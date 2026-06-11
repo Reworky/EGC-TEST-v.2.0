@@ -265,10 +265,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleMenuAction(callbackQuery, user, data.substring("menu:".length()));
             return;
         }
-        if (data.startsWith("role:")) {
-            handleRoleSwitchAction(callbackQuery, user, session, data.substring("role:".length()));
-            return;
-        }
         if (data.startsWith("profile:")) {
             handleProfileAction(callbackQuery, user, data.substring("profile:".length()));
             return;
@@ -368,28 +364,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             default -> sendProfile(user);
         }
         answerSilently(callbackQuery.getId());
-    }
-
-    private void handleRoleSwitchAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
-        if ("user".equals(action) && (adminService.isAdmin(user.getTelegramId()) || adminService.isModerator(user.getTelegramId()))) {
-            session.getData().put("active_role", ROLE_USER);
-            sendMainMenu(user, "🎮 Включён режим игрока.\n\nОткрываю пользовательское меню без служебных разделов.");
-            answerSilently(callbackQuery.getId());
-            return;
-        }
-        if ("moder".equals(action) && adminService.isAdmin(user.getTelegramId())) {
-            session.getData().put("active_role", ROLE_MODER);
-            sendMainMenu(user, "🛡️ Включён режим модератора.\n\nОткрываю служебное меню проверки и поддержки.");
-            answerSilently(callbackQuery.getId());
-            return;
-        }
-        if ("admin".equals(action) && adminService.isAdmin(user.getTelegramId())) {
-            session.getData().put("active_role", ROLE_ADMIN);
-            sendMainMenu(user, "🛠️ Включён режим администратора.\n\nОткрываю главный пульт управления платформой.");
-            answerSilently(callbackQuery.getId());
-            return;
-        }
-        answer(callbackQuery.getId(), "Переключение роли недоступно");
     }
 
     private void handlePlatformSelection(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
@@ -1759,24 +1733,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
         if (ROLE_ADMIN.equals(role)) {
-            rows.add(List.of(keyboardFactory.callback("👥 Пользователи", "admin:users:0")));
-            rows.add(List.of(keyboardFactory.callback("➕ Квест", "admin:create")));
-            rows.add(List.of(keyboardFactory.callback("✏️ Квесты", "admin:edit")));
-            rows.add(List.of(keyboardFactory.callback("🎁 Бонус", "admin:bonus")));
-            rows.add(List.of(keyboardFactory.callback("📣 Рассылка", "admin:broadcast")));
-            rows.add(List.of(keyboardFactory.callback("📊 Статистика", "admin:stats")));
-            rows.add(List.of(keyboardFactory.callback("🛡️ Модератор", "role:moder")));
-            rows.add(List.of(keyboardFactory.callback("👤 Игрок", "role:user")));
+            rows.add(List.of(
+                    keyboardFactory.callback("👥 Пользователи", "admin:users:0"),
+                    keyboardFactory.callback("📊 Статистика", "admin:stats")
+            ));
+            rows.add(List.of(
+                    keyboardFactory.callback("➕ Квест", "admin:create"),
+                    keyboardFactory.callback("✏️ Квесты", "admin:edit")
+            ));
+            rows.add(List.of(
+                    keyboardFactory.callback("🎁 Бонус", "admin:bonus"),
+                    keyboardFactory.callback("📣 Рассылка", "admin:broadcast")
+            ));
             return keyboardFactory.rowsLayout(rows);
         }
 
         if (ROLE_MODER.equals(role)) {
-            rows.add(List.of(keyboardFactory.callback("📂 Квесты", "mod:support:quests")));
-            rows.add(List.of(keyboardFactory.callback("🆘 Поддержка", "mod:support:list")));
-            rows.add(List.of(keyboardFactory.callback("👤 Игрок", "role:user")));
-            if (adminService.isAdmin(user.getTelegramId())) {
-                rows.add(List.of(keyboardFactory.callback("🛠️ Админка", "role:admin")));
-            }
+            rows.add(List.of(
+                    keyboardFactory.callback("📂 Квесты", "mod:support:quests"),
+                    keyboardFactory.callback("🆘 Поддержка", "mod:support:list")
+            ));
             return keyboardFactory.rowsLayout(rows);
         }
 
@@ -1887,14 +1863,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             default -> "🏠 <b>Главное меню</b>";
         };
         String body = switch (role) {
-            case ROLE_ADMIN -> "Добро пожаловать в главный центр управления <b>" + escape(appProperties.getClubName()) + "</b>.\n"
-                    + "Здесь у вас под рукой пользователи и роли, публикация квестов, внутренняя экономика, массовые сообщения и сводная статистика.\n\n"
-                    + "Выберите нужный блок ниже и продолжайте работу без лишних переходов.";
+            case ROLE_ADMIN -> "Перед вами главный центр управления <b>" + escape(appProperties.getClubName()) + "</b>.\n"
+                    + "Из этого раздела вы можете работать с пользователями и ролями, вести квестовый контент, запускать рассылки, выдавать бонусы и контролировать ключевые показатели платформы.\n\n"
+                    + "Выберите нужный блок ниже и переходите к работе.";
             case ROLE_MODER -> "Перед вами рабочий контур модерации <b>" + escape(appProperties.getClubName()) + "</b>.\n"
-                    + "Здесь собраны очереди проверки квестов, обращения в поддержку и все повседневные процессы, от которых зависит качество сервиса.\n\n"
-                    + "Откройте нужную очередь и продолжайте обработку заявок.";
+                    + "Здесь собраны очереди проверки квестов и обращения пользователей, чтобы вы могли быстро поддерживать качество сервиса и темп обработки заявок.\n\n"
+                    + "Откройте нужную очередь и продолжайте работу.";
             default -> "Перед вами игровой центр <b>" + escape(appProperties.getClubName()) + "</b>.\n"
-                    + "Здесь вы можете брать квесты, накапливать XP, подниматься в рейтинге, звать друзей и обменивать монеты на награды.\n\n"
+                    + "Здесь вы можете брать задания, накапливать XP, подниматься в рейтинге, приглашать друзей и обменивать монеты на награды.\n\n"
                     + "Выберите нужный раздел ниже и продолжайте прогресс.";
         };
         return title + "\n\n"
@@ -1997,29 +1973,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private boolean handleRoleSwitchCommand(AppUser user, UserSession session, String text) {
-        if (!adminService.isAdmin(user.getTelegramId()) && !adminService.isModerator(user.getTelegramId())) {
+        if (!canUseManualRoleSwitch(user)) {
             return false;
         }
         return switch (text.toLowerCase()) {
             case "/user" -> {
                 session.getData().put("active_role", ROLE_USER);
-                sendMainMenu(user, "👤 Включён пользовательский режим.\n\nПоказываю меню и сценарии так, как их видит обычный игрок.");
+                sendMainMenu(user, mainMenuText(user));
                 yield true;
             }
             case "/moder" -> {
-                if (!adminService.isAdmin(user.getTelegramId())) {
-                    yield false;
-                }
                 session.getData().put("active_role", ROLE_MODER);
-                sendMainMenu(user, "🛡️ Включён режим модератора.\n\nОткрываю меню проверки заявок, поддержки и игровых разделов.");
+                sendMainMenu(user, mainMenuText(user));
                 yield true;
             }
             case "/admin" -> {
-                if (!adminService.isAdmin(user.getTelegramId())) {
-                    yield false;
-                }
                 session.getData().put("active_role", ROLE_ADMIN);
-                sendMainMenu(user, "🛠️ Включён полный режим администратора.\n\nОткрываю административное меню со всеми разделами.");
+                sendMainMenu(user, mainMenuText(user));
                 yield true;
             }
             default -> false;
@@ -2127,6 +2097,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return "@" + user.getTelegramUsername();
         }
         return "без тега";
+    }
+
+    private boolean canUseManualRoleSwitch(AppUser user) {
+        return ROLE_ADMIN.equals(adminService.configuredRole(user.getTelegramId()));
     }
 
     private Integer currentBonusPage(UserSession session) {
