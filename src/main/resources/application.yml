@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:h2:file:./data/gamebot;AUTO_SERVER=TRUE}
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  h2:
+    console:
+      enabled: false
+
+app:
+  club-name: ${APP_CLUB_NAME:Game Quest Club}
+  support-username: ${APP_SUPPORT_USERNAME:support_manager}
+  admin-ids: ${APP_ADMIN_IDS:}
+  moderator-ids: ${APP_MODERATOR_IDS:}
+  bot-token: ${BOT_TOKEN:}
+  bot-username: ${BOT_USERNAME:}
