@@ -892,13 +892,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendRewardCard(AppUser user, Long rewardId, String notice) {
         RewardItem reward = rewardService.getRewardItem(rewardId);
-        sendText(user.getTelegramId(),
-                (notice == null ? "" : notice + "\n\n")
-                        + "🎁 <b>" + escape(reward.getTitle()) + "</b>\n\n"
-                        + "📦 Категория: <b>" + escape(reward.getCategory()) + "</b>\n"
-                        + "📝 " + escape(reward.getDescription()) + "\n\n"
-                        + "🪙 Стоимость: <b>" + reward.getPriceCoins() + " монет</b>",
-                verticalWithBackMenu(List.of(keyboardFactory.callback("🛒 Обменять", "shop:buy:" + rewardId)), "⬅️ Назад", "menu:shop"));
+        String text = (notice == null ? "" : notice + "\n\n")
+                + "🎁 <b>" + escape(reward.getTitle()) + "</b>\n\n"
+                + "📦 Категория: <b>" + escape(reward.getCategory()) + "</b>\n"
+                + "📝 " + escape(reward.getDescription()) + "\n\n"
+                + "🪙 Стоимость: <b>" + reward.getPriceCoins() + " монет</b>";
+        InlineKeyboardMarkup keyboard = verticalWithBackMenu(
+                List.of(keyboardFactory.callback("🛒 Обменять", "shop:buy:" + rewardId)),
+                "⬅️ Назад",
+                "menu:shop"
+        );
+        if (reward.getPhotoFileId() != null && !reward.getPhotoFileId().isBlank()) {
+            sendPhotoCaption(user.getTelegramId(), reward.getPhotoFileId(), text, keyboard);
+            return;
+        }
+        sendText(user.getTelegramId(), text, keyboard);
     }
 
     private void handleRewardPurchase(CallbackQuery callbackQuery, AppUser user, Long rewardId) {
@@ -1131,7 +1139,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (tickets.isEmpty()) {
             sendText(chatId,
                     "🆘 Открытых заявок поддержки сейчас нет.",
-                    backMenuKeyboard("menu:moderation"));
+                    backOnlyKeyboard("menu:moderation"));
             return;
         }
 
@@ -1173,7 +1181,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (submissions.isEmpty()) {
             sendText(chatId,
                     "🛡️ Очередь проверки пуста. Все текущие отчёты уже разобраны.",
-                    backMenuKeyboard("menu:moderation"));
+                    backOnlyKeyboard("menu:moderation"));
             return;
         }
 
@@ -1793,6 +1801,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ));
     }
 
+    private InlineKeyboardMarkup backOnlyKeyboard(String backData) {
+        return keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("⬅️ Назад", backData))
+        ));
+    }
+
     private InlineKeyboardMarkup verticalWithBackMenu(List<InlineKeyboardButton> buttons, String backText, String backData) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (InlineKeyboardButton button : buttons) {
@@ -2282,6 +2296,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             execute(message);
         } catch (TelegramApiException exception) {
             throw new IllegalStateException("Failed to send message to " + chatId, exception);
+        }
+    }
+
+    private void sendPhotoCaption(Long chatId, String photoFileId, String caption, InlineKeyboardMarkup keyboard) {
+        try {
+            SendPhoto message = new SendPhoto();
+            message.setChatId(chatId.toString());
+            message.setPhoto(new InputFile(photoFileId));
+            message.setCaption(caption);
+            message.setParseMode("HTML");
+            message.setReplyMarkup(keyboard);
+            execute(message);
+        } catch (TelegramApiException exception) {
+            log.warn("Failed to send photo message to {}", chatId, exception);
+            sendText(chatId, caption, keyboard);
         }
     }
 

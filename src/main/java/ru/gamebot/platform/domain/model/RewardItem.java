@@ -26,6 +26,7 @@ public class RewardItem {
     @Column(length = 2000)
     private String description;
 
+    private String photoFileId;
     private String category;
     private long priceCoins;
     private boolean active;

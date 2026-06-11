@@ -47,9 +47,15 @@ public class RewardService {
 
     @Transactional
     public RewardItem createRewardItem(String title, String description, String category, long priceCoins) {
+        return createRewardItem(title, description, category, priceCoins, null);
+    }
+
+    @Transactional
+    public RewardItem createRewardItem(String title, String description, String category, long priceCoins, String photoFileId) {
         RewardItem item = new RewardItem();
         item.setTitle(title);
         item.setDescription(description);
+        item.setPhotoFileId(photoFileId);
         item.setCategory(category);
         item.setPriceCoins(priceCoins);
         item.setActive(true);
