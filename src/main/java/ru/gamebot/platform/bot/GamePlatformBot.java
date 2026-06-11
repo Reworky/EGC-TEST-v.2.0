@@ -57,6 +57,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
     private static final Pattern URL_PATTERN = Pattern.compile("(https?://\\S+|t\\.me/\\S+)");
     private static final int ADMIN_USERS_PAGE_SIZE = 8;
+    private static final int BONUS_USERS_PAGE_SIZE = 8;
     private static final String ROLE_USER = "USER";
     private static final String ROLE_MODER = "MODER";
     private static final String ROLE_ADMIN = "ADMIN";
@@ -1285,10 +1286,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "bonus" -> {
                 session.reset();
                 session.setState(SessionState.BONUS_INPUT);
-                sendText(user.getTelegramId(),
-                        "🎁 Отправьте бонус в формате:\n<code>TELEGRAM_ID XP COINS комментарий</code>\n\n"
-                                + "Пример: <code>123456789 100 50 За активность</code>",
-                        cancelKeyboard());
+                sendAdminBonusUsersPage(user, session, 0, null);
             }
             case "broadcast" -> {
                 session.reset();
@@ -1303,6 +1301,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendAdminQuestEditor(user, parseLong(action.substring("quest:".length())));
                 } else if (action.startsWith("users:")) {
                     sendAdminUsersPage(user, parseInteger(action.substring("users:".length())));
+                } else if (action.startsWith("bonuspage:")) {
+                    session.setState(SessionState.BONUS_INPUT);
+                    sendAdminBonusUsersPage(user, session, parseInteger(action.substring("bonuspage:".length())), null);
                 } else if (action.startsWith("user:")) {
                     handleAdminUserAction(user, action.substring("user:".length()));
                 } else if (action.startsWith("toggle:")) {
@@ -1382,7 +1383,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "💸 Потенциальные расходы на выплаты: <b>" + totalQuestExpenses + " монет</b>\n"
                         + "📥 Заявок на модерации: <b>" + questService.pendingCount() + "</b>",
                 keyboardFactory.smartLayout(List.of(
-                        keyboardFactory.callback("🛠️ Админка", "menu:admin"),
                         keyboardFactory.callback("🏠 Меню", "menu:main")
                 )));
     }
@@ -1428,10 +1428,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!pagination.isEmpty()) {
             rows.add(pagination);
         }
-        rows.add(List.of(
-                keyboardFactory.callback("🛠️ Админ-пульт", "menu:admin"),
-                keyboardFactory.callback("🏠 Меню", "menu:main")
-        ));
+        rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(admin.getTelegramId(), builder.toString(), keyboardFactory.rowsLayout(rows));
     }
 
@@ -1515,20 +1512,72 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 mainMenuKeyboard(target));
     }
 
-    private void handleBonusInput(AppUser user, UserSession session, String text) {
-        String[] parts = text.trim().split("\\s+", 4);
-        if (parts.length < 3) {
-            sendText(user.getTelegramId(),
-                    "⚠️ Формат неверный. Используйте: <code>TELEGRAM_ID XP COINS комментарий</code>",
-                    cancelKeyboard());
+    private void sendAdminBonusUsersPage(AppUser admin, UserSession session, Integer requestedPage, String notice) {
+        List<AppUser> users = userService.allUsersSorted();
+        if (users.isEmpty()) {
+            sendText(admin.getTelegramId(),
+                    "🎁 <b>Начисление бонуса</b>\n\nВ базе пока нет пользователей для выдачи бонуса.",
+                    backMenuKeyboard("menu:main"));
             return;
         }
 
-        Long telegramId = parseLong(parts[0]);
+        int totalPages = Math.max(1, (int) Math.ceil(users.size() / (double) BONUS_USERS_PAGE_SIZE));
+        int page = requestedPage == null ? 0 : Math.max(0, Math.min(requestedPage, totalPages - 1));
+        int from = page * BONUS_USERS_PAGE_SIZE;
+        int to = Math.min(users.size(), from + BONUS_USERS_PAGE_SIZE);
+        List<AppUser> pageItems = users.subList(from, to);
+        session.getData().put("bonus_page", Integer.toString(page));
+
+        StringBuilder builder = new StringBuilder();
+        if (notice != null && !notice.isBlank()) {
+            builder.append(notice).append("\n\n");
+        }
+        builder.append("🎁 <b>Начисление бонуса</b>\n\n")
+                .append("Выберите игрока по номеру из списка ниже и отправьте данные одним сообщением.\n")
+                .append("Формат: <code>НОМЕР XP COINS комментарий</code>\n")
+                .append("Пример: <code>").append(from + 1).append(" 100 50 За активность</code>\n\n")
+                .append("Страница <b>").append(page + 1).append(" / ").append(totalPages).append("</b>\n\n");
+
+        for (int i = 0; i < pageItems.size(); i++) {
+            AppUser target = pageItems.get(i);
+            int number = from + i + 1;
+            builder.append(number).append(". <b>").append(escape(displayUserName(target))).append("</b>\n")
+                    .append("🏷️ ").append(escape(displayTag(target))).append(" • ")
+                    .append("ID: <code>").append(target.getTelegramId()).append("</code>\n\n");
+        }
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        List<InlineKeyboardButton> pagination = new ArrayList<>();
+        if (page > 0) {
+            pagination.add(keyboardFactory.callback("⬅️ Назад", "admin:bonuspage:" + (page - 1)));
+        }
+        if (page < totalPages - 1) {
+            pagination.add(keyboardFactory.callback("➡️ Далее", "admin:bonuspage:" + (page + 1)));
+        }
+        if (!pagination.isEmpty()) {
+            rows.add(pagination);
+        }
+        rows.add(List.of(
+                keyboardFactory.callback("🛠️ Админка", "menu:admin"),
+                keyboardFactory.callback("🏠 Меню", "menu:main")
+        ));
+        sendText(admin.getTelegramId(), builder.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleBonusInput(AppUser user, UserSession session, String text) {
+        String[] parts = text.trim().split("\\s+", 4);
+        if (parts.length < 3) {
+            sendAdminBonusUsersPage(user, session, currentBonusPage(session),
+                    "⚠️ Формат неверный. Используйте: <code>НОМЕР XP COINS комментарий</code>.");
+            return;
+        }
+
+        Long telegramId = resolveBonusTarget(parts[0]);
         Long xp = parsePositiveLong(parts[1]);
         Long coins = parsePositiveLong(parts[2]);
         if (telegramId == null || xp == null || coins == null) {
-            sendText(user.getTelegramId(), "⚠️ ID, XP и COINS должны быть числами.", cancelKeyboard());
+            sendAdminBonusUsersPage(user, session, currentBonusPage(session),
+                    "⚠️ Проверьте номер игрока, XP и монеты. Они должны быть указаны корректно.");
             return;
         }
 
@@ -1710,41 +1759,41 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
         if (ROLE_ADMIN.equals(role)) {
-            rows.add(List.of(keyboardFactory.callback("👥 Пользователи и роли", "admin:users:0")));
-            rows.add(List.of(keyboardFactory.callback("➕ Создать квест", "admin:create")));
-            rows.add(List.of(keyboardFactory.callback("✏️ Управление квестами", "admin:edit")));
-            rows.add(List.of(keyboardFactory.callback("🎁 Начислить бонус", "admin:bonus")));
-            rows.add(List.of(keyboardFactory.callback("📣 Новостная рассылка", "admin:broadcast")));
-            rows.add(List.of(keyboardFactory.callback("📊 Статистика платформы", "admin:stats")));
-            rows.add(List.of(keyboardFactory.callback("🛡️ Открыть меню модератора", "role:moder")));
-            rows.add(List.of(keyboardFactory.callback("🎮 Открыть меню игрока", "role:user")));
+            rows.add(List.of(keyboardFactory.callback("👥 Пользователи", "admin:users:0")));
+            rows.add(List.of(keyboardFactory.callback("➕ Квест", "admin:create")));
+            rows.add(List.of(keyboardFactory.callback("✏️ Квесты", "admin:edit")));
+            rows.add(List.of(keyboardFactory.callback("🎁 Бонус", "admin:bonus")));
+            rows.add(List.of(keyboardFactory.callback("📣 Рассылка", "admin:broadcast")));
+            rows.add(List.of(keyboardFactory.callback("📊 Статистика", "admin:stats")));
+            rows.add(List.of(keyboardFactory.callback("🛡️ Модератор", "role:moder")));
+            rows.add(List.of(keyboardFactory.callback("👤 Игрок", "role:user")));
             return keyboardFactory.rowsLayout(rows);
         }
 
         if (ROLE_MODER.equals(role)) {
-            rows.add(List.of(keyboardFactory.callback("📂 Очередь квестов", "mod:support:quests")));
-            rows.add(List.of(keyboardFactory.callback("🆘 Очередь поддержки", "mod:support:list")));
-            rows.add(List.of(keyboardFactory.callback("🎮 Открыть меню игрока", "role:user")));
+            rows.add(List.of(keyboardFactory.callback("📂 Квесты", "mod:support:quests")));
+            rows.add(List.of(keyboardFactory.callback("🆘 Поддержка", "mod:support:list")));
+            rows.add(List.of(keyboardFactory.callback("👤 Игрок", "role:user")));
             if (adminService.isAdmin(user.getTelegramId())) {
-                rows.add(List.of(keyboardFactory.callback("🛠️ Вернуться в админ-пульт", "role:admin")));
+                rows.add(List.of(keyboardFactory.callback("🛠️ Админка", "role:admin")));
             }
             return keyboardFactory.rowsLayout(rows);
         }
 
         rows.add(List.of(
-                keyboardFactory.callback("👤 Профиль игрока", "menu:profile"),
-                keyboardFactory.callback("🗺️ Центр квестов", "menu:quests")
+                keyboardFactory.callback("👤 Профиль", "menu:profile"),
+                keyboardFactory.callback("🗺️ Квесты", "menu:quests")
         ));
         rows.add(List.of(
-                keyboardFactory.callback("💰 Баланс и XP", "menu:balance"),
-                keyboardFactory.callback("🤝 Рефералы клуба", "menu:referrals")
+                keyboardFactory.callback("💰 Баланс", "menu:balance"),
+                keyboardFactory.callback("🤝 Рефералы", "menu:referrals")
         ));
         rows.add(List.of(
-                keyboardFactory.callback("🏆 Таблица рейтинга", "menu:rating"),
-                keyboardFactory.callback("📰 Новости клуба", "menu:news")
+                keyboardFactory.callback("🏆 Рейтинг", "menu:rating"),
+                keyboardFactory.callback("📰 Новости", "menu:news")
         ));
-        rows.add(List.of(keyboardFactory.callback("🛍️ Магазин наград", "menu:shop")));
-        rows.add(List.of(keyboardFactory.callback("🆘 Центр поддержки", "menu:support")));
+        rows.add(List.of(keyboardFactory.callback("🛍️ Магазин", "menu:shop")));
+        rows.add(List.of(keyboardFactory.callback("🆘 Поддержка", "menu:support")));
         return keyboardFactory.rowsLayout(rows);
     }
 
@@ -1838,15 +1887,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             default -> "🏠 <b>Главное меню</b>";
         };
         String body = switch (role) {
-            case ROLE_ADMIN -> "Перед вами главный контур управления платформой.\n"
-                    + "Здесь можно менять роли, управлять контентом и контролировать все ключевые процессы.";
-            case ROLE_MODER -> "Перед вами служебный контур модерации.\n"
-                    + "Здесь собраны очереди проверки квестов и обращения в поддержку.";
-            default -> "Выберите нужный раздел ниже и продолжайте игровой прогресс.";
+            case ROLE_ADMIN -> "Добро пожаловать в главный центр управления <b>" + escape(appProperties.getClubName()) + "</b>.\n"
+                    + "Здесь у вас под рукой пользователи и роли, публикация квестов, внутренняя экономика, массовые сообщения и сводная статистика.\n\n"
+                    + "Выберите нужный блок ниже и продолжайте работу без лишних переходов.";
+            case ROLE_MODER -> "Перед вами рабочий контур модерации <b>" + escape(appProperties.getClubName()) + "</b>.\n"
+                    + "Здесь собраны очереди проверки квестов, обращения в поддержку и все повседневные процессы, от которых зависит качество сервиса.\n\n"
+                    + "Откройте нужную очередь и продолжайте обработку заявок.";
+            default -> "Перед вами игровой центр <b>" + escape(appProperties.getClubName()) + "</b>.\n"
+                    + "Здесь вы можете брать квесты, накапливать XP, подниматься в рейтинге, звать друзей и обменивать монеты на награды.\n\n"
+                    + "Выберите нужный раздел ниже и продолжайте прогресс.";
         };
         return title + "\n\n"
-                + "Привет, <b>" + escape(user.getNickname()) + "</b>.\n"
-                + "Активный режим: <b>" + escape(humanRole(role)) + "</b>.\n"
+                + "Здравствуйте, <b>" + escape(user.getNickname()) + "</b>.\n"
+                + "Активный режим: <b>" + escape(humanRole(role)) + "</b>.\n\n"
                 + body;
     }
 
@@ -2029,7 +2082,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : escape(streakMessage);
         return title + "\n\n"
                 + "С возвращением, <b>" + escape(user.getNickname()) + "</b>.\n"
-                + activity;
+                + activity + "\n\n"
+                + switch (resolveMenuRole(user, sessionService.get(user.getTelegramId()))) {
+                    case ROLE_ADMIN -> "Перед вами полный контур управления платформой: пользователи, роли, контент, экономика и коммуникация.";
+                    case ROLE_MODER -> "Перед вами служебный контур проверки: очереди квестов, поддержка и ежедневная операционная работа.";
+                    default -> "Перед вами игровой контур: квесты, награды, рейтинг, рефералы и рост вашего профиля.";
+                };
     }
 
     private String humanRole(String role) {
@@ -2069,6 +2127,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return "@" + user.getTelegramUsername();
         }
         return "без тега";
+    }
+
+    private Integer currentBonusPage(UserSession session) {
+        return parseInteger(session.getData().getOrDefault("bonus_page", "0"));
+    }
+
+    private Long resolveBonusTarget(String token) {
+        Long directValue = parseLong(token);
+        if (directValue == null) {
+            return null;
+        }
+
+        List<AppUser> users = userService.allUsersSorted();
+        if (directValue >= 1 && directValue <= users.size()) {
+            return users.get((int) (directValue - 1)).getTelegramId();
+        }
+        return directValue;
     }
 
     private boolean shouldContinueSupportMediaGroup(Message message, UserSession session) {
