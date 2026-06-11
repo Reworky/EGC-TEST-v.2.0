@@ -22,4 +22,7 @@ public class AppProperties {
     private String supportUsername = "support_manager";
     private Set<Long> adminIds = new HashSet<>();
     private Set<Long> moderatorIds = new HashSet<>();
+    private String adminIdsRaw = "";
+    private String moderatorIdsRaw = "";
+    private String initialAdminId = "";
 }

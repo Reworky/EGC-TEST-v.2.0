@@ -92,6 +92,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
         botsApi.registerBot(this);
         log.info("Telegram bot registered: {}", getBotUsername());
+        log.info("Resolved admin IDs: {}", adminService.resolvedAdminIds());
+        log.info("Resolved moderator IDs: {}", adminService.resolvedModeratorIds());
     }
 
     @Override

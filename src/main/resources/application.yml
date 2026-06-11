@@ -20,5 +20,8 @@ app:
   support-username: ${APP_SUPPORT_USERNAME:support_manager}
   admin-ids: ${APP_ADMIN_IDS:${INITIAL_ADMIN_ID:}}
   moderator-ids: ${APP_MODERATOR_IDS:}
+  admin-ids-raw: ${APP_ADMIN_IDS:}
+  moderator-ids-raw: ${APP_MODERATOR_IDS:}
+  initial-admin-id: ${INITIAL_ADMIN_ID:}
   bot-token: ${TELEGRAM_BOT_TOKEN:${BOT_TOKEN:}}
   bot-username: ${TELEGRAM_BOT_USERNAME:${BOT_USERNAME:}}
