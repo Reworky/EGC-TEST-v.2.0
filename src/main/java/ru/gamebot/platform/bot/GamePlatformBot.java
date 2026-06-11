@@ -181,11 +181,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         if ("/menu".equalsIgnoreCase(text)) {
-            sendMainMenu(user, "🏠 Главное меню готово. Выбирайте раздел ниже.");
+            sendMainMenu(user, mainMenuText(user));
             return;
         }
 
-        sendMainMenu(user, "✨ Я на связи. Все разделы бота открываются через inline-кнопки ниже.");
+        sendMainMenu(user, mainMenuText(user));
     }
 
     private void handleStart(Message message) {
@@ -259,7 +259,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if (data.startsWith("quest:view:")) {
-            handleQuestView(callbackQuery, user, data.substring("quest:view:".length()));
+            handleQuestView(callbackQuery, user, session, data.substring("quest:view:".length()));
             return;
         }
         if (data.startsWith("myquest:view:")) {
@@ -633,11 +633,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.smartLayout(buttons));
     }
 
+    private void handleQuestView(CallbackQuery callbackQuery, AppUser user, UserSession session, String payload) {
+        String[] parts = payload.split(":");
+        if (parts.length != 2) {
+            answer(callbackQuery.getId(), "Карточка квеста недоступна");
+            return;
+        }
+        Long questId = parseLong(parts[1]);
+        if (questId == null) {
+            answer(callbackQuery.getId(), "Карточка квеста недоступна");
+            return;
+        }
+        sendQuestCard(user, questId, backDataFromCategoryToken(parts[0]), "⬅️ Назад", null);
+        answerSilently(callbackQuery.getId());
+    }
+
     private void sendQuestCard(AppUser user, Long questId) {
         sendQuestCard(user, questId, "menu:quests", "⬅️ Назад", null);
     }
 
     private void sendQuestCard(AppUser user, Long questId, String backData, String backText, String notice) {
+        sessionService.get(user.getTelegramId()).getData().put("quest_back_data", backData);
         Quest quest = questService.getQuest(questId);
         QuestSubmission latest = questService.getLatestSubmission(user, quest);
         String statusText = latest == null ? "Не начат" : humanStatus(latest.getStatus());
@@ -671,22 +687,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         Quest quest = questService.getQuest(questId);
         QuestSubmission latest = questService.getLatestSubmission(user, quest);
         if (latest != null && latest.getStatus() == SubmissionStatus.DRAFT) {
-            answer(callbackQuery.getId(), "Квест уже у вас в работе");
-            sendQuestCard(user, questId);
+            answerSilently(callbackQuery.getId());
+            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                    "🧭 Этот квест уже добавлен в работу. Ниже оставил карточку с кнопкой для отчёта.");
             return;
         }
         if (latest != null && (latest.getStatus() == SubmissionStatus.PENDING || latest.getStatus() == SubmissionStatus.APPROVED)) {
-            answer(callbackQuery.getId(), "Квест уже в работе или принят");
-            sendQuestCard(user, questId);
+            answerSilently(callbackQuery.getId());
+            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                    "📌 По этому квесту уже есть активный прогресс. Используйте карточку ниже, чтобы посмотреть статус или отправить отчёт.");
             return;
         }
 
         questService.createDraftSubmission(user, quest);
-        sendText(user.getTelegramId(),
-                "🚀 Квест <b>" + escape(quest.getTitle()) + "</b> добавлен в работу.\n\n"
-                        + "Когда будете готовы, откройте карточку квеста и отправьте отчёт.",
-                mainMenuKeyboard(user));
-        answer(callbackQuery.getId(), "Квест взят");
+        answerSilently(callbackQuery.getId());
+        sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                "🚀 Квест добавлен в работу. Когда будете готовы, отправьте отчёт прямо из этой карточки или через раздел «Мои квесты».");
     }
 
     private void handleReportStart(CallbackQuery callbackQuery, AppUser user, UserSession session, Long questId) {
@@ -746,7 +762,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (submissions.isEmpty()) {
             sendText(user.getTelegramId(),
                     "📭 У вас пока нет взятых или отправленных квестов.\n\nОткройте раздел квестов и начните с первого задания.",
-                    mainMenuKeyboard(user));
+                    keyboardFactory.verticalLayout(List.of(
+                            keyboardFactory.callback("⬅️ Назад", "menu:quests"),
+                            keyboardFactory.callback("🏠 Меню", "menu:main")
+                    )));
             return;
         }
 
@@ -756,7 +775,37 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .append("📌 Статус: <b>").append(escape(humanStatus(submission.getStatus()))).append("</b>\n")
                 .append("🕒 Обновлено: <b>").append(escape(submission.getUpdatedAt().format(DATE_TIME_FORMATTER))).append("</b>\n\n"));
 
-        sendText(user.getTelegramId(), builder.toString(), mainMenuKeyboard(user));
+        List<InlineKeyboardButton> buttons = new ArrayList<>();
+        submissions.stream().limit(10).forEach(submission ->
+                buttons.add(keyboardFactory.callback("🎯 " + trim(submission.getQuest().getTitle(), 30), "myquest:view:" + submission.getId()))
+        );
+        buttons.add(keyboardFactory.callback("⬅️ Назад", "menu:quests"));
+        buttons.add(keyboardFactory.callback("🏠 Меню", "menu:main"));
+        sendText(user.getTelegramId(), builder.toString(), keyboardFactory.verticalLayout(buttons));
+    }
+
+    private void sendMyQuestCard(AppUser user, Long submissionId) {
+        QuestSubmission submission = questService.getSubmission(submissionId);
+        Quest quest = submission.getQuest();
+        String moderatorComment = submission.getModeratorComment() == null || submission.getModeratorComment().isBlank()
+                ? ""
+                : "\n\n💬 Комментарий модератора:\n" + escape(submission.getModeratorComment());
+
+        List<InlineKeyboardButton> buttons = List.of(
+                keyboardFactory.callback("📤 Отчёт", "quest:report:" + quest.getId()),
+                keyboardFactory.callback("⬅️ Назад", "menu:myquests"),
+                keyboardFactory.callback("🏠 Меню", "menu:main")
+        );
+
+        sendText(user.getTelegramId(),
+                "📂 <b>Мой квест</b>\n\n"
+                        + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n"
+                        + "📌 Статус: <b>" + escape(humanStatus(submission.getStatus())) + "</b>\n"
+                        + "🕒 Обновлено: <b>" + escape(submission.getUpdatedAt().format(DATE_TIME_FORMATTER)) + "</b>\n"
+                        + "✨ Награда: <b>+" + quest.getRewardXp() + " XP</b>\n"
+                        + "🪙 Монеты: <b>+" + quest.getRewardCoins() + "</b>\n\n"
+                        + "📝 Описание:\n" + escape(quest.getDescription()) + moderatorComment,
+                keyboardFactory.verticalLayout(buttons));
     }
 
     private void sendRatingMenu(AppUser user) {
@@ -825,31 +874,43 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendRewardCard(AppUser user, Long rewardId) {
+        sendRewardCard(user, rewardId, null);
+    }
+
+    private void sendRewardCard(AppUser user, Long rewardId, String notice) {
         RewardItem reward = rewardService.getRewardItem(rewardId);
         List<InlineKeyboardButton> buttons = List.of(
                 keyboardFactory.callback("🛒 Обменять", "shop:buy:" + rewardId),
-                keyboardFactory.callback("🛍️ Магазин", "menu:shop"),
+                keyboardFactory.callback("⬅️ Назад", "menu:shop"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         );
 
         sendText(user.getTelegramId(),
-                "🎁 <b>" + escape(reward.getTitle()) + "</b>\n\n"
+                (notice == null ? "" : notice + "\n\n")
+                        + "🎁 <b>" + escape(reward.getTitle()) + "</b>\n\n"
                         + "📦 Категория: <b>" + escape(reward.getCategory()) + "</b>\n"
                         + "📝 Описание: " + escape(reward.getDescription()) + "\n"
                         + "🪙 Стоимость: <b>" + reward.getPriceCoins() + " монет</b>",
-                keyboardFactory.smartLayout(buttons));
+                keyboardFactory.verticalLayout(buttons));
     }
 
     private void handleRewardPurchase(CallbackQuery callbackQuery, AppUser user, Long rewardId) {
         RewardItem reward = rewardService.getRewardItem(rewardId);
-        rewardService.createRewardRequest(user, reward);
+        try {
+            rewardService.createRewardRequest(user, reward);
+        } catch (IllegalArgumentException exception) {
+            answerSilently(callbackQuery.getId());
+            sendRewardCard(user, rewardId,
+                    "⚠️ Для этой награды пока не хватает монет. Посмотрите стоимость ниже и возвращайтесь после новых квестов.");
+            return;
+        }
         notifyAdminsAboutRewardRequest(user, reward);
         sendText(user.getTelegramId(),
                 "✅ Заявка на выдачу награды отправлена администратору.\n\n"
                         + "🎁 Награда: <b>" + escape(reward.getTitle()) + "</b>\n"
                         + "🪙 Списано: <b>" + reward.getPriceCoins() + " монет</b>",
                 mainMenuKeyboard(user));
-        answer(callbackQuery.getId(), "Заявка отправлена");
+        answerSilently(callbackQuery.getId());
     }
 
     private void sendNews(AppUser user) {
@@ -872,10 +933,239 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendSupport(AppUser user) {
         sendText(user.getTelegramId(),
                 "🆘 <b>Поддержка</b>\n\n"
-                        + "Если возникли вопросы по квестам, наградам, модерации или профилю, напишите менеджеру:\n"
-                        + "👉 @" + escape(appProperties.getSupportUsername()) + "\n\n"
-                        + "Чтобы мы помогли быстрее, приложите ID игрока и краткое описание ситуации.",
-                mainMenuKeyboard(user));
+                        + "Здесь можно оставить заявку прямо в боте. Поддерживаются текст, фото, видео, документы и медиагруппы.\n\n"
+                        + "Модератор ответит вам тоже прямо в этом чате.",
+                keyboardFactory.verticalLayout(List.of(
+                        keyboardFactory.callback("✍️ Новая заявка", "support:new"),
+                        keyboardFactory.callback("📬 Мои заявки", "support:list"),
+                        keyboardFactory.callback("🏠 Меню", "menu:main")
+                )));
+    }
+
+    private void sendModerationHub(AppUser user) {
+        sendText(user.getTelegramId(),
+                "🛡️ <b>Центр модерации</b>\n\n"
+                        + "📂 Отчёты по квестам: <b>" + questService.pendingCount() + "</b>\n"
+                        + "🆘 Открытые заявки поддержки: <b>" + supportService.activeTicketCount() + "</b>",
+                keyboardFactory.verticalLayout(List.of(
+                        keyboardFactory.callback("📂 Квесты", "mod:support:quests"),
+                        keyboardFactory.callback("🆘 Поддержка", "mod:support:list"),
+                        keyboardFactory.callback("🏠 Меню", "menu:main")
+                )));
+    }
+
+    private void handleSupportAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
+        switch (action) {
+            case "new" -> {
+                clearSupportDraft(session);
+                session.setState(SessionState.SUPPORT_INPUT);
+                sendText(user.getTelegramId(),
+                        "🆘 <b>Новая заявка</b>\n\n"
+                                + "Пришлите текст, фото, видео, документ или медиагруппу.\n"
+                                + "Можно добавить комментарий в подписи.\n\n"
+                                + "После отправки заявка сразу попадёт модератору.",
+                        keyboardFactory.verticalLayout(List.of(
+                                keyboardFactory.callback("⬅️ Назад", "menu:support"),
+                                keyboardFactory.callback("🏠 Меню", "menu:main")
+                        )));
+                answerSilently(callbackQuery.getId());
+            }
+            case "list" -> {
+                sendUserSupportTickets(user);
+                answerSilently(callbackQuery.getId());
+            }
+            default -> answer(callbackQuery.getId(), "Неизвестное действие поддержки");
+        }
+    }
+
+    private void handleModeratorSupportAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
+        if ("quests".equals(action)) {
+            sendModerationQueue(user.getTelegramId());
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if ("list".equals(action)) {
+            sendSupportQueue(user.getTelegramId());
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if (action.startsWith("view:")) {
+            sendSupportTicketCard(user.getTelegramId(), parseLong(action.substring("view:".length())));
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if (action.startsWith("reply:")) {
+            session.reset();
+            session.setState(SessionState.SUPPORT_REPLY);
+            session.setSupportTicketId(parseLong(action.substring("reply:".length())));
+            sendText(user.getTelegramId(),
+                    "✍️ Отправьте ответ пользователю. Можно текстом, фото, видео или документом.",
+                    keyboardFactory.verticalLayout(List.of(
+                            keyboardFactory.callback("⬅️ Назад", "mod:support:list"),
+                            keyboardFactory.callback("🏠 Меню", "menu:main")
+                    )));
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if (action.startsWith("close:")) {
+            SupportTicket ticket = supportService.closeTicket(parseLong(action.substring("close:".length())), user.getTelegramId());
+            notifyUser(ticket.getUser().getTelegramId(),
+                    "✅ Ваша заявка в поддержку закрыта.\n\nЕсли проблема останется, вы всегда можете создать новую заявку.");
+            sendSupportQueue(user.getTelegramId());
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        answer(callbackQuery.getId(), "Неизвестное действие модерации");
+    }
+
+    private void handleSupportMessage(AppUser user, UserSession session, Message message) {
+        IncomingContent content = extractIncomingContent(message);
+        String mediaGroupId = message.getMediaGroupId();
+        boolean continuation = mediaGroupId != null
+                && session.getSupportTicketId() != null
+                && mediaGroupId.equals(session.getData().get("support_media_group_id"));
+
+        SupportTicket ticket;
+        if (continuation) {
+            ticket = supportService.getTicket(session.getSupportTicketId());
+        } else {
+            ticket = supportService.createTicket(user, content.text(), mediaGroupId);
+            session.setSupportTicketId(ticket.getId());
+            if (mediaGroupId != null) {
+                session.getData().put("support_media_group_id", mediaGroupId);
+            }
+        }
+
+        if (!"text".equals(content.mediaType()) || (content.text() != null && !content.text().isBlank())) {
+            supportService.addAttachment(ticket, false, content.mediaType(), content.fileId(), content.text());
+        }
+
+        notifyModeratorsAboutSupportTicket(ticket, content, continuation);
+
+        if (mediaGroupId == null) {
+            clearSupportDraft(session);
+            sendText(user.getTelegramId(),
+                    "✅ Заявка отправлена в поддержку.\n\nКак только модератор ответит, сообщение придёт сюда же.",
+                    keyboardFactory.verticalLayout(List.of(
+                            keyboardFactory.callback("📬 Мои заявки", "support:list"),
+                            keyboardFactory.callback("🏠 Меню", "menu:main")
+                    )));
+        } else if (!continuation) {
+            session.setState(SessionState.NONE);
+            sendText(user.getTelegramId(),
+                    "✅ Медиагруппа принята. Все вложения из этого альбома будут привязаны к одной заявке поддержки.",
+                    keyboardFactory.verticalLayout(List.of(
+                            keyboardFactory.callback("📬 Мои заявки", "support:list"),
+                            keyboardFactory.callback("🏠 Меню", "menu:main")
+                    )));
+        }
+    }
+
+    private void handleSupportReplyMessage(AppUser moderator, UserSession session, Message message) {
+        SupportTicket ticket = supportService.getTicket(session.getSupportTicketId());
+        IncomingContent content = extractIncomingContent(message);
+        try {
+            forwardSupportReply(ticket.getUser().getTelegramId(), content);
+        } catch (Exception exception) {
+            log.warn("Failed to deliver support reply to {}", ticket.getUser().getTelegramId(), exception);
+            sendText(moderator.getTelegramId(),
+                    "⚠️ Не удалось доставить ответ пользователю. Возможно, он закрыл чат с ботом.",
+                    keyboardFactory.verticalLayout(List.of(
+                            keyboardFactory.callback("⬅️ Назад", "mod:support:list"),
+                            keyboardFactory.callback("🏠 Меню", "menu:main")
+                    )));
+            session.reset();
+            return;
+        }
+        supportService.markAnswered(ticket.getId(), moderator.getTelegramId(), content.text());
+        if (!"text".equals(content.mediaType()) || (content.text() != null && !content.text().isBlank())) {
+            supportService.addAttachment(ticket, true, content.mediaType(), content.fileId(), content.text());
+        }
+        session.reset();
+        sendText(moderator.getTelegramId(),
+                "✅ Ответ пользователю отправлен.",
+                keyboardFactory.verticalLayout(List.of(
+                        keyboardFactory.callback("🆘 Поддержка", "mod:support:list"),
+                        keyboardFactory.callback("🏠 Меню", "menu:main")
+                )));
+    }
+
+    private void sendUserSupportTickets(AppUser user) {
+        List<SupportTicket> tickets = supportService.getUserTickets(user);
+        if (tickets.isEmpty()) {
+            sendText(user.getTelegramId(),
+                    "📭 У вас пока нет заявок в поддержку.\n\nЕсли что-то случится, создайте новую заявку прямо здесь.",
+                    keyboardFactory.verticalLayout(List.of(
+                            keyboardFactory.callback("✍️ Новая заявка", "support:new"),
+                            keyboardFactory.callback("⬅️ Назад", "menu:support"),
+                            keyboardFactory.callback("🏠 Меню", "menu:main")
+                    )));
+            return;
+        }
+
+        StringBuilder builder = new StringBuilder("📬 <b>Мои заявки</b>\n\n");
+        tickets.stream().limit(10).forEach(ticket -> builder
+                .append("🆘 Заявка #").append(ticket.getId()).append("\n")
+                .append("📌 Статус: <b>").append(escape(humanSupportStatus(ticket.getStatus().name()))).append("</b>\n")
+                .append("🕒 Обновлено: <b>").append(escape(ticket.getUpdatedAt().format(DATE_TIME_FORMATTER))).append("</b>\n")
+                .append("💬 ").append(escape(trim(ticket.getInitialMessage(), 80))).append("\n\n"));
+
+        sendText(user.getTelegramId(), builder.toString(),
+                keyboardFactory.verticalLayout(List.of(
+                        keyboardFactory.callback("✍️ Новая заявка", "support:new"),
+                        keyboardFactory.callback("⬅️ Назад", "menu:support"),
+                        keyboardFactory.callback("🏠 Меню", "menu:main")
+                )));
+    }
+
+    private void sendSupportQueue(Long chatId) {
+        List<SupportTicket> tickets = supportService.getActiveTickets();
+        if (tickets.isEmpty()) {
+            sendText(chatId,
+                    "🆘 Открытых заявок поддержки сейчас нет.",
+                    keyboardFactory.verticalLayout(List.of(
+                            keyboardFactory.callback("⬅️ Назад", "menu:moderation"),
+                            keyboardFactory.callback("🏠 Меню", "menu:main")
+                    )));
+            return;
+        }
+
+        List<InlineKeyboardButton> buttons = new ArrayList<>();
+        for (SupportTicket ticket : tickets) {
+            buttons.add(keyboardFactory.callback(
+                    "🆘 #" + ticket.getId() + " " + trim(ticket.getUser().getNickname(), 20),
+                    "mod:support:view:" + ticket.getId()
+            ));
+        }
+        buttons.add(keyboardFactory.callback("⬅️ Назад", "menu:moderation"));
+        buttons.add(keyboardFactory.callback("🏠 Меню", "menu:main"));
+
+        sendText(chatId,
+                "🆘 <b>Очередь поддержки</b>\n\n"
+                        + "Открытых заявок: <b>" + tickets.size() + "</b>\n"
+                        + "Откройте карточку, чтобы ответить или закрыть заявку.",
+                keyboardFactory.verticalLayout(buttons));
+    }
+
+    private void sendSupportTicketCard(Long chatId, Long ticketId) {
+        SupportTicket ticket = supportService.getTicket(ticketId);
+        List<SupportAttachment> attachments = supportService.getAttachments(ticket);
+        String text = "🆘 <b>Заявка поддержки #" + ticket.getId() + "</b>\n\n"
+                + "👤 Игрок: <b>" + escape(ticket.getUser().getNickname()) + "</b>\n"
+                + "🆔 ID: <b>" + ticket.getUser().getTelegramId() + "</b>\n"
+                + "📌 Статус: <b>" + escape(humanSupportStatus(ticket.getStatus().name())) + "</b>\n"
+                + "🕒 Создана: <b>" + escape(ticket.getCreatedAt().format(DATE_TIME_FORMATTER)) + "</b>\n"
+                + "📎 Вложений: <b>" + attachments.size() + "</b>\n\n"
+                + "💬 Сообщение игрока:\n" + escape(ticket.getInitialMessage())
+                + (ticket.getLastModeratorReply() == null ? "" : "\n\n✉️ Последний ответ модератора:\n" + escape(ticket.getLastModeratorReply()));
+
+        sendText(chatId, text,
+                keyboardFactory.verticalLayout(List.of(
+                        keyboardFactory.callback("✍️ Ответить", "mod:support:reply:" + ticketId),
+                        keyboardFactory.callback("✅ Закрыть", "mod:support:close:" + ticketId),
+                        keyboardFactory.callback("⬅️ Назад", "mod:support:list"),
+                        keyboardFactory.callback("🏠 Меню", "menu:main")
+                )));
     }
 
     private void sendModerationQueue(Long chatId) {
@@ -883,7 +1173,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (submissions.isEmpty()) {
             sendText(chatId,
                     "🛡️ Очередь проверки пуста. Все текущие отчёты уже разобраны.",
-                    keyboardFactory.smartLayout(List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))));
+                    keyboardFactory.verticalLayout(List.of(
+                            keyboardFactory.callback("⬅️ Назад", "menu:moderation"),
+                            keyboardFactory.callback("🏠 Меню", "menu:main")
+                    )));
             return;
         }
 
@@ -892,13 +1185,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String title = "🔎 " + trim(submission.getUser().getNickname() + " / " + submission.getQuest().getTitle(), 28);
             buttons.add(keyboardFactory.callback(title, "mod:view:" + submission.getId()));
         }
+        buttons.add(keyboardFactory.callback("⬅️ Назад", "menu:moderation"));
         buttons.add(keyboardFactory.callback("🏠 Меню", "menu:main"));
 
         sendText(chatId,
                 "🛡️ <b>Очередь модерации</b>\n\n"
                         + "Заявок на проверке: <b>" + submissions.size() + "</b>\n"
                         + "Откройте карточку, чтобы принять, отклонить или запросить уточнение.",
-                keyboardFactory.smartLayout(buttons));
+                keyboardFactory.verticalLayout(buttons));
     }
 
     private void sendSubmissionCard(Long chatId, Long submissionId) {
@@ -912,11 +1206,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "💬 Комментарий: " + escape(submission.getUserComment()) + "\n"
                 + (submission.getExternalLink() == null ? "" : "🔗 Ссылка: " + escape(submission.getExternalLink()) + "\n");
 
-        InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
+        InlineKeyboardMarkup markup = keyboardFactory.verticalLayout(List.of(
                 keyboardFactory.callback("✅ Одобрить", "mod:ok:" + submissionId),
                 keyboardFactory.callback("❌ Отклонить", "mod:no:" + submissionId),
                 keyboardFactory.callback("❓ Уточнить", "mod:more:" + submissionId),
-                keyboardFactory.callback("🛡️ Очередь", "menu:moderation")
+                keyboardFactory.callback("⬅️ Назад", "mod:support:quests"),
+                keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
         sendText(chatId, text, markup);
     }
@@ -1273,12 +1568,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private InlineKeyboardMarkup mainMenuKeyboard(AppUser user) {
-        return keyboardFactory.smartLayout(List.of(
-                keyboardFactory.callback("🏠 Меню", "menu:main"),
-                keyboardFactory.callback("👤 Профиль", "menu:profile"),
-                keyboardFactory.callback(adminService.isModerator(user.getTelegramId()) ? "🛡️ Очередь" : "🗺️ Квесты",
-                        adminService.isModerator(user.getTelegramId()) ? "menu:moderation" : "menu:quests")
-        ));
+        return keyboardFactory.verticalLayout(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
     }
 
     private InlineKeyboardMarkup cancelKeyboard() {
@@ -1333,6 +1623,149 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "Сейчас выбрано: <b>" + escape(selected.isEmpty() ? "ничего" : String.join(", ", selected)) + "</b>";
     }
 
+    private String mainMenuText(AppUser user) {
+        return "🏠 <b>Главное меню</b>\n\n"
+                + "Привет, <b>" + escape(user.getNickname()) + "</b>.\n"
+                + "Выберите раздел платформы ниже.";
+    }
+
+    private String categoryToken(String category) {
+        if (category == null) {
+            return "all";
+        }
+        return switch (category) {
+            case "Быстрые" -> "fast";
+            case "Средние" -> "medium";
+            case "Долгие" -> "long";
+            default -> "all";
+        };
+    }
+
+    private String backDataFromCategoryToken(String token) {
+        return switch (token) {
+            case "fast" -> "quests:cat:Быстрые";
+            case "medium" -> "quests:cat:Средние";
+            case "long" -> "quests:cat:Долгие";
+            default -> "quests:cat:all";
+        };
+    }
+
+    private String currentQuestBackData(AppUser user) {
+        return sessionService.get(user.getTelegramId()).getData().getOrDefault("quest_back_data", "quests:cat:all");
+    }
+
+    private boolean shouldContinueSupportMediaGroup(Message message, UserSession session) {
+        return message.getMediaGroupId() != null
+                && session.getSupportTicketId() != null
+                && message.getMediaGroupId().equals(session.getData().get("support_media_group_id"));
+    }
+
+    private void clearSupportDraft(UserSession session) {
+        session.setSupportTicketId(null);
+        session.getData().remove("support_media_group_id");
+        if (session.getState() == SessionState.SUPPORT_INPUT || session.getState() == SessionState.SUPPORT_REPLY) {
+            session.setState(SessionState.NONE);
+        }
+    }
+
+    private IncomingContent extractIncomingContent(Message message) {
+        String mediaType = "text";
+        String fileId = null;
+        String text = message.getCaption();
+        if (message.hasPhoto()) {
+            mediaType = "photo";
+            List<PhotoSize> photos = message.getPhoto();
+            fileId = photos.get(photos.size() - 1).getFileId();
+        } else if (message.hasVideo()) {
+            mediaType = "video";
+            fileId = message.getVideo().getFileId();
+        } else if (message.hasDocument()) {
+            mediaType = "document";
+            fileId = message.getDocument().getFileId();
+        } else if (message.hasText()) {
+            text = message.getText();
+        }
+        return new IncomingContent(mediaType, fileId, text == null ? "" : text);
+    }
+
+    private void notifyModeratorsAboutSupportTicket(SupportTicket ticket, IncomingContent content, boolean continuation) {
+        String caption = (continuation ? "📎 Дополнение к заявке поддержки\n\n" : "🆘 Новая заявка поддержки\n\n")
+                + "👤 " + escape(ticket.getUser().getNickname()) + " (" + ticket.getUser().getTelegramId() + ")\n"
+                + "🎫 Заявка #" + ticket.getId() + "\n"
+                + "💬 " + escape(content.text().isBlank() ? ticket.getInitialMessage() : content.text());
+
+        InlineKeyboardMarkup markup = keyboardFactory.verticalLayout(List.of(
+                keyboardFactory.callback("👁️ Открыть", "mod:support:view:" + ticket.getId()),
+                keyboardFactory.callback("✍️ Ответить", "mod:support:reply:" + ticket.getId()),
+                keyboardFactory.callback("✅ Закрыть", "mod:support:close:" + ticket.getId()),
+                keyboardFactory.callback("🏠 Меню", "menu:main")
+        ));
+
+        Set<Long> recipients = new LinkedHashSet<>();
+        recipients.addAll(appProperties.getModeratorIds());
+        recipients.addAll(appProperties.getAdminIds());
+
+        for (Long recipient : recipients) {
+            try {
+                sendContent(recipient, content, caption, markup);
+            } catch (Exception exception) {
+                log.warn("Failed to notify support moderator {}", recipient, exception);
+            }
+        }
+    }
+
+    private void forwardSupportReply(Long telegramId, IncomingContent content) {
+        String caption = "✉️ <b>Ответ поддержки</b>\n\n"
+                + (content.text().isBlank() ? "Модератор отправил вам вложение." : escape(content.text()));
+        sendContent(telegramId, content, caption, mainMenuButtonsOnly(telegramId));
+    }
+
+    private void sendContent(Long chatId, IncomingContent content, String fallbackText, InlineKeyboardMarkup markup) {
+        try {
+            switch (content.mediaType()) {
+                case "photo" -> {
+                    SendPhoto sendPhoto = new SendPhoto();
+                    sendPhoto.setChatId(chatId.toString());
+                    sendPhoto.setPhoto(new InputFile(content.fileId()));
+                    sendPhoto.setCaption(fallbackText);
+                    sendPhoto.setParseMode("HTML");
+                    sendPhoto.setReplyMarkup(markup);
+                    execute(sendPhoto);
+                }
+                case "video" -> {
+                    SendVideo sendVideo = new SendVideo();
+                    sendVideo.setChatId(chatId.toString());
+                    sendVideo.setVideo(new InputFile(content.fileId()));
+                    sendVideo.setCaption(fallbackText);
+                    sendVideo.setParseMode("HTML");
+                    sendVideo.setReplyMarkup(markup);
+                    execute(sendVideo);
+                }
+                case "document" -> {
+                    SendDocument sendDocument = new SendDocument();
+                    sendDocument.setChatId(chatId.toString());
+                    sendDocument.setDocument(new InputFile(content.fileId()));
+                    sendDocument.setCaption(fallbackText);
+                    sendDocument.setParseMode("HTML");
+                    sendDocument.setReplyMarkup(markup);
+                    execute(sendDocument);
+                }
+                default -> sendText(chatId, fallbackText, markup);
+            }
+        } catch (TelegramApiException exception) {
+            throw new IllegalStateException("Failed to send content to " + chatId, exception);
+        }
+    }
+
+    private String humanSupportStatus(String status) {
+        return switch (status) {
+            case "OPEN" -> "Открыта";
+            case "ANSWERED" -> "Есть ответ";
+            case "CLOSED" -> "Закрыта";
+            default -> status;
+        };
+    }
+
     private void sendCurrentRegistrationStep(AppUser user, UserSession session, String intro) {
         if (intro != null && !intro.isBlank()) {
             sendText(user.getTelegramId(), intro, null);
@@ -1360,6 +1793,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "🧭 Продолжим заполнение профиля с текущего шага.",
                     null);
         }
+    }
+
+    private record IncomingContent(String mediaType, String fileId, String text) {
     }
 
     private void sendText(Long chatId, String text, InlineKeyboardMarkup keyboard) {
