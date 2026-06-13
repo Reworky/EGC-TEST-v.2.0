@@ -384,9 +384,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.setState(SessionState.REG_INTERESTS);
             editRegistrationSelectionMessage(
                     callbackQuery,
-                    "🧠 Выберите игровые интересы. Этот шаг можно пропустить.\n\n"
+                    "🧠 Выберите игровые интересы.\n\n"
                             + "Сейчас выбрано: <b>ничего</b>",
-                    selectionKeyboard(INTEREST_OPTIONS, List.of(), "reg:interest:", true, true, false)
+                    selectionKeyboard(INTEREST_OPTIONS, List.of(), "reg:interest:", true, false, false)
             );
             answer(callbackQuery.getId(), "Платформы сохранены");
             return;
@@ -526,7 +526,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendInterestQuestion(AppUser user, UserSession session) {
         List<String> selected = resolveSelections(session, "interests", INTEREST_OPTIONS);
         sendText(user.getTelegramId(), interestQuestionText(selected),
-                selectionKeyboard(INTEREST_OPTIONS, selected, "reg:interest:", true, true, false));
+                selectionKeyboard(INTEREST_OPTIONS, selected, "reg:interest:", true, false, false));
     }
 
     private void finishRegistration(AppUser user, UserSession session, List<String> interests) {
@@ -1882,7 +1882,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private String interestQuestionText(List<String> selected) {
-        return "🧠 Выберите игровые интересы. Этот шаг можно пропустить.\n\n"
+        return "🧠 Выберите игровые интересы.\n\n"
                 + "Сейчас выбрано: <b>" + escape(selected.isEmpty() ? "ничего" : String.join(", ", selected)) + "</b>";
     }
 
