@@ -23,5 +23,9 @@ app:
   admin-ids-raw: ${APP_ADMIN_IDS:}
   moderator-ids-raw: ${APP_MODERATOR_IDS:}
   initial-admin-id: ${INITIAL_ADMIN_ID:}
+  required-channel-id: ${REQUIRED_CHANNEL_ID:}
+  required-channel-username: ${REQUIRED_CHANNEL_USERNAME:@exgamingclub}
+  required-channel-url: ${REQUIRED_CHANNEL_URL:}
+  required-channel-title: ${REQUIRED_CHANNEL_TITLE:EXPERIENCE GAMING CLUB}
   bot-token: ${TELEGRAM_BOT_TOKEN:${BOT_TOKEN:}}
   bot-username: ${TELEGRAM_BOT_USERNAME:${BOT_USERNAME:}}

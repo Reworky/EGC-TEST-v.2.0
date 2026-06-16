@@ -38,6 +38,7 @@ public class AppUser {
     @Column(length = 1000)
     private String interestsCsv;
 
+    private boolean profileCompleted;
     private boolean registrationCompleted;
     private long xp;
     private long weeklyXp;

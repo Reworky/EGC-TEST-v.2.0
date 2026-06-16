@@ -25,4 +25,8 @@ public class AppProperties {
     private String adminIdsRaw = "";
     private String moderatorIdsRaw = "";
     private String initialAdminId = "";
+    private String requiredChannelId = "";
+    private String requiredChannelUsername = "@exgamingclub";
+    private String requiredChannelUrl = "";
+    private String requiredChannelTitle = "EXPERIENCE GAMING CLUB";
 }

@@ -83,6 +83,13 @@ public class KeyboardFactory {
         return button;
     }
 
+    public InlineKeyboardButton url(String text, String url) {
+        InlineKeyboardButton button = new InlineKeyboardButton();
+        button.setText(text);
+        button.setUrl(url);
+        return button;
+    }
+
     private boolean isShort(String text) {
         return text != null && text.length() < 14;
     }

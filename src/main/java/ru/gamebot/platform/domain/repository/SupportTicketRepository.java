@@ -20,4 +20,8 @@ public interface SupportTicketRepository extends JpaRepository<SupportTicket, Lo
     Optional<SupportTicket> findWithUserById(Long id);
 
     long countByStatusIn(List<SupportTicketStatus> statuses);
+
+    List<SupportTicket> findAllByUser(AppUser user);
+
+    void deleteAllByUser(AppUser user);
 }

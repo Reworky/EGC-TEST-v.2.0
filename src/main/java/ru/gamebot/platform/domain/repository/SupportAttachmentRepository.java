@@ -8,4 +8,6 @@ import ru.gamebot.platform.domain.model.SupportTicket;
 public interface SupportAttachmentRepository extends JpaRepository<SupportAttachment, Long> {
 
     List<SupportAttachment> findAllByTicketOrderByCreatedAtAsc(SupportTicket ticket);
+
+    void deleteAllByTicket(SupportTicket ticket);
 }

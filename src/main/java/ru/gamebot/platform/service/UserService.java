@@ -13,7 +13,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.telegram.telegrambots.meta.api.objects.User;
 import ru.gamebot.platform.domain.model.AppUser;
+import ru.gamebot.platform.domain.model.SupportTicket;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
+import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
+import ru.gamebot.platform.domain.repository.RewardRequestRepository;
+import ru.gamebot.platform.domain.repository.SupportAttachmentRepository;
+import ru.gamebot.platform.domain.repository.SupportTicketRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +36,10 @@ public class UserService {
     );
 
     private final AppUserRepository appUserRepository;
+    private final QuestSubmissionRepository questSubmissionRepository;
+    private final RewardRequestRepository rewardRequestRepository;
+    private final SupportTicketRepository supportTicketRepository;
+    private final SupportAttachmentRepository supportAttachmentRepository;
 
     @Transactional
     public AppUser getOrCreate(User telegramUser, Long referredByTelegramId) {
@@ -51,6 +60,8 @@ public class UserService {
         user.setCompletedQuests(0);
         user.setInvitedFriends(0);
         user.setStreakDays(0);
+        user.setProfileCompleted(false);
+        user.setRegistrationCompleted(false);
         user.setStaffRole("USER");
         user.setCreatedAt(LocalDateTime.now());
         updateTelegramProfile(user, telegramUser);
@@ -129,6 +140,14 @@ public class UserService {
         user.setCountry(country);
         user.setPlatformsCsv(String.join(", ", platforms));
         user.setInterestsCsv(interests.isEmpty() ? "Не выбраны" : String.join(", ", interests));
+        user.setProfileCompleted(true);
+        user.setRegistrationCompleted(false);
+        return appUserRepository.save(user);
+    }
+
+    @Transactional
+    public AppUser activateAccount(AppUser user) {
+        user.setProfileCompleted(true);
         user.setRegistrationCompleted(true);
         return appUserRepository.save(user);
     }
@@ -249,6 +268,40 @@ public class UserService {
         AppUser user = appUserRepository.findByTelegramId(telegramId)
                 .orElseThrow(() -> new IllegalArgumentException("Игрок с таким Telegram ID не найден."));
         user.setStaffRole(staffRole);
+        return appUserRepository.save(user);
+    }
+
+    @Transactional
+    public AppUser clearPersonalProgress(Long telegramId) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId)
+                .orElseThrow(() -> new IllegalArgumentException("Игрок с таким Telegram ID не найден."));
+
+        questSubmissionRepository.deleteAllByUser(user);
+        rewardRequestRepository.deleteAllByUser(user);
+
+        List<SupportTicket> tickets = supportTicketRepository.findAllByUser(user);
+        for (SupportTicket ticket : tickets) {
+            supportAttachmentRepository.deleteAllByTicket(ticket);
+        }
+        supportTicketRepository.deleteAllByUser(user);
+
+        user.setNickname(null);
+        user.setAge(null);
+        user.setCountry(null);
+        user.setPlatformsCsv(null);
+        user.setInterestsCsv(null);
+        user.setProfileCompleted(false);
+        user.setRegistrationCompleted(false);
+        user.setXp(0);
+        user.setWeeklyXp(0);
+        user.setCoins(0);
+        user.setTickets(0);
+        user.setCompletedQuests(0);
+        user.setInvitedFriends(0);
+        user.setStreakDays(0);
+        user.setReferredByTelegramId(null);
+        user.setReferralRewardProcessed(false);
+        user.setLastActivityDate(null);
         return appUserRepository.save(user);
     }
 

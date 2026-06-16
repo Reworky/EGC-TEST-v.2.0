@@ -17,6 +17,8 @@ public class SchemaPatchInitializer implements CommandLineRunner {
     public void run(String... args) {
         apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS tickets BIGINT DEFAULT 0");
         apply("UPDATE app_users SET tickets = 0 WHERE tickets IS NULL");
+        apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS profile_completed BOOLEAN DEFAULT FALSE");
+        apply("UPDATE app_users SET profile_completed = registration_completed WHERE profile_completed IS NULL OR profile_completed = FALSE");
 
         apply("ALTER TABLE reward_items ADD COLUMN IF NOT EXISTS photo_file_id VARCHAR(255)");
     }

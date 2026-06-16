@@ -18,6 +18,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
+import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
@@ -29,6 +30,7 @@ import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.PhotoSize;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
@@ -143,6 +145,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         UserSession session = sessionService.get(user.getTelegramId());
         ensureRoleConsistency(user, session);
 
+        if (text != null && handleClearMeCommand(user, session, text.trim())) {
+            return;
+        }
+
         if (text != null && handleRoleSwitchCommand(user, session, text.trim())) {
             return;
         }
@@ -152,7 +158,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        if (!user.isRegistrationCompleted() && session.getState() == SessionState.NONE) {
+        if (!user.isProfileCompleted() && session.getState() == SessionState.NONE) {
             session.setState(SessionState.REG_NAME);
             sendText(user.getTelegramId(),
                     "🎉 Добро пожаловать в <b>" + escape(appProperties.getClubName()) + "</b>!\n\n"
@@ -160,6 +166,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "Напишите ваш игровой никнейм.\n\n"
                             + "<b>ВАЖНО! Ник в боте должен совпадать с ником в игре</b>",
                     null);
+            return;
+        }
+
+        if (user.isProfileCompleted() && !user.isRegistrationCompleted()) {
+            sendCommunityActivationPrompt(user, null);
             return;
         }
 
@@ -183,7 +194,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        if (!user.isRegistrationCompleted()) {
+        if (!user.isProfileCompleted()) {
             if ("/menu".equalsIgnoreCase(text)) {
                 sendCurrentRegistrationStep(user, session,
                         "🧭 Сначала завершим регистрацию. После этого откроется полное меню платформы.");
@@ -211,7 +222,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ensureRoleConsistency(user, session);
 
         String streakMessage = userService.registerActivity(user);
-        if (!user.isRegistrationCompleted()) {
+        if (!user.isProfileCompleted()) {
             session.reset();
             session.setState(SessionState.REG_NAME);
             sendText(user.getTelegramId(),
@@ -220,6 +231,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "Начнем с профиля. Напишите ваш игровой никнейм.\n\n"
                             + "<b>ВАЖНО! Ник в боте должен совпадать с ником в игре</b>",
                     null);
+            return;
+        }
+
+        if (!user.isRegistrationCompleted()) {
+            sendCommunityActivationPrompt(user, null);
             return;
         }
 
@@ -247,6 +263,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleInterestSelection(callbackQuery, user, session, data.substring("reg:interest:".length()));
             return;
         }
+        if ("activation:check".equals(data)) {
+            handleActivationCheck(callbackQuery, user);
+            return;
+        }
+        if ("activation:quests".equals(data)) {
+            sendQuestGames(user);
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if ("common:cancel".equals(data) && !user.isRegistrationCompleted()) {
             clearInlineKeyboard(callbackQuery);
             answerSilently(callbackQuery.getId());
@@ -259,10 +284,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        if (!user.isRegistrationCompleted()) {
+        if (!user.isProfileCompleted()) {
             answer(callbackQuery.getId(), "Сначала завершим регистрацию");
             sendCurrentRegistrationStep(user, session,
                     "🧭 Перед использованием разделов нужно закончить регистрацию. Продолжим с текущего шага.");
+            return;
+        }
+
+        if (!user.isRegistrationCompleted()) {
+            answer(callbackQuery.getId(), "Сначала активируйте аккаунт");
+            sendCommunityActivationPrompt(user, null);
             return;
         }
 
@@ -549,21 +580,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 platforms,
                 interests
         );
-        userService.grantReferralReward(updated);
         session.reset();
-
-        String achievements = userService.getAchievements(updated).isEmpty()
-                ? "Пока без достижений, но первое уже совсем рядом."
-                : String.join(", ", userService.getAchievements(updated));
-
-        sendMainMenu(updated,
-                "✨ <b>Профиль собран</b>\n\n"
-                        + "🎮 Никнейм: <b>" + escape(updated.getNickname()) + "</b>\n"
-                        + "🌍 Регион: <b>" + escape(updated.getCountry()) + "</b>\n"
-                        + "🕹️ Платформы: <b>" + escape(cleanChoiceDisplay(updated.getPlatformsCsv())) + "</b>\n"
-                        + "🎯 Интересы: <b>" + escape(cleanChoiceDisplay(updated.getInterestsCsv())) + "</b>\n"
-                        + "🌟 Стартовые достижения: " + escape(achievements) + "\n\n"
-                        + "Добро пожаловать в клуб. Теперь можно идти за первым сильным прогрессом.");
+        sendCommunityActivationPrompt(updated, null);
     }
 
     private void sendMainMenu(AppUser user, String text) {
@@ -572,6 +590,47 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         sendText(user.getTelegramId(), text, mainMenuKeyboard(user));
+    }
+
+    private void sendCommunityActivationPrompt(AppUser user, String notice) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.url("📢 Подписаться на канал", requiredChannelUrl())));
+        rows.add(List.of(keyboardFactory.callback("✅ Я подписался", "activation:check")));
+
+        String text = (notice == null || notice.isBlank() ? "" : notice + "\n\n")
+                + "🔐 <b>Активация аккаунта</b>\n\n"
+                + "Для активации игрового профиля в <b>EXPERIENCE GAMING CLUB</b> нужно подтвердить участие в сообществе.\n\n"
+                + "Подпишитесь на канал <b>" + escape(requiredChannelLabel()) + "</b>, а затем вернитесь сюда и нажмите кнопку <b>«Я подписался»</b>.\n\n"
+                + "После проверки аккаунт будет активирован автоматически, и откроется полный доступ ко всем игровым разделам.";
+        sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleActivationCheck(CallbackQuery callbackQuery, AppUser user) {
+        if (isRequiredChannelMember(user.getTelegramId())) {
+            AppUser activated = userService.activateAccount(user);
+            userService.grantReferralReward(activated);
+            sendActivationSuccess(activated);
+            answer(callbackQuery.getId(), "Аккаунт активирован");
+            return;
+        }
+
+        sendCommunityActivationPrompt(user,
+                "⚠️ Подписка пока не подтверждена. Убедитесь, что вы подписались на канал, и нажмите кнопку ещё раз.");
+        answer(callbackQuery.getId(), "Подписка не найдена");
+    }
+
+    private void sendActivationSuccess(AppUser user) {
+        sendText(user.getTelegramId(),
+                "✅ <b>Поздравляем! Ваш игровой профиль активирован.</b>\n\n"
+                        + "Теперь вам доступны:\n"
+                        + "Игровые задания\n"
+                        + "XP и EXC\n"
+                        + "Рейтинг игроков\n"
+                        + "Магазин наград\n"
+                        + "Реферальная программа и многое другое",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("🚀 Перейти к заданиям", "activation:quests"))
+                )));
     }
 
     private void sendProfile(AppUser user) {
@@ -2266,6 +2325,70 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             default -> false;
         };
+    }
+
+    private boolean handleClearMeCommand(AppUser user, UserSession session, String text) {
+        if (!"/clearme".equalsIgnoreCase(text)) {
+            return false;
+        }
+        if (!isEffectiveAdmin(user)) {
+            sendText(user.getTelegramId(), "⛔ Команда доступна только администраторам.", null);
+            return true;
+        }
+
+        AppUser cleared = userService.clearPersonalProgress(user.getTelegramId());
+        session.reset();
+        session.setState(SessionState.REG_NAME);
+        sendText(cleared.getTelegramId(),
+                "♻️ Личный профиль и пользовательский прогресс очищены.\n\n"
+                        + "Административный доступ сохранён. Ниже запускаю регистрацию заново, как для первого входа.",
+                null);
+        sendText(cleared.getTelegramId(),
+                "🎮 Добро пожаловать в <b>" + escape(appProperties.getClubName()) + "</b>!\n\n"
+                        + "Здесь вас ждут квесты, XP, рейтинг, награды и реферальная программа.\n"
+                        + "Начнем с профиля. Напишите ваш игровой никнейм.\n\n"
+                        + "<b>ВАЖНО! Ник в боте должен совпадать с ником в игре</b>",
+                null);
+        return true;
+    }
+
+    private boolean isRequiredChannelMember(Long telegramId) {
+        try {
+            GetChatMember request = new GetChatMember();
+            request.setChatId(requiredChannelChatId());
+            request.setUserId(telegramId);
+            ChatMember member = execute(request);
+            String status = member.getStatus();
+            return status != null && !"left".equalsIgnoreCase(status) && !"kicked".equalsIgnoreCase(status);
+        } catch (TelegramApiException exception) {
+            log.warn("Failed to verify channel membership for {}", telegramId, exception);
+            return false;
+        }
+    }
+
+    private String requiredChannelChatId() {
+        if (appProperties.getRequiredChannelId() != null && !appProperties.getRequiredChannelId().isBlank()) {
+            return appProperties.getRequiredChannelId().trim();
+        }
+        return appProperties.getRequiredChannelUsername();
+    }
+
+    private String requiredChannelLabel() {
+        if (appProperties.getRequiredChannelUsername() != null && !appProperties.getRequiredChannelUsername().isBlank()) {
+            return appProperties.getRequiredChannelUsername().trim();
+        }
+        return appProperties.getRequiredChannelTitle();
+    }
+
+    private String requiredChannelUrl() {
+        if (appProperties.getRequiredChannelUrl() != null && !appProperties.getRequiredChannelUrl().isBlank()) {
+            return appProperties.getRequiredChannelUrl().trim();
+        }
+        String username = appProperties.getRequiredChannelUsername();
+        if (username != null && !username.isBlank()) {
+            return "https://t.me/" + username.replace("@", "").trim();
+        }
+        return "https://t.me/exgamingclub";
     }
 
     private boolean isEffectiveModerator(AppUser user) {
