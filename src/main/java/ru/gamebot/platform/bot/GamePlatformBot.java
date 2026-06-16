@@ -267,8 +267,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleActivationCheck(callbackQuery, user);
             return;
         }
-        if ("activation:quests".equals(data)) {
-            sendQuestGames(user);
+        if ("activation:profile".equals(data)) {
+            sendProfile(user);
             answerSilently(callbackQuery.getId());
             return;
         }
@@ -629,7 +629,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "Магазин наград\n"
                         + "Реферальная программа и многое другое",
                 keyboardFactory.rowsLayout(List.of(
-                        List.of(keyboardFactory.callback("🚀 Перейти к заданиям", "activation:quests"))
+                        List.of(keyboardFactory.callback("🚀 Перейти в профиль", "activation:profile"))
                 )));
     }
 
