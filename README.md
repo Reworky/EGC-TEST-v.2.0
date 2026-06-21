@@ -35,7 +35,7 @@ docker run -d \
   --restart unless-stopped \
   --network host \
   --add-host api.telegram.org:149.154.167.220 \
-  -e TELEGRAM_BOT_TOKEN='' \
+  -e TELEGRAM_BOT_TOKEN='YOUR_BOT_TOKEN' \
   -e TELEGRAM_BOT_USERNAME='invitetogamebot' \
   -e INITIAL_ADMIN_ID='726773708,631884742' \
   -e APP_ADMIN_IDS='726773708' \
