@@ -182,6 +182,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (session.getState() == SessionState.AVATAR_UPLOAD) {
+            handleAvatarUpload(user, session, message);
+            return;
+        }
+
         if (session.getState() == SessionState.SUPPORT_INPUT) {
             handleSupportMessage(user, session, message);
             return;
@@ -305,7 +310,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if (data.startsWith("profile:")) {
-            handleProfileAction(callbackQuery, user, data.substring("profile:".length()));
+            handleProfileAction(callbackQuery, user, session, data.substring("profile:".length()));
             return;
         }
         if (data.startsWith("quests:game:")) {
@@ -438,9 +443,37 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         answerSilently(callbackQuery.getId());
     }
 
-    private void handleProfileAction(CallbackQuery callbackQuery, AppUser user, String action) {
+    private void handleAvatarUpload(AppUser user, UserSession session, Message message) {
+        if (!message.hasPhoto()) {
+            sendText(user.getTelegramId(),
+                    "⚠️ Пожалуйста, отправьте именно фото (не файл и не стикер).",
+                    backOnlyKeyboard("menu:profile"));
+            return;
+        }
+        List<PhotoSize> photos = message.getPhoto();
+        String fileId = photos.get(photos.size() - 1).getFileId();
+        user.setAvatarFileId(fileId);
+        userService.save(user);
+        session.setState(SessionState.NONE);
+        sendText(user.getTelegramId(),
+                "✅ Аватар успешно обновлён! Теперь он отображается в вашем профиле.",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("👤 Открыть профиль", "menu:profile")),
+                        List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
+                )));
+    }
+
+    private void handleProfileAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
         switch (action) {
             case "balance" -> sendBalance(user, "menu:profile");
+            case "avatar" -> {
+                session.setState(SessionState.AVATAR_UPLOAD);
+                sendText(user.getTelegramId(),
+                        "📷 <b>Загрузка аватара</b>\n\n"
+                                + "Отправьте фото, которое станет вашим аватаром в профиле.\n"
+                                + "Рекомендуем квадратное фото для лучшего отображения.",
+                        backOnlyKeyboard("menu:profile"));
+            }
             default -> sendProfile(user);
         }
         answerSilently(callbackQuery.getId());
@@ -686,39 +719,47 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? "🛡️ <b>EGC Council</b>\n"
                 : "";
 
-        sendText(user.getTelegramId(),
-                "👤 <b>Профиль</b>\n\n"
-                        + "🎮 <b>" + escape(user.getNickname()) + "</b>\n"
-                        + councilBadge
-                        + titleLine
-                        + "⭐ Уровень: <b>" + userService.getLevelNumber(user.getXp()) + ". "
-                        + escape(userService.getLevelName(user.getXp())) + "</b>\n"
-                        + levelProgressLine(user) + "\n\n"
-                        + "🏆 <b>Текущая форма</b>\n"
-                        + "🪙 Монеты: <b>" + user.getCoins() + " EXC</b>\n"
-                        + "💠 Бонус к EXC: <b>+" + userService.getExcBonusPercent(user.getXp()) + "%</b>\n"
-                        + boostLine
-                        + "🎟️ Билеты: <b>" + user.getTickets() + "</b>\n"
-                        + "🥇 Место в рейтинге: <b>" + rank + "</b>\n"
-                        + "✅ Выполнено квестов: <b>" + user.getCompletedQuests() + "</b>\n"
-                        + "🔥 Серия входов: <b>" + user.getStreakDays() + " дней</b>\n\n"
-                        + "🧩 <b>Игровой стиль</b>\n"
-                        + "🕹️ Платформы: <b>" + escape(displayValue(user.getPlatformsCsv(), "Подбираются")) + "</b>\n"
-                        + "🎯 Интересы: <b>" + escape(displayValue(user.getInterestsCsv(), "Открываются")) + "</b>\n"
-                        + "🤝 Приглашено друзей: <b>" + user.getInvitedFriends() + "</b>\n\n"
-                        + "🌟 <b>Достижения</b>\n"
-                        + escape(achievements),
-                keyboardFactory.rowsLayout(List.of(
-                        List.of(
-                                keyboardFactory.callback("🗺️ Квесты", "menu:quests"),
-                                keyboardFactory.callback("💰 Баланс", "profile:balance")
-                        ),
-                        List.of(
-                                keyboardFactory.callback("🏆 Рейтинг", "menu:rating"),
-                                keyboardFactory.callback("🤝 Рефералы", "menu:referrals")
-                        ),
-                        List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
-                )));
+        String profileText = "👤 <b>Профиль</b>\n\n"
+                + "🎮 <b>" + escape(user.getNickname()) + "</b>\n"
+                + councilBadge
+                + titleLine
+                + "⭐ Уровень: <b>" + userService.getLevelNumber(user.getXp()) + ". "
+                + escape(userService.getLevelName(user.getXp())) + "</b>\n"
+                + levelProgressLine(user) + "\n\n"
+                + "🏆 <b>Текущая форма</b>\n"
+                + "🪙 Монеты: <b>" + user.getCoins() + " EXC</b>\n"
+                + "💠 Бонус к EXC: <b>+" + userService.getExcBonusPercent(user.getXp()) + "%</b>\n"
+                + boostLine
+                + "🎟️ Билеты: <b>" + user.getTickets() + "</b>\n"
+                + "🥇 Место в рейтинге: <b>" + rank + "</b>\n"
+                + "✅ Выполнено квестов: <b>" + user.getCompletedQuests() + "</b>\n"
+                + "🔥 Серия входов: <b>" + user.getStreakDays() + " дней</b>\n\n"
+                + "🧩 <b>Игровой стиль</b>\n"
+                + "🕹️ Платформы: <b>" + escape(displayValue(user.getPlatformsCsv(), "Подбираются")) + "</b>\n"
+                + "🎯 Интересы: <b>" + escape(displayValue(user.getInterestsCsv(), "Открываются")) + "</b>\n"
+                + "🤝 Приглашено друзей: <b>" + user.getInvitedFriends() + "</b>\n\n"
+                + "🌟 <b>Достижения</b>\n"
+                + escape(achievements);
+
+        String avatarBtn = user.getAvatarFileId() != null ? "📷 Сменить аватар" : "📷 Загрузить аватар";
+        InlineKeyboardMarkup profileKeyboard = keyboardFactory.rowsLayout(List.of(
+                List.of(
+                        keyboardFactory.callback("🗺️ Квесты", "menu:quests"),
+                        keyboardFactory.callback("💰 Баланс", "profile:balance")
+                ),
+                List.of(
+                        keyboardFactory.callback("🏆 Рейтинг", "menu:rating"),
+                        keyboardFactory.callback("🤝 Рефералы", "menu:referrals")
+                ),
+                List.of(keyboardFactory.callback(avatarBtn, "profile:avatar")),
+                List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
+        ));
+
+        if (user.getAvatarFileId() != null) {
+            sendPhotoCaption(user.getTelegramId(), user.getAvatarFileId(), profileText, profileKeyboard);
+        } else {
+            sendText(user.getTelegramId(), profileText, profileKeyboard);
+        }
     }
 
     private void sendBalance(AppUser user) {

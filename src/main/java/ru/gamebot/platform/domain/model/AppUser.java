@@ -52,6 +52,9 @@ public class AppUser {
     private LocalDate lastActivityDate;
     private LocalDateTime createdAt;
 
+    // Avatar
+    private String avatarFileId;
+
     // Antifaud
     private boolean fraudSuspect;
 
