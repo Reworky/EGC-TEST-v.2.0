@@ -30,6 +30,8 @@ public class Quest {
     private String category;
     private String platform;
     private String durationText;
+
+    @Column(columnDefinition = "integer default 0")
     private int durationDays;
     private Integer participantLimit;
 
@@ -42,7 +44,10 @@ public class Quest {
     private long rewardXp;
     private long rewardCoins;
     private boolean active;
+
+    @Column(columnDefinition = "boolean default false")
     private boolean councilOnly;
+
     private String photoFileId;
     private LocalDateTime createdAt;
 }

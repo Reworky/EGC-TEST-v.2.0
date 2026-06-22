@@ -56,15 +56,23 @@ public class AppUser {
     private String avatarFileId;
 
     // Antifaud
+    @Column(columnDefinition = "boolean default false")
     private boolean fraudSuspect;
 
     // Sink items
     private LocalDateTime excBoostActiveUntil;
     private String profileTitle;
+
+    @Column(columnDefinition = "boolean default false")
     private boolean retryInsuranceActive;
 
     // Withdrawal limits
+    @Column(columnDefinition = "bigint default 0")
     private long monthlyWithdrawnExc;
+
+    @Column(columnDefinition = "integer default 0")
     private int withdrawalMonth;
+
+    @Column(columnDefinition = "integer default 0")
     private int withdrawalYear;
 }
