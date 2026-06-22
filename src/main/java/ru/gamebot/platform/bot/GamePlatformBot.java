@@ -1,5 +1,6 @@
 package ru.gamebot.platform.bot;
 
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -597,10 +598,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case QUEST_CREATE_PLATFORM -> {
                 session.setState(SessionState.QUEST_CREATE_DURATION);
-                sendText(user.getTelegramId(), "⏳ Укажите срок выполнения, например: 1-3 дня.", cancelKeyboard());
+                sendText(user.getTelegramId(), "⏳ Укажите срок выполнения в днях (число). Например: <code>3</code>\n\nОтсчёт начнётся с момента, когда игрок возьмёт квест в работу.", cancelKeyboard());
             }
             case QUEST_CREATE_DURATION -> {
-                session.getData().put("duration", text.trim());
+                Integer days = parseInteger(text.trim());
+                if (days == null || days < 1 || days > 365) {
+                    sendText(user.getTelegramId(), "⚠️ Укажите срок числом от 1 до 365 (количество дней).", cancelKeyboard());
+                    return;
+                }
+                session.getData().put("durationDays", days.toString());
+                session.getData().put("duration", days + (days == 1 ? " день" : days < 5 ? " дня" : " дней"));
                 session.setState(SessionState.QUEST_CREATE_REWARD_XP);
                 sendText(user.getTelegramId(), "✨ Сколько XP начислять за квест?", cancelKeyboard());
             }
@@ -960,6 +967,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         QuestSubmission latest = questService.getLatestSubmission(user, quest);
         String statusText = latest == null ? "Не начат" : humanStatus(latest.getStatus());
 
+        String deadlineLine = "";
+        if (latest != null && latest.getStatus() == SubmissionStatus.DRAFT && latest.getExpiresAt() != null) {
+            if (questService.isExpired(latest)) {
+                deadlineLine = "⌛ Дедлайн: <b>истёк</b>\n";
+            } else {
+                long hoursLeft = java.time.temporal.ChronoUnit.HOURS.between(LocalDateTime.now(), latest.getExpiresAt());
+                if (hoursLeft < 24) {
+                    deadlineLine = "⚠️ Дедлайн: <b>через " + hoursLeft + " ч</b>\n";
+                } else {
+                    long daysLeft = hoursLeft / 24;
+                    deadlineLine = "📅 Дедлайн: <b>через " + daysLeft + " д</b>\n";
+                }
+            }
+        } else if (quest.getDurationDays() > 0 && (latest == null || latest.getStatus() == SubmissionStatus.REJECTED)) {
+            deadlineLine = "⏳ Срок: <b>" + quest.getDurationText() + "</b> с момента старта\n";
+        }
+
         List<InlineKeyboardButton> buttons = new ArrayList<>();
         buttons.add(keyboardFactory.callback("🚀 Взять", "quest:take:" + questId));
         buttons.add(keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
@@ -973,7 +997,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🎮 Игра: <b>" + escape(quest.getGameName()) + "</b>\n"
                         + "📚 Формат: <b>" + escape(quest.getCategory()) + "</b>\n"
                         + "🕹️ Платформа: <b>" + escape(quest.getPlatform()) + "</b>\n"
-                        + "⏳ Темп: <b>" + escape(quest.getDurationText()) + "</b>\n"
+                        + deadlineLine
                         + "📌 Статус: <b>" + escape(statusText) + "</b>\n\n"
                         + "🏆 <b>Награда</b>\n"
                         + "✨ +" + quest.getRewardXp() + " XP\n"
@@ -989,8 +1013,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         QuestSubmission latest = questService.getLatestSubmission(user, quest);
         if (latest != null && latest.getStatus() == SubmissionStatus.DRAFT) {
             answerSilently(callbackQuery.getId());
-            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
-                    "🧭 Этот квест уже добавлен в работу. Ниже оставил карточку с кнопкой для отчёта.");
+            if (questService.isExpired(latest)) {
+                sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                        "⌛ Срок выполнения квеста истёк. Вы не успели сдать отчёт вовремя.");
+            } else {
+                sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                        "🧭 Этот квест уже добавлен в работу. Ниже оставил карточку с кнопкой для отчёта.");
+            }
             return;
         }
         if (latest != null && (latest.getStatus() == SubmissionStatus.PENDING || latest.getStatus() == SubmissionStatus.APPROVED)) {
@@ -1025,6 +1054,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         QuestSubmission latest = questService.getLatestSubmission(user, quest);
         if (latest == null || latest.getStatus() == SubmissionStatus.REJECTED || latest.getStatus() == SubmissionStatus.NEEDS_INFO) {
             latest = questService.createDraftSubmission(user, quest);
+        }
+
+        if (questService.isExpired(latest)) {
+            answerSilently(callbackQuery.getId());
+            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                    "⌛ Срок выполнения этого квеста истёк. Отчёт больше не принимается.");
+            return;
         }
 
         session.reset();
@@ -2629,6 +2665,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         quest.setCategory(session.getData().get("category"));
         quest.setPlatform(session.getData().get("platform"));
         quest.setDurationText(session.getData().get("duration"));
+        quest.setDurationDays(Integer.parseInt(session.getData().getOrDefault("durationDays", "0")));
         quest.setRewardXp(Long.parseLong(session.getData().get("xp")));
         quest.setRewardCoins(Long.parseLong(session.getData().get("coins")));
         quest.setInstruction(session.getData().get("instruction"));

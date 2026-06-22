@@ -30,6 +30,7 @@ public class Quest {
     private String category;
     private String platform;
     private String durationText;
+    private int durationDays;
     private Integer participantLimit;
 
     @Column(length = 2000)

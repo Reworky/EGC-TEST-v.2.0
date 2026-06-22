@@ -144,7 +144,15 @@ public class QuestService {
         submission.setStatus(SubmissionStatus.DRAFT);
         submission.setCreatedAt(LocalDateTime.now());
         submission.setUpdatedAt(LocalDateTime.now());
+        if (quest.getDurationDays() > 0) {
+            submission.setExpiresAt(LocalDateTime.now().plusDays(quest.getDurationDays()));
+        }
         return questSubmissionRepository.save(submission);
+    }
+
+    public boolean isExpired(QuestSubmission submission) {
+        return submission.getExpiresAt() != null
+                && LocalDateTime.now().isAfter(submission.getExpiresAt());
     }
 
     @Transactional

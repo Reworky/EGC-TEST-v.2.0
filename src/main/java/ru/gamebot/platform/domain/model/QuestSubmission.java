@@ -53,4 +53,5 @@ public class QuestSubmission {
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private LocalDateTime expiresAt;
 }
