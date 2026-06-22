@@ -1,8 +1,10 @@
 package ru.gamebot.platform.service;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -10,6 +12,7 @@ import ru.gamebot.platform.domain.enums.SubmissionStatus;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.model.QuestSubmission;
+import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.QuestRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
 
@@ -17,8 +20,14 @@ import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
 @RequiredArgsConstructor
 public class QuestService {
 
+    private static final int WEEKLY_QUEST_TYPE_LIMIT = 3;
+    private static final int COOLDOWN_HOURS = 24;
+    private static final int REFERRAL_BONUS_PERCENT = 10;
+    private static final int REFERRAL_DAYS_WINDOW = 30;
+
     private final QuestRepository questRepository;
     private final QuestSubmissionRepository questSubmissionRepository;
+    private final AppUserRepository appUserRepository;
     private final UserService userService;
     private final HealthRatioService healthRatioService;
 
@@ -101,6 +110,18 @@ public class QuestService {
         return questSubmissionRepository.findTopByUserAndQuestOrderByCreatedAtDesc(user, quest).orElse(null);
     }
 
+    public boolean isCooldownActive(AppUser user, Quest quest) {
+        Optional<LocalDateTime> lastApproved = questSubmissionRepository
+                .findLastApprovedDateByUserAndGame(user, quest.getGameName());
+        return lastApproved.isPresent()
+                && LocalDateTime.now().isBefore(lastApproved.get().plusHours(COOLDOWN_HOURS));
+    }
+
+    public long getWeeklyCompletionsOfType(AppUser user, Quest quest) {
+        return questSubmissionRepository.countApprovedByUserAndGameAndCategorySince(
+                user, quest.getGameName(), quest.getCategory(), LocalDateTime.now().minusWeeks(1));
+    }
+
     @Transactional
     public QuestSubmission createDraftSubmission(AppUser user, Quest quest) {
         QuestSubmission submission = new QuestSubmission();
@@ -146,12 +167,53 @@ public class QuestService {
         submission.setStatus(SubmissionStatus.APPROVED);
         submission.setModeratorComment("Принято. Отличная работа!");
         submission.setUpdatedAt(LocalDateTime.now());
+
         AppUser user = submission.getUser();
-        long adjustedCoins = healthRatioService.applyRatio(submission.getQuest().getRewardCoins());
-        userService.addReward(user, submission.getQuest().getRewardXp(), adjustedCoins);
+        Quest quest = submission.getQuest();
+
+        long baseCoins = quest.getRewardCoins();
+        long adjustedCoins = healthRatioService.applyRatio(baseCoins);
+
+        // 3.4 Antifaud: diminishing returns after 3 completions of same type per week
+        LocalDateTime weekAgo = LocalDateTime.now().minusWeeks(1);
+        long weeklyCount = questSubmissionRepository.countApprovedByUserAndGameAndCategorySince(
+                user, quest.getGameName(), quest.getCategory(), weekAgo);
+        if (weeklyCount >= WEEKLY_QUEST_TYPE_LIMIT) {
+            adjustedCoins = adjustedCoins / 2;
+        }
+
+        // 3.5 200 EXC bonus on first quest (before completedQuests increment)
+        userService.grantFirstQuestReferralBonus(user);
+
+        userService.addReward(user, quest.getRewardXp(), adjustedCoins);
         user.setCompletedQuests(user.getCompletedQuests() + 1);
         submission.setUser(user);
-        return questSubmissionRepository.save(submission);
+        questSubmissionRepository.save(submission);
+
+        // 3.5 Referral bonus: 10% of EXC earned by referred in first 30 days
+        grantReferralBonus(user, adjustedCoins);
+
+        return submission;
+    }
+
+    private void grantReferralBonus(AppUser invitedUser, long earnedCoins) {
+        Long referrerTelegramId = invitedUser.getReferredByTelegramId();
+        if (referrerTelegramId == null) {
+            return;
+        }
+        if (invitedUser.getCreatedAt() == null) {
+            return;
+        }
+        long daysSinceJoin = ChronoUnit.DAYS.between(invitedUser.getCreatedAt(), LocalDateTime.now());
+        if (daysSinceJoin > REFERRAL_DAYS_WINDOW) {
+            return;
+        }
+        AppUser referrer = appUserRepository.findByTelegramId(referrerTelegramId).orElse(null);
+        if (referrer == null) {
+            return;
+        }
+        long bonus = Math.max(1, earnedCoins * REFERRAL_BONUS_PERCENT / 100);
+        userService.addReward(referrer, 0, bonus);
     }
 
     @Transactional

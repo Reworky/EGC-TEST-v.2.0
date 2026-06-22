@@ -51,4 +51,14 @@ public class AppUser {
     private boolean referralRewardProcessed;
     private LocalDate lastActivityDate;
     private LocalDateTime createdAt;
+
+    // Sink items
+    private LocalDateTime excBoostActiveUntil;
+    private String profileTitle;
+    private boolean retryInsuranceActive;
+
+    // Withdrawal limits
+    private long monthlyWithdrawnExc;
+    private int withdrawalMonth;
+    private int withdrawalYear;
 }

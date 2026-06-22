@@ -94,6 +94,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final SupportService supportService;
     private final KeyboardFactory keyboardFactory;
     private final ru.gamebot.platform.service.HealthRatioService healthRatioService;
+    private final ru.gamebot.platform.service.SinkShopService sinkShopService;
 
     @EventListener(ApplicationReadyEvent.class)
     public void registerBot() throws TelegramApiException {
@@ -346,6 +347,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleRewardPurchase(callbackQuery, user, parseLong(data.substring("shop:buy:".length())));
             return;
         }
+        if (data.startsWith("sink:")) {
+            handleSinkAction(callbackQuery, user, data.substring("sink:".length()));
+            return;
+        }
         if (data.startsWith("rate:")) {
             sendLeaderboard(user, data.substring("rate:".length()));
             answer(callbackQuery.getId(), "Рейтинг готов");
@@ -394,6 +399,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "rating" -> sendRatingMenu(user);
             case "referrals" -> sendReferrals(user);
             case "shop" -> sendShop(user);
+            case "sink" -> sendSinkShop(user);
             case "news" -> sendNews(user);
             case "support" -> sendSupport(user);
             case "admin" -> sendAdminPanel(user);
@@ -641,16 +647,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String achievements = userService.getAchievements(user).isEmpty()
                 ? "Пока нет, но первое достижение уже близко."
                 : String.join(", ", userService.getAchievements(user));
+        String titleLine = user.getProfileTitle() != null
+                ? "🏅 Титул: <b>" + escape(user.getProfileTitle()) + "</b>\n"
+                : "";
+        String boostLine = sinkShopService.isBoostActive(user)
+                ? "⚡ Буст EXC +20% активен\n"
+                : "";
 
         sendText(user.getTelegramId(),
                 "👤 <b>Профиль</b>\n\n"
                         + "🎮 <b>" + escape(user.getNickname()) + "</b>\n"
+                        + titleLine
                         + "⭐ Уровень: <b>" + userService.getLevelNumber(user.getXp()) + ". "
                         + escape(userService.getLevelName(user.getXp())) + "</b>\n"
                         + levelProgressLine(user) + "\n\n"
                         + "🏆 <b>Текущая форма</b>\n"
-                        + "🪙 Монеты: <b>" + user.getCoins() + "</b>\n"
+                        + "🪙 Монеты: <b>" + user.getCoins() + " EXC</b>\n"
                         + "💠 Бонус к EXC: <b>+" + userService.getExcBonusPercent(user.getXp()) + "%</b>\n"
+                        + boostLine
                         + "🎟️ Билеты: <b>" + user.getTickets() + "</b>\n"
                         + "🥇 Место в рейтинге: <b>" + rank + "</b>\n"
                         + "✅ Выполнено квестов: <b>" + user.getCompletedQuests() + "</b>\n"
@@ -873,10 +887,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        // 3.4 Antifaud: cooldown 24h between same-game quests
+        if (questService.isCooldownActive(user, quest)) {
+            answerSilently(callbackQuery.getId());
+            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                    "⏳ Кулдаун активен. Повторный квест в этой игре доступен через 24 часа после последнего одобренного отчёта.");
+            return;
+        }
+
         questService.createDraftSubmission(user, quest);
         answerSilently(callbackQuery.getId());
-        sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
-                "🚀 Квест добавлен в работу. Когда будете готовы, отправьте отчёт прямо из этой карточки или через раздел «Мои квесты».");
+
+        // Warn if diminishing returns will apply
+        long weeklyCount = questService.getWeeklyCompletionsOfType(user, quest);
+        String notice = "🚀 Квест добавлен в работу. Когда будете готовы, отправьте отчёт прямо из этой карточки или через раздел «Мои квесты».";
+        if (weeklyCount >= 3) {
+            notice += "\n\n⚠️ Вы уже выполнили 3+ таких квеста за неделю — награда EXC будет снижена на 50%.";
+        }
+        sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад", notice);
     }
 
     private void handleReportStart(CallbackQuery callbackQuery, AppUser user, UserSession session, Long questId) {
@@ -1029,17 +1057,135 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        int ratioPercent = (int) Math.round(healthRatioService.getCurrentRatio() * 100);
+        long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
+
         List<InlineKeyboardButton> buttons = new ArrayList<>();
         for (RewardItem reward : rewards) {
-            buttons.add(keyboardFactory.callback("🎁 " + trim(reward.getTitle(), 26), "shop:view:" + reward.getId()));
+            long price = rewardService.effectivePrice(reward);
+            buttons.add(keyboardFactory.callback("🎁 " + trim(reward.getTitle(), 22) + " — " + price + " EXC", "shop:view:" + reward.getId()));
         }
         buttons.add(keyboardFactory.callback("🏠 Меню", "menu:main"));
 
         sendText(user.getTelegramId(),
                 "🛍️ <b>Магазин наград</b>\n\n"
-                        + "Здесь монеты превращаются в реальные бонусы, цифровые призы и мерч.\n"
-                        + "Текущий баланс: <b>" + user.getCoins() + " монет</b>.",
+                        + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>\n"
+                        + "📊 Health Ratio: <b>" + ratioPercent + "%</b> (влияет на цены)\n"
+                        + "📤 Лимит вывода в этом месяце: <b>" + remaining + " EXC</b>\n\n"
+                        + "Цены указаны с учётом текущего Health Ratio.",
                 keyboardFactory.smartLayout(buttons));
+    }
+
+    private void sendSinkShop(AppUser user) {
+        boolean boostActive = sinkShopService.isBoostActive(user);
+        boolean insuranceActive = user.isRetryInsuranceActive();
+        String titleLine = user.getProfileTitle() != null ? "🏅 Текущий титул: <b>" + escape(user.getProfileTitle()) + "</b>\n" : "";
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("🔀 Реролл квеста — 50 EXC", "sink:reroll")));
+        if (boostActive) {
+            rows.add(List.of(keyboardFactory.callback("⚡ Буст активен ✅", "sink:boost_info")));
+        } else {
+            rows.add(List.of(keyboardFactory.callback("⚡ Буст XP/EXC +20% на 24ч — 200 EXC", "sink:boost")));
+        }
+        rows.add(List.of(keyboardFactory.callback("🎭 Титулы профиля", "sink:titles")));
+        if (insuranceActive) {
+            rows.add(List.of(keyboardFactory.callback("🛡️ Страховка активна ✅", "sink:insurance_info")));
+        } else {
+            rows.add(List.of(keyboardFactory.callback("🛡️ Страховка попытки — 75 EXC", "sink:insurance")));
+        }
+        rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
+
+        sendText(user.getTelegramId(),
+                "⚡ <b>Предметы клуба</b>\n\n"
+                        + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>\n"
+                        + titleLine + "\n"
+                        + "Предметы не расходуют клубный бюджет — только ваши монеты.\n"
+                        + "Используйте их для ускорения прогресса и кастомизации.",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleSinkAction(CallbackQuery callbackQuery, AppUser user, String action) {
+        switch (action) {
+            case "reroll" -> {
+                try {
+                    sinkShopService.purchaseReroll(user);
+                    sendText(user.getTelegramId(),
+                            "🔀 <b>Реролл активирован</b>\n\nСписано 50 EXC. Перейдите в раздел квестов — там уже другой набор заданий.",
+                            backMenuKeyboard("menu:sink"));
+                } catch (IllegalArgumentException e) {
+                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
+                }
+            }
+            case "boost" -> {
+                try {
+                    sinkShopService.purchaseBoost(user);
+                    sendText(user.getTelegramId(),
+                            "⚡ <b>Буст активирован!</b>\n\nВы получаете +20% к EXC за все квесты в течение 24 часов.\nСписано 200 EXC.",
+                            backMenuKeyboard("menu:sink"));
+                } catch (IllegalArgumentException e) {
+                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
+                }
+            }
+            case "boost_info" -> sendText(user.getTelegramId(),
+                    "⚡ Буст уже активен. Действует до: <b>" + (user.getExcBoostActiveUntil() != null ? user.getExcBoostActiveUntil().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) : "—") + "</b>",
+                    backMenuKeyboard("menu:sink"));
+            case "insurance" -> {
+                try {
+                    sinkShopService.purchaseInsurance(user);
+                    sendText(user.getTelegramId(),
+                            "🛡️ <b>Страховка активирована!</b>\n\nЕсли ваш следующий отчёт по квесту будет отклонён — вы сможете отправить его повторно без штрафа.\nСписано 75 EXC.",
+                            backMenuKeyboard("menu:sink"));
+                } catch (IllegalArgumentException | IllegalStateException e) {
+                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
+                }
+            }
+            case "insurance_info" -> sendText(user.getTelegramId(),
+                    "🛡️ Страховка активна. Она сработает при следующем отклонённом отчёте.",
+                    backMenuKeyboard("menu:sink"));
+            case "titles" -> sendSinkTitles(user);
+            default -> {
+                if (action.startsWith("buy_title:")) {
+                    handleTitlePurchase(callbackQuery, user, action.substring("buy_title:".length()));
+                } else {
+                    sendSinkShop(user);
+                }
+            }
+        }
+        answerSilently(callbackQuery.getId());
+    }
+
+    private void sendSinkTitles(AppUser user) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("🌱 Новый игрок — 100 EXC", "sink:buy_title:Новый игрок:100")));
+        rows.add(List.of(keyboardFactory.callback("🔥 Квест-хантер — 300 EXC", "sink:buy_title:Квест-хантер:300")));
+        rows.add(List.of(keyboardFactory.callback("👑 Элита клуба — 500 EXC", "sink:buy_title:Элита клуба:500")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:sink")));
+        sendText(user.getTelegramId(),
+                "🎭 <b>Титулы профиля</b>\n\nТитул отображается в вашем профиле и виден другим игрокам.\nПокупка заменяет текущий титул.",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleTitlePurchase(CallbackQuery callbackQuery, AppUser user, String payload) {
+        String[] parts = payload.split(":");
+        if (parts.length != 2) {
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        String title = parts[0];
+        Long price = parseLong(parts[1]);
+        if (price == null) {
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        try {
+            sinkShopService.purchaseTitle(user, title, price);
+            sendText(user.getTelegramId(),
+                    "🏅 <b>Титул «" + escape(title) + "» получен!</b>\n\nСписано " + price + " EXC. Титул отображается в вашем профиле.",
+                    backMenuKeyboard("menu:sink"));
+        } catch (IllegalArgumentException e) {
+            sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
+        }
     }
 
     private void sendRewardCard(AppUser user, Long rewardId) {
@@ -1048,11 +1194,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendRewardCard(AppUser user, Long rewardId, String notice) {
         RewardItem reward = rewardService.getRewardItem(rewardId);
+        long effectivePrice = rewardService.effectivePrice(reward);
+        String priceNote = effectivePrice != reward.getPriceCoins()
+                ? " (базовая: " + reward.getPriceCoins() + " EXC)"
+                : "";
         String text = (notice == null ? "" : notice + "\n\n")
                 + "🎁 <b>" + escape(reward.getTitle()) + "</b>\n\n"
                 + "📦 Категория: <b>" + escape(reward.getCategory()) + "</b>\n"
                 + "📝 " + escape(reward.getDescription()) + "\n\n"
-                + "🪙 Стоимость: <b>" + reward.getPriceCoins() + " монет</b>";
+                + "🪙 Стоимость: <b>" + effectivePrice + " EXC</b>" + priceNote;
         InlineKeyboardMarkup keyboard = verticalWithBackMenu(
                 List.of(keyboardFactory.callback("🛒 Обменять", "shop:buy:" + rewardId)),
                 "⬅️ Назад",
@@ -1067,19 +1217,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleRewardPurchase(CallbackQuery callbackQuery, AppUser user, Long rewardId) {
         RewardItem reward = rewardService.getRewardItem(rewardId);
+        long effectivePrice = rewardService.effectivePrice(reward);
         try {
             rewardService.createRewardRequest(user, reward);
         } catch (IllegalArgumentException exception) {
             answerSilently(callbackQuery.getId());
-            sendRewardCard(user, rewardId,
-                    "⚠️ Для этой награды пока не хватает монет. Посмотрите стоимость ниже и возвращайтесь после новых квестов.");
+            sendRewardCard(user, rewardId, "⚠️ " + exception.getMessage());
             return;
         }
         notifyAdminsAboutRewardRequest(user, reward);
         sendText(user.getTelegramId(),
                 "✅ <b>Заявка на награду отправлена</b>\n\n"
                         + "🎁 Награда: <b>" + escape(reward.getTitle()) + "</b>\n"
-                        + "🪙 Списано: <b>" + reward.getPriceCoins() + " монет</b>\n\n"
+                        + "🪙 Списано: <b>" + effectivePrice + " EXC</b>\n\n"
                         + "Как только выдача будет подтверждена, вы получите отдельное уведомление.",
                 backMenuKeyboard("menu:shop"));
         answerSilently(callbackQuery.getId());
@@ -1381,12 +1531,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 adjustedCoins,
                 0
         );
+        boolean isFirstQuest = submission.getUser().getCompletedQuests() == 0;
         QuestSubmission submission = questService.approveSubmission(submissionId);
+        String firstQuestBonus = isFirstQuest && submission.getUser().getReferredByTelegramId() != null
+                ? "\n🎁 Бонус за первый квест: <b>+200 EXC</b>" : "";
         notifyUser(submission.getUser().getTelegramId(),
                 "🎉 Ваш отчёт по квесту <b>" + escape(submission.getQuest().getTitle()) + "</b> одобрен!\n\n"
                         + "✨ XP: <b>+" + rewardGrant.xp() + "</b>\n"
                         + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>\n"
-                        + formatExcBonusLine(rewardGrant));
+                        + formatExcBonusLine(rewardGrant)
+                        + firstQuestBonus);
         sendModerationQueue(callbackQuery.getFrom().getId());
         answer(callbackQuery.getId(), "Заявка одобрена");
     }
@@ -2183,7 +2337,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("🏆 Рейтинг", "menu:rating"),
                 keyboardFactory.callback("📰 Новости", "menu:news")
         ));
-        rows.add(List.of(keyboardFactory.callback("🛍️ Магазин", "menu:shop")));
+        rows.add(List.of(
+                keyboardFactory.callback("🛍️ Магазин наград", "menu:shop"),
+                keyboardFactory.callback("⚡ Предметы", "menu:sink")
+        ));
         rows.add(List.of(keyboardFactory.callback("🆘 Поддержка", "menu:support")));
         return keyboardFactory.rowsLayout(rows);
     }

@@ -1,9 +1,12 @@
 package ru.gamebot.platform.domain.repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import ru.gamebot.platform.domain.enums.SubmissionStatus;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Quest;
@@ -30,4 +33,10 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     void deleteAllByUser(AppUser user);
 
     void deleteAllByQuest(Quest quest);
+
+    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.user = :user AND s.quest.gameName = :gameName AND s.quest.category = :category AND s.status = 'APPROVED' AND s.updatedAt >= :since")
+    long countApprovedByUserAndGameAndCategorySince(@Param("user") AppUser user, @Param("gameName") String gameName, @Param("category") String category, @Param("since") LocalDateTime since);
+
+    @Query("SELECT MAX(s.updatedAt) FROM QuestSubmission s WHERE s.user = :user AND s.quest.gameName = :gameName AND s.status = 'APPROVED'")
+    Optional<LocalDateTime> findLastApprovedDateByUserAndGame(@Param("user") AppUser user, @Param("gameName") String gameName);
 }

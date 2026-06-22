@@ -197,6 +197,7 @@ public class UserService {
         return "📅 Серия входов обновлена: " + user.getStreakDays() + " дней подряд.";
     }
 
+    // Called on channel subscription — counts the invite, no EXC bonus yet
     @Transactional
     public void grantReferralReward(AppUser invitedUser) {
         if (invitedUser.isReferralRewardProcessed()) {
@@ -211,9 +212,24 @@ public class UserService {
             return;
         }
         referrer.setInvitedFriends(referrer.getInvitedFriends() + 1);
-        addReward(referrer, 30, 50, 0);
+        appUserRepository.save(referrer);
+        // 200 EXC to the invited user is granted on first quest completion (see QuestService)
+        // 10% referrer bonus per quest is also handled in QuestService
         invitedUser.setReferralRewardProcessed(true);
         appUserRepository.save(invitedUser);
+    }
+
+    // 3.5: 200 EXC bonus to invited user on their first approved quest
+    @Transactional
+    public boolean grantFirstQuestReferralBonus(AppUser invitedUser) {
+        if (invitedUser.getReferredByTelegramId() == null) {
+            return false;
+        }
+        if (invitedUser.getCompletedQuests() != 0) {
+            return false; // only on first quest (completedQuests is incremented before this call)
+        }
+        addReward(invitedUser, 0, 200);
+        return true;
     }
 
     @Transactional
