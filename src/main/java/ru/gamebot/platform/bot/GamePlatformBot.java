@@ -819,6 +819,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "💰 <b>Баланс</b>\n\n"
                         + "🪙 Монеты клуба: <b>" + user.getCoins() + " EXC</b>\n"
+                        + "💱 Курс обмена: <b>100 EXC = 1 ₽</b>\n"
                         + "💠 Активный бонус к EXC: <b>+" + userService.getExcBonusPercent(user.getXp()) + "%</b>\n"
                         + "🎟️ Билеты сезона: <b>" + user.getTickets() + "</b>\n"
                         + "✨ Общий XP: <b>" + user.getXp() + "</b>\n"
