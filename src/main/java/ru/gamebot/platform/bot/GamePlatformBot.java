@@ -823,7 +823,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🎟️ Билеты сезона: <b>" + user.getTickets() + "</b>\n"
                         + "✨ Общий XP: <b>" + user.getXp() + "</b>\n"
                         + "📈 XP за неделю: <b>" + user.getWeeklyXp() + "</b>\n\n"
-                        + "📊 <b>Health Ratio клуба: " + ratioPercent + "%</b>\n"
+                        + "📊 <b>Состояние фонда клуба: " + ratioPercent + "%</b>\n"
                         + hrExplanationLine(ratioPercent, effectiveQuestReward) + "\n"
                         + "Чем активнее вы играете, тем быстрее открываете сильные награды и поднимаетесь в рейтинге.",
                 backMenuKeyboard(backData));
@@ -1229,9 +1229,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "🛍️ <b>Магазин наград</b>\n\n"
                         + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>\n"
-                        + "📊 Health Ratio: <b>" + ratioPercent + "%</b> (влияет на цены)\n"
+                        + "📊 Состояние фонда: <b>" + ratioPercent + "%</b> (влияет на цены)\n"
                         + "📤 Лимит вывода в этом месяце: <b>" + remaining + " EXC</b>\n\n"
-                        + "Цены указаны с учётом текущего Health Ratio.",
+                        + "Цены указаны с учётом текущего Состояние фонда.",
                 keyboardFactory.smartLayout(buttons));
     }
 
@@ -1917,7 +1917,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 long debt = healthRatioService.getTotalDebtExc();
                 sendText(user.getTelegramId(),
                         "💳 <b>Пополнение Payout Pool</b>\n\n"
-                                + "📊 Текущий Health Ratio: <b>" + (int) Math.round(ratio * 100) + "%</b>\n"
+                                + "📊 Текущий Состояние фонда: <b>" + (int) Math.round(ratio * 100) + "%</b>\n"
                                 + "💰 Payout Pool: <b>" + pool + " ₽</b>\n"
                                 + "📉 Общий долг EXC: <b>" + debt + " EXC (" + (debt / 100) + " ₽)</b>\n\n"
                                 + "Введите сумму пополнения в рублях:",
@@ -2460,7 +2460,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         session.reset();
         sendText(user.getTelegramId(),
                 "✅ Payout Pool пополнен на <b>" + amount + " ₽</b>.\n\n"
-                        + "📊 Новый Health Ratio: <b>" + ratioPercent + "%</b>",
+                        + "📊 Новый Состояние фонда: <b>" + ratioPercent + "%</b>",
                 mainMenuKeyboard(user));
     }
 
