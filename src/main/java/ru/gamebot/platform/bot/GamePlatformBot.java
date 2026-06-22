@@ -824,9 +824,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "✨ Общий XP: <b>" + user.getXp() + "</b>\n"
                         + "📈 XP за неделю: <b>" + user.getWeeklyXp() + "</b>\n\n"
                         + "📊 <b>Health Ratio клуба: " + ratioPercent + "%</b>\n"
-                        + "💡 Текущий курс начислений: <b>" + effectiveQuestReward + " EXC</b> за базовый квест вместо 100\n\n"
+                        + hrExplanationLine(ratioPercent, effectiveQuestReward) + "\n"
                         + "Чем активнее вы играете, тем быстрее открываете сильные награды и поднимаетесь в рейтинге.",
                 backMenuKeyboard(backData));
+    }
+
+    private String hrExplanationLine(int ratioPercent, long effectiveRewardPer100) {
+        if (ratioPercent >= 100) {
+            return "✅ Клуб работает на полную мощность — награды начисляются в полном объёме.";
+        }
+        if (ratioPercent >= 70) {
+            return "💡 Клуб выплачивает <b>" + ratioPercent + "%</b> от заявленной награды. Пример: за квест с наградой 200 EXC вы получите <b>" + (effectiveRewardPer100 * 2) + " EXC</b>.";
+        }
+        return "⚠️ Клуб временно выплачивает <b>" + ratioPercent + "%</b> от заявленной награды. Пример: за квест с наградой 200 EXC сейчас начислят <b>" + (effectiveRewardPer100 * 2) + " EXC</b>. Когда фонд пополнится — курс вернётся к 100%.";
     }
 
     private void sendQuestGames(AppUser user) {
