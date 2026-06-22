@@ -390,6 +390,22 @@ public class UserService {
         return current;
     }
 
+    public List<AppUser> getFraudSuspects() {
+        return appUserRepository.findAllByFraudSuspectTrue();
+    }
+
+    public long countFraudSuspects() {
+        return appUserRepository.findAllByFraudSuspectTrue().size();
+    }
+
+    @Transactional
+    public void clearFraudSuspect(Long telegramId) {
+        appUserRepository.findByTelegramId(telegramId).ifPresent(user -> {
+            user.setFraudSuspect(false);
+            appUserRepository.save(user);
+        });
+    }
+
     public record RewardGrant(long xp, long baseExc, long bonusExc, long totalExc, long tickets, int excBonusPercent) {
     }
 

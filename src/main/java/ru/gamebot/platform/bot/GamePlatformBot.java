@@ -371,6 +371,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleSupportAction(callbackQuery, user, session, data.substring("support:".length()));
             return;
         }
+        if ("mod:suspects".equals(data) && isEffectiveModerator(user)) {
+            sendFraudSuspects(user.getTelegramId());
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if (data.startsWith("mod:suspect:") && isEffectiveModerator(user)) {
+            handleSuspectAction(callbackQuery, user, data.substring("mod:suspect:".length()));
+            return;
+        }
+        if (data.startsWith("mod:clear_suspect:") && isEffectiveModerator(user)) {
+            Long targetId = parseLong(data.substring("mod:clear_suspect:".length()));
+            userService.clearFraudSuspect(targetId);
+            sendText(user.getTelegramId(), "✅ Флаг снят. Аккаунт помечен как проверенный.", backOnlyKeyboard("mod:suspects"));
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if (data.startsWith("mod:view:") && isEffectiveModerator(user)) {
             sendSubmissionCard(user.getTelegramId(), parseLong(data.substring("mod:view:".length())));
             answer(callbackQuery.getId(), "Заявка открыта");
@@ -1575,25 +1591,92 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ), "⬅️ Назад", "mod:support:list"));
     }
 
+    private void handleSuspectAction(CallbackQuery callbackQuery, AppUser moderator, String telegramIdStr) {
+        Long targetId = parseLong(telegramIdStr);
+        if (targetId == null) { answerSilently(callbackQuery.getId()); return; }
+        AppUser suspect = userService.findByTelegramId(targetId).orElse(null);
+        if (suspect == null) {
+            sendText(moderator.getTelegramId(), "⚠️ Пользователь не найден.", backOnlyKeyboard("mod:suspects"));
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        long reviewed = questService.countReviewedByUser(suspect);
+        long approved = questService.countApprovedByUser(suspect);
+        double rate = reviewed > 0 ? (double) approved / reviewed * 100 : 0;
+        sendText(moderator.getTelegramId(),
+                "⚠️ <b>Подозрительный аккаунт</b>\n\n"
+                        + "👤 Никнейм: <b>" + escape(suspect.getNickname() != null ? suspect.getNickname() : "—") + "</b>\n"
+                        + "🆔 Telegram ID: <b>" + suspect.getTelegramId() + "</b>\n"
+                        + "✅ Одобрено: <b>" + approved + " / " + reviewed + "</b> (" + (int) rate + "%)\n"
+                        + "📅 В клубе с: <b>" + (suspect.getCreatedAt() != null ? suspect.getCreatedAt().format(DATE_TIME_FORMATTER) : "—") + "</b>\n\n"
+                        + "Если игрок честный — снимите флаг.",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("✅ Снять флаг — игрок честный", "mod:clear_suspect:" + targetId)),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "mod:suspects"))
+                )));
+        answerSilently(callbackQuery.getId());
+    }
+
     private void sendModerationQueue(Long chatId) {
         List<QuestSubmission> submissions = questService.getPendingSubmissions();
-        if (submissions.isEmpty()) {
+        long suspectCount = userService.countFraudSuspects();
+
+        List<InlineKeyboardButton> buttons = new ArrayList<>();
+        for (QuestSubmission submission : submissions) {
+            boolean suspect = submission.getUser().isFraudSuspect();
+            String prefix = suspect ? "⚠️ " : "🔎 ";
+            String title = prefix + trim(submission.getUser().getNickname() + " / " + submission.getQuest().getTitle(), 26);
+            buttons.add(keyboardFactory.callback(title, "mod:view:" + submission.getId()));
+        }
+
+        String suspectLine = suspectCount > 0
+                ? "\n⚠️ Подозрительных аккаунтов: <b>" + suspectCount + "</b>"
+                : "";
+
+        if (submissions.isEmpty() && suspectCount == 0) {
             sendText(chatId,
                     "🛡️ Очередь проверки пуста. Все текущие отчёты уже разобраны.",
                     backOnlyKeyboard("menu:moderation"));
             return;
         }
 
-        List<InlineKeyboardButton> buttons = new ArrayList<>();
-        for (QuestSubmission submission : submissions) {
-            String title = "🔎 " + trim(submission.getUser().getNickname() + " / " + submission.getQuest().getTitle(), 28);
-            buttons.add(keyboardFactory.callback(title, "mod:view:" + submission.getId()));
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (!buttons.isEmpty()) {
+            rows.add(List.of()); // placeholder, filled below via verticalWithBackMenu
         }
+        if (suspectCount > 0) {
+            buttons.add(keyboardFactory.callback("⚠️ Подозрительные аккаунты (" + suspectCount + ")", "mod:suspects"));
+        }
+        buttons.add(keyboardFactory.callback("⬅️ Назад", "menu:moderation"));
+
         sendText(chatId,
                 "🛡️ <b>Очередь модерации</b>\n\n"
-                        + "Заявок на проверке: <b>" + submissions.size() + "</b>\n"
-                        + "Откройте карточку, чтобы принять, отклонить или запросить уточнение.",
-                verticalWithBackMenu(buttons, "⬅️ Назад", "menu:moderation"));
+                        + "Заявок на проверке: <b>" + submissions.size() + "</b>"
+                        + suspectLine + "\n\n"
+                        + "⚠️ — аккаунты с признаками фрода помечены.",
+                keyboardFactory.smartLayout(buttons));
+    }
+
+    private void sendFraudSuspects(Long chatId) {
+        List<AppUser> suspects = userService.getFraudSuspects();
+        if (suspects.isEmpty()) {
+            sendText(chatId, "✅ Подозрительных аккаунтов нет.", backOnlyKeyboard("mod:support:quests"));
+            return;
+        }
+        List<InlineKeyboardButton> buttons = new ArrayList<>();
+        for (AppUser suspect : suspects) {
+            buttons.add(keyboardFactory.callback(
+                    "⚠️ " + trim(suspect.getNickname() != null ? suspect.getNickname() : "ID:" + suspect.getTelegramId(), 28),
+                    "mod:suspect:" + suspect.getTelegramId()));
+        }
+        buttons.add(keyboardFactory.callback("⬅️ Назад", "mod:support:quests"));
+        sendText(chatId,
+                "⚠️ <b>Подозрительные аккаунты</b>\n\n"
+                        + "Эти аккаунты автоматически помечены по признакам фрода:\n"
+                        + "• Success rate > 90%\n"
+                        + "• Интервал между заявками < 10 сек\n\n"
+                        + "Проверьте вручную и снимите флаг если игрок честный.",
+                keyboardFactory.smartLayout(buttons));
     }
 
     private void sendSubmissionCard(Long chatId, Long submissionId) {

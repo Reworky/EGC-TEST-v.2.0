@@ -52,6 +52,9 @@ public class AppUser {
     private LocalDate lastActivityDate;
     private LocalDateTime createdAt;
 
+    // Antifaud
+    private boolean fraudSuspect;
+
     // Sink items
     private LocalDateTime excBoostActiveUntil;
     private String profileTitle;

@@ -22,4 +22,6 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     @Query("SELECT COALESCE(SUM(u.coins), 0) FROM AppUser u")
     long sumAllCoins();
+
+    List<AppUser> findAllByFraudSuspectTrue();
 }

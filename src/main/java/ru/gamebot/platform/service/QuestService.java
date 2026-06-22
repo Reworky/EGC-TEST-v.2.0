@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.enums.SubmissionStatus;
@@ -16,6 +17,7 @@ import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.QuestRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class QuestService {
@@ -154,7 +156,38 @@ public class QuestService {
         submission.setUserComment(comment);
         submission.setStatus(SubmissionStatus.PENDING);
         submission.setUpdatedAt(LocalDateTime.now());
-        return questSubmissionRepository.save(submission);
+        questSubmissionRepository.save(submission);
+
+        checkFraudSuspect(submission.getUser());
+
+        return submission;
+    }
+
+    private void checkFraudSuspect(AppUser user) {
+        if (user.isFraudSuspect()) {
+            return;
+        }
+
+        // Check success rate > 90%
+        long totalReviewed = questSubmissionRepository.countReviewedByUser(user);
+        if (totalReviewed >= 5) {
+            long totalApproved = questSubmissionRepository.countApprovedByUser(user);
+            double successRate = (double) totalApproved / totalReviewed;
+            if (successRate > 0.9) {
+                // Check interval < 10 seconds between recent pending submissions
+                List<LocalDateTime> recentTimes = questSubmissionRepository.findRecentPendingSubmissionTimes(user);
+                if (recentTimes.size() >= 2) {
+                    long secondsBetween = java.time.temporal.ChronoUnit.SECONDS.between(
+                            recentTimes.get(1), recentTimes.get(0));
+                    if (secondsBetween < 10) {
+                        user.setFraudSuspect(true);
+                        appUserRepository.save(user);
+                        log.warn("Fraud suspect flagged: userId={} successRate={} interval={}s",
+                                user.getTelegramId(), successRate, secondsBetween);
+                    }
+                }
+            }
+        }
     }
 
     public QuestSubmission getSubmission(Long submissionId) {
@@ -244,6 +277,14 @@ public class QuestService {
         submission.setModeratorComment("Нужны уточнения. Пожалуйста, отправьте более понятный отчёт.");
         submission.setUpdatedAt(LocalDateTime.now());
         return questSubmissionRepository.save(submission);
+    }
+
+    public long countReviewedByUser(AppUser user) {
+        return questSubmissionRepository.countReviewedByUser(user);
+    }
+
+    public long countApprovedByUser(AppUser user) {
+        return questSubmissionRepository.countApprovedByUser(user);
     }
 
     public long pendingCount() {
