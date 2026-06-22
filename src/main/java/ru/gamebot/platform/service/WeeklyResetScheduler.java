@@ -11,10 +11,12 @@ import org.springframework.stereotype.Component;
 public class WeeklyResetScheduler {
 
     private final UserService userService;
+    private final HealthRatioService healthRatioService;
 
     @Scheduled(cron = "0 0 0 * * MON")
     public void resetWeeklyLeaderboard() {
         userService.resetWeeklyXp();
         log.info("Weekly XP has been reset.");
+        healthRatioService.recalculate();
     }
 }

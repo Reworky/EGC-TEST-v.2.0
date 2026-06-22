@@ -93,6 +93,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final SessionService sessionService;
     private final SupportService supportService;
     private final KeyboardFactory keyboardFactory;
+    private final ru.gamebot.platform.service.HealthRatioService healthRatioService;
 
     @EventListener(ApplicationReadyEvent.class)
     public void registerBot() throws TelegramApiException {
@@ -491,6 +492,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case BONUS_INPUT -> handleBonusInput(user, session, text);
             case DEBIT_INPUT -> handleDebitInput(user, session, text);
             case BROADCAST_MESSAGE -> handleBroadcast(user, session, text);
+            case PAYOUT_POOL_INPUT -> handlePayoutPoolInput(user, session, text);
             case QUEST_CREATE_TITLE -> {
                 session.getData().put("title", text.trim());
                 session.setState(SessionState.QUEST_CREATE_DESCRIPTION);
@@ -677,13 +679,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendBalance(AppUser user, String backData) {
+        double ratio = healthRatioService.getCurrentRatio();
+        int ratioPercent = (int) Math.round(ratio * 100);
+        long effectiveQuestReward = healthRatioService.applyRatio(100);
         sendText(user.getTelegramId(),
                 "💰 <b>Баланс</b>\n\n"
-                        + "🪙 Монеты клуба: <b>" + user.getCoins() + "</b>\n"
+                        + "🪙 Монеты клуба: <b>" + user.getCoins() + " EXC</b>\n"
                         + "💠 Активный бонус к EXC: <b>+" + userService.getExcBonusPercent(user.getXp()) + "%</b>\n"
                         + "🎟️ Билеты сезона: <b>" + user.getTickets() + "</b>\n"
                         + "✨ Общий XP: <b>" + user.getXp() + "</b>\n"
                         + "📈 XP за неделю: <b>" + user.getWeeklyXp() + "</b>\n\n"
+                        + "📊 <b>Health Ratio клуба: " + ratioPercent + "%</b>\n"
+                        + "💡 Текущий курс начислений: <b>" + effectiveQuestReward + " EXC</b> за базовый квест вместо 100\n\n"
                         + "Чем активнее вы играете, тем быстрее открываете сильные награды и поднимаетесь в рейтинге.",
                 backMenuKeyboard(backData));
     }
@@ -1367,10 +1374,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleModerationApprove(CallbackQuery callbackQuery, Long submissionId) {
         QuestSubmission currentSubmission = questService.getSubmission(submissionId);
+        long adjustedCoins = healthRatioService.applyRatio(currentSubmission.getQuest().getRewardCoins());
         UserService.RewardGrant rewardGrant = userService.previewReward(
                 currentSubmission.getUser(),
                 currentSubmission.getQuest().getRewardXp(),
-                currentSubmission.getQuest().getRewardCoins(),
+                adjustedCoins,
                 0
         );
         QuestSubmission submission = questService.approveSubmission(submissionId);
@@ -1445,6 +1453,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         cancelKeyboard());
             }
             case "stats" -> sendAdminStats(user);
+            case "payout" -> {
+                session.reset();
+                session.setState(SessionState.PAYOUT_POOL_INPUT);
+                double ratio = healthRatioService.getCurrentRatio();
+                long pool = healthRatioService.getPayoutPoolRub();
+                long debt = healthRatioService.getTotalDebtExc();
+                sendText(user.getTelegramId(),
+                        "💳 <b>Пополнение Payout Pool</b>\n\n"
+                                + "📊 Текущий Health Ratio: <b>" + (int) Math.round(ratio * 100) + "%</b>\n"
+                                + "💰 Payout Pool: <b>" + pool + " ₽</b>\n"
+                                + "📉 Общий долг EXC: <b>" + debt + " EXC (" + (debt / 100) + " ₽)</b>\n\n"
+                                + "Введите сумму пополнения в рублях:",
+                        cancelKeyboard());
+            }
             default -> {
                 if (action.startsWith("quest:")) {
                     handleAdminQuestOpen(user, action.substring("quest:".length()));
@@ -1934,6 +1956,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), "✅ Рассылка отправлена. Получателей: <b>" + delivered + "</b>.", mainMenuKeyboard(user));
     }
 
+    private void handlePayoutPoolInput(AppUser user, UserSession session, String text) {
+        if (!isEffectiveAdmin(user)) {
+            sendText(user.getTelegramId(), "⛔ Доступ запрещён.", mainMenuKeyboard(user));
+            return;
+        }
+        Long amount = parsePositiveLong(text.trim());
+        if (amount == null || amount < 1) {
+            sendText(user.getTelegramId(), "⚠️ Введите корректную сумму в рублях (целое число, больше 0).", cancelKeyboard());
+            return;
+        }
+        healthRatioService.addToPayoutPool(amount, user.getTelegramId());
+        double ratio = healthRatioService.getCurrentRatio();
+        int ratioPercent = (int) Math.round(ratio * 100);
+        session.reset();
+        sendText(user.getTelegramId(),
+                "✅ Payout Pool пополнен на <b>" + amount + " ₽</b>.\n\n"
+                        + "📊 Новый Health Ratio: <b>" + ratioPercent + "%</b>",
+                mainMenuKeyboard(user));
+    }
+
     private void handleQuestCreateFinish(AppUser user, UserSession session, String text) {
         Integer limit = parseInteger(text.trim());
         if (limit == null || limit < 1) {
@@ -2117,6 +2159,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback("➖ Списание", "admin:debit")
             ));
             rows.add(List.of(keyboardFactory.callback("📣 Рассылка", "admin:broadcast")));
+            rows.add(List.of(keyboardFactory.callback("💳 Пополнить Payout Pool", "admin:payout")));
             return keyboardFactory.rowsLayout(rows);
         }
 

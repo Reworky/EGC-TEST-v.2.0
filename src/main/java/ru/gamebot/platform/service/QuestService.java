@@ -20,6 +20,7 @@ public class QuestService {
     private final QuestRepository questRepository;
     private final QuestSubmissionRepository questSubmissionRepository;
     private final UserService userService;
+    private final HealthRatioService healthRatioService;
 
     public List<Quest> findActiveQuests() {
         return questRepository.findAllByActiveTrueOrderByCreatedAtDesc();
@@ -146,7 +147,8 @@ public class QuestService {
         submission.setModeratorComment("Принято. Отличная работа!");
         submission.setUpdatedAt(LocalDateTime.now());
         AppUser user = submission.getUser();
-        userService.addReward(user, submission.getQuest().getRewardXp(), submission.getQuest().getRewardCoins());
+        long adjustedCoins = healthRatioService.applyRatio(submission.getQuest().getRewardCoins());
+        userService.addReward(user, submission.getQuest().getRewardXp(), adjustedCoins);
         user.setCompletedQuests(user.getCompletedQuests() + 1);
         submission.setUser(user);
         return questSubmissionRepository.save(submission);
