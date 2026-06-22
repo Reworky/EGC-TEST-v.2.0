@@ -1823,7 +1823,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 adjustedCoins,
                 0
         );
-        boolean isFirstQuest = submission.getUser().getCompletedQuests() == 0;
+        boolean isFirstQuest = currentSubmission.getUser().getCompletedQuests() == 0;
         QuestSubmission submission = questService.approveSubmission(submissionId);
         String firstQuestBonus = isFirstQuest && submission.getUser().getReferredByTelegramId() != null
                 ? "\n🎁 Бонус за первый квест: <b>+200 EXC</b>" : "";
