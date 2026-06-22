@@ -95,6 +95,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final KeyboardFactory keyboardFactory;
     private final ru.gamebot.platform.service.HealthRatioService healthRatioService;
     private final ru.gamebot.platform.service.SinkShopService sinkShopService;
+    private final ru.gamebot.platform.service.CouncilService councilService;
 
     @EventListener(ApplicationReadyEvent.class)
     public void registerBot() throws TelegramApiException {
@@ -351,6 +352,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleSinkAction(callbackQuery, user, data.substring("sink:".length()));
             return;
         }
+        if (data.startsWith("council:")) {
+            handleCouncilAction(callbackQuery, user, data.substring("council:".length()));
+            return;
+        }
+        if (data.startsWith("quest_type:") && session.getState() == SessionState.QUEST_CREATE_COUNCIL) {
+            boolean councilOnly = "council".equals(data.substring("quest_type:".length()));
+            finalizeQuestCreation(user, session, councilOnly);
+            answer(callbackQuery.getId(), "Квест создан");
+            return;
+        }
         if (data.startsWith("rate:")) {
             sendLeaderboard(user, data.substring("rate:".length()));
             answer(callbackQuery.getId(), "Рейтинг готов");
@@ -400,6 +411,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "referrals" -> sendReferrals(user);
             case "shop" -> sendShop(user);
             case "sink" -> sendSinkShop(user);
+            case "council" -> sendCouncil(user);
+            case "tournament" -> sendTournament(user);
             case "news" -> sendNews(user);
             case "support" -> sendSupport(user);
             case "admin" -> sendAdminPanel(user);
@@ -653,10 +666,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String boostLine = sinkShopService.isBoostActive(user)
                 ? "⚡ Буст EXC +20% активен\n"
                 : "";
+        String councilBadge = councilService.isCouncilMember(user)
+                ? "🛡️ <b>EGC Council</b>\n"
+                : "";
 
         sendText(user.getTelegramId(),
                 "👤 <b>Профиль</b>\n\n"
                         + "🎮 <b>" + escape(user.getNickname()) + "</b>\n"
+                        + councilBadge
                         + titleLine
                         + "⭐ Уровень: <b>" + userService.getLevelNumber(user.getXp()) + ". "
                         + escape(userService.getLevelName(user.getXp())) + "</b>\n"
@@ -1233,6 +1250,82 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "Как только выдача будет подтверждена, вы получите отдельное уведомление.",
                 backMenuKeyboard("menu:shop"));
         answerSilently(callbackQuery.getId());
+    }
+
+    private void sendCouncil(AppUser user) {
+        boolean isMember = councilService.isCouncilMember(user);
+        long seats = councilService.availableSeats();
+        int level = userService.getLevelNumber(user.getXp());
+
+        if (isMember) {
+            List<Quest> councilQuests = questService.findActiveCouncilQuests();
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            if (councilQuests.isEmpty()) {
+                rows.add(List.of(keyboardFactory.callback("📭 Эксклюзивных квестов пока нет", "menu:council")));
+            } else {
+                for (Quest q : councilQuests) {
+                    rows.add(List.of(keyboardFactory.callback("🔐 " + trim(q.getTitle(), 28), "quest:card:" + q.getId())));
+                }
+            }
+            rows.add(List.of(keyboardFactory.callback("🏆 VIP-турниры", "menu:tournament")));
+            rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
+            sendText(user.getTelegramId(),
+                    "🛡️ <b>EGC Council</b>\n\n"
+                            + "Добро пожаловать, участник Council.\n\n"
+                            + "Здесь доступны эксклюзивные квесты и VIP-турниры, закрытые для обычных игроков.",
+                    keyboardFactory.rowsLayout(rows));
+        } else {
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            boolean canJoin = level >= ru.gamebot.platform.service.CouncilService.REQUIRED_LEVEL && seats > 0;
+            if (canJoin) {
+                rows.add(List.of(keyboardFactory.callback("✅ Вступить в Council — 10 000 EXC", "council:join")));
+            }
+            rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
+            sendText(user.getTelegramId(),
+                    "🛡️ <b>EGC Council</b>\n\n"
+                            + "Закрытое сообщество лучших игроков клуба.\n\n"
+                            + "📋 <b>Условия вступления:</b>\n"
+                            + "• Уровень 6 «Герой EXPERIENCE» или выше\n"
+                            + "• Взнос: 10 000 EXC\n\n"
+                            + "🎁 <b>Привилегии:</b>\n"
+                            + "• Эксклюзивные Council-квесты\n"
+                            + "• Доступ к VIP-турнирам\n"
+                            + "• Бейдж 🛡️ EGC Council в профиле\n\n"
+                            + "🪑 Свободных мест: <b>" + seats + " из " + ru.gamebot.platform.service.CouncilService.MAX_SEATS + "</b>\n"
+                            + "⭐ Ваш уровень: <b>" + level + "</b>" + (level < 6 ? " (нужен уровень 6+)" : " ✅") + "\n"
+                            + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>" + (user.getCoins() < 10_000 ? " (нужно 10 000)" : " ✅"),
+                    keyboardFactory.rowsLayout(rows));
+        }
+    }
+
+    private void handleCouncilAction(CallbackQuery callbackQuery, AppUser user, String action) {
+        if ("join".equals(action)) {
+            try {
+                councilService.joinCouncil(user);
+                sendText(user.getTelegramId(),
+                        "🛡️ <b>Добро пожаловать в EGC Council!</b>\n\n"
+                                + "Списано 10 000 EXC. Теперь вам доступны эксклюзивные квесты и VIP-турниры.\n"
+                                + "Бейдж Council отображается в вашем профиле.",
+                        backMenuKeyboard("menu:council"));
+            } catch (IllegalStateException e) {
+                sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:council"));
+            }
+        }
+        answerSilently(callbackQuery.getId());
+    }
+
+    private void sendTournament(AppUser user) {
+        if (!councilService.isCouncilMember(user)) {
+            sendText(user.getTelegramId(),
+                    "🔒 <b>VIP-турниры</b>\n\nДоступ только для участников EGC Council.",
+                    backMenuKeyboard("menu:council"));
+            return;
+        }
+        sendText(user.getTelegramId(),
+                "🏆 <b>VIP-турниры</b>\n\n"
+                        + "Ежемесячные соревнования среди участников EGC Council.\n\n"
+                        + "⏳ Первый турнир скоро будет анонсирован. Следите за новостями клуба.",
+                backMenuKeyboard("menu:council"));
     }
 
     private void sendNews(AppUser user) {
@@ -2136,7 +2229,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), "⚠️ Лимит участников должен быть положительным числом.", cancelKeyboard());
             return;
         }
+        session.getData().put("limit", limit.toString());
+        session.setState(SessionState.QUEST_CREATE_COUNCIL);
+        sendText(user.getTelegramId(),
+                "🛡️ Это квест только для участников EGC Council?\n\nВыберите тип:",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("🌐 Обычный квест", "quest_type:public")),
+                        List.of(keyboardFactory.callback("🛡️ Только EGC Council", "quest_type:council"))
+                )));
+    }
 
+    private void finalizeQuestCreation(AppUser user, UserSession session, boolean councilOnly) {
         Quest quest = new Quest();
         quest.setTitle(session.getData().get("title"));
         quest.setDescription(session.getData().get("description"));
@@ -2148,12 +2251,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         quest.setRewardCoins(Long.parseLong(session.getData().get("coins")));
         quest.setInstruction(session.getData().get("instruction"));
         quest.setRequirements(session.getData().get("requirements"));
-        quest.setParticipantLimit(limit);
+        quest.setParticipantLimit(Integer.parseInt(session.getData().getOrDefault("limit", "100")));
+        quest.setCouncilOnly(councilOnly);
 
         questService.createQuest(quest);
         session.reset();
+        String label = councilOnly ? "Council-квест" : "обычный квест";
         sendText(user.getTelegramId(),
-                "✅ Новый квест создан и сразу опубликован в списке доступных заданий.",
+                "✅ Новый " + label + " создан и сразу опубликован.",
                 mainMenuKeyboard(user));
     }
 
@@ -2341,6 +2446,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("🛍️ Магазин наград", "menu:shop"),
                 keyboardFactory.callback("⚡ Предметы", "menu:sink")
         ));
+        rows.add(List.of(keyboardFactory.callback("🛡️ EGC Council", "menu:council")));
         rows.add(List.of(keyboardFactory.callback("🆘 Поддержка", "menu:support")));
         return keyboardFactory.rowsLayout(rows);
     }

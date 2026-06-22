@@ -41,5 +41,6 @@ public class Quest {
     private long rewardXp;
     private long rewardCoins;
     private boolean active;
+    private boolean councilOnly;
     private LocalDateTime createdAt;
 }

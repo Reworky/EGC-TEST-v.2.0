@@ -35,6 +35,18 @@ public class QuestService {
         return questRepository.findAllByActiveTrueOrderByCreatedAtDesc();
     }
 
+    public List<Quest> findActiveQuestsForUser(boolean isCouncilMember) {
+        return findActiveQuests().stream()
+                .filter(q -> !q.isCouncilOnly() || isCouncilMember)
+                .toList();
+    }
+
+    public List<Quest> findActiveCouncilQuests() {
+        return findActiveQuests().stream()
+                .filter(Quest::isCouncilOnly)
+                .toList();
+    }
+
     public List<String> findActiveGameNames() {
         return findActiveQuests().stream()
                 .map(Quest::getGameName)
