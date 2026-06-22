@@ -42,5 +42,6 @@ public class Quest {
     private long rewardCoins;
     private boolean active;
     private boolean councilOnly;
+    private String photoFileId;
     private LocalDateTime createdAt;
 }

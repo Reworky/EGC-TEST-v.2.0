@@ -2,6 +2,7 @@ package ru.gamebot.platform.bot;
 
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -187,6 +188,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (session.getState() == SessionState.QUEST_CREATE_PHOTO) {
+            if (message.hasPhoto()) {
+                List<PhotoSize> photos = message.getPhoto();
+                String fileId = photos.get(photos.size() - 1).getFileId();
+                session.getData().put("photoFileId", fileId);
+            }
+            showQuestPreview(user, session);
+            return;
+        }
+
         if (session.getState() == SessionState.SUPPORT_INPUT) {
             handleSupportMessage(user, session, message);
             return;
@@ -365,6 +376,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             boolean councilOnly = "council".equals(data.substring("quest_type:".length()));
             finalizeQuestCreation(user, session, councilOnly);
             answer(callbackQuery.getId(), "Квест создан");
+            return;
+        }
+        if (data.startsWith("qc:")) {
+            handleQuestCreateCallback(callbackQuery, user, session, data.substring("qc:".length()));
+            return;
+        }
+        if (data.startsWith("qe:") && isEffectiveAdmin(user)) {
+            handleQuestEditCallback(callbackQuery, user, session, data.substring("qe:".length()));
             return;
         }
         if (data.startsWith("rate:")) {
@@ -574,15 +593,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case QUEST_CREATE_GAME -> {
                 session.getData().put("game", text.trim());
                 session.setState(SessionState.QUEST_CREATE_CATEGORY);
-                sendText(user.getTelegramId(), "📚 Укажите категорию: Легкие, Средние или Сложные.", cancelKeyboard());
-            }
-            case QUEST_CREATE_CATEGORY -> {
-                session.getData().put("category", text.trim());
-                session.setState(SessionState.QUEST_CREATE_PLATFORM);
-                sendText(user.getTelegramId(), "🕹️ Укажите платформу или связку платформ.", cancelKeyboard());
+                sendQuestCategoryKeyboard(user);
             }
             case QUEST_CREATE_PLATFORM -> {
-                session.getData().put("platform", text.trim());
                 session.setState(SessionState.QUEST_CREATE_DURATION);
                 sendText(user.getTelegramId(), "⏳ Укажите срок выполнения, например: 1-3 дня.", cancelKeyboard());
             }
@@ -621,10 +634,36 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.setState(SessionState.QUEST_CREATE_LIMIT);
                 sendText(user.getTelegramId(), "👥 Укажите лимит участников числом.", cancelKeyboard());
             }
-            case QUEST_CREATE_LIMIT -> handleQuestCreateFinish(user, session, text);
+            case QUEST_CREATE_LIMIT -> {
+                Integer limit = parseInteger(text.trim());
+                if (limit == null || limit < 1) {
+                    sendText(user.getTelegramId(), "⚠️ Лимит участников должен быть положительным числом.", cancelKeyboard());
+                    return;
+                }
+                session.getData().put("limit", limit.toString());
+                session.setState(SessionState.QUEST_CREATE_PHOTO);
+                sendText(user.getTelegramId(),
+                        "🖼️ Прикрепите фото к квесту (обложку) или пропустите этот шаг.",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("⏭️ Пропустить фото", "qc:photo:skip")),
+                                List.of(keyboardFactory.callback("❌ Отмена", "admin:cancel"))
+                        )));
+            }
             case QUEST_EDIT_TITLE -> updateQuestTitle(user, session, text);
             case QUEST_EDIT_DESCRIPTION -> updateQuestDescription(user, session, text);
             case QUEST_EDIT_REWARD -> updateQuestReward(user, session, text);
+            case QUEST_EDIT_LIMIT -> {
+                Integer limit = parseInteger(text.trim());
+                if (limit == null || limit < 1) {
+                    sendText(user.getTelegramId(), "⚠️ Лимит должен быть положительным числом.", cancelKeyboard());
+                    return;
+                }
+                Quest q = questService.getQuest(session.getQuestId());
+                q.setParticipantLimit(limit);
+                questService.save(q);
+                session.reset();
+                sendText(user.getTelegramId(), "✅ Лимит участников обновлён.", mainMenuKeyboard(user));
+            }
             default -> sendText(user.getTelegramId(), "🧭 Я не жду текст на этом шаге. Вернитесь в меню.", mainMenuKeyboard(user));
         }
     }
@@ -1876,6 +1915,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendText(user.getTelegramId(),
                             "✨ Отправьте новые награды в формате:\n<code>XP COINS</code>\n\nПример: <code>150 250</code>",
                             cancelKeyboard());
+                } else if (action.startsWith("edit-category:")) {
+                    session.reset();
+                    session.setQuestId(parseLong(action.substring("edit-category:".length())));
+                    session.setState(SessionState.QUEST_EDIT_CATEGORY);
+                    sendText(user.getTelegramId(),
+                            "📚 Выберите новую категорию:",
+                            keyboardFactory.rowsLayout(List.of(
+                                    List.of(keyboardFactory.callback("🟢 Легкие", "qe:cat:Легкие")),
+                                    List.of(keyboardFactory.callback("🟡 Средние", "qe:cat:Средние")),
+                                    List.of(keyboardFactory.callback("🔴 Сложные", "qe:cat:Сложные"))
+                            )));
+                } else if (action.startsWith("edit-platform:")) {
+                    session.reset();
+                    session.setQuestId(parseLong(action.substring("edit-platform:".length())));
+                    session.setState(SessionState.QUEST_EDIT_PLATFORM);
+                    sendQuestPlatformEditKeyboard(user, session);
+                } else if (action.startsWith("edit-limit:")) {
+                    session.reset();
+                    session.setQuestId(parseLong(action.substring("edit-limit:".length())));
+                    session.setState(SessionState.QUEST_EDIT_LIMIT);
+                    sendText(user.getTelegramId(), "👥 Укажите новый лимит участников числом.", cancelKeyboard());
                 }
             }
         }
@@ -1970,18 +2030,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ),
                 List.of(
                         keyboardFactory.callback("✨ Награды", "admin:edit-reward:" + questId),
-                        keyboardFactory.callback(quest.isActive() ? "⏸️ Скрыть" : "▶️ Включить", "admin:toggle:" + questId)
+                        keyboardFactory.callback("📚 Категория", "admin:edit-category:" + questId)
                 ),
-                List.of(keyboardFactory.callback("🗑️ Удалить", "admin:delete:" + questId)),
+                List.of(
+                        keyboardFactory.callback("🕹️ Платформа", "admin:edit-platform:" + questId),
+                        keyboardFactory.callback("👥 Лимит", "admin:edit-limit:" + questId)
+                ),
+                List.of(
+                        keyboardFactory.callback(quest.isActive() ? "⏸️ Скрыть" : "▶️ Включить", "admin:toggle:" + questId),
+                        keyboardFactory.callback("🗑️ Удалить", "admin:delete:" + questId)
+                ),
                 List.of(
                         keyboardFactory.callback("⬅️ Назад", backData),
                         keyboardFactory.callback("🏠 Меню", "menu:admin")
                 )
         );
+        String platformText = quest.getPlatform() != null ? quest.getPlatform() : "—";
+        String photoMark = quest.getPhotoFileId() != null ? " 🖼️" : "";
         sendText(user.getTelegramId(),
-                "✏️ <b>Редактор квеста</b>\n\n"
+                "✏️ <b>Редактор квеста</b>" + photoMark + "\n\n"
                         + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n"
                         + "📚 Категория: <b>" + escape(quest.getCategory()) + "</b>\n"
+                        + "🕹️ Платформа: <b>" + escape(platformText) + "</b>\n"
+                        + "👥 Лимит: <b>" + quest.getParticipantLimit() + "</b>\n"
                         + "🎮 Игра: <b>" + escape(quest.getGameName()) + "</b>\n"
                         + "✨ XP: <b>+" + quest.getRewardXp() + "</b>\n"
                         + "🪙 Монеты: <b>+" + quest.getRewardCoins() + "</b>\n"
@@ -2347,20 +2418,207 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 mainMenuKeyboard(user));
     }
 
-    private void handleQuestCreateFinish(AppUser user, UserSession session, String text) {
-        Integer limit = parseInteger(text.trim());
-        if (limit == null || limit < 1) {
-            sendText(user.getTelegramId(), "⚠️ Лимит участников должен быть положительным числом.", cancelKeyboard());
+    private static final List<String> QUEST_PLATFORMS = List.of("PC", "Console", "Mobile");
+
+    private void sendQuestCategoryKeyboard(AppUser user) {
+        sendText(user.getTelegramId(),
+                "📚 Выберите категорию сложности квеста:",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("🟢 Легкие", "qc:cat:Легкие")),
+                        List.of(keyboardFactory.callback("🟡 Средние", "qc:cat:Средние")),
+                        List.of(keyboardFactory.callback("🔴 Сложные", "qc:cat:Сложные")),
+                        List.of(keyboardFactory.callback("❌ Отмена", "admin:cancel"))
+                )));
+    }
+
+    private void sendQuestPlatformKeyboard(AppUser user, UserSession session) {
+        List<String> selected = List.of(session.getData().getOrDefault("platforms_selected", "").split(","))
+                .stream().filter(s -> !s.isBlank()).toList();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (String p : QUEST_PLATFORMS) {
+            boolean active = selected.contains(p);
+            rows.add(List.of(keyboardFactory.callback((active ? "✅ " : "") + p, "qc:plat:" + p)));
+        }
+        rows.add(List.of(
+                keyboardFactory.callback("✔️ Готово", "qc:plat:done"),
+                keyboardFactory.callback("❌ Отмена", "admin:cancel")
+        ));
+        String selectedText = selected.isEmpty() ? "не выбрано" : String.join(", ", selected);
+        sendText(user.getTelegramId(),
+                "🕹️ Выберите платформы (можно несколько):\nВыбрано: <b>" + escape(selectedText) + "</b>",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleQuestCreateCallback(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
+        if (action.startsWith("cat:")) {
+            if (session.getState() != SessionState.QUEST_CREATE_CATEGORY) {
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            String category = action.substring("cat:".length());
+            session.getData().put("category", category);
+            session.setState(SessionState.QUEST_CREATE_PLATFORM);
+            sendQuestPlatformKeyboard(user, session);
+            answerSilently(callbackQuery.getId());
             return;
         }
-        session.getData().put("limit", limit.toString());
+        if (action.startsWith("plat:")) {
+            if (session.getState() != SessionState.QUEST_CREATE_PLATFORM) {
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            String value = action.substring("plat:".length());
+            if ("done".equals(value)) {
+                String selected = session.getData().getOrDefault("platforms_selected", "");
+                if (selected.isBlank()) {
+                    answer(callbackQuery.getId(), "Выберите хотя бы одну платформу");
+                    return;
+                }
+                session.getData().put("platform", selected);
+                session.getData().remove("platforms_selected");
+                session.setState(SessionState.QUEST_CREATE_DURATION);
+                sendText(user.getTelegramId(), "⏳ Укажите срок выполнения, например: 1-3 дня.", cancelKeyboard());
+            } else {
+                List<String> current = new ArrayList<>(
+                        Arrays.stream(session.getData().getOrDefault("platforms_selected", "").split(","))
+                                .filter(s -> !s.isBlank()).toList());
+                if (current.contains(value)) {
+                    current.remove(value);
+                } else {
+                    current.add(value);
+                }
+                session.getData().put("platforms_selected", String.join(",", current));
+                sendQuestPlatformKeyboard(user, session);
+            }
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if ("photo:skip".equals(action)) {
+            if (session.getState() != SessionState.QUEST_CREATE_PHOTO) {
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            showQuestPreview(user, session);
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if ("preview:publish".equals(action)) {
+            if (session.getState() != SessionState.QUEST_CREATE_COUNCIL) {
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            boolean councilOnly = "true".equals(session.getData().get("councilOnly"));
+            finalizeQuestCreation(user, session, councilOnly);
+            answer(callbackQuery.getId(), "Квест опубликован");
+            return;
+        }
+        if ("preview:edit".equals(action)) {
+            session.setState(SessionState.QUEST_CREATE_TITLE);
+            session.getData().clear();
+            sendText(user.getTelegramId(),
+                    "✏️ Начнём сначала. Отправьте новое название квеста.",
+                    cancelKeyboard());
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        answerSilently(callbackQuery.getId());
+    }
+
+    private void showQuestPreview(AppUser user, UserSession session) {
         session.setState(SessionState.QUEST_CREATE_COUNCIL);
+        Map<String, String> d = session.getData();
+        String text = "👁 <b>Превью квеста</b>\n\n"
+                + "🎯 <b>" + escape(d.getOrDefault("title", "—")) + "</b>\n\n"
+                + "🎮 Игра: <b>" + escape(d.getOrDefault("game", "—")) + "</b>\n"
+                + "📚 Формат: <b>" + escape(d.getOrDefault("category", "—")) + "</b>\n"
+                + "🕹️ Платформа: <b>" + escape(d.getOrDefault("platform", "—")) + "</b>\n"
+                + "⏳ Темп: <b>" + escape(d.getOrDefault("duration", "—")) + "</b>\n"
+                + "👥 Лимит: <b>" + d.getOrDefault("limit", "—") + "</b>\n\n"
+                + "🏆 <b>Награда</b>\n"
+                + "✨ +" + d.getOrDefault("xp", "0") + " XP\n"
+                + "🪙 +" + d.getOrDefault("coins", "0") + " монет\n\n"
+                + "📝 <b>Описание</b>\n" + escape(d.getOrDefault("description", "—")) + "\n\n"
+                + "📎 <b>Инструкция</b>\n" + escape(d.getOrDefault("instruction", "—")) + "\n\n"
+                + "✅ <b>Требования</b>\n" + escape(d.getOrDefault("requirements", "—")) + "\n\n"
+                + "Выберите тип и опубликуйте квест:";
+
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("🌐 Опубликовать (обычный)", "quest_type:public")),
+                List.of(keyboardFactory.callback("🛡️ Опубликовать (Council)", "quest_type:council")),
+                List.of(keyboardFactory.callback("✏️ Начать заново", "qc:preview:edit"))
+        ));
+
+        String photoFileId = d.get("photoFileId");
+        if (photoFileId != null) {
+            sendPhotoCaption(user.getTelegramId(), photoFileId, text, keyboard);
+        } else {
+            sendText(user.getTelegramId(), text, keyboard);
+        }
+    }
+
+    private void handleQuestEditCallback(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
+        if (action.startsWith("cat:")) {
+            if (session.getState() != SessionState.QUEST_EDIT_CATEGORY || session.getQuestId() == null) {
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            String category = action.substring("cat:".length());
+            Quest q = questService.getQuest(session.getQuestId());
+            q.setCategory(category);
+            questService.save(q);
+            session.reset();
+            sendText(user.getTelegramId(), "✅ Категория обновлена: <b>" + escape(category) + "</b>", mainMenuKeyboard(user));
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if (action.startsWith("plat:")) {
+            if (session.getState() != SessionState.QUEST_EDIT_PLATFORM || session.getQuestId() == null) {
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            String value = action.substring("plat:".length());
+            if ("done".equals(value)) {
+                String selected = session.getData().getOrDefault("platforms_selected", "");
+                if (selected.isBlank()) {
+                    answer(callbackQuery.getId(), "Выберите хотя бы одну платформу");
+                    return;
+                }
+                Quest q = questService.getQuest(session.getQuestId());
+                q.setPlatform(selected);
+                questService.save(q);
+                session.reset();
+                sendText(user.getTelegramId(), "✅ Платформы обновлены: <b>" + escape(selected) + "</b>", mainMenuKeyboard(user));
+            } else {
+                List<String> current = new ArrayList<>(
+                        Arrays.stream(session.getData().getOrDefault("platforms_selected", "").split(","))
+                                .filter(s -> !s.isBlank()).toList());
+                if (current.contains(value)) {
+                    current.remove(value);
+                } else {
+                    current.add(value);
+                }
+                session.getData().put("platforms_selected", String.join(",", current));
+                sendQuestPlatformEditKeyboard(user, session);
+            }
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        answerSilently(callbackQuery.getId());
+    }
+
+    private void sendQuestPlatformEditKeyboard(AppUser user, UserSession session) {
+        List<String> selected = Arrays.stream(session.getData().getOrDefault("platforms_selected", "").split(","))
+                .filter(s -> !s.isBlank()).toList();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (String p : QUEST_PLATFORMS) {
+            boolean active = selected.contains(p);
+            rows.add(List.of(keyboardFactory.callback((active ? "✅ " : "") + p, "qe:plat:" + p)));
+        }
+        rows.add(List.of(keyboardFactory.callback("✔️ Сохранить", "qe:plat:done")));
+        String selectedText = selected.isEmpty() ? "не выбрано" : String.join(", ", selected);
         sendText(user.getTelegramId(),
-                "🛡️ Это квест только для участников EGC Council?\n\nВыберите тип:",
-                keyboardFactory.rowsLayout(List.of(
-                        List.of(keyboardFactory.callback("🌐 Обычный квест", "quest_type:public")),
-                        List.of(keyboardFactory.callback("🛡️ Только EGC Council", "quest_type:council"))
-                )));
+                "🕹️ Выберите платформы:\nВыбрано: <b>" + escape(selectedText) + "</b>",
+                keyboardFactory.rowsLayout(rows));
     }
 
     private void finalizeQuestCreation(AppUser user, UserSession session, boolean councilOnly) {
@@ -2377,6 +2635,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         quest.setRequirements(session.getData().get("requirements"));
         quest.setParticipantLimit(Integer.parseInt(session.getData().getOrDefault("limit", "100")));
         quest.setCouncilOnly(councilOnly);
+        quest.setPhotoFileId(session.getData().get("photoFileId"));
 
         questService.createQuest(quest);
         session.reset();
