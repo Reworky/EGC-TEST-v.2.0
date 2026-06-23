@@ -3297,14 +3297,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void notifyAdminsAboutRewardRequest(AppUser user, RewardItem reward) {
+        InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("📥 Открыть заявки", "admin:reward:requests"))
+        ));
         for (Long adminId : adminService.allAdminIds()) {
             sendText(adminId,
-                    "🛍️ Новая заявка на выдачу награды\n\n"
+                    "🛍️ <b>Новая заявка на выдачу награды</b>\n\n"
                             + "👤 Игрок: <b>" + escape(user.getNickname()) + "</b>\n"
                             + "🆔 Telegram ID: <b>" + user.getTelegramId() + "</b>\n"
                             + "🎁 Награда: <b>" + escape(reward.getTitle()) + "</b>\n"
-                            + "🪙 Стоимость: <b>" + reward.getPriceCoins() + " монет</b>",
-                    null);
+                            + "🪙 Стоимость: <b>" + reward.getPriceCoins() + " EXC</b>",
+                    markup);
         }
     }
 

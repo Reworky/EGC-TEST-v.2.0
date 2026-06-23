@@ -84,7 +84,7 @@ public class RewardService {
     }
 
     public RewardRequest getRequest(Long requestId) {
-        return rewardRequestRepository.findById(requestId)
+        return rewardRequestRepository.findWithUserAndRewardItemById(requestId)
                 .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена."));
     }
 
