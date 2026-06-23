@@ -2636,6 +2636,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<AppUser> pageItems = users.subList(from, to);
 
         StringBuilder builder = new StringBuilder("👥 <b>Пользователи платформы</b>\n\n");
+        builder.append("Всего: <b>").append(users.size()).append("</b>\n");
         builder.append("Страница <b>").append(page + 1).append(" / ").append(totalPages).append("</b>\n\n");
         for (AppUser target : pageItems) {
             builder.append("👤 <b>").append(escape(displayUserName(target))).append("</b>\n")
