@@ -130,6 +130,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         } catch (Exception exception) {
             log.error("Failed to process update", exception);
+            if (update.hasCallbackQuery()) {
+                answerSilently(update.getCallbackQuery().getId());
+            }
             Long chatId = extractChatId(update);
             if (chatId != null) {
                 sendText(chatId, "⚠️ Что-то пошло не так. Попробуйте ещё раз или вернитесь в меню командой /menu.", null);
@@ -3564,10 +3567,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private boolean isEffectiveModerator(AppUser user) {
-        if (adminService.isAdmin(user.getTelegramId())) {
-            String role = getActiveRole(sessionService.get(user.getTelegramId()));
-            return ROLE_ADMIN.equals(role) || ROLE_MODER.equals(role);
-        }
         return adminService.isModerator(user.getTelegramId());
     }
 
