@@ -71,6 +71,57 @@ public class RewardService {
         return rewardRequestRepository.save(request);
     }
 
+    public List<RewardRequest> findPendingRequests() {
+        return rewardRequestRepository.findAllByStatusOrderByCreatedAtAsc(RewardRequestStatus.PENDING);
+    }
+
+    public List<RewardRequest> findUserRequests(AppUser user) {
+        return rewardRequestRepository.findAllByUserOrderByCreatedAtDesc(user);
+    }
+
+    public long countPendingRequests() {
+        return rewardRequestRepository.countByStatus(RewardRequestStatus.PENDING);
+    }
+
+    public RewardRequest getRequest(Long requestId) {
+        return rewardRequestRepository.findById(requestId)
+                .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена."));
+    }
+
+    @Transactional
+    public RewardRequest approveRequest(Long requestId) {
+        RewardRequest req = getRequest(requestId);
+        req.setStatus(RewardRequestStatus.APPROVED);
+        return rewardRequestRepository.save(req);
+    }
+
+    @Transactional
+    public RewardRequest rejectRequest(Long requestId, String comment) {
+        RewardRequest req = getRequest(requestId);
+        req.setStatus(RewardRequestStatus.REJECTED);
+        req.setAdminComment(comment);
+        // Refund EXC
+        AppUser user = req.getUser();
+        long price = effectivePrice(req.getRewardItem());
+        user.setCoins(user.getCoins() + price);
+        userService.save(user);
+        return rewardRequestRepository.save(req);
+    }
+
+    public List<RewardItem> findAllRewards() {
+        return rewardItemRepository.findAll();
+    }
+
+    @Transactional
+    public RewardItem save(RewardItem item) {
+        return rewardItemRepository.save(item);
+    }
+
+    @Transactional
+    public void deleteRewardItem(Long id) {
+        rewardItemRepository.deleteById(id);
+    }
+
     @Transactional
     public RewardItem createRewardItem(String title, String description, String category, long priceCoins) {
         return createRewardItem(title, description, category, priceCoins, null);
