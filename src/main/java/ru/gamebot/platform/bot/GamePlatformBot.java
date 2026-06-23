@@ -742,6 +742,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.reset();
                 sendAdminRewardRequests(user);
             }
+            case QUEST_TEMPLATE_TITLE -> {
+                session.getData().put("title", text.trim());
+                session.setState(SessionState.QUEST_TEMPLATE_DESCRIPTION);
+                sendText(user.getTelegramId(), "📝 Теперь отправьте <b>описание</b> квеста (суть задания для игрока):", cancelKeyboard());
+            }
+            case QUEST_TEMPLATE_DESCRIPTION -> {
+                session.getData().put("description", text.trim());
+                session.setState(SessionState.QUEST_CREATE_COUNCIL);
+                showQuestPreview(user, session);
+            }
             case QUEST_EDIT_TITLE -> updateQuestTitle(user, session, text);
             case QUEST_EDIT_DESCRIPTION -> updateQuestDescription(user, session, text);
             case QUEST_EDIT_REWARD -> updateQuestReward(user, session, text);
@@ -2036,6 +2046,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         cancelKeyboard());
             }
             case "stats" -> sendAdminStats(user);
+            case "template" -> sendQuestTemplateGamePicker(user);
             case "rewards" -> sendAdminRewardList(user);
             case "payout" -> {
                 session.reset();
@@ -2113,10 +2124,153 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 } else if (action.startsWith("reward:")) {
                     handleAdminRewardAction(callbackQuery, user, session, action.substring("reward:".length()));
                     return;
+                } else if (action.startsWith("qt:")) {
+                    handleQuestTemplateCallback(callbackQuery, user, session, action.substring("qt:".length()));
+                    return;
                 }
             }
         }
         answer(callbackQuery.getId(), "Готово");
+    }
+
+    // ── Quest templates ──────────────────────────────────────────────────────
+
+    private record QuestTemplate(String game, String category, String platform,
+                                  int durationDays, String durationText,
+                                  long xp, long coins, String instruction, String requirements) {}
+
+    private static final java.util.LinkedHashMap<String, List<QuestTemplate>> QUEST_TEMPLATES = new java.util.LinkedHashMap<>();
+
+    static {
+        QUEST_TEMPLATES.put("PUBG", List.of(
+            new QuestTemplate("PUBG", "Легкие", "PC, Mobile", 2, "2 дня", 75, 75,
+                "1. Зайди в обычный матч PUBG.\n2. Попади в топ-10.\n3. Сделай скриншот таблицы результатов в конце матча.",
+                "Скриншот таблицы результатов с вашим никнеймом и местом в топ-10."),
+            new QuestTemplate("PUBG", "Средние", "PC, Mobile", 5, "5 дней", 200, 200,
+                "1. Зайди в обычный или рейтинговый матч PUBG.\n2. Набери не менее 3 килов за матч.\n3. Сделай скриншот итоговой таблицы.",
+                "Скриншот итоговой таблицы с вашим никнеймом и количеством килов (не менее 3)."),
+            new QuestTemplate("PUBG", "Сложные", "PC, Mobile", 10, "10 дней", 500, 500,
+                "1. Сыграй рейтинговый матч PUBG.\n2. Победи (Chicken Dinner).\n3. Сделай скриншот финального экрана победы.",
+                "Скриншот финального экрана с надписью Winner Winner Chicken Dinner и вашим никнеймом.")
+        ));
+        QUEST_TEMPLATES.put("Grim Soul", List.of(
+            new QuestTemplate("Grim Soul", "Легкие", "Mobile", 3, "3 дня", 75, 75,
+                "1. Зайди в Grim Soul.\n2. Выживи 3 дня подряд без смерти.\n3. Сделай скриншот экрана выживания с количеством дней.",
+                "Скриншот экрана с количеством дней выживания (не менее 3)."),
+            new QuestTemplate("Grim Soul", "Средние", "Mobile", 7, "7 дней", 200, 200,
+                "1. Убей рыцаря-скелета (Knight Skeleton) в Grim Soul.\n2. Сделай скриншот тела врага сразу после убийства с вашим персонажем рядом.",
+                "Скриншот с телом рыцаря-скелета и вашим персонажем в кадре."),
+            new QuestTemplate("Grim Soul", "Сложные", "Mobile", 14, "14 дней", 500, 500,
+                "1. Построй укреплённую базу с каменными стенами в Grim Soul.\n2. Сделай скриншот базы сверху — должны быть видны каменные стены.",
+                "Скриншот базы с каменными стенами. Должны быть видны минимум 4 каменных секции.")
+        ));
+        QUEST_TEMPLATES.put("EA FC 25", List.of(
+            new QuestTemplate("EA FC 25", "Легкие", "PC, Console", 3, "3 дня", 75, 75,
+                "1. Сыграй матч в режиме Ultimate Team или Карьера.\n2. Забей не менее 2 голов за матч.\n3. Сделай скриншот финального счёта.",
+                "Скриншот финального счёта матча с вашим результатом (минимум 2 гола)."),
+            new QuestTemplate("EA FC 25", "Средние", "PC, Console", 5, "5 дней", 200, 200,
+                "1. Сыграй матч в Division Rivals или FUT Champions.\n2. Победи.\n3. Сделай скриншот экрана победы с итогом матча.",
+                "Скриншот экрана победы в Division Rivals или FUT Champions."),
+            new QuestTemplate("EA FC 25", "Сложные", "PC, Console", 10, "10 дней", 500, 500,
+                "1. Собери команду с рейтингом не ниже 85 в Ultimate Team.\n2. Сделай скриншот состава команды в меню.",
+                "Скриншот состава команды в меню с общим рейтингом 85+.")
+        ));
+        QUEST_TEMPLATES.put("Brawl Stars", List.of(
+            new QuestTemplate("Brawl Stars", "Легкие", "Mobile", 2, "2 дня", 75, 75,
+                "1. Сыграй 3 матча в любом режиме Brawl Stars.\n2. Сделай скриншот профиля с количеством трофеев после матчей.",
+                "Скриншот профиля с количеством трофеев."),
+            new QuestTemplate("Brawl Stars", "Средние", "Mobile", 5, "5 дней", 200, 200,
+                "1. Доберись до 500+ трофеев на любом бравлере.\n2. Сделай скриншот карточки бравлера с трофеями.",
+                "Скриншот карточки бравлера с количеством трофеев 500+."),
+            new QuestTemplate("Brawl Stars", "Сложные", "Mobile", 14, "14 дней", 500, 500,
+                "1. Войди в топ-200 локального рейтинга на любом бравлере.\n2. Сделай скриншот таблицы рейтинга с вашим ником.",
+                "Скриншот таблицы рейтинга с вашим никнеймом в топ-200.")
+        ));
+        QUEST_TEMPLATES.put("Clash Royale", List.of(
+            new QuestTemplate("Clash Royale", "Легкие", "Mobile", 2, "2 дня", 75, 75,
+                "1. Выиграй 2 матча подряд в обычных боях Clash Royale.\n2. Сделай скриншот экрана победы после второго боя.",
+                "Скриншот экрана победы с никнеймом видимым в профиле."),
+            new QuestTemplate("Clash Royale", "Средние", "Mobile", 5, "5 дней", 200, 200,
+                "1. Открой сундук Гигантский или лучше в Clash Royale.\n2. Сделай скриншот момента открытия с содержимым сундука.",
+                "Скриншот открытия Гигантского сундука или выше с содержимым."),
+            new QuestTemplate("Clash Royale", "Сложные", "Mobile", 10, "10 дней", 500, 500,
+                "1. Набери 5000+ кубков в рейтинговых боях Clash Royale.\n2. Сделай скриншот профиля с количеством кубков.",
+                "Скриншот профиля с количеством кубков 5000+.")
+        ));
+        QUEST_TEMPLATES.put("Другая игра", List.of(
+            new QuestTemplate("", "Легкие", "", 3, "3 дня", 75, 75, "", ""),
+            new QuestTemplate("", "Средние", "", 7, "7 дней", 200, 200, "", ""),
+            new QuestTemplate("", "Сложные", "", 14, "14 дней", 500, 500, "", "")
+        ));
+    }
+
+    private void sendQuestTemplateGamePicker(AppUser user) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (String game : QUEST_TEMPLATES.keySet()) {
+            rows.add(List.of(keyboardFactory.callback("🎮 " + game, "admin:qt:game:" + game)));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
+        sendText(user.getTelegramId(),
+                "📋 <b>Создание квеста по шаблону</b>\n\nВыберите игру — бот подставит платформу, срок и награды автоматически.",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendQuestTemplateDifficultyPicker(AppUser user, String game) {
+        List<QuestTemplate> templates = QUEST_TEMPLATES.get(game);
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (int i = 0; i < templates.size(); i++) {
+            QuestTemplate t = templates.get(i);
+            rows.add(List.of(keyboardFactory.callback(
+                    t.category() + " — " + t.xp() + " XP / " + t.coins() + " EXC / " + t.durationText(),
+                    "admin:qt:pick:" + game + ":" + i)));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:template")));
+        sendText(user.getTelegramId(),
+                "📋 <b>" + escape(game) + "</b> — выберите сложность:",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleQuestTemplateCallback(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
+        if (action.startsWith("game:")) {
+            String game = action.substring("game:".length());
+            sendQuestTemplateDifficultyPicker(user, game);
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if (action.startsWith("pick:")) {
+            String[] parts = action.substring("pick:".length()).split(":", 2);
+            if (parts.length < 2) { answerSilently(callbackQuery.getId()); return; }
+            String game = parts[0];
+            Integer idxBoxed = parseInteger(parts[1]);
+            if (idxBoxed == null) { answerSilently(callbackQuery.getId()); return; }
+            int idx = idxBoxed;
+            List<QuestTemplate> templates = QUEST_TEMPLATES.get(game);
+            if (templates == null || idx < 0 || idx >= templates.size()) {
+                answerSilently(callbackQuery.getId()); return;
+            }
+            QuestTemplate t = templates.get(idx);
+            session.reset();
+            session.setState(SessionState.QUEST_TEMPLATE_TITLE);
+            session.getData().put("game", game.isEmpty() ? null : game);
+            session.getData().put("category", t.category());
+            session.getData().put("platform", t.platform());
+            session.getData().put("durationDays", String.valueOf(t.durationDays()));
+            session.getData().put("duration", t.durationText());
+            session.getData().put("xp", String.valueOf(t.xp()));
+            session.getData().put("coins", String.valueOf(t.coins()));
+            session.getData().put("instruction", t.instruction());
+            session.getData().put("requirements", t.requirements());
+            session.getData().put("limit", "100");
+
+            String gameLine = game.isEmpty() ? "\n\n⚠️ Игру укажите в названии или описании." : "\n\n🎮 Игра: <b>" + escape(game) + "</b>";
+            sendText(user.getTelegramId(),
+                    "📋 Шаблон загружен: <b>" + t.category() + "</b>" + gameLine + "\n"
+                            + "⏱ Срок: <b>" + t.durationText() + "</b>\n"
+                            + "🏆 Награда: <b>" + t.xp() + " XP / " + t.coins() + " EXC</b>\n\n"
+                            + "Отправьте <b>название</b> квеста:",
+                    cancelKeyboard());
+            answerSilently(callbackQuery.getId());
+        }
     }
 
     private void finalizeRewardCreation(AppUser user, UserSession session) {
@@ -3177,8 +3331,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             ));
             rows.add(List.of(
                     keyboardFactory.callback("➕ Квест", "admin:create"),
-                    keyboardFactory.callback("✏️ Квесты", "admin:edit")
+                    keyboardFactory.callback("📋 По шаблону", "admin:template")
             ));
+            rows.add(List.of(keyboardFactory.callback("✏️ Квесты", "admin:edit")));
             rows.add(List.of(
                     keyboardFactory.callback("🎁 Бонус", "admin:bonus"),
                     keyboardFactory.callback("➖ Списание", "admin:debit")
