@@ -2642,7 +2642,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             builder.append("👤 <b>").append(escape(displayUserName(target))).append("</b>\n")
                     .append("🏷️ Тег: <b>").append(escape(displayTag(target))).append("</b>\n")
                     .append("🆔 TG ID: <b>").append(target.getTelegramId()).append("</b>\n")
-                    .append("🛡️ Роль: <b>").append(escape(humanRole(highestAvailableRole(target)))).append("</b>\n")
                     .append("⭐ Уровень: <b>").append(userService.getLevelNumber(target.getXp())).append(". ").append(escape(userService.getLevelName(target.getXp()))).append("</b>\n")
                     .append("💰 EXC: <b>").append(target.getCoins()).append("</b>\n")
                     .append("📅 Зарегистрирован: <b>").append(target.getCreatedAt() != null ? target.getCreatedAt().toLocalDate().toString() : "—").append("</b>\n\n");
