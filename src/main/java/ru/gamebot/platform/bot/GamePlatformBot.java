@@ -2713,8 +2713,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "⭐ Уровень: <b>" + userService.getLevelNumber(target.getXp()) + ". " + escape(userService.getLevelName(target.getXp())) + "</b>\n"
                 + "💰 EXC: <b>" + target.getCoins() + "</b>\n"
                 + "📅 Зарегистрирован: <b>" + (target.getCreatedAt() != null ? target.getCreatedAt().toLocalDate().toString() : "—") + "</b>\n"
-                + "🛡️ Текущая роль: <b>" + escape(humanRole(highestAvailableRole(target))) + "</b>\n"
-                + "🧾 Назначенная роль: <b>" + escape(humanRole(normalizedStoredRole(target))) + "</b>\n"
+                + "🛡️ Роль: <b>" + escape(humanRole(highestAvailableRole(target))) + "</b>\n"
                 + configuredNote + "\n"
                 + "✅ Регистрация: <b>" + (target.isRegistrationCompleted() ? "завершена" : "не завершена") + "</b>";
 
