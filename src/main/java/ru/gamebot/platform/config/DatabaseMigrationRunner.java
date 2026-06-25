@@ -18,48 +18,33 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        logAllConstraints();
-        dropStatusCheckConstraint("QUEST_SUBMISSIONS", "STATUS");
-        dropStatusCheckConstraint("REWARD_REQUESTS", "STATUS");
-    }
-
-    private void logAllConstraints() {
+        // Log ALL constraints so we can see what's actually in the DB
         try {
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                    "SELECT CONSTRAINT_NAME, CONSTRAINT_TYPE, TABLE_NAME, TABLE_SCHEMA " +
-                    "FROM INFORMATION_SCHEMA.CONSTRAINTS");
-            log.error("[DBMigration] All constraints in DB ({} total): {}", rows.size(), rows);
+            List<Map<String, Object>> all = jdbcTemplate.queryForList(
+                    "SELECT CONSTRAINT_NAME, CONSTRAINT_TYPE, TABLE_NAME " +
+                    "FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS");
+            log.error("[DBMigration] All TABLE_CONSTRAINTS ({} total): {}", all.size(), all);
         } catch (Exception e) {
-            log.error("[DBMigration] Could not query INFORMATION_SCHEMA.CONSTRAINTS: {}", e.getMessage());
+            log.error("[DBMigration] Cannot query TABLE_CONSTRAINTS: {}", e.getMessage());
         }
+
+        dropCheckConstraints("QUEST_SUBMISSIONS");
+        dropCheckConstraints("REWARD_REQUESTS");
     }
 
-    private void dropStatusCheckConstraint(String table, String column) {
-        // Strategy 1: find by table name in INFORMATION_SCHEMA.CONSTRAINTS
+    private void dropCheckConstraints(String table) {
         try {
             List<String> names = jdbcTemplate.queryForList(
-                    "SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.CONSTRAINTS " +
-                    "WHERE UPPER(TABLE_NAME) = UPPER(?) AND CONSTRAINT_TYPE = 'CHECK'",
-                    String.class, table);
-            log.error("[DBMigration] Found {} CHECK constraints on {}: {}", names.size(), table, names);
+                    "SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS " +
+                    "WHERE UPPER(TABLE_NAME) = ? AND CONSTRAINT_TYPE = 'CHECK'",
+                    String.class, table.toUpperCase());
+            log.error("[DBMigration] CHECK constraints on {}: {}", table, names);
             for (String name : names) {
-                try {
-                    jdbcTemplate.execute("ALTER TABLE " + table + " DROP CONSTRAINT IF EXISTS " + name);
-                    log.error("[DBMigration] Dropped: {}", name);
-                } catch (Exception ex) {
-                    log.error("[DBMigration] Drop failed for {}: {}", name, ex.getMessage());
-                }
+                jdbcTemplate.execute("ALTER TABLE " + table + " DROP CONSTRAINT \"" + name + "\"");
+                log.error("[DBMigration] Dropped constraint '{}' on {}", name, table);
             }
         } catch (Exception e) {
-            log.error("[DBMigration] Strategy 1 failed for {}: {}", table, e.getMessage());
-        }
-
-        // Strategy 2: ALTER COLUMN to remove check — H2 specific
-        try {
-            jdbcTemplate.execute("ALTER TABLE " + table + " ALTER COLUMN " + column + " VARCHAR(255)");
-            log.error("[DBMigration] ALTER COLUMN done on {}.{}", table, column);
-        } catch (Exception e) {
-            log.error("[DBMigration] ALTER COLUMN failed on {}.{}: {}", table, column, e.getMessage());
+            log.error("[DBMigration] Failed for {}: {}", table, e.getMessage());
         }
     }
 }
