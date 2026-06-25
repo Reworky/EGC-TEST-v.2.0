@@ -290,6 +290,7 @@ public class QuestService {
     }
 
     @Transactional
+    @Transactional
     public QuestSubmission cancelSubmission(Long submissionId, AppUser user) {
         QuestSubmission submission = getSubmission(submissionId);
         if (!submission.getUser().getId().equals(user.getId())) {
