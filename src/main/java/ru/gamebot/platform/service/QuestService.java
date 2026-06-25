@@ -287,6 +287,28 @@ public class QuestService {
         return questSubmissionRepository.save(submission);
     }
 
+    @Transactional
+    public QuestSubmission cancelSubmission(Long submissionId, AppUser user) {
+        QuestSubmission submission = getSubmission(submissionId);
+        if (!submission.getUser().getId().equals(user.getId())) {
+            throw new IllegalArgumentException("Нет доступа.");
+        }
+        if (submission.getStatus() == SubmissionStatus.APPROVED) {
+            throw new IllegalArgumentException("Одобренный квест нельзя отменить.");
+        }
+        if (submission.getStatus() == SubmissionStatus.CANCELLED) {
+            throw new IllegalArgumentException("Квест уже отменён.");
+        }
+        Quest quest = submission.getQuest();
+        if (quest.getParticipantLimit() != null) {
+            quest.setCurrentParticipants(Math.max(0, quest.getCurrentParticipants() - 1));
+            questRepository.save(quest);
+        }
+        submission.setStatus(SubmissionStatus.CANCELLED);
+        submission.setUpdatedAt(LocalDateTime.now());
+        return questSubmissionRepository.save(submission);
+    }
+
     public long countReviewedByUser(AppUser user) {
         return questSubmissionRepository.countReviewedByUser(user);
     }

@@ -357,6 +357,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleQuestView(callbackQuery, user, session, data.substring("quest:view:".length()));
             return;
         }
+        if (data.startsWith("myquest:cancel:")) {
+            long submissionId = parseLong(data.substring("myquest:cancel:".length()));
+            try {
+                questService.cancelSubmission(submissionId, user);
+                sendMySubmissions(user);
+                sendText(user.getTelegramId(), "✅ Квест отменён.", null);
+            } catch (IllegalArgumentException e) {
+                sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), null);
+            }
+            return;
+        }
         if (data.startsWith("myquest:view:")) {
             sendMyQuestCard(user, parseLong(data.substring("myquest:view:".length())));
             answer(callbackQuery.getId(), "Мой квест");
@@ -1245,9 +1256,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? ""
                 : "\n\n💬 Комментарий модератора:\n" + escape(submission.getModeratorComment());
 
-        List<InlineKeyboardButton> buttons = List.of(
-                keyboardFactory.callback("📤 Отчёт", "quest:report:" + quest.getId())
-        );
+        boolean canCancel = submission.getStatus() == SubmissionStatus.DRAFT
+                || submission.getStatus() == SubmissionStatus.PENDING
+                || submission.getStatus() == SubmissionStatus.NEEDS_INFO;
+
+        List<InlineKeyboardButton> buttons = new ArrayList<>();
+        buttons.add(keyboardFactory.callback("📤 Отчёт", "quest:report:" + quest.getId()));
+        if (canCancel) {
+            buttons.add(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + submission.getId()));
+        }
 
         sendText(user.getTelegramId(),
                 "📂 <b>Мой квест</b>\n\n"
@@ -4165,6 +4182,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case APPROVED -> "Одобрен";
             case REJECTED -> "Отклонён";
             case NEEDS_INFO -> "Нужны уточнения";
+            case CANCELLED -> "Отменён";
         };
     }
 

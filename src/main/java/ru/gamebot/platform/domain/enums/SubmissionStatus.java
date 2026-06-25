@@ -5,5 +5,6 @@ public enum SubmissionStatus {
     PENDING,
     APPROVED,
     REJECTED,
-    NEEDS_INFO
+    NEEDS_INFO,
+    CANCELLED
 }
