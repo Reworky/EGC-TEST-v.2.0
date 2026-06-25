@@ -208,7 +208,9 @@ public class QuestService {
     }
 
     public List<QuestSubmission> getUserSubmissions(AppUser user) {
-        return questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user);
+        return questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user).stream()
+                .filter(s -> s.getStatus() != SubmissionStatus.CANCELLED)
+                .toList();
     }
 
     @Transactional
