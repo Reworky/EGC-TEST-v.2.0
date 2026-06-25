@@ -2154,9 +2154,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     // ── Quest templates ──────────────────────────────────────────────────────
 
-    private record QuestTemplate(String game, String category, String platform,
-                                  int durationDays, String durationText,
-                                  long xp, long coins, String instruction, String requirements) {}
+    private static final class QuestTemplate {
+        private final String game, category, platform, durationText, instruction, requirements;
+        private final int durationDays;
+        private final long xp, coins;
+        QuestTemplate(String game, String category, String platform,
+                      int durationDays, String durationText,
+                      long xp, long coins, String instruction, String requirements) {
+            this.game = game; this.category = category; this.platform = platform;
+            this.durationDays = durationDays; this.durationText = durationText;
+            this.xp = xp; this.coins = coins;
+            this.instruction = instruction; this.requirements = requirements;
+        }
+        String game() { return game; }
+        String category() { return category; }
+        String platform() { return platform; }
+        int durationDays() { return durationDays; }
+        String durationText() { return durationText; }
+        long xp() { return xp; }
+        long coins() { return coins; }
+        String instruction() { return instruction; }
+        String requirements() { return requirements; }
+    }
 
     private static final java.util.LinkedHashMap<String, List<QuestTemplate>> QUEST_TEMPLATES = new java.util.LinkedHashMap<>();
 
