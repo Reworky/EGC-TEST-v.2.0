@@ -299,11 +299,6 @@ public class QuestService {
         if (submission.getStatus() == SubmissionStatus.CANCELLED) {
             throw new IllegalArgumentException("Квест уже отменён.");
         }
-        Quest quest = submission.getQuest();
-        if (quest.getParticipantLimit() != null) {
-            quest.setCurrentParticipants(Math.max(0, quest.getCurrentParticipants() - 1));
-            questRepository.save(quest);
-        }
         submission.setStatus(SubmissionStatus.CANCELLED);
         submission.setUpdatedAt(LocalDateTime.now());
         return questSubmissionRepository.save(submission);
