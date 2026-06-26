@@ -26,6 +26,13 @@ public class QuestSeeder implements CommandLineRunner {
                 "Зайди в режим Solo → сыграй матч → доживи до топ-10.",
                 "Скриншот экрана результатов: место ≤10, режим Solo, ник игрока.",
                 100);
+        seed("Убить 1 противника в матче", "PUBG / PUBG Mobile",
+                "Лёгкие", "PC, Mobile", 3, "3 дня",
+                25, 100,
+                "Уничтожь хотя бы 1 противника в любом матче.",
+                "Сыграй матч в любом режиме → убей минимум 1 врага → дождись экрана итогов.",
+                "Скриншот экрана результатов: счётчик убийств (Kills) ≥1, ник игрока.",
+                100);
     }
 
     private void seed(String title, String gameName, String category, String platform,
