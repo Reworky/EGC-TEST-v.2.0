@@ -9,4 +9,6 @@ public interface QuestRepository extends JpaRepository<Quest, Long> {
     List<Quest> findAllByActiveTrueOrderByCreatedAtDesc();
 
     List<Quest> findAllByActiveTrueAndCategoryIgnoreCaseOrderByCreatedAtDesc(String category);
+
+    boolean existsByTitleAndGameName(String title, String gameName);
 }
