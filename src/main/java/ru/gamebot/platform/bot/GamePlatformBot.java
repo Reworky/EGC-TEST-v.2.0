@@ -1162,7 +1162,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         // Warn if diminishing returns will apply
         long weeklyCount = questService.getWeeklyCompletionsOfType(user, quest);
-        sendText(user.getTelegramId(), "🎮 Супер! Квест активирован — удачной игры! 🏆\n\nКогда выполните — возвращайтесь и отправьте отчёт.", null);
+        sendText(user.getTelegramId(), "🚀 Поехали! Квест активен — действуй и возвращайся с отчётом.", null);
         String notice = "🚀 Квест добавлен в работу. Когда будете готовы, отправьте отчёт прямо из этой карточки или через раздел «Мои квесты».";
         if (weeklyCount >= 3) {
             notice += "\n\n⚠️ Вы уже выполнили 3+ таких квеста за неделю — награда EXC будет снижена на 50%.";
