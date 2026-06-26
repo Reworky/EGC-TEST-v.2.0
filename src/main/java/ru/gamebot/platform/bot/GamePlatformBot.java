@@ -1161,7 +1161,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         answerSilently(callbackQuery.getId());
 
         long weeklyCount = questService.getWeeklyCompletionsOfType(user, quest);
-        String notice = "🚀 Квест активен! Когда будете готовы, отправьте отчёт прямо из этой карточки.";
+        String notice = "🚀 Квест активен! Приступайте к игре, когда выполните задание, отправьте отчёт прямо из этой карточки.";
         if (weeklyCount >= 3) {
             notice += "\n\n⚠️ Вы уже выполнили 3+ таких квеста за неделю — награда EXC будет снижена на 50%.";
         }
