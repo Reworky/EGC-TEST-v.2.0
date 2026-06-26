@@ -1160,14 +1160,41 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         questService.createDraftSubmission(user, quest);
         answerSilently(callbackQuery.getId());
 
-        // Warn if diminishing returns will apply
         long weeklyCount = questService.getWeeklyCompletionsOfType(user, quest);
-        sendText(user.getTelegramId(), "🚀 Поехали! Квест активен — действуй и возвращайся с отчётом.", null);
-        String notice = "🚀 Квест добавлен в работу. Когда будете готовы, отправьте отчёт прямо из этой карточки или через раздел «Мои квесты».";
+        String notice = "🚀 Квест активен! Когда будете готовы, отправьте отчёт прямо из этой карточки.";
         if (weeklyCount >= 3) {
             notice += "\n\n⚠️ Вы уже выполнили 3+ таких квеста за неделю — награда EXC будет снижена на 50%.";
         }
-        sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад", notice);
+
+        Quest freshQuest = questService.getQuest(questId);
+        QuestSubmission submission = questService.getLatestSubmission(user, freshQuest);
+        List<InlineKeyboardButton> buttons = new ArrayList<>();
+        buttons.add(keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
+        buttons.add(keyboardFactory.callback("📂 Мои квесты", "menu:myquests"));
+        buttons.add(keyboardFactory.callback("🏠 Меню", "menu:main"));
+        if (isEffectiveAdmin(user)) {
+            buttons.add(keyboardFactory.callback("✏️ Правка", "admin:quest:" + questId));
+        }
+
+        String deadlineLine = "";
+        if (submission != null && submission.getExpiresAt() != null) {
+            long hoursLeft = java.time.temporal.ChronoUnit.HOURS.between(LocalDateTime.now(), submission.getExpiresAt());
+            long daysLeft = hoursLeft / 24;
+            deadlineLine = "📅 Дедлайн: <b>через " + daysLeft + " д</b>\n";
+        }
+
+        sendText(user.getTelegramId(),
+                notice + "\n\n"
+                        + "🎯 <b>" + escape(freshQuest.getTitle()) + "</b>\n\n"
+                        + "🎮 Игра: <b>" + escape(freshQuest.getGameName()) + "</b>\n"
+                        + "📚 Формат: <b>" + escape(freshQuest.getCategory()) + "</b>\n"
+                        + "🕹️ Платформа: <b>" + escape(freshQuest.getPlatform()) + "</b>\n"
+                        + deadlineLine
+                        + "📌 Статус: <b>В процессе</b>\n\n"
+                        + "🏆 <b>Награда</b>\n"
+                        + "✨ +" + freshQuest.getRewardXp() + " XP\n"
+                        + "🪙 +" + freshQuest.getRewardCoins() + " монет",
+                keyboardFactory.smartLayout(buttons));
     }
 
     private void handleReportStart(CallbackQuery callbackQuery, AppUser user, UserSession session, Long questId) {
