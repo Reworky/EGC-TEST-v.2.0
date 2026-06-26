@@ -1,11 +1,13 @@
 package ru.gamebot.platform.config;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.repository.QuestRepository;
 
@@ -18,7 +20,14 @@ public class QuestSeeder implements CommandLineRunner {
     private final QuestRepository questRepository;
 
     @Override
+    @Transactional
     public void run(String... args) {
+
+        // Удаляем квесты с устаревшими названиями игры (оставляем только "PUBG / PUBG Mobile")
+        for (String obsolete : List.of("PUBG", "PUBG Mobile", "PUBG mobile", "PUBG MOBILE")) {
+            questRepository.deleteAllByGameNameIgnoreCase(obsolete);
+            log.info("[QuestSeeder] Deleted obsolete quests for game: '{}'", obsolete);
+        }
 
         // ── Лёгкие ──────────────────────────────────────────────────────────────
 
