@@ -1262,7 +1262,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         boolean canCancel = submission.getStatus() == SubmissionStatus.DRAFT
                 || submission.getStatus() == SubmissionStatus.PENDING
-                || submission.getStatus() == SubmissionStatus.NEEDS_INFO;
+                || submission.getStatus() == SubmissionStatus.NEEDS_INFO
+                || submission.getStatus() == SubmissionStatus.REJECTED;
 
         List<InlineKeyboardButton> buttons = new ArrayList<>();
         buttons.add(keyboardFactory.callback("📤 Отчёт", "quest:report:" + quest.getId()));
