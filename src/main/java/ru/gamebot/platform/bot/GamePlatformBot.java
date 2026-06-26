@@ -1172,8 +1172,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void handleReportStart(CallbackQuery callbackQuery, AppUser user, UserSession session, Long questId) {
         Quest quest = questService.getQuest(questId);
         QuestSubmission latest = questService.getLatestSubmission(user, quest);
-        if (latest == null || latest.getStatus() == SubmissionStatus.REJECTED || latest.getStatus() == SubmissionStatus.NEEDS_INFO) {
+        if (latest == null) {
             latest = questService.createDraftSubmission(user, quest);
+        } else if (latest.getStatus() == SubmissionStatus.REJECTED || latest.getStatus() == SubmissionStatus.NEEDS_INFO) {
+            latest = questService.resetToDraft(latest);
         }
 
         if (questService.isExpired(latest)) {

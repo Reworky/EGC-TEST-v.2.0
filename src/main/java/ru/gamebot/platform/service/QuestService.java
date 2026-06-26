@@ -137,6 +137,18 @@ public class QuestService {
     }
 
     @Transactional
+    public QuestSubmission resetToDraft(QuestSubmission submission) {
+        submission.setStatus(SubmissionStatus.DRAFT);
+        submission.setMediaType(null);
+        submission.setMediaFileId(null);
+        submission.setExternalLink(null);
+        submission.setUserComment(null);
+        submission.setModeratorComment(null);
+        submission.setUpdatedAt(LocalDateTime.now());
+        return questSubmissionRepository.save(submission);
+    }
+
+    @Transactional
     public QuestSubmission createDraftSubmission(AppUser user, Quest quest) {
         QuestSubmission submission = new QuestSubmission();
         submission.setUser(user);
