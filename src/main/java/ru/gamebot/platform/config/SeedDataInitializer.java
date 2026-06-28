@@ -21,9 +21,7 @@ public class SeedDataInitializer implements CommandLineRunner {
         if (questService.findAll().isEmpty()) {
             seedQuests();
         }
-        if (rewardService.findAvailableRewards().isEmpty()) {
-            seedRewards();
-        }
+
         if (newsService.latestNews().isEmpty()) {
             seedNews();
         }
@@ -89,61 +87,6 @@ public class SeedDataInitializer implements CommandLineRunner {
         return quest;
     }
 
-    private void seedRewards() {
-        // Подарочные карты
-        rewardService.createRewardItem(
-                "Steam Gift Card 100 руб.",
-                "Цифровой код пополнения баланса Steam на 100 рублей. Высылается в течение 24 часов.",
-                "Подарочные карты",
-                2000
-        );
-        rewardService.createRewardItem(
-                "Steam Gift Card 200 руб.",
-                "Цифровой код пополнения баланса Steam на 200 рублей. Высылается в течение 24 часов.",
-                "Подарочные карты",
-                4000
-        );
-        rewardService.createRewardItem(
-                "Steam Gift Card 500 руб.",
-                "Цифровой код пополнения баланса Steam на 500 рублей. Высылается в течение 24 часов.",
-                "Подарочные карты",
-                9000
-        );
-        rewardService.createRewardItem(
-                "PSN Gift Card 200 руб.",
-                "Цифровой код пополнения кошелька PlayStation Network на 200 рублей.",
-                "Подарочные карты",
-                4000
-        );
-
-        // Игровые подписки
-        rewardService.createRewardItem(
-                "Xbox Game Pass Ultimate 1 мес.",
-                "Подписка Xbox Game Pass Ultimate на 1 месяц: более 100 игр + EA Play + онлайн.",
-                "Игровые подписки",
-                5000
-        );
-        rewardService.createRewardItem(
-                "PlayStation Plus Essential 1 мес.",
-                "Подписка PlayStation Plus Essential на 1 месяц: онлайн-игра + ежемесячные игры.",
-                "Игровые подписки",
-                5000
-        );
-
-        // Мерч клуба
-        rewardService.createRewardItem(
-                "Стикерпак EGC",
-                "Набор из 10 фирменных стикеров Experience Gaming Club. Доставка по договорённости.",
-                "Мерч клуба",
-                3000
-        );
-        rewardService.createRewardItem(
-                "Футболка EGC",
-                "Фирменная футболка Experience Gaming Club. Уточните размер при оформлении заявки.",
-                "Мерч клуба",
-                8000
-        );
-    }
 
     private void seedNews() {
         newsService.createPost(
