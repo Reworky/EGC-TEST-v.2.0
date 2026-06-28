@@ -24,4 +24,6 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
     java.util.Optional<RewardRequest> findWithUserAndRewardItemById(Long id);
 
     long countByStatus(RewardRequestStatus status);
+
+    void deleteAllByRewardItem(ru.gamebot.platform.domain.model.RewardItem rewardItem);
 }
