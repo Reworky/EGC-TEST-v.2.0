@@ -2925,10 +2925,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long totalExc = questService.sumAllIssuedCoins();
         String topGame = questService.topGameName();
 
-        String[] medals = {"🥇", "🥈", "🥉", "4️⃣", "5️⃣"};
+        String[] medals = {"🥇", "🥈", "🥉"};
         StringBuilder sb = new StringBuilder();
-        sb.append("📊 <b>EXPERIENCE GAMING CLUB</b>\n");
-        sb.append("━━━━━━━━━━━━━━━━━━━━━\n\n");
+        sb.append("📊 <b>EXPERIENCE GAMING CLUB</b>\n\n");
 
         sb.append("👥 <b>Участников:</b> ").append(totalUsers).append("\n");
         sb.append("🆕 <b>Новых за неделю:</b> ").append(newThisWeek).append("\n");
@@ -2936,21 +2935,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("💰 <b>EXC выдано всего:</b> ").append(totalExc).append("\n");
         sb.append("🎮 <b>Топ игра:</b> ").append(escape(topGame)).append("\n");
 
-        sb.append("\n━━━━━━━━━━━━━━━━━━━━━\n");
-        sb.append("🏅 <b>ТОП-5 ИГРОКОВ</b>\n\n");
+        sb.append("\n🏅 <b>ТОП-3 ИГРОКОВ</b>\n\n");
 
-        for (int i = 0; i < top5.size(); i++) {
+        int limit = Math.min(3, top5.size());
+        for (int i = 0; i < limit; i++) {
             AppUser u = top5.get(i);
-            String medal = i < medals.length ? medals[i] : (i + 1) + ".";
             int level = userService.getLevelNumber(u.getXp());
             String levelName = userService.getLevelName(u.getXp());
-            sb.append(medal).append(" <b>").append(escape(displayUserName(u))).append("</b>\n");
+            sb.append(medals[i]).append(" <b>").append(escape(displayUserName(u))).append("</b>\n");
             sb.append("    ⭐ Ур. ").append(level).append(" · ").append(escape(levelName))
               .append(" · ").append(u.getXp()).append(" XP\n");
             sb.append("    💰 ").append(u.getCoins()).append(" EXC\n\n");
         }
 
-        sb.append("━━━━━━━━━━━━━━━━━━━━━\n");
         sb.append("📅 ").append(java.time.LocalDate.now());
 
         sendText(admin.getTelegramId(), sb.toString(),
