@@ -1415,47 +1415,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         int ratioPercent = (int) Math.round(healthRatioService.getCurrentRatio() * 100);
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
 
-        boolean xpBoostActive = sinkShopService.isXpBoostActive(user);
-        boolean excBoostActive = sinkShopService.isExcBoostActive(user);
-        java.time.format.DateTimeFormatter dtFmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm");
-
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-
-        // Boosts section
-        rows.add(List.of(keyboardFactory.callback("── ⚡ Бусты производительности ──", "noop")));
-        if (xpBoostActive) {
-            rows.add(List.of(keyboardFactory.callback(
-                "⚡ XP-буст активен до " + user.getXpBoostActiveUntil().format(dtFmt) + " ✅", "noop")));
-        } else {
-            rows.add(List.of(keyboardFactory.callback("⚡ XP +20% • 24ч — 200 EXC", "sink:xpboost:24")));
-            rows.add(List.of(keyboardFactory.callback("⚡ XP +20% • 72ч — 500 EXC", "sink:xpboost:72")));
-        }
-        if (excBoostActive) {
-            rows.add(List.of(keyboardFactory.callback(
-                "⚡ EXC-буст активен до " + user.getExcBoostActiveUntil().format(dtFmt) + " ✅", "noop")));
-        } else {
-            rows.add(List.of(keyboardFactory.callback("⚡ EXC +20% • 24ч — 200 EXC", "sink:excboost:24")));
-            rows.add(List.of(keyboardFactory.callback("⚡ EXC +20% • 72ч — 500 EXC", "sink:excboost:72")));
-        }
-        if (!xpBoostActive && !excBoostActive) {
-            rows.add(List.of(keyboardFactory.callback("⚡⚡ Двойной буст • 24ч — 350 EXC", "sink:doubleboost:24")));
-        }
-
-        // Quest tools section
-        rows.add(List.of(keyboardFactory.callback("── 🎮 Управление квестами ──", "noop")));
-        rows.add(List.of(keyboardFactory.callback("🔀 Реролл квеста — 50 EXC", "sink:reroll")));
-        if (user.isRetryInsuranceActive()) {
-            rows.add(List.of(keyboardFactory.callback("🛡️ Страховка провала — активна ✅", "sink:insurance_info")));
-        } else {
-            rows.add(List.of(keyboardFactory.callback("🛡️ Страховка провала — 75 EXC", "sink:insurance")));
-        }
-        if (sinkShopService.hasExtraSlot(user)) {
-            rows.add(List.of(keyboardFactory.callback(
-                "📂 Доп. слот активен до " + user.getQuestSlotExtraUntil().format(dtFmt) + " ✅", "noop")));
-        } else {
-            rows.add(List.of(keyboardFactory.callback("📂 Доп. слот квеста • 48ч — 150 EXC", "sink:extraslot")));
-        }
-        rows.add(List.of(keyboardFactory.callback("⏱️ Снятие кулдауна — 100 EXC", "sink:cooldown_info")));
 
         // Withdrawal
         rows.add(List.of(keyboardFactory.callback("── 💸 Вывод EXC ──", "noop")));
@@ -1478,14 +1438,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         }
 
-        // Social section
-        rows.add(List.of(keyboardFactory.callback("── 🤝 Социальные механики ──", "noop")));
-        rows.add(List.of(keyboardFactory.callback("🎁 Подарок другу (буст) — 300 EXC", "sink:gift")));
-        rows.add(List.of(keyboardFactory.callback("⚔️ 🔒 Вызов на дуэль — Скоро", "shop:soon")));
-        rows.add(List.of(keyboardFactory.callback("📢 🔒 Место в ТОП-посте — Скоро", "shop:soon")));
-
-        // SOON items
-        rows.add(List.of(keyboardFactory.callback("── 🎮 Gift Cards ──", "noop")));
+        // Gift Cards
+        rows.add(List.of(keyboardFactory.callback("── 🎁 Подарочные карты ──", "noop")));
         rows.add(List.of(keyboardFactory.callback("🔒 Gift Card Steam 100 руб. — Скоро", "shop:soon")));
         rows.add(List.of(keyboardFactory.callback("🔒 Gift Card Steam 200 руб. — Скоро", "shop:soon")));
         rows.add(List.of(keyboardFactory.callback("🔒 Gift Card PSN 200 руб. — Скоро", "shop:soon")));
@@ -1504,8 +1458,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>\n"
                         + "📊 Состояние фонда: <b>" + ratioPercent + "%</b>\n"
                         + "📤 Разрешено к выводу: <b>" + remaining + " EXC</b>\n"
-                        + "💱 Курс вывода: <b>" + rateDisplay + "</b>\n\n"
-                        + "⚡ Бусты и инструменты покупаются мгновенно, без подтверждения.",
+                        + "💱 Курс вывода: <b>" + rateDisplay + "</b>",
                 keyboardFactory.rowsLayout(rows));
     }
 
@@ -1570,10 +1523,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (xpBoostActive) info.append("⚡ XP-буст активен до: <b>").append(user.getXpBoostActiveUntil().format(dtFmt)).append("</b>\n");
         if (excBoostActive) info.append("⚡ EXC-буст активен до: <b>").append(user.getExcBoostActiveUntil().format(dtFmt)).append("</b>\n");
         if (slotActive) info.append("📂 Доп. слот активен до: <b>").append(user.getQuestSlotExtraUntil().format(dtFmt)).append("</b>\n");
-        info.append("\n<b>— Бусты —</b>");
-
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
+        rows.add(List.of(keyboardFactory.callback("— Бусты —", "sink:noop")));
         if (xpBoostActive) {
             rows.add(List.of(keyboardFactory.callback("⚡ XP-буст активен ✅", "sink:xpboost_info")));
         } else {
