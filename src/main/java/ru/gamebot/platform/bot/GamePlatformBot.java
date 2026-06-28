@@ -1415,14 +1415,41 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         int ratioPercent = (int) Math.round(healthRatioService.getCurrentRatio() * 100);
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
 
+        boolean xpBoostActive = sinkShopService.isXpBoostActive(user);
+        boolean excBoostActive = sinkShopService.isExcBoostActive(user);
+        java.time.format.DateTimeFormatter dtFmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm");
+
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
-        // Withdrawal always at top
+        // Boosts section
+        rows.add(List.of(keyboardFactory.callback("── ⚡ Бусты производительности ──", "noop")));
+        if (xpBoostActive) {
+            rows.add(List.of(keyboardFactory.callback(
+                "⚡ XP-буст активен до " + user.getXpBoostActiveUntil().format(dtFmt) + " ✅", "noop")));
+        } else {
+            rows.add(List.of(
+                keyboardFactory.callback("⚡ XP +20% • 24ч — 200 EXC", "sink:xpboost:24"),
+                keyboardFactory.callback("⚡ XP +20% • 72ч — 500 EXC", "sink:xpboost:72")
+            ));
+        }
+        if (excBoostActive) {
+            rows.add(List.of(keyboardFactory.callback(
+                "⚡ EXC-буст активен до " + user.getExcBoostActiveUntil().format(dtFmt) + " ✅", "noop")));
+        } else {
+            rows.add(List.of(
+                keyboardFactory.callback("⚡ EXC +20% • 24ч — 200 EXC", "sink:excboost:24"),
+                keyboardFactory.callback("⚡ EXC +20% • 72ч — 500 EXC", "sink:excboost:72")
+            ));
+        }
+        if (!xpBoostActive && !excBoostActive) {
+            rows.add(List.of(keyboardFactory.callback("⚡⚡ Двойной буст • 24ч — 350 EXC", "sink:doubleboost:24")));
+        }
+
+        // Withdrawal
         rows.add(List.of(keyboardFactory.callback("── 💸 Вывод EXC ──", "noop")));
         rows.add(List.of(keyboardFactory.callback("💸 Вывести EXC — от 5 000 EXC", "shop:withdraw")));
 
         if (!rewards.isEmpty()) {
-            // Group by category
             java.util.LinkedHashMap<String, List<RewardItem>> byCategory = new java.util.LinkedHashMap<>();
             for (RewardItem reward : rewards) {
                 String cat = reward.getCategory() != null ? reward.getCategory() : "Другое";
