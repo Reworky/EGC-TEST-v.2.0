@@ -1579,7 +1579,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "slot_info" -> sendText(user.getTelegramId(),
                     "📂 Доп. слот активен до: <b>" + fmt(user.getQuestSlotExtraUntil()) + "</b>",
                     backMenuKeyboard("menu:sink"));
-            case "noop" -> sendSinkShop(user);
+            case "noop" -> { /* category header — do nothing */ }
             case "soon" -> sendText(user.getTelegramId(),
                     "🔒 <b>Скоро!</b>\n\nЭта функция появится в следующем обновлении. Следи за каналом!",
                     backMenuKeyboard("menu:sink"));
