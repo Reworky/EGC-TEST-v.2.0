@@ -1503,7 +1503,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "🛍️ <b>Магазин наград</b>\n\n"
                         + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>\n"
                         + "📊 Состояние фонда: <b>" + ratioPercent + "%</b>\n"
-                        + "📤 Доступно к выводу: <b>" + remaining + " EXC</b>\n"
+                        + "📤 Разрешено к выводу: <b>" + remaining + " EXC</b>\n"
                         + "💱 Курс вывода: <b>" + rateDisplay + "</b>\n\n"
                         + "⚡ Бусты и инструменты покупаются мгновенно, без подтверждения.",
                 keyboardFactory.rowsLayout(rows));
@@ -1519,7 +1519,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         String text = "💸 <b>Вывод EXC</b>\n\n"
                 + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>\n"
-                + "📤 Доступно к выводу: <b>" + remaining + " EXC</b>\n"
+                + "📤 Разрешено к выводу: <b>" + remaining + " EXC</b>\n"
                 + "💱 Текущий курс: <b>" + rateStr + "</b>\n\n"
                 + "Минимальная сумма вывода: <b>5 000 EXC</b>\n\n"
                 + "Введите сумму в EXC, которую хотите вывести.\n"
