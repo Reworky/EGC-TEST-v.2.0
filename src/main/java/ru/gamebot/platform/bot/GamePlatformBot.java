@@ -1445,6 +1445,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("⚡⚡ Двойной буст • 24ч — 350 EXC", "sink:doubleboost:24")));
         }
 
+        // Quest tools section
+        rows.add(List.of(keyboardFactory.callback("── 🎮 Управление квестами ──", "noop")));
+        rows.add(List.of(keyboardFactory.callback("🔀 Реролл квеста — 50 EXC", "sink:reroll")));
+        if (user.isRetryInsuranceActive()) {
+            rows.add(List.of(keyboardFactory.callback("🛡️ Страховка провала — активна ✅", "sink:insurance_info")));
+        } else {
+            rows.add(List.of(keyboardFactory.callback("🛡️ Страховка провала — 75 EXC", "sink:insurance")));
+        }
+        if (sinkShopService.hasExtraSlot(user)) {
+            rows.add(List.of(keyboardFactory.callback(
+                "📂 Доп. слот активен до " + user.getQuestSlotExtraUntil().format(dtFmt) + " ✅", "noop")));
+        } else {
+            rows.add(List.of(keyboardFactory.callback("📂 Доп. слот квеста • 48ч — 150 EXC", "sink:extraslot")));
+        }
+        rows.add(List.of(keyboardFactory.callback("⏱️ Снятие кулдауна — 100 EXC", "sink:cooldown_info")));
+
         // Withdrawal
         rows.add(List.of(keyboardFactory.callback("── 💸 Вывод EXC ──", "noop")));
         rows.add(List.of(keyboardFactory.callback("💸 Вывести EXC — от 5 000 EXC", "shop:withdraw")));
