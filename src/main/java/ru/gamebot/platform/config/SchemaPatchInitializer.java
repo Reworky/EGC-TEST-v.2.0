@@ -23,6 +23,21 @@ public class SchemaPatchInitializer implements CommandLineRunner {
         apply("UPDATE quests SET category = 'Сложные' WHERE category = 'Долгие'");
 
         apply("ALTER TABLE reward_items ADD COLUMN IF NOT EXISTS photo_file_id VARCHAR(255)");
+
+        // Boost & sink shop columns
+        apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS xp_boost_active_until TIMESTAMP");
+        apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS quest_slot_extra_until TIMESTAMP");
+        apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS cooldown_bypass_game VARCHAR(255)");
+        apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS daily_boost_count INT DEFAULT 0");
+        apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS daily_boost_date DATE");
+        apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS daily_cooldown_removals INT DEFAULT 0");
+        apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS daily_cooldown_date DATE");
+        apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS daily_gifts_sent INT DEFAULT 0");
+        apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS daily_gift_sent_date DATE");
+        apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS daily_gifts_received INT DEFAULT 0");
+        apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS daily_gift_received_date DATE");
+        apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS daily_reroll_count INT DEFAULT 0");
+        apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS daily_reroll_date DATE");
     }
 
     private void apply(String sql) {
