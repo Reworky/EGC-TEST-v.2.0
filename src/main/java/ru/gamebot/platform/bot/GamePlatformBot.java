@@ -1577,19 +1577,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (xpBoostActive) {
             rows.add(List.of(keyboardFactory.callback("⚡ XP-буст активен ✅", "sink:xpboost_info")));
         } else {
-            rows.add(List.of(
-                keyboardFactory.callback("⚡ XP +20% • 24ч — 200 EXC", "sink:xpboost:24"),
-                keyboardFactory.callback("⚡ XP +20% • 72ч — 500 EXC", "sink:xpboost:72")
-            ));
+            rows.add(List.of(keyboardFactory.callback("⚡ XP +20% • 24ч — 200 EXC", "sink:xpboost:24")));
+            rows.add(List.of(keyboardFactory.callback("⚡ XP +20% • 72ч — 500 EXC", "sink:xpboost:72")));
         }
 
         if (excBoostActive) {
             rows.add(List.of(keyboardFactory.callback("⚡ EXC-буст активен ✅", "sink:excboost_info")));
         } else {
-            rows.add(List.of(
-                keyboardFactory.callback("⚡ EXC +20% • 24ч — 200 EXC", "sink:excboost:24"),
-                keyboardFactory.callback("⚡ EXC +20% • 72ч — 500 EXC", "sink:excboost:72")
-            ));
+            rows.add(List.of(keyboardFactory.callback("⚡ EXC +20% • 24ч — 200 EXC", "sink:excboost:24")));
+            rows.add(List.of(keyboardFactory.callback("⚡ EXC +20% • 72ч — 500 EXC", "sink:excboost:72")));
         }
 
         if (!xpBoostActive && !excBoostActive) {
