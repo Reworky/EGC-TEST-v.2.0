@@ -2549,6 +2549,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     status + " " + trim(item.getTitle(), 24) + " — " + item.getPriceCoins() + " EXC",
                     "admin:reward:edit:" + item.getId())));
         }
+        rows.add(List.of(keyboardFactory.callback("👁 Просмотр магазина", "admin:reward:preview")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
         sendText(user.getTelegramId(),
                 "🎁 <b>Управление магазином наград</b>\n\n"
@@ -2559,6 +2560,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void handleAdminRewardAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
+        if ("preview".equals(action)) {
+            sendShop(user);
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if ("create".equals(action)) {
             session.reset();
             session.setState(SessionState.REWARD_CREATE_TITLE);
