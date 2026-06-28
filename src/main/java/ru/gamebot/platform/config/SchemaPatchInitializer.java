@@ -38,6 +38,11 @@ public class SchemaPatchInitializer implements CommandLineRunner {
         apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS daily_gift_received_date DATE");
         apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS daily_reroll_count INT DEFAULT 0");
         apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS daily_reroll_date DATE");
+
+        // Withdrawal limit columns
+        apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS monthly_withdrawn_exc BIGINT DEFAULT 0");
+        apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS withdrawal_month INT DEFAULT 0");
+        apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS withdrawal_year INT DEFAULT 0");
     }
 
     private void apply(String sql) {
