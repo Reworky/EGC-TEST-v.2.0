@@ -1495,24 +1495,32 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
 
+        String rateDisplay = ratioPercent == 100
+                ? "100 EXC = 1 ₽"
+                : "100 EXC = " + String.format("%.2f", ratioPercent / 100.0) + " ₽";
+
         sendText(user.getTelegramId(),
                 "🛍️ <b>Магазин наград</b>\n\n"
                         + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>\n"
                         + "📊 Состояние фонда: <b>" + ratioPercent + "%</b>\n"
-                        + "📤 Доступно к выводу: <b>" + remaining + " EXC</b>\n\n"
-                        + "Курс вывода: 100 EXC = " + ratioPercent + " коп. (×Health Ratio)",
+                        + "📤 Доступно к выводу: <b>" + remaining + " EXC</b>\n"
+                        + "💱 Курс вывода: <b>" + rateDisplay + "</b>\n\n"
+                        + "⚡ Бусты и инструменты покупаются мгновенно, без подтверждения.",
                 keyboardFactory.rowsLayout(rows));
     }
 
     private void sendWithdrawalScreen(AppUser user) {
         double ratio = healthRatioService.getCurrentRatio();
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
-        long rateKopecks = Math.round(ratio * 100);
+        int ratioP = (int) Math.round(ratio * 100);
+        String rateStr = ratioP == 100
+                ? "100 EXC = 1 ₽"
+                : "100 EXC = " + String.format("%.2f", ratio) + " ₽";
 
         String text = "💸 <b>Вывод EXC</b>\n\n"
                 + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>\n"
                 + "📤 Доступно к выводу: <b>" + remaining + " EXC</b>\n"
-                + "📊 Текущий курс: 100 EXC = <b>" + rateKopecks + " коп.</b>\n\n"
+                + "💱 Текущий курс: <b>" + rateStr + "</b>\n\n"
                 + "Минимальная сумма вывода: <b>5 000 EXC</b>\n\n"
                 + "Введите сумму в EXC, которую хотите вывести.\n"
                 + "Выплата производится вручную администратором в течение 24 часов.";
