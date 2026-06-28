@@ -32,6 +32,7 @@ public class QuestService {
     private final AppUserRepository appUserRepository;
     private final UserService userService;
     private final HealthRatioService healthRatioService;
+    private final SinkShopService sinkShopService;
 
     public List<Quest> findActiveQuests() {
         return questRepository.findAllByActiveTrueOrderByCreatedAtDesc();
@@ -127,8 +128,14 @@ public class QuestService {
     public boolean isCooldownActive(AppUser user, Quest quest) {
         Optional<LocalDateTime> lastApproved = questSubmissionRepository
                 .findLastApprovedDateByUserAndGame(user, quest.getGameName());
-        return lastApproved.isPresent()
-                && LocalDateTime.now().isBefore(lastApproved.get().plusHours(COOLDOWN_HOURS));
+        if (lastApproved.isPresent() && LocalDateTime.now().isBefore(lastApproved.get().plusHours(COOLDOWN_HOURS))) {
+            if (sinkShopService.hasCooldownBypass(user, quest.getGameName())) {
+                sinkShopService.consumeCooldownBypass(user, quest.getGameName());
+                return false;
+            }
+            return true;
+        }
+        return false;
     }
 
     public long getWeeklyCompletionsOfType(AppUser user, Quest quest) {
@@ -249,10 +256,15 @@ public class QuestService {
             adjustedCoins = adjustedCoins / 2;
         }
 
+        // Apply XP boost
+        long baseXp = quest.getRewardXp();
+        int xpBoostPct = sinkShopService.getXpBoostPercent(user);
+        long adjustedXp = baseXp + (baseXp * xpBoostPct / 100);
+
         // 3.5 200 EXC bonus on first quest (before completedQuests increment)
         userService.grantFirstQuestReferralBonus(user);
 
-        userService.addReward(user, quest.getRewardXp(), adjustedCoins);
+        userService.addReward(user, adjustedXp, adjustedCoins);
         user.setCompletedQuests(user.getCompletedQuests() + 1);
         submission.setUser(user);
         questSubmissionRepository.save(submission);
@@ -352,6 +364,12 @@ public class QuestService {
         }
         questRepository.delete(quest);
         return submissions;
+    }
+
+    public long countActiveDrafts(AppUser user) {
+        return questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user).stream()
+                .filter(s -> s.getStatus() == SubmissionStatus.DRAFT && !isExpired(s))
+                .count();
     }
 
     private boolean sameGame(String left, String right) {

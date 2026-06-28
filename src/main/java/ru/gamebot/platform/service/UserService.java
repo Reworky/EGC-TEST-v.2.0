@@ -77,6 +77,12 @@ public class UserService {
         return appUserRepository.findByTelegramId(telegramId);
     }
 
+    public Optional<AppUser> findByNickname(String nickname) {
+        return appUserRepository.findAll().stream()
+                .filter(u -> u.isRegistrationCompleted() && nickname.equalsIgnoreCase(u.getNickname()))
+                .findFirst();
+    }
+
     public long getOverallRank(AppUser user) {
         List<AppUser> sorted = appUserRepository.findAllByRegistrationCompletedTrueOrderByXpDescTelegramIdAsc();
         return getRank(sorted, user.getTelegramId());

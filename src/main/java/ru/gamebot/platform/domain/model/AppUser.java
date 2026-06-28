@@ -66,6 +66,23 @@ public class AppUser {
     @Column(columnDefinition = "boolean default false")
     private boolean retryInsuranceActive;
 
+    // New boosts
+    private LocalDateTime xpBoostActiveUntil;
+    private LocalDateTime questSlotExtraUntil;
+    private String cooldownBypassGame;
+
+    // Daily counters (reset by comparing date)
+    private int dailyRerollCount;
+    private LocalDate dailyRerollDate;
+    private int dailyBoostCount;
+    private LocalDate dailyBoostDate;
+    private int dailyCooldownRemovals;
+    private LocalDate dailyCooldownDate;
+    private int dailyGiftsSent;
+    private LocalDate dailyGiftSentDate;
+    private int dailyGiftsReceived;
+    private LocalDate dailyGiftReceivedDate;
+
     // Withdrawal limits
     @Column(columnDefinition = "bigint default 0")
     private long monthlyWithdrawnExc;
