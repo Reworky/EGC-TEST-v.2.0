@@ -51,6 +51,7 @@ import ru.gamebot.platform.domain.model.RewardRequest;
 import ru.gamebot.platform.domain.model.SupportAttachment;
 import ru.gamebot.platform.domain.model.SupportTicket;
 import ru.gamebot.platform.service.AdminService;
+import ru.gamebot.platform.service.GameCatalogService;
 import ru.gamebot.platform.service.NewsService;
 import ru.gamebot.platform.service.QuestService;
 import ru.gamebot.platform.service.RewardService;
@@ -101,6 +102,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.HealthRatioService healthRatioService;
     private final ru.gamebot.platform.service.SinkShopService sinkShopService;
     private final ru.gamebot.platform.service.CouncilService councilService;
+    private final GameCatalogService gameCatalogService;
 
     @EventListener(ApplicationReadyEvent.class)
     public void registerBot() throws TelegramApiException {
@@ -211,6 +213,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.getData().put("photoFileId", photos.get(photos.size() - 1).getFileId());
             }
             finalizeRewardCreation(user, session);
+            return;
+        }
+
+        if (session.getState() == SessionState.GAME_PHOTO_UPLOAD) {
+            if (!message.hasPhoto()) {
+                sendText(user.getTelegramId(), "⚠️ Пожалуйста, отправьте изображение (не файл).", cancelKeyboard());
+                return;
+            }
+            List<PhotoSize> photos = message.getPhoto();
+            String fileId = photos.get(photos.size() - 1).getFileId();
+            String gameName = session.getData().get("gamePhotoName");
+            gameCatalogService.setPhoto(gameName, fileId);
+            session.reset();
+            sendText(user.getTelegramId(), "✅ Фото для игры «" + escape(gameName) + "» сохранено.", null);
+            sendAdminQuestCategories(user, gameName);
             return;
         }
 
@@ -1052,10 +1069,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
 
-        sendText(user.getTelegramId(),
-                "🎮 <b>" + escape(gameName) + "</b>\n\n"
-                        + "Выберите нужную категорию и откройте подборку квестов именно по этой игре.",
-                keyboardFactory.rowsLayout(rows));
+        String caption = "🎮 <b>" + escape(gameName) + "</b>\n\nВыберите нужную категорию и откройте подборку квестов именно по этой игре.";
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
+
+        gameCatalogService.getPhotoFileId(gameName).ifPresentOrElse(
+                photoFileId -> sendPhotoCaption(user.getTelegramId(), photoFileId, caption, keyboard),
+                () -> sendText(user.getTelegramId(), caption, keyboard)
+        );
     }
 
     private void sendQuestList(AppUser user, String gameName, String category) {
@@ -2379,6 +2399,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     session.setQuestId(parseLong(action.substring("edit-limit:".length())));
                     session.setState(SessionState.QUEST_EDIT_LIMIT);
                     sendText(user.getTelegramId(), "👥 Укажите новый лимит участников числом.", cancelKeyboard());
+                } else if (action.startsWith("game:photo:set:")) {
+                    String gameName = decodeGameToken(action.substring("game:photo:set:".length()));
+                    session.reset();
+                    session.setState(SessionState.GAME_PHOTO_UPLOAD);
+                    session.getData().put("gamePhotoName", gameName);
+                    sendText(user.getTelegramId(),
+                            "🖼 <b>Загрузка фото для игры «" + escape(gameName) + "»</b>\n\n"
+                                    + "Отправьте изображение (фото, не файл). Оно будет показываться пользователям при входе в раздел квестов этой игры.",
+                            cancelKeyboard());
+                } else if (action.startsWith("game:photo:remove:")) {
+                    String gameName = decodeGameToken(action.substring("game:photo:remove:".length()));
+                    gameCatalogService.removePhoto(gameName);
+                    answer(callbackQuery.getId(), "Фото удалено");
+                    sendAdminQuestCategories(user, gameName);
+                    return;
                 } else if (action.startsWith("reward:")) {
                     handleAdminRewardAction(callbackQuery, user, session, action.substring("reward:".length()));
                     return;
@@ -2794,13 +2829,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ));
         rows.add(List.of(keyboardFactory.callback("🏰 Сложные", "admin:quests:list:" + encodeGameToken(gameName) + ":long")));
         rows.add(List.of(keyboardFactory.callback("📚 Все квесты", "admin:quests:list:" + encodeGameToken(gameName) + ":all")));
+
+        boolean hasPhoto = gameCatalogService.getPhotoFileId(gameName).isPresent();
+        if (hasPhoto) {
+            rows.add(List.of(
+                    keyboardFactory.callback("🖼 Обновить фото игры", "admin:game:photo:set:" + encodeGameToken(gameName)),
+                    keyboardFactory.callback("🗑 Удалить фото", "admin:game:photo:remove:" + encodeGameToken(gameName))
+            ));
+        } else {
+            rows.add(List.of(keyboardFactory.callback("🖼 Добавить фото игры", "admin:game:photo:set:" + encodeGameToken(gameName))));
+        }
+
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", "admin:edit"),
                 keyboardFactory.callback("🏠 Меню", "menu:admin")
         ));
 
+        String photoStatus = hasPhoto ? "✅ Фото установлено" : "📷 Фото не добавлено";
         sendText(user.getTelegramId(),
-                "🎮 <b>" + escape(gameName) + "</b>\n\n"
+                "🎮 <b>" + escape(gameName) + "</b>\n"
+                        + photoStatus + "\n\n"
                         + "Выберите категорию, чтобы открыть нужную группу квестов по этой игре.",
                 keyboardFactory.rowsLayout(rows));
     }
