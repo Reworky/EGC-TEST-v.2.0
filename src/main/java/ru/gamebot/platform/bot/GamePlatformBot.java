@@ -55,6 +55,7 @@ import ru.gamebot.platform.service.NewsService;
 import ru.gamebot.platform.service.QuestService;
 import ru.gamebot.platform.service.RewardService;
 import ru.gamebot.platform.service.SessionService;
+import ru.gamebot.platform.service.SinkShopService;
 import ru.gamebot.platform.service.SupportService;
 import ru.gamebot.platform.service.UserService;
 
