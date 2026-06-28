@@ -3670,7 +3670,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("⚡ Предметы", "menu:sink")
         ));
         rows.add(List.of(keyboardFactory.callback("🛡️ EGC Council", "menu:council")));
-        rows.add(List.of(keyboardFactory.callback("🆘 Поддержка", "menu:support")));
+        rows.add(List.of(
+                keyboardFactory.callback("🆘 Поддержка", "menu:support"),
+                keyboardFactory.url("⭐ Отзывы игроков", "https://t.me/egc_payouts")
+        ));
         return keyboardFactory.rowsLayout(rows);
     }
 
