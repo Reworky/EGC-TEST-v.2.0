@@ -2881,23 +2881,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendAdminStats(AppUser user) {
         List<AppUser> users = userService.allRegisteredUsers();
+        java.time.LocalDate sevenDaysAgo = java.time.LocalDate.now().minusDays(7);
         long activeUsers = users.stream()
-                .filter(player -> player.getLastActivityDate() != null)
-                .filter(player -> !player.getLastActivityDate().isBefore(java.time.LocalDate.now().minusDays(7)))
+                .filter(u -> u.getLastActivityDate() != null)
+                .filter(u -> !u.getLastActivityDate().isBefore(sevenDaysAgo))
                 .count();
-        long totalQuestExpenses = questService.findAll().stream()
-                .mapToLong(quest -> quest.getRewardCoins())
-                .sum();
+        long newUsersWeek = users.stream()
+                .filter(u -> u.getCreatedAt() != null)
+                .filter(u -> !u.getCreatedAt().toLocalDate().isBefore(sevenDaysAgo))
+                .count();
+        long totalCoins = users.stream().mapToLong(AppUser::getCoins).sum();
+        long pendingQuests = questService.pendingCount();
+        long pendingRewards = rewardService.countPendingRequests();
 
         sendText(user.getTelegramId(),
                 "📊 <b>Статистика платформы</b>\n\n"
                         + "👥 Всего игроков: <b>" + userService.totalRegisteredUsers() + "</b>\n"
                         + "🟢 Активных за 7 дней: <b>" + activeUsers + "</b>\n"
-                        + "🆕 Новых игроков: <b>" + users.stream().filter(player -> player.getCreatedAt().toLocalDate().equals(java.time.LocalDate.now())).count() + "</b>\n"
+                        + "🆕 Новых за 7 дней: <b>" + newUsersWeek + "</b>\n"
                         + "✅ Выполненных заданий: <b>" + users.stream().mapToInt(AppUser::getCompletedQuests).sum() + "</b>\n"
                         + "🎟️ Билетов в обороте: <b>" + users.stream().mapToLong(AppUser::getTickets).sum() + "</b>\n"
-                        + "💸 Потенциальные расходы на выплаты: <b>" + totalQuestExpenses + " монет</b>\n"
-                        + "📥 Заявок на модерации: <b>" + questService.pendingCount() + "</b>",
+                        + "💰 EXC на счетах игроков: <b>" + totalCoins + " EXC</b>\n"
+                        + "📥 Квестов на модерации: <b>" + pendingQuests + "</b>\n"
+                        + "🎁 Заявок на награды: <b>" + pendingRewards + "</b>",
                 keyboardFactory.smartLayout(List.of(
                         keyboardFactory.callback("🏠 Меню", "menu:main")
                 )));
