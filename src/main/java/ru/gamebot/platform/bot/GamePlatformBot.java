@@ -391,6 +391,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 backMenuKeyboard("menu:shop"));
             return;
         }
+        if (data.equals("shop:withdraw")) {
+            answerSilently(callbackQuery.getId());
+            session.setState(SessionState.WITHDRAWAL_INPUT);
+            sendWithdrawalScreen(user);
+            return;
+        }
         if (data.startsWith("shop:view:")) {
             sendRewardCard(user, parseLong(data.substring("shop:view:".length())));
             answer(callbackQuery.getId(), "Карточка награды");
@@ -816,6 +822,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
                 }
             }
+            case WITHDRAWAL_INPUT -> handleWithdrawalInput(user, session, text);
             default -> sendText(user.getTelegramId(), "🧭 Я не жду текст на этом шаге. Вернитесь в меню.", mainMenuKeyboard(user));
         }
     }
@@ -1405,36 +1412,38 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendShop(AppUser user) {
         List<RewardItem> rewards = rewardService.findAvailableRewards();
-        if (rewards.isEmpty()) {
-            sendText(user.getTelegramId(), "🛍️ Магазин пока обновляется. Новые награды появятся здесь совсем скоро.", backMenuKeyboard("menu:main"));
-            return;
-        }
-
         int ratioPercent = (int) Math.round(healthRatioService.getCurrentRatio() * 100);
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
 
-        // Group by category
-        java.util.LinkedHashMap<String, List<RewardItem>> byCategory = new java.util.LinkedHashMap<>();
-        for (RewardItem reward : rewards) {
-            String cat = reward.getCategory() != null ? reward.getCategory() : "Другое";
-            byCategory.computeIfAbsent(cat, k -> new ArrayList<>()).add(reward);
-        }
-
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        for (Map.Entry<String, List<RewardItem>> entry : byCategory.entrySet()) {
-            // Category header as disabled label button
-            rows.add(List.of(keyboardFactory.callback("── " + entry.getKey() + " ──", "noop")));
-            for (RewardItem reward : entry.getValue()) {
-                long price = rewardService.effectivePrice(reward);
-                rows.add(List.of(keyboardFactory.callback(
-                        "🎁 " + trim(reward.getTitle(), 22) + " — " + price + " EXC",
-                        "shop:view:" + reward.getId())));
+
+        // Withdrawal always at top
+        rows.add(List.of(keyboardFactory.callback("── 💸 Вывод EXC ──", "noop")));
+        rows.add(List.of(keyboardFactory.callback("💸 Вывести EXC — от 5 000 EXC", "shop:withdraw")));
+
+        if (!rewards.isEmpty()) {
+            // Group by category
+            java.util.LinkedHashMap<String, List<RewardItem>> byCategory = new java.util.LinkedHashMap<>();
+            for (RewardItem reward : rewards) {
+                String cat = reward.getCategory() != null ? reward.getCategory() : "Другое";
+                byCategory.computeIfAbsent(cat, k -> new ArrayList<>()).add(reward);
+            }
+            for (Map.Entry<String, List<RewardItem>> entry : byCategory.entrySet()) {
+                rows.add(List.of(keyboardFactory.callback("── " + entry.getKey() + " ──", "noop")));
+                for (RewardItem reward : entry.getValue()) {
+                    long price = rewardService.effectivePrice(reward);
+                    rows.add(List.of(keyboardFactory.callback(
+                            "🎁 " + trim(reward.getTitle(), 22) + " — " + price + " EXC",
+                            "shop:view:" + reward.getId())));
+                }
             }
         }
+
         // SOON items
-        rows.add(List.of(keyboardFactory.callback("🎮 🔒 Gift Card Steam 100 руб. — Скоро", "shop:soon")));
-        rows.add(List.of(keyboardFactory.callback("🎮 🔒 Gift Card Steam 200 руб. — Скоро", "shop:soon")));
-        rows.add(List.of(keyboardFactory.callback("🎮 🔒 Gift Card PSN 200 руб. — Скоро", "shop:soon")));
+        rows.add(List.of(keyboardFactory.callback("── 🎮 Gift Cards ──", "noop")));
+        rows.add(List.of(keyboardFactory.callback("🔒 Gift Card Steam 100 руб. — Скоро", "shop:soon")));
+        rows.add(List.of(keyboardFactory.callback("🔒 Gift Card Steam 200 руб. — Скоро", "shop:soon")));
+        rows.add(List.of(keyboardFactory.callback("🔒 Gift Card PSN 200 руб. — Скоро", "shop:soon")));
 
         rows.add(List.of(
                 keyboardFactory.callback("📋 Мои заявки", "menu:my-rewards"),
@@ -1444,10 +1453,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "🛍️ <b>Магазин наград</b>\n\n"
                         + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>\n"
-                        + "📊 Состояние фонда: <b>" + ratioPercent + "%</b> (влияет на цены)\n"
-                        + "📤 Лимит вывода в этом месяце: <b>" + remaining + " EXC</b>\n\n"
-                        + "Цены указаны с учётом текущего Состояния фонда.",
+                        + "📊 Состояние фонда: <b>" + ratioPercent + "%</b>\n"
+                        + "📤 Доступно к выводу: <b>" + remaining + " EXC</b>\n\n"
+                        + "Курс вывода: 100 EXC = " + ratioPercent + " коп. (×Health Ratio)",
                 keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendWithdrawalScreen(AppUser user) {
+        double ratio = healthRatioService.getCurrentRatio();
+        long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
+        long rateKopecks = Math.round(ratio * 100);
+
+        String text = "💸 <b>Вывод EXC</b>\n\n"
+                + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>\n"
+                + "📤 Доступно к выводу: <b>" + remaining + " EXC</b>\n"
+                + "📊 Текущий курс: 100 EXC = <b>" + rateKopecks + " коп.</b>\n\n"
+                + "Минимальная сумма вывода: <b>5 000 EXC</b>\n\n"
+                + "Введите сумму в EXC, которую хотите вывести.\n"
+                + "Выплата производится вручную администратором в течение 24 часов.";
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("❌ Отмена", "menu:shop")));
+
+        sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
 
     private void sendUserRewardRequests(AppUser user) {
@@ -3252,6 +3280,34 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "✅ Payout Pool пополнен на <b>" + amount + " ₽</b>.\n\n"
                         + "📊 Новый Состояние фонда: <b>" + ratioPercent + "%</b>",
                 mainMenuKeyboard(user));
+    }
+
+    private void handleWithdrawalInput(AppUser user, UserSession session, String text) {
+        long amount;
+        try {
+            amount = Long.parseLong(text.trim().replace(" ", ""));
+        } catch (NumberFormatException e) {
+            sendText(user.getTelegramId(), "⚠️ Введите сумму числом, например: <b>5000</b>", cancelKeyboard());
+            return;
+        }
+        if (amount < 5000) {
+            sendText(user.getTelegramId(), "⚠️ Минимальная сумма вывода — <b>5 000 EXC</b>.", cancelKeyboard());
+            return;
+        }
+        double ratio = healthRatioService.getCurrentRatio();
+        long rubles = Math.round(amount * ratio / 100.0);
+        try {
+            rewardService.createWithdrawalRequest(user, amount, rubles);
+            session.reset();
+            sendText(user.getTelegramId(),
+                "✅ <b>Заявка на вывод принята!</b>\n\n"
+                    + "💸 Сумма: <b>" + amount + " EXC</b>\n"
+                    + "💵 К выплате: <b>~" + rubles + " ₽</b>\n\n"
+                    + "Администратор обработает заявку в течение 24 часов.",
+                backMenuKeyboard("menu:shop"));
+        } catch (IllegalArgumentException e) {
+            sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), cancelKeyboard());
+        }
     }
 
     private static final List<String> QUEST_PLATFORMS = List.of("PC", "Console", "Mobile");
