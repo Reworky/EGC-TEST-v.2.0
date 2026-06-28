@@ -118,7 +118,6 @@ public class RewardService {
     }
 
     @Transactional
-    @Transactional
     public void deleteRewardItem(Long id) {
         RewardItem item = rewardItemRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Награда не найдена."));
