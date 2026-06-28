@@ -2119,6 +2119,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendAdminQuestCategories(user, decodeGameToken(action.substring("quests:game:".length())));
                 } else if (action.startsWith("quests:list:")) {
                     handleAdminQuestListAction(user, action.substring("quests:list:".length()));
+                } else if ("users:post".equals(action)) {
+                    sendAdminUsersPostCard(user);
                 } else if (action.startsWith("users:")) {
                     sendAdminUsersPage(user, parseInteger(action.substring("users:".length())));
                 } else if (action.startsWith("bonuspage:")) {
@@ -2733,8 +2735,52 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!pagination.isEmpty()) {
             rows.add(pagination);
         }
+        rows.add(List.of(keyboardFactory.callback("📸 Для постов", "admin:users:post")));
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(admin.getTelegramId(), builder.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendAdminUsersPostCard(AppUser admin) {
+        List<AppUser> top5 = userService.top5Overall();
+        long totalUsers = userService.totalRegisteredUsers();
+        long newThisWeek = userService.countNewUsersSince(java.time.LocalDateTime.now().minusWeeks(1));
+        long totalQuests = questService.countAllApproved();
+        long totalExc = questService.sumAllIssuedCoins();
+        String topGame = questService.topGameName();
+
+        String[] medals = {"🥇", "🥈", "🥉", "4️⃣", "5️⃣"};
+        StringBuilder sb = new StringBuilder();
+        sb.append("📊 <b>EXPERIENCE GAMING CLUB</b>\n");
+        sb.append("━━━━━━━━━━━━━━━━━━━━━\n\n");
+
+        sb.append("👥 <b>Участников:</b> ").append(totalUsers).append("\n");
+        sb.append("🆕 <b>Новых за неделю:</b> ").append(newThisWeek).append("\n");
+        sb.append("✅ <b>Квестов выполнено:</b> ").append(totalQuests).append("\n");
+        sb.append("💰 <b>EXC выдано всего:</b> ").append(totalExc).append("\n");
+        sb.append("🎮 <b>Топ игра:</b> ").append(escape(topGame)).append("\n");
+
+        sb.append("\n━━━━━━━━━━━━━━━━━━━━━\n");
+        sb.append("🏅 <b>ТОП-5 ИГРОКОВ</b>\n\n");
+
+        for (int i = 0; i < top5.size(); i++) {
+            AppUser u = top5.get(i);
+            String medal = i < medals.length ? medals[i] : (i + 1) + ".";
+            int level = userService.getLevelNumber(u.getXp());
+            String levelName = userService.getLevelName(u.getXp());
+            sb.append(medal).append(" <b>").append(escape(displayUserName(u))).append("</b>\n");
+            sb.append("    ⭐ Ур. ").append(level).append(" · ").append(escape(levelName))
+              .append(" · ").append(u.getXp()).append(" XP\n");
+            sb.append("    💰 ").append(u.getCoins()).append(" EXC\n\n");
+        }
+
+        sb.append("━━━━━━━━━━━━━━━━━━━━━\n");
+        sb.append("📅 ").append(java.time.LocalDate.now());
+
+        sendText(admin.getTelegramId(), sb.toString(),
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("⬅️ К пользователям", "admin:users:0")),
+                        List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
+                )));
     }
 
     private void handleAdminUserAction(AppUser admin, String payload) {

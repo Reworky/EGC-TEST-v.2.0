@@ -326,6 +326,19 @@ public class QuestService {
         return questSubmissionRepository.countApprovedByUser(user);
     }
 
+    public long countAllApproved() {
+        return questSubmissionRepository.countAllApproved();
+    }
+
+    public long sumAllIssuedCoins() {
+        return questSubmissionRepository.sumAllIssuedCoins();
+    }
+
+    public String topGameName() {
+        List<String> names = questSubmissionRepository.findTopGameNames();
+        return names.isEmpty() ? "—" : names.get(0);
+    }
+
     public long pendingCount() {
         return questSubmissionRepository.countByStatus(SubmissionStatus.PENDING);
     }

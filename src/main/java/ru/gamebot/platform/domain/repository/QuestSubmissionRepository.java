@@ -49,4 +49,13 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT s.createdAt FROM QuestSubmission s WHERE s.user = :user AND s.status = 'PENDING' ORDER BY s.createdAt DESC")
     List<LocalDateTime> findRecentPendingSubmissionTimes(@Param("user") AppUser user);
 
+    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.status = 'APPROVED'")
+    long countAllApproved();
+
+    @Query("SELECT COALESCE(SUM(s.quest.rewardCoins), 0) FROM QuestSubmission s WHERE s.status = 'APPROVED'")
+    long sumAllIssuedCoins();
+
+    @Query("SELECT s.quest.gameName FROM QuestSubmission s WHERE s.status = 'APPROVED' GROUP BY s.quest.gameName ORDER BY COUNT(s) DESC")
+    List<String> findTopGameNames();
+
 }

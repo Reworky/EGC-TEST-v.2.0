@@ -160,6 +160,14 @@ public class UserService {
         return appUserRepository.findTop20ByRegistrationCompletedTrueOrderByWeeklyXpDescTelegramIdAsc();
     }
 
+    public List<AppUser> top5Overall() {
+        return appUserRepository.findTop5ByRegistrationCompletedTrueOrderByXpDescTelegramIdAsc();
+    }
+
+    public long countNewUsersSince(java.time.LocalDateTime since) {
+        return appUserRepository.countNewUsersSince(since);
+    }
+
     @Transactional
     public String registerActivity(AppUser user) {
         LocalDate today = LocalDate.now();
