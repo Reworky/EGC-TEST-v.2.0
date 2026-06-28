@@ -1482,6 +1482,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         }
 
+        // Social section
+        rows.add(List.of(keyboardFactory.callback("── 🤝 Социальные механики ──", "noop")));
+        rows.add(List.of(keyboardFactory.callback("🎁 Подарок другу (буст) — 300 EXC", "sink:gift")));
+        rows.add(List.of(keyboardFactory.callback("⚔️ 🔒 Вызов на дуэль — Скоро", "shop:soon")));
+        rows.add(List.of(keyboardFactory.callback("📢 🔒 Место в ТОП-посте — Скоро", "shop:soon")));
+
         // SOON items
         rows.add(List.of(keyboardFactory.callback("── 🎮 Gift Cards ──", "noop")));
         rows.add(List.of(keyboardFactory.callback("🔒 Gift Card Steam 100 руб. — Скоро", "shop:soon")));
