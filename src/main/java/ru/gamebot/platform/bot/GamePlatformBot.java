@@ -1478,8 +1478,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "🛍️ <b>Магазин наград</b>\n\n"
                         + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>\n"
                         + "📊 Состояние фонда: <b>" + ratioPercent + "%</b>\n"
-                        + "📤 Разрешено к выводу: <b>" + remaining + " EXC</b>\n"
-                        + "💱 Курс вывода: <b>" + rateDisplay + "</b>",
+                        + "📤 Лимит вывода: <b>" + sinkShopService.getMonthlyLimit(user.getXp()) + " EXC/мес</b> (осталось: " + remaining + " EXC)\n"
+                        + "💱 Курс вывода: <b>" + rateDisplay + "</b>\n"
+                        + withdrawalLevelHint(user),
                 keyboardFactory.rowsLayout(rows));
     }
 
@@ -1493,8 +1494,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         String text = "💸 <b>Вывод EXC</b>\n\n"
                 + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>\n"
-                + "📤 Разрешено к выводу: <b>" + remaining + " EXC</b>\n"
-                + "💱 Текущий курс: <b>" + rateStr + "</b>\n\n"
+                + "📤 Лимит вывода: <b>" + sinkShopService.getMonthlyLimit(user.getXp()) + " EXC/мес</b> (осталось: " + remaining + " EXC)\n"
+                + "💱 Текущий курс: <b>" + rateStr + "</b>\n"
+                + withdrawalLevelHint(user) + "\n"
                 + "Минимальная сумма вывода: <b>5 000 EXC</b>\n\n"
                 + "Введите сумму в EXC, которую хотите вывести.\n"
                 + "Выплата производится вручную администратором в течение 24 часов.";
@@ -1503,6 +1505,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("❌ Отмена", "menu:shop")));
 
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
+    }
+
+    private String withdrawalLevelHint(AppUser user) {
+        long xp = user.getXp();
+        long nextXp;
+        long nextLimit;
+        String nextLevel;
+        if (xp < 1_000)       { nextXp = 1_000;   nextLimit = 25_000;  nextLevel = "Игрок"; }
+        else if (xp < 5_000)  { nextXp = 5_000;   nextLimit = 50_000;  nextLevel = "Ветеран"; }
+        else if (xp < 15_000) { nextXp = 15_000;  nextLimit = 80_000;  nextLevel = "Элита"; }
+        else if (xp < 35_000) { nextXp = 35_000;  nextLimit = 100_000; nextLevel = "Легенда"; }
+        else if (xp < 75_000) { nextXp = 75_000;  nextLimit = 150_000; nextLevel = "Герой EXPERIENCE"; }
+        else return "";
+        long xpNeeded = nextXp - xp;
+        return "\n💡 До уровня <b>" + nextLevel + "</b> ещё <b>" + xpNeeded + " XP</b> → лимит вывода вырастет до <b>" + nextLimit + " EXC/мес</b>";
     }
 
     private void sendUserRewardRequests(AppUser user) {
