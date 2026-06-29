@@ -233,7 +233,7 @@ public class UserService {
         appUserRepository.save(invitedUser);
     }
 
-    // 3.5: 200 EXC bonus to invited user on their first approved quest
+    // 3.5: 3000 EXC bonus to invited user on their first approved quest
     @Transactional
     public boolean grantFirstQuestReferralBonus(AppUser invitedUser) {
         if (invitedUser.getReferredByTelegramId() == null) {
@@ -242,7 +242,7 @@ public class UserService {
         if (invitedUser.getCompletedQuests() != 0) {
             return false; // only on first quest (completedQuests is incremented before this call)
         }
-        addReward(invitedUser, 0, 200);
+        addReward(invitedUser, 0, 3_000);
         return true;
     }
 

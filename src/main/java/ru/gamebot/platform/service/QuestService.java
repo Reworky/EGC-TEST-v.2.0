@@ -24,8 +24,8 @@ public class QuestService {
 
     private static final int WEEKLY_QUEST_TYPE_LIMIT = 3;
     private static final int COOLDOWN_HOURS = 24;
-    private static final int REFERRAL_BONUS_PERCENT = 10;
-    private static final int REFERRAL_DAYS_WINDOW = 30;
+    private static final int REFERRAL_BONUS_PERCENT = 3;
+    private static final int REFERRAL_DAYS_WINDOW = 14;
 
     private final QuestRepository questRepository;
     private final QuestSubmissionRepository questSubmissionRepository;
@@ -261,7 +261,7 @@ public class QuestService {
         int xpBoostPct = sinkShopService.getXpBoostPercent(user);
         long adjustedXp = baseXp + (baseXp * xpBoostPct / 100);
 
-        // 3.5 200 EXC bonus on first quest (before completedQuests increment)
+        // 3.5 3000 EXC bonus on first quest (before completedQuests increment)
         userService.grantFirstQuestReferralBonus(user);
 
         userService.addReward(user, adjustedXp, adjustedCoins);

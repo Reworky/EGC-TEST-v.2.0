@@ -829,7 +829,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sinkShopService.purchaseGiftBoost(user, recipient);
                     session.reset();
                     sendText(user.getTelegramId(),
-                        "🎁 <b>Подарок отправлен!</b>\n\nВы подарили XP-буст на 24ч игроку <b>" + escape(displayUserName(recipient)) + "</b>.\nСписано 300 EXC.",
+                        "🎁 <b>Подарок отправлен!</b>\n\nВы подарили XP-буст на 24ч игроку <b>" + escape(displayUserName(recipient)) + "</b>.\nСписано 4 500 EXC.",
                         backMenuKeyboard("menu:main"));
                     sendText(recipient.getTelegramId(),
                         "🎁 <b>" + escape(displayUserName(user)) + "</b> подарил(а) тебе XP-буст +20% на 24 часа!\n\nБуст уже активен — удачи в квестах!",
@@ -1004,9 +1004,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return "✅ Клуб работает на полную мощность — награды начисляются в полном объёме.";
         }
         if (ratioPercent >= 70) {
-            return "💡 Клуб выплачивает <b>" + ratioPercent + "%</b> от заявленной награды. Пример: за квест с наградой 200 EXC вы получите <b>" + (effectiveRewardPer100 * 2) + " EXC</b>.";
+            return "💡 Клуб выплачивает <b>" + ratioPercent + "%</b> от заявленной награды. Пример: за квест с наградой 1 500 EXC вы получите <b>" + (effectiveRewardPer100 * 15) + " EXC</b>.";
         }
-        return "⚠️ Клуб временно выплачивает <b>" + ratioPercent + "%</b> от заявленной награды. Пример: за квест с наградой 200 EXC сейчас начислят <b>" + (effectiveRewardPer100 * 2) + " EXC</b>. Когда фонд пополнится — курс вернётся к 100%.";
+        return "⚠️ Клуб временно выплачивает <b>" + ratioPercent + "%</b> от заявленной награды. Пример: за квест с наградой 1 500 EXC сейчас начислят <b>" + (effectiveRewardPer100 * 15) + " EXC</b>. Когда фонд пополнится — курс вернётся к 100%.";
     }
 
     private void sendQuestGames(AppUser user) {
@@ -1218,7 +1218,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (activeSlots >= maxSlots) {
             answerSilently(callbackQuery.getId());
             sendText(user.getTelegramId(),
-                    "📂 У вас уже " + activeSlots + " активных квеста. Завершите или отмените один из них, либо купите доп. слот (150 EXC) в разделе Предметы клуба.",
+                    "📂 У вас уже " + activeSlots + " активных квеста. Завершите или отмените один из них, либо купите доп. слот (2 000 EXC) в разделе Предметы клуба.",
                     backMenuKeyboard("menu:myquests"));
             return;
         }
@@ -1227,7 +1227,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (questService.isCooldownActive(user, quest)) {
             answerSilently(callbackQuery.getId());
             sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
-                    "⏳ Кулдаун активен. Повторный квест в этой игре доступен через 24 часа.\n\n💡 Можно снять кулдаун за 100 EXC в разделе Предметы клуба.");
+                    "⏳ Кулдаун активен. Повторный квест в этой игре доступен через 24 часа.\n\n💡 Можно снять кулдаун за 1 500 EXC в разделе Предметы клуба.");
             return;
         }
 
@@ -1425,8 +1425,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "🤝 <b>Рефералы</b>\n\n"
                         + "🔗 Ваша ссылка:\n" + escape(referralLink) + "\n\n"
                         + "👥 Приглашено друзей: <b>" + user.getInvitedFriends() + "</b>\n"
-                        + "🎁 Награда за активного друга: <b>+30 XP и +50 монет</b>\n\n"
-                        + "Приглашайте друзей в клуб и усиливайте свой прогресс без лишней рутины.",
+                        + "🎁 Ваш друг получит: <b>+3 000 EXC</b> за первый выполненный квест\n"
+                        + "💰 Вы получаете: <b>3% от EXC</b> друга в первые 14 дней\n\n"
+                        + "Приглашайте друзей в клуб и зарабатывайте пассивно с каждого их квеста.",
                 backMenuKeyboard("menu:main"));
     }
 
@@ -1549,40 +1550,40 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (xpBoostActive) {
             rows.add(List.of(keyboardFactory.callback("⚡ XP-буст активен ✅", "sink:xpboost_info")));
         } else {
-            rows.add(List.of(keyboardFactory.callback("⚡ XP +20% • 24ч — 200 EXC", "sink:xpboost:24")));
-            rows.add(List.of(keyboardFactory.callback("⚡ XP +20% • 72ч — 500 EXC", "sink:xpboost:72")));
+            rows.add(List.of(keyboardFactory.callback("⚡ XP +20% • 24ч — 3 000 EXC", "sink:xpboost:24")));
+            rows.add(List.of(keyboardFactory.callback("⚡ XP +20% • 72ч — 7 500 EXC", "sink:xpboost:72")));
         }
 
         if (excBoostActive) {
             rows.add(List.of(keyboardFactory.callback("⚡ EXC-буст активен ✅", "sink:excboost_info")));
         } else {
-            rows.add(List.of(keyboardFactory.callback("⚡ EXC +20% • 24ч — 200 EXC", "sink:excboost:24")));
-            rows.add(List.of(keyboardFactory.callback("⚡ EXC +20% • 72ч — 500 EXC", "sink:excboost:72")));
+            rows.add(List.of(keyboardFactory.callback("⚡ EXC +20% • 24ч — 3 000 EXC", "sink:excboost:24")));
+            rows.add(List.of(keyboardFactory.callback("⚡ EXC +20% • 72ч — 7 500 EXC", "sink:excboost:72")));
         }
 
         if (!xpBoostActive && !excBoostActive) {
-            rows.add(List.of(keyboardFactory.callback("⚡⚡ Двойной буст • 24ч — 350 EXC", "sink:doubleboost:24")));
+            rows.add(List.of(keyboardFactory.callback("⚡⚡ Двойной буст • 24ч — 5 000 EXC", "sink:doubleboost:24")));
         }
 
         rows.add(List.of(keyboardFactory.callback("— Квесты —", "sink:noop")));
-        rows.add(List.of(keyboardFactory.callback("🔀 Реролл квеста — 50 EXC", "sink:reroll")));
+        rows.add(List.of(keyboardFactory.callback("🔀 Реролл квеста — 750 EXC", "sink:reroll")));
 
         if (insuranceActive) {
             rows.add(List.of(keyboardFactory.callback("🛡️ Страховка активна ✅", "sink:insurance_info")));
         } else {
-            rows.add(List.of(keyboardFactory.callback("🛡️ Страховка провала — 75 EXC", "sink:insurance")));
+            rows.add(List.of(keyboardFactory.callback("🛡️ Страховка провала — 1 100 EXC", "sink:insurance")));
         }
 
         if (slotActive) {
             rows.add(List.of(keyboardFactory.callback("📂 Доп. слот активен ✅", "sink:slot_info")));
         } else {
-            rows.add(List.of(keyboardFactory.callback("📂 Доп. слот квеста 48ч — 150 EXC", "sink:extraslot")));
+            rows.add(List.of(keyboardFactory.callback("📂 Доп. слот квеста 48ч — 2 000 EXC", "sink:extraslot")));
         }
 
-        rows.add(List.of(keyboardFactory.callback("⏱️ Снятие кулдауна — 100 EXC", "sink:cooldown_info")));
+        rows.add(List.of(keyboardFactory.callback("⏱️ Снятие кулдауна — 1 500 EXC", "sink:cooldown_info")));
 
         rows.add(List.of(keyboardFactory.callback("— Социальные —", "sink:noop")));
-        rows.add(List.of(keyboardFactory.callback("🎁 Подарок другу (буст) — 300 EXC", "sink:gift")));
+        rows.add(List.of(keyboardFactory.callback("🎁 Подарок другу (буст) — 4 500 EXC", "sink:gift")));
         rows.add(List.of(keyboardFactory.callback("⚔️ 🔒 Дуэль — Скоро", "sink:soon")));
         rows.add(List.of(keyboardFactory.callback("📢 🔒 Место в ТОП-посте — Скоро", "sink:soon")));
 
@@ -1610,7 +1611,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 try {
                     sinkShopService.purchaseBoost(user);
                     sendText(user.getTelegramId(),
-                            "⚡ <b>Буст активирован!</b>\n\nВы получаете +20% к EXC за все квесты в течение 24 часов.\nСписано 200 EXC.",
+                            "⚡ <b>Буст активирован!</b>\n\nВы получаете +20% к EXC за все квесты в течение 24 часов.\nСписано 3 000 EXC.",
                             backMenuKeyboard("menu:sink"));
                 } catch (IllegalArgumentException e) {
                     sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
@@ -1636,7 +1637,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 try {
                     sinkShopService.purchaseExtraSlot(user);
                     sendText(user.getTelegramId(),
-                        "📂 <b>Доп. слот активирован!</b>\n\nТеперь вы можете вести 3 квеста одновременно в течение 48 часов.\nСписано 150 EXC.",
+                        "📂 <b>Доп. слот активирован!</b>\n\nТеперь вы можете вести 3 квеста одновременно в течение 48 часов.\nСписано 2 000 EXC.",
                         backMenuKeyboard("menu:sink"));
                 } catch (IllegalArgumentException e) {
                     sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
@@ -1644,17 +1645,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case "cooldown_info" -> {
                 List<List<InlineKeyboardButton>> rows2 = new ArrayList<>();
-                rows2.add(List.of(keyboardFactory.callback("⏱️ Купить снятие — 100 EXC", "sink:buycooldown")));
+                rows2.add(List.of(keyboardFactory.callback("⏱️ Купить снятие — 1 500 EXC", "sink:buycooldown")));
                 rows2.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:sink")));
                 sendText(user.getTelegramId(),
-                    "⏱️ <b>Снятие кулдауна</b>\n\nСнимает 24-часовой кулдаун для следующего квеста в любой игре.\nСтоимость: 100 EXC. Лимит: 2 раза в сутки.\n\n💡 После покупки перейдите к нужному квесту — кулдаун будет снят автоматически при взятии.",
+                    "⏱️ <b>Снятие кулдауна</b>\n\nСнимает 24-часовой кулдаун для следующего квеста в любой игре.\nСтоимость: 1 500 EXC. Лимит: 2 раза в сутки.\n\n💡 После покупки перейдите к нужному квесту — кулдаун будет снят автоматически при взятии.",
                     keyboardFactory.rowsLayout(rows2));
             }
             case "buycooldown" -> {
                 try {
                     sinkShopService.purchaseCooldownRemoval(user);
                     sendText(user.getTelegramId(),
-                        "⏱️ <b>Снятие кулдауна активировано!</b>\n\nВаш следующий квест, если на него действует кулдаун, будет доступен без ожидания.\nСписано 100 EXC.",
+                        "⏱️ <b>Снятие кулдауна активировано!</b>\n\nВаш следующий квест, если на него действует кулдаун, будет доступен без ожидания.\nСписано 1 500 EXC.",
                         backMenuKeyboard("menu:sink"));
                 } catch (IllegalArgumentException e) {
                     sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
@@ -1664,7 +1665,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 UserSession giftSession = sessionService.get(user.getTelegramId());
                 giftSession.setState(SessionState.GIFT_INPUT);
                 sendText(user.getTelegramId(),
-                    "🎁 <b>Подарок другу</b>\n\nОтправьте XP-буст на 24 часа другому игроку.\nСтоимость: 300 EXC.\n\nВведите ник получателя (как в профиле бота):",
+                    "🎁 <b>Подарок другу</b>\n\nОтправьте XP-буст на 24 часа другому игроку.\nСтоимость: 4 500 EXC.\n\nВведите ник получателя (как в профиле бота):",
                     backMenuKeyboard("menu:sink"));
             }
             case "insurance" -> {
@@ -1729,9 +1730,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendSinkTitles(AppUser user) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.callback("🌱 Новый игрок — 100 EXC", "sink:buy_title:Новый игрок:100")));
-        rows.add(List.of(keyboardFactory.callback("🔥 Квест-хантер — 300 EXC", "sink:buy_title:Квест-хантер:300")));
-        rows.add(List.of(keyboardFactory.callback("👑 Элита клуба — 500 EXC", "sink:buy_title:Элита клуба:500")));
+        rows.add(List.of(keyboardFactory.callback("🌱 Новый игрок — 1 500 EXC", "sink:buy_title:Новый игрок:1500")));
+        rows.add(List.of(keyboardFactory.callback("🔥 Квест-хантер — 4 500 EXC", "sink:buy_title:Квест-хантер:4500")));
+        rows.add(List.of(keyboardFactory.callback("👑 Элита клуба — 7 500 EXC", "sink:buy_title:Элита клуба:7500")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:sink")));
         sendText(user.getTelegramId(),
                 "🎭 <b>Титулы профиля</b>\n\nТитул отображается в вашем профиле и виден другим игрокам.\nПокупка заменяет текущий титул.",
@@ -2249,7 +2250,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean isFirstQuest = currentSubmission.getUser().getCompletedQuests() == 0;
         QuestSubmission submission = questService.approveSubmission(submissionId);
         String firstQuestBonus = isFirstQuest && submission.getUser().getReferredByTelegramId() != null
-                ? "\n🎁 Бонус за первый квест: <b>+200 EXC</b>" : "";
+                ? "\n🎁 Бонус за первый квест: <b>+3 000 EXC</b>" : "";
         notifyUser(submission.getUser().getTelegramId(),
                 "🎉 Ваш отчёт по квесту <b>" + escape(submission.getQuest().getTitle()) + "</b> одобрен!\n\n"
                         + "✨ XP: <b>+" + rewardGrant.xp() + "</b>\n"

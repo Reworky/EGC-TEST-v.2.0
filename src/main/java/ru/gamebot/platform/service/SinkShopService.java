@@ -13,21 +13,21 @@ import ru.gamebot.platform.domain.repository.AppUserRepository;
 @RequiredArgsConstructor
 public class SinkShopService {
 
-    public static final long PRICE_REROLL = 50;
-    public static final long PRICE_BOOST = 200;
-    public static final long PRICE_TITLE_BASIC = 100;
-    public static final long PRICE_TITLE_RARE = 300;
-    public static final long PRICE_TITLE_EPIC = 500;
-    public static final long PRICE_INSURANCE = 75;
+    public static final long PRICE_REROLL = 750;
+    public static final long PRICE_BOOST = 3_000;
+    public static final long PRICE_TITLE_BASIC = 1_500;
+    public static final long PRICE_TITLE_RARE = 4_500;
+    public static final long PRICE_TITLE_EPIC = 7_500;
+    public static final long PRICE_INSURANCE = 1_100;
 
-    public static final long PRICE_XP_BOOST_24H = 200;
-    public static final long PRICE_EXC_BOOST_24H = 200;
-    public static final long PRICE_DOUBLE_BOOST_24H = 350;
-    public static final long PRICE_XP_BOOST_72H = 500;
-    public static final long PRICE_EXC_BOOST_72H = 500;
-    public static final long PRICE_EXTRA_SLOT = 150;
-    public static final long PRICE_COOLDOWN_REMOVAL = 100;
-    public static final long PRICE_GIFT_BOOST = 300;
+    public static final long PRICE_XP_BOOST_24H = 3_000;
+    public static final long PRICE_EXC_BOOST_24H = 3_000;
+    public static final long PRICE_DOUBLE_BOOST_24H = 5_000;
+    public static final long PRICE_XP_BOOST_72H = 7_500;
+    public static final long PRICE_EXC_BOOST_72H = 7_500;
+    public static final long PRICE_EXTRA_SLOT = 2_000;
+    public static final long PRICE_COOLDOWN_REMOVAL = 1_500;
+    public static final long PRICE_GIFT_BOOST = 4_500;
 
     private static final int BOOST_DURATION_HOURS = 24;
     private static final int BOOST_PERCENT = 20;
@@ -228,9 +228,12 @@ public class SinkShopService {
     // --- 3.3 Withdrawal limits ---
 
     public long getMonthlyLimit(long xp) {
-        if (xp >= 10000) return 75_000;
-        if (xp >= 3000) return 35_000;
-        return 15_000;
+        if (xp >= 75_000) return 150_000;
+        if (xp >= 35_000) return 100_000;
+        if (xp >= 15_000) return 80_000;
+        if (xp >= 5_000)  return 50_000;
+        if (xp >= 1_000)  return 25_000;
+        return 10_000;
     }
 
     public long getRemainingWithdrawalLimit(AppUser user) {
