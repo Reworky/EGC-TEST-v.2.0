@@ -410,8 +410,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.equals("shop:withdraw")) {
             answerSilently(callbackQuery.getId());
+            sendWithdrawalMethodChoice(user);
+            return;
+        }
+        if (data.equals("shop:withdraw:rub")) {
+            answerSilently(callbackQuery.getId());
             session.setState(SessionState.WITHDRAWAL_INPUT);
             sendWithdrawalScreen(user);
+            return;
+        }
+        if (data.equals("shop:withdraw:usdt")) {
+            answerSilently(callbackQuery.getId());
+            session.setState(SessionState.WITHDRAWAL_USDT_AMOUNT);
+            sendWithdrawalUsdtAmountScreen(user);
             return;
         }
         if (data.startsWith("shop:view:")) {
@@ -522,6 +533,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "tournament" -> sendTournament(user);
             case "news" -> sendNews(user);
             case "support" -> sendSupport(user);
+            case "quickstart" -> { answerSilently(callbackQuery.getId()); sendQuickStartGuide(user); }
             case "admin" -> sendAdminPanel(user);
             case "moderation" -> sendModerationHub(user);
             default -> sendMainMenu(user, mainMenuText(user));
@@ -840,6 +852,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
             }
             case WITHDRAWAL_INPUT -> handleWithdrawalInput(user, session, text);
+            case WITHDRAWAL_USDT_AMOUNT -> handleWithdrawalUsdtAmount(user, session, text);
+            case WITHDRAWAL_USDT_ADDRESS -> handleWithdrawalUsdtAddress(user, session, text);
             default -> sendText(user.getTelegramId(), "🧭 Я не жду текст на этом шаге. Вернитесь в меню.", mainMenuKeyboard(user));
         }
     }
@@ -896,6 +910,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             AppUser activated = userService.activateAccount(user);
             userService.grantReferralReward(activated);
             sendActivationSuccess(activated);
+            notifyAdminsNewRegistration(activated);
             answer(callbackQuery.getId(), "Аккаунт активирован");
             return;
         }
@@ -916,6 +931,33 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "Реферальная программа и многое другое",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("🚀 Перейти в профиль", "activation:profile"))
+                )));
+        sendQuickStartGuide(user);
+    }
+
+    private void sendQuickStartGuide(AppUser user) {
+        String text = "📖 <b>Быстрый старт — как это работает</b>\n\n"
+                + "1️⃣ <b>Возьми квест</b>\n"
+                + "Раздел 🗺️ Квесты → выбери игру → нажми «Взять квест».\n"
+                + "Квесты бывают Лёгкие 🟢, Средние 🟡 и Сложные 🔴 — чем сложнее, тем больше наград.\n\n"
+                + "2️⃣ <b>Выполни задание</b>\n"
+                + "Сделай скриншот результата прямо в игре.\n"
+                + "Вернись в бот → «Мои квесты» → отправь скриншот.\n\n"
+                + "3️⃣ <b>Получи EXC</b>\n"
+                + "Модератор проверит скриншот в течение 24 часов.\n"
+                + "После одобрения EXC и XP зачислятся на баланс автоматически.\n\n"
+                + "4️⃣ <b>Выведи деньги</b>\n"
+                + "Раздел 🛍️ Магазин наград → Вывод EXC.\n"
+                + "Минимум <b>5 000 EXC</b> (50 ₽). Доступен вывод в рубли или USDT.\n"
+                + "Курс: <b>100 EXC = 1 ₽</b>.\n\n"
+                + "5️⃣ <b>Приглашай друзей</b>\n"
+                + "Раздел 🤝 Рефералы → получи ссылку.\n"
+                + "Ты будешь получать <b>3% от EXC</b> друга первые 14 дней.\n\n"
+                + "❓ Остались вопросы — пиши в 🆘 Поддержку.";
+        sendText(user.getTelegramId(), text,
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("🗺️ Перейти к квестам", "menu:quests")),
+                        List.of(keyboardFactory.callback("🏠 Главное меню", "menu:main"))
                 )));
     }
 
@@ -1459,43 +1501,131 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         }
 
-        // Gift Cards
-        rows.add(List.of(keyboardFactory.callback("── 🎁 Подарочные карты ──", "noop")));
-        rows.add(List.of(keyboardFactory.callback("🔒 Gift Card Steam 100 руб. — Скоро", "shop:soon")));
-        rows.add(List.of(keyboardFactory.callback("🔒 Gift Card Steam 200 руб. — Скоро", "shop:soon")));
-        rows.add(List.of(keyboardFactory.callback("🔒 Gift Card PSN 200 руб. — Скоро", "shop:soon")));
-
         rows.add(List.of(
                 keyboardFactory.callback("📋 Мои заявки", "menu:my-rewards"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
-
-        String rateDisplay = ratioPercent == 100
-                ? "100 EXC = 1 ₽"
-                : "100 EXC = " + String.format("%.2f", ratioPercent / 100.0) + " ₽";
 
         sendText(user.getTelegramId(),
                 "🛍️ <b>Магазин наград</b>\n\n"
                         + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>\n"
                         + "📊 Состояние фонда: <b>" + ratioPercent + "%</b>\n"
                         + "📤 Лимит вывода: <b>" + sinkShopService.getMonthlyLimit(user.getXp()) + " EXC/мес</b> (осталось: " + remaining + " EXC)\n"
-                        + "💱 Курс вывода: <b>" + rateDisplay + "</b>\n"
+                        + "💱 Курс вывода: <b>100 EXC = 1 ₽</b>\n"
                         + withdrawalLevelHint(user),
                 keyboardFactory.rowsLayout(rows));
     }
 
-    private void sendWithdrawalScreen(AppUser user) {
-        double ratio = healthRatioService.getCurrentRatio();
+    private void sendWithdrawalMethodChoice(AppUser user) {
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
-        int ratioP = (int) Math.round(ratio * 100);
-        String rateStr = ratioP == 100
-                ? "100 EXC = 1 ₽"
-                : "100 EXC = " + String.format("%.2f", ratio) + " ₽";
+        String text = "💸 <b>Вывод EXC</b>\n\n"
+                + "🪙 Баланс: <b>" + user.getCoins() + " EXC</b>\n"
+                + "📤 Доступно к выводу: <b>" + remaining + " EXC</b>\n"
+                + "💱 Курс: <b>100 EXC = 1 ₽</b>\n\n"
+                + "Выберите способ получения:";
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("💸 В рублях (Сбербанк / СБП)", "shop:withdraw:rub")));
+        rows.add(List.of(keyboardFactory.callback("💎 В USDT (Telegram Wallet, TON)", "shop:withdraw:usdt")));
+        rows.add(List.of(keyboardFactory.callback("❌ Отмена", "menu:shop")));
+        sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
+    }
 
+    private void sendWithdrawalUsdtAmountScreen(AppUser user) {
+        long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
+        String text = "💎 <b>Вывод в USDT</b>\n\n"
+                + "🪙 Баланс: <b>" + user.getCoins() + " EXC</b>\n"
+                + "📤 Доступно к выводу: <b>" + remaining + " EXC</b>\n"
+                + "💱 Курс: 100 EXC = 1 ₽ → USDT по рыночному курсу\n"
+                + "📡 Сеть: <b>TON (Telegram Wallet)</b>\n"
+                + "⚠️ Минимум: <b>5 000 EXC</b>\n\n"
+                + "Нет кошелька? Создай прямо в Telegram — займёт 30 секунд 👇\n\n"
+                + "Введите сумму в EXC:";
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.url("🚀 Открыть свой крипто-кошелёк", "https://t.me/wallet/start?startapp=ref-3-PaQlujnvUGU")));
+        rows.add(List.of(keyboardFactory.callback("❌ Отмена", "menu:shop")));
+        sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleWithdrawalUsdtAmount(AppUser user, UserSession session, String text) {
+        long amount;
+        try {
+            amount = Long.parseLong(text.trim().replace(" ", ""));
+        } catch (NumberFormatException e) {
+            sendText(user.getTelegramId(), "⚠️ Введите сумму числом, например: <b>5000</b>", cancelKeyboard());
+            return;
+        }
+        if (amount < 5000) {
+            sendText(user.getTelegramId(), "⚠️ Минимальная сумма вывода — <b>5 000 EXC</b>.", cancelKeyboard());
+            return;
+        }
+        long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
+        if (amount > remaining) {
+            sendText(user.getTelegramId(), "⚠️ Превышен месячный лимит. Доступно: <b>" + remaining + " EXC</b>.", cancelKeyboard());
+            return;
+        }
+        if (amount > user.getCoins()) {
+            sendText(user.getTelegramId(), "⚠️ Недостаточно EXC. Баланс: <b>" + user.getCoins() + " EXC</b>.", cancelKeyboard());
+            return;
+        }
+        double ratio = healthRatioService.getCurrentRatio();
+        long rubles = Math.round(amount * ratio / 100.0);
+        session.getData().put("usdt_exc_amount", String.valueOf(amount));
+        session.getData().put("usdt_rubles", String.valueOf(rubles));
+        session.setState(SessionState.WITHDRAWAL_USDT_ADDRESS);
+        String msg = "💎 <b>Сумма принята</b>\n\n"
+                + "💸 " + amount + " EXC → ~<b>" + rubles + " ₽</b> → USDT по курсу на момент выплаты\n\n"
+                + "━━━━━━━━━━━━━━━\n"
+                + "📋 <b>Как найти адрес кошелька:</b>\n\n"
+                + "1. Открой @wallet в Telegram (или кнопку ниже)\n"
+                + "2. Нажми <b>«Получить»</b> или <b>«Deposit»</b>\n"
+                + "3. Выбери <b>USDT</b> → сеть <b>TON</b>\n"
+                + "4. Нажми <b>«Скопировать адрес»</b>\n"
+                + "5. Вернись сюда и вставь адрес\n\n"
+                + "⚠️ <b>Адрес начинается с UQ... или EQ...</b>\n"
+                + "━━━━━━━━━━━━━━━\n\n"
+                + "Введите или вставьте адрес TON-кошелька:";
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.url("💎 Открыть Telegram Wallet", "https://t.me/wallet/start?startapp=ref-3-PaQlujnvUGU")));
+        rows.add(List.of(keyboardFactory.callback("❌ Отмена", "menu:shop")));
+        sendText(user.getTelegramId(), msg, keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleWithdrawalUsdtAddress(AppUser user, UserSession session, String text) {
+        String wallet = text.trim();
+        if (wallet.length() < 20 || wallet.contains(" ")) {
+            sendText(user.getTelegramId(),
+                    "⚠️ <b>Некорректный адрес кошелька</b>\n\n"
+                    + "Адрес TON должен начинаться с <b>UQ...</b> или <b>EQ...</b> и содержать 48 символов.\n\n"
+                    + "Как найти: @wallet → Получить → USDT → TON → Скопировать адрес.\n\n"
+                    + "Попробуйте ещё раз:",
+                    cancelKeyboard());
+            return;
+        }
+        long excAmount = Long.parseLong(session.getData().getOrDefault("usdt_exc_amount", "0"));
+        long rubles = Long.parseLong(session.getData().getOrDefault("usdt_rubles", "0"));
+        try {
+            rewardService.createUsdtWithdrawalRequest(user, excAmount, rubles, wallet);
+            session.reset();
+            sendText(user.getTelegramId(),
+                    "✅ <b>Заявка на вывод в USDT принята!</b>\n\n"
+                    + "💸 Сумма: <b>" + excAmount + " EXC</b>\n"
+                    + "💵 Эквивалент: <b>~" + rubles + " ₽</b>\n"
+                    + "💎 Способ: <b>USDT · TON</b>\n"
+                    + "📬 Кошелёк: <code>" + escape(wallet) + "</code>\n\n"
+                    + "Администратор обработает заявку в течение 24 часов.\n"
+                    + "USDT будет зачислен по рыночному курсу на момент выплаты.",
+                    backMenuKeyboard("menu:shop"));
+        } catch (IllegalArgumentException e) {
+            sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), cancelKeyboard());
+        }
+    }
+
+    private void sendWithdrawalScreen(AppUser user) {
+        long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
         String text = "💸 <b>Вывод EXC</b>\n\n"
                 + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>\n"
                 + "📤 Лимит вывода: <b>" + sinkShopService.getMonthlyLimit(user.getXp()) + " EXC/мес</b> (осталось: " + remaining + " EXC)\n"
-                + "💱 Текущий курс: <b>" + rateStr + "</b>\n"
+                + "💱 Текущий курс: <b>100 EXC = 1 ₽</b>\n"
                 + withdrawalLevelHint(user) + "\n"
                 + "Минимальная сумма вывода: <b>5 000 EXC</b>\n\n"
                 + "Введите сумму в EXC, которую хотите вывести.\n"
@@ -1583,12 +1713,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         rows.add(List.of(keyboardFactory.callback("— Квесты —", "sink:noop")));
-        rows.add(List.of(keyboardFactory.callback("🔀 Реролл квеста — 750 EXC", "sink:reroll")));
+        rows.add(List.of(keyboardFactory.callback("🔀 Реролл квеста — 2 000 EXC", "sink:reroll")));
 
         if (insuranceActive) {
             rows.add(List.of(keyboardFactory.callback("🛡️ Страховка активна ✅", "sink:insurance_info")));
         } else {
-            rows.add(List.of(keyboardFactory.callback("🛡️ Страховка провала — 1 100 EXC", "sink:insurance")));
+            rows.add(List.of(keyboardFactory.callback("🛡️ Страховка провала — 1 500 EXC", "sink:insurance")));
         }
 
         if (slotActive) {
@@ -2473,7 +2603,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     static {
         QUEST_TEMPLATES.put("PUBG", List.of(
-            new QuestTemplate("PUBG", "Легкие", "PC, Mobile", 2, "2 дня", 50, 150,
+            new QuestTemplate("PUBG", "Лёгкие", "PC, Mobile", 2, "2 дня", 50, 150,
                 "1. Зайди в обычный матч PUBG.\n2. Попади в топ-10.\n3. Сделай скриншот таблицы результатов в конце матча.",
                 "Скриншот таблицы результатов с вашим никнеймом и местом в топ-10."),
             new QuestTemplate("PUBG", "Средние", "PC, Mobile", 5, "5 дней", 100, 400,
@@ -2484,7 +2614,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "Скриншот финального экрана с надписью Winner Winner Chicken Dinner и вашим никнеймом.")
         ));
         QUEST_TEMPLATES.put("Grim Soul", List.of(
-            new QuestTemplate("Grim Soul", "Легкие", "Mobile", 3, "3 дня", 50, 150,
+            new QuestTemplate("Grim Soul", "Лёгкие", "Mobile", 3, "3 дня", 50, 150,
                 "1. Зайди в Grim Soul.\n2. Выживи 3 дня подряд без смерти.\n3. Сделай скриншот экрана выживания с количеством дней.",
                 "Скриншот экрана с количеством дней выживания (не менее 3)."),
             new QuestTemplate("Grim Soul", "Средние", "Mobile", 7, "7 дней", 100, 400,
@@ -2495,7 +2625,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "Скриншот базы с каменными стенами. Должны быть видны минимум 4 каменных секции.")
         ));
         QUEST_TEMPLATES.put("EA FC 25", List.of(
-            new QuestTemplate("EA FC 25", "Легкие", "PC, Console", 3, "3 дня", 50, 150,
+            new QuestTemplate("EA FC 25", "Лёгкие", "PC, Console", 3, "3 дня", 50, 150,
                 "1. Сыграй матч в режиме Ultimate Team или Карьера.\n2. Забей не менее 2 голов за матч.\n3. Сделай скриншот финального счёта.",
                 "Скриншот финального счёта матча с вашим результатом (минимум 2 гола)."),
             new QuestTemplate("EA FC 25", "Средние", "PC, Console", 5, "5 дней", 100, 400,
@@ -2506,7 +2636,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "Скриншот состава команды в меню с общим рейтингом 85+.")
         ));
         QUEST_TEMPLATES.put("Brawl Stars", List.of(
-            new QuestTemplate("Brawl Stars", "Легкие", "Mobile", 2, "2 дня", 50, 150,
+            new QuestTemplate("Brawl Stars", "Лёгкие", "Mobile", 2, "2 дня", 50, 150,
                 "1. Сыграй 3 матча в любом режиме Brawl Stars.\n2. Сделай скриншот профиля с количеством трофеев после матчей.",
                 "Скриншот профиля с количеством трофеев."),
             new QuestTemplate("Brawl Stars", "Средние", "Mobile", 5, "5 дней", 100, 400,
@@ -2517,7 +2647,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "Скриншот таблицы рейтинга с вашим никнеймом в топ-200.")
         ));
         QUEST_TEMPLATES.put("Clash Royale", List.of(
-            new QuestTemplate("Clash Royale", "Легкие", "Mobile", 2, "2 дня", 50, 150,
+            new QuestTemplate("Clash Royale", "Лёгкие", "Mobile", 2, "2 дня", 50, 150,
                 "1. Выиграй 2 матча подряд в обычных боях Clash Royale.\n2. Сделай скриншот экрана победы после второго боя.",
                 "Скриншот экрана победы с никнеймом видимым в профиле."),
             new QuestTemplate("Clash Royale", "Средние", "Mobile", 5, "5 дней", 100, 400,
@@ -2528,7 +2658,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "Скриншот профиля с количеством кубков 5000+.")
         ));
         QUEST_TEMPLATES.put("Другая игра", List.of(
-            new QuestTemplate("", "Легкие", "", 3, "3 дня", 50, 150, "", ""),
+            new QuestTemplate("", "Лёгкие", "", 3, "3 дня", 50, 150, "", ""),
             new QuestTemplate("", "Средние", "", 7, "7 дней", 100, 400, "", ""),
             new QuestTemplate("", "Сложные", "", 14, "14 дней", 250, 1000, "", "")
         ));
@@ -3740,6 +3870,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    private void notifyAdminsNewRegistration(AppUser user) {
+        long totalUsers = userService.totalRegisteredUsers();
+        InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("👤 Профиль пользователя", "admin:user:view:" + user.getTelegramId() + ":0"))
+        ));
+        String text = "🎮 <b>Новая регистрация</b>\n\n"
+                + "👤 Никнейм: <b>" + escape(user.getNickname()) + "</b>\n"
+                + "🆔 Telegram ID: <b>" + user.getTelegramId() + "</b>\n"
+                + "🌍 Страна: <b>" + escape(user.getCountry() != null ? user.getCountry() : "—") + "</b>\n"
+                + "🎯 Интересы: <b>" + escape(user.getInterestsCsv() != null ? user.getInterestsCsv() : "—") + "</b>\n"
+                + "📊 Всего игроков: <b>" + totalUsers + "</b>";
+        for (Long adminId : adminService.allAdminIds()) {
+            sendText(adminId, text, markup);
+        }
+    }
+
     private void notifyUser(Long telegramId, String text) {
         sendText(telegramId, text, mainMenuButtonsOnly(telegramId));
     }
@@ -3807,6 +3953,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("🆘 Поддержка", "menu:support"),
                 keyboardFactory.url("⭐ Отзывы игроков", "https://t.me/egc_payouts")
         ));
+        rows.add(List.of(keyboardFactory.callback("❓ Как начать — быстрый старт", "menu:quickstart")));
         return keyboardFactory.rowsLayout(rows);
     }
 
@@ -4000,7 +4147,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return "all";
         }
         return switch (category) {
-            case "Легкие", "Быстрые" -> "fast";
+            case "Лёгкие", "Быстрые" -> "fast";
             case "Средние" -> "medium";
             case "Сложные", "Долгие" -> "long";
             default -> "all";
@@ -4009,7 +4156,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private String categoryFromToken(String token) {
         return switch (token) {
-            case "fast" -> "Легкие";
+            case "fast" -> "Лёгкие";
             case "medium" -> "Средние";
             case "long" -> "Сложные";
             default -> null;

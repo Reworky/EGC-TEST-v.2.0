@@ -13,12 +13,12 @@ import ru.gamebot.platform.domain.repository.AppUserRepository;
 @RequiredArgsConstructor
 public class SinkShopService {
 
-    public static final long PRICE_REROLL = 750;
+    public static final long PRICE_REROLL = 2_000;
     public static final long PRICE_BOOST = 3_000;
     public static final long PRICE_TITLE_BASIC = 1_500;
     public static final long PRICE_TITLE_RARE = 4_500;
     public static final long PRICE_TITLE_EPIC = 7_500;
-    public static final long PRICE_INSURANCE = 1_100;
+    public static final long PRICE_INSURANCE = 1_500;
 
     public static final long PRICE_XP_BOOST_24H = 3_000;
     public static final long PRICE_EXC_BOOST_24H = 3_000;

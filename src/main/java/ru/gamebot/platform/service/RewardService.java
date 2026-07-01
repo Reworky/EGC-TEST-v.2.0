@@ -144,6 +144,37 @@ public class RewardService {
     }
 
     @Transactional
+    public RewardRequest createUsdtWithdrawalRequest(AppUser user, long excAmount, long rubles, String tonWallet) {
+        long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
+        if (excAmount > remaining) {
+            throw new IllegalArgumentException("Превышен месячный лимит вывода. Доступно ещё: " + remaining + " EXC.");
+        }
+        if (excAmount > user.getCoins()) {
+            throw new IllegalArgumentException("Недостаточно EXC. Ваш баланс: " + user.getCoins() + " EXC.");
+        }
+
+        RewardItem withdrawItem = new RewardItem();
+        withdrawItem.setTitle("Вывод " + excAmount + " EXC → USDT (TON)");
+        withdrawItem.setDescription("Заявка на вывод в USDT · Кошелёк: " + tonWallet);
+        withdrawItem.setCategory("Вывод");
+        withdrawItem.setPriceCoins(excAmount);
+        withdrawItem.setActive(false);
+        withdrawItem.setCreatedAt(LocalDateTime.now());
+        RewardItem saved = rewardItemRepository.save(withdrawItem);
+
+        user.setCoins(user.getCoins() - excAmount);
+        userService.save(user);
+        sinkShopService.recordWithdrawal(user, excAmount);
+
+        RewardRequest request = new RewardRequest();
+        request.setUser(user);
+        request.setRewardItem(saved);
+        request.setStatus(RewardRequestStatus.PENDING);
+        request.setCreatedAt(LocalDateTime.now());
+        request.setPayoutDetails("USDT·TON:" + tonWallet + ":rubles=" + rubles);
+        return rewardRequestRepository.save(request);
+    }
+
     public RewardRequest createWithdrawalRequest(AppUser user, long excAmount, long rubles) {
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
         if (excAmount > remaining) {

@@ -32,7 +32,7 @@ public class SeedDataInitializer implements CommandLineRunner {
                 "Установить Cyber Drift",
                 "Быстрое ознакомительное задание: установить игру, пройти авторизацию и дойти до первого боя.",
                 "Cyber Drift",
-                "Легкие",
+                "Лёгкие",
                 "Android / iPhone",
                 "5-15 минут",
                 40,

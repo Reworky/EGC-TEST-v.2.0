@@ -38,4 +38,7 @@ public class RewardRequest {
 
     private LocalDateTime createdAt;
     private String adminComment;
+
+    /** Детали выплаты (для USDT: адрес кошелька TON) */
+    private String payoutDetails;
 }

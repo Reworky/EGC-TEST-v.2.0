@@ -29,4 +29,9 @@ public class AppProperties {
     private String requiredChannelUsername = "@exgamingclub";
     private String requiredChannelUrl = "";
     private String requiredChannelTitle = "EXPERIENCE GAMING CLUB";
+
+    // REST API
+    private String jwtSecret = "egc-default-secret-change-in-production-min-32-chars";
+    private long jwtExpirationDays = 30;
+    private String corsAllowedOrigins = "http://localhost:3000";
 }

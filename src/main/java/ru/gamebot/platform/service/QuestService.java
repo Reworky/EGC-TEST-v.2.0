@@ -389,9 +389,9 @@ public class QuestService {
     private String normalizeCategory(String value) {
         String normalized = value == null ? "" : value.trim();
         return switch (normalized.toLowerCase()) {
-            case "быстрые", "легкие" -> "Легкие";
-            case "долгие", "сложные" -> "Сложные";
-            case "средние" -> "Средние";
+            case "быстрые", "легкие", "лёгкие", "лёгкие задания", "легкие задания" -> "Лёгкие";
+            case "долгие", "сложные", "сложные задания" -> "Сложные";
+            case "средние", "средние задания" -> "Средние";
             default -> normalized;
         };
     }

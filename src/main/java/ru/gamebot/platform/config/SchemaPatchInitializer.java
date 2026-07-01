@@ -19,8 +19,9 @@ public class SchemaPatchInitializer implements CommandLineRunner {
         apply("UPDATE app_users SET tickets = 0 WHERE tickets IS NULL");
         apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS profile_completed BOOLEAN DEFAULT FALSE");
         apply("UPDATE app_users SET profile_completed = registration_completed WHERE profile_completed IS NULL OR profile_completed = FALSE");
-        apply("UPDATE quests SET category = 'Легкие' WHERE category = 'Быстрые'");
-        apply("UPDATE quests SET category = 'Сложные' WHERE category = 'Долгие'");
+        apply("UPDATE quests SET category = 'Лёгкие' WHERE category IN ('Быстрые', 'Легкие', 'легкие', 'Лёгкие задания', 'Легкие задания')");
+        apply("UPDATE quests SET category = 'Средние' WHERE category IN ('Средние задания', 'средние')");
+        apply("UPDATE quests SET category = 'Сложные' WHERE category IN ('Долгие', 'Сложные задания', 'сложные')");
 
         apply("ALTER TABLE reward_items ADD COLUMN IF NOT EXISTS photo_file_id VARCHAR(255)");
 
@@ -43,6 +44,9 @@ public class SchemaPatchInitializer implements CommandLineRunner {
         apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS monthly_withdrawn_exc BIGINT DEFAULT 0");
         apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS withdrawal_month INT DEFAULT 0");
         apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS withdrawal_year INT DEFAULT 0");
+
+        // USDT withdrawal support
+        apply("ALTER TABLE reward_requests ADD COLUMN IF NOT EXISTS payout_details VARCHAR(512)");
     }
 
     private void apply(String sql) {

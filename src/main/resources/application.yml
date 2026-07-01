@@ -16,7 +16,7 @@ spring:
       enabled: false
 
 app:
-  club-name: ${APP_CLUB_NAME:Game Quest Club}
+  club-name: ${APP_CLUB_NAME:EXPERIENCE GAMING CLUB}
   support-username: ${APP_SUPPORT_USERNAME:support_manager}
   admin-ids: ${APP_ADMIN_IDS:${INITIAL_ADMIN_ID:}}
   moderator-ids: ${APP_MODERATOR_IDS:}
@@ -29,3 +29,6 @@ app:
   required-channel-title: ${REQUIRED_CHANNEL_TITLE:EXPERIENCE GAMING CLUB}
   bot-token: ${TELEGRAM_BOT_TOKEN:${BOT_TOKEN:}}
   bot-username: ${TELEGRAM_BOT_USERNAME:${BOT_USERNAME:}}
+  jwt-secret: ${JWT_SECRET:change-me-in-production-must-be-32-chars}
+  jwt-expiration-days: ${JWT_EXPIRATION_DAYS:30}
+  cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
