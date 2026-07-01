@@ -1604,7 +1604,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long excAmount = Long.parseLong(session.getData().getOrDefault("usdt_exc_amount", "0"));
         long rubles = Long.parseLong(session.getData().getOrDefault("usdt_rubles", "0"));
         try {
-            rewardService.createUsdtWithdrawalRequest(user, excAmount, rubles, wallet);
+            RewardRequest usdtReq = rewardService.createUsdtWithdrawalRequest(user, excAmount, rubles, wallet);
             session.reset();
             sendText(user.getTelegramId(),
                     "✅ <b>Заявка на вывод в USDT принята!</b>\n\n"
@@ -1615,6 +1615,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "Администратор обработает заявку в течение 24 часов.\n"
                     + "USDT будет зачислен по рыночному курсу на момент выплаты.",
                     backMenuKeyboard("menu:shop"));
+            notifyAdminsAboutWithdrawal(user, usdtReq);
         } catch (IllegalArgumentException e) {
             sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), cancelKeyboard());
         }
@@ -3500,7 +3501,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         double ratio = healthRatioService.getCurrentRatio();
         long rubles = Math.round(amount * ratio / 100.0);
         try {
-            rewardService.createWithdrawalRequest(user, amount, rubles);
+            RewardRequest withdrawalReq = rewardService.createWithdrawalRequest(user, amount, rubles);
             session.reset();
             sendText(user.getTelegramId(),
                 "✅ <b>Заявка на вывод принята!</b>\n\n"
@@ -3508,6 +3509,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "💵 К выплате: <b>~" + rubles + " ₽</b>\n\n"
                     + "Администратор обработает заявку в течение 24 часов.",
                 backMenuKeyboard("menu:shop"));
+            notifyAdminsAboutWithdrawal(user, withdrawalReq);
         } catch (IllegalArgumentException e) {
             sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), cancelKeyboard());
         }
@@ -3852,6 +3854,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             } catch (TelegramApiException exception) {
                 log.warn("Failed to notify moderator {}", recipient, exception);
             }
+        }
+    }
+
+    private void notifyAdminsAboutWithdrawal(AppUser user, RewardRequest req) {
+        InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("📥 Открыть заявки", "admin:reward:requests"))
+        ));
+        String details = req.getPayoutDetails() != null ? "\n💎 Детали: <code>" + escape(req.getPayoutDetails()) + "</code>" : "";
+        for (Long adminId : adminService.allAdminIds()) {
+            sendText(adminId,
+                    "💸 <b>Новая заявка на вывод EXC</b>\n\n"
+                            + "👤 Игрок: <b>" + escape(user.getNickname()) + "</b>\n"
+                            + "🆔 Telegram ID: <b>" + user.getTelegramId() + "</b>\n"
+                            + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
+                            + "📦 Тип: <b>" + escape(req.getRewardItem().getTitle()) + "</b>"
+                            + details,
+                    markup);
         }
     }
 
