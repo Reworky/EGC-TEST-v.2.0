@@ -40,8 +40,7 @@ public class ProfileController {
                             .streakDays(user.getStreakDays())
                             .monthlyWithdrawalLimit(sinkShopService.getMonthlyLimit(user.getXp()))
                             .remainingWithdrawalLimit(sinkShopService.getRemainingWithdrawalLimit(user))
-                            .build());
-                })
+                            .build()))
                 .orElse(ResponseEntity.notFound().build());
     }
 }
