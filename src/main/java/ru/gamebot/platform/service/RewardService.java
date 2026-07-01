@@ -72,7 +72,13 @@ public class RewardService {
     }
 
     public List<RewardRequest> findPendingRequests() {
-        return rewardRequestRepository.findAllByStatusOrderByCreatedAtAsc(RewardRequestStatus.PENDING);
+        return rewardRequestRepository.findAllByStatusOrderByCreatedAtAsc(RewardRequestStatus.PENDING)
+                .stream().filter(r -> !"Вывод".equals(r.getRewardItem().getCategory())).toList();
+    }
+
+    public List<RewardRequest> findPendingWithdrawals() {
+        return rewardRequestRepository.findAllByStatusAndRewardItemCategoryOrderByCreatedAtAsc(
+                RewardRequestStatus.PENDING, "Вывод");
     }
 
     public List<RewardRequest> findUserRequests(AppUser user) {

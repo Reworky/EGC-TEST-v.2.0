@@ -794,9 +794,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case REWARD_REJECT_COMMENT -> {
                 RewardRequest rejected = rewardService.rejectRequest(session.getQuestId(), text.trim());
-                notifyUserRewardRejected(rejected);
+                boolean isWithdrawal = "withdrawal".equals(session.getData().get("rejectType"));
                 session.reset();
-                sendAdminRewardRequests(user);
+                if (isWithdrawal) {
+                    notifyUserWithdrawalRejected(rejected);
+                    sendAdminWithdrawals(user);
+                } else {
+                    notifyUserRewardRejected(rejected);
+                    sendAdminRewardRequests(user);
+                }
             }
             case QUEST_TEMPLATE_TITLE -> {
                 session.getData().put("title", text.trim());
@@ -2473,6 +2479,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "stats" -> sendAdminStats(user);
             case "template" -> sendQuestTemplateGamePicker(user);
             case "rewards" -> sendAdminRewardList(user);
+            case "withdrawals" -> { sendAdminWithdrawals(user); answerSilently(callbackQuery.getId()); return; }
             case "payout" -> {
                 session.reset();
                 session.setState(SessionState.PAYOUT_POOL_INPUT);
@@ -2562,6 +2569,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     gameCatalogService.removePhoto(gameName);
                     answer(callbackQuery.getId(), "Фото удалено");
                     sendAdminQuestCategories(user, gameName);
+                    return;
+                } else if (action.startsWith("withdrawal:")) {
+                    handleAdminWithdrawalAction(callbackQuery, user, session, action.substring("withdrawal:".length()));
                     return;
                 } else if (action.startsWith("reward:")) {
                     handleAdminRewardAction(callbackQuery, user, session, action.substring("reward:".length()));
@@ -2916,6 +2926,112 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(req.getUser().getTelegramId(),
                 "❌ <b>Заявка на награду отклонена</b>\n\n"
                         + "🎁 <b>" + escape(req.getRewardItem().getTitle()) + "</b>\n\n"
+                        + "📝 Причина: " + escape(comment) + "\n\n"
+                        + "EXC возвращены на ваш баланс.",
+                null);
+    }
+
+    // ── Withdrawal requests admin ─────────────────────────────────────────────
+
+    private void handleAdminWithdrawalAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
+        if (action.startsWith("req:")) {
+            sendAdminWithdrawalCard(user, parseLong(action.substring("req:".length())));
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if (action.startsWith("approve:")) {
+            RewardRequest req = rewardService.approveRequest(parseLong(action.substring("approve:".length())));
+            notifyUserWithdrawalApproved(req);
+            sendAdminWithdrawals(user);
+            answer(callbackQuery.getId(), "✅ Выплачено");
+            return;
+        }
+        if (action.startsWith("reject:")) {
+            session.reset();
+            session.setQuestId(parseLong(action.substring("reject:".length())));
+            session.setState(SessionState.REWARD_REJECT_COMMENT);
+            session.getData().put("rejectType", "withdrawal");
+            sendText(user.getTelegramId(), "❌ Укажите причину отклонения:", cancelKeyboard());
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        sendAdminWithdrawals(user);
+        answerSilently(callbackQuery.getId());
+    }
+
+    private void sendAdminWithdrawals(AppUser user) {
+        List<RewardRequest> pending = rewardService.findPendingWithdrawals();
+        if (pending.isEmpty()) {
+            sendText(user.getTelegramId(),
+                    "💸 <b>Заявки на вывод EXC</b>\n\nНет новых заявок.",
+                    backMenuKeyboard("admin"));
+            return;
+        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (RewardRequest req : pending) {
+            String uname = req.getUser().getTelegramUsername() != null
+                    ? "@" + req.getUser().getTelegramUsername()
+                    : "#" + req.getUser().getTelegramId();
+            String type = req.getPayoutDetails() != null ? "💎 USDT" : "💸 ₽";
+            rows.add(List.of(keyboardFactory.callback(
+                    uname + " — " + type + " " + req.getRewardItem().getPriceCoins() + " EXC",
+                    "admin:withdrawal:req:" + req.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin")));
+        sendText(user.getTelegramId(),
+                "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendAdminWithdrawalCard(AppUser user, Long reqId) {
+        RewardRequest req = rewardService.getRequest(reqId);
+        AppUser requester = req.getUser();
+        String uname = requester.getTelegramUsername() != null
+                ? "@" + requester.getTelegramUsername()
+                : "#" + requester.getTelegramId();
+        boolean isUsdt = req.getPayoutDetails() != null;
+        String detailsLine = "";
+        if (isUsdt) {
+            String[] parts = req.getPayoutDetails().split(":");
+            String wallet = parts.length > 1 ? parts[1] : req.getPayoutDetails();
+            detailsLine = "\n💎 Способ: <b>USDT · TON</b>\n📬 Кошелёк: <code>" + escape(wallet) + "</code>";
+        } else {
+            detailsLine = "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>";
+        }
+        long rubles = Math.round(req.getRewardItem().getPriceCoins() / 100.0);
+        sendText(user.getTelegramId(),
+                "💸 <b>Заявка на вывод #" + req.getId() + "</b>\n\n"
+                        + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + uname + ")\n"
+                        + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
+                        + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
+                        + "💵 К выплате: <b>~" + rubles + " ₽</b>"
+                        + detailsLine + "\n"
+                        + "📅 Дата: <b>" + req.getCreatedAt().toLocalDate() + "</b>",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(
+                                keyboardFactory.callback("✅ Выплачено", "admin:withdrawal:approve:" + req.getId()),
+                                keyboardFactory.callback("❌ Отклонить", "admin:withdrawal:reject:" + req.getId())
+                        ),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "admin:withdrawals"))
+                )));
+    }
+
+    private void notifyUserWithdrawalApproved(RewardRequest req) {
+        boolean isUsdt = req.getPayoutDetails() != null;
+        String method = isUsdt ? "USDT · TON" : "рубли (СБП / Сбербанк)";
+        sendText(req.getUser().getTelegramId(),
+                "✅ <b>Ваш вывод EXC выполнен!</b>\n\n"
+                        + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
+                        + "💵 Способ: <b>" + method + "</b>\n\n"
+                        + "Средства отправлены. Если не получили — напишите в поддержку.",
+                null);
+    }
+
+    private void notifyUserWithdrawalRejected(RewardRequest req) {
+        String comment = req.getAdminComment() != null ? req.getAdminComment() : "—";
+        sendText(req.getUser().getTelegramId(),
+                "❌ <b>Заявка на вывод отклонена</b>\n\n"
+                        + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
                         + "📝 Причина: " + escape(comment) + "\n\n"
                         + "EXC возвращены на ваш баланс.",
                 null);
@@ -3940,6 +4056,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback("📣 Рассылка", "admin:broadcast")
             ));
             rows.add(List.of(keyboardFactory.callback("💳 Пополнить Payout Pool", "admin:payout")));
+            long pendingWithdrawals = rewardService.findPendingWithdrawals().size();
+            String wLabel = pendingWithdrawals > 0
+                    ? "💸 Заявки на вывод (" + pendingWithdrawals + ")"
+                    : "💸 Заявки на вывод";
+            rows.add(List.of(keyboardFactory.callback(wLabel, "admin:withdrawals")));
             return keyboardFactory.rowsLayout(rows);
         }
 
