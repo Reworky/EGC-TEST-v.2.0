@@ -2986,9 +2986,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendAdminWithdrawalCard(AppUser user, Long reqId) {
         RewardRequest req = rewardService.getRequest(reqId);
         AppUser requester = req.getUser();
-        String uname = requester.getTelegramUsername() != null
-                ? "@" + requester.getTelegramUsername()
-                : "#" + requester.getTelegramId();
+        String unameLink = requester.getTelegramUsername() != null
+                ? "<a href=\"https://t.me/" + requester.getTelegramUsername() + "\">@" + requester.getTelegramUsername() + "</a>"
+                : "<a href=\"tg://user?id=" + requester.getTelegramId() + "\">" + requester.getTelegramId() + "</a>";
         boolean isUsdt = req.getPayoutDetails() != null;
         String detailsLine = "";
         if (isUsdt) {
@@ -3001,7 +3001,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long rubles = Math.round(req.getRewardItem().getPriceCoins() / 100.0);
         sendText(user.getTelegramId(),
                 "💸 <b>Заявка на вывод #" + req.getId() + "</b>\n\n"
-                        + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + uname + ")\n"
+                        + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
                         + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
                         + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
                         + "💵 К выплате: <b>~" + rubles + " ₽</b>"
