@@ -1288,6 +1288,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        // Same quest: max 1 per 24h
+        if (questService.isSameQuestCooldownActive(user, quest)) {
+            answerSilently(callbackQuery.getId());
+            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                    "⏳ Этот квест можно выполнять не чаще 1 раза в 24 часа.");
+            return;
+        }
+
         // 3.4 Antifaud: cooldown 24h between same-game quests
         if (questService.isCooldownActive(user, quest)) {
             answerSilently(callbackQuery.getId());

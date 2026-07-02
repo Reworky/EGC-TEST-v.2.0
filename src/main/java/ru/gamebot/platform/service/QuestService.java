@@ -125,6 +125,13 @@ public class QuestService {
         return questSubmissionRepository.findTopByUserAndQuestOrderByCreatedAtDesc(user, quest).orElse(null);
     }
 
+    public boolean isSameQuestCooldownActive(AppUser user, Quest quest) {
+        Optional<LocalDateTime> lastApproved = questSubmissionRepository
+                .findLastApprovedDateByUserAndQuest(user, quest);
+        return lastApproved.isPresent()
+                && LocalDateTime.now().isBefore(lastApproved.get().plusHours(COOLDOWN_HOURS));
+    }
+
     public boolean isCooldownActive(AppUser user, Quest quest) {
         Optional<LocalDateTime> lastApproved = questSubmissionRepository
                 .findLastApprovedDateByUserAndGame(user, quest.getGameName());

@@ -40,6 +40,9 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT MAX(s.updatedAt) FROM QuestSubmission s WHERE s.user = :user AND s.quest.gameName = :gameName AND s.status = 'APPROVED'")
     Optional<LocalDateTime> findLastApprovedDateByUserAndGame(@Param("user") AppUser user, @Param("gameName") String gameName);
 
+    @Query("SELECT MAX(s.updatedAt) FROM QuestSubmission s WHERE s.user = :user AND s.quest = :quest AND s.status = 'APPROVED'")
+    Optional<LocalDateTime> findLastApprovedDateByUserAndQuest(@Param("user") AppUser user, @Param("quest") Quest quest);
+
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.user = :user AND s.status IN ('APPROVED', 'REJECTED', 'NEEDS_INFO')")
     long countReviewedByUser(@Param("user") AppUser user);
 
