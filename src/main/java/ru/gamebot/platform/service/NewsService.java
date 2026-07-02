@@ -3,16 +3,19 @@ package ru.gamebot.platform.service;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.model.NewsPost;
 import ru.gamebot.platform.domain.repository.NewsPostRepository;
+import ru.gamebot.platform.event.NewsPublishedEvent;
 
 @Service
 @RequiredArgsConstructor
 public class NewsService {
 
     private final NewsPostRepository newsPostRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public List<NewsPost> latestNews() {
         return newsPostRepository.findTop5ByActiveTrueOrderByPublishedAtDesc();
@@ -25,6 +28,8 @@ public class NewsService {
         post.setBody(body);
         post.setActive(true);
         post.setPublishedAt(LocalDateTime.now());
-        return newsPostRepository.save(post);
+        NewsPost saved = newsPostRepository.save(post);
+        eventPublisher.publishEvent(new NewsPublishedEvent(this, title, body));
+        return saved;
     }
 }

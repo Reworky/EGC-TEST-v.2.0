@@ -50,6 +50,7 @@ import ru.gamebot.platform.domain.model.RewardItem;
 import ru.gamebot.platform.domain.model.RewardRequest;
 import ru.gamebot.platform.domain.model.SupportAttachment;
 import ru.gamebot.platform.domain.model.SupportTicket;
+import ru.gamebot.platform.event.NewsPublishedEvent;
 import ru.gamebot.platform.service.AdminService;
 import ru.gamebot.platform.service.GameCatalogService;
 import ru.gamebot.platform.service.NewsService;
@@ -3700,19 +3701,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void handleBroadcast(AppUser user, UserSession session, String text) {
+        int delivered = broadcastToAll("📣 <b>Новости платформы</b>\n\n" + escape(text));
+        session.reset();
+        sendText(user.getTelegramId(), "✅ Рассылка отправлена. Получателей: <b>" + delivered + "</b>.", mainMenuKeyboard(user));
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onNewsPublished(NewsPublishedEvent event) {
+        String message = "📰 <b>" + escape(event.getTitle()) + "</b>\n\n" + event.getBody();
+        int delivered = broadcastToAll(message);
+        log.info("[News] Broadcast '{}' → {} users", event.getTitle(), delivered);
+    }
+
+    private int broadcastToAll(String html) {
         int delivered = 0;
         for (AppUser player : userService.allRegisteredUsers()) {
             try {
-                sendText(player.getTelegramId(),
-                        "📣 <b>Новости платформы</b>\n\n" + escape(text),
-                        singleMenuKeyboard());
+                sendText(player.getTelegramId(), html, singleMenuKeyboard());
                 delivered++;
             } catch (Exception exception) {
                 log.warn("Failed to broadcast to {}", player.getTelegramId(), exception);
             }
         }
-        session.reset();
-        sendText(user.getTelegramId(), "✅ Рассылка отправлена. Получателей: <b>" + delivered + "</b>.", mainMenuKeyboard(user));
+        return delivered;
     }
 
     private void handlePayoutPoolInput(AppUser user, UserSession session, String text) {
