@@ -860,6 +860,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case WITHDRAWAL_INPUT -> handleWithdrawalInput(user, session, text);
             case WITHDRAWAL_USDT_AMOUNT -> handleWithdrawalUsdtAmount(user, session, text);
             case WITHDRAWAL_USDT_ADDRESS -> handleWithdrawalUsdtAddress(user, session, text);
+            case SHOP_GAME_DATA_INPUT -> handleShopGameDataInput(user, session, text);
             default -> sendText(user.getTelegramId(), "🧭 Я не жду текст на этом шаге. Вернитесь в меню.", mainMenuKeyboard(user));
         }
     }
@@ -1944,22 +1945,50 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleRewardPurchase(CallbackQuery callbackQuery, AppUser user, Long rewardId) {
         RewardItem reward = rewardService.getRewardItem(rewardId);
-        long effectivePrice = rewardService.effectivePrice(reward);
-        try {
-            rewardService.createRewardRequest(user, reward);
-        } catch (IllegalArgumentException exception) {
+        if (reward.getUserDataPrompt() != null && !reward.getUserDataPrompt().isBlank()) {
+            UserSession session = sessionService.get(user.getTelegramId());
+            session.reset();
+            session.setState(SessionState.SHOP_GAME_DATA_INPUT);
+            session.getData().put("pendingRewardId", String.valueOf(rewardId));
+            sendText(user.getTelegramId(),
+                    "📋 <b>Для оформления заявки нужны ваши данные</b>\n\n"
+                            + escape(reward.getUserDataPrompt()),
+                    cancelKeyboard());
             answerSilently(callbackQuery.getId());
-            sendRewardCard(user, rewardId, "⚠️ " + exception.getMessage());
             return;
         }
-        notifyAdminsAboutRewardRequest(user, reward);
+        completePurchase(callbackQuery, user, reward, null);
+    }
+
+    private void handleShopGameDataInput(AppUser user, UserSession session, String text) {
+        Long rewardId = parseLong(session.getData().getOrDefault("pendingRewardId", "0"));
+        RewardItem reward = rewardService.getRewardItem(rewardId);
+        session.reset();
+        completePurchase(null, user, reward, text.trim());
+    }
+
+    private void completePurchase(CallbackQuery callbackQuery, AppUser user, RewardItem reward, String userGameData) {
+        long effectivePrice = rewardService.effectivePrice(reward);
+        RewardRequest req;
+        try {
+            req = rewardService.createRewardRequest(user, reward);
+        } catch (IllegalArgumentException exception) {
+            if (callbackQuery != null) answerSilently(callbackQuery.getId());
+            sendRewardCard(user, reward.getId(), "⚠️ " + exception.getMessage());
+            return;
+        }
+        if (userGameData != null && !userGameData.isBlank()) {
+            req.setPayoutDetails(userGameData);
+            rewardService.saveRequest(req);
+        }
+        notifyAdminsAboutRewardRequest(user, reward, userGameData);
         sendText(user.getTelegramId(),
                 "✅ <b>Заявка на награду отправлена</b>\n\n"
                         + "🎁 Награда: <b>" + escape(reward.getTitle()) + "</b>\n"
                         + "🪙 Списано: <b>" + effectivePrice + " EXC</b>\n\n"
                         + "Как только выдача будет подтверждена, вы получите отдельное уведомление.",
                 backMenuKeyboard("menu:shop"));
-        answerSilently(callbackQuery.getId());
+        if (callbackQuery != null) answerSilently(callbackQuery.getId());
     }
 
     private void sendCouncil(AppUser user) {
@@ -3991,16 +4020,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void notifyAdminsAboutRewardRequest(AppUser user, RewardItem reward) {
+        notifyAdminsAboutRewardRequest(user, reward, null);
+    }
+
+    private void notifyAdminsAboutRewardRequest(AppUser user, RewardItem reward, String userGameData) {
         InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("📥 Открыть заявки", "admin:reward:requests"))
         ));
+        String dataLine = userGameData != null && !userGameData.isBlank()
+                ? "\n📋 Данные игрока: <code>" + escape(userGameData) + "</code>"
+                : "";
         for (Long adminId : adminService.allAdminIds()) {
             sendText(adminId,
                     "🛍️ <b>Новая заявка на выдачу награды</b>\n\n"
                             + "👤 Игрок: <b>" + escape(user.getNickname()) + "</b>\n"
                             + "🆔 Telegram ID: <b>" + user.getTelegramId() + "</b>\n"
                             + "🎁 Награда: <b>" + escape(reward.getTitle()) + "</b>\n"
-                            + "🪙 Стоимость: <b>" + reward.getPriceCoins() + " EXC</b>",
+                            + "🪙 Стоимость: <b>" + reward.getPriceCoins() + " EXC</b>"
+                            + dataLine,
                     markup);
         }
     }

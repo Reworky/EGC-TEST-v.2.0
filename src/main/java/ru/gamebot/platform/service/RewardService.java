@@ -114,6 +114,11 @@ public class RewardService {
         return rewardRequestRepository.save(req);
     }
 
+    @Transactional
+    public RewardRequest saveRequest(RewardRequest req) {
+        return rewardRequestRepository.save(req);
+    }
+
     public List<RewardItem> findAllRewards() {
         return rewardItemRepository.findAll();
     }

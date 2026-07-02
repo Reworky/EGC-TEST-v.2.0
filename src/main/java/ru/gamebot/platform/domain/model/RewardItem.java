@@ -31,4 +31,8 @@ public class RewardItem {
     private long priceCoins;
     private boolean active;
     private LocalDateTime createdAt;
+
+    /** Если не null — перед покупкой бот спросит у пользователя эти данные (хранятся в payoutDetails заявки) */
+    @Column(length = 512)
+    private String userDataPrompt;
 }

@@ -47,6 +47,9 @@ public class SchemaPatchInitializer implements CommandLineRunner {
 
         // USDT withdrawal support
         apply("ALTER TABLE reward_requests ADD COLUMN IF NOT EXISTS payout_details VARCHAR(512)");
+
+        // Game currency shop — user data collection
+        apply("ALTER TABLE reward_items ADD COLUMN IF NOT EXISTS user_data_prompt VARCHAR(512)");
     }
 
     private void apply(String sql) {
