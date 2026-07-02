@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.repository.QuestRepository;
+import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
 
 @Slf4j
 @Component
@@ -18,6 +19,7 @@ import ru.gamebot.platform.domain.repository.QuestRepository;
 public class QuestSeeder implements CommandLineRunner {
 
     private final QuestRepository questRepository;
+    private final QuestSubmissionRepository questSubmissionRepository;
 
     @Override
     @Transactional
@@ -25,6 +27,9 @@ public class QuestSeeder implements CommandLineRunner {
 
         // Удаляем квесты с устаревшими названиями игры (оставляем только "PUBG / PUBG Mobile")
         for (String obsolete : List.of("PUBG", "PUBG Mobile", "PUBG mobile", "PUBG MOBILE", "EA FC 25")) {
+            questRepository.findAll().stream()
+                    .filter(q -> q.getGameName() != null && q.getGameName().equalsIgnoreCase(obsolete))
+                    .forEach(questSubmissionRepository::deleteAllByQuest);
             questRepository.deleteAllByGameNameIgnoreCase(obsolete);
             log.info("[QuestSeeder] Deleted obsolete quests for game: '{}'", obsolete);
         }
