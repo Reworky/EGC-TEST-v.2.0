@@ -943,7 +943,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("🚀 Перейти в профиль", "activation:profile"))
                 )));
-        sendQuickStartGuide(user);
     }
 
     private void sendQuickStartGuide(AppUser user) {
