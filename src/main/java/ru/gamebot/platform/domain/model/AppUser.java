@@ -97,4 +97,7 @@ public class AppUser {
     private LocalDateTime shopCooldownSmallUntil;
     private LocalDateTime shopCooldownMediumUntil;
     private LocalDateTime shopCooldownLargeUntil;
+
+    // Daily bonus
+    private LocalDate lastBonusDate;
 }

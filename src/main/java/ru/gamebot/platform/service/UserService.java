@@ -189,27 +189,84 @@ public class UserService {
         }
         user.setLastActivityDate(today);
 
-        long streakBonus = 0;
+        long xpBonus = 0;
         if (user.getStreakDays() == 7) {
-            streakBonus = 20;
+            xpBonus = 20;
         } else if (user.getStreakDays() == 30) {
-            streakBonus = 100;
+            xpBonus = 100;
         } else if (user.getStreakDays() == 90) {
-            streakBonus = 500;
+            xpBonus = 500;
         }
 
-        if (streakBonus > 0) {
-            user.setXp(user.getXp() + streakBonus);
-            user.setWeeklyXp(user.getWeeklyXp() + streakBonus);
+        if (xpBonus > 0) {
+            user.setXp(user.getXp() + xpBonus);
+            user.setWeeklyXp(user.getWeeklyXp() + xpBonus);
         }
 
         appUserRepository.save(user);
-        if (streakBonus > 0) {
-            return "🔥 Серия входов: " + user.getStreakDays() + " дней подряд.\n"
-                    + "🎁 Бонус за активность: +" + streakBonus + " XP.";
-        }
-        return "📅 Серия входов обновлена: " + user.getStreakDays() + " дней подряд.";
+        return null;
     }
+
+    public boolean isDailyBonusAvailable(AppUser user) {
+        return user.getLastBonusDate() == null || !user.getLastBonusDate().equals(LocalDate.now());
+    }
+
+    @Transactional
+    public DailyBonusResult claimDailyBonus(AppUser user) {
+        if (!isDailyBonusAvailable(user)) {
+            return null;
+        }
+        // Update streak first
+        LocalDate today = LocalDate.now();
+        LocalDate lastActivity = user.getLastActivityDate();
+        if (lastActivity == null || !lastActivity.equals(today)) {
+            if (lastActivity != null && lastActivity.plusDays(1).equals(today)) {
+                user.setStreakDays(user.getStreakDays() + 1);
+            } else {
+                user.setStreakDays(1);
+            }
+            user.setLastActivityDate(today);
+        }
+
+        int streak = user.getStreakDays();
+        long dailyExc = Math.min(150L + (long)(streak - 1) * 50, 500L);
+        long milestoneExc = 0;
+        long xpBonus = 0;
+        String milestoneText = null;
+
+        if (streak == 7) {
+            milestoneExc = 1000;
+            xpBonus = 20;
+            milestoneText = "🔥 Неделя подряд!";
+        } else if (streak == 14) {
+            milestoneExc = 1500;
+            milestoneText = "💥 2 недели подряд!";
+        } else if (streak == 30) {
+            milestoneExc = 5000;
+            xpBonus = 100;
+            milestoneText = "⭐ Месяц без пропуска!";
+        } else if (streak == 90) {
+            milestoneExc = 15000;
+            xpBonus = 500;
+            milestoneText = "🏆 3 месяца подряд!";
+        }
+
+        long totalExc = dailyExc + milestoneExc;
+        user.setCoins(user.getCoins() + totalExc);
+        if (xpBonus > 0) {
+            user.setXp(user.getXp() + xpBonus);
+            user.setWeeklyXp(user.getWeeklyXp() + xpBonus);
+        }
+        user.setLastBonusDate(today);
+        appUserRepository.save(user);
+
+        return new DailyBonusResult(totalExc, dailyExc, milestoneExc, xpBonus, streak, milestoneText);
+    }
+
+    public record DailyBonusResult(
+            long totalExc, long dailyExc, long milestoneExc,
+            long xpBonus, int streakDays, String milestoneText
+    ) {}
 
     // Called on channel subscription — counts the invite, no EXC bonus yet
     @Transactional

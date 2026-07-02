@@ -575,6 +575,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "quickstart" -> { answerSilently(callbackQuery.getId()); sendQuickStartGuide(user); }
             case "admin" -> sendAdminPanel(user);
             case "moderation" -> sendModerationHub(user);
+            case "daily" -> { sendDailyBonus(callbackQuery, user); return; }
             default -> sendMainMenu(user, mainMenuText(user));
         }
         answerSilently(callbackQuery.getId());
@@ -1064,6 +1065,55 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else {
             sendText(user.getTelegramId(), profileText, profileKeyboard);
         }
+    }
+
+    private void sendDailyBonus(CallbackQuery callbackQuery, AppUser user) {
+        if (!userService.isDailyBonusAvailable(user)) {
+            answer(callbackQuery.getId(), "Бонус уже получен сегодня");
+            int streak = user.getStreakDays();
+            long nextBonus = Math.min(150L + (long) streak * 50, 500L);
+            sendText(user.getTelegramId(),
+                    "✅ <b>Ежедневный бонус уже получен</b>\n\n"
+                            + "🔥 Серия: <b>" + streak + " " + dayWord(streak) + " подряд</b>\n\n"
+                            + "Возвращайся завтра — тебя ждёт <b>+" + nextBonus + " EXC</b>.",
+                    backMenuKeyboard("menu:main"));
+            return;
+        }
+        ru.gamebot.platform.service.UserService.DailyBonusResult result = userService.claimDailyBonus(user);
+        if (result == null) {
+            answer(callbackQuery.getId(), "Бонус уже получен");
+            return;
+        }
+        StringBuilder msg = new StringBuilder();
+        if (result.milestoneText() != null) {
+            msg.append(result.milestoneText()).append("\n\n");
+        } else {
+            msg.append("🎁 <b>Ежедневный бонус получен!</b>\n\n");
+        }
+        msg.append("🔥 Серия: <b>").append(result.streakDays()).append(" ")
+                .append(dayWord(result.streakDays())).append(" подряд</b>\n\n");
+        msg.append("🪙 Начислено: <b>+").append(result.totalExc()).append(" EXC</b>");
+        if (result.milestoneExc() > 0) {
+            msg.append("\n   ├ ежедневный: +").append(result.dailyExc()).append(" EXC");
+            msg.append("\n   └ бонус за серию: +").append(result.milestoneExc()).append(" EXC");
+        }
+        if (result.xpBonus() > 0) {
+            msg.append("\n⭐ XP: <b>+").append(result.xpBonus()).append(" XP</b>");
+        }
+        long nextBonus = Math.min(150L + (long) result.streakDays() * 50, 500L);
+        msg.append("\n\n💰 Баланс: <b>").append(user.getCoins() + result.totalExc()).append(" EXC</b>");
+        msg.append("\n\nВозвращайся завтра — тебя ждёт <b>+").append(nextBonus).append(" EXC</b>.");
+        answer(callbackQuery.getId(), "+" + result.totalExc() + " EXC получено!");
+        sendText(user.getTelegramId(), msg.toString(), backMenuKeyboard("menu:main"));
+    }
+
+    private static String dayWord(int days) {
+        if (days % 100 >= 11 && days % 100 <= 19) return "дней";
+        return switch (days % 10) {
+            case 1 -> "день";
+            case 2, 3, 4 -> "дня";
+            default -> "дней";
+        };
     }
 
     private void sendBalance(AppUser user) {
@@ -4300,6 +4350,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("⚡ Предметы", "menu:sink")
         ));
         rows.add(List.of(keyboardFactory.callback("🛡️ EGC Council", "menu:council")));
+        String dailyLabel = userService.isDailyBonusAvailable(user)
+                ? "🎁 Забрать ежедневный бонус 🔔"
+                : "✅ Бонус за вход получен";
+        rows.add(List.of(keyboardFactory.callback(dailyLabel, "menu:daily")));
         rows.add(List.of(
                 keyboardFactory.callback("🆘 Поддержка", "menu:support"),
                 keyboardFactory.url("⭐ Отзывы игроков", "https://t.me/egc_payouts")
