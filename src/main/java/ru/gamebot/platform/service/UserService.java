@@ -268,26 +268,49 @@ public class UserService {
             long xpBonus, int streakDays, String milestoneText
     ) {}
 
-    // Called on channel subscription — counts the invite, no EXC bonus yet
+    public record ReferralActivationResult(
+            long invitedBonus,
+            Long referrerTelegramId,
+            String referrerNickname,
+            long referrerBonus,
+            String invitedNickname
+    ) {}
+
+    // Called on channel subscription — gives instant EXC to both parties
     @Transactional
-    public void grantReferralReward(AppUser invitedUser) {
+    public ReferralActivationResult grantReferralReward(AppUser invitedUser) {
         if (invitedUser.isReferralRewardProcessed()) {
-            return;
+            return null;
         }
         Long referrerTelegramId = invitedUser.getReferredByTelegramId();
         if (referrerTelegramId == null) {
-            return;
+            return null;
         }
         AppUser referrer = appUserRepository.findByTelegramId(referrerTelegramId).orElse(null);
         if (referrer == null) {
-            return;
+            return null;
         }
         referrer.setInvitedFriends(referrer.getInvitedFriends() + 1);
+
+        // Instant bonus: 500 EXC to invited user
+        long invitedBonus = 500;
+        invitedUser.setCoins(invitedUser.getCoins() + invitedBonus);
+
+        // Instant bonus: 300 EXC to referrer
+        long referrerBonus = 300;
+        referrer.setCoins(referrer.getCoins() + referrerBonus);
+
         appUserRepository.save(referrer);
-        // 200 EXC to the invited user is granted on first quest completion (see QuestService)
-        // 10% referrer bonus per quest is also handled in QuestService
         invitedUser.setReferralRewardProcessed(true);
         appUserRepository.save(invitedUser);
+
+        return new ReferralActivationResult(
+                invitedBonus,
+                referrer.getTelegramId(),
+                referrer.getNickname(),
+                referrerBonus,
+                invitedUser.getNickname()
+        );
     }
 
     // 3.5: 3000 EXC bonus to invited user on their first approved quest

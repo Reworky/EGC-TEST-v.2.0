@@ -957,8 +957,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void handleActivationCheck(CallbackQuery callbackQuery, AppUser user) {
         if (isRequiredChannelMember(user.getTelegramId())) {
             AppUser activated = userService.activateAccount(user);
-            userService.grantReferralReward(activated);
-            sendActivationSuccess(activated);
+            ru.gamebot.platform.service.UserService.ReferralActivationResult referral =
+                    userService.grantReferralReward(activated);
+            sendActivationSuccess(activated, referral);
+            if (referral != null) {
+                sendText(referral.referrerTelegramId(),
+                        "🎉 <b>Твой реферал присоединился!</b>\n\n"
+                                + "👤 <b>" + escape(referral.invitedNickname()) + "</b> только что активировал аккаунт по твоей ссылке.\n\n"
+                                + "🪙 Тебе начислено: <b>+" + referral.referrerBonus() + " EXC</b>\n\n"
+                                + "Ты будешь получать <b>3% от EXC</b>, которые он заработает на квестах в первые 14 дней.",
+                        null);
+            }
             notifyAdminsNewRegistration(activated);
             answer(callbackQuery.getId(), "Аккаунт активирован");
             return;
@@ -969,10 +978,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         answer(callbackQuery.getId(), "Подписка не найдена");
     }
 
-    private void sendActivationSuccess(AppUser user) {
+    private void sendActivationSuccess(AppUser user,
+            ru.gamebot.platform.service.UserService.ReferralActivationResult referral) {
+        String referralLine = referral != null
+                ? "\n🪙 <b>Реферальный бонус: +" + referral.invitedBonus() + " EXC</b> уже на балансе!\n"
+                        + "Ещё <b>3 000 EXC</b> придут после первого выполненного квеста.\n"
+                : "";
         sendText(user.getTelegramId(),
                 "✅ <b>Поздравляем! Ваш игровой профиль активирован.</b>\n\n"
-                        + "Теперь вам доступны:\n"
+                        + referralLine
+                        + "\nТеперь вам доступны:\n"
                         + "Игровые задания\n"
                         + "XP и EXC\n"
                         + "Рейтинг игроков\n"
