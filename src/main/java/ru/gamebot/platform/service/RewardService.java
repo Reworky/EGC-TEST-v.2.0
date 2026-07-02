@@ -21,6 +21,7 @@ public class RewardService {
     private final UserService userService;
     private final SinkShopService sinkShopService;
     private final HealthRatioService healthRatioService;
+    private final ShopLimitService shopLimitService;
 
     public List<RewardItem> findAvailableRewards() {
         return rewardItemRepository.findAllByActiveTrueOrderByPriceCoinsAsc();
@@ -42,6 +43,9 @@ public class RewardService {
 
     @Transactional
     public RewardRequest createRewardRequest(AppUser user, RewardItem rewardItem) {
+        // 4-layer shop limits check (throws IllegalArgumentException on violation)
+        shopLimitService.checkAllLimits(user, rewardItem);
+
         long price = effectivePrice(rewardItem);
 
         // 3.3 Withdrawal limit check (min 5000 EXC per model)
@@ -62,6 +66,9 @@ public class RewardService {
         user.setCoins(user.getCoins() - price);
         userService.save(user);
         sinkShopService.recordWithdrawal(user, price);
+
+        // Record cooldown after successful purchase (Layer 4)
+        shopLimitService.recordPurchaseCooldown(user, rewardItem.getPriceCoins());
 
         RewardRequest request = new RewardRequest();
         request.setUser(user);

@@ -102,6 +102,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.HealthRatioService healthRatioService;
     private final ru.gamebot.platform.service.SinkShopService sinkShopService;
     private final ru.gamebot.platform.service.CouncilService councilService;
+    private final ru.gamebot.platform.service.ShopLimitService shopLimitService;
     private final GameCatalogService gameCatalogService;
 
     @EventListener(ApplicationReadyEvent.class)
@@ -1521,8 +1522,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback("── " + entry.getKey() + " ──", "noop")));
                 for (RewardItem reward : entry.getValue()) {
                     long price = rewardService.effectivePrice(reward);
+                    String status = shopLimitService.getItemStatus(user, reward);
+                    String icon = status.startsWith("🔒") ? "🔒"
+                            : status.startsWith("⏳") ? "⏳"
+                            : status.startsWith("🚫") ? "🚫"
+                            : "🎁";
                     rows.add(List.of(keyboardFactory.callback(
-                            "🎁 " + trim(reward.getTitle(), 22) + " — " + price + " EXC",
+                            icon + " " + trim(reward.getTitle(), 22) + " — " + price + " EXC",
                             "shop:view:" + reward.getId())));
                 }
             }
@@ -1989,11 +1995,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String priceNote = effectivePrice != reward.getPriceCoins()
                 ? " (базовая: " + reward.getPriceCoins() + " EXC)"
                 : "";
+        String limitStatus = shopLimitService.getItemStatus(user, reward);
         String text = (notice == null ? "" : notice + "\n\n")
                 + "🎁 <b>" + escape(reward.getTitle()) + "</b>\n\n"
                 + "📦 Категория: <b>" + escape(reward.getCategory()) + "</b>\n"
                 + "📝 " + escape(reward.getDescription()) + "\n\n"
-                + "🪙 Стоимость: <b>" + effectivePrice + " EXC</b>" + priceNote;
+                + "🪙 Стоимость: <b>" + effectivePrice + " EXC</b>" + priceNote + "\n"
+                + limitStatus;
         InlineKeyboardMarkup keyboard = verticalWithBackMenu(
                 List.of(keyboardFactory.callback("🛒 Обменять", "shop:buy:" + rewardId)),
                 "⬅️ Назад",
