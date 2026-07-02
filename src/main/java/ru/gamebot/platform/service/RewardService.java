@@ -72,8 +72,11 @@ public class RewardService {
     }
 
     public List<RewardRequest> findPendingRequests() {
-        return rewardRequestRepository.findAllByStatusOrderByCreatedAtAsc(RewardRequestStatus.PENDING)
-                .stream().filter(r -> !"Вывод".equals(r.getRewardItem().getCategory())).toList();
+        List<RewardRequest> pending = rewardRequestRepository.findAllByStatusOrderByCreatedAtAsc(RewardRequestStatus.PENDING);
+        List<RewardRequest> inProgress = rewardRequestRepository.findAllByStatusOrderByCreatedAtAsc(RewardRequestStatus.IN_PROGRESS);
+        return java.util.stream.Stream.concat(pending.stream(), inProgress.stream())
+                .filter(r -> !"Вывод".equals(r.getRewardItem().getCategory()))
+                .toList();
     }
 
     public List<RewardRequest> findPendingWithdrawals() {
@@ -86,7 +89,8 @@ public class RewardService {
     }
 
     public long countPendingRequests() {
-        return rewardRequestRepository.countByStatus(RewardRequestStatus.PENDING);
+        return rewardRequestRepository.countByStatusIn(
+                java.util.List.of(RewardRequestStatus.PENDING, RewardRequestStatus.IN_PROGRESS));
     }
 
     public RewardRequest getRequest(Long requestId) {
@@ -95,9 +99,29 @@ public class RewardService {
     }
 
     @Transactional
+    public RewardRequest takeInProgressRequest(Long requestId) {
+        RewardRequest req = getRequest(requestId);
+        req.setStatus(RewardRequestStatus.IN_PROGRESS);
+        return rewardRequestRepository.save(req);
+    }
+
+    @Transactional
     public RewardRequest approveRequest(Long requestId) {
         RewardRequest req = getRequest(requestId);
         req.setStatus(RewardRequestStatus.APPROVED);
+        return rewardRequestRepository.save(req);
+    }
+
+    @Transactional
+    public RewardRequest cancelRequest(Long requestId, AppUser requester) {
+        RewardRequest req = getRequest(requestId);
+        if (req.getStatus() != RewardRequestStatus.PENDING) {
+            throw new IllegalArgumentException("Заявку можно отменить только в статусе «Ожидает».");
+        }
+        req.setStatus(RewardRequestStatus.CANCELLED);
+        long price = effectivePrice(req.getRewardItem());
+        requester.setCoins(requester.getCoins() + price);
+        userService.save(requester);
         return rewardRequestRepository.save(req);
     }
 

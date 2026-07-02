@@ -430,6 +430,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "Карточка награды");
             return;
         }
+        if (data.startsWith("reward:cancel:")) {
+            handleUserRewardCancel(callbackQuery, user, parseLong(data.substring("reward:cancel:".length())));
+            return;
+        }
         if (data.startsWith("shop:buy:")) {
             handleRewardPurchase(callbackQuery, user, parseLong(data.substring("shop:buy:".length())));
             return;
@@ -1669,19 +1673,55 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         StringBuilder sb = new StringBuilder("📋 <b>Мои заявки</b>\n\n");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (RewardRequest req : requests) {
             String status = switch (req.getStatus()) {
                 case PENDING -> "⏳ Ожидает";
+                case IN_PROGRESS -> "🔄 В работе";
                 case APPROVED -> "✅ Выдано";
                 case REJECTED -> "❌ Отклонено";
+                case CANCELLED -> "🚫 Отменено";
             };
             sb.append("• <b>").append(escape(req.getRewardItem().getTitle())).append("</b> — ").append(status);
             if (req.getStatus() == RewardRequestStatus.REJECTED && req.getAdminComment() != null) {
                 sb.append("\n  📝 ").append(escape(req.getAdminComment()));
             }
             sb.append("\n");
+            if (req.getStatus() == RewardRequestStatus.PENDING) {
+                rows.add(List.of(keyboardFactory.callback(
+                        "🚫 Отменить «" + trim(req.getRewardItem().getTitle(), 20) + "»",
+                        "reward:cancel:" + req.getId())));
+            }
         }
-        sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:shop"));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:shop")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleUserRewardCancel(CallbackQuery callbackQuery, AppUser user, Long reqId) {
+        try {
+            RewardRequest req = rewardService.cancelRequest(reqId, user);
+            answer(callbackQuery.getId(), "Заявка отменена");
+            sendText(user.getTelegramId(),
+                    "🚫 <b>Заявка отменена</b>\n\n"
+                            + "🎁 <b>" + escape(req.getRewardItem().getTitle()) + "</b>\n\n"
+                            + "💰 EXC возвращены на ваш баланс.",
+                    backMenuKeyboard("menu:my-rewards"));
+            notifyAdminsRewardCancelled(user, req);
+        } catch (IllegalArgumentException e) {
+            answer(callbackQuery.getId(), e.getMessage());
+        }
+    }
+
+    private void notifyAdminsRewardCancelled(AppUser user, RewardRequest req) {
+        String usernameStr = user.getTelegramUsername() != null
+                ? "@" + user.getTelegramUsername() : "#" + user.getTelegramId();
+        String text = "🚫 <b>Заявка отменена пользователем</b>\n\n"
+                + "👤 " + usernameStr + " (<b>" + escape(user.getNickname()) + "</b>)\n"
+                + "🎁 <b>" + escape(req.getRewardItem().getTitle()) + "</b>\n"
+                + "🪙 " + req.getRewardItem().getPriceCoins() + " EXC возвращено";
+        for (Long adminId : adminService.allAdminIds()) {
+            sendText(adminId, text, null);
+        }
     }
 
     private void sendSinkShop(AppUser user) {
@@ -2880,6 +2920,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if (action.startsWith("inprogress:")) {
+            Long reqId = parseLong(action.substring("inprogress:".length()));
+            RewardRequest req = rewardService.takeInProgressRequest(reqId);
+            notifyUserRewardInProgress(req);
+            sendAdminRewardRequestCard(user, reqId);
+            answer(callbackQuery.getId(), "🔄 Взято в работу");
+            return;
+        }
         if (action.startsWith("approve:")) {
             Long reqId = parseLong(action.substring("approve:".length()));
             RewardRequest req = rewardService.approveRequest(reqId);
@@ -2909,7 +2957,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (RewardRequest req : pending) {
-            String label = "@" + (req.getUser().getTelegramUsername() != null
+            String statusMark = req.getStatus() == RewardRequestStatus.IN_PROGRESS ? "🔄 " : "";
+            String label = statusMark + "@" + (req.getUser().getTelegramUsername() != null
                     ? req.getUser().getTelegramUsername()
                     : req.getUser().getTelegramId())
                     + " — " + trim(req.getRewardItem().getTitle(), 20);
@@ -2927,19 +2976,37 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String usernameStr = requester.getTelegramUsername() != null
                 ? "@" + requester.getTelegramUsername()
                 : "#" + requester.getTelegramId();
+        boolean inProgress = req.getStatus() == RewardRequestStatus.IN_PROGRESS;
+        String statusLine = inProgress ? "\n🔄 Статус: <b>В работе</b>" : "\n⏳ Статус: <b>Ожидает</b>";
+        List<List<InlineKeyboardButton>> cardRows = new ArrayList<>();
+        if (!inProgress) {
+            cardRows.add(List.of(
+                    keyboardFactory.callback("🔄 Взять в работу", "admin:reward:inprogress:" + req.getId()),
+                    keyboardFactory.callback("❌ Отклонить", "admin:reward:reject:" + req.getId())
+            ));
+        } else {
+            cardRows.add(List.of(
+                    keyboardFactory.callback("✅ Выдано", "admin:reward:approve:" + req.getId()),
+                    keyboardFactory.callback("❌ Отклонить", "admin:reward:reject:" + req.getId())
+            ));
+        }
+        cardRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:reward:requests")));
         sendText(user.getTelegramId(),
                 "📋 <b>Заявка #" + req.getId() + "</b>\n\n"
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + usernameStr + ")\n"
                         + "🎁 Награда: <b>" + escape(req.getRewardItem().getTitle()) + "</b>\n"
                         + "🪙 Цена: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
-                        + "📅 Дата: <b>" + req.getCreatedAt().toLocalDate() + "</b>",
-                keyboardFactory.rowsLayout(List.of(
-                        List.of(
-                                keyboardFactory.callback("✅ Выдано", "admin:reward:approve:" + req.getId()),
-                                keyboardFactory.callback("❌ Отклонить", "admin:reward:reject:" + req.getId())
-                        ),
-                        List.of(keyboardFactory.callback("⬅️ Назад", "admin:reward:requests"))
-                )));
+                        + "📅 Дата: <b>" + req.getCreatedAt().toLocalDate() + "</b>"
+                        + statusLine,
+                keyboardFactory.rowsLayout(cardRows));
+    }
+
+    private void notifyUserRewardInProgress(RewardRequest req) {
+        sendText(req.getUser().getTelegramId(),
+                "🔄 <b>Ваша заявка взята в работу!</b>\n\n"
+                        + "🎁 <b>" + escape(req.getRewardItem().getTitle()) + "</b>\n\n"
+                        + "Администратор обрабатывает заявку. Отменить её теперь можно только через поддержку.",
+                null);
     }
 
     private void notifyUserRewardApproved(RewardRequest req) {
