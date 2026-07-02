@@ -122,6 +122,7 @@ public class RewardService {
         long price = effectivePrice(req.getRewardItem());
         requester.setCoins(requester.getCoins() + price);
         userService.save(requester);
+        sinkShopService.reverseWithdrawal(requester, price);
         return rewardRequestRepository.save(req);
     }
 
@@ -130,11 +131,11 @@ public class RewardService {
         RewardRequest req = getRequest(requestId);
         req.setStatus(RewardRequestStatus.REJECTED);
         req.setAdminComment(comment);
-        // Refund EXC
         AppUser user = req.getUser();
         long price = effectivePrice(req.getRewardItem());
         user.setCoins(user.getCoins() + price);
         userService.save(user);
+        sinkShopService.reverseWithdrawal(user, price);
         return rewardRequestRepository.save(req);
     }
 
