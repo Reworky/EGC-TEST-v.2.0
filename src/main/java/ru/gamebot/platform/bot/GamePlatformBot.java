@@ -2846,12 +2846,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void finalizeRewardCreation(AppUser user, UserSession session) {
         Map<String, String> d = session.getData();
+        String title = d.get("title");
+        long price = Long.parseLong(d.getOrDefault("price", "0"));
         rewardService.createRewardItem(
-                d.get("title"),
+                title,
                 d.get("description"),
                 d.get("category"),
-                Long.parseLong(d.getOrDefault("price", "0")),
+                price,
                 d.get("photoFileId")
+        );
+        newsService.createPost(
+                "🎁 Новый товар в магазине",
+                "В магазин наград добавлен <b>" + title + "</b> за " + price + " EXC. Загляни в раздел 🛍 Магазин!"
         );
         session.reset();
         sendText(user.getTelegramId(), "✅ Награда добавлена в магазин.", backMenuKeyboard("admin:rewards"));
