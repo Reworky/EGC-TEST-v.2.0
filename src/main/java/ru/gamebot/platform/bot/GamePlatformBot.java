@@ -1693,6 +1693,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         "reward:cancel:" + req.getId())));
             }
         }
+        sb.append("\n💡 <i>Отменить заявку можно только в статусе ⏳ Ожидает. После того как администратор возьмёт заявку в работу (🔄 В работе), отмена доступна только через поддержку.</i>");
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:shop")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
