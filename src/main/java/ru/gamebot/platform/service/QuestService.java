@@ -134,7 +134,7 @@ public class QuestService {
 
     public boolean isCooldownActive(AppUser user, Quest quest) {
         Optional<LocalDateTime> lastApproved = questSubmissionRepository
-                .findLastApprovedDateByUserAndGame(user, quest.getGameName());
+                .findLastApprovedDateByUserAndGameAndCategory(user, quest.getGameName(), quest.getCategory());
         if (lastApproved.isPresent() && LocalDateTime.now().isBefore(lastApproved.get().plusHours(COOLDOWN_HOURS))) {
             if (sinkShopService.hasCooldownBypass(user, quest.getGameName())) {
                 sinkShopService.consumeCooldownBypass(user, quest.getGameName());
