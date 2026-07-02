@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.stream.Stream;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.telegram.telegrambots.meta.api.objects.User;
@@ -19,6 +20,7 @@ import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
 import ru.gamebot.platform.domain.repository.RewardRequestRepository;
 import ru.gamebot.platform.domain.repository.SupportAttachmentRepository;
 import ru.gamebot.platform.domain.repository.SupportTicketRepository;
+import ru.gamebot.platform.event.LeagueRewardEvent;
 
 @Service
 @RequiredArgsConstructor
@@ -35,10 +37,37 @@ public class UserService {
             new LevelTier(8, "Амбассадор EXPERIENCE", 300_000, 50)
     );
 
+    public enum League {
+        BRONZE("🥉 Бронза",    0,    0),
+        SILVER("🥈 Серебро",   250,  300),
+        GOLD  ("🥇 Золото",    600,  800),
+        PLAT  ("💎 Платина",  1500, 2000),
+        ELITE ("👑 Элита",    3500, 5000);
+
+        public final String displayName;
+        public final int minWeeklyXp;
+        public final long excPrize;
+
+        League(String displayName, int minWeeklyXp, long excPrize) {
+            this.displayName = displayName;
+            this.minWeeklyXp = minWeeklyXp;
+            this.excPrize = excPrize;
+        }
+    }
+
+    public static League getLeague(long weeklyXp) {
+        League result = League.BRONZE;
+        for (League l : League.values()) {
+            if (weeklyXp >= l.minWeeklyXp) result = l;
+        }
+        return result;
+    }
+
     private final AppUserRepository appUserRepository;
     private final QuestSubmissionRepository questSubmissionRepository;
     private final RewardRequestRepository rewardRequestRepository;
     private final SupportTicketRepository supportTicketRepository;
+    private final ApplicationEventPublisher eventPublisher;
     private final SupportAttachmentRepository supportAttachmentRepository;
 
     @Transactional
@@ -375,7 +404,17 @@ public class UserService {
     @Transactional
     public void resetWeeklyXp() {
         List<AppUser> users = appUserRepository.findAll();
-        users.forEach(user -> user.setWeeklyXp(0));
+        for (AppUser user : users) {
+            if (!user.isRegistrationCompleted()) continue;
+            League league = getLeague(user.getWeeklyXp());
+            if (league.excPrize > 0) {
+                user.setCoins(user.getCoins() + league.excPrize);
+                eventPublisher.publishEvent(new LeagueRewardEvent(
+                        this, user.getTelegramId(), league.displayName, league.excPrize, (int) user.getWeeklyXp()
+                ));
+            }
+            user.setWeeklyXp(0);
+        }
         appUserRepository.saveAll(users);
     }
 

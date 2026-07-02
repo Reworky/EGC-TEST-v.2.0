@@ -52,6 +52,7 @@ import ru.gamebot.platform.domain.model.RewardItem;
 import ru.gamebot.platform.domain.model.RewardRequest;
 import ru.gamebot.platform.domain.model.SupportAttachment;
 import ru.gamebot.platform.domain.model.SupportTicket;
+import ru.gamebot.platform.event.LeagueRewardEvent;
 import ru.gamebot.platform.event.NewsPublishedEvent;
 import ru.gamebot.platform.service.AdminService;
 import ru.gamebot.platform.service.GameCatalogService;
@@ -1053,7 +1054,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🎟️ Билеты: <b>" + user.getTickets() + "</b>\n"
                 + "🥇 Место в рейтинге: <b>" + rank + "</b>\n"
                 + "✅ Выполнено квестов: <b>" + user.getCompletedQuests() + "</b>\n"
-                + "🔥 Серия входов: <b>" + user.getStreakDays() + " дней</b>\n\n"
+                + "🔥 Серия входов: <b>" + user.getStreakDays() + " дней</b>\n"
+                + "🏅 Лига недели: <b>" + ru.gamebot.platform.service.UserService.getLeague(user.getWeeklyXp()).displayName + "</b>\n\n"
                 + "🧩 <b>Игровой стиль</b>\n"
                 + "🕹️ Платформы: <b>" + escape(displayValue(user.getPlatformsCsv(), "Подбираются")) + "</b>\n"
                 + "🎯 Интересы: <b>" + escape(displayValue(user.getInterestsCsv(), "Открываются")) + "</b>\n"
@@ -1550,18 +1552,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendRatingMenu(AppUser user) {
-        List<InlineKeyboardButton> buttons = List.of(
+        ru.gamebot.platform.service.UserService.League myLeague =
+                ru.gamebot.platform.service.UserService.getLeague(user.getWeeklyXp());
+        String leagueLine = myLeague.excPrize > 0
+                ? "Твоя лига: <b>" + myLeague.displayName + "</b> (приз " + myLeague.excPrize + " EXC в конце недели)\n\n"
+                : "Твоя лига: <b>" + myLeague.displayName + "</b>\nДля приза нужно " + ru.gamebot.platform.service.UserService.League.SILVER.minWeeklyXp + "+ XP за неделю\n\n";
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(
                 keyboardFactory.callback("🌍 Общий", "rate:overall"),
-                keyboardFactory.callback("📆 Недельный", "rate:weekly"),
-                keyboardFactory.callback("🏠 Меню", "menu:main")
-        );
+                keyboardFactory.callback("📆 Недельный", "rate:weekly")
+        ));
+        rows.add(List.of(keyboardFactory.callback("🏅 Таблица лиг", "rate:leagues")));
+        rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(),
-                "🏆 <b>Рейтинг</b>\n\n"
-                        + "Сравните общий прогресс клуба или посмотрите гонку этой недели.",
-                keyboardFactory.smartLayout(buttons));
+                "🏆 <b>Рейтинг</b>\n\n" + leagueLine
+                        + "Еженедельно лидеры лиг получают EXC-призы.",
+                keyboardFactory.rowsLayout(rows));
     }
 
     private void sendLeaderboard(AppUser user, String type) {
+        if ("leagues".equals(type)) {
+            sendLeagueTable(user);
+            return;
+        }
         boolean weekly = "weekly".equals(type);
         List<AppUser> players = weekly ? userService.topWeekly() : userService.topOverall();
         StringBuilder builder = new StringBuilder();
@@ -1569,19 +1582,53 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         for (int i = 0; i < players.size(); i++) {
             AppUser player = players.get(i);
+            String leagueBadge = weekly
+                    ? ru.gamebot.platform.service.UserService.getLeague(player.getWeeklyXp()).displayName + " "
+                    : "";
             builder.append(i + 1).append(". ")
+                    .append(leagueBadge)
                     .append(escape(player.getNickname()))
                     .append(" — ")
                     .append(weekly ? player.getWeeklyXp() + " XP" : player.getXp() + " XP")
                     .append(", ")
-                    .append(player.getCompletedQuests()).append(" квестов")
-                    .append(", ")
-                    .append(player.getCoins()).append(" монет\n");
+                    .append(player.getCompletedQuests()).append(" квестов\n");
         }
 
         long rank = weekly ? userService.getWeeklyRank(user) : userService.getOverallRank(user);
-        builder.append("\n👤 Ваше место: <b>").append(rank).append("</b>");
-        sendText(user.getTelegramId(), builder.toString(), backMenuKeyboard("menu:main"));
+        if (weekly) {
+            ru.gamebot.platform.service.UserService.League myLeague =
+                    ru.gamebot.platform.service.UserService.getLeague(user.getWeeklyXp());
+            builder.append("\n👤 Ваше место: <b>").append(rank).append("</b>")
+                    .append(" • ").append(myLeague.displayName);
+        } else {
+            builder.append("\n👤 Ваше место: <b>").append(rank).append("</b>");
+        }
+        sendText(user.getTelegramId(), builder.toString(), backMenuKeyboard("menu:rating"));
+    }
+
+    private void sendLeagueTable(AppUser user) {
+        StringBuilder sb = new StringBuilder("🏅 <b>Таблица лиг EGC</b>\n\n")
+                .append("Лиги определяются по XP, заработанным за неделю.\n")
+                .append("Каждый понедельник в 00:00 лига фиксируется, призы начисляются, XP обнуляется.\n\n");
+        ru.gamebot.platform.service.UserService.League[] leagues =
+                ru.gamebot.platform.service.UserService.League.values();
+        for (int i = 0; i < leagues.length; i++) {
+            ru.gamebot.platform.service.UserService.League l = leagues[i];
+            int nextMin = i + 1 < leagues.length ? leagues[i + 1].minWeeklyXp : Integer.MAX_VALUE;
+            String range = i + 1 < leagues.length
+                    ? l.minWeeklyXp + "–" + (nextMin - 1) + " XP/нед"
+                    : l.minWeeklyXp + "+ XP/нед";
+            String prize = l.excPrize > 0 ? "+" + l.excPrize + " EXC" : "—";
+            sb.append(l.displayName).append(" — ").append(range).append(" → <b>").append(prize).append("</b>\n");
+        }
+        ru.gamebot.platform.service.UserService.League myLeague =
+                ru.gamebot.platform.service.UserService.getLeague(user.getWeeklyXp());
+        sb.append("\n🎯 Твоя лига сейчас: <b>").append(myLeague.displayName)
+                .append("</b> (").append(user.getWeeklyXp()).append(" XP этой недели)");
+        if (myLeague.excPrize > 0) {
+            sb.append("\n💰 Приз в конце недели: <b>+").append(myLeague.excPrize).append(" EXC</b>");
+        }
+        sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:rating"));
     }
 
     private void sendReferrals(AppUser user) {
@@ -3794,6 +3841,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         int delivered = broadcastToAll("📣 <b>Новости платформы</b>\n\n" + escape(text));
         session.reset();
         sendText(user.getTelegramId(), "✅ Рассылка отправлена. Получателей: <b>" + delivered + "</b>.", mainMenuKeyboard(user));
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onLeagueReward(LeagueRewardEvent event) {
+        String msg = "🏆 <b>Итоги недели — " + escape(event.getLeagueName()) + "</b>\n\n"
+                + "Ты набрал <b>" + event.getWeeklyXp() + " XP</b> за эту неделю.\n\n"
+                + "🪙 Призовые: <b>+" + event.getExcPrize() + " EXC</b> начислены на баланс!\n\n"
+                + "Новая неделя — новые квесты. Борись за более высокую лигу! 💪";
+        sendText(event.getTelegramId(), msg, null);
     }
 
     @org.springframework.context.event.EventListener
