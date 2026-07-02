@@ -837,9 +837,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.reset();
                 if (isWithdrawal) {
                     notifyUserWithdrawalRejected(rejected);
+                    sendText(user.getTelegramId(), "✅ Заявка на вывод отклонена. EXC возвращены пользователю.", null);
                     sendAdminWithdrawals(user);
                 } else {
                     notifyUserRewardRejected(rejected);
+                    sendText(user.getTelegramId(), "✅ Заявка отклонена. EXC возвращены на баланс пользователя.", null);
                     sendAdminRewardRequests(user);
                 }
             }
@@ -3001,8 +3003,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.reset();
             session.setQuestId(parseLong(action.substring("reject:".length())));
             session.setState(SessionState.REWARD_REJECT_COMMENT);
-            sendText(user.getTelegramId(), "❌ Укажите причину отклонения заявки:", cancelKeyboard());
-            answerSilently(callbackQuery.getId());
+            answer(callbackQuery.getId(), "Введите причину отклонения");
+            sendText(user.getTelegramId(), "❌ <b>Отклонение заявки</b>\n\nНапишите причину отклонения, она будет отправлена пользователю:", cancelKeyboard());
             return;
         }
         answerSilently(callbackQuery.getId());
@@ -3108,8 +3110,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.setQuestId(parseLong(action.substring("reject:".length())));
             session.setState(SessionState.REWARD_REJECT_COMMENT);
             session.getData().put("rejectType", "withdrawal");
-            sendText(user.getTelegramId(), "❌ Укажите причину отклонения:", cancelKeyboard());
-            answerSilently(callbackQuery.getId());
+            answer(callbackQuery.getId(), "Введите причину отклонения");
+            sendText(user.getTelegramId(), "❌ <b>Отклонение заявки на вывод</b>\n\nНапишите причину отклонения, она будет отправлена пользователю:", cancelKeyboard());
             return;
         }
         sendAdminWithdrawals(user);
