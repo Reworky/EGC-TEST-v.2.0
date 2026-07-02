@@ -1648,8 +1648,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "💎 Способ: <b>USDT · TON</b>\n"
                     + "📬 Кошелёк: <code>" + escape(wallet) + "</code>\n\n"
                     + "Администратор обработает заявку в течение 24 часов.\n"
-                    + "USDT будет зачислен по рыночному курсу на момент выплаты.",
-                    backMenuKeyboard("menu:shop"));
+                    + "USDT будет зачислен по рыночному курсу на момент выплаты.\n"
+                    + "По вопросам — напишите <b>@GressToEx</b>.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.url("💬 Написать администратору", "https://t.me/GressToEx")),
+                            List.of(keyboardFactory.callback("🏠 Главное меню", "menu:main"))
+                    )));
             notifyAdminsAboutWithdrawal(user, usdtReq);
         } catch (IllegalArgumentException e) {
             sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), cancelKeyboard());
@@ -3733,8 +3737,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "✅ <b>Заявка на вывод принята!</b>\n\n"
                     + "💸 Сумма: <b>" + amount + " EXC</b>\n"
                     + "💵 К выплате: <b>~" + rubles + " ₽</b>\n\n"
-                    + "Администратор обработает заявку в течение 24 часов.",
-                backMenuKeyboard("menu:shop"));
+                    + "Администратор обработает заявку в течение 24 часов.\n"
+                    + "По вопросам — напишите <b>@GressToEx</b>.",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.url("💬 Написать администратору", "https://t.me/GressToEx")),
+                        List.of(keyboardFactory.callback("🏠 Главное меню", "menu:main"))
+                )));
             notifyAdminsAboutWithdrawal(user, withdrawalReq);
         } catch (IllegalArgumentException e) {
             sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), cancelKeyboard());
