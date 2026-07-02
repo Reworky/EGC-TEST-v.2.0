@@ -30,6 +30,14 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
 
         dropCheckConstraints("QUEST_SUBMISSIONS");
         dropCheckConstraints("REWARD_REQUESTS");
+
+        // ONE-TIME: clear all news posts
+        try {
+            int deleted = jdbcTemplate.update("DELETE FROM NEWS_POSTS");
+            log.info("[DBMigration] Deleted {} news posts", deleted);
+        } catch (Exception e) {
+            log.error("[DBMigration] Failed to delete news posts: {}", e.getMessage());
+        }
     }
 
     private void dropCheckConstraints(String table) {
