@@ -2286,7 +2286,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         StringBuilder builder = new StringBuilder("📰 <b>Новости клуба</b>\n\n");
         for (NewsPost post : posts) {
             builder.append("📣 <b>").append(escape(post.getTitle())).append("</b>\n")
-                    .append(escape(post.getBody())).append("\n")
+                    .append(post.getBody()).append("\n")
                     .append("🕒 ").append(escape(post.getPublishedAt().format(DATE_TIME_FORMATTER))).append("\n\n");
         }
 
