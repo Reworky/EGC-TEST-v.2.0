@@ -92,4 +92,9 @@ public class AppUser {
 
     @Column(columnDefinition = "integer default 0")
     private int withdrawalYear;
+
+    // Shop cooldowns (Layer 4)
+    private LocalDateTime shopCooldownSmallUntil;
+    private LocalDateTime shopCooldownMediumUntil;
+    private LocalDateTime shopCooldownLargeUntil;
 }

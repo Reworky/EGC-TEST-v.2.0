@@ -35,4 +35,11 @@ public class RewardItem {
     /** Если не null — перед покупкой бот спросит у пользователя эти данные (хранятся в payoutDetails заявки) */
     @Column(length = 512)
     private String userDataPrompt;
+
+    /** Минимальный XP для доступа к товару (Слой 1) */
+    private int minLevelXp;
+
+    /** Группа лимита: gift_card, pubg_pc, pubg_mobile и т.д. (Слой 2) */
+    @Column(length = 64)
+    private String purchaseGroup;
 }
