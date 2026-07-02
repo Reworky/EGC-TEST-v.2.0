@@ -1677,7 +1677,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (RewardRequest req : requests) {
             String status = switch (req.getStatus()) {
                 case PENDING -> "⏳ Ожидает";
-                case IN_PROGRESS -> "🔄 В работе";
+                case IN_PROGRESS -> "🔄 В разработке";
                 case APPROVED -> "✅ Выдано";
                 case REJECTED -> "❌ Отклонено";
                 case CANCELLED -> "🚫 Отменено";
@@ -1693,7 +1693,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         "reward:cancel:" + req.getId())));
             }
         }
-        sb.append("\n💡 <i>Отменить заявку можно только в статусе ⏳ Ожидает. После того как администратор возьмёт заявку в работу (🔄 В работе), отмена доступна только через поддержку.</i>");
+        sb.append("\n💡 <i>Отменить заявку можно только в статусе ⏳ Ожидает. После того как администратор возьмёт заявку в разработку (🔄 В разработке), отмена доступна только через поддержку.</i>");
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:shop")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
@@ -2926,7 +2926,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             RewardRequest req = rewardService.takeInProgressRequest(reqId);
             notifyUserRewardInProgress(req);
             sendAdminRewardRequestCard(user, reqId);
-            answer(callbackQuery.getId(), "🔄 Взято в работу");
+            answer(callbackQuery.getId(), "🔄 Взято в разработку");
             return;
         }
         if (action.startsWith("approve:")) {
@@ -2978,11 +2978,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? "@" + requester.getTelegramUsername()
                 : "#" + requester.getTelegramId();
         boolean inProgress = req.getStatus() == RewardRequestStatus.IN_PROGRESS;
-        String statusLine = inProgress ? "\n🔄 Статус: <b>В работе</b>" : "\n⏳ Статус: <b>Ожидает</b>";
+        String statusLine = inProgress ? "\n🔄 Статус: <b>В разработке</b>" : "\n⏳ Статус: <b>Ожидает</b>";
         List<List<InlineKeyboardButton>> cardRows = new ArrayList<>();
         if (!inProgress) {
             cardRows.add(List.of(
-                    keyboardFactory.callback("🔄 Взять в работу", "admin:reward:inprogress:" + req.getId()),
+                    keyboardFactory.callback("🔄 Взять в разработку", "admin:reward:inprogress:" + req.getId()),
                     keyboardFactory.callback("❌ Отклонить", "admin:reward:reject:" + req.getId())
             ));
         } else {
@@ -3004,9 +3004,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void notifyUserRewardInProgress(RewardRequest req) {
         sendText(req.getUser().getTelegramId(),
-                "🔄 <b>Ваша заявка взята в работу!</b>\n\n"
+                "🔄 <b>Ваша заявка взята в разработку!</b>\n\n"
                         + "🎁 <b>" + escape(req.getRewardItem().getTitle()) + "</b>\n\n"
-                        + "Администратор обрабатывает заявку. Отменить её теперь можно только через поддержку.",
+                        + "Администратор взял заявку в разработку. Отменить её теперь можно только через поддержку.",
                 null);
     }
 
