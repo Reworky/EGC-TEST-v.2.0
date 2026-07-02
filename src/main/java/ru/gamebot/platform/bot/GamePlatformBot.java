@@ -2635,14 +2635,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "1. Построй укреплённую базу с каменными стенами в Grim Soul.\n2. Сделай скриншот базы сверху — должны быть видны каменные стены.",
                 "Скриншот базы с каменными стенами. Должны быть видны минимум 4 каменных секции.")
         ));
-        QUEST_TEMPLATES.put("EA FC 25", List.of(
-            new QuestTemplate("EA FC 25", "Лёгкие", "PC, Console", 3, "3 дня", 50, 150,
+        QUEST_TEMPLATES.put("EA FC 26", List.of(
+            new QuestTemplate("EA FC 26", "Лёгкие", "PC, Console", 3, "3 дня", 50, 150,
                 "1. Сыграй матч в режиме Ultimate Team или Карьера.\n2. Забей не менее 2 голов за матч.\n3. Сделай скриншот финального счёта.",
                 "Скриншот финального счёта матча с вашим результатом (минимум 2 гола)."),
-            new QuestTemplate("EA FC 25", "Средние", "PC, Console", 5, "5 дней", 100, 400,
+            new QuestTemplate("EA FC 26", "Средние", "PC, Console", 5, "5 дней", 100, 400,
                 "1. Сыграй матч в Division Rivals или FUT Champions.\n2. Победи.\n3. Сделай скриншот экрана победы с итогом матча.",
                 "Скриншот экрана победы в Division Rivals или FUT Champions."),
-            new QuestTemplate("EA FC 25", "Сложные", "PC, Console", 10, "10 дней", 250, 1000,
+            new QuestTemplate("EA FC 26", "Сложные", "PC, Console", 10, "10 дней", 250, 1000,
                 "1. Собери команду с рейтингом не ниже 85 в Ultimate Team.\n2. Сделай скриншот состава команды в меню.",
                 "Скриншот состава команды в меню с общим рейтингом 85+.")
         ));
