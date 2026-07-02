@@ -37,6 +37,7 @@ public class RewardItem {
     private String userDataPrompt;
 
     /** Минимальный XP для доступа к товару (Слой 1) */
+    @Column(columnDefinition = "integer default 0")
     private int minLevelXp;
 
     /** Группа лимита: gift_card, pubg_pc, pubg_mobile и т.д. (Слой 2) */
