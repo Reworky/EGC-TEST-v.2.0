@@ -7,9 +7,9 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import ru.gamebot.platform.bot.GamePlatformBot;
 import ru.gamebot.platform.domain.model.RewardItem;
 import ru.gamebot.platform.domain.repository.RewardItemRepository;
-import ru.gamebot.platform.service.NewsService;
 
 @Slf4j
 @Component
@@ -18,7 +18,7 @@ import ru.gamebot.platform.service.NewsService;
 public class RewardSeeder implements CommandLineRunner {
 
     private final RewardItemRepository rewardItemRepository;
-    private final NewsService newsService;
+    private final GamePlatformBot gamePlatformBot;
 
     @Override
     @Transactional
@@ -186,7 +186,7 @@ public class RewardSeeder implements CommandLineRunner {
                     item.setCreatedAt(LocalDateTime.now());
                     rewardItemRepository.save(item);
                     log.info("[RewardSeeder] Created '{}': {} EXC", title, priceCoins);
-                    newsService.createPost(
+                    gamePlatformBot.requestNewsApproval(
                             "🎁 Новый товар в магазине",
                             "В магазин наград добавлен <b>" + title + "</b> за " + priceCoins + " EXC. Загляни в раздел 🛍 Магазин!"
                     );

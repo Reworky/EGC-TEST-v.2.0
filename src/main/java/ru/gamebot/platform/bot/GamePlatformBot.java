@@ -10,7 +10,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.nio.charset.StandardCharsets;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -106,6 +108,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ShopLimitService shopLimitService;
     private final GameCatalogService gameCatalogService;
 
+    private final Queue<String[]> pendingNewsQueue = new ConcurrentLinkedQueue<>();
+
     @EventListener(ApplicationReadyEvent.class)
     public void registerBot() throws TelegramApiException {
         TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
@@ -113,6 +117,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         log.info("Telegram bot registered: {}", getBotUsername());
         log.info("Resolved admin IDs: {}", adminService.resolvedAdminIds());
         log.info("Resolved moderator IDs: {}", adminService.resolvedModeratorIds());
+        drainNewsQueue();
     }
 
     @Override
@@ -335,6 +340,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.reset();
             sendMainMenu(user, "↩️ Текущее действие отменено. Возвращаю вас в главное меню.");
             answer(callbackQuery.getId(), "Отменено");
+            return;
+        }
+
+        if ("news:approve".equals(data) && isEffectiveAdmin(user) && session.getState() == SessionState.NEWS_APPROVAL) {
+            String newsTitle = session.getData().get("pending_news_title");
+            String newsBody = session.getData().get("pending_news_body");
+            session.reset();
+            newsService.createPost(newsTitle, newsBody);
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "✅ Новость опубликована и разослана");
+            drainNewsQueue();
+            return;
+        }
+        if ("news:reject".equals(data) && isEffectiveAdmin(user) && session.getState() == SessionState.NEWS_APPROVAL) {
+            session.reset();
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "❌ Публикация отменена");
+            drainNewsQueue();
             return;
         }
 
@@ -2856,7 +2879,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 price,
                 d.get("photoFileId")
         );
-        newsService.createPost(
+        requestNewsApproval(
                 "🎁 Новый товар в магазине",
                 "В магазин наград добавлен <b>" + title + "</b> за " + price + " EXC. Загляни в раздел 🛍 Магазин!"
         );
@@ -3711,6 +3734,40 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String message = "📰 <b>" + escape(event.getTitle()) + "</b>\n\n" + event.getBody();
         int delivered = broadcastToAll(message);
         log.info("[News] Broadcast '{}' → {} users", event.getTitle(), delivered);
+    }
+
+    public void requestNewsApproval(String title, String body) {
+        pendingNewsQueue.add(new String[]{title, body});
+        drainNewsQueue();
+    }
+
+    private void drainNewsQueue() {
+        for (Long adminId : adminService.allAdminIds()) {
+            UserSession adminSession = sessionService.get(adminId);
+            if (adminSession.getState() == SessionState.NEWS_APPROVAL) {
+                return;
+            }
+        }
+        String[] next = pendingNewsQueue.poll();
+        if (next == null) return;
+        String title = next[0];
+        String body = next[1];
+        String preview = "📰 <b>Новость на одобрение:</b>\n\n"
+                + "<b>" + escape(title) + "</b>\n\n" + body
+                + "\n\n<i>Будет опубликована и разослана всем пользователям.</i>";
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup(List.of(
+                List.of(
+                        keyboardFactory.callback("✅ Опубликовать", "news:approve"),
+                        keyboardFactory.callback("❌ Отменить", "news:reject")
+                )
+        ));
+        for (Long adminId : adminService.allAdminIds()) {
+            UserSession adminSession = sessionService.get(adminId);
+            adminSession.setState(SessionState.NEWS_APPROVAL);
+            adminSession.getData().put("pending_news_title", title);
+            adminSession.getData().put("pending_news_body", body);
+            sendText(adminId, preview, markup);
+        }
     }
 
     private int broadcastToAll(String html) {
