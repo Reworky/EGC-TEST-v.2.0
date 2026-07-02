@@ -22,9 +22,6 @@ public class SeedDataInitializer implements CommandLineRunner {
             seedQuests();
         }
 
-        if (newsService.latestNews().isEmpty()) {
-            seedNews();
-        }
     }
 
     private void seedQuests() {
@@ -88,14 +85,4 @@ public class SeedDataInitializer implements CommandLineRunner {
     }
 
 
-    private void seedNews() {
-        newsService.createPost(
-                "Новая подборка быстрых квестов",
-                "⚡ В витрину добавлены задания на Android и PC, которые можно закрыть меньше чем за 20 минут."
-        );
-        newsService.createPost(
-                "Реферальный спринт недели",
-                "🤝 За каждого активного приглашенного друга сейчас начисляется +30 XP и +50 монет."
-        );
-    }
 }
