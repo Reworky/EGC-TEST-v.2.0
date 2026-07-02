@@ -24,7 +24,7 @@ public class QuestSeeder implements CommandLineRunner {
     public void run(String... args) {
 
         // Удаляем квесты с устаревшими названиями игры (оставляем только "PUBG / PUBG Mobile")
-        for (String obsolete : List.of("PUBG", "PUBG Mobile", "PUBG mobile", "PUBG MOBILE")) {
+        for (String obsolete : List.of("PUBG", "PUBG Mobile", "PUBG mobile", "PUBG MOBILE", "EA FC 25")) {
             questRepository.deleteAllByGameNameIgnoreCase(obsolete);
             log.info("[QuestSeeder] Deleted obsolete quests for game: '{}'", obsolete);
         }
