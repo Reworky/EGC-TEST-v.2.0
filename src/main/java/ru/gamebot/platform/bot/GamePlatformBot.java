@@ -1048,7 +1048,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📊 <b>Состояние фонда клуба: " + ratioPercent + "%</b>\n"
                         + hrExplanationLine(ratioPercent, effectiveQuestReward) + "\n"
                         + "Чем активнее вы играете, тем быстрее открываете сильные награды и поднимаетесь в рейтинге.",
-                backMenuKeyboard(backData));
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("💸 Вывести EXC", "shop:withdraw")),
+                        List.of(keyboardFactory.callback("⬅️ Назад", backData))
+                )));
     }
 
     private String hrExplanationLine(int ratioPercent, long effectiveRewardPer100) {
@@ -1489,10 +1492,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-
-        // Withdrawal
-        rows.add(List.of(keyboardFactory.callback("── 💸 Вывод EXC ──", "noop")));
-        rows.add(List.of(keyboardFactory.callback("💸 Вывести EXC — от 5 000 EXC", "shop:withdraw")));
 
         if (!rewards.isEmpty()) {
             java.util.LinkedHashMap<String, List<RewardItem>> byCategory = new java.util.LinkedHashMap<>();
