@@ -421,8 +421,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.equals("shop:withdraw:usdt")) {
             answerSilently(callbackQuery.getId());
+            sendWithdrawalUsdtWalletQuestion(user);
+            return;
+        }
+        if (data.equals("shop:withdraw:usdt:has_wallet")) {
+            answerSilently(callbackQuery.getId());
             session.setState(SessionState.WITHDRAWAL_USDT_AMOUNT);
             sendWithdrawalUsdtAmountScreen(user);
+            return;
+        }
+        if (data.equals("shop:withdraw:usdt:no_wallet")) {
+            answerSilently(callbackQuery.getId());
+            sendWithdrawalUsdtNoWalletGuide(user);
             return;
         }
         if (data.startsWith("shop:view:")) {
@@ -1530,29 +1540,45 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String text = "💸 <b>Вывод EXC</b>\n\n"
                 + "🪙 Баланс: <b>" + user.getCoins() + " EXC</b>\n"
                 + "📤 Доступно к выводу: <b>" + remaining + " EXC</b>\n"
-                + "💱 Курс: <b>100 EXC = 1 ₽</b>\n\n"
+                + "📋 Лимит: <b>" + sinkShopService.getMonthlyLimit(user.getXp()) + " EXC/мес</b>\n"
+                + "💱 Курс: <b>100 EXC = 1 ₽</b>\n"
+                + "⚠️ Минимум: <b>5 000 EXC</b>\n"
+                + withdrawalLevelHint(user) + "\n\n"
                 + "Выберите способ получения:";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("💸 В рублях (Сбербанк / СБП)", "shop:withdraw:rub")));
         rows.add(List.of(keyboardFactory.callback("💎 В USDT (Telegram Wallet, TON)", "shop:withdraw:usdt")));
-        rows.add(List.of(keyboardFactory.callback("❌ Отмена", "menu:shop")));
+        rows.add(List.of(keyboardFactory.callback("❌ Отмена", "menu:balance")));
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
 
+    private void sendWithdrawalUsdtWalletQuestion(AppUser user) {
+        sendText(user.getTelegramId(),
+                "💎 <b>Вывод в USDT</b>\n\nЕсть ли у вас кошелёк в Telegram Wallet (@wallet)?",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("✅ Да, есть кошелёк", "shop:withdraw:usdt:has_wallet")),
+                        List.of(keyboardFactory.callback("❌ Нет кошелька", "shop:withdraw:usdt:no_wallet")),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw"))
+                )));
+    }
+
+    private void sendWithdrawalUsdtNoWalletGuide(AppUser user) {
+        sendText(user.getTelegramId(),
+                "💎 <b>Как создать кошелёк</b>\n\n"
+                        + "1. Нажми кнопку ниже — откроется <b>@wallet</b> в Telegram\n"
+                        + "2. Пройди короткую регистрацию (1–2 минуты)\n"
+                        + "3. Вернись сюда и нажми <b>«У меня есть кошелёк»</b>",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.url("🚀 Открыть Telegram Wallet", "https://t.me/wallet/start?startapp=ref-3-PaQlujnvUGU")),
+                        List.of(keyboardFactory.callback("✅ У меня есть кошелёк", "shop:withdraw:usdt:has_wallet")),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw"))
+                )));
+    }
+
     private void sendWithdrawalUsdtAmountScreen(AppUser user) {
-        long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
-        String text = "💎 <b>Вывод в USDT</b>\n\n"
-                + "🪙 Баланс: <b>" + user.getCoins() + " EXC</b>\n"
-                + "📤 Доступно к выводу: <b>" + remaining + " EXC</b>\n"
-                + "💱 Курс: 100 EXC = 1 ₽ → USDT по рыночному курсу\n"
-                + "📡 Сеть: <b>TON (Telegram Wallet)</b>\n"
-                + "⚠️ Минимум: <b>5 000 EXC</b>\n\n"
-                + "Нет кошелька? Создай прямо в Telegram — займёт 30 секунд 👇\n\n"
-                + "Введите сумму в EXC:";
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.url("🚀 Открыть свой крипто-кошелёк", "https://t.me/wallet/start?startapp=ref-3-PaQlujnvUGU")));
-        rows.add(List.of(keyboardFactory.callback("❌ Отмена", "menu:shop")));
-        sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
+        sendText(user.getTelegramId(),
+                "💎 <b>Вывод в USDT</b>\n\nВведите сумму в EXC, которую хотите вывести.",
+                cancelKeyboard());
     }
 
     private void handleWithdrawalUsdtAmount(AppUser user, UserSession session, String text) {
@@ -1631,20 +1657,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendWithdrawalScreen(AppUser user) {
-        long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
-        String text = "💸 <b>Вывод EXC</b>\n\n"
-                + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>\n"
-                + "📤 Лимит вывода: <b>" + sinkShopService.getMonthlyLimit(user.getXp()) + " EXC/мес</b> (осталось: " + remaining + " EXC)\n"
-                + "💱 Текущий курс: <b>100 EXC = 1 ₽</b>\n"
-                + withdrawalLevelHint(user) + "\n"
-                + "Минимальная сумма вывода: <b>5 000 EXC</b>\n\n"
-                + "Введите сумму в EXC, которую хотите вывести.\n"
-                + "Выплата производится вручную администратором в течение 24 часов.";
-
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.callback("❌ Отмена", "menu:shop")));
-
-        sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
+        sendText(user.getTelegramId(),
+                "💸 <b>Вывод в рублях</b>\n\nВведите сумму в EXC, которую хотите вывести.",
+                cancelKeyboard());
     }
 
     private String withdrawalLevelHint(AppUser user) {
