@@ -262,6 +262,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (session.getState() == SessionState.WITHDRAWAL_RECEIPT) {
+            if (!message.hasPhoto()) {
+                sendText(user.getTelegramId(), "⚠️ Пожалуйста, отправьте фото чека.", null);
+                return;
+            }
+            List<PhotoSize> photos = message.getPhoto();
+            String fileId = photos.get(photos.size() - 1).getFileId();
+            Long reqId = session.getQuestId();
+            session.reset();
+            RewardRequest req = rewardService.approveRequest(reqId);
+            notifyUserWithdrawalApproved(req, fileId);
+            sendAdminWithdrawals(user);
+            sendText(user.getTelegramId(), "✅ Выплата подтверждена, чек отправлен пользователю.", null);
+            return;
+        }
+
         if (session.getState() == SessionState.GAME_PHOTO_UPLOAD) {
             if (!message.hasPhoto()) {
                 sendText(user.getTelegramId(), "⚠️ Пожалуйста, отправьте изображение (не файл).", cancelKeyboard());
@@ -956,6 +972,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
             }
             case WITHDRAWAL_INPUT -> handleWithdrawalInput(user, session, text);
+            case WITHDRAWAL_DETAILS -> handleWithdrawalDetails(user, session, text);
             case WITHDRAWAL_USDT_AMOUNT -> handleWithdrawalUsdtAmount(user, session, text);
             case WITHDRAWAL_USDT_ADDRESS -> handleWithdrawalUsdtAddress(user, session, text);
             case SHOP_GAME_DATA_INPUT -> handleShopGameDataInput(user, session, text);
@@ -3364,8 +3381,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if (action.startsWith("approve:")) {
-            RewardRequest req = rewardService.approveRequest(parseLong(action.substring("approve:".length())));
-            notifyUserWithdrawalApproved(req);
+            long reqId = parseLong(action.substring("approve:".length()));
+            session.setQuestId(reqId);
+            session.setState(SessionState.WITHDRAWAL_RECEIPT);
+            answer(callbackQuery.getId(), "Загрузите фото чека");
+            sendText(user.getTelegramId(),
+                    "🧾 <b>Загрузите скриншот чека</b>\n\nОтправьте фото подтверждения оплаты — оно будет отправлено пользователю.\n\nИли нажмите «Пропустить» если чек не нужен.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("⏭️ Пропустить", "admin:withdrawal:approve:skip:" + reqId))
+                    )));
+            return;
+        }
+        if (action.startsWith("approve:skip:")) {
+            long reqId = parseLong(action.substring("approve:skip:".length()));
+            session.reset();
+            RewardRequest req = rewardService.approveRequest(reqId);
+            notifyUserWithdrawalApproved(req, null);
             sendAdminWithdrawals(user);
             answer(callbackQuery.getId(), "✅ Выплачено");
             return;
@@ -3413,12 +3444,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String unameLink = requester.getTelegramUsername() != null
                 ? "<a href=\"https://t.me/" + requester.getTelegramUsername() + "\">@" + requester.getTelegramUsername() + "</a>"
                 : "<a href=\"tg://user?id=" + requester.getTelegramId() + "\">" + requester.getTelegramId() + "</a>";
-        boolean isUsdt = req.getPayoutDetails() != null;
+        boolean isUsdt = req.getPayoutDetails() != null && req.getPayoutDetails().startsWith("USDT");
         String detailsLine = "";
         if (isUsdt) {
             String[] parts = req.getPayoutDetails().split(":");
             String wallet = parts.length > 1 ? parts[1] : req.getPayoutDetails();
             detailsLine = "\n💎 Способ: <b>USDT · TON</b>\n📬 Кошелёк: <code>" + escape(wallet) + "</code>";
+        } else if (req.getPayoutDetails() != null) {
+            detailsLine = "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>\n💳 Реквизиты: <code>" + escape(req.getPayoutDetails()) + "</code>";
         } else {
             detailsLine = "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>";
         }
@@ -3440,15 +3473,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 )));
     }
 
-    private void notifyUserWithdrawalApproved(RewardRequest req) {
+    private void notifyUserWithdrawalApproved(RewardRequest req, String receiptFileId) {
         boolean isUsdt = req.getPayoutDetails() != null;
         String method = isUsdt ? "USDT · TON" : "рубли (СБП / Сбербанк)";
-        sendText(req.getUser().getTelegramId(),
-                "✅ <b>Ваш вывод EXC выполнен!</b>\n\n"
-                        + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
-                        + "💵 Способ: <b>" + method + "</b>\n\n"
-                        + "Средства отправлены. Если не получили — напишите в поддержку.",
-                null);
+        String caption = "✅ <b>Ваш вывод EXC выполнен!</b>\n\n"
+                + "🔢 Номер заявки: <b>#" + req.getId() + "</b>\n"
+                + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
+                + "💵 Способ: <b>" + method + "</b>\n\n"
+                + "Средства отправлены. Если не получили — напишите в поддержку.";
+        if (receiptFileId != null) {
+            SendPhoto photo = new SendPhoto();
+            photo.setChatId(req.getUser().getTelegramId().toString());
+            photo.setPhoto(new InputFile(receiptFileId));
+            photo.setCaption(caption);
+            photo.setParseMode("HTML");
+            try { execute(photo); } catch (TelegramApiException e) { log.error("Failed to send receipt", e); }
+        } else {
+            sendText(req.getUser().getTelegramId(), caption, null);
+        }
     }
 
     private void notifyUserWithdrawalRejected(RewardRequest req) {
@@ -4091,17 +4133,44 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), "⚠️ Минимальная сумма вывода — <b>5 000 EXC</b>.", cancelKeyboard());
             return;
         }
+        long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
+        if (amount > remaining) {
+            sendText(user.getTelegramId(), "⚠️ Превышен месячный лимит. Доступно: <b>" + remaining + " EXC</b>.", cancelKeyboard());
+            return;
+        }
+        if (amount > user.getCoins()) {
+            sendText(user.getTelegramId(), "⚠️ Недостаточно EXC. Баланс: <b>" + user.getCoins() + " EXC</b>.", cancelKeyboard());
+            return;
+        }
         double ratio = healthRatioService.getCurrentRatio();
         long rubles = Math.round(amount * ratio / 100.0);
+        session.getData().put("withdrawAmount", String.valueOf(amount));
+        session.getData().put("withdrawRubles", String.valueOf(rubles));
+        session.setState(SessionState.WITHDRAWAL_DETAILS);
+        sendText(user.getTelegramId(),
+                "💳 <b>Введите реквизиты для перевода</b>\n\n"
+                        + "💸 Сумма: <b>" + amount + " EXC → ~" + rubles + " ₽</b>\n\n"
+                        + "Введите <b>номер карты Сбербанк</b> или <b>номер телефона для СБП</b>:",
+                cancelKeyboard());
+    }
+
+    private void handleWithdrawalDetails(AppUser user, UserSession session, String text) {
+        String details = text.trim();
+        if (details.length() < 6) {
+            sendText(user.getTelegramId(), "⚠️ Реквизиты слишком короткие. Введите номер карты или телефон:", cancelKeyboard());
+            return;
+        }
+        long amount = Long.parseLong(session.getData().get("withdrawAmount"));
+        long rubles = Long.parseLong(session.getData().get("withdrawRubles"));
         try {
-            RewardRequest withdrawalReq = rewardService.createWithdrawalRequest(user, amount, rubles);
+            RewardRequest withdrawalReq = rewardService.createWithdrawalRequestWithDetails(user, amount, rubles, details);
             session.reset();
             sendText(user.getTelegramId(),
                 "✅ <b>Заявка на вывод принята!</b>\n\n"
                     + "🔢 Номер заявки: <b>#" + withdrawalReq.getId() + "</b>\n"
                     + "💸 Сумма: <b>" + amount + " EXC</b>\n"
                     + "💵 К выплате: <b>~" + rubles + " ₽</b>\n\n"
-                    + "Ожидайте, в течение 24 часов вам напишет менеджер @GressToEx для получения реквизитов!",
+                    + "Ожидайте, в течение 24 часов администратор выполнит перевод!",
                 backMenuKeyboard("menu:main"));
             notifyAdminsAboutWithdrawal(user, withdrawalReq);
         } catch (IllegalArgumentException e) {

@@ -229,15 +229,8 @@ public class RewardService {
         return rewardRequestRepository.save(request);
     }
 
-    public RewardRequest createWithdrawalRequest(AppUser user, long excAmount, long rubles) {
-        long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
-        if (excAmount > remaining) {
-            throw new IllegalArgumentException("Превышен месячный лимит вывода. Доступно ещё: " + remaining + " EXC.");
-        }
-        if (excAmount > user.getCoins()) {
-            throw new IllegalArgumentException("Недостаточно EXC. Ваш баланс: " + user.getCoins() + " EXC.");
-        }
-
+    @Transactional
+    public RewardRequest createWithdrawalRequestWithDetails(AppUser user, long excAmount, long rubles, String payoutDetails) {
         RewardItem withdrawItem = new RewardItem();
         withdrawItem.setTitle("Вывод " + excAmount + " EXC → " + rubles + " ₽");
         withdrawItem.setDescription("Заявка на вывод средств");
@@ -254,6 +247,7 @@ public class RewardService {
         request.setUser(user);
         request.setRewardItem(saved);
         request.setStatus(RewardRequestStatus.PENDING);
+        request.setPayoutDetails(payoutDetails);
         request.setCreatedAt(LocalDateTime.now());
         return rewardRequestRepository.save(request);
     }
