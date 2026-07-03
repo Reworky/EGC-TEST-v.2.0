@@ -1765,8 +1765,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
         String text = "💸 <b>Вывод EXC</b>\n\n"
                 + "🪙 Баланс: <b>" + user.getCoins() + " EXC</b>\n"
-                + "📤 Доступно к выводу: <b>" + remaining + " EXC</b>\n"
-                + "📋 Лимит: <b>" + sinkShopService.getMonthlyLimit(user.getXp()) + " EXC/мес</b>\n"
+                + "📤 Остаток лимита: <b>" + remaining + " EXC (из " + sinkShopService.getMonthlyLimit(user.getXp()) + "/мес)</b>\n"
                 + "💱 Курс: <b>100 EXC = 1 ₽</b>\n"
                 + "⚠️ Минимум: <b>5 000 EXC</b>\n"
                 + withdrawalLevelHint(user) + "\n\n"
