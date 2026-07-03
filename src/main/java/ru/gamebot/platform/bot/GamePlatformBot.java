@@ -605,6 +605,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "shop" -> sendShop(user);
             case "sink" -> sendSinkShop(user);
             case "my-rewards" -> sendUserRewardRequests(user);
+            case "my-withdrawals" -> sendUserWithdrawalRequests(user);
             case "council" -> sendCouncil(user);
             case "tournament" -> sendTournament(user);
             case "news" -> sendNews(user);
@@ -1773,6 +1774,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("💸 В рублях (Сбербанк / СБП)", "shop:withdraw:rub")));
         rows.add(List.of(keyboardFactory.callback("💎 В USDT (Telegram Wallet, TON)", "shop:withdraw:usdt")));
+        rows.add(List.of(keyboardFactory.callback("📋 Мои заявки на вывод", "menu:my-withdrawals")));
         rows.add(List.of(keyboardFactory.callback("❌ Отмена", "menu:balance")));
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
@@ -1904,7 +1906,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendUserRewardRequests(AppUser user) {
-        List<RewardRequest> requests = rewardService.findUserRequests(user);
+        List<RewardRequest> requests = rewardService.findUserRequests(user).stream()
+                .filter(r -> !"Вывод".equals(r.getRewardItem().getCategory()))
+                .toList();
         if (requests.isEmpty()) {
             sendText(user.getTelegramId(),
                     "📋 <b>Мои заявки</b>\n\nВы ещё не делали заявок на награды.",
@@ -1935,6 +1939,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("\n💡 <i>Отменить заявку можно только в статусе ⏳ Ожидает. После того как администратор возьмёт заявку в разработку (🔄 В разработке), отмена доступна только через поддержку.</i>");
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:shop")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendUserWithdrawalRequests(AppUser user) {
+        List<RewardRequest> requests = rewardService.findUserRequests(user).stream()
+                .filter(r -> "Вывод".equals(r.getRewardItem().getCategory()))
+                .toList();
+        if (requests.isEmpty()) {
+            sendText(user.getTelegramId(),
+                    "💸 <b>Мои заявки на вывод</b>\n\nУ вас ещё нет заявок на вывод EXC.",
+                    backMenuKeyboard("shop:withdraw"));
+            return;
+        }
+        StringBuilder sb = new StringBuilder("💸 <b>Мои заявки на вывод</b>\n\n");
+        for (RewardRequest req : requests) {
+            String status = switch (req.getStatus()) {
+                case PENDING -> "⏳ Ожидает";
+                case IN_PROGRESS -> "🔄 В обработке";
+                case APPROVED -> "✅ Выплачено";
+                case REJECTED -> "❌ Отклонено";
+                case CANCELLED -> "🚫 Отменено";
+            };
+            sb.append("• <b>").append(escape(req.getRewardItem().getTitle())).append("</b> — ").append(status);
+            if (req.getStatus() == RewardRequestStatus.REJECTED && req.getAdminComment() != null) {
+                sb.append("\n  📝 ").append(escape(req.getAdminComment()));
+            }
+            sb.append("\n");
+        }
+        sendText(user.getTelegramId(), sb.toString(),
+                keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")))));
     }
 
     private void handleUserRewardCancel(CallbackQuery callbackQuery, AppUser user, Long reqId) {
