@@ -471,6 +471,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if (data.startsWith("shop:soon:")) {
+            RewardItem item = rewardService.getRewardItem(parseLong(data.substring("shop:soon:".length())));
+            sendText(user.getTelegramId(),
+                    "🔜 <b>" + escape(item.getTitle()) + "</b>\n\n"
+                            + "📦 Категория: <b>" + escape(item.getCategory()) + "</b>\n"
+                            + "📝 " + escape(item.getDescription()) + "\n\n"
+                            + "⏳ <b>Этот товар скоро появится в магазине.</b> Следи за обновлениями!",
+                    backMenuKeyboard("menu:shop"));
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if (data.startsWith("reward:cancel:")) {
             handleUserRewardCancel(callbackQuery, user, parseLong(data.substring("reward:cancel:".length())));
             return;
@@ -1694,6 +1705,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 "shop:view:" + reward.getId())));
                     }
                 }
+            }
+        }
+
+        List<RewardItem> comingSoon = rewardService.findComingSoon();
+        if (!comingSoon.isEmpty()) {
+            rows.add(List.of(keyboardFactory.callback("── ⏳ Скоро в магазине ──", "noop")));
+            for (RewardItem item : comingSoon) {
+                rows.add(List.of(keyboardFactory.callback("🔜 " + trim(item.getTitle(), 28), "shop:soon:" + item.getId())));
             }
         }
 

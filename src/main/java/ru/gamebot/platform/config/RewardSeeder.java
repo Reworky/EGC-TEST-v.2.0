@@ -100,13 +100,13 @@ public class RewardSeeder implements CommandLineRunner {
                 "Пополнение 240 UC на аккаунт PUBG Mobile. Зачисляется по Player ID без входа в аккаунт. Срок доставки — до 24 ч.",
                 "Игровые валюты", 42_000, pubgMobilePrompt, 5_000, "pubg_mobile");
 
-        seed("EA FC 26 — 500 FC Points",
-                "500 FC Points для EA FC 26 (PS5 или Xbox). Ключ активируется в PS Store или Xbox Store. "
-                        + "Ключи для PS5 и Xbox — разные, укажите вашу платформу. Срок доставки — до 24 ч.",
-                "Игровые валюты", 20_000,
-                "Укажите вашу платформу для EA FC 26.\n\n"
-                        + "Напишите: PS5 или Xbox",
-                5_000, "ea_fc_26");
+        // EA FC 26 — coming soon (visible but not purchasable)
+        rewardItemRepository.findByTitle("EA FC 26 — 500 FC Points").ifPresent(item -> {
+            boolean changed = false;
+            if (item.isActive()) { item.setActive(false); changed = true; }
+            if (!item.isComingSoon()) { item.setComingSoon(true); changed = true; }
+            if (changed) rewardItemRepository.save(item);
+        });
 
         seed("Grim Soul — 500 Талеров",
                 "500 Талеров для Grim Soul: Dark Survival RPG (iOS/Android). "

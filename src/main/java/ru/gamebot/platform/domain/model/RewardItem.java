@@ -43,4 +43,8 @@ public class RewardItem {
     /** Группа лимита: gift_card, pubg_pc, pubg_mobile и т.д. (Слой 2) */
     @Column(length = 64)
     private String purchaseGroup;
+
+    /** Товар скоро появится: отображается в магазине, но купить нельзя */
+    @Column(columnDefinition = "boolean default false")
+    private boolean comingSoon;
 }
