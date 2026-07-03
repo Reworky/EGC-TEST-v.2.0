@@ -50,11 +50,11 @@ public class TelegramAuthService {
                 .orElse("");
 
         try {
-            // secret_key = HMAC-SHA256(bot_token, "WebAppData")
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec("WebAppData".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] secretKey = mac.doFinal(props.getBotToken().getBytes(StandardCharsets.UTF_8));
+            // secret_key = SHA256(bot_token) — Telegram Login Widget spec
+            MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+            byte[] secretKey = sha256.digest(props.getBotToken().getBytes(StandardCharsets.UTF_8));
 
+            Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(secretKey, "HmacSHA256"));
             byte[] computedHash = mac.doFinal(dataCheckString.getBytes(StandardCharsets.UTF_8));
 
