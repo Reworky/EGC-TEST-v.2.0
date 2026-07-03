@@ -1871,6 +1871,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.reset();
             sendText(user.getTelegramId(),
                     "✅ <b>Заявка на вывод в USDT принята!</b>\n\n"
+                    + "🔢 Номер заявки: <b>#" + usdtReq.getId() + "</b>\n"
                     + "💸 Сумма: <b>" + excAmount + " EXC</b>\n"
                     + "💵 Эквивалент: <b>~" + rubles + " ₽</b>\n"
                     + "💎 Способ: <b>USDT · TON</b>\n"
@@ -1960,7 +1961,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 case REJECTED -> "❌ Отклонено";
                 case CANCELLED -> "🚫 Отменено";
             };
-            sb.append("• <b>").append(escape(req.getRewardItem().getTitle())).append("</b> — ").append(status);
+            sb.append("• #").append(req.getId()).append(" <b>").append(escape(req.getRewardItem().getTitle())).append("</b> — ").append(status);
             if (req.getStatus() == RewardRequestStatus.REJECTED && req.getAdminComment() != null) {
                 sb.append("\n  📝 ").append(escape(req.getAdminComment()));
             }
@@ -4075,6 +4076,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.reset();
             sendText(user.getTelegramId(),
                 "✅ <b>Заявка на вывод принята!</b>\n\n"
+                    + "🔢 Номер заявки: <b>#" + withdrawalReq.getId() + "</b>\n"
                     + "💸 Сумма: <b>" + amount + " EXC</b>\n"
                     + "💵 К выплате: <b>~" + rubles + " ₽</b>\n\n"
                     + "Администратор обработает заявку в течение 24 часов.",
