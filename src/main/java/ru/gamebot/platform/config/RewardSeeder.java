@@ -71,14 +71,22 @@ public class RewardSeeder implements CommandLineRunner {
                         + "Код активируется в меню пополнения PUBG PC самостоятельно. Срок доставки — до 24 ч.",
                 "Игровые валюты", 13_000, null, 1_000, "pubg_pc");
 
-        seed("PUBG Mobile — 60 UC",
-                "60 UC (Unknown Cash) для PUBG Mobile. Пополнение через midasbuy.com по вашему Player ID. "
-                        + "Срок доставки — до 24 ч.",
-                "Игровые валюты", 13_000,
-                "Укажите ваш PUBG Mobile Player ID.\n\n"
-                        + "Где найти: откройте профиль в игре → ваш ID указан под никнеймом.\n\n"
-                        + "Введите Player ID:",
-                1_000, "pubg_mobile");
+        // Deactivate old PUBG Mobile entry
+        rewardItemRepository.findByTitle("PUBG Mobile — 60 UC").ifPresent(old -> {
+            if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
+        });
+
+        String pubgMobilePrompt = "Укажите ваш PUBG Mobile Player ID.\n\n"
+                + "Где найти: откройте профиль в игре → ваш ID указан под никнеймом.\n\n"
+                + "Введите Player ID:";
+
+        seed("PUBG Mobile - UC 120",
+                "Пополнение 120 UC на аккаунт PUBG Mobile. Зачисляется по Player ID без входа в аккаунт. Срок доставки — до 24 ч.",
+                "Игровые валюты", 21_500, pubgMobilePrompt, 1_000, "pubg_mobile");
+
+        seed("PUBG Mobile - UC 240",
+                "Пополнение 240 UC на аккаунт PUBG Mobile. Зачисляется по Player ID без входа в аккаунт. Срок доставки — до 24 ч.",
+                "Игровые валюты", 42_000, pubgMobilePrompt, 5_000, "pubg_mobile");
 
         seed("EA FC 26 — 500 FC Points",
                 "500 FC Points для EA FC 26 (PS5 или Xbox). Ключ активируется в PS Store или Xbox Store. "
