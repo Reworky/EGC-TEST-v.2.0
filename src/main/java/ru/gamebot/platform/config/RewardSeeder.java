@@ -108,15 +108,21 @@ public class RewardSeeder implements CommandLineRunner {
             if (changed) rewardItemRepository.save(item);
         });
 
-        seed("Grim Soul — 500 Талеров",
-                "500 Талеров для Grim Soul: Dark Survival RPG (iOS/Android). "
-                        + "Пополнение через официальный магазин по аккаунту игры. Срок доставки — до 24 ч.",
-                "Игровые валюты", 10_000,
-                "⚠️ Важно: для зачисления валюты администратор временно войдёт в ваш игровой аккаунт.\n\n"
-                        + "Оформляя заявку, вы соглашаетесь передать данные для входа через поддержку после одобрения.\n\n"
-                        + "Укажите email или ID аккаунта Grim Soul:\n\n"
-                        + "Введите email или ID:",
-                1_000, "grim_soul");
+        rewardItemRepository.findByTitle("Grim Soul — 500 Талеров").ifPresent(old -> {
+            if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
+        });
+
+        String grimSoulPrompt = "Укажите ваш ID аккаунта Grim Soul.\n\n"
+                + "Где найти: откройте профиль в игре → ваш ID указан под именем.\n\n"
+                + "Введите ID аккаунта:";
+
+        seed("Grim Soul - Талеры 35",
+                "Пополнение 35 Талеров на аккаунт Grim Soul. Зачисляется по ID аккаунта без входа. Срок доставки — до 24 ч.",
+                "Игровые валюты", 20_000, grimSoulPrompt, 1_000, "grim_soul");
+
+        seed("Grim Soul - Талеры 150",
+                "Пополнение 150 Талеров на аккаунт Grim Soul. Зачисляется по ID аккаунта без входа. Срок доставки — до 24 ч.",
+                "Игровые валюты", 81_500, grimSoulPrompt, 75_000, "grim_soul");
 
         seed("Clash Royale — 80 Gems",
                 "80 Самоцветов для Clash Royale (iOS/Android). Пополнение через Supercell ID. "
