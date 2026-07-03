@@ -154,14 +154,25 @@ public class RewardSeeder implements CommandLineRunner {
                         + "Введите email:",
                 0, "clash_of_clans");
 
-        seed("Mobile Legends — 86 Diamonds",
-                "86 Алмазов для Mobile Legends: Bang Bang (iOS/Android). "
-                        + "Пополнение по UID и серверу — вход в аккаунт не требуется. Срок доставки — до 24 ч.",
-                "Игровые валюты", 9_000,
-                "Для пополнения MLBB нужны UID и номер сервера.\n\n"
-                        + "Где найти: откройте профиль в игре → UID и сервер указаны под никнеймом.\n\n"
-                        + "Введите UID и сервер через пробел (пример: 123456789 2345):",
-                1_000, "mobile_legends");
+        rewardItemRepository.findByTitle("Mobile Legends — 86 Diamonds").ifPresent(old -> {
+            if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
+        });
+
+        String mlPrompt = "Для пополнения нужны ID аккаунта и Zone ID.\n\n"
+                + "Где найти: откройте профиль в игре → ID и Zone ID указаны под никнеймом.\n\n"
+                + "Введите ID аккаунта и Zone ID через пробел (пример: 123456789 2345):";
+
+        seed("Mobile Legends - Diamonds 35",
+                "Пополнение 35 Diamonds на аккаунт Mobile Legends. Зачисляется по ID аккаунта и Zone ID без входа. Срок доставки — до 24 ч.",
+                "Игровые валюты", 8_000, mlPrompt, 1_000, "mobile_legends");
+
+        seed("Mobile Legends - Diamonds 55",
+                "Пополнение 55 Diamonds на аккаунт Mobile Legends. Зачисляется по ID аккаунта и Zone ID без входа. Срок доставки — до 24 ч.",
+                "Игровые валюты", 12_500, mlPrompt, 1_000, "mobile_legends");
+
+        seed("Mobile Legends - Diamonds 275",
+                "Пополнение 275 Diamonds на аккаунт Mobile Legends. Зачисляется по ID аккаунта и Zone ID без входа. Срок доставки — до 24 ч.",
+                "Игровые валюты", 65_000, mlPrompt, 15_000, "mobile_legends");
 
         // Deactivate old CS2 entry created with em-dash title
         rewardItemRepository.findByTitle("CS2 — Пополнение Steam 150 ₽").ifPresent(old -> {
