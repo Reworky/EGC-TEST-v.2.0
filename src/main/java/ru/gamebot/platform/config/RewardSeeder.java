@@ -66,10 +66,22 @@ public class RewardSeeder implements CommandLineRunner {
 
         // ── Игровые валюты ───────────────────────────────────────────────────────
 
-        seed("PUBG PC — 200 G-Coin",
-                "200 G-Coin для PUBG PC. Доставляется в виде подарочного кода в Telegram. "
-                        + "Код активируется в меню пополнения PUBG PC самостоятельно. Срок доставки — до 24 ч.",
-                "Игровые валюты", 13_000, null, 1_000, "pubg_pc");
+        // Deactivate old PUBG PC entry
+        rewardItemRepository.findByTitle("PUBG PC — 200 G-Coin").ifPresent(old -> {
+            if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
+        });
+
+        seed("PUBG PC - G-Coin 100",
+                "Пополнение 100 G-Coin на аккаунт PUBG PC. Доставляется подарочным кодом. Срок доставки — до 24 ч.",
+                "Игровые валюты", 10_000, null, 1_000, "pubg_pc");
+
+        seed("PUBG PC - G-Coin 500",
+                "Пополнение 500 G-Coin на аккаунт PUBG PC. Доставляется подарочным кодом. Срок доставки — до 24 ч.",
+                "Игровые валюты", 51_500, null, 15_000, "pubg_pc");
+
+        seed("PUBG PC - G-Coin 1000",
+                "Пополнение 1000 G-Coin на аккаунт PUBG PC. Доставляется подарочным кодом. Срок доставки — до 24 ч.",
+                "Игровые валюты", 108_000, null, 75_000, "pubg_pc");
 
         // Deactivate old PUBG Mobile entry
         rewardItemRepository.findByTitle("PUBG Mobile — 60 UC").ifPresent(old -> {
