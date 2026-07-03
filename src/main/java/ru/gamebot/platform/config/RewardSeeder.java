@@ -156,6 +156,10 @@ public class RewardSeeder implements CommandLineRunner {
                 existing -> {
                     boolean changed = existing.getPriceCoins() != priceCoins;
                     if (changed) existing.setPriceCoins(priceCoins);
+                    if (description != null && !description.equals(existing.getDescription())) {
+                        existing.setDescription(description);
+                        changed = true;
+                    }
                     if (userDataPrompt != null && !userDataPrompt.equals(existing.getUserDataPrompt())) {
                         existing.setUserDataPrompt(userDataPrompt);
                         changed = true;
