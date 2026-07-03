@@ -4101,7 +4101,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "🔢 Номер заявки: <b>#" + withdrawalReq.getId() + "</b>\n"
                     + "💸 Сумма: <b>" + amount + " EXC</b>\n"
                     + "💵 К выплате: <b>~" + rubles + " ₽</b>\n\n"
-                    + "Администратор обработает заявку в течение 24 часов.",
+                    + "Ожидайте, в течение 24 часов вам напишет менеджер @GressToEx для получения реквизитов!",
                 backMenuKeyboard("menu:main"));
             notifyAdminsAboutWithdrawal(user, withdrawalReq);
         } catch (IllegalArgumentException e) {
