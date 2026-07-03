@@ -137,6 +137,11 @@ public class RewardSeeder implements CommandLineRunner {
                         + "Введите UID и сервер через пробел (пример: 123456789 2345):",
                 1_000, "mobile_legends");
 
+        // Deactivate old CS2 entry created with em-dash title
+        rewardItemRepository.findByTitle("CS2 — Пополнение Steam 150 ₽").ifPresent(old -> {
+            if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
+        });
+
         String cs2Prompt = "Укажите ваш логин Steam (не email, не никнейм — именно логин для входа).\n\n"
                 + "Введите логин Steam:";
 
