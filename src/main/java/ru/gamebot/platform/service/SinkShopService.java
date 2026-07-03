@@ -252,7 +252,6 @@ public class SinkShopService {
     }
 
     @Transactional
-    @Transactional
     public void resetWithdrawalLimit(AppUser user) {
         user.setMonthlyWithdrawnExc(0);
         appUserRepository.save(user);
