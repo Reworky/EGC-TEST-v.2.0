@@ -121,7 +121,6 @@ public class RewardService {
     }
 
     @Transactional
-    @Transactional
     public RewardRequest approveRequest(Long requestId) {
         RewardRequest req = getRequest(requestId);
         req.setStatus(RewardRequestStatus.APPROVED);
