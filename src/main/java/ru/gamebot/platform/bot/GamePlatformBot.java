@@ -4428,6 +4428,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void notifyAdminsAboutWithdrawal(AppUser user, RewardRequest req) {
+        String username = user.getUsername();
+        String userLink = (username != null && !username.isBlank())
+                ? "\n✉️ Написать: <a href=\"https://t.me/" + username + "\">@" + username + "</a>"
+                : "\n✉️ Telegram ID: <code>" + user.getTelegramId() + "</code>";
         InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("💸 Открыть заявки на вывод", "admin:withdrawals"))
         ));
@@ -4436,7 +4440,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(adminId,
                     "💸 <b>Новая заявка на вывод EXC</b>\n\n"
                             + "👤 Игрок: <b>" + escape(user.getNickname()) + "</b>\n"
-                            + "🆔 Telegram ID: <b>" + user.getTelegramId() + "</b>\n"
+                            + "🆔 Telegram ID: <b>" + user.getTelegramId() + "</b>"
+                            + userLink + "\n"
                             + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
                             + "📦 Тип: <b>" + escape(req.getRewardItem().getTitle()) + "</b>"
                             + details,
