@@ -252,6 +252,12 @@ public class SinkShopService {
     }
 
     @Transactional
+    @Transactional
+    public void resetWithdrawalLimit(AppUser user) {
+        user.setMonthlyWithdrawnExc(0);
+        appUserRepository.save(user);
+    }
+
     public void reverseWithdrawal(AppUser user, long amount) {
         refreshWithdrawalMonthIfNeeded(user);
         long restored = Math.max(0, user.getMonthlyWithdrawnExc() - amount);

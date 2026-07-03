@@ -194,6 +194,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (text != null && text.startsWith("/resetlimit") && isEffectiveAdmin(user)) {
+            String[] parts = text.trim().split("\\s+");
+            if (parts.length == 2) {
+                try {
+                    long targetId = Long.parseLong(parts[1]);
+                    userService.findByTelegramId(targetId).ifPresentOrElse(target -> {
+                        sinkShopService.resetWithdrawalLimit(target);
+                        sendText(user.getTelegramId(), "✅ Лимит вывода сброшен для пользователя #" + targetId, null);
+                    }, () -> sendText(user.getTelegramId(), "❌ Пользователь не найден: " + targetId, null));
+                } catch (NumberFormatException e) {
+                    sendText(user.getTelegramId(), "❌ Неверный формат ID", null);
+                }
+            } else {
+                sendText(user.getTelegramId(), "Использование: /resetlimit <telegram_id>", null);
+            }
+            return;
+        }
+
         if (shouldContinueSupportMediaGroup(message, session)) {
             handleSupportMessage(user, session, message);
             return;
