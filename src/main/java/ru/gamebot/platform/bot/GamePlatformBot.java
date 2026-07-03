@@ -1349,6 +1349,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             buttons.add(keyboardFactory.callback("✏️ Правка", "admin:quest:" + questId));
         }
 
+        long cooldownLeft = questService.getCooldownHoursLeft(user, quest);
+        String cooldownLine = cooldownLeft > 0
+                ? "⏳ <b>Повтор доступен через: " + cooldownLeft + " ч</b> — этот квест уже выполнялся недавно. После кулдауна он снова станет доступен.\n"
+                : "";
+
         sendText(user.getTelegramId(),
                 (notice == null ? "" : notice + "\n\n")
                         + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n\n"
@@ -1356,6 +1361,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📚 Формат: <b>" + escape(quest.getCategory()) + "</b>\n"
                         + "🕹️ Платформа: <b>" + escape(quest.getPlatform()) + "</b>\n"
                         + deadlineLine
+                        + cooldownLine
                         + "📌 Статус: <b>" + escape(statusText) + "</b>\n\n"
                         + "🏆 <b>Награда</b>\n"
                         + "✨ +" + quest.getRewardXp() + " XP\n"

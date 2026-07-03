@@ -145,6 +145,27 @@ public class QuestService {
         return false;
     }
 
+    /** Возвращает сколько часов осталось до снятия кулдауна (0 = нет кулдауна) */
+    public long getCooldownHoursLeft(AppUser user, Quest quest) {
+        Optional<LocalDateTime> lastApproved = questSubmissionRepository
+                .findLastApprovedDateByUserAndQuest(user, quest);
+        if (lastApproved.isPresent()) {
+            LocalDateTime until = lastApproved.get().plusHours(COOLDOWN_HOURS);
+            if (LocalDateTime.now().isBefore(until)) {
+                return Math.max(1, java.time.temporal.ChronoUnit.HOURS.between(LocalDateTime.now(), until));
+            }
+        }
+        Optional<LocalDateTime> lastGame = questSubmissionRepository
+                .findLastApprovedDateByUserAndGameAndCategory(user, quest.getGameName(), quest.getCategory());
+        if (lastGame.isPresent()) {
+            LocalDateTime until = lastGame.get().plusHours(COOLDOWN_HOURS);
+            if (LocalDateTime.now().isBefore(until)) {
+                return Math.max(1, java.time.temporal.ChronoUnit.HOURS.between(LocalDateTime.now(), until));
+            }
+        }
+        return 0;
+    }
+
     public long getWeeklyCompletionsOfType(AppUser user, Quest quest) {
         return questSubmissionRepository.countApprovedByUserAndGameAndCategorySince(
                 user, quest.getGameName(), quest.getCategory(), LocalDateTime.now().minusWeeks(1));
