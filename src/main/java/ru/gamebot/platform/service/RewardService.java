@@ -134,10 +134,11 @@ public class RewardService {
             throw new IllegalArgumentException("Заявку можно отменить только в статусе «Ожидает».");
         }
         req.setStatus(RewardRequestStatus.CANCELLED);
-        long price = effectivePrice(req.getRewardItem());
+        boolean isWithdrawal = "Вывод".equals(req.getRewardItem().getCategory());
+        long price = isWithdrawal ? req.getRewardItem().getPriceCoins() : effectivePrice(req.getRewardItem());
         requester.setCoins(requester.getCoins() + price);
         userService.save(requester);
-        sinkShopService.reverseWithdrawal(requester, price);
+        if (isWithdrawal) sinkShopService.reverseWithdrawal(requester, price);
         return rewardRequestRepository.save(req);
     }
 
@@ -147,10 +148,11 @@ public class RewardService {
         req.setStatus(RewardRequestStatus.REJECTED);
         req.setAdminComment(comment);
         AppUser user = req.getUser();
-        long price = effectivePrice(req.getRewardItem());
+        boolean isWithdrawal = "Вывод".equals(req.getRewardItem().getCategory());
+        long price = isWithdrawal ? req.getRewardItem().getPriceCoins() : effectivePrice(req.getRewardItem());
         user.setCoins(user.getCoins() + price);
         userService.save(user);
-        sinkShopService.reverseWithdrawal(user, price);
+        if (isWithdrawal) sinkShopService.reverseWithdrawal(user, price);
         return rewardRequestRepository.save(req);
     }
 
