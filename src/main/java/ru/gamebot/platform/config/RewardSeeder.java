@@ -124,15 +124,26 @@ public class RewardSeeder implements CommandLineRunner {
                 "Пополнение 150 Талеров на аккаунт Grim Soul. Зачисляется по ID аккаунта без входа. Срок доставки — до 24 ч.",
                 "Игровые валюты", 81_500, grimSoulPrompt, 75_000, "grim_soul");
 
-        seed("Clash Royale — 80 Gems",
-                "80 Самоцветов для Clash Royale (iOS/Android). Пополнение через Supercell ID. "
-                        + "Срок доставки — до 24 ч.",
-                "Игровые валюты", 6_500,
-                "⚠️ Важно: для зачисления самоцветов администратор временно войдёт в ваш Supercell-аккаунт.\n\n"
-                        + "Оформляя заявку, вы соглашаетесь передать данные для входа через поддержку после одобрения.\n\n"
-                        + "Укажите email вашего Supercell ID:\n\n"
-                        + "Введите email:",
-                0, "clash_royale");
+        rewardItemRepository.findByTitle("Clash Royale — 80 Gems").ifPresent(old -> {
+            if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
+        });
+
+        String crPrompt = "Введи эл. почту, к которой имеешь постоянный доступ. "
+                + "На этот адрес придет письмо с ссылкой на активацию твоей покупки.\n\n"
+                + "Не забудь проверить папку «Спам»\n\n"
+                + "Введите email:";
+
+        seed("Clash Royale - Gems 160",
+                "Пополнение 160 гемов на аккаунт Clash Royale. Доставка на email. Срок доставки — до 24 ч.",
+                "Игровые валюты", 30_000, crPrompt, 1_000, "clash_royale");
+
+        seed("Clash Royale - Gems 500",
+                "Пополнение 500 гемов на аккаунт Clash Royale. Доставка на email. Срок доставки — до 24 ч.",
+                "Игровые валюты", 72_000, crPrompt, 5_000, "clash_royale");
+
+        seed("Clash Royale - Gems 1200",
+                "Пополнение 1200 гемов на аккаунт Clash Royale. Доставка на email. Срок доставки — до 24 ч.",
+                "Игровые валюты", 141_000, crPrompt, 15_000, "clash_royale");
 
         rewardItemRepository.findByTitle("Brawl Stars — 80 Gems").ifPresent(old -> {
             if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
