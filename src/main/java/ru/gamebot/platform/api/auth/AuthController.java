@@ -24,7 +24,10 @@ public class AuthController {
      * Returns: { token, registered }
      */
     @PostMapping("/telegram")
-    public ResponseEntity<?> telegramLogin(@RequestBody Map<String, String> data) {
+    public ResponseEntity<?> telegramLogin(@RequestBody Map<String, Object> rawData) {
+        Map<String, String> data = new java.util.HashMap<>();
+        rawData.forEach((k, v) -> data.put(k, String.valueOf(v)));
+
         if (!telegramAuthService.validate(data)) {
             return ResponseEntity.status(401).body(Map.of("error", "Invalid Telegram auth data"));
         }
