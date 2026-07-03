@@ -1343,16 +1343,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         List<InlineKeyboardButton> buttons = new ArrayList<>();
-        buttons.add(keyboardFactory.callback("🚀 Взять", "quest:take:" + questId));
+        if (cooldownLeft > 0) {
+            buttons.add(keyboardFactory.callback("⏳ Доступно через " + cooldownLeft + " ч", "noop"));
+        } else {
+            buttons.add(keyboardFactory.callback("🚀 Взять", "quest:take:" + questId));
+        }
         buttons.add(keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
         if (isEffectiveAdmin(user)) {
             buttons.add(keyboardFactory.callback("✏️ Правка", "admin:quest:" + questId));
         }
 
         long cooldownLeft = questService.getCooldownHoursLeft(user, quest);
-        String cooldownLine = cooldownLeft > 0
-                ? "⏳ <b>Повтор доступен через: " + cooldownLeft + " ч</b> — этот квест уже выполнялся недавно. После кулдауна он снова станет доступен.\n"
-                : "";
+        String displayStatus = cooldownLeft > 0
+                ? "⏳ Кулдаун (" + cooldownLeft + " ч)"
+                : statusText;
 
         sendText(user.getTelegramId(),
                 (notice == null ? "" : notice + "\n\n")
@@ -1361,8 +1365,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📚 Формат: <b>" + escape(quest.getCategory()) + "</b>\n"
                         + "🕹️ Платформа: <b>" + escape(quest.getPlatform()) + "</b>\n"
                         + deadlineLine
-                        + cooldownLine
-                        + "📌 Статус: <b>" + escape(statusText) + "</b>\n\n"
+                        + "📌 Статус: <b>" + escape(displayStatus) + "</b>\n\n"
                         + "🏆 <b>Награда</b>\n"
                         + "✨ +" + quest.getRewardXp() + " XP\n"
                         + "🪙 +" + quest.getRewardCoins() + " монет\n\n"
