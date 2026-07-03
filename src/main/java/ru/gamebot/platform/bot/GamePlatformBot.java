@@ -1953,6 +1953,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         StringBuilder sb = new StringBuilder("💸 <b>Мои заявки на вывод</b>\n\n");
+        List<List<InlineKeyboardButton>> rows = new java.util.ArrayList<>();
         for (RewardRequest req : requests) {
             String status = switch (req.getStatus()) {
                 case PENDING -> "⏳ Ожидает";
@@ -1966,20 +1967,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sb.append("\n  📝 ").append(escape(req.getAdminComment()));
             }
             sb.append("\n");
+            if (req.getStatus() == RewardRequestStatus.PENDING) {
+                rows.add(List.of(keyboardFactory.callback("❌ Отменить заявку #" + req.getId(), "reward:cancel:" + req.getId())));
+            }
         }
-        sendText(user.getTelegramId(), sb.toString(),
-                keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")))));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     private void handleUserRewardCancel(CallbackQuery callbackQuery, AppUser user, Long reqId) {
         try {
             RewardRequest req = rewardService.cancelRequest(reqId, user);
             answer(callbackQuery.getId(), "Заявка отменена");
+            boolean isWithdrawal = "Вывод".equals(req.getRewardItem().getCategory());
             sendText(user.getTelegramId(),
                     "🚫 <b>Заявка отменена</b>\n\n"
                             + "🎁 <b>" + escape(req.getRewardItem().getTitle()) + "</b>\n\n"
                             + "💰 EXC возвращены на ваш баланс.",
-                    backMenuKeyboard("menu:my-rewards"));
+                    backMenuKeyboard(isWithdrawal ? "menu:my-withdrawals" : "menu:my-rewards"));
             notifyAdminsRewardCancelled(user, req);
         } catch (IllegalArgumentException e) {
             answer(callbackQuery.getId(), e.getMessage());
