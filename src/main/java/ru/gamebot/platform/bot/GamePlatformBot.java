@@ -4396,7 +4396,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void notifyAdminsAboutWithdrawal(AppUser user, RewardRequest req) {
         InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
-                List.of(keyboardFactory.callback("📥 Открыть заявки", "admin:reward:requests"))
+                List.of(keyboardFactory.callback("💸 Открыть заявки на вывод", "admin:withdrawals"))
         ));
         String details = req.getPayoutDetails() != null ? "\n💎 Детали: <code>" + escape(req.getPayoutDetails()) + "</code>" : "";
         for (Long adminId : adminService.allAdminIds()) {
