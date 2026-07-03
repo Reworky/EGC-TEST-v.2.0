@@ -27,6 +27,10 @@ public class RewardService {
         return rewardItemRepository.findAllByActiveTrueOrderByPriceCoinsAsc();
     }
 
+    public List<RewardItem> findByPurchaseGroup(String purchaseGroup) {
+        return rewardItemRepository.findAllByActiveTrueAndPurchaseGroupOrderByPriceCoinsAsc(purchaseGroup);
+    }
+
     public RewardItem getRewardItem(Long rewardId) {
         return rewardItemRepository.findById(rewardId)
                 .orElseThrow(() -> new IllegalArgumentException("Награда не найдена."));

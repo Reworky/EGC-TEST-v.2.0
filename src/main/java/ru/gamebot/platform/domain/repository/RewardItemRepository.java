@@ -10,4 +10,6 @@ public interface RewardItemRepository extends JpaRepository<RewardItem, Long> {
     List<RewardItem> findAllByActiveTrueOrderByPriceCoinsAsc();
 
     Optional<RewardItem> findByTitle(String title);
+
+    List<RewardItem> findAllByActiveTrueAndPurchaseGroupOrderByPriceCoinsAsc(String purchaseGroup);
 }

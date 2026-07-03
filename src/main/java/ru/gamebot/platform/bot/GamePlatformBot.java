@@ -466,6 +466,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "Карточка награды");
             return;
         }
+        if (data.startsWith("shop:group:")) {
+            sendGroupPicker(user, data.substring("shop:group:".length()));
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if (data.startsWith("reward:cancel:")) {
             handleUserRewardCancel(callbackQuery, user, parseLong(data.substring("reward:cancel:".length())));
             return;
@@ -1658,16 +1663,36 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             for (Map.Entry<String, List<RewardItem>> entry : byCategory.entrySet()) {
                 rows.add(List.of(keyboardFactory.callback("── " + entry.getKey() + " ──", "noop")));
+                // Group items by purchaseGroup; groups with >1 item shown as single entry
+                java.util.LinkedHashMap<String, List<RewardItem>> byGroup = new java.util.LinkedHashMap<>();
                 for (RewardItem reward : entry.getValue()) {
-                    long price = rewardService.effectivePrice(reward);
-                    String status = shopLimitService.getItemStatus(user, reward);
-                    String icon = status.startsWith("🔒") ? "🔒"
-                            : status.startsWith("⏳") ? "⏳"
-                            : status.startsWith("🚫") ? "🚫"
-                            : "🎁";
-                    rows.add(List.of(keyboardFactory.callback(
-                            icon + " " + trim(reward.getTitle(), 22) + " — " + price + " EXC",
-                            "shop:view:" + reward.getId())));
+                    String group = reward.getPurchaseGroup() != null ? reward.getPurchaseGroup() : reward.getId().toString();
+                    byGroup.computeIfAbsent(group, k -> new ArrayList<>()).add(reward);
+                }
+                for (Map.Entry<String, List<RewardItem>> groupEntry : byGroup.entrySet()) {
+                    List<RewardItem> groupItems = groupEntry.getValue();
+                    if (groupItems.size() > 1) {
+                        // Show as single entry leading to denomination picker
+                        RewardItem first = groupItems.get(0);
+                        String groupLabel = groupItemLabel(first.getTitle());
+                        boolean anyAvailable = groupItems.stream().anyMatch(r ->
+                                !shopLimitService.getItemStatus(user, r).startsWith("🔒"));
+                        String icon = anyAvailable ? "🎁" : "🔒";
+                        rows.add(List.of(keyboardFactory.callback(
+                                icon + " " + groupLabel + " — выбор номинала",
+                                "shop:group:" + groupEntry.getKey())));
+                    } else {
+                        RewardItem reward = groupItems.get(0);
+                        long price = rewardService.effectivePrice(reward);
+                        String status = shopLimitService.getItemStatus(user, reward);
+                        String icon = status.startsWith("🔒") ? "🔒"
+                                : status.startsWith("⏳") ? "⏳"
+                                : status.startsWith("🚫") ? "🚫"
+                                : "🎁";
+                        rows.add(List.of(keyboardFactory.callback(
+                                icon + " " + trim(reward.getTitle(), 22) + " — " + price + " EXC",
+                                "shop:view:" + reward.getId())));
+                    }
                 }
             }
         }
@@ -2121,6 +2146,30 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } catch (IllegalArgumentException e) {
             sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
         }
+    }
+
+    private void sendGroupPicker(AppUser user, String purchaseGroup) {
+        List<RewardItem> items = rewardService.findByPurchaseGroup(purchaseGroup);
+        if (items.isEmpty()) { sendShop(user); return; }
+        String groupLabel = groupItemLabel(items.get(0).getTitle());
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (RewardItem item : items) {
+            long price = rewardService.effectivePrice(item);
+            String status = shopLimitService.getItemStatus(user, item);
+            String icon = status.startsWith("🔒") ? "🔒" : status.startsWith("⏳") ? "⏳" : "🎁";
+            // Extract denomination part: everything after last space-dash-space
+            String denom = item.getTitle().replaceAll(".*- ", "");
+            rows.add(List.of(keyboardFactory.callback(icon + " " + denom + " — " + price + " EXC", "shop:view:" + item.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:shop"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(),
+                "🎁 <b>" + escape(groupLabel) + "</b>\n\nВыберите номинал:",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private String groupItemLabel(String title) {
+        // "CS2 - Пополнение Steam 150 ₽" → "CS2 - Пополнение Steam"
+        return title.replaceAll("\\s+\\d+\\s*[₽$€¥]?\\s*$", "").trim();
     }
 
     private void sendRewardCard(AppUser user, Long rewardId) {
