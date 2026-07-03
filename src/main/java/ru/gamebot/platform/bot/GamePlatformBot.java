@@ -119,6 +119,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         log.info("Resolved admin IDs: {}", adminService.resolvedAdminIds());
         log.info("Resolved moderator IDs: {}", adminService.resolvedModeratorIds());
         drainNewsQueue();
+        notifyAdminsStartup();
+    }
+
+    private void notifyAdminsStartup() {
+        String time = LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss"));
+        String text = "✅ <b>Бот запущен</b>\n\n"
+                + "🕒 " + time + "\n"
+                + "🤖 @" + getBotUsername() + " v1.0.0\n"
+                + "📦 Статус: работает в штатном режиме";
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                SendMessage msg = new SendMessage();
+                msg.setChatId(adminId.toString());
+                msg.setText(text);
+                msg.setParseMode("HTML");
+                execute(msg);
+            } catch (TelegramApiException e) {
+                log.warn("Failed to notify admin {} about startup", adminId, e);
+            }
+        }
     }
 
     @Override
