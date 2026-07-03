@@ -144,15 +144,24 @@ public class RewardSeeder implements CommandLineRunner {
                         + "Введите email:",
                 0, "brawl_stars");
 
-        seed("Clash of Clans — 80 Gems",
-                "80 Самоцветов для Clash of Clans (iOS/Android). Пополнение через Supercell ID. "
-                        + "Срок доставки — до 24 ч.",
-                "Игровые валюты", 6_500,
-                "⚠️ Важно: для зачисления самоцветов администратор временно войдёт в ваш Supercell-аккаунт.\n\n"
-                        + "Оформляя заявку, вы соглашаетесь передать данные для входа через поддержку после одобрения.\n\n"
-                        + "Укажите email вашего Supercell ID:\n\n"
-                        + "Введите email:",
-                0, "clash_of_clans");
+        rewardItemRepository.findByTitle("Clash of Clans — 80 Gems").ifPresent(old -> {
+            if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
+        });
+
+        String cocPrompt = "Укажите email вашего Supercell ID для зачисления гемов.\n\n"
+                + "Введите email:";
+
+        seed("Clash of Clans - Gems 80",
+                "Пополнение 80 гемов на аккаунт Clash of Clans. Доставка через Supercell ID. Срок доставки — до 24 ч.",
+                "Игровые валюты", 16_000, cocPrompt, 1_000, "clash_of_clans");
+
+        seed("Clash of Clans - Gems 260",
+                "Пополнение 260 гемов на аккаунт Clash of Clans. Доставка через Supercell ID. Срок доставки — до 24 ч.",
+                "Игровые валюты", 29_500, cocPrompt, 5_000, "clash_of_clans");
+
+        seed("Clash of Clans - Gems 500",
+                "Пополнение 500 гемов на аккаунт Clash of Clans. Доставка через Supercell ID. Срок доставки — до 24 ч.",
+                "Игровые валюты", 72_500, cocPrompt, 15_000, "clash_of_clans");
 
         rewardItemRepository.findByTitle("Mobile Legends — 86 Diamonds").ifPresent(old -> {
             if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
