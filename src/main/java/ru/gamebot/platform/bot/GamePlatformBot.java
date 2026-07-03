@@ -4150,7 +4150,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "💳 <b>Введите реквизиты для перевода</b>\n\n"
                         + "💸 Сумма: <b>" + amount + " EXC → ~" + rubles + " ₽</b>\n\n"
-                        + "Введите <b>номер карты Сбербанк</b> или <b>номер телефона для СБП</b>:",
+                        + "Укажите <b>банк</b> и <b>номер карты или телефона</b>.\n\n"
+                        + "Пример:\n<code>Сбербанк, карта 4276 1234 5678 9012</code>\n<code>Тинькофф, СБП +7 900 123 45 67</code>",
                 cancelKeyboard());
     }
 
