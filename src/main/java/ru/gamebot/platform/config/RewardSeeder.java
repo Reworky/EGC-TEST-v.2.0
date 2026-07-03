@@ -134,15 +134,26 @@ public class RewardSeeder implements CommandLineRunner {
                         + "Введите email:",
                 0, "clash_royale");
 
-        seed("Brawl Stars — 80 Gems",
-                "80 Самоцветов для Brawl Stars (iOS/Android). Пополнение через Supercell ID. "
-                        + "Срок доставки — до 24 ч.",
-                "Игровые валюты", 6_500,
-                "⚠️ Важно: для зачисления самоцветов администратор временно войдёт в ваш Supercell-аккаунт.\n\n"
-                        + "Оформляя заявку, вы соглашаетесь передать данные для входа через поддержку после одобрения.\n\n"
-                        + "Укажите email вашего Supercell ID:\n\n"
-                        + "Введите email:",
-                0, "brawl_stars");
+        rewardItemRepository.findByTitle("Brawl Stars — 80 Gems").ifPresent(old -> {
+            if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
+        });
+
+        String brawlPrompt = "Введи эл. почту, к которой имеешь постоянный доступ. "
+                + "На этот адрес придет письмо с ссылкой на активацию твоей покупки.\n\n"
+                + "Не забудь проверить папку «Спам»\n\n"
+                + "Введите email:";
+
+        seed("Brawl Stars - Gems 30",
+                "Пополнение 30 гемов на аккаунт Brawl Stars. Доставка на email. Срок доставки — до 24 ч.",
+                "Игровые валюты", 30_000, brawlPrompt, 1_000, "brawl_stars");
+
+        seed("Brawl Stars - Gems 60",
+                "Пополнение 60 гемов на аккаунт Brawl Stars. Доставка на email. Срок доставки — до 24 ч.",
+                "Игровые валюты", 58_000, brawlPrompt, 5_000, "brawl_stars");
+
+        seed("Brawl Stars - Gems 110",
+                "Пополнение 110 гемов на аккаунт Brawl Stars. Доставка на email. Срок доставки — до 24 ч.",
+                "Игровые валюты", 98_000, brawlPrompt, 15_000, "brawl_stars");
 
         rewardItemRepository.findByTitle("Clash of Clans — 80 Gems").ifPresent(old -> {
             if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
