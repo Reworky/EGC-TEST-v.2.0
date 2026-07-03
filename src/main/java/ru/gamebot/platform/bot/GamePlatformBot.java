@@ -2134,10 +2134,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? " (базовая: " + reward.getPriceCoins() + " EXC)"
                 : "";
         String limitStatus = shopLimitService.getItemStatus(user, reward);
+        boolean requiresAccount = reward.getUserDataPrompt() != null && !reward.getUserDataPrompt().isBlank();
         String text = (notice == null ? "" : notice + "\n\n")
                 + "🎁 <b>" + escape(reward.getTitle()) + "</b>\n\n"
                 + "📦 Категория: <b>" + escape(reward.getCategory()) + "</b>\n"
                 + "📝 " + escape(reward.getDescription()) + "\n\n"
+                + (requiresAccount ? "⚠️ <b>Для получения награды потребуется доступ к вашему игровому аккаунту.</b> Передавайте данные только если доверяете платформе.\n\n" : "")
                 + "🪙 Стоимость: <b>" + effectivePrice + " EXC</b>" + priceNote + "\n"
                 + limitStatus;
         InlineKeyboardMarkup keyboard = verticalWithBackMenu(
