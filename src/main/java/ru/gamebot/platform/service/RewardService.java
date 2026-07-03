@@ -121,9 +121,14 @@ public class RewardService {
     }
 
     @Transactional
+    @Transactional
     public RewardRequest approveRequest(Long requestId) {
         RewardRequest req = getRequest(requestId);
         req.setStatus(RewardRequestStatus.APPROVED);
+        if ("Вывод".equals(req.getRewardItem().getCategory())) {
+            AppUser user = req.getUser();
+            sinkShopService.recordWithdrawal(user, req.getRewardItem().getPriceCoins());
+        }
         return rewardRequestRepository.save(req);
     }
 
@@ -138,7 +143,6 @@ public class RewardService {
         long price = isWithdrawal ? req.getRewardItem().getPriceCoins() : effectivePrice(req.getRewardItem());
         requester.setCoins(requester.getCoins() + price);
         userService.save(requester);
-        if (isWithdrawal) sinkShopService.reverseWithdrawal(requester, price);
         return rewardRequestRepository.save(req);
     }
 
@@ -152,7 +156,6 @@ public class RewardService {
         long price = isWithdrawal ? req.getRewardItem().getPriceCoins() : effectivePrice(req.getRewardItem());
         user.setCoins(user.getCoins() + price);
         userService.save(user);
-        if (isWithdrawal) sinkShopService.reverseWithdrawal(user, price);
         return rewardRequestRepository.save(req);
     }
 
@@ -217,7 +220,6 @@ public class RewardService {
 
         user.setCoins(user.getCoins() - excAmount);
         userService.save(user);
-        sinkShopService.recordWithdrawal(user, excAmount);
 
         RewardRequest request = new RewardRequest();
         request.setUser(user);
@@ -248,7 +250,6 @@ public class RewardService {
 
         user.setCoins(user.getCoins() - excAmount);
         userService.save(user);
-        sinkShopService.recordWithdrawal(user, excAmount);
 
         RewardRequest request = new RewardRequest();
         request.setUser(user);
