@@ -108,6 +108,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.CouncilService councilService;
     private final ru.gamebot.platform.service.ShopLimitService shopLimitService;
     private final GameCatalogService gameCatalogService;
+    private final ru.gamebot.platform.service.TrafficSourceService trafficSourceService;
 
     private final Queue<String[]> pendingNewsQueue = new ConcurrentLinkedQueue<>();
 
@@ -336,10 +337,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void handleStart(Message message) {
+        String srcCode = parseStartTrafficSource(message.getText());
         Long referredBy = parseStartReferral(message.getText());
         AppUser user = userService.getOrCreate(message.getFrom(), referredBy);
         UserSession session = sessionService.get(user.getTelegramId());
         ensureRoleConsistency(user, session);
+
+        if (srcCode != null) {
+            trafficSourceService.recordClick(srcCode);
+            if (user.getTrafficSourceCode() == null) {
+                user.setTrafficSourceCode(srcCode);
+                userService.save(user);
+            }
+        }
 
         String streakMessage = userService.registerActivity(user);
         if (!user.isProfileCompleted()) {
@@ -777,6 +787,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case DEBIT_INPUT -> handleDebitInput(user, session, text);
             case BROADCAST_MESSAGE -> handleBroadcast(user, session, text);
             case PAYOUT_POOL_INPUT -> handlePayoutPoolInput(user, session, text);
+            case TRAFFIC_SOURCE_NAME -> {
+                session.getData().put("trafficName", text.trim());
+                session.setState(SessionState.TRAFFIC_SOURCE_CODE);
+                sendText(user.getTelegramId(),
+                        "🔑 Введите короткий код (латиница, цифры, дефис). Например: <code>instagram</code>, <code>vk-ad</code>, <code>blogger1</code>\n\n"
+                        + "Ссылка будет: <code>t.me/" + appProperties.getBotUsername() + "?start=src_ВАШ_КОД</code>",
+                        cancelKeyboard());
+            }
+            case TRAFFIC_SOURCE_CODE -> {
+                String code = text.trim().toLowerCase().replaceAll("[^a-z0-9\\-_]", "");
+                if (code.isEmpty()) {
+                    sendText(user.getTelegramId(), "❌ Код должен содержать только латиницу, цифры, дефис.", cancelKeyboard());
+                    return;
+                }
+                String name = session.getData().get("trafficName");
+                try {
+                    ru.gamebot.platform.domain.model.TrafficSource ts = trafficSourceService.create(name, code);
+                    String link = "https://t.me/" + appProperties.getBotUsername() + "?start=src_" + ts.getCode();
+                    session.reset();
+                    sendText(user.getTelegramId(),
+                            "✅ <b>Источник создан!</b>\n\n"
+                            + "📌 Название: <b>" + escape(ts.getName()) + "</b>\n"
+                            + "🔑 Код: <code>" + ts.getCode() + "</code>\n"
+                            + "🔗 Ссылка:\n<code>" + link + "</code>",
+                            backMenuKeyboard("admin:traffic"));
+                } catch (IllegalArgumentException e) {
+                    sendText(user.getTelegramId(), "❌ " + e.getMessage(), cancelKeyboard());
+                }
+            }
             case QUEST_CREATE_TITLE -> {
                 session.getData().put("title", text.trim());
                 session.setState(SessionState.QUEST_CREATE_DESCRIPTION);
@@ -2894,6 +2933,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "template" -> sendQuestTemplateGamePicker(user);
             case "rewards" -> sendAdminRewardList(user);
             case "withdrawals" -> { sendAdminWithdrawals(user); answerSilently(callbackQuery.getId()); return; }
+            case "traffic" -> { sendAdminTrafficList(user); answerSilently(callbackQuery.getId()); return; }
+            case "traffic:create" -> {
+                session.reset();
+                session.setState(SessionState.TRAFFIC_SOURCE_NAME);
+                sendText(user.getTelegramId(),
+                        "📈 <b>Новый источник трафика</b>\n\nВведите название (например: Instagram, VK, Блогер Петя):",
+                        cancelKeyboard());
+            }
             case "payout" -> {
                 session.reset();
                 session.setState(SessionState.PAYOUT_POOL_INPUT);
@@ -2983,6 +3030,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     gameCatalogService.removePhoto(gameName);
                     answer(callbackQuery.getId(), "Фото удалено");
                     sendAdminQuestCategories(user, gameName);
+                    return;
+                } else if (action.startsWith("traffic:view:")) {
+                    sendAdminTrafficView(user, parseLong(action.substring("traffic:view:".length())));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("traffic:view:page:")) {
+                    String[] parts = action.substring("traffic:view:page:".length()).split(":");
+                    sendAdminTrafficUsersPage(user, parseLong(parts[0]), parseInteger(parts[1]));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("traffic:delete:")) {
+                    trafficSourceService.delete(parseLong(action.substring("traffic:delete:".length())));
+                    sendAdminTrafficList(user);
+                    answerSilently(callbackQuery.getId());
                     return;
                 } else if (action.startsWith("withdrawal:")) {
                     handleAdminWithdrawalAction(callbackQuery, user, session, action.substring("withdrawal:".length()));
@@ -3692,6 +3753,70 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.smartLayout(List.of(
                         keyboardFactory.callback("🏠 Меню", "menu:main")
                 )));
+    }
+
+    private void sendAdminTrafficList(AppUser user) {
+        List<ru.gamebot.platform.domain.model.TrafficSource> sources = trafficSourceService.findAll();
+        StringBuilder sb = new StringBuilder("📈 <b>Источники трафика</b>\n\n");
+        if (sources.isEmpty()) {
+            sb.append("Источников пока нет.");
+        } else {
+            for (ru.gamebot.platform.domain.model.TrafficSource ts : sources) {
+                long regs = userService.countByTrafficSource(ts.getCode());
+                sb.append("• <b>").append(escape(ts.getName())).append("</b>")
+                        .append(" — переходов: <b>").append(ts.getClicks()).append("</b>")
+                        .append(", зарег.: <b>").append(regs).append("</b>\n");
+            }
+        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (ru.gamebot.platform.domain.model.TrafficSource ts : sources) {
+            rows.add(List.of(keyboardFactory.callback("👁 " + ts.getName(), "admin:traffic:view:" + ts.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("➕ Создать источник", "admin:traffic:create")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendAdminTrafficView(AppUser user, Long sourceId) {
+        trafficSourceService.findById(sourceId).ifPresentOrElse(ts -> {
+            sendAdminTrafficUsersPage(user, sourceId, 0);
+        }, () -> sendText(user.getTelegramId(), "❌ Источник не найден.", backMenuKeyboard("admin:traffic")));
+    }
+
+    private void sendAdminTrafficUsersPage(AppUser user, Long sourceId, int page) {
+        trafficSourceService.findById(sourceId).ifPresentOrElse(ts -> {
+            List<AppUser> users = userService.findByTrafficSource(ts.getCode());
+            String link = "https://t.me/" + appProperties.getBotUsername() + "?start=src_" + ts.getCode();
+            int pageSize = 10;
+            int totalPages = Math.max(1, (int) Math.ceil(users.size() / (double) pageSize));
+            int p = Math.max(0, Math.min(page, totalPages - 1));
+            int from = p * pageSize;
+            int to = Math.min(users.size(), from + pageSize);
+            StringBuilder sb = new StringBuilder();
+            sb.append("📈 <b>").append(escape(ts.getName())).append("</b>\n\n");
+            sb.append("🔗 <code>").append(link).append("</code>\n");
+            sb.append("👆 Переходов: <b>").append(ts.getClicks()).append("</b>\n");
+            sb.append("👥 Регистраций: <b>").append(users.size()).append("</b>\n\n");
+            if (users.isEmpty()) {
+                sb.append("Пользователей пока нет.");
+            } else {
+                sb.append("Стр. ").append(p + 1).append("/").append(totalPages).append(":\n");
+                for (AppUser u : users.subList(from, to)) {
+                    sb.append("• ");
+                    if (u.getTelegramUsername() != null) sb.append("@").append(u.getTelegramUsername()).append(" ");
+                    sb.append("<b>").append(escape(u.getNickname())).append("</b>");
+                    sb.append(" — ").append(u.getXp()).append(" XP\n");
+                }
+            }
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            List<InlineKeyboardButton> nav = new ArrayList<>();
+            if (p > 0) nav.add(keyboardFactory.callback("⬅️", "admin:traffic:view:page:" + sourceId + ":" + (p - 1)));
+            if (p < totalPages - 1) nav.add(keyboardFactory.callback("➡️", "admin:traffic:view:page:" + sourceId + ":" + (p + 1)));
+            if (!nav.isEmpty()) rows.add(nav);
+            rows.add(List.of(keyboardFactory.callback("🗑 Удалить источник", "admin:traffic:delete:" + sourceId)));
+            rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:traffic")));
+            sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+        }, () -> sendText(user.getTelegramId(), "❌ Источник не найден.", backMenuKeyboard("admin:traffic")));
     }
 
     private void sendAdminUsersPage(AppUser admin, Integer requestedPage) {
@@ -4628,6 +4753,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     ? "💸 Заявки на вывод (" + pendingWithdrawals + ")"
                     : "💸 Заявки на вывод";
             rows.add(List.of(keyboardFactory.callback(wLabel, "admin:withdrawals")));
+            rows.add(List.of(keyboardFactory.callback("📈 Трафик", "admin:traffic")));
             return keyboardFactory.rowsLayout(rows);
         }
 
@@ -5399,6 +5525,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         Matcher matcher = URL_PATTERN.matcher(text);
         return matcher.find() ? matcher.group(1) : null;
+    }
+
+    private String parseStartTrafficSource(String text) {
+        if (text == null || !text.contains(" ")) return null;
+        String payload = text.substring(text.indexOf(' ') + 1).trim();
+        if (payload.startsWith("src_")) return payload.substring(4);
+        return null;
     }
 
     private Long parseStartReferral(String text) {

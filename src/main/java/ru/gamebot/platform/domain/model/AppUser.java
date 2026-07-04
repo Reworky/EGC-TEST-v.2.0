@@ -100,4 +100,7 @@ public class AppUser {
 
     // Daily bonus
     private LocalDate lastBonusDate;
+
+    // Traffic source tracking
+    private String trafficSourceCode;
 }

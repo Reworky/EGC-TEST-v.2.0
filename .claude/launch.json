@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "egc-landing",
+      "runtimeExecutable": "/usr/bin/python3",
+      "runtimeArgs": ["-c", "import os,http.server,socketserver; os.chdir('/Users/olegdanilov/Desktop/egc-landing'); socketserver.TCPServer(('',3456),http.server.SimpleHTTPRequestHandler).serve_forever()"],
+      "port": 3456
+    }
+  ]
+}

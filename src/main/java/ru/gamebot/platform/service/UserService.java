@@ -428,6 +428,14 @@ public class UserService {
                 .collect(Collectors.toList());
     }
 
+    public List<AppUser> findByTrafficSource(String code) {
+        return appUserRepository.findAllByTrafficSourceCodeOrderByCreatedAtDesc(code);
+    }
+
+    public long countByTrafficSource(String code) {
+        return appUserRepository.countByTrafficSourceCode(code);
+    }
+
     public List<AppUser> allUsersSorted() {
         return appUserRepository.findAll().stream()
                 .sorted(Comparator.comparing(AppUser::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder()))

@@ -31,4 +31,8 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     List<AppUser> findTop5ByRegistrationCompletedTrueOrderByXpDescTelegramIdAsc();
 
     List<AppUser> findAllByFraudSuspectTrue();
+
+    List<AppUser> findAllByTrafficSourceCodeOrderByCreatedAtDesc(String trafficSourceCode);
+
+    long countByTrafficSourceCode(String trafficSourceCode);
 }
