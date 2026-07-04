@@ -2032,30 +2032,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean weekly = "weekly".equals(type);
         List<AppUser> players = weekly ? userService.topWeekly() : userService.topOverall();
         StringBuilder builder = new StringBuilder();
-        builder.append(weekly ? "📆 <b>Недельный рейтинг</b>\n\n" : "🌍 <b>Общий рейтинг</b>\n\n");
+
+        String[] medals = {"🥇", "🥈", "🥉"};
+
+        if (weekly) {
+            builder.append("📆 <b>Недельный рейтинг</b>\n");
+            builder.append("<i>Сбрасывается каждый понедельник</i>\n\n");
+        } else {
+            builder.append("🌍 <b>Общий рейтинг</b>\n\n");
+        }
 
         for (int i = 0; i < players.size(); i++) {
             AppUser player = players.get(i);
-            String leagueBadge = weekly
-                    ? ru.gamebot.platform.service.UserService.getLeague(player.getWeeklyXp()).displayName + " "
-                    : "";
-            builder.append(i + 1).append(". ")
-                    .append(leagueBadge)
-                    .append(escape(player.getNickname()))
-                    .append(" — ")
-                    .append(weekly ? player.getWeeklyXp() + " XP" : player.getXp() + " XP")
-                    .append(", ")
-                    .append(player.getCompletedQuests()).append(" квестов\n");
+            long xp = weekly ? player.getWeeklyXp() : player.getXp();
+            String place = i < 3 ? medals[i] : "<b>" + (i + 1) + ".</b>";
+            builder.append(place).append(" ").append(escape(player.getNickname()));
+            builder.append(" — <b>").append(xp).append(" XP</b>\n");
         }
 
         long rank = weekly ? userService.getWeeklyRank(user) : userService.getOverallRank(user);
+        long myXp = weekly ? user.getWeeklyXp() : user.getXp();
+        builder.append("\n");
+        builder.append("▶ Ты: <b>").append(rank).append(" место</b> • <b>").append(myXp).append(" XP</b>");
         if (weekly) {
             ru.gamebot.platform.service.UserService.League myLeague =
                     ru.gamebot.platform.service.UserService.getLeague(user.getWeeklyXp());
-            builder.append("\n👤 Ваше место: <b>").append(rank).append("</b>")
-                    .append(" • ").append(myLeague.displayName);
-        } else {
-            builder.append("\n👤 Ваше место: <b>").append(rank).append("</b>");
+            builder.append("\n🏅 Лига: <b>").append(myLeague.displayName).append("</b>");
+            if (myLeague.excPrize > 0) {
+                builder.append(" · приз <b>+").append(myLeague.excPrize).append(" EXC</b>");
+            }
         }
         sendText(user.getTelegramId(), builder.toString(), backMenuKeyboard("menu:rating"));
     }
