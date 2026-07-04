@@ -233,23 +233,21 @@ public class RewardService {
 
     @Transactional
     public void resetWithdrawalRequestIds() {
-        // Collect reward_item IDs before deleting requests
-        List<Long> itemIds = rewardRequestRepository.findAll().stream()
-                .filter(r -> "Вывод".equals(r.getRewardItem().getCategory()))
-                .map(r -> r.getRewardItem().getId())
+        // Find all withdrawal reward items
+        List<RewardItem> withdrawalItems = rewardItemRepository.findAll().stream()
+                .filter(i -> "Вывод".equals(i.getCategory()))
                 .toList();
-        // Delete requests first (FK references reward_item)
-        entityManager.createNativeQuery(
-                "DELETE FROM reward_request WHERE reward_item_id IN " +
-                "(SELECT id FROM reward_item WHERE category = 'Вывод')")
-                .executeUpdate();
+        // Delete all requests referencing these items first (FK constraint)
+        for (RewardItem item : withdrawalItems) {
+            rewardRequestRepository.deleteAllByRewardItem(item);
+        }
         // Then delete the virtual reward items
+        rewardItemRepository.deleteAll(withdrawalItems);
+        // Flush so H2 sees the deletes before DDL
+        entityManager.flush();
+        // Reset reward_request identity sequence (H2 stores table as lowercase quoted)
         entityManager.createNativeQuery(
-                "DELETE FROM reward_item WHERE category = 'Вывод'")
-                .executeUpdate();
-        // Reset only reward_request sequence
-        entityManager.createNativeQuery(
-                "ALTER TABLE reward_request ALTER COLUMN id RESTART WITH 1")
+                "ALTER TABLE \"reward_request\" ALTER COLUMN id RESTART WITH 1")
                 .executeUpdate();
     }
 
