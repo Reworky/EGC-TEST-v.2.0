@@ -1112,7 +1112,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "Магазин наград\n"
                         + "Реферальная программа и многое другое",
                 keyboardFactory.rowsLayout(List.of(
-                        List.of(keyboardFactory.callback("🚀 Перейти в профиль", "activation:profile"))
+                        List.of(keyboardFactory.callback("🚀 Перейти в профиль", "activation:profile")),
+                        List.of(keyboardFactory.url("📨 Пригласить друга",
+                                "https://t.me/share/url?url=https://t.me/" + getBotUsername()
+                                + "?start=ref_" + user.getTelegramId()
+                                + "&text=" + java.net.URLEncoder.encode(
+                                        "Зарабатывай EXC за игровые квесты в EXPERIENCE GAMING CLUB! 🎮",
+                                        java.nio.charset.StandardCharsets.UTF_8)))
                 )));
     }
 
@@ -1759,10 +1765,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendReferrals(AppUser user) {
         String referralLink = "https://t.me/" + appProperties.getBotUsername() + "?start=ref_" + user.getTelegramId();
+        long earned = user.getReferralEarnedExc();
+        long[] milestones = {3_000, 10_000, 30_000, 100_000};
+        long nextMilestone = milestones[milestones.length - 1];
+        for (long m : milestones) {
+            if (earned < m) { nextMilestone = m; break; }
+        }
+        int progressPct = (int) Math.min(100, earned * 100 / nextMilestone);
+        int filled = progressPct / 10;
+        String bar = "█".repeat(filled) + "░".repeat(10 - filled);
+
         sendText(user.getTelegramId(),
                 "🤝 <b>Рефералы</b>\n\n"
                         + "🔗 Ваша ссылка:\n" + escape(referralLink) + "\n\n"
                         + "👥 Приглашено друзей: <b>" + user.getInvitedFriends() + "</b>\n"
+                        + "💎 Заработано на рефералах: <b>" + earned + " EXC</b>\n\n"
+                        + "📊 Прогресс до " + nextMilestone + " EXC:\n"
+                        + "[" + bar + "] " + progressPct + "%\n\n"
                         + "🎁 Ваш друг получит: <b>+3 000 EXC</b> за первый выполненный квест\n"
                         + "💰 Вы получаете: <b>3% от EXC</b> друга в первые 14 дней\n\n"
                         + "Приглашайте друзей в клуб и зарабатывайте пассивно с каждого их квеста.",
@@ -4206,6 +4225,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🪙 Призовые: <b>+" + event.getExcPrize() + " EXC</b> начислены на баланс!\n\n"
                 + "Новая неделя — новые квесты. Борись за более высокую лигу! 💪";
         sendText(event.getTelegramId(), msg, null);
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onHallOfFame(ru.gamebot.platform.event.HallOfFameEvent event) {
+        String[] medals = {"🥇", "🥈", "🥉"};
+        StringBuilder sb = new StringBuilder();
+        sb.append("🏆 <b>Зал славы EGC — итоги недели</b>\n\n");
+        for (ru.gamebot.platform.event.HallOfFameEvent.HallEntry entry : event.getTop3()) {
+            int rank = entry.rank();
+            String medal = rank <= 3 ? medals[rank - 1] : rank + ".";
+            sb.append(medal).append(" <b>").append(escape(entry.nickname())).append("</b>");
+            if (entry.username() != null) sb.append(" (@").append(entry.username()).append(")");
+            sb.append("\n   ⚡ ").append(entry.weeklyXp()).append(" XP за неделю\n\n");
+        }
+        sb.append("Поздравляем лучших игроков! 💪\n")
+          .append("Новая неделя — новые квесты. Присоединяйся → @").append(getBotUsername());
+        try {
+            SendMessage msg = new SendMessage();
+            msg.setChatId(requiredChannelChatId());
+            msg.setText(sb.toString());
+            msg.setParseMode("HTML");
+            execute(msg);
+        } catch (TelegramApiException e) {
+            log.error("Failed to post hall of fame to channel", e);
+        }
     }
 
     @org.springframework.context.event.EventListener

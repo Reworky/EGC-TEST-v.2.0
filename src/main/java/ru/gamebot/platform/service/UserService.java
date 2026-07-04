@@ -328,6 +328,7 @@ public class UserService {
         // Instant bonus: 300 EXC to referrer
         long referrerBonus = 300;
         referrer.setCoins(referrer.getCoins() + referrerBonus);
+        referrer.setReferralEarnedExc(referrer.getReferralEarnedExc() + referrerBonus);
 
         appUserRepository.save(referrer);
         invitedUser.setReferralRewardProcessed(true);
@@ -404,6 +405,23 @@ public class UserService {
     @Transactional
     public void resetWeeklyXp() {
         List<AppUser> users = appUserRepository.findAll();
+
+        // Publish hall of fame before reset
+        List<ru.gamebot.platform.event.HallOfFameEvent.HallEntry> top3 = users.stream()
+                .filter(u -> u.isRegistrationCompleted() && u.getWeeklyXp() > 0)
+                .sorted(java.util.Comparator.comparingLong(AppUser::getWeeklyXp).reversed())
+                .limit(3)
+                .map((AppUser u) -> ru.gamebot.platform.event.HallOfFameEvent.fromUser(0, u))
+                .collect(java.util.stream.Collectors.toList());
+        // Assign ranks
+        for (int i = 0; i < top3.size(); i++) {
+            ru.gamebot.platform.event.HallOfFameEvent.HallEntry e = top3.get(i);
+            top3.set(i, new ru.gamebot.platform.event.HallOfFameEvent.HallEntry(i + 1, e.nickname(), e.username(), e.weeklyXp(), e.totalXp()));
+        }
+        if (!top3.isEmpty()) {
+            eventPublisher.publishEvent(new ru.gamebot.platform.event.HallOfFameEvent(this, top3));
+        }
+
         for (AppUser user : users) {
             if (!user.isRegistrationCompleted()) continue;
             League league = getLeague(user.getWeeklyXp());

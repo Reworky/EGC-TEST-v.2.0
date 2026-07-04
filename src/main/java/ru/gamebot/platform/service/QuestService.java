@@ -322,6 +322,8 @@ public class QuestService {
         }
         long bonus = Math.max(1, earnedCoins * REFERRAL_BONUS_PERCENT / 100);
         userService.addReward(referrer, 0, bonus);
+        referrer.setReferralEarnedExc(referrer.getReferralEarnedExc() + bonus);
+        appUserRepository.save(referrer);
     }
 
     @Transactional

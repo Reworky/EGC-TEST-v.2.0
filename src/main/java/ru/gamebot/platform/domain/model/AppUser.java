@@ -103,4 +103,8 @@ public class AppUser {
 
     // Traffic source tracking
     private String trafficSourceCode;
+
+    // Referral earnings accumulator
+    @Column(columnDefinition = "bigint default 0")
+    private long referralEarnedExc;
 }
