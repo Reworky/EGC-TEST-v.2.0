@@ -2772,7 +2772,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (QuestSubmission submission : submissions) {
             boolean suspect = submission.getUser().isFraudSuspect();
             String prefix = suspect ? "⚠️ " : "🔎 ";
-            String title = prefix + "#" + submission.getId() + " " + trim(submission.getUser().getNickname() + " / " + submission.getQuest().getTitle(), 22);
+            String title = prefix + "#" + (submission.getDisplayId() != null ? submission.getDisplayId() : submission.getId()) + " " + trim(submission.getUser().getNickname() + " / " + submission.getQuest().getTitle(), 22);
             buttons.add(keyboardFactory.callback(title, "mod:view:" + submission.getId()));
         }
 
@@ -2828,7 +2828,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendSubmissionCard(Long chatId, Long submissionId) {
         QuestSubmission submission = questService.getSubmission(submissionId);
-        String text = "🧾 <b>Заявка #" + submission.getId() + " на проверку</b>\n\n"
+        String text = "🧾 <b>Заявка #" + (submission.getDisplayId() != null ? submission.getDisplayId() : submission.getId()) + " на проверку</b>\n\n"
                 + "👤 Игрок: <b>" + escape(submission.getUser().getNickname()) + "</b>\n"
                 + "🆔 ID: <b>" + submission.getUser().getTelegramId() + "</b>\n"
                 + "🎯 Квест: <b>" + escape(submission.getQuest().getTitle()) + "</b>\n"
@@ -4600,7 +4600,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void notifyModeratorsAboutSubmission(Long submissionId) {
         QuestSubmission submission = questService.getSubmission(submissionId);
-        String caption = "🧾 Заявка #" + submissionId + " на модерацию\n\n"
+        String caption = "🧾 Заявка #" + (submission.getDisplayId() != null ? submission.getDisplayId() : submissionId) + " на модерацию\n\n"
                 + "👤 " + escape(submission.getUser().getNickname()) + " (" + submission.getUser().getTelegramId() + ")\n"
                 + "🎯 " + escape(submission.getQuest().getTitle()) + "\n"
                 + "💬 " + escape(submission.getUserComment());

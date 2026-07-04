@@ -191,6 +191,7 @@ public class QuestService {
         submission.setStatus(SubmissionStatus.DRAFT);
         submission.setCreatedAt(LocalDateTime.now());
         submission.setUpdatedAt(LocalDateTime.now());
+        submission.setDisplayId(questSubmissionRepository.findMaxDisplayId() + 1);
         if (quest.getDurationDays() > 0) {
             submission.setExpiresAt(LocalDateTime.now().plusDays(quest.getDurationDays()));
         }

@@ -64,4 +64,7 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT s.quest.gameName FROM QuestSubmission s WHERE s.status = 'APPROVED' GROUP BY s.quest.gameName ORDER BY COUNT(s) DESC")
     List<String> findTopGameNames();
 
+    @Query("SELECT COALESCE(MAX(s.displayId), 0) FROM QuestSubmission s")
+    long findMaxDisplayId();
+
 }
