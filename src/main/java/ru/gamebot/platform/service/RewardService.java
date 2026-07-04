@@ -247,7 +247,7 @@ public class RewardService {
         entityManager.flush();
         // Reset reward_request identity sequence (H2 stores table as lowercase quoted)
         entityManager.createNativeQuery(
-                "ALTER TABLE \"reward_requests\" ALTER COLUMN id RESTART WITH 1")
+                "ALTER TABLE REWARD_REQUESTS ALTER COLUMN id RESTART WITH 1")
                 .executeUpdate();
     }
 
