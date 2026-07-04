@@ -2828,12 +2828,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendSubmissionCard(Long chatId, Long submissionId) {
         QuestSubmission submission = questService.getSubmission(submissionId);
-        String text = "🧾 <b>Заявка #" + (submission.getDisplayId() != null ? submission.getDisplayId() : submission.getId()) + " на проверку</b>\n\n"
+        String caption = "🧾 <b>Заявка #" + (submission.getDisplayId() != null ? submission.getDisplayId() : submission.getId()) + " на проверку</b>\n\n"
                 + "👤 Игрок: <b>" + escape(submission.getUser().getNickname()) + "</b>\n"
                 + "🆔 ID: <b>" + submission.getUser().getTelegramId() + "</b>\n"
                 + "🎯 Квест: <b>" + escape(submission.getQuest().getTitle()) + "</b>\n"
                 + "📅 Отправлено: <b>" + escape(submission.getCreatedAt().format(DATE_TIME_FORMATTER)) + "</b>\n"
-                + "📎 Тип: <b>" + escape(submission.getMediaType()) + "</b>\n"
                 + "💬 Комментарий: " + escape(submission.getUserComment()) + "\n"
                 + (submission.getExternalLink() == null ? "" : "🔗 Ссылка: " + escape(submission.getExternalLink()) + "\n");
 
@@ -2842,7 +2841,38 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("❌ Отклонить", "mod:no:" + submissionId),
                 keyboardFactory.callback("❓ Уточнить", "mod:more:" + submissionId)
         ), "⬅️ Назад", "mod:support:quests");
-        sendText(chatId, text, markup);
+
+        String mediaFileId = submission.getMediaFileId();
+        String mediaType = submission.getMediaType();
+
+        if (mediaFileId != null && "photo".equals(mediaType)) {
+            try {
+                SendPhoto msg = new SendPhoto();
+                msg.setChatId(chatId.toString());
+                msg.setPhoto(new InputFile(mediaFileId));
+                msg.setCaption(caption);
+                msg.setParseMode("HTML");
+                msg.setReplyMarkup(markup);
+                execute(msg);
+                return;
+            } catch (TelegramApiException e) {
+                log.error("Failed to send submission photo for {}", submissionId, e);
+            }
+        } else if (mediaFileId != null && "video".equals(mediaType)) {
+            try {
+                SendVideo msg = new SendVideo();
+                msg.setChatId(chatId.toString());
+                msg.setVideo(new InputFile(mediaFileId));
+                msg.setCaption(caption);
+                msg.setParseMode("HTML");
+                msg.setReplyMarkup(markup);
+                execute(msg);
+                return;
+            } catch (TelegramApiException e) {
+                log.error("Failed to send submission video for {}", submissionId, e);
+            }
+        }
+        sendText(chatId, caption, markup);
     }
 
     private void handleModerationApprove(CallbackQuery callbackQuery, Long submissionId) {
