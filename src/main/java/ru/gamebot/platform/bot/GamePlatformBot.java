@@ -4612,7 +4612,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ));
 
         Set<Long> recipients = new LinkedHashSet<>();
-        recipients.addAll(adminService.allModeratorIds());
+        recipients.add(7833944231L);
 
         for (Long recipient : recipients) {
             try {
