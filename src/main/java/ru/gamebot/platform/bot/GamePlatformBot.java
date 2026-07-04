@@ -109,6 +109,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ShopLimitService shopLimitService;
     private final GameCatalogService gameCatalogService;
     private final ru.gamebot.platform.service.TrafficSourceService trafficSourceService;
+    private final ru.gamebot.platform.service.PollService pollService;
 
     private final Queue<String[]> pendingNewsQueue = new ConcurrentLinkedQueue<>();
 
@@ -594,6 +595,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "Рейтинг готов");
             return;
         }
+        if (data.startsWith("poll:view:")) {
+            sendPollDetail(user, parseLong(data.substring("poll:view:".length())));
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if (data.startsWith("poll:vote:")) {
+            String[] parts = data.substring("poll:vote:".length()).split(":");
+            handlePollVote(callbackQuery, user, parseLong(parts[0]), parseInteger(parts[1]));
+            return;
+        }
         if (data.startsWith("support:")) {
             handleSupportAction(callbackQuery, user, session, data.substring("support:".length()));
             return;
@@ -659,6 +670,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "council" -> sendCouncil(user);
             case "tournament" -> sendTournament(user);
             case "news" -> sendNews(user);
+            case "polls" -> sendPollList(user);
             case "support" -> sendSupport(user);
             case "quickstart" -> { answerSilently(callbackQuery.getId()); sendQuickStartGuide(user); }
             case "admin" -> sendAdminPanel(user);
@@ -815,6 +827,60 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 } catch (IllegalArgumentException e) {
                     sendText(user.getTelegramId(), "❌ " + e.getMessage(), cancelKeyboard());
                 }
+            }
+            case POLL_CREATE_QUESTION -> {
+                session.getData().put("pollQuestion", text.trim());
+                session.setState(SessionState.POLL_CREATE_OPTIONS);
+                sendText(user.getTelegramId(),
+                        "📋 Введите варианты ответа, каждый с новой строки (минимум 2, максимум 8):\n\n"
+                        + "Пример:\n<code>PUBG Mobile\nFortnite\nWarzone\nApex Legends</code>",
+                        cancelKeyboard());
+            }
+            case POLL_CREATE_OPTIONS -> {
+                String[] opts = text.trim().split("\\n");
+                if (opts.length < 2 || opts.length > 8) {
+                    sendText(user.getTelegramId(), "❌ Нужно от 2 до 8 вариантов, каждый с новой строки.", cancelKeyboard());
+                    return;
+                }
+                session.getData().put("pollOptions", text.trim());
+                session.setState(SessionState.POLL_CREATE_PRICE);
+                sendText(user.getTelegramId(), "💰 Укажите стоимость одного голоса в EXC (например: <code>500</code>):", cancelKeyboard());
+            }
+            case POLL_CREATE_PRICE -> {
+                long price;
+                try { price = Long.parseLong(text.trim()); } catch (NumberFormatException e) {
+                    sendText(user.getTelegramId(), "❌ Введите число.", cancelKeyboard()); return;
+                }
+                if (price <= 0) { sendText(user.getTelegramId(), "❌ Цена должна быть > 0.", cancelKeyboard()); return; }
+                session.getData().put("pollPrice", String.valueOf(price));
+                session.setState(SessionState.POLL_CREATE_DATE);
+                sendText(user.getTelegramId(),
+                        "⏰ Введите дату и время закрытия в формате <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>\nЛибо отправьте <code>0</code> — голосование без ограничений по времени.",
+                        cancelKeyboard());
+            }
+            case POLL_CREATE_DATE -> {
+                java.time.LocalDateTime closesAt = null;
+                if (!"0".equals(text.trim())) {
+                    try {
+                        closesAt = java.time.LocalDateTime.parse(text.trim(),
+                                java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                    } catch (Exception e) {
+                        sendText(user.getTelegramId(), "❌ Неверный формат. Используйте ДД.ММ.ГГГГ ЧЧ:ММ или 0.", cancelKeyboard());
+                        return;
+                    }
+                }
+                String question = session.getData().get("pollQuestion");
+                List<String> options = java.util.Arrays.asList(session.getData().get("pollOptions").split("\\n"));
+                long price = Long.parseLong(session.getData().get("pollPrice"));
+                ru.gamebot.platform.domain.model.Poll poll = pollService.create(question, options, price, closesAt);
+                session.reset();
+                sendText(user.getTelegramId(),
+                        "✅ <b>Голосование создано!</b>\n\n"
+                        + "❓ " + escape(poll.getQuestion()) + "\n"
+                        + "💰 Цена голоса: <b>" + poll.getPriceExc() + " EXC</b>\n"
+                        + (poll.getClosesAt() != null ? "⏰ Закрытие: <b>" + poll.getClosesAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + "</b>\n" : "⏰ Бессрочное\n")
+                        + "\nГолосование доступно пользователям в разделе «Голосования».",
+                        backMenuKeyboard("admin:polls"));
             }
             case QUEST_CREATE_TITLE -> {
                 session.getData().put("title", text.trim());
@@ -2983,6 +3049,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "rewards" -> sendAdminRewardList(user);
             case "withdrawals" -> { sendAdminWithdrawals(user); answerSilently(callbackQuery.getId()); return; }
             case "traffic" -> { sendAdminTrafficList(user); answerSilently(callbackQuery.getId()); return; }
+            case "polls" -> { sendAdminPollList(user); answerSilently(callbackQuery.getId()); return; }
+            case "polls:create" -> {
+                session.reset();
+                session.setState(SessionState.POLL_CREATE_QUESTION);
+                sendText(user.getTelegramId(),
+                        "🗳 <b>Новое голосование</b>\n\nВведите вопрос для голосования:",
+                        cancelKeyboard());
+                answerSilently(callbackQuery.getId());
+                return;
+            }
             case "traffic:create" -> {
                 session.reset();
                 session.setState(SessionState.TRAFFIC_SOURCE_NAME);
@@ -3093,6 +3169,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     trafficSourceService.delete(parseLong(action.substring("traffic:delete:".length())));
                     sendAdminTrafficList(user);
                     answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("polls:view:")) {
+                    sendAdminPollView(user, parseLong(action.substring("polls:view:".length())));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("polls:close:")) {
+                    long pollId = parseLong(action.substring("polls:close:".length()));
+                    pollService.findById(pollId).ifPresent(p -> {
+                        pollService.close(p);
+                        publishPollResults(p);
+                        answer(callbackQuery.getId(), "Голосование закрыто, результаты опубликованы.");
+                        sendAdminPollList(user);
+                    });
+                    return;
+                } else if (action.startsWith("polls:delete:")) {
+                    long pollId = parseLong(action.substring("polls:delete:".length()));
+                    pollService.findById(pollId).ifPresent(p -> {
+                        pollService.close(p);
+                        answer(callbackQuery.getId(), "Голосование удалено.");
+                        sendAdminPollList(user);
+                    });
                     return;
                 } else if (action.startsWith("withdrawal:")) {
                     handleAdminWithdrawalAction(callbackQuery, user, session, action.substring("withdrawal:".length()));
@@ -3866,6 +3963,169 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:traffic")));
             sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
         }, () -> sendText(user.getTelegramId(), "❌ Источник не найден.", backMenuKeyboard("admin:traffic")));
+    }
+
+    // ─── Polls ────────────────────────────────────────────────────────────────
+
+    private void sendPollList(AppUser user) {
+        List<ru.gamebot.platform.domain.model.Poll> polls = pollService.findActive();
+        if (polls.isEmpty()) {
+            sendText(user.getTelegramId(),
+                    "🗳 <b>Голосования</b>\n\nАктивных голосований нет. Следите за обновлениями!",
+                    backMenuKeyboard("menu:main"));
+            return;
+        }
+        StringBuilder sb = new StringBuilder("🗳 <b>Активные голосования</b>\n\nВыберите, чтобы проголосовать:\n");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (ru.gamebot.platform.domain.model.Poll poll : polls) {
+            long total = pollService.totalVotes(poll);
+            boolean voted = pollService.hasVoted(poll, user);
+            String prefix = voted ? "✅ " : "🗳 ";
+            rows.add(List.of(keyboardFactory.callback(
+                    prefix + poll.getQuestion() + " (" + total + " голосов)",
+                    "poll:view:" + poll.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendPollDetail(AppUser user, long pollId) {
+        pollService.findById(pollId).ifPresentOrElse(poll -> {
+            List<String> options = pollService.getOptions(poll);
+            long[] counts = pollService.getVoteCounts(poll);
+            long total = pollService.totalVotes(poll);
+            boolean voted = pollService.hasVoted(poll, user);
+
+            StringBuilder sb = new StringBuilder("🗳 <b>" + escape(poll.getQuestion()) + "</b>\n\n");
+            if (poll.isClosed()) sb.append("🔒 Голосование завершено\n\n");
+            else if (poll.getClosesAt() != null)
+                sb.append("⏰ Закрытие: <b>" + poll.getClosesAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm")) + "</b>\n\n");
+            sb.append("💰 Стоимость голоса: <b>" + poll.getPriceExc() + " EXC</b>\n");
+            sb.append("👥 Всего голосов: <b>" + total + "</b>\n\n");
+
+            for (int i = 0; i < options.size(); i++) {
+                long cnt = i < counts.length ? counts[i] : 0;
+                int pct = total > 0 ? (int) (cnt * 100 / total) : 0;
+                int filled = pct / 10;
+                String bar = "█".repeat(filled) + "░".repeat(10 - filled);
+                sb.append((i + 1) + ". " + escape(options.get(i)) + "\n");
+                sb.append("   [" + bar + "] " + pct + "% (" + cnt + ")\n\n");
+            }
+
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            if (!voted && !poll.isClosed()) {
+                sb.append("\n<i>Ваш баланс: " + user.getCoins() + " EXC. Выберите вариант для голосования:</i>");
+                for (int i = 0; i < options.size(); i++) {
+                    rows.add(List.of(keyboardFactory.callback(
+                            (i + 1) + ". " + options.get(i),
+                            "poll:vote:" + poll.getId() + ":" + i)));
+                }
+            } else if (voted) {
+                sb.append("\n✅ <i>Вы уже проголосовали.</i>");
+            }
+            rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "polls")));
+            sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+        }, () -> sendText(user.getTelegramId(), "❌ Голосование не найдено.", backMenuKeyboard("polls")));
+    }
+
+    private void handlePollVote(CallbackQuery callbackQuery, AppUser user, long pollId, int optionIndex) {
+        pollService.findById(pollId).ifPresentOrElse(poll -> {
+            ru.gamebot.platform.service.PollService.VoteResult result = pollService.castVote(user, poll, optionIndex);
+            if (result.success()) {
+                answer(callbackQuery.getId(), "✅ Голос принят!");
+                sendPollDetail(user, pollId);
+            } else {
+                answer(callbackQuery.getId(), "❌ " + result.error());
+            }
+        }, () -> answer(callbackQuery.getId(), "❌ Голосование не найдено."));
+    }
+
+    private void sendAdminPollList(AppUser user) {
+        List<ru.gamebot.platform.domain.model.Poll> polls = pollService.findAll();
+        StringBuilder sb = new StringBuilder("🗳 <b>Голосования</b>\n\n");
+        if (polls.isEmpty()) sb.append("Голосований пока нет.");
+        else sb.append("Всего: " + polls.size());
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (ru.gamebot.platform.domain.model.Poll poll : polls) {
+            String status = poll.isClosed() ? "🔒" : "🟢";
+            long total = pollService.totalVotes(poll);
+            rows.add(List.of(keyboardFactory.callback(
+                    status + " " + poll.getQuestion() + " (" + total + ")",
+                    "admin:polls:view:" + poll.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("➕ Создать голосование", "admin:polls:create")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendAdminPollView(AppUser user, long pollId) {
+        pollService.findById(pollId).ifPresentOrElse(poll -> {
+            List<String> options = pollService.getOptions(poll);
+            long[] counts = pollService.getVoteCounts(poll);
+            long total = pollService.totalVotes(poll);
+
+            StringBuilder sb = new StringBuilder("🗳 <b>" + escape(poll.getQuestion()) + "</b>\n\n");
+            sb.append("Статус: " + (poll.isClosed() ? "🔒 Закрыто" : "🟢 Активно") + "\n");
+            sb.append("💰 Цена голоса: <b>" + poll.getPriceExc() + " EXC</b> | Всего голосов: <b>" + total + "</b>\n");
+            if (poll.getClosesAt() != null)
+                sb.append("⏰ Закрытие: " + poll.getClosesAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + "\n");
+            sb.append("\n");
+            for (int i = 0; i < options.size(); i++) {
+                long cnt = i < counts.length ? counts[i] : 0;
+                int pct = total > 0 ? (int) (cnt * 100 / total) : 0;
+                sb.append((i + 1) + ". " + escape(options.get(i)) + " — <b>" + cnt + "</b> (" + pct + "%)\n");
+            }
+
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            if (!poll.isClosed()) {
+                rows.add(List.of(keyboardFactory.callback("🔒 Закрыть и опубликовать", "admin:polls:close:" + pollId)));
+                rows.add(List.of(keyboardFactory.callback("🗑 Удалить", "admin:polls:delete:" + pollId)));
+            }
+            rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:polls")));
+            sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+        }, () -> sendText(user.getTelegramId(), "❌ Голосование не найдено.", backMenuKeyboard("admin:polls")));
+    }
+
+    private void publishPollResults(ru.gamebot.platform.domain.model.Poll poll) {
+        List<String> options = pollService.getOptions(poll);
+        long[] counts = pollService.getVoteCounts(poll);
+        long total = pollService.totalVotes(poll);
+
+        StringBuilder sb = new StringBuilder("🗳 <b>Результаты голосования</b>\n\n");
+        sb.append("❓ <b>" + escape(poll.getQuestion()) + "</b>\n");
+        sb.append("👥 Всего проголосовало: <b>" + total + "</b>\n\n");
+
+        // Find winner
+        int winnerIdx = 0;
+        for (int i = 1; i < counts.length; i++) {
+            if (counts[i] > counts[winnerIdx]) winnerIdx = i;
+        }
+
+        for (int i = 0; i < options.size(); i++) {
+            long cnt = i < counts.length ? counts[i] : 0;
+            int pct = total > 0 ? (int) (cnt * 100 / total) : 0;
+            int filled = pct / 10;
+            String bar = "█".repeat(filled) + "░".repeat(10 - filled);
+            String winner = (i == winnerIdx && total > 0) ? " 🏆" : "";
+            sb.append((i + 1) + ". <b>" + escape(options.get(i)) + "</b>" + winner + "\n");
+            sb.append("   [" + bar + "] " + pct + "% (" + cnt + " голосов)\n\n");
+        }
+        sb.append("Спасибо всем участникам! 🎮");
+
+        try {
+            org.telegram.telegrambots.meta.api.methods.send.SendMessage msg = new org.telegram.telegrambots.meta.api.methods.send.SendMessage();
+            msg.setChatId(requiredChannelChatId());
+            msg.setText(sb.toString());
+            msg.setParseMode("HTML");
+            execute(msg);
+        } catch (Exception e) {
+            log.error("Failed to publish poll results for poll {}", poll.getId(), e);
+        }
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onPollClosed(ru.gamebot.platform.event.PollClosedEvent event) {
+        publishPollResults(event.getPoll());
     }
 
     private void sendAdminUsersPage(AppUser admin, Integer requestedPage) {
@@ -4828,6 +5088,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     : "💸 Заявки на вывод";
             rows.add(List.of(keyboardFactory.callback(wLabel, "admin:withdrawals")));
             rows.add(List.of(keyboardFactory.callback("📈 Трафик", "admin:traffic")));
+            rows.add(List.of(keyboardFactory.callback("🗳 Голосования", "admin:polls")));
             return keyboardFactory.rowsLayout(rows);
         }
 
@@ -4856,6 +5117,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("⚡ Предметы", "menu:sink")
         ));
         rows.add(List.of(keyboardFactory.callback("🛡️ EGC Council", "menu:council")));
+        long activePolls = pollService.findActive().size();
+        String pollLabel = activePolls > 0 ? "🗳 Голосования (" + activePolls + ")" : "🗳 Голосования";
+        rows.add(List.of(keyboardFactory.callback(pollLabel, "menu:polls")));
         String dailyLabel = userService.isDailyBonusAvailable(user)
                 ? "🎁 Забрать ежедневный бонус 🔔"
                 : "✅ Бонус за вход получен";
