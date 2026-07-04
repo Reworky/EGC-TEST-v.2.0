@@ -2061,26 +2061,51 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendLeagueTable(AppUser user) {
-        StringBuilder sb = new StringBuilder("🏅 <b>Таблица лиг EGC</b>\n\n")
-                .append("Лиги определяются по XP, заработанным за неделю.\n")
-                .append("Каждый понедельник в 00:00 лига фиксируется, призы начисляются, XP обнуляется.\n\n");
+        ru.gamebot.platform.service.UserService.League myLeague =
+                ru.gamebot.platform.service.UserService.getLeague(user.getWeeklyXp());
         ru.gamebot.platform.service.UserService.League[] leagues =
                 ru.gamebot.platform.service.UserService.League.values();
+
+        StringBuilder sb = new StringBuilder("🏅 <b>Таблица лиг EGC</b>\n");
+        sb.append("<i>Лиги сбрасываются каждый понедельник в 00:00</i>\n\n");
+
         for (int i = 0; i < leagues.length; i++) {
             ru.gamebot.platform.service.UserService.League l = leagues[i];
             int nextMin = i + 1 < leagues.length ? leagues[i + 1].minWeeklyXp : Integer.MAX_VALUE;
+            boolean isMine = l == myLeague;
+
             String range = i + 1 < leagues.length
-                    ? l.minWeeklyXp + "–" + (nextMin - 1) + " XP/нед"
-                    : l.minWeeklyXp + "+ XP/нед";
-            String prize = l.excPrize > 0 ? "+" + l.excPrize + " EXC" : "—";
-            sb.append(l.displayName).append(" — ").append(range).append(" → <b>").append(prize).append("</b>\n");
+                    ? l.minWeeklyXp + " – " + (nextMin - 1) + " XP"
+                    : "от " + l.minWeeklyXp + " XP";
+            String prize = l.excPrize > 0 ? "+" + l.excPrize + " EXC" : "без приза";
+
+            if (isMine) sb.append("▶ ");
+            sb.append("<b>").append(l.displayName).append("</b>");
+            if (isMine) sb.append(" ← ты здесь");
+            sb.append("\n");
+            sb.append("   📊 ").append(range).append("\n");
+            sb.append("   💰 Приз: <b>").append(prize).append("</b>\n");
+
+            // прогресс до следующей лиги
+            if (isMine && i + 1 < leagues.length) {
+                int min = l.minWeeklyXp;
+                int max = nextMin;
+                long xp = user.getWeeklyXp();
+                int pct = (int) Math.min(100, (xp - min) * 100 / (max - min));
+                int filled = pct / 10;
+                String bar = "█".repeat(filled) + "░".repeat(10 - filled);
+                sb.append("   ").append(bar).append(" ").append(pct).append("%\n");
+                sb.append("   До следующей лиги: <b>").append(Math.max(0, max - xp)).append(" XP</b>\n");
+            } else if (isMine) {
+                sb.append("   🏆 Максимальная лига!\n");
+            }
+
+            sb.append("\n");
         }
-        ru.gamebot.platform.service.UserService.League myLeague =
-                ru.gamebot.platform.service.UserService.getLeague(user.getWeeklyXp());
-        sb.append("\n🎯 Твоя лига сейчас: <b>").append(myLeague.displayName)
-                .append("</b> (").append(user.getWeeklyXp()).append(" XP этой недели)");
+
+        sb.append("🎯 Твой XP за эту неделю: <b>").append(user.getWeeklyXp()).append(" XP</b>");
         if (myLeague.excPrize > 0) {
-            sb.append("\n💰 Приз в конце недели: <b>+").append(myLeague.excPrize).append(" EXC</b>");
+            sb.append("\n💸 Приз в конце недели: <b>+").append(myLeague.excPrize).append(" EXC</b>");
         }
         sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:rating"));
     }
