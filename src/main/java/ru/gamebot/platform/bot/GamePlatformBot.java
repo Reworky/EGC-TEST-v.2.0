@@ -3427,7 +3427,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String uname = req.getUser().getTelegramUsername() != null
                     ? "@" + req.getUser().getTelegramUsername()
                     : "#" + req.getUser().getTelegramId();
-            String type = req.getPayoutDetails() != null ? "💎 USDT" : "💸 ₽";
+            String type = (req.getPayoutDetails() != null && req.getPayoutDetails().startsWith("USDT")) ? "💎 USDT" : "💸 ₽";
             rows.add(List.of(keyboardFactory.callback(
                     uname + " — " + type + " " + req.getRewardItem().getPriceCoins() + " EXC",
                     "admin:withdrawal:req:" + req.getId())));
