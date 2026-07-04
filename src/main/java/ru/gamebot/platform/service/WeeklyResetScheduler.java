@@ -7,6 +7,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import ru.gamebot.platform.domain.model.Poll;
 import ru.gamebot.platform.event.PollClosedEvent;
+import ru.gamebot.platform.service.TournamentService;
 
 import java.util.List;
 
@@ -18,6 +19,7 @@ public class WeeklyResetScheduler {
     private final UserService userService;
     private final HealthRatioService healthRatioService;
     private final PollService pollService;
+    private final TournamentService tournamentService;
     private final ApplicationEventPublisher eventPublisher;
 
     @Scheduled(cron = "0 0 0 * * MON")
@@ -35,5 +37,11 @@ public class WeeklyResetScheduler {
             eventPublisher.publishEvent(new PollClosedEvent(this, poll));
             log.info("Poll {} closed and results published.", poll.getId());
         }
+    }
+
+    @Scheduled(fixedDelay = 60_000)
+    public void processTournaments() {
+        tournamentService.activateRegistrationTournaments();
+        tournamentService.settleFinishedTournaments();
     }
 }

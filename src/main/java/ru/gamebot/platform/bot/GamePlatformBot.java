@@ -110,6 +110,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final GameCatalogService gameCatalogService;
     private final ru.gamebot.platform.service.TrafficSourceService trafficSourceService;
     private final ru.gamebot.platform.service.PollService pollService;
+    private final ru.gamebot.platform.service.TournamentService tournamentService;
 
     private final Queue<String[]> pendingNewsQueue = new ConcurrentLinkedQueue<>();
 
@@ -595,6 +596,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "Рейтинг готов");
             return;
         }
+        if (data.startsWith("tournament:join:")) {
+            long tid = parseLong(data.substring("tournament:join:".length()));
+            tournamentService.findById(tid).ifPresentOrElse(t -> {
+                ru.gamebot.platform.service.TournamentService.JoinResult res = tournamentService.join(user, t);
+                if (res.success()) {
+                    answer(callbackQuery.getId(), "✅ Вы зарегистрированы! Взнос списан.");
+                    sendTournament(user);
+                } else {
+                    answer(callbackQuery.getId(), "❌ " + res.error());
+                }
+            }, () -> answer(callbackQuery.getId(), "❌ Турнир не найден."));
+            return;
+        }
+        if (data.startsWith("tournament:leaderboard:")) {
+            long tid = parseLong(data.substring("tournament:leaderboard:".length()));
+            sendTournamentLeaderboard(user, tid);
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if (data.startsWith("poll:view:")) {
             sendPollDetail(user, parseLong(data.substring("poll:view:".length())));
             answerSilently(callbackQuery.getId());
@@ -881,6 +901,74 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + (poll.getClosesAt() != null ? "⏰ Закрытие: <b>" + poll.getClosesAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + "</b>\n" : "⏰ Бессрочное\n")
                         + "\nГолосование доступно пользователям в разделе «Голосования».",
                         backMenuKeyboard("admin:polls"));
+            }
+            case TOURNAMENT_CREATE_NAME -> {
+                session.getData().put("tName", text.trim());
+                session.setState(SessionState.TOURNAMENT_CREATE_GAME);
+                sendText(user.getTelegramId(),
+                        "🎮 Введите название игры (например: <code>PUBG Mobile</code>)\nИли <code>0</code> — если турнир по всем играм:",
+                        cancelKeyboard());
+            }
+            case TOURNAMENT_CREATE_GAME -> {
+                session.getData().put("tGame", "0".equals(text.trim()) ? null : text.trim());
+                session.setState(SessionState.TOURNAMENT_CREATE_FEE);
+                sendText(user.getTelegramId(),
+                        "💰 Введите взнос за участие в EXC (например: <code>2000</code>):",
+                        cancelKeyboard());
+            }
+            case TOURNAMENT_CREATE_FEE -> {
+                long fee;
+                try { fee = Long.parseLong(text.trim()); } catch (NumberFormatException e) {
+                    sendText(user.getTelegramId(), "❌ Введите число.", cancelKeyboard()); return;
+                }
+                if (fee <= 0) { sendText(user.getTelegramId(), "❌ Взнос должен быть > 0.", cancelKeyboard()); return; }
+                session.getData().put("tFee", String.valueOf(fee));
+                session.setState(SessionState.TOURNAMENT_CREATE_START);
+                sendText(user.getTelegramId(),
+                        "🚀 Дата и время начала регистрации (формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>):",
+                        cancelKeyboard());
+            }
+            case TOURNAMENT_CREATE_START -> {
+                java.time.LocalDateTime startDate;
+                try {
+                    startDate = java.time.LocalDateTime.parse(text.trim(),
+                            java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                } catch (Exception e) {
+                    sendText(user.getTelegramId(), "❌ Неверный формат. Используйте ДД.ММ.ГГГГ ЧЧ:ММ", cancelKeyboard()); return;
+                }
+                session.getData().put("tStart", text.trim());
+                session.setState(SessionState.TOURNAMENT_CREATE_END);
+                sendText(user.getTelegramId(),
+                        "⏰ Дата и время окончания турнира (формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>):",
+                        cancelKeyboard());
+            }
+            case TOURNAMENT_CREATE_END -> {
+                java.time.LocalDateTime endDate;
+                try {
+                    endDate = java.time.LocalDateTime.parse(text.trim(),
+                            java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                } catch (Exception e) {
+                    sendText(user.getTelegramId(), "❌ Неверный формат.", cancelKeyboard()); return;
+                }
+                java.time.LocalDateTime startDate = java.time.LocalDateTime.parse(
+                        session.getData().get("tStart"),
+                        java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                if (!endDate.isAfter(startDate)) {
+                    sendText(user.getTelegramId(), "❌ Дата окончания должна быть позже даты начала.", cancelKeyboard()); return;
+                }
+                String tName = session.getData().get("tName");
+                String tGame = session.getData().get("tGame");
+                long fee = Long.parseLong(session.getData().get("tFee"));
+                ru.gamebot.platform.domain.model.Tournament t = tournamentService.create(tName, tGame, fee, startDate, endDate);
+                session.reset();
+                sendText(user.getTelegramId(),
+                        "✅ <b>Турнир создан!</b>\n\n"
+                        + "📌 " + escape(t.getName()) + "\n"
+                        + "💰 Взнос: <b>" + t.getEntryFeeExc() + " EXC</b>\n"
+                        + "🚀 Старт: " + t.getStartDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + "\n"
+                        + "⏰ Финиш: " + t.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + "\n\n"
+                        + "Турнир будет виден пользователям с момента начала регистрации.",
+                        backMenuKeyboard("admin:tournaments"));
             }
             case QUEST_CREATE_TITLE -> {
                 session.getData().put("title", text.trim());
@@ -2563,17 +2651,52 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendTournament(AppUser user) {
-        if (!councilService.isCouncilMember(user)) {
+        java.util.Optional<ru.gamebot.platform.domain.model.Tournament> opt = tournamentService.findCurrentForUser();
+        if (opt.isEmpty()) {
             sendText(user.getTelegramId(),
-                    "🔒 <b>VIP-турниры</b>\n\nДоступ только для участников EGC Council.",
-                    backMenuKeyboard("menu:council"));
+                    "🏆 <b>Еженедельный турнир</b>\n\n⏳ Активных турниров нет. Следите за новостями клуба!",
+                    backMenuKeyboard("menu:main"));
             return;
         }
-        sendText(user.getTelegramId(),
-                "🏆 <b>VIP-турниры</b>\n\n"
-                        + "Ежемесячные соревнования среди участников EGC Council.\n\n"
-                        + "⏳ Первый турнир скоро будет анонсирован. Следите за новостями клуба.",
-                backMenuKeyboard("menu:council"));
+        ru.gamebot.platform.domain.model.Tournament t = opt.get();
+        boolean entered = tournamentService.hasEntered(t, user);
+        long entries = tournamentService.entryCount(t);
+        long pool = t.getPrizePoolExc();
+
+        StringBuilder sb = new StringBuilder("🏆 <b>Еженедельный турнир</b>\n\n");
+        sb.append("📌 <b>").append(escape(t.getName())).append("</b>\n");
+        if (t.getGameName() != null) sb.append("🎮 Игра: ").append(escape(t.getGameName())).append("\n");
+        sb.append("💰 Взнос: <b>").append(t.getEntryFeeExc()).append(" EXC</b>\n");
+        sb.append("🏅 Призовой фонд: <b>").append(pool).append(" EXC</b>\n");
+        sb.append("👥 Участников: <b>").append(entries).append("</b>\n");
+        if (t.getStartDate() != null) sb.append("🚀 Старт: ").append(t.getStartDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm"))).append("\n");
+        if (t.getEndDate() != null) sb.append("⏰ Финиш: ").append(t.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm"))).append("\n");
+        sb.append("\n");
+
+        boolean isReg = t.getStatus() == ru.gamebot.platform.domain.model.Tournament.Status.REGISTRATION;
+        boolean isActive = t.getStatus() == ru.gamebot.platform.domain.model.Tournament.Status.ACTIVE;
+
+        if (isActive) {
+            sb.append("🔥 <b>Турнир идёт!</b> Выполняйте квесты — побеждает тот, кто выполнит больше всего.\n\n");
+            sb.append("🥇 1 место — 60% призового фонда\n");
+            sb.append("🥈-🥉 2–10 места — остаток фонда поровну\n");
+        } else if (isReg) {
+            sb.append("📋 <b>Идёт регистрация!</b> Ваш баланс: <b>").append(user.getCoins()).append(" EXC</b>\n\n");
+            sb.append("🥇 1 место — 60% призового фонда\n");
+            sb.append("🥈-🥉 2–10 места — остаток фонда поровну\n");
+        }
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (isReg && !entered) {
+            rows.add(List.of(keyboardFactory.callback("⚔️ Участвовать (" + t.getEntryFeeExc() + " EXC)", "tournament:join:" + t.getId())));
+        } else if (entered) {
+            sb.append("\n✅ Вы зарегистрированы!");
+        }
+        if (entered || isActive) {
+            rows.add(List.of(keyboardFactory.callback("📊 Список участников", "tournament:leaderboard:" + t.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     private void sendNews(AppUser user) {
@@ -3050,6 +3173,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "withdrawals" -> { sendAdminWithdrawals(user); answerSilently(callbackQuery.getId()); return; }
             case "traffic" -> { sendAdminTrafficList(user); answerSilently(callbackQuery.getId()); return; }
             case "polls" -> { sendAdminPollList(user); answerSilently(callbackQuery.getId()); return; }
+            case "tournaments" -> { sendAdminTournamentList(user); answerSilently(callbackQuery.getId()); return; }
+            case "tournaments:create" -> {
+                session.reset();
+                session.setState(SessionState.TOURNAMENT_CREATE_NAME);
+                sendText(user.getTelegramId(),
+                        "🏆 <b>Новый турнир</b>\n\nВведите название турнира (например: «Турнир июля — PUBG»):",
+                        cancelKeyboard());
+                answerSilently(callbackQuery.getId());
+                return;
+            }
             case "polls:create" -> {
                 session.reset();
                 session.setState(SessionState.POLL_CREATE_QUESTION);
@@ -3168,6 +3301,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 } else if (action.startsWith("traffic:delete:")) {
                     trafficSourceService.delete(parseLong(action.substring("traffic:delete:".length())));
                     sendAdminTrafficList(user);
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("tournaments:view:")) {
+                    sendAdminTournamentView(user, parseLong(action.substring("tournaments:view:".length())));
                     answerSilently(callbackQuery.getId());
                     return;
                 } else if (action.startsWith("polls:view:")) {
@@ -3963,6 +4100,124 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:traffic")));
             sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
         }, () -> sendText(user.getTelegramId(), "❌ Источник не найден.", backMenuKeyboard("admin:traffic")));
+    }
+
+    // ─── Tournaments ──────────────────────────────────────────────────────────
+
+    private void sendAdminTournamentList(AppUser user) {
+        List<ru.gamebot.platform.domain.model.Tournament> tournaments = tournamentService.findAll();
+        StringBuilder sb = new StringBuilder("🏆 <b>Турниры</b>\n\n");
+        if (tournaments.isEmpty()) sb.append("Турниров пока нет.");
+        else sb.append("Всего: " + tournaments.size());
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (ru.gamebot.platform.domain.model.Tournament t : tournaments) {
+            String icon = switch (t.getStatus()) {
+                case REGISTRATION -> "📋";
+                case ACTIVE -> "🔥";
+                case FINISHED -> "🏁";
+            };
+            long entries = tournamentService.entryCount(t);
+            rows.add(List.of(keyboardFactory.callback(
+                    icon + " " + t.getName() + " (" + entries + " уч.)",
+                    "admin:tournaments:view:" + t.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("➕ Создать турнир", "admin:tournaments:create")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendAdminTournamentView(AppUser user, long tid) {
+        tournamentService.findById(tid).ifPresentOrElse(t -> {
+            long entries = tournamentService.entryCount(t);
+            StringBuilder sb = new StringBuilder("🏆 <b>" + escape(t.getName()) + "</b>\n\n");
+            sb.append("Статус: ").append(switch (t.getStatus()) {
+                case REGISTRATION -> "📋 Регистрация";
+                case ACTIVE -> "🔥 Активен";
+                case FINISHED -> "🏁 Завершён";
+            }).append("\n");
+            if (t.getGameName() != null) sb.append("🎮 Игра: ").append(escape(t.getGameName())).append("\n");
+            sb.append("💰 Взнос: <b>").append(t.getEntryFeeExc()).append(" EXC</b>\n");
+            sb.append("🏅 Призовой фонд: <b>").append(t.getPrizePoolExc()).append(" EXC</b>\n");
+            sb.append("👥 Участников: <b>").append(entries).append("</b>\n");
+            if (t.getStartDate() != null) sb.append("🚀 Старт: ").append(t.getStartDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))).append("\n");
+            if (t.getEndDate() != null) sb.append("⏰ Финиш: ").append(t.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))).append("\n");
+
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            if (t.getStatus() != ru.gamebot.platform.domain.model.Tournament.Status.FINISHED) {
+                rows.add(List.of(keyboardFactory.callback("📊 Участники", "tournament:leaderboard:" + tid)));
+            }
+            rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:tournaments")));
+            sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+        }, () -> sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("admin:tournaments")));
+    }
+
+    private void sendTournamentLeaderboard(AppUser user, long tid) {
+        tournamentService.findById(tid).ifPresentOrElse(t -> {
+            List<ru.gamebot.platform.domain.model.TournamentEntry> entries = tournamentService.getLeaderboard(t);
+            StringBuilder sb = new StringBuilder("📊 <b>Участники — " + escape(t.getName()) + "</b>\n\n");
+            if (entries.isEmpty()) {
+                sb.append("Пока никто не записался.");
+            } else {
+                for (int i = 0; i < Math.min(20, entries.size()); i++) {
+                    ru.gamebot.platform.domain.model.TournamentEntry e = entries.get(i);
+                    String rank = e.getRank() > 0 ? e.getRank() + ". " : (i + 1) + ". ";
+                    String nick = e.getUser().getNickname() != null ? e.getUser().getNickname() : "—";
+                    String prize = e.getPrizeExc() > 0 ? " 🏆 +" + e.getPrizeExc() + " EXC" : "";
+                    sb.append(rank).append(escape(nick)).append(prize).append("\n");
+                }
+                if (entries.size() > 20) sb.append("\n...и ещё " + (entries.size() - 20));
+            }
+            sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:tournament"));
+        }, () -> sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("menu:main")));
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onTournamentFinished(ru.gamebot.platform.event.TournamentFinishedEvent event) {
+        ru.gamebot.platform.domain.model.Tournament t = event.getTournament();
+        List<ru.gamebot.platform.domain.model.TournamentEntry> entries = tournamentService.getLeaderboard(t);
+
+        StringBuilder sb = new StringBuilder("🏆 <b>Итоги турнира — " + escape(t.getName()) + "</b>\n\n");
+        long pool = t.getPrizePoolExc();
+        sb.append("🏅 Призовой фонд: <b>" + pool + " EXC</b>\n");
+        sb.append("👥 Участников: <b>" + entries.size() + "</b>\n\n");
+
+        String[] medals = {"🥇", "🥈", "🥉"};
+        for (int i = 0; i < Math.min(10, entries.size()); i++) {
+            ru.gamebot.platform.domain.model.TournamentEntry e = entries.get(i);
+            String medal = i < 3 ? medals[i] : (i + 1) + ".";
+            String nick = e.getUser().getNickname() != null ? e.getUser().getNickname() : "—";
+            String username = e.getUser().getTelegramUsername();
+            sb.append(medal).append(" <b>").append(escape(nick)).append("</b>");
+            if (username != null) sb.append(" (@").append(username).append(")");
+            if (e.getPrizeExc() > 0) sb.append(" — <b>+").append(e.getPrizeExc()).append(" EXC</b>");
+            sb.append("\n");
+        }
+        sb.append("\nПоздравляем победителей! 🎮\nСледите за новыми турнирами → @").append(getBotUsername());
+
+        try {
+            org.telegram.telegrambots.meta.api.methods.send.SendMessage msg = new org.telegram.telegrambots.meta.api.methods.send.SendMessage();
+            msg.setChatId(requiredChannelChatId());
+            msg.setText(sb.toString());
+            msg.setParseMode("HTML");
+            execute(msg);
+        } catch (Exception e) {
+            log.error("Failed to publish tournament results for tournament {}", t.getId(), e);
+        }
+
+        // Notify each prize winner in private
+        for (ru.gamebot.platform.domain.model.TournamentEntry e : entries) {
+            if (e.getPrizeExc() > 0) {
+                try {
+                    sendText(e.getUser().getTelegramId(),
+                            "🏆 <b>Турнир завершён!</b>\n\n"
+                            + "Вы заняли <b>" + e.getRank() + " место</b> в турнире «" + escape(t.getName()) + "»\n"
+                            + "💰 Приз зачислен: <b>+" + e.getPrizeExc() + " EXC</b>",
+                            backMenuKeyboard("menu:main"));
+                } catch (Exception ex) {
+                    log.warn("Failed to notify user {} about tournament prize", e.getUser().getTelegramId());
+                }
+            }
+        }
     }
 
     // ─── Polls ────────────────────────────────────────────────────────────────
@@ -5089,6 +5344,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback(wLabel, "admin:withdrawals")));
             rows.add(List.of(keyboardFactory.callback("📈 Трафик", "admin:traffic")));
             rows.add(List.of(keyboardFactory.callback("🗳 Голосования", "admin:polls")));
+            rows.add(List.of(keyboardFactory.callback("🏆 Турниры", "admin:tournaments")));
             return keyboardFactory.rowsLayout(rows);
         }
 
@@ -5117,6 +5373,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("⚡ Предметы", "menu:sink")
         ));
         rows.add(List.of(keyboardFactory.callback("🛡️ EGC Council", "menu:council")));
+        boolean hasTournament = tournamentService.findCurrentForUser().isPresent();
+        String tournamentLabel = hasTournament ? "🏆 Турнир 🔥" : "🏆 Турнир";
+        rows.add(List.of(keyboardFactory.callback(tournamentLabel, "menu:tournament")));
         long activePolls = pollService.findActive().size();
         String pollLabel = activePolls > 0 ? "🗳 Голосования (" + activePolls + ")" : "🗳 Голосования";
         rows.add(List.of(keyboardFactory.callback(pollLabel, "menu:polls")));

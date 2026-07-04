@@ -67,4 +67,6 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT COALESCE(MAX(s.displayId), 0) FROM QuestSubmission s")
     long findMaxDisplayId();
 
+    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.user = :user AND s.status = 'APPROVED' AND s.updatedAt >= :since AND s.updatedAt < :until")
+    long countApprovedByUserBetween(@Param("user") AppUser user, @Param("since") LocalDateTime since, @Param("until") LocalDateTime until);
 }
