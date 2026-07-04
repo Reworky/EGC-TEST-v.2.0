@@ -111,6 +111,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.TrafficSourceService trafficSourceService;
     private final ru.gamebot.platform.service.PollService pollService;
     private final ru.gamebot.platform.service.TournamentService tournamentService;
+    private final ru.gamebot.platform.service.SeasonService seasonService;
 
     private final Queue<String[]> pendingNewsQueue = new ConcurrentLinkedQueue<>();
 
@@ -596,6 +597,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "Рейтинг готов");
             return;
         }
+        if (data.startsWith("battlepass:buy:")) {
+            long seasonId = parseLong(data.substring("battlepass:buy:".length()));
+            seasonService.findById(seasonId).ifPresentOrElse(season -> {
+                ru.gamebot.platform.service.SeasonService.PurchaseResult res = seasonService.purchase(user, season);
+                if (res.success()) {
+                    answer(callbackQuery.getId(), "🎫 Battle Pass активирован!");
+                    sendBattlePass(user);
+                } else {
+                    answer(callbackQuery.getId(), "❌ " + res.error());
+                }
+            }, () -> answer(callbackQuery.getId(), "❌ Сезон не найден."));
+            return;
+        }
         if (data.startsWith("tournament:join:")) {
             long tid = parseLong(data.substring("tournament:join:".length()));
             tournamentService.findById(tid).ifPresentOrElse(t -> {
@@ -691,6 +705,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "tournament" -> sendTournament(user);
             case "news" -> sendNews(user);
             case "polls" -> sendPollList(user);
+            case "battlepass" -> sendBattlePass(user);
             case "support" -> sendSupport(user);
             case "quickstart" -> { answerSilently(callbackQuery.getId()); sendQuickStartGuide(user); }
             case "admin" -> sendAdminPanel(user);
@@ -901,6 +916,79 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + (poll.getClosesAt() != null ? "⏰ Закрытие: <b>" + poll.getClosesAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + "</b>\n" : "⏰ Бессрочное\n")
                         + "\nГолосование доступно пользователям в разделе «Голосования».",
                         backMenuKeyboard("admin:polls"));
+            }
+            case SEASON_CREATE_NAME -> {
+                session.getData().put("sName", text.trim());
+                session.setState(SessionState.SEASON_CREATE_PRICE);
+                sendText(user.getTelegramId(),
+                        "💰 Стоимость Battle Pass в EXC (например: <code>7500</code>):",
+                        cancelKeyboard());
+            }
+            case SEASON_CREATE_PRICE -> {
+                long price;
+                try { price = Long.parseLong(text.trim()); } catch (NumberFormatException e) {
+                    sendText(user.getTelegramId(), "❌ Введите число.", cancelKeyboard()); return;
+                }
+                if (price <= 0) { sendText(user.getTelegramId(), "❌ Цена должна быть > 0.", cancelKeyboard()); return; }
+                session.getData().put("sPrice", String.valueOf(price));
+                session.setState(SessionState.SEASON_CREATE_XP_BOOST);
+                sendText(user.getTelegramId(),
+                        "⚡ Бонус XP для держателей пасса в % (например: <code>10</code> — это +10% XP за каждый квест):",
+                        cancelKeyboard());
+            }
+            case SEASON_CREATE_XP_BOOST -> {
+                int boost;
+                try { boost = Integer.parseInt(text.trim()); } catch (NumberFormatException e) {
+                    sendText(user.getTelegramId(), "❌ Введите целое число.", cancelKeyboard()); return;
+                }
+                if (boost < 0 || boost > 100) { sendText(user.getTelegramId(), "❌ Укажите от 0 до 100.", cancelKeyboard()); return; }
+                session.getData().put("sBoost", String.valueOf(boost));
+                session.setState(SessionState.SEASON_CREATE_START);
+                sendText(user.getTelegramId(),
+                        "🚀 Дата начала сезона (формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>):",
+                        cancelKeyboard());
+            }
+            case SEASON_CREATE_START -> {
+                java.time.LocalDateTime startDate;
+                try {
+                    startDate = java.time.LocalDateTime.parse(text.trim(),
+                            java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                } catch (Exception e) {
+                    sendText(user.getTelegramId(), "❌ Неверный формат. Используйте ДД.ММ.ГГГГ ЧЧ:ММ", cancelKeyboard()); return;
+                }
+                session.getData().put("sStart", text.trim());
+                session.setState(SessionState.SEASON_CREATE_END);
+                sendText(user.getTelegramId(),
+                        "⏰ Дата окончания сезона (формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>):",
+                        cancelKeyboard());
+            }
+            case SEASON_CREATE_END -> {
+                java.time.LocalDateTime endDate;
+                try {
+                    endDate = java.time.LocalDateTime.parse(text.trim(),
+                            java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                } catch (Exception e) {
+                    sendText(user.getTelegramId(), "❌ Неверный формат.", cancelKeyboard()); return;
+                }
+                java.time.LocalDateTime startDate = java.time.LocalDateTime.parse(
+                        session.getData().get("sStart"),
+                        java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                if (!endDate.isAfter(startDate)) {
+                    sendText(user.getTelegramId(), "❌ Дата окончания должна быть позже даты начала.", cancelKeyboard()); return;
+                }
+                String sName = session.getData().get("sName");
+                long price = Long.parseLong(session.getData().get("sPrice"));
+                int boost = Integer.parseInt(session.getData().get("sBoost"));
+                ru.gamebot.platform.domain.model.Season s = seasonService.create(sName, price, boost, startDate, endDate);
+                session.reset();
+                sendText(user.getTelegramId(),
+                        "✅ <b>Сезон создан!</b>\n\n"
+                        + "🎫 " + escape(s.getName()) + "\n"
+                        + "💰 Цена: <b>" + s.getPriceExc() + " EXC</b>\n"
+                        + "⚡ XP-буст: <b>+" + s.getXpBoostPercent() + "%</b>\n"
+                        + "🚀 Начало: " + s.getStartDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + "\n"
+                        + "⏰ Конец: " + s.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")),
+                        backMenuKeyboard("admin:seasons"));
             }
             case TOURNAMENT_CREATE_NAME -> {
                 session.getData().put("tName", text.trim());
@@ -1316,10 +1404,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String councilBadge = councilService.isCouncilMember(user)
                 ? "🛡️ <b>EGC Council</b>\n"
                 : "";
+        String passLine = seasonService.hasActivePass(user) ? "🎫 <b>Battle Pass активен</b>\n" : "";
 
         String profileText = "👤 <b>Профиль</b>\n\n"
                 + "🎮 <b>" + escape(user.getNickname()) + "</b>\n"
                 + councilBadge
+                + passLine
                 + titleLine
                 + "⭐ Уровень: <b>" + userService.getLevelNumber(user.getXp()) + ". "
                 + escape(userService.getLevelName(user.getXp())) + "</b>\n"
@@ -3173,6 +3263,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "withdrawals" -> { sendAdminWithdrawals(user); answerSilently(callbackQuery.getId()); return; }
             case "traffic" -> { sendAdminTrafficList(user); answerSilently(callbackQuery.getId()); return; }
             case "polls" -> { sendAdminPollList(user); answerSilently(callbackQuery.getId()); return; }
+            case "seasons" -> { sendAdminSeasonList(user); answerSilently(callbackQuery.getId()); return; }
+            case "seasons:create" -> {
+                session.reset();
+                session.setState(SessionState.SEASON_CREATE_NAME);
+                sendText(user.getTelegramId(),
+                        "🎫 <b>Новый сезон Battle Pass</b>\n\nВведите название сезона (например: «Сезон 1 — Лето 2026»):",
+                        cancelKeyboard());
+                answerSilently(callbackQuery.getId());
+                return;
+            }
             case "tournaments" -> { sendAdminTournamentList(user); answerSilently(callbackQuery.getId()); return; }
             case "tournaments:create" -> {
                 session.reset();
@@ -3302,6 +3402,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     trafficSourceService.delete(parseLong(action.substring("traffic:delete:".length())));
                     sendAdminTrafficList(user);
                     answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("seasons:view:")) {
+                    sendAdminSeasonView(user, parseLong(action.substring("seasons:view:".length())));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("seasons:deactivate:")) {
+                    seasonService.deactivate(parseLong(action.substring("seasons:deactivate:".length())));
+                    answer(callbackQuery.getId(), "Сезон деактивирован.");
+                    sendAdminSeasonList(user);
                     return;
                 } else if (action.startsWith("tournaments:view:")) {
                     sendAdminTournamentView(user, parseLong(action.substring("tournaments:view:".length())));
@@ -4100,6 +4209,88 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:traffic")));
             sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
         }, () -> sendText(user.getTelegramId(), "❌ Источник не найден.", backMenuKeyboard("admin:traffic")));
+    }
+
+    // ─── Battle Pass ──────────────────────────────────────────────────────────
+
+    private void sendBattlePass(AppUser user) {
+        boolean hasPass = seasonService.hasActivePass(user);
+        java.util.Optional<ru.gamebot.platform.domain.model.Season> seasonOpt = seasonService.findCurrentSeason();
+
+        if (hasPass) {
+            java.time.LocalDateTime until = user.getSeasonPassActiveUntil();
+            StringBuilder sb = new StringBuilder("🎫 <b>Battle Pass — активен</b>\n\n");
+            sb.append("✅ Ваш пропуск активен до: <b>")
+              .append(until.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")))
+              .append("</b>\n\n");
+            seasonOpt.ifPresent(s -> {
+                sb.append("⚡ Бонус XP за квесты: <b>+" + s.getXpBoostPercent() + "%</b>\n");
+                sb.append("🌟 Доступны эксклюзивные сезонные квесты\n");
+                sb.append("👑 Значок Battle Pass в профиле и рейтинге\n");
+            });
+            sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:main"));
+            return;
+        }
+
+        if (seasonOpt.isEmpty()) {
+            sendText(user.getTelegramId(),
+                    "🎫 <b>Battle Pass</b>\n\n⏳ Активного сезона сейчас нет. Следите за анонсами!",
+                    backMenuKeyboard("menu:main"));
+            return;
+        }
+
+        ru.gamebot.platform.domain.model.Season s = seasonOpt.get();
+        StringBuilder sb = new StringBuilder("🎫 <b>Battle Pass — " + escape(s.getName()) + "</b>\n\n");
+        sb.append("💰 Стоимость: <b>" + s.getPriceExc() + " EXC</b>\n");
+        sb.append("⚡ XP-буст: <b>+" + s.getXpBoostPercent() + "% к каждому квесту</b>\n");
+        sb.append("🌟 Эксклюзивные сезонные квесты\n");
+        sb.append("👑 Значок в профиле и рейтинге\n");
+        if (s.getEndDate() != null) sb.append("⏰ Действует до: <b>" + s.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + "</b>\n");
+        sb.append("\n💼 Ваш баланс: <b>" + user.getCoins() + " EXC</b>");
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (user.getCoins() >= s.getPriceExc()) {
+            rows.add(List.of(keyboardFactory.callback("🎫 Купить Battle Pass", "battlepass:buy:" + s.getId())));
+        } else {
+            rows.add(List.of(keyboardFactory.callback("❌ Недостаточно EXC", "noop")));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendAdminSeasonList(AppUser user) {
+        List<ru.gamebot.platform.domain.model.Season> seasons = seasonService.findAll();
+        StringBuilder sb = new StringBuilder("🎫 <b>Battle Pass — сезоны</b>\n\n");
+        if (seasons.isEmpty()) sb.append("Сезонов пока нет.");
+        else sb.append("Всего: " + seasons.size());
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (ru.gamebot.platform.domain.model.Season s : seasons) {
+            String icon = s.isActive() ? "🟢" : "⚫";
+            rows.add(List.of(keyboardFactory.callback(
+                    icon + " " + s.getName() + " (" + s.getPriceExc() + " EXC)",
+                    "admin:seasons:view:" + s.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("➕ Создать сезон", "admin:seasons:create")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendAdminSeasonView(AppUser user, long seasonId) {
+        seasonService.findById(seasonId).ifPresentOrElse(s -> {
+            StringBuilder sb = new StringBuilder("🎫 <b>" + escape(s.getName()) + "</b>\n\n");
+            sb.append("Статус: " + (s.isActive() ? "🟢 Активен" : "⚫ Деактивирован") + "\n");
+            sb.append("💰 Цена: <b>" + s.getPriceExc() + " EXC</b>\n");
+            sb.append("⚡ XP-буст: <b>+" + s.getXpBoostPercent() + "%</b>\n");
+            if (s.getStartDate() != null) sb.append("🚀 Начало: " + s.getStartDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + "\n");
+            if (s.getEndDate() != null) sb.append("⏰ Конец: " + s.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + "\n");
+
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            if (s.isActive()) {
+                rows.add(List.of(keyboardFactory.callback("⚫ Деактивировать", "admin:seasons:deactivate:" + seasonId)));
+            }
+            rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:seasons")));
+            sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+        }, () -> sendText(user.getTelegramId(), "❌ Сезон не найден.", backMenuKeyboard("admin:seasons")));
     }
 
     // ─── Tournaments ──────────────────────────────────────────────────────────
@@ -5345,6 +5536,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("📈 Трафик", "admin:traffic")));
             rows.add(List.of(keyboardFactory.callback("🗳 Голосования", "admin:polls")));
             rows.add(List.of(keyboardFactory.callback("🏆 Турниры", "admin:tournaments")));
+            rows.add(List.of(keyboardFactory.callback("🎫 Battle Pass", "admin:seasons")));
             return keyboardFactory.rowsLayout(rows);
         }
 
@@ -5379,6 +5571,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long activePolls = pollService.findActive().size();
         String pollLabel = activePolls > 0 ? "🗳 Голосования (" + activePolls + ")" : "🗳 Голосования";
         rows.add(List.of(keyboardFactory.callback(pollLabel, "menu:polls")));
+        boolean hasPass = seasonService.hasActivePass(user);
+        boolean hasSeason = seasonService.findCurrentSeason().isPresent();
+        String passLabel = hasPass ? "🎫 Battle Pass ✅" : (hasSeason ? "🎫 Battle Pass 🆕" : "🎫 Battle Pass");
+        rows.add(List.of(keyboardFactory.callback(passLabel, "menu:battlepass")));
         String dailyLabel = userService.isDailyBonusAvailable(user)
                 ? "🎁 Забрать ежедневный бонус 🔔"
                 : "✅ Бонус за вход получен";

@@ -48,6 +48,9 @@ public class Quest {
     @Column(columnDefinition = "boolean default false")
     private boolean councilOnly;
 
+    @Column(columnDefinition = "boolean default false")
+    private boolean seasonOnly;
+
     private String photoFileId;
     private LocalDateTime createdAt;
 }

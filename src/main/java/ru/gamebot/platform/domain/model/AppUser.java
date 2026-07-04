@@ -104,6 +104,9 @@ public class AppUser {
     // Traffic source tracking
     private String trafficSourceCode;
 
+    // Season Pass
+    private java.time.LocalDateTime seasonPassActiveUntil;
+
     // Referral earnings accumulator
     @Column(columnDefinition = "bigint default 0")
     private long referralEarnedExc;

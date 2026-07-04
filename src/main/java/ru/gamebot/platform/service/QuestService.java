@@ -13,6 +13,7 @@ import ru.gamebot.platform.domain.enums.SubmissionStatus;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.model.QuestSubmission;
+import ru.gamebot.platform.domain.model.Season;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.QuestRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
@@ -33,14 +34,16 @@ public class QuestService {
     private final UserService userService;
     private final HealthRatioService healthRatioService;
     private final SinkShopService sinkShopService;
+    private final SeasonService seasonService;
 
     public List<Quest> findActiveQuests() {
         return questRepository.findAllByActiveTrueOrderByCreatedAtDesc();
     }
 
-    public List<Quest> findActiveQuestsForUser(boolean isCouncilMember) {
+    public List<Quest> findActiveQuestsForUser(boolean isCouncilMember, boolean hasSeasonPass) {
         return findActiveQuests().stream()
                 .filter(q -> !q.isCouncilOnly() || isCouncilMember)
+                .filter(q -> !q.isSeasonOnly() || hasSeasonPass)
                 .toList();
     }
 
@@ -288,6 +291,13 @@ public class QuestService {
         // Apply XP boost
         long baseXp = quest.getRewardXp();
         int xpBoostPct = sinkShopService.getXpBoostPercent(user);
+        // Season Pass adds extra XP boost
+        if (seasonService.hasActivePass(user)) {
+            seasonService.findCurrentSeason().ifPresent(s -> {});
+            int seasonBoost = seasonService.findCurrentSeason()
+                    .map(Season -> Season.getXpBoostPercent()).orElse(0);
+            xpBoostPct += seasonBoost;
+        }
         long adjustedXp = baseXp + (baseXp * xpBoostPct / 100);
 
         // 3.5 3000 EXC bonus on first quest (before completedQuests increment)
