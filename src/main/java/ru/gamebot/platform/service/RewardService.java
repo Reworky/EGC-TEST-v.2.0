@@ -233,15 +233,24 @@ public class RewardService {
 
     @Transactional
     public void resetWithdrawalRequestIds() {
-        // Delete all withdrawal requests and their virtual reward items
-        List<RewardRequest> withdrawals = rewardRequestRepository.findAll().stream()
+        // Collect reward_item IDs before deleting requests
+        List<Long> itemIds = rewardRequestRepository.findAll().stream()
                 .filter(r -> "Вывод".equals(r.getRewardItem().getCategory()))
+                .map(r -> r.getRewardItem().getId())
                 .toList();
-        rewardRequestRepository.deleteAll(withdrawals);
-        withdrawals.forEach(r -> rewardItemRepository.delete(r.getRewardItem()));
-        // Reset H2 auto-increment sequence
-        entityManager.createNativeQuery("ALTER TABLE reward_request ALTER COLUMN id RESTART WITH 1").executeUpdate();
-        entityManager.createNativeQuery("ALTER TABLE reward_item ALTER COLUMN id RESTART WITH 1").executeUpdate();
+        // Delete requests first (FK references reward_item)
+        entityManager.createNativeQuery(
+                "DELETE FROM reward_request WHERE reward_item_id IN " +
+                "(SELECT id FROM reward_item WHERE category = 'Вывод')")
+                .executeUpdate();
+        // Then delete the virtual reward items
+        entityManager.createNativeQuery(
+                "DELETE FROM reward_item WHERE category = 'Вывод'")
+                .executeUpdate();
+        // Reset only reward_request sequence
+        entityManager.createNativeQuery(
+                "ALTER TABLE reward_request ALTER COLUMN id RESTART WITH 1")
+                .executeUpdate();
     }
 
     @Transactional
