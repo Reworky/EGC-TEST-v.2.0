@@ -194,6 +194,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (text != null && text.equals("/resetreqid") && isEffectiveAdmin(user)) {
+            rewardService.resetWithdrawalRequestIds();
+            sendText(user.getTelegramId(), "✅ Все заявки на вывод удалены, счётчик ID сброшен до 1.", null);
+            return;
+        }
+
         if (text != null && text.startsWith("/resetlimit") && isEffectiveAdmin(user)) {
             String[] parts = text.trim().split("\\s+");
             if (parts.length == 2) {

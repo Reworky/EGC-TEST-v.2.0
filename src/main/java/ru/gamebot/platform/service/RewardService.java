@@ -1,5 +1,6 @@
 package ru.gamebot.platform.service;
 
+import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ public class RewardService {
     private final SinkShopService sinkShopService;
     private final HealthRatioService healthRatioService;
     private final ShopLimitService shopLimitService;
+    private final EntityManager entityManager;
 
     public List<RewardItem> findAvailableRewards() {
         return rewardItemRepository.findAllByActiveTrueOrderByPriceCoinsAsc();
@@ -227,6 +229,19 @@ public class RewardService {
         request.setCreatedAt(LocalDateTime.now());
         request.setPayoutDetails("USDT·TON:" + tonWallet + ":rubles=" + rubles);
         return rewardRequestRepository.save(request);
+    }
+
+    @Transactional
+    public void resetWithdrawalRequestIds() {
+        // Delete all withdrawal requests and their virtual reward items
+        List<RewardRequest> withdrawals = rewardRequestRepository.findAll().stream()
+                .filter(r -> "Вывод".equals(r.getRewardItem().getCategory()))
+                .toList();
+        rewardRequestRepository.deleteAll(withdrawals);
+        withdrawals.forEach(r -> rewardItemRepository.delete(r.getRewardItem()));
+        // Reset H2 auto-increment sequence
+        entityManager.createNativeQuery("ALTER TABLE reward_request ALTER COLUMN id RESTART WITH 1").executeUpdate();
+        entityManager.createNativeQuery("ALTER TABLE reward_item ALTER COLUMN id RESTART WITH 1").executeUpdate();
     }
 
     @Transactional
