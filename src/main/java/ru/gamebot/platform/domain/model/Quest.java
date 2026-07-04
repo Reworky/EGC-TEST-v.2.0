@@ -51,6 +51,11 @@ public class Quest {
     @Column(columnDefinition = "boolean default false")
     private boolean seasonOnly;
 
+    @Column(columnDefinition = "boolean default false")
+    private boolean sponsored;
+
+    private Long sponsorId;
+
     private String photoFileId;
     private LocalDateTime createdAt;
 }

@@ -35,6 +35,7 @@ public class QuestService {
     private final HealthRatioService healthRatioService;
     private final SinkShopService sinkShopService;
     private final SeasonService seasonService;
+    private final SponsorService sponsorService;
 
     public List<Quest> findActiveQuests() {
         return questRepository.findAllByActiveTrueOrderByCreatedAtDesc();
@@ -307,6 +308,11 @@ public class QuestService {
         user.setCompletedQuests(user.getCompletedQuests() + 1);
         submission.setUser(user);
         questSubmissionRepository.save(submission);
+
+        // Track sponsored quest spend
+        if (quest.isSponsored() && quest.getSponsorId() != null) {
+            sponsorService.recordSpend(quest.getSponsorId(), adjustedCoins);
+        }
 
         // 3.5 Referral bonus: 10% of EXC earned by referred in first 30 days
         grantReferralBonus(user, adjustedCoins);
