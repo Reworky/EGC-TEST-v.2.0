@@ -45,6 +45,10 @@ public class QuestSubmission {
     @Column(length = 1000)
     private String mediaFileId;
 
+    // Additional media files (pipe-separated fileIds for multi-screenshot support)
+    @Column(length = 4000, columnDefinition = "varchar(4000) default ''")
+    private String extraMediaFileIds;
+
     @Column(length = 1000)
     private String externalLink;
 

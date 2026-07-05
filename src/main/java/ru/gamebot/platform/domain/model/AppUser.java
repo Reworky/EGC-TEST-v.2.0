@@ -110,4 +110,7 @@ public class AppUser {
     // Referral earnings accumulator
     @Column(columnDefinition = "bigint default 0")
     private long referralEarnedExc;
+
+    // Quest take cooldown (1 per hour global)
+    private java.time.LocalDateTime lastQuestTakenAt;
 }

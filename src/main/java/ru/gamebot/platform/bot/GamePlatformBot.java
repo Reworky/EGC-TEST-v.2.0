@@ -249,6 +249,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (session.getState() == SessionState.REPORT_MEDIA_COLLECTING) {
+            handleReportCollecting(user, session, message);
+            return;
+        }
+
         if (session.getState() == SessionState.AVATAR_UPLOAD) {
             handleAvatarUpload(user, session, message);
             return;
@@ -499,6 +504,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.startsWith("quest:report:")) {
             handleReportStart(callbackQuery, user, session, parseLong(data.substring("quest:report:".length())));
+            return;
+        }
+        if (data.startsWith("report:submit:")) {
+            long submissionId = parseLong(data.substring("report:submit:".length()));
+            String photos = session.getData().getOrDefault("report_photos", "");
+            String comment = session.getData().getOrDefault("report_comment", "Без комментария");
+            if (photos.isBlank()) {
+                answerSilently(callbackQuery.getId());
+                sendText(user.getTelegramId(), "⚠️ Добавьте хотя бы один скриншот или файл перед отправкой.", null);
+                return;
+            }
+            String[] allPhotos = photos.split("\\|\\|");
+            String firstPhoto = allPhotos[0];
+            String extra = allPhotos.length > 1
+                    ? String.join("||", java.util.Arrays.copyOfRange(allPhotos, 1, allPhotos.length))
+                    : "";
+            QuestSubmission submission = questService.getSubmission(submissionId);
+            submission.setExtraMediaFileIds(extra);
+            questService.submitReport(submission, "photo", firstPhoto, null, comment);
+            session.reset();
+            notifyModeratorsAboutSubmission(submission.getId());
+            answerSilently(callbackQuery.getId());
+            sendText(user.getTelegramId(),
+                    "✅ <b>Отчёт отправлен</b> (" + allPhotos.length + " фото)\n\nМатериалы ушли в очередь проверки.",
+                    backMenuKeyboard("menu:myquests"));
             return;
         }
         if (data.equals("shop:soon")) {
@@ -1339,6 +1369,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case WITHDRAWAL_USDT_AMOUNT -> handleWithdrawalUsdtAmount(user, session, text);
             case WITHDRAWAL_USDT_ADDRESS -> handleWithdrawalUsdtAddress(user, session, text);
             case SHOP_GAME_DATA_INPUT -> handleShopGameDataInput(user, session, text);
+            case ADMIN_USER_SEARCH -> {
+                session.reset();
+                try {
+                    long searchId = Long.parseLong(text.trim());
+                    AppUser found = userService.findByTelegramId(searchId).orElse(null);
+                    if (found == null) {
+                        sendText(user.getTelegramId(), "❌ Пользователь с TG ID <b>" + searchId + "</b> не найден.", backMenuKeyboard("admin:users:0"));
+                    } else {
+                        sendAdminUserCard(user, found.getTelegramId(), 0, null);
+                    }
+                } catch (NumberFormatException e) {
+                    sendText(user.getTelegramId(), "⚠️ TG ID должен быть числом. Попробуйте ещё раз.", backMenuKeyboard("admin:users:0"));
+                }
+            }
             default -> sendText(user.getTelegramId(), "🧭 Я не жду текст на этом шаге. Вернитесь в меню.", mainMenuKeyboard(user));
         }
     }
@@ -1852,7 +1896,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        // Global cooldown: max 1 new quest taken per hour
+        if (user.getLastQuestTakenAt() != null) {
+            long minutesLeft = java.time.temporal.ChronoUnit.MINUTES.between(
+                    user.getLastQuestTakenAt(), LocalDateTime.now());
+            if (minutesLeft < 60) {
+                answerSilently(callbackQuery.getId());
+                sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                        "⏳ Новый квест можно брать раз в час. Подождите ещё <b>" + (60 - minutesLeft) + " мин.</b>");
+                return;
+            }
+        }
+
         questService.createDraftSubmission(user, quest);
+        user.setLastQuestTakenAt(LocalDateTime.now());
+        userService.save(user);
         answerSilently(callbackQuery.getId());
 
         long weeklyCount = questService.getWeeklyCompletionsOfType(user, quest);
@@ -1909,16 +1967,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         session.reset();
-        session.setState(SessionState.REPORT_MEDIA);
+        session.setState(SessionState.REPORT_MEDIA_COLLECTING);
         session.setQuestId(questId);
         session.setSubmissionId(latest.getId());
+        session.getData().put("report_photos", "");
+        session.getData().put("report_comment", "");
 
         sendText(user.getTelegramId(),
                 "📤 <b>Отчёт по квесту</b>\n\n"
-                        + "Пришлите одним сообщением скриншот, видео, файл или ссылку.\n"
-                        + "Можно добавить комментарий в подписи или текстом.\n\n"
+                        + "Отправьте скриншот(ы), видео, файл или ссылку.\n"
+                        + "Можно добавить несколько фото по одному — бот их соберёт.\n"
+                        + "Когда закончите — нажмите <b>«Отправить отчёт»</b>.\n\n"
                         + "🎯 Квест: <b>" + escape(quest.getTitle()) + "</b>",
-                cancelKeyboard());
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("❌ Отмена", "menu:myquests"))
+                )));
         answer(callbackQuery.getId(), "Жду отчёт");
     }
 
@@ -1952,6 +2015,59 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "Материалы уже ушли в очередь проверки.\n"
                         + "После одобрения награда начислится автоматически.",
                 backMenuKeyboard("menu:myquests"));
+    }
+
+    private void handleReportCollecting(AppUser user, UserSession session, Message message) {
+        String photos = session.getData().getOrDefault("report_photos", "");
+        String comment = session.getData().getOrDefault("report_comment", "");
+
+        if (message.hasPhoto()) {
+            List<PhotoSize> photoList = message.getPhoto();
+            String fileId = photoList.get(photoList.size() - 1).getFileId();
+            photos = photos.isBlank() ? fileId : photos + "||" + fileId;
+            if (message.getCaption() != null && !message.getCaption().isBlank()) {
+                comment = message.getCaption();
+            }
+            session.getData().put("report_photos", photos);
+            session.getData().put("report_comment", comment);
+            int count = (int) photos.chars().filter(c -> c == '|').count() / 2 + 1;
+            sendText(user.getTelegramId(),
+                    "🖼 Фото добавлено (" + count + " шт.). Можете прислать ещё или нажмите «Отправить отчёт».",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("📤 Отправить отчёт", "report:submit:" + session.getSubmissionId())),
+                            List.of(keyboardFactory.callback("❌ Отмена", "menu:myquests"))
+                    )));
+        } else if (message.hasVideo()) {
+            String fileId = message.getVideo().getFileId();
+            String text = message.getCaption();
+            QuestSubmission submission = questService.getSubmission(session.getSubmissionId());
+            questService.submitReport(submission, "video", fileId, extractUrl(text), text == null ? "Без комментария" : text);
+            session.reset();
+            notifyModeratorsAboutSubmission(submission.getId());
+            sendText(user.getTelegramId(),
+                    "✅ <b>Отчёт отправлен</b>\n\nМатериалы ушли в очередь проверки.",
+                    backMenuKeyboard("menu:myquests"));
+        } else if (message.hasDocument()) {
+            String fileId = message.getDocument().getFileId();
+            String text = message.getCaption();
+            QuestSubmission submission = questService.getSubmission(session.getSubmissionId());
+            questService.submitReport(submission, "document", fileId, extractUrl(text), text == null ? "Без комментария" : text);
+            session.reset();
+            notifyModeratorsAboutSubmission(submission.getId());
+            sendText(user.getTelegramId(),
+                    "✅ <b>Отчёт отправлен</b>\n\nМатериалы ушли в очередь проверки.",
+                    backMenuKeyboard("menu:myquests"));
+        } else if (message.hasText()) {
+            String text = message.getText();
+            comment = text;
+            session.getData().put("report_comment", comment);
+            sendText(user.getTelegramId(),
+                    "💬 Комментарий сохранён. Теперь пришлите скриншот или нажмите «Отправить отчёт».",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("📤 Отправить отчёт", "report:submit:" + session.getSubmissionId())),
+                            List.of(keyboardFactory.callback("❌ Отмена", "menu:myquests"))
+                    )));
+        }
     }
 
     private void sendMySubmissions(AppUser user) {
@@ -3260,6 +3376,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 msg.setParseMode("HTML");
                 msg.setReplyMarkup(markup);
                 execute(msg);
+                // Send extra photos if any
+                String extra = submission.getExtraMediaFileIds();
+                if (extra != null && !extra.isBlank()) {
+                    String[] extraIds = extra.split("\\|\\|");
+                    for (int ei = 0; ei < extraIds.length; ei++) {
+                        try {
+                            SendPhoto ep = new SendPhoto();
+                            ep.setChatId(chatId.toString());
+                            ep.setPhoto(new InputFile(extraIds[ei]));
+                            ep.setCaption("📎 Доп. фото " + (ei + 2) + "/" + (extraIds.length + 1));
+                            execute(ep);
+                        } catch (TelegramApiException ex) {
+                            log.error("Failed to send extra photo {} for submission {}", ei, submissionId, ex);
+                        }
+                    }
+                }
                 return;
             } catch (TelegramApiException e) {
                 log.error("Failed to send submission photo for {}", submissionId, e);
@@ -3438,6 +3570,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendAdminQuestCategories(user, decodeGameToken(action.substring("quests:game:".length())));
                 } else if (action.startsWith("quests:list:")) {
                     handleAdminQuestListAction(user, action.substring("quests:list:".length()));
+                } else if ("users:search".equals(action)) {
+                    session.setState(SessionState.ADMIN_USER_SEARCH);
+                    answer(callbackQuery.getId(), "Введите TG ID");
+                    sendText(user.getTelegramId(), "🔍 <b>Поиск пользователя</b>\n\nВведите Telegram ID (числовой):", cancelKeyboard());
                 } else if ("users:post".equals(action)) {
                     sendAdminUsersPostCard(user);
                 } else if (action.startsWith("users:")) {
@@ -4002,6 +4138,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if (action.startsWith("approve:skip:")) {
+            long reqId = parseLong(action.substring("approve:skip:".length()));
+            session.reset();
+            RewardRequest req = rewardService.approveRequest(reqId);
+            notifyUserWithdrawalApproved(req, null);
+            sendAdminWithdrawals(user);
+            answer(callbackQuery.getId(), "✅ Выплачено");
+            return;
+        }
         if (action.startsWith("approve:")) {
             long reqId = parseLong(action.substring("approve:".length()));
             session.setQuestId(reqId);
@@ -4012,15 +4157,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.rowsLayout(List.of(
                             List.of(keyboardFactory.callback("⏭️ Пропустить", "admin:withdrawal:approve:skip:" + reqId))
                     )));
-            return;
-        }
-        if (action.startsWith("approve:skip:")) {
-            long reqId = parseLong(action.substring("approve:skip:".length()));
-            session.reset();
-            RewardRequest req = rewardService.approveRequest(reqId);
-            notifyUserWithdrawalApproved(req, null);
-            sendAdminWithdrawals(user);
-            answer(callbackQuery.getId(), "✅ Выплачено");
             return;
         }
         if (action.startsWith("reject:")) {
@@ -4860,6 +4996,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!pagination.isEmpty()) {
             rows.add(pagination);
         }
+        rows.add(List.of(keyboardFactory.callback("🔍 Найти по TG ID", "admin:users:search")));
         rows.add(List.of(keyboardFactory.callback("📸 Для постов", "admin:users:post")));
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(admin.getTelegramId(), builder.toString(), keyboardFactory.rowsLayout(rows));
