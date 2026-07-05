@@ -3543,6 +3543,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         cancelKeyboard());
             }
             case "stats" -> sendAdminStats(user);
+            case "queststats" -> sendAdminQuestStats(user);
             case "template" -> sendQuestTemplateGamePicker(user);
             case "rewards" -> sendAdminRewardList(user);
             case "withdrawals" -> { sendAdminWithdrawals(user); answerSilently(callbackQuery.getId()); return; }
@@ -4496,6 +4497,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.smartLayout(List.of(
                         keyboardFactory.callback("🏠 Меню", "menu:main")
                 )));
+    }
+
+    private void sendAdminQuestStats(AppUser user) {
+        List<Object[]> rows = questService.getTopQuestsByCompletions();
+        if (rows.isEmpty()) {
+            sendText(user.getTelegramId(), "📈 <b>Топ квестов</b>\n\nВыполненных квестов пока нет.", backMenuKeyboard("menu:admin"));
+            return;
+        }
+        StringBuilder sb = new StringBuilder("📈 <b>Топ квестов по выполнениям</b>\n\n");
+        int i = 1;
+        for (Object[] row : rows) {
+            String title = (String) row[1];
+            String game = (String) row[2];
+            String category = (String) row[3];
+            long count = ((Number) row[4]).longValue();
+            String medal = i == 1 ? "🥇" : i == 2 ? "🥈" : i == 3 ? "🥉" : i + ".";
+            sb.append(medal).append(" <b>").append(escape(title)).append("</b>\n")
+              .append("   🎮 ").append(escape(game)).append(" · ").append(escape(category))
+              .append(" · <b>").append(count).append("</b> раз\n\n");
+            if (i >= 20) break;
+            i++;
+        }
+        sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:admin"));
     }
 
     private void sendAdminTrafficList(AppUser user) {
@@ -6017,7 +6041,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback("➕ Квест", "admin:create"),
                     keyboardFactory.callback("📋 По шаблону", "admin:template")
             ));
-            rows.add(List.of(keyboardFactory.callback("✏️ Квесты", "admin:edit")));
+            rows.add(List.of(
+                    keyboardFactory.callback("✏️ Квесты", "admin:edit"),
+                    keyboardFactory.callback("📈 Топ квестов", "admin:queststats")
+            ));
             rows.add(List.of(
                     keyboardFactory.callback("🎁 Бонус", "admin:bonus"),
                     keyboardFactory.callback("➖ Списание", "admin:debit")

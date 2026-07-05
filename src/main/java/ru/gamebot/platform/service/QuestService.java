@@ -441,6 +441,10 @@ public class QuestService {
         return questSubmissionRepository.countByStatus(SubmissionStatus.PENDING);
     }
 
+    public List<Object[]> getTopQuestsByCompletions() {
+        return questSubmissionRepository.findTopQuestsByCompletions();
+    }
+
     @Transactional
     public long deleteQuest(Long questId) {
         Quest quest = getQuest(questId);

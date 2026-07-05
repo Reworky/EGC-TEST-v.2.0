@@ -72,4 +72,7 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
 
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.user = :user AND s.status = 'APPROVED' AND s.updatedAt >= :since AND s.updatedAt < :until")
     long countApprovedByUserBetween(@Param("user") AppUser user, @Param("since") LocalDateTime since, @Param("until") LocalDateTime until);
+
+    @Query("SELECT s.quest.id, s.quest.title, s.quest.gameName, s.quest.category, COUNT(s) as cnt FROM QuestSubmission s WHERE s.status = 'APPROVED' GROUP BY s.quest.id, s.quest.title, s.quest.gameName, s.quest.category ORDER BY cnt DESC")
+    List<Object[]> findTopQuestsByCompletions();
 }
