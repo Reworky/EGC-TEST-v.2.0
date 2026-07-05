@@ -2,6 +2,7 @@ package ru.gamebot.platform.config;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -34,63 +35,28 @@ public class QuestSeeder implements CommandLineRunner {
             log.info("[QuestSeeder] Deleted obsolete quests for game: '{}'", obsolete);
         }
 
-        // ── Brawl Stars: обновление квестов (пересмотр сложности) ──────────────
+        // ── Brawl Stars: удаляем все старые квесты, оставляем только 10 актуальных ──
+        Set<String> keepBsTitles = Set.of(
+                "Сыграй 3 боя подряд",
+                "Победи в 5 матчах Showdown",
+                "Разблокируй нового Бравлера",
+                "Набери 10 убийств за 1 матч в Showdown",
+                "Достигни ранга Золото в любом Бравлере",
+                "Победи в 3 матчах Gem Grab подряд",
+                "Набери 500 Кубков суммарно",
+                "Выиграй турнир или событие Club League",
+                "Достигни 1 500 Кубков на аккаунте",
+                "Достигни ранга Алмаз в любом Бравлере"
+        );
+        questRepository.findAll().stream()
+                .filter(q -> "Brawl Stars".equalsIgnoreCase(q.getGameName()) && !keepBsTitles.contains(q.getTitle()))
+                .forEach(q -> {
+                    questSubmissionRepository.deleteAllByQuest(q);
+                    questRepository.delete(q);
+                    log.info("[QuestSeeder] Deleted obsolete Brawl Stars quest: '{}'", q.getTitle());
+                });
 
-        updateQuest("Сыграть 3 боя", "Brawl Stars",
-                "Сыграть 5 боёв и победить хотя бы в 2", "Лёгкие", "iOS, Android", 3, "3 дня", 50, 1500,
-                "Заверши 5 боёв в любом режиме и одержи минимум 2 победы.",
-                "Открой Brawl Stars → сыграй 5 боёв в любом режиме → выиграй хотя бы 2 из них.",
-                "Скриншот Battle Log: 5 завершённых боёв и минимум 2 отметки Victory, ник игрока виден.");
-
-        updateQuest("Выиграть бой в Showdown", "Brawl Stars",
-                "Войти в топ-3 в Solo Showdown 3 раза", "Лёгкие", "iOS, Android", 5, "5 дней", 50, 1500,
-                "Финишируй на 1-м, 2-м или 3-м месте в Solo Showdown — суммарно 3 раза за 5 дней.",
-                "Открой Solo Showdown → выживай до конца → финишируй в топ-3. Повтори 3 раза.",
-                "Скриншот Battle Log: 3 боя Solo Showdown с результатом #1, #2 или #3, ник игрока виден.");
-
-        updateQuest("Уничтожить 3 противника в одном бою", "Brawl Stars",
-                "Уничтожить 5+ противников в одном бою Showdown", "Лёгкие", "iOS, Android", 3, "3 дня", 50, 1500,
-                "Набери 5 и более элиминаций за один матч Solo Showdown.",
-                "Открой Solo Showdown → играй агрессивно → набери 5+ элиминаций за один матч.",
-                "Скриншот экрана статистики боя: Eliminations ≥5, режим Solo Showdown, ник игрока.");
-
-        updateQuest("Сыграть 5 боёв в режиме Gem Grab", "Brawl Stars",
-                "Выиграть 3 боя в режиме Gem Grab", "Лёгкие", "iOS, Android", 5, "5 дней", 50, 1500,
-                "Одержи 3 победы в режиме Gem Grab за 5 дней.",
-                "Выбери режим Gem Grab → играй матчи → набери 3 победы суммарно.",
-                "Скриншот Battle Log: 3 боя Gem Grab с отметкой Victory, ник игрока виден.");
-
-        updateQuest("Выиграть бой в Brawl Ball", "Brawl Stars",
-                "Выиграть 2 боя в Brawl Ball и забить гол в каждом", "Лёгкие", "iOS, Android", 5, "5 дней", 50, 1500,
-                "Одержи 2 победы в Brawl Ball, забив минимум 1 гол лично в каждом матче.",
-                "Выбери Brawl Ball → забей гол и выиграй матч. Повтори в следующем бою.",
-                "Скриншот экрана статистики каждого боя: Victory + Goals ≥1 у игрока, режим Brawl Ball, ник виден. Нужно 2 скриншота.");
-
-        updateQuest("Нанести 5000+ урона в одном бою", "Brawl Stars",
-                "Нанести 25 000 урона суммарно за 3 боя", "Средние", "iOS, Android", 7, "7 дней", 100, 4000,
-                "Нанеси суммарно 25 000 и более единиц урона за любые 3 завершённых боя.",
-                "Выбери бойца с высоким уроном (Frank, Bull, Bibi, Primo) → сыграй 3 боя → суммируй урон по скриншотам.",
-                "3 скриншота экрана статистики боя с суммой Damage ≥25 000, ник игрока виден на каждом.");
-
-        updateQuest("Нанести 10 000+ урона в одном бою", "Brawl Stars",
-                "Нанести 25 000 урона суммарно за 3 боя", "Средние", "iOS, Android", 7, "7 дней", 100, 4000,
-                "Нанеси суммарно 25 000 и более единиц урона за любые 3 завершённых боя.",
-                "Выбери бойца с высоким уроном (Frank, Bull, Bibi, Primo) → сыграй 3 боя → суммируй урон по скриншотам.",
-                "3 скриншота экрана статистики боя с суммой Damage ≥25 000, ник игрока виден на каждом.");
-
-        updateQuest("Сделать тройное убийство в одном бою", "Brawl Stars",
-                "Набрать 5+ элиминаций в одном бою в режиме 3v3", "Средние", "iOS, Android", 7, "7 дней", 100, 4000,
-                "Уничтожь 5 и более противников за один матч в командном режиме (3v3).",
-                "Сыграй матч в Gem Grab, Brawl Ball или Knockout → набери 5+ элиминаций за один бой.",
-                "Скриншот экрана статистики боя: Eliminations ≥5 в режиме 3v3, ник игрока.");
-
-        updateQuest("Набрать 15+ элиминаций в одном бою Showdown", "Brawl Stars",
-                "Набрать 7+ элиминаций в одном бою Solo Showdown", "Сложные", "iOS, Android", 10, "10 дней", 250, 10000,
-                "Уничтожь 7 и более противников за один матч Solo Showdown.",
-                "Solo Showdown → играй агрессивно, атакуй всех соперников → набери 7+ элиминаций за бой.",
-                "Скриншот экрана статистики боя: Eliminations ≥7, режим Solo Showdown, ник игрока.");
-
-        // ── Brawl Stars: новые квесты ────────────────────────────────────────────
+        // ── Brawl Stars: актуальные квесты ──────────────────────────────────────
 
         seed("Сыграй 3 боя подряд", "Brawl Stars",
                 "Лёгкие", "Mobile", 1, "1 день", 50, 1500,
