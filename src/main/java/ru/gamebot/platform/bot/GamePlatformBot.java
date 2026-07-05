@@ -778,6 +778,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 + "Рекомендуем квадратное фото для лучшего отображения.",
                         backOnlyKeyboard("menu:profile"));
             }
+            case "nickname" -> {
+                session.setState(SessionState.NICKNAME_CHANGE);
+                sendText(user.getTelegramId(),
+                        "✏️ <b>Смена никнейма</b>\n\n"
+                                + "Текущий ник: <b>" + escape(user.getNickname()) + "</b>\n\n"
+                                + "Введите новый игровой никнейм.\n"
+                                + "<b>ВАЖНО: ник в боте должен совпадать с ником в игре.</b>",
+                        backOnlyKeyboard("menu:profile"));
+            }
             default -> sendProfile(user);
         }
         answerSilently(callbackQuery.getId());
@@ -860,6 +869,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.getData().put("country", text.trim());
                 session.setState(SessionState.REG_PLATFORMS);
                 sendPlatformQuestion(user, session);
+            }
+            case NICKNAME_CHANGE -> {
+                String newNick = text.trim();
+                if (newNick.length() < 2 || newNick.length() > 32) {
+                    sendText(user.getTelegramId(),
+                            "⚠️ Никнейм должен быть от 2 до 32 символов. Попробуйте ещё раз:",
+                            backOnlyKeyboard("menu:profile"));
+                    return;
+                }
+                if (userService.findByNickname(newNick).isPresent()
+                        && !newNick.equalsIgnoreCase(user.getNickname())) {
+                    sendText(user.getTelegramId(),
+                            "⚠️ Ник <b>" + escape(newNick) + "</b> уже занят. Введите другой:",
+                            backOnlyKeyboard("menu:profile"));
+                    return;
+                }
+                user.setNickname(newNick);
+                userService.save(user);
+                session.setState(SessionState.NONE);
+                sendText(user.getTelegramId(),
+                        "✅ Никнейм успешно изменён на <b>" + escape(newNick) + "</b>!",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("👤 Открыть профиль", "menu:profile")),
+                                List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
+                        )));
             }
             case BONUS_INPUT -> handleBonusInput(user, session, text);
             case DEBIT_INPUT -> handleDebitInput(user, session, text);
@@ -1561,6 +1595,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         keyboardFactory.callback("🤝 Рефералы", "menu:referrals")
                 ),
                 List.of(keyboardFactory.callback(avatarBtn, "profile:avatar")),
+                List.of(keyboardFactory.callback("✏️ Сменить ник", "profile:nickname")),
                 List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
         ));
 
