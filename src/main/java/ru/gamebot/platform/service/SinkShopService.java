@@ -264,13 +264,6 @@ public class SinkShopService {
         appUserRepository.save(user);
     }
 
-    public void reverseWithdrawal(AppUser user, long amount) {
-        refreshWithdrawalMonthIfNeeded(user);
-        long restored = Math.max(0, user.getMonthlyWithdrawnExc() - amount);
-        user.setMonthlyWithdrawnExc(restored);
-        appUserRepository.save(user);
-    }
-
     private void refreshWithdrawalMonthIfNeeded(AppUser user) {
         YearMonth now = YearMonth.now();
         if (user.getWithdrawalYear() != now.getYear() || user.getWithdrawalMonth() != now.getMonthValue()) {
