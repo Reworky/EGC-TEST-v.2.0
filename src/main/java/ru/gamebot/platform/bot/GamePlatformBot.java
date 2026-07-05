@@ -4194,7 +4194,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (pending.isEmpty()) {
             sendText(user.getTelegramId(),
                     "💸 <b>Заявки на вывод EXC</b>\n\nНет новых заявок.",
-                    backMenuKeyboard("admin"));
+                    backMenuKeyboard("menu:admin"));
             return;
         }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
@@ -4207,7 +4207,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     uname + " — " + type + " " + req.getRewardItem().getPriceCoins() + " EXC",
                     "admin:withdrawal:req:" + req.getId())));
         }
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
         sendText(user.getTelegramId(),
                 "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>",
                 keyboardFactory.rowsLayout(rows));
