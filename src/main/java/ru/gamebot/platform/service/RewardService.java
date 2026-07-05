@@ -219,6 +219,7 @@ public class RewardService {
         withdrawItem.setCreatedAt(LocalDateTime.now());
         RewardItem saved = rewardItemRepository.save(withdrawItem);
 
+        sinkShopService.recordWithdrawal(user, excAmount);
         user.setCoins(user.getCoins() - excAmount);
         userService.save(user);
 
@@ -275,28 +276,4 @@ public class RewardService {
         return rewardRequestRepository.save(request);
     }
 
-    // USDT withdrawal — also records monthly limit
-    @Transactional
-    public RewardRequest createUsdtWithdrawalRequest(AppUser user, long excAmount, long rubles, String usdtAddress) {
-        RewardItem withdrawItem = new RewardItem();
-        withdrawItem.setTitle("Вывод USDT " + excAmount + " EXC");
-        withdrawItem.setDescription("USDT: " + usdtAddress);
-        withdrawItem.setCategory("Вывод USDT");
-        withdrawItem.setPriceCoins(excAmount);
-        withdrawItem.setActive(false);
-        withdrawItem.setCreatedAt(LocalDateTime.now());
-        RewardItem saved = rewardItemRepository.save(withdrawItem);
-
-        sinkShopService.recordWithdrawal(user, excAmount);
-        user.setCoins(user.getCoins() - excAmount);
-        userService.save(user);
-
-        RewardRequest request = new RewardRequest();
-        request.setUser(user);
-        request.setRewardItem(saved);
-        request.setStatus(RewardRequestStatus.PENDING);
-        request.setPayoutDetails("USDT: " + usdtAddress);
-        request.setCreatedAt(LocalDateTime.now());
-        return rewardRequestRepository.save(request);
-    }
 }

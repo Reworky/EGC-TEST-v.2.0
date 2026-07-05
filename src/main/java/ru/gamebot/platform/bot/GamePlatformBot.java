@@ -3570,6 +3570,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendAdminQuestCategories(user, decodeGameToken(action.substring("quests:game:".length())));
                 } else if (action.startsWith("quests:list:")) {
                     handleAdminQuestListAction(user, action.substring("quests:list:".length()));
+                } else if ("users:bylevel".equals(action)) {
+                    sendAdminUsersByLevel(user);
+                    answerSilently(callbackQuery.getId());
+                } else if (action.startsWith("users:level:")) {
+                    int lvl = Integer.parseInt(action.substring("users:level:".length()));
+                    sendAdminUsersOfLevel(user, lvl);
+                    answerSilently(callbackQuery.getId());
                 } else if ("users:search".equals(action)) {
                     session.setState(SessionState.ADMIN_USER_SEARCH);
                     answer(callbackQuery.getId(), "Введите TG ID");
@@ -4996,10 +5003,78 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!pagination.isEmpty()) {
             rows.add(pagination);
         }
-        rows.add(List.of(keyboardFactory.callback("🔍 Найти по TG ID", "admin:users:search")));
+        rows.add(List.of(
+                keyboardFactory.callback("🔍 Найти по TG ID", "admin:users:search"),
+                keyboardFactory.callback("📊 По уровням", "admin:users:bylevel")
+        ));
         rows.add(List.of(keyboardFactory.callback("📸 Для постов", "admin:users:post")));
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(admin.getTelegramId(), builder.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private static final String[] LEVEL_NAMES = {
+        "", "Новичок", "Игрок", "Ветеран", "Элита", "Легенда",
+        "Герой EXPERIENCE", "Чемпион EXPERIENCE", "Амбассадор EXPERIENCE"
+    };
+    private static final long[] LEVEL_MIN_XP = {0, 0, 1_000, 5_000, 15_000, 35_000, 75_000, 150_000, 300_000};
+
+    private void sendAdminUsersByLevel(AppUser admin) {
+        List<AppUser> all = userService.allUsersSorted();
+        int[] counts = new int[9]; // index = level 1..8
+        for (AppUser u : all) {
+            int lvl = Math.min(8, Math.max(1, userService.getLevelNumber(u.getXp())));
+            counts[lvl]++;
+        }
+        StringBuilder sb = new StringBuilder("📊 <b>Пользователи по уровням</b>\n\n");
+        sb.append("Всего зарегистрированных: <b>").append(all.size()).append("</b>\n\n");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (int lvl = 8; lvl >= 1; lvl--) {
+            String limitStr = lvl == 1 ? "10 000" : lvl == 2 ? "25 000" : lvl == 3 ? "50 000"
+                    : lvl == 4 ? "80 000" : lvl == 5 ? "100 000" : "150 000";
+            sb.append("Ур. <b>").append(lvl).append(" — ").append(LEVEL_NAMES[lvl]).append("</b>: ")
+              .append("<b>").append(counts[lvl]).append("</b> чел.  |  лимит вывода: <b>").append(limitStr).append(" EXC/мес</b>\n");
+            if (counts[lvl] > 0) {
+                rows.add(List.of(keyboardFactory.callback(
+                        "Ур." + lvl + " " + LEVEL_NAMES[lvl] + " (" + counts[lvl] + ")",
+                        "admin:users:level:" + lvl)));
+            }
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ К пользователям", "admin:users:0")));
+        sendText(admin.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendAdminUsersOfLevel(AppUser admin, int level) {
+        List<AppUser> all = userService.allUsersSorted();
+        List<AppUser> filtered = all.stream()
+                .filter(u -> Math.min(8, Math.max(1, userService.getLevelNumber(u.getXp()))) == level)
+                .toList();
+        String levelName = level >= 1 && level <= 8 ? LEVEL_NAMES[level] : "?";
+        if (filtered.isEmpty()) {
+            sendText(admin.getTelegramId(),
+                    "📊 <b>Ур. " + level + " — " + levelName + "</b>\n\nПользователей нет.",
+                    backMenuKeyboard("admin:users:bylevel"));
+            return;
+        }
+        StringBuilder sb = new StringBuilder("📊 <b>Ур. " + level + " — " + levelName + "</b>\n");
+        sb.append("<i>Всего: " + filtered.size() + " пользователей</i>\n\n");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        int shown = Math.min(filtered.size(), 30);
+        for (int i = 0; i < shown; i++) {
+            AppUser u = filtered.get(i);
+            String tag = u.getTelegramUsername() != null ? "@" + u.getTelegramUsername() : "ID:" + u.getTelegramId();
+            sb.append(i + 1).append(". <b>").append(escape(u.getNickname() != null ? u.getNickname() : tag)).append("</b>")
+              .append(" — ").append(u.getXp()).append(" XP")
+              .append(" — ").append(u.getCoins()).append(" EXC")
+              .append("\n");
+            rows.add(List.of(keyboardFactory.callback(
+                    trim((u.getNickname() != null ? u.getNickname() : tag), 28),
+                    "admin:user:view:" + u.getTelegramId() + ":0")));
+        }
+        if (filtered.size() > 30) {
+            sb.append("\n<i>...и ещё ").append(filtered.size() - 30).append(" пользователей</i>");
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ По уровням", "admin:users:bylevel")));
+        sendText(admin.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     private void sendAdminUsersPostCard(AppUser admin) {
