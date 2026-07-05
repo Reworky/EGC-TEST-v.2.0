@@ -1896,21 +1896,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        // Global cooldown: max 1 new quest taken per hour
-        if (user.getLastQuestTakenAt() != null) {
-            long minutesLeft = java.time.temporal.ChronoUnit.MINUTES.between(
-                    user.getLastQuestTakenAt(), LocalDateTime.now());
-            if (minutesLeft < 60) {
-                answerSilently(callbackQuery.getId());
+        // Fix 2: atomic 1-hour global cooldown (transactional check+set prevents race condition)
+        QuestSubmission newSubmission;
+        try {
+            newSubmission = questService.takeQuestAtomically(user, quest);
+        } catch (IllegalArgumentException e) {
+            answerSilently(callbackQuery.getId());
+            String msg = e.getMessage();
+            if (msg != null && msg.startsWith("cooldown:")) {
+                long minsLeft = Long.parseLong(msg.split(":")[1]);
                 sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
-                        "⏳ Новый квест можно брать раз в час. Подождите ещё <b>" + (60 - minutesLeft) + " мин.</b>");
-                return;
+                        "⏳ Новый квест можно брать раз в час. Подождите ещё <b>" + minsLeft + " мин.</b>");
+            } else {
+                sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад", "⚠️ " + msg);
             }
+            return;
         }
-
-        questService.createDraftSubmission(user, quest);
-        user.setLastQuestTakenAt(LocalDateTime.now());
-        userService.save(user);
         answerSilently(callbackQuery.getId());
 
         long weeklyCount = questService.getWeeklyCompletionsOfType(user, quest);
@@ -1920,7 +1921,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         Quest freshQuest = questService.getQuest(questId);
-        QuestSubmission submission = questService.getLatestSubmission(user, freshQuest);
+        QuestSubmission submission = newSubmission;
         List<InlineKeyboardButton> buttons = new ArrayList<>();
         buttons.add(keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
         buttons.add(keyboardFactory.callback("📂 Мои квесты", "menu:myquests"));
@@ -1956,6 +1957,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (latest == null) {
             latest = questService.createDraftSubmission(user, quest);
         } else if (latest.getStatus() == SubmissionStatus.REJECTED || latest.getStatus() == SubmissionStatus.NEEDS_INFO) {
+            // Fix 4: cooldown 1h after rejection to prevent instant resubmit spam
+            LocalDateTime rejectedAt = latest.getUpdatedAt();
+            if (rejectedAt != null && LocalDateTime.now().isBefore(rejectedAt.plusHours(1))) {
+                long minsLeft = java.time.temporal.ChronoUnit.MINUTES.between(LocalDateTime.now(), rejectedAt.plusHours(1));
+                answerSilently(callbackQuery.getId());
+                sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                        "⏳ После отклонения повторный отчёт можно отправить через <b>" + Math.max(1, minsLeft) + " мин.</b>");
+                return;
+            }
             latest = questService.resetToDraft(latest);
         }
 

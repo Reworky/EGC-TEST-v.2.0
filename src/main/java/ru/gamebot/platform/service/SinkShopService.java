@@ -206,7 +206,10 @@ public class SinkShopService {
     }
 
     public boolean hasCooldownBypass(AppUser user, String gameName) {
-        return user.getCooldownBypassGame() != null;
+        // Fix 7: bypass must match the game it was purchased for (or "ANY" for universal)
+        String bypass = user.getCooldownBypassGame();
+        if (bypass == null) return false;
+        return "ANY".equalsIgnoreCase(bypass) || bypass.equalsIgnoreCase(gameName);
     }
 
     @Transactional

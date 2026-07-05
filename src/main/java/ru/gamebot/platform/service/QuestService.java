@@ -132,8 +132,19 @@ public class QuestService {
     public boolean isSameQuestCooldownActive(AppUser user, Quest quest) {
         Optional<LocalDateTime> lastApproved = questSubmissionRepository
                 .findLastApprovedDateByUserAndQuest(user, quest);
-        return lastApproved.isPresent()
-                && LocalDateTime.now().isBefore(lastApproved.get().plusHours(COOLDOWN_HOURS));
+        if (lastApproved.isPresent() && LocalDateTime.now().isBefore(lastApproved.get().plusHours(COOLDOWN_HOURS))) {
+            return true;
+        }
+        // Fix 5: cancelled submissions also block retake for 1h to prevent cancel-retake abuse
+        Optional<QuestSubmission> lastCancelled = questSubmissionRepository
+                .findTopByUserAndQuestOrderByCreatedAtDesc(user, quest);
+        if (lastCancelled.isPresent() && lastCancelled.get().getStatus() == SubmissionStatus.CANCELLED) {
+            LocalDateTime cancelledAt = lastCancelled.get().getUpdatedAt();
+            if (cancelledAt != null && LocalDateTime.now().isBefore(cancelledAt.plusHours(1))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public boolean isCooldownActive(AppUser user, Quest quest) {
@@ -189,6 +200,13 @@ public class QuestService {
 
     @Transactional
     public QuestSubmission createDraftSubmission(AppUser user, Quest quest) {
+        // Fix 1: enforce participant limit
+        if (quest.getParticipantLimit() != null && quest.getParticipantLimit() > 0) {
+            long approved = questSubmissionRepository.countApprovedByQuest(quest);
+            if (approved >= quest.getParticipantLimit()) {
+                throw new IllegalArgumentException("Квест закрыт — набор участников завершён (" + quest.getParticipantLimit() + "/" + quest.getParticipantLimit() + ").");
+            }
+        }
         QuestSubmission submission = new QuestSubmission();
         submission.setUser(user);
         submission.setQuest(quest);
@@ -200,6 +218,22 @@ public class QuestService {
             submission.setExpiresAt(LocalDateTime.now().plusDays(quest.getDurationDays()));
         }
         return questSubmissionRepository.save(submission);
+    }
+
+    // Fix 2: atomic check + set of 1-hour global cooldown — prevents race condition
+    @Transactional
+    public QuestSubmission takeQuestAtomically(AppUser user, Quest quest) {
+        AppUser freshUser = appUserRepository.findById(user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
+        if (freshUser.getLastQuestTakenAt() != null) {
+            long minutesLeft = ChronoUnit.MINUTES.between(freshUser.getLastQuestTakenAt(), LocalDateTime.now());
+            if (minutesLeft < 60) {
+                throw new IllegalArgumentException("cooldown:" + (60 - minutesLeft));
+            }
+        }
+        freshUser.setLastQuestTakenAt(LocalDateTime.now());
+        appUserRepository.save(freshUser);
+        return createDraftSubmission(freshUser, quest);
     }
 
     public boolean isExpired(QuestSubmission submission) {
@@ -239,7 +273,7 @@ public class QuestService {
                 if (recentTimes.size() >= 2) {
                     long secondsBetween = java.time.temporal.ChronoUnit.SECONDS.between(
                             recentTimes.get(1), recentTimes.get(0));
-                    if (secondsBetween < 10) {
+                    if (secondsBetween < 60) {
                         user.setFraudSuspect(true);
                         appUserRepository.save(user);
                         log.warn("Fraud suspect flagged: userId={} successRate={} interval={}s",
@@ -325,11 +359,16 @@ public class QuestService {
         if (referrerTelegramId == null) {
             return;
         }
+        // Fix 3: prevent self-referral (multi-account farming)
+        if (referrerTelegramId.equals(invitedUser.getTelegramId())) {
+            return;
+        }
         if (invitedUser.getCreatedAt() == null) {
             return;
         }
         long daysSinceJoin = ChronoUnit.DAYS.between(invitedUser.getCreatedAt(), LocalDateTime.now());
-        if (daysSinceJoin > REFERRAL_DAYS_WINDOW) {
+        // Fix 10: off-by-one — was >, should be >= to correctly close window on day 14
+        if (daysSinceJoin >= REFERRAL_DAYS_WINDOW) {
             return;
         }
         AppUser referrer = appUserRepository.findByTelegramId(referrerTelegramId).orElse(null);
