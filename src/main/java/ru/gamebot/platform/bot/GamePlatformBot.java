@@ -321,6 +321,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        // Сотрудник без завершённой регистрации — сбросить сессию и показать рабочее меню
+        if (!user.isProfileCompleted() && isEffectiveModerator(user)) {
+            session.reset();
+            sendMainMenu(user, roleWelcomeText(user, null));
+            return;
+        }
+
         if (session.getState() == SessionState.BROADCAST_MESSAGE && message.hasPhoto()) {
             List<PhotoSize> bcastPhotos = message.getPhoto();
             String bcastFileId = bcastPhotos.get(bcastPhotos.size() - 1).getFileId();
@@ -331,11 +338,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (text != null && session.getState() != SessionState.NONE) {
             handleStateInput(user, session, text);
-            return;
-        }
-
-        if (!user.isProfileCompleted() && isEffectiveModerator(user)) {
-            sendMainMenu(user, roleWelcomeText(user, null));
             return;
         }
 
