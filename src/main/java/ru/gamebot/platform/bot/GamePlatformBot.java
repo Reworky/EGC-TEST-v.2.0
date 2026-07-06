@@ -239,7 +239,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        if (user.isProfileCompleted() && !user.isRegistrationCompleted()) {
+        if (user.isProfileCompleted() && !user.isRegistrationCompleted() && !isEffectiveModerator(user)) {
             sendCommunityActivationPrompt(user, null);
             return;
         }
