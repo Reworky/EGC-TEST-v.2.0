@@ -1904,9 +1904,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : statusText;
 
         List<InlineKeyboardButton> buttons = new ArrayList<>();
+        boolean hasActiveSubmission = latest != null && latest.getStatus() != SubmissionStatus.CANCELLED;
         if (cooldownLeft > 0) {
             buttons.add(keyboardFactory.callback("⏳ Доступно через " + cooldownLeft + " ч", "noop"));
-        } else {
+        } else if (!hasActiveSubmission) {
             buttons.add(keyboardFactory.callback("🚀 Взять", "quest:take:" + questId));
         }
         buttons.add(keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
@@ -1951,6 +1952,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
                     "📌 По этому квесту уже есть активный прогресс. Используйте карточку ниже, чтобы посмотреть статус или отправить отчёт.");
+            return;
+        }
+        if (latest != null && (latest.getStatus() == SubmissionStatus.REJECTED || latest.getStatus() == SubmissionStatus.NEEDS_INFO)) {
+            answerSilently(callbackQuery.getId());
+            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                    "❌ Ваш отчёт по этому квесту был отклонён. Нажмите «📤 Отчёт», чтобы исправить ошибки и переотправить.");
             return;
         }
 

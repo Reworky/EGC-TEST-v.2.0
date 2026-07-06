@@ -458,7 +458,7 @@ public class QuestService {
 
     public long countActiveDrafts(AppUser user) {
         return questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user).stream()
-                .filter(s -> s.getStatus() == SubmissionStatus.DRAFT && !isExpired(s))
+                .filter(s -> (s.getStatus() == SubmissionStatus.DRAFT || s.getStatus() == SubmissionStatus.PENDING) && !isExpired(s))
                 .count();
     }
 
