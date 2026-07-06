@@ -577,6 +577,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.equals("shop:withdraw")) {
             answerSilently(callbackQuery.getId());
+            if (rewardService.hasPendingWithdrawal(user)) {
+                sendText(user.getTelegramId(),
+                    "⚠️ <b>У вас уже есть активная заявка на вывод.</b>\n\n"
+                        + "Дождитесь обработки текущей заявки, прежде чем создавать новую.",
+                    backMenuKeyboard("menu:main"));
+                return;
+            }
             sendWithdrawalMethodChoice(user);
             return;
         }
