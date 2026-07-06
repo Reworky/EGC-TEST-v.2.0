@@ -2513,7 +2513,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.reset();
             sendText(user.getTelegramId(),
                     "✅ <b>Заявка на вывод в USDT принята!</b>\n\n"
-                    + "🔢 Номер заявки: <b>#" + usdtReq.getId() + "</b>\n"
+                    + "🔢 Номер заявки: <b>В-" + usdtReq.getId() + "</b>\n"
                     + "💸 Сумма: <b>" + excAmount + " EXC</b>\n"
                     + "💵 Эквивалент: <b>~" + rubles + " ₽</b>\n"
                     + "💎 Способ: <b>USDT · TON</b>\n"
@@ -3376,7 +3376,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (QuestSubmission submission : submissions) {
             boolean suspect = submission.getUser().isFraudSuspect();
             String prefix = suspect ? "⚠️ " : "🔎 ";
-            String title = prefix + "#" + (submission.getDisplayId() != null ? submission.getDisplayId() : submission.getId()) + " " + trim(submission.getUser().getNickname() + " / " + submission.getQuest().getTitle(), 22);
+            String title = prefix + "К-" + (submission.getDisplayId() != null ? submission.getDisplayId() : submission.getId()) + " " + trim(submission.getUser().getNickname() + " / " + submission.getQuest().getTitle(), 22);
             buttons.add(keyboardFactory.callback(title, "mod:view:" + submission.getId()));
         }
 
@@ -3432,7 +3432,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendSubmissionCard(Long chatId, Long submissionId) {
         QuestSubmission submission = questService.getSubmission(submissionId);
-        String caption = "🧾 <b>Заявка #" + (submission.getDisplayId() != null ? submission.getDisplayId() : submission.getId()) + " на проверку</b>\n\n"
+        String caption = "🧾 <b>Заявка К-" + (submission.getDisplayId() != null ? submission.getDisplayId() : submission.getId()) + " на проверку</b>\n\n"
                 + "👤 Игрок: <b>" + escape(submission.getUser().getNickname()) + "</b>\n"
                 + "🆔 ID: <b>" + submission.getUser().getTelegramId() + "</b>\n"
                 + "🎯 Квест: <b>" + escape(submission.getQuest().getTitle()) + "</b>\n"
@@ -4305,7 +4305,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         long rubles = Math.round(req.getRewardItem().getPriceCoins() / 100.0);
         sendText(user.getTelegramId(),
-                "💸 <b>Заявка на вывод #" + req.getId() + "</b>\n\n"
+                "💸 <b>Заявка на вывод В-" + req.getId() + "</b>\n\n"
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
                         + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
                         + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
@@ -4325,7 +4325,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean isUsdt = req.getPayoutDetails() != null;
         String method = isUsdt ? "USDT · TON" : "рубли (СБП / Сбербанк)";
         String caption = "✅ <b>Ваш вывод EXC выполнен!</b>\n\n"
-                + "🔢 Номер заявки: <b>#" + req.getId() + "</b>\n"
+                + "🔢 Номер заявки: <b>В-" + req.getId() + "</b>\n"
                 + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
                 + "💵 Способ: <b>" + method + "</b>\n\n"
                 + "Средства отправлены. Если не получили — напишите в поддержку.";
@@ -5666,7 +5666,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.reset();
             sendText(user.getTelegramId(),
                 "✅ <b>Заявка на вывод принята!</b>\n\n"
-                    + "🔢 Номер заявки: <b>#" + withdrawalReq.getId() + "</b>\n"
+                    + "🔢 Номер заявки: <b>В-" + withdrawalReq.getId() + "</b>\n"
                     + "💸 Сумма: <b>" + amount + " EXC</b>\n"
                     + "💵 К выплате: <b>~" + rubles + " ₽</b>\n\n"
                     + "Ожидайте, в течение 24 часов администратор выполнит перевод!",
@@ -5967,7 +5967,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void notifyModeratorsAboutSubmission(Long submissionId) {
         QuestSubmission submission = questService.getSubmission(submissionId);
-        String caption = "🧾 Заявка #" + (submission.getDisplayId() != null ? submission.getDisplayId() : submissionId) + " на модерацию\n\n"
+        String caption = "🧾 Заявка К-" + (submission.getDisplayId() != null ? submission.getDisplayId() : submissionId) + " на модерацию\n\n"
                 + "👤 " + escape(submission.getUser().getNickname()) + " (" + submission.getUser().getTelegramId() + ")\n"
                 + "🎯 " + escape(submission.getQuest().getTitle()) + "\n"
                 + "💬 " + escape(submission.getUserComment());
@@ -6054,7 +6054,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.reset();
             RewardRequest req = rewardService.approveRequest(reqId);
             notifyUserWithdrawalApproved(req, null);
-            sendText(user.getTelegramId(), "✅ Заявка #" + reqId + " одобрена.", null);
+            sendText(user.getTelegramId(), "✅ Заявка В-" + reqId + " одобрена.", null);
             sendModWithdrawals(user);
         } else if (data.startsWith("mod:withdrawal:approve:")) {
             long reqId = Long.parseLong(data.substring("mod:withdrawal:approve:".length()));
@@ -6118,7 +6118,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         long rubles = Math.round(req.getRewardItem().getPriceCoins() / 100.0);
         sendText(user.getTelegramId(),
-                "💸 <b>Заявка на вывод #" + req.getId() + "</b>\n\n"
+                "💸 <b>Заявка на вывод В-" + req.getId() + "</b>\n\n"
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
                         + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
                         + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
