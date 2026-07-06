@@ -149,9 +149,8 @@ public class RewardService {
         long price = isWithdrawal ? req.getRewardItem().getPriceCoins() : effectivePrice(req.getRewardItem());
         requester.setCoins(requester.getCoins() + price);
         userService.save(requester);
-        if (isWithdrawal) {
-            sinkShopService.reverseWithdrawal(requester, price);
-        }
+        // reverseWithdrawal for ALL items since recordWithdrawal is called for all in createRewardRequest
+        sinkShopService.reverseWithdrawal(requester, price);
         return rewardRequestRepository.save(req);
     }
 
@@ -165,9 +164,7 @@ public class RewardService {
         long price = isWithdrawal ? req.getRewardItem().getPriceCoins() : effectivePrice(req.getRewardItem());
         user.setCoins(user.getCoins() + price);
         userService.save(user);
-        if (isWithdrawal) {
-            sinkShopService.reverseWithdrawal(user, price);
-        }
+        sinkShopService.reverseWithdrawal(user, price);
         return rewardRequestRepository.save(req);
     }
 

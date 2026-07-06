@@ -93,6 +93,10 @@ public class UserService {
         user.setRegistrationCompleted(false);
         user.setStaffRole("USER");
         user.setCreatedAt(LocalDateTime.now());
+        java.time.YearMonth now = java.time.YearMonth.now();
+        user.setWithdrawalMonth(now.getMonthValue());
+        user.setWithdrawalYear(now.getYear());
+        user.setMonthlyWithdrawnExc(0);
         updateTelegramProfile(user, telegramUser);
         return appUserRepository.save(user);
     }
