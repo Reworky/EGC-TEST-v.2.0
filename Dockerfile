@@ -18,4 +18,6 @@ ENV APP_CLUB_NAME="Game Quest Club"
 ENV DB_PATH="/data/game-platform-bot"
 ENV JAVA_TOOL_OPTIONS="-Djava.net.preferIPv4Stack=true -Djava.net.preferIPv6Addresses=false"
 VOLUME ["/data"]
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
