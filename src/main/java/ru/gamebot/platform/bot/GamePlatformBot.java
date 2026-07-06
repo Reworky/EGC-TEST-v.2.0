@@ -3482,8 +3482,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String caption = "🧾 <b>Заявка К-" + (submission.getDisplayId() != null ? submission.getDisplayId() : submission.getId()) + " на проверку</b>\n\n"
                 + "👤 Игрок: <b>" + escape(submission.getUser().getNickname()) + "</b>\n"
                 + "🆔 ID: <b>" + submission.getUser().getTelegramId() + "</b>\n"
-                + "🎯 Квест: <b>" + escape(submission.getQuest().getTitle()) + "</b>\n"
-                + "💰 Сумма EXC: <b>" + submission.getQuest().getRewardCoins() + " EXC</b>\n"
+                + "🎯 Квест: <b>" + escape(submission.getQuest().getTitle()) + " (" + submission.getQuest().getRewardCoins() + " EXC)</b>\n"
                 + "📅 Отправлено: <b>" + escape(submission.getCreatedAt().format(DATE_TIME_FORMATTER)) + "</b>\n"
                 + "💬 Комментарий: " + escape(submission.getUserComment()) + "\n"
                 + (submission.getExternalLink() == null ? "" : "🔗 Ссылка: " + escape(submission.getExternalLink()) + "\n");
@@ -6030,8 +6029,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         QuestSubmission submission = questService.getSubmission(submissionId);
         String caption = "🧾 Заявка К-" + (submission.getDisplayId() != null ? submission.getDisplayId() : submissionId) + " на модерацию\n\n"
                 + "👤 " + escape(submission.getUser().getNickname()) + " (" + submission.getUser().getTelegramId() + ")\n"
-                + "🎯 " + escape(submission.getQuest().getTitle()) + "\n"
-                + "💰 Сумма EXC: " + submission.getQuest().getRewardCoins() + " EXC\n"
+                + "🎯 " + escape(submission.getQuest().getTitle()) + " (" + submission.getQuest().getRewardCoins() + " EXC)\n"
                 + "💬 " + escape(submission.getUserComment());
 
         InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
