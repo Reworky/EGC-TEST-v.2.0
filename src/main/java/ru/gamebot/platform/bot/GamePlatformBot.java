@@ -6031,6 +6031,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String caption = "🧾 Заявка К-" + (submission.getDisplayId() != null ? submission.getDisplayId() : submissionId) + " на модерацию\n\n"
                 + "👤 " + escape(submission.getUser().getNickname()) + " (" + submission.getUser().getTelegramId() + ")\n"
                 + "🎯 " + escape(submission.getQuest().getTitle()) + "\n"
+                + "💰 Сумма EXC: " + submission.getQuest().getRewardCoins() + " EXC\n"
                 + "💬 " + escape(submission.getUserComment());
 
         InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
