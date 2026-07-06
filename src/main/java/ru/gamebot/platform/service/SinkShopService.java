@@ -219,7 +219,7 @@ public class SinkShopService {
     }
 
     public long getMaxQuestSlots(AppUser user) {
-        return hasExtraSlot(user) ? 3 : 2;
+        return 1;
     }
 
     @Transactional

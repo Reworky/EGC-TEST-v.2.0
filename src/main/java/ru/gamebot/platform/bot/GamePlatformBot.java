@@ -1905,8 +1905,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         List<InlineKeyboardButton> buttons = new ArrayList<>();
         boolean hasActiveSubmission = latest != null && latest.getStatus() != SubmissionStatus.CANCELLED;
+        long activeSlots = questService.countActiveDrafts(user);
+        long maxSlots = sinkShopService.getMaxQuestSlots(user);
+        boolean slotsFull = activeSlots >= maxSlots && !hasActiveSubmission;
+        boolean gameCooldown = !hasActiveSubmission && cooldownLeft == 0 && questService.isCooldownActive(user, quest);
         if (cooldownLeft > 0) {
             buttons.add(keyboardFactory.callback("⏳ Доступно через " + cooldownLeft + " ч", "noop"));
+        } else if (slotsFull) {
+            buttons.add(keyboardFactory.callback("📂 Квест уже активен", "noop"));
+        } else if (gameCooldown) {
+            buttons.add(keyboardFactory.callback("⏳ Кулдаун 24ч по этой игре", "noop"));
         } else if (!hasActiveSubmission) {
             buttons.add(keyboardFactory.callback("🚀 Взять", "quest:take:" + questId));
         }
