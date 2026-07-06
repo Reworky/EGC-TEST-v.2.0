@@ -6208,6 +6208,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback("📂 Квесты", "mod:support:quests"),
                     keyboardFactory.callback("🆘 Поддержка", "mod:support:list")
             ));
+            long pendingWithdrawalsMod = rewardService.findPendingWithdrawals().size();
+            String wLabelMod = pendingWithdrawalsMod > 0
+                    ? "💸 Заявки на вывод (" + pendingWithdrawalsMod + ")"
+                    : "💸 Заявки на вывод";
+            rows.add(List.of(keyboardFactory.callback(wLabelMod, "mod:withdrawals")));
             return keyboardFactory.rowsLayout(rows);
         }
 
