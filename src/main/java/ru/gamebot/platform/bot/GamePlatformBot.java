@@ -12,7 +12,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.nio.charset.StandardCharsets;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -115,6 +120,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.SponsorService sponsorService;
 
     private final Queue<String[]> pendingNewsQueue = new ConcurrentLinkedQueue<>();
+    private final ScheduledExecutorService albumScheduler = Executors.newSingleThreadScheduledExecutor();
+    private final ConcurrentHashMap<String, ScheduledFuture<?>> albumTimers = new ConcurrentHashMap<>();
 
     @EventListener(ApplicationReadyEvent.class)
     public void registerBot() throws TelegramApiException {
@@ -2106,7 +2113,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "📤 <b>Отчёт по квесту</b>\n\n"
                         + "Отправьте скриншот(ы), видео, файл или ссылку.\n"
-                        + "Можно добавить несколько фото по одному — бот их соберёт.\n"
+                        + "Можно отправить сразу несколько фото альбомом или по одному — бот их соберёт.\n"
                         + "Когда закончите — нажмите <b>«Отправить отчёт»</b>.\n\n"
                         + "🎯 Квест: <b>" + escape(quest.getTitle()) + "</b>",
                 keyboardFactory.rowsLayout(List.of(
@@ -2160,13 +2167,37 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             session.getData().put("report_photos", photos);
             session.getData().put("report_comment", comment);
-            int count = (int) photos.chars().filter(c -> c == '|').count() / 2 + 1;
-            sendText(user.getTelegramId(),
-                    "🖼 Фото добавлено (" + count + " шт.). Можете прислать ещё или нажмите «Отправить отчёт».",
-                    keyboardFactory.rowsLayout(List.of(
-                            List.of(keyboardFactory.callback("📤 Отправить отчёт", "report:submit:" + session.getSubmissionId())),
-                            List.of(keyboardFactory.callback("❌ Отмена", "menu:myquests"))
-                    )));
+
+            String mediaGroupId = message.getMediaGroupId();
+            Long submissionId = session.getSubmissionId();
+            Long telegramId = user.getTelegramId();
+
+            if (mediaGroupId != null) {
+                // Album: cancel previous timer for this group and schedule a new one
+                ScheduledFuture<?> existing = albumTimers.remove(mediaGroupId);
+                if (existing != null) existing.cancel(false);
+                ScheduledFuture<?> timer = albumScheduler.schedule(() -> {
+                    albumTimers.remove(mediaGroupId);
+                    String currentPhotos = session.getData().getOrDefault("report_photos", "");
+                    int count = currentPhotos.isBlank() ? 0
+                            : (int) currentPhotos.chars().filter(c -> c == '|').count() / 2 + 1;
+                    sendText(telegramId,
+                            "🖼 Добавлено фото: <b>" + count + " шт.</b> Можете прислать ещё или нажмите «Отправить отчёт».",
+                            keyboardFactory.rowsLayout(List.of(
+                                    List.of(keyboardFactory.callback("📤 Отправить отчёт", "report:submit:" + submissionId)),
+                                    List.of(keyboardFactory.callback("❌ Отмена", "menu:myquests"))
+                            )));
+                }, 1500, TimeUnit.MILLISECONDS);
+                albumTimers.put(mediaGroupId, timer);
+            } else {
+                int count = photos.isBlank() ? 0 : (int) photos.chars().filter(c -> c == '|').count() / 2 + 1;
+                sendText(telegramId,
+                        "🖼 Фото добавлено (" + count + " шт.). Можете прислать ещё или нажмите «Отправить отчёт».",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("📤 Отправить отчёт", "report:submit:" + submissionId)),
+                                List.of(keyboardFactory.callback("❌ Отмена", "menu:myquests"))
+                        )));
+            }
         } else if (message.hasVideo()) {
             String fileId = message.getVideo().getFileId();
             String text = message.getCaption();
@@ -2496,7 +2527,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendWithdrawalUsdtNoWalletGuide(AppUser user) {
         sendText(user.getTelegramId(),
                 "💎 <b>Как создать кошелёк</b>\n\n"
-                        + "1. Нажми кнопку ниже — откроется <b>@wallet</b> в Telegram\n"
+                        + "1. Нажми кнопку ниже — откроется <b>кошелёк</b> в Telegram\n"
                         + "2. Пройди короткую регистрацию (1–2 минуты)\n"
                         + "3. Вернись сюда и нажми <b>«У меня есть кошелёк»</b>",
                 keyboardFactory.rowsLayout(List.of(
@@ -5325,7 +5356,69 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if ("quests".equals(action)) {
+            sendAdminUserQuestHistory(admin, telegramId, page == null ? 0 : page);
+            return;
+        }
+
         sendText(admin.getTelegramId(), "⚠️ Действие с пользователем не распознано.", backMenuKeyboard("menu:admin"));
+    }
+
+    private void sendAdminUserQuestHistory(AppUser admin, Long telegramId, int page) {
+        AppUser target = userService.findByTelegramId(telegramId).orElse(null);
+        if (target == null) {
+            sendText(admin.getTelegramId(), "⚠️ Пользователь не найден.", backMenuKeyboard("admin:users:0"));
+            return;
+        }
+
+        List<ru.gamebot.platform.domain.model.QuestSubmission> approved =
+                questService.findApprovedByUser(target);
+
+        String header = "📋 <b>Одобренные квесты игрока</b>\n"
+                + "👤 <b>" + escape(displayUserName(target)) + "</b> (ID: " + telegramId + ")\n"
+                + "Всего завершено: <b>" + approved.size() + "</b>\n\n";
+
+        if (approved.isEmpty()) {
+            sendText(admin.getTelegramId(), header + "Нет одобренных квестов.",
+                    backMenuKeyboard("admin:user:view:" + telegramId + ":" + page));
+            return;
+        }
+
+        int pageSize = 10;
+        int totalPages = (approved.size() + pageSize - 1) / pageSize;
+        int safePage = Math.max(0, Math.min(page, totalPages - 1));
+        List<ru.gamebot.platform.domain.model.QuestSubmission> pageItems =
+                approved.subList(safePage * pageSize, Math.min((safePage + 1) * pageSize, approved.size()));
+
+        StringBuilder sb = new StringBuilder(header);
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
+        int startNum = safePage * pageSize + 1;
+        for (int i = 0; i < pageItems.size(); i++) {
+            ru.gamebot.platform.domain.model.QuestSubmission s = pageItems.get(i);
+            String dateStr = s.getUpdatedAt() != null ? s.getUpdatedAt().format(fmt) : "—";
+            sb.append(startNum + i).append(". <b>").append(escape(s.getQuest().getTitle())).append("</b>\n")
+              .append("   🎮 ").append(escape(s.getQuest().getGameName()))
+              .append(" · ").append(escape(s.getQuest().getCategory()))
+              .append(" · 💰 ").append(s.getQuest().getRewardCoins()).append(" EXC\n")
+              .append("   📅 ").append(dateStr).append("\n\n");
+        }
+        if (totalPages > 1) {
+            sb.append("📄 Страница ").append(safePage + 1).append(" из ").append(totalPages);
+        }
+
+        List<InlineKeyboardButton> navRow = new ArrayList<>();
+        if (safePage > 0) {
+            navRow.add(keyboardFactory.callback("⬅️", "admin:user:quests:" + telegramId + ":" + (safePage - 1)));
+        }
+        if (safePage < totalPages - 1) {
+            navRow.add(keyboardFactory.callback("➡️", "admin:user:quests:" + telegramId + ":" + (safePage + 1)));
+        }
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (!navRow.isEmpty()) rows.add(navRow);
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад к карточке", "admin:user:view:" + telegramId + ":" + page)));
+
+        sendText(admin.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     private void sendAdminUserCard(AppUser admin, Long telegramId, int page, String notice) {
@@ -5348,7 +5441,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + configuredNote + "\n"
                 + "✅ Регистрация: <b>" + (target.isRegistrationCompleted() ? "завершена" : "не завершена") + "</b>";
 
-        List<List<InlineKeyboardButton>> rows = List.of(
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
+                List.of(keyboardFactory.callback("📋 Квесты игрока", "admin:user:quests:" + telegramId + ":" + page)),
                 List.of(keyboardFactory.callback("👤 Сделать игроком", "admin:user:role:" + telegramId + ":" + page + ":" + ROLE_USER)),
                 List.of(keyboardFactory.callback("🛡️ Сделать модератором", "admin:user:role:" + telegramId + ":" + page + ":" + ROLE_MODER)),
                 List.of(keyboardFactory.callback("🛠️ Сделать админом", "admin:user:role:" + telegramId + ":" + page + ":" + ROLE_ADMIN)),
@@ -5356,7 +5450,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         keyboardFactory.callback("⬅️ К списку", "admin:users:" + page),
                         keyboardFactory.callback("🏠 Меню", "menu:main")
                 )
-        );
+        ));
         sendText(admin.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
 

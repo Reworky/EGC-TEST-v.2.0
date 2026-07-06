@@ -444,6 +444,10 @@ public class QuestService {
         return questSubmissionRepository.countApprovedByUser(user);
     }
 
+    public List<QuestSubmission> findApprovedByUser(AppUser user) {
+        return questSubmissionRepository.findAllApprovedByUserOrderByUpdatedAtDesc(user);
+    }
+
     public long countAllApproved() {
         return questSubmissionRepository.countAllApproved();
     }
