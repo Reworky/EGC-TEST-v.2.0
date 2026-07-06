@@ -6027,10 +6027,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void notifyModeratorsAboutSubmission(Long submissionId) {
         QuestSubmission submission = questService.getSubmission(submissionId);
-        String caption = "🧾 Заявка К-" + (submission.getDisplayId() != null ? submission.getDisplayId() : submissionId) + " на модерацию\n\n"
-                + "👤 " + escape(submission.getUser().getNickname()) + " (" + submission.getUser().getTelegramId() + ")\n"
-                + "🎯 " + escape(submission.getQuest().getTitle()) + " (" + submission.getQuest().getRewardCoins() + " EXC)\n"
-                + "💬 " + escape(submission.getUserComment());
+        String caption = "🧾 <b>Заявка К-" + (submission.getDisplayId() != null ? submission.getDisplayId() : submissionId) + " на проверку</b>\n\n"
+                + "👤 Игрок: <b>" + escape(submission.getUser().getNickname()) + "</b>\n"
+                + "🆔 ID: <b>" + submission.getUser().getTelegramId() + "</b>\n"
+                + "🎯 Квест: <b>" + escape(submission.getQuest().getTitle()) + " (" + submission.getQuest().getRewardCoins() + " EXC)</b>\n"
+                + "📅 Отправлено: <b>" + submission.getCreatedAt().format(DATE_TIME_FORMATTER) + "</b>\n"
+                + "💬 Комментарий: " + escape(submission.getUserComment());
 
         InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
                 keyboardFactory.callback("✅ Одобрить", "mod:ok:" + submissionId),
