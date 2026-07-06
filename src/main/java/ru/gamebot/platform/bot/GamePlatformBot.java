@@ -4238,7 +4238,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + usernameStr + ")\n"
                         + "🎁 Награда: <b>" + escape(req.getRewardItem().getTitle()) + "</b>\n"
                         + "🪙 Цена: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
-                        + "📅 Дата: <b>" + req.getCreatedAt().toLocalDate() + "</b>"
+                        + "📅 Дата: <b>" + req.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) + "</b>"
                         + statusLine,
                 keyboardFactory.rowsLayout(cardRows));
     }
@@ -4363,7 +4363,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
                         + "💵 К выплате: <b>~" + rubles + " ₽</b>"
                         + detailsLine + "\n"
-                        + "📅 Дата: <b>" + req.getCreatedAt().toLocalDate() + "</b>"
+                        + "📅 Дата: <b>" + req.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) + "</b>"
                         + duplicateWarning,
                 keyboardFactory.rowsLayout(List.of(
                         List.of(
@@ -6193,7 +6193,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
                         + "💵 К выплате: <b>~" + rubles + " ₽</b>"
                         + detailsLine + "\n"
-                        + "📅 Дата: <b>" + req.getCreatedAt().toLocalDate() + "</b>"
+                        + "📅 Дата: <b>" + req.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) + "</b>"
                         + dupWarning,
                 keyboardFactory.rowsLayout(List.of(
                         List.of(
