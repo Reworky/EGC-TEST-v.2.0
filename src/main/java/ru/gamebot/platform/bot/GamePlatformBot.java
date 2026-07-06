@@ -279,6 +279,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         if (session.getState() == SessionState.WITHDRAWAL_RECEIPT) {
+            // Команды переключения роли и навигации сбрасывают состояние
+            if (text != null && (text.startsWith("/start") || text.equals("/moder") || text.equals("/admin") || text.equals("/user") || text.equals("/menu"))) {
+                session.reset();
+                sendMainMenu(user, roleWelcomeText(user, null));
+                return;
+            }
             if (!message.hasPhoto()) {
                 sendText(user.getTelegramId(), "⚠️ Пожалуйста, отправьте фото чека.", null);
                 return;
@@ -337,6 +343,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         if (text != null && session.getState() != SessionState.NONE) {
+            // Навигационные команды всегда сбрасывают текущее состояние
+            if (text.equals("/moder") || text.equals("/admin") || text.equals("/user") || text.equals("/menu")) {
+                session.reset();
+                sendMainMenu(user, roleWelcomeText(user, null));
+                return;
+            }
             handleStateInput(user, session, text);
             return;
         }
