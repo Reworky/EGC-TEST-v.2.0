@@ -6039,7 +6039,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.setQuestId(reqId);
             session.getData().put("rejectType", "withdrawal");
             session.getData().put("rejectBack", "mod");
-            session.setState(SessionState.REJECTION_REASON);
+            session.setState(SessionState.REWARD_REJECT_COMMENT);
             sendText(user.getTelegramId(), "✏️ Введите причину отклонения заявки #" + reqId + ":", cancelKeyboard());
         }
     }
