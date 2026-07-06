@@ -105,6 +105,10 @@ public class RewardService {
         return rewardRequestRepository.countPendingWithdrawalsByUser(user) > 0;
     }
 
+    public long countPendingWithdrawalsByUser(AppUser user) {
+        return rewardRequestRepository.countPendingWithdrawalsByUser(user);
+    }
+
     public List<RewardRequest> findUserRequests(AppUser user) {
         return rewardRequestRepository.findAllByUserOrderByCreatedAtDesc(user);
     }

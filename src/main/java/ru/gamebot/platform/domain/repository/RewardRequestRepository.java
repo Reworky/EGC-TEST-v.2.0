@@ -31,8 +31,8 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
 
     long countByStatusIn(java.util.Collection<RewardRequestStatus> statuses);
 
-    @EntityGraph(attributePaths = {"user", "rewardItem"})
-    List<RewardRequest> findAllByStatusAndRewardItemCategoryOrderByCreatedAtAsc(RewardRequestStatus status, String category);
+    @Query("SELECT DISTINCT r FROM RewardRequest r JOIN FETCH r.user JOIN FETCH r.rewardItem WHERE r.status = :status AND r.rewardItem.category = :category ORDER BY r.createdAt ASC")
+    List<RewardRequest> findAllByStatusAndRewardItemCategoryOrderByCreatedAtAsc(@Param("status") RewardRequestStatus status, @Param("category") String category);
 
     void deleteAllByRewardItem(RewardItem rewardItem);
 
