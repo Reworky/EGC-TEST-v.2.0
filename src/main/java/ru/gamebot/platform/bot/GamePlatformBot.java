@@ -577,10 +577,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.equals("shop:withdraw")) {
             answerSilently(callbackQuery.getId());
-            if (rewardService.hasPendingWithdrawal(user)) {
+            if (rewardService.hasWithdrawalTodayOrPending(user)) {
                 sendText(user.getTelegramId(),
-                    "⚠️ <b>У вас уже есть активная заявка на вывод.</b>\n\n"
-                        + "Дождитесь обработки текущей заявки, прежде чем создавать новую.",
+                    "⚠️ <b>Лимит: 1 заявка на вывод в сутки.</b>\n\n"
+                        + "Следующую заявку можно создать через 24 часа после предыдущей.",
                     backMenuKeyboard("menu:main"));
                 return;
             }
@@ -2560,11 +2560,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     cancelKeyboard());
             return;
         }
-        if (rewardService.hasPendingWithdrawal(user)) {
+        if (rewardService.hasWithdrawalTodayOrPending(user)) {
             session.reset();
             sendText(user.getTelegramId(),
-                "⚠️ <b>У вас уже есть активная заявка на вывод.</b>\n\n"
-                    + "Дождитесь обработки текущей заявки, прежде чем создавать новую.",
+                "⚠️ <b>Лимит: 1 заявка на вывод в сутки.</b>\n\n"
+                    + "Следующую заявку можно создать через 24 часа после предыдущей.",
                 backMenuKeyboard("menu:main"));
             return;
         }
@@ -5728,11 +5728,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), "⚠️ Реквизиты слишком короткие. Введите номер карты или телефон:", cancelKeyboard());
             return;
         }
-        if (rewardService.hasPendingWithdrawal(user)) {
+        if (rewardService.hasWithdrawalTodayOrPending(user)) {
             session.reset();
             sendText(user.getTelegramId(),
-                "⚠️ <b>У вас уже есть активная заявка на вывод.</b>\n\n"
-                    + "Дождитесь обработки текущей заявки, прежде чем создавать новую.",
+                "⚠️ <b>Лимит: 1 заявка на вывод в сутки.</b>\n\n"
+                    + "Следующую заявку можно создать через 24 часа после предыдущей.",
                 backMenuKeyboard("menu:main"));
             return;
         }
