@@ -1,9 +1,8 @@
 #!/bin/sh
-# Kill any process holding port 8080 before starting
-PID=$(fuser 8080/tcp 2>/dev/null)
-if [ -n "$PID" ]; then
-  echo "[entrypoint] Killing stale process on port 8080: $PID"
-  kill -9 $PID 2>/dev/null
-  sleep 1
-fi
+# Kill ALL lingering java processes before starting (orphans from --network host restarts)
+echo "[entrypoint] Killing any lingering java processes..."
+fuser -k 8080/tcp 2>/dev/null || true
+kill -9 $(pgrep -f "java -jar" 2>/dev/null) 2>/dev/null || true
+sleep 2
+echo "[entrypoint] Starting bot..."
 exec java -jar /app/app.jar
