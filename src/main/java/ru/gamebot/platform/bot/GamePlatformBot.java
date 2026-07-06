@@ -3105,16 +3105,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendModerationHub(AppUser user) {
+        long pendingWithdrawalsMod = rewardService.findPendingWithdrawals().size();
+        String wLabelMod = pendingWithdrawalsMod > 0
+                ? "💸 Заявки на вывод (" + pendingWithdrawalsMod + ")"
+                : "💸 Заявки на вывод";
         sendText(user.getTelegramId(),
                 "🛡️ <b>Центр модерации</b>\n\n"
                         + "📂 Отчёты по квестам: <b>" + questService.pendingCount() + "</b>\n"
-                        + "🆘 Открытые заявки поддержки: <b>" + supportService.activeTicketCount() + "</b>\n\n"
+                        + "🆘 Открытые заявки поддержки: <b>" + supportService.activeTicketCount() + "</b>\n"
+                        + "💸 Заявки на вывод: <b>" + pendingWithdrawalsMod + "</b>\n\n"
                         + "Здесь собрана вся оперативная работа по платформе.",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(
-                        keyboardFactory.callback("📂 Квесты", "mod:support:quests"),
-                        keyboardFactory.callback("🆘 Поддержка", "mod:support:list")
-                        )
+                                keyboardFactory.callback("📂 Квесты", "mod:support:quests"),
+                                keyboardFactory.callback("🆘 Поддержка", "mod:support:list")
+                        ),
+                        List.of(keyboardFactory.callback(wLabelMod, "mod:withdrawals"))
                 )));
     }
 
