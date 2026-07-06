@@ -101,6 +101,10 @@ public class RewardService {
                 RewardRequestStatus.PENDING, "Вывод");
     }
 
+    public boolean hasPendingWithdrawal(AppUser user) {
+        return rewardRequestRepository.countPendingWithdrawalsByUser(user) > 0;
+    }
+
     public List<RewardRequest> findUserRequests(AppUser user) {
         return rewardRequestRepository.findAllByUserOrderByCreatedAtDesc(user);
     }

@@ -2034,6 +2034,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         QuestSubmission latest = questService.getLatestSubmission(user, quest);
         if (latest == null) {
             latest = questService.createDraftSubmission(user, quest);
+        } else if (latest.getStatus() == SubmissionStatus.PENDING) {
+            answerSilently(callbackQuery.getId());
+            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                    "⏳ <b>Отчёт уже на проверке.</b>\n\nДождитесь решения модератора — дублировать заявку нельзя.");
+            return;
         } else if (latest.getStatus() == SubmissionStatus.REJECTED || latest.getStatus() == SubmissionStatus.NEEDS_INFO) {
             // Fix 4: cooldown 1h after rejection to prevent instant resubmit spam
             LocalDateTime rejectedAt = latest.getUpdatedAt();
@@ -2516,6 +2521,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "Как найти: @wallet → Получить → USDT → TON → Скопировать адрес.\n\n"
                     + "Попробуйте ещё раз:",
                     cancelKeyboard());
+            return;
+        }
+        if (rewardService.hasPendingWithdrawal(user)) {
+            session.reset();
+            sendText(user.getTelegramId(),
+                "⚠️ <b>У вас уже есть активная заявка на вывод.</b>\n\n"
+                    + "Дождитесь обработки текущей заявки, прежде чем создавать новую.",
+                backMenuKeyboard("menu:main"));
             return;
         }
         long excAmount = Long.parseLong(session.getData().getOrDefault("usdt_exc_amount", "0"));
@@ -5670,6 +5683,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String details = text.trim();
         if (details.length() < 6) {
             sendText(user.getTelegramId(), "⚠️ Реквизиты слишком короткие. Введите номер карты или телефон:", cancelKeyboard());
+            return;
+        }
+        if (rewardService.hasPendingWithdrawal(user)) {
+            session.reset();
+            sendText(user.getTelegramId(),
+                "⚠️ <b>У вас уже есть активная заявка на вывод.</b>\n\n"
+                    + "Дождитесь обработки текущей заявки, прежде чем создавать новую.",
+                backMenuKeyboard("menu:main"));
             return;
         }
         long amount = Long.parseLong(session.getData().get("withdrawAmount"));

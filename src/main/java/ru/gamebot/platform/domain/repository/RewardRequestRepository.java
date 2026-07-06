@@ -36,6 +36,9 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
 
     void deleteAllByRewardItem(RewardItem rewardItem);
 
+    @Query("SELECT COUNT(r) FROM RewardRequest r WHERE r.user = :user AND r.rewardItem.category = 'Вывод' AND r.status = 'PENDING'")
+    long countPendingWithdrawalsByUser(@Param("user") AppUser user);
+
     @Query("SELECT COUNT(r) FROM RewardRequest r WHERE r.user = :user AND r.rewardItem.purchaseGroup = :group AND r.status NOT IN ('CANCELLED', 'REJECTED') AND r.createdAt >= :since")
     long countActiveByUserAndGroupSince(@Param("user") AppUser user, @Param("group") String group, @Param("since") LocalDateTime since);
 
