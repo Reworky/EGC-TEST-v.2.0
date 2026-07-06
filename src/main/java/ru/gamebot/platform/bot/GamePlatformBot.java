@@ -371,6 +371,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         String streakMessage = userService.registerActivity(user);
+
+        // Сотрудники (модератор/admin) получают доступ к меню без прохождения регистрации
+        boolean isStaff = isEffectiveModerator(user);
+        if (isStaff) {
+            sendMainMenu(user, roleWelcomeText(user, streakMessage));
+            return;
+        }
+
         if (!user.isProfileCompleted()) {
             session.reset();
             session.setState(SessionState.REG_NAME);
@@ -6658,13 +6666,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             default -> "🏠 <b>Платформа готова к игре</b>";
         };
         if (ROLE_ADMIN.equals(resolveMenuRole(user, sessionService.get(user.getTelegramId())))) {
-            return title + "\n\nС возвращением, <b>" + escape(user.getNickname()) + "</b>.";
+            String name = user.getNickname() != null ? escape(user.getNickname()) : "Администратор";
+            return title + "\n\nС возвращением, <b>" + name + "</b>.";
         }
         String activity = streakMessage == null
                 ? "Все ключевые разделы уже готовы к работе."
                 : escape(streakMessage);
+        String displayName = user.getNickname() != null ? escape(user.getNickname()) : "Модератор";
         return title + "\n\n"
-                + "С возвращением, <b>" + escape(user.getNickname()) + "</b>.\n"
+                + "С возвращением, <b>" + displayName + "</b>.\n"
                 + activity + "\n\n"
                 + switch (resolveMenuRole(user, sessionService.get(user.getTelegramId()))) {
                     case ROLE_ADMIN -> "Перед вами полный контур управления платформой: пользователи, роли, контент, экономика и коммуникация.";
