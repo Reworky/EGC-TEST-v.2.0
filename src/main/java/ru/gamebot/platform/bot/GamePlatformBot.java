@@ -719,6 +719,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleModeratorSupportAction(callbackQuery, user, session, data.substring("mod:support:".length()));
             return;
         }
+        if (data.startsWith("mod:withdrawal") && isEffectiveModerator(user)) {
+            handleModWithdrawalAction(callbackQuery, user, session, data);
+            return;
+        }
         if (data.startsWith("admin:") && isEffectiveAdmin(user)) {
             handleAdminAction(callbackQuery, user, session, data.substring("admin:".length()));
             return;
@@ -1342,11 +1346,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case REWARD_REJECT_COMMENT -> {
                 RewardRequest rejected = rewardService.rejectRequest(session.getQuestId(), text.trim());
                 boolean isWithdrawal = "withdrawal".equals(session.getData().get("rejectType"));
+                boolean isModFlow = "mod".equals(session.getData().get("rejectBack"));
                 session.reset();
                 if (isWithdrawal) {
                     notifyUserWithdrawalRejected(rejected);
                     sendText(user.getTelegramId(), "✅ Заявка на вывод отклонена. EXC возвращены пользователю.", null);
-                    sendAdminWithdrawals(user);
+                    if (isModFlow) sendModWithdrawals(user);
+                    else sendAdminWithdrawals(user);
                 } else {
                     notifyUserRewardRejected(rejected);
                     sendText(user.getTelegramId(), "✅ Заявка отклонена. EXC возвращены на баланс пользователя.", null);
@@ -5995,21 +6001,103 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String userLink = (username != null && !username.isBlank())
                 ? "\n✉️ Написать: <a href=\"https://t.me/" + username + "\">@" + username + "</a>"
                 : "\n✉️ Telegram ID: <code>" + user.getTelegramId() + "</code>";
-        InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
-                List.of(keyboardFactory.callback("💸 Открыть заявки на вывод", "admin:withdrawals"))
-        ));
         String details = req.getPayoutDetails() != null ? "\n💎 Детали: <code>" + escape(req.getPayoutDetails()) + "</code>" : "";
-        for (Long adminId : adminService.allAdminIds()) {
-            sendText(adminId,
-                    "💸 <b>Новая заявка на вывод EXC</b>\n\n"
-                            + "👤 Игрок: <b>" + escape(user.getNickname()) + "</b>\n"
-                            + "🆔 Telegram ID: <b>" + user.getTelegramId() + "</b>"
-                            + userLink + "\n"
-                            + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
-                            + "📦 Тип: <b>" + escape(req.getRewardItem().getTitle()) + "</b>"
-                            + details,
-                    markup);
+        String text = "💸 <b>Новая заявка на вывод EXC</b>\n\n"
+                + "👤 Игрок: <b>" + escape(user.getNickname()) + "</b>\n"
+                + "🆔 Telegram ID: <b>" + user.getTelegramId() + "</b>"
+                + userLink + "\n"
+                + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
+                + "📦 Тип: <b>" + escape(req.getRewardItem().getTitle()) + "</b>"
+                + details;
+        Set<Long> adminIds = adminService.allAdminIds();
+        for (Long recipientId : adminService.allModeratorIds()) {
+            String callbackData = adminIds.contains(recipientId) ? "admin:withdrawals" : "mod:withdrawals";
+            InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
+                    List.of(keyboardFactory.callback("💸 Открыть заявки на вывод", callbackData))
+            ));
+            sendText(recipientId, text, markup);
         }
+    }
+
+    private void handleModWithdrawalAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String data) {
+        answerSilently(callbackQuery.getId());
+        if (data.equals("mod:withdrawals")) {
+            sendModWithdrawals(user);
+        } else if (data.startsWith("mod:withdrawal:req:")) {
+            long reqId = Long.parseLong(data.substring("mod:withdrawal:req:".length()));
+            sendModWithdrawalCard(user, reqId);
+        } else if (data.startsWith("mod:withdrawal:approve:")) {
+            String[] parts = data.substring("mod:withdrawal:approve:".length()).split(":");
+            long reqId = Long.parseLong(parts[0]);
+            String receiptFileId = parts.length > 1 ? parts[1] : null;
+            RewardRequest req = rewardService.approveRequest(reqId);
+            notifyUserWithdrawalApproved(req, receiptFileId);
+            sendText(user.getTelegramId(), "✅ Заявка #" + reqId + " одобрена.", null);
+            sendModWithdrawals(user);
+        } else if (data.startsWith("mod:withdrawal:reject:")) {
+            long reqId = Long.parseLong(data.substring("mod:withdrawal:reject:".length()));
+            session.setQuestId(reqId);
+            session.getData().put("rejectType", "withdrawal");
+            session.getData().put("rejectBack", "mod");
+            session.setState(SessionState.REJECTION_REASON);
+            sendText(user.getTelegramId(), "✏️ Введите причину отклонения заявки #" + reqId + ":", cancelKeyboard());
+        }
+    }
+
+    private void sendModWithdrawals(AppUser user) {
+        List<RewardRequest> pending = rewardService.findPendingWithdrawals();
+        if (pending.isEmpty()) {
+            sendText(user.getTelegramId(), "💸 <b>Заявки на вывод EXC</b>\n\nНет новых заявок.", null);
+            return;
+        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (RewardRequest req : pending) {
+            String uname = req.getUser().getTelegramUsername() != null
+                    ? "@" + req.getUser().getTelegramUsername()
+                    : "#" + req.getUser().getTelegramId();
+            String type = (req.getPayoutDetails() != null && req.getPayoutDetails().startsWith("USDT")) ? "💎 USDT" : "💸 ₽";
+            rows.add(List.of(keyboardFactory.callback(
+                    uname + " — " + type + " " + req.getRewardItem().getPriceCoins() + " EXC",
+                    "mod:withdrawal:req:" + req.getId())));
+        }
+        sendText(user.getTelegramId(),
+                "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendModWithdrawalCard(AppUser user, Long reqId) {
+        RewardRequest req = rewardService.getRequest(reqId);
+        AppUser requester = req.getUser();
+        String unameLink = requester.getTelegramUsername() != null
+                ? "<a href=\"https://t.me/" + requester.getTelegramUsername() + "\">@" + requester.getTelegramUsername() + "</a>"
+                : "<a href=\"tg://user?id=" + requester.getTelegramId() + "\">" + requester.getTelegramId() + "</a>";
+        boolean isUsdt = req.getPayoutDetails() != null && req.getPayoutDetails().startsWith("USDT");
+        String detailsLine;
+        if (isUsdt) {
+            String[] parts = req.getPayoutDetails().split(":");
+            String wallet = parts.length > 1 ? parts[1] : req.getPayoutDetails();
+            detailsLine = "\n💎 Способ: <b>USDT · TON</b>\n📬 Кошелёк: <code>" + escape(wallet) + "</code>";
+        } else if (req.getPayoutDetails() != null) {
+            detailsLine = "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>\n💳 Реквизиты: <code>" + escape(req.getPayoutDetails()) + "</code>";
+        } else {
+            detailsLine = "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>";
+        }
+        long rubles = Math.round(req.getRewardItem().getPriceCoins() / 100.0);
+        sendText(user.getTelegramId(),
+                "💸 <b>Заявка на вывод #" + req.getId() + "</b>\n\n"
+                        + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
+                        + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
+                        + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
+                        + "💵 К выплате: <b>~" + rubles + " ₽</b>"
+                        + detailsLine + "\n"
+                        + "📅 Дата: <b>" + req.getCreatedAt().toLocalDate() + "</b>",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(
+                                keyboardFactory.callback("✅ Выплачено", "mod:withdrawal:approve:" + req.getId()),
+                                keyboardFactory.callback("❌ Отклонить", "mod:withdrawal:reject:" + req.getId())
+                        ),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "mod:withdrawals"))
+                )));
     }
 
     private void notifyAdminsAboutRewardRequest(AppUser user, RewardItem reward) {
