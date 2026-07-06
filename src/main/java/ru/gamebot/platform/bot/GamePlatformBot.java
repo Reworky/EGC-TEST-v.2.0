@@ -5361,6 +5361,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if ("resetquests".equals(action)) {
+            AppUser target = userService.findByTelegramId(telegramId).orElse(null);
+            if (target == null) {
+                sendText(admin.getTelegramId(), "⚠️ Пользователь не найден.", backMenuKeyboard("admin:users:0"));
+                return;
+            }
+            int count = questService.resetActiveSubmissions(target);
+            String notice = count > 0
+                    ? "🗑 Сброшено активных квестов: <b>" + count + "</b>."
+                    : "ℹ️ Активных квестов не было.";
+            sendAdminUserCard(admin, telegramId, page == null ? 0 : page, notice);
+            return;
+        }
+
         sendText(admin.getTelegramId(), "⚠️ Действие с пользователем не распознано.", backMenuKeyboard("menu:admin"));
     }
 
@@ -5443,6 +5457,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("📋 Квесты игрока", "admin:user:quests:" + telegramId + ":" + page)),
+                List.of(keyboardFactory.callback("🗑 Сбросить активные квесты", "admin:user:resetquests:" + telegramId + ":" + page)),
                 List.of(keyboardFactory.callback("👤 Сделать игроком", "admin:user:role:" + telegramId + ":" + page + ":" + ROLE_USER)),
                 List.of(keyboardFactory.callback("🛡️ Сделать модератором", "admin:user:role:" + telegramId + ":" + page + ":" + ROLE_MODER)),
                 List.of(keyboardFactory.callback("🛠️ Сделать админом", "admin:user:role:" + telegramId + ":" + page + ":" + ROLE_ADMIN)),

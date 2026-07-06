@@ -436,6 +436,20 @@ public class QuestService {
         return questSubmissionRepository.save(submission);
     }
 
+    @Transactional
+    public int resetActiveSubmissions(AppUser user) {
+        List<QuestSubmission> active = questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user)
+                .stream()
+                .filter(s -> s.getStatus() == SubmissionStatus.DRAFT || s.getStatus() == SubmissionStatus.PENDING)
+                .toList();
+        for (QuestSubmission s : active) {
+            s.setStatus(SubmissionStatus.CANCELLED);
+            s.setUpdatedAt(LocalDateTime.now());
+            questSubmissionRepository.save(s);
+        }
+        return active.size();
+    }
+
     public long countReviewedByUser(AppUser user) {
         return questSubmissionRepository.countReviewedByUser(user);
     }
