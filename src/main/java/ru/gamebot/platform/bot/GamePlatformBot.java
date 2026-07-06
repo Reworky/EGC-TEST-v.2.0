@@ -3182,7 +3182,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 keyboardFactory.callback("📂 Квесты", "mod:support:quests"),
                                 keyboardFactory.callback("🆘 Поддержка", "mod:support:list")
                         ),
-                        List.of(keyboardFactory.callback(wLabelMod, "mod:withdrawals"))
+                        List.of(keyboardFactory.callback(wLabelMod, "mod:withdrawals")),
+                        List.of(keyboardFactory.callback("🏠 Главное меню", "menu:main"))
                 )));
     }
 
@@ -3445,7 +3446,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (suspectCount > 0) {
             buttons.add(keyboardFactory.callback("⚠️ Подозрительные аккаунты (" + suspectCount + ")", "mod:suspects"));
         }
-        buttons.add(keyboardFactory.callback("⬅️ Назад", "menu:moderation"));
+        buttons.add(keyboardFactory.callback("⬅️ Центр модерации", "menu:moderation"));
+        buttons.add(keyboardFactory.callback("🏠 Главное меню", "menu:main"));
 
         sendText(chatId,
                 "🛡️ <b>Очередь модерации</b>\n\n"
@@ -6143,7 +6145,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendModWithdrawals(AppUser user) {
         List<RewardRequest> pending = rewardService.findPendingWithdrawals();
         if (pending.isEmpty()) {
-            sendText(user.getTelegramId(), "💸 <b>Заявки на вывод EXC</b>\n\nНет новых заявок.", null);
+            sendText(user.getTelegramId(), "💸 <b>Заявки на вывод EXC</b>\n\nНет новых заявок.",
+                    backOnlyKeyboard("menu:moderation"));
             return;
         }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
@@ -6156,6 +6159,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     uname + " — " + type + " " + req.getRewardItem().getPriceCoins() + " EXC",
                     "mod:withdrawal:req:" + req.getId())));
         }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:moderation")));
         sendText(user.getTelegramId(),
                 "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>",
                 keyboardFactory.rowsLayout(rows));
