@@ -334,6 +334,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (!user.isProfileCompleted() && isEffectiveModerator(user)) {
+            sendMainMenu(user, roleWelcomeText(user, null));
+            return;
+        }
+
         if (!user.isProfileCompleted()) {
             if ("/menu".equalsIgnoreCase(text)) {
                 sendCurrentRegistrationStep(user, session,
