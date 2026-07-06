@@ -286,11 +286,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             List<PhotoSize> photos = message.getPhoto();
             String fileId = photos.get(photos.size() - 1).getFileId();
             Long reqId = session.getQuestId();
+            boolean isModReceiptFlow = "mod".equals(session.getData().get("receiptFlow"));
             session.reset();
             RewardRequest req = rewardService.approveRequest(reqId);
             notifyUserWithdrawalApproved(req, fileId);
-            sendAdminWithdrawals(user);
             sendText(user.getTelegramId(), "✅ Выплата подтверждена, чек отправлен пользователю.", null);
+            if (isModReceiptFlow) sendModWithdrawals(user);
+            else sendAdminWithdrawals(user);
             return;
         }
 
@@ -6026,16 +6028,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else if (data.startsWith("mod:withdrawal:req:")) {
             long reqId = Long.parseLong(data.substring("mod:withdrawal:req:".length()));
             sendModWithdrawalCard(user, reqId);
-        } else if (data.startsWith("mod:withdrawal:approve:")) {
-            String[] parts = data.substring("mod:withdrawal:approve:".length()).split(":");
-            long reqId = Long.parseLong(parts[0]);
-            String receiptFileId = parts.length > 1 ? parts[1] : null;
+        } else if (data.startsWith("mod:withdrawal:approve:skip:")) {
+            long reqId = Long.parseLong(data.substring("mod:withdrawal:approve:skip:".length()));
+            session.reset();
             RewardRequest req = rewardService.approveRequest(reqId);
-            notifyUserWithdrawalApproved(req, receiptFileId);
+            notifyUserWithdrawalApproved(req, null);
             sendText(user.getTelegramId(), "✅ Заявка #" + reqId + " одобрена.", null);
             sendModWithdrawals(user);
+        } else if (data.startsWith("mod:withdrawal:approve:")) {
+            long reqId = Long.parseLong(data.substring("mod:withdrawal:approve:".length()));
+            session.reset();
+            session.setQuestId(reqId);
+            session.getData().put("receiptFlow", "mod");
+            session.setState(SessionState.WITHDRAWAL_RECEIPT);
+            sendText(user.getTelegramId(),
+                    "🧾 <b>Загрузите скриншот чека</b>\n\nОтправьте фото подтверждения оплаты — оно будет отправлено пользователю.\n\nИли нажмите «Пропустить» если чек не нужен.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("⏭️ Пропустить", "mod:withdrawal:approve:skip:" + reqId))
+                    )));
         } else if (data.startsWith("mod:withdrawal:reject:")) {
             long reqId = Long.parseLong(data.substring("mod:withdrawal:reject:".length()));
+            session.reset();
             session.setQuestId(reqId);
             session.getData().put("rejectType", "withdrawal");
             session.getData().put("rejectBack", "mod");
