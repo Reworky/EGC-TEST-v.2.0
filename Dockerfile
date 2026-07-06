@@ -17,6 +17,7 @@ ENV APP_SUPPORT_USERNAME="support_manager"
 ENV APP_CLUB_NAME="Game Quest Club"
 ENV DB_PATH="/data/game-platform-bot"
 ENV JAVA_TOOL_OPTIONS="-Djava.net.preferIPv4Stack=true -Djava.net.preferIPv6Addresses=false"
+RUN apt-get update && apt-get install -y --no-install-recommends psmisc && rm -rf /var/lib/apt/lists/*
 VOLUME ["/data"]
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
