@@ -319,6 +319,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (session.getState() == SessionState.BROADCAST_MESSAGE && message.hasPhoto()) {
+            List<PhotoSize> bcastPhotos = message.getPhoto();
+            String bcastFileId = bcastPhotos.get(bcastPhotos.size() - 1).getFileId();
+            String bcastCaption = message.getCaption() != null ? message.getCaption() : "";
+            handleBroadcastPhoto(user, session, bcastFileId, bcastCaption);
+            return;
+        }
+
         if (text != null && session.getState() != SessionState.NONE) {
             handleStateInput(user, session, text);
             return;
@@ -3539,7 +3547,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.reset();
                 session.setState(SessionState.BROADCAST_MESSAGE);
                 sendText(user.getTelegramId(),
-                        "📣 Отправьте текст рассылки. Я доставлю его всем зарегистрированным игрокам.",
+                        "📣 Отправьте текст рассылки или фото с подписью.\n\nЯ доставлю его всем зарегистрированным игрокам.",
                         cancelKeyboard());
             }
             case "stats" -> sendAdminStats(user);
@@ -5445,6 +5453,33 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         int delivered = broadcastToAll("📣 <b>Новости платформы</b>\n\n" + escape(text));
         session.reset();
         sendText(user.getTelegramId(), "✅ Рассылка отправлена. Получателей: <b>" + delivered + "</b>.", mainMenuKeyboard(user));
+    }
+
+    private void handleBroadcastPhoto(AppUser user, UserSession session, String fileId, String caption) {
+        String html = caption.isBlank() ? "" : "📣 <b>Новости платформы</b>\n\n" + escape(caption);
+        int delivered = broadcastPhotoToAll(fileId, html);
+        session.reset();
+        sendText(user.getTelegramId(), "✅ Рассылка с фото отправлена. Получателей: <b>" + delivered + "</b>.", mainMenuKeyboard(user));
+    }
+
+    private int broadcastPhotoToAll(String fileId, String caption) {
+        int delivered = 0;
+        for (AppUser player : userService.allRegisteredUsers()) {
+            try {
+                SendPhoto photo = new SendPhoto();
+                photo.setChatId(player.getTelegramId().toString());
+                photo.setPhoto(new InputFile(fileId));
+                if (!caption.isBlank()) {
+                    photo.setCaption(caption);
+                    photo.setParseMode("HTML");
+                }
+                execute(photo);
+                delivered++;
+            } catch (Exception e) {
+                log.warn("Failed to broadcast photo to {}", player.getTelegramId(), e);
+            }
+        }
+        return delivered;
     }
 
     @org.springframework.context.event.EventListener
