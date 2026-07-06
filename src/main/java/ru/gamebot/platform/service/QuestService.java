@@ -28,6 +28,11 @@ public class QuestService {
     private static final int REFERRAL_BONUS_PERCENT = 3;
     private static final int REFERRAL_DAYS_WINDOW = 14;
 
+    // Minimum time before report can be submitted, by difficulty category
+    private static final int SUBMIT_COOLDOWN_EASY_HOURS = 24;
+    private static final int SUBMIT_COOLDOWN_MEDIUM_HOURS = 72;
+    private static final int SUBMIT_COOLDOWN_HARD_HOURS = 168;
+
     private final QuestRepository questRepository;
     private final QuestSubmissionRepository questSubmissionRepository;
     private final AppUserRepository appUserRepository;
@@ -239,6 +244,21 @@ public class QuestService {
     public boolean isExpired(QuestSubmission submission) {
         return submission.getExpiresAt() != null
                 && LocalDateTime.now().isAfter(submission.getExpiresAt());
+    }
+
+    /** Returns hours remaining before report can be submitted (0 = can submit now) */
+    public long getSubmitCooldownHoursLeft(QuestSubmission submission) {
+        String category = submission.getQuest().getCategory();
+        int cooldownHours = switch (category) {
+            case "Средние" -> SUBMIT_COOLDOWN_MEDIUM_HOURS;
+            case "Сложные" -> SUBMIT_COOLDOWN_HARD_HOURS;
+            default -> SUBMIT_COOLDOWN_EASY_HOURS; // Лёгкие and anything else
+        };
+        LocalDateTime availableAt = submission.getCreatedAt().plusHours(cooldownHours);
+        if (LocalDateTime.now().isBefore(availableAt)) {
+            return Math.max(1, ChronoUnit.HOURS.between(LocalDateTime.now(), availableAt));
+        }
+        return 0;
     }
 
     @Transactional

@@ -1918,7 +1918,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else if (!hasActiveSubmission) {
             buttons.add(keyboardFactory.callback("🚀 Взять", "quest:take:" + questId));
         }
-        buttons.add(keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
+        long submitCooldown = (latest != null && latest.getStatus() == SubmissionStatus.DRAFT)
+                ? questService.getSubmitCooldownHoursLeft(latest) : 0;
+        if (submitCooldown > 0) {
+            buttons.add(keyboardFactory.callback("⏳ Отчёт через " + submitCooldown + " ч", "noop"));
+        } else {
+            buttons.add(keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
+        }
         if (isEffectiveAdmin(user)) {
             buttons.add(keyboardFactory.callback("✏️ Правка", "admin:quest:" + questId));
         }
@@ -2072,6 +2078,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 return;
             }
             latest = questService.resetToDraft(latest);
+        }
+
+        long submitCooldownLeft = questService.getSubmitCooldownHoursLeft(latest);
+        if (submitCooldownLeft > 0) {
+            answerSilently(callbackQuery.getId());
+            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                    "⏳ Отчёт по этому квесту можно отправить через <b>" + submitCooldownLeft + " ч.</b>\n\n"
+                    + "Это минимальное время честного выполнения квеста.");
+            return;
         }
 
         if (questService.isExpired(latest)) {
