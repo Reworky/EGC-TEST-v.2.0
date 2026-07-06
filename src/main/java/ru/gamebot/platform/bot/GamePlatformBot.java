@@ -109,6 +109,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final SupportService supportService;
     private final KeyboardFactory keyboardFactory;
     private final ru.gamebot.platform.service.HealthRatioService healthRatioService;
+    private final ru.gamebot.platform.service.ExchangeRateService exchangeRateService;
     private final ru.gamebot.platform.service.SinkShopService sinkShopService;
     private final ru.gamebot.platform.service.CouncilService councilService;
     private final ru.gamebot.platform.service.ShopLimitService shopLimitService;
@@ -2566,11 +2567,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         double ratio = healthRatioService.getCurrentRatio();
         long rubles = Math.round(amount * ratio / 100.0);
+        java.math.BigDecimal rublesDecimal = java.math.BigDecimal.valueOf(rubles);
+        java.math.BigDecimal usdtRate = exchangeRateService.getUsdtRubRate();
+        java.math.BigDecimal usdtAmount = exchangeRateService.rubToUsdt(rublesDecimal);
+        String rateNote = exchangeRateService.isUsingFallback()
+                ? "📈 Курс: 1 USDT ≈ " + usdtRate.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽ (приблизительно)"
+                : "📈 Курс: 1 USDT = " + usdtRate.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽";
         session.getData().put("usdt_exc_amount", String.valueOf(amount));
         session.getData().put("usdt_rubles", String.valueOf(rubles));
         session.setState(SessionState.WITHDRAWAL_USDT_ADDRESS);
         String msg = "💎 <b>Сумма принята</b>\n\n"
-                + "💸 " + amount + " EXC → ~<b>" + rubles + " ₽</b> → USDT по курсу на момент выплаты\n\n"
+                + "💸 " + amount + " EXC → <b>" + rubles + " ₽</b> → ~<b>" + usdtAmount + " USDT</b>\n"
+                + rateNote + "\n\n"
                 + "━━━━━━━━━━━━━━━\n"
                 + "📋 <b>Как найти адрес кошелька:</b>\n\n"
                 + "1. Открой @wallet в Telegram (или кнопку ниже)\n"
@@ -2609,6 +2617,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         long excAmount = Long.parseLong(session.getData().getOrDefault("usdt_exc_amount", "0"));
         long rubles = Long.parseLong(session.getData().getOrDefault("usdt_rubles", "0"));
+        java.math.BigDecimal usdtRate2 = exchangeRateService.getUsdtRubRate();
+        java.math.BigDecimal usdtAmount2 = exchangeRateService.rubToUsdt(java.math.BigDecimal.valueOf(rubles));
         try {
             RewardRequest usdtReq = rewardService.createUsdtWithdrawalRequest(user, excAmount, rubles, wallet);
             session.reset();
@@ -2616,11 +2626,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>Заявка на вывод в USDT принята!</b>\n\n"
                     + "🔢 Номер заявки: <b>В-" + usdtReq.getId() + "</b>\n"
                     + "💸 Сумма: <b>" + excAmount + " EXC</b>\n"
-                    + "💵 Эквивалент: <b>~" + rubles + " ₽</b>\n"
+                    + "💵 Эквивалент: <b>" + rubles + " ₽</b> → ~<b>" + usdtAmount2 + " USDT</b>\n"
+                    + "📈 Курс: 1 USDT = " + usdtRate2.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽\n"
                     + "💎 Способ: <b>USDT · TON</b>\n"
                     + "📬 Кошелёк: <code>" + escape(wallet) + "</code>\n\n"
-                    + "Администратор обработает заявку в течение 24 часов.\n"
-                    + "USDT будет зачислен по рыночному курсу на момент выплаты.",
+                    + "Администратор обработает заявку в течение 24 часов.",
                     backMenuKeyboard("menu:main"));
             notifyAdminsAboutWithdrawal(user, usdtReq);
         } catch (IllegalArgumentException e) {
