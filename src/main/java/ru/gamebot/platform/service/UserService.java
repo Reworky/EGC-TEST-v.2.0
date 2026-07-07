@@ -26,6 +26,8 @@ import ru.gamebot.platform.event.LeagueRewardEvent;
 @RequiredArgsConstructor
 public class UserService {
 
+    private final ExcTransactionService excTx;
+
     private static final List<LevelTier> LEVEL_TIERS = List.of(
             new LevelTier(1, "Новичок", 0, 0),
             new LevelTier(2, "Игрок", 1_000, 5),
@@ -286,6 +288,8 @@ public class UserService {
 
         long totalExc = dailyExc + milestoneExc;
         user.setCoins(user.getCoins() + totalExc);
+        excTx.log(user, totalExc, ExcTransactionService.DAILY,
+                "Ежедневный бонус (день " + user.getCurrentStreak() + ")");
         if (xpBonus > 0) {
             user.setXp(user.getXp() + xpBonus);
             user.setWeeklyXp(user.getWeeklyXp() + xpBonus);
@@ -328,10 +332,13 @@ public class UserService {
         // Instant bonus: 500 EXC to invited user
         long invitedBonus = 500;
         invitedUser.setCoins(invitedUser.getCoins() + invitedBonus);
+        excTx.log(invitedUser, invitedBonus, ExcTransactionService.REFERRAL, "Реферальный бонус (приглашён)");
 
         // Instant bonus: 300 EXC to referrer
         long referrerBonus = 300;
         referrer.setCoins(referrer.getCoins() + referrerBonus);
+        excTx.log(referrer, referrerBonus, ExcTransactionService.REFERRAL,
+                "Реферальный бонус за приглашение: " + invitedUser.getNickname());
         referrer.setReferralEarnedExc(referrer.getReferralEarnedExc() + referrerBonus);
 
         appUserRepository.save(referrer);
@@ -380,7 +387,10 @@ public class UserService {
     public RewardGrant addManualBonus(Long telegramId, long xp, long coins, long tickets) {
         AppUser user = appUserRepository.findByTelegramId(telegramId)
                 .orElseThrow(() -> new IllegalArgumentException("Игрок с таким Telegram ID не найден."));
-        return addReward(user, xp, coins, tickets);
+        RewardGrant grant = addReward(user, xp, coins, tickets);
+        if (coins > 0) excTx.log(user, grant.totalExc(), ExcTransactionService.BONUS,
+                "Ручное начисление администратором");
+        return grant;
     }
 
     @Transactional
@@ -403,6 +413,8 @@ public class UserService {
         user.setCoins(user.getCoins() - coins);
         user.setTickets(user.getTickets() - tickets);
         appUserRepository.save(user);
+        if (coins > 0) excTx.log(user, -coins, ExcTransactionService.DEBIT,
+                "Ручное списание администратором");
         return new BalanceDebit(xp, coins, tickets);
     }
 
@@ -431,6 +443,8 @@ public class UserService {
             League league = getLeague(user.getWeeklyXp());
             if (league.excPrize > 0) {
                 user.setCoins(user.getCoins() + league.excPrize);
+                excTx.log(user, league.excPrize, ExcTransactionService.LEAGUE,
+                        "Еженедельная награда лиги: " + league.displayName);
                 eventPublisher.publishEvent(new LeagueRewardEvent(
                         this, user.getTelegramId(), league.displayName, league.excPrize, (int) user.getWeeklyXp()
                 ));

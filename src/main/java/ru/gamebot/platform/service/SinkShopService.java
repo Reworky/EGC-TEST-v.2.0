@@ -38,10 +38,11 @@ public class SinkShopService {
     private static final int MAX_DAILY_GIFTS_RECEIVED = 1;
 
     private final AppUserRepository appUserRepository;
+    private final ExcTransactionService excTx;
 
     @Transactional
     public void purchaseReroll(AppUser user) {
-        deductCoins(user, PRICE_REROLL);
+        deductCoins(user, PRICE_REROLL, "Реролл квеста");
     }
 
     @Transactional
@@ -51,7 +52,7 @@ public class SinkShopService {
 
     @Transactional
     public void purchaseTitle(AppUser user, String title, long price) {
-        deductCoins(user, price);
+        deductCoins(user, price, "Титул: " + title);
         user.setProfileTitle(title);
         appUserRepository.save(user);
     }
@@ -61,7 +62,7 @@ public class SinkShopService {
         if (user.isRetryInsuranceActive()) {
             throw new IllegalStateException("Страховка уже активна.");
         }
-        deductCoins(user, PRICE_INSURANCE);
+        deductCoins(user, PRICE_INSURANCE, "Страховка повторной попытки");
         user.setRetryInsuranceActive(true);
         appUserRepository.save(user);
     }
@@ -76,7 +77,7 @@ public class SinkShopService {
             throw new IllegalArgumentException("Достигнут дневной лимит покупки бустов (" + MAX_DAILY_BOOSTS + " в сутки).");
         }
         long price = hours == 72 ? PRICE_XP_BOOST_72H : PRICE_XP_BOOST_24H;
-        deductCoins(user, price);
+        deductCoins(user, price, "XP-буст ×" + hours + "ч");
         user.setXpBoostActiveUntil(LocalDateTime.now().plusHours(hours));
         user.setDailyBoostCount(dailyBoosts + 1);
         user.setDailyBoostDate(LocalDate.now());
@@ -93,7 +94,7 @@ public class SinkShopService {
             throw new IllegalArgumentException("Достигнут дневной лимит покупки бустов (" + MAX_DAILY_BOOSTS + " в сутки).");
         }
         long price = hours == 72 ? PRICE_EXC_BOOST_72H : PRICE_EXC_BOOST_24H;
-        deductCoins(user, price);
+        deductCoins(user, price, "EXC-буст ×" + hours + "ч");
         user.setExcBoostActiveUntil(LocalDateTime.now().plusHours(hours));
         user.setDailyBoostCount(dailyBoosts + 1);
         user.setDailyBoostDate(LocalDate.now());
@@ -112,7 +113,7 @@ public class SinkShopService {
         if (dailyBoosts + 2 > MAX_DAILY_BOOSTS) {
             throw new IllegalArgumentException("Недостаточно дневного лимита для двойного буста (нужно 2 слота, доступно " + (MAX_DAILY_BOOSTS - dailyBoosts) + ").");
         }
-        deductCoins(user, PRICE_DOUBLE_BOOST_24H);
+        deductCoins(user, PRICE_DOUBLE_BOOST_24H, "Двойной буст ×" + hours + "ч");
         LocalDateTime until = LocalDateTime.now().plusHours(hours);
         user.setXpBoostActiveUntil(until);
         user.setExcBoostActiveUntil(until);
@@ -126,7 +127,7 @@ public class SinkShopService {
         if (hasExtraSlot(user)) {
             throw new IllegalArgumentException("Доп. слот уже активен до: " + user.getQuestSlotExtraUntil().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm")) + ".");
         }
-        deductCoins(user, PRICE_EXTRA_SLOT);
+        deductCoins(user, PRICE_EXTRA_SLOT, "Дополнительный слот квеста");
         user.setQuestSlotExtraUntil(LocalDateTime.now().plusHours(48));
         appUserRepository.save(user);
     }
@@ -140,7 +141,7 @@ public class SinkShopService {
         if (user.getCooldownBypassGame() != null) {
             throw new IllegalArgumentException("Снятие кулдауна уже активно. Возьмите квест с кулдауном, чтобы использовать его.");
         }
-        deductCoins(user, PRICE_COOLDOWN_REMOVAL);
+        deductCoins(user, PRICE_COOLDOWN_REMOVAL, "Снятие кулдауна квеста");
         user.setCooldownBypassGame("ANY");
         user.setDailyCooldownRemovals(dailyRemovals + 1);
         user.setDailyCooldownDate(LocalDate.now());
@@ -160,7 +161,7 @@ public class SinkShopService {
         if (receivedToday >= MAX_DAILY_GIFTS_RECEIVED) {
             throw new IllegalArgumentException("Этот игрок уже получил максимум подарков сегодня (" + MAX_DAILY_GIFTS_RECEIVED + " в сутки).");
         }
-        deductCoins(sender, PRICE_GIFT_BOOST);
+        deductCoins(sender, PRICE_GIFT_BOOST, "Подарок буст → " + recipient.getNickname());
         sender.setDailyGiftsSent(sentToday + 1);
         sender.setDailyGiftSentDate(LocalDate.now());
         appUserRepository.save(sender);
@@ -278,11 +279,16 @@ public class SinkShopService {
     }
 
     private void deductCoins(AppUser user, long price) {
+        deductCoins(user, price, "Покупка в магазине предметов");
+    }
+
+    private void deductCoins(AppUser user, long price, String description) {
         if (user.getCoins() < price) {
             throw new IllegalArgumentException("Недостаточно EXC. Нужно " + price + ", есть " + user.getCoins() + ".");
         }
         user.setCoins(user.getCoins() - price);
         appUserRepository.save(user);
+        excTx.log(user, -price, ExcTransactionService.SINK, description);
     }
 
     private int getDailyCount(int count, LocalDate date) {

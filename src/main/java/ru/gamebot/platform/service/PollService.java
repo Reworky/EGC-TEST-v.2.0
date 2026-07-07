@@ -21,6 +21,7 @@ public class PollService {
     private final PollRepository pollRepository;
     private final PollVoteRepository pollVoteRepository;
     private final UserService userService;
+    private final ExcTransactionService excTx;
 
     public List<Poll> findActive() {
         return pollRepository.findAllByClosedFalseOrderByCreatedAtDesc();
@@ -83,6 +84,7 @@ public class PollService {
 
         user.setCoins(user.getCoins() - poll.getPriceExc());
         userService.save(user);
+        excTx.log(user, -poll.getPriceExc(), ExcTransactionService.POLL, "Голосование: " + poll.getTitle());
 
         PollVote vote = new PollVote();
         vote.setPoll(poll);

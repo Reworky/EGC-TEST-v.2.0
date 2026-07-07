@@ -17,6 +17,7 @@ public class SeasonService {
 
     private final SeasonRepository seasonRepository;
     private final UserService userService;
+    private final ExcTransactionService excTx;
 
     public Optional<Season> findCurrentSeason() {
         LocalDateTime now = LocalDateTime.now();
@@ -53,6 +54,7 @@ public class SeasonService {
         user.setSeasonPassActiveUntil(until);
 
         userService.save(user);
+        excTx.log(user, -season.getPriceExc(), ExcTransactionService.SEASON, "Battle Pass: " + season.getName());
         return new PurchaseResult(true, null);
     }
 

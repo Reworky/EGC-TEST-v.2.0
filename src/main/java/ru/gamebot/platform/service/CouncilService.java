@@ -21,6 +21,7 @@ public class CouncilService {
     private final CouncilMemberRepository councilMemberRepository;
     private final AppUserRepository appUserRepository;
     private final UserService userService;
+    private final ExcTransactionService excTx;
 
     public boolean isCouncilMember(AppUser user) {
         return councilMemberRepository.existsByUser(user);
@@ -50,6 +51,7 @@ public class CouncilService {
 
         user.setCoins(user.getCoins() - PRICE_EXC);
         appUserRepository.save(user);
+        excTx.log(user, -PRICE_EXC, ExcTransactionService.COUNCIL, "Вступление в EGC Council");
 
         CouncilMember member = new CouncilMember();
         member.setUser(user);

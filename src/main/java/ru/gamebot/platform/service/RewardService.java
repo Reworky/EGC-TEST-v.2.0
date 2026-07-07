@@ -24,6 +24,7 @@ public class RewardService {
     private final HealthRatioService healthRatioService;
     private final ShopLimitService shopLimitService;
     private final EntityManager entityManager;
+    private final ExcTransactionService excTx;
 
     public List<RewardItem> findAvailableRewards() {
         return rewardItemRepository.findAllByActiveTrueOrderByPriceCoinsAsc();
@@ -75,6 +76,7 @@ public class RewardService {
 
         user.setCoins(user.getCoins() - price);
         userService.save(user);
+        excTx.log(user, -price, ExcTransactionService.SHOP_BUY, "Покупка: " + rewardItem.getTitle());
         sinkShopService.recordWithdrawal(user, price);
 
         // Record cooldown after successful purchase (Layer 4)
@@ -153,6 +155,7 @@ public class RewardService {
         boolean isWithdrawal = "Вывод".equals(req.getRewardItem().getCategory());
         long price = isWithdrawal ? req.getRewardItem().getPriceCoins() : effectivePrice(req.getRewardItem());
         requester.setCoins(requester.getCoins() + price);
+        excTx.log(requester, price, ExcTransactionService.SHOP_REFUND, "Отмена заявки: " + req.getRewardItem().getTitle());
         userService.save(requester);
         // reverseWithdrawal for ALL items since recordWithdrawal is called for all in createRewardRequest
         sinkShopService.reverseWithdrawal(requester, price);
@@ -168,6 +171,7 @@ public class RewardService {
         boolean isWithdrawal = "Вывод".equals(req.getRewardItem().getCategory());
         long price = isWithdrawal ? req.getRewardItem().getPriceCoins() : effectivePrice(req.getRewardItem());
         user.setCoins(user.getCoins() + price);
+        excTx.log(user, price, ExcTransactionService.SHOP_REFUND, "Возврат (отклонение): " + req.getRewardItem().getTitle());
         userService.save(user);
         sinkShopService.reverseWithdrawal(user, price);
         return rewardRequestRepository.save(req);
@@ -234,6 +238,7 @@ public class RewardService {
 
         sinkShopService.recordWithdrawal(user, excAmount);
         user.setCoins(user.getCoins() - excAmount);
+        excTx.log(user, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод → USDT (TON)");
         userService.save(user);
 
         RewardRequest request = new RewardRequest();
@@ -278,6 +283,7 @@ public class RewardService {
 
         sinkShopService.recordWithdrawal(user, excAmount);
         user.setCoins(user.getCoins() - excAmount);
+        excTx.log(user, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод → " + rubles + " ₽");
         userService.save(user);
 
         RewardRequest request = new RewardRequest();

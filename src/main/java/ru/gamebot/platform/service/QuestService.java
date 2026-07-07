@@ -39,6 +39,7 @@ public class QuestService {
     private final UserService userService;
     private final HealthRatioService healthRatioService;
     private final SinkShopService sinkShopService;
+    private final ExcTransactionService excTx;
     private final SeasonService seasonService;
     private final SponsorService sponsorService;
 
@@ -359,6 +360,8 @@ public class QuestService {
         userService.grantFirstQuestReferralBonus(user);
 
         userService.addReward(user, adjustedXp, adjustedCoins);
+        excTx.log(user, adjustedCoins, ExcTransactionService.QUEST,
+                quest.getTitle() + " (" + quest.getGameName() + ")");
         user.setCompletedQuests(user.getCompletedQuests() + 1);
         submission.setUser(user);
         questSubmissionRepository.save(submission);
@@ -397,6 +400,8 @@ public class QuestService {
         }
         long bonus = Math.max(1, earnedCoins * REFERRAL_BONUS_PERCENT / 100);
         userService.addReward(referrer, 0, bonus);
+        excTx.log(referrer, bonus, ExcTransactionService.REFERRAL,
+                "3% с квеста реферала " + invitedUser.getNickname());
         referrer.setReferralEarnedExc(referrer.getReferralEarnedExc() + bonus);
         appUserRepository.save(referrer);
     }

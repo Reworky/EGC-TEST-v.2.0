@@ -119,6 +119,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.TournamentService tournamentService;
     private final ru.gamebot.platform.service.SeasonService seasonService;
     private final ru.gamebot.platform.service.SponsorService sponsorService;
+    private final ru.gamebot.platform.service.ExcTransactionService excTransactionService;
 
     private final Queue<String[]> pendingNewsQueue = new ConcurrentLinkedQueue<>();
     private final ScheduledExecutorService albumScheduler = Executors.newSingleThreadScheduledExecutor();
@@ -5371,6 +5372,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if ("exc".equals(action)) {
+            sendAdminUserExcHistory(admin, telegramId, page == null ? 0 : page);
+            return;
+        }
+
         if ("resetquests".equals(action)) {
             AppUser target = userService.findByTelegramId(telegramId).orElse(null);
             if (target == null) {
@@ -5445,6 +5451,60 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(admin.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
+    private void sendAdminUserExcHistory(AppUser admin, Long telegramId, int page) {
+        AppUser target = userService.findByTelegramId(telegramId).orElse(null);
+        if (target == null) {
+            sendText(admin.getTelegramId(), "⚠️ Пользователь не найден.", backMenuKeyboard("admin:users:0"));
+            return;
+        }
+
+        int pageSize = 10;
+        long total = excTransactionService.countAll(target);
+        int totalPages = total == 0 ? 1 : (int) ((total + pageSize - 1) / pageSize);
+        int safePage = Math.max(0, Math.min(page, totalPages - 1));
+        List<ru.gamebot.platform.domain.model.ExcTransaction> items =
+                excTransactionService.getHistory(target, safePage, pageSize);
+
+        String header = "💳 <b>История EXC</b>\n"
+                + "👤 <b>" + escape(displayUserName(target)) + "</b> (ID: " + telegramId + ")\n"
+                + "💰 Баланс: <b>" + target.getCoins() + " EXC</b>\n"
+                + "Всего операций: <b>" + total + "</b>\n\n";
+
+        if (items.isEmpty()) {
+            sendText(admin.getTelegramId(), header + "Операций нет.",
+                    backMenuKeyboard("admin:user:view:" + telegramId + ":0"));
+            return;
+        }
+
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yy HH:mm");
+        StringBuilder sb = new StringBuilder(header);
+        for (ru.gamebot.platform.domain.model.ExcTransaction tx : items) {
+            String sign = tx.getAmount() >= 0 ? "+" : "";
+            String desc = tx.getDescription() != null ? escape(tx.getDescription()) : "";
+            sb.append(ru.gamebot.platform.service.ExcTransactionService.typeLabel(tx.getType()))
+              .append("  <b>").append(sign).append(tx.getAmount()).append(" EXC</b>\n");
+            if (!desc.isEmpty()) sb.append("   ").append(desc).append("\n");
+            sb.append("   📅 ").append(tx.getCreatedAt().format(fmt)).append("\n\n");
+        }
+        if (totalPages > 1) {
+            sb.append("📄 Стр. ").append(safePage + 1).append(" / ").append(totalPages);
+        }
+
+        List<InlineKeyboardButton> navRow = new ArrayList<>();
+        if (safePage > 0) {
+            navRow.add(keyboardFactory.callback("⬅️", "admin:user:exc:" + telegramId + ":" + (safePage - 1)));
+        }
+        if (safePage < totalPages - 1) {
+            navRow.add(keyboardFactory.callback("➡️", "admin:user:exc:" + telegramId + ":" + (safePage + 1)));
+        }
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (!navRow.isEmpty()) rows.add(navRow);
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад к карточке", "admin:user:view:" + telegramId + ":0")));
+
+        sendText(admin.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
     private void sendAdminUserCard(AppUser admin, Long telegramId, int page, String notice) {
         AppUser target = userService.findByTelegramId(telegramId)
                 .orElseThrow(() -> new IllegalArgumentException("Игрок не найден."));
@@ -5467,6 +5527,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("📋 Квесты игрока", "admin:user:quests:" + telegramId + ":" + page)),
+                List.of(keyboardFactory.callback("💳 История EXC", "admin:user:exc:" + telegramId + ":0")),
                 List.of(keyboardFactory.callback("🗑 Сбросить активные квесты", "admin:user:resetquests:" + telegramId + ":" + page)),
                 List.of(keyboardFactory.callback("👤 Сделать игроком", "admin:user:role:" + telegramId + ":" + page + ":" + ROLE_USER)),
                 List.of(keyboardFactory.callback("🛡️ Сделать модератором", "admin:user:role:" + telegramId + ":" + page + ":" + ROLE_MODER)),
