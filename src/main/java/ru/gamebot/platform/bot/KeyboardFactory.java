@@ -90,6 +90,13 @@ public class KeyboardFactory {
         return button;
     }
 
+    public InlineKeyboardButton webApp(String text, String url) {
+        InlineKeyboardButton button = new InlineKeyboardButton();
+        button.setText(text);
+        button.setWebApp(new org.telegram.telegrambots.meta.api.objects.webapp.WebAppInfo(url));
+        return button;
+    }
+
     private boolean isShort(String text) {
         return text != null && text.length() < 14;
     }

@@ -6485,6 +6485,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.url("⭐ Отзывы игроков", "https://t.me/egc_payouts")
         ));
         rows.add(List.of(keyboardFactory.callback("❓ Как начать — быстрый старт", "menu:quickstart")));
+        rows.add(List.of(keyboardFactory.webApp("🌐 Открыть Mini App", "https://experience-gaming-club.pages.dev")));
         return keyboardFactory.rowsLayout(rows);
     }
 
