@@ -21,7 +21,7 @@ export default function App() {
     }
     authMiniApp(initData)
       .then(() => setReady(true))
-      .catch(() => setError('Не удалось авторизоваться. Откройте приложение через Telegram.'));
+      .catch((e) => setError(`Ошибка: ${e?.response?.status || e?.message || 'нет ответа'} | URL: ${import.meta.env.VITE_API_URL || 'localhost:8090'}`));
   }, [initData]);
 
   if (error) {
