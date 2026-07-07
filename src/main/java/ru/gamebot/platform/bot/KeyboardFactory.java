@@ -93,7 +93,10 @@ public class KeyboardFactory {
     public InlineKeyboardButton webApp(String text, String url) {
         InlineKeyboardButton button = new InlineKeyboardButton();
         button.setText(text);
-        button.setWebApp(new org.telegram.telegrambots.meta.api.objects.webapp.WebAppInfo(url));
+        org.telegram.telegrambots.meta.api.objects.webapp.WebAppInfo webAppInfo =
+                new org.telegram.telegrambots.meta.api.objects.webapp.WebAppInfo();
+        webAppInfo.setUrl(url);
+        button.setWebApp(webAppInfo);
         return button;
     }
 
