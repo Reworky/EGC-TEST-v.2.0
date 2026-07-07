@@ -487,14 +487,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        if (!user.isProfileCompleted()) {
+        if (!isEffectiveModerator(user) && !user.isProfileCompleted()) {
             answer(callbackQuery.getId(), "Сначала завершим регистрацию");
             sendCurrentRegistrationStep(user, session,
                     "🧭 Перед использованием разделов нужно закончить регистрацию. Продолжим с текущего шага.");
             return;
         }
 
-        if (!user.isRegistrationCompleted()) {
+        if (!isEffectiveModerator(user) && !user.isRegistrationCompleted()) {
             answer(callbackQuery.getId(), "Сначала активируйте аккаунт");
             sendCommunityActivationPrompt(user, null);
             return;
