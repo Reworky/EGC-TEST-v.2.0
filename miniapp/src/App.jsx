@@ -1,0 +1,52 @@
+import { useEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { authMiniApp } from './api/client';
+import { useTelegram } from './hooks/useTelegram';
+import BottomNav from './components/BottomNav';
+import ProfilePage from './pages/ProfilePage';
+import QuestsPage from './pages/QuestsPage';
+import ComingSoonPage from './pages/ComingSoonPage';
+import './App.css';
+
+export default function App() {
+  const { initData } = useTelegram();
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!initData) {
+      // Dev mode — no Telegram context, skip auth
+      setReady(true);
+      return;
+    }
+    authMiniApp(initData)
+      .then(() => setReady(true))
+      .catch(() => setError('Не удалось авторизоваться. Откройте приложение через Telegram.'));
+  }, [initData]);
+
+  if (error) {
+    return (
+      <div className="page-center error-msg">
+        <div style={{ fontSize: 48 }}>⚠️</div>
+        <div>{error}</div>
+      </div>
+    );
+  }
+
+  if (!ready) return <div className="page-center">Загрузка...</div>;
+
+  return (
+    <BrowserRouter>
+      <div className="app">
+        <Routes>
+          <Route path="/" element={<Navigate to="/profile" replace />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/quests" element={<QuestsPage />} />
+          <Route path="/shop" element={<ComingSoonPage title="Магазин" />} />
+          <Route path="/top" element={<ComingSoonPage title="Лидерборд" />} />
+        </Routes>
+        <BottomNav />
+      </div>
+    </BrowserRouter>
+  );
+}
