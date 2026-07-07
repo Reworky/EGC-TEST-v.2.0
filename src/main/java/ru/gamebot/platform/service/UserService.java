@@ -289,7 +289,7 @@ public class UserService {
         long totalExc = dailyExc + milestoneExc;
         user.setCoins(user.getCoins() + totalExc);
         excTx.log(user, totalExc, ExcTransactionService.DAILY,
-                "Ежедневный бонус (день " + user.getCurrentStreak() + ")");
+                "Ежедневный бонус (день " + user.getStreakDays() + ")");
         if (xpBonus > 0) {
             user.setXp(user.getXp() + xpBonus);
             user.setWeeklyXp(user.getWeeklyXp() + xpBonus);

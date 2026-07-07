@@ -81,7 +81,7 @@ public class TournamentService {
         user.setCoins(user.getCoins() - tournament.getEntryFeeExc());
         tournament.setPrizePoolExc(tournament.getPrizePoolExc() + tournament.getEntryFeeExc());
         userService.save(user);
-        excTx.log(user, -tournament.getEntryFeeExc(), ExcTransactionService.TOURNAMENT, "Взнос за турнир: " + tournament.getTitle());
+        excTx.log(user, -tournament.getEntryFeeExc(), ExcTransactionService.TOURNAMENT, "Взнос за турнир: " + tournament.getName());
         tournamentRepository.save(tournament);
 
         TournamentEntry entry = new TournamentEntry();
@@ -166,7 +166,7 @@ public class TournamentService {
                 AppUser user = entry.getUser();
                 user.setCoins(user.getCoins() + prize);
                 userService.save(user);
-                excTx.log(user, prize, ExcTransactionService.TOURNAMENT, "Приз за турнир: " + tournament.getTitle() + " (#" + (i + 1) + " место)");
+                excTx.log(user, prize, ExcTransactionService.TOURNAMENT, "Приз за турнир: " + tournament.getName() + " (#" + (i + 1) + " место)");
             }
             tournamentEntryRepository.save(entry);
         }

@@ -84,7 +84,7 @@ public class PollService {
 
         user.setCoins(user.getCoins() - poll.getPriceExc());
         userService.save(user);
-        excTx.log(user, -poll.getPriceExc(), ExcTransactionService.POLL, "Голосование: " + poll.getTitle());
+        excTx.log(user, -poll.getPriceExc(), ExcTransactionService.POLL, "Голосование: " + poll.getQuestion());
 
         PollVote vote = new PollVote();
         vote.setPoll(poll);
