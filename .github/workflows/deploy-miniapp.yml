@@ -1,0 +1,47 @@
+name: Deploy Mini App to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths: [miniapp/**]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: miniapp/package-lock.json
+
+      - name: Install & Build
+        working-directory: miniapp
+        run: |
+          npm ci
+          npm run build
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+
+      - uses: actions/configure-pages@v4
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: miniapp/dist
+
+      - uses: actions/deploy-pages@v4
+        id: deployment
