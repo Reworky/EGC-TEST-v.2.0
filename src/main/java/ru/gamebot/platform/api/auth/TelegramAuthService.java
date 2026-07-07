@@ -91,10 +91,10 @@ public class TelegramAuthService {
                     .reduce((a, b) -> a + "\n" + b)
                     .orElse("");
 
-            // secret_key = HMAC_SHA256("WebAppData", bot_token)
+            // secret_key = HMAC_SHA256(key="WebAppData", data=bot_token)
             Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(props.getBotToken().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] secretKey = mac.doFinal("WebAppData".getBytes(StandardCharsets.UTF_8));
+            mac.init(new SecretKeySpec("WebAppData".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] secretKey = mac.doFinal(props.getBotToken().getBytes(StandardCharsets.UTF_8));
 
             mac.init(new SecretKeySpec(secretKey, "HmacSHA256"));
             byte[] computedHash = mac.doFinal(dataCheckString.getBytes(StandardCharsets.UTF_8));
