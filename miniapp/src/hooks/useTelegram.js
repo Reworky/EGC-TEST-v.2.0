@@ -13,7 +13,7 @@ export function useTelegram() {
   }, []);
 
   const user = tg?.initDataUnsafe?.user;
-  const initData = tg?.initData ?? '';
+  const initData = tg?.initData || '';
 
   return { tg, user, initData };
 }
