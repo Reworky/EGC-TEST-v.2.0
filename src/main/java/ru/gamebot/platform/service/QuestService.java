@@ -467,6 +467,10 @@ public class QuestService {
         return questSubmissionRepository.findAllApprovedByUserOrderByUpdatedAtDesc(user);
     }
 
+    public List<QuestSubmission> findAllByUser(AppUser user) {
+        return questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user);
+    }
+
     public long countAllApproved() {
         return questSubmissionRepository.countAllApproved();
     }

@@ -5401,34 +5401,45 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        List<ru.gamebot.platform.domain.model.QuestSubmission> approved =
-                questService.findApprovedByUser(target);
+        List<ru.gamebot.platform.domain.model.QuestSubmission> all =
+                questService.findAllByUser(target);
 
-        String header = "📋 <b>Одобренные квесты игрока</b>\n"
+        long approvedCount = all.stream()
+                .filter(s -> s.getStatus() == ru.gamebot.platform.domain.enums.SubmissionStatus.APPROVED)
+                .count();
+
+        String header = "📋 <b>Квесты игрока</b>\n"
                 + "👤 <b>" + escape(displayUserName(target)) + "</b> (ID: " + telegramId + ")\n"
-                + "Всего завершено: <b>" + approved.size() + "</b>\n\n";
+                + "Всего заявок: <b>" + all.size() + "</b> · Одобрено: <b>" + approvedCount + "</b>\n\n";
 
-        if (approved.isEmpty()) {
-            sendText(admin.getTelegramId(), header + "Нет одобренных квестов.",
+        if (all.isEmpty()) {
+            sendText(admin.getTelegramId(), header + "Заявок нет.",
                     backMenuKeyboard("admin:user:view:" + telegramId + ":" + page));
             return;
         }
 
         int pageSize = 10;
-        int totalPages = (approved.size() + pageSize - 1) / pageSize;
+        int totalPages = (all.size() + pageSize - 1) / pageSize;
         int safePage = Math.max(0, Math.min(page, totalPages - 1));
         List<ru.gamebot.platform.domain.model.QuestSubmission> pageItems =
-                approved.subList(safePage * pageSize, Math.min((safePage + 1) * pageSize, approved.size()));
+                all.subList(safePage * pageSize, Math.min((safePage + 1) * pageSize, all.size()));
 
         StringBuilder sb = new StringBuilder(header);
-        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yy HH:mm");
         int startNum = safePage * pageSize + 1;
         for (int i = 0; i < pageItems.size(); i++) {
             ru.gamebot.platform.domain.model.QuestSubmission s = pageItems.get(i);
             String dateStr = s.getUpdatedAt() != null ? s.getUpdatedAt().format(fmt) : "—";
-            sb.append(startNum + i).append(". <b>").append(escape(s.getQuest().getTitle())).append("</b>\n")
+            String statusIcon = switch (s.getStatus()) {
+                case APPROVED -> "✅";
+                case REJECTED -> "❌";
+                case NEEDS_INFO -> "❓";
+                case PENDING -> "⏳";
+                default -> "📌";
+            };
+            sb.append(startNum + i).append(". ").append(statusIcon)
+              .append(" <b>").append(escape(s.getQuest().getTitle())).append("</b>\n")
               .append("   🎮 ").append(escape(s.getQuest().getGameName()))
-              .append(" · ").append(escape(s.getQuest().getCategory()))
               .append(" · 💰 ").append(s.getQuest().getRewardCoins()).append(" EXC\n")
               .append("   📅 ").append(dateStr).append("\n\n");
         }
