@@ -21,6 +21,11 @@ export async function getProfile() {
   return data;
 }
 
+export async function getAvatarUrl() {
+  const { data } = await api.get('/api/profile/avatar', { responseType: 'blob' });
+  return URL.createObjectURL(data);
+}
+
 export async function getQuests(game, category) {
   const params = {};
   if (game) params.game = game;

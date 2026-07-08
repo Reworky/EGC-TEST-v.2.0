@@ -5,4 +5,8 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   base: process.env.GITHUB_ACTIONS ? '/EXPERIENCE-GAMING-CLUB/' : '/',
+  server: {
+    host: true,
+    port: process.env.PORT ? Number(process.env.PORT) : 5173,
+  },
 })

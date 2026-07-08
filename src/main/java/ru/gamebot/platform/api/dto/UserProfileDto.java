@@ -20,4 +20,5 @@ public class UserProfileDto {
     private int streakDays;
     private long monthlyWithdrawalLimit;
     private long remainingWithdrawalLimit;
+    private boolean hasAvatar;
 }

@@ -6,6 +6,14 @@
       "runtimeExecutable": "/usr/bin/python3",
       "runtimeArgs": ["-c", "import os,http.server,socketserver; os.chdir('/Users/olegdanilov/Desktop/egc-landing'); socketserver.TCPServer(('',3456),http.server.SimpleHTTPRequestHandler).serve_forever()"],
       "port": 3456
+    },
+    {
+      "name": "miniapp",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--host"],
+      "cwd": "miniapp",
+      "port": 5173,
+      "autoPort": true
     }
   ]
 }

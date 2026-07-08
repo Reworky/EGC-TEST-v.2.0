@@ -3,9 +3,12 @@
   bottom: 0;
   left: 0;
   right: 0;
+  max-width: 480px;
+  margin: 0 auto;
   height: 60px;
-  background: var(--tg-theme-bg-color, #1a1a2e);
-  border-top: 1px solid rgba(255,255,255,0.08);
+  background: rgba(15, 16, 32, 0.75);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid var(--egc-glass-border, rgba(168, 85, 247, 0.18));
   display: flex;
   z-index: 100;
   padding-bottom: env(safe-area-inset-bottom);
@@ -25,7 +28,7 @@
 }
 
 .tab.active {
-  color: var(--tg-theme-button-color, #6c63ff);
+  color: var(--tg-theme-button-color, #a855f7);
 }
 
 .tab-icon {
