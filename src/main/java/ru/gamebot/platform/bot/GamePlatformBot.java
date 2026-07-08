@@ -3555,6 +3555,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.smartLayout(buttons));
     }
 
+    private String rewardPreviewLine(QuestSubmission submission) {
+        QuestService.RewardPreview reward = questService.computeReward(submission.getUser(), submission.getQuest());
+        StringBuilder sb = new StringBuilder("💰 К начислению: <b>")
+                .append(reward.xp()).append(" XP, ")
+                .append(reward.coins()).append(" EXC</b>");
+        if (reward.diminished()) {
+            sb.append(" ⚠️ <i>снижено (лимит 3/нед по этому типу квеста)</i>");
+        }
+        if (reward.xpBoosted()) {
+            sb.append(" ⚡<i>буст XP</i>");
+        }
+        return sb.toString();
+    }
+
     private void sendFraudSuspects(Long chatId) {
         List<AppUser> suspects = userService.getFraudSuspects();
         if (suspects.isEmpty()) {
@@ -3582,7 +3596,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String caption = "🧾 <b>Заявка К-" + (submission.getDisplayId() != null ? submission.getDisplayId() : submission.getId()) + " на проверку</b>\n\n"
                 + "👤 Игрок: <b>" + escape(submission.getUser().getNickname()) + "</b>\n"
                 + "🆔 ID: <b>" + submission.getUser().getTelegramId() + "</b>\n"
-                + "🎯 Квест: <b>" + escape(submission.getQuest().getTitle()) + " (" + submission.getQuest().getRewardCoins() + " EXC)</b>\n"
+                + "🎯 Квест: <b>" + escape(submission.getQuest().getTitle()) + "</b>\n"
+                + rewardPreviewLine(submission) + "\n"
                 + "📅 Отправлено: <b>" + escape(submission.getCreatedAt().format(DATE_TIME_FORMATTER)) + "</b>\n"
                 + "💬 Комментарий: " + escape(submission.getUserComment()) + "\n"
                 + (submission.getExternalLink() == null ? "" : "🔗 Ссылка: " + escape(submission.getExternalLink()) + "\n");
@@ -6323,7 +6338,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String caption = "🧾 <b>Заявка К-" + (submission.getDisplayId() != null ? submission.getDisplayId() : submissionId) + " на проверку</b>\n\n"
                 + "👤 Игрок: <b>" + escape(submission.getUser().getNickname()) + "</b>\n"
                 + "🆔 ID: <b>" + submission.getUser().getTelegramId() + "</b>\n"
-                + "🎯 Квест: <b>" + escape(submission.getQuest().getTitle()) + " (" + submission.getQuest().getRewardCoins() + " EXC)</b>\n"
+                + "🎯 Квест: <b>" + escape(submission.getQuest().getTitle()) + "</b>\n"
+                + rewardPreviewLine(submission) + "\n"
                 + "📅 Отправлено: <b>" + submission.getCreatedAt().format(DATE_TIME_FORMATTER) + "</b>\n"
                 + "💬 Комментарий: " + escape(submission.getUserComment());
 

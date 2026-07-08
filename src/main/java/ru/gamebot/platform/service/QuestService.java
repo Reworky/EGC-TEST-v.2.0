@@ -320,6 +320,36 @@ public class QuestService {
                 .toList();
     }
 
+    public record RewardPreview(long xp, long coins, boolean diminished, boolean xpBoosted) {
+    }
+
+    public RewardPreview computeReward(AppUser user, Quest quest) {
+        long baseCoins = quest.getRewardCoins();
+        long adjustedCoins = healthRatioService.applyRatio(baseCoins);
+
+        // 3.4 Antifaud: diminishing returns after 3 completions of same type per week
+        LocalDateTime weekAgo = LocalDateTime.now().minusWeeks(1);
+        long weeklyCount = questSubmissionRepository.countApprovedByUserAndGameAndCategorySince(
+                user, quest.getGameName(), quest.getCategory(), weekAgo);
+        boolean diminished = weeklyCount >= WEEKLY_QUEST_TYPE_LIMIT;
+        if (diminished) {
+            adjustedCoins = adjustedCoins / 2;
+        }
+
+        // Apply XP boost
+        long baseXp = quest.getRewardXp();
+        int xpBoostPct = sinkShopService.getXpBoostPercent(user);
+        // Season Pass adds extra XP boost
+        if (seasonService.hasActivePass(user)) {
+            int seasonBoost = seasonService.findCurrentSeason()
+                    .map(Season -> Season.getXpBoostPercent()).orElse(0);
+            xpBoostPct += seasonBoost;
+        }
+        long adjustedXp = baseXp + (baseXp * xpBoostPct / 100);
+
+        return new RewardPreview(adjustedXp, adjustedCoins, diminished, xpBoostPct > 0);
+    }
+
     @Transactional
     public QuestSubmission approveSubmission(Long submissionId) {
         QuestSubmission submission = getSubmission(submissionId);
@@ -333,28 +363,9 @@ public class QuestService {
         AppUser user = submission.getUser();
         Quest quest = submission.getQuest();
 
-        long baseCoins = quest.getRewardCoins();
-        long adjustedCoins = healthRatioService.applyRatio(baseCoins);
-
-        // 3.4 Antifaud: diminishing returns after 3 completions of same type per week
-        LocalDateTime weekAgo = LocalDateTime.now().minusWeeks(1);
-        long weeklyCount = questSubmissionRepository.countApprovedByUserAndGameAndCategorySince(
-                user, quest.getGameName(), quest.getCategory(), weekAgo);
-        if (weeklyCount >= WEEKLY_QUEST_TYPE_LIMIT) {
-            adjustedCoins = adjustedCoins / 2;
-        }
-
-        // Apply XP boost
-        long baseXp = quest.getRewardXp();
-        int xpBoostPct = sinkShopService.getXpBoostPercent(user);
-        // Season Pass adds extra XP boost
-        if (seasonService.hasActivePass(user)) {
-            seasonService.findCurrentSeason().ifPresent(s -> {});
-            int seasonBoost = seasonService.findCurrentSeason()
-                    .map(Season -> Season.getXpBoostPercent()).orElse(0);
-            xpBoostPct += seasonBoost;
-        }
-        long adjustedXp = baseXp + (baseXp * xpBoostPct / 100);
+        RewardPreview reward = computeReward(user, quest);
+        long adjustedCoins = reward.coins();
+        long adjustedXp = reward.xp();
 
         // 3.5 3000 EXC bonus on first quest (before completedQuests increment)
         userService.grantFirstQuestReferralBonus(user);
