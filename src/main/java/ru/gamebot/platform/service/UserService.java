@@ -488,6 +488,26 @@ public class UserService {
     }
 
     @Transactional
+    public AppUser blockUser(Long telegramId, String reason) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId)
+                .orElseThrow(() -> new IllegalArgumentException("Игрок с таким Telegram ID не найден."));
+        user.setBlocked(true);
+        user.setBlockReason(reason);
+        user.setBlockedAt(java.time.LocalDateTime.now());
+        return appUserRepository.save(user);
+    }
+
+    @Transactional
+    public AppUser unblockUser(Long telegramId) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId)
+                .orElseThrow(() -> new IllegalArgumentException("Игрок с таким Telegram ID не найден."));
+        user.setBlocked(false);
+        user.setBlockReason(null);
+        user.setBlockedAt(null);
+        return appUserRepository.save(user);
+    }
+
+    @Transactional
     public AppUser clearPersonalProgress(Long telegramId) {
         AppUser user = appUserRepository.findByTelegramId(telegramId)
                 .orElseThrow(() -> new IllegalArgumentException("Игрок с таким Telegram ID не найден."));

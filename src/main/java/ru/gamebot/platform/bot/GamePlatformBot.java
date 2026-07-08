@@ -200,6 +200,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         UserSession session = sessionService.get(user.getTelegramId());
         ensureRoleConsistency(user, session);
 
+        if (user.isBlocked() && !adminService.isAdmin(user.getTelegramId())) {
+            sendBlockedNotice(user);
+            return;
+        }
+
         if (text != null && handleClearMeCommand(user, session, text.trim())) {
             return;
         }
@@ -390,6 +395,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         UserSession session = sessionService.get(user.getTelegramId());
         ensureRoleConsistency(user, session);
 
+        if (user.isBlocked() && !adminService.isAdmin(user.getTelegramId())) {
+            sendBlockedNotice(user);
+            return;
+        }
+
         if (srcCode != null) {
             trafficSourceService.recordClick(srcCode);
             if (user.getTrafficSourceCode() == null) {
@@ -434,6 +444,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         UserSession session = sessionService.get(telegramId);
         ensureRoleConsistency(user, session);
         String data = callbackQuery.getData();
+
+        if (user.isBlocked() && !adminService.isAdmin(user.getTelegramId())) {
+            answerSilently(callbackQuery.getId());
+            sendBlockedNotice(user);
+            return;
+        }
 
         if (data == null) {
             answer(callbackQuery.getId(), "Пустое действие");
@@ -1403,6 +1419,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendText(user.getTelegramId(), "✅ Заявка отклонена. EXC возвращены на баланс пользователя.", null);
                     sendAdminRewardRequests(user);
                 }
+            }
+            case BLOCK_USER_REASON -> {
+                Long targetId = session.getQuestId();
+                int blockPage = parseInteger(session.getData().getOrDefault("blockPage", "0"));
+                AppUser target = userService.findByTelegramId(targetId).orElse(null);
+                session.reset();
+                if (target == null) {
+                    sendText(user.getTelegramId(), "⚠️ Пользователь не найден.", backMenuKeyboard("admin:users:0"));
+                    return;
+                }
+                userService.blockUser(targetId, text.trim());
+                sendText(targetId,
+                        "🚫 <b>Ваш аккаунт заблокирован</b>\n\n"
+                                + "Причина: <i>" + escape(text.trim()) + "</i>\n\n"
+                                + "Если считаете это ошибкой — обратитесь в поддержку клуба.",
+                        null);
+                sendAdminUserCard(user, targetId, blockPage, "✅ Пользователь заблокирован.");
             }
             case QUEST_TEMPLATE_TITLE -> {
                 session.getData().put("title", text.trim());
@@ -3789,7 +3822,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     session.setState(SessionState.DEBIT_INPUT);
                     sendAdminDebitUsersPage(user, session, parseInteger(action.substring("debitpage:".length())), null);
                 } else if (action.startsWith("user:")) {
-                    handleAdminUserAction(user, action.substring("user:".length()));
+                    handleAdminUserAction(user, session, action.substring("user:".length()));
                 } else if (action.startsWith("delete:")) {
                     deleteQuest(user, parseLong(action.substring("delete:".length())));
                 } else if (action.startsWith("toggle:")) {
@@ -5341,7 +5374,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 )));
     }
 
-    private void handleAdminUserAction(AppUser admin, String payload) {
+    private void handleAdminUserAction(AppUser admin, UserSession session, String payload) {
         String[] parts = payload.split(":");
         if (parts.length < 3) {
             sendText(admin.getTelegramId(), "⚠️ Карточка пользователя недоступна.", backMenuKeyboard("menu:admin"));
@@ -5388,6 +5421,41 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     ? "🗑 Сброшено активных квестов: <b>" + count + "</b>."
                     : "ℹ️ Активных квестов не было.";
             sendAdminUserCard(admin, telegramId, page == null ? 0 : page, notice);
+            return;
+        }
+
+        if ("block".equals(action)) {
+            AppUser target = userService.findByTelegramId(telegramId).orElse(null);
+            if (target == null) {
+                sendText(admin.getTelegramId(), "⚠️ Пользователь не найден.", backMenuKeyboard("admin:users:0"));
+                return;
+            }
+            if (telegramId.equals(admin.getTelegramId())) {
+                sendText(admin.getTelegramId(), "⚠️ Нельзя заблокировать самого себя.",
+                        backMenuKeyboard("admin:user:view:" + telegramId + ":" + (page == null ? 0 : page)));
+                return;
+            }
+            session.reset();
+            session.setQuestId(telegramId);
+            session.getData().put("blockPage", String.valueOf(page == null ? 0 : page));
+            session.setState(SessionState.BLOCK_USER_REASON);
+            sendText(admin.getTelegramId(),
+                    "🚫 <b>Блокировка пользователя</b>\n\n"
+                            + "👤 " + escape(displayUserName(target)) + " (ID: " + telegramId + ")\n\n"
+                            + "Напишите причину блокировки — она будет сохранена и отправлена пользователю:",
+                    cancelKeyboard());
+            return;
+        }
+
+        if ("unblock".equals(action)) {
+            AppUser target = userService.findByTelegramId(telegramId).orElse(null);
+            if (target == null) {
+                sendText(admin.getTelegramId(), "⚠️ Пользователь не найден.", backMenuKeyboard("admin:users:0"));
+                return;
+            }
+            userService.unblockUser(telegramId);
+            sendText(telegramId, "✅ Вы разблокированы администратором. Снова доступны все функции клуба.", null);
+            sendAdminUserCard(admin, telegramId, page == null ? 0 : page, "✅ Пользователь разблокирован.");
             return;
         }
 
@@ -5534,7 +5602,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "📅 Зарегистрирован: <b>" + (target.getCreatedAt() != null ? target.getCreatedAt().toLocalDate().toString() : "—") + "</b>\n"
                 + "🛡️ Роль: <b>" + escape(humanRole(highestAvailableRole(target))) + "</b>\n"
                 + configuredNote + "\n"
-                + "✅ Регистрация: <b>" + (target.isRegistrationCompleted() ? "завершена" : "не завершена") + "</b>";
+                + "✅ Регистрация: <b>" + (target.isRegistrationCompleted() ? "завершена" : "не завершена") + "</b>\n"
+                + (target.isBlocked()
+                        ? "🚫 Статус: <b>заблокирован</b>"
+                                + (target.getBlockReason() != null && !target.getBlockReason().isBlank()
+                                        ? "\n   Причина: <i>" + escape(target.getBlockReason()) + "</i>"
+                                        : "")
+                        : "🟢 Статус: <b>активен</b>");
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("📋 Квесты игрока", "admin:user:quests:" + telegramId + ":" + page)),
@@ -5543,6 +5617,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("👤 Сделать игроком", "admin:user:role:" + telegramId + ":" + page + ":" + ROLE_USER)),
                 List.of(keyboardFactory.callback("🛡️ Сделать модератором", "admin:user:role:" + telegramId + ":" + page + ":" + ROLE_MODER)),
                 List.of(keyboardFactory.callback("🛠️ Сделать админом", "admin:user:role:" + telegramId + ":" + page + ":" + ROLE_ADMIN)),
+                List.of(target.isBlocked()
+                        ? keyboardFactory.callback("✅ Разблокировать", "admin:user:unblock:" + telegramId + ":" + page)
+                        : keyboardFactory.callback("🚫 Заблокировать", "admin:user:block:" + telegramId + ":" + page)),
                 List.of(
                         keyboardFactory.callback("⬅️ К списку", "admin:users:" + page),
                         keyboardFactory.callback("🏠 Меню", "menu:main")
@@ -6905,6 +6982,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return "https://t.me/" + username.replace("@", "").trim();
         }
         return "https://t.me/exgamingclub";
+    }
+
+    private void sendBlockedNotice(AppUser user) {
+        String reason = user.getBlockReason();
+        sendText(user.getTelegramId(),
+                "🚫 <b>Ваш аккаунт заблокирован</b>\n\n"
+                        + (reason != null && !reason.isBlank() ? "Причина: <i>" + escape(reason) + "</i>\n\n" : "")
+                        + "Если считаете это ошибкой — обратитесь в поддержку клуба.",
+                null);
     }
 
     private boolean isEffectiveModerator(AppUser user) {
