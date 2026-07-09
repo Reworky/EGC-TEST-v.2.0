@@ -39,7 +39,7 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
     @Query("SELECT COUNT(r) FROM RewardRequest r WHERE r.user = :user AND r.rewardItem.category = 'Вывод' AND r.status = 'PENDING'")
     long countPendingWithdrawalsByUser(@Param("user") AppUser user);
 
-    @Query("SELECT COUNT(r) FROM RewardRequest r WHERE r.user = :user AND r.rewardItem.category = 'Вывод' AND r.status NOT IN ('CANCELLED') AND r.createdAt >= :since")
+    @Query("SELECT COUNT(r) FROM RewardRequest r WHERE r.user = :user AND r.rewardItem.category = 'Вывод' AND r.status NOT IN ('CANCELLED', 'REJECTED') AND r.createdAt >= :since")
     long countWithdrawalsByUserSince(@Param("user") AppUser user, @Param("since") LocalDateTime since);
 
     @Query("SELECT COUNT(r) FROM RewardRequest r WHERE r.user = :user AND r.rewardItem.purchaseGroup = :group AND r.status NOT IN ('CANCELLED', 'REJECTED') AND r.createdAt >= :since")

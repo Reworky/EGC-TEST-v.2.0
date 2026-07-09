@@ -175,6 +175,10 @@ public class RewardService {
         excTx.log(user, price, ExcTransactionService.SHOP_REFUND, "Возврат (отклонение): " + req.getRewardItem().getTitle());
         userService.save(user);
         sinkShopService.reverseWithdrawal(user, price);
+        // Отклонение — не вина игрока, поэтому снимаем cooldown по ценовому диапазону товара (Layer 4)
+        if (!isWithdrawal) {
+            shopLimitService.reverseCooldown(user, req.getRewardItem().getPriceCoins());
+        }
         return rewardRequestRepository.save(req);
     }
 

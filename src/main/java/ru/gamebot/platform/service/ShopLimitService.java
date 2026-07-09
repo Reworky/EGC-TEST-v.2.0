@@ -136,6 +136,19 @@ public class ShopLimitService {
         appUserRepository.save(user);
     }
 
+    /** Снимает cooldown ценового диапазона — вызывается при отклонении заявки админом/модератором, чтобы не наказывать игрока за чужой отказ. */
+    @Transactional
+    public void reverseCooldown(AppUser user, long price) {
+        if (price <= COOLDOWN_SMALL_THRESHOLD) {
+            user.setShopCooldownSmallUntil(null);
+        } else if (price <= COOLDOWN_MEDIUM_THRESHOLD) {
+            user.setShopCooldownMediumUntil(null);
+        } else {
+            user.setShopCooldownLargeUntil(null);
+        }
+        appUserRepository.save(user);
+    }
+
     /**
      * Возвращает статусную строку для карточки товара.
      * Порядок: уровень → cooldown → количественный лимит → месячный лимит → доступно.
