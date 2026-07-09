@@ -2634,7 +2634,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.url("💎 Открыть Telegram Wallet", "https://t.me/wallet/start?startapp=ref-3-PaQlujnvUGU")));
         rows.add(List.of(keyboardFactory.url("💬 Помощь — @GressToEx", "https://t.me/GressToEx")));
-        rows.add(List.of(keyboardFactory.callback("❌ Отмена", "menu:shop")));
+        rows.add(List.of(keyboardFactory.callback("❌ Отмена", "common:cancel")));
         sendText(user.getTelegramId(), msg, keyboardFactory.rowsLayout(rows));
     }
 
