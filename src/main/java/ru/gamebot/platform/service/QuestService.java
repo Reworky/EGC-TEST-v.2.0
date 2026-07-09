@@ -408,6 +408,7 @@ public class QuestService {
         submission.setStatus(SubmissionStatus.APPROVED);
         submission.setModeratorComment("Принято. Отличная работа!");
         submission.setUpdatedAt(LocalDateTime.now());
+        submission.setCompletionDisplayId(questSubmissionRepository.findMaxCompletionDisplayId() + 1);
 
         AppUser user = submission.getUser();
         Quest quest = submission.getQuest();

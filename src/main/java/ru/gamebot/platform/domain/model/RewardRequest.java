@@ -39,6 +39,12 @@ public class RewardRequest {
     private LocalDateTime createdAt;
     private String adminComment;
 
-    /** Детали выплаты (для USDT: адрес кошелька TON) */
+    /** Детали выплаты (для USDT: адрес кошелька TON) или данные, введённые игроком для выдачи (ID аккаунта и т.п.) */
     private String payoutDetails;
+
+    /**
+     * Порядковый номер заявки в своей категории: отдельный счётчик для заявок магазина наград
+     * и отдельный для заявок на вывод EXC (не связан с {@link #id}, который общий на всю таблицу).
+     */
+    private Long displayId;
 }

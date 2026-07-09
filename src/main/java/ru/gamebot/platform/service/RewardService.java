@@ -87,6 +87,7 @@ public class RewardService {
         request.setRewardItem(rewardItem);
         request.setStatus(RewardRequestStatus.PENDING);
         request.setCreatedAt(LocalDateTime.now());
+        request.setDisplayId(rewardRequestRepository.findMaxShopDisplayId() + 1);
         return rewardRequestRepository.save(request);
     }
 
@@ -247,6 +248,7 @@ public class RewardService {
         request.setStatus(RewardRequestStatus.PENDING);
         request.setCreatedAt(LocalDateTime.now());
         request.setPayoutDetails("USDT·TON:" + tonWallet + ":rubles=" + rubles);
+        request.setDisplayId(rewardRequestRepository.findMaxWithdrawalDisplayId() + 1);
         return rewardRequestRepository.save(request);
     }
 
@@ -292,6 +294,7 @@ public class RewardService {
         request.setStatus(RewardRequestStatus.PENDING);
         request.setPayoutDetails(payoutDetails);
         request.setCreatedAt(LocalDateTime.now());
+        request.setDisplayId(rewardRequestRepository.findMaxWithdrawalDisplayId() + 1);
         return rewardRequestRepository.save(request);
     }
 

@@ -2721,7 +2721,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 case REJECTED -> "❌ Отклонено";
                 case CANCELLED -> "🚫 Отменено";
             };
-            sb.append("• <b>").append(escape(req.getRewardItem().getTitle())).append("</b> — ").append(status);
+            sb.append("• М-").append(reqDisplayId(req)).append(" <b>").append(escape(req.getRewardItem().getTitle())).append("</b> — ").append(status);
             if (req.getStatus() == RewardRequestStatus.REJECTED && req.getAdminComment() != null) {
                 sb.append("\n  📝 ").append(escape(req.getAdminComment()));
             }
@@ -2757,13 +2757,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 case REJECTED -> "❌ Отклонено";
                 case CANCELLED -> "🚫 Отменено";
             };
-            sb.append("• #").append(req.getId()).append(" <b>").append(escape(req.getRewardItem().getTitle())).append("</b> — ").append(status);
+            sb.append("• В-").append(reqDisplayId(req)).append(" <b>").append(escape(req.getRewardItem().getTitle())).append("</b> — ").append(status);
             if (req.getStatus() == RewardRequestStatus.REJECTED && req.getAdminComment() != null) {
                 sb.append("\n  📝 ").append(escape(req.getAdminComment()));
             }
             sb.append("\n");
             if (req.getStatus() == RewardRequestStatus.PENDING) {
-                rows.add(List.of(keyboardFactory.callback("❌ Отменить заявку #" + req.getId(), "reward:cancel:" + req.getId())));
+                rows.add(List.of(keyboardFactory.callback("❌ Отменить заявку В-" + reqDisplayId(req), "reward:cancel:" + req.getId())));
             }
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")));
@@ -3680,6 +3680,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? "\n🎁 Бонус за первый квест: <b>+3 000 EXC</b>" : "";
         notifyUser(submission.getUser().getTelegramId(),
                 "🎉 Ваш отчёт по квесту <b>" + escape(submission.getQuest().getTitle()) + "</b> одобрен!\n\n"
+                        + "🏅 Квест З-" + submission.getCompletionDisplayId() + "\n"
                         + "✨ XP: <b>+" + rewardGrant.xp() + "</b>\n"
                         + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>\n"
                         + formatExcBonusLine(rewardGrant)
@@ -4321,7 +4322,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (RewardRequest req : pending) {
             String statusMark = req.getStatus() == RewardRequestStatus.IN_PROGRESS ? "🔄 " : "";
-            String label = statusMark + "@" + (req.getUser().getTelegramUsername() != null
+            String label = statusMark + "М-" + reqDisplayId(req) + " @" + (req.getUser().getTelegramUsername() != null
                     ? req.getUser().getTelegramUsername()
                     : req.getUser().getTelegramId())
                     + " — " + trim(req.getRewardItem().getTitle(), 20);
@@ -4354,11 +4355,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             ));
         }
         cardRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:reward:requests")));
+        String userDataLine = req.getPayoutDetails() != null && !req.getPayoutDetails().isBlank()
+                ? "\n📋 Данные для выдачи: <code>" + escape(req.getPayoutDetails()) + "</code>"
+                : "";
         sendText(user.getTelegramId(),
-                "📋 <b>Заявка #" + req.getId() + "</b>\n\n"
+                "📋 <b>Заявка М-" + reqDisplayId(req) + "</b>\n\n"
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + usernameStr + ")\n"
                         + "🎁 Награда: <b>" + escape(req.getRewardItem().getTitle()) + "</b>\n"
-                        + "🪙 Цена: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
+                        + "🪙 Цена: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>"
+                        + userDataLine + "\n"
                         + "📅 Дата: <b>" + req.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) + "</b>"
                         + statusLine,
                 keyboardFactory.rowsLayout(cardRows));
@@ -4447,7 +4452,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     : "#" + req.getUser().getTelegramId();
             String type = (req.getPayoutDetails() != null && req.getPayoutDetails().startsWith("USDT")) ? "💎 USDT" : "💸 ₽";
             rows.add(List.of(keyboardFactory.callback(
-                    uname + " — " + type + " " + req.getRewardItem().getPriceCoins() + " EXC",
+                    "В-" + reqDisplayId(req) + " " + uname + " — " + type + " " + req.getRewardItem().getPriceCoins() + " EXC",
                     "admin:withdrawal:req:" + req.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
@@ -4478,7 +4483,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String duplicateWarning = duplicateCount > 1
                 ? "\n\n⚠️ <b>ВНИМАНИЕ: у этого пользователя " + duplicateCount + " активные заявки на вывод!</b> Оплачивайте только эту." : "";
         sendText(user.getTelegramId(),
-                "💸 <b>Заявка на вывод В-" + req.getId() + "</b>\n\n"
+                "💸 <b>Заявка на вывод В-" + reqDisplayId(req) + "</b>\n\n"
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
                         + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
                         + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
@@ -4499,7 +4504,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean isUsdt = req.getPayoutDetails() != null;
         String method = isUsdt ? "USDT · TON" : "рубли (СБП / Сбербанк)";
         String caption = "✅ <b>Ваш вывод EXC выполнен!</b>\n\n"
-                + "🔢 Номер заявки: <b>В-" + req.getId() + "</b>\n"
+                + "🔢 Номер заявки: <b>В-" + reqDisplayId(req) + "</b>\n"
                 + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
                 + "💵 Способ: <b>" + method + "</b>\n\n"
                 + "Средства отправлены. Если не получили — напишите в поддержку.";
@@ -5528,8 +5533,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 case PENDING -> "⏳";
                 default -> "📌";
             };
+            String completionTag = s.getCompletionDisplayId() != null ? " (З-" + s.getCompletionDisplayId() + ")" : "";
             sb.append(startNum + i).append(". ").append(statusIcon)
-              .append(" <b>").append(escape(s.getQuest().getTitle())).append("</b>\n")
+              .append(" <b>").append(escape(s.getQuest().getTitle())).append("</b>").append(completionTag).append("\n")
               .append("   🎮 ").append(escape(s.getQuest().getGameName()))
               .append(" · 💰 ").append(s.getQuest().getRewardCoins()).append(" EXC\n")
               .append("   📅 ").append(dateStr).append("\n\n");
@@ -6487,7 +6493,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     : "#" + req.getUser().getTelegramId();
             String type = (req.getPayoutDetails() != null && req.getPayoutDetails().startsWith("USDT")) ? "💎 USDT" : "💸 ₽";
             rows.add(List.of(keyboardFactory.callback(
-                    uname + " — " + type + " " + req.getRewardItem().getPriceCoins() + " EXC",
+                    "В-" + reqDisplayId(req) + " " + uname + " — " + type + " " + req.getRewardItem().getPriceCoins() + " EXC",
                     "mod:withdrawal:req:" + req.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:moderation")));
@@ -6518,7 +6524,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String dupWarning = dupCount > 1
                 ? "\n\n⚠️ <b>ВНИМАНИЕ: у этого пользователя " + dupCount + " активные заявки на вывод!</b> Оплачивайте только эту." : "";
         sendText(user.getTelegramId(),
-                "💸 <b>Заявка на вывод В-" + req.getId() + "</b>\n\n"
+                "💸 <b>Заявка на вывод В-" + reqDisplayId(req) + "</b>\n\n"
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
                         + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
                         + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
@@ -7121,6 +7127,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return ROLE_MODER;
         }
         return ROLE_USER;
+    }
+
+    private long reqDisplayId(ru.gamebot.platform.domain.model.RewardRequest req) {
+        return req.getDisplayId() != null ? req.getDisplayId() : req.getId();
     }
 
     private String displayUserName(AppUser user) {

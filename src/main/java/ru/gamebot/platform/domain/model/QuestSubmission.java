@@ -61,4 +61,7 @@ public class QuestSubmission {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime expiresAt;
+
+    /** Отдельный порядковый номер, присваивается только при одобрении квеста (не связан с displayId заявки). */
+    private Long completionDisplayId;
 }

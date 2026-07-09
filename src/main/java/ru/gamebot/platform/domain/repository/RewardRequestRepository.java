@@ -50,4 +50,10 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
 
     @Query("SELECT COUNT(r) FROM RewardRequest r WHERE r.user = :user AND r.rewardItem.purchaseGroup = 'council_egc' AND r.status NOT IN ('CANCELLED', 'REJECTED') AND r.createdAt >= :since")
     long countActiveCouncilSince(@Param("user") AppUser user, @Param("since") LocalDateTime since);
+
+    @Query("SELECT COALESCE(MAX(r.displayId), 0) FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод'")
+    long findMaxWithdrawalDisplayId();
+
+    @Query("SELECT COALESCE(MAX(r.displayId), 0) FROM RewardRequest r WHERE r.rewardItem.category <> 'Вывод'")
+    long findMaxShopDisplayId();
 }
