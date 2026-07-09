@@ -1296,6 +1296,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendText(user.getTelegramId(), "⚠️ Укажите срок числом от 1 до 365 (количество дней).", cancelKeyboard());
                     return;
                 }
+                int minDays = questService.minDurationDaysForCategory(session.getData().get("category"));
+                if (days < minDays) {
+                    sendText(user.getTelegramId(),
+                            "⚠️ Для категории «" + escape(session.getData().get("category")) + "» минимальный срок — <b>" + minDays + " дн.</b>\n\n"
+                                    + "Это минимальное время честного выполнения квеста (кулдаун перед сдачей отчёта). Укажите срок не меньше этого значения.",
+                            cancelKeyboard());
+                    return;
+                }
                 session.getData().put("durationDays", days.toString());
                 session.getData().put("duration", days + (days == 1 ? " день" : days < 5 ? " дня" : " дней"));
                 session.setState(SessionState.QUEST_CREATE_REWARD_XP);
@@ -6193,8 +6201,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             Quest q = questService.getQuest(session.getQuestId());
             q.setCategory(category);
             questService.save(q);
+            int extendedTo = questService.ensureDurationCoversCategory(q, category);
             session.reset();
-            sendText(user.getTelegramId(), "✅ Категория обновлена: <b>" + escape(category) + "</b>", mainMenuKeyboard(user));
+            String extendNote = extendedTo > 0
+                    ? "\n\n⏳ Срок квеста автоматически продлён до <b>" + extendedTo + " дн.</b> — иначе дедлайн наступал бы раньше, чем снимается кулдаун сдачи отчёта для этой категории. Активные заявки игроков тоже продлены."
+                    : "";
+            sendText(user.getTelegramId(), "✅ Категория обновлена: <b>" + escape(category) + "</b>" + extendNote, mainMenuKeyboard(user));
             answerSilently(callbackQuery.getId());
             return;
         }

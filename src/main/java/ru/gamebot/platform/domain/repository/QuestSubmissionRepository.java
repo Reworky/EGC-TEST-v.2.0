@@ -79,4 +79,7 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @EntityGraph(attributePaths = {"user", "quest"})
     @Query("SELECT s FROM QuestSubmission s WHERE s.user = :user AND s.status = 'APPROVED' ORDER BY s.updatedAt DESC")
     List<QuestSubmission> findAllApprovedByUserOrderByUpdatedAtDesc(@Param("user") AppUser user);
+
+    @Query("SELECT s FROM QuestSubmission s WHERE s.quest = :quest AND s.status IN ('DRAFT','PENDING','REJECTED','NEEDS_INFO')")
+    List<QuestSubmission> findActiveByQuest(@Param("quest") Quest quest);
 }

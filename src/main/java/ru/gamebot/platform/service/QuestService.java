@@ -33,6 +33,9 @@ public class QuestService {
     private static final int SUBMIT_COOLDOWN_MEDIUM_HOURS = 72;
     private static final int SUBMIT_COOLDOWN_HARD_HOURS = 168;
 
+    // Запас сверх кулдауна при расчёте минимального срока квеста — чтобы окно на отправку отчёта было реальным
+    private static final int DURATION_BUFFER_DAYS = 1;
+
     private final QuestRepository questRepository;
     private final QuestSubmissionRepository questSubmissionRepository;
     private final AppUserRepository appUserRepository;
@@ -123,12 +126,63 @@ public class QuestService {
     public Quest createQuest(Quest quest) {
         quest.setCreatedAt(LocalDateTime.now());
         quest.setActive(true);
+        // Safety net: срок должен покрывать минимальный кулдаун сдачи отчёта для категории,
+        // иначе дедлайн наступит раньше, чем откроется возможность отправить отчёт.
+        int minDays = minDurationDaysForCategory(quest.getCategory());
+        if (quest.getDurationDays() < minDays) {
+            quest.setDurationDays(minDays);
+            quest.setDurationText(minDays + (minDays == 1 ? " день" : minDays < 5 ? " дня" : " дней"));
+        }
         return questRepository.save(quest);
     }
 
     @Transactional
     public Quest save(Quest quest) {
         return questRepository.save(quest);
+    }
+
+    /** Минимальное количество часов ожидания перед сдачей отчёта для категории квеста. */
+    private int submitCooldownHoursForCategory(String category) {
+        return switch (category) {
+            case "Средние" -> SUBMIT_COOLDOWN_MEDIUM_HOURS;
+            case "Сложные" -> SUBMIT_COOLDOWN_HARD_HOURS;
+            default -> SUBMIT_COOLDOWN_EASY_HOURS; // Лёгкие and anything else
+        };
+    }
+
+    /**
+     * Минимальный срок квеста в днях: покрывает кулдаун сдачи отчёта для категории
+     * плюс {@link #DURATION_BUFFER_DAYS} день запаса, чтобы у игрока было реальное окно на отправку,
+     * а не доли секунды впритык к дедлайну.
+     */
+    public int minDurationDaysForCategory(String category) {
+        int cooldownDays = (submitCooldownHoursForCategory(category) + 23) / 24;
+        return cooldownDays + DURATION_BUFFER_DAYS;
+    }
+
+    /**
+     * При смене категории квеста продлевает срок (и все активные заявки по нему) так,
+     * чтобы дедлайн не наступал раньше минимального кулдауна сдачи отчёта новой категории.
+     * Возвращает новый срок в днях, если было продление, иначе 0.
+     */
+    @Transactional
+    public int ensureDurationCoversCategory(Quest quest, String newCategory) {
+        int minDays = minDurationDaysForCategory(newCategory);
+        if (quest.getDurationDays() >= minDays) {
+            return 0;
+        }
+        int extraDays = minDays - quest.getDurationDays();
+        quest.setDurationDays(minDays);
+        quest.setDurationText(minDays + (minDays == 1 ? " день" : minDays < 5 ? " дня" : " дней"));
+        questRepository.save(quest);
+
+        for (QuestSubmission submission : questSubmissionRepository.findActiveByQuest(quest)) {
+            if (submission.getExpiresAt() != null) {
+                submission.setExpiresAt(submission.getExpiresAt().plusDays(extraDays));
+                questSubmissionRepository.save(submission);
+            }
+        }
+        return minDays;
     }
 
     public QuestSubmission getLatestSubmission(AppUser user, Quest quest) {
@@ -249,12 +303,7 @@ public class QuestService {
 
     /** Returns hours remaining before report can be submitted (0 = can submit now) */
     public long getSubmitCooldownHoursLeft(QuestSubmission submission) {
-        String category = submission.getQuest().getCategory();
-        int cooldownHours = switch (category) {
-            case "Средние" -> SUBMIT_COOLDOWN_MEDIUM_HOURS;
-            case "Сложные" -> SUBMIT_COOLDOWN_HARD_HOURS;
-            default -> SUBMIT_COOLDOWN_EASY_HOURS; // Лёгкие and anything else
-        };
+        int cooldownHours = submitCooldownHoursForCategory(submission.getQuest().getCategory());
         LocalDateTime availableAt = submission.getCreatedAt().plusHours(cooldownHours);
         if (LocalDateTime.now().isBefore(availableAt)) {
             return Math.max(1, ChronoUnit.HOURS.between(LocalDateTime.now(), availableAt));
