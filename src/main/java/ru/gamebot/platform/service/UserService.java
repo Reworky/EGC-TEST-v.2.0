@@ -458,6 +458,11 @@ public class UserService {
         return appUserRepository.countByRegistrationCompletedTrue();
     }
 
+    /** Игроки, заходившие в бота сегодня (хотя бы раз отправляли /start). */
+    public long countActiveToday() {
+        return appUserRepository.countActiveOnDate(LocalDate.now());
+    }
+
     public List<AppUser> allRegisteredUsers() {
         return appUserRepository.findAll().stream()
                 .filter(AppUser::isRegistrationCompleted)

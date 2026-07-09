@@ -549,6 +549,11 @@ public class QuestService {
         return questSubmissionRepository.countByStatus(SubmissionStatus.PENDING);
     }
 
+    /** Квесты, которые игроки прямо сейчас выполняют: взяты в работу или на проверке, срок ещё не истёк. */
+    public long countActiveInProgress() {
+        return questSubmissionRepository.countActiveInProgress();
+    }
+
     public List<Object[]> getTopQuestsByCompletions() {
         return questSubmissionRepository.findTopQuestsByCompletions();
     }

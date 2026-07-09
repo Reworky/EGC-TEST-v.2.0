@@ -3751,6 +3751,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         cancelKeyboard());
             }
             case "stats" -> sendAdminStats(user);
+            case "live" -> sendAdminLiveStatus(user);
             case "queststats" -> sendAdminQuestStats(user);
             case "template" -> sendQuestTemplateGamePicker(user);
             case "rewards" -> sendAdminRewardList(user);
@@ -4712,6 +4713,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🎁 Заявок на награды: <b>" + pendingRewards + "</b>",
                 keyboardFactory.smartLayout(List.of(
                         keyboardFactory.callback("🏠 Меню", "menu:main")
+                )));
+    }
+
+    private void sendAdminLiveStatus(AppUser user) {
+        long activeQuests = questService.countActiveInProgress();
+        long activeToday = userService.countActiveToday();
+        String updatedAt = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+
+        sendText(user.getTelegramId(),
+                "📡 <b>Сейчас на платформе</b>\n\n"
+                        + "🎯 Квестов в работе: <b>" + activeQuests + "</b>\n"
+                        + "   <i>(взято в работу или отправлено на проверку, срок не истёк)</i>\n\n"
+                        + "🟢 Заходило в бота сегодня: <b>" + activeToday + "</b>\n\n"
+                        + "🕐 Обновлено: <b>" + updatedAt + "</b>",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("🔄 Обновить", "admin:live")),
+                        List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
                 )));
     }
 
@@ -6603,6 +6621,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback("👥 Пользователи", "admin:users:0"),
                     keyboardFactory.callback("📊 Статистика", "admin:stats")
             ));
+            rows.add(List.of(keyboardFactory.callback("📡 Сейчас на платформе", "admin:live")));
             rows.add(List.of(
                     keyboardFactory.callback("➕ Квест", "admin:create"),
                     keyboardFactory.callback("📋 По шаблону", "admin:template")

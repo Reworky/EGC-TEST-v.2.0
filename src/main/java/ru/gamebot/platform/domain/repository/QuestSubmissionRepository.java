@@ -85,4 +85,7 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
 
     @Query("SELECT s FROM QuestSubmission s WHERE s.quest = :quest AND s.status IN ('DRAFT','PENDING','REJECTED','NEEDS_INFO')")
     List<QuestSubmission> findActiveByQuest(@Param("quest") Quest quest);
+
+    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.status IN ('DRAFT','PENDING','NEEDS_INFO') AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP)")
+    long countActiveInProgress();
 }
