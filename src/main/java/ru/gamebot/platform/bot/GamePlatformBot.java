@@ -5139,9 +5139,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             } else if (voted) {
                 sb.append("\n✅ <i>Вы уже проголосовали.</i>");
             }
-            rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "polls")));
+            rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:polls")));
             sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
-        }, () -> sendText(user.getTelegramId(), "❌ Голосование не найдено.", backMenuKeyboard("polls")));
+        }, () -> sendText(user.getTelegramId(), "❌ Голосование не найдено.", backMenuKeyboard("menu:polls")));
     }
 
     private void handlePollVote(CallbackQuery callbackQuery, AppUser user, long pollId, int optionIndex) {
@@ -5572,6 +5572,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         int safePage = Math.max(0, Math.min(page, totalPages - 1));
         List<ru.gamebot.platform.domain.model.ExcTransaction> items =
                 excTransactionService.getHistory(target, safePage, pageSize);
+        // Внутри страницы показываем от старых к новым — чтобы цепочка Было/Стало читалась сверху вниз естественно
+        java.util.Collections.reverse(items);
 
         String header = "💳 <b>История EXC</b>\n"
                 + "👤 <b>" + escape(displayUserName(target)) + "</b> (ID: " + telegramId + ")\n"
