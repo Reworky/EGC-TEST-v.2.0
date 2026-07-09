@@ -30,4 +30,7 @@ public class ExcTransaction {
 
     @Column(nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    /** Баланс пользователя сразу после операции. Null для записей, созданных до введения этого поля. */
+    private Long balanceAfter;
 }

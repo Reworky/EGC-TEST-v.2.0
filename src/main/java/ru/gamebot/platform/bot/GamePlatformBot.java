@@ -5583,10 +5583,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (ru.gamebot.platform.domain.model.ExcTransaction tx : items) {
             String sign = tx.getAmount() >= 0 ? "+" : "";
             String desc = tx.getDescription() != null ? escape(tx.getDescription()) : "";
-            sb.append(ru.gamebot.platform.service.ExcTransactionService.typeLabel(tx.getType()))
-              .append("  <b>").append(sign).append(tx.getAmount()).append(" EXC</b>\n");
-            if (!desc.isEmpty()) sb.append("   ").append(desc).append("\n");
-            sb.append("   📅 ").append(tx.getCreatedAt().format(fmt)).append("\n\n");
+            String meta = tx.getCreatedAt().format(fmt) + (desc.isEmpty() ? "" : ", " + desc);
+
+            Long after = tx.getBalanceAfter();
+            if (after != null) {
+                long before = after - tx.getAmount();
+                sb.append("💸 Было <b>").append(before).append(" EXC</b>\n")
+                  .append(ru.gamebot.platform.service.ExcTransactionService.typeLabel(tx.getType()))
+                  .append("  <b>").append(sign).append(tx.getAmount()).append(" EXC</b>")
+                  .append(" (").append(meta).append(")\n")
+                  .append("💸 Стало <b>").append(after).append(" EXC</b>\n\n");
+            } else {
+                // Старая запись без сохранённого баланса после операции — показываем как раньше
+                sb.append(ru.gamebot.platform.service.ExcTransactionService.typeLabel(tx.getType()))
+                  .append("  <b>").append(sign).append(tx.getAmount()).append(" EXC</b>")
+                  .append(" (").append(meta).append(")\n\n");
+            }
         }
         if (totalPages > 1) {
             sb.append("📄 Стр. ").append(safePage + 1).append(" / ").append(totalPages);

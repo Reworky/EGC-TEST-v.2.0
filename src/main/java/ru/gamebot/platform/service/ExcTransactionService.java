@@ -38,6 +38,8 @@ public class ExcTransactionService {
         tx.setAmount(amount);
         tx.setType(type);
         tx.setDescription(description);
+        // Вызывается всегда после того, как вызывающий код уже применил изменение к user.coins
+        tx.setBalanceAfter(user.getCoins());
         repo.save(tx);
     }
 
