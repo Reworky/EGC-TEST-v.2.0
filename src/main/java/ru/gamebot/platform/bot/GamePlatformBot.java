@@ -3603,8 +3603,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(chatId,
                 "⚠️ <b>Подозрительные аккаунты</b>\n\n"
                         + "Эти аккаунты автоматически помечены по признакам фрода:\n"
-                        + "• Success rate > 90%\n"
-                        + "• Интервал между заявками < 10 сек\n\n"
+                        + "• Success rate больше 90%\n"
+                        + "• Интервал между заявками меньше 10 сек\n\n"
                         + "Проверьте вручную и снимите флаг если игрок честный.",
                 keyboardFactory.smartLayout(buttons));
     }
