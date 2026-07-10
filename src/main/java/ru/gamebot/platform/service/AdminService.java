@@ -91,6 +91,17 @@ public class AdminService {
         return ids;
     }
 
+    /** Только модераторы, без админов — для уведомлений, которые не должны попадать к админу (например, поддержка). */
+    public Set<Long> strictModeratorIds() {
+        Set<Long> ids = new HashSet<>(resolvedModeratorIds());
+        ids.addAll(appUserRepository.findAll().stream()
+                .filter(user -> "MODER".equalsIgnoreCase(user.getStaffRole()))
+                .map(AppUser::getTelegramId)
+                .collect(Collectors.toSet()));
+        ids.removeAll(allAdminIds());
+        return ids;
+    }
+
     private Set<Long> parseIds(String raw) {
         if (raw == null || raw.isBlank()) {
             return Set.of();
