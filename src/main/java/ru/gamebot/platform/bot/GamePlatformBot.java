@@ -815,6 +815,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "admin" -> sendAdminPanel(user);
             case "moderation" -> sendModerationHub(user);
             case "daily" -> { sendDailyBonus(callbackQuery, user); return; }
+            case "cat:quests" -> sendQuestsCategory(user);
+            case "cat:wallet" -> sendWalletCategory(user);
+            case "cat:shop" -> sendShopCategory(user);
+            case "cat:club" -> sendClubCategory(user);
+            case "cat:help" -> sendHelpCategory(user);
             default -> sendMainMenu(user, mainMenuText(user));
         }
         answerSilently(callbackQuery.getId());
@@ -1553,6 +1558,62 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         sendText(user.getTelegramId(), text, mainMenuKeyboard(user));
+    }
+
+    private void sendMenuCategory(AppUser user, String title, List<List<InlineKeyboardButton>> items) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>(items);
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
+        sendText(user.getTelegramId(), title, keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendQuestsCategory(AppUser user) {
+        boolean hasTournament = tournamentService.findCurrentForUser().isPresent();
+        String tournamentLabel = hasTournament ? "🏆 Турнир 🔥" : "🏆 Турнир";
+        sendMenuCategory(user, "🎯 <b>Квесты и рейтинг</b>", List.of(
+                List.of(keyboardFactory.callback("🗺️ Квесты", "menu:quests")),
+                List.of(keyboardFactory.callback("🏆 Рейтинг", "menu:rating")),
+                List.of(keyboardFactory.callback(tournamentLabel, "menu:tournament"))
+        ));
+    }
+
+    private void sendWalletCategory(AppUser user) {
+        String dailyLabel = userService.isDailyBonusAvailable(user)
+                ? "🎁 Забрать ежедневный бонус 🔔"
+                : "✅ Бонус за вход получен";
+        sendMenuCategory(user, "💰 <b>Кошелёк</b>", List.of(
+                List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
+                List.of(keyboardFactory.callback(dailyLabel, "menu:daily"))
+        ));
+    }
+
+    private void sendShopCategory(AppUser user) {
+        boolean hasPass = seasonService.hasActivePass(user);
+        boolean hasSeason = seasonService.findCurrentSeason().isPresent();
+        String passLabel = hasPass ? "🎫 Battle Pass ✅" : (hasSeason ? "🎫 Battle Pass 🆕" : "🎫 Battle Pass");
+        sendMenuCategory(user, "🛍️ <b>Магазин</b>", List.of(
+                List.of(keyboardFactory.callback("🛍️ Магазин наград", "menu:shop")),
+                List.of(keyboardFactory.callback("⚡ Предметы", "menu:sink")),
+                List.of(keyboardFactory.callback(passLabel, "menu:battlepass"))
+        ));
+    }
+
+    private void sendClubCategory(AppUser user) {
+        long activePolls = pollService.findActive().size();
+        String pollLabel = activePolls > 0 ? "🗳 Голосования (" + activePolls + ")" : "🗳 Голосования";
+        sendMenuCategory(user, "👥 <b>Клуб</b>", List.of(
+                List.of(keyboardFactory.callback("🤝 Рефералы", "menu:referrals")),
+                List.of(keyboardFactory.callback("🛡️ EGC Council", "menu:council")),
+                List.of(keyboardFactory.callback(pollLabel, "menu:polls")),
+                List.of(keyboardFactory.callback("📰 Новости", "menu:news"))
+        ));
+    }
+
+    private void sendHelpCategory(AppUser user) {
+        sendMenuCategory(user, "🆘 <b>Помощь</b>", List.of(
+                List.of(keyboardFactory.callback("🆘 Поддержка", "menu:support")),
+                List.of(keyboardFactory.callback("❓ Как начать — быстрый старт", "menu:quickstart")),
+                List.of(keyboardFactory.url("⭐ Отзывы игроков", "https://t.me/egc_payouts"))
+        ));
     }
 
     private void sendCommunityActivationPrompt(AppUser user, String notice) {
@@ -6675,42 +6736,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return keyboardFactory.rowsLayout(rows);
         }
 
-        rows.add(List.of(
-                keyboardFactory.callback("👤 Профиль", "menu:profile"),
-                keyboardFactory.callback("🗺️ Квесты", "menu:quests")
-        ));
-        rows.add(List.of(
-                keyboardFactory.callback("💰 Баланс", "menu:balance"),
-                keyboardFactory.callback("🤝 Рефералы", "menu:referrals")
-        ));
-        rows.add(List.of(
-                keyboardFactory.callback("🏆 Рейтинг", "menu:rating"),
-                keyboardFactory.callback("📰 Новости", "menu:news")
-        ));
-        rows.add(List.of(
-                keyboardFactory.callback("🛍️ Магазин наград", "menu:shop"),
-                keyboardFactory.callback("⚡ Предметы", "menu:sink")
-        ));
-        rows.add(List.of(keyboardFactory.callback("🛡️ EGC Council", "menu:council")));
+        rows.add(List.of(keyboardFactory.callback("👤 Профиль", "menu:profile")));
+
         boolean hasTournament = tournamentService.findCurrentForUser().isPresent();
-        String tournamentLabel = hasTournament ? "🏆 Турнир 🔥" : "🏆 Турнир";
-        rows.add(List.of(keyboardFactory.callback(tournamentLabel, "menu:tournament")));
+        String questsLabel = hasTournament ? "🎯 Квесты и рейтинг 🔥" : "🎯 Квесты и рейтинг";
+        rows.add(List.of(keyboardFactory.callback(questsLabel, "menu:cat:quests")));
+
+        String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошелёк 🔔" : "💰 Кошелёк";
+        rows.add(List.of(keyboardFactory.callback(walletLabel, "menu:cat:wallet")));
+
+        rows.add(List.of(keyboardFactory.callback("🛍️ Магазин", "menu:cat:shop")));
+
         long activePolls = pollService.findActive().size();
-        String pollLabel = activePolls > 0 ? "🗳 Голосования (" + activePolls + ")" : "🗳 Голосования";
-        rows.add(List.of(keyboardFactory.callback(pollLabel, "menu:polls")));
-        boolean hasPass = seasonService.hasActivePass(user);
-        boolean hasSeason = seasonService.findCurrentSeason().isPresent();
-        String passLabel = hasPass ? "🎫 Battle Pass ✅" : (hasSeason ? "🎫 Battle Pass 🆕" : "🎫 Battle Pass");
-        rows.add(List.of(keyboardFactory.callback(passLabel, "menu:battlepass")));
-        String dailyLabel = userService.isDailyBonusAvailable(user)
-                ? "🎁 Забрать ежедневный бонус 🔔"
-                : "✅ Бонус за вход получен";
-        rows.add(List.of(keyboardFactory.callback(dailyLabel, "menu:daily")));
-        rows.add(List.of(
-                keyboardFactory.callback("🆘 Поддержка", "menu:support"),
-                keyboardFactory.url("⭐ Отзывы игроков", "https://t.me/egc_payouts")
-        ));
-        rows.add(List.of(keyboardFactory.callback("❓ Как начать — быстрый старт", "menu:quickstart")));
+        String clubLabel = activePolls > 0 ? "👥 Клуб (" + activePolls + ")" : "👥 Клуб";
+        rows.add(List.of(keyboardFactory.callback(clubLabel, "menu:cat:club")));
+
+        rows.add(List.of(keyboardFactory.callback("🆘 Помощь", "menu:cat:help")));
         rows.add(List.of(keyboardFactory.webApp("🌐 Открыть Mini App", "https://experience-gaming-club.pages.dev")));
         return keyboardFactory.rowsLayout(rows);
     }
