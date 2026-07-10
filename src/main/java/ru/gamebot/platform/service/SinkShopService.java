@@ -220,7 +220,9 @@ public class SinkShopService {
     }
 
     public long getMaxQuestSlots(AppUser user) {
-        return 1;
+        boolean boostActive = user.getQuestSlotExtraUntil() != null
+                && LocalDateTime.now().isBefore(user.getQuestSlotExtraUntil());
+        return boostActive ? 3 : 1;
     }
 
     @Transactional

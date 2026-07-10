@@ -314,6 +314,9 @@ public class QuestService {
     @Transactional
     public QuestSubmission submitReport(QuestSubmission submission, String mediaType, String fileId,
                                         String externalLink, String comment) {
+        if (submission.getStatus() == SubmissionStatus.APPROVED) {
+            throw new IllegalStateException("Этот квест уже одобрен и оплачен — повторная сдача отчёта невозможна.");
+        }
         submission.setMediaType(mediaType);
         submission.setMediaFileId(fileId);
         submission.setExternalLink(externalLink);

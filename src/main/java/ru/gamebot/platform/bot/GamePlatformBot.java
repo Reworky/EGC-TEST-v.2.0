@@ -2117,6 +2117,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
                     "⏳ <b>Отчёт уже на проверке.</b>\n\nДождитесь решения модератора — дублировать заявку нельзя.");
             return;
+        } else if (latest.getStatus() == SubmissionStatus.APPROVED) {
+            answerSilently(callbackQuery.getId());
+            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                    "✅ <b>Этот квест уже одобрен и оплачен.</b>\n\nПовторная сдача отчёта по нему невозможна.");
+            return;
+        } else if (latest.getStatus() == SubmissionStatus.CANCELLED) {
+            answerSilently(callbackQuery.getId());
+            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                    "🚫 <b>Эта попытка была отменена.</b>\n\nЧтобы попробовать снова, возьмите квест заново кнопкой «🚀 Взять».");
+            return;
         } else if (latest.getStatus() == SubmissionStatus.REJECTED || latest.getStatus() == SubmissionStatus.NEEDS_INFO) {
             // Fix 4: cooldown 1h after rejection to prevent instant resubmit spam
             LocalDateTime rejectedAt = latest.getUpdatedAt();
