@@ -25,6 +25,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Действия с квестом — нужен JWT (проверяем раньше общего правила ниже)
                         .requestMatchers(HttpMethod.POST, "/api/quests/*/take", "/api/quests/*/report").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/quests/mine").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/quests/mine/*/cancel").authenticated()
                         // Публичные эндпоинты — без токена
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/leaderboard").permitAll()

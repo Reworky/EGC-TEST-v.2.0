@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import ru.gamebot.platform.api.dto.MyQuestDto;
 import ru.gamebot.platform.api.dto.QuestActionResponseDto;
 import ru.gamebot.platform.api.dto.QuestDetailDto;
 import ru.gamebot.platform.api.dto.QuestDto;
@@ -171,6 +172,54 @@ public class QuestController {
         QuestService.QuestActionResult result = questService.submitReportChecked(
                 user, quest, mediaType, fileId, externalLink, comment);
         return ResponseEntity.ok(toResponse(result));
+    }
+
+    @GetMapping("/mine")
+    public ResponseEntity<List<MyQuestDto>> myQuests(@AuthenticationPrincipal Long telegramId) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+
+        List<MyQuestDto> result = questService.getUserSubmissions(user).stream()
+                .map(s -> MyQuestDto.builder()
+                        .submissionId(s.getId())
+                        .questId(s.getQuest().getId())
+                        .title(s.getQuest().getTitle())
+                        .gameName(s.getQuest().getGameName())
+                        .category(s.getQuest().getCategory())
+                        .status(s.getStatus().name())
+                        .updatedAt(s.getUpdatedAt() != null ? s.getUpdatedAt().format(ISO_FMT) : null)
+                        .expiresAt(s.getExpiresAt() != null ? s.getExpiresAt().format(ISO_FMT) : null)
+                        .moderatorComment(s.getModeratorComment())
+                        .rewardXp(s.getQuest().getRewardXp())
+                        .rewardCoins(s.getQuest().getRewardCoins())
+                        .build())
+                .toList();
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/mine/{submissionId}/cancel")
+    public ResponseEntity<QuestActionResponseDto> cancelMyQuest(
+            @PathVariable Long submissionId, @AuthenticationPrincipal Long telegramId) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        try {
+            questService.cancelSubmission(submissionId, user);
+            return ResponseEntity.ok(QuestActionResponseDto.builder()
+                    .success(true)
+                    .status("CANCELLED")
+                    .message("Квест отменён.")
+                    .build());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(QuestActionResponseDto.builder()
+                    .success(false)
+                    .status("ERROR")
+                    .message(e.getMessage())
+                    .build());
+        }
     }
 
     private QuestActionResponseDto toResponse(QuestService.QuestActionResult result) {

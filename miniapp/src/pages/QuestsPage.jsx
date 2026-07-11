@@ -1,9 +1,25 @@
 import { useEffect, useState } from 'react';
-import { getQuests, getGames, getQuestDetail, takeQuest, submitQuestReport } from '../api/client';
+import { getQuests, getGames, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest } from '../api/client';
 import './QuestsPage.css';
 
 const CATEGORY_ORDER = ['Лёгкие', 'Средние', 'Сложные'];
 const CATEGORY_COLORS = { 'Лёгкие': '#66bb6a', 'Средние': '#ffa726', 'Сложные': '#ef5350' };
+
+const STATUS_LABELS = {
+  DRAFT: 'В процессе',
+  PENDING: 'На проверке',
+  APPROVED: 'Одобрен',
+  REJECTED: 'Отклонён',
+  NEEDS_INFO: 'Нужны уточнения',
+};
+const STATUS_COLORS = {
+  DRAFT: '#66bb6a',
+  PENDING: '#ffa726',
+  APPROVED: '#66bb6a',
+  REJECTED: '#ef5350',
+  NEEDS_INFO: '#ef5350',
+};
+const CANCELABLE_STATUSES = ['DRAFT', 'PENDING', 'NEEDS_INFO', 'REJECTED'];
 
 function QuestActions({ quest, detail, onChanged }) {
   const [busy, setBusy] = useState(false);
@@ -105,13 +121,11 @@ function QuestActions({ quest, detail, onChanged }) {
   );
 }
 
-export default function QuestsPage() {
+function AllQuestsView({ expanded, details, onToggle, onDetailChanged }) {
   const [games, setGames] = useState([]);
   const [selectedGame, setSelectedGame] = useState(null);
   const [quests, setQuests] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [expanded, setExpanded] = useState(null);
-  const [details, setDetails] = useState({});
 
   useEffect(() => {
     getGames().then(g => {
@@ -123,24 +137,10 @@ export default function QuestsPage() {
   useEffect(() => {
     if (!selectedGame) return;
     setLoading(true);
-    setExpanded(null);
     getQuests(selectedGame)
       .then(setQuests)
       .finally(() => setLoading(false));
   }, [selectedGame]);
-
-  function loadDetail(id) {
-    getQuestDetail(id).then(d => setDetails(prev => ({ ...prev, [id]: d })));
-  }
-
-  function toggleExpand(id) {
-    if (expanded === id) {
-      setExpanded(null);
-      return;
-    }
-    setExpanded(id);
-    loadDetail(id);
-  }
 
   const grouped = CATEGORY_ORDER.reduce((acc, cat) => {
     const list = quests.filter(q => q.category === cat);
@@ -149,7 +149,7 @@ export default function QuestsPage() {
   }, {});
 
   return (
-    <div className="quests-page">
+    <>
       <div className="game-tabs">
         {games.map(g => (
           <button
@@ -170,7 +170,7 @@ export default function QuestsPage() {
             {cat}
           </div>
           {list.map(q => (
-            <div key={q.id} className="quest-card" onClick={() => toggleExpand(q.id)}>
+            <div key={q.id} className="quest-card" onClick={() => onToggle(q.id)}>
               <div className="quest-top">
                 <div className="quest-title">{q.title}</div>
                 <div className="quest-rewards">
@@ -200,7 +200,7 @@ export default function QuestsPage() {
                   <QuestActions
                     quest={q}
                     detail={details[q.id]}
-                    onChanged={() => loadDetail(q.id)}
+                    onChanged={() => onDetailChanged(q.id)}
                   />
                 </div>
               )}
@@ -208,6 +208,121 @@ export default function QuestsPage() {
           ))}
         </div>
       ))}
+    </>
+  );
+}
+
+function MyQuestsView({ expanded, details, onToggle, onDetailChanged }) {
+  const [myQuests, setMyQuests] = useState(null);
+  const [error, setError] = useState(null);
+  const [cancelBusy, setCancelBusy] = useState(null);
+
+  function reload() {
+    setError(null);
+    getMyQuests().then(setMyQuests).catch(() => setError('Не удалось загрузить квесты. Попробуйте ещё раз.'));
+  }
+
+  useEffect(() => { reload(); }, []);
+
+  async function handleCancel(submissionId, e) {
+    e.stopPropagation();
+    setCancelBusy(submissionId);
+    try {
+      await cancelMyQuest(submissionId);
+      reload();
+    } finally {
+      setCancelBusy(null);
+    }
+  }
+
+  if (error) {
+    return <div className="page-center error-msg">{error}</div>;
+  }
+
+  if (myQuests === null) {
+    return <div className="page-center">Загрузка...</div>;
+  }
+
+  if (myQuests.length === 0) {
+    return <div className="page-center">📭 У вас пока нет взятых квестов. Откройте «Все квесты» и возьмите первое задание.</div>;
+  }
+
+  return (
+    <div className="category-section">
+      {myQuests.map(m => (
+        <div key={m.submissionId} className="quest-card" onClick={() => onToggle(m.questId)}>
+          <div className="quest-top">
+            <div className="quest-title">{m.title}</div>
+            <div className="quest-rewards">
+              <span className="reward-exc">{m.rewardCoins.toLocaleString()} EXC</span>
+              <span className="reward-xp">{m.rewardXp} XP</span>
+            </div>
+          </div>
+          <div className="quest-meta">
+            <span style={{ color: STATUS_COLORS[m.status] }}>● {STATUS_LABELS[m.status] || m.status}</span>
+            <span className="quest-platform">{m.gameName}</span>
+          </div>
+          {expanded === m.questId && (
+            <div className="quest-detail" onClick={e => e.stopPropagation()}>
+              <QuestActions
+                quest={{ id: m.questId, title: m.title, rewardXp: m.rewardXp, rewardCoins: m.rewardCoins }}
+                detail={details[m.questId]}
+                onChanged={() => { onDetailChanged(m.questId); reload(); }}
+              />
+              {CANCELABLE_STATUSES.includes(m.status) && (
+                <button
+                  className="quest-btn quest-btn-secondary"
+                  disabled={cancelBusy === m.submissionId}
+                  onClick={e => handleCancel(m.submissionId, e)}
+                >
+                  {cancelBusy === m.submissionId ? 'Отмена...' : 'Отменить квест'}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function QuestsPage() {
+  const [view, setView] = useState('all');
+  const [expanded, setExpanded] = useState(null);
+  const [details, setDetails] = useState({});
+
+  function loadDetail(id) {
+    getQuestDetail(id).then(d => setDetails(prev => ({ ...prev, [id]: d })));
+  }
+
+  function toggleExpand(id) {
+    if (expanded === id) {
+      setExpanded(null);
+      return;
+    }
+    setExpanded(id);
+    loadDetail(id);
+  }
+
+  function switchView(v) {
+    setView(v);
+    setExpanded(null);
+  }
+
+  return (
+    <div className="quests-page">
+      <div className="view-toggle">
+        <button className={`view-tab ${view === 'all' ? 'active' : ''}`} onClick={() => switchView('all')}>
+          Все квесты
+        </button>
+        <button className={`view-tab ${view === 'mine' ? 'active' : ''}`} onClick={() => switchView('mine')}>
+          Мои квесты
+        </button>
+      </div>
+
+      {view === 'all'
+        ? <AllQuestsView expanded={expanded} details={details} onToggle={toggleExpand} onDetailChanged={loadDetail} />
+        : <MyQuestsView expanded={expanded} details={details} onToggle={toggleExpand} onDetailChanged={loadDetail} />}
     </div>
   );
 }

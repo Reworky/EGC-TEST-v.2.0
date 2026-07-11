@@ -59,3 +59,13 @@ export async function submitQuestReport(id, { photo, externalLink, comment }) {
   });
   return data;
 }
+
+export async function getMyQuests() {
+  const { data } = await api.get('/api/quests/mine');
+  return data;
+}
+
+export async function cancelMyQuest(submissionId) {
+  const { data } = await api.post(`/api/quests/mine/${submissionId}/cancel`);
+  return data;
+}
