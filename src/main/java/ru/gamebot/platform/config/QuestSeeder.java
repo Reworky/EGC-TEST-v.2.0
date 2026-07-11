@@ -770,6 +770,21 @@ public class QuestSeeder implements CommandLineRunner {
                     log.info("[QuestSeeder] Deleted Last Day on Earth quest: '{}'", q.getTitle());
                 });
 
+        // ── Временно закрыт доступ игрокам: CS2, EA FC 26, Mobile Legends («скоро откроется») ──
+        // Квесты не удаляются, только деактивируются — чтобы вернуть доступ, достаточно убрать этот блок.
+        deactivateGame("CS2");
+        deactivateGame("EA FC 26");
+        deactivateGame("Mobile Legends: Bang Bang");
+    }
+
+    private void deactivateGame(String gameName) {
+        questRepository.findAll().stream()
+                .filter(q -> gameName.equalsIgnoreCase(q.getGameName()) && q.isActive())
+                .forEach(q -> {
+                    q.setActive(false);
+                    questRepository.save(q);
+                    log.info("[QuestSeeder] Closed access (deactivated): '{}' [{}]", q.getTitle(), gameName);
+                });
     }
 
     private void seed(String title, String gameName, String category, String platform,

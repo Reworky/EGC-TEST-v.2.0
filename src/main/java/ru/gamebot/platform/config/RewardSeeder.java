@@ -228,6 +228,11 @@ public class RewardSeeder implements CommandLineRunner {
                         + "Зачисляется напрямую на ваш Steam-аккаунт по логину. Срок доставки — до 24 ч.",
                 "Игровые валюты", 63_000, cs2Prompt, 15_000, "cs2");
 
+        // ── Временно закрыт доступ игрокам: CS2, Mobile Legends («скоро откроется») ──
+        // Товары не удаляются, только помечаются «скоро» — чтобы вернуть доступ, достаточно убрать этот блок.
+        markComingSoon("cs2");
+        markComingSoon("mobile_legends");
+
         // ── Кастомизация: рамки аватара (применяются мгновенно, без одобрения) ────
 
         seedAvatarFrame("🔥 Огненная рамка аватара",
@@ -283,6 +288,17 @@ public class RewardSeeder implements CommandLineRunner {
                     );
                 }
         );
+    }
+
+    private void markComingSoon(String purchaseGroup) {
+        rewardItemRepository.findAll().stream()
+                .filter(item -> purchaseGroup.equals(item.getPurchaseGroup()) && (item.isActive() || !item.isComingSoon()))
+                .forEach(item -> {
+                    item.setActive(false);
+                    item.setComingSoon(true);
+                    rewardItemRepository.save(item);
+                    log.info("[RewardSeeder] Closed access (coming soon): '{}' [{}]", item.getTitle(), purchaseGroup);
+                });
     }
 
     private void seed(String title, String description, String category, long priceCoins,
