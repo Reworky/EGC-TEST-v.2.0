@@ -62,6 +62,7 @@ import ru.gamebot.platform.event.NewsPublishedEvent;
 import ru.gamebot.platform.service.AdminService;
 import ru.gamebot.platform.service.GameCatalogService;
 import ru.gamebot.platform.service.NewsService;
+import ru.gamebot.platform.service.QuestActionStatus;
 import ru.gamebot.platform.service.QuestService;
 import ru.gamebot.platform.service.RewardService;
 import ru.gamebot.platform.service.SessionService;
@@ -2079,75 +2080,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleTakeQuest(CallbackQuery callbackQuery, AppUser user, Long questId) {
         Quest quest = questService.getQuest(questId);
-        QuestSubmission latest = questService.getLatestSubmission(user, quest);
-        if (latest != null && latest.getStatus() == SubmissionStatus.DRAFT) {
-            answerSilently(callbackQuery.getId());
-            if (questService.isExpired(latest)) {
-                sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
-                        "⌛ Срок выполнения квеста истёк. Вы не успели сдать отчёт вовремя.");
-            } else {
-                sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
-                        "🧭 Этот квест уже добавлен в работу. Ниже оставил карточку с кнопкой для отчёта.");
-            }
-            return;
-        }
-        if (latest != null && (latest.getStatus() == SubmissionStatus.PENDING || latest.getStatus() == SubmissionStatus.APPROVED)) {
-            answerSilently(callbackQuery.getId());
-            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
-                    "📌 По этому квесту уже есть активный прогресс. Используйте карточку ниже, чтобы посмотреть статус или отправить отчёт.");
-            return;
-        }
-        if (latest != null && (latest.getStatus() == SubmissionStatus.REJECTED || latest.getStatus() == SubmissionStatus.NEEDS_INFO)) {
-            answerSilently(callbackQuery.getId());
-            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
-                    "❌ Ваш отчёт по этому квесту был отклонён. Нажмите «📤 Отчёт», чтобы исправить ошибки и переотправить.");
-            return;
-        }
-
-        // Slot limit check
-        long activeSlots = questService.countActiveDrafts(user);
-        long maxSlots = sinkShopService.getMaxQuestSlots(user);
-        if (activeSlots >= maxSlots) {
-            answerSilently(callbackQuery.getId());
-            sendText(user.getTelegramId(),
-                    "📂 У вас уже " + activeSlots + " активных квеста. Завершите или отмените один из них, либо купите доп. слот (2 000 EXC) в разделе Предметы клуба.",
-                    backMenuKeyboard("menu:myquests"));
-            return;
-        }
-
-        // Same quest: max 1 per 24h
-        if (questService.isSameQuestCooldownActive(user, quest)) {
-            answerSilently(callbackQuery.getId());
-            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
-                    "⏳ Этот квест можно выполнять не чаще 1 раза в 24 часа.");
-            return;
-        }
-
-        // 3.4 Antifaud: cooldown 24h between same-game quests
-        if (questService.isCooldownActive(user, quest)) {
-            answerSilently(callbackQuery.getId());
-            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
-                    "⏳ Кулдаун активен. Повторный квест в этой игре доступен через 24 часа.\n\n💡 Можно снять кулдаун за 1 500 EXC в разделе Предметы клуба.");
-            return;
-        }
-
-        // Fix 2: atomic 1-hour global cooldown (transactional check+set prevents race condition)
-        QuestSubmission newSubmission;
-        try {
-            newSubmission = questService.takeQuestAtomically(user, quest);
-        } catch (IllegalArgumentException e) {
-            answerSilently(callbackQuery.getId());
-            String msg = e.getMessage();
-            if (msg != null && msg.startsWith("cooldown:")) {
-                long minsLeft = Long.parseLong(msg.split(":")[1]);
-                sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
-                        "⏳ Новый квест можно брать раз в час. Подождите ещё <b>" + minsLeft + " мин.</b>");
-            } else {
-                sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад", "⚠️ " + msg);
-            }
-            return;
-        }
+        QuestService.QuestActionResult result = questService.takeQuestChecked(user, quest);
         answerSilently(callbackQuery.getId());
+
+        if (result.status() != QuestActionStatus.OK) {
+            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад", takeQuestErrorMessage(user, quest, result));
+            return;
+        }
 
         long weeklyCount = questService.getWeeklyCompletionsOfType(user, quest);
         String notice = "🚀 Квест активен! Приступайте к игре, когда выполните задание, отправьте отчёт прямо из этой карточки.";
@@ -2156,7 +2095,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         Quest freshQuest = questService.getQuest(questId);
-        QuestSubmission submission = newSubmission;
+        QuestSubmission submission = result.submission();
         List<InlineKeyboardButton> buttons = new ArrayList<>();
         buttons.add(keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
         buttons.add(keyboardFactory.callback("📂 Мои квесты", "menu:myquests"));
@@ -2184,6 +2123,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "✨ +" + freshQuest.getRewardXp() + " XP\n"
                         + "🪙 +" + freshQuest.getRewardCoins() + " монет",
                 keyboardFactory.smartLayout(buttons));
+    }
+
+    private String takeQuestErrorMessage(AppUser user, Quest quest, QuestService.QuestActionResult result) {
+        return switch (result.status()) {
+            case ALREADY_DRAFT -> {
+                QuestSubmission latest = questService.getLatestSubmission(user, quest);
+                yield (latest != null && questService.isExpired(latest))
+                        ? "⌛ Срок выполнения квеста истёк. Вы не успели сдать отчёт вовремя."
+                        : "🧭 Этот квест уже добавлен в работу. Ниже оставил карточку с кнопкой для отчёта.";
+            }
+            case ALREADY_PENDING, ALREADY_APPROVED ->
+                    "📌 По этому квесту уже есть активный прогресс. Используйте карточку ниже, чтобы посмотреть статус или отправить отчёт.";
+            case HAS_REJECTED_REPORT ->
+                    "❌ Ваш отчёт по этому квесту был отклонён. Нажмите «📤 Отчёт», чтобы исправить ошибки и переотправить.";
+            case SLOTS_FULL ->
+                    "📂 У вас уже есть активные квесты. Завершите или отмените один из них, либо купите доп. слот (2 000 EXC) в разделе Предметы клуба.";
+            case SAME_QUEST_COOLDOWN -> "⏳ Этот квест можно выполнять не чаще 1 раза в 24 часа.";
+            case GAME_COOLDOWN ->
+                    "⏳ Кулдаун активен. Повторный квест в этой игре доступен через 24 часа.\n\n💡 Можно снять кулдаун за 1 500 EXC в разделе Предметы клуба.";
+            case TAKE_COOLDOWN -> "⏳ Новый квест можно брать раз в час. Подождите ещё <b>" + result.minutesLeft() + " мин.</b>";
+            default -> "⚠️ Не удалось взять квест.";
+        };
     }
 
     private void handleReportStart(CallbackQuery callbackQuery, AppUser user, UserSession session, Long questId) {

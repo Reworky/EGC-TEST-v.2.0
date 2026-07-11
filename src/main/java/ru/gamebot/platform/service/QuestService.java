@@ -270,22 +270,6 @@ public class QuestService {
         return questSubmissionRepository.save(submission);
     }
 
-    // Fix 2: atomic check + set of 1-hour global cooldown — prevents race condition
-    @Transactional
-    public QuestSubmission takeQuestAtomically(AppUser user, Quest quest) {
-        AppUser freshUser = appUserRepository.findById(user.getId())
-                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
-        if (freshUser.getLastQuestTakenAt() != null) {
-            long minutesLeft = ChronoUnit.MINUTES.between(freshUser.getLastQuestTakenAt(), LocalDateTime.now());
-            if (minutesLeft < 60) {
-                throw new IllegalArgumentException("cooldown:" + (60 - minutesLeft));
-            }
-        }
-        freshUser.setLastQuestTakenAt(LocalDateTime.now());
-        appUserRepository.save(freshUser);
-        return createDraftSubmission(freshUser, quest);
-    }
-
     public boolean isExpired(QuestSubmission submission) {
         return submission.getExpiresAt() != null
                 && LocalDateTime.now().isAfter(submission.getExpiresAt());
@@ -303,10 +287,18 @@ public class QuestService {
     /**
      * Единая точка входа для взятия квеста — используется и ботом, и API Mini App.
      * Переиспользует те же правила: слот-лимит, кулдаун между взятием (1ч), кулдаун по игре/категории (24ч), 24ч на повтор того же квеста.
+     *
+     * Строка пользователя блокируется на всё время проверок ({@link AppUserRepository#findByIdForUpdate}) —
+     * без этого два конкурентных запроса (двойное нажатие «Взять квест», гонка между ботом и Mini App)
+     * могли пройти проверку лимитов одновременно, до того как первый из них успеет записать результат.
+     * Реальный случай: игрок взял 4 квеста за 29 минут при лимите «1 квест в час, 1 слот».
      */
     @Transactional
     public QuestActionResult takeQuestChecked(AppUser user, Quest quest) {
-        QuestSubmission latest = getLatestSubmission(user, quest);
+        AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
+
+        QuestSubmission latest = getLatestSubmission(lockedUser, quest);
         if (latest != null) {
             if (latest.getStatus() == SubmissionStatus.DRAFT) {
                 return QuestActionResult.of(QuestActionStatus.ALREADY_DRAFT, 0);
@@ -317,38 +309,37 @@ public class QuestService {
             if (latest.getStatus() == SubmissionStatus.APPROVED) {
                 return QuestActionResult.of(QuestActionStatus.ALREADY_APPROVED, 0);
             }
+            if (latest.getStatus() == SubmissionStatus.REJECTED || latest.getStatus() == SubmissionStatus.NEEDS_INFO) {
+                return QuestActionResult.of(QuestActionStatus.HAS_REJECTED_REPORT, 0);
+            }
         }
 
-        long activeSlots = countActiveDrafts(user);
-        long maxSlots = sinkShopService.getMaxQuestSlots(user);
+        long activeSlots = countActiveDrafts(lockedUser);
+        long maxSlots = sinkShopService.getMaxQuestSlots(lockedUser);
         if (activeSlots >= maxSlots) {
             return QuestActionResult.of(QuestActionStatus.SLOTS_FULL, 0);
         }
 
-        if (isSameQuestCooldownActive(user, quest)) {
+        if (isSameQuestCooldownActive(lockedUser, quest)) {
             return QuestActionResult.of(QuestActionStatus.SAME_QUEST_COOLDOWN, COOLDOWN_HOURS * 60L);
         }
 
-        if (isCooldownActive(user, quest)) {
-            long hoursLeft = getCooldownHoursLeft(user, quest);
+        if (isCooldownActive(lockedUser, quest)) {
+            long hoursLeft = getCooldownHoursLeft(lockedUser, quest);
             return QuestActionResult.of(QuestActionStatus.GAME_COOLDOWN, hoursLeft * 60L);
         }
 
-        try {
-            QuestSubmission created = takeQuestAtomically(user, quest);
-            return QuestActionResult.ok(created);
-        } catch (IllegalArgumentException e) {
-            long minutesLeft = 60;
-            String msg = e.getMessage();
-            if (msg != null && msg.startsWith("cooldown:")) {
-                try {
-                    minutesLeft = Long.parseLong(msg.substring("cooldown:".length()));
-                } catch (NumberFormatException ignored) {
-                    // keep default
-                }
+        if (lockedUser.getLastQuestTakenAt() != null) {
+            long minutesSince = ChronoUnit.MINUTES.between(lockedUser.getLastQuestTakenAt(), LocalDateTime.now());
+            if (minutesSince < 60) {
+                return QuestActionResult.of(QuestActionStatus.TAKE_COOLDOWN, 60 - minutesSince);
             }
-            return QuestActionResult.of(QuestActionStatus.TAKE_COOLDOWN, minutesLeft);
         }
+
+        lockedUser.setLastQuestTakenAt(LocalDateTime.now());
+        appUserRepository.save(lockedUser);
+        QuestSubmission created = createDraftSubmission(lockedUser, quest);
+        return QuestActionResult.ok(created);
     }
 
     /**

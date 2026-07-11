@@ -6,6 +6,7 @@ public enum QuestActionStatus {
     ALREADY_DRAFT,
     ALREADY_PENDING,
     ALREADY_APPROVED,
+    HAS_REJECTED_REPORT,
     NOT_TAKEN,
     SLOTS_FULL,
     SAME_QUEST_COOLDOWN,
