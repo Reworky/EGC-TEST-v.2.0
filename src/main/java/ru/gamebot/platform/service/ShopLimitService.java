@@ -79,6 +79,13 @@ public class ShopLimitService {
                             "🚫 EGC Council: статус уже активен. Продление доступно через 30 дней после последней покупки.");
                 }
             }
+            case "avatar_frame" -> {
+                long count = rewardRequestRepository.countActiveByUserAndGroupSince(user, "avatar_frame", monthStart);
+                if (count > 0) {
+                    throw new IllegalArgumentException(
+                            "🚫 Рамку аватара можно менять не чаще 1 раза в месяц. Доступно с 1-го числа следующего месяца.");
+                }
+            }
             default -> {
                 // Игровые валюты: 1 покупка на игру в месяц
                 long count = rewardRequestRepository.countActiveByUserAndGroupSince(user, group, monthStart);

@@ -227,6 +227,62 @@ public class RewardSeeder implements CommandLineRunner {
                 "Пополнение баланса Steam на ~500 ₽ для CS2 (PC). "
                         + "Зачисляется напрямую на ваш Steam-аккаунт по логину. Срок доставки — до 24 ч.",
                 "Игровые валюты", 63_000, cs2Prompt, 15_000, "cs2");
+
+        // ── Кастомизация: рамки аватара (применяются мгновенно, без одобрения) ────
+
+        seedAvatarFrame("🔥 Огненная рамка аватара",
+                "Огненная рамка вокруг аватара в профиле мини-аппа. Применяется сразу после покупки.",
+                3_000, "#ef4444");
+
+        seedAvatarFrame("❄️ Ледяная рамка аватара",
+                "Ледяная рамка вокруг аватара в профиле мини-аппа. Применяется сразу после покупки.",
+                3_000, "#38bdf8");
+
+        seedAvatarFrame("💜 Фиолетовая рамка аватара",
+                "Фирменная фиолетовая рамка вокруг аватара в профиле мини-аппа. Применяется сразу после покупки.",
+                3_000, "#a855f7");
+
+        seedAvatarFrame("👑 Золотая рамка аватара",
+                "Премиальная золотая рамка вокруг аватара в профиле мини-аппа. Применяется сразу после покупки.",
+                5_000, "#fbbf24");
+    }
+
+    private void seedAvatarFrame(String title, String description, long priceCoins, String frameColor) {
+        rewardItemRepository.findByTitle(title).ifPresentOrElse(
+                existing -> {
+                    boolean changed = false;
+                    if (existing.getPriceCoins() != priceCoins) {
+                        existing.setPriceCoins(priceCoins);
+                        changed = true;
+                    }
+                    if (!frameColor.equals(existing.getAvatarFrameColor())) {
+                        existing.setAvatarFrameColor(frameColor);
+                        changed = true;
+                    }
+                    if (changed) {
+                        rewardItemRepository.save(existing);
+                        log.info("[RewardSeeder] Updated avatar frame '{}': {} EXC", title, priceCoins);
+                    }
+                },
+                () -> {
+                    RewardItem item = new RewardItem();
+                    item.setTitle(title);
+                    item.setDescription(description);
+                    item.setCategory("Кастомизация");
+                    item.setPriceCoins(priceCoins);
+                    item.setMinLevelXp(0);
+                    item.setPurchaseGroup("avatar_frame");
+                    item.setAvatarFrameColor(frameColor);
+                    item.setActive(true);
+                    item.setCreatedAt(LocalDateTime.now());
+                    rewardItemRepository.save(item);
+                    log.info("[RewardSeeder] Created avatar frame '{}': {} EXC", title, priceCoins);
+                    gamePlatformBot.requestNewsApproval(
+                            "🎁 Новый товар в магазине",
+                            "В магазин наград добавлена <b>" + title + "</b> за " + priceCoins + " EXC — новая кастомизация профиля! Загляни в раздел 🛍 Магазин."
+                    );
+                }
+        );
     }
 
     private void seed(String title, String description, String category, long priceCoins,

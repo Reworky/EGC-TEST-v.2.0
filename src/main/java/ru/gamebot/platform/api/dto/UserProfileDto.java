@@ -21,4 +21,6 @@ public class UserProfileDto {
     private long monthlyWithdrawalLimit;
     private long remainingWithdrawalLimit;
     private boolean hasAvatar;
+    /** Купленный в магазине цвет рамки аватара (hex). null = цвет по умолчанию (по уровню). */
+    private String avatarFrameColor;
 }

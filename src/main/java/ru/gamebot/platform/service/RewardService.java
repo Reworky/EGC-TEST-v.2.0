@@ -85,9 +85,17 @@ public class RewardService {
         RewardRequest request = new RewardRequest();
         request.setUser(user);
         request.setRewardItem(rewardItem);
-        request.setStatus(RewardRequestStatus.PENDING);
         request.setCreatedAt(LocalDateTime.now());
         request.setDisplayId(rewardRequestRepository.findMaxShopDisplayId() + 1);
+
+        if (rewardItem.getAvatarFrameColor() != null) {
+            // Цифровая косметика — применяется мгновенно, без очереди на одобрение администратора
+            user.setAvatarFrameColor(rewardItem.getAvatarFrameColor());
+            userService.save(user);
+            request.setStatus(RewardRequestStatus.APPROVED);
+        } else {
+            request.setStatus(RewardRequestStatus.PENDING);
+        }
         return rewardRequestRepository.save(request);
     }
 

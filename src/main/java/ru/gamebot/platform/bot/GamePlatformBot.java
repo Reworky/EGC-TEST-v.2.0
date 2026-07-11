@@ -3201,6 +3201,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             req.setPayoutDetails(userGameData);
             rewardService.saveRequest(req);
         }
+
+        if (reward.getAvatarFrameColor() != null) {
+            sendText(user.getTelegramId(),
+                    "✅ <b>Рамка аватара применена!</b>\n\n"
+                            + "🎁 " + escape(reward.getTitle()) + "\n"
+                            + "🪙 Списано: <b>" + effectivePrice + " EXC</b>\n\n"
+                            + "Открой мини-апп → Профиль, чтобы увидеть новую рамку вокруг аватара.",
+                    backMenuKeyboard("menu:shop"));
+            if (callbackQuery != null) answerSilently(callbackQuery.getId());
+            return;
+        }
+
         notifyAdminsAboutRewardRequest(user, reward, userGameData);
         sendText(user.getTelegramId(),
                 "✅ <b>Заявка на награду отправлена</b>\n\n"

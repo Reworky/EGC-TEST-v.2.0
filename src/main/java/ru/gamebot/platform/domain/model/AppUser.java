@@ -54,6 +54,8 @@ public class AppUser {
 
     // Avatar
     private String avatarFileId;
+    /** Цвет рамки аватара, купленной в магазине наград (hex). null = цвет по умолчанию (по уровню). */
+    private String avatarFrameColor;
 
     // Antifaud
     @Column(columnDefinition = "boolean default false")

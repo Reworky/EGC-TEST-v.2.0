@@ -48,6 +48,7 @@ public class ProfileController {
                             .monthlyWithdrawalLimit(sinkShopService.getMonthlyLimit(user.getXp()))
                             .remainingWithdrawalLimit(sinkShopService.getRemainingWithdrawalLimit(user))
                             .hasAvatar(user.getAvatarFileId() != null)
+                            .avatarFrameColor(user.getAvatarFrameColor())
                             .build()))
                 .orElse(ResponseEntity.notFound().build());
     }

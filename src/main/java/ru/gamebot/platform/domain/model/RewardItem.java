@@ -47,4 +47,10 @@ public class RewardItem {
     /** Товар скоро появится: отображается в магазине, но купить нельзя */
     @Column(columnDefinition = "boolean default false")
     private boolean comingSoon;
+
+    /**
+     * Если задано — этот товар является цифровой косметикой «рамка аватара» (hex-цвет).
+     * Применяется пользователю мгновенно при покупке, без одобрения администратора.
+     */
+    private String avatarFrameColor;
 }

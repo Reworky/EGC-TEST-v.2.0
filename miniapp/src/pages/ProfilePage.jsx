@@ -36,13 +36,14 @@ export default function ProfilePage() {
   const xpIntoLevel = profile.xp % 1000;
   const xpProgress = xpIntoLevel / 10;
   const levelColor = LEVEL_COLORS[profile.levelName] || '#a855f7';
+  const ringColor = profile.avatarFrameColor || levelColor;
 
   return (
     <div className="profile-page">
-      <div className="profile-glow" style={{ background: levelColor }} />
+      <div className="profile-glow" style={{ background: ringColor }} />
 
       <div className="profile-header">
-        <div className="avatar" style={{ '--ring-color': levelColor, background: avatarUrl ? 'transparent' : levelColor }}>
+        <div className="avatar" style={{ '--ring-color': ringColor, background: avatarUrl ? 'transparent' : levelColor }}>
           {avatarUrl
             ? <img className="avatar-img" src={avatarUrl} alt="" />
             : (profile.nickname?.[0]?.toUpperCase() || '?')}
