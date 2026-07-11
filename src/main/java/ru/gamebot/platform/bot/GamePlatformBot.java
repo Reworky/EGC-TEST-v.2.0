@@ -7583,7 +7583,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return switch (status) {
             case DRAFT -> "В процессе";
             case PENDING -> "На проверке";
-            case APPROVED -> "Одобрен";
+            case APPROVED -> "Выполнен";
             case REJECTED -> "Отклонён";
             case NEEDS_INFO -> "Нужны уточнения";
             case CANCELLED -> "Отменён";

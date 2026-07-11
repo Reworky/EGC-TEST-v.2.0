@@ -8,7 +8,7 @@ const CATEGORY_COLORS = { 'Лёгкие': '#66bb6a', 'Средние': '#ffa726'
 const STATUS_LABELS = {
   DRAFT: 'В процессе',
   PENDING: 'На проверке',
-  APPROVED: 'Одобрен',
+  APPROVED: 'Выполнен',
   REJECTED: 'Отклонён',
   NEEDS_INFO: 'Нужны уточнения',
 };
