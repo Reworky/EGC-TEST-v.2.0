@@ -2,7 +2,9 @@ package ru.gamebot.platform.api.controller;
 
 import java.io.IOException;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -42,12 +44,22 @@ public class QuestController {
     @GetMapping
     public List<QuestDto> quests(
             @RequestParam(required = false) String game,
-            @RequestParam(required = false) String category) {
+            @RequestParam(required = false) String category,
+            @AuthenticationPrincipal Long telegramId) {
         var quests = (game != null && !game.isBlank())
                 ? (category != null ? questService.findActiveByGameNameAndCategory(game, category)
                                     : questService.findActiveByGameName(game))
                 : (category != null ? questService.findByCategory(category)
                                     : questService.findActiveQuests());
+
+        Map<Long, String> statusByQuestId = new HashMap<>();
+        if (telegramId != null) {
+            appUserRepository.findByTelegramId(telegramId).ifPresent(user -> {
+                for (QuestSubmission s : questService.getUserSubmissions(user)) {
+                    statusByQuestId.putIfAbsent(s.getQuest().getId(), s.getStatus().name());
+                }
+            });
+        }
 
         return quests.stream().map(q -> QuestDto.builder()
                 .id(q.getId())
@@ -60,6 +72,7 @@ public class QuestController {
                 .rewardXp(q.getRewardXp())
                 .rewardCoins(q.getRewardCoins())
                 .councilOnly(q.isCouncilOnly())
+                .submissionStatus(statusByQuestId.get(q.getId()))
                 .build()).toList();
     }
 

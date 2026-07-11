@@ -16,4 +16,7 @@ public class QuestDto {
     private long rewardXp;
     private long rewardCoins;
     private boolean councilOnly;
+
+    /** null, если пользователь ещё не брал этот квест */
+    private String submissionStatus;
 }

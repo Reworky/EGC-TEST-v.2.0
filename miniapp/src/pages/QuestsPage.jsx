@@ -170,7 +170,11 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged }) {
             {cat}
           </div>
           {list.map(q => (
-            <div key={q.id} className="quest-card" onClick={() => onToggle(q.id)}>
+            <div
+              key={q.id}
+              className={`quest-card ${q.submissionStatus ? 'quest-card-taken' : ''}`}
+              onClick={() => onToggle(q.id)}
+            >
               <div className="quest-top">
                 <div className="quest-title">{q.title}</div>
                 <div className="quest-rewards">
@@ -181,6 +185,11 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged }) {
               <div className="quest-meta">
                 <span className="quest-duration">⏱ {q.durationDays === 1 ? '24 ч' : q.durationDays + ' дн'}</span>
                 <span className="quest-platform">{q.platform}</span>
+                {q.submissionStatus && (
+                  <span className="quest-taken-badge" style={{ color: STATUS_COLORS[q.submissionStatus] }}>
+                    ● {STATUS_LABELS[q.submissionStatus] || q.submissionStatus}
+                  </span>
+                )}
               </div>
               {expanded === q.id && (
                 <div className="quest-detail" onClick={e => e.stopPropagation()}>
