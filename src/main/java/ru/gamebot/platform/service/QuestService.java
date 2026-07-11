@@ -28,10 +28,11 @@ public class QuestService {
     private static final int REFERRAL_BONUS_PERCENT = 3;
     private static final int REFERRAL_DAYS_WINDOW = 14;
 
-    // Minimum time before report can be submitted, by difficulty category
-    private static final int SUBMIT_COOLDOWN_EASY_HOURS = 24;
-    private static final int SUBMIT_COOLDOWN_MEDIUM_HOURS = 72;
-    private static final int SUBMIT_COOLDOWN_HARD_HOURS = 168;
+    // Minimum time before report can be submitted, by difficulty category.
+    // Уменьшено по решению пользователя (2026-07-10) с 24/72/168ч.
+    private static final int SUBMIT_COOLDOWN_EASY_HOURS = 3;
+    private static final int SUBMIT_COOLDOWN_MEDIUM_HOURS = 12;
+    private static final int SUBMIT_COOLDOWN_HARD_HOURS = 24;
 
     // Запас сверх кулдауна при расчёте минимального срока квеста — чтобы окно на отправку отчёта было реальным
     private static final int DURATION_BUFFER_DAYS = 1;
