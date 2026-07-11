@@ -2029,13 +2029,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else if (!hasActiveSubmission) {
             buttons.add(keyboardFactory.callback("🚀 Взять", "quest:take:" + questId));
         }
-        long submitCooldown = (latest != null && latest.getStatus() == SubmissionStatus.DRAFT)
-                ? questService.getSubmitCooldownHoursLeft(latest) : 0;
-        if (submitCooldown > 0) {
-            buttons.add(keyboardFactory.callback("⏳ Отчёт через " + submitCooldown + " ч", "noop"));
-        } else {
-            buttons.add(keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
-        }
+        buttons.add(keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
         if (isEffectiveAdmin(user)) {
             buttons.add(keyboardFactory.callback("✏️ Правка", "admin:quest:" + questId));
         }
@@ -2199,15 +2193,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 return;
             }
             latest = questService.resetToDraft(latest);
-        }
-
-        long submitCooldownLeft = questService.getSubmitCooldownHoursLeft(latest);
-        if (submitCooldownLeft > 0) {
-            answerSilently(callbackQuery.getId());
-            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
-                    "⏳ Отчёт по этому квесту можно отправить через <b>" + submitCooldownLeft + " ч.</b>\n\n"
-                    + "Это минимальное время честного выполнения квеста.");
-            return;
         }
 
         if (questService.isExpired(latest)) {
@@ -3664,8 +3649,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(chatId,
                 "⚠️ <b>Подозрительные аккаунты</b>\n\n"
                         + "Эти аккаунты автоматически помечены по признакам фрода:\n"
-                        + "• Success rate больше 90%\n"
-                        + "• Интервал между заявками меньше 10 сек\n\n"
+                        + "• Success rate больше 90% + интервал между заявками меньше 60 сек\n"
+                        + "• Отчёт отправлен быстрее чем через 30 мин после взятия квеста\n\n"
                         + "Проверьте вручную и снимите флаг если игрок честный.",
                 keyboardFactory.smartLayout(buttons));
     }

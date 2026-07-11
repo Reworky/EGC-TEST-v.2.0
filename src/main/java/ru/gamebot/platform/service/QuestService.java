@@ -28,13 +28,13 @@ public class QuestService {
     private static final int REFERRAL_BONUS_PERCENT = 3;
     private static final int REFERRAL_DAYS_WINDOW = 14;
 
-    // Minimum time before report can be submitted, by difficulty category.
-    // Уменьшено по решению пользователя (2026-07-10) с 24/72/168ч.
-    private static final int SUBMIT_COOLDOWN_EASY_HOURS = 3;
-    private static final int SUBMIT_COOLDOWN_MEDIUM_HOURS = 12;
-    private static final int SUBMIT_COOLDOWN_HARD_HOURS = 24;
+    // Жёсткий кулдаун на отправку отчёта убран по решению пользователя (2026-07-11) — throughput и так
+    // ограничен часовым кулдауном на взятие, лимитом слотов, 24ч на повтор того же квеста и diminishing returns.
+    // Вместо блокировки — мягкий антифрод-флаг: отчёт отправлен быстрее этого порога после взятия квеста.
+    private static final int SUBMIT_FLAG_THRESHOLD_MINUTES = 30;
 
-    // Запас сверх кулдауна при расчёте минимального срока квеста — чтобы окно на отправку отчёта было реальным
+    // Минимальный срок квеста в днях — гарантирует, что у игрока в принципе есть окно на выполнение,
+    // а не квест с дедлайном в тот же день.
     private static final int DURATION_BUFFER_DAYS = 1;
 
     private final QuestRepository questRepository;
@@ -142,23 +142,12 @@ public class QuestService {
         return questRepository.save(quest);
     }
 
-    /** Минимальное количество часов ожидания перед сдачей отчёта для категории квеста. */
-    private int submitCooldownHoursForCategory(String category) {
-        return switch (category) {
-            case "Средние" -> SUBMIT_COOLDOWN_MEDIUM_HOURS;
-            case "Сложные" -> SUBMIT_COOLDOWN_HARD_HOURS;
-            default -> SUBMIT_COOLDOWN_EASY_HOURS; // Лёгкие and anything else
-        };
-    }
-
     /**
-     * Минимальный срок квеста в днях: покрывает кулдаун сдачи отчёта для категории
-     * плюс {@link #DURATION_BUFFER_DAYS} день запаса, чтобы у игрока было реальное окно на отправку,
-     * а не доли секунды впритык к дедлайну.
+     * Минимальный срок квеста в днях. Раньше зависел от категории (кулдаун сдачи отчёта в часах),
+     * но с переходом на мягкий антифрод-флаг вместо блокировки стал единым для всех категорий.
      */
     public int minDurationDaysForCategory(String category) {
-        int cooldownDays = (submitCooldownHoursForCategory(category) + 23) / 24;
-        return cooldownDays + DURATION_BUFFER_DAYS;
+        return DURATION_BUFFER_DAYS;
     }
 
     /**
@@ -364,7 +353,9 @@ public class QuestService {
 
     /**
      * Единая точка входа для отправки отчёта — используется и ботом, и API Mini App.
-     * Переиспользует те же правила: кулдаун после отклонения (1ч), кулдаун на отправку по категории, дедлайн квеста.
+     * Переиспользует те же правила: кулдаун после отклонения (1ч), дедлайн квеста. Отчёт можно отправить
+     * сразу после взятия квеста — слишком быстрая отправка не блокируется, а помечается антифрод-флагом
+     * в {@link #submitReport}.
      */
     @Transactional
     public QuestActionResult submitReportChecked(AppUser user, Quest quest, String mediaType, String fileId,
@@ -388,27 +379,12 @@ public class QuestService {
             latest = resetToDraft(latest);
         }
 
-        long submitCooldownLeft = getSubmitCooldownHoursLeft(latest);
-        if (submitCooldownLeft > 0) {
-            return QuestActionResult.of(QuestActionStatus.SUBMIT_COOLDOWN, submitCooldownLeft * 60L);
-        }
-
         if (isExpired(latest)) {
             return QuestActionResult.of(QuestActionStatus.EXPIRED, 0);
         }
 
         QuestSubmission submitted = submitReport(latest, mediaType, fileId, externalLink, comment);
         return QuestActionResult.ok(submitted);
-    }
-
-    /** Returns hours remaining before report can be submitted (0 = can submit now) */
-    public long getSubmitCooldownHoursLeft(QuestSubmission submission) {
-        int cooldownHours = submitCooldownHoursForCategory(submission.getQuest().getCategory());
-        LocalDateTime availableAt = submission.getCreatedAt().plusHours(cooldownHours);
-        if (LocalDateTime.now().isBefore(availableAt)) {
-            return Math.max(1, ChronoUnit.HOURS.between(LocalDateTime.now(), availableAt));
-        }
-        return 0;
     }
 
     @Transactional
@@ -425,9 +401,25 @@ public class QuestService {
         submission.setUpdatedAt(LocalDateTime.now());
         questSubmissionRepository.save(submission);
 
+        flagIfFastSubmit(submission);
         checkFraudSuspect(submission.getUser());
 
         return submission;
+    }
+
+    /** Мягкий антифрод-сигнал вместо блокировки: отчёт отправлен подозрительно быстро после взятия квеста. */
+    private void flagIfFastSubmit(QuestSubmission submission) {
+        AppUser user = submission.getUser();
+        if (user.isFraudSuspect()) {
+            return;
+        }
+        long minutesSinceTaken = ChronoUnit.MINUTES.between(submission.getCreatedAt(), LocalDateTime.now());
+        if (minutesSinceTaken < SUBMIT_FLAG_THRESHOLD_MINUTES) {
+            user.setFraudSuspect(true);
+            appUserRepository.save(user);
+            log.warn("Fraud suspect flagged: userId={} submitted report {} min after taking quest {}",
+                    user.getTelegramId(), minutesSinceTaken, submission.getQuest().getId());
+        }
     }
 
     private void checkFraudSuspect(AppUser user) {

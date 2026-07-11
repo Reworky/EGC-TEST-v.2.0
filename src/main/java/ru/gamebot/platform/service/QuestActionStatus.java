@@ -12,6 +12,5 @@ public enum QuestActionStatus {
     GAME_COOLDOWN,
     TAKE_COOLDOWN,
     REJECT_COOLDOWN,
-    SUBMIT_COOLDOWN,
     EXPIRED
 }
