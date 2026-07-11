@@ -3659,7 +3659,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🆔 ID: <b>" + submission.getUser().getTelegramId() + "</b>\n"
                 + "🎯 Квест: <b>" + escape(submission.getQuest().getTitle()) + "</b>\n"
                 + rewardPreviewLine(submission) + "\n"
-                + "📅 Отправлено: <b>" + escape(submission.getCreatedAt().format(DATE_TIME_FORMATTER)) + "</b>\n"
+                + "📅 Отправлено: <b>" + escape(submission.getUpdatedAt().format(DATE_TIME_FORMATTER)) + "</b>\n"
                 + "💬 Комментарий: " + escape(submission.getUserComment()) + "\n"
                 + (submission.getExternalLink() == null ? "" : "🔗 Ссылка: " + escape(submission.getExternalLink()) + "\n");
 
@@ -6448,7 +6448,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🆔 ID: <b>" + submission.getUser().getTelegramId() + "</b>\n"
                 + "🎯 Квест: <b>" + escape(submission.getQuest().getTitle()) + "</b>\n"
                 + rewardPreviewLine(submission) + "\n"
-                + "📅 Отправлено: <b>" + submission.getCreatedAt().format(DATE_TIME_FORMATTER) + "</b>\n"
+                + "📅 Отправлено: <b>" + submission.getUpdatedAt().format(DATE_TIME_FORMATTER) + "</b>\n"
                 + "💬 Комментарий: " + escape(submission.getUserComment());
 
         InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
