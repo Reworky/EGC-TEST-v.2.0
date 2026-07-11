@@ -302,6 +302,105 @@ public class QuestService {
                 && LocalDateTime.now().isAfter(submission.getExpiresAt());
     }
 
+    public record QuestActionResult(QuestActionStatus status, long minutesLeft, QuestSubmission submission) {
+        public static QuestActionResult ok(QuestSubmission s) {
+            return new QuestActionResult(QuestActionStatus.OK, 0, s);
+        }
+        public static QuestActionResult of(QuestActionStatus status, long minutesLeft) {
+            return new QuestActionResult(status, minutesLeft, null);
+        }
+    }
+
+    /**
+     * Единая точка входа для взятия квеста — используется и ботом, и API Mini App.
+     * Переиспользует те же правила: слот-лимит, кулдаун между взятием (1ч), кулдаун по игре/категории (24ч), 24ч на повтор того же квеста.
+     */
+    @Transactional
+    public QuestActionResult takeQuestChecked(AppUser user, Quest quest) {
+        QuestSubmission latest = getLatestSubmission(user, quest);
+        if (latest != null) {
+            if (latest.getStatus() == SubmissionStatus.DRAFT) {
+                return QuestActionResult.of(QuestActionStatus.ALREADY_DRAFT, 0);
+            }
+            if (latest.getStatus() == SubmissionStatus.PENDING) {
+                return QuestActionResult.of(QuestActionStatus.ALREADY_PENDING, 0);
+            }
+            if (latest.getStatus() == SubmissionStatus.APPROVED) {
+                return QuestActionResult.of(QuestActionStatus.ALREADY_APPROVED, 0);
+            }
+        }
+
+        long activeSlots = countActiveDrafts(user);
+        long maxSlots = sinkShopService.getMaxQuestSlots(user);
+        if (activeSlots >= maxSlots) {
+            return QuestActionResult.of(QuestActionStatus.SLOTS_FULL, 0);
+        }
+
+        if (isSameQuestCooldownActive(user, quest)) {
+            return QuestActionResult.of(QuestActionStatus.SAME_QUEST_COOLDOWN, COOLDOWN_HOURS * 60L);
+        }
+
+        if (isCooldownActive(user, quest)) {
+            long hoursLeft = getCooldownHoursLeft(user, quest);
+            return QuestActionResult.of(QuestActionStatus.GAME_COOLDOWN, hoursLeft * 60L);
+        }
+
+        try {
+            QuestSubmission created = takeQuestAtomically(user, quest);
+            return QuestActionResult.ok(created);
+        } catch (IllegalArgumentException e) {
+            long minutesLeft = 60;
+            String msg = e.getMessage();
+            if (msg != null && msg.startsWith("cooldown:")) {
+                try {
+                    minutesLeft = Long.parseLong(msg.substring("cooldown:".length()));
+                } catch (NumberFormatException ignored) {
+                    // keep default
+                }
+            }
+            return QuestActionResult.of(QuestActionStatus.TAKE_COOLDOWN, minutesLeft);
+        }
+    }
+
+    /**
+     * Единая точка входа для отправки отчёта — используется и ботом, и API Mini App.
+     * Переиспользует те же правила: кулдаун после отклонения (1ч), кулдаун на отправку по категории, дедлайн квеста.
+     */
+    @Transactional
+    public QuestActionResult submitReportChecked(AppUser user, Quest quest, String mediaType, String fileId,
+                                                  String externalLink, String comment) {
+        QuestSubmission latest = getLatestSubmission(user, quest);
+        if (latest == null || latest.getStatus() == SubmissionStatus.CANCELLED) {
+            return QuestActionResult.of(QuestActionStatus.NOT_TAKEN, 0);
+        }
+        if (latest.getStatus() == SubmissionStatus.PENDING) {
+            return QuestActionResult.of(QuestActionStatus.ALREADY_PENDING, 0);
+        }
+        if (latest.getStatus() == SubmissionStatus.APPROVED) {
+            return QuestActionResult.of(QuestActionStatus.ALREADY_APPROVED, 0);
+        }
+        if (latest.getStatus() == SubmissionStatus.REJECTED || latest.getStatus() == SubmissionStatus.NEEDS_INFO) {
+            LocalDateTime rejectedAt = latest.getUpdatedAt();
+            if (rejectedAt != null && LocalDateTime.now().isBefore(rejectedAt.plusHours(1))) {
+                long minutesLeft = ChronoUnit.MINUTES.between(LocalDateTime.now(), rejectedAt.plusHours(1));
+                return QuestActionResult.of(QuestActionStatus.REJECT_COOLDOWN, Math.max(1, minutesLeft));
+            }
+            latest = resetToDraft(latest);
+        }
+
+        long submitCooldownLeft = getSubmitCooldownHoursLeft(latest);
+        if (submitCooldownLeft > 0) {
+            return QuestActionResult.of(QuestActionStatus.SUBMIT_COOLDOWN, submitCooldownLeft * 60L);
+        }
+
+        if (isExpired(latest)) {
+            return QuestActionResult.of(QuestActionStatus.EXPIRED, 0);
+        }
+
+        QuestSubmission submitted = submitReport(latest, mediaType, fileId, externalLink, comment);
+        return QuestActionResult.ok(submitted);
+    }
+
     /** Returns hours remaining before report can be submitted (0 = can submit now) */
     public long getSubmitCooldownHoursLeft(QuestSubmission submission) {
         int cooldownHours = submitCooldownHoursForCategory(submission.getQuest().getCategory());

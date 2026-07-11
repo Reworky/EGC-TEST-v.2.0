@@ -3,6 +3,7 @@ package ru.gamebot.platform.config;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -22,6 +23,8 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // Действия с квестом — нужен JWT (проверяем раньше общего правила ниже)
+                        .requestMatchers(HttpMethod.POST, "/api/quests/*/take", "/api/quests/*/report").authenticated()
                         // Публичные эндпоинты — без токена
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/leaderboard").permitAll()

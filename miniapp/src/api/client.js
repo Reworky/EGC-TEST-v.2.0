@@ -38,3 +38,24 @@ export async function getGames() {
   const { data } = await api.get('/api/quests/games');
   return data;
 }
+
+export async function getQuestDetail(id) {
+  const { data } = await api.get(`/api/quests/${id}`);
+  return data;
+}
+
+export async function takeQuest(id) {
+  const { data } = await api.post(`/api/quests/${id}/take`);
+  return data;
+}
+
+export async function submitQuestReport(id, { photo, externalLink, comment }) {
+  const form = new FormData();
+  if (photo) form.append('photo', photo);
+  if (externalLink) form.append('externalLink', externalLink);
+  if (comment) form.append('comment', comment);
+  const { data } = await api.post(`/api/quests/${id}/report`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}

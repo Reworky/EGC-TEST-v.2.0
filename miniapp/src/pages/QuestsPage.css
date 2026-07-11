@@ -134,3 +134,77 @@
   cursor: pointer;
   margin-top: 4px;
 }
+
+.quest-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.quest-detail-loading {
+  font-size: 13px;
+  color: var(--tg-theme-hint-color, #888);
+  padding: 8px 0;
+}
+
+.quest-status {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.quest-status-approved {
+  background: rgba(102, 187, 106, 0.15);
+  color: #66bb6a;
+}
+
+.quest-status-pending {
+  background: rgba(255, 167, 38, 0.15);
+  color: #ffa726;
+}
+
+.quest-submit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quest-mod-comment {
+  background: rgba(239, 83, 80, 0.1);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+}
+
+.quest-mod-comment p {
+  font-size: 13px;
+  color: var(--tg-theme-text-color, #eee);
+  margin: 4px 0 0;
+}
+
+.quest-file-input,
+.quest-text-input,
+.quest-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  color: var(--tg-theme-text-color, #fff);
+  font-size: 13px;
+}
+
+.quest-textarea {
+  resize: vertical;
+  min-height: 60px;
+  font-family: inherit;
+}
+
+.quest-message {
+  font-size: 13px;
+  color: var(--tg-theme-hint-color, #ccc);
+  text-align: center;
+  padding-top: 4px;
+}
