@@ -1,5 +1,5 @@
 .quests-page {
-  padding: 0 0 80px;
+  padding: 0 0 calc(80px + env(safe-area-inset-bottom, 0px));
 }
 
 .view-toggle {
