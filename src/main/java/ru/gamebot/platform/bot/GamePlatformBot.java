@@ -1522,6 +1522,30 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendText(user.getTelegramId(), "⚠️ TG ID должен быть числом. Попробуйте ещё раз.", backMenuKeyboard("admin:users:0"));
                 }
             }
+            case BONUS_SEARCH -> {
+                try {
+                    long searchId = Long.parseLong(text.trim());
+                    AppUser found = userService.findByTelegramId(searchId).orElse(null);
+                    if (found == null) {
+                        session.setState(SessionState.BONUS_SEARCH);
+                        sendText(user.getTelegramId(),
+                                "❌ Пользователь с TG ID <b>" + searchId + "</b> не найден. Введите другой TG ID:",
+                                cancelKeyboard());
+                    } else {
+                        session.setState(SessionState.BONUS_INPUT);
+                        sendText(user.getTelegramId(),
+                                "✅ Найден: <b>" + escape(displayUserName(found)) + "</b>\n"
+                                        + "🏷️ " + escape(displayTag(found)) + " • ID: <code>" + found.getTelegramId() + "</code>\n\n"
+                                        + "Отправьте данные одним сообщением.\n"
+                                        + "Формат: <code>" + found.getTelegramId() + " XP COINS TICKETS комментарий</code>\n"
+                                        + "Пример: <code>" + found.getTelegramId() + " 100 50 3 За активность</code>",
+                                cancelKeyboard());
+                    }
+                } catch (NumberFormatException e) {
+                    session.setState(SessionState.BONUS_SEARCH);
+                    sendText(user.getTelegramId(), "⚠️ TG ID должен быть числом. Попробуйте ещё раз.", cancelKeyboard());
+                }
+            }
             default -> sendText(user.getTelegramId(), "🧭 Я не жду текст на этом шаге. Вернитесь в меню.", mainMenuKeyboard(user));
         }
     }
@@ -3896,6 +3920,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendAdminUsersPostCard(user);
                 } else if (action.startsWith("users:")) {
                     sendAdminUsersPage(user, parseInteger(action.substring("users:".length())));
+                } else if ("bonussearch".equals(action)) {
+                    session.setState(SessionState.BONUS_SEARCH);
+                    answer(callbackQuery.getId(), "Введите TG ID");
+                    sendText(user.getTelegramId(), "🔍 <b>Поиск игрока для начисления бонуса</b>\n\nВведите Telegram ID (числовой):", cancelKeyboard());
                 } else if (action.startsWith("bonuspage:")) {
                     session.setState(SessionState.BONUS_INPUT);
                     sendAdminBonusUsersPage(user, session, parseInteger(action.substring("bonuspage:".length())), null);
@@ -5811,6 +5839,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!pagination.isEmpty()) {
             rows.add(pagination);
         }
+        rows.add(List.of(keyboardFactory.callback("🔍 Поиск по TG ID", "admin:bonussearch")));
         rows.add(List.of(
                 keyboardFactory.callback("🛠️ Админка", "menu:admin"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
