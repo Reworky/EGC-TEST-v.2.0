@@ -776,7 +776,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if (data.startsWith("mod:no:") && isEffectiveModerator(user)) {
-            handleModerationReject(callbackQuery, parseLong(data.substring("mod:no:".length())));
+            handleModerationReject(callbackQuery, user, session, parseLong(data.substring("mod:no:".length())));
             return;
         }
         if (data.startsWith("mod:more:") && isEffectiveModerator(user)) {
@@ -1456,6 +1456,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 + "Если считаете это ошибкой — обратитесь в поддержку клуба.",
                         null);
                 sendAdminUserCard(user, targetId, blockPage, "✅ Пользователь заблокирован.");
+            }
+            case QUEST_REJECT_COMMENT -> {
+                Long submissionId = session.getQuestId();
+                session.reset();
+                QuestSubmission submission = questService.rejectSubmission(submissionId, text.trim());
+                notifyUser(submission.getUser().getTelegramId(),
+                        "⚠️ Отчёт по квесту <b>" + escape(submission.getQuest().getTitle()) + "</b> отклонён.\n\n"
+                                + escape(submission.getModeratorComment()));
+                sendText(user.getTelegramId(), "✅ Заявка отклонена, игрок уведомлён с указанной причиной.", null);
+                sendModerationQueue(user.getTelegramId());
             }
             case QUEST_TEMPLATE_TITLE -> {
                 session.getData().put("title", text.trim());
@@ -3777,16 +3787,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         answer(callbackQuery.getId(), "Заявка одобрена");
     }
 
-    private void handleModerationReject(CallbackQuery callbackQuery, Long submissionId) {
-        QuestSubmission submission = questService.rejectSubmission(
-                submissionId,
-                "Отчёт отклонён. Проверьте инструкцию к квесту и отправьте более точное подтверждение."
-        );
-        notifyUser(submission.getUser().getTelegramId(),
-                "⚠️ Отчёт по квесту <b>" + escape(submission.getQuest().getTitle()) + "</b> отклонён.\n\n"
-                        + escape(submission.getModeratorComment()));
-        sendModerationQueue(callbackQuery.getFrom().getId());
-        answer(callbackQuery.getId(), "Заявка отклонена");
+    private void handleModerationReject(CallbackQuery callbackQuery, AppUser user, UserSession session, Long submissionId) {
+        session.reset();
+        session.setState(SessionState.QUEST_REJECT_COMMENT);
+        session.setQuestId(submissionId);
+        answer(callbackQuery.getId(), "Укажите причину");
+        sendText(user.getTelegramId(),
+                "❌ <b>Отклонение отчёта</b>\n\nНапишите причину отклонения — она будет отправлена игроку, чтобы он понимал, что исправить:",
+                cancelKeyboard());
     }
 
     private void handleModerationClarify(CallbackQuery callbackQuery, Long submissionId) {
