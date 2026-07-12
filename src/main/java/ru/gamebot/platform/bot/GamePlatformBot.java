@@ -247,6 +247,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.setState(SessionState.REG_NAME);
             sendText(user.getTelegramId(),
                     "🎉 Добро пожаловать в <b>" + escape(appProperties.getClubName()) + "</b>!\n\n"
+                            + socialProofLine()
                             + "Чтобы открыть квесты, рейтинг и награды, давайте быстро оформим профиль.\n"
                             + "Напишите ваш игровой никнейм.\n\n"
                             + "<b>ВАЖНО! Ник в боте должен совпадать с ником в игре</b>",
@@ -423,6 +424,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.setState(SessionState.REG_NAME);
             sendText(user.getTelegramId(),
                     "🎮 Добро пожаловать в <b>" + escape(appProperties.getClubName()) + "</b>!\n\n"
+                            + socialProofLine()
                             + "Здесь вас ждут квесты, XP, рейтинг, награды и реферальная программа.\n"
                             + "Начнем с профиля. Напишите ваш игровой никнейм.\n\n"
                             + "<b>ВАЖНО! Ник в боте должен совпадать с ником в игре</b>",
@@ -7199,6 +7201,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 null);
         sendText(cleared.getTelegramId(),
                 "🎮 Добро пожаловать в <b>" + escape(appProperties.getClubName()) + "</b>!\n\n"
+                        + socialProofLine()
                         + "Здесь вас ждут квесты, XP, рейтинг, награды и реферальная программа.\n"
                         + "Начнем с профиля. Напишите ваш игровой никнейм.\n\n"
                         + "<b>ВАЖНО! Ник в боте должен совпадать с ником в игре</b>",
@@ -7722,5 +7725,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .replace("&", "&amp;")
                 .replace("<", "&lt;")
                 .replace(">", "&gt;");
+    }
+
+    /** Живая строка соц-доказательства для приветствия новичков — реальное число игроков, округлённое вниз до 50. */
+    private String socialProofLine() {
+        long registered = userService.totalRegisteredUsers();
+        long roundedBase = (registered / 50) * 50;
+        return roundedBase >= 50 ? "👥 Уже <b>" + roundedBase + "+</b> игроков в клубе\n\n" : "";
     }
 }
