@@ -2783,7 +2783,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "💸 Сумма: <b>" + excAmount + " EXC</b>\n"
                     + "💵 Эквивалент: <b>" + rubles + " ₽</b> → ~<b>" + tonAmount2 + " TON</b>\n"
                     + "📈 Курс: 1 TON = " + tonRate2.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽\n"
-                    + "💎 Способ: <b>TON</b>\n"
+                    + "💎 Способ: <b>GRAM (TON)</b>\n"
                     + "📬 Кошелёк: <code>" + escape(wallet) + "</code>\n\n"
                     + "Администратор обработает заявку в течение 24 часов.",
                     backMenuKeyboard("menu:main"));
@@ -4579,7 +4579,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Сохраняет историческую точность для старых заявок, оформленных ещё в USDT. */
     private String cryptoMethodLabel(String payoutDetails) {
-        return payoutDetails.startsWith("USDT") ? "USDT · TON" : "TON";
+        return payoutDetails.startsWith("USDT") ? "USDT · TON" : "GRAM (TON)";
+    }
+
+    /** ~ количество монет GRAM (TON) по живому курсу — для карточек заявки на вывод у админа/модератора. */
+    private String cryptoPayoutSuffix(long rubles) {
+        java.math.BigDecimal tonRate = exchangeRateService.getTonRubRate();
+        java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(rubles));
+        return " (~<b>" + tonAmount + " GRAM</b>, курс 1 GRAM ≈ " + tonRate.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽)";
     }
 
     private void sendAdminWithdrawals(AppUser user) {
@@ -4622,6 +4629,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             detailsLine = "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>";
         }
         long rubles = Math.round(req.getRewardItem().getPriceCoins() / 100.0);
+        String payoutSuffix = isCryptoWithdrawal(req) ? cryptoPayoutSuffix(rubles) : "";
         long duplicateCount = rewardService.countPendingWithdrawalsByUser(requester);
         String duplicateWarning = duplicateCount > 1
                 ? "\n\n⚠️ <b>ВНИМАНИЕ: у этого пользователя " + duplicateCount + " активные заявки на вывод!</b> Оплачивайте только эту." : "";
@@ -4630,7 +4638,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
                         + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
                         + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
-                        + "💵 К выплате: <b>~" + rubles + " ₽</b>"
+                        + "💵 К выплате: <b>~" + rubles + " ₽</b>" + payoutSuffix
                         + detailsLine + "\n"
                         + "📅 Дата: <b>" + req.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) + "</b>"
                         + duplicateWarning,
@@ -6755,6 +6763,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             detailsLine = "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>";
         }
         long rubles = Math.round(req.getRewardItem().getPriceCoins() / 100.0);
+        String payoutSuffix = isCryptoWithdrawal(req) ? cryptoPayoutSuffix(rubles) : "";
         long dupCount = rewardService.countPendingWithdrawalsByUser(requester);
         String dupWarning = dupCount > 1
                 ? "\n\n⚠️ <b>ВНИМАНИЕ: у этого пользователя " + dupCount + " активные заявки на вывод!</b> Оплачивайте только эту." : "";
@@ -6763,7 +6772,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
                         + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
                         + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
-                        + "💵 К выплате: <b>~" + rubles + " ₽</b>"
+                        + "💵 К выплате: <b>~" + rubles + " ₽</b>" + payoutSuffix
                         + detailsLine + "\n"
                         + "📅 Дата: <b>" + req.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) + "</b>"
                         + dupWarning,
