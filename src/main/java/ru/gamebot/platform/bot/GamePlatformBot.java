@@ -625,20 +625,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendWithdrawalScreen(user);
             return;
         }
-        if (data.equals("shop:withdraw:usdt")) {
+        if (data.equals("shop:withdraw:ton")) {
             answerSilently(callbackQuery.getId());
-            sendWithdrawalUsdtWalletQuestion(user);
+            sendWithdrawalTonWalletQuestion(user);
             return;
         }
-        if (data.equals("shop:withdraw:usdt:has_wallet")) {
+        if (data.equals("shop:withdraw:ton:has_wallet")) {
             answerSilently(callbackQuery.getId());
-            session.setState(SessionState.WITHDRAWAL_USDT_AMOUNT);
-            sendWithdrawalUsdtAmountScreen(user);
+            session.setState(SessionState.WITHDRAWAL_TON_AMOUNT);
+            sendWithdrawalTonAmountScreen(user);
             return;
         }
-        if (data.equals("shop:withdraw:usdt:no_wallet")) {
+        if (data.equals("shop:withdraw:ton:no_wallet")) {
             answerSilently(callbackQuery.getId());
-            sendWithdrawalUsdtNoWalletGuide(user);
+            sendWithdrawalTonNoWalletGuide(user);
             return;
         }
         if (data.startsWith("shop:view:")) {
@@ -1533,8 +1533,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case WITHDRAWAL_INPUT -> handleWithdrawalInput(user, session, text);
             case WITHDRAWAL_DETAILS -> handleWithdrawalDetails(user, session, text);
-            case WITHDRAWAL_USDT_AMOUNT -> handleWithdrawalUsdtAmount(user, session, text);
-            case WITHDRAWAL_USDT_ADDRESS -> handleWithdrawalUsdtAddress(user, session, text);
+            case WITHDRAWAL_TON_AMOUNT -> handleWithdrawalTonAmount(user, session, text);
+            case WITHDRAWAL_TON_ADDRESS -> handleWithdrawalTonAddress(user, session, text);
             case SHOP_GAME_DATA_INPUT -> handleShopGameDataInput(user, session, text);
             case ADMIN_USER_SEARCH -> {
                 session.reset();
@@ -1758,7 +1758,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "После одобрения EXC и XP зачислятся на баланс автоматически.\n\n"
                 + "4️⃣ <b>Выведи деньги</b>\n"
                 + "Раздел 🛍️ Магазин наград → Вывод EXC.\n"
-                + "Минимум <b>5 000 EXC</b> (50 ₽). Доступен вывод в рубли или USDT.\n"
+                + "Минимум <b>5 000 EXC</b> (50 ₽). Доступен вывод в рубли или TON.\n"
                 + "Курс: <b>100 EXC = 1 ₽</b>.\n\n"
                 + "5️⃣ <b>Приглашай друзей</b>\n"
                 + "Раздел 🤝 Рефералы → получи ссылку.\n"
@@ -2662,23 +2662,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "Выберите способ получения:";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("💸 В рублях (Сбербанк / СБП)", "shop:withdraw:rub")));
-        rows.add(List.of(keyboardFactory.callback("💎 В USDT (Telegram Wallet, TON)", "shop:withdraw:usdt")));
+        rows.add(List.of(keyboardFactory.callback("💎 В TON (Telegram Wallet)", "shop:withdraw:ton")));
         rows.add(List.of(keyboardFactory.callback("📋 Мои заявки на вывод", "menu:my-withdrawals")));
         rows.add(List.of(keyboardFactory.callback("❌ Отмена", "menu:balance")));
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
 
-    private void sendWithdrawalUsdtWalletQuestion(AppUser user) {
+    private void sendWithdrawalTonWalletQuestion(AppUser user) {
         sendText(user.getTelegramId(),
-                "💎 <b>Вывод в USDT</b>\n\nЕсть ли у вас кошелёк в Telegram Wallet (@wallet)?",
+                "💎 <b>Вывод в TON</b>\n\nЕсть ли у вас кошелёк в Telegram Wallet (@wallet)?",
                 keyboardFactory.rowsLayout(List.of(
-                        List.of(keyboardFactory.callback("✅ Да, есть кошелёк", "shop:withdraw:usdt:has_wallet")),
-                        List.of(keyboardFactory.callback("❌ Нет кошелька", "shop:withdraw:usdt:no_wallet")),
+                        List.of(keyboardFactory.callback("✅ Да, есть кошелёк", "shop:withdraw:ton:has_wallet")),
+                        List.of(keyboardFactory.callback("❌ Нет кошелька", "shop:withdraw:ton:no_wallet")),
                         List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw"))
                 )));
     }
 
-    private void sendWithdrawalUsdtNoWalletGuide(AppUser user) {
+    private void sendWithdrawalTonNoWalletGuide(AppUser user) {
         sendText(user.getTelegramId(),
                 "💎 <b>Как создать кошелёк</b>\n\n"
                         + "1. Нажми кнопку ниже — откроется <b>кошелёк</b> в Telegram\n"
@@ -2686,18 +2686,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "3. Вернись сюда и нажми <b>«У меня есть кошелёк»</b>",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.url("🚀 Открыть Telegram Wallet", "https://t.me/wallet/start?startapp=ref-3-PaQlujnvUGU")),
-                        List.of(keyboardFactory.callback("✅ У меня есть кошелёк", "shop:withdraw:usdt:has_wallet")),
+                        List.of(keyboardFactory.callback("✅ У меня есть кошелёк", "shop:withdraw:ton:has_wallet")),
                         List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw"))
                 )));
     }
 
-    private void sendWithdrawalUsdtAmountScreen(AppUser user) {
+    private void sendWithdrawalTonAmountScreen(AppUser user) {
         sendText(user.getTelegramId(),
-                "💎 <b>Вывод в USDT</b>\n\nВведите сумму в EXC, которую хотите вывести.",
+                "💎 <b>Вывод в TON</b>\n\nВведите сумму в EXC, которую хотите вывести.",
                 cancelKeyboard());
     }
 
-    private void handleWithdrawalUsdtAmount(AppUser user, UserSession session, String text) {
+    private void handleWithdrawalTonAmount(AppUser user, UserSession session, String text) {
         long amount;
         try {
             amount = Long.parseLong(text.trim().replace(" ", ""));
@@ -2721,22 +2721,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         double ratio = healthRatioService.getCurrentRatio();
         long rubles = Math.round(amount * ratio / 100.0);
         java.math.BigDecimal rublesDecimal = java.math.BigDecimal.valueOf(rubles);
-        java.math.BigDecimal usdtRate = exchangeRateService.getUsdtRubRate();
-        java.math.BigDecimal usdtAmount = exchangeRateService.rubToUsdt(rublesDecimal);
+        java.math.BigDecimal tonRate = exchangeRateService.getTonRubRate();
+        java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(rublesDecimal);
         String rateNote = exchangeRateService.isUsingFallback()
-                ? "📈 Курс: 1 USDT ≈ " + usdtRate.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽ (приблизительно)"
-                : "📈 Курс: 1 USDT = " + usdtRate.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽";
-        session.getData().put("usdt_exc_amount", String.valueOf(amount));
-        session.getData().put("usdt_rubles", String.valueOf(rubles));
-        session.setState(SessionState.WITHDRAWAL_USDT_ADDRESS);
+                ? "📈 Курс: 1 TON ≈ " + tonRate.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽ (приблизительно)"
+                : "📈 Курс: 1 TON = " + tonRate.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽";
+        session.getData().put("ton_exc_amount", String.valueOf(amount));
+        session.getData().put("ton_rubles", String.valueOf(rubles));
+        session.setState(SessionState.WITHDRAWAL_TON_ADDRESS);
         String msg = "💎 <b>Сумма принята</b>\n\n"
-                + "💸 " + amount + " EXC → <b>" + rubles + " ₽</b> → ~<b>" + usdtAmount + " USDT</b>\n"
+                + "💸 " + amount + " EXC → <b>" + rubles + " ₽</b> → ~<b>" + tonAmount + " TON</b>\n"
                 + rateNote + "\n\n"
                 + "━━━━━━━━━━━━━━━\n"
                 + "📋 <b>Как найти адрес кошелька:</b>\n\n"
                 + "1. Открой @wallet в Telegram (или кнопку ниже)\n"
                 + "2. Нажми <b>«Получить»</b> или <b>«Deposit»</b>\n"
-                + "3. Выбери <b>USDT</b> → сеть <b>TON</b>\n"
+                + "3. Выбери <b>Toncoin (TON)</b>\n"
                 + "4. Нажми <b>«Скопировать адрес»</b>\n"
                 + "5. Вернись сюда и вставь адрес\n\n"
                 + "⚠️ <b>Адрес начинается с UQ... или EQ...</b>\n"
@@ -2749,13 +2749,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), msg, keyboardFactory.rowsLayout(rows));
     }
 
-    private void handleWithdrawalUsdtAddress(AppUser user, UserSession session, String text) {
+    private void handleWithdrawalTonAddress(AppUser user, UserSession session, String text) {
         String wallet = text.trim();
         if (wallet.length() < 20 || wallet.contains(" ")) {
             sendText(user.getTelegramId(),
                     "⚠️ <b>Некорректный адрес кошелька</b>\n\n"
                     + "Адрес TON должен начинаться с <b>UQ...</b> или <b>EQ...</b> и содержать 48 символов.\n\n"
-                    + "Как найти: @wallet → Получить → USDT → TON → Скопировать адрес.\n\n"
+                    + "Как найти: @wallet → Получить → Toncoin (TON) → Скопировать адрес.\n\n"
                     + "Попробуйте ещё раз:",
                     cancelKeyboard());
             return;
@@ -2768,24 +2768,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 backMenuKeyboard("menu:main"));
             return;
         }
-        long excAmount = Long.parseLong(session.getData().getOrDefault("usdt_exc_amount", "0"));
-        long rubles = Long.parseLong(session.getData().getOrDefault("usdt_rubles", "0"));
-        java.math.BigDecimal usdtRate2 = exchangeRateService.getUsdtRubRate();
-        java.math.BigDecimal usdtAmount2 = exchangeRateService.rubToUsdt(java.math.BigDecimal.valueOf(rubles));
+        long excAmount = Long.parseLong(session.getData().getOrDefault("ton_exc_amount", "0"));
+        long rubles = Long.parseLong(session.getData().getOrDefault("ton_rubles", "0"));
+        java.math.BigDecimal tonRate2 = exchangeRateService.getTonRubRate();
+        java.math.BigDecimal tonAmount2 = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(rubles));
         try {
-            RewardRequest usdtReq = rewardService.createUsdtWithdrawalRequest(user, excAmount, rubles, wallet);
+            RewardRequest tonReq = rewardService.createTonWithdrawalRequest(user, excAmount, rubles, wallet);
             session.reset();
             sendText(user.getTelegramId(),
-                    "✅ <b>Заявка на вывод в USDT принята!</b>\n\n"
-                    + "🔢 Номер заявки: <b>В-" + usdtReq.getId() + "</b>\n"
+                    "✅ <b>Заявка на вывод в TON принята!</b>\n\n"
+                    + "🔢 Номер заявки: <b>В-" + tonReq.getId() + "</b>\n"
                     + "💸 Сумма: <b>" + excAmount + " EXC</b>\n"
-                    + "💵 Эквивалент: <b>" + rubles + " ₽</b> → ~<b>" + usdtAmount2 + " USDT</b>\n"
-                    + "📈 Курс: 1 USDT = " + usdtRate2.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽\n"
-                    + "💎 Способ: <b>USDT · TON</b>\n"
+                    + "💵 Эквивалент: <b>" + rubles + " ₽</b> → ~<b>" + tonAmount2 + " TON</b>\n"
+                    + "📈 Курс: 1 TON = " + tonRate2.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽\n"
+                    + "💎 Способ: <b>TON</b>\n"
                     + "📬 Кошелёк: <code>" + escape(wallet) + "</code>\n\n"
                     + "Администратор обработает заявку в течение 24 часов.",
                     backMenuKeyboard("menu:main"));
-            notifyAdminsAboutWithdrawal(user, usdtReq);
+            notifyAdminsAboutWithdrawal(user, tonReq);
         } catch (IllegalArgumentException e) {
             sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), cancelKeyboard());
         }
@@ -4564,6 +4564,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         answerSilently(callbackQuery.getId());
     }
 
+    /** true — заявка на вывод в криптовалюту (TON, либо старый формат "USDT·TON" до перехода), не в рублях. */
+    private boolean isCryptoWithdrawal(RewardRequest req) {
+        String details = req.getPayoutDetails();
+        return details != null && (details.startsWith("TON") || details.startsWith("USDT"));
+    }
+
+    private String cryptoWalletFromPayoutDetails(String payoutDetails) {
+        String[] parts = payoutDetails.split(":");
+        return parts.length > 1 ? parts[1] : payoutDetails;
+    }
+
+    /** Сохраняет историческую точность для старых заявок, оформленных ещё в USDT. */
+    private String cryptoMethodLabel(String payoutDetails) {
+        return payoutDetails.startsWith("USDT") ? "USDT · TON" : "TON";
+    }
+
     private void sendAdminWithdrawals(AppUser user) {
         List<RewardRequest> pending = rewardService.findPendingWithdrawals();
         if (pending.isEmpty()) {
@@ -4577,7 +4593,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String uname = req.getUser().getTelegramUsername() != null
                     ? "@" + req.getUser().getTelegramUsername()
                     : "#" + req.getUser().getTelegramId();
-            String type = (req.getPayoutDetails() != null && req.getPayoutDetails().startsWith("USDT")) ? "💎 USDT" : "💸 ₽";
+            String type = isCryptoWithdrawal(req) ? "💎 TON" : "💸 ₽";
             rows.add(List.of(keyboardFactory.callback(
                     "В-" + reqDisplayId(req) + " " + uname + " — " + type + " " + req.getRewardItem().getPriceCoins() + " EXC",
                     "admin:withdrawal:req:" + req.getId())));
@@ -4594,12 +4610,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String unameLink = requester.getTelegramUsername() != null
                 ? "<a href=\"https://t.me/" + requester.getTelegramUsername() + "\">@" + requester.getTelegramUsername() + "</a>"
                 : "<a href=\"tg://user?id=" + requester.getTelegramId() + "\">" + requester.getTelegramId() + "</a>";
-        boolean isUsdt = req.getPayoutDetails() != null && req.getPayoutDetails().startsWith("USDT");
-        String detailsLine = "";
-        if (isUsdt) {
-            String[] parts = req.getPayoutDetails().split(":");
-            String wallet = parts.length > 1 ? parts[1] : req.getPayoutDetails();
-            detailsLine = "\n💎 Способ: <b>USDT · TON</b>\n📬 Кошелёк: <code>" + escape(wallet) + "</code>";
+        String detailsLine;
+        if (isCryptoWithdrawal(req)) {
+            String wallet = cryptoWalletFromPayoutDetails(req.getPayoutDetails());
+            detailsLine = "\n💎 Способ: <b>" + cryptoMethodLabel(req.getPayoutDetails()) + "</b>\n📬 Кошелёк: <code>" + escape(wallet) + "</code>";
         } else if (req.getPayoutDetails() != null) {
             detailsLine = "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>\n💳 Реквизиты: <code>" + escape(req.getPayoutDetails()) + "</code>";
         } else {
@@ -4628,8 +4642,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void notifyUserWithdrawalApproved(RewardRequest req, String receiptFileId) {
-        boolean isUsdt = req.getPayoutDetails() != null;
-        String method = isUsdt ? "USDT · TON" : "рубли (СБП / Сбербанк)";
+        // Было: isUsdt = payoutDetails != null — ловило и рублёвые реквизиты тоже, не только крипту. Исправлено.
+        String method = isCryptoWithdrawal(req) ? cryptoMethodLabel(req.getPayoutDetails()) : "рубли (СБП / Сбербанк)";
         String caption = "✅ <b>Ваш вывод EXC выполнен!</b>\n\n"
                 + "🔢 Номер заявки: <b>В-" + reqDisplayId(req) + "</b>\n"
                 + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
@@ -6712,7 +6726,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String uname = req.getUser().getTelegramUsername() != null
                     ? "@" + req.getUser().getTelegramUsername()
                     : "#" + req.getUser().getTelegramId();
-            String type = (req.getPayoutDetails() != null && req.getPayoutDetails().startsWith("USDT")) ? "💎 USDT" : "💸 ₽";
+            String type = isCryptoWithdrawal(req) ? "💎 TON" : "💸 ₽";
             rows.add(List.of(keyboardFactory.callback(
                     "В-" + reqDisplayId(req) + " " + uname + " — " + type + " " + req.getRewardItem().getPriceCoins() + " EXC",
                     "mod:withdrawal:req:" + req.getId())));
@@ -6729,12 +6743,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String unameLink = requester.getTelegramUsername() != null
                 ? "<a href=\"https://t.me/" + requester.getTelegramUsername() + "\">@" + requester.getTelegramUsername() + "</a>"
                 : "<a href=\"tg://user?id=" + requester.getTelegramId() + "\">" + requester.getTelegramId() + "</a>";
-        boolean isUsdt = req.getPayoutDetails() != null && req.getPayoutDetails().startsWith("USDT");
         String detailsLine;
-        if (isUsdt) {
-            String[] parts = req.getPayoutDetails().split(":");
-            String wallet = parts.length > 1 ? parts[1] : req.getPayoutDetails();
-            detailsLine = "\n💎 Способ: <b>USDT · TON</b>\n📬 Кошелёк: <code>" + escape(wallet) + "</code>";
+        if (isCryptoWithdrawal(req)) {
+            String wallet = cryptoWalletFromPayoutDetails(req.getPayoutDetails());
+            detailsLine = "\n💎 Способ: <b>" + cryptoMethodLabel(req.getPayoutDetails()) + "</b>\n📬 Кошелёк: <code>" + escape(wallet) + "</code>";
         } else if (req.getPayoutDetails() != null) {
             detailsLine = "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>\n💳 Реквизиты: <code>" + escape(req.getPayoutDetails()) + "</code>";
         } else {

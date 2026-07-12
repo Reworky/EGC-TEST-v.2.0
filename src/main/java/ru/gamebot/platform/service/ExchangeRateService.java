@@ -16,8 +16,9 @@ import org.springframework.stereotype.Service;
 public class ExchangeRateService {
 
     private static final String URL =
-            "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=rub";
-    private static final BigDecimal FALLBACK_RATE = BigDecimal.valueOf(90);
+            "https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=rub";
+    // Грубая оценка на случай недоступности API — курс TON гораздо волатильнее USDT, при живом API не используется.
+    private static final BigDecimal FALLBACK_RATE = BigDecimal.valueOf(300);
     private static final Duration CACHE_TTL = Duration.ofMinutes(10);
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(5);
 
@@ -29,7 +30,7 @@ public class ExchangeRateService {
     private Instant cacheTime = Instant.EPOCH;
     private boolean usingFallback = false;
 
-    public synchronized BigDecimal getUsdtRubRate() {
+    public synchronized BigDecimal getTonRubRate() {
         if (cachedRate == null || Instant.now().isAfter(cacheTime.plus(CACHE_TTL))) {
             try {
                 HttpRequest request = HttpRequest.newBuilder()
@@ -39,7 +40,7 @@ public class ExchangeRateService {
                         .build();
                 HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
                 String body = response.body();
-                // Parse: {"tether":{"rub":92.14}}
+                // Parse: {"the-open-network":{"rub":320.5}}
                 int idx = body.indexOf("\"rub\":");
                 if (idx < 0) throw new IllegalStateException("Unexpected response: " + body);
                 String after = body.substring(idx + 6).replaceAll("[^0-9.]", "");
@@ -48,7 +49,7 @@ public class ExchangeRateService {
                 cachedRate = new BigDecimal(numStr.trim());
                 cacheTime = Instant.now();
                 usingFallback = false;
-                log.info("Exchange rate updated: 1 USDT = {} RUB", cachedRate);
+                log.info("Exchange rate updated: 1 TON = {} RUB", cachedRate);
             } catch (Exception e) {
                 log.warn("Failed to fetch exchange rate: {}", e.getMessage());
                 if (cachedRate == null) {
@@ -60,8 +61,8 @@ public class ExchangeRateService {
         return cachedRate;
     }
 
-    public BigDecimal rubToUsdt(BigDecimal rubAmount) {
-        return rubAmount.divide(getUsdtRubRate(), 2, RoundingMode.HALF_DOWN);
+    public BigDecimal rubToTon(BigDecimal rubAmount) {
+        return rubAmount.divide(getTonRubRate(), 2, RoundingMode.HALF_DOWN);
     }
 
     public boolean isUsingFallback() {

@@ -39,7 +39,7 @@ public class RewardRequest {
     private LocalDateTime createdAt;
     private String adminComment;
 
-    /** Детали выплаты (для USDT: адрес кошелька TON) или данные, введённые игроком для выдачи (ID аккаунта и т.п.) */
+    /** Детали выплаты (для крипто-вывода: адрес TON-кошелька) или данные, введённые игроком для выдачи (ID аккаунта и т.п.) */
     private String payoutDetails;
 
     /**

@@ -231,7 +231,7 @@ public class RewardService {
     }
 
     @Transactional
-    public RewardRequest createUsdtWithdrawalRequest(AppUser user, long excAmount, long rubles, String tonWallet) {
+    public RewardRequest createTonWithdrawalRequest(AppUser user, long excAmount, long rubles, String tonWallet) {
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
         if (excAmount > remaining) {
             throw new IllegalArgumentException("Превышен месячный лимит вывода. Доступно ещё: " + remaining + " EXC.");
@@ -241,8 +241,8 @@ public class RewardService {
         }
 
         RewardItem withdrawItem = new RewardItem();
-        withdrawItem.setTitle("Вывод " + excAmount + " EXC → USDT (TON)");
-        withdrawItem.setDescription("Заявка на вывод в USDT · Кошелёк: " + tonWallet);
+        withdrawItem.setTitle("Вывод " + excAmount + " EXC → TON");
+        withdrawItem.setDescription("Заявка на вывод в TON · Кошелёк: " + tonWallet);
         withdrawItem.setCategory("Вывод");
         withdrawItem.setPriceCoins(excAmount);
         withdrawItem.setActive(false);
@@ -251,7 +251,7 @@ public class RewardService {
 
         sinkShopService.recordWithdrawal(user, excAmount);
         user.setCoins(user.getCoins() - excAmount);
-        excTx.log(user, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод → USDT (TON)");
+        excTx.log(user, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод → TON");
         userService.save(user);
 
         RewardRequest request = new RewardRequest();
@@ -259,7 +259,9 @@ public class RewardService {
         request.setRewardItem(saved);
         request.setStatus(RewardRequestStatus.PENDING);
         request.setCreatedAt(LocalDateTime.now());
-        request.setPayoutDetails("USDT·TON:" + tonWallet + ":rubles=" + rubles);
+        // Префикс "TON:" — новый формат. Старые заявки могли быть сохранены с "USDT·TON:" (до перехода на TON) —
+        // код чтения (isCryptoWithdrawal/cryptoWalletFromPayoutDetails в GamePlatformBot) понимает оба варианта.
+        request.setPayoutDetails("TON:" + tonWallet + ":rubles=" + rubles);
         request.setDisplayId(rewardRequestRepository.findMaxWithdrawalDisplayId() + 1);
         return rewardRequestRepository.save(request);
     }
