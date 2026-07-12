@@ -142,11 +142,15 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged }) {
       .finally(() => setLoading(false));
   }, [selectedGame]);
 
-  const grouped = CATEGORY_ORDER.reduce((acc, cat) => {
-    const list = quests.filter(q => q.category === cat);
-    if (list.length) acc[cat] = list;
-    return acc;
-  }, {});
+  // UGC-квесты без деления на сложность — единый плоский список без заголовка категории
+  const noCategoryTiers = selectedGame === 'UGC';
+  const grouped = noCategoryTiers
+    ? (quests.length ? { '': quests } : {})
+    : CATEGORY_ORDER.reduce((acc, cat) => {
+        const list = quests.filter(q => q.category === cat);
+        if (list.length) acc[cat] = list;
+        return acc;
+      }, {});
 
   return (
     <>
@@ -165,10 +169,12 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged }) {
       {loading && <div className="page-center">Загрузка...</div>}
 
       {!loading && Object.entries(grouped).map(([cat, list]) => (
-        <div key={cat} className="category-section">
-          <div className="category-header" style={{ color: CATEGORY_COLORS[cat] }}>
-            {cat}
-          </div>
+        <div key={cat || 'flat'} className="category-section">
+          {cat && (
+            <div className="category-header" style={{ color: CATEGORY_COLORS[cat] }}>
+              {cat}
+            </div>
+          )}
           {list.map(q => (
             <div
               key={q.id}

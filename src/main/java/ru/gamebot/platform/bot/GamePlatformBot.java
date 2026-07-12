@@ -1930,6 +1930,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        // UGC-квесты без деления на сложность — сразу показываем список
+        if ("UGC".equalsIgnoreCase(gameName)) {
+            sendQuestList(user, gameName, null);
+            return;
+        }
+
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(
                 keyboardFactory.callback("⚡ Легкие", "quests:list:" + encodeGameToken(gameName) + ":fast"),
