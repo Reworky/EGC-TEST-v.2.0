@@ -3412,6 +3412,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 keyboardFactory.callback("🆘 Поддержка", "mod:support:list")
                         ),
                         List.of(keyboardFactory.callback(wLabelMod, "mod:withdrawals")),
+                        List.of(keyboardFactory.callback("🔍 Поиск игрока", "mod:usersearch")),
                         List.of(keyboardFactory.callback("🏠 Главное меню", "menu:main"))
                 )));
     }
