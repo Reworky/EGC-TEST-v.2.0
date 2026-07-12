@@ -13,5 +13,6 @@ public enum QuestActionStatus {
     GAME_COOLDOWN,
     TAKE_COOLDOWN,
     REJECT_COOLDOWN,
+    HAS_PENDING_REPORT,
     EXPIRED
 }

@@ -259,6 +259,7 @@ public class QuestController {
             case GAME_COOLDOWN -> "Кулдаун по этой игре: ещё " + hours + " ч.";
             case TAKE_COOLDOWN -> "Между взятием квестов должен пройти час. Осталось " + result.minutesLeft() + " мин.";
             case REJECT_COOLDOWN -> "После отклонения повторный отчёт можно отправить через " + result.minutesLeft() + " мин.";
+            case HAS_PENDING_REPORT -> "У вас уже есть отчёт на проверке у модератора — дождитесь решения, прежде чем отправлять следующий.";
             case EXPIRED -> "Срок выполнения этого квеста истёк.";
         };
     }

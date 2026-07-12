@@ -585,7 +585,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     : "";
             QuestSubmission submission = questService.getSubmission(submissionId);
             submission.setExtraMediaFileIds(extra);
-            questService.submitReport(submission, "photo", firstPhoto, null, comment);
+            try {
+                questService.submitReport(submission, "photo", firstPhoto, null, comment);
+            } catch (IllegalStateException e) {
+                answerSilently(callbackQuery.getId());
+                sendText(user.getTelegramId(), reportSubmitErrorMessage(e), backMenuKeyboard("menu:myquests"));
+                return;
+            }
             session.reset();
             notifyModeratorsAboutSubmission(submission.getId());
             answerSilently(callbackQuery.getId());
@@ -2147,6 +2153,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         };
     }
 
+    private String reportSubmitErrorMessage(IllegalStateException e) {
+        return "pending_report_exists".equals(e.getMessage())
+                ? "⏳ У вас уже есть отчёт на проверке у модератора — дождитесь решения, прежде чем отправлять следующий."
+                : "⚠️ " + e.getMessage();
+    }
+
     private void handleReportStart(CallbackQuery callbackQuery, AppUser user, UserSession session, Long questId) {
         Quest quest = questService.getQuest(questId);
         QuestSubmission latest = questService.getLatestSubmission(user, quest);
@@ -2184,6 +2196,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
                     "⌛ Срок выполнения этого квеста истёк. Отчёт больше не принимается.");
+            return;
+        }
+
+        if (questService.hasOtherPendingSubmission(user, quest)) {
+            answerSilently(callbackQuery.getId());
+            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                    "⏳ У вас уже есть отчёт на проверке у модератора — дождитесь решения, прежде чем отправлять следующий.");
             return;
         }
 
@@ -2286,7 +2305,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String fileId = message.getVideo().getFileId();
             String text = message.getCaption();
             QuestSubmission submission = questService.getSubmission(session.getSubmissionId());
-            questService.submitReport(submission, "video", fileId, extractUrl(text), text == null ? "Без комментария" : text);
+            try {
+                questService.submitReport(submission, "video", fileId, extractUrl(text), text == null ? "Без комментария" : text);
+            } catch (IllegalStateException e) {
+                sendText(user.getTelegramId(), reportSubmitErrorMessage(e), backMenuKeyboard("menu:myquests"));
+                return;
+            }
             session.reset();
             notifyModeratorsAboutSubmission(submission.getId());
             sendText(user.getTelegramId(),
@@ -2296,7 +2320,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String fileId = message.getDocument().getFileId();
             String text = message.getCaption();
             QuestSubmission submission = questService.getSubmission(session.getSubmissionId());
-            questService.submitReport(submission, "document", fileId, extractUrl(text), text == null ? "Без комментария" : text);
+            try {
+                questService.submitReport(submission, "document", fileId, extractUrl(text), text == null ? "Без комментария" : text);
+            } catch (IllegalStateException e) {
+                sendText(user.getTelegramId(), reportSubmitErrorMessage(e), backMenuKeyboard("menu:myquests"));
+                return;
+            }
             session.reset();
             notifyModeratorsAboutSubmission(submission.getId());
             sendText(user.getTelegramId(),

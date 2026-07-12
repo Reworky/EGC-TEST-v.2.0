@@ -344,14 +344,21 @@ public class QuestService {
 
     /**
      * Единая точка входа для отправки отчёта — используется и ботом, и API Mini App.
-     * Переиспользует те же правила: кулдаун после отклонения (1ч), дедлайн квеста. Отчёт можно отправить
-     * сразу после взятия квеста — слишком быстрая отправка не блокируется, а помечается антифрод-флагом
-     * в {@link #submitReport}.
+     * Переиспользует те же правила: кулдаун после отклонения (1ч), дедлайн квеста, не более одного
+     * отчёта на проверке одновременно (по всем квестам сразу, не только по этому). Отчёт можно
+     * отправить сразу после взятия квеста — слишком быстрая отправка не блокируется, а помечается
+     * антифрод-флагом в {@link #submitReport}.
+     *
+     * Строка пользователя блокируется на всё время проверок ({@link AppUserRepository#findByIdForUpdate}) —
+     * та же защита от гонки состояний, что и в {@link #takeQuestChecked}.
      */
     @Transactional
     public QuestActionResult submitReportChecked(AppUser user, Quest quest, String mediaType, String fileId,
                                                   String externalLink, String comment) {
-        QuestSubmission latest = getLatestSubmission(user, quest);
+        AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
+
+        QuestSubmission latest = getLatestSubmission(lockedUser, quest);
         if (latest == null || latest.getStatus() == SubmissionStatus.CANCELLED) {
             return QuestActionResult.of(QuestActionStatus.NOT_TAKEN, 0);
         }
@@ -374,8 +381,19 @@ public class QuestService {
             return QuestActionResult.of(QuestActionStatus.EXPIRED, 0);
         }
 
+        if (hasOtherPendingSubmission(lockedUser, quest)) {
+            return QuestActionResult.of(QuestActionStatus.HAS_PENDING_REPORT, 0);
+        }
+
         QuestSubmission submitted = submitReport(latest, mediaType, fileId, externalLink, comment);
         return QuestActionResult.ok(submitted);
+    }
+
+    /** true, если у пользователя уже есть ДРУГОЙ отчёт на проверке (статус PENDING) по любому квесту. */
+    public boolean hasOtherPendingSubmission(AppUser user, Quest excludeQuest) {
+        return questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user).stream()
+                .anyMatch(s -> s.getStatus() == SubmissionStatus.PENDING
+                        && !s.getQuest().getId().equals(excludeQuest.getId()));
     }
 
     @Transactional
@@ -383,6 +401,11 @@ public class QuestService {
                                         String externalLink, String comment) {
         if (submission.getStatus() == SubmissionStatus.APPROVED) {
             throw new IllegalStateException("Этот квест уже одобрен и оплачен — повторная сдача отчёта невозможна.");
+        }
+        // Защита от гонки/обхода: те же правила, что и в submitReportChecked, продублированы здесь,
+        // т.к. бот исторически вызывал submitReport напрямую в некоторых местах, минуя проверки.
+        if (hasOtherPendingSubmission(submission.getUser(), submission.getQuest())) {
+            throw new IllegalStateException("pending_report_exists");
         }
         submission.setMediaType(mediaType);
         submission.setMediaFileId(fileId);
