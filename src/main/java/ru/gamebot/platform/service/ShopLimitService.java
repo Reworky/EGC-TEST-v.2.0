@@ -28,6 +28,10 @@ public class ShopLimitService {
      * Проверяет все 4 слоя ограничений. Бросает IllegalArgumentException с текстом для пользователя.
      */
     public void checkAllLimits(AppUser user, RewardItem item) {
+        if ("avatar_frame".equals(item.getPurchaseGroup())) {
+            // Рамки аватара — без ограничений вообще (ни количество, ни месячный лимит, ни cooldown), по требованию пользователя.
+            return;
+        }
         checkLevelAccess(user, item);
         checkItemQuantityLimit(user, item);
         checkMonthlySpendsLimit(user, item);

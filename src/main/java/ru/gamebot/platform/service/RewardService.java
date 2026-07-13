@@ -67,6 +67,7 @@ public class RewardService {
         // 4-layer shop limits check (throws IllegalArgumentException on violation)
         shopLimitService.checkAllLimits(lockedUser, rewardItem);
 
+        boolean isAvatarFrame = "avatar_frame".equals(rewardItem.getPurchaseGroup());
         long price = effectivePrice(rewardItem);
 
         // 3.3 Withdrawal limit check (min 5000 EXC per model)
@@ -78,19 +79,23 @@ public class RewardService {
             throw new IllegalArgumentException("Недостаточно EXC. Нужно " + price + " EXC.");
         }
 
-        long remaining = sinkShopService.getRemainingWithdrawalLimit(lockedUser);
-        if (price > remaining) {
-            throw new IllegalArgumentException(
-                    "Превышен месячный лимит вывода. Доступно ещё: " + remaining + " EXC.");
+        if (!isAvatarFrame) {
+            long remaining = sinkShopService.getRemainingWithdrawalLimit(lockedUser);
+            if (price > remaining) {
+                throw new IllegalArgumentException(
+                        "Превышен месячный лимит вывода. Доступно ещё: " + remaining + " EXC.");
+            }
         }
 
         lockedUser.setCoins(lockedUser.getCoins() - price);
         userService.save(lockedUser);
         excTx.log(lockedUser, -price, ExcTransactionService.SHOP_BUY, "Покупка: " + rewardItem.getTitle());
-        sinkShopService.recordWithdrawal(lockedUser, price);
-
-        // Record cooldown after successful purchase (Layer 4)
-        shopLimitService.recordPurchaseCooldown(lockedUser, rewardItem.getPriceCoins());
+        if (!isAvatarFrame) {
+            // Рамки не учитываются в месячном лимите трат и не ставят cooldown — по требованию пользователя,
+            // они полностью без ограничений и не должны мешать другим покупкам в магазине.
+            sinkShopService.recordWithdrawal(lockedUser, price);
+            shopLimitService.recordPurchaseCooldown(lockedUser, rewardItem.getPriceCoins());
+        }
 
         RewardRequest request = new RewardRequest();
         request.setUser(lockedUser);
