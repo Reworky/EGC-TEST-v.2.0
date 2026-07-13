@@ -94,3 +94,18 @@ export async function getLeaderboard(type) {
   const { data } = await api.get('/api/leaderboard', { params: { type } });
   return data;
 }
+
+export async function getPerksState() {
+  const { data } = await api.get('/api/perks');
+  return data;
+}
+
+export async function purchasePerk(key) {
+  const { data } = await api.post('/api/perks/purchase', { key });
+  return data;
+}
+
+export async function sendGiftBoost(nickname) {
+  const { data } = await api.post('/api/perks/gift', { nickname });
+  return data;
+}

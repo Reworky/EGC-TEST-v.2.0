@@ -1,7 +1,37 @@
 import { useEffect, useState } from 'react';
-import { getShopItems, getShopStats, purchaseItem, getMyRewards, getProfile } from '../api/client';
+import { getShopItems, getShopStats, purchaseItem, getMyRewards, getProfile, getPerksState, purchasePerk, sendGiftBoost } from '../api/client';
 import './QuestsPage.css';
 import './ShopPage.css';
+
+const PERK_CATEGORIES = [
+  {
+    title: 'Бусты',
+    items: [
+      { key: 'xpboost24', title: '⚡ XP +20% • 24ч', price: 3000, blockedBy: 'xpBoostActive', activeUntilField: 'xpBoostUntil' },
+      { key: 'xpboost72', title: '⚡ XP +20% • 72ч', price: 7500, blockedBy: 'xpBoostActive', activeUntilField: 'xpBoostUntil' },
+      { key: 'excboost24', title: '⚡ EXC +20% • 24ч', price: 3000, blockedBy: 'excBoostActive', activeUntilField: 'excBoostUntil' },
+      { key: 'excboost72', title: '⚡ EXC +20% • 72ч', price: 7500, blockedBy: 'excBoostActive', activeUntilField: 'excBoostUntil' },
+      { key: 'doubleboost24', title: '⚡⚡ Двойной буст • 24ч', price: 5000, hideIf: s => s.xpBoostActive || s.excBoostActive },
+    ],
+  },
+  {
+    title: 'Квесты',
+    items: [
+      { key: 'reroll', title: '🔀 Реролл квеста', price: 2000, description: 'Заменяет ваш текущий набор доступных квестов на новый.' },
+      { key: 'insurance', title: '🛡️ Страховка провала', price: 1500, blockedBy: 'insuranceActive', description: 'Если следующий отчёт отклонят — сможете отправить его повторно без штрафа.' },
+      { key: 'extraslot', title: '📂 Доп. слот квеста 48ч', price: 2000, blockedBy: 'extraSlotActive', activeUntilField: 'extraSlotUntil', description: 'Позволяет вести 3 квеста одновременно вместо 1.' },
+      { key: 'cooldown', title: '⏱️ Снятие кулдауна', price: 1500, blockedBy: 'cooldownBypassActive', description: 'Снимает кулдаун для следующего взятого квеста в любой игре. Лимит: 2 раза в сутки.' },
+    ],
+  },
+  {
+    title: 'Кастомизация',
+    items: [
+      { key: 'title_basic', title: '🌱 Новый игрок', price: 1500, description: 'Титул отображается в профиле.' },
+      { key: 'title_rare', title: '🔥 Квест-хантер', price: 4500, description: 'Титул отображается в профиле.' },
+      { key: 'title_epic', title: '👑 Элита клуба', price: 7500, description: 'Титул отображается в профиле.' },
+    ],
+  },
+];
 
 const STATUS_LABELS = {
   PENDING: 'На проверке',
@@ -127,6 +157,142 @@ function ShopItemsView({ expanded, onToggle }) {
   );
 }
 
+function PerkCard({ item, state, expanded, onToggle, onPurchased }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState(null);
+  const active = item.blockedBy && state[item.blockedBy];
+  const untilText = active && item.activeUntilField ? state[item.activeUntilField] : null;
+
+  async function handleBuy() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await purchasePerk(item.key);
+      setMessage(res.message);
+      if (res.success) onPurchased();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={`shop-card ${active ? 'shop-card-locked' : ''}`} onClick={() => onToggle(item.key)}>
+      <div className="shop-top">
+        <div className="shop-title">{item.title}</div>
+        <div className="shop-price">{item.price.toLocaleString()} EXC</div>
+      </div>
+      {active && (
+        <div className="shop-status">✅ Активен{untilText ? ` до ${untilText}` : ''}</div>
+      )}
+      {expanded && (
+        <div className="shop-detail" onClick={e => e.stopPropagation()}>
+          {item.description && <p className="shop-desc">{item.description}</p>}
+          <button className="quest-btn" disabled={busy || active} onClick={handleBuy}>
+            {busy ? 'Секунду...' : active ? 'Уже активен' : 'Купить'}
+          </button>
+          {message && <div className="quest-message">{message}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GiftCard({ expanded, onToggle }) {
+  const [nickname, setNickname] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  async function handleSend() {
+    if (!nickname.trim()) {
+      setMessage('Введите ник получателя.');
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await sendGiftBoost(nickname.trim());
+      setMessage(res.message);
+      if (res.success) setNickname('');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="shop-card" onClick={() => onToggle('gift')}>
+      <div className="shop-top">
+        <div className="shop-title">🎁 Подарок другу (буст)</div>
+        <div className="shop-price">4 500 EXC</div>
+      </div>
+      {expanded && (
+        <div className="shop-detail" onClick={e => e.stopPropagation()}>
+          <p className="shop-desc">Отправляет XP-буст на 24 часа другому игроку. Лимит: 2 подарка в сутки.</p>
+          <input
+            type="text"
+            className="quest-text-input"
+            value={nickname}
+            onChange={e => setNickname(e.target.value)}
+            placeholder="Ник получателя (как в профиле бота)"
+          />
+          <button className="quest-btn" disabled={busy} onClick={handleSend}>
+            {busy ? 'Секунду...' : 'Отправить'}
+          </button>
+          {message && <div className="quest-message">{message}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PerksView({ expanded, onToggle }) {
+  const [state, setState] = useState(null);
+  const [error, setError] = useState(null);
+
+  function reload() {
+    setError(null);
+    getPerksState().then(setState).catch(() => setError('Не удалось загрузить предметы. Попробуйте ещё раз.'));
+  }
+
+  useEffect(() => { reload(); }, []);
+
+  if (error) return <div className="page-center error-msg">{error}</div>;
+  if (state === null) return <div className="page-center">Загрузка...</div>;
+
+  return (
+    <>
+      <div className="shop-header">
+        <div className="shop-balance">🪙 {state.coins.toLocaleString()} EXC</div>
+        {state.profileTitle && <div className="shop-ratio">🏅 {state.profileTitle}</div>}
+      </div>
+
+      {PERK_CATEGORIES.map(cat => {
+        const visible = cat.items.filter(item => !item.hideIf || !item.hideIf(state));
+        if (visible.length === 0) return null;
+        return (
+          <div key={cat.title} className="category-section">
+            <div className="category-header">{cat.title}</div>
+            {visible.map(item => (
+              <PerkCard
+                key={item.key}
+                item={item}
+                state={state}
+                expanded={expanded === item.key}
+                onToggle={onToggle}
+                onPurchased={reload}
+              />
+            ))}
+          </div>
+        );
+      })}
+
+      <div className="category-section">
+        <div className="category-header">Социальные</div>
+        <GiftCard expanded={expanded === 'gift'} onToggle={onToggle} />
+      </div>
+    </>
+  );
+}
+
 function MyPurchasesView() {
   const [rewards, setRewards] = useState(null);
   const [error, setError] = useState(null);
@@ -181,14 +347,17 @@ export default function ShopPage() {
         <button className={`view-tab ${view === 'items' ? 'active' : ''}`} onClick={() => switchView('items')}>
           Товары
         </button>
+        <button className={`view-tab ${view === 'perks' ? 'active' : ''}`} onClick={() => switchView('perks')}>
+          Предметы
+        </button>
         <button className={`view-tab ${view === 'mine' ? 'active' : ''}`} onClick={() => switchView('mine')}>
           Мои заявки
         </button>
       </div>
 
-      {view === 'items'
-        ? <ShopItemsView expanded={expanded} onToggle={toggleExpand} />
-        : <MyPurchasesView />}
+      {view === 'items' && <ShopItemsView expanded={expanded} onToggle={toggleExpand} />}
+      {view === 'perks' && <PerksView expanded={expanded} onToggle={toggleExpand} />}
+      {view === 'mine' && <MyPurchasesView />}
     </div>
   );
 }
