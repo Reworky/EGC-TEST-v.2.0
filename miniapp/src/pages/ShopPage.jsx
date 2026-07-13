@@ -126,7 +126,8 @@ function ShopItemsView({ expanded, onToggle }) {
     return <div className="page-center">Загрузка...</div>;
   }
 
-  const grouped = items.reduce((acc, item) => {
+  // Кастомизация (рамки аватара) объединена с титулами в разделе «Предметы» — здесь не дублируем.
+  const grouped = items.filter(item => item.category !== 'Кастомизация').reduce((acc, item) => {
     const cat = item.category || 'Другое';
     (acc[cat] = acc[cat] || []).push(item);
     return acc;
@@ -246,11 +247,13 @@ function GiftCard({ expanded, onToggle }) {
 
 function PerksView({ expanded, onToggle }) {
   const [state, setState] = useState(null);
+  const [frames, setFrames] = useState(null);
   const [error, setError] = useState(null);
 
   function reload() {
     setError(null);
     getPerksState().then(setState).catch(() => setError('Не удалось загрузить предметы. Попробуйте ещё раз.'));
+    getShopItems().then(items => setFrames(items.filter(i => i.category === 'Кастомизация'))).catch(() => setFrames([]));
   }
 
   useEffect(() => { reload(); }, []);
@@ -267,7 +270,8 @@ function PerksView({ expanded, onToggle }) {
 
       {PERK_CATEGORIES.map(cat => {
         const visible = cat.items.filter(item => !item.hideIf || !item.hideIf(state));
-        if (visible.length === 0) return null;
+        const isCustomization = cat.title === 'Кастомизация';
+        if (visible.length === 0 && !(isCustomization && frames?.length)) return null;
         return (
           <div key={cat.title} className="category-section">
             <div className="category-header">{cat.title}</div>
@@ -277,6 +281,15 @@ function PerksView({ expanded, onToggle }) {
                 item={item}
                 state={state}
                 expanded={expanded === item.key}
+                onToggle={onToggle}
+                onPurchased={reload}
+              />
+            ))}
+            {isCustomization && frames?.map(item => (
+              <ShopItemCard
+                key={`frame-${item.id}`}
+                item={item}
+                expanded={expanded === item.id}
                 onToggle={onToggle}
                 onPurchased={reload}
               />
