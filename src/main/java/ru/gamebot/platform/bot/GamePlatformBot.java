@@ -133,8 +133,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         log.info("Telegram bot registered: {}", getBotUsername());
         log.info("Resolved admin IDs: {}", adminService.resolvedAdminIds());
         log.info("Resolved moderator IDs: {}", adminService.resolvedModeratorIds());
+        setupMenuButton();
         drainNewsQueue();
         notifyAdminsStartup();
+    }
+
+    /** Постоянная кнопка "Открыть" рядом с полем ввода — запускает Mini App напрямую, без пункта меню. */
+    private void setupMenuButton() {
+        try {
+            org.telegram.telegrambots.meta.api.objects.webapp.WebAppInfo webAppInfo =
+                    new org.telegram.telegrambots.meta.api.objects.webapp.WebAppInfo();
+            webAppInfo.setUrl("https://experience-gaming-club.pages.dev");
+            org.telegram.telegrambots.meta.api.objects.menubutton.MenuButtonWebApp menuButton =
+                    org.telegram.telegrambots.meta.api.objects.menubutton.MenuButtonWebApp.builder()
+                            .text("Открыть")
+                            .webAppInfo(webAppInfo)
+                            .build();
+            execute(org.telegram.telegrambots.meta.api.methods.menubutton.SetChatMenuButton.builder()
+                    .menuButton(menuButton)
+                    .build());
+            log.info("Chat menu button configured to open Mini App");
+        } catch (TelegramApiException e) {
+            log.warn("Failed to set chat menu button", e);
+        }
     }
 
     private void notifyAdminsStartup() {
