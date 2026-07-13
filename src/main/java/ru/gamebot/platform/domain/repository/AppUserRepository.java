@@ -43,6 +43,8 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     List<AppUser> findAllByFraudSuspectTrue();
 
+    List<AppUser> findAllByAvatarFrameColorAndAvatarFrameImageIsNull(String avatarFrameColor);
+
     List<AppUser> findAllByTrafficSourceCodeOrderByCreatedAtDesc(String trafficSourceCode);
 
     long countByTrafficSourceCode(String trafficSourceCode);

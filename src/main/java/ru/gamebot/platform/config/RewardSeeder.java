@@ -1,6 +1,7 @@
 package ru.gamebot.platform.config;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -8,7 +9,9 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.bot.GamePlatformBot;
+import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.RewardItem;
+import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.RewardItemRepository;
 
 @Slf4j
@@ -18,6 +21,7 @@ import ru.gamebot.platform.domain.repository.RewardItemRepository;
 public class RewardSeeder implements CommandLineRunner {
 
     private final RewardItemRepository rewardItemRepository;
+    private final AppUserRepository appUserRepository;
     private final GamePlatformBot gamePlatformBot;
 
     @Override
@@ -250,6 +254,20 @@ public class RewardSeeder implements CommandLineRunner {
         seedAvatarFrame("👑 Золотая рамка аватара",
                 "Премиальная золотая рамка вокруг аватара в профиле мини-аппа. Применяется сразу после покупки.",
                 5_000, "#fbbf24", null);
+
+        // Одноразовый backfill: игрокам, купившим огненную рамку ДО появления картинки (была только заливка
+        // цветом), проставляем avatarFrameImage — иначе картинка появляется только при следующей покупке.
+        backfillAvatarFrameImage("#ef4444", "fire");
+    }
+
+    private void backfillAvatarFrameImage(String frameColor, String frameImage) {
+        List<AppUser> users = appUserRepository.findAllByAvatarFrameColorAndAvatarFrameImageIsNull(frameColor);
+        if (users.isEmpty()) return;
+        for (AppUser user : users) {
+            user.setAvatarFrameImage(frameImage);
+        }
+        appUserRepository.saveAll(users);
+        log.info("[RewardSeeder] Backfilled avatarFrameImage='{}' for {} user(s) with frame color {}", frameImage, users.size(), frameColor);
     }
 
     private void seedAvatarFrame(String title, String description, long priceCoins, String frameColor, String frameImage) {
