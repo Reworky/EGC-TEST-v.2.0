@@ -245,19 +245,22 @@ public class RewardSeeder implements CommandLineRunner {
 
         seedAvatarFrame("❄️ Ледяная рамка аватара",
                 "Ледяная рамка вокруг аватара в профиле мини-аппа. Применяется сразу после покупки.",
-                3_000, "#38bdf8", null);
+                3_000, "#38bdf8", "ice");
 
         seedAvatarFrame("💜 Фиолетовая рамка аватара",
                 "Фирменная фиолетовая рамка вокруг аватара в профиле мини-аппа. Применяется сразу после покупки.",
-                3_000, "#a855f7", null);
+                3_000, "#a855f7", "purple");
 
         seedAvatarFrame("👑 Золотая рамка аватара",
                 "Премиальная золотая рамка вокруг аватара в профиле мини-аппа. Применяется сразу после покупки.",
-                5_000, "#fbbf24", null);
+                5_000, "#fbbf24", "gold");
 
-        // Одноразовый backfill: игрокам, купившим огненную рамку ДО появления картинки (была только заливка
+        // Одноразовый backfill: игрокам, купившим рамку ДО появления картинки (была только заливка
         // цветом), проставляем avatarFrameImage — иначе картинка появляется только при следующей покупке.
         backfillAvatarFrameImage("#ef4444", "fire");
+        backfillAvatarFrameImage("#38bdf8", "ice");
+        backfillAvatarFrameImage("#a855f7", "purple");
+        backfillAvatarFrameImage("#fbbf24", "gold");
     }
 
     private void backfillAvatarFrameImage(String frameColor, String frameImage) {

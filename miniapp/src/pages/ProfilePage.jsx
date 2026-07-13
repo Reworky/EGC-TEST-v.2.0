@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { getProfile, getAvatarUrl } from '../api/client';
 import fireFrame from '../assets/frames/fire.png';
+import iceFrame from '../assets/frames/ice.png';
+import purpleFrame from '../assets/frames/purple.png';
+import goldFrame from '../assets/frames/gold.png';
 import './ProfilePage.css';
 
 const LEVEL_COLORS = {
@@ -11,7 +14,9 @@ const LEVEL_COLORS = {
   'Легенда': '#fbbf24',
 };
 
-const FRAME_IMAGES = { fire: fireFrame };
+const FRAME_IMAGES = { fire: fireFrame, ice: iceFrame, purple: purpleFrame, gold: goldFrame };
+// Разные картинки — разное соотношение "толщина рамки / отверстие", размер подобран под 84px аватар индивидуально
+const FRAME_SIZES = { fire: 116, ice: 152, purple: 124, gold: 130 };
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState(null);
@@ -41,6 +46,7 @@ export default function ProfilePage() {
   const levelColor = LEVEL_COLORS[profile.levelName] || '#a855f7';
   const ringColor = profile.avatarFrameColor || levelColor;
   const frameImage = FRAME_IMAGES[profile.avatarFrameImage];
+  const frameSize = FRAME_SIZES[profile.avatarFrameImage] || 128;
 
   return (
     <div className="profile-page">
@@ -60,7 +66,14 @@ export default function ProfilePage() {
               ? <img className="avatar-img" src={avatarUrl} alt="" />
               : (profile.nickname?.[0]?.toUpperCase() || '?')}
           </div>
-          {frameImage && <img className="avatar-frame-img" src={frameImage} alt="" />}
+          {frameImage && (
+            <img
+              className="avatar-frame-img"
+              src={frameImage}
+              alt=""
+              style={{ width: frameSize, height: frameSize }}
+            />
+          )}
         </div>
         <div className="profile-info">
           <h2 className="nickname">{profile.nickname}</h2>
