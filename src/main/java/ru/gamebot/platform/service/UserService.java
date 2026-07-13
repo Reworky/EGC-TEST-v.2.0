@@ -198,7 +198,8 @@ public class UserService {
     }
 
     public List<AppUser> topWeekly() {
-        return appUserRepository.findTop20ByRegistrationCompletedTrueOrderByWeeklyXpDescTelegramIdAsc();
+        // Только weeklyXp > 0 — иначе список добивался неактивными игроками (0 XP за неделю, отсортированы по TG ID).
+        return appUserRepository.findTop20ByRegistrationCompletedTrueAndWeeklyXpGreaterThanOrderByWeeklyXpDescTelegramIdAsc(0);
     }
 
     public List<AppUser> top5Overall() {

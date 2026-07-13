@@ -31,6 +31,9 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     List<AppUser> findTop20ByRegistrationCompletedTrueOrderByWeeklyXpDescTelegramIdAsc();
 
+    /** Только реально активные на этой неделе игроки — без этого топ-20 добивался нулями (неактивные, но с малым TG ID). */
+    List<AppUser> findTop20ByRegistrationCompletedTrueAndWeeklyXpGreaterThanOrderByWeeklyXpDescTelegramIdAsc(long weeklyXp);
+
     long countByRegistrationCompletedTrue();
 
     @Query("SELECT COALESCE(SUM(u.coins), 0) FROM AppUser u")
