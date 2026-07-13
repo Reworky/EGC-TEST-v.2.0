@@ -118,6 +118,10 @@ export default function ProfilePage() {
       </div>
 
       <div className="nav-links">
+        <Link to="/wallet" className="nav-link-row">
+          <span className="detail-label">💰 Кошелёк</span>
+          <span className="nav-link-arrow">›</span>
+        </Link>
         <Link to="/referrals" className="nav-link-row">
           <span className="detail-label">🤝 Рефералы</span>
           <span className="nav-link-arrow">›</span>

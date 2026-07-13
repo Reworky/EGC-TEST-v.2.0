@@ -174,6 +174,11 @@ public class RewardService {
     @Transactional
     public RewardRequest cancelRequest(Long requestId, AppUser requester) {
         RewardRequest req = getRequest(requestId);
+        // Без этой проверки любой пользователь мог отменить ЧУЖУЮ заявку по угаданному/подобранному ID
+        // и получить возврат EXC на СВОЙ баланс — реальная уязвимость, найдена при разработке API кошелька.
+        if (!req.getUser().getTelegramId().equals(requester.getTelegramId())) {
+            throw new IllegalArgumentException("Это не ваша заявка.");
+        }
         if (req.getStatus() != RewardRequestStatus.PENDING) {
             throw new IllegalArgumentException("Заявку можно отменить только в статусе «Ожидает».");
         }

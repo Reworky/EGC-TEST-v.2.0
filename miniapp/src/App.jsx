@@ -8,6 +8,7 @@ import QuestsPage from './pages/QuestsPage';
 import ShopPage from './pages/ShopPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import ReferralsPage from './pages/ReferralsPage';
+import WalletPage from './pages/WalletPage';
 import './App.css';
 
 export default function App() {
@@ -47,6 +48,7 @@ export default function App() {
           <Route path="/shop" element={<ShopPage />} />
           <Route path="/top" element={<LeaderboardPage />} />
           <Route path="/referrals" element={<ReferralsPage />} />
+          <Route path="/wallet" element={<WalletPage />} />
         </Routes>
         <BottomNav />
       </div>

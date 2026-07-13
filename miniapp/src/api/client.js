@@ -129,3 +129,38 @@ export async function getTournamentLeaderboard(id) {
   const { data } = await api.get(`/api/tournament/${id}/leaderboard`);
   return data;
 }
+
+export async function getWallet() {
+  const { data } = await api.get('/api/wallet');
+  return data;
+}
+
+export async function claimDailyBonus() {
+  const { data } = await api.post('/api/wallet/daily-bonus');
+  return data;
+}
+
+export async function getTonQuote(amount) {
+  const { data } = await api.get('/api/wallet/ton-quote', { params: { amount } });
+  return data;
+}
+
+export async function withdrawRub(amount, requisites) {
+  const { data } = await api.post('/api/wallet/withdraw/rub', { amount, requisites });
+  return data;
+}
+
+export async function withdrawTon(amount, walletAddress) {
+  const { data } = await api.post('/api/wallet/withdraw/ton', { amount, walletAddress });
+  return data;
+}
+
+export async function getWithdrawals() {
+  const { data } = await api.get('/api/wallet/withdrawals');
+  return data;
+}
+
+export async function cancelReward(id) {
+  const { data } = await api.post(`/api/profile/rewards/${id}/cancel`);
+  return data;
+}

@@ -7,6 +7,7 @@ import lombok.Data;
 @Builder
 public class RewardRequestDto {
     private Long id;
+    private long displayId;
     private String rewardTitle;
     private String category;
     private long priceCoins;

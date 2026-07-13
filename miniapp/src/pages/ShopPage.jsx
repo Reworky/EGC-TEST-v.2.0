@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getShopItems, getShopStats, purchaseItem, getMyRewards, getProfile, getPerksState, purchasePerk, sendGiftBoost } from '../api/client';
+import { getShopItems, getShopStats, purchaseItem, getMyRewards, getProfile, getPerksState, purchasePerk, sendGiftBoost, cancelReward } from '../api/client';
 import './QuestsPage.css';
 import './ShopPage.css';
 
@@ -296,10 +296,24 @@ function PerksView({ expanded, onToggle }) {
 function MyPurchasesView() {
   const [rewards, setRewards] = useState(null);
   const [error, setError] = useState(null);
+  const [busyId, setBusyId] = useState(null);
 
-  useEffect(() => {
+  function reload() {
+    setError(null);
     getMyRewards().then(setRewards).catch(() => setError('Не удалось загрузить заявки. Попробуйте ещё раз.'));
-  }, []);
+  }
+
+  useEffect(() => { reload(); }, []);
+
+  async function handleCancel(id) {
+    setBusyId(id);
+    try {
+      await cancelReward(id);
+      reload();
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   if (error) return <div className="page-center error-msg">{error}</div>;
   if (rewards === null) return <div className="page-center">Загрузка...</div>;
@@ -321,6 +335,11 @@ function MyPurchasesView() {
           </div>
           {r.status === 'REJECTED' && r.adminComment && (
             <div className="quest-mod-comment"><p>{r.adminComment}</p></div>
+          )}
+          {r.status === 'PENDING' && (
+            <button className="quest-btn quest-btn-secondary" disabled={busyId === r.id} onClick={() => handleCancel(r.id)}>
+              {busyId === r.id ? 'Секунду...' : 'Отменить заявку'}
+            </button>
           )}
         </div>
       ))}
