@@ -27,6 +27,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/quests/*/take", "/api/quests/*/report").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/quests/mine").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/quests/mine/*/cancel").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/shop/items/*/purchase").authenticated()
                         // Публичные эндпоинты — без токена
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/leaderboard").permitAll()

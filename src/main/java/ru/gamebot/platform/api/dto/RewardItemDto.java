@@ -12,4 +12,10 @@ public class RewardItemDto {
     private String category;
     private long priceCoins;
     private long effectivePrice;
+    /** Человекочитаемый статус доступности (уровень/cooldown/лимиты) — уже готовая строка для отображения. */
+    private String statusNote;
+    /** true, если товар сейчас нельзя купить (статус начинается с 🔒/⏳/🚫). */
+    private boolean locked;
+    /** Если задано — перед покупкой нужно запросить у игрока эти данные (см. userDataPrompt). */
+    private String userDataPrompt;
 }

@@ -5,6 +5,7 @@ import { useTelegram } from './hooks/useTelegram';
 import BottomNav from './components/BottomNav';
 import ProfilePage from './pages/ProfilePage';
 import QuestsPage from './pages/QuestsPage';
+import ShopPage from './pages/ShopPage';
 import ComingSoonPage from './pages/ComingSoonPage';
 import './App.css';
 
@@ -42,7 +43,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/profile" replace />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/quests" element={<QuestsPage />} />
-          <Route path="/shop" element={<ComingSoonPage title="Магазин" />} />
+          <Route path="/shop" element={<ShopPage />} />
           <Route path="/top" element={<ComingSoonPage title="Лидерборд" />} />
         </Routes>
         <BottomNav />

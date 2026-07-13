@@ -161,6 +161,10 @@ public class ShopLimitService {
      * Порядок: уровень → cooldown → количественный лимит → месячный лимит → доступно.
      */
     public String getItemStatus(AppUser user, RewardItem item) {
+        if ("avatar_frame".equals(item.getPurchaseGroup())) {
+            // Рамки аватара — без ограничений вообще, см. checkAllLimits.
+            return "✅ Доступно";
+        }
         // Слой 1
         if (item.getMinLevelXp() > 0 && user.getXp() < item.getMinLevelXp()) {
             String requiredLevel = userService.getLevelName(item.getMinLevelXp());

@@ -69,3 +69,23 @@ export async function cancelMyQuest(submissionId) {
   const { data } = await api.post(`/api/quests/mine/${submissionId}/cancel`);
   return data;
 }
+
+export async function getShopItems() {
+  const { data } = await api.get('/api/shop/items');
+  return data;
+}
+
+export async function getShopStats() {
+  const { data } = await api.get('/api/shop/stats');
+  return data;
+}
+
+export async function purchaseItem(id, userData) {
+  const { data } = await api.post(`/api/shop/items/${id}/purchase`, { userData });
+  return data;
+}
+
+export async function getMyRewards() {
+  const { data } = await api.get('/api/profile/rewards');
+  return data;
+}

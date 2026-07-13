@@ -6793,11 +6793,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 )));
     }
 
-    private void notifyAdminsAboutRewardRequest(AppUser user, RewardItem reward) {
+    public void notifyAdminsAboutRewardRequest(AppUser user, RewardItem reward) {
         notifyAdminsAboutRewardRequest(user, reward, null);
     }
 
-    private void notifyAdminsAboutRewardRequest(AppUser user, RewardItem reward, String userGameData) {
+    public void notifyAdminsAboutRewardRequest(AppUser user, RewardItem reward, String userGameData) {
         InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("📥 Открыть заявки", "admin:reward:requests"))
         ));
