@@ -9,10 +9,11 @@
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(circle at 18% 8%, rgba(168, 85, 247, 0.45), transparent 45%),
-    radial-gradient(circle at 88% 20%, rgba(124, 58, 237, 0.4), transparent 42%),
+    radial-gradient(circle at 18% 8%, var(--rank-blob-1, rgba(168, 85, 247, 0.45)), transparent 45%),
+    radial-gradient(circle at 88% 20%, var(--rank-blob-2, rgba(124, 58, 237, 0.4)), transparent 42%),
     radial-gradient(circle at 50% 95%, rgba(236, 72, 153, 0.22), transparent 55%),
     linear-gradient(135deg, #0f1020 0%, #1a1535 100%);
+  transition: background 0.4s ease;
   pointer-events: none;
 }
 
@@ -59,6 +60,43 @@
   overflow: hidden;
   border: 3px solid var(--ring-color, var(--egc-accent));
   box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.04), 0 4px 24px rgba(124, 58, 237, 0.4);
+}
+
+/* Пульсирующее свечение по цвету ранга — сидит точно под аватаром, виден только blur box-shadow за краями */
+.rank-glow-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: rankGlowPulse 2.5s ease-in-out infinite;
+}
+
+@keyframes rankGlowPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+/* Радужное вращающееся кольцо — только для ранга Амбассадор EXPERIENCE, если не куплена своя рамка */
+.rank-rainbow-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: conic-gradient(from 0deg, #FF0000, #FF7700, #FFFF00, #00FF00, #0099FF, #9933FF, #FF0000);
+  pointer-events: none;
+  animation: rankRainbowSpin 3s linear infinite;
+}
+
+@keyframes rankRainbowSpin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
 /* Картинка-рамка (напр. огненная) — оверлей поверх круглого аватара, крупнее самого аватара */
