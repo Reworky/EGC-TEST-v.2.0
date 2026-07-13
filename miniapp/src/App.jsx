@@ -6,7 +6,7 @@ import BottomNav from './components/BottomNav';
 import ProfilePage from './pages/ProfilePage';
 import QuestsPage from './pages/QuestsPage';
 import ShopPage from './pages/ShopPage';
-import ComingSoonPage from './pages/ComingSoonPage';
+import LeaderboardPage from './pages/LeaderboardPage';
 import './App.css';
 
 export default function App() {
@@ -44,7 +44,7 @@ export default function App() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/quests" element={<QuestsPage />} />
           <Route path="/shop" element={<ShopPage />} />
-          <Route path="/top" element={<ComingSoonPage title="Лидерборд" />} />
+          <Route path="/top" element={<LeaderboardPage />} />
         </Routes>
         <BottomNav />
       </div>

@@ -89,3 +89,8 @@ export async function getMyRewards() {
   const { data } = await api.get('/api/profile/rewards');
   return data;
 }
+
+export async function getLeaderboard(type) {
+  const { data } = await api.get('/api/leaderboard', { params: { type } });
+  return data;
+}
