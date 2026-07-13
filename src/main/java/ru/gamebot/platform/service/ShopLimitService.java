@@ -80,11 +80,7 @@ public class ShopLimitService {
                 }
             }
             case "avatar_frame" -> {
-                long count = rewardRequestRepository.countActiveByUserAndGroupSince(user, "avatar_frame", monthStart);
-                if (count > 0) {
-                    throw new IllegalArgumentException(
-                            "🚫 Рамку аватара можно менять не чаще 1 раза в месяц. Доступно с 1-го числа следующего месяца.");
-                }
+                // Лимита количества нет — рамки можно покупать/менять сколько угодно раз, по требованию пользователя.
             }
             default -> {
                 // Игровые валюты: 1 покупка на игру в месяц
