@@ -4640,6 +4640,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
                         + "💵 К выплате: <b>~" + rubles + " ₽</b>" + payoutSuffix
                         + detailsLine + "\n"
+                        + monthlyLimitLine(requester)
                         + "📅 Дата: <b>" + req.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) + "</b>"
                         + duplicateWarning,
                 keyboardFactory.rowsLayout(List.of(
@@ -4649,6 +4650,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         ),
                         List.of(keyboardFactory.callback("⬅️ Назад", "admin:withdrawals"))
                 )));
+    }
+
+    /** Строка "остаток месячного лимита" для карточки заявки на вывод (эта заявка уже учтена в счётчике на момент подачи). */
+    private String monthlyLimitLine(AppUser requester) {
+        long limit = sinkShopService.getMonthlyLimit(requester.getXp());
+        long remaining = sinkShopService.getRemainingWithdrawalLimit(requester);
+        long used = limit - remaining;
+        return "📊 Месячный лимит: <b>" + used + " / " + limit + " EXC</b> использовано (осталось " + remaining + ")\n";
     }
 
     private void notifyUserWithdrawalApproved(RewardRequest req, String receiptFileId) {
@@ -6774,6 +6783,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
                         + "💵 К выплате: <b>~" + rubles + " ₽</b>" + payoutSuffix
                         + detailsLine + "\n"
+                        + monthlyLimitLine(requester)
                         + "📅 Дата: <b>" + req.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) + "</b>"
                         + dupWarning,
                 keyboardFactory.rowsLayout(List.of(
