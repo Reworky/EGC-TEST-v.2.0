@@ -10,6 +10,7 @@ import ru.gamebot.platform.domain.enums.RewardRequestStatus;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.RewardItem;
 import ru.gamebot.platform.domain.model.RewardRequest;
+import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.RewardItemRepository;
 import ru.gamebot.platform.domain.repository.RewardRequestRepository;
 
@@ -25,6 +26,7 @@ public class RewardService {
     private final ShopLimitService shopLimitService;
     private final EntityManager entityManager;
     private final ExcTransactionService excTx;
+    private final AppUserRepository appUserRepository;
 
     public List<RewardItem> findAvailableRewards() {
         return rewardItemRepository.findAllByActiveTrueOrderByPriceCoinsAsc();
@@ -52,10 +54,18 @@ public class RewardService {
         return Math.round(item.getPriceCoins() / ratio);
     }
 
+    /**
+     * Строка пользователя блокируется на всё время проверок лимитов ({@link AppUserRepository#findByIdForUpdate}) —
+     * без этого два почти одновременных запроса могли пройти все 4 слоя лимитов до того, как первый
+     * успеет сохраниться, и превысить месячный лимит/лимит группы товара на 1 покупку.
+     */
     @Transactional
     public RewardRequest createRewardRequest(AppUser user, RewardItem rewardItem) {
+        AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
+
         // 4-layer shop limits check (throws IllegalArgumentException on violation)
-        shopLimitService.checkAllLimits(user, rewardItem);
+        shopLimitService.checkAllLimits(lockedUser, rewardItem);
 
         long price = effectivePrice(rewardItem);
 
@@ -64,34 +74,34 @@ public class RewardService {
             price = rewardItem.getPriceCoins(); // small items bypass withdrawal tracking
         }
 
-        if (user.getCoins() < price) {
+        if (lockedUser.getCoins() < price) {
             throw new IllegalArgumentException("Недостаточно EXC. Нужно " + price + " EXC.");
         }
 
-        long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
+        long remaining = sinkShopService.getRemainingWithdrawalLimit(lockedUser);
         if (price > remaining) {
             throw new IllegalArgumentException(
                     "Превышен месячный лимит вывода. Доступно ещё: " + remaining + " EXC.");
         }
 
-        user.setCoins(user.getCoins() - price);
-        userService.save(user);
-        excTx.log(user, -price, ExcTransactionService.SHOP_BUY, "Покупка: " + rewardItem.getTitle());
-        sinkShopService.recordWithdrawal(user, price);
+        lockedUser.setCoins(lockedUser.getCoins() - price);
+        userService.save(lockedUser);
+        excTx.log(lockedUser, -price, ExcTransactionService.SHOP_BUY, "Покупка: " + rewardItem.getTitle());
+        sinkShopService.recordWithdrawal(lockedUser, price);
 
         // Record cooldown after successful purchase (Layer 4)
-        shopLimitService.recordPurchaseCooldown(user, rewardItem.getPriceCoins());
+        shopLimitService.recordPurchaseCooldown(lockedUser, rewardItem.getPriceCoins());
 
         RewardRequest request = new RewardRequest();
-        request.setUser(user);
+        request.setUser(lockedUser);
         request.setRewardItem(rewardItem);
         request.setCreatedAt(LocalDateTime.now());
         request.setDisplayId(rewardRequestRepository.findMaxShopDisplayId() + 1);
 
         if (rewardItem.getAvatarFrameColor() != null) {
             // Цифровая косметика — применяется мгновенно, без очереди на одобрение администратора
-            user.setAvatarFrameColor(rewardItem.getAvatarFrameColor());
-            userService.save(user);
+            lockedUser.setAvatarFrameColor(rewardItem.getAvatarFrameColor());
+            userService.save(lockedUser);
             request.setStatus(RewardRequestStatus.APPROVED);
         } else {
             request.setStatus(RewardRequestStatus.PENDING);
@@ -230,14 +240,19 @@ public class RewardService {
         return rewardItemRepository.save(item);
     }
 
+    /** Строка пользователя блокируется на всё время проверки лимита ({@link AppUserRepository#findByIdForUpdate}) —
+     * та же защита от гонки состояний, что и в {@link #createRewardRequest}. */
     @Transactional
     public RewardRequest createTonWithdrawalRequest(AppUser user, long excAmount, long rubles, String tonWallet) {
-        long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
+        AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
+
+        long remaining = sinkShopService.getRemainingWithdrawalLimit(lockedUser);
         if (excAmount > remaining) {
             throw new IllegalArgumentException("Превышен месячный лимит вывода. Доступно ещё: " + remaining + " EXC.");
         }
-        if (excAmount > user.getCoins()) {
-            throw new IllegalArgumentException("Недостаточно EXC. Ваш баланс: " + user.getCoins() + " EXC.");
+        if (excAmount > lockedUser.getCoins()) {
+            throw new IllegalArgumentException("Недостаточно EXC. Ваш баланс: " + lockedUser.getCoins() + " EXC.");
         }
 
         RewardItem withdrawItem = new RewardItem();
@@ -249,13 +264,13 @@ public class RewardService {
         withdrawItem.setCreatedAt(LocalDateTime.now());
         RewardItem saved = rewardItemRepository.save(withdrawItem);
 
-        sinkShopService.recordWithdrawal(user, excAmount);
-        user.setCoins(user.getCoins() - excAmount);
-        excTx.log(user, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод → TON");
-        userService.save(user);
+        sinkShopService.recordWithdrawal(lockedUser, excAmount);
+        lockedUser.setCoins(lockedUser.getCoins() - excAmount);
+        excTx.log(lockedUser, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод → TON");
+        userService.save(lockedUser);
 
         RewardRequest request = new RewardRequest();
-        request.setUser(user);
+        request.setUser(lockedUser);
         request.setRewardItem(saved);
         request.setStatus(RewardRequestStatus.PENDING);
         request.setCreatedAt(LocalDateTime.now());
@@ -286,8 +301,22 @@ public class RewardService {
                 .executeUpdate();
     }
 
+    /** Строка пользователя блокируется на всё время проверки лимита ({@link AppUserRepository#findByIdForUpdate}) —
+     * та же защита от гонки состояний, что и в {@link #createRewardRequest}. Лимит/баланс проверяются здесь
+     * повторно (defense-in-depth) — раньше единственная проверка была на шаге ввода суммы, ДО этого метода. */
     @Transactional
     public RewardRequest createWithdrawalRequestWithDetails(AppUser user, long excAmount, long rubles, String payoutDetails) {
+        AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
+
+        long remaining = sinkShopService.getRemainingWithdrawalLimit(lockedUser);
+        if (excAmount > remaining) {
+            throw new IllegalArgumentException("Превышен месячный лимит вывода. Доступно ещё: " + remaining + " EXC.");
+        }
+        if (excAmount > lockedUser.getCoins()) {
+            throw new IllegalArgumentException("Недостаточно EXC. Ваш баланс: " + lockedUser.getCoins() + " EXC.");
+        }
+
         RewardItem withdrawItem = new RewardItem();
         withdrawItem.setTitle("Вывод " + excAmount + " EXC → " + rubles + " ₽");
         withdrawItem.setDescription("Заявка на вывод средств");
@@ -297,13 +326,13 @@ public class RewardService {
         withdrawItem.setCreatedAt(LocalDateTime.now());
         RewardItem saved = rewardItemRepository.save(withdrawItem);
 
-        sinkShopService.recordWithdrawal(user, excAmount);
-        user.setCoins(user.getCoins() - excAmount);
-        excTx.log(user, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод → " + rubles + " ₽");
-        userService.save(user);
+        sinkShopService.recordWithdrawal(lockedUser, excAmount);
+        lockedUser.setCoins(lockedUser.getCoins() - excAmount);
+        excTx.log(lockedUser, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод → " + rubles + " ₽");
+        userService.save(lockedUser);
 
         RewardRequest request = new RewardRequest();
-        request.setUser(user);
+        request.setUser(lockedUser);
         request.setRewardItem(saved);
         request.setStatus(RewardRequestStatus.PENDING);
         request.setPayoutDetails(payoutDetails);
