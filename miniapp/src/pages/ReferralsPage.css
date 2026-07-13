@@ -1,0 +1,109 @@
+.ref-page {
+  padding: 16px 16px calc(80px + env(safe-area-inset-bottom, 0px));
+}
+
+.ref-back {
+  display: inline-block;
+  color: var(--tg-theme-hint-color, #888);
+  font-size: 13px;
+  text-decoration: none;
+  margin-bottom: 12px;
+}
+
+.ref-title {
+  font-size: 19px;
+  font-weight: 800;
+  margin: 0 0 16px;
+  color: var(--tg-theme-text-color, #fff);
+}
+
+.ref-link-card,
+.ref-progress-card,
+.ref-how-card {
+  background: rgba(255,255,255,0.05);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.ref-link-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--tg-theme-hint-color, #888);
+  margin-bottom: 6px;
+}
+
+.ref-link-value {
+  font-size: 13px;
+  color: var(--tg-theme-text-color, #eee);
+  word-break: break-all;
+  background: rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.ref-link-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ref-link-actions .quest-btn {
+  margin-top: 0;
+}
+
+.ref-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.ref-progress-label {
+  font-size: 13px;
+  color: var(--tg-theme-hint-color, #888);
+  margin-bottom: 8px;
+}
+
+.ref-progress-bar {
+  font-size: 14px;
+  font-weight: 700;
+  color: #66bb6a;
+  letter-spacing: -1px;
+}
+
+.ref-how-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: var(--tg-theme-text-color, #fff);
+}
+
+.ref-step {
+  padding: 10px 0;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.ref-step-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tg-theme-text-color, #fff);
+  margin-bottom: 4px;
+}
+
+.ref-step-desc {
+  font-size: 13px;
+  color: var(--tg-theme-hint-color, #ccc);
+  line-height: 1.4;
+}
+
+.ref-how-footer {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  font-size: 12px;
+  font-style: italic;
+  color: var(--tg-theme-hint-color, #888);
+}

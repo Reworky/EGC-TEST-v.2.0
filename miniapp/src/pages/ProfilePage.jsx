@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { getProfile, getAvatarUrl } from '../api/client';
 import fireFrame from '../assets/frames/fire.png';
 import iceFrame from '../assets/frames/ice.png';
@@ -114,6 +115,13 @@ export default function ProfilePage() {
           <div className="stat-value">{profile.remainingWithdrawalLimit?.toLocaleString() || '—'}</div>
           <div className="stat-label">Лимит вывода</div>
         </div>
+      </div>
+
+      <div className="nav-links">
+        <Link to="/referrals" className="nav-link-row">
+          <span className="detail-label">🤝 Рефералы</span>
+          <span className="nav-link-arrow">›</span>
+        </Link>
       </div>
 
       {(profile.country || profile.platformsCsv) && (
