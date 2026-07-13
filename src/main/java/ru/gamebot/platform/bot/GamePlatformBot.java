@@ -6148,18 +6148,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     @org.springframework.context.event.EventListener
     public void onHallOfFame(ru.gamebot.platform.event.HallOfFameEvent event) {
-        String[] medals = {"🥇", "🥈", "🥉"};
+        String divider = "━━━━━━━━━━━━━━━━━━━━";
         StringBuilder sb = new StringBuilder();
-        sb.append("🏆 <b>Зал славы EGC — итоги недели</b>\n\n");
+        sb.append("🏆✨ <b>ЗАЛ СЛАВЫ EGC</b> ✨🏆\n")
+          .append("<i>Топ игроков недели по опыту</i>\n\n")
+          .append(divider).append("\n\n");
         for (ru.gamebot.platform.event.HallOfFameEvent.HallEntry entry : event.getTop3()) {
             int rank = entry.rank();
-            String medal = rank <= 3 ? medals[rank - 1] : rank + ".";
-            sb.append(medal).append(" <b>").append(escape(entry.nickname())).append("</b>");
-            if (entry.username() != null) sb.append(" (@").append(entry.username()).append(")");
-            sb.append("\n   ⚡ ").append(entry.weeklyXp()).append(" XP за неделю\n\n");
+            String nameLine = "<b>" + escape(entry.nickname()) + "</b>"
+                    + (entry.username() != null ? " (@" + entry.username() + ")" : "");
+            switch (rank) {
+                case 1 -> sb.append("👑 ").append(nameLine).append(" — Чемпион недели!\n")
+                        .append("   ⚡️ <b>").append(entry.weeklyXp()).append(" XP</b> · 🏅 ").append(entry.totalXp()).append(" XP всего\n\n");
+                case 2 -> sb.append("🥈 ").append(nameLine).append("\n")
+                        .append("   ⚡️ <b>").append(entry.weeklyXp()).append(" XP</b> за неделю\n\n");
+                case 3 -> sb.append("🥉 ").append(nameLine).append("\n")
+                        .append("   ⚡️ <b>").append(entry.weeklyXp()).append(" XP</b> за неделю\n\n");
+                default -> sb.append(rank).append(". ").append(nameLine).append(" — ").append(entry.weeklyXp()).append(" XP\n\n");
+            }
         }
-        sb.append("Поздравляем лучших игроков! 💪\n")
-          .append("Новая неделя — новые квесты. Присоединяйся → @").append(getBotUsername());
+        sb.append(divider).append("\n\n")
+          .append("👏 Поздравляем лучших игроков недели!\n")
+          .append("🎯 Новая неделя уже началась — новые квесты, новые шансы попасть в топ.\n\n")
+          .append("Присоединяйся → @").append(getBotUsername());
         try {
             SendMessage msg = new SendMessage();
             msg.setChatId(requiredChannelChatId());
