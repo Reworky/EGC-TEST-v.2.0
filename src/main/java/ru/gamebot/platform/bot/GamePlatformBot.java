@@ -796,8 +796,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if ("mod:usersearch".equals(data) && isEffectiveModerator(user)) {
             session.reset();
             session.setState(SessionState.MOD_USER_SEARCH);
-            answer(callbackQuery.getId(), "Введите TG ID");
-            sendText(user.getTelegramId(), "🔍 <b>Поиск игрока</b>\n\nВведите Telegram ID (числовой):", cancelKeyboard());
+            answer(callbackQuery.getId(), "Введите TG ID или ник");
+            sendText(user.getTelegramId(), "🔍 <b>Поиск игрока</b>\n\nВведите Telegram ID или никнейм:", cancelKeyboard());
             return;
         }
         if (data.startsWith("mod:user:") && isEffectiveModerator(user)) {
@@ -1540,54 +1540,41 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case SHOP_GAME_DATA_INPUT -> handleShopGameDataInput(user, session, text);
             case ADMIN_USER_SEARCH -> {
                 session.reset();
-                try {
-                    long searchId = Long.parseLong(text.trim());
-                    AppUser found = userService.findByTelegramId(searchId).orElse(null);
-                    if (found == null) {
-                        sendText(user.getTelegramId(), "❌ Пользователь с TG ID <b>" + searchId + "</b> не найден.", backMenuKeyboard("admin:users:0"));
-                    } else {
-                        sendAdminUserCard(user, found.getTelegramId(), 0, null);
-                    }
-                } catch (NumberFormatException e) {
-                    sendText(user.getTelegramId(), "⚠️ TG ID должен быть числом. Попробуйте ещё раз.", backMenuKeyboard("admin:users:0"));
+                String query = text.trim();
+                AppUser found = resolveUserBySearch(query);
+                if (found == null) {
+                    sendText(user.getTelegramId(), "❌ Пользователь «" + escape(query) + "» не найден (ни по TG ID, ни по нику).", backMenuKeyboard("admin:users:0"));
+                } else {
+                    sendAdminUserCard(user, found.getTelegramId(), 0, null);
                 }
             }
             case MOD_USER_SEARCH -> {
                 session.reset();
-                try {
-                    long searchId = Long.parseLong(text.trim());
-                    AppUser found = userService.findByTelegramId(searchId).orElse(null);
-                    if (found == null) {
-                        sendText(user.getTelegramId(), "❌ Пользователь с TG ID <b>" + searchId + "</b> не найден.", backMenuKeyboard("menu:main"));
-                    } else {
-                        sendModUserCard(user, found.getTelegramId(), null);
-                    }
-                } catch (NumberFormatException e) {
-                    sendText(user.getTelegramId(), "⚠️ TG ID должен быть числом. Попробуйте ещё раз.", backMenuKeyboard("menu:main"));
+                String query = text.trim();
+                AppUser found = resolveUserBySearch(query);
+                if (found == null) {
+                    sendText(user.getTelegramId(), "❌ Пользователь «" + escape(query) + "» не найден (ни по TG ID, ни по нику).", backMenuKeyboard("menu:main"));
+                } else {
+                    sendModUserCard(user, found.getTelegramId(), null);
                 }
             }
             case BONUS_SEARCH -> {
-                try {
-                    long searchId = Long.parseLong(text.trim());
-                    AppUser found = userService.findByTelegramId(searchId).orElse(null);
-                    if (found == null) {
-                        session.setState(SessionState.BONUS_SEARCH);
-                        sendText(user.getTelegramId(),
-                                "❌ Пользователь с TG ID <b>" + searchId + "</b> не найден. Введите другой TG ID:",
-                                cancelKeyboard());
-                    } else {
-                        session.setState(SessionState.BONUS_INPUT);
-                        sendText(user.getTelegramId(),
-                                "✅ Найден: <b>" + escape(displayUserName(found)) + "</b>\n"
-                                        + "🏷️ " + escape(displayTag(found)) + " • ID: <code>" + found.getTelegramId() + "</code>\n\n"
-                                        + "Отправьте данные одним сообщением.\n"
-                                        + "Формат: <code>" + found.getTelegramId() + " XP COINS TICKETS комментарий</code>\n"
-                                        + "Пример: <code>" + found.getTelegramId() + " 100 50 3 За активность</code>",
-                                cancelKeyboard());
-                    }
-                } catch (NumberFormatException e) {
+                String query = text.trim();
+                AppUser found = resolveUserBySearch(query);
+                if (found == null) {
                     session.setState(SessionState.BONUS_SEARCH);
-                    sendText(user.getTelegramId(), "⚠️ TG ID должен быть числом. Попробуйте ещё раз.", cancelKeyboard());
+                    sendText(user.getTelegramId(),
+                            "❌ Пользователь «" + escape(query) + "» не найден (ни по TG ID, ни по нику). Введите ещё раз:",
+                            cancelKeyboard());
+                } else {
+                    session.setState(SessionState.BONUS_INPUT);
+                    sendText(user.getTelegramId(),
+                            "✅ Найден: <b>" + escape(displayUserName(found)) + "</b>\n"
+                                    + "🏷️ " + escape(displayTag(found)) + " • ID: <code>" + found.getTelegramId() + "</code>\n\n"
+                                    + "Отправьте данные одним сообщением.\n"
+                                    + "Формат: <code>" + found.getTelegramId() + " XP COINS TICKETS комментарий</code>\n"
+                                    + "Пример: <code>" + found.getTelegramId() + " 100 50 3 За активность</code>",
+                            cancelKeyboard());
                 }
             }
             default -> sendText(user.getTelegramId(), "🧭 Я не жду текст на этом шаге. Вернитесь в меню.", mainMenuKeyboard(user));
@@ -3958,16 +3945,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     answerSilently(callbackQuery.getId());
                 } else if ("users:search".equals(action)) {
                     session.setState(SessionState.ADMIN_USER_SEARCH);
-                    answer(callbackQuery.getId(), "Введите TG ID");
-                    sendText(user.getTelegramId(), "🔍 <b>Поиск пользователя</b>\n\nВведите Telegram ID (числовой):", cancelKeyboard());
+                    answer(callbackQuery.getId(), "Введите TG ID или ник");
+                    sendText(user.getTelegramId(), "🔍 <b>Поиск пользователя</b>\n\nВведите Telegram ID или никнейм:", cancelKeyboard());
                 } else if ("users:post".equals(action)) {
                     sendAdminUsersPostCard(user);
                 } else if (action.startsWith("users:")) {
                     sendAdminUsersPage(user, parseInteger(action.substring("users:".length())));
                 } else if ("bonussearch".equals(action)) {
                     session.setState(SessionState.BONUS_SEARCH);
-                    answer(callbackQuery.getId(), "Введите TG ID");
-                    sendText(user.getTelegramId(), "🔍 <b>Поиск игрока для начисления бонуса</b>\n\nВведите Telegram ID (числовой):", cancelKeyboard());
+                    answer(callbackQuery.getId(), "Введите TG ID или ник");
+                    sendText(user.getTelegramId(), "🔍 <b>Поиск игрока для начисления бонуса</b>\n\nВведите Telegram ID или никнейм:", cancelKeyboard());
                 } else if (action.startsWith("bonuspage:")) {
                     session.setState(SessionState.BONUS_INPUT);
                     sendAdminBonusUsersPage(user, session, parseInteger(action.substring("bonuspage:".length())), null);
@@ -5466,7 +5453,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(pagination);
         }
         rows.add(List.of(
-                keyboardFactory.callback("🔍 Найти по TG ID", "admin:users:search"),
+                keyboardFactory.callback("🔍 Найти по TG ID / нику", "admin:users:search"),
                 keyboardFactory.callback("📊 По уровням", "admin:users:bylevel")
         ));
         rows.add(List.of(keyboardFactory.callback("📸 Для постов", "admin:users:post")));
@@ -5988,7 +5975,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!pagination.isEmpty()) {
             rows.add(pagination);
         }
-        rows.add(List.of(keyboardFactory.callback("🔍 Поиск по TG ID", "admin:bonussearch")));
+        rows.add(List.of(keyboardFactory.callback("🔍 Поиск по TG ID / нику", "admin:bonussearch")));
         rows.add(List.of(
                 keyboardFactory.callback("🛠️ Админка", "menu:admin"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
@@ -7734,6 +7721,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return value;
         }
         return value.substring(0, maxLength - 1) + "…";
+    }
+
+    /** Ищет игрока по вводу: если строка — число, ищет по TG ID, иначе по никнейму (без учёта регистра). */
+    private AppUser resolveUserBySearch(String input) {
+        String trimmed = input.trim();
+        try {
+            long id = Long.parseLong(trimmed);
+            return userService.findByTelegramId(id).orElse(null);
+        } catch (NumberFormatException e) {
+            return userService.findByNickname(trimmed).orElse(null);
+        }
     }
 
     private String escape(String value) {
