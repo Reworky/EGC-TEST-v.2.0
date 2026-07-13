@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.enums.SubmissionStatus;
@@ -46,6 +47,7 @@ public class QuestService {
     private final ExcTransactionService excTx;
     private final SeasonService seasonService;
     private final SponsorService sponsorService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public List<Quest> findActiveQuests() {
         return questRepository.findAllByActiveTrueOrderByCreatedAtDesc();
@@ -386,6 +388,9 @@ public class QuestService {
         }
 
         QuestSubmission submitted = submitReport(latest, mediaType, fileId, externalLink, comment);
+        // Уведомление модераторов — только этот путь (submitReportChecked) используется Mini App;
+        // сам бот сдаёт отчёт через submitReport() напрямую и уведомляет модераторов сам, отдельно от этого события.
+        eventPublisher.publishEvent(new ru.gamebot.platform.event.QuestReportSubmittedEvent(this, submitted.getId()));
         return QuestActionResult.ok(submitted);
     }
 

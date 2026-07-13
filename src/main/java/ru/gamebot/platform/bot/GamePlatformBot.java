@@ -6138,6 +6138,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     @org.springframework.context.event.EventListener
+    public void onQuestReportSubmitted(ru.gamebot.platform.event.QuestReportSubmittedEvent event) {
+        notifyModeratorsAboutSubmission(event.getSubmissionId());
+    }
+
+    @org.springframework.context.event.EventListener
     public void onLeagueReward(LeagueRewardEvent event) {
         String msg = "🏆 <b>Итоги недели — " + escape(event.getLeagueName()) + "</b>\n\n"
                 + "Ты набрал <b>" + event.getWeeklyXp() + " XP</b> за эту неделю.\n\n"
@@ -6631,8 +6636,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("❓ Уточнить", "mod:more:" + submissionId)
         ));
 
-        Set<Long> recipients = new LinkedHashSet<>();
-        recipients.add(7833944231L);
+        Set<Long> recipients = adminService.allModeratorIds();
 
         for (Long recipient : recipients) {
             try {
