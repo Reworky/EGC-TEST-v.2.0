@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getQuests, getGames, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest } from '../api/client';
+import { getQuests, getGames, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard } from '../api/client';
 import './QuestsPage.css';
 
 const CATEGORY_ORDER = ['Лёгкие', 'Средние', 'Сложные'];
@@ -301,6 +301,103 @@ function MyQuestsView({ expanded, details, onToggle, onDetailChanged }) {
   );
 }
 
+function TournamentLeaderboard({ id }) {
+  const [entries, setEntries] = useState(null);
+
+  useEffect(() => {
+    getTournamentLeaderboard(id).then(setEntries).catch(() => setEntries([]));
+  }, [id]);
+
+  if (entries === null) return <div className="quest-detail-loading">Загрузка...</div>;
+  if (entries.length === 0) return <div className="quest-message">Пока никто не записался.</div>;
+
+  return (
+    <div className="category-section" style={{ padding: 0, marginTop: 8 }}>
+      {entries.slice(0, 20).map(e => (
+        <div key={e.rank} className="quest-meta" style={{ padding: '6px 0' }}>
+          <span>{e.rank}. {e.nickname}</span>
+          {e.prizeExc > 0 && <span className="reward-exc">🏆 +{e.prizeExc} EXC</span>}
+        </div>
+      ))}
+      {entries.length > 20 && <div className="quest-message">...и ещё {entries.length - 20}</div>}
+    </div>
+  );
+}
+
+function TournamentView() {
+  const [tournament, setTournament] = useState(undefined);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  function reload() {
+    getTournament().then(setTournament).catch(() => setTournament(null));
+  }
+
+  useEffect(() => { reload(); }, []);
+
+  async function handleJoin() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await joinTournament(tournament.id);
+      setMessage(res.message);
+      if (res.success) reload();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (tournament === undefined) return <div className="page-center">Загрузка...</div>;
+  if (tournament === null) {
+    return <div className="page-center">⏳ Активных турниров нет. Следите за новостями клуба!</div>;
+  }
+
+  const isReg = tournament.status === 'REGISTRATION';
+  const isActive = tournament.status === 'ACTIVE';
+
+  return (
+    <div className="category-section">
+      <div className="quest-card" style={{ cursor: 'default' }}>
+        <div className="quest-top">
+          <div className="quest-title">📌 {tournament.name}</div>
+        </div>
+        <div className="quest-meta" style={{ marginBottom: 8 }}>
+          {tournament.gameName && <span>🎮 {tournament.gameName}</span>}
+          <span>👥 {tournament.entryCount} участников</span>
+        </div>
+        <p className="quest-desc" style={{ margin: '0 0 8px' }}>
+          💰 Взнос: <b>{tournament.entryFeeExc.toLocaleString()} EXC</b><br />
+          🏅 Призовой фонд: <b>{tournament.prizePoolExc.toLocaleString()} EXC</b><br />
+          {tournament.startDate && <>🚀 Старт: {tournament.startDate}<br /></>}
+          {tournament.endDate && <>⏰ Финиш: {tournament.endDate}<br /></>}
+        </p>
+        {(isReg || isActive) && (
+          <p className="quest-desc" style={{ margin: '0 0 8px' }}>
+            {isActive ? '🔥 Турнир идёт! Выполняйте квесты — побеждает тот, кто выполнит больше всего.' : '📋 Идёт регистрация!'}<br />
+            🥇 1 место — 60% призового фонда<br />
+            🥈-🥉 2–10 места — остаток фонда поровну
+          </p>
+        )}
+
+        {isReg && !tournament.entered && (
+          <button className="quest-btn" disabled={busy} onClick={handleJoin}>
+            {busy ? 'Секунду...' : `⚔️ Участвовать (${tournament.entryFeeExc.toLocaleString()} EXC)`}
+          </button>
+        )}
+        {tournament.entered && <div className="quest-status quest-status-approved">✅ Вы зарегистрированы!</div>}
+        {message && <div className="quest-message">{message}</div>}
+
+        {(tournament.entered || isActive) && (
+          <>
+            <div className="quest-section-title" style={{ marginTop: 12 }}>Список участников</div>
+            <TournamentLeaderboard id={tournament.id} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function QuestsPage() {
   const [view, setView] = useState('all');
   const [expanded, setExpanded] = useState(null);
@@ -333,11 +430,14 @@ export default function QuestsPage() {
         <button className={`view-tab ${view === 'mine' ? 'active' : ''}`} onClick={() => switchView('mine')}>
           Мои квесты
         </button>
+        <button className={`view-tab ${view === 'tournament' ? 'active' : ''}`} onClick={() => switchView('tournament')}>
+          Турнир
+        </button>
       </div>
 
-      {view === 'all'
-        ? <AllQuestsView expanded={expanded} details={details} onToggle={toggleExpand} onDetailChanged={loadDetail} />
-        : <MyQuestsView expanded={expanded} details={details} onToggle={toggleExpand} onDetailChanged={loadDetail} />}
+      {view === 'all' && <AllQuestsView expanded={expanded} details={details} onToggle={toggleExpand} onDetailChanged={loadDetail} />}
+      {view === 'mine' && <MyQuestsView expanded={expanded} details={details} onToggle={toggleExpand} onDetailChanged={loadDetail} />}
+      {view === 'tournament' && <TournamentView />}
     </div>
   );
 }

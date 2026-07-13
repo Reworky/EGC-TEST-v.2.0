@@ -114,3 +114,18 @@ export async function getReferrals() {
   const { data } = await api.get('/api/profile/referrals');
   return data;
 }
+
+export async function getTournament() {
+  const { data } = await api.get('/api/tournament');
+  return data;
+}
+
+export async function joinTournament(id) {
+  const { data } = await api.post(`/api/tournament/${id}/join`);
+  return data;
+}
+
+export async function getTournamentLeaderboard(id) {
+  const { data } = await api.get(`/api/tournament/${id}/leaderboard`);
+  return data;
+}
