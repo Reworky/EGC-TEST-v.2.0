@@ -49,6 +49,7 @@ public class ProfileController {
                             .remainingWithdrawalLimit(sinkShopService.getRemainingWithdrawalLimit(user))
                             .hasAvatar(user.getAvatarFileId() != null)
                             .avatarFrameColor(user.getAvatarFrameColor())
+                            .avatarFrameImage(user.getAvatarFrameImage())
                             .build()))
                 .orElse(ResponseEntity.notFound().build());
     }

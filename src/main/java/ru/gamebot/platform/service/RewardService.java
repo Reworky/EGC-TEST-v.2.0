@@ -101,6 +101,8 @@ public class RewardService {
         if (rewardItem.getAvatarFrameColor() != null) {
             // Цифровая косметика — применяется мгновенно, без очереди на одобрение администратора
             lockedUser.setAvatarFrameColor(rewardItem.getAvatarFrameColor());
+            // Картинка рамки заменяет предыдущую (в т.ч. сбрасывает её, если новая рамка — просто цвет без картинки)
+            lockedUser.setAvatarFrameImage(rewardItem.getAvatarFrameImage());
             userService.save(lockedUser);
             request.setStatus(RewardRequestStatus.APPROVED);
         } else {

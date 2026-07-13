@@ -23,4 +23,6 @@ public class UserProfileDto {
     private boolean hasAvatar;
     /** Купленный в магазине цвет рамки аватара (hex). null = цвет по умолчанию (по уровню). */
     private String avatarFrameColor;
+    /** Ключ картинки рамки аватара (например "fire"), купленной в магазине. null = обычная цветная обводка. */
+    private String avatarFrameImage;
 }

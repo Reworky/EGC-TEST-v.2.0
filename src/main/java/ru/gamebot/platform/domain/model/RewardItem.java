@@ -53,4 +53,10 @@ public class RewardItem {
      * Применяется пользователю мгновенно при покупке, без одобрения администратора.
      */
     private String avatarFrameColor;
+
+    /**
+     * Ключ картинки рамки аватара (например "fire") — если задан, в Mini App рисуется PNG-оверлей
+     * вместо простой цветной обводки. Файл лежит в miniapp/src/assets/frames/{ключ}.png.
+     */
+    private String avatarFrameImage;
 }

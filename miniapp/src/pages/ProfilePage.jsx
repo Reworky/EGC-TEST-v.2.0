@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getProfile, getAvatarUrl } from '../api/client';
+import fireFrame from '../assets/frames/fire.png';
 import './ProfilePage.css';
 
 const LEVEL_COLORS = {
@@ -9,6 +10,8 @@ const LEVEL_COLORS = {
   'Ветеран': '#c084fc',
   'Легенда': '#fbbf24',
 };
+
+const FRAME_IMAGES = { fire: fireFrame };
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState(null);
@@ -37,16 +40,27 @@ export default function ProfilePage() {
   const xpProgress = xpIntoLevel / 10;
   const levelColor = LEVEL_COLORS[profile.levelName] || '#a855f7';
   const ringColor = profile.avatarFrameColor || levelColor;
+  const frameImage = FRAME_IMAGES[profile.avatarFrameImage];
 
   return (
     <div className="profile-page">
       <div className="profile-glow" style={{ background: ringColor }} />
 
       <div className="profile-header">
-        <div className="avatar" style={{ '--ring-color': ringColor, background: avatarUrl ? 'transparent' : levelColor }}>
-          {avatarUrl
-            ? <img className="avatar-img" src={avatarUrl} alt="" />
-            : (profile.nickname?.[0]?.toUpperCase() || '?')}
+        <div className="avatar-wrap">
+          <div
+            className="avatar"
+            style={{
+              '--ring-color': ringColor,
+              background: avatarUrl ? 'transparent' : levelColor,
+              borderColor: frameImage ? 'transparent' : ringColor,
+            }}
+          >
+            {avatarUrl
+              ? <img className="avatar-img" src={avatarUrl} alt="" />
+              : (profile.nickname?.[0]?.toUpperCase() || '?')}
+          </div>
+          {frameImage && <img className="avatar-frame-img" src={frameImage} alt="" />}
         </div>
         <div className="profile-info">
           <h2 className="nickname">{profile.nickname}</h2>

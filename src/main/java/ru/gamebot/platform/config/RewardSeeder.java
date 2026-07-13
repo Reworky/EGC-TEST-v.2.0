@@ -237,22 +237,22 @@ public class RewardSeeder implements CommandLineRunner {
 
         seedAvatarFrame("🔥 Огненная рамка аватара",
                 "Огненная рамка вокруг аватара в профиле мини-аппа. Применяется сразу после покупки.",
-                3_000, "#ef4444");
+                3_000, "#ef4444", "fire");
 
         seedAvatarFrame("❄️ Ледяная рамка аватара",
                 "Ледяная рамка вокруг аватара в профиле мини-аппа. Применяется сразу после покупки.",
-                3_000, "#38bdf8");
+                3_000, "#38bdf8", null);
 
         seedAvatarFrame("💜 Фиолетовая рамка аватара",
                 "Фирменная фиолетовая рамка вокруг аватара в профиле мини-аппа. Применяется сразу после покупки.",
-                3_000, "#a855f7");
+                3_000, "#a855f7", null);
 
         seedAvatarFrame("👑 Золотая рамка аватара",
                 "Премиальная золотая рамка вокруг аватара в профиле мини-аппа. Применяется сразу после покупки.",
-                5_000, "#fbbf24");
+                5_000, "#fbbf24", null);
     }
 
-    private void seedAvatarFrame(String title, String description, long priceCoins, String frameColor) {
+    private void seedAvatarFrame(String title, String description, long priceCoins, String frameColor, String frameImage) {
         rewardItemRepository.findByTitle(title).ifPresentOrElse(
                 existing -> {
                     boolean changed = false;
@@ -262,6 +262,10 @@ public class RewardSeeder implements CommandLineRunner {
                     }
                     if (!frameColor.equals(existing.getAvatarFrameColor())) {
                         existing.setAvatarFrameColor(frameColor);
+                        changed = true;
+                    }
+                    if (!java.util.Objects.equals(frameImage, existing.getAvatarFrameImage())) {
+                        existing.setAvatarFrameImage(frameImage);
                         changed = true;
                     }
                     if (changed) {
@@ -278,6 +282,7 @@ public class RewardSeeder implements CommandLineRunner {
                     item.setMinLevelXp(0);
                     item.setPurchaseGroup("avatar_frame");
                     item.setAvatarFrameColor(frameColor);
+                    item.setAvatarFrameImage(frameImage);
                     item.setActive(true);
                     item.setCreatedAt(LocalDateTime.now());
                     rewardItemRepository.save(item);
