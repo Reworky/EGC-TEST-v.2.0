@@ -6654,7 +6654,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
                 keyboardFactory.callback("✅ Одобрить", "mod:ok:" + submissionId),
                 keyboardFactory.callback("❌ Отклонить", "mod:no:" + submissionId),
-                keyboardFactory.callback("❓ Уточнить", "mod:more:" + submissionId)
+                keyboardFactory.callback("❓ Уточнить", "mod:more:" + submissionId),
+                keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
 
         Set<Long> recipients = adminService.allModeratorIds();
