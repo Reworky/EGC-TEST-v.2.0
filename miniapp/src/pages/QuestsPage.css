@@ -251,3 +251,50 @@
   text-align: center;
   padding-top: 4px;
 }
+
+.quest-section-group {
+  margin: 8px 16px 0;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.quest-section-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.04);
+  border: none;
+  color: var(--tg-theme-text-color, #fff);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.quest-section-header:active {
+  background: rgba(255,255,255,0.08);
+}
+
+.quest-section-chevron {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--tg-theme-hint-color, #888);
+  transform: rotate(0deg);
+  transition: transform 0.2s ease;
+  line-height: 1;
+}
+
+.quest-section-chevron.open {
+  transform: rotate(90deg);
+}
+
+.quest-empty-section {
+  padding: 20px 16px;
+  font-size: 14px;
+  color: var(--tg-theme-hint-color, #888);
+  text-align: center;
+}

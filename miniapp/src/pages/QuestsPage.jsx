@@ -121,108 +121,153 @@ function QuestActions({ quest, detail, onChanged }) {
   );
 }
 
+function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
+  return (
+    <div
+      className={`quest-card ${q.submissionStatus ? 'quest-card-taken' : ''}`}
+      onClick={() => onToggle(q.id)}
+    >
+      <div className="quest-top">
+        <div className="quest-title">{q.title}</div>
+        <div className="quest-rewards">
+          <span className="reward-exc">{q.rewardCoins.toLocaleString()} EXC</span>
+          <span className="reward-xp">{q.rewardXp} XP</span>
+        </div>
+      </div>
+      <div className="quest-meta">
+        <span className="quest-duration">⏱ {q.durationDays === 1 ? '24 ч' : q.durationDays + ' дн'}</span>
+        <span className="quest-platform">{q.platform}</span>
+        {q.submissionStatus && (
+          <span className="quest-taken-badge" style={{ color: STATUS_COLORS[q.submissionStatus] }}>
+            ● {STATUS_LABELS[q.submissionStatus] || q.submissionStatus}
+          </span>
+        )}
+      </div>
+      {expanded === q.id && (
+        <div className="quest-detail" onClick={e => e.stopPropagation()}>
+          <p className="quest-desc">{details[q.id]?.description ?? q.description}</p>
+          {details[q.id]?.instruction && (
+            <>
+              <div className="quest-section-title">Как выполнить</div>
+              <p className="quest-instruction">{details[q.id].instruction}</p>
+            </>
+          )}
+          {details[q.id]?.requirements && (
+            <>
+              <div className="quest-section-title">Требования</div>
+              <p className="quest-requirements">{details[q.id].requirements}</p>
+            </>
+          )}
+          <QuestActions
+            quest={q}
+            detail={details[q.id]}
+            onChanged={() => onDetailChanged(q.id)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AllQuestsView({ expanded, details, onToggle, onDetailChanged }) {
   const [games, setGames] = useState([]);
   const [selectedGame, setSelectedGame] = useState(null);
   const [quests, setQuests] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [ugcQuests, setUgcQuests] = useState([]);
+  const [ugcLoading, setUgcLoading] = useState(false);
+  const [openSections, setOpenSections] = useState({ gaming: true, sponsored: false, ugc: false });
 
   useEffect(() => {
     getGames().then(g => {
-      setGames(g);
-      if (g.length > 0) setSelectedGame(g[0]);
+      const gameOnly = g.filter(name => name !== 'UGC');
+      setGames(gameOnly);
+      if (gameOnly.length > 0) setSelectedGame(gameOnly[0]);
     });
+    setUgcLoading(true);
+    getQuests('UGC').then(setUgcQuests).finally(() => setUgcLoading(false));
   }, []);
 
   useEffect(() => {
     if (!selectedGame) return;
     setLoading(true);
-    getQuests(selectedGame)
-      .then(setQuests)
-      .finally(() => setLoading(false));
+    getQuests(selectedGame).then(setQuests).finally(() => setLoading(false));
   }, [selectedGame]);
 
-  // UGC-квесты без деления на сложность — единый плоский список без заголовка категории
-  const noCategoryTiers = selectedGame === 'UGC';
-  const grouped = noCategoryTiers
-    ? (quests.length ? { '': quests } : {})
-    : CATEGORY_ORDER.reduce((acc, cat) => {
-        const list = quests.filter(q => q.category === cat);
-        if (list.length) acc[cat] = list;
-        return acc;
-      }, {});
+  const grouped = CATEGORY_ORDER.reduce((acc, cat) => {
+    const list = quests.filter(q => q.category === cat);
+    if (list.length) acc[cat] = list;
+    return acc;
+  }, {});
+
+  function toggleSection(key) {
+    setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
+  }
 
   return (
     <>
-      <div className="game-tabs">
-        {games.map(g => (
-          <button
-            key={g}
-            className={`game-tab ${selectedGame === g ? 'active' : ''}`}
-            onClick={() => setSelectedGame(g)}
-          >
-            {g}
-          </button>
-        ))}
+      <div className="quest-section-group">
+        <button className="quest-section-header" onClick={() => toggleSection('gaming')}>
+          <span>🎮 Игровые квесты</span>
+          <span className={`quest-section-chevron ${openSections.gaming ? 'open' : ''}`}>›</span>
+        </button>
+        {openSections.gaming && (
+          <>
+            <div className="game-tabs">
+              {games.map(g => (
+                <button
+                  key={g}
+                  className={`game-tab ${selectedGame === g ? 'active' : ''}`}
+                  onClick={() => setSelectedGame(g)}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
+            {loading && <div className="page-center">Загрузка...</div>}
+            {!loading && Object.entries(grouped).map(([cat, list]) => (
+              <div key={cat} className="category-section">
+                <div className="category-header" style={{ color: CATEGORY_COLORS[cat] }}>{cat}</div>
+                {list.map(q => (
+                  <QuestCard key={q.id} q={q} expanded={expanded} onToggle={onToggle} details={details} onDetailChanged={onDetailChanged} />
+                ))}
+              </div>
+            ))}
+          </>
+        )}
       </div>
 
-      {loading && <div className="page-center">Загрузка...</div>}
+      <div className="quest-section-group">
+        <button className="quest-section-header" onClick={() => toggleSection('sponsored')}>
+          <span>💼 Спонсорские квесты</span>
+          <span className={`quest-section-chevron ${openSections.sponsored ? 'open' : ''}`}>›</span>
+        </button>
+        {openSections.sponsored && (
+          <div className="quest-empty-section">👀 Спонсорские квесты появятся скоро</div>
+        )}
+      </div>
 
-      {!loading && Object.entries(grouped).map(([cat, list]) => (
-        <div key={cat || 'flat'} className="category-section">
-          {cat && (
-            <div className="category-header" style={{ color: CATEGORY_COLORS[cat] }}>
-              {cat}
-            </div>
-          )}
-          {list.map(q => (
-            <div
-              key={q.id}
-              className={`quest-card ${q.submissionStatus ? 'quest-card-taken' : ''}`}
-              onClick={() => onToggle(q.id)}
-            >
-              <div className="quest-top">
-                <div className="quest-title">{q.title}</div>
-                <div className="quest-rewards">
-                  <span className="reward-exc">{q.rewardCoins.toLocaleString()} EXC</span>
-                  <span className="reward-xp">{q.rewardXp} XP</span>
-                </div>
+      <div className="quest-section-group">
+        <button className="quest-section-header" onClick={() => toggleSection('ugc')}>
+          <span>📹 Контент-квесты</span>
+          <span className={`quest-section-chevron ${openSections.ugc ? 'open' : ''}`}>›</span>
+        </button>
+        {openSections.ugc && (
+          <>
+            {ugcLoading && <div className="page-center">Загрузка...</div>}
+            {!ugcLoading && ugcQuests.length === 0 && (
+              <div className="quest-empty-section">Нет активных контент-квестов</div>
+            )}
+            {!ugcLoading && ugcQuests.length > 0 && (
+              <div className="category-section">
+                {ugcQuests.map(q => (
+                  <QuestCard key={q.id} q={q} expanded={expanded} onToggle={onToggle} details={details} onDetailChanged={onDetailChanged} />
+                ))}
               </div>
-              <div className="quest-meta">
-                <span className="quest-duration">⏱ {q.durationDays === 1 ? '24 ч' : q.durationDays + ' дн'}</span>
-                <span className="quest-platform">{q.platform}</span>
-                {q.submissionStatus && (
-                  <span className="quest-taken-badge" style={{ color: STATUS_COLORS[q.submissionStatus] }}>
-                    ● {STATUS_LABELS[q.submissionStatus] || q.submissionStatus}
-                  </span>
-                )}
-              </div>
-              {expanded === q.id && (
-                <div className="quest-detail" onClick={e => e.stopPropagation()}>
-                  <p className="quest-desc">{details[q.id]?.description ?? q.description}</p>
-                  {details[q.id]?.instruction && (
-                    <>
-                      <div className="quest-section-title">Как выполнить</div>
-                      <p className="quest-instruction">{details[q.id].instruction}</p>
-                    </>
-                  )}
-                  {details[q.id]?.requirements && (
-                    <>
-                      <div className="quest-section-title">Требования</div>
-                      <p className="quest-requirements">{details[q.id].requirements}</p>
-                    </>
-                  )}
-                  <QuestActions
-                    quest={q}
-                    detail={details[q.id]}
-                    onChanged={() => onDetailChanged(q.id)}
-                  />
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      ))}
+            )}
+          </>
+        )}
+      </div>
     </>
   );
 }
