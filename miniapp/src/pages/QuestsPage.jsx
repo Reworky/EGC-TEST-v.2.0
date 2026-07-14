@@ -176,7 +176,7 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged }) {
   const [loading, setLoading] = useState(false);
   const [ugcQuests, setUgcQuests] = useState([]);
   const [ugcLoading, setUgcLoading] = useState(false);
-  const [openSections, setOpenSections] = useState({ gaming: true, sponsored: false, ugc: false });
+  const [openSections, setOpenSections] = useState({ gaming: false, sponsored: false, ugc: false });
 
   useEffect(() => {
     getGames().then(g => {
