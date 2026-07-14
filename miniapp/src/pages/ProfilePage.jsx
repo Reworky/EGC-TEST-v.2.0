@@ -5,7 +5,6 @@ import fireFrame from '../assets/frames/fire.png';
 import iceFrame from '../assets/frames/ice.png';
 import purpleFrame from '../assets/frames/purple.png';
 import goldFrame from '../assets/frames/gold.png';
-import fireAnimFrame from '../assets/frames/fire_anim.webp';
 import './ProfilePage.css';
 
 // По гайду EGC_Rank_Design_Guide.md, адаптировано под тёмную тему приложения (в гайде фоны светлые).
@@ -32,9 +31,9 @@ const DEFAULT_RANK = RANK_STYLES['Новичок'];
 // реальными порогами уровней уже начиная со 2 ранга).
 const TIER_THRESHOLDS = [0, 1000, 5000, 15000, 35000, 75000, 150000, 300000];
 
-const FRAME_IMAGES = { fire: fireFrame, ice: iceFrame, purple: purpleFrame, gold: goldFrame, fire_anim: fireAnimFrame };
+const FRAME_IMAGES = { fire: fireFrame, ice: iceFrame, purple: purpleFrame, gold: goldFrame };
 // Разные картинки — разное соотношение "толщина рамки / отверстие", размер подобран под 84px аватар индивидуально
-const FRAME_SIZES = { fire: 116, ice: 152, purple: 124, gold: 130, fire_anim: 130 };
+const FRAME_SIZES = { fire: 116, ice: 152, purple: 124, gold: 130 };
 
 function hexToRgba(hex, alpha) {
   const n = parseInt(hex.replace('#', ''), 16);
