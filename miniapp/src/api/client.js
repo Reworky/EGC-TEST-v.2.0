@@ -189,3 +189,13 @@ export async function cancelReward(id) {
   const { data } = await api.post(`/api/profile/rewards/${id}/cancel`);
   return data;
 }
+
+export async function getBattlePass() {
+  const { data } = await api.get('/api/battlepass');
+  return data;
+}
+
+export async function purchaseBattlePass(seasonId) {
+  const { data } = await api.post(`/api/battlepass/${seasonId}/purchase`);
+  return data;
+}

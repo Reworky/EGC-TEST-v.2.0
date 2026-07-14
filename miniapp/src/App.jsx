@@ -11,6 +11,7 @@ import ReferralsPage from './pages/ReferralsPage';
 import WalletPage from './pages/WalletPage';
 import PollsPage from './pages/PollsPage';
 import SupportPage from './pages/SupportPage';
+import BattlePassPage from './pages/BattlePassPage';
 import './App.css';
 
 export default function App() {
@@ -53,6 +54,7 @@ export default function App() {
           <Route path="/wallet" element={<WalletPage />} />
           <Route path="/polls" element={<PollsPage />} />
           <Route path="/support" element={<SupportPage />} />
+          <Route path="/battlepass" element={<BattlePassPage />} />
         </Routes>
         <BottomNav />
       </div>
