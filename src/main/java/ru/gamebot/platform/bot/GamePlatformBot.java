@@ -6658,7 +6658,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
 
-        Set<Long> recipients = adminService.allModeratorIds();
+        // Только модераторы, без админов — по явному запросу пользователя.
+        Set<Long> recipients = adminService.strictModeratorIds();
 
         for (Long recipient : recipients) {
             try {
