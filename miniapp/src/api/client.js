@@ -130,6 +130,16 @@ export async function getTournamentLeaderboard(id) {
   return data;
 }
 
+export async function getPolls() {
+  const { data } = await api.get('/api/polls');
+  return data;
+}
+
+export async function votePoll(id, optionIndex) {
+  const { data } = await api.post(`/api/polls/${id}/vote`, { optionIndex });
+  return data;
+}
+
 export async function getWallet() {
   const { data } = await api.get('/api/wallet');
   return data;

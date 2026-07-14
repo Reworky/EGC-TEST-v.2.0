@@ -172,6 +172,10 @@ export default function ProfilePage() {
           <span className="detail-label">🤝 Рефералы</span>
           <span className="nav-link-arrow">›</span>
         </Link>
+        <Link to="/polls" className="nav-link-row">
+          <span className="detail-label">🗳 Голосования</span>
+          <span className="nav-link-arrow">›</span>
+        </Link>
       </div>
 
       {(profile.country || profile.platformsCsv) && (
