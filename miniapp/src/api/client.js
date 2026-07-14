@@ -140,6 +140,21 @@ export async function votePoll(id, optionIndex) {
   return data;
 }
 
+export async function getSupportTickets() {
+  const { data } = await api.get('/api/support/tickets');
+  return data;
+}
+
+export async function createSupportTicket({ text, photo }) {
+  const form = new FormData();
+  if (text) form.append('text', text);
+  if (photo) form.append('photo', photo);
+  const { data } = await api.post('/api/support/tickets', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
+
 export async function getWallet() {
   const { data } = await api.get('/api/wallet');
   return data;

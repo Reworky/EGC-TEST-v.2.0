@@ -7471,6 +7471,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return new IncomingContent(mediaType, fileId, text == null ? "" : text);
     }
 
+    /** Публичная обёртка для заявок поддержки, созданных через Mini App (там нет объекта Message от Telegram). */
+    public void notifyModeratorsAboutSupportTicket(SupportTicket ticket, String text, String photoFileId) {
+        String mediaType = photoFileId != null ? "photo" : "text";
+        notifyModeratorsAboutSupportTicket(ticket, new IncomingContent(mediaType, photoFileId, text == null ? "" : text), false);
+    }
+
     private void notifyModeratorsAboutSupportTicket(SupportTicket ticket, IncomingContent content, boolean continuation) {
         String caption = (continuation ? "📎 Дополнение к заявке поддержки\n\n" : "🆘 Новая заявка поддержки\n\n")
                 + "👤 " + escape(ticket.getUser().getNickname()) + " (" + ticket.getUser().getTelegramId() + ")\n"

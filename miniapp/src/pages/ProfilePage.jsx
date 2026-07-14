@@ -176,6 +176,10 @@ export default function ProfilePage() {
           <span className="detail-label">🗳 Голосования</span>
           <span className="nav-link-arrow">›</span>
         </Link>
+        <Link to="/support" className="nav-link-row">
+          <span className="detail-label">🆘 Поддержка</span>
+          <span className="nav-link-arrow">›</span>
+        </Link>
       </div>
 
       {(profile.country || profile.platformsCsv) && (
