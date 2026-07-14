@@ -198,7 +198,7 @@ function WithdrawView({ wallet, onChanged }) {
 
   return (
     <>
-      <div className="view-toggle" style={{ padding: '0 16px 12px' }}>
+      <div className="view-toggle" style={{ padding: '10px 16px 12px' }}>
         <button className={`view-tab ${method === 'rub' ? 'active' : ''}`} onClick={() => setMethod('rub')}>💸 Рубли</button>
         <button className={`view-tab ${method === 'ton' ? 'active' : ''}`} onClick={() => setMethod('ton')}>💎 GRAM (TON)</button>
       </div>
