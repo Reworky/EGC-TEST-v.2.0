@@ -115,6 +115,10 @@
   object-fit: cover;
 }
 
+.profile-info {
+  padding-left: 12px;
+}
+
 .nickname {
   font-size: 21px;
   font-weight: 800;
