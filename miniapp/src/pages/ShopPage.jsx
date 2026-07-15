@@ -109,6 +109,7 @@ function ShopItemsView({ expanded, onToggle }) {
   const [stats, setStats] = useState(null);
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState(null);
+  const [showFundInfo, setShowFundInfo] = useState(false);
 
   function reload() {
     setError(null);
@@ -137,7 +138,33 @@ function ShopItemsView({ expanded, onToggle }) {
     <>
       <div className="shop-header">
         {profile && <div className="shop-balance">🪙 {profile.coins.toLocaleString()} EXC</div>}
-        {stats && <div className="shop-ratio">📊 Состояние фонда: {stats.healthRatioPercent}%</div>}
+        {stats && (
+        <>
+          <div className="shop-ratio" onClick={() => setShowFundInfo(true)} style={{ cursor: 'pointer' }}>
+            📊 Состояние фонда: {stats.healthRatioPercent}%
+          </div>
+          {showFundInfo && (
+            <div className="fund-modal-overlay" onClick={() => setShowFundInfo(false)}>
+              <div className="fund-modal" onClick={e => e.stopPropagation()}>
+                <div className="fund-modal-title">📊 Состояние фонда</div>
+                <p className="fund-modal-text">
+                  Фонд клуба — это пул рублей, из которого выплачиваются награды игрокам.
+                </p>
+                <p className="fund-modal-text">
+                  <b>Текущее состояние: {stats.healthRatioPercent}%</b><br />
+                  Это соотношение реальных средств в фонде к общей сумме EXC у игроков.
+                  Чем ниже — тем выше цены в магазине: так клуб балансирует нагрузку на фонд.
+                </p>
+                <p className="fund-modal-text">
+                  При 100% все цены базовые. При снижении фонда цены растут пропорционально,
+                  чтобы поддерживать возможность выплат всем игрокам.
+                </p>
+                <button className="fund-modal-close" onClick={() => setShowFundInfo(false)}>Понятно</button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
       </div>
 
       {Object.entries(grouped).map(([cat, list]) => (
