@@ -255,7 +255,7 @@ public class RewardService {
     /** Строка пользователя блокируется на всё время проверки лимита ({@link AppUserRepository#findByIdForUpdate}) —
      * та же защита от гонки состояний, что и в {@link #createRewardRequest}. */
     @Transactional
-    public RewardRequest createTonWithdrawalRequest(AppUser user, long excAmount, long rubles, String tonWallet) {
+    public RewardRequest createTonWithdrawalRequest(AppUser user, long excAmount, long rubles, long fixedRubUsed, String tonWallet) {
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
 
@@ -278,6 +278,9 @@ public class RewardService {
 
         sinkShopService.recordWithdrawal(lockedUser, excAmount);
         lockedUser.setCoins(lockedUser.getCoins() - excAmount);
+        if (fixedRubUsed > 0) {
+            lockedUser.setFixedRubBalance(Math.max(0, lockedUser.getFixedRubBalance() - fixedRubUsed));
+        }
         excTx.log(lockedUser, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод → TON");
         userService.save(lockedUser);
 
@@ -317,7 +320,7 @@ public class RewardService {
      * та же защита от гонки состояний, что и в {@link #createRewardRequest}. Лимит/баланс проверяются здесь
      * повторно (defense-in-depth) — раньше единственная проверка была на шаге ввода суммы, ДО этого метода. */
     @Transactional
-    public RewardRequest createWithdrawalRequestWithDetails(AppUser user, long excAmount, long rubles, String payoutDetails) {
+    public RewardRequest createWithdrawalRequestWithDetails(AppUser user, long excAmount, long rubles, long fixedRubUsed, String payoutDetails) {
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
 
@@ -340,6 +343,9 @@ public class RewardService {
 
         sinkShopService.recordWithdrawal(lockedUser, excAmount);
         lockedUser.setCoins(lockedUser.getCoins() - excAmount);
+        if (fixedRubUsed > 0) {
+            lockedUser.setFixedRubBalance(Math.max(0, lockedUser.getFixedRubBalance() - fixedRubUsed));
+        }
         excTx.log(lockedUser, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод → " + rubles + " ₽");
         userService.save(lockedUser);
 

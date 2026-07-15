@@ -71,6 +71,11 @@ function BalanceView({ wallet, onChanged }) {
         <div className="ref-progress-label">
           💸 Лимит вывода: {wallet.remainingWithdrawalLimit.toLocaleString()} / {wallet.monthlyWithdrawalLimit.toLocaleString()} EXC в этом месяце
         </div>
+        {wallet.fixedRubBalance > 0 && (
+          <div className="ref-progress-label">
+            ✅ Гарантировано к выводу: {wallet.fixedRubBalance.toLocaleString()} ₽
+          </div>
+        )}
       </div>
 
       <div className="ref-link-card">

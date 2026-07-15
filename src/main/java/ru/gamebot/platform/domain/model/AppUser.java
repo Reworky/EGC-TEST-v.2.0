@@ -126,4 +126,8 @@ public class AppUser {
     private String blockReason;
 
     private LocalDateTime blockedAt;
+
+    /** Накопленная сумма зафиксированных рублей из одобренных квестов (уменьшается при выводе). */
+    @Column(columnDefinition = "bigint default 0")
+    private long fixedRubBalance;
 }

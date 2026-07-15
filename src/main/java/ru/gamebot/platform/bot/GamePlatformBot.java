@@ -2782,7 +2782,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         java.math.BigDecimal tonRate2 = exchangeRateService.getTonRubRate();
         java.math.BigDecimal tonAmount2 = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(rubles));
         try {
-            RewardRequest tonReq = rewardService.createTonWithdrawalRequest(user, excAmount, rubles, wallet);
+            RewardRequest tonReq = rewardService.createTonWithdrawalRequest(user, excAmount, rubles, 0, wallet);
             session.reset();
             sendText(user.getTelegramId(),
                     "✅ <b>Заявка на вывод в TON принята!</b>\n\n"
@@ -6366,7 +6366,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long amount = Long.parseLong(session.getData().get("withdrawAmount"));
         long rubles = Long.parseLong(session.getData().get("withdrawRubles"));
         try {
-            RewardRequest withdrawalReq = rewardService.createWithdrawalRequestWithDetails(user, amount, rubles, details);
+            RewardRequest withdrawalReq = rewardService.createWithdrawalRequestWithDetails(user, amount, rubles, 0, details);
             session.reset();
             sendText(user.getTelegramId(),
                 "✅ <b>Заявка на вывод принята!</b>\n\n"

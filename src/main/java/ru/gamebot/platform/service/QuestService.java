@@ -488,7 +488,7 @@ public class QuestService {
 
     public RewardPreview computeReward(AppUser user, Quest quest) {
         long baseCoins = quest.getRewardCoins();
-        long adjustedCoins = healthRatioService.applyRatio(baseCoins);
+        long adjustedCoins = baseCoins; // EXC начисляются полные; HR фиксируется в rub только при одобрении
 
         // 3.4 Antifaud: diminishing returns after 3 completions of same type per week
         LocalDateTime weekAgo = LocalDateTime.now().minusWeeks(1);
@@ -531,6 +531,11 @@ public class QuestService {
         long adjustedCoins = reward.coins();
         long adjustedXp = reward.xp();
 
+        // Фиксируем рублёвый эквивалент по HR на момент одобрения
+        double currentHR = healthRatioService.getCurrentRatio();
+        long fixedRub = Math.round(adjustedCoins * currentHR / 100.0);
+        submission.setFixedRubValue(fixedRub);
+
         // 3.5 3000 EXC bonus on first quest (before completedQuests increment)
         userService.grantFirstQuestReferralBonus(user);
 
@@ -538,6 +543,7 @@ public class QuestService {
         excTx.log(user, adjustedCoins, ExcTransactionService.QUEST,
                 quest.getTitle() + " (" + quest.getGameName() + ")");
         user.setCompletedQuests(user.getCompletedQuests() + 1);
+        user.setFixedRubBalance(user.getFixedRubBalance() + fixedRub);
         submission.setUser(user);
         questSubmissionRepository.save(submission);
 

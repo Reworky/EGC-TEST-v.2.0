@@ -50,6 +50,11 @@ public class SchemaPatchInitializer implements CommandLineRunner {
 
         // Game currency shop — user data collection
         apply("ALTER TABLE reward_items ADD COLUMN IF NOT EXISTS user_data_prompt VARCHAR(512)");
+
+        // Fixed rub economy
+        apply("ALTER TABLE quest_submissions ADD COLUMN IF NOT EXISTS fixed_rub_value BIGINT DEFAULT NULL");
+        apply("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS fixed_rub_balance BIGINT DEFAULT 0");
+        apply("UPDATE app_users SET fixed_rub_balance = 0 WHERE fixed_rub_balance IS NULL");
     }
 
     private void apply(String sql) {

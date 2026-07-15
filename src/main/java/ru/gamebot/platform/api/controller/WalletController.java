@@ -76,6 +76,7 @@ public class WalletController {
                 .dailyBonusAvailable(userService.isDailyBonusAvailable(user))
                 .streakDays(user.getStreakDays())
                 .nextDailyBonusExc(nextDailyBonus)
+                .fixedRubBalance(user.getFixedRubBalance())
                 .build());
     }
 
@@ -112,8 +113,7 @@ public class WalletController {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
-        double ratio = healthRatioService.getCurrentRatio();
-        long rubles = Math.round(amount * ratio / 100.0);
+        long rubles = resolveRubValue(user, amount).rubles();
         BigDecimal rublesDecimal = BigDecimal.valueOf(rubles);
         BigDecimal tonRate = exchangeRateService.getTonRubRate();
         BigDecimal tonAmount = exchangeRateService.rubToTon(rublesDecimal);
@@ -141,10 +141,10 @@ public class WalletController {
         if (rewardService.hasWithdrawalTodayOrPending(user)) {
             return errorResponse("Лимит: 1 заявка на вывод в сутки. Следующую можно создать через 24 часа после предыдущей.");
         }
-        double ratio = healthRatioService.getCurrentRatio();
-        long rubles = Math.round(body.getAmount() * ratio / 100.0);
+        RubResolution resolution = resolveRubValue(user, body.getAmount());
+        long rubles = resolution.rubles();
         try {
-            RewardRequest req = rewardService.createWithdrawalRequestWithDetails(user, body.getAmount(), rubles, requisites);
+            RewardRequest req = rewardService.createWithdrawalRequestWithDetails(user, body.getAmount(), rubles, resolution.fixedRubUsed(), requisites);
             return ResponseEntity.ok(ShopActionResponseDto.builder()
                     .success(true)
                     .message("Заявка на вывод В-" + (req.getDisplayId() != null ? req.getDisplayId() : req.getId())
@@ -171,10 +171,10 @@ public class WalletController {
         if (rewardService.hasWithdrawalTodayOrPending(user)) {
             return errorResponse("Лимит: 1 заявка на вывод в сутки. Следующую можно создать через 24 часа после предыдущей.");
         }
-        double ratio = healthRatioService.getCurrentRatio();
-        long rubles = Math.round(body.getAmount() * ratio / 100.0);
+        RubResolution resolution = resolveRubValue(user, body.getAmount());
+        long rubles = resolution.rubles();
         try {
-            RewardRequest req = rewardService.createTonWithdrawalRequest(user, body.getAmount(), rubles, wallet);
+            RewardRequest req = rewardService.createTonWithdrawalRequest(user, body.getAmount(), rubles, resolution.fixedRubUsed(), wallet);
             BigDecimal tonAmount = exchangeRateService.rubToTon(BigDecimal.valueOf(rubles));
             return ResponseEntity.ok(ShopActionResponseDto.builder()
                     .success(true)
@@ -240,5 +240,35 @@ public class WalletController {
 
     private ResponseEntity<ShopActionResponseDto> errorResponse(String message) {
         return ResponseEntity.ok(ShopActionResponseDto.builder().success(false).message(message).build());
+    }
+
+    private record RubResolution(long rubles, long fixedRubUsed) {}
+
+    /**
+     * Рассчитывает рублёвый эквивалент для вывода excAmount EXC.
+     * Если зафиксированный баланс (fixedRubBalance) даёт больше, чем текущий HR —
+     * используется гарантированная сумма. Иначе — текущий HR.
+     * fixedRubUsed — сколько нужно списать с fixedRubBalance при создании заявки.
+     */
+    private RubResolution resolveRubValue(AppUser user, long excAmount) {
+        double ratio = healthRatioService.getCurrentRatio();
+        long hrRub = Math.round(excAmount * ratio / 100.0);
+
+        long fixedRubBalance = user.getFixedRubBalance();
+        if (fixedRubBalance <= 0) return new RubResolution(hrRub, 0);
+
+        long totalCoins = user.getCoins();
+        if (totalCoins <= 0) return new RubResolution(hrRub, 0);
+
+        // Пропорциональная доля фиксированного баланса, относящаяся к выводимым EXC
+        long usedFixed = Math.round((double) fixedRubBalance * excAmount / totalCoins);
+        usedFixed = Math.min(usedFixed, fixedRubBalance);
+
+        if (hrRub >= usedFixed) {
+            // Текущий HR не хуже гарантированного — fixed баланс не расходуем
+            return new RubResolution(hrRub, 0);
+        }
+        // Fixed rate выгоднее — используем гарантированную сумму
+        return new RubResolution(usedFixed, usedFixed);
     }
 }

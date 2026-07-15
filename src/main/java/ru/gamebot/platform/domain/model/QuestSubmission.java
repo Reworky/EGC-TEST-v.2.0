@@ -64,4 +64,8 @@ public class QuestSubmission {
 
     /** Отдельный порядковый номер, присваивается только при одобрении квеста (не связан с displayId заявки). */
     private Long completionDisplayId;
+
+    /** Рублёвый эквивалент награды, зафиксированный в момент одобрения (HR × EXC / 100). null = старые записи. */
+    @Column(nullable = true)
+    private Long fixedRubValue;
 }
