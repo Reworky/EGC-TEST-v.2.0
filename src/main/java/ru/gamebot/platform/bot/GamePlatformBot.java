@@ -333,9 +333,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.reset();
             RewardRequest req = rewardService.approveRequest(reqId);
             notifyUserWithdrawalApproved(req, fileId);
-            sendText(user.getTelegramId(), "✅ Выплата подтверждена, чек отправлен пользователю.", null);
-            if (isModReceiptFlow) sendModWithdrawals(user);
-            else sendAdminWithdrawals(user);
+            sendPayoutConfirmedCard(user, req, isModReceiptFlow);
             return;
         }
 
@@ -4680,6 +4678,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long remaining = sinkShopService.getRemainingWithdrawalLimit(requester);
         long used = limit - remaining;
         return "📊 Месячный лимит: <b>" + used + " / " + limit + " EXC</b> использовано (осталось " + remaining + ")\n";
+    }
+
+    private void sendPayoutConfirmedCard(AppUser admin, RewardRequest req, boolean isModFlow) {
+        long exc = req.getRewardItem().getPriceCoins();
+        long rub = exc / 100;
+        String withdrawalsCallback = isModFlow ? "mod:withdrawals" : "admin:withdrawals";
+        String text = "🎉 <b>Выплата выполнена!</b>\n\n"
+                + "👤 " + escape(req.getUser().getNickname()) + "\n"
+                + "💸 " + exc + " EXC → " + rub + " ₽\n"
+                + "📋 Заявка В-" + reqDisplayId(req) + "\n"
+                + "📅 " + LocalDateTime.now().format(DATE_TIME_FORMATTER) + "\n\n"
+                + "Так держать! 🔥\n\n"
+                + "🎮 EXPERIENCE GAMING CLUB";
+        sendText(admin.getTelegramId(), text,
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("📋 Заявки на вывод", withdrawalsCallback)),
+                        List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
+                )));
     }
 
     private void notifyUserWithdrawalApproved(RewardRequest req, String receiptFileId) {
