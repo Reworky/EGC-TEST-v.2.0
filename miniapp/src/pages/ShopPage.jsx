@@ -140,8 +140,8 @@ function ShopItemsView({ expanded, onToggle }) {
         {profile && <div className="shop-balance">🪙 {profile.coins.toLocaleString()} EXC</div>}
         {stats && (
         <>
-          <div className="shop-ratio" onClick={() => setShowFundInfo(true)} style={{ cursor: 'pointer' }}>
-            📊 Состояние фонда: {stats.healthRatioPercent}%
+          <div className="shop-ratio" onClick={() => setShowFundInfo(true)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            📊 Состояние фонда: {stats.healthRatioPercent}% <span style={{ fontSize: '11px', opacity: 0.6 }}>ⓘ</span>
           </div>
           {showFundInfo && (
             <div className="fund-modal-overlay" onClick={() => setShowFundInfo(false)}>

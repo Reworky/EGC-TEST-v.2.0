@@ -20,7 +20,6 @@
 
 .shop-ratio {
   color: var(--tg-theme-hint-color, #888);
-  text-decoration: underline dotted;
 }
 
 .fund-modal-overlay {
