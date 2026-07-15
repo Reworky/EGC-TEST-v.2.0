@@ -45,8 +45,12 @@ public class RewardService {
                 .orElseThrow(() -> new IllegalArgumentException("Награда не найдена."));
     }
 
-    // 3.2 Level B: effective price adjusted by Health Ratio (worse HR → higher EXC price)
+    // 3.2 Level B: effective price adjusted by Health Ratio (worse HR → higher EXC price).
+    // Косметика (avatar_frame) не участвует в экономике фонда — цена всегда базовая.
     public long effectivePrice(RewardItem item) {
+        if ("avatar_frame".equals(item.getPurchaseGroup())) {
+            return item.getPriceCoins();
+        }
         double ratio = healthRatioService.getCurrentRatio();
         if (ratio >= 1.0) {
             return item.getPriceCoins();
