@@ -4684,7 +4684,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long exc = req.getRewardItem().getPriceCoins();
         long rub = exc / 100;
         String withdrawalsCallback = isModFlow ? "mod:withdrawals" : "admin:withdrawals";
-        String text = "🎉 <b>Выплата выполнена!</b>\n\n"
+        String text = "🎉 <b>Перевод выполнен!</b>\n\n"
                 + "👤 " + escape(req.getUser().getNickname()) + "\n"
                 + "💸 " + exc + " EXC → " + rub + " ₽\n"
                 + "📋 Заявка В-" + reqDisplayId(req) + "\n"
