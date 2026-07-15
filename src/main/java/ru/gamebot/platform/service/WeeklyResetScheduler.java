@@ -29,6 +29,11 @@ public class WeeklyResetScheduler {
         healthRatioService.recalculate();
     }
 
+    @Scheduled(fixedDelay = 3_600_000)
+    public void recalculateHealthRatio() {
+        healthRatioService.recalculate();
+    }
+
     @Scheduled(fixedDelay = 60_000)
     public void closeExpiredPolls() {
         List<Poll> expired = pollService.findExpiredUnclosed();
