@@ -3739,6 +3739,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "👤 Игрок: <b>" + escape(submission.getUser().getNickname()) + "</b>\n"
                 + "🆔 ID: <b>" + submission.getUser().getTelegramId() + "</b>\n"
                 + "🎯 Квест: <b>" + escape(submission.getQuest().getTitle()) + "</b>\n"
+                + "🎮 Игра: <b>" + escape(submission.getQuest().getGameName()) + "</b>\n"
                 + rewardPreviewLine(submission) + "\n"
                 + "📅 Отправлено: <b>" + escape(submission.getUpdatedAt().format(DATE_TIME_FORMATTER)) + "</b>\n"
                 + "💬 Комментарий: " + escape(submission.getUserComment()) + "\n"
@@ -6647,6 +6648,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "👤 Игрок: <b>" + escape(submission.getUser().getNickname()) + "</b>\n"
                 + "🆔 ID: <b>" + submission.getUser().getTelegramId() + "</b>\n"
                 + "🎯 Квест: <b>" + escape(submission.getQuest().getTitle()) + "</b>\n"
+                + "🎮 Игра: <b>" + escape(submission.getQuest().getGameName()) + "</b>\n"
                 + rewardPreviewLine(submission) + "\n"
                 + "📅 Отправлено: <b>" + submission.getUpdatedAt().format(DATE_TIME_FORMATTER) + "</b>\n"
                 + "💬 Комментарий: " + escape(submission.getUserComment());
