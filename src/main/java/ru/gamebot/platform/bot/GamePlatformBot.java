@@ -2739,7 +2739,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         session.setState(SessionState.WITHDRAWAL_TON_ADDRESS);
         String msg = "💎 <b>Сумма принята</b>\n\n"
                 + "💸 " + amount + " EXC → <b>" + rubles + " ₽</b> → ~<b>" + tonAmount + " TON</b>\n"
-                + rateNote + "\n\n"
+                + rateNote + "\n"
+                + "⚠️ Комиссия сети (~0.01 TON) вычитается из суммы перевода — получишь чуть меньше.\n\n"
                 + "━━━━━━━━━━━━━━━\n"
                 + "📋 <b>Как найти адрес кошелька:</b>\n\n"
                 + "1. Открой @wallet в Telegram (или кнопку ниже)\n"
@@ -2791,6 +2792,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "📈 Курс: 1 TON = " + tonRate2.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽\n"
                     + "💎 Способ: <b>GRAM (TON)</b>\n"
                     + "📬 Кошелёк: <code>" + escape(wallet) + "</code>\n\n"
+                    + "⚠️ Комиссия сети (~0.01 TON) вычитается из суммы — на кошелёк придёт чуть меньше.\n\n"
                     + "Администратор обработает заявку в течение 24 часов.",
                     backMenuKeyboard("menu:main"));
             notifyAdminsAboutWithdrawal(user, tonReq);
