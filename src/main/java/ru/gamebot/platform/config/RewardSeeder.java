@@ -13,6 +13,7 @@ import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.RewardItem;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.RewardItemRepository;
+import ru.gamebot.platform.domain.repository.RewardRequestRepository;
 
 @Slf4j
 @Component
@@ -21,12 +22,16 @@ import ru.gamebot.platform.domain.repository.RewardItemRepository;
 public class RewardSeeder implements CommandLineRunner {
 
     private final RewardItemRepository rewardItemRepository;
+    private final RewardRequestRepository rewardRequestRepository;
     private final AppUserRepository appUserRepository;
     private final GamePlatformBot gamePlatformBot;
 
     @Override
     @Transactional
     public void run(String... args) {
+
+        // ── Удаление устаревших товаров ─────────────────────────────────────────
+        deleteObsoleteItem("🔥 Анимированная огненная рамка аватара");
 
         // ── Подарочные карты ────────────────────────────────────────────────────
 
@@ -373,5 +378,13 @@ public class RewardSeeder implements CommandLineRunner {
                     );
                 }
         );
+    }
+
+    private void deleteObsoleteItem(String title) {
+        rewardItemRepository.findByTitle(title).ifPresent(item -> {
+            rewardRequestRepository.deleteAllByRewardItem(item);
+            rewardItemRepository.delete(item);
+            log.info("[RewardSeeder] Deleted obsolete item '{}'", title);
+        });
     }
 }
