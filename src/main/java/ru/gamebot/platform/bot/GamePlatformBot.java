@@ -3628,6 +3628,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         keyboardFactory.callback("✍️ Ответить", "mod:support:reply:" + ticketId),
                         keyboardFactory.callback("✅ Закрыть", "mod:support:close:" + ticketId)
                 ), "⬅️ Назад", "mod:support:list"));
+
+        // Отправить вложения игрока отдельными сообщениями
+        List<SupportAttachment> playerAttachments = attachments.stream()
+                .filter(a -> !a.isFromModerator() && a.getFileId() != null)
+                .toList();
+        for (SupportAttachment att : playerAttachments) {
+            try {
+                sendContent(chatId, new IncomingContent(att.getMediaType(), att.getFileId(),
+                        att.getCaption() != null ? att.getCaption() : ""), null, null);
+            } catch (Exception e) {
+                log.warn("Failed to send support attachment {} to moderator {}", att.getId(), chatId, e);
+            }
+        }
     }
 
     private void handleSuspectAction(CallbackQuery callbackQuery, AppUser moderator, String telegramIdStr) {
