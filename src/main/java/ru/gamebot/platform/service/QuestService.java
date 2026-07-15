@@ -26,6 +26,11 @@ public class QuestService {
 
     private static final int WEEKLY_QUEST_TYPE_LIMIT = 3;
     private static final int COOLDOWN_HOURS = 24;
+    private static final int HARD_COOLDOWN_HOURS = 336; // 14 дней для Сложных
+
+    private static int cooldownHours(Quest quest) {
+        return "Сложные".equals(quest.getCategory()) ? HARD_COOLDOWN_HOURS : COOLDOWN_HOURS;
+    }
     private static final int REFERRAL_BONUS_PERCENT = 3;
     private static final int REFERRAL_DAYS_WINDOW = 14;
 
@@ -184,7 +189,7 @@ public class QuestService {
     public boolean isSameQuestCooldownActive(AppUser user, Quest quest) {
         Optional<LocalDateTime> lastApproved = questSubmissionRepository
                 .findLastApprovedDateByUserAndQuest(user, quest);
-        if (lastApproved.isPresent() && LocalDateTime.now().isBefore(lastApproved.get().plusHours(COOLDOWN_HOURS))) {
+        if (lastApproved.isPresent() && LocalDateTime.now().isBefore(lastApproved.get().plusHours(cooldownHours(quest)))) {
             return true;
         }
         // Fix 5: cancelled submissions also block retake for 1h to prevent cancel-retake abuse
@@ -202,7 +207,7 @@ public class QuestService {
     public boolean isCooldownActive(AppUser user, Quest quest) {
         Optional<LocalDateTime> lastApproved = questSubmissionRepository
                 .findLastApprovedDateByUserAndGameAndCategory(user, quest.getGameName(), quest.getCategory());
-        if (lastApproved.isPresent() && LocalDateTime.now().isBefore(lastApproved.get().plusHours(COOLDOWN_HOURS))) {
+        if (lastApproved.isPresent() && LocalDateTime.now().isBefore(lastApproved.get().plusHours(cooldownHours(quest)))) {
             if (sinkShopService.hasCooldownBypass(user, quest.getGameName())) {
                 sinkShopService.consumeCooldownBypass(user, quest.getGameName());
                 return false;
@@ -216,8 +221,9 @@ public class QuestService {
     public long getCooldownHoursLeft(AppUser user, Quest quest) {
         Optional<LocalDateTime> lastApproved = questSubmissionRepository
                 .findLastApprovedDateByUserAndQuest(user, quest);
+        int cd = cooldownHours(quest);
         if (lastApproved.isPresent()) {
-            LocalDateTime until = lastApproved.get().plusHours(COOLDOWN_HOURS);
+            LocalDateTime until = lastApproved.get().plusHours(cd);
             if (LocalDateTime.now().isBefore(until)) {
                 return Math.max(1, java.time.temporal.ChronoUnit.HOURS.between(LocalDateTime.now(), until));
             }
@@ -225,7 +231,7 @@ public class QuestService {
         Optional<LocalDateTime> lastGame = questSubmissionRepository
                 .findLastApprovedDateByUserAndGameAndCategory(user, quest.getGameName(), quest.getCategory());
         if (lastGame.isPresent()) {
-            LocalDateTime until = lastGame.get().plusHours(COOLDOWN_HOURS);
+            LocalDateTime until = lastGame.get().plusHours(cd);
             if (LocalDateTime.now().isBefore(until)) {
                 return Math.max(1, java.time.temporal.ChronoUnit.HOURS.between(LocalDateTime.now(), until));
             }
@@ -323,7 +329,7 @@ public class QuestService {
         }
 
         if (isSameQuestCooldownActive(lockedUser, quest)) {
-            return QuestActionResult.of(QuestActionStatus.SAME_QUEST_COOLDOWN, COOLDOWN_HOURS * 60L);
+            return QuestActionResult.of(QuestActionStatus.SAME_QUEST_COOLDOWN, cooldownHours(quest) * 60L);
         }
 
         if (isCooldownActive(lockedUser, quest)) {
