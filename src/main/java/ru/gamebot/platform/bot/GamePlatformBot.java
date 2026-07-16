@@ -3643,8 +3643,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .toList();
         for (SupportAttachment att : playerAttachments) {
             try {
-                sendContent(chatId, new IncomingContent(att.getMediaType(), att.getFileId(),
-                        att.getCaption() != null ? att.getCaption() : ""), null, null);
+                String caption = att.getCaption() != null ? att.getCaption() : "";
+                sendContent(chatId, new IncomingContent(att.getMediaType(), att.getFileId(), caption), caption, null);
             } catch (Exception e) {
                 log.warn("Failed to send support attachment {} to moderator {}", att.getId(), chatId, e);
             }
@@ -7579,7 +7579,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendDocument.setReplyMarkup(markup);
                     execute(sendDocument);
                 }
-                default -> sendText(chatId, fallbackText, markup);
+                default -> {
+                    String text = (fallbackText != null && !fallbackText.isBlank()) ? fallbackText
+                            : (content.text() != null && !content.text().isBlank()) ? content.text()
+                            : "📎 Вложение";
+                    sendText(chatId, text, markup);
+                }
             }
         } catch (TelegramApiException exception) {
             throw new IllegalStateException("Failed to send content to " + chatId, exception);
