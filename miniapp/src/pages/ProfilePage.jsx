@@ -243,26 +243,17 @@ export default function ProfilePage() {
         <div className="p-hero-glow" />
         <div className="p-hero-glow2" />
         <div className="p-hero-content">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-
-            {/* Avatar */}
-            <div style={{ position: 'relative', flexShrink: 0 }}>
-              <div className="p-avatar" style={{ borderColor: ringColor, color: ringColor, background: avatarUrl ? 'transparent' : `${ringColor}22` }}>
-                {avatarUrl
-                  ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                  : (profile.nickname?.[0]?.toUpperCase() || '?')}
-              </div>
-              <div className="p-avatar-ring" style={{ borderColor: `${ringColor}44` }} />
-              {frameImage && (
-                <img src={frameImage} alt="" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: frameSize, height: frameSize, pointerEvents: 'none' }} />
-              )}
+          {/* Avatar */}
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <div className="p-avatar" style={{ borderColor: ringColor, color: ringColor, background: avatarUrl ? 'transparent' : `${ringColor}22` }}>
+              {avatarUrl
+                ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                : (profile.nickname?.[0]?.toUpperCase() || '?')}
             </div>
-
-            {/* Rank badge */}
-            <div className="p-rank-badge" style={{ borderColor: `${rank.primary}55`, color: rank.primary, background: `${rank.primary}18` }}>
-              <span>{rank.icon}</span>
-              <span>Ур. {profile.level} · {profile.levelName}</span>
-            </div>
+            <div className="p-avatar-ring" style={{ borderColor: `${ringColor}44` }} />
+            {frameImage && (
+              <img src={frameImage} alt="" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: frameSize, height: frameSize, pointerEvents: 'none' }} />
+            )}
           </div>
 
           <div style={{ marginTop: 20 }}>
@@ -270,7 +261,12 @@ export default function ProfilePage() {
               <span className="p-nickname">{profile.nickname}</span>
               {profile.isCouncilMember && <i className="ti ti-crown" style={{ color: '#FFD700', fontSize: 14 }} />}
             </div>
-            <div className="p-subtitle">{rank.icon} Ур. {profile.level} · {profile.levelName}</div>
+            <div style={{ marginTop: 35 }}>
+              <div className="p-rank-badge" style={{ display: 'inline-flex', borderColor: `${rank.primary}55`, color: rank.primary, background: `${rank.primary}18` }}>
+                <span>{rank.icon}</span>
+                <span>Ур. {profile.level} · {profile.levelName}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
