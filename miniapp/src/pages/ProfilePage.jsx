@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getProfile, getAvatarUrl } from '../api/client';
 import SpotlightCard from '../components/SpotlightCard';
+import AnimatedNumber from '../components/AnimatedNumber';
 import fireFrame from '../assets/frames/fire.png';
 import iceFrame from '../assets/frames/ice.png';
 import purpleFrame from '../assets/frames/purple.png';
@@ -145,12 +146,12 @@ export default function ProfilePage() {
       <div className="stats-grid" style={{ margin: 0, padding: 14 }}>
         <div className="stat-card">
           <div className="stat-icon">💰</div>
-          <div className="stat-value">{profile.coins.toLocaleString()}</div>
+          <div className="stat-value"><AnimatedNumber value={profile.coins} flashColor="#F5A623" /></div>
           <div className="stat-label">EXC</div>
         </div>
         <div className="stat-card">
           <div className="stat-icon">🎯</div>
-          <div className="stat-value">{profile.completedQuests}</div>
+          <div className="stat-value"><AnimatedNumber value={profile.completedQuests} /></div>
           <div className="stat-label">Квестов</div>
         </div>
         <div className="stat-card">

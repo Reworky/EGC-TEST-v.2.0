@@ -4,6 +4,7 @@ import { authMiniApp } from './api/client';
 import { useTelegram } from './hooks/useTelegram';
 import BottomNav from './components/BottomNav';
 import { LottieProvider } from './components/LottieContext';
+import { ParticlesProvider } from './components/ParticlesContext';
 import ProfilePage from './pages/ProfilePage';
 import QuestsPage from './pages/QuestsPage';
 import ShopPage from './pages/ShopPage';
@@ -45,6 +46,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <LottieProvider>
+      <ParticlesProvider>
       <div className="app">
         <Routes>
           <Route path="/" element={<Navigate to="/profile" replace />} />
@@ -60,6 +62,7 @@ export default function App() {
         </Routes>
         <BottomNav />
       </div>
+      </ParticlesProvider>
       </LottieProvider>
     </BrowserRouter>
   );

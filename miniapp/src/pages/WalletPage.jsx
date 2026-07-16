@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { getWallet, claimDailyBonus, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, getReferrals } from '../api/client';
 import BorderBeamCard from '../components/BorderBeamCard';
 import ShimmerButton from '../components/ShimmerButton';
+import AnimatedNumber from '../components/AnimatedNumber';
+import { useParticles } from '../components/ParticlesContext';
 import './QuestsPage.css';
 import './ShopPage.css';
 import './ReferralsPage.css';
@@ -21,6 +23,7 @@ function BalanceView({ wallet, onChanged }) {
   const [message, setMessage] = useState(null);
   const [refData, setRefData] = useState(null);
   const [refCopied, setRefCopied] = useState(false);
+  const playParticles = useParticles();
 
   useEffect(() => {
     getReferrals().then(setRefData).catch(() => {});
@@ -51,6 +54,7 @@ function BalanceView({ wallet, onChanged }) {
         let msg = `+${res.totalExc} EXC · Серия: ${res.streakDays} дн.`;
         if (res.milestoneText) msg = `${res.milestoneText} ${msg}`;
         setMessage(msg);
+        playParticles?.('streakBonus', 3000);
         onChanged();
       } else {
         setMessage(res.message);
@@ -68,7 +72,7 @@ function BalanceView({ wallet, onChanged }) {
         </div>
         <div style={{ fontSize: 30, fontWeight: 600, color: '#F5A623' }}>
           <i className="ti ti-coin" style={{ marginRight: 4 }} />
-          {wallet.coins.toLocaleString()} EXC
+          <AnimatedNumber value={wallet.coins} flashColor="#F5A623" /> EXC
         </div>
         <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>
           ≈ {+(wallet.coins * wallet.healthRatioPercent / 100 / 100).toFixed(1)} ₽ · фонд {wallet.healthRatioPercent}%
@@ -88,7 +92,7 @@ function BalanceView({ wallet, onChanged }) {
         </div>
         <div className="stat-card">
           <div className="stat-icon"><i className="ti ti-star"></i></div>
-          <div className="stat-value">{wallet.xp.toLocaleString()}</div>
+          <div className="stat-value"><AnimatedNumber value={wallet.xp} flashColor="#7B68EE" /></div>
           <div className="stat-label">Общий XP</div>
         </div>
         <div className="stat-card">

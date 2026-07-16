@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { getQuests, getGames, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard } from '../api/client';
 import { useLottie } from '../components/LottieContext';
+import { useParticles } from '../components/ParticlesContext';
 import './QuestsPage.css';
 
 const CATEGORY_ORDER = ['Лёгкие', 'Средние', 'Сложные'];
@@ -47,12 +48,14 @@ function QuestActions({ quest, detail, onChanged }) {
   const [externalLink, setExternalLink] = useState('');
   const [comment, setComment] = useState('');
   const playLottie = useLottie();
+  const playParticles = useParticles();
   const prevStatus = useRef(quest.submissionStatus);
   const status = detail?.submissionStatus;
 
   useEffect(() => {
     if (prevStatus.current !== 'APPROVED' && status === 'APPROVED') {
       playLottie?.();
+      playParticles?.('questApproved', 4000);
     }
     prevStatus.current = status;
   }, [status]);
