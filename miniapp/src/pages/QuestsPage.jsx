@@ -30,12 +30,18 @@ function QuestActions({ quest, detail, onChanged }) {
   const [comment, setComment] = useState('');
   const playLottie = useLottie();
   const prevStatus = useRef(detail?.status);
+  const status = detail?.submissionStatus;
+
+  useEffect(() => {
+    if (prevStatus.current !== 'APPROVED' && status === 'APPROVED') {
+      playLottie?.();
+    }
+    prevStatus.current = status;
+  }, [status]);
 
   if (!detail) {
     return <div className="quest-detail-loading">Загрузка...</div>;
   }
-
-  const status = detail.submissionStatus;
 
   async function handleTake() {
     setBusy(true);
@@ -69,13 +75,6 @@ function QuestActions({ quest, detail, onChanged }) {
       setBusy(false);
     }
   }
-
-  useEffect(() => {
-    if (prevStatus.current !== 'APPROVED' && status === 'APPROVED') {
-      playLottie?.();
-    }
-    prevStatus.current = status;
-  }, [status]);
 
   if (status === 'APPROVED') {
     return <div className="quest-status quest-status-approved"><i className="ti ti-circle-check"></i> Квест выполнен и оплачен</div>;
