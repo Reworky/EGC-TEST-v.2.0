@@ -1901,7 +1901,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "💰 <b>Баланс</b>\n\n"
                         + "🪙 Монеты клуба: <b>" + user.getCoins() + " EXC</b>\n"
-                        + "💱 Курс обмена: <b>100 EXC = 1 ₽</b>\n"
+                        + "💱 Курс вывода: <b>" + rateString(ratioPercent) + "</b>\n"
                         + "💠 Активный бонус к EXC: <b>+" + userService.getExcBonusPercent(user.getXp()) + "%</b>\n"
                         + "🎟️ Билеты сезона: <b>" + user.getTickets() + "</b>\n"
                         + "✨ Общий XP: <b>" + user.getXp() + "</b>\n"
@@ -1915,14 +1915,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 )));
     }
 
+    private String rateString(int ratioPercent) {
+        long rubPer1000 = Math.round(1000L * ratioPercent / 100.0);
+        return "1 000 EXC = " + rubPer1000 + " ₽ (фонд " + ratioPercent + "%)";
+    }
+
     private String hrExplanationLine(int ratioPercent, long effectiveRewardPer100) {
         if (ratioPercent >= 100) {
-            return "✅ Клуб работает на полную мощность — награды начисляются в полном объёме.";
+            return "✅ Клуб работает на полную мощность — EXC выводятся по полному курсу.";
         }
         if (ratioPercent >= 70) {
-            return "💡 Клуб выплачивает <b>" + ratioPercent + "%</b> от заявленной награды. Пример: за квест с наградой 1 500 EXC вы получите <b>" + (effectiveRewardPer100 * 15) + " EXC</b>.";
+            return "💡 Текущий курс вывода: <b>" + rateString(ratioPercent) + "</b>. EXC начисляются в полном объёме.";
         }
-        return "⚠️ Клуб временно выплачивает <b>" + ratioPercent + "%</b> от заявленной награды. Пример: за квест с наградой 1 500 EXC сейчас начислят <b>" + (effectiveRewardPer100 * 15) + " EXC</b>. Когда фонд пополнится — курс вернётся к 100%.";
+        return "⚠️ Текущий курс вывода: <b>" + rateString(ratioPercent) + "</b>. EXC начисляются в полном объёме. Когда фонд пополнится — курс вернётся к 1 000 EXC = 10 ₽.";
     }
 
     private void sendQuestGames(AppUser user) {
@@ -2654,17 +2659,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>\n"
                         + "📊 Состояние фонда: <b>" + ratioPercent + "%</b>\n"
                         + "📤 Лимит вывода: <b>" + sinkShopService.getMonthlyLimit(user.getXp()) + " EXC/мес</b> (осталось: " + remaining + " EXC)\n"
-                        + "💱 Курс вывода: <b>100 EXC = 1 ₽</b>\n"
+                        + "💱 Курс вывода: <b>" + rateString(ratioPercent) + "</b>\n"
                         + withdrawalLevelHint(user),
                 keyboardFactory.rowsLayout(rows));
     }
 
     private void sendWithdrawalMethodChoice(AppUser user) {
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
+        int ratioPercent = (int) Math.round(healthRatioService.getCurrentRatio() * 100);
         String text = "💸 <b>Вывод EXC</b>\n\n"
                 + "🪙 Баланс: <b>" + user.getCoins() + " EXC</b>\n"
                 + "📤 Остаток лимита: <b>" + remaining + " EXC (из " + sinkShopService.getMonthlyLimit(user.getXp()) + "/мес)</b>\n"
-                + "💱 Курс: <b>100 EXC = 1 ₽</b>\n"
+                + "💱 Курс: <b>" + rateString(ratioPercent) + "</b>\n"
                 + "⚠️ Минимум: <b>5 000 EXC</b>\n"
                 + withdrawalLevelHint(user) + "\n\n"
                 + "Выберите способ получения:";
