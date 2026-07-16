@@ -3823,11 +3823,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleModerationApprove(CallbackQuery callbackQuery, Long submissionId) {
         QuestSubmission currentSubmission = questService.getSubmission(submissionId);
-        long adjustedCoins = healthRatioService.applyRatio(currentSubmission.getQuest().getRewardCoins());
         UserService.RewardGrant rewardGrant = userService.previewReward(
                 currentSubmission.getUser(),
                 currentSubmission.getQuest().getRewardXp(),
-                adjustedCoins,
+                currentSubmission.getQuest().getRewardCoins(),
                 0
         );
         boolean isFirstQuest = currentSubmission.getUser().getCompletedQuests() == 0;
