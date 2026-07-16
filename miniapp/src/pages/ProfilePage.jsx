@@ -257,7 +257,7 @@ export default function ProfilePage() {
           </div>
 
           <div style={{
-            marginTop: 50,
+            marginTop: 14,
             background: `rgba(0,0,0,0.35)`,
             border: `1px solid ${rank.primary}33`,
             borderRadius: 14,
