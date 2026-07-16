@@ -265,12 +265,12 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <div style={{ marginTop: 12 }}>
+          <div style={{ marginTop: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span className="p-nickname">{profile.nickname}</span>
               {profile.isCouncilMember && <i className="ti ti-crown" style={{ color: '#FFD700', fontSize: 14 }} />}
             </div>
-            <div className="p-subtitle">Experience Gaming Club</div>
+            <div className="p-subtitle">{rank.icon} Ур. {profile.level} · {profile.levelName}</div>
           </div>
         </div>
       </div>
