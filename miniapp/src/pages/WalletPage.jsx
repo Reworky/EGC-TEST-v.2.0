@@ -79,26 +79,45 @@ function BalanceView({ wallet, onChanged }) {
         </div>
       </BorderBeamCard>
 
-      <div className="ref-stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon">💠</div>
-          <div className="stat-value">+{wallet.excBonusPercent}%</div>
-          <div className="stat-label">Бонус к EXC</div>
+      <div className="w-stats-grid">
+        <div className="w-stat-card">
+          <div className="w-stat-accent" style={{ background: 'linear-gradient(90deg,#6366f1,#818cf8)' }} />
+          <div className="w-stat-label">Бонус к EXC</div>
+          <div className="w-stat-val" style={{ color: '#818cf8' }}>+{wallet.excBonusPercent}%</div>
+          <svg className="w-stat-illus" width="48" height="44" viewBox="0 0 48 44" fill="none">
+            <circle cx="24" cy="22" r="14" fill="#6366f1" opacity=".18"/>
+            <path d="M24 10l3.5 7 7.5 1-5.5 5.5 1.3 7.5L24 27.5l-6.8 3.5 1.3-7.5L13 18l7.5-1z" fill="#818cf8" opacity=".7"/>
+          </svg>
         </div>
-        <div className="stat-card">
-          <div className="stat-icon">🎟️</div>
-          <div className="stat-value">{wallet.tickets}</div>
-          <div className="stat-label">Билеты сезона</div>
+        <div className="w-stat-card">
+          <div className="w-stat-accent" style={{ background: 'linear-gradient(90deg,#f59e0b,#fbbf24)' }} />
+          <div className="w-stat-label">Билеты сезона</div>
+          <div className="w-stat-val" style={{ color: '#fbbf24' }}>{wallet.tickets}</div>
+          <svg className="w-stat-illus" width="48" height="44" viewBox="0 0 48 44" fill="none">
+            <rect x="8" y="14" width="32" height="18" rx="5" fill="#92400e" opacity=".4"/>
+            <rect x="12" y="18" width="24" height="10" rx="3" fill="#fbbf24" opacity=".5"/>
+            <circle cx="12" cy="22" r="3" fill="#f59e0b" opacity=".8"/>
+            <circle cx="36" cy="22" r="3" fill="#f59e0b" opacity=".8"/>
+          </svg>
         </div>
-        <div className="stat-card">
-          <div className="stat-icon"><i className="ti ti-star"></i></div>
-          <div className="stat-value"><AnimatedNumber value={wallet.xp} flashColor="#7B68EE" /></div>
-          <div className="stat-label">Общий XP</div>
+        <div className="w-stat-card">
+          <div className="w-stat-accent" style={{ background: 'linear-gradient(90deg,#8b5cf6,#a78bfa)' }} />
+          <div className="w-stat-label">Общий XP</div>
+          <div className="w-stat-val" style={{ color: '#a78bfa' }}><AnimatedNumber value={wallet.xp} flashColor="#a78bfa" /></div>
+          <svg className="w-stat-illus" width="48" height="44" viewBox="0 0 48 44" fill="none">
+            <circle cx="24" cy="24" r="13" fill="#6d28d9" opacity=".2"/>
+            <path d="M16 30l5-8 4 5 3-5 4 8" stroke="#a78bfa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+          </svg>
         </div>
-        <div className="stat-card">
-          <div className="stat-icon">📈</div>
-          <div className="stat-value">{wallet.weeklyXp.toLocaleString()}</div>
-          <div className="stat-label">XP за неделю</div>
+        <div className="w-stat-card">
+          <div className="w-stat-accent" style={{ background: 'linear-gradient(90deg,#10b981,#34d399)' }} />
+          <div className="w-stat-label">XP за неделю</div>
+          <div className="w-stat-val" style={{ color: '#34d399' }}>{wallet.weeklyXp.toLocaleString()}</div>
+          <svg className="w-stat-illus" width="48" height="44" viewBox="0 0 48 44" fill="none">
+            <rect x="10" y="28" width="6" height="8" rx="2" fill="#34d399" opacity=".5"/>
+            <rect x="20" y="20" width="6" height="16" rx="2" fill="#34d399" opacity=".6"/>
+            <rect x="30" y="14" width="6" height="22" rx="2" fill="#34d399" opacity=".8"/>
+          </svg>
         </div>
       </div>
 

@@ -21,3 +21,49 @@
   font-weight: 800;
   color: #ffa726;
 }
+
+/* ── Wallet stat cards (profile style) ── */
+.w-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 0 16px 14px;
+}
+
+.w-stat-card {
+  border-radius: 14px;
+  padding: 14px;
+  position: relative;
+  overflow: hidden;
+  min-height: 100px;
+  background: rgba(255,255,255,0.04);
+  border: 0.5px solid rgba(255,255,255,0.08);
+}
+
+.w-stat-accent {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+}
+
+.w-stat-label {
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 6px;
+}
+
+.w-stat-val {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+
+.w-stat-illus {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  opacity: 0.5;
+  pointer-events: none;
+}
