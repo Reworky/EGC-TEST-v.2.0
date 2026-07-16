@@ -58,3 +58,136 @@ body {
 .error-msg {
   color: #ef5350;
 }
+
+/* ── Spotlight card (Aceternity) ── */
+.spotlight-card {
+  position: relative;
+  border-radius: 14px;
+  border: 0.5px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  padding: 14px;
+}
+.spotlight-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 14px;
+  background: radial-gradient(
+    500px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    rgba(123, 104, 238, 0.18),
+    transparent 50%
+  );
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+  z-index: 0;
+}
+.spotlight-card:hover::before { opacity: 1; }
+.spotlight-card > * { position: relative; z-index: 1; }
+
+/* ── Border-beam card (Aceternity) ── */
+@keyframes beam-rotate {
+  to { transform: rotate(360deg); }
+}
+.border-beam-card {
+  position: relative;
+  border-radius: 14px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+.border-beam-card::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 16px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0%, transparent 30%,
+    #7B68EE 50%, #00CED1 60%,
+    transparent 70%, transparent 100%
+  );
+  animation: beam-rotate 3s linear infinite;
+  z-index: 0;
+}
+.border-beam-card::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  border-radius: 13px;
+  background: var(--tg-theme-bg-color, #0d0d1a);
+  z-index: 1;
+}
+.border-beam-card > * { position: relative; z-index: 2; }
+
+/* ── Shimmer button (Aceternity) ── */
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+.btn-shimmer {
+  width: 100%;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(
+    110deg,
+    #1a1a2e 0%, #1a1a2e 35%,
+    #7B68EE 50%,
+    #1a1a2e 65%, #1a1a2e 100%
+  );
+  background-size: 200% auto;
+  animation: shimmer 2.5s linear infinite;
+  transition: transform 0.1s, box-shadow 0.2s;
+}
+.btn-shimmer:hover  { transform: scale(1.02); box-shadow: 0 0 20px rgba(123,104,238,0.4); }
+.btn-shimmer:active { transform: scale(0.98); }
+.btn-shimmer:disabled { opacity: 0.5; cursor: not-allowed; animation: none; }
+
+/* ── Quest card enhancements ── */
+.quest-card {
+  transition: transform 0.2s, box-shadow 0.2s, background 0.15s !important;
+}
+.quest-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+}
+
+/* Category badge */
+.quest-cat-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border: 1px solid currentColor;
+}
+.quest-cat-badge.easy   { color: #66bb6a; border-color: rgba(102,187,106,0.4); background: rgba(102,187,106,0.1); }
+.quest-cat-badge.medium { color: #ffa726; border-color: rgba(255,167,38,0.4);  background: rgba(255,167,38,0.1); }
+.quest-cat-badge.hard   { color: #ef5350; border-color: rgba(239,83,80,0.4);   background: rgba(239,83,80,0.1); }
+.quest-cat-badge.other  { color: #888;    border-color: rgba(136,136,136,0.3); background: rgba(136,136,136,0.08); }
+
+/* Quest skeleton */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 0.8; }
+}
+.quest-skeleton-item {
+  background: rgba(255,255,255,0.05);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 10px;
+}
+.skel {
+  background: rgba(255,255,255,0.1);
+  border-radius: 6px;
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+

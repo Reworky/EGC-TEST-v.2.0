@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getWallet, claimDailyBonus, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, getReferrals } from '../api/client';
+import BorderBeamCard from '../components/BorderBeamCard';
+import ShimmerButton from '../components/ShimmerButton';
 import './QuestsPage.css';
 import './ShopPage.css';
 import './ReferralsPage.css';
@@ -60,10 +62,18 @@ function BalanceView({ wallet, onChanged }) {
 
   return (
     <>
-      <div className="wallet-hero">
-        <div className="wallet-hero-label">Баланс клуба</div>
-        <div className="wallet-hero-value"><i className="ti ti-coin"></i> {wallet.coins.toLocaleString()} EXC</div>
-      </div>
+      <BorderBeamCard style={{ margin: '12px 16px', textAlign: 'center' }}>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 4 }}>
+          <i className="ti ti-wallet" /> Баланс клуба
+        </div>
+        <div style={{ fontSize: 30, fontWeight: 600, color: '#F5A623' }}>
+          <i className="ti ti-coin" style={{ marginRight: 4 }} />
+          {wallet.coins.toLocaleString()} EXC
+        </div>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>
+          ≈ {+(wallet.coins * wallet.healthRatioPercent / 100 / 100).toFixed(1)} ₽ · фонд {wallet.healthRatioPercent}%
+        </div>
+      </BorderBeamCard>
 
       <div className="ref-stats-grid">
         <div className="stat-card">
@@ -105,9 +115,9 @@ function BalanceView({ wallet, onChanged }) {
         {wallet.dailyBonusAvailable ? (
           <>
             <p className="shop-desc"><i className="ti ti-flame"></i> Серия: {wallet.streakDays} дн. · Следующий бонус: +{wallet.nextDailyBonusExc} EXC</p>
-            <button className="quest-btn" disabled={busy} onClick={handleClaim}>
-              {busy ? 'Секунду...' : <><i className="ti ti-gift"></i> Забрать бонус</>}
-            </button>
+            <ShimmerButton disabled={busy} onClick={handleClaim}>
+              {busy ? 'Секунду...' : <><i className="ti ti-gift" style={{ marginRight: 6 }} /> Забрать бонус</>}
+            </ShimmerButton>
           </>
         ) : (
           <p className="shop-desc"><i className="ti ti-circle-check"></i> Бонус за сегодня уже получен. Серия: {wallet.streakDays} дн. Возвращайся завтра за +{wallet.nextDailyBonusExc} EXC.</p>

@@ -5,6 +5,24 @@ import './QuestsPage.css';
 
 const CATEGORY_ORDER = ['Лёгкие', 'Средние', 'Сложные'];
 const CATEGORY_COLORS = { 'Лёгкие': '#66bb6a', 'Средние': '#ffa726', 'Сложные': '#ef5350' };
+const CATEGORY_BADGE = { 'Лёгкие': 'easy', 'Средние': 'medium', 'Сложные': 'hard' };
+
+function QuestSkeleton() {
+  return (
+    <div className="quest-skeleton-item">
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div className="skel" style={{ height: 14, width: '55%' }} />
+        <div className="skel" style={{ height: 14, width: '20%' }} />
+      </div>
+      <div className="skel" style={{ height: 11, width: '100%', marginBottom: 6 }} />
+      <div className="skel" style={{ height: 11, width: '70%', marginBottom: 12 }} />
+      <div style={{ display: 'flex', gap: 8 }}>
+        <div className="skel" style={{ height: 20, width: 80 }} />
+        <div className="skel" style={{ height: 20, width: 64 }} />
+      </div>
+    </div>
+  );
+}
 
 const STATUS_LABELS = {
   DRAFT: 'В процессе',
@@ -136,6 +154,18 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
       className={`quest-card ${q.submissionStatus ? 'quest-card-taken' : ''}`}
       onClick={() => onToggle(q.id)}
     >
+      {/* Шапка: категория + статус */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span className={`quest-cat-badge ${CATEGORY_BADGE[q.category] || 'other'}`}>
+          {q.category}
+        </span>
+        {q.submissionStatus && (
+          <span className="quest-taken-badge" style={{ color: STATUS_COLORS[q.submissionStatus] }}>
+            ● {STATUS_LABELS[q.submissionStatus] || q.submissionStatus}
+          </span>
+        )}
+      </div>
+
       <div className="quest-top">
         <div className="quest-title">{q.title}</div>
         <div className="quest-rewards">
@@ -146,11 +176,6 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
       <div className="quest-meta">
         <span className="quest-duration">⏱ {q.durationDays === 1 ? '24 ч' : q.durationDays + ' дн'}</span>
         <span className="quest-platform">{q.platform}</span>
-        {q.submissionStatus && (
-          <span className="quest-taken-badge" style={{ color: STATUS_COLORS[q.submissionStatus] }}>
-            ● {STATUS_LABELS[q.submissionStatus] || q.submissionStatus}
-          </span>
-        )}
       </div>
       {expanded === q.id && (
         <div className="quest-detail" onClick={e => e.stopPropagation()}>
@@ -233,7 +258,11 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged }) {
                 </button>
               ))}
             </div>
-            {loading && <div className="page-center">Загрузка...</div>}
+            {loading && (
+              <div className="category-section">
+                {[1,2,3].map(i => <QuestSkeleton key={i} />)}
+              </div>
+            )}
             {!loading && Object.entries(grouped).map(([cat, list]) => (
               <div key={cat} className="category-section">
                 <div className="category-header" style={{ color: CATEGORY_COLORS[cat] }}>{cat}</div>

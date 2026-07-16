@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getProfile, getAvatarUrl } from '../api/client';
+import SpotlightCard from '../components/SpotlightCard';
 import fireFrame from '../assets/frames/fire.png';
 import iceFrame from '../assets/frames/ice.png';
 import purpleFrame from '../assets/frames/purple.png';
@@ -140,7 +141,8 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <div className="stats-grid">
+      <SpotlightCard style={{ margin: '0 16px 12px', padding: 0 }}>
+      <div className="stats-grid" style={{ margin: 0, padding: 14 }}>
         <div className="stat-card">
           <div className="stat-icon">💰</div>
           <div className="stat-value">{profile.coins.toLocaleString()}</div>
@@ -162,6 +164,7 @@ export default function ProfilePage() {
           <div className="stat-label">Лимит вывода</div>
         </div>
       </div>
+      </SpotlightCard>
 
       <div className="nav-links">
         <Link to="/wallet" className="nav-link-row">
