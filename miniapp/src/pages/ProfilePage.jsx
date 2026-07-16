@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getProfile, getAvatarUrl } from '../api/client';
+import SplineHero from '../components/SplineHero';
 import fireFrame from '../assets/frames/fire.png';
 import iceFrame from '../assets/frames/ice.png';
 import purpleFrame from '../assets/frames/purple.png';
@@ -87,6 +88,8 @@ export default function ProfilePage() {
       style={{ '--rank-blob-1': hexToRgba(rank.primary, 0.12 + tierIndex * 0.045), '--rank-blob-2': hexToRgba(rank.secondary, 0.1 + tierIndex * 0.04) }}
     >
       <div className="profile-glow" style={{ background: ringColor }} />
+
+      <SplineHero coins={profile.coins} />
 
       <div className="profile-header">
         <div className="avatar-wrap">

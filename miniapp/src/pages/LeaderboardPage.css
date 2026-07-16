@@ -1,5 +1,12 @@
 .lb-page {
+  position: relative;
+  min-height: 100vh;
   padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+}
+
+.lb-content {
+  position: relative;
+  z-index: 1;
 }
 
 .lb-hint {
@@ -17,11 +24,13 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: rgba(255,255,255,0.05);
+  background: rgba(255,255,255,0.07);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 0.5px solid rgba(255,255,255,0.15);
   border-radius: 12px;
   padding: 10px 14px;
   margin-bottom: 8px;
-  border: 1px solid transparent;
 }
 
 .lb-row-me {
@@ -68,7 +77,9 @@
 .lb-me-card {
   margin: 16px 16px 0;
   padding: 14px;
-  background: rgba(108, 99, 255, 0.15);
+  background: rgba(108, 99, 255, 0.2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(108, 99, 255, 0.4);
   border-radius: 12px;
 }

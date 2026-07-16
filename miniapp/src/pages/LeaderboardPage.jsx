@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getLeaderboard } from '../api/client';
+import VantaBackground from '../components/VantaBackground';
 import './QuestsPage.css';
 import './LeaderboardPage.css';
 
@@ -31,6 +32,23 @@ export default function LeaderboardPage() {
 
   return (
     <div className="lb-page">
+      <VantaBackground
+        effect="NET"
+        config={{
+          color: 0x7B68EE,
+          backgroundColor: 0x0d0d1a,
+          points: 12,
+          maxDistance: 18,
+          spacing: 16,
+          showDots: true,
+          mouseControls: true,
+          touchControls: true,
+          gyroControls: false,
+          scale: 1.0,
+          scaleMobile: 0.8,
+        }}
+      />
+      <div className="lb-content">
       <div className="view-toggle">
         <button className={`view-tab ${type === 'overall' ? 'active' : ''}`} onClick={() => setType('overall')}>
           🌍 Общий
@@ -75,6 +93,7 @@ export default function LeaderboardPage() {
           )}
         </>
       )}
+      </div>
     </div>
   );
 }
