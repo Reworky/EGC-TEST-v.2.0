@@ -494,8 +494,7 @@ public class QuestService {
 
     public RewardPreview computeReward(AppUser user, Quest quest) {
         long baseCoins = quest.getRewardCoins();
-        double hr = healthRatioService.getCurrentRatio();
-        long adjustedCoins = Math.round(baseCoins * hr);
+        long adjustedCoins = baseCoins; // EXC начисляются полные; HR влияет только на рублёвый эквивалент
 
         // 3.4 Antifaud: diminishing returns after 3 completions of same type per week
         LocalDateTime weekAgo = LocalDateTime.now().minusWeeks(1);
