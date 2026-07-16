@@ -7,6 +7,7 @@ import './QuestsPage.css';
 const CATEGORY_ORDER = ['Лёгкие', 'Средние', 'Сложные'];
 const CATEGORY_COLORS = { 'Лёгкие': '#66bb6a', 'Средние': '#ffa726', 'Сложные': '#ef5350' };
 const CATEGORY_BADGE = { 'Лёгкие': 'easy', 'Средние': 'medium', 'Сложные': 'hard' };
+const CATEGORY_CLASS = { 'Лёгкие': 'q-easy', 'Средние': 'q-medium', 'Сложные': 'q-hard' };
 
 function QuestSkeleton() {
   return (
@@ -154,7 +155,7 @@ function QuestActions({ quest, detail, onChanged }) {
 function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
   return (
     <div
-      className={`quest-card ${q.submissionStatus ? 'quest-card-taken' : ''}`}
+      className={`quest-card ${CATEGORY_CLASS[q.category] || 'q-ugc'} ${q.submissionStatus ? 'quest-card-taken' : ''}`}
       onClick={() => onToggle(q.id)}
     >
       {/* Шапка: категория + статус */}
