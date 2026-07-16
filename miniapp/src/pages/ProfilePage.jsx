@@ -256,7 +256,15 @@ export default function ProfilePage() {
             )}
           </div>
 
-          <div style={{ marginTop: 50 }}>
+          <div style={{
+            marginTop: 50,
+            background: `rgba(0,0,0,0.35)`,
+            border: `1px solid ${rank.primary}33`,
+            borderRadius: 14,
+            padding: '10px 14px',
+            backdropFilter: 'blur(8px)',
+            boxShadow: `0 0 18px ${rank.primary}15`,
+          }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span className="p-nickname">{profile.nickname}</span>
               {profile.isCouncilMember && <i className="ti ti-crown" style={{ color: '#FFD700', fontSize: 14 }} />}
