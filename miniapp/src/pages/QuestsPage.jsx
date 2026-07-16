@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getQuests, getGames, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard } from '../api/client';
+import { useLottie } from '../components/LottieContext';
 import './QuestsPage.css';
 
 const CATEGORY_ORDER = ['Лёгкие', 'Средние', 'Сложные'];
@@ -27,6 +28,8 @@ function QuestActions({ quest, detail, onChanged }) {
   const [photo, setPhoto] = useState(null);
   const [externalLink, setExternalLink] = useState('');
   const [comment, setComment] = useState('');
+  const playLottie = useLottie();
+  const prevStatus = useRef(detail?.status);
 
   if (!detail) {
     return <div className="quest-detail-loading">Загрузка...</div>;
@@ -67,12 +70,19 @@ function QuestActions({ quest, detail, onChanged }) {
     }
   }
 
+  useEffect(() => {
+    if (prevStatus.current !== 'APPROVED' && status === 'APPROVED') {
+      playLottie?.();
+    }
+    prevStatus.current = status;
+  }, [status]);
+
   if (status === 'APPROVED') {
-    return <div className="quest-status quest-status-approved">✅ Квест выполнен и оплачен</div>;
+    return <div className="quest-status quest-status-approved"><i className="ti ti-circle-check"></i> Квест выполнен и оплачен</div>;
   }
 
   if (status === 'PENDING') {
-    return <div className="quest-status quest-status-pending">⏳ Отчёт на проверке у модератора</div>;
+    return <div className="quest-status quest-status-pending"><i className="ti ti-clock"></i> Отчёт на проверке у модератора</div>;
   }
 
   if (status === 'DRAFT' || status === 'REJECTED' || status === 'NEEDS_INFO') {
@@ -130,8 +140,8 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
       <div className="quest-top">
         <div className="quest-title">{q.title}</div>
         <div className="quest-rewards">
-          <span className="reward-exc">{q.rewardCoins.toLocaleString()} EXC</span>
-          <span className="reward-xp">{q.rewardXp} XP</span>
+          <span className="reward-exc"><i className="ti ti-coin"></i> {q.rewardCoins.toLocaleString()} EXC</span>
+          <span className="reward-xp"><i className="ti ti-star"></i> {q.rewardXp} XP</span>
         </div>
       </div>
       <div className="quest-meta">
@@ -314,8 +324,8 @@ function MyQuestsView({ expanded, details, onToggle, onDetailChanged }) {
           <div className="quest-top">
             <div className="quest-title">{m.title}</div>
             <div className="quest-rewards">
-              <span className="reward-exc">{m.rewardCoins.toLocaleString()} EXC</span>
-              <span className="reward-xp">{m.rewardXp} XP</span>
+              <span className="reward-exc"><i className="ti ti-coin"></i> {m.rewardCoins.toLocaleString()} EXC</span>
+              <span className="reward-xp"><i className="ti ti-star"></i> {m.rewardXp} XP</span>
             </div>
           </div>
           <div className="quest-meta">

@@ -4,6 +4,21 @@
   padding: 0;
 }
 
+/* Tabler Icons global */
+.ti {
+  font-size: 1em;
+  vertical-align: -2px;
+  line-height: 1;
+}
+.ti-coin { color: #F5A623; }
+.ti-star { color: #7B68EE; }
+.ti-trophy { color: #FFD700; }
+.ti-flame { color: #FF4500; }
+.ti-gift { color: #a855f7; }
+.ti-circle-check { color: #66bb6a; }
+.ti-circle-x { color: #ef5350; }
+.ti-clock { color: #ffa726; }
+
 :root {
   --egc-accent: #7c3aed;
   --egc-accent-2: #a855f7;

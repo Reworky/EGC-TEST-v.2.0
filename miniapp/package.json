@@ -10,8 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tabler/icons-webfont": "^3.44.0",
     "@twa-dev/sdk": "^8.0.2",
     "axios": "^1.18.1",
+    "lottie-web": "^5.13.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.18.1"

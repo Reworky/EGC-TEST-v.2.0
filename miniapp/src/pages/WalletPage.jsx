@@ -7,11 +7,11 @@ import './ReferralsPage.css';
 import './WalletPage.css';
 
 const STATUS_LABELS = {
-  PENDING: '⏳ Ожидает',
-  IN_PROGRESS: '🔄 В обработке',
-  APPROVED: '✅ Выплачено',
-  REJECTED: '❌ Отклонено',
-  CANCELLED: '🚫 Отменено',
+  PENDING: <><i className="ti ti-clock"></i> Ожидает</>,
+  IN_PROGRESS: <><i className="ti ti-clock"></i> В обработке</>,
+  APPROVED: <><i className="ti ti-circle-check"></i> Выплачено</>,
+  REJECTED: <><i className="ti ti-circle-x"></i> Отклонено</>,
+  CANCELLED: <><i className="ti ti-circle-x"></i> Отменено</>,
 };
 
 function BalanceView({ wallet, onChanged }) {
@@ -62,7 +62,7 @@ function BalanceView({ wallet, onChanged }) {
     <>
       <div className="wallet-hero">
         <div className="wallet-hero-label">Баланс клуба</div>
-        <div className="wallet-hero-value">🪙 {wallet.coins.toLocaleString()} EXC</div>
+        <div className="wallet-hero-value"><i className="ti ti-coin"></i> {wallet.coins.toLocaleString()} EXC</div>
       </div>
 
       <div className="ref-stats-grid">
@@ -77,7 +77,7 @@ function BalanceView({ wallet, onChanged }) {
           <div className="stat-label">Билеты сезона</div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon">✨</div>
+          <div className="stat-icon"><i className="ti ti-star"></i></div>
           <div className="stat-value">{wallet.xp.toLocaleString()}</div>
           <div className="stat-label">Общий XP</div>
         </div>
@@ -95,7 +95,7 @@ function BalanceView({ wallet, onChanged }) {
         </div>
         {wallet.fixedRubBalance > 0 && (
           <div className="ref-progress-label">
-            ✅ Гарантировано к выводу: {wallet.fixedRubBalance.toLocaleString()} ₽
+            <i className="ti ti-circle-check"></i> Гарантировано к выводу: {wallet.fixedRubBalance.toLocaleString()} ₽
           </div>
         )}
       </div>
@@ -104,13 +104,13 @@ function BalanceView({ wallet, onChanged }) {
         <div className="ref-link-label">Ежедневный бонус</div>
         {wallet.dailyBonusAvailable ? (
           <>
-            <p className="shop-desc">🔥 Серия: {wallet.streakDays} дн. · Следующий бонус: +{wallet.nextDailyBonusExc} EXC</p>
+            <p className="shop-desc"><i className="ti ti-flame"></i> Серия: {wallet.streakDays} дн. · Следующий бонус: +{wallet.nextDailyBonusExc} EXC</p>
             <button className="quest-btn" disabled={busy} onClick={handleClaim}>
-              {busy ? 'Секунду...' : '🎁 Забрать бонус'}
+              {busy ? 'Секунду...' : <><i className="ti ti-gift"></i> Забрать бонус</>}
             </button>
           </>
         ) : (
-          <p className="shop-desc">✅ Бонус за сегодня уже получен. Серия: {wallet.streakDays} дн. Возвращайся завтра за +{wallet.nextDailyBonusExc} EXC.</p>
+          <p className="shop-desc"><i className="ti ti-circle-check"></i> Бонус за сегодня уже получен. Серия: {wallet.streakDays} дн. Возвращайся завтра за +{wallet.nextDailyBonusExc} EXC.</p>
         )}
         {message && <div className="quest-message">{message}</div>}
       </div>

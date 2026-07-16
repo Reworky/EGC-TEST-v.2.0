@@ -34,11 +34,11 @@ const PERK_CATEGORIES = [
 ];
 
 const STATUS_LABELS = {
-  PENDING: 'На проверке',
-  IN_PROGRESS: 'В обработке',
-  APPROVED: 'Выдано',
-  REJECTED: 'Отклонено',
-  CANCELLED: 'Отменено',
+  PENDING: <><i className="ti ti-clock"></i> На проверке</>,
+  IN_PROGRESS: <><i className="ti ti-clock"></i> В обработке</>,
+  APPROVED: <><i className="ti ti-circle-check"></i> Выдано</>,
+  REJECTED: <><i className="ti ti-circle-x"></i> Отклонено</>,
+  CANCELLED: <><i className="ti ti-circle-x"></i> Отменено</>,
 };
 const STATUS_COLORS = {
   PENDING: '#ffa726',
@@ -137,7 +137,7 @@ function ShopItemsView({ expanded, onToggle }) {
   return (
     <>
       <div className="shop-header">
-        {profile && <div className="shop-balance">🪙 {profile.coins.toLocaleString()} EXC</div>}
+        {profile && <div className="shop-balance"><i className="ti ti-coin"></i> {profile.coins.toLocaleString()} EXC</div>}
         {stats && (
         <>
           <div className="shop-ratio" onClick={() => setShowFundInfo(true)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -210,7 +210,7 @@ function PerkCard({ item, state, expanded, onToggle, onPurchased }) {
         <div className="shop-price">{item.price.toLocaleString()} EXC</div>
       </div>
       {active && (
-        <div className="shop-status">✅ Активен{untilText ? ` до ${untilText}` : ''}</div>
+        <div className="shop-status"><i className="ti ti-circle-check"></i> Активен{untilText ? ` до ${untilText}` : ''}</div>
       )}
       {expanded && (
         <div className="shop-detail" onClick={e => e.stopPropagation()}>
@@ -291,7 +291,7 @@ function PerksView({ expanded, onToggle }) {
   return (
     <>
       <div className="shop-header">
-        <div className="shop-balance">🪙 {state.coins.toLocaleString()} EXC</div>
+        <div className="shop-balance"><i className="ti ti-coin"></i> {state.coins.toLocaleString()} EXC</div>
         {state.profileTitle && <div className="shop-ratio">🏅 {state.profileTitle}</div>}
       </div>
 
