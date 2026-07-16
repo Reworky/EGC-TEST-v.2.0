@@ -29,7 +29,7 @@ function QuestActions({ quest, detail, onChanged }) {
   const [externalLink, setExternalLink] = useState('');
   const [comment, setComment] = useState('');
   const playLottie = useLottie();
-  const prevStatus = useRef(detail?.status);
+  const prevStatus = useRef(quest.submissionStatus);
   const status = detail?.submissionStatus;
 
   useEffect(() => {
