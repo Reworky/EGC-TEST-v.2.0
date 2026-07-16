@@ -256,7 +256,7 @@ export default function ProfilePage() {
             )}
           </div>
 
-          <div style={{ marginTop: 20 }}>
+          <div style={{ marginTop: 32 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span className="p-nickname">{profile.nickname}</span>
               {profile.isCouncilMember && <i className="ti ti-crown" style={{ color: '#FFD700', fontSize: 14 }} />}
