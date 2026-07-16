@@ -1907,8 +1907,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "✨ Общий XP: <b>" + user.getXp() + "</b>\n"
                         + "📈 XP за неделю: <b>" + user.getWeeklyXp() + "</b>\n\n"
                         + "📊 <b>Состояние фонда клуба: " + ratioPercent + "%</b>\n"
-                        + hrExplanationLine(ratioPercent, effectiveQuestReward) + "\n"
-                        + "Чем активнее вы играете, тем быстрее открываете сильные награды и поднимаетесь в рейтинге.",
+                        + hrExplanationLine(ratioPercent, effectiveQuestReward),
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("💸 Вывести EXC", "shop:withdraw")),
                         List.of(keyboardFactory.callback("⬅️ Назад", backData))
