@@ -26,6 +26,21 @@ public class QuestSeeder implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
 
+        // Удаляем конкретные устаревшие квесты
+        for (String[] titleAndGame : new String[][]{
+                {"8 убийств в одном матче", "PUBG Mobile"},
+                {"3 победы за неделю",      "PUBG Mobile"},
+        }) {
+            questRepository.findAll().stream()
+                    .filter(q -> titleAndGame[0].equalsIgnoreCase(q.getTitle())
+                             && titleAndGame[1].equalsIgnoreCase(q.getGameName()))
+                    .forEach(q -> {
+                        questSubmissionRepository.deleteAllByQuest(q);
+                        questRepository.delete(q);
+                        log.info("[QuestSeeder] Deleted quest '{}' ({})", q.getTitle(), q.getGameName());
+                    });
+        }
+
         // Удаляем устаревшие названия игр
         for (String obsolete : List.of("PUBG", "PUBG mobile", "PUBG MOBILE", "EA FC 25")) {
             questRepository.findAll().stream()
@@ -221,17 +236,6 @@ public class QuestSeeder implements CommandLineRunner {
                 "Играй ранговые матчи и набирай очки рейтинга. При достижении Платины появится анимация повышения ранга. Текущий ранг виден в профиле аккаунта.",
                 "Скриншот профиля PUBG Mobile с иконкой ранга Платина или выше и никнеймом аккаунта. Ранг и ник должны быть в одном кадре.");
 
-        seed("3 победы за неделю", "PUBG Mobile",
-                "Сложные", "Mobile", 7, "168 часов", 250, 10000,
-                "Получи Chicken Dinner в трёх разных матчах классического режима в течение 7 дней.",
-                "Играй ежедневно и стремись к победе. После трёх побед зайди в историю матчей — там видны все результаты.",
-                "Скриншот истории матчей с тремя победами (#1 / Chicken Dinner) за последние 7 дней и никнеймом аккаунта. Все три победы и ник должны быть в одном кадре.");
-
-        seed("8 убийств в одном матче", "PUBG Mobile",
-                "Сложные", "Mobile", 7, "168 часов", 250, 10000,
-                "Набери 8 и более убийств в одном матче классического режима PUBG Mobile.",
-                "Высаживайся в самые горячие точки и атакуй агрессивно весь матч. После матча послематчевый экран покажет убийства.",
-                "Скриншот послематчевого экрана с 8+ убийствами и никнеймом аккаунта. Убийства и ник должны быть в одном кадре.");
 
         // ── Mobile Legends: удаляем все старые квесты, оставляем только 10 актуальных ──
         Set<String> keepMlTitles = Set.of(
