@@ -22,7 +22,7 @@ const DEFAULT_RANK = { primary: '#9CA3AF', icon: '🥚' };
 
 const TIER_THRESHOLDS = [0, 1000, 5000, 15000, 35000, 75000, 150000, 300000];
 const FRAME_IMAGES = { fire: fireFrame, ice: iceFrame, purple: purpleFrame, gold: goldFrame };
-const FRAME_SIZES = { fire: 122, ice: 120, purple: 118, gold: 133 };
+const FRAME_SIZES = { fire: 122, ice: 120, purple: 118, gold: 126 };
 
 // ── SVG illustrations ────────────────────────────────────────
 const SVG_EXC = (
