@@ -1915,8 +1915,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private String rateString(int ratioPercent) {
-        long rubPer1000 = Math.round(10.0 * ratioPercent / 100.0);
-        return "1 000 EXC = " + rubPer1000 + " ₽ (фонд " + ratioPercent + "%)";
+        double rubPer1000 = 10.0 * ratioPercent / 100.0;
+        String rubStr = rubPer1000 == Math.floor(rubPer1000)
+                ? String.valueOf((long) rubPer1000)
+                : String.format("%.1f", rubPer1000).replace('.', ',');
+        return "1 000 EXC = " + rubStr + " ₽ (фонд " + ratioPercent + "%)";
     }
 
     private String hrExplanationLine(int ratioPercent, long effectiveRewardPer100) {

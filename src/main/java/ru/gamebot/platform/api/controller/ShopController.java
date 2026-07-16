@@ -63,7 +63,9 @@ public class ShopController {
                 "healthRatioPercent", ratioPercent,
                 "payoutPoolRub", healthRatioService.getPayoutPoolRub(),
                 "totalDebtExc", healthRatioService.getTotalDebtExc(),
-                "baseRate", "1 000 EXC = " + Math.round(10.0 * healthRatioService.getCurrentRatio()) + " ₽"
+                "baseRate", "1 000 EXC = " + (healthRatioService.getCurrentRatio() * 10 % 1 == 0
+                        ? String.valueOf((long)(healthRatioService.getCurrentRatio() * 10))
+                        : String.format("%.1f", healthRatioService.getCurrentRatio() * 10).replace('.', ',')) + " ₽"
         );
     }
 
