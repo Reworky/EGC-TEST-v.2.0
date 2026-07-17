@@ -30,6 +30,7 @@ public class ExcTransactionService {
     public static final String SEASON     = "SEASON";
     public static final String COUNCIL    = "COUNCIL";
     public static final String WITHDRAWAL = "WITHDRAWAL";
+    public static final String TRANSFER   = "TRANSFER";
 
     @Transactional(propagation = Propagation.REQUIRED)
     public void log(AppUser user, long amount, String type, String description) {
@@ -67,6 +68,7 @@ public class ExcTransactionService {
             case SEASON     -> "🎫 Battle Pass";
             case COUNCIL    -> "🛡️ Council";
             case WITHDRAWAL -> "💸 Вывод";
+            case TRANSFER   -> "🔄 Перевод";
             default         -> "📌 Прочее";
         };
     }

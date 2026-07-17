@@ -1676,6 +1676,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
                 }
             }
+            case TRANSFER_EXC_RECIPIENT -> handleTransferRecipientInput(user, session, text);
+            case TRANSFER_EXC_AMOUNT -> handleTransferAmountInput(user, session, text);
             case WITHDRAWAL_INPUT -> handleWithdrawalInput(user, session, text);
             case WITHDRAWAL_DETAILS -> handleWithdrawalDetails(user, session, text);
             case WITHDRAWAL_TON_AMOUNT -> handleWithdrawalTonAmount(user, session, text);
@@ -3141,6 +3143,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         rows.add(List.of(keyboardFactory.callback("— Социальные —", "sink:noop")));
         rows.add(List.of(keyboardFactory.callback("🎁 Подарок другу (буст) — 4 500 EXC", "sink:gift")));
+        rows.add(List.of(keyboardFactory.callback("🔄 Перевод EXC другу — 10% комиссия", "sink:transfer")));
         rows.add(List.of(keyboardFactory.callback("⚔️ 🔒 Дуэль — Скоро", "sink:soon")));
         rows.add(List.of(keyboardFactory.callback("📢 🔒 Место в ТОП-посте — Скоро", "sink:soon")));
 
@@ -3224,6 +3227,55 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(user.getTelegramId(),
                     "🎁 <b>Подарок другу</b>\n\nОтправьте XP-буст на 24 часа другому игроку.\nСтоимость: 4 500 EXC.\n\nВведите ник получателя (как в профиле бота):",
                     backMenuKeyboard("menu:sink"));
+            }
+            case "transfer" -> {
+                UserSession ts = sessionService.get(user.getTelegramId());
+                ts.setState(SessionState.TRANSFER_EXC_RECIPIENT);
+                sendText(user.getTelegramId(),
+                    "🔄 <b>Перевод EXC</b>\n\n"
+                    + "Переведи EXC другому игроку.\n"
+                    + "Комиссия: 10% от суммы (мин. 200 EXC) — сгорает.\n"
+                    + "Лимит: 1 перевод в сутки.\n\n"
+                    + "Введи ник получателя (как в профиле бота):",
+                    backMenuKeyboard("menu:sink"));
+            }
+            case "transfer:cancel" -> {
+                sessionService.get(user.getTelegramId()).reset();
+                sendSinkShop(user);
+            }
+            case "transfer:confirm" -> {
+                UserSession ts = sessionService.get(user.getTelegramId());
+                String recipientIdStr = ts.getData().get("transfer_recipient_id");
+                String amountStr = ts.getData().get("transfer_amount");
+                ts.reset();
+                if (recipientIdStr == null || amountStr == null) {
+                    sendText(user.getTelegramId(), "⚠️ Сессия устарела. Начните перевод заново.", backMenuKeyboard("menu:sink"));
+                    return;
+                }
+                AppUser recipient = appUserRepository.findByTelegramId(Long.parseLong(recipientIdStr)).orElse(null);
+                if (recipient == null) {
+                    sendText(user.getTelegramId(), "⚠️ Получатель не найден.", backMenuKeyboard("menu:sink"));
+                    return;
+                }
+                long amount = Long.parseLong(amountStr);
+                try {
+                    var transfer = sinkShopService.executeTransfer(user, recipient, amount);
+                    sendText(user.getTelegramId(),
+                        "✅ <b>Перевод выполнен!</b>\n\n"
+                        + "Получатель: <b>" + escape(displayUserName(recipient)) + "</b>\n"
+                        + "Сумма: <b>" + transfer.getAmount() + " EXC</b>\n"
+                        + "Комиссия (сгорела): <b>" + transfer.getCommission() + " EXC</b>\n"
+                        + "Списано с тебя: <b>" + transfer.getTotalDebited() + " EXC</b>",
+                        backMenuKeyboard("menu:sink"));
+                    try {
+                        sendText(recipient.getTelegramId(),
+                            "🔄 <b>Тебе перевели " + transfer.getAmount() + " EXC</b>\n\n"
+                            + "Отправитель: <b>" + escape(displayUserName(user)) + "</b>",
+                            backMenuKeyboard("menu:main"));
+                    } catch (Exception ignored) { }
+                } catch (IllegalArgumentException e) {
+                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
+                }
             }
             case "insurance" -> {
                 try {
@@ -3386,6 +3438,65 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         completePurchase(callbackQuery, user, reward, null);
+    }
+
+    private void handleTransferRecipientInput(AppUser user, UserSession session, String text) {
+        String nickname = text.trim().replaceFirst("^@", "");
+        AppUser recipient = userService.findByNickname(nickname).orElse(null);
+        if (recipient == null) {
+            sendText(user.getTelegramId(),
+                "⚠️ Игрок с ником «" + escape(nickname) + "» не найден. Проверьте написание и попробуйте снова:",
+                backMenuKeyboard("menu:sink"));
+            return;
+        }
+        if (recipient.getTelegramId().equals(user.getTelegramId())) {
+            sendText(user.getTelegramId(), "⚠️ Нельзя переводить EXC самому себе.", backMenuKeyboard("menu:sink"));
+            session.reset();
+            return;
+        }
+        session.getData().put("transfer_recipient_id", String.valueOf(recipient.getTelegramId()));
+        session.setState(SessionState.TRANSFER_EXC_AMOUNT);
+        sendText(user.getTelegramId(),
+            "✅ Найден игрок: <b>" + escape(displayUserName(recipient)) + "</b>\n\n"
+            + "Введи сумму перевода (от 1 000 до 10 000 EXC):",
+            backMenuKeyboard("menu:sink"));
+    }
+
+    private void handleTransferAmountInput(AppUser user, UserSession session, String text) {
+        long amount;
+        try {
+            amount = Long.parseLong(text.trim().replace(",", "").replace(" ", ""));
+        } catch (NumberFormatException e) {
+            sendText(user.getTelegramId(), "⚠️ Введи число, например: 5000", backMenuKeyboard("menu:sink"));
+            return;
+        }
+        if (amount < SinkShopService.TRANSFER_MIN || amount > SinkShopService.TRANSFER_MAX) {
+            sendText(user.getTelegramId(),
+                "⚠️ Сумма должна быть от " + SinkShopService.TRANSFER_MIN + " до " + SinkShopService.TRANSFER_MAX + " EXC.",
+                backMenuKeyboard("menu:sink"));
+            return;
+        }
+        long commission = sinkShopService.calcCommission(amount);
+        long totalDebited = amount + commission;
+        String recipientIdStr = session.getData().get("transfer_recipient_id");
+        AppUser recipient = appUserRepository.findByTelegramId(Long.parseLong(recipientIdStr)).orElse(null);
+        if (recipient == null) {
+            session.reset();
+            sendText(user.getTelegramId(), "⚠️ Получатель не найден. Начните заново.", backMenuKeyboard("menu:sink"));
+            return;
+        }
+        session.getData().put("transfer_amount", String.valueOf(amount));
+        session.setState(SessionState.NONE);
+        sendText(user.getTelegramId(),
+            "🔄 <b>Подтвердите перевод</b>\n\n"
+            + "Получатель: <b>" + escape(displayUserName(recipient)) + "</b>\n"
+            + "Сумма: <b>" + amount + " EXC</b>\n"
+            + "Комиссия (сгорает): <b>" + commission + " EXC</b>\n"
+            + "Спишется с тебя: <b>" + totalDebited + " EXC</b>",
+            keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("✅ Подтвердить", "sink:transfer:confirm")),
+                List.of(keyboardFactory.callback("❌ Отмена", "sink:transfer:cancel"))
+            )));
     }
 
     private void handleShopGameDataInput(AppUser user, UserSession session, String text) {

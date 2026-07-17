@@ -39,6 +39,7 @@ public class SinkShopService {
 
     private final AppUserRepository appUserRepository;
     private final ExcTransactionService excTx;
+    private final ru.gamebot.platform.domain.repository.ExcTransferRepository excTransferRepository;
 
     @Transactional
     public void purchaseReroll(AppUser user) {
@@ -295,5 +296,75 @@ public class SinkShopService {
 
     private int getDailyCount(int count, LocalDate date) {
         return LocalDate.now().equals(date) ? count : 0;
+    }
+
+    // ── EXC Transfer ────────────────────────────────────────────
+
+    public static final long TRANSFER_MIN    = 1_000;
+    public static final long TRANSFER_MAX    = 10_000;
+    public static final long TRANSFER_COMMISSION_MIN = 200;
+    public static final double TRANSFER_COMMISSION_RATE = 0.10;
+
+    /** Рассчитать комиссию для суммы перевода. */
+    public long calcCommission(long amount) {
+        return Math.max(Math.round(amount * TRANSFER_COMMISSION_RATE), TRANSFER_COMMISSION_MIN);
+    }
+
+    @Transactional
+    public ru.gamebot.platform.domain.model.ExcTransfer executeTransfer(AppUser sender, AppUser receiver, long amount) {
+        if (sender.getId().equals(receiver.getId())) {
+            throw new IllegalArgumentException("Нельзя переводить EXC самому себе.");
+        }
+        if (amount < TRANSFER_MIN || amount > TRANSFER_MAX) {
+            throw new IllegalArgumentException("Сумма перевода должна быть от " + TRANSFER_MIN + " до " + TRANSFER_MAX + " EXC.");
+        }
+        if (receiver.isFraudSuspect()) {
+            throw new IllegalArgumentException("Перевод этому игроку недоступен.");
+        }
+        if (receiver.isBlocked()) {
+            throw new IllegalArgumentException("Получатель заблокирован.");
+        }
+
+        // Дневной лимит: 1 перевод в сутки
+        long todayCount = excTransferRepository.countBySenderAndCreatedAtAfter(sender, LocalDateTime.now().toLocalDate().atStartOfDay());
+        if (todayCount >= 1) {
+            throw new IllegalArgumentException("Лимит: не более 1 перевода в сутки. Попробуйте завтра.");
+        }
+
+        long commission = calcCommission(amount);
+        long totalDebited = amount + commission;
+
+        if (sender.getCoins() < totalDebited) {
+            throw new IllegalArgumentException("Недостаточно EXC. Нужно " + totalDebited + " (перевод " + amount + " + комиссия " + commission + "), есть " + sender.getCoins() + ".");
+        }
+
+        // Списываем с отправителя
+        sender.setCoins(sender.getCoins() - totalDebited);
+        appUserRepository.save(sender);
+        excTx.log(sender, -totalDebited, ExcTransactionService.TRANSFER,
+                "Перевод → " + displayName(receiver) + " (" + amount + " EXC + " + commission + " комиссия)");
+
+        // Зачисляем получателю
+        receiver.setCoins(receiver.getCoins() + amount);
+        appUserRepository.save(receiver);
+        excTx.log(receiver, amount, ExcTransactionService.TRANSFER,
+                "Перевод от " + displayName(sender));
+
+        // Комиссия сгорает (не идёт в Payout Pool)
+
+        ru.gamebot.platform.domain.model.ExcTransfer transfer = new ru.gamebot.platform.domain.model.ExcTransfer();
+        transfer.setSender(sender);
+        transfer.setReceiver(receiver);
+        transfer.setAmount(amount);
+        transfer.setCommission(commission);
+        transfer.setTotalDebited(totalDebited);
+        return excTransferRepository.save(transfer);
+    }
+
+    private String displayName(AppUser user) {
+        if (user.getTelegramUsername() != null && !user.getTelegramUsername().isBlank()) {
+            return "@" + user.getTelegramUsername();
+        }
+        return user.getTelegramFirstName() != null ? user.getTelegramFirstName() : "ID" + user.getTelegramId();
     }
 }
