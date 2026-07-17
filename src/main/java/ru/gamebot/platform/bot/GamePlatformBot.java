@@ -1,5 +1,6 @@
 package ru.gamebot.platform.bot;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -256,6 +257,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             } else {
                 sendText(user.getTelegramId(), "Использование: /resetlimit <telegram_id>", null);
             }
+            return;
+        }
+
+        if (text != null && text.startsWith("/add_sponsor") && isEffectiveAdmin(user)) {
+            handleAddSponsor(user, text);
+            return;
+        }
+
+        if (text != null && text.startsWith("/sponsor_stats") && isEffectiveAdmin(user)) {
+            handleSponsorStats(user, text);
+            return;
+        }
+
+        if (text != null && text.equals("/sponsors_list") && isEffectiveAdmin(user)) {
+            handleSponsorsList(user);
             return;
         }
 
@@ -7838,5 +7854,131 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long registered = userService.totalRegisteredUsers();
         long roundedBase = (registered / 50) * 50;
         return roundedBase >= 50 ? "👥 Уже <b>" + roundedBase + "+</b> игроков в клубе\n\n" : "";
+    }
+
+    // ── Sponsor text commands ────────────────────────────────────────────────
+
+    private void handleAddSponsor(AppUser user, String text) {
+        // Format:
+        // /add_sponsor
+        // quest_id: 123
+        // sponsor_name: Supercell
+        // sponsor_contact: @supercell_manager
+        // start_date: 2026-07-16
+        // end_date: 2026-08-31
+        try {
+            java.util.Map<String, String> params = new java.util.HashMap<>();
+            for (String line : text.split("\n")) {
+                int colon = line.indexOf(':');
+                if (colon > 0) {
+                    String key = line.substring(0, colon).trim().toLowerCase().replace(' ', '_');
+                    String val = line.substring(colon + 1).trim();
+                    params.put(key, val);
+                }
+            }
+            String name = params.get("sponsor_name");
+            String contact = params.getOrDefault("sponsor_contact", "");
+            String questIdStr = params.get("quest_id");
+            String startStr = params.get("start_date");
+            String endStr = params.get("end_date");
+
+            if (name == null || startStr == null || endStr == null) {
+                sendText(user.getTelegramId(),
+                        "❌ Не хватает полей. Нужно:\n"
+                                + "<code>/add_sponsor\nquest_id: 123\nsponsor_name: Supercell\nsponsor_contact: @manager\nstart_date: 2026-07-16\nend_date: 2026-08-31</code>",
+                        null);
+                return;
+            }
+
+            Long questId = questIdStr != null ? Long.parseLong(questIdStr.trim()) : null;
+            LocalDate start = LocalDate.parse(startStr.trim());
+            LocalDate end = LocalDate.parse(endStr.trim());
+
+            ru.gamebot.platform.domain.model.Sponsor sp = sponsorService.createSimple(name, contact, questId, start, end);
+
+            String questTitle = "не указан";
+            if (questId != null) {
+                try { questTitle = questService.getQuest(questId).getTitle(); } catch (Exception ignored) { questTitle = "квест #" + questId; }
+            }
+
+            sendText(user.getTelegramId(),
+                    "✅ Спонсор создан (ID: " + sp.getId() + ")\n\n"
+                            + "🏢 <b>" + escape(sp.getName()) + "</b>\n"
+                            + "📞 " + escape(contact) + "\n"
+                            + "🎯 Квест: " + escape(questTitle) + "\n"
+                            + "📅 " + start.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+                            + " — " + end.format(DateTimeFormatter.ofPattern("dd.MM.yyyy")),
+                    null);
+        } catch (Exception e) {
+            sendText(user.getTelegramId(), "❌ Ошибка: " + e.getMessage(), null);
+        }
+    }
+
+    private void handleSponsorStats(AppUser user, String text) {
+        String[] parts = text.trim().split("\\s+");
+        if (parts.length < 2) {
+            sendText(user.getTelegramId(), "Использование: /sponsor_stats <quest_id>", null);
+            return;
+        }
+        try {
+            long questId = Long.parseLong(parts[1]);
+            ru.gamebot.platform.domain.model.Quest quest;
+            try { quest = questService.getQuest(questId); } catch (Exception e) { quest = null; }
+            if (quest == null) {
+                sendText(user.getTelegramId(), "❌ Квест #" + questId + " не найден.", null);
+                return;
+            }
+            if (!quest.isSponsored() || quest.getSponsorId() == null) {
+                sendText(user.getTelegramId(), "ℹ️ Квест #" + questId + " не является спонсорским.", null);
+                return;
+            }
+            ru.gamebot.platform.domain.model.Sponsor sp = sponsorService.findById(quest.getSponsorId()).orElse(null);
+            if (sp == null) {
+                sendText(user.getTelegramId(), "❌ Спонсор не найден.", null);
+                return;
+            }
+            long completions = sponsorService.countCompletions(sp);
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+            String period = sp.getStartDate() != null && sp.getEndDate() != null
+                    ? sp.getStartDate().format(fmt) + " — " + sp.getEndDate().minusDays(1).format(fmt)
+                    : "не задан";
+
+            sendText(user.getTelegramId(),
+                    "📊 <b>Статистика спонсорского квеста</b>\n\n"
+                            + "🏢 Спонсор: <b>" + escape(sp.getName()) + "</b>\n"
+                            + (sp.getSponsorContact() != null ? "📞 Контакт: " + escape(sp.getSponsorContact()) + "\n" : "")
+                            + "🎯 Квест: <b>" + escape(quest.getTitle()) + "</b>\n"
+                            + "📅 Период: " + period + "\n"
+                            + "✅ Одобрено прохождений: <b>" + completions + "</b>",
+                    null);
+        } catch (NumberFormatException e) {
+            sendText(user.getTelegramId(), "❌ quest_id должен быть числом.", null);
+        }
+    }
+
+    private void handleSponsorsList(AppUser user) {
+        java.util.List<ru.gamebot.platform.domain.model.Sponsor> sponsors = sponsorService.findAll();
+        if (sponsors.isEmpty()) {
+            sendText(user.getTelegramId(), "📋 Спонсорских кампаний нет.", null);
+            return;
+        }
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd.MM.yy");
+        StringBuilder sb = new StringBuilder("📋 <b>Спонсорские квесты</b>\n\n");
+        for (ru.gamebot.platform.domain.model.Sponsor sp : sponsors) {
+            java.util.List<ru.gamebot.platform.domain.model.Quest> quests = sponsorService.findSponsoredQuests(sp.getId());
+            long completions = sponsorService.countCompletions(sp);
+            String period = sp.getStartDate() != null && sp.getEndDate() != null
+                    ? sp.getStartDate().format(fmt) + "–" + sp.getEndDate().minusDays(1).format(fmt)
+                    : "—";
+            String status = sp.isActive() ? "🟢" : "🔴";
+            sb.append(status).append(" <b>").append(escape(sp.getName())).append("</b>");
+            if (sp.getSponsorContact() != null) sb.append(" (").append(escape(sp.getSponsorContact())).append(")");
+            sb.append("\n");
+            for (ru.gamebot.platform.domain.model.Quest q : quests) {
+                sb.append("   🎯 ").append(escape(q.getTitle())).append("\n");
+            }
+            sb.append("   📅 ").append(period).append(" · ✅ ").append(completions).append(" прохождений\n\n");
+        }
+        sendText(user.getTelegramId(), sb.toString(), null);
     }
 }

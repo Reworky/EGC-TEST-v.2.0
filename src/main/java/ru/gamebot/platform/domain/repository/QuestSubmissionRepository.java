@@ -33,6 +33,11 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.quest = :quest AND s.status = 'APPROVED'")
     long countApprovedByQuest(@Param("quest") Quest quest);
 
+    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.quest = :quest AND s.status = 'APPROVED' AND s.updatedAt >= :from AND s.updatedAt < :to")
+    long countApprovedByQuestBetween(@Param("quest") Quest quest,
+                                     @Param("from") LocalDateTime from,
+                                     @Param("to") LocalDateTime to);
+
     void deleteAllByUser(AppUser user);
 
     void deleteAllByQuest(Quest quest);

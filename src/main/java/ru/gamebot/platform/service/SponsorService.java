@@ -7,8 +7,10 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.model.Sponsor;
 import ru.gamebot.platform.domain.repository.QuestRepository;
+import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
 import ru.gamebot.platform.domain.repository.SponsorRepository;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -22,6 +24,7 @@ public class SponsorService {
 
     private final SponsorRepository sponsorRepository;
     private final QuestRepository questRepository;
+    private final QuestSubmissionRepository questSubmissionRepository;
     private final HealthRatioService healthRatioService;
 
     public List<Sponsor> findAll() { return sponsorRepository.findAllByOrderByCreatedAtDesc(); }
@@ -85,5 +88,42 @@ public class SponsorService {
 
     public long commissionRub(Sponsor s) {
         return Math.round(s.getPaidRub() * COMMISSION_RATE);
+    }
+
+    /** Count approved submissions for sponsor's quests within the sponsor's period. */
+    public long countCompletions(Sponsor sponsor) {
+        if (sponsor.getStartDate() == null || sponsor.getEndDate() == null) {
+            return findSponsoredQuests(sponsor.getId()).stream()
+                    .mapToLong(questSubmissionRepository::countApprovedByQuest)
+                    .sum();
+        }
+        LocalDateTime from = sponsor.getStartDate();
+        LocalDateTime to = sponsor.getEndDate();
+        return findSponsoredQuests(sponsor.getId()).stream()
+                .mapToLong(q -> questSubmissionRepository.countApprovedByQuestBetween(q, from, to))
+                .sum();
+    }
+
+    @Transactional
+    public Sponsor createSimple(String name, String contact, Long questId,
+                                LocalDate startDate, LocalDate endDate) {
+        Sponsor s = new Sponsor();
+        s.setName(name);
+        s.setSponsorContact(contact);
+        s.setBudgetExc(0);
+        s.setStartDate(startDate.atStartOfDay());
+        s.setEndDate(endDate.plusDays(1).atStartOfDay());
+        s.setActive(true);
+        s.setCreatedAt(LocalDateTime.now());
+        s = sponsorRepository.save(s);
+
+        if (questId != null) {
+            questRepository.findById(questId).ifPresent(q -> {
+                q.setSponsored(true);
+                q.setSponsorId(s.getId());
+                questRepository.save(q);
+            });
+        }
+        return s;
     }
 }

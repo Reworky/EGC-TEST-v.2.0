@@ -33,6 +33,8 @@ public class Sponsor {
     @Column(columnDefinition = "bigint default 0")
     private long paidRub;
 
+    private String sponsorContact;
+
     private LocalDateTime startDate;
     private LocalDateTime endDate;
 
