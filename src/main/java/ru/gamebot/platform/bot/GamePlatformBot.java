@@ -3252,7 +3252,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendText(user.getTelegramId(), "⚠️ Сессия устарела. Начните перевод заново.", backMenuKeyboard("menu:sink"));
                     return;
                 }
-                AppUser recipient = appUserRepository.findByTelegramId(Long.parseLong(recipientIdStr)).orElse(null);
+                AppUser recipient = userService.findByTelegramId(Long.parseLong(recipientIdStr)).orElse(null);
                 if (recipient == null) {
                     sendText(user.getTelegramId(), "⚠️ Получатель не найден.", backMenuKeyboard("menu:sink"));
                     return;
