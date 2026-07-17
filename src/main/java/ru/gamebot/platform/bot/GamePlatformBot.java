@@ -1306,13 +1306,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 String period = sp.getStartDate() != null
                         ? sp.getStartDate().format(fmt) + " — " + sp.getEndDate().minusDays(1).format(fmt)
                         : "без ограничений";
+                List<List<InlineKeyboardButton>> ppRows = new ArrayList<>();
+                ppRows.add(List.of(keyboardFactory.callback("➕ Создать квест", "admin:postpay:newquest:" + sp.getId())));
+                ppRows.add(List.of(
+                        keyboardFactory.callback("⬅️ Назад", "admin:postpay"),
+                        keyboardFactory.callback("🏠 Меню", "menu:admin")
+                ));
                 sendText(user.getTelegramId(),
                         "✅ <b>Кампания под отчёт создана!</b>\n\n"
                         + "📋 " + escape(sp.getName()) + "\n"
                         + "📞 " + escape(ppContact) + "\n"
-                        + "📅 " + period + "\n\n"
-                        + "Теперь привяжите квест через «Привязать квест».",
-                        backMenuKeyboard("admin:postpay"));
+                        + "📅 " + period,
+                        keyboardFactory.rowsLayout(ppRows));
             }
             case TOURNAMENT_CREATE_NAME -> {
                 session.getData().put("tName", text.trim());
