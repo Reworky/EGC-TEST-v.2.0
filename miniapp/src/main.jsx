@@ -3,6 +3,10 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 
+// Убрать белый/чёрный экран Telegram как можно раньше
+window.Telegram?.WebApp?.ready();
+window.Telegram?.WebApp?.expand();
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <App />

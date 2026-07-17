@@ -6,8 +6,6 @@ export function useTelegram() {
   useEffect(() => {
     const app = window.Telegram?.WebApp;
     if (app) {
-      app.ready();
-      app.expand();
       setTg(app);
     }
   }, []);

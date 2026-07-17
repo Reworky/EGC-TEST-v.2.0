@@ -1,35 +1,40 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { authMiniApp } from './api/client';
 import { useTelegram } from './hooks/useTelegram';
 import BottomNav from './components/BottomNav';
 import { LottieProvider } from './components/LottieContext';
 import { ParticlesProvider } from './components/ParticlesContext';
-import ProfilePage from './pages/ProfilePage';
-import QuestsPage from './pages/QuestsPage';
-import ShopPage from './pages/ShopPage';
-import LeaderboardPage from './pages/LeaderboardPage';
-import ReferralsPage from './pages/ReferralsPage';
-import WalletPage from './pages/WalletPage';
-import PollsPage from './pages/PollsPage';
-import SupportPage from './pages/SupportPage';
-import BattlePassPage from './pages/BattlePassPage';
 import './App.css';
+
+const ProfilePage    = lazy(() => import('./pages/ProfilePage'));
+const QuestsPage     = lazy(() => import('./pages/QuestsPage'));
+const ShopPage       = lazy(() => import('./pages/ShopPage'));
+const LeaderboardPage= lazy(() => import('./pages/LeaderboardPage'));
+const ReferralsPage  = lazy(() => import('./pages/ReferralsPage'));
+const WalletPage     = lazy(() => import('./pages/WalletPage'));
+const PollsPage      = lazy(() => import('./pages/PollsPage'));
+const SupportPage    = lazy(() => import('./pages/SupportPage'));
+const BattlePassPage = lazy(() => import('./pages/BattlePassPage'));
 
 export default function App() {
   const { initData } = useTelegram();
-  const [ready, setReady] = useState(false);
+  const hasToken = !!localStorage.getItem('egc_token');
+  const [ready, setReady] = useState(hasToken);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     if (!initData) {
-      // Dev mode — no Telegram context, skip auth
       setReady(true);
       return;
     }
     authMiniApp(initData)
       .then(() => setReady(true))
-      .catch((e) => setError(`Ошибка: ${e?.response?.status || e?.message || 'нет ответа'} | URL: ${import.meta.env.VITE_API_URL || 'localhost:8090'}`));
+      .catch((e) => {
+        if (!hasToken) {
+          setError(`Ошибка: ${e?.response?.status || e?.message || 'нет ответа'} | URL: ${import.meta.env.VITE_API_URL || 'localhost:8090'}`);
+        }
+      });
   }, [initData]);
 
   if (error) {
@@ -48,6 +53,7 @@ export default function App() {
       <LottieProvider>
       <ParticlesProvider>
       <div className="app">
+        <Suspense fallback={null}>
         <Routes>
           <Route path="/" element={<Navigate to="/profile" replace />} />
           <Route path="/profile" element={<ProfilePage />} />
@@ -60,6 +66,7 @@ export default function App() {
           <Route path="/support" element={<SupportPage />} />
           <Route path="/battlepass" element={<BattlePassPage />} />
         </Routes>
+        </Suspense>
         <BottomNav />
       </div>
       </ParticlesProvider>
