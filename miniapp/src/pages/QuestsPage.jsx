@@ -117,7 +117,7 @@ function QuestActions({ quest, detail, onChanged }) {
         )}
         <input
           type="file"
-          accept="image/*"
+          accept="image/*,video/*"
           onChange={e => setPhoto(e.target.files?.[0] || null)}
           className="quest-file-input"
         />

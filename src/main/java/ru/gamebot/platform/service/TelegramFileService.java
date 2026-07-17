@@ -59,6 +59,34 @@ public class TelegramFileService {
         return sizes.get(sizes.size() - 1).path("file_id").asText();
     }
 
+    public String uploadVideo(byte[] videoBytes, String filename, Long chatId) throws IOException, InterruptedException {
+        String token = appProperties.getBotToken();
+        String boundary = "----EGC" + UUID.randomUUID();
+
+        ByteArrayOutputStream body = new ByteArrayOutputStream();
+        writeField(body, boundary, "chat_id", chatId.toString());
+
+        body.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
+        body.write(("Content-Disposition: form-data; name=\"video\"; filename=\"" + filename + "\"\r\n").getBytes(StandardCharsets.UTF_8));
+        body.write("Content-Type: application/octet-stream\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+        body.write(videoBytes);
+        body.write("\r\n".getBytes(StandardCharsets.UTF_8));
+        body.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://api.telegram.org/bot" + token + "/sendVideo"))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(body.toByteArray()))
+                .build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        JsonNode root = objectMapper.readTree(response.body());
+        if (!root.path("ok").asBoolean(false)) {
+            throw new IOException("Telegram sendVideo failed: " + response.body());
+        }
+        return root.path("result").path("video").path("file_id").asText();
+    }
+
     private void writeField(ByteArrayOutputStream body, String boundary, String name, String value) throws IOException {
         body.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
         body.write(("Content-Disposition: form-data; name=\"" + name + "\"\r\n\r\n").getBytes(StandardCharsets.UTF_8));

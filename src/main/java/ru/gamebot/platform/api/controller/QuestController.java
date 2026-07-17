@@ -188,18 +188,26 @@ public class QuestController {
         String mediaType = null;
         String fileId = null;
         if (photo != null && !photo.isEmpty()) {
+            String contentType = photo.getContentType() != null ? photo.getContentType() : "";
+            boolean isVideo = contentType.startsWith("video/");
             try {
-                fileId = telegramFileService.uploadPhoto(photo.getBytes(), photo.getOriginalFilename() != null ? photo.getOriginalFilename() : "report.jpg", telegramId);
-                mediaType = "photo";
+                String filename = photo.getOriginalFilename() != null ? photo.getOriginalFilename() : (isVideo ? "report.mp4" : "report.jpg");
+                if (isVideo) {
+                    fileId = telegramFileService.uploadVideo(photo.getBytes(), filename, telegramId);
+                    mediaType = "video";
+                } else {
+                    fileId = telegramFileService.uploadPhoto(photo.getBytes(), filename, telegramId);
+                    mediaType = "photo";
+                }
             } catch (IOException | InterruptedException e) {
                 if (e instanceof InterruptedException) {
                     Thread.currentThread().interrupt();
                 }
-                log.warn("Failed to upload report photo for user {}", telegramId, e);
+                log.warn("Failed to upload report media for user {}", telegramId, e);
                 return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(QuestActionResponseDto.builder()
                         .success(false)
                         .status("UPLOAD_FAILED")
-                        .message("Не удалось загрузить фото. Попробуйте ещё раз.")
+                        .message("Не удалось загрузить файл. Попробуйте ещё раз.")
                         .build());
             }
         }

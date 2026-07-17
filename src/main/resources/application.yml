@@ -19,8 +19,8 @@ spring:
       enabled: false
   servlet:
     multipart:
-      max-file-size: 15MB
-      max-request-size: 15MB
+      max-file-size: 50MB
+      max-request-size: 50MB
 
 app:
   club-name: ${APP_CLUB_NAME:EXPERIENCE GAMING CLUB}
