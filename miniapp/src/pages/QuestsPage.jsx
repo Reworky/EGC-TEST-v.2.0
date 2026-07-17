@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getQuests, getGames, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard } from '../api/client';
+import { getQuests, getSponsoredQuests, getGames, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard } from '../api/client';
 import { useLottie } from '../components/LottieContext';
 import { useParticles } from '../components/ParticlesContext';
 import './QuestsPage.css';
@@ -214,6 +214,8 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged }) {
   const [loading, setLoading] = useState(false);
   const [ugcQuests, setUgcQuests] = useState([]);
   const [ugcLoading, setUgcLoading] = useState(false);
+  const [sponsoredQuests, setSponsoredQuests] = useState([]);
+  const [sponsoredLoading, setSponsoredLoading] = useState(false);
   const [openSections, setOpenSections] = useState({ gaming: false, sponsored: false, ugc: false });
 
   useEffect(() => {
@@ -224,6 +226,8 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged }) {
     });
     setUgcLoading(true);
     getQuests('UGC').then(setUgcQuests).finally(() => setUgcLoading(false));
+    setSponsoredLoading(true);
+    getSponsoredQuests().then(setSponsoredQuests).catch(() => setSponsoredQuests([])).finally(() => setSponsoredLoading(false));
   }, []);
 
   useEffect(() => {
@@ -285,7 +289,19 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged }) {
           <span className={`quest-section-chevron ${openSections.sponsored ? 'open' : ''}`}>›</span>
         </button>
         {openSections.sponsored && (
-          <div className="quest-empty-section">👀 Спонсорские квесты появятся скоро</div>
+          <>
+            {sponsoredLoading && <div className="page-center">Загрузка...</div>}
+            {!sponsoredLoading && sponsoredQuests.length === 0 && (
+              <div className="quest-empty-section">👀 Спонсорские квесты появятся скоро</div>
+            )}
+            {!sponsoredLoading && sponsoredQuests.length > 0 && (
+              <div className="category-section">
+                {sponsoredQuests.map(q => (
+                  <QuestCard key={q.id} quest={q} detail={details[q.id]} onChanged={() => onDetailChanged(q.id)} />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 

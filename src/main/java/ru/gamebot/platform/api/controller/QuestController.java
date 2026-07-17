@@ -72,6 +72,7 @@ public class QuestController {
                 .rewardXp(q.getRewardXp())
                 .rewardCoins(q.getRewardCoins())
                 .councilOnly(q.isCouncilOnly())
+                .sponsored(q.isSponsored())
                 .submissionStatus(statusByQuestId.get(q.getId()))
                 .build()).toList();
     }
@@ -79,6 +80,27 @@ public class QuestController {
     @GetMapping("/games")
     public List<String> games() {
         return questService.findActiveGameNames();
+    }
+
+    @GetMapping("/sponsored")
+    public List<QuestDto> sponsored(@AuthenticationPrincipal Long telegramId) {
+        var quests = questService.findActiveSponsored();
+        Map<Long, String> statusByQuestId = new java.util.HashMap<>();
+        if (telegramId != null) {
+            userRepo.findByTelegramId(telegramId).ifPresent(user -> {
+                for (var q : quests) {
+                    java.util.Optional.ofNullable(questService.getLatestSubmission(user, q))
+                            .ifPresent(s -> statusByQuestId.put(q.getId(), s.getStatus().name()));
+                }
+            });
+        }
+        return quests.stream().map(q -> QuestDto.builder()
+                .id(q.getId()).title(q.getTitle()).description(q.getDescription())
+                .gameName(q.getGameName()).category(q.getCategory()).platform(q.getPlatform())
+                .durationDays(q.getDurationDays()).rewardXp(q.getRewardXp()).rewardCoins(q.getRewardCoins())
+                .councilOnly(q.isCouncilOnly()).sponsored(true)
+                .submissionStatus(statusByQuestId.get(q.getId()))
+                .build()).toList();
     }
 
     @GetMapping("/{id}")

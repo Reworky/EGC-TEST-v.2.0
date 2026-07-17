@@ -26,6 +26,11 @@ export async function getAvatarUrl() {
   return URL.createObjectURL(data);
 }
 
+export async function getSponsoredQuests() {
+  const { data } = await api.get('/api/quests/sponsored');
+  return data;
+}
+
 export async function getQuests(game, category) {
   const params = {};
   if (game) params.game = game;

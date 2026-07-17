@@ -58,6 +58,10 @@ public class QuestService {
         return questRepository.findAllByActiveTrueOrderByCreatedAtDesc();
     }
 
+    public List<Quest> findActiveSponsored() {
+        return findActiveQuests().stream().filter(Quest::isSponsored).toList();
+    }
+
     public List<Quest> findActiveQuestsForUser(boolean isCouncilMember, boolean hasSeasonPass) {
         return findActiveQuests().stream()
                 .filter(q -> !q.isCouncilOnly() || isCouncilMember)
@@ -73,6 +77,7 @@ public class QuestService {
 
     public List<String> findActiveGameNames() {
         return findActiveQuests().stream()
+                .filter(q -> !q.isSponsored())
                 .map(Quest::getGameName)
                 .filter(name -> name != null && !name.isBlank())
                 .distinct()
