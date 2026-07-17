@@ -1319,6 +1319,43 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📅 " + period,
                         keyboardFactory.rowsLayout(ppRows));
             }
+
+            case SPONSOR_QUEST_TITLE -> {
+                session.getData().put("sq_title", text.trim());
+                session.setState(SessionState.SPONSOR_QUEST_DESCRIPTION);
+                sendText(user.getTelegramId(), "2️⃣ Подробное описание квеста:", cancelKeyboard());
+            }
+            case SPONSOR_QUEST_DESCRIPTION -> {
+                session.getData().put("sq_desc", text.trim());
+                session.setState(SessionState.SPONSOR_QUEST_XP);
+                sendText(user.getTelegramId(), "3️⃣ Сколько XP за выполнение квеста? (число)", cancelKeyboard());
+            }
+            case SPONSOR_QUEST_XP -> {
+                try { Long.parseLong(text.trim()); } catch (NumberFormatException e) {
+                    sendText(user.getTelegramId(), "❌ Введите число.", cancelKeyboard()); return;
+                }
+                session.getData().put("sq_xp", text.trim());
+                session.setState(SessionState.SPONSOR_QUEST_EXC);
+                sendText(user.getTelegramId(), "4️⃣ Сколько EXC за выполнение квеста? (число)", cancelKeyboard());
+            }
+            case SPONSOR_QUEST_EXC -> {
+                try { Long.parseLong(text.trim()); } catch (NumberFormatException e) {
+                    sendText(user.getTelegramId(), "❌ Введите число.", cancelKeyboard()); return;
+                }
+                session.getData().put("sq_exc", text.trim());
+                session.setState(SessionState.SPONSOR_QUEST_DURATION);
+                sendText(user.getTelegramId(), "5️⃣ Длительность квеста (например: <code>7 дней</code>, <code>30 дней</code>):", cancelKeyboard());
+            }
+            case SPONSOR_QUEST_DURATION -> {
+                session.getData().put("sq_duration", text.trim());
+                session.setState(SessionState.SPONSOR_QUEST_NOTE);
+                sendText(user.getTelegramId(), "6️⃣ Примечание (условия, ссылки, доп. инфо). Или <code>0</code> — без примечания:", cancelKeyboard());
+            }
+            case SPONSOR_QUEST_NOTE -> {
+                String note = "0".equals(text.trim()) ? "" : text.trim();
+                finalizeSponsorQuest(user, session, note);
+            }
+
             case TOURNAMENT_CREATE_NAME -> {
                 session.getData().put("tName", text.trim());
                 session.setState(SessionState.TOURNAMENT_CREATE_GAME);
@@ -4208,8 +4245,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     long sponsorId = parseLong(action.substring("sponsors:newquest:".length()));
                     session.reset();
                     session.getData().put("sponsorId", String.valueOf(sponsorId));
-                    session.setState(SessionState.QUEST_CREATE_TITLE);
-                    sendText(user.getTelegramId(), "➕ <b>Создание спонсорского квеста</b>\n\nВведите название квеста:", cancelKeyboard());
+                    session.setState(SessionState.SPONSOR_QUEST_TITLE);
+                    sendText(user.getTelegramId(), "➕ <b>Создание спонсорского квеста</b>\n\n1️⃣ Введите название квеста:", cancelKeyboard());
                     answerSilently(callbackQuery.getId());
                     return;
                 } else if (action.startsWith("sponsors:addquest:")) {
@@ -4226,8 +4263,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     session.reset();
                     session.getData().put("sponsorId", String.valueOf(sponsorId));
                     session.getData().put("postpay", "1");
-                    session.setState(SessionState.QUEST_CREATE_TITLE);
-                    sendText(user.getTelegramId(), "➕ <b>Создание квеста под отчёт</b>\n\nВведите название квеста:", cancelKeyboard());
+                    session.setState(SessionState.SPONSOR_QUEST_TITLE);
+                    sendText(user.getTelegramId(), "➕ <b>Создание квеста под отчёт</b>\n\n1️⃣ Введите название квеста:", cancelKeyboard());
                     answerSilently(callbackQuery.getId());
                     return;
                 } else if (action.startsWith("postpay:addquest:")) {
@@ -8098,6 +8135,59 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long registered = userService.totalRegisteredUsers();
         long roundedBase = (registered / 50) * 50;
         return roundedBase >= 50 ? "👥 Уже <b>" + roundedBase + "+</b> игроков в клубе\n\n" : "";
+    }
+
+    // ── Sponsor quest creation ───────────────────────────────────────────────
+
+    private void finalizeSponsorQuest(AppUser user, UserSession session, String note) {
+        Map<String, String> d = session.getData();
+        String sponsorIdStr = d.get("sponsorId");
+        boolean isPostpay = d.containsKey("postpay");
+
+        Quest quest = new Quest();
+        quest.setTitle(d.get("sq_title"));
+        quest.setDescription(d.get("sq_desc"));
+        quest.setRewardXp(Long.parseLong(d.getOrDefault("sq_xp", "0")));
+        quest.setRewardCoins(Long.parseLong(d.getOrDefault("sq_exc", "0")));
+        quest.setDurationText(d.get("sq_duration"));
+        quest.setInstruction(note.isBlank() ? null : note);
+        quest.setRequirements(null);
+        quest.setCategory("Средние");
+        quest.setPlatform("PC");
+        quest.setParticipantLimit(10000);
+        quest.setSponsored(true);
+
+        // Parse duration days from text (e.g. "7 дней" → 7)
+        String durText = d.getOrDefault("sq_duration", "");
+        try {
+            quest.setDurationDays(Integer.parseInt(durText.replaceAll("[^0-9]", "")));
+        } catch (NumberFormatException ignored) {
+            quest.setDurationDays(30);
+        }
+
+        // Link to sponsor
+        if (sponsorIdStr != null) {
+            try {
+                long sid = Long.parseLong(sponsorIdStr);
+                quest.setSponsorId(sid);
+                // Use sponsor name as gameName so quest appears in its own section
+                sponsorService.findById(sid).ifPresent(s -> quest.setGameName(s.getName()));
+            } catch (NumberFormatException ignored) {}
+        }
+
+        questService.createQuest(quest);
+
+        String backAction = isPostpay
+                ? "admin:postpay:view:" + sponsorIdStr
+                : "admin:sponsors:view:" + sponsorIdStr;
+        session.reset();
+
+        sendText(user.getTelegramId(),
+                "✅ <b>Квест создан!</b>\n\n"
+                + "🎯 " + escape(quest.getTitle()) + "\n"
+                + "✨ XP: <b>" + quest.getRewardXp() + "</b>  🪙 EXC: <b>" + quest.getRewardCoins() + "</b>\n"
+                + "📅 " + escape(quest.getDurationText()),
+                backMenuKeyboard(backAction));
     }
 
     // ── Sponsor text commands ────────────────────────────────────────────────
