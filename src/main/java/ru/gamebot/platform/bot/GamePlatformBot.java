@@ -4194,6 +4194,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         answer(callbackQuery.getId(), "❌ " + e.getMessage());
                     }
                     return;
+                } else if (action.startsWith("sponsors:newquest:")) {
+                    long sponsorId = parseLong(action.substring("sponsors:newquest:".length()));
+                    session.reset();
+                    session.getData().put("sponsorId", String.valueOf(sponsorId));
+                    session.setState(SessionState.QUEST_CREATE_TITLE);
+                    sendText(user.getTelegramId(), "➕ <b>Создание спонсорского квеста</b>\n\nВведите название квеста:", cancelKeyboard());
+                    answerSilently(callbackQuery.getId());
+                    return;
                 } else if (action.startsWith("sponsors:addquest:")) {
                     long sponsorId = parseLong(action.substring("sponsors:addquest:".length()));
                     sendSponsorQuestPicker(user, sponsorId);
@@ -4201,6 +4209,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     return;
                 } else if (action.startsWith("postpay:view:")) {
                     sendAdminPostpayView(user, parseLong(action.substring("postpay:view:".length())));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("postpay:newquest:")) {
+                    long sponsorId = parseLong(action.substring("postpay:newquest:".length()));
+                    session.reset();
+                    session.getData().put("sponsorId", String.valueOf(sponsorId));
+                    session.getData().put("postpay", "1");
+                    session.setState(SessionState.QUEST_CREATE_TITLE);
+                    sendText(user.getTelegramId(), "➕ <b>Создание квеста под отчёт</b>\n\nВведите название квеста:", cancelKeyboard());
                     answerSilently(callbackQuery.getId());
                     return;
                 } else if (action.startsWith("postpay:addquest:")) {
@@ -5199,7 +5216,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
             if (s.isActive()) {
-                rows.add(List.of(keyboardFactory.callback("➕ Привязать квест", "admin:sponsors:addquest:" + sponsorId)));
+                rows.add(List.of(keyboardFactory.callback("➕ Создать квест", "admin:sponsors:newquest:" + sponsorId)));
                 rows.add(List.of(keyboardFactory.callback("⚫ Завершить кампанию", "admin:sponsors:deactivate:" + sponsorId)));
             }
             for (ru.gamebot.platform.domain.model.Quest q : linked) {
@@ -5253,7 +5270,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
             if (s.isActive()) {
-                rows.add(List.of(keyboardFactory.callback("➕ Привязать квест", "admin:postpay:addquest:" + sponsorId)));
+                rows.add(List.of(keyboardFactory.callback("➕ Создать квест", "admin:postpay:newquest:" + sponsorId)));
                 rows.add(List.of(keyboardFactory.callback("⚫ Закрыть кампанию", "admin:postpay:close:" + sponsorId)));
             }
             for (ru.gamebot.platform.domain.model.Quest q : linked) {
@@ -6684,7 +6701,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if ("preview:edit".equals(action)) {
             session.setState(SessionState.QUEST_CREATE_TITLE);
+            String savedSponsorId = session.getData().get("sponsorId");
+            String savedPostpay = session.getData().get("postpay");
             session.getData().clear();
+            if (savedSponsorId != null) session.getData().put("sponsorId", savedSponsorId);
+            if (savedPostpay != null) session.getData().put("postpay", savedPostpay);
             sendText(user.getTelegramId(),
                     "✏️ Начнём сначала. Отправьте новое название квеста.",
                     cancelKeyboard());
@@ -6812,12 +6833,33 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         quest.setCouncilOnly(councilOnly);
         quest.setPhotoFileId(session.getData().get("photoFileId"));
 
+        // Link to sponsor if quest was created from sponsor/postpay flow
+        String sponsorIdStr = session.getData().get("sponsorId");
+        if (sponsorIdStr != null) {
+            try {
+                long sid = Long.parseLong(sponsorIdStr);
+                quest.setSponsored(true);
+                quest.setSponsorId(sid);
+            } catch (NumberFormatException ignored) {}
+        }
+
         questService.createQuest(quest);
+
+        String backAction = sponsorIdStr != null
+                ? (session.getData().containsKey("postpay") ? "admin:postpay:view:" + sponsorIdStr : "admin:sponsors:view:" + sponsorIdStr)
+                : null;
+
         session.reset();
         String label = councilOnly ? "Council-квест" : "обычный квест";
-        sendText(user.getTelegramId(),
-                "✅ Новый " + label + " создан и сразу опубликован.",
-                mainMenuKeyboard(user));
+        if (backAction != null) {
+            sendText(user.getTelegramId(),
+                    "✅ Спонсорский квест создан и привязан к кампании.",
+                    backMenuKeyboard(backAction));
+        } else {
+            sendText(user.getTelegramId(),
+                    "✅ Новый " + label + " создан и сразу опубликован.",
+                    mainMenuKeyboard(user));
+        }
     }
 
     private void updateQuestTitle(AppUser user, UserSession session, String text) {
