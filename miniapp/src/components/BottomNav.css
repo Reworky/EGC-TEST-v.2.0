@@ -32,8 +32,16 @@
 }
 
 .tab-icon {
-  font-size: 22px;
-  line-height: 1;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-icon svg {
+  width: 24px;
+  height: 24px;
 }
 
 .tab-label {
