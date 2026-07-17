@@ -68,6 +68,12 @@ public class QuestService {
                 .toList();
     }
 
+    public List<Quest> findActiveSponsoredAndUgc() {
+        return findActiveQuests().stream()
+                .filter(q -> q.isSponsored() || "UGC".equalsIgnoreCase(q.getGameName()))
+                .toList();
+    }
+
     public List<Quest> findActiveQuestsForUser(boolean isCouncilMember, boolean hasSeasonPass) {
         return findActiveQuests().stream()
                 .filter(q -> !q.isCouncilOnly() || isCouncilMember)
