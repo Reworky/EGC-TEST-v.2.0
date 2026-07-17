@@ -87,7 +87,7 @@ public class QuestController {
         var quests = questService.findActiveSponsored();
         Map<Long, String> statusByQuestId = new java.util.HashMap<>();
         if (telegramId != null) {
-            userRepo.findByTelegramId(telegramId).ifPresent(user -> {
+            appUserRepository.findByTelegramId(telegramId).ifPresent(user -> {
                 for (var q : quests) {
                     java.util.Optional.ofNullable(questService.getLatestSubmission(user, q))
                             .ifPresent(s -> statusByQuestId.put(q.getId(), s.getStatus().name()));
