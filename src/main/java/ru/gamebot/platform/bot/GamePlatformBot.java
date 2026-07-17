@@ -5144,8 +5144,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendAdminQuestList(AppUser user) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "admin:quests:section:gaming")));
-        rows.add(List.of(keyboardFactory.callback("💼 Спонсорские квесты", "admin:quests:section:sponsored")));
-        rows.add(List.of(keyboardFactory.callback("📋 Квесты под отчёт", "admin:quests:section:ugc")));
         rows.add(List.of(
                 keyboardFactory.callback("🤝 Спонсоры", "admin:sponsors"),
                 keyboardFactory.callback("📑 Постоплата", "admin:postpay")
