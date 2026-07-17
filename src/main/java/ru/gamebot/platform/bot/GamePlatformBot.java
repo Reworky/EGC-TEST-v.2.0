@@ -2090,7 +2090,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendSponsoredQuestList(AppUser user) {
-        List<Quest> quests = questService.findActiveSponsoredAndUgc();
+        List<Quest> quests = questService.findActiveSponsored();
         if (quests.isEmpty()) {
             sendText(user.getTelegramId(),
                     "👀 Спонсорские квесты появятся скоро.",
