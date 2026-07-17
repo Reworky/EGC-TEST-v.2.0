@@ -5517,7 +5517,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "admin:sponsors:view:" + s.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("➕ Добавить спонсора", "admin:sponsors:create")));
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:edit")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
@@ -5584,7 +5584,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "admin:postpay:view:" + s.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("➕ Новая кампания под отчёт", "admin:postpay:create")));
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:edit")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
