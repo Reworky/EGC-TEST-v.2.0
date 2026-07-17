@@ -4255,19 +4255,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     answerSilently(callbackQuery.getId());
                     return;
                 } else if (action.startsWith("sq-edit:")) {
-                    // sponsors:sq-edit:sponsorId:questId
                     String[] parts = action.substring("sq-edit:".length()).split(":");
                     long sid = parseLong(parts[0]);
                     long qid = parseLong(parts[1]);
-                    sendAdminQuestEditor(user, qid, "admin:sponsors:view:" + sid);
+                    sendSponsorQuestEditor(user, qid, "admin:sponsors:view:" + sid);
                     answerSilently(callbackQuery.getId());
                     return;
                 } else if (action.startsWith("pp-edit:")) {
-                    // postpay:pp-edit:sponsorId:questId
                     String[] parts = action.substring("pp-edit:".length()).split(":");
                     long sid = parseLong(parts[0]);
                     long qid = parseLong(parts[1]);
-                    sendAdminQuestEditor(user, qid, "admin:postpay:view:" + sid);
+                    sendSponsorQuestEditor(user, qid, "admin:postpay:view:" + sid);
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("sq-edit-note:")) {
+                    long qid = parseLong(action.substring("sq-edit-note:".length()));
+                    session.setQuestId(qid);
+                    session.setState(SessionState.QUEST_EDIT_DESCRIPTION);
+                    sendText(user.getTelegramId(), "📝 Введите новое примечание (или <code>0</code> — очистить):", cancelKeyboard());
                     answerSilently(callbackQuery.getId());
                     return;
                 } else if (action.startsWith("postpay:view:")) {
@@ -5090,6 +5095,46 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🎮 Игра: <b>" + escape(quest.getGameName()) + "</b>\n"
                         + "✨ XP: <b>+" + quest.getRewardXp() + "</b>\n"
                         + "🪙 Монеты: <b>+" + quest.getRewardCoins() + "</b>\n"
+                        + "📡 Статус: <b>" + (quest.isActive() ? "активен" : "скрыт") + "</b>",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendSponsorQuestEditor(AppUser user, long questId, String backData) {
+        Quest quest = questService.getQuest(questId);
+        sessionService.get(user.getTelegramId()).getData().put("admin_quest_back_data", backData);
+
+        String sponsorContact = "—";
+        if (quest.getSponsorId() != null) {
+            sponsorContact = sponsorService.findById(quest.getSponsorId())
+                    .map(s -> s.getSponsorContact() != null ? s.getSponsorContact() : s.getName())
+                    .orElse("—");
+        }
+
+        List<List<InlineKeyboardButton>> rows = List.of(
+                List.of(
+                        keyboardFactory.callback("✏️ Название", "admin:edit-title:" + questId),
+                        keyboardFactory.callback("📝 Описание", "admin:edit-description:" + questId)
+                ),
+                List.of(
+                        keyboardFactory.callback("✨ Награды", "admin:edit-reward:" + questId),
+                        keyboardFactory.callback("📋 Примечание", "admin:sq-edit-note:" + questId)
+                ),
+                List.of(
+                        keyboardFactory.callback(quest.isActive() ? "⏸️ Скрыть" : "▶️ Включить", "admin:toggle:" + questId),
+                        keyboardFactory.callback("🗑️ Удалить", "admin:delete:" + questId)
+                ),
+                List.of(
+                        keyboardFactory.callback("⬅️ Назад", backData),
+                        keyboardFactory.callback("🏠 Меню", "menu:admin")
+                )
+        );
+        sendText(user.getTelegramId(),
+                "✏️ <b>Редактор спонсорского квеста</b>\n\n"
+                        + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n"
+                        + "📞 Контакт: <b>" + escape(sponsorContact) + "</b>\n"
+                        + "✨ XP: <b>+" + quest.getRewardXp() + "</b>\n"
+                        + "🪙 EXC: <b>+" + quest.getRewardCoins() + "</b>\n"
+                        + "📅 Длительность: <b>" + (quest.getDurationText() != null ? escape(quest.getDurationText()) : "—") + "</b>\n"
                         + "📡 Статус: <b>" + (quest.isActive() ? "активен" : "скрыт") + "</b>",
                 keyboardFactory.rowsLayout(rows));
     }
