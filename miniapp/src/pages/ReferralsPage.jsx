@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getReferrals } from '../api/client';
-import './QuestsPage.css';
-import './ProfilePage.css';
 import './ReferralsPage.css';
 
 function fallbackCopy(text, onDone) {
@@ -13,12 +11,7 @@ function fallbackCopy(text, onDone) {
   document.body.appendChild(textarea);
   textarea.focus();
   textarea.select();
-  try {
-    document.execCommand('copy');
-    onDone();
-  } catch {
-    // Копирование недоступно в этом окружении — пользователь может выделить ссылку вручную.
-  }
+  try { document.execCommand('copy'); onDone(); } catch {}
   document.body.removeChild(textarea);
 }
 
@@ -32,10 +25,7 @@ export default function ReferralsPage() {
   }, []);
 
   function copyLink() {
-    const markCopied = () => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    };
+    const markCopied = () => { setCopied(true); setTimeout(() => setCopied(false), 2000); };
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(data.referralLink).then(markCopied, () => fallbackCopy(data.referralLink, markCopied));
     } else {
@@ -46,72 +36,90 @@ export default function ReferralsPage() {
   function shareLink() {
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(data.referralLink)}&text=${encodeURIComponent('Присоединяйся к EXPERIENCE GAMING CLUB!')}`;
     const tg = window.Telegram?.WebApp;
-    if (tg?.openTelegramLink) {
-      tg.openTelegramLink(shareUrl);
-    } else {
-      window.open(shareUrl, '_blank');
-    }
+    if (tg?.openTelegramLink) tg.openTelegramLink(shareUrl);
+    else window.open(shareUrl, '_blank');
   }
 
-  if (error) return <div className="page-center error-msg">{error}</div>;
-  if (!data) return <div className="page-center">Загрузка...</div>;
+  if (error) return <div style={{ padding: 32, color: '#ef4444', textAlign: 'center' }}>{error}</div>;
+  if (!data) return <div style={{ padding: 32, color: '#888', textAlign: 'center' }}>Загрузка...</div>;
 
-  const filled = Math.round(data.progressPercent / 10);
-  const bar = '█'.repeat(filled) + '░'.repeat(10 - filled);
+  const pct = Math.min(data.progressPercent, 100);
 
   return (
     <div className="ref-page">
-      <Link to="/profile" className="ref-back">← Профиль</Link>
 
-      <h2 className="ref-title">🤝 Реферальная программа EGC</h2>
-
-      <div className="ref-link-card">
-        <div className="ref-link-label">Ваша ссылка</div>
-        <div className="ref-link-value">{data.referralLink}</div>
-        <div className="ref-link-actions">
-          <button className="quest-btn" onClick={copyLink}>{copied ? '✅ Скопировано' : '📋 Копировать'}</button>
-          <button className="quest-btn quest-btn-secondary" onClick={shareLink}>📤 Поделиться</button>
-        </div>
+      <div className="ref-hero">
+        <div className="ref-hero-icon">🤝</div>
+        <div className="ref-hero-title">Реферальная программа</div>
+        <div className="ref-hero-sub">EXPERIENCE GAMING CLUB</div>
       </div>
 
       <div className="ref-stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon">👥</div>
-          <div className="stat-value">{data.invitedFriends}</div>
-          <div className="stat-label">Друзей</div>
+        <div className="ref-stat-card">
+          <div className="ref-stat-accent" style={{ background: 'linear-gradient(90deg,#7c3aed,#a855f7)' }} />
+          <div className="ref-stat-label">Приглашено</div>
+          <div className="ref-stat-val">{data.invitedFriends}</div>
+          <div className="ref-stat-unit">друзей</div>
         </div>
-        <div className="stat-card">
-          <div className="stat-icon">💎</div>
-          <div className="stat-value">{data.earnedExc.toLocaleString()}</div>
-          <div className="stat-label">EXC заработано</div>
+        <div className="ref-stat-card">
+          <div className="ref-stat-accent" style={{ background: 'linear-gradient(90deg,#f59e0b,#fbbf24)' }} />
+          <div className="ref-stat-label">Заработано</div>
+          <div className="ref-stat-val">{data.earnedExc.toLocaleString()}</div>
+          <div className="ref-stat-unit">EXC</div>
+        </div>
+      </div>
+
+      <div className="ref-link-card">
+        <div className="ref-link-label">Ваша реферальная ссылка</div>
+        <div className="ref-link-value">{data.referralLink}</div>
+        <div className="ref-link-actions">
+          <button className="ref-btn ref-btn-primary" onClick={copyLink}>
+            {copied ? '✅ Скопировано' : '📋 Копировать'}
+          </button>
+          <button className="ref-btn ref-btn-secondary" onClick={shareLink}>
+            📤 Поделиться
+          </button>
         </div>
       </div>
 
       <div className="ref-progress-card">
         <div className="ref-progress-label">Прогресс до {data.nextMilestone.toLocaleString()} EXC</div>
-        <div className="ref-progress-bar">{bar} {data.progressPercent}%</div>
+        <div className="ref-progress-track">
+          <div className="ref-progress-fill" style={{ width: pct + '%' }} />
+        </div>
+        <div className="ref-progress-pct">{pct}%</div>
       </div>
 
       <div className="ref-how-card">
-        <div className="ref-how-title">🎁 Как работает</div>
+        <div className="ref-how-title">Как это работает</div>
 
         <div className="ref-step">
-          <div className="ref-step-title">Шаг 1 — друг вступает в клуб</div>
-          <div className="ref-step-desc">Тебе сразу: <b>+300 EXC</b> · Другу сразу: <b>+500 EXC</b></div>
+          <div className="ref-step-num">1</div>
+          <div className="ref-step-body">
+            <div className="ref-step-title">Друг вступает в клуб</div>
+            <div className="ref-step-desc">Тебе: <b>+300 EXC</b> · Другу: <b>+500 EXC</b></div>
+          </div>
         </div>
 
         <div className="ref-step">
-          <div className="ref-step-title">Шаг 2 — друг выполняет первый квест</div>
-          <div className="ref-step-desc">Другу бонусом: <b>+3 000 EXC</b></div>
+          <div className="ref-step-num">2</div>
+          <div className="ref-step-body">
+            <div className="ref-step-title">Друг выполняет первый квест</div>
+            <div className="ref-step-desc">Другу бонусом: <b>+3 000 EXC</b></div>
+          </div>
         </div>
 
         <div className="ref-step">
-          <div className="ref-step-title">Шаг 3 — друг зарабатывает квестами</div>
-          <div className="ref-step-desc">Ты получаешь <b>3% от каждого его EXC</b> в течение первых 14 дней автоматически</div>
+          <div className="ref-step-num">3</div>
+          <div className="ref-step-body">
+            <div className="ref-step-title">Друг зарабатывает квестами</div>
+            <div className="ref-step-desc">Ты получаешь <b>3% от каждого его EXC</b> в течение первых 14 дней автоматически</div>
+          </div>
         </div>
 
         <div className="ref-how-footer">Скопируй ссылку и отправь другу — остальное система сделает сама.</div>
       </div>
+
     </div>
   );
 }
