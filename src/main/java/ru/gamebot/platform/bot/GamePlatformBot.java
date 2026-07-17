@@ -4254,6 +4254,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendSponsorQuestPicker(user, sponsorId);
                     answerSilently(callbackQuery.getId());
                     return;
+                } else if (action.startsWith("sq-edit:")) {
+                    // sponsors:sq-edit:sponsorId:questId
+                    String[] parts = action.substring("sq-edit:".length()).split(":");
+                    long sid = parseLong(parts[0]);
+                    long qid = parseLong(parts[1]);
+                    sendAdminQuestEditor(user, qid, "admin:sponsors:view:" + sid);
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("pp-edit:")) {
+                    // postpay:pp-edit:sponsorId:questId
+                    String[] parts = action.substring("pp-edit:".length()).split(":");
+                    long sid = parseLong(parts[0]);
+                    long qid = parseLong(parts[1]);
+                    sendAdminQuestEditor(user, qid, "admin:postpay:view:" + sid);
+                    answerSilently(callbackQuery.getId());
+                    return;
                 } else if (action.startsWith("postpay:view:")) {
                     sendAdminPostpayView(user, parseLong(action.substring("postpay:view:".length())));
                     answerSilently(callbackQuery.getId());
@@ -5272,7 +5288,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback("⚫ Завершить кампанию", "admin:sponsors:deactivate:" + sponsorId)));
             }
             for (ru.gamebot.platform.domain.model.Quest q : linked) {
-                rows.add(List.of(keyboardFactory.callback("❌ Открепить: " + q.getTitle(), "admin:sponsors:unlink:" + q.getId())));
+                rows.add(List.of(
+                        keyboardFactory.callback("✏️ " + trim(q.getTitle(), 28), "admin:sq-edit:" + sponsorId + ":" + q.getId()),
+                        keyboardFactory.callback("❌ Открепить", "admin:sponsors:unlink:" + q.getId())
+                ));
             }
             rows.add(List.of(keyboardFactory.callback("🗑 Удалить кампанию", "admin:sponsors:delete:" + sponsorId)));
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:sponsors")));
@@ -5327,7 +5346,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback("⚫ Закрыть кампанию", "admin:postpay:close:" + sponsorId)));
             }
             for (ru.gamebot.platform.domain.model.Quest q : linked) {
-                rows.add(List.of(keyboardFactory.callback("❌ Открепить: " + trim(q.getTitle(), 30), "admin:postpay:unlink:" + q.getId())));
+                rows.add(List.of(
+                        keyboardFactory.callback("✏️ " + trim(q.getTitle(), 28), "admin:pp-edit:" + sponsorId + ":" + q.getId()),
+                        keyboardFactory.callback("❌ Открепить", "admin:postpay:unlink:" + q.getId())
+                ));
             }
             rows.add(List.of(keyboardFactory.callback("🗑 Удалить кампанию", "admin:postpay:delete:" + sponsorId)));
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:postpay")));
