@@ -1190,6 +1190,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case SPONSOR_CREATE_NAME -> {
                 session.getData().put("spName", text.trim());
+                session.setState(SessionState.SPONSOR_CREATE_CONTACT);
+                sendText(user.getTelegramId(), "📞 Введите контакт менеджера спонсора (например: <code>@manager</code> или email):", cancelKeyboard());
+            }
+            case SPONSOR_CREATE_CONTACT -> {
+                session.getData().put("spContact", text.trim());
                 session.setState(SessionState.SPONSOR_CREATE_CAMPAIGN);
                 sendText(user.getTelegramId(), "📋 Введите название кампании (например: «Запуск PUBG New State»):", cancelKeyboard());
             }
@@ -1245,6 +1250,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     }
                 }
                 String spName = session.getData().get("spName");
+                String spContact = session.getData().getOrDefault("spContact", "");
                 String spCampaign = session.getData().get("spCampaign");
                 long paidRub = Long.parseLong(session.getData().get("spPaidRub"));
                 long budgetExc = Long.parseLong(session.getData().get("spBudgetExc"));
@@ -1252,6 +1258,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 long poolFunded = paidRub - commission;
                 ru.gamebot.platform.domain.model.Sponsor sp = sponsorService.create(
                         spName, spCampaign, paidRub, budgetExc, startDate, endDate, user.getTelegramId());
+                sp.setSponsorContact(spContact);
+                sponsorService.save(sp);
                 session.reset();
                 sendText(user.getTelegramId(),
                         "✅ <b>Спонсор добавлен!</b>\n\n"
@@ -5073,9 +5081,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             long rem = sponsorService.remainingBudget(s);
             long commission = sponsorService.commissionRub(s);
 
+            long completions = sponsorService.countCompletions(s);
             StringBuilder sb = new StringBuilder("🤝 <b>" + escape(s.getName()) + "</b>\n");
+            if (s.getSponsorContact() != null && !s.getSponsorContact().isBlank()) {
+                sb.append("📞 Контакт: ").append(escape(s.getSponsorContact())).append("\n");
+            }
             sb.append("📋 Кампания: ").append(escape(s.getCampaignName() != null ? s.getCampaignName() : "—")).append("\n");
             sb.append("Статус: ").append(s.isActive() ? "🟢 Активна" : "⚫ Завершена").append("\n\n");
+            if (s.getStartDate() != null && s.getEndDate() != null) {
+                java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
+                sb.append("📅 Период: ").append(s.getStartDate().format(fmt)).append(" — ").append(s.getEndDate().format(fmt)).append("\n");
+            }
+            sb.append("✅ Одобрено прохождений: <b>").append(completions).append("</b>\n\n");
             sb.append("💵 Оплата: <b>").append(s.getPaidRub()).append(" ₽</b>\n");
             sb.append("   ├ Комиссия EGC: <b>").append(commission).append(" ₽</b>\n");
             sb.append("   └ В Payout Pool: <b>").append(s.getPaidRub() - commission).append(" ₽</b>\n\n");

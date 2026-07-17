@@ -30,6 +30,7 @@ public class SponsorService {
     public List<Sponsor> findAll() { return sponsorRepository.findAllByOrderByCreatedAtDesc(); }
     public List<Sponsor> findActive() { return sponsorRepository.findAllByActiveTrueOrderByCreatedAtDesc(); }
     public Optional<Sponsor> findById(Long id) { return sponsorRepository.findById(id); }
+    public Sponsor save(Sponsor s) { return sponsorRepository.save(s); }
 
     /**
      * Creates a sponsor campaign and optionally funds the Payout Pool with 70% of paidRub.
