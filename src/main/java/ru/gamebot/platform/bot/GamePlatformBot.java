@@ -4134,6 +4134,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             default -> {
                 if (action.startsWith("quest:")) {
                     handleAdminQuestOpen(user, action.substring("quest:".length()));
+                } else if ("quests:section:gaming".equals(action)) {
+                    sendAdminGamingQuestList(user);
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if ("quests:section:sponsored".equals(action)) {
+                    sendAdminSponsoredQuestList(user);
+                    answerSilently(callbackQuery.getId());
+                    return;
                 } else if (action.startsWith("quests:game:")) {
                     sendAdminQuestCategories(user, decodeGameToken(action.substring("quests:game:".length())));
                 } else if (action.startsWith("quests:list:")) {
@@ -5009,23 +5017,51 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendAdminQuestList(AppUser user) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "admin:quests:section:gaming")));
+        rows.add(List.of(keyboardFactory.callback("💼 Спонсорские квесты", "admin:quests:section:sponsored")));
+        rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:admin")));
+        sendText(user.getTelegramId(),
+                "🗂️ <b>Управление квестами</b>\n\nВыберите раздел:",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendAdminGamingQuestList(AppUser user) {
         List<String> games = questService.findAllGameNames();
         if (games.isEmpty()) {
             sendText(user.getTelegramId(),
-                    "🗂️ <b>Управление квестами</b>\n\nПока нет квестов, распределённых по играм.",
-                    backMenuKeyboard("menu:admin"));
+                    "🗂️ <b>Игровые квесты</b>\n\nПока нет квестов, распределённых по играм.",
+                    backMenuKeyboard("admin:edit"));
             return;
         }
-
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (String game : games) {
             rows.add(List.of(keyboardFactory.callback("🎮 " + trim(game, 28), "admin:quests:game:" + encodeGameToken(game))));
         }
-        rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:admin")));
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", "admin:edit"),
+                keyboardFactory.callback("🏠 Меню", "menu:admin")
+        ));
         sendText(user.getTelegramId(),
-                "🗂️ <b>Управление квестами</b>\n\n"
-                        + "Сначала выберите игру, чтобы открыть только связанные с ней квесты и редактировать их без общего смешанного списка.",
+                "🗂️ <b>Игровые квесты</b>\n\nВыберите игру:",
                 keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendAdminSponsoredQuestList(AppUser user) {
+        List<Quest> quests = questService.findActiveSponsored();
+        if (quests.isEmpty()) {
+            sendText(user.getTelegramId(),
+                    "💼 <b>Спонсорские квесты</b>\n\nНет активных спонсорских квестов.",
+                    backMenuKeyboard("admin:edit"));
+            return;
+        }
+        List<InlineKeyboardButton> buttons = new ArrayList<>();
+        for (Quest q : quests) {
+            buttons.add(keyboardFactory.callback("🎯 " + trim(q.getTitle(), 32), "admin:edit-quest:" + q.getId()));
+        }
+        sendText(user.getTelegramId(),
+                "💼 <b>Спонсорские квесты</b>\n\nВыберите квест для редактирования:",
+                verticalWithBackMenu(buttons, "⬅️ Назад", "admin:edit"));
     }
 
     private void sendAdminQuestCategories(AppUser user, String gameName) {
@@ -5053,7 +5089,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         rows.add(List.of(
-                keyboardFactory.callback("⬅️ Назад", "admin:edit"),
+                keyboardFactory.callback("⬅️ Назад", "admin:quests:section:gaming"),
                 keyboardFactory.callback("🏠 Меню", "menu:admin")
         ));
 
