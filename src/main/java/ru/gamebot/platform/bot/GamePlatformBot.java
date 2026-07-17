@@ -2282,10 +2282,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📌 Статус: <b>" + escape(displayStatus) + "</b>\n\n"
                         + "🏆 <b>Награда</b>\n"
                         + "✨ +" + quest.getRewardXp() + " XP\n"
-                        + "🪙 +" + quest.getRewardCoins() + " монет\n\n"
+                        + "🪙 +" + quest.getRewardCoins() + (quest.isSponsored() ? " EXC" : " монет") + "\n\n"
                         + "📝 <b>Суть задания</b>\n" + escape(quest.getDescription()) + "\n\n"
-                        + "📎 <b>Что нужно сделать</b>\n" + escape(quest.getInstruction()) + "\n\n"
-                        + "✅ <b>Что примет модерация</b>\n" + escape(quest.getRequirements()),
+                        + "📎 <b>Что нужно сделать</b>\n" + escape(quest.getInstruction())
+                        + (quest.isSponsored() ? "" : "\n\n✅ <b>Что примет модерация</b>\n" + escape(quest.getRequirements())),
                 verticalWithBackMenu(buttons, backText, backData));
     }
 
