@@ -112,8 +112,8 @@ public class SponsorService {
         s.setName(name);
         s.setSponsorContact(contact);
         s.setBudgetExc(0);
-        s.setStartDate(startDate.atStartOfDay());
-        s.setEndDate(endDate.plusDays(1).atStartOfDay());
+        if (startDate != null) s.setStartDate(startDate.atStartOfDay());
+        if (endDate != null) s.setEndDate(endDate.plusDays(1).atStartOfDay());
         s.setActive(true);
         s.setCreatedAt(LocalDateTime.now());
         Sponsor saved = sponsorRepository.save(s);

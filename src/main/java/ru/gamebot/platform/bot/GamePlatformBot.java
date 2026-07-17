@@ -1271,6 +1271,49 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "Теперь привяжите квесты к этой кампании через «Привязать квест».",
                         backMenuKeyboard("admin:sponsors"));
             }
+            case POSTPAY_CREATE_NAME -> {
+                session.getData().put("ppName", text.trim());
+                session.setState(SessionState.POSTPAY_CREATE_CONTACT);
+                sendText(user.getTelegramId(), "📞 Введите контакт менеджера (например: <code>@manager</code>):", cancelKeyboard());
+            }
+            case POSTPAY_CREATE_CONTACT -> {
+                session.getData().put("ppContact", text.trim());
+                session.setState(SessionState.POSTPAY_CREATE_DATES);
+                sendText(user.getTelegramId(),
+                        "📅 Введите даты кампании в формате:\n<code>ДД.ММ.ГГГГ - ДД.ММ.ГГГГ</code>\n\nИли <code>0</code> — без ограничений:",
+                        cancelKeyboard());
+            }
+            case POSTPAY_CREATE_DATES -> {
+                java.time.LocalDate startD = null, endD = null;
+                if (!"0".equals(text.trim())) {
+                    String[] parts2 = text.trim().split(" - ");
+                    if (parts2.length != 2) {
+                        sendText(user.getTelegramId(), "❌ Неверный формат. Используйте: ДД.ММ.ГГГГ - ДД.ММ.ГГГГ", cancelKeyboard()); return;
+                    }
+                    try {
+                        java.time.format.DateTimeFormatter df = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
+                        startD = java.time.LocalDate.parse(parts2[0].trim(), df);
+                        endD   = java.time.LocalDate.parse(parts2[1].trim(), df);
+                    } catch (Exception e) {
+                        sendText(user.getTelegramId(), "❌ Неверный формат даты.", cancelKeyboard()); return;
+                    }
+                }
+                String ppName    = session.getData().get("ppName");
+                String ppContact = session.getData().getOrDefault("ppContact", "");
+                session.reset();
+                ru.gamebot.platform.domain.model.Sponsor sp = sponsorService.createSimple(ppName, ppContact, null, startD, endD);
+                java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
+                String period = sp.getStartDate() != null
+                        ? sp.getStartDate().format(fmt) + " — " + sp.getEndDate().minusDays(1).format(fmt)
+                        : "без ограничений";
+                sendText(user.getTelegramId(),
+                        "✅ <b>Кампания под отчёт создана!</b>\n\n"
+                        + "📋 " + escape(sp.getName()) + "\n"
+                        + "📞 " + escape(ppContact) + "\n"
+                        + "📅 " + period + "\n\n"
+                        + "Теперь привяжите квест через «Привязать квест».",
+                        backMenuKeyboard("admin:postpay"));
+            }
             case TOURNAMENT_CREATE_NAME -> {
                 session.getData().put("tName", text.trim());
                 session.setState(SessionState.TOURNAMENT_CREATE_GAME);
@@ -3945,6 +3988,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 answerSilently(callbackQuery.getId());
                 return;
             }
+            case "postpay" -> { sendAdminPostpayList(user); answerSilently(callbackQuery.getId()); return; }
+            case "postpay:create" -> {
+                session.reset();
+                session.getData().put("postpay", "1");
+                session.setState(SessionState.POSTPAY_CREATE_NAME);
+                sendText(user.getTelegramId(),
+                        "📋 <b>Новый квест под отчёт</b>\n\nВведите название компании/спонсора:",
+                        cancelKeyboard());
+                answerSilently(callbackQuery.getId());
+                return;
+            }
             case "seasons" -> { sendAdminSeasonList(user); answerSilently(callbackQuery.getId()); return; }
             case "seasons:create" -> {
                 session.reset();
@@ -4144,6 +4198,45 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     long sponsorId = parseLong(action.substring("sponsors:addquest:".length()));
                     sendSponsorQuestPicker(user, sponsorId);
                     answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("postpay:view:")) {
+                    sendAdminPostpayView(user, parseLong(action.substring("postpay:view:".length())));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("postpay:addquest:")) {
+                    sendPostpayQuestPicker(user, parseLong(action.substring("postpay:addquest:".length())));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("postpay:link:")) {
+                    String[] parts = action.substring("postpay:link:".length()).split(":");
+                    long sponsorId = parseLong(parts[0]);
+                    long questId = parseLong(parts[1]);
+                    try {
+                        ru.gamebot.platform.domain.model.Quest q = questService.getQuest(questId);
+                        q.setSponsored(true);
+                        q.setSponsorId(sponsorId);
+                        questService.save(q);
+                        answer(callbackQuery.getId(), "Квест привязан.");
+                        sendAdminPostpayView(user, sponsorId);
+                    } catch (Exception e) { answer(callbackQuery.getId(), "❌ " + e.getMessage()); }
+                    return;
+                } else if (action.startsWith("postpay:unlink:")) {
+                    long questId = parseLong(action.substring("postpay:unlink:".length()));
+                    try {
+                        ru.gamebot.platform.domain.model.Quest q = questService.getQuest(questId);
+                        long sid = q.getSponsorId() != null ? q.getSponsorId() : 0;
+                        q.setSponsored(false);
+                        q.setSponsorId(null);
+                        questService.save(q);
+                        answer(callbackQuery.getId(), "Квест откреплён.");
+                        if (sid > 0) sendAdminPostpayView(user, sid);
+                        else sendAdminPostpayList(user);
+                    } catch (Exception e) { answer(callbackQuery.getId(), "❌ " + e.getMessage()); }
+                    return;
+                } else if (action.startsWith("postpay:close:")) {
+                    sponsorService.deactivate(parseLong(action.substring("postpay:close:".length())));
+                    answer(callbackQuery.getId(), "Кампания закрыта.");
+                    sendAdminPostpayList(user);
                     return;
                 } else if (action.startsWith("seasons:view:")) {
                     sendAdminSeasonView(user, parseLong(action.substring("seasons:view:".length())));
@@ -5115,6 +5208,80 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:sponsors")));
             sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
         }, () -> sendText(user.getTelegramId(), "❌ Спонсор не найден.", backMenuKeyboard("admin:sponsors")));
+    }
+
+    private void sendAdminPostpayList(AppUser user) {
+        List<ru.gamebot.platform.domain.model.Sponsor> all = sponsorService.findAll().stream()
+                .filter(s -> s.getBudgetExc() == 0)
+                .toList();
+        StringBuilder sb = new StringBuilder("📋 <b>Квесты под отчёт</b>\n\nПартнёры платят постфактум — по итогам кампании.\n");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yy");
+        for (ru.gamebot.platform.domain.model.Sponsor s : all) {
+            String icon = s.isActive() ? "🟢" : "⚫";
+            String period = s.getStartDate() != null
+                    ? s.getStartDate().format(fmt) + "–" + s.getEndDate().minusDays(1).format(fmt) : "—";
+            long completions = sponsorService.countCompletions(s);
+            rows.add(List.of(keyboardFactory.callback(
+                    icon + " " + s.getName() + " · " + completions + " прохожд. · " + period,
+                    "admin:postpay:view:" + s.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("➕ Новая кампания под отчёт", "admin:postpay:create")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendAdminPostpayView(AppUser user, long sponsorId) {
+        sponsorService.findById(sponsorId).ifPresentOrElse(s -> {
+            List<ru.gamebot.platform.domain.model.Quest> linked = sponsorService.findSponsoredQuests(sponsorId);
+            long completions = sponsorService.countCompletions(s);
+            java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
+            String period = s.getStartDate() != null
+                    ? s.getStartDate().format(fmt) + " — " + s.getEndDate().minusDays(1).format(fmt) : "без ограничений";
+
+            StringBuilder sb = new StringBuilder("📋 <b>" + escape(s.getName()) + "</b>\n");
+            if (s.getSponsorContact() != null && !s.getSponsorContact().isBlank()) {
+                sb.append("📞 Контакт: ").append(escape(s.getSponsorContact())).append("\n");
+            }
+            sb.append("Статус: ").append(s.isActive() ? "🟢 Активна" : "⚫ Завершена").append("\n");
+            sb.append("📅 Период: ").append(period).append("\n");
+            sb.append("✅ Одобрено прохождений: <b>").append(completions).append("</b>\n\n");
+            sb.append("🗺️ <b>Привязанные квесты (").append(linked.size()).append("):</b>\n");
+            for (ru.gamebot.platform.domain.model.Quest q : linked) {
+                sb.append("• ").append(escape(q.getTitle())).append("\n");
+            }
+
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            if (s.isActive()) {
+                rows.add(List.of(keyboardFactory.callback("➕ Привязать квест", "admin:postpay:addquest:" + sponsorId)));
+                rows.add(List.of(keyboardFactory.callback("⚫ Закрыть кампанию", "admin:postpay:close:" + sponsorId)));
+            }
+            for (ru.gamebot.platform.domain.model.Quest q : linked) {
+                rows.add(List.of(keyboardFactory.callback("❌ Открепить: " + trim(q.getTitle(), 30), "admin:postpay:unlink:" + q.getId())));
+            }
+            rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:postpay")));
+            sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+        }, () -> sendText(user.getTelegramId(), "❌ Кампания не найдена.", backMenuKeyboard("admin:postpay")));
+    }
+
+    private void sendPostpayQuestPicker(AppUser user, long sponsorId) {
+        List<ru.gamebot.platform.domain.model.Quest> allQuests = questService.findAll().stream()
+                .filter(q -> !q.isSponsored())
+                .toList();
+        if (allQuests.isEmpty()) {
+            sendText(user.getTelegramId(),
+                    "⚠️ Нет квестов без спонсора.",
+                    backMenuKeyboard("admin:postpay:view:" + sponsorId));
+            return;
+        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (ru.gamebot.platform.domain.model.Quest q : allQuests.stream().limit(20).toList()) {
+            rows.add(List.of(keyboardFactory.callback(
+                    q.getTitle() + " (" + q.getGameName() + ")",
+                    "admin:postpay:link:" + sponsorId + ":" + q.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:postpay:view:" + sponsorId)));
+        sendText(user.getTelegramId(), "🗺️ Выберите квест для привязки:", keyboardFactory.rowsLayout(rows));
     }
 
     private void sendSponsorQuestPicker(AppUser user, long sponsorId) {
@@ -6981,6 +7148,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("🏆 Турниры", "admin:tournaments")));
             rows.add(List.of(keyboardFactory.callback("🎫 Battle Pass", "admin:seasons")));
             rows.add(List.of(keyboardFactory.callback("🤝 Спонсорские квесты", "admin:sponsors")));
+            rows.add(List.of(keyboardFactory.callback("📋 Квесты под отчёт", "admin:postpay")));
             return keyboardFactory.rowsLayout(rows);
         }
 
