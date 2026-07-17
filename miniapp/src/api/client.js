@@ -115,6 +115,11 @@ export async function sendGiftBoost(nickname) {
   return data;
 }
 
+export async function sendExcTransfer(nickname, amount) {
+  const { data } = await api.post('/api/perks/transfer', { nickname, amount });
+  return data;
+}
+
 export async function getReferrals() {
   const { data } = await api.get('/api/profile/referrals');
   return data;

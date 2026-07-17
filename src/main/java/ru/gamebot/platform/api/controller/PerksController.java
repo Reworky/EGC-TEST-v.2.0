@@ -39,6 +39,12 @@ public class PerksController {
         private String nickname;
     }
 
+    @Data
+    public static class TransferRequest {
+        private String nickname;
+        private long amount;
+    }
+
     @GetMapping
     public ResponseEntity<PerkStateDto> state(@AuthenticationPrincipal Long telegramId) {
         AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
@@ -121,6 +127,29 @@ public class PerksController {
             };
             return ResponseEntity.ok(ShopActionResponseDto.builder().success(true).message(message).build());
         } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.ok(ShopActionResponseDto.builder().success(false).message(e.getMessage()).build());
+        }
+    }
+
+    @PostMapping("/transfer")
+    public ResponseEntity<ShopActionResponseDto> transfer(
+            @AuthenticationPrincipal Long telegramId, @RequestBody TransferRequest body) {
+        AppUser sender = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (sender == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        String nickname = body.getNickname() != null ? body.getNickname().trim() : "";
+        AppUser recipient = userService.findByNickname(nickname).orElse(null);
+        if (recipient == null) {
+            return ResponseEntity.ok(ShopActionResponseDto.builder()
+                    .success(false).message("Игрок с ником «" + nickname + "» не найден.").build());
+        }
+        try {
+            sinkShopService.executeTransfer(sender, recipient, body.getAmount());
+            long commission = sinkShopService.calcCommission(body.getAmount());
+            return ResponseEntity.ok(ShopActionResponseDto.builder()
+                    .success(true)
+                    .message("Перевод выполнен! " + recipient.getNickname() + " получил " + body.getAmount() + " EXC. Комиссия: " + commission + " EXC.")
+                    .build());
+        } catch (IllegalArgumentException e) {
             return ResponseEntity.ok(ShopActionResponseDto.builder().success(false).message(e.getMessage()).build());
         }
     }

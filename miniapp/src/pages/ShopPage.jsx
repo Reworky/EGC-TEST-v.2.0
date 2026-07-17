@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getShopItems, getShopStats, purchaseItem, getMyRewards, getProfile, getPerksState, purchasePerk, sendGiftBoost, cancelReward } from '../api/client';
+import { getShopItems, getShopStats, purchaseItem, getMyRewards, getProfile, getPerksState, purchasePerk, sendGiftBoost, sendExcTransfer, cancelReward } from '../api/client';
 import './QuestsPage.css';
 import './ShopPage.css';
 
@@ -225,6 +225,90 @@ function PerkCard({ item, state, expanded, onToggle, onPurchased }) {
   );
 }
 
+function TransferCard({ expanded, onToggle }) {
+  const [step, setStep] = useState(1);
+  const [nickname, setNickname] = useState('');
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  const MIN = 1000, MAX = 10000;
+  const commission = amount ? Math.max(Math.round(Number(amount) * 0.10), 200) : 0;
+  const total = amount ? Number(amount) + commission : 0;
+
+  function reset() { setStep(1); setNickname(''); setAmount(''); setMessage(null); }
+
+  async function handleConfirm() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await sendExcTransfer(nickname.trim(), Number(amount));
+      setMessage(res.message);
+      if (res.success) reset();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="shop-card" onClick={() => { if (!expanded) { reset(); onToggle('transfer'); } }}>
+      <div className="shop-top">
+        <div className="shop-title">🔄 Перевод EXC другу</div>
+        <div className="shop-price">10% комиссия</div>
+      </div>
+      {expanded && (
+        <div className="shop-detail" onClick={e => e.stopPropagation()}>
+          <p className="shop-desc">Перевод от 1 000 до 10 000 EXC. Комиссия: 10% (мин. 200 EXC).</p>
+          {step === 1 && (
+            <>
+              <input
+                type="text"
+                className="quest-text-input"
+                value={nickname}
+                onChange={e => setNickname(e.target.value)}
+                placeholder="Ник получателя (как в профиле бота)"
+              />
+              <button className="quest-btn" disabled={!nickname.trim()} onClick={() => setStep(2)}>
+                Далее
+              </button>
+            </>
+          )}
+          {step === 2 && (
+            <>
+              <input
+                type="number"
+                className="quest-text-input"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                placeholder="Сумма (1 000 – 10 000 EXC)"
+                min={MIN}
+                max={MAX}
+              />
+              {amount && Number(amount) >= MIN && Number(amount) <= MAX && (
+                <div className="quest-message" style={{ color: '#a0a4c0', marginBottom: 8 }}>
+                  Получит: {Number(amount).toLocaleString()} EXC · Комиссия: {commission.toLocaleString()} EXC · Итого: {total.toLocaleString()} EXC
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="quest-btn" style={{ flex: 1, background: '#444' }} onClick={() => setStep(1)}>Назад</button>
+                <button
+                  className="quest-btn"
+                  style={{ flex: 2 }}
+                  disabled={busy || !amount || Number(amount) < MIN || Number(amount) > MAX}
+                  onClick={handleConfirm}
+                >
+                  {busy ? 'Секунду...' : 'Перевести'}
+                </button>
+              </div>
+            </>
+          )}
+          {message && <div className="quest-message" style={{ marginTop: 8 }}>{message}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GiftCard({ expanded, onToggle }) {
   const [nickname, setNickname] = useState('');
   const [busy, setBusy] = useState(false);
@@ -327,6 +411,7 @@ function PerksView({ expanded, onToggle }) {
 
       <div className="category-section">
         <div className="category-header">Социальные</div>
+        <TransferCard expanded={expanded === 'transfer'} onToggle={onToggle} />
         <GiftCard expanded={expanded === 'gift'} onToggle={onToggle} />
       </div>
     </>
