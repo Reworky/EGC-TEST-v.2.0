@@ -2276,8 +2276,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + sponsorBadge
                         + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n\n"
                         + "🎮 Игра: <b>" + escape(quest.getGameName()) + "</b>\n"
-                        + "📚 Формат: <b>" + escape(quest.getCategory()) + "</b>\n"
-                        + "🕹️ Платформа: <b>" + escape(quest.getPlatform()) + "</b>\n"
+                        + (quest.isSponsored() ? "" : "📚 Формат: <b>" + escape(quest.getCategory()) + "</b>\n"
+                        + "🕹️ Платформа: <b>" + escape(quest.getPlatform()) + "</b>\n")
                         + deadlineLine
                         + "📌 Статус: <b>" + escape(displayStatus) + "</b>\n\n"
                         + "🏆 <b>Награда</b>\n"
@@ -2326,8 +2326,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 notice + "\n\n"
                         + "🎯 <b>" + escape(freshQuest.getTitle()) + "</b>\n\n"
                         + "🎮 Игра: <b>" + escape(freshQuest.getGameName()) + "</b>\n"
-                        + "📚 Формат: <b>" + escape(freshQuest.getCategory()) + "</b>\n"
-                        + "🕹️ Платформа: <b>" + escape(freshQuest.getPlatform()) + "</b>\n"
+                        + (freshQuest.isSponsored() ? "" : "📚 Формат: <b>" + escape(freshQuest.getCategory()) + "</b>\n"
+                        + "🕹️ Платформа: <b>" + escape(freshQuest.getPlatform()) + "</b>\n")
                         + deadlineLine
                         + "📌 Статус: <b>В процессе</b>\n\n"
                         + "🏆 <b>Награда</b>\n"
