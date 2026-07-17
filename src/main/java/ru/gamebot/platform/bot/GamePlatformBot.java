@@ -2091,7 +2091,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         // UGC-квесты без деления на сложность — сразу показываем список
         if ("UGC".equalsIgnoreCase(gameName)) {
-            sendQuestList(user, gameName, null);
+            sendQuestList(user, gameName, null, "menu:quests");
             return;
         }
 
@@ -2117,6 +2117,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendQuestList(AppUser user, String gameName, String category) {
+        sendQuestList(user, gameName, category, "quests:game:" + encodeGameToken(gameName));
+    }
+
+    private void sendQuestList(AppUser user, String gameName, String category, String backData) {
         if (gameName == null || gameName.isBlank()) {
             sendQuestGames(user);
             return;
@@ -2128,7 +2132,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (quests.isEmpty()) {
             sendText(user.getTelegramId(),
                     "📭 В этой категории пока нет активных квестов. Проверьте позже или выберите другую подборку.",
-                    backMenuKeyboard("quests:game:" + encodeGameToken(gameName)));
+                    backMenuKeyboard(backData));
             return;
         }
 
@@ -2144,7 +2148,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "<b>" + escape(title) + "</b>\n\n"
                         + "Ниже собраны активные задания по выбранной игре. Откройте карточку, чтобы увидеть награды и условия прохождения.",
-                verticalWithBackMenu(buttons, "⬅️ Назад", "quests:game:" + encodeGameToken(gameName)));
+                verticalWithBackMenu(buttons, "⬅️ Назад", backData));
     }
 
     private void handleQuestListAction(CallbackQuery callbackQuery, AppUser user, String payload) {
