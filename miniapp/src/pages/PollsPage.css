@@ -1,13 +1,13 @@
 .poll-question {
   font-size: 15px;
   font-weight: 700;
-  color: var(--tg-theme-text-color, #fff);
+  color: #fff;
   margin-bottom: 6px;
 }
 
 .poll-meta {
   font-size: 12px;
-  color: var(--tg-theme-hint-color, #888);
+  color: #888;
   margin-bottom: 4px;
 }
 
@@ -22,7 +22,7 @@
   display: flex;
   justify-content: space-between;
   font-size: 13px;
-  color: var(--tg-theme-text-color, #eee);
+  color: #eee;
   margin-bottom: 4px;
 }
 

@@ -22,13 +22,13 @@
   justify-content: center;
   gap: 2px;
   text-decoration: none;
-  color: var(--tg-theme-hint-color, #888);
+  color: #888;
   font-size: 10px;
   transition: color 0.15s;
 }
 
 .tab.active {
-  color: var(--tg-theme-button-color, #a855f7);
+  color: #a855f7;
 }
 
 .tab-icon {

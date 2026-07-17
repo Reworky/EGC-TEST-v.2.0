@@ -4,7 +4,7 @@
 
 .ref-back {
   display: inline-block;
-  color: var(--tg-theme-hint-color, #888);
+  color: #888;
   font-size: 13px;
   text-decoration: none;
   margin-bottom: 12px;
@@ -14,7 +14,7 @@
   font-size: 19px;
   font-weight: 800;
   margin: 0 0 16px;
-  color: var(--tg-theme-text-color, #fff);
+  color: #fff;
 }
 
 .ref-link-card,
@@ -31,13 +31,13 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--tg-theme-hint-color, #888);
+  color: #888;
   margin-bottom: 6px;
 }
 
 .ref-link-value {
   font-size: 13px;
-  color: var(--tg-theme-text-color, #eee);
+  color: #eee;
   word-break: break-all;
   background: rgba(255,255,255,0.06);
   border-radius: 8px;
@@ -63,7 +63,7 @@
 
 .ref-progress-label {
   font-size: 13px;
-  color: var(--tg-theme-hint-color, #888);
+  color: #888;
   margin-bottom: 8px;
 }
 
@@ -78,7 +78,7 @@
   font-size: 15px;
   font-weight: 700;
   margin-bottom: 12px;
-  color: var(--tg-theme-text-color, #fff);
+  color: #fff;
 }
 
 .ref-step {
@@ -89,13 +89,13 @@
 .ref-step-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--tg-theme-text-color, #fff);
+  color: #fff;
   margin-bottom: 4px;
 }
 
 .ref-step-desc {
   font-size: 13px;
-  color: var(--tg-theme-hint-color, #ccc);
+  color: #ccc;
   line-height: 1.4;
 }
 
@@ -105,5 +105,5 @@
   border-top: 1px solid rgba(255,255,255,0.08);
   font-size: 12px;
   font-style: italic;
-  color: var(--tg-theme-hint-color, #888);
+  color: #888;
 }

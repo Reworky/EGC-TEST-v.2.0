@@ -12,7 +12,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--tg-theme-hint-color, #a0a4c0);
+  color: #a0a4c0;
   margin-bottom: 6px;
 }
 
