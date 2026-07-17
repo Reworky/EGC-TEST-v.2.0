@@ -297,7 +297,7 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged }) {
             {!sponsoredLoading && sponsoredQuests.length > 0 && (
               <div className="category-section">
                 {sponsoredQuests.map(q => (
-                  <QuestCard key={q.id} quest={q} detail={details[q.id]} onChanged={() => onDetailChanged(q.id)} />
+                  <QuestCard key={q.id} q={q} expanded={expanded} onToggle={onToggle} details={details} onDetailChanged={onDetailChanged} />
                 ))}
               </div>
             )}
