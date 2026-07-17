@@ -77,6 +77,21 @@ public class SponsorService {
         });
     }
 
+    @Transactional
+    public void deleteCampaign(Long id) {
+        sponsorRepository.findById(id).ifPresent(s -> {
+            // Unlink all quests
+            questRepository.findAll().stream()
+                    .filter(q -> id.equals(q.getSponsorId()))
+                    .forEach(q -> {
+                        q.setSponsored(false);
+                        q.setSponsorId(null);
+                        questRepository.save(q);
+                    });
+            sponsorRepository.delete(s);
+        });
+    }
+
     public List<Quest> findSponsoredQuests(Long sponsorId) {
         return questRepository.findAll().stream()
                 .filter(q -> q.isSponsored() && sponsorId.equals(q.getSponsorId()))
