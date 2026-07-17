@@ -2060,7 +2060,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "quests:section:gaming")));
         rows.add(List.of(keyboardFactory.callback("💼 Спонсорские квесты", "quests:section:sponsored")));
-        rows.add(List.of(keyboardFactory.callback("📋 Квесты под отчёт", "quests:section:ugc")));
+        rows.add(List.of(keyboardFactory.callback("UGC", "quests:section:ugc")));
         rows.add(List.of(keyboardFactory.callback("📂 Мои квесты", "menu:myquests")));
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(),
