@@ -341,30 +341,34 @@ public class QuestService {
             }
         }
 
-        long activeSlots = countActiveDrafts(lockedUser);
-        long maxSlots = sinkShopService.getMaxQuestSlots(lockedUser);
-        if (activeSlots >= maxSlots) {
-            return QuestActionResult.of(QuestActionStatus.SLOTS_FULL, 0);
-        }
-
-        if (isSameQuestCooldownActive(lockedUser, quest)) {
-            return QuestActionResult.of(QuestActionStatus.SAME_QUEST_COOLDOWN, cooldownHours(quest) * 60L);
-        }
-
-        if (isCooldownActive(lockedUser, quest)) {
-            long hoursLeft = getCooldownHoursLeft(lockedUser, quest);
-            return QuestActionResult.of(QuestActionStatus.GAME_COOLDOWN, hoursLeft * 60L);
-        }
-
-        if (lockedUser.getLastQuestTakenAt() != null) {
-            long minutesSince = ChronoUnit.MINUTES.between(lockedUser.getLastQuestTakenAt(), LocalDateTime.now());
-            if (minutesSince < 60) {
-                return QuestActionResult.of(QuestActionStatus.TAKE_COOLDOWN, 60 - minutesSince);
+        // Спонсорские квесты: никаких кулдаунов и ограничений по слотам
+        if (!quest.isSponsored()) {
+            long activeSlots = countActiveDrafts(lockedUser);
+            long maxSlots = sinkShopService.getMaxQuestSlots(lockedUser);
+            if (activeSlots >= maxSlots) {
+                return QuestActionResult.of(QuestActionStatus.SLOTS_FULL, 0);
             }
+
+            if (isSameQuestCooldownActive(lockedUser, quest)) {
+                return QuestActionResult.of(QuestActionStatus.SAME_QUEST_COOLDOWN, cooldownHours(quest) * 60L);
+            }
+
+            if (isCooldownActive(lockedUser, quest)) {
+                long hoursLeft = getCooldownHoursLeft(lockedUser, quest);
+                return QuestActionResult.of(QuestActionStatus.GAME_COOLDOWN, hoursLeft * 60L);
+            }
+
+            if (lockedUser.getLastQuestTakenAt() != null) {
+                long minutesSince = ChronoUnit.MINUTES.between(lockedUser.getLastQuestTakenAt(), LocalDateTime.now());
+                if (minutesSince < 60) {
+                    return QuestActionResult.of(QuestActionStatus.TAKE_COOLDOWN, 60 - minutesSince);
+                }
+            }
+
+            lockedUser.setLastQuestTakenAt(LocalDateTime.now());
+            appUserRepository.save(lockedUser);
         }
 
-        lockedUser.setLastQuestTakenAt(LocalDateTime.now());
-        appUserRepository.save(lockedUser);
         QuestSubmission created = createDraftSubmission(lockedUser, quest);
         return QuestActionResult.ok(created);
     }
@@ -396,10 +400,12 @@ public class QuestService {
             return QuestActionResult.of(QuestActionStatus.ALREADY_APPROVED, 0);
         }
         if (latest.getStatus() == SubmissionStatus.REJECTED || latest.getStatus() == SubmissionStatus.NEEDS_INFO) {
-            LocalDateTime rejectedAt = latest.getUpdatedAt();
-            if (rejectedAt != null && LocalDateTime.now().isBefore(rejectedAt.plusHours(1))) {
-                long minutesLeft = ChronoUnit.MINUTES.between(LocalDateTime.now(), rejectedAt.plusHours(1));
-                return QuestActionResult.of(QuestActionStatus.REJECT_COOLDOWN, Math.max(1, minutesLeft));
+            if (!quest.isSponsored()) {
+                LocalDateTime rejectedAt = latest.getUpdatedAt();
+                if (rejectedAt != null && LocalDateTime.now().isBefore(rejectedAt.plusHours(1))) {
+                    long minutesLeft = ChronoUnit.MINUTES.between(LocalDateTime.now(), rejectedAt.plusHours(1));
+                    return QuestActionResult.of(QuestActionStatus.REJECT_COOLDOWN, Math.max(1, minutesLeft));
+                }
             }
             latest = resetToDraft(latest);
         }
@@ -408,7 +414,7 @@ public class QuestService {
             return QuestActionResult.of(QuestActionStatus.EXPIRED, 0);
         }
 
-        if (hasOtherPendingSubmission(lockedUser, quest)) {
+        if (!quest.isSponsored() && hasOtherPendingSubmission(lockedUser, quest)) {
             return QuestActionResult.of(QuestActionStatus.HAS_PENDING_REPORT, 0);
         }
 
