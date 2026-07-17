@@ -5063,7 +5063,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendAdminSponsoredQuestList(AppUser user) {
-        List<Quest> quests = questService.findActiveSponsored();
+        List<Quest> quests = questService.findAllSponsored();
         if (quests.isEmpty()) {
             sendText(user.getTelegramId(),
                     "💼 <b>Спонсорские квесты</b>\n\nНет активных спонсорских квестов.",
@@ -5080,7 +5080,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendAdminUgcQuestList(AppUser user) {
-        List<Quest> quests = questService.findActiveUgc();
+        List<Quest> quests = questService.findAllUgc();
         if (quests.isEmpty()) {
             sendText(user.getTelegramId(),
                     "📋 <b>Квесты под отчёт</b>\n\nНет активных квестов под отчёт.",

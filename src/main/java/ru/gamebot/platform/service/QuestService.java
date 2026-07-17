@@ -130,6 +130,7 @@ public class QuestService {
     public List<Quest> findAllByGameName(String gameName) {
         return questRepository.findAll().stream()
                 .filter(quest -> sameGame(quest.getGameName(), gameName))
+                .filter(q -> !q.isSponsored() && !"UGC".equalsIgnoreCase(q.getGameName()))
                 .sorted(Comparator.comparing(Quest::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
     }
@@ -137,6 +138,20 @@ public class QuestService {
     public List<Quest> findAllByGameNameAndCategory(String gameName, String category) {
         return findAllByGameName(gameName).stream()
                 .filter(quest -> sameCategory(quest.getCategory(), category))
+                .toList();
+    }
+
+    public List<Quest> findAllSponsored() {
+        return questRepository.findAll().stream()
+                .filter(Quest::isSponsored)
+                .sorted(Comparator.comparing(Quest::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+    }
+
+    public List<Quest> findAllUgc() {
+        return questRepository.findAll().stream()
+                .filter(q -> !q.isSponsored() && "UGC".equalsIgnoreCase(q.getGameName()))
+                .sorted(Comparator.comparing(Quest::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
     }
 
