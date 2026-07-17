@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getWallet, claimDailyBonus, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, getReferrals } from '../api/client';
+import { getWallet, claimDailyBonus, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward } from '../api/client';
 import BorderBeamCard from '../components/BorderBeamCard';
 import ShimmerButton from '../components/ShimmerButton';
 import AnimatedNumber from '../components/AnimatedNumber';
@@ -21,29 +21,7 @@ const STATUS_LABELS = {
 function BalanceView({ wallet, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
-  const [refData, setRefData] = useState(null);
-  const [refCopied, setRefCopied] = useState(false);
   const playParticles = useParticles();
-
-  useEffect(() => {
-    getReferrals().then(setRefData).catch(() => {});
-  }, []);
-
-  function copyRefLink() {
-    if (!refData?.referralLink) return;
-    const markCopied = () => { setRefCopied(true); setTimeout(() => setRefCopied(false), 2000); };
-    if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(refData.referralLink).then(markCopied, () => markCopied());
-    } else {
-      markCopied();
-    }
-  }
-
-  function shareRefLink() {
-    if (!refData?.referralLink) return;
-    const url = `https://t.me/share/url?url=${encodeURIComponent(refData.referralLink)}&text=${encodeURIComponent('Присоединяйся к EXPERIENCE GAMING CLUB!')}`;
-    window.Telegram?.WebApp?.openTelegramLink?.(url) || window.open(url, '_blank');
-  }
 
   async function handleClaim() {
     setBusy(true);
@@ -148,21 +126,6 @@ function BalanceView({ wallet, onChanged }) {
         {message && <div className="quest-message">{message}</div>}
       </div>
 
-      {refData?.referralLink && (
-        <div className="ref-link-card">
-          <div className="ref-link-label">🤝 Пригласи друга — получи бонус</div>
-          <p className="shop-desc">За каждого приглашённого игрока ты получаешь 10% от его заработка в первые 30 дней.</p>
-          <div className="ref-link-value">{refData.referralLink}</div>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-            <button className="quest-btn" style={{ flex: 1 }} onClick={copyRefLink}>
-              {refCopied ? '✅ Скопировано' : '📋 Скопировать'}
-            </button>
-            <button className="quest-btn" style={{ flex: 1 }} onClick={shareRefLink}>
-              📤 Поделиться
-            </button>
-          </div>
-        </div>
-      )}
     </>
   );
 }
