@@ -5146,6 +5146,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "admin:quests:section:gaming")));
         rows.add(List.of(keyboardFactory.callback("💼 Спонсорские квесты", "admin:quests:section:sponsored")));
         rows.add(List.of(keyboardFactory.callback("📋 Квесты под отчёт", "admin:quests:section:ugc")));
+        rows.add(List.of(
+                keyboardFactory.callback("🤝 Спонсоры", "admin:sponsors"),
+                keyboardFactory.callback("📑 Постоплата", "admin:postpay")
+        ));
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:admin")));
         sendText(user.getTelegramId(),
                 "🗂️ <b>Управление квестами</b>\n\nВыберите раздел:",
@@ -7529,8 +7533,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("🗳 Голосования", "admin:polls")));
             rows.add(List.of(keyboardFactory.callback("🏆 Турниры", "admin:tournaments")));
             rows.add(List.of(keyboardFactory.callback("🎫 Battle Pass", "admin:seasons")));
-            rows.add(List.of(keyboardFactory.callback("🤝 Спонсорские квесты", "admin:sponsors")));
-            rows.add(List.of(keyboardFactory.callback("📋 Квесты под отчёт", "admin:postpay")));
             return keyboardFactory.rowsLayout(rows);
         }
 
