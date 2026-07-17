@@ -3479,7 +3479,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long commission = sinkShopService.calcCommission(amount);
         long totalDebited = amount + commission;
         String recipientIdStr = session.getData().get("transfer_recipient_id");
-        AppUser recipient = appUserRepository.findByTelegramId(Long.parseLong(recipientIdStr)).orElse(null);
+        AppUser recipient = userService.findByTelegramId(Long.parseLong(recipientIdStr)).orElse(null);
         if (recipient == null) {
             session.reset();
             sendText(user.getTelegramId(), "⚠️ Получатель не найден. Начните заново.", backMenuKeyboard("menu:sink"));
