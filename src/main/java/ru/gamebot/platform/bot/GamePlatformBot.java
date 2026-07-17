@@ -562,6 +562,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleProfileAction(callbackQuery, user, session, data.substring("profile:".length()));
             return;
         }
+        if ("quests:section:gaming".equals(data)) {
+            sendGamingQuestGames(user);
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if ("quests:section:sponsored".equals(data)) {
+            sendSponsoredQuestList(user);
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if (data.startsWith("quests:game:")) {
             sendQuestCategories(user, decodeGameToken(data.substring("quests:game:".length())));
             answer(callbackQuery.getId(), "Квесты обновлены");
@@ -2042,26 +2052,52 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendQuestGames(AppUser user) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "quests:section:gaming")));
+        rows.add(List.of(keyboardFactory.callback("💼 Спонсорские квесты", "quests:section:sponsored")));
+        rows.add(List.of(keyboardFactory.callback("📂 Мои квесты", "menu:myquests")));
+        rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(),
+                "🗺️ <b>Квесты</b>\n\nВыберите раздел:",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendGamingQuestGames(AppUser user) {
         List<String> games = questService.findActiveGameNames();
         if (games.isEmpty()) {
             sendText(user.getTelegramId(),
                     "📭 Сейчас в клубе нет активных квестов по играм. Как только новые задания появятся, они откроются здесь.",
-                    backMenuKeyboard("menu:main"));
+                    backMenuKeyboard("menu:quests"));
             return;
         }
-
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (String game : games) {
             rows.add(List.of(keyboardFactory.callback("🎮 " + trim(game, 28), "quests:game:" + encodeGameToken(game))));
         }
-        rows.add(List.of(keyboardFactory.callback("📂 Мои квесты", "menu:myquests")));
-        rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
-
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", "menu:quests"),
+                keyboardFactory.callback("🏠 Меню", "menu:main")
+        ));
         sendText(user.getTelegramId(),
-                "🗺️ <b>Квесты по играм</b>\n\n"
-                        + "Сначала выберите игру, а затем откройте задания именно по ней.\n"
-                        + "Так навигация остаётся чистой, а нужные квесты находятся быстрее.",
+                "🎮 <b>Игровые квесты</b>\n\nВыберите игру:",
                 keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendSponsoredQuestList(AppUser user) {
+        List<Quest> quests = questService.findActiveSponsored();
+        if (quests.isEmpty()) {
+            sendText(user.getTelegramId(),
+                    "👀 Спонсорские квесты появятся скоро.",
+                    backMenuKeyboard("menu:quests"));
+            return;
+        }
+        List<InlineKeyboardButton> buttons = new ArrayList<>();
+        for (Quest q : quests) {
+            buttons.add(keyboardFactory.callback("🎯 " + trim(q.getTitle(), 32), "quest:view:sponsored:all:" + q.getId()));
+        }
+        sendText(user.getTelegramId(),
+                "💼 <b>Спонсорские квесты</b>\n\nВыберите задание:",
+                verticalWithBackMenu(buttons, "⬅️ Назад", "menu:quests"));
     }
 
     private void sendQuestCategories(AppUser user) {
@@ -2103,7 +2139,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🏰 Сложные", "quests:list:" + encodeGameToken(gameName) + ":long")));
         rows.add(List.of(keyboardFactory.callback("📚 Все квесты", "quests:list:" + encodeGameToken(gameName) + ":all")));
         rows.add(List.of(
-                keyboardFactory.callback("⬅️ Назад", "menu:quests"),
+                keyboardFactory.callback("⬅️ Назад", "quests:section:gaming"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
 
