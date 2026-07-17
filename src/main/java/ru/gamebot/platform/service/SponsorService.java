@@ -115,15 +115,15 @@ public class SponsorService {
         s.setEndDate(endDate.plusDays(1).atStartOfDay());
         s.setActive(true);
         s.setCreatedAt(LocalDateTime.now());
-        s = sponsorRepository.save(s);
+        Sponsor saved = sponsorRepository.save(s);
 
         if (questId != null) {
             questRepository.findById(questId).ifPresent(q -> {
                 q.setSponsored(true);
-                q.setSponsorId(s.getId());
+                q.setSponsorId(saved.getId());
                 questRepository.save(q);
             });
         }
-        return s;
+        return saved;
     }
 }
