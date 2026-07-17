@@ -5225,8 +5225,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
 
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            rows.add(List.of(keyboardFactory.callback("➕ Создать квест", "admin:sponsors:newquest:" + sponsorId)));
             if (s.isActive()) {
-                rows.add(List.of(keyboardFactory.callback("➕ Создать квест", "admin:sponsors:newquest:" + sponsorId)));
                 rows.add(List.of(keyboardFactory.callback("⚫ Завершить кампанию", "admin:sponsors:deactivate:" + sponsorId)));
             }
             for (ru.gamebot.platform.domain.model.Quest q : linked) {
@@ -5280,8 +5280,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
 
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            rows.add(List.of(keyboardFactory.callback("➕ Создать квест", "admin:postpay:newquest:" + sponsorId)));
             if (s.isActive()) {
-                rows.add(List.of(keyboardFactory.callback("➕ Создать квест", "admin:postpay:newquest:" + sponsorId)));
                 rows.add(List.of(keyboardFactory.callback("⚫ Закрыть кампанию", "admin:postpay:close:" + sponsorId)));
             }
             for (ru.gamebot.platform.domain.model.Quest q : linked) {
