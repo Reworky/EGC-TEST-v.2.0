@@ -62,6 +62,12 @@ public class QuestService {
         return findActiveQuests().stream().filter(Quest::isSponsored).toList();
     }
 
+    public List<Quest> findActiveUgc() {
+        return findActiveQuests().stream()
+                .filter(q -> !q.isSponsored() && "UGC".equalsIgnoreCase(q.getGameName()))
+                .toList();
+    }
+
     public List<Quest> findActiveQuestsForUser(boolean isCouncilMember, boolean hasSeasonPass) {
         return findActiveQuests().stream()
                 .filter(q -> !q.isCouncilOnly() || isCouncilMember)
@@ -77,7 +83,7 @@ public class QuestService {
 
     public List<String> findActiveGameNames() {
         return findActiveQuests().stream()
-                .filter(q -> !q.isSponsored())
+                .filter(q -> !q.isSponsored() && !"UGC".equalsIgnoreCase(q.getGameName()))
                 .map(Quest::getGameName)
                 .filter(name -> name != null && !name.isBlank())
                 .distinct()
@@ -87,6 +93,7 @@ public class QuestService {
 
     public List<String> findAllGameNames() {
         return questRepository.findAll().stream()
+                .filter(q -> !q.isSponsored() && !"UGC".equalsIgnoreCase(q.getGameName()))
                 .map(Quest::getGameName)
                 .filter(name -> name != null && !name.isBlank())
                 .distinct()
@@ -109,6 +116,7 @@ public class QuestService {
     public List<Quest> findActiveByGameName(String gameName) {
         return findActiveQuests().stream()
                 .filter(quest -> sameGame(quest.getGameName(), gameName))
+                .filter(q -> !q.isSponsored())
                 .sorted(Comparator.comparing(Quest::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
     }

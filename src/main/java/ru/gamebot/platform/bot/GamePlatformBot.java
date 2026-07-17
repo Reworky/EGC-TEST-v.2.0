@@ -572,6 +572,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if ("quests:section:ugc".equals(data)) {
+            sendUgcQuestList(user);
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if (data.startsWith("quests:game:")) {
             sendQuestCategories(user, decodeGameToken(data.substring("quests:game:".length())));
             answer(callbackQuery.getId(), "Квесты обновлены");
@@ -2055,6 +2060,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "quests:section:gaming")));
         rows.add(List.of(keyboardFactory.callback("💼 Спонсорские квесты", "quests:section:sponsored")));
+        rows.add(List.of(keyboardFactory.callback("📋 Квесты под отчёт", "quests:section:ugc")));
         rows.add(List.of(keyboardFactory.callback("📂 Мои квесты", "menu:myquests")));
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(),
@@ -2098,6 +2104,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "💼 <b>Спонсорские квесты</b>\n\nВыберите задание:",
                 verticalWithBackMenu(buttons, "⬅️ Назад", "menu:quests"));
+    }
+
+    private void sendUgcQuestList(AppUser user) {
+        sendQuestList(user, "UGC", null, "menu:quests");
     }
 
     private void sendQuestCategories(AppUser user) {
@@ -4142,6 +4152,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendAdminSponsoredQuestList(user);
                     answerSilently(callbackQuery.getId());
                     return;
+                } else if ("quests:section:ugc".equals(action)) {
+                    sendAdminUgcQuestList(user);
+                    answerSilently(callbackQuery.getId());
+                    return;
                 } else if (action.startsWith("quests:game:")) {
                     sendAdminQuestCategories(user, decodeGameToken(action.substring("quests:game:".length())));
                 } else if (action.startsWith("quests:list:")) {
@@ -5020,6 +5034,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "admin:quests:section:gaming")));
         rows.add(List.of(keyboardFactory.callback("💼 Спонсорские квесты", "admin:quests:section:sponsored")));
+        rows.add(List.of(keyboardFactory.callback("📋 Квесты под отчёт", "admin:quests:section:ugc")));
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:admin")));
         sendText(user.getTelegramId(),
                 "🗂️ <b>Управление квестами</b>\n\nВыберите раздел:",
@@ -5061,6 +5076,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         sendText(user.getTelegramId(),
                 "💼 <b>Спонсорские квесты</b>\n\nВыберите квест для редактирования:",
+                verticalWithBackMenu(buttons, "⬅️ Назад", "admin:edit"));
+    }
+
+    private void sendAdminUgcQuestList(AppUser user) {
+        List<Quest> quests = questService.findActiveUgc();
+        if (quests.isEmpty()) {
+            sendText(user.getTelegramId(),
+                    "📋 <b>Квесты под отчёт</b>\n\nНет активных квестов под отчёт.",
+                    backMenuKeyboard("admin:edit"));
+            return;
+        }
+        List<InlineKeyboardButton> buttons = new ArrayList<>();
+        for (Quest q : quests) {
+            buttons.add(keyboardFactory.callback("📋 " + trim(q.getTitle(), 32), "admin:edit-quest:" + q.getId()));
+        }
+        sendText(user.getTelegramId(),
+                "📋 <b>Квесты под отчёт</b>\n\nВыберите квест для редактирования:",
                 verticalWithBackMenu(buttons, "⬅️ Назад", "admin:edit"));
     }
 
