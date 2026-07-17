@@ -2804,14 +2804,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         }
 
-        List<RewardItem> comingSoon = rewardService.findComingSoon();
-        if (!comingSoon.isEmpty()) {
-            rows.add(List.of(keyboardFactory.callback("── ⏳ Скоро в магазине ──", "noop")));
-            for (RewardItem item : comingSoon) {
-                rows.add(List.of(keyboardFactory.callback("🔜 " + trim(item.getTitle(), 28), "shop:soon:" + item.getId())));
-            }
-        }
-
         rows.add(List.of(
                 keyboardFactory.callback("📋 Мои заявки", "menu:my-rewards"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
