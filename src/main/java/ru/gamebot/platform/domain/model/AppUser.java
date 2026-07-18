@@ -130,4 +130,7 @@ public class AppUser {
     /** Накопленная сумма зафиксированных рублей из одобренных квестов (уменьшается при выводе). */
     @Column(columnDefinition = "bigint default 0")
     private long fixedRubBalance;
+
+    // Squad membership
+    private Long squadId;
 }

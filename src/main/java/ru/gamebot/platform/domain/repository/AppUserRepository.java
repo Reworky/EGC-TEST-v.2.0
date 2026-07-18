@@ -54,4 +54,8 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.lastActivityDate = :today")
     long countActiveOnDate(@Param("today") java.time.LocalDate today);
+
+    List<AppUser> findAllBySquadId(Long squadId);
+
+    long countBySquadId(Long squadId);
 }

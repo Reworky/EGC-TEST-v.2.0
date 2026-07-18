@@ -23,11 +23,13 @@ public class WeeklyResetScheduler {
     private final HealthRatioService healthRatioService;
     private final PollService pollService;
     private final TournamentService tournamentService;
+    private final SquadService squadService;
     private final QuestSubmissionRepository questSubmissionRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     @Scheduled(cron = "0 0 0 * * MON")
     public void resetWeeklyLeaderboard() {
+        squadService.rewardTopSquad();
         userService.resetWeeklyXp();
         log.info("Weekly XP has been reset.");
         healthRatioService.recalculate();
