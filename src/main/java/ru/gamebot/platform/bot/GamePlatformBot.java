@@ -6970,7 +6970,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     @org.springframework.context.event.EventListener
-    @org.springframework.context.event.EventListener
     public void onCooldownExpired(ru.gamebot.platform.event.CooldownExpiredEvent event) {
         String msg;
         if (event.isQuestSpecific()) {
@@ -6988,6 +6987,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(event.getTelegramId(), msg, keyboard);
     }
 
+    @org.springframework.context.event.EventListener
     public void onLeagueReward(LeagueRewardEvent event) {
         String msg = "🏆 <b>Итоги недели — " + escape(event.getLeagueName()) + "</b>\n\n"
                 + "Ты набрал <b>" + event.getWeeklyXp() + " XP</b> за эту неделю.\n\n"
