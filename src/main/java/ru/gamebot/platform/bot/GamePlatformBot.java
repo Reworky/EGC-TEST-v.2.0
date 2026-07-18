@@ -6968,9 +6968,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     @org.springframework.context.event.EventListener
     @org.springframework.context.event.EventListener
     public void onCooldownExpired(ru.gamebot.platform.event.CooldownExpiredEvent event) {
-        String msg = "🎮 <b>Кулдаун снят!</b>\n\n"
-                + "Ты снова можешь взять квест в игре <b>" + escape(event.getGameName()) + "</b>.\n\n"
-                + "Заходи и продолжай прогресс 👇";
+        String msg;
+        if (event.isQuestSpecific()) {
+            msg = "🎮 <b>Кулдаун снят!</b>\n\n"
+                    + "Квест <b>«" + escape(event.getQuestTitle()) + "»</b> снова доступен.\n\n"
+                    + "Заходи и продолжай прогресс 👇";
+        } else {
+            msg = "🎮 <b>Кулдаун снят!</b>\n\n"
+                    + "Ты снова можешь взять квест в игре <b>" + escape(event.getGameName()) + "</b>.\n\n"
+                    + "Заходи и продолжай прогресс 👇";
+        }
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("🗺️ Перейти к квестам", "menu:quests"))
         ));

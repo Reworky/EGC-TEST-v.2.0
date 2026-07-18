@@ -58,18 +58,36 @@ public class WeeklyResetScheduler {
     @Scheduled(fixedDelay = 300_000)
     public void notifyCooldownExpired() {
         LocalDateTime now = LocalDateTime.now();
-        // Обычный кулдаун: 24ч
-        notifyExpiredInWindow(now.minusHours(24).minusMinutes(5), now.minusHours(24));
-        // Сложный кулдаун: 14 дней (336ч)
-        notifyExpiredInWindow(now.minusHours(336).minusMinutes(5), now.minusHours(336));
+        LocalDateTime from24 = now.minusHours(24).minusMinutes(5);
+        LocalDateTime to24   = now.minusHours(24);
+        LocalDateTime from336 = now.minusHours(336).minusMinutes(5);
+        LocalDateTime to336   = now.minusHours(336);
+
+        // Игровой кулдаун (по игре в целом)
+        notifyGameCooldownExpired(from24, to24);
+        notifyGameCooldownExpired(from336, to336);
+
+        // Кулдаун на конкретный квест
+        notifyQuestCooldownExpired(from24, to24);
+        notifyQuestCooldownExpired(from336, to336);
     }
 
-    private void notifyExpiredInWindow(LocalDateTime from, LocalDateTime to) {
+    private void notifyGameCooldownExpired(LocalDateTime from, LocalDateTime to) {
         List<Object[]> rows = questSubmissionRepository.findUsersWhoseCooldownExpiredBetween(from, to);
         for (Object[] row : rows) {
             Long telegramId = (Long) row[0];
             String gameName = (String) row[1];
-            eventPublisher.publishEvent(new CooldownExpiredEvent(this, telegramId, gameName));
+            eventPublisher.publishEvent(new CooldownExpiredEvent(this, telegramId, gameName, null));
+        }
+    }
+
+    private void notifyQuestCooldownExpired(LocalDateTime from, LocalDateTime to) {
+        List<Object[]> rows = questSubmissionRepository.findUsersWhoseQuestCooldownExpiredBetween(from, to);
+        for (Object[] row : rows) {
+            Long telegramId = (Long) row[0];
+            String gameName = (String) row[1];
+            String questTitle = (String) row[2];
+            eventPublisher.publishEvent(new CooldownExpiredEvent(this, telegramId, gameName, questTitle));
         }
     }
 }
