@@ -7864,9 +7864,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String role = resolveMenuRole(user, sessionService.get(user.getTelegramId()));
         if (ROLE_USER.equals(role)) {
             return "Здравствуйте, " + escape(user.getNickname()) + ".\n\n"
-                    + "Перед вами игровой центр <b>EXPERIENCE GAMING CLUB.</b>\n\n"
                     + "Здесь вы можете брать задания, накапливать XP, подниматься в рейтинге, приглашать друзей и обменивать монеты на награды.\n\n"
-                    + "Активный режим: <b>Игрок.</b>\n\n"
                     + "Выберите нужный раздел ниже и продолжайте прогресс.";
         }
         String title = switch (role) {
