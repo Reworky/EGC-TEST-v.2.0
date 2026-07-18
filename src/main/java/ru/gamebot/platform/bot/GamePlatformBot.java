@@ -1753,12 +1753,41 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendCommunityActivationPrompt(updated, null);
     }
 
+    private volatile String mainMenuBannerFileId = null;
+
     private void sendMainMenu(AppUser user, String text) {
         if (ROLE_MODER.equals(resolveMenuRole(user, sessionService.get(user.getTelegramId())))) {
             sendModerationHub(user);
             return;
         }
-        sendText(user.getTelegramId(), text, mainMenuKeyboard(user));
+        InlineKeyboardMarkup keyboard = mainMenuKeyboard(user);
+        if (text.length() > 1000) {
+            sendText(user.getTelegramId(), text, keyboard);
+            return;
+        }
+        if (mainMenuBannerFileId != null) {
+            sendPhotoCaption(user.getTelegramId(), mainMenuBannerFileId, text, keyboard);
+            return;
+        }
+        try {
+            try (java.io.InputStream is = getClass().getResourceAsStream("/gamecenter.png")) {
+                if (is == null) throw new java.io.IOException("gamecenter.png not found");
+                byte[] img = is.readAllBytes();
+                SendPhoto sendPhoto = new SendPhoto();
+                sendPhoto.setChatId(user.getTelegramId().toString());
+                sendPhoto.setPhoto(new InputFile(new java.io.ByteArrayInputStream(img), "gamecenter.png"));
+                sendPhoto.setCaption(text);
+                sendPhoto.setParseMode("HTML");
+                sendPhoto.setReplyMarkup(keyboard);
+                org.telegram.telegrambots.meta.api.objects.Message sent = execute(sendPhoto);
+                if (sent.getPhoto() != null && !sent.getPhoto().isEmpty()) {
+                    mainMenuBannerFileId = sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId();
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to send main menu banner", e);
+            sendText(user.getTelegramId(), text, keyboard);
+        }
     }
 
     private void sendMenuCategory(AppUser user, String title, List<List<InlineKeyboardButton>> items) {
