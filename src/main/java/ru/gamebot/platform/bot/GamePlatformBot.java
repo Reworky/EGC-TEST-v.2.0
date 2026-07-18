@@ -1803,10 +1803,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         try {
-            byte[] img = generateShopBannerPng();
+            byte[] img = loadShopBanner();
             SendPhoto sendPhoto = new SendPhoto();
             sendPhoto.setChatId(user.getTelegramId().toString());
-            sendPhoto.setPhoto(new InputFile(new java.io.ByteArrayInputStream(img), "shop-banner.png"));
+            sendPhoto.setPhoto(new InputFile(new java.io.ByteArrayInputStream(img), "shop-banner.jpg"));
             sendPhoto.setCaption("🛍️ <b>Магазин</b>");
             sendPhoto.setParseMode("HTML");
             sendPhoto.setReplyMarkup(keyboard);
@@ -1821,6 +1821,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     List.of(keyboardFactory.callback("⚡ Предметы", "menu:sink")),
                     List.of(keyboardFactory.callback(passLabel, "menu:battlepass"))
             ));
+        }
+    }
+
+    private byte[] loadShopBanner() throws Exception {
+        try (java.io.InputStream is = getClass().getResourceAsStream("/shop-banner.jpg")) {
+            if (is == null) throw new java.io.IOException("shop-banner.jpg not found in resources");
+            return is.readAllBytes();
         }
     }
 
