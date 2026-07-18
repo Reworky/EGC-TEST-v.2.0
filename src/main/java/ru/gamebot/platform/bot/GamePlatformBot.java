@@ -85,6 +85,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private static final String ROLE_ADMIN = "ADMIN";
     private static final Map<String, String> PLATFORM_OPTIONS = new LinkedHashMap<>();
     private static final Map<String, String> INTEREST_OPTIONS = new LinkedHashMap<>();
+    private volatile String shopBannerFileId = null;
 
     static {
         PLATFORM_OPTIONS.put("ANDROID", "Android");
@@ -1790,11 +1791,127 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean hasPass = seasonService.hasActivePass(user);
         boolean hasSeason = seasonService.findCurrentSeason().isPresent();
         String passLabel = hasPass ? "🎫 Battle Pass ✅" : (hasSeason ? "🎫 Battle Pass 🆕" : "🎫 Battle Pass");
-        sendMenuCategory(user, "🛍️ <b>Магазин</b>", List.of(
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("🛍️ Магазин наград", "menu:shop")),
                 List.of(keyboardFactory.callback("⚡ Предметы", "menu:sink")),
-                List.of(keyboardFactory.callback(passLabel, "menu:battlepass"))
+                List.of(keyboardFactory.callback(passLabel, "menu:battlepass")),
+                List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
+        if (shopBannerFileId != null) {
+            sendPhotoCaption(user.getTelegramId(), shopBannerFileId, "🛍️ <b>Магазин</b>", keyboard);
+            return;
+        }
+        try {
+            byte[] img = generateShopBannerPng();
+            SendPhoto sendPhoto = new SendPhoto();
+            sendPhoto.setChatId(user.getTelegramId().toString());
+            sendPhoto.setPhoto(new InputFile(new java.io.ByteArrayInputStream(img), "shop-banner.png"));
+            sendPhoto.setCaption("🛍️ <b>Магазин</b>");
+            sendPhoto.setParseMode("HTML");
+            sendPhoto.setReplyMarkup(keyboard);
+            org.telegram.telegrambots.meta.api.objects.Message sent = execute(sendPhoto);
+            if (sent.getPhoto() != null && !sent.getPhoto().isEmpty()) {
+                shopBannerFileId = sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to send shop banner", e);
+            sendMenuCategory(user, "🛍️ <b>Магазин</b>", List.of(
+                    List.of(keyboardFactory.callback("🛍️ Магазин наград", "menu:shop")),
+                    List.of(keyboardFactory.callback("⚡ Предметы", "menu:sink")),
+                    List.of(keyboardFactory.callback(passLabel, "menu:battlepass"))
+            ));
+        }
+    }
+
+    private byte[] generateShopBannerPng() throws Exception {
+        int W = 800, H = 360;
+        java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(W, H, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        java.awt.Graphics2D g = img.createGraphics();
+        g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(java.awt.RenderingHints.KEY_TEXT_ANTIALIASING, java.awt.RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+        // Background gradient
+        java.awt.GradientPaint bg = new java.awt.GradientPaint(0, 0, new java.awt.Color(10, 11, 30),
+                W, H, new java.awt.Color(8, 9, 22));
+        g.setPaint(bg);
+        g.fillRoundRect(0, 0, W, H, 30, 30);
+
+        // Dot grid
+        g.setColor(new java.awt.Color(168, 85, 247, 18));
+        for (int x = 20; x < W; x += 28)
+            for (int y = 20; y < H; y += 28)
+                g.fillOval(x - 1, y - 1, 3, 3);
+
+        // Purple glow left
+        java.awt.RadialGradientPaint glow1 = new java.awt.RadialGradientPaint(
+                200, 180, 220,
+                new float[]{0f, 0.5f, 1f},
+                new java.awt.Color[]{new java.awt.Color(124, 58, 237, 90), new java.awt.Color(124, 58, 237, 30), new java.awt.Color(124, 58, 237, 0)});
+        g.setPaint(glow1);
+        g.fillRect(0, 0, W, H);
+
+        // Gold glow bottom right
+        java.awt.RadialGradientPaint glow2 = new java.awt.RadialGradientPaint(
+                650, 320, 180,
+                new float[]{0f, 1f},
+                new java.awt.Color[]{new java.awt.Color(245, 158, 11, 46), new java.awt.Color(245, 158, 11, 0)});
+        g.setPaint(glow2);
+        g.fillRect(0, 0, W, H);
+
+        // Glass card for icon
+        g.setPaint(new java.awt.Color(255, 255, 255, 13));
+        g.fillRoundRect(60, 100, 200, 160, 24, 24);
+        g.setColor(new java.awt.Color(168, 85, 247, 90));
+        g.setStroke(new java.awt.BasicStroke(1.5f));
+        g.drawRoundRect(60, 100, 200, 160, 24, 24);
+
+        // Purple top border on card
+        java.awt.GradientPaint cardTop = new java.awt.GradientPaint(60, 100, new java.awt.Color(124, 58, 237, 200), 260, 100, new java.awt.Color(168, 85, 247, 100));
+        g.setPaint(cardTop);
+        g.setStroke(new java.awt.BasicStroke(2f));
+        g.drawLine(84, 100, 236, 100);
+
+        // Shopping bag emoji as large text
+        g.setFont(new java.awt.Font("Segoe UI Emoji", java.awt.Font.PLAIN, 72));
+        java.awt.FontMetrics fm = g.getFontMetrics();
+        String emoji = "🛍️";
+        int ew = fm.stringWidth(emoji);
+        g.drawString(emoji, 160 - ew / 2, 200);
+
+        // Right side — label
+        g.setFont(new java.awt.Font("SansSerif", java.awt.Font.BOLD, 11));
+        g.setColor(new java.awt.Color(168, 85, 247, 200));
+        g.drawString("EXPERIENCE GAMING CLUB", 320, 118);
+
+        // Divider
+        java.awt.GradientPaint div = new java.awt.GradientPaint(320, 135, new java.awt.Color(168, 85, 247, 153), 720, 135, new java.awt.Color(168, 85, 247, 0));
+        g.setPaint(div);
+        g.setStroke(new java.awt.BasicStroke(1f));
+        g.drawLine(320, 135, 720, 135);
+
+        // Main title
+        g.setFont(new java.awt.Font("SansSerif", java.awt.Font.BOLD, 72));
+        java.awt.GradientPaint titleGrad = new java.awt.GradientPaint(320, 150, java.awt.Color.WHITE, 640, 230, new java.awt.Color(196, 181, 253));
+        g.setPaint(titleGrad);
+        g.drawString("Магазин", 320, 220);
+
+        // Subtitle
+        g.setFont(new java.awt.Font("SansSerif", java.awt.Font.PLAIN, 17));
+        g.setColor(new java.awt.Color(255, 255, 255, 115));
+        g.drawString("Награды · Предметы · Battle Pass", 320, 252);
+
+        // Border
+        java.awt.GradientPaint border = new java.awt.GradientPaint(0, 0, new java.awt.Color(168, 85, 247, 100),
+                W, H, new java.awt.Color(245, 158, 11, 51));
+        g.setPaint(border);
+        g.setStroke(new java.awt.BasicStroke(1.5f));
+        g.drawRoundRect(1, 1, W - 2, H - 2, 30, 30);
+
+        g.dispose();
+        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(img, "png", baos);
+        return baos.toByteArray();
     }
 
     private void sendClubCategory(AppUser user) {
