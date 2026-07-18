@@ -4201,6 +4201,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     try {
                         supportService.closeTicket(ticketId, user.getTelegramId());
                     } catch (Exception ignored) {}
+                    // Уведомить модераторов о закрытии диалога пользователем
+                    String modMsg = "✅ <b>Диалог закрыт пользователем</b>\n\n"
+                            + "👤 <b>" + escape(user.getNickname()) + "</b> (" + user.getTelegramId() + ")\n"
+                            + "🎫 Заявка #" + ticketId;
+                    for (Long modId : adminService.strictModeratorIds()) {
+                        try {
+                            sendText(modId, modMsg, keyboardFactory.rowsLayout(List.of(
+                                    List.of(keyboardFactory.callback("👁️ Открыть", "mod:support:view:" + ticketId))
+                            )));
+                        } catch (Exception e) {
+                            log.warn("Failed to notify moderator {} about closed ticket {}", modId, ticketId, e);
+                        }
+                    }
                 }
                 sendText(user.getTelegramId(),
                         "✅ Диалог завершён.\n\nЕсли понадобится помощь снова — просто напишите.",
