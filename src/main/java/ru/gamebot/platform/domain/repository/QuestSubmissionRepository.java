@@ -94,23 +94,16 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.status IN ('DRAFT','PENDING','NEEDS_INFO') AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP)")
     long countActiveInProgress();
 
-    // Возвращает [telegramId, gameName] пар, у которых игровой кулдаун истёк в окне [from, to]
-    @Query("SELECT s.user.telegramId, s.quest.gameName " +
-           "FROM QuestSubmission s " +
-           "WHERE s.status = 'APPROVED' " +
-           "GROUP BY s.user.telegramId, s.quest.gameName " +
-           "HAVING MAX(s.updatedAt) BETWEEN :from AND :to")
-    List<Object[]> findUsersWhoseCooldownExpiredBetween(
-            @Param("from") java.time.LocalDateTime from,
-            @Param("to") java.time.LocalDateTime to);
-
-    // Возвращает [telegramId, gameName, questTitle] пар, у которых кулдаун на конкретный квест истёк в окне [from, to]
+    // Возвращает [telegramId, gameName, questTitle] — кулдаун на конкретный квест истёк в окне [from, to]
+    // excludeCategory: исключает квесты данной категории (передавать 'Сложные' для 24ч окна, '' для 336ч окна)
     @Query("SELECT s.user.telegramId, s.quest.gameName, s.quest.title " +
            "FROM QuestSubmission s " +
            "WHERE s.status = 'APPROVED' " +
+           "AND (:excludeCategory = '' OR s.quest.category <> :excludeCategory) " +
            "GROUP BY s.user.telegramId, s.quest.id, s.quest.gameName, s.quest.title " +
            "HAVING MAX(s.updatedAt) BETWEEN :from AND :to")
     List<Object[]> findUsersWhoseQuestCooldownExpiredBetween(
             @Param("from") java.time.LocalDateTime from,
-            @Param("to") java.time.LocalDateTime to);
+            @Param("to") java.time.LocalDateTime to,
+            @Param("excludeCategory") String excludeCategory);
 }
