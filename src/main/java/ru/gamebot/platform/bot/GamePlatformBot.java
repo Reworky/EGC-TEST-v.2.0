@@ -1767,14 +1767,45 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), title, keyboardFactory.rowsLayout(rows));
     }
 
+    private volatile String questBannerFileId = null;
+
     private void sendQuestsCategory(AppUser user) {
         boolean hasTournament = tournamentService.findCurrentForUser().isPresent();
         String tournamentLabel = hasTournament ? "🏆 Турнир 🔥" : "🏆 Турнир";
-        sendMenuCategory(user, "🎯 <b>Квесты и рейтинг</b>", List.of(
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("🗺️ Квесты", "menu:quests")),
                 List.of(keyboardFactory.callback("🏆 Рейтинг", "menu:rating")),
-                List.of(keyboardFactory.callback(tournamentLabel, "menu:tournament"))
+                List.of(keyboardFactory.callback(tournamentLabel, "menu:tournament")),
+                List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
+        if (questBannerFileId != null) {
+            sendPhotoCaption(user.getTelegramId(), questBannerFileId, "🎯 <b>Квесты и рейтинг</b>", keyboard);
+            return;
+        }
+        try {
+            try (java.io.InputStream is = getClass().getResourceAsStream("/quest_banner.png")) {
+                if (is == null) throw new java.io.IOException("quest_banner.png not found");
+                byte[] img = is.readAllBytes();
+                SendPhoto sendPhoto = new SendPhoto();
+                sendPhoto.setChatId(user.getTelegramId().toString());
+                sendPhoto.setPhoto(new InputFile(new java.io.ByteArrayInputStream(img), "quest_banner.png"));
+                sendPhoto.setCaption("🎯 <b>Квесты и рейтинг</b>");
+                sendPhoto.setParseMode("HTML");
+                sendPhoto.setReplyMarkup(keyboard);
+                org.telegram.telegrambots.meta.api.objects.Message sent = execute(sendPhoto);
+                if (sent.getPhoto() != null && !sent.getPhoto().isEmpty()) {
+                    questBannerFileId = sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId();
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to send quest banner", e);
+            sendMenuCategory(user, "🎯 <b>Квесты и рейтинг</b>", List.of(
+                    List.of(keyboardFactory.callback("🗺️ Квесты", "menu:quests")),
+                    List.of(keyboardFactory.callback("🏆 Рейтинг", "menu:rating")),
+                    List.of(keyboardFactory.callback(tournamentLabel, "menu:tournament"))
+            ));
+        }
     }
 
     private volatile String walletBannerFileId = null;
