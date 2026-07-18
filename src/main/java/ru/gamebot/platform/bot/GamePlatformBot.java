@@ -1908,42 +1908,40 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendProfile(AppUser user) {
         long rank = userService.getOverallRank(user);
         String achievements = userService.getAchievements(user).isEmpty()
-                ? "Пока нет, но первое достижение уже близко."
+                ? "Пока нет"
                 : String.join(", ", userService.getAchievements(user));
-        String titleLine = user.getProfileTitle() != null
-                ? "🏅 Титул: <b>" + escape(user.getProfileTitle()) + "</b>\n"
-                : "";
-        String boostLine = sinkShopService.isBoostActive(user)
-                ? "⚡ Буст EXC +20% активен\n"
-                : "";
-        String councilBadge = councilService.isCouncilMember(user)
-                ? "🛡️ <b>EGC Council</b>\n"
-                : "";
-        String passLine = seasonService.hasActivePass(user) ? "🎫 <b>Battle Pass активен</b>\n" : "";
 
-        String profileText = "👤 <b>Профиль</b>\n\n"
-                + "🎮 <b>" + escape(user.getNickname()) + "</b>\n"
-                + councilBadge
-                + passLine
-                + titleLine
-                + "⭐ Уровень: <b>" + userService.getLevelNumber(user.getXp()) + ". "
-                + escape(userService.getLevelName(user.getXp())) + "</b>\n"
-                + levelProgressLine(user) + "\n\n"
-                + "🏆 <b>Текущая форма</b>\n"
-                + "🪙 Монеты: <b>" + user.getCoins() + " EXC</b>\n"
-                + "💠 Бонус к EXC: <b>+" + userService.getExcBonusPercent(user.getXp()) + "%</b>\n"
-                + boostLine
-                + "🎟️ Билеты: <b>" + user.getTickets() + "</b>\n"
-                + "🥇 Место в рейтинге: <b>" + rank + "</b>\n"
-                + "✅ Выполнено квестов: <b>" + user.getCompletedQuests() + "</b>\n"
-                + "🔥 Серия входов: <b>" + user.getStreakDays() + " дней</b>\n"
-                + "🏅 Лига недели: <b>" + ru.gamebot.platform.service.UserService.getLeague(user.getWeeklyXp()).displayName + "</b>\n\n"
-                + "🧩 <b>Игровой стиль</b>\n"
-                + "🕹️ Платформы: <b>" + escape(displayValue(user.getPlatformsCsv(), "Подбираются")) + "</b>\n"
-                + "🎯 Интересы: <b>" + escape(displayValue(user.getInterestsCsv(), "Открываются")) + "</b>\n"
-                + "🤝 Приглашено друзей: <b>" + user.getInvitedFriends() + "</b>\n\n"
-                + "🌟 <b>Достижения</b>\n"
-                + escape(achievements);
+        // Строка с титулом, уровнем (компактно)
+        String titlePart = user.getProfileTitle() != null ? "🏅 " + escape(user.getProfileTitle()) + " · " : "";
+        int levelNum = userService.getLevelNumber(user.getXp());
+        String levelName = escape(userService.getLevelName(user.getXp()));
+
+        // Бейджи одной строкой
+        String badges = "";
+        if (councilService.isCouncilMember(user)) badges += "🛡️ EGC Council  ";
+        if (seasonService.hasActivePass(user)) badges += "🎫 Battle Pass  ";
+        String badgeLine = badges.isEmpty() ? "" : badges.trim() + "\n";
+
+        // EXC бонус
+        int excBonus = userService.getExcBonusPercent(user.getXp());
+        String boostSuffix = sinkShopService.isBoostActive(user) ? " (+20% буст)" : "";
+        String league = ru.gamebot.platform.service.UserService.getLeague(user.getWeeklyXp()).displayName;
+
+        String profileText = "🎮 <b>" + escape(user.getNickname()) + "</b>\n"
+                + badgeLine
+                + titlePart + "⭐ " + levelName + " · Уровень " + levelNum + "\n"
+                + levelProgressBar(user) + "\n\n"
+                + "💰 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>"
+                + " · +" + excBonus + "% к награде" + boostSuffix + "\n"
+                + "👑 Лига: <b>" + league + "</b> · 🥇 #" + rank + " в рейтинге\n\n"
+                + "📊 <b>Эта неделя</b>\n"
+                + "✅ Квестов: <b>" + user.getCompletedQuests() + "</b>"
+                + " · 🔥 Серия: <b>" + user.getStreakDays() + " дней</b>"
+                + " · 🎟️ Билеты: <b>" + user.getTickets() + "</b>\n\n"
+                + "🎮 <b>Платформы</b> · " + escape(displayValue(user.getPlatformsCsv(), "не указаны")) + "\n"
+                + "🎯 <b>Жанры</b> · " + escape(displayValue(user.getInterestsCsv(), "не указаны")) + "\n\n"
+                + "🏆 <b>Достижения</b> · " + escape(achievements) + "\n"
+                + "👥 <b>Приглашено друзей</b> · " + user.getInvitedFriends();
 
         String avatarBtn = user.getAvatarFileId() != null ? "📷 Сменить аватар" : "📷 Загрузить аватар";
         InlineKeyboardMarkup profileKeyboard = keyboardFactory.rowsLayout(List.of(
@@ -7706,15 +7704,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private String levelProgressLine(AppUser user) {
+        return levelProgressBar(user);
+    }
+
+    private String levelProgressBar(AppUser user) {
         long xp = user.getXp();
         long floor = userService.currentLevelFloor(xp);
         long ceiling = userService.nextLevelCeiling(xp);
-        if (ceiling == floor) {
-            return "📈 " + xp + "/" + ceiling + " XP";
+        int filled = 10;
+        if (ceiling > floor) {
+            filled = (int) Math.round(10.0 * (xp - floor) / (ceiling - floor));
+            filled = Math.max(0, Math.min(10, filled));
         }
-        long progress = xp - floor;
-        long range = ceiling - floor;
-        return "📈 <b>" + progress + "/" + range + " XP</b>";
+        String bar = "▰".repeat(filled) + "▱".repeat(10 - filled);
+        return bar + " <b>" + String.format("%,d", xp).replace(',', ' ') + " / "
+                + String.format("%,d", ceiling).replace(',', ' ') + " XP</b>";
     }
 
     private String formatExcBonusLine(UserService.RewardGrant rewardGrant) {
