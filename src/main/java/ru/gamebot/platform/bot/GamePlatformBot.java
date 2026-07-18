@@ -8683,7 +8683,12 @@ String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошел�
     private void forwardSupportReply(Long telegramId, IncomingContent content) {
         String caption = "✉️ <b>Ответ поддержки</b>\n\n"
                 + (content.text().isBlank() ? "Модератор отправил вам вложение." : escape(content.text()));
-        sendContent(telegramId, content, caption, mainMenuButtonsOnly(telegramId));
+        InlineKeyboardMarkup keyboard = keyboardFactory.verticalLayout(List.of(
+                keyboardFactory.callback("🔚 Завершить диалог", "support:close_chat"),
+                keyboardFactory.callback("📬 Мои заявки", "support:list"),
+                keyboardFactory.callback("🏠 Меню", "menu:main")
+        ));
+        sendContent(telegramId, content, caption, keyboard);
     }
 
     private void sendContent(Long chatId, IncomingContent content, String fallbackText, InlineKeyboardMarkup markup) {
