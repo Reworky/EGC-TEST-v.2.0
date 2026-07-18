@@ -8099,11 +8099,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String questsLabel = hasTournament ? "🎯 Квесты и рейтинг 🔥" : "🎯 Квесты и рейтинг";
         rows.add(List.of(keyboardFactory.callback(questsLabel, "menu:cat:quests")));
 
-        boolean hasSquad = user.getSquadId() != null;
-        String squadLabel = hasSquad ? "⚔️ Мой отряд" : "⚔️ Отряды";
-        rows.add(List.of(keyboardFactory.callback(squadLabel, "menu:squads")));
-
-        String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошелёк 🔔" : "💰 Кошелёк";
+String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошелёк 🔔" : "💰 Кошелёк";
         rows.add(List.of(keyboardFactory.callback(walletLabel, "menu:cat:wallet")));
 
         rows.add(List.of(keyboardFactory.callback("🛍️ Магазин", "menu:cat:shop")));
