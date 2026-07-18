@@ -19,6 +19,9 @@ public interface SupportTicketRepository extends JpaRepository<SupportTicket, Lo
     @EntityGraph(attributePaths = {"user"})
     Optional<SupportTicket> findWithUserById(Long id);
 
+    @EntityGraph(attributePaths = {"user"})
+    Optional<SupportTicket> findFirstByUserAndStatusInOrderByUpdatedAtDesc(AppUser user, List<SupportTicketStatus> statuses);
+
     long countByStatusIn(List<SupportTicketStatus> statuses);
 
     List<SupportTicket> findAllByUser(AppUser user);

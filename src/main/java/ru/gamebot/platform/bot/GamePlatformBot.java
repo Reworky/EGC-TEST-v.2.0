@@ -3880,12 +3880,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendSupport(AppUser user) {
         sendText(user.getTelegramId(),
                 "🆘 <b>Поддержка</b>\n\n"
-                        + "Если что-то пошло не так, напишите сюда прямо в боте.\n"
-                        + "Поддерживаются текст, фото, видео, документы и медиагруппы.\n\n"
-                        + "Ответ модератора придёт сюда же, без переходов в сторонние чаты.",
+                        + "Напишите нам — вопрос, проблема, предложение.\n"
+                        + "Все ваши сообщения попадают в один диалог, не нужно открывать новую заявку каждый раз.\n\n"
+                        + "Ответ придёт прямо сюда.",
                 keyboardFactory.verticalLayout(List.of(
-                        keyboardFactory.callback("✍️ Новая заявка", "support:new"),
-                        keyboardFactory.callback("📬 Мои заявки", "support:list"),
+                        keyboardFactory.callback("✍️ Написать в поддержку", "support:new"),
+                        keyboardFactory.callback("📬 История диалогов", "support:list"),
                         keyboardFactory.callback("🏠 Меню", "menu:main")
                 )));
     }
@@ -3918,15 +3918,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 clearSupportDraft(session);
                 session.setState(SessionState.SUPPORT_INPUT);
                 sendText(user.getTelegramId(),
-                        "🆘 <b>Новая заявка</b>\n\n"
-                                + "Пришлите текст, фото, видео, документ или медиагруппу.\n"
-                                + "Можно добавить комментарий в подписи.\n\n"
-                                + "После отправки заявка сразу попадёт в рабочую очередь модераторов.",
+                        "💬 <b>Поддержка</b>\n\n"
+                                + "Напишите ваш вопрос или проблему.\n"
+                                + "Можно отправлять текст, фото, видео и документы — всё попадёт в один диалог.\n\n"
+                                + "Ответ придёт прямо сюда.",
                         backMenuKeyboard("menu:support"));
                 answerSilently(callbackQuery.getId());
             }
             case "list" -> {
                 sendUserSupportTickets(user);
+                answerSilently(callbackQuery.getId());
+            }
+            case "close_chat" -> {
+                Long ticketId = session.getSupportTicketId();
+                clearSupportDraft(session);
+                if (ticketId != null) {
+                    try {
+                        supportService.closeTicket(ticketId, user.getTelegramId());
+                    } catch (Exception ignored) {}
+                }
+                sendText(user.getTelegramId(),
+                        "✅ Диалог завершён.\n\nЕсли понадобится помощь снова — просто напишите.",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("✍️ Написать снова", "support:new")),
+                                List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
+                        )));
                 answerSilently(callbackQuery.getId());
             }
             default -> answer(callbackQuery.getId(), "Неизвестное действие поддержки");
@@ -3973,18 +3989,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void handleSupportMessage(AppUser user, UserSession session, Message message) {
         IncomingContent content = extractIncomingContent(message);
         String mediaGroupId = message.getMediaGroupId();
-        boolean continuation = mediaGroupId != null
+        boolean mediaGroupContinuation = mediaGroupId != null
                 && session.getSupportTicketId() != null
                 && mediaGroupId.equals(session.getData().get("support_media_group_id"));
 
         SupportTicket ticket;
-        if (continuation) {
+        boolean isNewTicket;
+        if (mediaGroupContinuation) {
             ticket = supportService.getTicket(session.getSupportTicketId());
+            isNewTicket = false;
         } else {
-            ticket = supportService.createTicket(user, content.text(), mediaGroupId);
+            Long existingId = session.getSupportTicketId();
+            ticket = supportService.getOrCreateActiveTicket(user, content.text(), mediaGroupId);
+            isNewTicket = existingId == null || !ticket.getId().equals(existingId);
             session.setSupportTicketId(ticket.getId());
             if (mediaGroupId != null) {
                 session.getData().put("support_media_group_id", mediaGroupId);
+            } else {
+                session.getData().remove("support_media_group_id");
             }
         }
 
@@ -3992,26 +4014,32 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             supportService.addAttachment(ticket, false, content.mediaType(), content.fileId(), content.text());
         }
 
-        notifyModeratorsAboutSupportTicket(ticket, content, continuation);
+        notifyModeratorsAboutSupportTicket(ticket, content, !isNewTicket);
 
-        if (mediaGroupId == null) {
-            clearSupportDraft(session);
+        // Keep session alive so user can continue sending messages in the same ticket
+        session.setState(SessionState.SUPPORT_INPUT);
+
+        InlineKeyboardMarkup chatKeyboard = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("🔚 Завершить диалог", "support:close_chat")),
+                List.of(
+                        keyboardFactory.callback("📬 Мои заявки", "support:list"),
+                        keyboardFactory.callback("🏠 Меню", "menu:main")
+                )
+        ));
+
+        if (mediaGroupContinuation) {
+            // silent — already showed a message for first file of group
+        } else if (isNewTicket) {
             sendText(user.getTelegramId(),
-                    "✅ <b>Заявка отправлена</b>\n\n"
-                            + "Она уже в очереди поддержки.\n"
-                            + "Ответ придёт прямо в этот чат.",
-                    keyboardFactory.verticalLayout(List.of(
-                            keyboardFactory.callback("📬 Мои заявки", "support:list"),
-                            keyboardFactory.callback("🏠 Меню", "menu:main")
-                    )));
-        } else if (!continuation) {
-            session.setState(SessionState.NONE);
+                    "✅ <b>Диалог открыт</b>\n\n"
+                            + "Ваше сообщение (#" + ticket.getId() + ") принято в поддержку.\n"
+                            + "Можете продолжать писать — все сообщения попадут в один чат.\n"
+                            + "Ответ придёт прямо сюда.",
+                    chatKeyboard);
+        } else {
             sendText(user.getTelegramId(),
-                    "✅ <b>Медиагруппа принята</b>\n\nВсе вложения из этого альбома будут прикреплены к одной заявке поддержки.",
-                    keyboardFactory.verticalLayout(List.of(
-                            keyboardFactory.callback("📬 Мои заявки", "support:list"),
-                            keyboardFactory.callback("🏠 Меню", "menu:main")
-                    )));
+                    "💬 Сообщение добавлено в диалог #" + ticket.getId() + ".",
+                    chatKeyboard);
         }
     }
 
@@ -4099,31 +4127,46 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendSupportTicketCard(Long chatId, Long ticketId) {
         SupportTicket ticket = supportService.getTicket(ticketId);
         List<SupportAttachment> attachments = supportService.getAttachments(ticket);
-        String text = "🆘 <b>Заявка поддержки #" + ticket.getId() + "</b>\n\n"
-                + "👤 Игрок: <b>" + escape(ticket.getUser().getNickname()) + "</b>\n"
-                + "🆔 ID: <b>" + ticket.getUser().getTelegramId() + "</b>\n"
-                + "📌 Статус: <b>" + escape(humanSupportStatus(ticket.getStatus().name())) + "</b>\n"
-                + "🕒 Создана: <b>" + escape(ticket.getCreatedAt().format(DATE_TIME_FORMATTER)) + "</b>\n"
-                + "📎 Вложений: <b>" + attachments.size() + "</b>\n\n"
-                + "💬 <b>Сообщение игрока</b>\n" + escape(ticket.getInitialMessage())
-                + (ticket.getLastModeratorReply() == null ? "" : "\n\n✉️ Последний ответ модератора:\n" + escape(ticket.getLastModeratorReply()));
 
-        sendText(chatId, text,
+        // Build conversation history
+        StringBuilder history = new StringBuilder();
+        history.append("🆘 <b>Диалог #").append(ticket.getId()).append("</b>\n\n")
+                .append("👤 Игрок: <b>").append(escape(ticket.getUser().getNickname())).append("</b>\n")
+                .append("🆔 ID: <b>").append(ticket.getUser().getTelegramId()).append("</b>\n")
+                .append("📌 Статус: <b>").append(escape(humanSupportStatus(ticket.getStatus().name()))).append("</b>\n")
+                .append("🕒 Создан: <b>").append(escape(ticket.getCreatedAt().format(DATE_TIME_FORMATTER))).append("</b>\n\n")
+                .append("─────────────────\n");
+
+        for (SupportAttachment att : attachments) {
+            String who = att.isFromModerator() ? "🛡️ Модератор" : "👤 Игрок";
+            String time = att.getCreatedAt().format(DATE_TIME_FORMATTER);
+            history.append(who).append(" · ").append(time).append("\n");
+            if (att.getCaption() != null && !att.getCaption().isBlank()) {
+                history.append(escape(trim(att.getCaption(), 200)));
+            }
+            if (att.getFileId() != null) {
+                history.append(" [").append(att.getMediaType()).append("]");
+            }
+            history.append("\n");
+        }
+        history.append("─────────────────");
+
+        sendText(chatId, history.toString(),
                 verticalWithBackMenu(List.of(
                         keyboardFactory.callback("✍️ Ответить", "mod:support:reply:" + ticketId),
                         keyboardFactory.callback("✅ Закрыть", "mod:support:close:" + ticketId)
                 ), "⬅️ Назад", "mod:support:list"));
 
-        // Отправить вложения игрока отдельными сообщениями
-        List<SupportAttachment> playerAttachments = attachments.stream()
-                .filter(a -> !a.isFromModerator() && a.getFileId() != null)
-                .toList();
-        for (SupportAttachment att : playerAttachments) {
-            try {
-                String caption = att.getCaption() != null ? att.getCaption() : "";
-                sendContent(chatId, new IncomingContent(att.getMediaType(), att.getFileId(), caption), caption, null);
-            } catch (Exception e) {
-                log.warn("Failed to send support attachment {} to moderator {}", att.getId(), chatId, e);
+        // Send media attachments separately
+        for (SupportAttachment att : attachments) {
+            if (att.getFileId() != null) {
+                try {
+                    String caption = (att.isFromModerator() ? "🛡️ " : "👤 ")
+                            + (att.getCaption() != null ? att.getCaption() : "");
+                    sendContent(chatId, new IncomingContent(att.getMediaType(), att.getFileId(), caption), caption, null);
+                } catch (Exception e) {
+                    log.warn("Failed to send support attachment {} to moderator {}", att.getId(), chatId, e);
+                }
             }
         }
     }

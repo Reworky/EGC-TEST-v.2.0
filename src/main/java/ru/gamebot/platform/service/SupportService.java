@@ -20,6 +20,13 @@ public class SupportService {
     private final SupportAttachmentRepository supportAttachmentRepository;
 
     @Transactional
+    public SupportTicket getOrCreateActiveTicket(AppUser user, String firstMessage, String mediaGroupId) {
+        return supportTicketRepository
+                .findFirstByUserAndStatusInOrderByUpdatedAtDesc(user, List.of(SupportTicketStatus.OPEN, SupportTicketStatus.ANSWERED))
+                .orElseGet(() -> createTicket(user, firstMessage, mediaGroupId));
+    }
+
+    @Transactional
     public SupportTicket createTicket(AppUser user, String initialMessage, String mediaGroupId) {
         SupportTicket ticket = new SupportTicket();
         ticket.setUser(user);
