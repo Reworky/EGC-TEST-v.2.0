@@ -60,20 +60,15 @@ public class WeeklyResetScheduler {
     @Scheduled(fixedDelay = 300_000)
     public void notifyCooldownExpired() {
         LocalDateTime now = LocalDateTime.now();
-        // 24ч — обычные квесты (исключаем «Сложные»)
-        notifyQuestCooldownExpired(now.minusHours(24).minusMinutes(5), now.minusHours(24), "Сложные");
-        // 336ч — только «Сложные» квесты
-        notifyQuestCooldownExpired(now.minusHours(336).minusMinutes(5), now.minusHours(336), "");
+        // 24ч — обычные квесты (все кроме «Сложные»)
+        notifyExpired(questSubmissionRepository.findUsersWhoseNormalQuestCooldownExpiredBetween(
+                now.minusHours(24).minusMinutes(5), now.minusHours(24)));
+        // 336ч — только «Сложные»
+        notifyExpired(questSubmissionRepository.findUsersWhoseHardQuestCooldownExpiredBetween(
+                now.minusHours(336).minusMinutes(5), now.minusHours(336)));
     }
 
-    private void notifyQuestCooldownExpired(LocalDateTime from, LocalDateTime to, String excludeCategory) {
-        List<Object[]> rows;
-        try {
-            rows = questSubmissionRepository.findUsersWhoseQuestCooldownExpiredBetween(from, to, excludeCategory);
-        } catch (Exception e) {
-            log.warn("Failed to query cooldown expirations", e);
-            return;
-        }
+    private void notifyExpired(List<Object[]> rows) {
         for (Object[] row : rows) {
             try {
                 Long telegramId = (Long) row[0];
