@@ -3962,6 +3962,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleSquadAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
         switch (action) {
+            case "soon" -> {
+                sendText(user.getTelegramId(),
+                        "🔒 <b>Отряды — Скоро!</b>\n\nФункция появится в следующем обновлении. Следи за каналом!",
+                        backMenuKeyboard("menu:main"));
+                answerSilently(callbackQuery.getId());
+            }
             case "create" -> {
                 if (user.getSquadId() != null) {
                     answer(callbackQuery.getId(), "Вы уже в отряде");
@@ -8099,7 +8105,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String questsLabel = hasTournament ? "🎯 Квесты и рейтинг 🔥" : "🎯 Квесты и рейтинг";
         rows.add(List.of(keyboardFactory.callback(questsLabel, "menu:cat:quests")));
 
-        rows.add(List.of(keyboardFactory.callback("⚔️ Отряды — Скоро", "sink:soon")));
+        rows.add(List.of(keyboardFactory.callback("⚔️ Отряды — Скоро", "squad:soon")));
 
 String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошелёк 🔔" : "💰 Кошелёк";
         rows.add(List.of(keyboardFactory.callback(walletLabel, "menu:cat:wallet")));
