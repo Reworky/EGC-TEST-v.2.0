@@ -1777,14 +1777,44 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ));
     }
 
+    private volatile String walletBannerFileId = null;
+
     private void sendWalletCategory(AppUser user) {
         String dailyLabel = userService.isDailyBonusAvailable(user)
                 ? "🎁 Забрать ежедневный бонус 🔔"
                 : "✅ Бонус за вход получен";
-        sendMenuCategory(user, "💰 <b>Кошелёк</b>", List.of(
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
-                List.of(keyboardFactory.callback(dailyLabel, "menu:daily"))
+                List.of(keyboardFactory.callback(dailyLabel, "menu:daily")),
+                List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
+        if (walletBannerFileId != null) {
+            sendPhotoCaption(user.getTelegramId(), walletBannerFileId, "💰 <b>Кошелёк</b>", keyboard);
+            return;
+        }
+        try {
+            try (java.io.InputStream is = getClass().getResourceAsStream("/wallet_banner.png")) {
+                if (is == null) throw new java.io.IOException("wallet_banner.png not found");
+                byte[] img = is.readAllBytes();
+                SendPhoto sendPhoto = new SendPhoto();
+                sendPhoto.setChatId(user.getTelegramId().toString());
+                sendPhoto.setPhoto(new InputFile(new java.io.ByteArrayInputStream(img), "wallet_banner.png"));
+                sendPhoto.setCaption("💰 <b>Кошелёк</b>");
+                sendPhoto.setParseMode("HTML");
+                sendPhoto.setReplyMarkup(keyboard);
+                org.telegram.telegrambots.meta.api.objects.Message sent = execute(sendPhoto);
+                if (sent.getPhoto() != null && !sent.getPhoto().isEmpty()) {
+                    walletBannerFileId = sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId();
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to send wallet banner", e);
+            sendMenuCategory(user, "💰 <b>Кошелёк</b>", List.of(
+                    List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
+                    List.of(keyboardFactory.callback(dailyLabel, "menu:daily"))
+            ));
+        }
     }
 
     private void sendShopCategory(AppUser user) {
