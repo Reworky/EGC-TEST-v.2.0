@@ -7463,14 +7463,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), "⚠️ Недостаточно EXC. Баланс: <b>" + user.getCoins() + " EXC</b>.", cancelKeyboard());
             return;
         }
-        double ratio = healthRatioService.getCurrentRatio();
+        double ratio = healthRatioService.recalculate().getRatio();
+        int ratioPercent = (int) Math.round(ratio * 100);
         long rubles = Math.round(amount * ratio / 100.0);
         session.getData().put("withdrawAmount", String.valueOf(amount));
         session.getData().put("withdrawRubles", String.valueOf(rubles));
         session.setState(SessionState.WITHDRAWAL_DETAILS);
         sendText(user.getTelegramId(),
                 "💳 <b>Введите реквизиты для перевода</b>\n\n"
-                        + "💸 Сумма: <b>" + amount + " EXC → ~" + rubles + " ₽</b>\n\n"
+                        + "💸 Сумма: <b>" + amount + " EXC → ~" + rubles + " ₽</b>\n"
+                        + "💱 Курс: <b>" + rateString(ratioPercent) + "</b>\n\n"
                         + "Укажите <b>банк</b> и <b>номер телефона</b>.\n\n"
                         + "Пример:\n<code>Сбербанк, СБП +7 900 123 45 67</code>\n\n"
                         + "<i>*на текущий момент переводы осуществляются только по СБП, учитывайте это при создании заявки!</i>",
