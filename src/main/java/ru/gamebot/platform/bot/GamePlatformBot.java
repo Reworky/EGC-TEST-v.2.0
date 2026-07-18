@@ -2025,7 +2025,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendHelpCategory(AppUser user) {
         sendMenuCategory(user, "🆘 <b>Помощь</b>", List.of(
                 List.of(keyboardFactory.callback("🆘 Поддержка", "menu:support")),
-                List.of(keyboardFactory.callback("❓ Как начать — быстрый старт", "menu:quickstart")),
                 List.of(keyboardFactory.url("⭐ Отзывы игроков", "https://t.me/egc_payouts"))
         ));
     }
