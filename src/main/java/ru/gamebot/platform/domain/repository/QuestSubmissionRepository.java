@@ -94,20 +94,20 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.status IN ('DRAFT','PENDING','NEEDS_INFO') AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP)")
     long countActiveInProgress();
 
-    // 24ч кулдаун — обычные квесты (все кроме «Сложные»)
+    // 24ч кулдаун — обычные квесты (все кроме «Сложные» и спонсорских)
     @Query("SELECT s.user.telegramId, s.quest.gameName, s.quest.title " +
            "FROM QuestSubmission s " +
-           "WHERE s.status = 'APPROVED' AND s.quest.category <> 'Сложные' " +
+           "WHERE s.status = 'APPROVED' AND s.quest.category <> 'Сложные' AND s.quest.sponsored = false " +
            "GROUP BY s.user.telegramId, s.quest.id, s.quest.gameName, s.quest.title " +
            "HAVING MAX(s.updatedAt) BETWEEN :from AND :to")
     List<Object[]> findUsersWhoseNormalQuestCooldownExpiredBetween(
             @Param("from") java.time.LocalDateTime from,
             @Param("to") java.time.LocalDateTime to);
 
-    // 336ч кулдаун — только «Сложные» квесты
+    // 336ч кулдаун — только «Сложные» квесты (спонсорские исключены)
     @Query("SELECT s.user.telegramId, s.quest.gameName, s.quest.title " +
            "FROM QuestSubmission s " +
-           "WHERE s.status = 'APPROVED' AND s.quest.category = 'Сложные' " +
+           "WHERE s.status = 'APPROVED' AND s.quest.category = 'Сложные' AND s.quest.sponsored = false " +
            "GROUP BY s.user.telegramId, s.quest.id, s.quest.gameName, s.quest.title " +
            "HAVING MAX(s.updatedAt) BETWEEN :from AND :to")
     List<Object[]> findUsersWhoseHardQuestCooldownExpiredBetween(
