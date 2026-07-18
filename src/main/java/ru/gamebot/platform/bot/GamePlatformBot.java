@@ -2141,21 +2141,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String boostSuffix = sinkShopService.isBoostActive(user) ? " (+20% буст)" : "";
         String league = ru.gamebot.platform.service.UserService.getLeague(user.getWeeklyXp()).displayName;
 
+        String titleLine = user.getProfileTitle() != null ? "🏅 " + escape(user.getProfileTitle()) + "\n" : "";
+        String boostNote = sinkShopService.isBoostActive(user) ? " +20% буст" : "";
+
         String profileText = "🎮 <b>" + escape(user.getNickname()) + "</b>\n"
                 + badgeLine
-                + titlePart + "⭐ " + levelName + " · Уровень " + levelNum + "\n"
+                + titleLine
+                + "\nУровень " + levelNum + ": <b>" + levelName + "</b>\n"
                 + levelProgressBar(user) + "\n\n"
                 + "💰 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>"
-                + " · +" + excBonus + "% к награде" + boostSuffix + "\n"
-                + "👑 Лига: <b>" + league + "</b> · 🥇 #" + rank + " в рейтинге\n\n"
+                + " (+" + excBonus + "% к награде" + boostNote + ")\n"
+                + "👑 Лига: <b>" + league + "</b> (#" + rank + " в рейтинге)\n\n"
                 + "📊 <b>Эта неделя</b>\n"
                 + "✅ Квестов: <b>" + user.getCompletedQuests() + "</b>"
                 + " · 🔥 Серия: <b>" + user.getStreakDays() + " дней</b>"
                 + " · 🎟️ Билеты: <b>" + user.getTickets() + "</b>\n\n"
-                + "🎮 <b>Платформы</b> · " + escape(displayValue(user.getPlatformsCsv(), "не указаны")) + "\n"
-                + "🎯 <b>Жанры</b> · " + escape(displayValue(user.getInterestsCsv(), "не указаны")) + "\n\n"
-                + "🏆 <b>Достижения</b> · " + escape(achievements) + "\n"
-                + "👥 <b>Приглашено друзей</b> · " + user.getInvitedFriends();
+                + "🎮 Платформы: <b>" + escape(displayValue(user.getPlatformsCsv(), "не указаны")) + "</b>\n"
+                + "🎯 Жанры: <b>" + escape(displayValue(user.getInterestsCsv(), "не указаны")) + "</b>\n\n"
+                + "🏆 Достижения: " + escape(achievements) + "\n"
+                + "👥 Приглашено друзей: <b>" + user.getInvitedFriends() + "</b>";
 
         String avatarBtn = user.getAvatarFileId() != null ? "📷 Сменить аватар" : "📷 Загрузить аватар";
         InlineKeyboardMarkup profileKeyboard = keyboardFactory.rowsLayout(List.of(
