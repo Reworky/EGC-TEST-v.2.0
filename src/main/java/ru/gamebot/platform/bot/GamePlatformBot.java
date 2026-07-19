@@ -5600,7 +5600,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendPayoutConfirmedCard(AppUser admin, RewardRequest req, boolean isModFlow) {
         AppUser player = req.getUser();
         long exc = req.getRewardItem().getPriceCoins();
-        long rub = parseRubFromWithdrawalTitle(req.getRewardItem().getTitle(), exc);
         String withdrawalsCallback = isModFlow ? "mod:withdrawals" : "admin:withdrawals";
 
         String usernameStr = player.getTelegramUsername() != null
@@ -5609,6 +5608,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long questsDone = questService.countApprovedByUser(player);
         long totalEarned = questService.sumEarnedCoinsByUser(player);
 
+        String withdrawLine;
+        if (isCryptoWithdrawal(req)) {
+            long rubles = parseRubFromPayoutDetails(req.getPayoutDetails(), exc);
+            java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(rubles));
+            withdrawLine = exc + " EXC → ~" + tonAmount + " GRAM";
+        } else {
+            long rub = parseRubFromWithdrawalTitle(req.getRewardItem().getTitle(), exc);
+            withdrawLine = exc + " EXC → " + rub + " ₽";
+        }
+
         String text = "🎉 <b>Перевод выполнен!</b>\n\n"
                 + "Игрок: <b>" + usernameStr + "</b>\n"
                 + "Уровень: <b>" + levelName + "</b>\n"
@@ -5616,13 +5625,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "Дата: <b>" + LocalDateTime.now().format(DATE_TIME_FORMATTER) + "</b>\n"
                 + "Квестов выполнено: <b>" + questsDone + "</b>\n"
                 + "Заработано: <b>" + String.format("%,d", totalEarned).replace(',', ' ') + " EXC</b>\n"
-                + "Вывел: <b>" + exc + " EXC → " + rub + " ₽</b>\n\n"
+                + "Вывел: <b>" + withdrawLine + "</b>\n\n"
                 + "Так держать! 🔥";
         sendText(admin.getTelegramId(), text,
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("📋 Заявки на вывод", withdrawalsCallback)),
                         List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
                 )));
+    }
+
+    private long parseRubFromPayoutDetails(String payoutDetails, long excFallback) {
+        if (payoutDetails != null && payoutDetails.contains("rubles=")) {
+            try {
+                String after = payoutDetails.substring(payoutDetails.indexOf("rubles=") + 7);
+                return Long.parseLong(after.replaceAll("[^0-9]", ""));
+            } catch (NumberFormatException ignored) {}
+        }
+        return excFallback / 100;
     }
 
     private long parseRubFromWithdrawalTitle(String title, long excFallback) {
