@@ -3940,7 +3940,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "Собирайте команду из 2–5 игроков.\n"
                             + "Суммарный XP участников — рейтинг вашего отряда.\n"
                             + "Каждую неделю топ-отряд делит <b>10 000 EXC</b> на всех.\n\n"
-                            + "Зовите друзей — это честная вирусная механика.",
+                            + "Зовите друзей и играйте вместе 🔥",
                     keyboardFactory.verticalLayout(List.of(
                             keyboardFactory.callback("➕ Создать отряд", "squad:create"),
                             keyboardFactory.callback("🔗 Вступить по коду", "squad:join_prompt"),
