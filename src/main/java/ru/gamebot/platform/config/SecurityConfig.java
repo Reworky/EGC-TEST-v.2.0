@@ -31,6 +31,8 @@ public class SecurityConfig {
                         // Публичные эндпоинты — без токена
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/leaderboard").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/squads/leaderboard").permitAll()
+                        .requestMatchers("/api/squads/**").authenticated()
                         .requestMatchers("/api/quests/**").permitAll()
                         .requestMatchers("/api/shop/**").permitAll()
                         .requestMatchers("/api/stats").permitAll()

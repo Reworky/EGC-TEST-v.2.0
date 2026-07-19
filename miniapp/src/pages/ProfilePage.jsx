@@ -121,6 +121,15 @@ const SVG_MENU_REFS = (
   </svg>
 );
 
+const SVG_MENU_SQUADS = (
+  <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+    <circle cx="22" cy="22" r="10" fill="#0f172a" opacity=".7"/>
+    <path d="M22 14 L24 19 L29 19 L25 22.5 L26.5 28 L22 25 L17.5 28 L19 22.5 L15 19 L20 19 Z" fill="#f59e0b" opacity=".8" stroke="#fbbf24" strokeWidth=".6"/>
+    <circle cx="14" cy="30" r="4" fill="#1e3a5f" opacity=".6" stroke="#3b82f6" strokeWidth=".8"/>
+    <circle cx="30" cy="30" r="4" fill="#1e3a5f" opacity=".6" stroke="#3b82f6" strokeWidth=".8"/>
+  </svg>
+);
+
 const SVG_MENU_POLLS = (
   <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
     <circle cx="22" cy="22" r="10" fill="#1e1b4b" opacity=".7"/>
@@ -366,6 +375,18 @@ export default function ProfilePage() {
           <div className="p-menu-texts">
             <div className="p-menu-title">Рефералы</div>
             <div className="p-menu-sub">Пригласи друга — получи бонус</div>
+          </div>
+          <i className="ti ti-chevron-right" style={{ color: 'rgba(255,255,255,0.25)', marginRight: 12 }} />
+        </Link>
+
+        {/* Squads */}
+        <Link to="/squads" className="p-menu-item">
+          <div className="p-menu-illus" style={{ background: 'linear-gradient(135deg,#0f1a2e,#060d1a)' }}>
+            {SVG_MENU_SQUADS}
+          </div>
+          <div className="p-menu-texts">
+            <div className="p-menu-title">Отряды</div>
+            <div className="p-menu-sub">Играй вместе — побеждай вместе</div>
           </div>
           <i className="ti ti-chevron-right" style={{ color: 'rgba(255,255,255,0.25)', marginRight: 12 }} />
         </Link>

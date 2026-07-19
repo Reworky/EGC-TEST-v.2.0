@@ -209,3 +209,35 @@ export async function purchaseBattlePass(seasonId) {
   const { data } = await api.post(`/api/battlepass/${seasonId}/purchase`);
   return data;
 }
+
+export async function getMySquad() {
+  const { data } = await api.get('/api/squads/me');
+  return data;
+}
+
+export async function createSquad(name) {
+  const { data } = await api.post('/api/squads/create', { name });
+  return data;
+}
+
+export async function joinSquad(code) {
+  const { data } = await api.post('/api/squads/join', { code });
+  return data;
+}
+
+export async function leaveSquad() {
+  await api.post('/api/squads/leave');
+}
+
+export async function disbandSquad() {
+  await api.post('/api/squads/disband');
+}
+
+export async function kickSquadMember(memberTelegramId) {
+  await api.post(`/api/squads/kick/${memberTelegramId}`);
+}
+
+export async function getSquadLeaderboard() {
+  const { data } = await api.get('/api/squads/leaderboard');
+  return data;
+}

@@ -16,6 +16,7 @@ const WalletPage     = lazy(() => import('./pages/WalletPage'));
 const PollsPage      = lazy(() => import('./pages/PollsPage'));
 const SupportPage    = lazy(() => import('./pages/SupportPage'));
 const BattlePassPage = lazy(() => import('./pages/BattlePassPage'));
+const SquadsPage     = lazy(() => import('./pages/SquadsPage'));
 
 export default function App() {
   const { initData } = useTelegram();
@@ -65,6 +66,7 @@ export default function App() {
           <Route path="/polls" element={<PollsPage />} />
           <Route path="/support" element={<SupportPage />} />
           <Route path="/battlepass" element={<BattlePassPage />} />
+          <Route path="/squads" element={<SquadsPage />} />
         </Routes>
         </Suspense>
         <BottomNav />
