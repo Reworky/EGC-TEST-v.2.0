@@ -40,6 +40,7 @@ public class AppUser {
 
     private boolean profileCompleted;
     private boolean registrationCompleted;
+    private boolean welcomeBonusPaid;
     private long xp;
     private long weeklyXp;
     private long coins;
