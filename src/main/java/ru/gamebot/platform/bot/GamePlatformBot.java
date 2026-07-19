@@ -6858,6 +6858,46 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if ("bonus".equals(action)) {
+            AppUser target = userService.findByTelegramId(telegramId).orElse(null);
+            if (target == null) {
+                sendText(admin.getTelegramId(), "⚠️ Пользователь не найден.", backMenuKeyboard("admin:users:0"));
+                return;
+            }
+            session.reset();
+            session.setState(SessionState.BONUS_INPUT);
+            session.getData().put("bonus_direct_target", String.valueOf(telegramId));
+            session.getData().put("bonus_direct_page", String.valueOf(page == null ? 0 : page));
+            sendText(admin.getTelegramId(),
+                    "🎁 <b>Начисление бонуса</b>\n\n"
+                            + "👤 Игрок: <b>" + escape(displayUserName(target)) + "</b> (ID: " + telegramId + ")\n\n"
+                            + "Отправьте данные одним сообщением.\n"
+                            + "Формат: <code>XP COINS TICKETS комментарий</code>\n"
+                            + "Пример: <code>100 50 3 За активность</code>",
+                    cancelKeyboard());
+            return;
+        }
+
+        if ("debit".equals(action)) {
+            AppUser target = userService.findByTelegramId(telegramId).orElse(null);
+            if (target == null) {
+                sendText(admin.getTelegramId(), "⚠️ Пользователь не найден.", backMenuKeyboard("admin:users:0"));
+                return;
+            }
+            session.reset();
+            session.setState(SessionState.DEBIT_INPUT);
+            session.getData().put("debit_direct_target", String.valueOf(telegramId));
+            session.getData().put("debit_direct_page", String.valueOf(page == null ? 0 : page));
+            sendText(admin.getTelegramId(),
+                    "➖ <b>Списание баланса</b>\n\n"
+                            + "👤 Игрок: <b>" + escape(displayUserName(target)) + "</b> (ID: " + telegramId + ")\n\n"
+                            + "Отправьте данные одним сообщением.\n"
+                            + "Формат: <code>XP EXC TICKETS комментарий</code>\n"
+                            + "Пример: <code>0 500 0 Штраф за нарушение</code>",
+                    cancelKeyboard());
+            return;
+        }
+
         sendText(admin.getTelegramId(), "⚠️ Действие с пользователем не распознано.", backMenuKeyboard("menu:admin"));
     }
 
@@ -7109,6 +7149,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         ? keyboardFactory.callback("✅ Разблокировать", "admin:user:unblock:" + telegramId + ":" + page)
                         : keyboardFactory.callback("🚫 Заблокировать", "admin:user:block:" + telegramId + ":" + page)),
                 List.of(
+                        keyboardFactory.callback("🎁 Бонус", "admin:user:bonus:" + telegramId + ":" + page),
+                        keyboardFactory.callback("➖ Списание", "admin:user:debit:" + telegramId + ":" + page)
+                ),
+                List.of(
                         keyboardFactory.callback("⬅️ К списку", "admin:users:" + page),
                         keyboardFactory.callback("🏠 Меню", "menu:main")
                 )
@@ -7246,6 +7290,41 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void handleBonusInput(AppUser user, UserSession session, String text) {
+        String directTargetStr = session.getData().get("bonus_direct_target");
+        if (directTargetStr != null) {
+            Long telegramId = parseLong(directTargetStr);
+            Integer parsedBonusPage = parseInteger(session.getData().getOrDefault("bonus_direct_page", "0"));
+            int returnPage = parsedBonusPage == null ? 0 : parsedBonusPage;
+            String[] parts = text.trim().split("\\s+", 4);
+            if (parts.length < 3) {
+                sendText(user.getTelegramId(),
+                        "⚠️ Формат неверный. Используйте: <code>XP COINS TICKETS комментарий</code>.",
+                        cancelKeyboard());
+                return;
+            }
+            Long xp = parsePositiveLong(parts[0]);
+            Long coins = parsePositiveLong(parts[1]);
+            Long tickets = parsePositiveLong(parts[2]);
+            String comment = parts.length >= 4 ? parts[3] : "За активность";
+            if (telegramId == null || xp == null || coins == null || tickets == null) {
+                sendText(user.getTelegramId(),
+                        "⚠️ Проверьте XP, монеты и билеты. Они должны быть числами.",
+                        cancelKeyboard());
+                return;
+            }
+            UserService.RewardGrant rewardGrant = userService.addManualBonus(telegramId, xp, coins, tickets);
+            session.reset();
+            notifyUser(telegramId,
+                    "🎁 Администратор начислил вам бонус.\n\n"
+                            + "✨ XP: <b>+" + rewardGrant.xp() + "</b>\n"
+                            + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>\n"
+                            + formatExcBonusLine(rewardGrant)
+                            + "🎟️ Билеты: <b>+" + rewardGrant.tickets() + "</b>\n"
+                            + "💬 Основание: <b>" + escape(comment) + "</b>");
+            sendAdminUserCard(user, telegramId, returnPage, "✅ Бонус начислен игроку " + telegramId + ".");
+            return;
+        }
+
         String[] parts = text.trim().split("\\s+", 5);
         if (parts.length < 4) {
             sendAdminBonusUsersPage(user, session, currentBonusPage(session),
@@ -7277,6 +7356,44 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void handleDebitInput(AppUser user, UserSession session, String text) {
+        String directTargetStr = session.getData().get("debit_direct_target");
+        if (directTargetStr != null) {
+            Long telegramId = parseLong(directTargetStr);
+            Integer parsedDebitPage = parseInteger(session.getData().getOrDefault("debit_direct_page", "0"));
+            int returnPage = parsedDebitPage == null ? 0 : parsedDebitPage;
+            String[] parts = text.trim().split("\\s+", 4);
+            if (parts.length < 3) {
+                sendText(user.getTelegramId(),
+                        "⚠️ Формат неверный. Используйте: <code>XP EXC TICKETS комментарий</code>.",
+                        cancelKeyboard());
+                return;
+            }
+            Long xp = parsePositiveLong(parts[0]);
+            Long exc = parsePositiveLong(parts[1]);
+            Long tickets = parsePositiveLong(parts[2]);
+            String comment = parts.length >= 4 ? parts[3] : "Корректировка баланса";
+            if (telegramId == null || xp == null || exc == null || tickets == null) {
+                sendText(user.getTelegramId(),
+                        "⚠️ Проверьте XP, EXC и билеты. Они должны быть числами.",
+                        cancelKeyboard());
+                return;
+            }
+            try {
+                UserService.BalanceDebit debit = userService.debitManualBalance(telegramId, xp, exc, tickets);
+                session.reset();
+                notifyUser(telegramId,
+                        "➖ Администратор выполнил списание баланса.\n\n"
+                                + "✨ XP: <b>-" + debit.xp() + "</b>\n"
+                                + "🪙 EXC: <b>-" + debit.exc() + "</b>\n"
+                                + "🎟️ Билеты: <b>-" + debit.tickets() + "</b>\n"
+                                + "💬 Основание: <b>" + escape(comment) + "</b>");
+                sendAdminUserCard(user, telegramId, returnPage, "✅ Списание применено для игрока " + telegramId + ".");
+            } catch (IllegalArgumentException exception) {
+                sendText(user.getTelegramId(), "⚠️ " + escape(exception.getMessage()), cancelKeyboard());
+            }
+            return;
+        }
+
         String[] parts = text.trim().split("\\s+", 5);
         if (parts.length < 4) {
             sendAdminDebitUsersPage(user, session, currentDebitPage(session),
@@ -8137,10 +8254,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(
                     keyboardFactory.callback("✏️ Квесты", "admin:edit"),
                     keyboardFactory.callback("📈 Топ квестов", "admin:queststats")
-            ));
-            rows.add(List.of(
-                    keyboardFactory.callback("🎁 Бонус", "admin:bonus"),
-                    keyboardFactory.callback("➖ Списание", "admin:debit")
             ));
             rows.add(List.of(
                     keyboardFactory.callback("🎁 Магазин наград", "admin:rewards"),
