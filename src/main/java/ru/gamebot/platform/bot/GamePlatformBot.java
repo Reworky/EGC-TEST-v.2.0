@@ -8069,7 +8069,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String userLink = (username != null && !username.isBlank())
                 ? "\n✉️ Написать: <a href=\"https://t.me/" + username + "\">@" + username + "</a>"
                 : "\n✉️ Telegram ID: <code>" + user.getTelegramId() + "</code>";
-        String details = req.getPayoutDetails() != null ? "\n💎 Детали: <code>" + escape(req.getPayoutDetails()) + "</code>" : "";
+
+        String details = "";
+        String payoutDetails = req.getPayoutDetails();
+        if (payoutDetails != null && payoutDetails.startsWith("TON:")) {
+            // Формат: TON:<wallet>:rubles=<N>
+            String wallet = cryptoWalletFromPayoutDetails(payoutDetails);
+            long rubles = parseRubFromWithdrawalTitle(req.getRewardItem().getTitle(), req.getRewardItem().getPriceCoins());
+            java.math.BigDecimal tonRate = exchangeRateService.getTonRubRate();
+            java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(rubles));
+            details = "\n💰 К отправке: ~<b>" + tonAmount + " GRAM (TON)</b>"
+                    + "\n📈 Курс: 1 TON = " + tonRate.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽"
+                    + "\n💵 Рублёвый эквивалент: <b>" + rubles + " ₽</b>"
+                    + "\n💎 Кошелёк: <code>" + escape(wallet != null ? wallet : "") + "</code>";
+        } else if (payoutDetails != null) {
+            details = "\n💎 Реквизиты: <code>" + escape(payoutDetails) + "</code>";
+        }
+
         String text = "💸 <b>Новая заявка на вывод EXC</b>\n\n"
                 + "👤 Игрок: <b>" + escape(user.getNickname()) + "</b>\n"
                 + "🆔 Telegram ID: <b>" + user.getTelegramId() + "</b>"

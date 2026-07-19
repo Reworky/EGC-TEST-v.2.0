@@ -287,8 +287,8 @@ public class RewardService {
         }
 
         RewardItem withdrawItem = new RewardItem();
-        withdrawItem.setTitle("Вывод " + excAmount + " EXC → TON");
-        withdrawItem.setDescription("Заявка на вывод в TON · Кошелёк: " + tonWallet);
+        withdrawItem.setTitle("Вывод " + excAmount + " EXC → GRAM (TON)");
+        withdrawItem.setDescription("Заявка на вывод в GRAM (TON) · Кошелёк: " + tonWallet);
         withdrawItem.setCategory("Вывод");
         withdrawItem.setPriceCoins(excAmount);
         withdrawItem.setActive(false);
