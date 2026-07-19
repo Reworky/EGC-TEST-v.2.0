@@ -8183,7 +8183,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String questsLabel = hasTournament ? "🎯 Квесты и рейтинг 🔥" : "🎯 Квесты и рейтинг";
         rows.add(List.of(keyboardFactory.callback(questsLabel, "menu:cat:quests")));
 
-        rows.add(List.of(keyboardFactory.callback("⚔️ Отряды — Скоро", "squad:soon")));
+        rows.add(List.of(keyboardFactory.callback("⚔️ Отряды", "menu:squads")));
 
 String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошелёк 🔔" : "💰 Кошелёк";
         rows.add(List.of(keyboardFactory.callback(walletLabel, "menu:cat:wallet")));
