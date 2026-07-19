@@ -29,7 +29,7 @@ public class Squad {
     @Column(unique = true, length = 20)
     private String inviteCode;
 
-    @Column(columnDefinition = "varchar(20) default 'ACTIVE'")
+    @Column(length = 20)
     private String status; // ACTIVE / DISBANDED
 
     private LocalDateTime createdAt;
