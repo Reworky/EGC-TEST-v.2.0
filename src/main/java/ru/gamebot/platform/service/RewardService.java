@@ -18,6 +18,8 @@ import ru.gamebot.platform.domain.repository.RewardRequestRepository;
 @RequiredArgsConstructor
 public class RewardService {
 
+    private static final String WITHDRAWAL_CATEGORY = "Вывод";
+
     private final RewardItemRepository rewardItemRepository;
     private final RewardRequestRepository rewardRequestRepository;
     private final UserService userService;
@@ -171,8 +173,21 @@ public class RewardService {
     public RewardRequest approveRequest(Long requestId) {
         RewardRequest req = getRequest(requestId);
         req.setStatus(RewardRequestStatus.APPROVED);
-        // Withdrawal limit already recorded at request creation time — do NOT call recordWithdrawal again
+        if (WITHDRAWAL_CATEGORY.equals(req.getRewardItem().getCategory())) {
+            long rubles = parseRubFromTitle(req.getRewardItem().getTitle(), req.getRewardItem().getPriceCoins());
+            healthRatioService.deductFromPayoutPool(rubles);
+        }
         return rewardRequestRepository.save(req);
+    }
+
+    private long parseRubFromTitle(String title, long excFallback) {
+        if (title != null && title.contains("→")) {
+            try {
+                String after = title.substring(title.lastIndexOf('→') + 1).trim();
+                return Long.parseLong(after.replaceAll("[^0-9]", ""));
+            } catch (NumberFormatException ignored) {}
+        }
+        return excFallback / 100;
     }
 
     @Transactional

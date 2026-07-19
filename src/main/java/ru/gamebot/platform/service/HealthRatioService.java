@@ -35,6 +35,16 @@ public class HealthRatioService {
     }
 
     @Transactional
+    public void deductFromPayoutPool(long amountRub) {
+        PayoutPoolEntry entry = new PayoutPoolEntry();
+        entry.setAmountRub(-amountRub);
+        entry.setCreatedAt(LocalDateTime.now());
+        payoutPoolEntryRepository.save(entry);
+        log.info("Payout pool deducted by {} RUB (withdrawal paid)", amountRub);
+        recalculate();
+    }
+
+    @Transactional
     public HealthRatioSnapshot recalculate() {
         long payoutPoolRub = payoutPoolEntryRepository.sumAllAmounts();
         long totalDebtExc = appUserRepository.sumAllCoins();
