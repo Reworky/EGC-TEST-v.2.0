@@ -525,7 +525,9 @@ public class QuestService {
 
     public List<QuestSubmission> getUserSubmissions(AppUser user) {
         return questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user).stream()
-                .filter(s -> s.getStatus() != SubmissionStatus.CANCELLED)
+                .filter(s -> s.getStatus() == SubmissionStatus.DRAFT
+                        || s.getStatus() == SubmissionStatus.PENDING
+                        || s.getStatus() == SubmissionStatus.NEEDS_INFO)
                 .toList();
     }
 

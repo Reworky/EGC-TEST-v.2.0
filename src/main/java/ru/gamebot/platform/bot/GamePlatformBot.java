@@ -2827,7 +2827,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<QuestSubmission> submissions = questService.getUserSubmissions(user);
         if (submissions.isEmpty()) {
             sendText(user.getTelegramId(),
-                    "📭 У вас пока нет взятых или отправленных квестов.\n\nОткройте раздел квестов и начните с первого задания.",
+                    "📭 У вас нет квестов в работе.\n\nОткройте раздел квестов и возьмите первое задание.",
                     backMenuKeyboard("menu:quests"));
             return;
         }
