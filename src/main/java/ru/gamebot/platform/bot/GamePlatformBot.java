@@ -5585,7 +5585,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else {
             detailsLine = "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>";
         }
-        long rubles = Math.round(req.getRewardItem().getPriceCoins() / 100.0);
+        long rubles = parseRubFromWithdrawalTitle(
+                req.getRewardItem().getTitle(), req.getRewardItem().getPriceCoins());
         String payoutSuffix = isCryptoWithdrawal(req) ? cryptoPayoutSuffix(rubles) : "";
         long duplicateCount = rewardService.countPendingWithdrawalsByUser(requester);
         String duplicateWarning = duplicateCount > 1
@@ -8043,7 +8044,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else {
             detailsLine = "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>";
         }
-        long rubles = Math.round(req.getRewardItem().getPriceCoins() / 100.0);
+        long rubles = parseRubFromWithdrawalTitle(
+                req.getRewardItem().getTitle(), req.getRewardItem().getPriceCoins());
         String payoutSuffix = isCryptoWithdrawal(req) ? cryptoPayoutSuffix(rubles) : "";
         long dupCount = rewardService.countPendingWithdrawalsByUser(requester);
         String dupWarning = dupCount > 1
