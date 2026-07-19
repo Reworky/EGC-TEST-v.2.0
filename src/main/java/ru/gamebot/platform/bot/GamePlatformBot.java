@@ -7522,7 +7522,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), "⚠️ Недостаточно EXC. Баланс: <b>" + user.getCoins() + " EXC</b>.", cancelKeyboard());
             return;
         }
-        double ratio = healthRatioService.recalculate().getRatio();
+        double ratio = healthRatioService.getCurrentRatio();
         int ratioPercent = (int) Math.round(ratio * 100);
         long rubles = Math.round(amount * ratio / 100.0);
         session.getData().put("withdrawAmount", String.valueOf(amount));
