@@ -69,6 +69,9 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT COALESCE(SUM(s.quest.rewardCoins), 0) FROM QuestSubmission s WHERE s.status = 'APPROVED'")
     long sumAllIssuedCoins();
 
+    @Query("SELECT COALESCE(SUM(s.quest.rewardCoins), 0) FROM QuestSubmission s WHERE s.user = :user AND s.status = 'APPROVED'")
+    long sumIssuedCoinsByUser(@Param("user") AppUser user);
+
     @Query("SELECT s.quest.gameName FROM QuestSubmission s WHERE s.status = 'APPROVED' GROUP BY s.quest.gameName ORDER BY COUNT(s) DESC")
     List<String> findTopGameNames();
 

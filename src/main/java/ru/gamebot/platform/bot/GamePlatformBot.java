@@ -5598,21 +5598,41 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendPayoutConfirmedCard(AppUser admin, RewardRequest req, boolean isModFlow) {
+        AppUser player = req.getUser();
         long exc = req.getRewardItem().getPriceCoins();
-        long rub = exc / 100;
+        long rub = parseRubFromWithdrawalTitle(req.getRewardItem().getTitle(), exc);
         String withdrawalsCallback = isModFlow ? "mod:withdrawals" : "admin:withdrawals";
+
+        String usernameStr = player.getTelegramUsername() != null
+                ? "@" + player.getTelegramUsername() : escape(player.getNickname());
+        String levelName = escape(userService.getLevelName(player.getXp()));
+        long questsDone = questService.countApprovedByUser(player);
+        long totalEarned = questService.sumEarnedCoinsByUser(player);
+
         String text = "🎉 <b>Перевод выполнен!</b>\n\n"
-                + "👤 " + escape(req.getUser().getNickname()) + "\n"
-                + "💸 " + exc + " EXC → " + rub + " ₽\n"
-                + "📋 Заявка В-" + reqDisplayId(req) + "\n"
-                + "📅 " + LocalDateTime.now().format(DATE_TIME_FORMATTER) + "\n\n"
-                + "Так держать! 🔥\n\n"
-                + "🎮 EXPERIENCE GAMING CLUB";
+                + "Игрок: <b>" + usernameStr + "</b>\n"
+                + "Уровень: <b>" + levelName + "</b>\n"
+                + "Номер заявки: <b>В-" + reqDisplayId(req) + "</b>\n"
+                + "Дата: <b>" + LocalDateTime.now().format(DATE_TIME_FORMATTER) + "</b>\n"
+                + "Квестов выполнено: <b>" + questsDone + "</b>\n"
+                + "Заработано: <b>" + String.format("%,d", totalEarned).replace(',', ' ') + " EXC</b>\n"
+                + "Вывел: <b>" + exc + " EXC → " + rub + " ₽</b>\n\n"
+                + "Так держать! 🔥";
         sendText(admin.getTelegramId(), text,
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("📋 Заявки на вывод", withdrawalsCallback)),
                         List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
                 )));
+    }
+
+    private long parseRubFromWithdrawalTitle(String title, long excFallback) {
+        if (title != null && title.contains("→")) {
+            try {
+                String after = title.substring(title.lastIndexOf('→') + 1).trim();
+                return Long.parseLong(after.replaceAll("[^0-9]", ""));
+            } catch (NumberFormatException ignored) {}
+        }
+        return excFallback / 100;
     }
 
     private void notifyUserWithdrawalApproved(RewardRequest req, String receiptFileId) {

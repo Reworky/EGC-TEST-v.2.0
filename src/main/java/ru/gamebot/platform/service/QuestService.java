@@ -690,6 +690,10 @@ public class QuestService {
         return questSubmissionRepository.countApprovedByUser(user);
     }
 
+    public long sumEarnedCoinsByUser(AppUser user) {
+        return questSubmissionRepository.sumIssuedCoinsByUser(user);
+    }
+
     public List<QuestSubmission> findApprovedByUser(AppUser user) {
         return questSubmissionRepository.findAllApprovedByUserOrderByUpdatedAtDesc(user);
     }
