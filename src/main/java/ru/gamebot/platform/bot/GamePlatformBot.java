@@ -460,20 +460,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         if (!user.isProfileCompleted()) {
-            if (!user.isWelcomeBonusPaid()) {
-                user.setCoins(user.getCoins() + 200);
-                user.setWelcomeBonusPaid(true);
-                userService.save(user);
-                excTransactionService.log(user, 200, ru.gamebot.platform.service.ExcTransactionService.WELCOME_BONUS, "Приветственный бонус за регистрацию");
-                sendText(user.getTelegramId(),
-                        "🎉 <b>Добро пожаловать в EGC!</b>\n\n"
-                                + "Тебе начислено <b>200 EXC</b> за регистрацию.\n\n"
-                                + "Это твой стартовый капитал.\n"
-                                + "Выполни первый квест — и заработай ещё.",
-                        keyboardFactory.rowsLayout(List.of(
-                                List.of(keyboardFactory.callback("👉 Выбрать квест", "menu:quests"))
-                        )));
-            }
             session.reset();
             session.setState(SessionState.REG_NAME);
             sendText(user.getTelegramId(),
@@ -2098,6 +2084,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (isRequiredChannelMember(user.getTelegramId())) {
             subscriptionCheckCache.put(user.getTelegramId(), System.currentTimeMillis());
             AppUser activated = userService.activateAccount(user);
+            if (!activated.isWelcomeBonusPaid()) {
+                activated.setCoins(activated.getCoins() + 200);
+                activated.setWelcomeBonusPaid(true);
+                activated.setLastBonusDate(java.time.LocalDate.now());
+                userService.save(activated);
+                excTransactionService.log(activated, 200, ru.gamebot.platform.service.ExcTransactionService.WELCOME_BONUS, "Приветственный бонус за регистрацию");
+            }
             ru.gamebot.platform.service.UserService.ReferralActivationResult referral =
                     userService.grantReferralReward(activated);
             sendActivationSuccess(activated, referral);
@@ -2127,6 +2120,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "";
         sendText(user.getTelegramId(),
                 "✅ <b>Поздравляем! Ваш игровой профиль активирован.</b>\n\n"
+                        + "🎁 <b>Приветственный бонус: +200 EXC</b> уже на балансе!\n"
                         + referralLine
                         + "\nТеперь вам доступны:\n"
                         + "Игровые задания\n"
