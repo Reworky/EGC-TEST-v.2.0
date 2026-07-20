@@ -2581,7 +2581,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 (notice == null ? "" : notice + "\n\n")
                         + sponsorBadge
                         + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n\n"
-                        + "🎮 Игра: <b>" + escape(quest.getGameName()) + "</b>\n"
+                        + (quest.isSponsored() ? "🎮 Канал: <b>" : "🎮 Игра: <b>") + escape(quest.getGameName()) + "</b>\n"
                         + (quest.isSponsored() ? "" : "📚 Формат: <b>" + escape(quest.getCategory()) + "</b>\n"
                         + "🕹️ Платформа: <b>" + escape(quest.getPlatform()) + "</b>\n")
                         + deadlineLine
@@ -2631,7 +2631,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 notice + "\n\n"
                         + "🎯 <b>" + escape(freshQuest.getTitle()) + "</b>\n\n"
-                        + "🎮 Игра: <b>" + escape(freshQuest.getGameName()) + "</b>\n"
+                        + (freshQuest.isSponsored() ? "🎮 Канал: <b>" : "🎮 Игра: <b>") + escape(freshQuest.getGameName()) + "</b>\n"
                         + (freshQuest.isSponsored() ? "" : "📚 Формат: <b>" + escape(freshQuest.getCategory()) + "</b>\n"
                         + "🕹️ Платформа: <b>" + escape(freshQuest.getPlatform()) + "</b>\n")
                         + deadlineLine
