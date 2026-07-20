@@ -362,7 +362,7 @@ function MyQuestsView({ expanded, details, onToggle, onDetailChanged }) {
   }
 
   if (myQuests.length === 0) {
-    return <div className="page-center">📭 У вас пока нет взятых квестов. Откройте «Все квесты» и возьмите первое задание.</div>;
+    return <div className="page-center">📭 У вас нет квестов в работе. Откройте «Все квесты» и возьмите первое задание.</div>;
   }
 
   return (
