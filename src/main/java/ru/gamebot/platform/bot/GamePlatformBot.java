@@ -7511,11 +7511,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     @org.springframework.context.event.EventListener
     public void onHallOfFame(ru.gamebot.platform.event.HallOfFameEvent event) {
-        String divider = "━━━━━━━━━━━━━━━━━━━━";
         StringBuilder sb = new StringBuilder();
-        sb.append("🏆✨ <b>ЗАЛ СЛАВЫ EGC</b> ✨🏆\n")
-          .append("<i>Топ игроков недели по опыту</i>\n\n")
-          .append(divider).append("\n\n");
+        sb.append("🏆✨ <b>ЗАЛ СЛАВЫ EGC</b> ✨🏆\n\n")
+          .append("<i>Топ игроков недели по опыту</i>\n\n");
         for (ru.gamebot.platform.event.HallOfFameEvent.HallEntry entry : event.getTop3()) {
             int rank = entry.rank();
             String nameLine = "<b>" + escape(entry.nickname()) + "</b>"
@@ -7530,7 +7528,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 default -> sb.append(rank).append(". ").append(nameLine).append(" — ").append(entry.weeklyXp()).append(" XP\n\n");
             }
         }
-        sb.append(divider).append("\n\n")
+        sb.append("\n")
           .append("👏 Поздравляем лучших игроков недели!\n")
           .append("🎯 Новая неделя уже началась — новые квесты, новые шансы попасть в топ.\n\n")
           .append("Присоединяйся → @").append(getBotUsername());
