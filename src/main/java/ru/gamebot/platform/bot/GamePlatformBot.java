@@ -7941,7 +7941,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ Новый " + label + " создан и сразу опубликован.",
                     mainMenuKeyboard(user));
         }
-        sendText(user.getTelegramId(), buildQuestAnnouncement(quest), null);
+        if (quest.isSponsored()) {
+            sendText(user.getTelegramId(), buildQuestAnnouncement(quest), null);
+        }
     }
 
     private String buildQuestAnnouncement(Quest quest) {
