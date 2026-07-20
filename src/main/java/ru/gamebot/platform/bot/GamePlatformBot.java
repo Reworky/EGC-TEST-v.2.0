@@ -2049,15 +2049,47 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return baos.toByteArray();
     }
 
+    private volatile String clubBannerFileId = null;
+
     private void sendClubCategory(AppUser user) {
         long activePolls = pollService.findActive().size();
         String pollLabel = activePolls > 0 ? "🗳 Голосования (" + activePolls + ")" : "🗳 Голосования";
-        sendMenuCategory(user, "👥 <b>Клуб</b>", List.of(
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("🤝 Рефералы", "menu:referrals")),
                 List.of(keyboardFactory.callback("🛡️ EGC Council", "menu:council")),
                 List.of(keyboardFactory.callback(pollLabel, "menu:polls")),
-                List.of(keyboardFactory.callback("📰 Новости", "menu:news"))
+                List.of(keyboardFactory.callback("📰 Новости", "menu:news")),
+                List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
+        if (clubBannerFileId != null) {
+            sendPhotoCaption(user.getTelegramId(), clubBannerFileId, "👥 <b>Клуб</b>", keyboard);
+            return;
+        }
+        try {
+            try (java.io.InputStream is = getClass().getResourceAsStream("/club_banner.jpg")) {
+                if (is == null) throw new java.io.IOException("club_banner.jpg not found");
+                byte[] img = is.readAllBytes();
+                SendPhoto sendPhoto = new SendPhoto();
+                sendPhoto.setChatId(user.getTelegramId().toString());
+                sendPhoto.setPhoto(new InputFile(new java.io.ByteArrayInputStream(img), "club_banner.jpg"));
+                sendPhoto.setCaption("👥 <b>Клуб</b>");
+                sendPhoto.setParseMode("HTML");
+                sendPhoto.setReplyMarkup(keyboard);
+                org.telegram.telegrambots.meta.api.objects.Message sent = execute(sendPhoto);
+                if (sent.getPhoto() != null && !sent.getPhoto().isEmpty()) {
+                    clubBannerFileId = sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId();
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to send club banner", e);
+            sendMenuCategory(user, "👥 <b>Клуб</b>", List.of(
+                    List.of(keyboardFactory.callback("🤝 Рефералы", "menu:referrals")),
+                    List.of(keyboardFactory.callback("🛡️ EGC Council", "menu:council")),
+                    List.of(keyboardFactory.callback(pollLabel, "menu:polls")),
+                    List.of(keyboardFactory.callback("📰 Новости", "menu:news"))
+            ));
+        }
     }
 
     private void sendHelpCategory(AppUser user) {
