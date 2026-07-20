@@ -2634,7 +2634,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private String reportSubmitErrorMessage(IllegalStateException e) {
         return "pending_report_exists".equals(e.getMessage())
-                ? "⏳ У вас уже есть отчёт на проверке у модератора — дождитесь решения, прежде чем отправлять следующий."
+                ? "⏳ У вас уже 2 отчёта на проверке у модератора — дождитесь решения по одному из них, прежде чем отправлять следующий."
                 : "⚠️ " + e.getMessage();
     }
 
@@ -2681,7 +2681,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (questService.hasOtherPendingSubmission(user, quest)) {
             answerSilently(callbackQuery.getId());
             sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
-                    "⏳ У вас уже есть отчёт на проверке у модератора — дождитесь решения, прежде чем отправлять следующий.");
+                    "⏳ У вас уже 2 отчёта на проверке у модератора — дождитесь решения по одному из них, прежде чем отправлять следующий.");
             return;
         }
 

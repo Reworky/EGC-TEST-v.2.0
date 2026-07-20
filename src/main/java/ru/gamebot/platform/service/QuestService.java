@@ -442,9 +442,11 @@ public class QuestService {
 
     /** true, если у пользователя уже есть ДРУГОЙ отчёт на проверке (статус PENDING) по любому квесту. */
     public boolean hasOtherPendingSubmission(AppUser user, Quest excludeQuest) {
-        return questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user).stream()
-                .anyMatch(s -> s.getStatus() == SubmissionStatus.PENDING
-                        && !s.getQuest().getId().equals(excludeQuest.getId()));
+        long pendingCount = questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user).stream()
+                .filter(s -> s.getStatus() == SubmissionStatus.PENDING
+                        && !s.getQuest().getId().equals(excludeQuest.getId()))
+                .count();
+        return pendingCount >= 2;
     }
 
     @Transactional
