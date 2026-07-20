@@ -7941,6 +7941,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ Новый " + label + " создан и сразу опубликован.",
                     mainMenuKeyboard(user));
         }
+        sendText(user.getTelegramId(), buildQuestAnnouncement(quest), null);
+    }
+
+    private String buildQuestAnnouncement(Quest quest) {
+        java.time.LocalDate start = java.time.LocalDate.now();
+        String startStr = start.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"));
+        String endStr = quest.getDurationDays() > 0
+                ? start.plusDays(quest.getDurationDays()).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+                : null;
+        String period = endStr != null ? startStr + " - " + endStr : startStr;
+        boolean isSponsored = quest.isSponsored();
+        String header = isSponsored ? "🎯 НОВЫЙ СПОНСОРСКИЙ КВЕСТ" : "🎯 НОВЫЙ КВЕСТ";
+        return header + "\n\n"
+                + "📋 Квест: \"" + quest.getTitle() + "\"\n"
+                + "💰 Награда: " + String.format("%,d", quest.getRewardCoins()) + " EXC\n\n"
+                + "📅 Период: " + period + "\n\n"
+                + "👉 Выполнить → @" + getBotUsername();
     }
 
     private void updateQuestTitle(AppUser user, UserSession session, String text) {
@@ -9242,6 +9259,7 @@ String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошел�
                 + "✨ XP: <b>" + quest.getRewardXp() + "</b>  🪙 EXC: <b>" + quest.getRewardCoins() + "</b>\n"
                 + "📅 " + escape(quest.getDurationText()),
                 backMenuKeyboard(backAction));
+        sendText(user.getTelegramId(), buildQuestAnnouncement(quest), null);
     }
 
     // ── Sponsor text commands ────────────────────────────────────────────────
