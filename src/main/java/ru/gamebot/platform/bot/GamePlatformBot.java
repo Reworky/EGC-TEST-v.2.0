@@ -4032,7 +4032,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     } else if ("AVATAR_FRAME".equals(result.type())) {
                         msg += "✨ Рамка аватара применена к вашему профилю!";
                     }
-                    int remaining = user.getTickets();
+                    int remaining = (int) user.getTickets();
                     msg += "\n\n🎟 Осталось билетов: <b>" + remaining + "</b>";
                     InlineKeyboardMarkup kb;
                     if (remaining > 0) {
@@ -4057,7 +4057,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendWheelMenu(AppUser user) {
-        int tickets = user.getTickets();
+        int tickets = (int) user.getTickets();
         String text = "🎰 <b>Колесо фортуны</b>\n\n"
                 + "У вас: 🎟 <b>" + tickets + " билет(ов)</b>\n\n"
                 + "Призы:\n"

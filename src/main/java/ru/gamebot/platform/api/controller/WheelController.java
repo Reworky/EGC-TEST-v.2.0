@@ -42,7 +42,7 @@ public class WheelController {
         if (user == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
 
         long spinsToday = wheelSpinLogRepository.countByUserSince(user, LocalDate.now().atStartOfDay());
-        return ResponseEntity.ok(new WheelStatusDto(user.getTickets(), spinsToday, WheelService.MAX_SPINS_PER_DAY));
+        return ResponseEntity.ok(new WheelStatusDto((int) user.getTickets(), spinsToday, WheelService.MAX_SPINS_PER_DAY));
     }
 
     @PostMapping("/spin")
@@ -55,13 +55,13 @@ public class WheelController {
             long spinsToday = wheelSpinLogRepository.countByUserSince(user, LocalDate.now().atStartOfDay());
             return ResponseEntity.ok(new SpinResponseDto(
                     true, "Удача!", result.type(), result.excAmount(), result.label(),
-                    user.getTickets(), spinsToday
+                    (int) user.getTickets(), spinsToday
             ));
         } catch (IllegalArgumentException e) {
             long spinsToday = wheelSpinLogRepository.countByUserSince(user, LocalDate.now().atStartOfDay());
             return ResponseEntity.ok(new SpinResponseDto(
                     false, e.getMessage(), null, 0, null,
-                    user.getTickets(), spinsToday
+                    (int) user.getTickets(), spinsToday
             ));
         }
     }
