@@ -848,11 +848,7 @@ public class QuestSeeder implements CommandLineRunner {
                       String description, String instruction, String requirements) {
         var existing = questRepository.findByTitleAndGameName(title, gameName);
         if (existing.isPresent()) {
-            Quest q = existing.get();
-            q.setRewardXp(rewardXp);
-            q.setRewardCoins(rewardCoins);
-            questRepository.save(q);
-            log.info("[QuestSeeder] Updated rewards: '{}'", title);
+            log.info("[QuestSeeder] Already exists, skipping: '{}'", title);
             return;
         }
         Quest quest = new Quest();
@@ -875,31 +871,43 @@ public class QuestSeeder implements CommandLineRunner {
         log.info("[QuestSeeder] Created: '{}'", title);
     }
 
-    // Full update — replaces description, instruction, requirements, duration, rewards
+    // One-time migration: renames and fully replaces content when found under oldTitle.
+    // On subsequent runs (quest already has newTitle), only updates rewards — like seed().
     private void updateQuest(String oldTitle, String gameName,
                              String newTitle, String category, String platform,
                              int durationDays, String durationText,
                              long rewardXp, long rewardCoins,
                              String description, String instruction, String requirements) {
-        var existing = questRepository.findByTitleAndGameName(oldTitle, gameName);
-        if (existing.isEmpty()) {
-            // Quest not found under old title — seed as new
-            seed(newTitle, gameName, category, platform, durationDays, durationText,
-                    rewardXp, rewardCoins, description, instruction, requirements);
+        var byOldTitle = questRepository.findByTitleAndGameName(oldTitle, gameName);
+        if (byOldTitle.isPresent()) {
+            // One-time migration: apply full update
+            Quest q = byOldTitle.get();
+            q.setTitle(newTitle);
+            q.setCategory(category);
+            q.setPlatform(platform);
+            q.setDurationDays(durationDays);
+            q.setDurationText(durationText);
+            q.setRewardXp(rewardXp);
+            q.setRewardCoins(rewardCoins);
+            q.setDescription(description);
+            q.setInstruction(instruction);
+            q.setRequirements(requirements);
+            questRepository.save(q);
+            log.info("[QuestSeeder] Full update: '{}' -> '{}'", oldTitle, newTitle);
             return;
         }
-        Quest q = existing.get();
-        q.setTitle(newTitle);
-        q.setCategory(category);
-        q.setPlatform(platform);
-        q.setDurationDays(durationDays);
-        q.setDurationText(durationText);
-        q.setRewardXp(rewardXp);
-        q.setRewardCoins(rewardCoins);
-        q.setDescription(description);
-        q.setInstruction(instruction);
-        q.setRequirements(requirements);
-        questRepository.save(q);
-        log.info("[QuestSeeder] Full update: '{}' -> '{}'", oldTitle, newTitle);
+        // Quest already has newTitle (migration already done) — only update rewards
+        var byNewTitle = questRepository.findByTitleAndGameName(newTitle, gameName);
+        if (byNewTitle.isPresent()) {
+            Quest q = byNewTitle.get();
+            q.setRewardXp(rewardXp);
+            q.setRewardCoins(rewardCoins);
+            questRepository.save(q);
+            log.info("[QuestSeeder] Updated rewards: '{}'", newTitle);
+            return;
+        }
+        // Neither found — create fresh
+        seed(newTitle, gameName, category, platform, durationDays, durationText,
+                rewardXp, rewardCoins, description, instruction, requirements);
     }
 }
