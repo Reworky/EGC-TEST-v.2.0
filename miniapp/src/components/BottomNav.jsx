@@ -29,9 +29,21 @@ const icons = {
   ),
 };
 
+const wheelIcon = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9"/>
+    <circle cx="12" cy="12" r="3"/>
+    <line x1="12" y1="3" x2="12" y2="9"/>
+    <line x1="12" y1="15" x2="12" y2="21"/>
+    <line x1="3" y1="12" x2="9" y2="12"/>
+    <line x1="15" y1="12" x2="21" y2="12"/>
+  </svg>
+);
+
 const tabs = [
   { to: '/profile', icon: icons.profile, label: 'Профиль' },
   { to: '/quests', icon: icons.quests, label: 'Квесты' },
+  { to: '/wheel', icon: wheelIcon, label: 'Колесо' },
   { to: '/shop', icon: icons.shop, label: 'Магазин' },
   { to: '/top', icon: icons.top, label: 'Топ' },
 ];

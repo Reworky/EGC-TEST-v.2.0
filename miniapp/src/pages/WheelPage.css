@@ -1,0 +1,185 @@
+.wheel-page {
+  padding: 16px 16px 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.wheel-header h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 10px;
+}
+
+.wheel-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wheel-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  background: rgba(124, 58, 237, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.wheel-chip strong {
+  color: #fff;
+}
+
+.wheel-canvas-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  position: relative;
+}
+
+.wheel-arrow {
+  font-size: 24px;
+  color: #f472b6;
+  text-shadow: 0 0 10px #f472b6;
+  line-height: 1;
+  margin-bottom: -4px;
+  z-index: 2;
+}
+
+.wheel-canvas {
+  border-radius: 50%;
+  display: block;
+  max-width: 280px;
+  width: 100%;
+}
+
+.wheel-btn {
+  width: 100%;
+  padding: 14px;
+  border-radius: 16px;
+  border: none;
+  font-size: 16px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: not-allowed;
+  transition: all 0.2s;
+}
+
+.wheel-btn--active {
+  background: linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #ec4899 100%);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 0 24px rgba(168, 85, 247, 0.4);
+}
+
+.wheel-btn--active:active {
+  transform: scale(0.97);
+}
+
+.wheel-result {
+  text-align: center;
+  padding: 16px;
+}
+
+.wheel-result-prize {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 6px;
+}
+
+.wheel-result-sub {
+  font-size: 14px;
+}
+
+.wheel-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.wheel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wheel-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.wheel-tickets-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.wheel-ticket-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.wheel-ticket-icon {
+  font-size: 20px;
+}
+
+.wheel-ticket-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.wheel-ticket-sub {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.wheel-prize-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.wheel-prize-table tr {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.wheel-prize-table tr:last-child {
+  border-bottom: none;
+}
+
+.wheel-prize-table td {
+  padding: 8px 12px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.wheel-prize-prob {
+  text-align: right;
+  color: rgba(255, 255, 255, 0.4) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.wheel-note {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  text-align: center;
+}

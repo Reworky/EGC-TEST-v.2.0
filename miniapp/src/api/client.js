@@ -241,3 +241,13 @@ export async function getSquadLeaderboard() {
   const { data } = await api.get('/api/squads/leaderboard');
   return data;
 }
+
+export async function getWheelStatus() {
+  const { data } = await api.get('/api/wheel');
+  return data;
+}
+
+export async function spinWheel() {
+  const { data } = await api.post('/api/wheel/spin');
+  return data;
+}
