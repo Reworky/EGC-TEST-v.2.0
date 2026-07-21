@@ -124,6 +124,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.SponsorService sponsorService;
     private final ru.gamebot.platform.service.ExcTransactionService excTransactionService;
     private final ru.gamebot.platform.service.SquadService squadService;
+    private final ru.gamebot.platform.service.WheelService wheelService;
 
     private final Queue<String[]> pendingNewsQueue = new ConcurrentLinkedQueue<>();
     private final ScheduledExecutorService albumScheduler = Executors.newSingleThreadScheduledExecutor();
@@ -828,6 +829,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.startsWith("squad:")) {
             handleSquadAction(callbackQuery, user, session, data.substring("squad:".length()));
+            return;
+        }
+        if (data.startsWith("wheel:")) {
+            handleWheelAction(callbackQuery, user, data.substring("wheel:".length()));
             return;
         }
         if ("mod:suspects".equals(data) && isEffectiveModerator(user)) {
@@ -4009,6 +4014,72 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
 
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleWheelAction(CallbackQuery callbackQuery, AppUser user, String action) {
+        answerSilently(callbackQuery.getId());
+        switch (action) {
+            case "menu" -> sendWheelMenu(user);
+            case "spin" -> {
+                try {
+                    ru.gamebot.platform.service.WheelService.SpinResult result = wheelService.spin(user);
+                    String msg = "🎰 <b>Колесо остановилось на...</b>\n\n"
+                            + "<b>" + result.label() + "</b>!\n\n";
+                    if ("EXC".equals(result.type())) {
+                        msg += "💰 EXC зачислены на ваш счёт.";
+                    } else if ("BOOST_24H".equals(result.type())) {
+                        msg += "⚡ XP-буст активирован на 24 часа!";
+                    } else if ("AVATAR_FRAME".equals(result.type())) {
+                        msg += "✨ Рамка аватара применена к вашему профилю!";
+                    }
+                    int remaining = user.getTickets();
+                    msg += "\n\n🎟 Осталось билетов: <b>" + remaining + "</b>";
+                    InlineKeyboardMarkup kb;
+                    if (remaining > 0) {
+                        kb = keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("🎰 Крутить ещё", "wheel:spin")),
+                                List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
+                        ));
+                    } else {
+                        kb = keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
+                        ));
+                    }
+                    sendText(user.getTelegramId(), msg, kb);
+                } catch (IllegalArgumentException e) {
+                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
+                    )));
+                }
+            }
+            default -> sendWheelMenu(user);
+        }
+    }
+
+    private void sendWheelMenu(AppUser user) {
+        int tickets = user.getTickets();
+        String text = "🎰 <b>Колесо фортуны</b>\n\n"
+                + "У вас: 🎟 <b>" + tickets + " билет(ов)</b>\n\n"
+                + "Призы:\n"
+                + "🥉 50 EXC — 30%\n"
+                + "🥉 100 EXC — 25%\n"
+                + "🥈 300 EXC — 20%\n"
+                + "🥈 500 EXC — 12%\n"
+                + "🥇 1 000 EXC — 8%\n"
+                + "🥇 2 000 EXC — 3%\n"
+                + "💎 XP-буст 24ч — 1.5%\n"
+                + "👑 Рамка аватара — 0.5%\n\n"
+                + "<i>Билеты получаешь за выполнение квестов и серию входов в бот.</i>\n"
+                + "<i>Лимит: " + ru.gamebot.platform.service.WheelService.MAX_SPINS_PER_DAY + " кручений в сутки.</i>";
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (tickets > 0) {
+            rows.add(List.of(keyboardFactory.callback("🎰 Крутить (−1 🎟)", "wheel:spin")));
+        } else {
+            rows.add(List.of(keyboardFactory.callback("🎟 Нет билетов", "wheel:menu")));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
+        sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
 
     private void handleSquadAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
@@ -8452,6 +8523,11 @@ String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошел�
         rows.add(List.of(keyboardFactory.callback(walletLabel, "menu:cat:wallet")));
 
         rows.add(List.of(keyboardFactory.callback("🛍️ Магазин", "menu:cat:shop")));
+
+        String wheelLabel = user.getTickets() > 0
+                ? "🎰 Колесо фортуны 🎟 " + user.getTickets()
+                : "🎰 Колесо фортуны";
+        rows.add(List.of(keyboardFactory.callback(wheelLabel, "wheel:menu")));
 
         long activePolls = pollService.findActive().size();
         String clubLabel = activePolls > 0 ? "👥 Клуб (" + activePolls + ")" : "👥 Клуб";

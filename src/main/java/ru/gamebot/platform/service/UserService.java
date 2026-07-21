@@ -71,6 +71,7 @@ public class UserService {
     private final SupportTicketRepository supportTicketRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final SupportAttachmentRepository supportAttachmentRepository;
+    private final WheelService wheelService;
 
     @Transactional
     public AppUser getOrCreate(User telegramUser, Long referredByTelegramId) {
@@ -269,6 +270,17 @@ public class UserService {
         long milestoneExc = 0;
         long xpBonus = 0;
         String milestoneText = null;
+
+        // Билеты колеса фортуны за серию входов
+        int streakTickets = switch (streak) {
+            case 3 -> 1;
+            case 7 -> 2;
+            case 14 -> 3;
+            default -> 0;
+        };
+        if (streakTickets > 0) {
+            wheelService.addTickets(user, streakTickets, "Серия входов: " + streak + " дней");
+        }
 
         if (streak == 7) {
             milestoneExc = 1000;

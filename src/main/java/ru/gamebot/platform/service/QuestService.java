@@ -53,6 +53,7 @@ public class QuestService {
     private final SeasonService seasonService;
     private final SponsorService sponsorService;
     private final ApplicationEventPublisher eventPublisher;
+    private final WheelService wheelService;
 
     public List<Quest> findActiveQuests() {
         return questRepository.findAllByActiveTrueOrderByCreatedAtDesc();
@@ -596,6 +597,15 @@ public class QuestService {
         userService.addReward(user, adjustedXp, adjustedCoins);
         excTx.log(user, adjustedCoins, ExcTransactionService.QUEST,
                 quest.getTitle() + " (" + quest.getGameName() + ")");
+
+        // Колесо фортуны: билеты за выполнение квеста по категории
+        int tickets = switch (quest.getCategory() == null ? "" : quest.getCategory()) {
+            case "Лёгкие" -> 1;
+            case "Средние" -> 2;
+            case "Сложные" -> 3;
+            default -> 1;
+        };
+        wheelService.addTickets(user, tickets, "Квест: " + quest.getTitle());
         user.setCompletedQuests(user.getCompletedQuests() + 1);
         user.setFixedRubBalance(user.getFixedRubBalance() + fixedRub);
         submission.setUser(user);
