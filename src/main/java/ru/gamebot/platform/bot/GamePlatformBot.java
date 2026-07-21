@@ -6049,12 +6049,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendAdminStatsTopQuests(AppUser user) {
         List<Object[]> top = questService.getTopQuestsByCompletionsThisWeek();
-        String[] medals = {"🥇", "🥈", "🥉"};
+        String[] medals = {"🥇", "🥈", "🥉", "4️⃣", "5️⃣"};
         StringBuilder sb = new StringBuilder("🔥 <b>Топ квестов недели</b>\n\n");
         if (top.isEmpty()) {
             sb.append("За последние 7 дней квесты ещё не выполнялись.");
         } else {
-            int limit = Math.min(3, top.size());
+            int limit = Math.min(5, top.size());
             for (int i = 0; i < limit; i++) {
                 Object[] row = top.get(i);
                 String title = (String) row[1];
