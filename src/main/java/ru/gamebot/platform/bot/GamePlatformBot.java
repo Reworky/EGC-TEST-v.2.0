@@ -1674,8 +1674,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 Quest q = questService.getQuest(session.getQuestId());
                 q.setParticipantLimit(limit);
                 questService.save(q);
+                String limitBackData = session.getData().getOrDefault("admin_quest_back_data", "admin:edit");
                 session.reset();
-                sendText(user.getTelegramId(), "✅ Лимит участников обновлён.", mainMenuKeyboard(user));
+                returnToQuestEditor(user, q, limitBackData);
             }
             case GIFT_INPUT -> {
                 String nickname = text.trim();
@@ -7947,7 +7948,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String extendNote = extendedTo > 0
                     ? "\n\n⏳ Срок квеста автоматически продлён до <b>" + extendedTo + " дн.</b> — иначе дедлайн наступал бы раньше, чем снимается кулдаун сдачи отчёта для этой категории. Активные заявки игроков тоже продлены."
                     : "";
-            sendText(user.getTelegramId(), "✅ Категория обновлена: <b>" + escape(category) + "</b>" + extendNote, mainMenuKeyboard(user));
+            String catBackData = session.getData().getOrDefault("admin_quest_back_data", "admin:edit");
+            Long catQuestId = session.getQuestId();
+            session.reset();
+            sendText(user.getTelegramId(), "✅ Категория обновлена: <b>" + escape(category) + "</b>" + extendNote, null);
+            Quest catQuest = questService.getQuest(catQuestId);
+            returnToQuestEditor(user, catQuest, catBackData);
             answerSilently(callbackQuery.getId());
             return;
         }
@@ -7966,8 +7972,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 Quest q = questService.getQuest(session.getQuestId());
                 q.setPlatform(selected);
                 questService.save(q);
+                String platBackData = session.getData().getOrDefault("admin_quest_back_data", "admin:edit");
                 session.reset();
-                sendText(user.getTelegramId(), "✅ Платформы обновлены: <b>" + escape(selected) + "</b>", mainMenuKeyboard(user));
+                sendText(user.getTelegramId(), "✅ Платформы обновлены: <b>" + escape(selected) + "</b>", null);
+                returnToQuestEditor(user, q, platBackData);
             } else {
                 List<String> current = new ArrayList<>(
                         Arrays.stream(session.getData().getOrDefault("platforms_selected", "").split(","))
@@ -8070,16 +8078,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         Quest quest = questService.getQuest(session.getQuestId());
         quest.setTitle(text.trim());
         questService.save(quest);
+        String backData = session.getData().getOrDefault("admin_quest_back_data", "admin:edit");
         session.reset();
-        sendText(user.getTelegramId(), "✅ Название обновлено.", mainMenuKeyboard(user));
+        returnToQuestEditor(user, quest, backData);
     }
 
     private void updateQuestDescription(AppUser user, UserSession session, String text) {
         Quest quest = questService.getQuest(session.getQuestId());
         quest.setDescription(text.trim());
         questService.save(quest);
+        String backData = session.getData().getOrDefault("admin_quest_back_data", "admin:edit");
         session.reset();
-        sendText(user.getTelegramId(), "✅ Описание обновлено.", mainMenuKeyboard(user));
+        returnToQuestEditor(user, quest, backData);
     }
 
     private void updateQuestReward(AppUser user, UserSession session, String text) {
@@ -8098,8 +8108,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         quest.setRewardXp(xp);
         quest.setRewardCoins(coins);
         questService.save(quest);
+        String backData = session.getData().getOrDefault("admin_quest_back_data", "admin:edit");
         session.reset();
-        sendText(user.getTelegramId(), "✅ Награды обновлены.", mainMenuKeyboard(user));
+        returnToQuestEditor(user, quest, backData);
+    }
+
+    private void returnToQuestEditor(AppUser user, Quest quest, String backData) {
+        if (quest.isSponsored()) {
+            sendSponsorQuestEditor(user, quest.getId(), backData);
+        } else {
+            sendAdminQuestEditor(user, quest.getId(), backData);
+        }
     }
 
     private void toggleQuestStatus(AppUser user, Long questId) {
