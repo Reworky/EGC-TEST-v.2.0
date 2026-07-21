@@ -4754,6 +4754,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         cancelKeyboard());
             }
             case "stats" -> sendAdminStats(user);
+            case "stats:platform" -> sendAdminStatsPlatform(user);
+            case "stats:topquests" -> sendAdminStatsTopQuests(user);
             case "live" -> sendAdminLiveStatus(user);
             case "queststats" -> sendAdminQuestStats(user);
             case "template" -> sendQuestTemplateGamePicker(user);
@@ -5981,6 +5983,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendAdminStats(AppUser user) {
+        sendText(user.getTelegramId(),
+                "📊 <b>Статистика</b>\n\nВыберите раздел:",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(
+                                keyboardFactory.callback("📊 Платформа", "admin:stats:platform"),
+                                keyboardFactory.callback("🔥 Топ недели", "admin:stats:topquests")
+                        ),
+                        List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
+                )));
+    }
+
+    private void sendAdminStatsPlatform(AppUser user) {
         List<AppUser> users = userService.allRegisteredUsers();
         java.time.LocalDate sevenDaysAgo = java.time.LocalDate.now().minusDays(7);
         long activeUsers = users.stream()
@@ -6009,9 +6023,44 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🗺️ Активных квестов: <b>" + totalQuestsCreated + "</b>\n"
                         + "📥 Квестов на модерации: <b>" + pendingQuests + "</b>\n"
                         + "🎁 Заявок на награды: <b>" + pendingRewards + "</b>",
-                keyboardFactory.smartLayout(List.of(
-                        keyboardFactory.callback("🏠 Меню", "menu:main")
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("⬅️ Назад", "admin:stats"),
+                                keyboardFactory.callback("🏠 Меню", "menu:main"))
                 )));
+    }
+
+    private void sendAdminStatsTopQuests(AppUser user) {
+        List<Object[]> top = questService.getTopQuestsByCompletionsThisWeek();
+        String[] medals = {"🥇", "🥈", "🥉"};
+        StringBuilder sb = new StringBuilder("🔥 <b>Топ квестов недели</b>\n\n");
+        if (top.isEmpty()) {
+            sb.append("За последние 7 дней квесты ещё не выполнялись.");
+        } else {
+            int limit = Math.min(3, top.size());
+            for (int i = 0; i < limit; i++) {
+                Object[] row = top.get(i);
+                String title = (String) row[1];
+                long coins = ((Number) row[2]).longValue();
+                long count = ((Number) row[3]).longValue();
+                sb.append(medals[i]).append(" <b>").append(escape(title)).append("</b>\n")
+                  .append("   ✅ ").append(count).append(" ").append(pluralCompletions(count))
+                  .append(" · 🪙 ").append(coins).append(" EXC\n\n");
+            }
+        }
+        sendText(user.getTelegramId(), sb.toString(),
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("⬅️ Назад", "admin:stats"),
+                                keyboardFactory.callback("🏠 Меню", "menu:main"))
+                )));
+    }
+
+    private String pluralCompletions(long n) {
+        if (n % 100 >= 11 && n % 100 <= 19) return "выполнений";
+        return switch ((int)(n % 10)) {
+            case 1 -> "выполнение";
+            case 2, 3, 4 -> "выполнения";
+            default -> "выполнений";
+        };
     }
 
     private void sendAdminLiveStatus(AppUser user) {

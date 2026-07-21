@@ -736,6 +736,11 @@ public class QuestService {
         return questSubmissionRepository.findTopQuestsByCompletions();
     }
 
+    public List<Object[]> getTopQuestsByCompletionsThisWeek() {
+        return questSubmissionRepository.findTopQuestsByCompletionsSince(
+                LocalDateTime.now().minusDays(7));
+    }
+
     @Transactional
     public long deleteQuest(Long questId) {
         Quest quest = getQuest(questId);
