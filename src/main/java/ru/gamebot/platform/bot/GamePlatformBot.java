@@ -4885,28 +4885,40 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 } else if (action.startsWith("toggle:")) {
                     toggleQuestStatus(user, parseLong(action.substring("toggle:".length())));
                 } else if (action.startsWith("edit-title:")) {
+                    long qid = parseLong(action.substring("edit-title:".length()));
                     session.reset();
-                    session.setQuestId(parseLong(action.substring("edit-title:".length())));
+                    session.setQuestId(qid);
                     session.setState(SessionState.QUEST_EDIT_TITLE);
-                    sendText(user.getTelegramId(), "✏️ Отправьте новое название квеста.", cancelKeyboard());
-                } else if (action.startsWith("edit-description:")) {
-                    session.reset();
-                    session.setQuestId(parseLong(action.substring("edit-description:".length())));
-                    session.setState(SessionState.QUEST_EDIT_DESCRIPTION);
-                    sendText(user.getTelegramId(), "📝 Отправьте новое описание квеста.", cancelKeyboard());
-                } else if (action.startsWith("edit-reward:")) {
-                    session.reset();
-                    session.setQuestId(parseLong(action.substring("edit-reward:".length())));
-                    session.setState(SessionState.QUEST_EDIT_REWARD);
+                    ru.gamebot.platform.domain.model.Quest qCur = questService.getQuest(qid);
                     sendText(user.getTelegramId(),
-                            "✨ Отправьте новые награды в формате:\n<code>XP COINS</code>\n\nПример: <code>150 250</code>",
+                            "✏️ <b>Изменить название</b>\n\nСейчас: <i>" + escape(qCur.getTitle()) + "</i>\n\nОтправьте новое название:",
+                            cancelKeyboard());
+                } else if (action.startsWith("edit-description:")) {
+                    long qid = parseLong(action.substring("edit-description:".length()));
+                    session.reset();
+                    session.setQuestId(qid);
+                    session.setState(SessionState.QUEST_EDIT_DESCRIPTION);
+                    ru.gamebot.platform.domain.model.Quest qCur = questService.getQuest(qid);
+                    sendText(user.getTelegramId(),
+                            "📝 <b>Изменить описание</b>\n\nСейчас:\n<i>" + escape(qCur.getDescription()) + "</i>\n\nОтправьте новое описание:",
+                            cancelKeyboard());
+                } else if (action.startsWith("edit-reward:")) {
+                    long qid = parseLong(action.substring("edit-reward:".length()));
+                    session.reset();
+                    session.setQuestId(qid);
+                    session.setState(SessionState.QUEST_EDIT_REWARD);
+                    ru.gamebot.platform.domain.model.Quest qCur = questService.getQuest(qid);
+                    sendText(user.getTelegramId(),
+                            "✨ <b>Изменить награды</b>\n\nСейчас: <i>" + qCur.getRewardXp() + " XP, " + qCur.getRewardCoins() + " EXC</i>\n\nОтправьте новые награды в формате:\n<code>XP COINS</code>\n\nПример: <code>150 250</code>",
                             cancelKeyboard());
                 } else if (action.startsWith("edit-category:")) {
+                    long qid = parseLong(action.substring("edit-category:".length()));
                     session.reset();
-                    session.setQuestId(parseLong(action.substring("edit-category:".length())));
+                    session.setQuestId(qid);
                     session.setState(SessionState.QUEST_EDIT_CATEGORY);
+                    ru.gamebot.platform.domain.model.Quest qCur = questService.getQuest(qid);
                     sendText(user.getTelegramId(),
-                            "📚 Выберите новую категорию:",
+                            "📚 <b>Изменить категорию</b>\n\nСейчас: <i>" + escape(qCur.getCategory()) + "</i>\n\nВыберите новую категорию:",
                             keyboardFactory.rowsLayout(List.of(
                                     List.of(keyboardFactory.callback("🟢 Легкие", "qe:cat:Легкие")),
                                     List.of(keyboardFactory.callback("🟡 Средние", "qe:cat:Средние")),
@@ -4918,10 +4930,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     session.setState(SessionState.QUEST_EDIT_PLATFORM);
                     sendQuestPlatformEditKeyboard(user, session);
                 } else if (action.startsWith("edit-limit:")) {
+                    long qid = parseLong(action.substring("edit-limit:".length()));
                     session.reset();
-                    session.setQuestId(parseLong(action.substring("edit-limit:".length())));
+                    session.setQuestId(qid);
                     session.setState(SessionState.QUEST_EDIT_LIMIT);
-                    sendText(user.getTelegramId(), "👥 Укажите новый лимит участников числом.", cancelKeyboard());
+                    ru.gamebot.platform.domain.model.Quest qCur = questService.getQuest(qid);
+                    String curLimit = qCur.getParticipantLimit() == null ? "не задан" : String.valueOf(qCur.getParticipantLimit());
+                    sendText(user.getTelegramId(),
+                            "👥 <b>Изменить лимит участников</b>\n\nСейчас: <i>" + curLimit + "</i>\n\nУкажите новый лимит числом:",
+                            cancelKeyboard());
                 } else if (action.startsWith("game:photo:set:")) {
                     String gameName = decodeGameToken(action.substring("game:photo:set:".length()));
                     session.reset();
