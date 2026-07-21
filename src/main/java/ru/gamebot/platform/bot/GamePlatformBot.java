@@ -6040,9 +6040,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             for (int i = 0; i < limit; i++) {
                 Object[] row = top.get(i);
                 String title = (String) row[1];
-                long coins = ((Number) row[2]).longValue();
-                long count = ((Number) row[3]).longValue();
+                String gameName = (String) row[2];
+                long coins = ((Number) row[3]).longValue();
+                long count = ((Number) row[4]).longValue();
                 sb.append(medals[i]).append(" <b>").append(escape(title)).append("</b>\n")
+                  .append("   🎮 ").append(escape(gameName != null ? gameName : "—")).append("\n")
                   .append("   ✅ ").append(count).append(" ").append(pluralCompletions(count))
                   .append(" · 🪙 ").append(coins).append(" EXC\n\n");
             }
