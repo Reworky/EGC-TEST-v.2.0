@@ -54,6 +54,9 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
     @Query("SELECT COALESCE(MAX(r.displayId), 0) FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод'")
     long findMaxWithdrawalDisplayId();
 
+    @Query("SELECT COALESCE(SUM(r.rewardItem.priceCoins), 0) FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED'")
+    long sumApprovedWithdrawalExc();
+
     @Query("SELECT COALESCE(MAX(r.displayId), 0) FROM RewardRequest r WHERE r.rewardItem.category <> 'Вывод'")
     long findMaxShopDisplayId();
 }

@@ -159,6 +159,10 @@ public class QuestService {
         return questRepository.findAll();
     }
 
+    public long countAll() {
+        return questRepository.count();
+    }
+
     public Quest getQuest(Long questId) {
         return questRepository.findById(questId)
                 .orElseThrow(() -> new IllegalArgumentException("Квест не найден."));

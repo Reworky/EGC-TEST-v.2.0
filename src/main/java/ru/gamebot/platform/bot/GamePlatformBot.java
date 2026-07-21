@@ -5994,6 +5994,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long totalCoins = users.stream().mapToLong(AppUser::getCoins).sum();
         long pendingQuests = questService.pendingCount();
         long pendingRewards = rewardService.countPendingRequests();
+        long totalPaidOut = rewardService.totalPaidOutExc();
+        long totalQuestsCreated = questService.countAll();
 
         sendText(user.getTelegramId(),
                 "📊 <b>Статистика платформы</b>\n\n"
@@ -6003,6 +6005,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "✅ Выполненных заданий: <b>" + users.stream().mapToInt(AppUser::getCompletedQuests).sum() + "</b>\n"
                         + "🎟️ Билетов в обороте: <b>" + users.stream().mapToLong(AppUser::getTickets).sum() + "</b>\n"
                         + "💰 EXC на счетах игроков: <b>" + totalCoins + " EXC</b>\n"
+                        + "💸 Выплачено игрокам: <b>" + String.format("%,d", totalPaidOut).replace(',', ' ') + " EXC</b>\n"
+                        + "🗺️ Квестов в системе: <b>" + totalQuestsCreated + "</b>\n"
                         + "📥 Квестов на модерации: <b>" + pendingQuests + "</b>\n"
                         + "🎁 Заявок на награды: <b>" + pendingRewards + "</b>",
                 keyboardFactory.smartLayout(List.of(

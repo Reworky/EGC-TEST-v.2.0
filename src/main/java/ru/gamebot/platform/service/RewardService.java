@@ -157,6 +157,10 @@ public class RewardService {
                 java.util.List.of(RewardRequestStatus.PENDING, RewardRequestStatus.IN_PROGRESS));
     }
 
+    public long totalPaidOutExc() {
+        return rewardRequestRepository.sumApprovedWithdrawalExc();
+    }
+
     public RewardRequest getRequest(Long requestId) {
         return rewardRequestRepository.findWithUserAndRewardItemById(requestId)
                 .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена."));
