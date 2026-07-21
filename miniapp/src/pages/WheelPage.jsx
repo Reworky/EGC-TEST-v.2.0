@@ -106,37 +106,86 @@ export default function WheelPage() {
     getWheelStatus().then(setStatus).catch(() => {});
   }, [redraw]);
 
+  function sectorIndexForResult(res) {
+    if (res.type === 'BOOST_24H') return 6;
+    if (res.type === 'AVATAR_FRAME') return 7;
+    const excMap = { 50: 0, 100: 1, 300: 2, 500: 3, 1000: 4, 2000: 5 };
+    return excMap[res.excAmount] ?? 0;
+  }
+
+  function targetRotForSector(fromRot, sectorIdx, minRevs = 5) {
+    // Arrow is at top = 270° = 3π/2. We want the center of sectorIdx under it.
+    // Sector i center angle = sectorIdx * SLICE + SLICE/2 (from rotation origin)
+    // We need: finalRot + sectorIdx * SLICE + SLICE/2 ≡ 3π/2 (mod 2π)
+    const arrow = Math.PI * 3 / 2;
+    let target = arrow - (sectorIdx * SLICE + SLICE / 2);
+    // Normalize to [0, 2π)
+    target = ((target % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    // Add enough full rotations so we spin at least minRevs from current position
+    const minTarget = fromRot + minRevs * 2 * Math.PI;
+    while (target < minTarget) target += 2 * Math.PI;
+    return target;
+  }
+
   async function handleSpin() {
     if (spinning) return;
     setResult(null);
     setError('');
     setSpinning(true);
 
-    const spinRevs = 5 + Math.random() * 3;
-    const targetRot = rotRef.current + spinRevs * 2 * Math.PI;
-    const duration = 4000;
-    const startTime = performance.now();
-    const startRot = rotRef.current;
-
     function easeOut(t) { return 1 - Math.pow(1 - t, 4); }
 
-    const [, res] = await Promise.all([
+    // Phase 1: fast free spin while waiting for API (2s)
+    const phase1Duration = 2000;
+    const phase1Speed = 4 * 2 * Math.PI; // rad/s
+    const phase1StartRot = rotRef.current;
+    const phase1StartTime = performance.now();
+
+    const [res] = await Promise.all([
+      spinWheel().catch(e => ({ success: false, message: String(e) })),
       new Promise(resolve => {
         function frame(now) {
-          const t = Math.min((now - startTime) / duration, 1);
-          rotRef.current = startRot + (targetRot - startRot) * easeOut(t);
-          redraw();
-          if (t < 1) rafRef.current = requestAnimationFrame(frame);
-          else { rotRef.current = targetRot % (2 * Math.PI); redraw(); resolve(); }
+          const elapsed = now - phase1StartTime;
+          if (elapsed < phase1Duration) {
+            rotRef.current = phase1StartRot + phase1Speed * (elapsed / 1000);
+            redraw();
+            rafRef.current = requestAnimationFrame(frame);
+          } else {
+            rotRef.current = phase1StartRot + phase1Speed * (phase1Duration / 1000);
+            redraw();
+            resolve();
+          }
         }
         rafRef.current = requestAnimationFrame(frame);
       }),
-      spinWheel().catch(e => ({ success: false, message: String(e) })),
     ]);
 
     cancelAnimationFrame(rafRef.current);
-    rotRef.current = targetRot % (2 * Math.PI);
-    redraw();
+
+    // Phase 2: decelerate to the correct sector (2s)
+    const phase2StartRot = rotRef.current;
+    let finalTarget;
+    if (res.success) {
+      finalTarget = targetRotForSector(phase2StartRot, sectorIndexForResult(res), 2);
+    } else {
+      // On error just do 2 more full spins and stop
+      finalTarget = phase2StartRot + 2 * 2 * Math.PI;
+    }
+
+    const phase2Duration = 2000;
+    const phase2StartTime = performance.now();
+
+    await new Promise(resolve => {
+      function frame(now) {
+        const t = Math.min((now - phase2StartTime) / phase2Duration, 1);
+        rotRef.current = phase2StartRot + (finalTarget - phase2StartRot) * easeOut(t);
+        redraw();
+        if (t < 1) rafRef.current = requestAnimationFrame(frame);
+        else { rotRef.current = finalTarget; redraw(); resolve(); }
+      }
+      rafRef.current = requestAnimationFrame(frame);
+    });
+
     setSpinning(false);
 
     if (res.success) {
