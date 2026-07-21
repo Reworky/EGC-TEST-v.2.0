@@ -159,8 +159,8 @@ public class QuestService {
         return questRepository.findAll();
     }
 
-    public long countAll() {
-        return questRepository.count();
+    public long countActive() {
+        return questRepository.findAllByActiveTrueOrderByCreatedAtDesc().size();
     }
 
     public Quest getQuest(Long questId) {
