@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getMySquad, createSquad, joinSquad, leaveSquad, disbandSquad, kickSquadMember, getSquadLeaderboard } from '../api/client';
+import BackButton from '../components/BackButton';
 import './QuestsPage.css';
 import './ShopPage.css';
 import './ReferralsPage.css';
@@ -194,7 +195,10 @@ export default function SquadsPage() {
 
   return (
     <div className="quests-page shop-page">
-      <div style={{ padding: '16px 16px 0', fontSize: 20, fontWeight: 700 }}>⚔️ Отряды</div>
+      <div style={{ padding: '16px 16px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <BackButton label="Назад" />
+        <span style={{ fontSize: 20, fontWeight: 700 }}>⚔️ Отряды</span>
+      </div>
 
       <div className="view-toggle">
         <button className={`view-tab ${tab === 'squad' ? 'active' : ''}`} onClick={() => setTab('squad')}>Мой отряд</button>

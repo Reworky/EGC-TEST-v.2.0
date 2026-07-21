@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { getReferrals } from '../api/client';
+import BackButton from '../components/BackButton';
 import './ReferralsPage.css';
 
 function fallbackCopy(text, onDone) {
@@ -47,6 +47,7 @@ export default function ReferralsPage() {
 
   return (
     <div className="ref-page">
+      <div style={{ padding: '16px 16px 0' }}><BackButton to="/profile" label="Профиль" /></div>
 
       <div className="ref-hero">
         <div className="ref-hero-icon">🤝</div>

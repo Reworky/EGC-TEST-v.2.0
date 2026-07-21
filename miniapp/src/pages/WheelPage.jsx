@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { getWheelStatus, spinWheel } from '../api/client';
 import BorderBeamCard from '../components/BorderBeamCard';
+import BackButton from '../components/BackButton';
 import './WheelPage.css';
 
 const SECTORS = [
@@ -153,6 +154,7 @@ export default function WheelPage() {
     <div className="wheel-page">
       {/* Header */}
       <div className="wheel-header">
+        <BackButton label="Назад" />
         <h1>🎰 Колесо фортуны</h1>
         <div className="wheel-chips">
           <div className="wheel-chip">

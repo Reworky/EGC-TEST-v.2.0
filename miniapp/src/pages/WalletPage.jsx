@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { getWallet, claimDailyBonus, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward } from '../api/client';
+import BackButton from '../components/BackButton';
 import BorderBeamCard from '../components/BorderBeamCard';
 import ShimmerButton from '../components/ShimmerButton';
 import AnimatedNumber from '../components/AnimatedNumber';
@@ -311,7 +311,7 @@ export default function WalletPage() {
 
   return (
     <div className="quests-page shop-page">
-      <Link to="/profile" className="ref-back" style={{ display: 'block', padding: '16px 16px 0' }}>← Профиль</Link>
+      <div style={{ padding: '16px 16px 0' }}><BackButton to="/profile" label="Профиль" /></div>
 
       <div className="view-toggle">
         <button className={`view-tab ${view === 'balance' ? 'active' : ''}`} onClick={() => setView('balance')}>Баланс</button>

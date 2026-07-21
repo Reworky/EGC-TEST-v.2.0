@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { getPolls, votePoll } from '../api/client';
+import BackButton from '../components/BackButton';
 import './QuestsPage.css';
 import './ReferralsPage.css';
 import './PollsPage.css';
@@ -72,7 +72,7 @@ export default function PollsPage() {
 
   return (
     <div className="ref-page">
-      <Link to="/profile" className="ref-back">← Профиль</Link>
+      <div style={{ padding: '16px 16px 0' }}><BackButton to="/profile" label="Профиль" /></div>
       <h2 className="ref-title">🗳 Голосования</h2>
 
       {error && <div className="page-center error-msg">{error}</div>}

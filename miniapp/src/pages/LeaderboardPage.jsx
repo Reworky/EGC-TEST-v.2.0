@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getLeaderboard } from '../api/client';
 import VantaBackground from '../components/VantaBackground';
+import BackButton from '../components/BackButton';
 import './QuestsPage.css';
 import './LeaderboardPage.css';
 
@@ -49,6 +50,7 @@ export default function LeaderboardPage() {
         }}
       />
       <div className="lb-content">
+      <div style={{ padding: '4px 0 8px' }}><BackButton label="Назад" /></div>
       <div className="view-toggle">
         <button className={`view-tab ${type === 'overall' ? 'active' : ''}`} onClick={() => setType('overall')}>
           🌍 Общий

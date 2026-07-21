@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { getSupportTickets, createSupportTicket } from '../api/client';
+import BackButton from '../components/BackButton';
 import './QuestsPage.css';
 import './ShopPage.css';
 import './ReferralsPage.css';
@@ -109,7 +109,7 @@ export default function SupportPage() {
 
   return (
     <div className="quests-page shop-page">
-      <Link to="/profile" className="ref-back" style={{ display: 'block', padding: '16px 16px 0' }}>← Профиль</Link>
+      <div style={{ padding: '16px 16px 0' }}><BackButton to="/profile" label="Профиль" /></div>
 
       <div className="view-toggle">
         <button className={`view-tab ${view === 'new' ? 'active' : ''}`} onClick={() => setView('new')}>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getShopItems, getShopStats, purchaseItem, getMyRewards, getProfile, getPerksState, purchasePerk, sendGiftBoost, sendExcTransfer, cancelReward } from '../api/client';
+import BackButton from '../components/BackButton';
 import './QuestsPage.css';
 import './ShopPage.css';
 
@@ -136,6 +137,7 @@ function ShopItemsView({ expanded, onToggle }) {
 
   return (
     <>
+      <div style={{ padding: '12px 16px 0' }}><BackButton label="Назад" /></div>
       <div className="shop-header">
         {profile && <div className="shop-balance"><i className="ti ti-coin"></i> {profile.coins.toLocaleString()} EXC</div>}
         {stats && (
