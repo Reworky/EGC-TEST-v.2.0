@@ -3036,7 +3036,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "💎 Заработано на рефералах: <b>" + earned + " EXC</b>\n\n"
                         + "📊 Прогресс до " + nextMilestone + " EXC:\n"
                         + "[" + bar + "] " + progressPct + "%\n\n"
-                        + "━━━━━━━━━━━━━━━\n"
                         + "🎁 <b>Как работает:</b>\n\n"
                         + "Шаг 1 — друг вступает в клуб\n"
                         + "• Тебе сразу: <b>+300 EXC</b>\n"
@@ -3045,7 +3044,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "• Другу бонусом: <b>+3 000 EXC</b>\n\n"
                         + "Шаг 3 — друг зарабатывает квестами\n"
                         + "• Ты получаешь <b>3% от каждого его EXC</b> в течение первых 14 дней автоматически\n\n"
-                        + "━━━━━━━━━━━━━━━\n"
                         + "Скопируй ссылку и отправь другу — остальное система сделает сама.",
                 backMenuKeyboard("menu:main"));
     }
