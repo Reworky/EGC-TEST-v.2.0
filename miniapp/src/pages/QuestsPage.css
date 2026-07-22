@@ -168,6 +168,11 @@
   color: rgba(255,255,255,0.4);
 }
 
+.reward-ticket {
+  font-size: 11px;
+  color: #c084fc;
+}
+
 .quest-meta {
   display: flex;
   gap: 10px;

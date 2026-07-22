@@ -8,6 +8,7 @@ const CATEGORY_ORDER = ['Лёгкие', 'Средние', 'Сложные'];
 const CATEGORY_COLORS = { 'Лёгкие': '#66bb6a', 'Средние': '#ffa726', 'Сложные': '#ef5350' };
 const CATEGORY_BADGE = { 'Лёгкие': 'easy', 'Средние': 'medium', 'Сложные': 'hard' };
 const CATEGORY_CLASS = { 'Лёгкие': 'q-easy', 'Средние': 'q-medium', 'Сложные': 'q-hard' };
+const CATEGORY_TICKETS = { 'Лёгкие': 1, 'Средние': 2, 'Сложные': 3 };
 
 function QuestSkeleton() {
   return (
@@ -175,6 +176,9 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
         <div className="quest-rewards">
           <span className="reward-exc"><i className="ti ti-coin"></i> {q.rewardCoins.toLocaleString()} EXC</span>
           <span className="reward-xp"><i className="ti ti-star"></i> {q.rewardXp} XP</span>
+          {CATEGORY_TICKETS[q.category] && (
+            <span className="reward-ticket">🎟 +{CATEGORY_TICKETS[q.category]}</span>
+          )}
         </div>
       </div>
       <div className="quest-meta">
