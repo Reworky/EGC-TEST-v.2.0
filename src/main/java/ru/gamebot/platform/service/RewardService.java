@@ -291,7 +291,7 @@ public class RewardService {
         }
 
         RewardItem withdrawItem = new RewardItem();
-        withdrawItem.setTitle("Вывод " + excAmount + " EXC → GRAM (TON)");
+        withdrawItem.setTitle("Вывод " + excAmount + " EXC → " + rubles + " ₽ (GRAM/TON)");
         withdrawItem.setDescription("Заявка на вывод в GRAM (TON) · Кошелёк: " + tonWallet);
         withdrawItem.setCategory("Вывод");
         withdrawItem.setPriceCoins(excAmount);
