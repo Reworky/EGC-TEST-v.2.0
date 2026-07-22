@@ -6,6 +6,7 @@ import fireFrame from '../assets/frames/fire.png';
 import iceFrame from '../assets/frames/ice.png';
 import purpleFrame from '../assets/frames/purple.png';
 import goldFrame from '../assets/frames/gold.png';
+import egcFrame from '../assets/frames/egc.png';
 import './ProfilePage.css';
 
 const RANK_STYLES = {
@@ -21,8 +22,8 @@ const RANK_STYLES = {
 const DEFAULT_RANK = { primary: '#9CA3AF', icon: '🥚' };
 
 const TIER_THRESHOLDS = [0, 1000, 5000, 15000, 35000, 75000, 150000, 300000];
-const FRAME_IMAGES = { fire: fireFrame, ice: iceFrame, purple: purpleFrame, gold: goldFrame };
-const FRAME_SIZES = { fire: 122, ice: 120, purple: 118, gold: 126 };
+const FRAME_IMAGES = { fire: fireFrame, ice: iceFrame, purple: purpleFrame, gold: goldFrame, egc: egcFrame };
+const FRAME_SIZES = { fire: 122, ice: 120, purple: 118, gold: 126, egc: 128 };
 
 // ── SVG illustrations ────────────────────────────────────────
 const SVG_EXC = (

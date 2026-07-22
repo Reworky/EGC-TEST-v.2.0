@@ -31,6 +31,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         dropCheckConstraints("QUEST_SUBMISSIONS");
         dropCheckConstraints("REWARD_REQUESTS");
         backfillQuestTicketRewards();
+        seedEgcAvatarFrame();
     }
 
     private void backfillQuestTicketRewards() {
@@ -44,6 +45,22 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             }
         } catch (Exception e) {
             log.error("[DBMigration] backfillQuestTicketRewards failed: {}", e.getMessage());
+        }
+    }
+
+    private void seedEgcAvatarFrame() {
+        try {
+            Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM reward_items WHERE avatar_frame_image = 'egc'", Integer.class);
+            if (count != null && count > 0) return;
+            jdbcTemplate.update(
+                "INSERT INTO reward_items (title, description, category, price_coins, active, purchase_group, avatar_frame_image, avatar_frame_color, created_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())",
+                "👑 Рамка EGC", "Эксклюзивная рамка аватара Experience Gaming Club", "Рамка",
+                50000, true, "avatar_frame", "egc", "#7C3AED");
+            log.info("[DBMigration] Inserted EGC avatar frame");
+        } catch (Exception e) {
+            log.error("[DBMigration] seedEgcAvatarFrame failed: {}", e.getMessage());
         }
     }
 
