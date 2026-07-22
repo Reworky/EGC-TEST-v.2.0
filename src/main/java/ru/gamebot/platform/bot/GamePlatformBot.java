@@ -2602,14 +2602,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + sponsorBadge
                         + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n\n"
                         + (quest.isSponsored() ? "🎮 Канал: <b>" : "🎮 Игра: <b>") + escape(quest.getGameName()) + "</b>\n"
-                        + (quest.isSponsored() ? "" : "📚 Формат: <b>" + escape(quest.getCategory()) + "</b>\n"
+                        + (quest.isSponsored() || "UGC".equalsIgnoreCase(quest.getGameName()) ? "" : "📚 Формат: <b>" + escape(quest.getCategory()) + "</b>\n"
                         + "🕹️ Платформа: <b>" + escape(quest.getPlatform()) + "</b>\n")
                         + deadlineLine
                         + "📌 Статус: <b>" + escape(displayStatus) + "</b>\n\n"
                         + "🏆 <b>Награда</b>\n"
                         + "✨ +" + quest.getRewardXp() + " XP\n"
                         + "🪙 +" + quest.getRewardCoins() + (quest.isSponsored() ? " EXC" : " монет") + "\n"
-                        + (quest.getTicketReward() > 0 ? "🎟 +" + quest.getTicketReward() + " билет(а) для Колеса фортуны\n" : "")
+                        + (!quest.isSponsored() && !"UGC".equalsIgnoreCase(quest.getGameName()) && quest.getTicketReward() > 0 ? "🎟 +" + quest.getTicketReward() + " билет(а) для Колеса фортуны\n" : "")
                         + "\n"
                         + "📝 <b>Суть задания</b>\n" + escape(quest.getDescription()) + "\n\n"
                         + "📎 <b>Что нужно сделать</b>\n" + escape(quest.getInstruction())
@@ -2654,14 +2654,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 notice + "\n\n"
                         + "🎯 <b>" + escape(freshQuest.getTitle()) + "</b>\n\n"
                         + (freshQuest.isSponsored() ? "🎮 Канал: <b>" : "🎮 Игра: <b>") + escape(freshQuest.getGameName()) + "</b>\n"
-                        + (freshQuest.isSponsored() ? "" : "📚 Формат: <b>" + escape(freshQuest.getCategory()) + "</b>\n"
+                        + (freshQuest.isSponsored() || "UGC".equalsIgnoreCase(freshQuest.getGameName()) ? "" : "📚 Формат: <b>" + escape(freshQuest.getCategory()) + "</b>\n"
                         + "🕹️ Платформа: <b>" + escape(freshQuest.getPlatform()) + "</b>\n")
                         + deadlineLine
                         + "📌 Статус: <b>В процессе</b>\n\n"
                         + "🏆 <b>Награда</b>\n"
                         + "✨ +" + freshQuest.getRewardXp() + " XP\n"
                         + "🪙 +" + freshQuest.getRewardCoins() + " монет"
-                        + (freshQuest.getTicketReward() > 0 ? "\n🎟 +" + freshQuest.getTicketReward() + " билет(а) для Колеса фортуны" : ""),
+                        + (!freshQuest.isSponsored() && !"UGC".equalsIgnoreCase(freshQuest.getGameName()) && freshQuest.getTicketReward() > 0 ? "\n🎟 +" + freshQuest.getTicketReward() + " билет(а) для Колеса фортуны" : ""),
                 keyboardFactory.smartLayout(buttons));
     }
 

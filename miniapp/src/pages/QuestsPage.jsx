@@ -161,9 +161,15 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
     >
       {/* Шапка: категория + статус */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span className={`quest-cat-badge ${CATEGORY_BADGE[q.category] || 'other'}`}>
-          {q.category}
-        </span>
+        {!q.sponsored && q.gameName !== 'UGC' && q.category ? (
+          <span className={`quest-cat-badge ${CATEGORY_BADGE[q.category] || 'other'}`}>
+            {q.category}
+          </span>
+        ) : (
+          <span className={`quest-cat-badge ${q.sponsored ? 'sponsored' : 'ugc'}`}>
+            {q.sponsored ? '💼 Спонсорский' : '🤳 Контент'}
+          </span>
+        )}
         {q.submissionStatus && (
           <span className="quest-taken-badge" style={{ color: STATUS_COLORS[q.submissionStatus] }}>
             ● {STATUS_LABELS[q.submissionStatus] || q.submissionStatus}
@@ -176,7 +182,7 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
         <div className="quest-rewards">
           <span className="reward-exc"><i className="ti ti-coin"></i> {q.rewardCoins.toLocaleString()} EXC</span>
           <span className="reward-xp"><i className="ti ti-star"></i> {q.rewardXp} XP</span>
-          {(q.ticketReward > 0 || CATEGORY_TICKETS[q.category]) && (
+          {!q.sponsored && q.gameName !== 'UGC' && (q.ticketReward > 0 || CATEGORY_TICKETS[q.category]) && (
             <span className="reward-ticket">🎟 +{q.ticketReward > 0 ? q.ticketReward : CATEGORY_TICKETS[q.category]}</span>
           )}
         </div>
