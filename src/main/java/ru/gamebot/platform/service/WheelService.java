@@ -9,10 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.model.AppUser;
-import ru.gamebot.platform.domain.model.RewardItem;
 import ru.gamebot.platform.domain.model.WheelSpinLog;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
-import ru.gamebot.platform.domain.repository.RewardItemRepository;
 import ru.gamebot.platform.domain.repository.WheelSpinLogRepository;
 
 @Slf4j
@@ -37,7 +35,6 @@ public class WheelService {
 
     private final AppUserRepository appUserRepository;
     private final WheelSpinLogRepository wheelSpinLogRepository;
-    private final RewardItemRepository rewardItemRepository;
     private final SinkShopService sinkShopService;
     private final ExcTransactionService excTx;
 
@@ -90,14 +87,9 @@ public class WheelService {
                 }
             }
             case "AVATAR_FRAME" -> {
-                List<RewardItem> frames = rewardItemRepository
-                        .findAllByActiveTrueAndPurchaseGroupOrderByPriceCoinsAsc("avatar_frame");
-                if (!frames.isEmpty()) {
-                    RewardItem frame = frames.get(RNG.nextInt(frames.size()));
-                    user.setAvatarFrameColor(frame.getAvatarFrameColor());
-                    user.setAvatarFrameImage(frame.getAvatarFrameImage());
-                    label = "👑 Рамка аватара «" + frame.getTitle() + "»";
-                }
+                user.setAvatarFrameColor("#7C3AED");
+                user.setAvatarFrameImage("egc");
+                label = "👑 Рамка аватара «EGC»";
             }
         }
 
