@@ -5891,7 +5891,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (String game : games) {
-            rows.add(List.of(keyboardFactory.callback("🎮 " + trim(game, 28), "admin:quests:game:" + encodeGameToken(game))));
+            long count = questService.countActiveByGameName(game);
+            rows.add(List.of(keyboardFactory.callback("🎮 " + trim(game, 28) + " (" + count + ")", "admin:quests:game:" + encodeGameToken(game))));
         }
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", "admin:edit"),

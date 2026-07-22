@@ -108,6 +108,10 @@ public class QuestService {
                 .toList();
     }
 
+    public long countActiveByGameName(String gameName) {
+        return questRepository.countByGameNameIgnoreCaseAndActiveTrue(gameName);
+    }
+
     public List<Quest> findByCategory(String category) {
         return findActiveQuests().stream()
                 .filter(quest -> sameCategory(quest.getCategory(), category))
