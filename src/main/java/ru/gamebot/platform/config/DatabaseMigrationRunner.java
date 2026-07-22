@@ -30,7 +30,21 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
 
         dropCheckConstraints("QUEST_SUBMISSIONS");
         dropCheckConstraints("REWARD_REQUESTS");
+        backfillQuestTicketRewards();
+    }
 
+    private void backfillQuestTicketRewards() {
+        try {
+            int updated = jdbcTemplate.update(
+                "UPDATE quests SET ticket_reward = CASE category " +
+                "WHEN 'Лёгкие' THEN 1 WHEN 'Средние' THEN 2 WHEN 'Сложные' THEN 3 ELSE 1 END " +
+                "WHERE ticket_reward = 0");
+            if (updated > 0) {
+                log.info("[DBMigration] backfilled ticket_reward for {} quests", updated);
+            }
+        } catch (Exception e) {
+            log.error("[DBMigration] backfillQuestTicketRewards failed: {}", e.getMessage());
+        }
     }
 
     private void dropCheckConstraints(String table) {
