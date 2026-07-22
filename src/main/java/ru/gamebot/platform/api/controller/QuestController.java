@@ -71,6 +71,7 @@ public class QuestController {
                 .durationDays(q.getDurationDays())
                 .rewardXp(q.getRewardXp())
                 .rewardCoins(q.getRewardCoins())
+                .ticketReward(q.getTicketReward())
                 .councilOnly(q.isCouncilOnly())
                 .sponsored(q.isSponsored())
                 .submissionStatus(statusByQuestId.get(q.getId()))
@@ -98,6 +99,7 @@ public class QuestController {
                 .id(q.getId()).title(q.getTitle()).description(q.getDescription())
                 .gameName(q.getGameName()).category(q.getCategory()).platform(q.getPlatform())
                 .durationDays(q.getDurationDays()).rewardXp(q.getRewardXp()).rewardCoins(q.getRewardCoins())
+                .ticketReward(q.getTicketReward())
                 .councilOnly(q.isCouncilOnly()).sponsored(true)
                 .submissionStatus(statusByQuestId.get(q.getId()))
                 .build()).toList();
@@ -124,6 +126,7 @@ public class QuestController {
                 .durationDays(quest.getDurationDays())
                 .rewardXp(quest.getRewardXp())
                 .rewardCoins(quest.getRewardCoins())
+                .ticketReward(quest.getTicketReward())
                 .councilOnly(quest.isCouncilOnly());
 
         if (telegramId != null) {

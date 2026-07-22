@@ -598,13 +598,14 @@ public class QuestService {
         excTx.log(user, adjustedCoins, ExcTransactionService.QUEST,
                 quest.getTitle() + " (" + quest.getGameName() + ")");
 
-        // Колесо фортуны: билеты за выполнение квеста по категории
-        int tickets = switch (quest.getCategory() == null ? "" : quest.getCategory()) {
-            case "Лёгкие" -> 1;
-            case "Средние" -> 2;
-            case "Сложные" -> 3;
-            default -> 1;
-        };
+        // Колесо фортуны: берём ticketReward из квеста, если задан; иначе по категории
+        int tickets = quest.getTicketReward() > 0 ? quest.getTicketReward()
+                : switch (quest.getCategory() == null ? "" : quest.getCategory()) {
+                    case "Лёгкие" -> 1;
+                    case "Средние" -> 2;
+                    case "Сложные" -> 3;
+                    default -> 1;
+                };
         wheelService.addTickets(user, tickets, "Квест: " + quest.getTitle());
         user.setCompletedQuests(user.getCompletedQuests() + 1);
         user.setFixedRubBalance(user.getFixedRubBalance() + fixedRub);

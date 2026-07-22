@@ -17,6 +17,7 @@ public class QuestDetailDto {
     private int durationDays;
     private long rewardXp;
     private long rewardCoins;
+    private int ticketReward;
     private boolean councilOnly;
 
     /** null, если пользователь ещё не брал этот квест */

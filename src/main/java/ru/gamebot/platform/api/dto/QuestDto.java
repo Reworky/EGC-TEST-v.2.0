@@ -15,6 +15,7 @@ public class QuestDto {
     private int durationDays;
     private long rewardXp;
     private long rewardCoins;
+    private int ticketReward;
     private boolean councilOnly;
     private boolean sponsored;
 

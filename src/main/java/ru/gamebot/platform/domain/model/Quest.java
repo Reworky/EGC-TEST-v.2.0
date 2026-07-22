@@ -43,6 +43,7 @@ public class Quest {
 
     private long rewardXp;
     private long rewardCoins;
+    private int ticketReward;
     private boolean active;
 
     @Column(columnDefinition = "boolean default false")

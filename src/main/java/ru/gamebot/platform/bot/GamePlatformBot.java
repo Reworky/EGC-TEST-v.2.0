@@ -1528,6 +1528,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     return;
                 }
                 session.getData().put("coins", coins.toString());
+                session.setState(SessionState.QUEST_CREATE_TICKETS);
+                sendText(user.getTelegramId(),
+                        "🎟 Сколько билетов для Колеса фортуны начислять за квест?\n\n"
+                                + "Стандарт: Лёгкие — 1, Средние — 2, Сложные — 3\n"
+                                + "Введите число (0 — без билетов):",
+                        cancelKeyboard());
+            }
+            case QUEST_CREATE_TICKETS -> {
+                Integer tickets = parseInteger(text.trim());
+                if (tickets == null || tickets < 0) {
+                    sendText(user.getTelegramId(), "⚠️ Укажите целое неотрицательное число (0 — без билетов).", cancelKeyboard());
+                    return;
+                }
+                session.getData().put("tickets", tickets.toString());
                 session.setState(SessionState.QUEST_CREATE_INSTRUCTION);
                 sendText(user.getTelegramId(), "📎 Отправьте инструкцию для игрока.", cancelKeyboard());
             }
@@ -7982,7 +7996,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "👥 Лимит: <b>" + d.getOrDefault("limit", "—") + "</b>\n\n"
                 + "🏆 <b>Награда</b>\n"
                 + "✨ +" + d.getOrDefault("xp", "0") + " XP\n"
-                + "🪙 +" + d.getOrDefault("coins", "0") + " монет\n\n"
+                + "🪙 +" + d.getOrDefault("coins", "0") + " монет\n"
+                + "🎟 +" + d.getOrDefault("tickets", "0") + " билетов\n\n"
                 + "📝 <b>Описание</b>\n" + escape(d.getOrDefault("description", "—")) + "\n\n"
                 + "📎 <b>Инструкция</b>\n" + escape(d.getOrDefault("instruction", "—")) + "\n\n"
                 + "✅ <b>Требования</b>\n" + escape(d.getOrDefault("requirements", "—")) + "\n\n"
@@ -8089,6 +8104,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         quest.setDurationDays(Integer.parseInt(session.getData().getOrDefault("durationDays", "0")));
         quest.setRewardXp(Long.parseLong(session.getData().get("xp")));
         quest.setRewardCoins(Long.parseLong(session.getData().get("coins")));
+        quest.setTicketReward(Integer.parseInt(session.getData().getOrDefault("tickets", "0")));
         quest.setInstruction(session.getData().get("instruction"));
         quest.setRequirements(session.getData().get("requirements"));
         quest.setParticipantLimit(Integer.parseInt(session.getData().getOrDefault("limit", "100")));

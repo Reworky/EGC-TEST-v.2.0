@@ -176,8 +176,8 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
         <div className="quest-rewards">
           <span className="reward-exc"><i className="ti ti-coin"></i> {q.rewardCoins.toLocaleString()} EXC</span>
           <span className="reward-xp"><i className="ti ti-star"></i> {q.rewardXp} XP</span>
-          {CATEGORY_TICKETS[q.category] && (
-            <span className="reward-ticket">🎟 +{CATEGORY_TICKETS[q.category]}</span>
+          {(q.ticketReward > 0 || CATEGORY_TICKETS[q.category]) && (
+            <span className="reward-ticket">🎟 +{q.ticketReward > 0 ? q.ticketReward : CATEGORY_TICKETS[q.category]}</span>
           )}
         </div>
       </div>
