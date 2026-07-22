@@ -43,6 +43,7 @@ public class Quest {
 
     private long rewardXp;
     private long rewardCoins;
+    @jakarta.persistence.Column(columnDefinition = "INT DEFAULT 0")
     private int ticketReward;
     private boolean active;
 
