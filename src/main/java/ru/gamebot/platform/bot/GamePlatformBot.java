@@ -2608,7 +2608,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📌 Статус: <b>" + escape(displayStatus) + "</b>\n\n"
                         + "🏆 <b>Награда</b>\n"
                         + "✨ +" + quest.getRewardXp() + " XP\n"
-                        + "🪙 +" + quest.getRewardCoins() + (quest.isSponsored() ? " EXC" : " монет") + "\n\n"
+                        + "🪙 +" + quest.getRewardCoins() + (quest.isSponsored() ? " EXC" : " монет") + "\n"
+                        + (quest.getTicketReward() > 0 ? "🎟 +" + quest.getTicketReward() + " билет(а) для Колеса фортуны\n" : "")
+                        + "\n"
                         + "📝 <b>Суть задания</b>\n" + escape(quest.getDescription()) + "\n\n"
                         + "📎 <b>Что нужно сделать</b>\n" + escape(quest.getInstruction())
                         + (quest.isSponsored() ? "" : "\n\n✅ <b>Что примет модерация</b>\n" + escape(quest.getRequirements())),
@@ -2658,7 +2660,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📌 Статус: <b>В процессе</b>\n\n"
                         + "🏆 <b>Награда</b>\n"
                         + "✨ +" + freshQuest.getRewardXp() + " XP\n"
-                        + "🪙 +" + freshQuest.getRewardCoins() + " монет",
+                        + "🪙 +" + freshQuest.getRewardCoins() + " монет"
+                        + (freshQuest.getTicketReward() > 0 ? "\n🎟 +" + freshQuest.getTicketReward() + " билет(а) для Колеса фортуны" : ""),
                 keyboardFactory.smartLayout(buttons));
     }
 
@@ -2921,8 +2924,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📌 Статус: <b>" + escape(humanStatus(submission.getStatus())) + "</b>\n"
                         + "🕒 Обновлено: <b>" + escape(submission.getUpdatedAt().format(DATE_TIME_FORMATTER)) + "</b>\n"
                         + "✨ XP: <b>+" + quest.getRewardXp() + "</b>\n"
-                        + "🪙 Монеты: <b>+" + quest.getRewardCoins() + "</b>\n\n"
-                        + "📝 <b>Суть задания</b>\n" + escape(quest.getDescription()) + moderatorComment,
+                        + "🪙 Монеты: <b>+" + quest.getRewardCoins() + "</b>\n"
+                        + (quest.getTicketReward() > 0 ? "🎟 Билеты: <b>+" + quest.getTicketReward() + "</b>\n" : "")
+                        + "\n📝 <b>Суть задания</b>\n" + escape(quest.getDescription()) + moderatorComment,
                 verticalWithBackMenu(buttons, "⬅️ Назад", "menu:myquests"));
     }
 
@@ -6039,6 +6043,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🎮 Игра: <b>" + escape(quest.getGameName()) + "</b>\n"
                         + "✨ XP: <b>+" + quest.getRewardXp() + "</b>\n"
                         + "🪙 Монеты: <b>+" + quest.getRewardCoins() + "</b>\n"
+                        + (quest.getTicketReward() > 0 ? "🎟 Билеты: <b>+" + quest.getTicketReward() + "</b>\n" : "")
                         + "📡 Статус: <b>" + (quest.isActive() ? "активен" : "скрыт") + "</b>",
                 keyboardFactory.rowsLayout(rows));
     }
@@ -6078,6 +6083,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📞 Контакт: <b>" + escape(sponsorContact) + "</b>\n"
                         + "✨ XP: <b>+" + quest.getRewardXp() + "</b>\n"
                         + "🪙 EXC: <b>+" + quest.getRewardCoins() + "</b>\n"
+                        + (quest.getTicketReward() > 0 ? "🎟 Билеты: <b>+" + quest.getTicketReward() + "</b>\n" : "")
                         + "📅 Длительность: <b>" + (quest.getDurationText() != null ? escape(quest.getDurationText()) : "—") + "</b>\n"
                         + "📡 Статус: <b>" + (quest.isActive() ? "активен" : "скрыт") + "</b>",
                 keyboardFactory.rowsLayout(rows));
