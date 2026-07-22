@@ -33,9 +33,9 @@ export default function App() {
     authMiniApp(initData)
       .then(() => setReady(true))
       .catch((e) => {
-        if (!hasToken) {
-          setError(`Ошибка: ${e?.response?.status || e?.message || 'нет ответа'} | URL: ${import.meta.env.VITE_API_URL || 'localhost:8090'}`);
-        }
+        // Clear stale token so subsequent API calls don't use it
+        localStorage.removeItem('egc_token');
+        setError(`Ошибка авторизации: ${e?.response?.status || e?.message || 'нет ответа'}. Закройте и откройте Mini App заново.`);
       });
   }, [initData]);
 
