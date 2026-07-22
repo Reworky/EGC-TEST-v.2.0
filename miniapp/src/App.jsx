@@ -21,19 +21,22 @@ const WheelPage      = lazy(() => import('./pages/WheelPage'));
 
 export default function App() {
   const { initData } = useTelegram();
-  const hasToken = !!localStorage.getItem('egc_token');
-  const [ready, setReady] = useState(hasToken);
+  const [ready, setReady] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     if (!initData) {
-      setReady(true);
+      // Not inside Telegram — use stored token as-is (dev mode)
+      if (localStorage.getItem('egc_token')) {
+        setReady(true);
+      } else {
+        setError('Откройте приложение через Telegram бота.');
+      }
       return;
     }
     authMiniApp(initData)
       .then(() => setReady(true))
       .catch((e) => {
-        // Clear stale token so subsequent API calls don't use it
         localStorage.removeItem('egc_token');
         setError(`Ошибка авторизации: ${e?.response?.status || e?.message || 'нет ответа'}. Закройте и откройте Mini App заново.`);
       });
