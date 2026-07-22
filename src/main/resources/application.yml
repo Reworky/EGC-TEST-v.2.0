@@ -7,10 +7,15 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db-migration.sql
   jpa:
     hibernate:
       ddl-auto: update
     open-in-view: false
+    defer-datasource-initialization: true
     properties:
       hibernate:
         format_sql: true
