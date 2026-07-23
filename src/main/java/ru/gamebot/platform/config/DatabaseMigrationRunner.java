@@ -34,6 +34,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         seedEgcAvatarFrame();
         fixSponsoredQuestFlag();
         seedGtaVQuests();
+        seedGtaVCatalog();
     }
 
     private void backfillQuestTicketRewards() {
@@ -47,6 +48,18 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             }
         } catch (Exception e) {
             log.error("[DBMigration] backfillQuestTicketRewards failed: {}", e.getMessage());
+        }
+    }
+
+    private void seedGtaVCatalog() {
+        try {
+            Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM game_catalog WHERE game_name = 'GTA V'", Integer.class);
+            if (count != null && count > 0) return;
+            jdbcTemplate.update("INSERT INTO game_catalog (game_name) VALUES ('GTA V')");
+            log.info("[DBMigration] Added GTA V to game catalog");
+        } catch (Exception e) {
+            log.error("[DBMigration] seedGtaVCatalog failed: {}", e.getMessage());
         }
     }
 
