@@ -36,6 +36,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         seedGtaVQuests();
         seedGtaVCatalog();
         deleteGamesAndQuests();
+        fixNullDurationText();
     }
 
     private void backfillQuestTicketRewards() {
@@ -49,6 +50,21 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             }
         } catch (Exception e) {
             log.error("[DBMigration] backfillQuestTicketRewards failed: {}", e.getMessage());
+        }
+    }
+
+    private void fixNullDurationText() {
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "SELECT id, duration_days FROM quests WHERE duration_text IS NULL AND duration_days > 0");
+            for (Map<String, Object> row : rows) {
+                int days = ((Number) row.get("DURATION_DAYS")).intValue();
+                String text = days + " " + (days == 1 ? "день" : days < 5 ? "дня" : "дней");
+                jdbcTemplate.update("UPDATE quests SET duration_text = ? WHERE id = ?", text, row.get("ID"));
+            }
+            if (!rows.isEmpty()) log.info("[DBMigration] Fixed duration_text for {} quests", rows.size());
+        } catch (Exception e) {
+            log.error("[DBMigration] fixNullDurationText failed: {}", e.getMessage());
         }
     }
 
@@ -119,10 +135,11 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             Integer count = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM quests WHERE title = ? AND game_name = ?", Integer.class, title, gameName);
             if (count != null && count > 0) return;
+            String durationText = durationDays + " " + (durationDays == 1 ? "день" : durationDays < 5 ? "дня" : "дней");
             jdbcTemplate.update(
-                "INSERT INTO quests (title, game_name, description, category, platform, duration_days, reward_xp, reward_coins, ticket_reward, requirements, active, council_only, season_only, sponsored, created_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, false, false, false, NOW())",
-                title, gameName, description, category, platform, durationDays, rewardXp, rewardCoins, ticketReward, requirements);
+                "INSERT INTO quests (title, game_name, description, category, platform, duration_days, duration_text, reward_xp, reward_coins, ticket_reward, requirements, active, council_only, season_only, sponsored, created_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, false, false, false, NOW())",
+                title, gameName, description, category, platform, durationDays, durationText, rewardXp, rewardCoins, ticketReward, requirements);
             log.info("[DBMigration] Inserted quest '{}' for {}", title, gameName);
         } catch (Exception e) {
             log.error("[DBMigration] seedQuestIfAbsent '{}' failed: {}", title, e.getMessage());
