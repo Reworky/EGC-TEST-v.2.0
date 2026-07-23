@@ -3,6 +3,7 @@ package ru.gamebot.platform.service;
 /** Результат попытки взять квест или отправить отчёт через API (Mini App). Те же правила, что и в боте. */
 public enum QuestActionStatus {
     OK,
+    QUEST_INACTIVE,
     ALREADY_DRAFT,
     ALREADY_PENDING,
     ALREADY_APPROVED,

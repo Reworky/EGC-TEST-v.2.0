@@ -352,6 +352,10 @@ public class QuestService {
      */
     @Transactional
     public QuestActionResult takeQuestChecked(AppUser user, Quest quest) {
+        if (!quest.isActive()) {
+            return QuestActionResult.of(QuestActionStatus.QUEST_INACTIVE, 0);
+        }
+
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
 
