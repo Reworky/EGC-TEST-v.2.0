@@ -10,6 +10,16 @@ api.interceptors.request.use(cfg => {
   return cfg;
 });
 
+api.interceptors.response.use(
+  res => res,
+  err => {
+    if (!err.response) {
+      window.dispatchEvent(new CustomEvent('egc:offline'));
+    }
+    return Promise.reject(err);
+  }
+);
+
 const cache = new Map();
 const TTL = 60_000;
 

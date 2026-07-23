@@ -19,14 +19,49 @@ const BattlePassPage = lazy(() => import('./pages/BattlePassPage'));
 const SquadsPage     = lazy(() => import('./pages/SquadsPage'));
 const WheelPage      = lazy(() => import('./pages/WheelPage'));
 
+function MaintenanceScreen({ onRetry }) {
+  return (
+    <div className="page-center" style={{ flexDirection: 'column', gap: 16, padding: '0 32px', textAlign: 'center' }}>
+      <div style={{ fontSize: 52 }}>🛠</div>
+      <div style={{ fontSize: 18, fontWeight: 500, color: 'var(--tg-theme-text-color, #e2e8f0)' }}>Технические работы</div>
+      <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.45)', lineHeight: 1.5 }}>
+        Мы обновляем платформу. Обычно это занимает не более 2–3 минут.
+      </div>
+      <button
+        onClick={onRetry}
+        style={{
+          marginTop: 8, padding: '10px 24px', borderRadius: 10,
+          background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.35)',
+          color: '#a78bfa', fontSize: 14, cursor: 'pointer'
+        }}
+      >
+        Попробовать снова
+      </button>
+    </div>
+  );
+}
+
 export default function App() {
   const { initData } = useTelegram();
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(null);
+  const [offline, setOffline] = useState(false);
+
+  const doAuth = (data) => {
+    authMiniApp(data)
+      .then(() => { setOffline(false); setReady(true); })
+      .catch((e) => {
+        if (!e?.response) {
+          setOffline(true);
+        } else {
+          localStorage.removeItem('egc_token');
+          setError(`Ошибка авторизации: ${e?.response?.status || e?.message || 'нет ответа'}. Закройте и откройте Mini App заново.`);
+        }
+      });
+  };
 
   useEffect(() => {
     if (!initData) {
-      // Not inside Telegram — use stored token as-is (dev mode)
       if (localStorage.getItem('egc_token')) {
         setReady(true);
       } else {
@@ -34,13 +69,18 @@ export default function App() {
       }
       return;
     }
-    authMiniApp(initData)
-      .then(() => setReady(true))
-      .catch((e) => {
-        localStorage.removeItem('egc_token');
-        setError(`Ошибка авторизации: ${e?.response?.status || e?.message || 'нет ответа'}. Закройте и откройте Mini App заново.`);
-      });
+    doAuth(initData);
   }, [initData]);
+
+  useEffect(() => {
+    const handler = () => setOffline(true);
+    window.addEventListener('egc:offline', handler);
+    return () => window.removeEventListener('egc:offline', handler);
+  }, []);
+
+  if (offline) {
+    return <MaintenanceScreen onRetry={() => { setOffline(false); if (initData) doAuth(initData); }} />;
+  }
 
   if (error) {
     return (
