@@ -279,11 +279,17 @@ export default function ProfilePage() {
               <span className="p-nickname">{profile.nickname}</span>
               {profile.isCouncilMember && <i className="ti ti-crown" style={{ color: '#FFD700', fontSize: 14 }} />}
             </div>
-            <div style={{ marginTop: 8 }}>
+            <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
               <div className="p-rank-badge" style={{ display: 'inline-flex', borderColor: `${rank.primary}55`, color: rank.primary, background: `${rank.primary}18` }}>
                 <span>{rank.icon}</span>
                 <span>Ур. {profile.level} · {profile.levelName}</span>
               </div>
+              {profile.profileTitle && (
+                <div className="p-rank-badge" style={{ display: 'inline-flex', borderColor: 'rgba(167,139,250,0.35)', color: '#A78BFA', background: 'rgba(167,139,250,0.12)' }}>
+                  <span>🏅</span>
+                  <span>{profile.profileTitle}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
