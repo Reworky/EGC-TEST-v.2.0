@@ -6280,7 +6280,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     // ─── Sponsors ─────────────────────────────────────────────────────────────
 
     private void sendAdminSponsorList(AppUser user) {
-        List<ru.gamebot.platform.domain.model.Sponsor> sponsors = sponsorService.findAll();
+        List<ru.gamebot.platform.domain.model.Sponsor> sponsors = sponsorService.findAll().stream()
+                .filter(s -> s.getBudgetExc() > 0)
+                .toList();
         StringBuilder sb = new StringBuilder("🤝 <b>Спонсорские квесты</b>\n\n");
         if (sponsors.isEmpty()) {
             sb.append("Кампаний пока нет. Добавьте первого спонсора!");
