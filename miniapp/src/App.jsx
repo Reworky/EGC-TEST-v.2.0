@@ -30,7 +30,7 @@ export default function App() {
       if (localStorage.getItem('egc_token')) {
         setReady(true);
       } else {
-        setError('Откройте приложение через Telegram бота.');
+        setError('Приложение доступно только через Telegram. Найдите бота @invitetogamebot и нажмите кнопку «Открыть приложение».');
       }
       return;
     }
