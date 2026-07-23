@@ -32,6 +32,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         dropCheckConstraints("REWARD_REQUESTS");
         backfillQuestTicketRewards();
         seedEgcAvatarFrame();
+        fixSponsoredQuestFlag();
     }
 
     private void backfillQuestTicketRewards() {
@@ -45,6 +46,18 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             }
         } catch (Exception e) {
             log.error("[DBMigration] backfillQuestTicketRewards failed: {}", e.getMessage());
+        }
+    }
+
+    private void fixSponsoredQuestFlag() {
+        try {
+            int updated = jdbcTemplate.update(
+                "UPDATE quests SET sponsored = true WHERE sponsor_id IS NOT NULL AND sponsored = false");
+            if (updated > 0) {
+                log.info("[DBMigration] Fixed sponsored flag for {} quests", updated);
+            }
+        } catch (Exception e) {
+            log.error("[DBMigration] fixSponsoredQuestFlag failed: {}", e.getMessage());
         }
     }
 
