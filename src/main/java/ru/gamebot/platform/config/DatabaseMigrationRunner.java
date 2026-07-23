@@ -33,6 +33,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         backfillQuestTicketRewards();
         seedEgcAvatarFrame();
         fixSponsoredQuestFlag();
+        seedGtaVQuests();
     }
 
     private void backfillQuestTicketRewards() {
@@ -46,6 +47,48 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             }
         } catch (Exception e) {
             log.error("[DBMigration] backfillQuestTicketRewards failed: {}", e.getMessage());
+        }
+    }
+
+    private void seedGtaVQuests() {
+        try {
+            seedQuestIfAbsent(
+                "Первый миллион", "GTA V",
+                "Заработай 1,000,000 $ в GTA Online.\nДеньги можно получить любым способом — миссии, гонки, бизнес, продажа товара.",
+                "Лёгкие", "PC, PS4/5, Xbox", 7, 50, 1500, 1,
+                "Скриншот экрана персонажа с видимым балансом $1,000,000+ в правом углу экрана. На скриншоте должен быть виден ник персонажа."
+            );
+            seedQuestIfAbsent(
+                "Звёзды розыска", "GTA V",
+                "Получи 5 звёзд розыска в GTA Online и продержись с ними живым 3 минуты.\nУбегай, прячься или отстреливайся — главное выжить.",
+                "Средние", "PC, PS4/5, Xbox", 7, 100, 4000, 2,
+                "Скриншот экрана с 5 звёздами розыска в правом верхнем углу и таймером или временем сессии. Ник персонажа должен быть виден."
+            );
+            seedQuestIfAbsent(
+                "Король Лос-Сантоса", "GTA V",
+                "Купи любую недвижимость в GTA Online — гараж, квартиру, бизнес или клубный дом.\nПокупка должна быть совершена в рамках текущей игровой сессии, не ранее.",
+                "Сложные", "PC, PS4/5, Xbox", 14, 250, 10000, 3,
+                "Скриншот экрана подтверждения покупки с названием недвижимости и суммой сделки. Ник персонажа должен быть виден."
+            );
+        } catch (Exception e) {
+            log.error("[DBMigration] seedGtaVQuests failed: {}", e.getMessage());
+        }
+    }
+
+    private void seedQuestIfAbsent(String title, String gameName, String description,
+            String category, String platform, int durationDays, long rewardXp, long rewardCoins,
+            int ticketReward, String requirements) {
+        try {
+            Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM quests WHERE title = ? AND game_name = ?", Integer.class, title, gameName);
+            if (count != null && count > 0) return;
+            jdbcTemplate.update(
+                "INSERT INTO quests (title, game_name, description, category, platform, duration_days, reward_xp, reward_coins, ticket_reward, requirements, active, council_only, season_only, sponsored, created_at) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, true, false, false, false, NOW())",
+                title, gameName, description, category, platform, durationDays, rewardXp, rewardCoins, ticketReward, requirements);
+            log.info("[DBMigration] Inserted quest '{}' for {}", title, gameName);
+        } catch (Exception e) {
+            log.error("[DBMigration] seedQuestIfAbsent '{}' failed: {}", title, e.getMessage());
         }
     }
 
