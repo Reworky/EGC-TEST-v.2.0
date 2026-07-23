@@ -12,7 +12,7 @@ public interface QuestRepository extends JpaRepository<Quest, Long> {
 
     boolean existsByTitleAndGameName(String title, String gameName);
 
-    java.util.Optional<Quest> findByTitleAndGameName(String title, String gameName);
+    java.util.Optional<Quest> findFirstByTitleAndGameName(String title, String gameName);
 
     List<Quest> findAllByGameNameIgnoreCase(String gameName);
 

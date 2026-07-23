@@ -30,6 +30,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
 
         dropCheckConstraints("QUEST_SUBMISSIONS");
         dropCheckConstraints("REWARD_REQUESTS");
+        deduplicateQuests();
         backfillQuestTicketRewards();
         seedEgcAvatarFrame();
         fixSponsoredQuestFlag();
@@ -37,6 +38,28 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         seedGtaVCatalog();
         deleteGamesAndQuests();
         fixNullDurationText();
+    }
+
+    private void deduplicateQuests() {
+        try {
+            List<Map<String, Object>> dups = jdbcTemplate.queryForList(
+                "SELECT title, game_name, COUNT(*) as cnt FROM quests GROUP BY title, game_name HAVING COUNT(*) > 1");
+            for (Map<String, Object> row : dups) {
+                String title = (String) row.get("TITLE");
+                String gameName = (String) row.get("GAME_NAME");
+                List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                    "SELECT id FROM quests WHERE title = ? AND game_name = ? ORDER BY id ASC", title, gameName);
+                // Keep the first (oldest), delete the rest
+                for (int i = 1; i < rows.size(); i++) {
+                    Long id = ((Number) rows.get(i).get("ID")).longValue();
+                    jdbcTemplate.update("DELETE FROM quest_submissions WHERE quest_id = ?", id);
+                    jdbcTemplate.update("DELETE FROM quests WHERE id = ?", id);
+                    log.warn("[DBMigration] Removed duplicate quest id={} title='{}' game='{}'", id, title, gameName);
+                }
+            }
+        } catch (Exception e) {
+            log.error("[DBMigration] deduplicateQuests failed: {}", e.getMessage());
+        }
     }
 
     private void backfillQuestTicketRewards() {

@@ -746,7 +746,7 @@ public class QuestSeeder implements CommandLineRunner {
                 "1. Играй Competitive или Premier матчи до получения звания Gold Nova I+ (или 5 000+ CS Rating в Premier)\n2. Когда ранг присвоен — перейди в Профиль CS2 → вкладка «Конкурентный» или «Рейтинговый»\n3. Сделай скриншот, на котором одновременно видны: твой Steam-никнейм, значок звания и его название / цифра CS Rating\n4. Загрузи скриншот. Принимается также ссылка на Steam-профиль, если ранг отображается публично",
                 "— Режим: Competitive (классический ранг) или Premier (рейтинг CS Rating)\n— Для Competitive: звание Gold Nova I и выше\n— Для Premier: CS Rating 5 000+\n— Скриншот должен быть сделан после достижения, не «у меня было такое звание раньше»");
         // Ограничить участников для Сложного квеста на период отладки верификации
-        questRepository.findByTitleAndGameName("Ранговый прорыв — достигни звания Gold Nova I или выше", "CS2")
+        questRepository.findFirstByTitleAndGameName("Ранговый прорыв — достигни звания Gold Nova I или выше", "CS2")
                 .ifPresent(q -> { if (q.getParticipantLimit() == null || q.getParticipantLimit() == 100) { q.setParticipantLimit(50); questRepository.save(q); } });
 
         // ── Last Day on Earth: Survival — удалить все квесты ───────────────────
@@ -804,7 +804,7 @@ public class QuestSeeder implements CommandLineRunner {
         // ── Dota 2 — Сложные ──────────────────────────────────────────────────────
         {
             String title = "Калибровка пройдена — достигни рейтинга 2000 MMR";
-            if (questRepository.findByTitleAndGameName(title, "Dota 2").isEmpty()) {
+            if (questRepository.findFirstByTitleAndGameName(title, "Dota 2").isEmpty()) {
                 Quest q = new Quest();
                 q.setTitle(title);
                 q.setGameName("Dota 2");
@@ -846,7 +846,7 @@ public class QuestSeeder implements CommandLineRunner {
                       int durationDays, String durationText,
                       long rewardXp, long rewardCoins,
                       String description, String instruction, String requirements) {
-        var existing = questRepository.findByTitleAndGameName(title, gameName);
+        var existing = questRepository.findFirstByTitleAndGameName(title, gameName);
         if (existing.isPresent()) {
             log.info("[QuestSeeder] Already exists, skipping: '{}'", title);
             return;
@@ -878,7 +878,7 @@ public class QuestSeeder implements CommandLineRunner {
                              int durationDays, String durationText,
                              long rewardXp, long rewardCoins,
                              String description, String instruction, String requirements) {
-        var byOldTitle = questRepository.findByTitleAndGameName(oldTitle, gameName);
+        var byOldTitle = questRepository.findFirstByTitleAndGameName(oldTitle, gameName);
         if (byOldTitle.isPresent()) {
             // One-time migration: apply full update
             Quest q = byOldTitle.get();
@@ -897,7 +897,7 @@ public class QuestSeeder implements CommandLineRunner {
             return;
         }
         // Quest already has newTitle (migration already done) — only update rewards
-        var byNewTitle = questRepository.findByTitleAndGameName(newTitle, gameName);
+        var byNewTitle = questRepository.findFirstByTitleAndGameName(newTitle, gameName);
         if (byNewTitle.isPresent()) {
             Quest q = byNewTitle.get();
             q.setRewardXp(rewardXp);
