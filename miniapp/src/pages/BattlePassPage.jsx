@@ -40,7 +40,7 @@ export default function BattlePassPage() {
     <div className="quests-page shop-page">
       <div style={{ padding: '16px 16px 0' }}><BackButton to="/profile" label="Профиль" /></div>
 
-      <div className="category-section">
+      <div className="category-section" style={{ marginTop: 16 }}>
         {!pass.hasSeason ? (
           <div className="ref-link-card">
             <div className="ref-link-label">🎫 Battle Pass</div>
