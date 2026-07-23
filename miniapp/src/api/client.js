@@ -10,6 +10,20 @@ api.interceptors.request.use(cfg => {
   return cfg;
 });
 
+const cache = new Map();
+const TTL = 60_000;
+
+function cached(key, fn) {
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.ts < TTL) return Promise.resolve(hit.data);
+  return fn().then(data => { cache.set(key, { data, ts: Date.now() }); return data; });
+}
+
+export function invalidateCache(...keys) {
+  if (keys.length === 0) cache.clear();
+  else keys.forEach(k => cache.delete(k));
+}
+
 export async function authMiniApp(initData) {
   const { data } = await api.post('/api/auth/miniapp', { initData });
   localStorage.setItem('egc_token', data.token);
@@ -17,8 +31,7 @@ export async function authMiniApp(initData) {
 }
 
 export async function getProfile() {
-  const { data } = await api.get('/api/profile');
-  return data;
+  return cached('profile', async () => { const { data } = await api.get('/api/profile'); return data; });
 }
 
 export async function getAvatarUrl() {
@@ -40,8 +53,7 @@ export async function getQuests(game, category) {
 }
 
 export async function getGames() {
-  const { data } = await api.get('/api/quests/games');
-  return data;
+  return cached('games', async () => { const { data } = await api.get('/api/quests/games'); return data; });
 }
 
 export async function getQuestDetail(id) {
@@ -76,17 +88,16 @@ export async function cancelMyQuest(submissionId) {
 }
 
 export async function getShopItems() {
-  const { data } = await api.get('/api/shop/items');
-  return data;
+  return cached('shopItems', async () => { const { data } = await api.get('/api/shop/items'); return data; });
 }
 
 export async function getShopStats() {
-  const { data } = await api.get('/api/shop/stats');
-  return data;
+  return cached('shopStats', async () => { const { data } = await api.get('/api/shop/stats'); return data; });
 }
 
 export async function purchaseItem(id, userData) {
   const { data } = await api.post(`/api/shop/items/${id}/purchase`, { userData });
+  invalidateCache('shopItems', 'shopStats', 'profile', 'wallet');
   return data;
 }
 
@@ -96,8 +107,7 @@ export async function getMyRewards() {
 }
 
 export async function getLeaderboard(type) {
-  const { data } = await api.get('/api/leaderboard', { params: { type } });
-  return data;
+  return cached(`leaderboard_${type}`, async () => { const { data } = await api.get('/api/leaderboard', { params: { type } }); return data; });
 }
 
 export async function getPerksState() {
@@ -117,6 +127,7 @@ export async function sendGiftBoost(nickname) {
 
 export async function sendExcTransfer(nickname, amount) {
   const { data } = await api.post('/api/perks/transfer', { nickname, amount });
+  invalidateCache('profile', 'wallet');
   return data;
 }
 
@@ -166,8 +177,7 @@ export async function createSupportTicket({ text, photo }) {
 }
 
 export async function getWallet() {
-  const { data } = await api.get('/api/wallet');
-  return data;
+  return cached('wallet', async () => { const { data } = await api.get('/api/wallet'); return data; });
 }
 
 export async function claimDailyBonus() {
@@ -182,11 +192,13 @@ export async function getTonQuote(amount) {
 
 export async function withdrawRub(amount, requisites) {
   const { data } = await api.post('/api/wallet/withdraw/rub', { amount, requisites });
+  invalidateCache('wallet', 'profile');
   return data;
 }
 
 export async function withdrawTon(amount, walletAddress) {
   const { data } = await api.post('/api/wallet/withdraw/ton', { amount, walletAddress });
+  invalidateCache('wallet', 'profile');
   return data;
 }
 
