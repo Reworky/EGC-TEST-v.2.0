@@ -4694,13 +4694,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendSubmissionCard(Long chatId, Long submissionId) {
         QuestSubmission submission = questService.getSubmission(submissionId);
-        AppUser submitter = submission.getUser();
-        String submitterLink = submitter.getTelegramUsername() != null
-                ? "<a href=\"https://t.me/" + submitter.getTelegramUsername() + "\">@" + submitter.getTelegramUsername() + "</a>"
-                : "<a href=\"tg://user?id=" + submitter.getTelegramId() + "\">" + escape(submitter.getNickname()) + "</a>";
         String caption = "🧾 <b>Заявка К-" + (submission.getDisplayId() != null ? submission.getDisplayId() : submission.getId()) + " на проверку</b>\n\n"
-                + "👤 Игрок: <b>" + escape(submitter.getNickname()) + "</b> (" + submitterLink + ")\n"
-                + "🆔 ID: <b>" + submitter.getTelegramId() + "</b>\n"
+                + "👤 Игрок: <b>" + escape(submission.getUser().getNickname()) + "</b>\n"
+                + "🆔 ID: <b>" + submission.getUser().getTelegramId() + "</b>\n"
                 + "🎯 Квест: <b>" + escape(submission.getQuest().getTitle()) + "</b>\n"
                 + "🎮 Игра: <b>" + escape(submission.getQuest().getGameName()) + "</b>\n"
                 + rewardPreviewLine(submission) + "\n"
@@ -8249,13 +8245,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void notifyModeratorsAboutSubmission(Long submissionId) {
         QuestSubmission submission = questService.getSubmission(submissionId);
-        AppUser notifUser = submission.getUser();
-        String notifUserLink = notifUser.getTelegramUsername() != null
-                ? "<a href=\"https://t.me/" + notifUser.getTelegramUsername() + "\">@" + notifUser.getTelegramUsername() + "</a>"
-                : "<a href=\"tg://user?id=" + notifUser.getTelegramId() + "\">" + escape(notifUser.getNickname()) + "</a>";
         String caption = "🧾 <b>Заявка К-" + (submission.getDisplayId() != null ? submission.getDisplayId() : submissionId) + " на проверку</b>\n\n"
-                + "👤 Игрок: <b>" + escape(notifUser.getNickname()) + "</b> (" + notifUserLink + ")\n"
-                + "🆔 ID: <b>" + notifUser.getTelegramId() + "</b>\n"
+                + "👤 Игрок: <b>" + escape(submission.getUser().getNickname()) + "</b>\n"
+                + "🆔 ID: <b>" + submission.getUser().getTelegramId() + "</b>\n"
                 + "🎯 Квест: <b>" + escape(submission.getQuest().getTitle()) + "</b>\n"
                 + "🎮 Игра: <b>" + escape(submission.getQuest().getGameName()) + "</b>\n"
                 + rewardPreviewLine(submission) + "\n"
