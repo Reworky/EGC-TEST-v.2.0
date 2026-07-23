@@ -84,6 +84,12 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
     private void seedGtaVQuests() {
         try {
             seedQuestIfAbsent(
+                "Добро пожаловать в Лос-Сантос", "GTA V",
+                "Зайди в GTA Online и сыграй одну любую миссию до конца.\nПодойдёт любая — контракт, работа, миссия от персонажа.",
+                "Лёгкие", "PC, PS4/5, Xbox", 3, 50, 1500, 1,
+                "Скриншот экрана завершения миссии с надписью \"Mission Passed\" и наградой. Ник персонажа должен быть виден."
+            );
+            seedQuestIfAbsent(
                 "Первый миллион", "GTA V",
                 "Заработай 1,000,000 $ в GTA Online.\nДеньги можно получить любым способом — миссии, гонки, бизнес, продажа товара.",
                 "Лёгкие", "PC, PS4/5, Xbox", 7, 50, 1500, 1,
