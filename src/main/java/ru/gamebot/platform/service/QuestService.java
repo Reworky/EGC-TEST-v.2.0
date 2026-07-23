@@ -16,8 +16,11 @@ import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.model.QuestSubmission;
 import ru.gamebot.platform.domain.model.Season;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
+import ru.gamebot.platform.domain.repository.GameCatalogRepository;
 import ru.gamebot.platform.domain.repository.QuestRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -46,6 +49,7 @@ public class QuestService {
     private final QuestRepository questRepository;
     private final QuestSubmissionRepository questSubmissionRepository;
     private final AppUserRepository appUserRepository;
+    private final GameCatalogRepository gameCatalogRepository;
     private final UserService userService;
     private final HealthRatioService healthRatioService;
     private final SinkShopService sinkShopService;
@@ -89,23 +93,31 @@ public class QuestService {
     }
 
     public List<String> findActiveGameNames() {
+        Set<String> catalog = catalogGameNames();
         return findActiveQuests().stream()
                 .filter(q -> !q.isSponsored() && !"UGC".equalsIgnoreCase(q.getGameName()))
                 .map(Quest::getGameName)
-                .filter(name -> name != null && !name.isBlank())
+                .filter(name -> name != null && !name.isBlank() && catalog.contains(name.toLowerCase()))
                 .distinct()
                 .sorted(String.CASE_INSENSITIVE_ORDER)
                 .toList();
     }
 
     public List<String> findAllGameNames() {
+        Set<String> catalog = catalogGameNames();
         return questRepository.findAll().stream()
                 .filter(q -> !q.isSponsored() && !"UGC".equalsIgnoreCase(q.getGameName()))
                 .map(Quest::getGameName)
-                .filter(name -> name != null && !name.isBlank())
+                .filter(name -> name != null && !name.isBlank() && catalog.contains(name.toLowerCase()))
                 .distinct()
                 .sorted(String.CASE_INSENSITIVE_ORDER)
                 .toList();
+    }
+
+    private Set<String> catalogGameNames() {
+        return gameCatalogRepository.findAll().stream()
+                .map(g -> g.getGameName().toLowerCase())
+                .collect(Collectors.toSet());
     }
 
     public long countActiveByGameName(String gameName) {
