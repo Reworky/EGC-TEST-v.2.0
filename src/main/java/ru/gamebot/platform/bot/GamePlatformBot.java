@@ -3119,7 +3119,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 "shop:view:" + reward.getId())));
                     }
                 }
+                if ("Кастомизация".equals(entry.getKey())) {
+                    rows.add(List.of(keyboardFactory.callback("🎭 Титулы профиля", "sink:titles")));
+                }
             }
+        } else {
+            rows.add(List.of(keyboardFactory.callback("── Кастомизация ──", "noop")));
+            rows.add(List.of(keyboardFactory.callback("🎭 Титулы профиля", "sink:titles")));
         }
 
         rows.add(List.of(keyboardFactory.callback("📋 Мои заявки", "menu:my-rewards")));
@@ -3457,9 +3463,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🔄 Перевод EXC другу — 10% комиссия", "sink:transfer")));
         rows.add(List.of(keyboardFactory.callback("⚔️ 🔒 Дуэль — Скоро", "sink:soon")));
         rows.add(List.of(keyboardFactory.callback("📢 🔒 Место в ТОП-посте — Скоро", "sink:soon")));
-
-        rows.add(List.of(keyboardFactory.callback("— Кастомизация —", "sink:noop")));
-        rows.add(List.of(keyboardFactory.callback("🎭 Титулы профиля", "sink:titles")));
 
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
 
