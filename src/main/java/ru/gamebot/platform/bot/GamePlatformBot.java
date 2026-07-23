@@ -3122,8 +3122,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         }
 
+        rows.add(List.of(keyboardFactory.callback("📋 Мои заявки", "menu:my-rewards")));
         rows.add(List.of(
-                keyboardFactory.callback("📋 Мои заявки", "menu:my-rewards"),
+                keyboardFactory.callback("⬅️ Назад", "menu:shop"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
 
