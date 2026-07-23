@@ -3097,7 +3097,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     if (groupItems.size() > 1) {
                         // Show as single entry leading to denomination picker
                         RewardItem first = groupItems.get(0);
-                        String groupLabel = groupItemLabel(first.getTitle());
+                        String groupLabel = "avatar_frame".equals(groupEntry.getKey())
+                                ? "Рамка аватара"
+                                : groupItemLabel(first.getTitle());
                         boolean anyAvailable = groupItems.stream().anyMatch(r ->
                                 !shopLimitService.getItemStatus(user, r).startsWith("🔒"));
                         String icon = anyAvailable ? "🎁" : "🔒";
