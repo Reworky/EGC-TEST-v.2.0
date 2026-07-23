@@ -19,8 +19,6 @@ import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.GameCatalogRepository;
 import ru.gamebot.platform.domain.repository.QuestRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -93,31 +91,27 @@ public class QuestService {
     }
 
     public List<String> findActiveGameNames() {
-        Set<String> catalog = catalogGameNames();
         return findActiveQuests().stream()
                 .filter(q -> !q.isSponsored() && !"UGC".equalsIgnoreCase(q.getGameName()))
                 .map(Quest::getGameName)
-                .filter(name -> name != null && !name.isBlank() && catalog.contains(name.toLowerCase()))
+                .filter(name -> name != null && !name.isBlank() && isValidGameName(name))
                 .distinct()
                 .sorted(String.CASE_INSENSITIVE_ORDER)
                 .toList();
     }
 
     public List<String> findAllGameNames() {
-        Set<String> catalog = catalogGameNames();
         return questRepository.findAll().stream()
                 .filter(q -> !q.isSponsored() && !"UGC".equalsIgnoreCase(q.getGameName()))
                 .map(Quest::getGameName)
-                .filter(name -> name != null && !name.isBlank() && catalog.contains(name.toLowerCase()))
+                .filter(name -> name != null && !name.isBlank() && isValidGameName(name))
                 .distinct()
                 .sorted(String.CASE_INSENSITIVE_ORDER)
                 .toList();
     }
 
-    private Set<String> catalogGameNames() {
-        return gameCatalogRepository.findAll().stream()
-                .map(g -> g.getGameName().toLowerCase())
-                .collect(Collectors.toSet());
+    private static boolean isValidGameName(String name) {
+        return !name.contains("://") && !name.contains("t.me") && !name.contains("/");
     }
 
     public long countActiveByGameName(String gameName) {
