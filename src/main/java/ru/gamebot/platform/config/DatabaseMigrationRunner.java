@@ -35,6 +35,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         fixSponsoredQuestFlag();
         seedGtaVQuests();
         seedGtaVCatalog();
+        deleteGamesAndQuests();
     }
 
     private void backfillQuestTicketRewards() {
@@ -48,6 +49,23 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             }
         } catch (Exception e) {
             log.error("[DBMigration] backfillQuestTicketRewards failed: {}", e.getMessage());
+        }
+    }
+
+    private void deleteGamesAndQuests() {
+        try {
+            for (String game : List.of("EA FC 26", "Mobile Legends: Bang Bang")) {
+                // Delete submissions for quests of this game
+                jdbcTemplate.update(
+                    "DELETE FROM quest_submissions WHERE quest_id IN (SELECT id FROM quests WHERE game_name = ?)", game);
+                // Delete quests
+                int deleted = jdbcTemplate.update("DELETE FROM quests WHERE game_name = ?", game);
+                // Delete from catalog
+                jdbcTemplate.update("DELETE FROM game_catalog WHERE game_name = ?", game);
+                if (deleted > 0) log.info("[DBMigration] Deleted {} quests and catalog entry for '{}'", deleted, game);
+            }
+        } catch (Exception e) {
+            log.error("[DBMigration] deleteGamesAndQuests failed: {}", e.getMessage());
         }
     }
 
