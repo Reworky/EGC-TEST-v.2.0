@@ -135,6 +135,8 @@ function QuestActions({ quest, detail, onChanged }) {
         setComment('');
         onChanged();
       }
+    } catch (e) {
+      setMessage(e?.response?.data?.message || 'Ошибка отправки. Попробуйте ещё раз.');
     } finally {
       setBusy(false);
     }

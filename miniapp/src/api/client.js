@@ -13,7 +13,7 @@ api.interceptors.request.use(cfg => {
 api.interceptors.response.use(
   res => res,
   err => {
-    if (!err.response) {
+    if (!err.response && !err.config?.skipOfflineDetection) {
       window.dispatchEvent(new CustomEvent('egc:offline'));
     }
     return Promise.reject(err);
@@ -83,6 +83,7 @@ export async function submitQuestReport(id, { photo, externalLink, comment }) {
   if (comment) form.append('comment', comment);
   const { data } = await api.post(`/api/quests/${id}/report`, form, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    skipOfflineDetection: true,
   });
   return data;
 }
@@ -182,6 +183,7 @@ export async function createSupportTicket({ text, photo }) {
   if (photo) form.append('photo', photo);
   const { data } = await api.post('/api/support/tickets', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    skipOfflineDetection: true,
   });
   return data;
 }
