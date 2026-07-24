@@ -10,6 +10,47 @@ const CATEGORY_BADGE = { 'Лёгкие': 'easy', 'Средние': 'medium', 'С
 const CATEGORY_CLASS = { 'Лёгкие': 'q-easy', 'Средние': 'q-medium', 'Сложные': 'q-hard' };
 const CATEGORY_TICKETS = { 'Лёгкие': 1, 'Средние': 2, 'Сложные': 3 };
 
+function LinkPill({ url }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleOpen(e) {
+    e.stopPropagation();
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      url.includes('t.me/') ? tg.openTelegramLink(url) : tg.openLink(url);
+    } else {
+      window.open(url, '_blank', 'noopener');
+    }
+  }
+
+  function handleCopy(e) {
+    e.stopPropagation();
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
+  const display = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+
+  return (
+    <span className="quest-link-pill" onClick={e => e.stopPropagation()}>
+      <span className="quest-link-url" onClick={handleOpen}>🔗 {display}</span>
+      <button className="quest-link-copy" onClick={handleCopy} title="Копировать ссылку">
+        {copied ? '✓' : '⎘'}
+      </button>
+    </span>
+  );
+}
+
+function renderTextWithLinks(text) {
+  if (!text) return null;
+  const parts = text.split(/(https?:\/\/[^\s<>"']+)/);
+  return parts.map((part, i) =>
+    /^https?:\/\//.test(part) ? <LinkPill key={i} url={part} /> : part
+  );
+}
+
 function QuestSkeleton() {
   return (
     <div className="quest-skeleton-item">
@@ -193,17 +234,17 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
       </div>
       {expanded === q.id && (
         <div className="quest-detail" onClick={e => e.stopPropagation()}>
-          <p className="quest-desc">{details[q.id]?.description ?? q.description}</p>
+          <p className="quest-desc">{renderTextWithLinks(details[q.id]?.description ?? q.description)}</p>
           {details[q.id]?.instruction && (
             <>
               <div className="quest-section-title">Как выполнить</div>
-              <p className="quest-instruction">{details[q.id].instruction}</p>
+              <p className="quest-instruction">{renderTextWithLinks(details[q.id].instruction)}</p>
             </>
           )}
           {details[q.id]?.requirements && (
             <>
               <div className="quest-section-title">Требования</div>
-              <p className="quest-requirements">{details[q.id].requirements}</p>
+              <p className="quest-requirements">{renderTextWithLinks(details[q.id].requirements)}</p>
             </>
           )}
           <QuestActions
