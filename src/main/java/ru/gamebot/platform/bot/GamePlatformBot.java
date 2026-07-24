@@ -1371,13 +1371,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
             case SPONSOR_QUEST_TITLE -> {
                 session.getData().put("sq_title", text.trim());
+                session.setState(SessionState.SPONSOR_QUEST_CHANNEL);
+                sendText(user.getTelegramId(), "2️⃣ Название канала (например: <code>Подарки</code>):", cancelKeyboard());
+            }
+            case SPONSOR_QUEST_CHANNEL -> {
+                session.getData().put("sq_channel", text.trim());
                 session.setState(SessionState.SPONSOR_QUEST_DESCRIPTION);
-                sendText(user.getTelegramId(), "2️⃣ Подробное описание квеста:", cancelKeyboard());
+                sendText(user.getTelegramId(), "3️⃣ Суть задания (что нужно сделать пользователю):", cancelKeyboard());
             }
             case SPONSOR_QUEST_DESCRIPTION -> {
                 session.getData().put("sq_desc", text.trim());
                 session.setState(SessionState.SPONSOR_QUEST_XP);
-                sendText(user.getTelegramId(), "3️⃣ Сколько XP за выполнение квеста? (число)", cancelKeyboard());
+                sendText(user.getTelegramId(), "4️⃣ Сколько XP за выполнение квеста? (число)", cancelKeyboard());
             }
             case SPONSOR_QUEST_XP -> {
                 try { Long.parseLong(text.trim()); } catch (NumberFormatException e) {
@@ -1385,7 +1390,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
                 session.getData().put("sq_xp", text.trim());
                 session.setState(SessionState.SPONSOR_QUEST_EXC);
-                sendText(user.getTelegramId(), "4️⃣ Сколько EXC за выполнение квеста? (число)", cancelKeyboard());
+                sendText(user.getTelegramId(), "5️⃣ Сколько EXC за выполнение квеста? (число)", cancelKeyboard());
             }
             case SPONSOR_QUEST_EXC -> {
                 try { Long.parseLong(text.trim()); } catch (NumberFormatException e) {
@@ -1393,12 +1398,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
                 session.getData().put("sq_exc", text.trim());
                 session.setState(SessionState.SPONSOR_QUEST_DURATION);
-                sendText(user.getTelegramId(), "5️⃣ Длительность квеста (например: <code>7 дней</code>, <code>30 дней</code>):", cancelKeyboard());
+                sendText(user.getTelegramId(), "6️⃣ Длительность квеста (например: <code>7 дней</code>, <code>30 дней</code>):", cancelKeyboard());
             }
             case SPONSOR_QUEST_DURATION -> {
                 session.getData().put("sq_duration", text.trim());
                 session.setState(SessionState.SPONSOR_QUEST_NOTE);
-                sendText(user.getTelegramId(), "6️⃣ Примечание (условия, ссылки, доп. инфо). Или <code>0</code> — без примечания:", cancelKeyboard());
+                sendText(user.getTelegramId(), "7️⃣ Ссылки на канал (через Enter, если несколько). Или <code>0</code> — без ссылок:", cancelKeyboard());
             }
             case SPONSOR_QUEST_NOTE -> {
                 String note = "0".equals(text.trim()) ? "" : text.trim();
@@ -2601,19 +2606,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 (notice == null ? "" : notice + "\n\n")
                         + sponsorBadge
                         + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n\n"
-                        + (quest.isSponsored() ? "🎮 Канал: <b>" : "🎮 Игра: <b>") + escape(quest.getGameName()) + "</b>\n"
+                        + (quest.isSponsored() ? "🎮 Название канала: <b>" : "🎮 Игра: <b>") + escape(quest.getGameName()) + "</b>\n"
                         + (quest.isSponsored() || "UGC".equalsIgnoreCase(quest.getGameName()) ? "" : "📚 Формат: <b>" + escape(quest.getCategory()) + "</b>\n"
                         + "🕹️ Платформа: <b>" + escape(quest.getPlatform()) + "</b>\n")
                         + deadlineLine
                         + "📌 Статус: <b>" + escape(displayStatus) + "</b>\n\n"
-                        + "🏆 <b>Награда</b>\n"
+                        + "🏆 <b>Награда:</b>\n"
                         + "✨ +" + quest.getRewardXp() + " XP\n"
                         + "🪙 +" + quest.getRewardCoins() + (quest.isSponsored() ? " EXC" : " монет") + "\n"
                         + (!quest.isSponsored() && !"UGC".equalsIgnoreCase(quest.getGameName()) && quest.getTicketReward() > 0 ? "🎟 +" + quest.getTicketReward() + " билет(а) для Колеса фортуны\n" : "")
                         + "\n"
-                        + "📝 <b>Суть задания</b>\n" + escape(quest.getDescription()) + "\n\n"
-                        + "📎 <b>Что нужно сделать</b>\n" + escape(quest.getInstruction())
-                        + (quest.isSponsored() ? "" : "\n\n✅ <b>Что примет модерация</b>\n" + escape(quest.getRequirements())),
+                        + "📝 <b>Суть задания:</b>\n" + escape(quest.getDescription()) + "\n\n"
+                        + (quest.getInstruction() != null && !quest.getInstruction().isBlank()
+                            ? (quest.isSponsored() ? "📎 <b>Ссылки:</b>\n" : "📎 <b>Что нужно сделать:</b>\n") + escape(quest.getInstruction()) + (quest.isSponsored() ? "" : "\n\n✅ <b>Что примет модерация:</b>\n" + escape(quest.getRequirements()))
+                            : (quest.isSponsored() ? "" : "📎 <b>Что нужно сделать:</b>\n" + escape(quest.getInstruction()) + "\n\n✅ <b>Что примет модерация:</b>\n" + escape(quest.getRequirements()))),
                 verticalWithBackMenu(buttons, backText, backData));
     }
 
@@ -2653,7 +2659,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 notice + "\n\n"
                         + "🎯 <b>" + escape(freshQuest.getTitle()) + "</b>\n\n"
-                        + (freshQuest.isSponsored() ? "🎮 Канал: <b>" : "🎮 Игра: <b>") + escape(freshQuest.getGameName()) + "</b>\n"
+                        + (freshQuest.isSponsored() ? "🎮 Название канала: <b>" : "🎮 Игра: <b>") + escape(freshQuest.getGameName()) + "</b>\n"
                         + (freshQuest.isSponsored() || "UGC".equalsIgnoreCase(freshQuest.getGameName()) ? "" : "📚 Формат: <b>" + escape(freshQuest.getCategory()) + "</b>\n"
                         + "🕹️ Платформа: <b>" + escape(freshQuest.getPlatform()) + "</b>\n")
                         + deadlineLine
@@ -9483,8 +9489,13 @@ String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошел�
             try {
                 long sid = Long.parseLong(sponsorIdStr);
                 quest.setSponsorId(sid);
-                // Use sponsor name as gameName so quest appears in its own section
-                sponsorService.findById(sid).ifPresent(s -> quest.setGameName(s.getName()));
+                // Use channel name if provided, otherwise fall back to sponsor name
+                String channelName = d.get("sq_channel");
+                if (channelName != null && !channelName.isBlank()) {
+                    quest.setGameName(channelName);
+                } else {
+                    sponsorService.findById(sid).ifPresent(s -> quest.setGameName(s.getName()));
+                }
             } catch (NumberFormatException ignored) {}
         }
 
