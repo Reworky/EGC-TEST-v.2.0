@@ -5898,7 +5898,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendAdminGamingQuestList(AppUser user) {
-        List<String> games = questService.findAllGameNames();
+        List<String> games = questService.findActiveGameNames();
         if (games.isEmpty()) {
             sendText(user.getTelegramId(),
                     "🗂️ <b>Игровые квесты</b>\n\nПока нет квестов, распределённых по играм.",
