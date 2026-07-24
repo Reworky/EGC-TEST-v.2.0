@@ -92,7 +92,7 @@ public class QuestService {
 
     public List<String> findActiveGameNames() {
         return findActiveQuests().stream()
-                .filter(q -> !q.isSponsored() && !"UGC".equalsIgnoreCase(q.getGameName()))
+                .filter(q -> !q.isSponsored() && q.getSponsorId() == null && !"UGC".equalsIgnoreCase(q.getGameName()))
                 .map(Quest::getGameName)
                 .filter(name -> name != null && !name.isBlank() && isValidGameName(name))
                 .distinct()
@@ -102,7 +102,7 @@ public class QuestService {
 
     public List<String> findAllGameNames() {
         return questRepository.findAll().stream()
-                .filter(q -> !q.isSponsored() && !"UGC".equalsIgnoreCase(q.getGameName()))
+                .filter(q -> !q.isSponsored() && q.getSponsorId() == null && !"UGC".equalsIgnoreCase(q.getGameName()))
                 .map(Quest::getGameName)
                 .filter(name -> name != null && !name.isBlank() && isValidGameName(name))
                 .distinct()
@@ -133,7 +133,7 @@ public class QuestService {
     public List<Quest> findActiveByGameName(String gameName) {
         return findActiveQuests().stream()
                 .filter(quest -> sameGame(quest.getGameName(), gameName))
-                .filter(q -> !q.isSponsored())
+                .filter(q -> !q.isSponsored() && q.getSponsorId() == null)
                 .sorted(Comparator.comparing(Quest::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
     }
@@ -141,7 +141,7 @@ public class QuestService {
     public List<Quest> findAllByGameName(String gameName) {
         return questRepository.findAll().stream()
                 .filter(quest -> sameGame(quest.getGameName(), gameName))
-                .filter(q -> !q.isSponsored() && !"UGC".equalsIgnoreCase(q.getGameName()))
+                .filter(q -> !q.isSponsored() && q.getSponsorId() == null && !"UGC".equalsIgnoreCase(q.getGameName()))
                 .sorted(Comparator.comparing(Quest::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
     }
@@ -183,6 +183,9 @@ public class QuestService {
     public Quest createQuest(Quest quest) {
         quest.setCreatedAt(LocalDateTime.now());
         quest.setActive(true);
+        if (quest.getSponsorId() != null) {
+            quest.setSponsored(true);
+        }
         // Safety net: срок должен покрывать минимальный кулдаун сдачи отчёта для категории,
         // иначе дедлайн наступит раньше, чем откроется возможность отправить отчёт.
         int minDays = minDurationDaysForCategory(quest.getCategory());
