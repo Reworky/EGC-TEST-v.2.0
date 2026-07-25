@@ -777,10 +777,10 @@ public class QuestService {
     public long deleteQuest(Long questId) {
         Quest quest = getQuest(questId);
         long submissions = questSubmissionRepository.countByQuest(quest);
-        if (submissions > 0) {
-            questSubmissionRepository.deleteAllByQuest(quest);
-        }
-        questRepository.delete(quest);
+        // Deactivate instead of physical delete — seeder checks existence (not active flag),
+        // so a deactivated quest won't be re-created on next deploy.
+        quest.setActive(false);
+        questRepository.save(quest);
         return submissions;
     }
 

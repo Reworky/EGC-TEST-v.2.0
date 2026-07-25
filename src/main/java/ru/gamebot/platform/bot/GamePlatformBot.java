@@ -8299,11 +8299,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         Quest quest = questService.getQuest(questId);
         String backData = currentAdminQuestBackData(user, quest);
-        long removedSubmissions = questService.deleteQuest(questId);
+        questService.deleteQuest(questId);
         sendText(user.getTelegramId(),
-                "🗑️ Квест удалён.\n\n"
-                        + "🎯 Название: <b>" + escape(quest.getTitle()) + "</b>\n"
-                        + "📎 Удалено связанных заявок: <b>" + removedSubmissions + "</b>",
+                "🗑️ Квест скрыт от пользователей.\n\n"
+                        + "🎯 Название: <b>" + escape(quest.getTitle()) + "</b>\n\n"
+                        + "После следующего деплоя квест не вернётся.",
                 backMenuKeyboard(backData));
     }
 
