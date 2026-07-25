@@ -6189,13 +6189,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long pendingRewards = rewardService.countPendingRequests();
         long totalPaidOut = rewardService.totalPaidOutExc();
         long totalQuestsCreated = questService.countActive();
+        long totalApproved = questService.countAllApproved();
 
         sendText(user.getTelegramId(),
                 "📊 <b>Статистика платформы</b>\n\n"
                         + "👥 Всего игроков: <b>" + userService.totalRegisteredUsers() + "</b>\n"
                         + "🟢 Активных за 7 дней: <b>" + activeUsers + "</b>\n"
                         + "🆕 Новых за 7 дней: <b>" + newUsersWeek + "</b>\n"
-                        + "✅ Выполненных заданий: <b>" + users.stream().mapToInt(AppUser::getCompletedQuests).sum() + "</b>\n"
+                        + "✅ Выполненных заданий: <b>" + totalApproved + "</b>\n"
                         + "🎟️ Билетов в обороте: <b>" + users.stream().mapToLong(AppUser::getTickets).sum() + "</b>\n"
                         + "💰 EXC на счетах игроков: <b>" + totalCoins + " EXC</b>\n"
                         + "💸 Выплачено игрокам: <b>" + String.format("%,d", totalPaidOut).replace(',', ' ') + " EXC</b>\n"
