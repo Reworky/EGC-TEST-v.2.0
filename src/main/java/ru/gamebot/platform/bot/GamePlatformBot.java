@@ -5763,6 +5763,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "💸 <b>Заявка на вывод В-" + reqDisplayId(req) + "</b>\n\n"
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
                         + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
+                        + "🌍 Страна: <b>" + escape(requester.getCountry() != null ? requester.getCountry() : "Не указана") + "</b>\n"
                         + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
                         + "💵 К выплате: <b>~" + rubles + " ₽</b>" + payoutSuffix
                         + detailsLine + "\n"
@@ -8361,6 +8362,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "👤 Игрок: <b>" + escape(user.getNickname()) + "</b>\n"
                 + "🆔 Telegram ID: <b>" + user.getTelegramId() + "</b>"
                 + userLink + "\n"
+                + "🌍 Страна: <b>" + escape(user.getCountry() != null ? user.getCountry() : "Не указана") + "</b>\n"
                 + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
                 + "📦 Тип: <b>" + escape(req.getRewardItem().getTitle()) + "</b>"
                 + details;
@@ -8458,6 +8460,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "💸 <b>Заявка на вывод В-" + reqDisplayId(req) + "</b>\n\n"
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
                         + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
+                        + "🌍 Страна: <b>" + escape(requester.getCountry() != null ? requester.getCountry() : "Не указана") + "</b>\n"
                         + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
                         + "💵 К выплате: <b>~" + rubles + " ₽</b>" + payoutSuffix
                         + detailsLine + "\n"
