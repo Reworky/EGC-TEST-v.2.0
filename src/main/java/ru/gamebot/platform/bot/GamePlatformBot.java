@@ -5056,6 +5056,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendText(user.getTelegramId(),
                             "👥 <b>Изменить лимит участников</b>\n\nСейчас: <i>" + curLimit + "</i>\n\nУкажите новый лимит числом:",
                             cancelKeyboard());
+                } else if (action.startsWith("game:top:")) {
+                    String gameName = decodeGameToken(action.substring("game:top:".length()));
+                    sendAdminGameQuestTop(user, gameName);
+                    answerSilently(callbackQuery.getId());
+                    return;
                 } else if (action.startsWith("game:photo:set:")) {
                     String gameName = decodeGameToken(action.substring("game:photo:set:".length()));
                     session.reset();
@@ -5982,6 +5987,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ));
         rows.add(List.of(keyboardFactory.callback("🏰 Сложные", "admin:quests:list:" + encodeGameToken(gameName) + ":long")));
         rows.add(List.of(keyboardFactory.callback("📚 Все квесты", "admin:quests:list:" + encodeGameToken(gameName) + ":all")));
+        rows.add(List.of(keyboardFactory.callback("🏆 Топ квестов", "admin:game:top:" + encodeGameToken(gameName))));
 
         boolean hasPhoto = gameCatalogService.getPhotoFileId(gameName).isPresent();
         if (hasPhoto) {
@@ -6004,6 +6010,32 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + photoStatus + "\n\n"
                         + "Выберите категорию, чтобы открыть нужную группу квестов по этой игре.",
                 keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendAdminGameQuestTop(AppUser user, String gameName) {
+        List<Quest> quests = questService.findAllByGameName(gameName);
+        if (quests.isEmpty()) {
+            sendText(user.getTelegramId(), "Квесты не найдены.", backMenuKeyboard("admin:quests:game:" + encodeGameToken(gameName)));
+            return;
+        }
+        record QuestStat(Quest quest, long count) {}
+        List<QuestStat> stats = quests.stream()
+                .map(q -> new QuestStat(q, questService.countApprovedByQuest(q)))
+                .sorted((a, b) -> Long.compare(b.count(), a.count()))
+                .toList();
+
+        String[] medals = {"🥇", "🥈", "🥉"};
+        StringBuilder sb = new StringBuilder("🏆 <b>Топ квестов — " + escape(gameName) + "</b>\n\n");
+        for (int i = 0; i < stats.size(); i++) {
+            QuestStat s = stats.get(i);
+            String place = i < medals.length ? medals[i] : (i + 1) + ".";
+            String activeTag = s.quest().isActive() ? "" : " <i>(неактивен)</i>";
+            sb.append(place).append(" <b>").append(escape(s.quest().getTitle())).append("</b>").append(activeTag).append("\n")
+              .append("   ").append(s.quest().getCategory()).append(" · ")
+              .append(s.count()).append(" выполн.\n\n");
+        }
+        sendText(user.getTelegramId(), sb.toString().trim(),
+                backMenuKeyboard("admin:quests:game:" + encodeGameToken(gameName)));
     }
 
     private void sendAdminQuestListByGame(AppUser user, String gameName, String category) {

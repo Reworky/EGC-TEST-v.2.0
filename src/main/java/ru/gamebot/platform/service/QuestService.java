@@ -726,6 +726,10 @@ public class QuestService {
         return questSubmissionRepository.countApprovedByUser(user);
     }
 
+    public long countApprovedByQuest(Quest quest) {
+        return questSubmissionRepository.countApprovedByQuest(quest);
+    }
+
     public long sumEarnedCoinsByUser(AppUser user) {
         return questSubmissionRepository.sumIssuedCoinsByUser(user);
     }
