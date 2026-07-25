@@ -31,6 +31,8 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         dropCheckConstraints("QUEST_SUBMISSIONS");
         dropCheckConstraints("REWARD_REQUESTS");
         deduplicateQuests();
+        deduplicateNicknames();
+        addNicknameUniqueIndex();
         backfillQuestTicketRewards();
         seedEgcAvatarFrame();
         fixSponsoredQuestFlag();
@@ -38,6 +40,44 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         seedGtaVCatalog();
         deleteGamesAndQuests();
         fixNullDurationText();
+    }
+
+    private void deduplicateNicknames() {
+        try {
+            List<Map<String, Object>> dups = jdbcTemplate.queryForList(
+                "SELECT LOWER(nickname) as lnick, COUNT(*) as cnt FROM app_users " +
+                "WHERE nickname IS NOT NULL GROUP BY LOWER(nickname) HAVING COUNT(*) > 1");
+            for (Map<String, Object> row : dups) {
+                String lnick = (String) row.get("LNICK");
+                List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                    "SELECT id, nickname FROM app_users WHERE LOWER(nickname) = ? ORDER BY id ASC", lnick);
+                for (int i = 1; i < rows.size(); i++) {
+                    Long id = ((Number) rows.get(i).get("ID")).longValue();
+                    String oldNick = (String) rows.get(i).get("NICKNAME");
+                    String newNick = oldNick + "_" + (i + 1);
+                    jdbcTemplate.update("UPDATE app_users SET nickname = ? WHERE id = ?", newNick, id);
+                    log.warn("[DBMigration] Renamed duplicate nickname '{}' -> '{}' for user id={}", oldNick, newNick, id);
+                }
+            }
+        } catch (Exception e) {
+            log.error("[DBMigration] deduplicateNicknames failed: {}", e.getMessage());
+        }
+    }
+
+    private void addNicknameUniqueIndex() {
+        try {
+            Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM INFORMATION_SCHEMA.INDEXES " +
+                "WHERE UPPER(TABLE_NAME) = 'APP_USERS' AND INDEX_NAME = 'IDX_APP_USERS_NICKNAME'",
+                Integer.class);
+            if (count == null || count == 0) {
+                jdbcTemplate.execute(
+                    "CREATE UNIQUE INDEX IDX_APP_USERS_NICKNAME ON app_users(nickname)");
+                log.info("[DBMigration] Created unique index on app_users.nickname");
+            }
+        } catch (Exception e) {
+            log.error("[DBMigration] addNicknameUniqueIndex failed: {}", e.getMessage());
+        }
     }
 
     private void deduplicateQuests() {
