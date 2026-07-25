@@ -1027,10 +1027,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void handleStateInput(AppUser user, UserSession session, String text) {
         switch (session.getState()) {
             case REG_NAME -> {
-                session.getData().put("nickname", text.trim());
+                String regNick = text.trim();
+                if (regNick.length() < 2 || regNick.length() > 32) {
+                    sendText(user.getTelegramId(),
+                            "⚠️ Никнейм должен быть от 2 до 32 символов. Попробуйте ещё раз:",
+                            null);
+                    return;
+                }
+                if (userService.findByNickname(regNick).isPresent()) {
+                    sendText(user.getTelegramId(),
+                            "⚠️ Никнейм <b>" + escape(regNick) + "</b> уже занят.\n\nПридумайте другой и введите его:",
+                            null);
+                    return;
+                }
+                session.getData().put("nickname", regNick);
                 session.setState(SessionState.REG_AGE);
                 sendText(user.getTelegramId(),
-                        "🧾 Отлично, <b>" + escape(text.trim()) + "</b>!\n\nТеперь укажите возраст числом.",
+                        "🧾 Отлично, <b>" + escape(regNick) + "</b>!\n\nТеперь укажите возраст числом.",
                         null);
             }
             case REG_AGE -> {
