@@ -6026,16 +6026,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         String[] medals = {"🥇", "🥈", "🥉"};
         StringBuilder sb = new StringBuilder("🏆 <b>Топ квестов — " + escape(gameName) + "</b>\n\n");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (int i = 0; i < stats.size(); i++) {
             QuestStat s = stats.get(i);
             String place = i < medals.length ? medals[i] : (i + 1) + ".";
-            String activeTag = s.quest().isActive() ? "" : " <i>(неактивен)</i>";
+            String activeTag = s.quest().isActive() ? "" : " (неактивен)";
             sb.append(place).append(" <b>").append(escape(s.quest().getTitle())).append("</b>").append(activeTag).append("\n")
               .append("   ").append(s.quest().getCategory()).append(" · ")
               .append(s.count()).append(" выполн.\n\n");
+            String catToken = categoryToken(s.quest().getCategory());
+            String cb = "admin:quest:" + encodeGameToken(gameName) + ":" + catToken + ":" + s.quest().getId();
+            rows.add(List.of(keyboardFactory.callback("✏️ " + trim(s.quest().getTitle(), 35), cb)));
         }
-        sendText(user.getTelegramId(), sb.toString().trim(),
-                backMenuKeyboard("admin:quests:game:" + encodeGameToken(gameName)));
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", "admin:quests:game:" + encodeGameToken(gameName)),
+                keyboardFactory.callback("🏠 Меню", "menu:admin")
+        ));
+        sendText(user.getTelegramId(), sb.toString().trim(), keyboardFactory.rowsLayout(rows));
     }
 
     private void sendAdminQuestListByGame(AppUser user, String gameName, String category) {
