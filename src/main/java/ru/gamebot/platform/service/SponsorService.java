@@ -74,16 +74,19 @@ public class SponsorService {
         sponsorRepository.findById(id).ifPresent(s -> {
             s.setActive(false);
             sponsorRepository.save(s);
+            questRepository.findAll().stream()
+                    .filter(q -> id.equals(q.getSponsorId()))
+                    .forEach(q -> { q.setActive(false); questRepository.save(q); });
         });
     }
 
     @Transactional
     public void deleteCampaign(Long id) {
         sponsorRepository.findById(id).ifPresent(s -> {
-            // Unlink all quests
             questRepository.findAll().stream()
                     .filter(q -> id.equals(q.getSponsorId()))
                     .forEach(q -> {
+                        q.setActive(false);
                         q.setSponsored(false);
                         q.setSponsorId(null);
                         questRepository.save(q);

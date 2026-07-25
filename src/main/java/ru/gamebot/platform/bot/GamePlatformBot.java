@@ -5120,10 +5120,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     try {
                         ru.gamebot.platform.domain.model.Quest q = questService.getQuest(questId);
                         long sid = q.getSponsorId() != null ? q.getSponsorId() : 0;
+                        q.setActive(false);
                         q.setSponsored(false);
                         q.setSponsorId(null);
                         questService.save(q);
-                        answer(callbackQuery.getId(), "Квест откреплён.");
+                        answer(callbackQuery.getId(), "Квест откреплён и скрыт от пользователей.");
                         if (sid > 0) sendAdminSponsorView(user, sid);
                         else sendAdminSponsorList(user);
                     } catch (Exception e) {
@@ -5199,10 +5200,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     try {
                         ru.gamebot.platform.domain.model.Quest q = questService.getQuest(questId);
                         long sid = q.getSponsorId() != null ? q.getSponsorId() : 0;
+                        q.setActive(false);
                         q.setSponsored(false);
                         q.setSponsorId(null);
                         questService.save(q);
-                        answer(callbackQuery.getId(), "Квест откреплён.");
+                        answer(callbackQuery.getId(), "Квест откреплён и скрыт от пользователей.");
                         if (sid > 0) sendAdminPostpayView(user, sid);
                         else sendAdminPostpayList(user);
                     } catch (Exception e) { answer(callbackQuery.getId(), "❌ " + e.getMessage()); }
