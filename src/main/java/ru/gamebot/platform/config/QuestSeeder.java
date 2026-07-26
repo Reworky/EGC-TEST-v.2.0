@@ -73,6 +73,7 @@ public class QuestSeeder implements CommandLineRunner {
                 "Нанеси 300 000 ед. урона",
                 "Финишируй в топ-3 в режиме Solo Showdown 3 раза подряд",
                 "Набери 200 Кубков не выходя в лобби",
+                "Набери 250 Кубков не выходя в лобби",
                 "С нуля набери 2000 Кубков на одном бойце",
                 "С нуля набери 2500 Кубков на одном бойце",
                 "Нанеси 100 000 ед. урона в режиме Ограбление или Любое столкновение",
@@ -82,9 +83,11 @@ public class QuestSeeder implements CommandLineRunner {
         questRepository.findAll().stream()
                 .filter(q -> "Brawl Stars".equalsIgnoreCase(q.getGameName()) && !keepBsTitles.contains(q.getTitle()))
                 .forEach(q -> {
-                    questSubmissionRepository.deleteAllByQuest(q);
-                    questRepository.delete(q);
-                    log.info("[QuestSeeder] Deleted obsolete Brawl Stars quest: '{}'", q.getTitle());
+                    if (q.isActive()) {
+                        q.setActive(false);
+                        questRepository.save(q);
+                        log.info("[QuestSeeder] Deactivated obsolete Brawl Stars quest: '{}'", q.getTitle());
+                    }
                 });
 
         // ── Brawl Stars: актуальные квесты ──────────────────────────────────────
@@ -281,9 +284,11 @@ public class QuestSeeder implements CommandLineRunner {
         questRepository.findAll().stream()
                 .filter(q -> "Mobile Legends: Bang Bang".equalsIgnoreCase(q.getGameName()) && !keepMlTitles.contains(q.getTitle()))
                 .forEach(q -> {
-                    questSubmissionRepository.deleteAllByQuest(q);
-                    questRepository.delete(q);
-                    log.info("[QuestSeeder] Deleted obsolete Mobile Legends quest: '{}'", q.getTitle());
+                    if (q.isActive()) {
+                        q.setActive(false);
+                        questRepository.save(q);
+                        log.info("[QuestSeeder] Deactivated obsolete Mobile Legends quest: '{}'", q.getTitle());
+                    }
                 });
 
         // ── Mobile Legends — Лёгкие ─────────────────────────────────────────────
@@ -367,9 +372,11 @@ public class QuestSeeder implements CommandLineRunner {
         questRepository.findAll().stream()
                 .filter(q -> "Clash of Clans".equalsIgnoreCase(q.getGameName()) && !keepCocTitles.contains(q.getTitle()))
                 .forEach(q -> {
-                    questSubmissionRepository.deleteAllByQuest(q);
-                    questRepository.delete(q);
-                    log.info("[QuestSeeder] Deleted obsolete Clash of Clans quest: '{}'", q.getTitle());
+                    if (q.isActive()) {
+                        q.setActive(false);
+                        questRepository.save(q);
+                        log.info("[QuestSeeder] Deactivated obsolete Clash of Clans quest: '{}'", q.getTitle());
+                    }
                 });
 
         // ── Clash of Clans — Лёгкие ─────────────────────────────────────────────
@@ -436,9 +443,11 @@ public class QuestSeeder implements CommandLineRunner {
         questRepository.findAll().stream()
                 .filter(q -> "Grim Soul: Dark Survival RPG".equalsIgnoreCase(q.getGameName()) && !keepGrimSoulTitles.contains(q.getTitle()))
                 .forEach(q -> {
-                    questSubmissionRepository.deleteAllByQuest(q);
-                    questRepository.delete(q);
-                    log.info("[QuestSeeder] Deleted obsolete Grim Soul quest: '{}'", q.getTitle());
+                    if (q.isActive()) {
+                        q.setActive(false);
+                        questRepository.save(q);
+                        log.info("[QuestSeeder] Deactivated obsolete Grim Soul quest: '{}'", q.getTitle());
+                    }
                 });
 
         // ── Grim Soul — Лёгкие ──────────────────────────────────────────────────
@@ -526,9 +535,11 @@ public class QuestSeeder implements CommandLineRunner {
         questRepository.findAll().stream()
                 .filter(q -> "Clash Royale".equalsIgnoreCase(q.getGameName()) && !keepCrTitles.contains(q.getTitle()))
                 .forEach(q -> {
-                    questSubmissionRepository.deleteAllByQuest(q);
-                    questRepository.delete(q);
-                    log.info("[QuestSeeder] Deleted obsolete Clash Royale quest: '{}'", q.getTitle());
+                    if (q.isActive()) {
+                        q.setActive(false);
+                        questRepository.save(q);
+                        log.info("[QuestSeeder] Deactivated obsolete Clash Royale quest: '{}'", q.getTitle());
+                    }
                 });
 
         // ── Clash Royale — Лёгкие ───────────────────────────────────────────────
@@ -608,9 +619,11 @@ public class QuestSeeder implements CommandLineRunner {
         questRepository.findAll().stream()
                 .filter(q -> "EA FC 26".equalsIgnoreCase(q.getGameName()) && !keepEaFcTitles.contains(q.getTitle()))
                 .forEach(q -> {
-                    questSubmissionRepository.deleteAllByQuest(q);
-                    questRepository.delete(q);
-                    log.info("[QuestSeeder] Deleted obsolete EA FC 26 quest: '{}'", q.getTitle());
+                    if (q.isActive()) {
+                        q.setActive(false);
+                        questRepository.save(q);
+                        log.info("[QuestSeeder] Deactivated obsolete EA FC 26 quest: '{}'", q.getTitle());
+                    }
                 });
 
         // ── EA FC 26 — Лёгкие ───────────────────────────────────────────────────
@@ -693,14 +706,17 @@ public class QuestSeeder implements CommandLineRunner {
                 "Достигни ранга Золото или выше",
                 "Выиграй 10 соревновательных матчей за 2 недели",
                 "Первая кровь — 5 убийств в одном матче",
+                "Первая кровь — 10 убийств в одном матче",
                 "Ранговый прорыв — достигни звания Gold Nova I или выше"
         );
         questRepository.findAll().stream()
                 .filter(q -> "CS2".equalsIgnoreCase(q.getGameName()) && !keepCs2Titles.contains(q.getTitle()))
                 .forEach(q -> {
-                    questSubmissionRepository.deleteAllByQuest(q);
-                    questRepository.delete(q);
-                    log.info("[QuestSeeder] Deleted obsolete CS2 quest: '{}'", q.getTitle());
+                    if (q.isActive()) {
+                        q.setActive(false);
+                        questRepository.save(q);
+                        log.info("[QuestSeeder] Deactivated obsolete CS2 quest: '{}'", q.getTitle());
+                    }
                 });
 
         // ── CS2 — Лёгкие ────────────────────────────────────────────────────────
