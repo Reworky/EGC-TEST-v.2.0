@@ -527,6 +527,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleInterestSelection(callbackQuery, user, session, data.substring("reg:interest:".length()));
             return;
         }
+        if ("activation:accept_rules".equals(data)) {
+            user.setRulesAccepted(true);
+            userService.save(user);
+            answer(callbackQuery.getId(), "Правила приняты");
+            sendCommunityActivationPrompt(user, null);
+            return;
+        }
         if ("activation:check".equals(data)) {
             handleActivationCheck(callbackQuery, user);
             return;
@@ -914,6 +921,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "polls" -> sendPollList(user);
             case "battlepass" -> sendBattlePass(user);
             case "support" -> sendSupport(user);
+            case "rules" -> sendRulesMessage(user, backMenuKeyboard("cat:help"));
             case "quickstart" -> { answerSilently(callbackQuery.getId()); sendQuickStartGuide(user); }
             case "admin" -> sendAdminPanel(user);
             case "moderation" -> sendModerationHub(user);
@@ -2132,12 +2140,62 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendHelpCategory(AppUser user) {
         sendMenuCategory(user, "🆘 <b>Помощь</b>", List.of(
+                List.of(keyboardFactory.callback("📋 Правила клуба", "menu:rules")),
                 List.of(keyboardFactory.callback("🆘 Поддержка", "menu:support")),
                 List.of(keyboardFactory.url("⭐ Отзывы игроков", "https://t.me/egc_payouts"))
         ));
     }
 
+    private void sendRulesMessage(AppUser user, InlineKeyboardMarkup keyboard) {
+        sendText(user.getTelegramId(), rulesText(), keyboard);
+    }
+
+    private static String rulesText() {
+        return "📋 <b>Правила платформы EGC</b>\n\n"
+                + "<b>1. Верификация</b>\n"
+                + "Каждый выполненный квест проходит ручную проверку модератором.\n"
+                + "• Доказательство — скриншот или видео согласно инструкции квеста\n"
+                + "• На скриншоте должен быть виден ник, результат и режим — без исключений\n"
+                + "• Срок проверки: до 24 часов\n"
+                + "• При отклонении EXC не начисляются, причина указывается в боте\n"
+                + "• Повторная подача возможна, если доказательство было неполным\n\n"
+                + "<b>2. Лимиты вывода (в месяц)</b>\n"
+                + "🟢 Новичок — 10 000 EXC\n"
+                + "🔵 Игрок — 25 000 EXC\n"
+                + "🟣 Ветеран — 50 000 EXC\n"
+                + "🟡 Элита — 80 000 EXC\n"
+                + "🔴 Легенда — 100 000 EXC\n"
+                + "⚡ Герой и выше — 150 000 EXC\n"
+                + "Минимум для вывода: 5 000 EXC. Курс: 100 EXC = 1 ₽ (при HR 100%)\n\n"
+                + "<b>3. Антифрод</b>\n"
+                + "⏳ После одобрения квеста — 24ч до повтора (для Сложных — 14 дней)\n"
+                + "⏳ 24ч кулдаун на квест в той же игре/категории (для Сложных — 14 дней)\n"
+                + "⏳ 1ч между взятием любых квестов\n"
+                + "📂 Максимум 1 активный квест одновременно\n"
+                + "📉 3+ квестов одного типа за неделю → награда −50%\n"
+                + "💸 1 заявка на вывод в 24ч, новую нельзя создать пока активна текущая\n\n"
+                + "<b>4. Health Ratio</b>\n"
+                + "HR — соотношение фонда клуба к балансу игроков.\n"
+                + "При HR < 100% курс EXC к рублю снижается пропорционально.\n"
+                + "Текущий HR всегда виден в боте перед выводом.\n\n"
+                + "<b>5. Реферальная программа</b>\n"
+                + "• Тебе: +300 EXC сразу, +3% от EXC друга в первые 14 дней\n"
+                + "• Другу: +500 EXC сразу, +3 000 EXC после первого квеста\n"
+                + "Самореферал и технические аккаунты не засчитываются.\n\n"
+                + "<b>6. Блокировка аккаунтов</b>\n"
+                + "Пожизненная блокировка без предупреждения:\n"
+                + "🚫 <b>Мультиаккаунт</b> — несколько TG-аккаунтов для получения наград. Блокируются все аккаунты, EXC аннулируются, выводы отклоняются. Совпадение реквизитов фиксируется системой автоматически.\n"
+                + "🚫 <b>Фальсификация</b> — подделка скриншотов, чужие результаты, накрутка статистики\n\n"
+                + "По всем вопросам — @GressToEx";
+    }
+
     private void sendCommunityActivationPrompt(AppUser user, String notice) {
+        if (!user.isRulesAccepted()) {
+            sendRulesMessage(user, keyboardFactory.rowsLayout(List.of(
+                    List.of(keyboardFactory.callback("✅ Принимаю правила и продолжаю", "activation:accept_rules"))
+            )));
+            return;
+        }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.url("📢 Подписаться на канал", requiredChannelUrl())));
         rows.add(List.of(keyboardFactory.callback("✅ Я подписался", "activation:check")));

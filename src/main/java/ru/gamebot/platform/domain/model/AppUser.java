@@ -119,6 +119,9 @@ public class AppUser {
     // Quest take cooldown (1 per hour global)
     private java.time.LocalDateTime lastQuestTakenAt;
 
+    @Column(columnDefinition = "boolean default false")
+    private boolean rulesAccepted;
+
     // Blocking
     @Column(columnDefinition = "boolean default false")
     private boolean blocked;
