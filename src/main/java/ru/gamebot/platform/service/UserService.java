@@ -516,6 +516,24 @@ public class UserService {
     }
 
     @Transactional
+    public AppUser blockAndConfiscate(Long telegramId, String reason) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId)
+                .orElseThrow(() -> new IllegalArgumentException("Игрок с таким Telegram ID не найден."));
+        user.setBlocked(true);
+        user.setBlockReason(reason);
+        user.setBlockedAt(java.time.LocalDateTime.now());
+        long confiscated = user.getCoins();
+        if (confiscated > 0) {
+            user.setCoins(0);
+            appUserRepository.save(user);
+            excTx.log(user, -confiscated, ExcTransactionService.CONFISCATE, "Конфискация при блокировке: " + reason);
+        } else {
+            appUserRepository.save(user);
+        }
+        return user;
+    }
+
+    @Transactional
     public AppUser unblockUser(Long telegramId) {
         AppUser user = appUserRepository.findByTelegramId(telegramId)
                 .orElseThrow(() -> new IllegalArgumentException("Игрок с таким Telegram ID не найден."));

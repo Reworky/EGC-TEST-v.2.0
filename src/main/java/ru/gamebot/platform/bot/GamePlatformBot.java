@@ -5760,10 +5760,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             RewardRequest req = rewardService.rejectRequest(reqId, blockReason);
             AppUser requester = req.getUser();
             AppUser other = userService.findByTelegramId(otherTgId).orElse(null);
-            userService.blockUser(requester.getTelegramId(), blockReason);
+            userService.blockAndConfiscate(requester.getTelegramId(), blockReason);
             String otherNick = "(неизвестен)";
             if (other != null) {
-                userService.blockUser(other.getTelegramId(), blockReason);
+                userService.blockAndConfiscate(other.getTelegramId(), blockReason);
                 otherNick = other.getNickname();
             }
             notifyUserWithdrawalRejected(req);
@@ -8556,10 +8556,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             RewardRequest req = rewardService.rejectRequest(reqId, blockReason);
             AppUser requester = req.getUser();
             AppUser other = userService.findByTelegramId(otherTgId).orElse(null);
-            userService.blockUser(requester.getTelegramId(), blockReason);
+            userService.blockAndConfiscate(requester.getTelegramId(), blockReason);
             String otherNick = "(неизвестен)";
             if (other != null) {
-                userService.blockUser(other.getTelegramId(), blockReason);
+                userService.blockAndConfiscate(other.getTelegramId(), blockReason);
                 otherNick = other.getNickname();
             }
             notifyUserWithdrawalRejected(req);
