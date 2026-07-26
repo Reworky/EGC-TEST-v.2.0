@@ -46,6 +46,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMar
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardRemove;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -9515,8 +9516,10 @@ String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошел�
     private void sendPhoneShareRequest(Long chatId) {
         KeyboardButton btn = new KeyboardButton("📱 Поделиться номером телефона");
         btn.setRequestContact(true);
+        KeyboardRow row = new KeyboardRow();
+        row.add(btn);
         ReplyKeyboardMarkup keyboard = ReplyKeyboardMarkup.builder()
-                .keyboardRow(List.of(btn))
+                .keyboardRow(row)
                 .resizeKeyboard(true)
                 .oneTimeKeyboard(true)
                 .build();
