@@ -106,6 +106,9 @@ public class AppUser {
     // Daily bonus
     private LocalDate lastBonusDate;
 
+    // Phone verification (withdrawal anti-fraud)
+    private String phoneNumber;
+
     // Traffic source tracking
     private String trafficSourceCode;
 

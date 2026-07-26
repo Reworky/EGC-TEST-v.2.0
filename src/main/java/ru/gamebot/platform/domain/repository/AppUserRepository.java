@@ -58,4 +58,6 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     List<AppUser> findAllBySquadId(Long squadId);
 
     long countBySquadId(Long squadId);
+
+    Optional<AppUser> findByPhoneNumberAndTelegramIdNot(String phoneNumber, Long excludeTelegramId);
 }

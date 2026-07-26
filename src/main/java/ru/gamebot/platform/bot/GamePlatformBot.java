@@ -42,7 +42,10 @@ import org.telegram.telegrambots.meta.api.objects.PhotoSize;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.chatmember.ChatMember;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardRemove;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -231,6 +234,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (user.isBlocked() && !adminService.isAdmin(user.getTelegramId())) {
             sendBlockedNotice(user);
+            return;
+        }
+
+        if (message.hasContact() && session.getState() == SessionState.AWAITING_PHONE_SHARE) {
+            handlePhoneShare(user, session, message.getContact());
             return;
         }
 
@@ -705,13 +713,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.equals("shop:withdraw:rub")) {
             answerSilently(callbackQuery.getId());
-            session.setState(SessionState.WITHDRAWAL_INPUT);
-            sendWithdrawalScreen(user);
+            if (user.getPhoneNumber() == null) {
+                session.setState(SessionState.AWAITING_PHONE_SHARE);
+                session.getData().put("pendingWithdrawal", "rub");
+                sendPhoneShareRequest(user.getTelegramId());
+            } else {
+                session.setState(SessionState.WITHDRAWAL_INPUT);
+                sendWithdrawalScreen(user);
+            }
             return;
         }
         if (data.equals("shop:withdraw:ton")) {
             answerSilently(callbackQuery.getId());
-            sendWithdrawalTonWalletQuestion(user);
+            if (user.getPhoneNumber() == null) {
+                session.setState(SessionState.AWAITING_PHONE_SHARE);
+                session.getData().put("pendingWithdrawal", "ton");
+                sendPhoneShareRequest(user.getTelegramId());
+            } else {
+                sendWithdrawalTonWalletQuestion(user);
+            }
             return;
         }
         if (data.equals("shop:withdraw:ton:has_wallet")) {
@@ -5856,16 +5876,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String destDupWarning = destDups.isEmpty() ? "" : "\n\n🚨 <b>МУЛЬТИАККАУНТ!</b> Этот реквизит уже получил выплату другой аккаунт: <b>"
                 + escape(destDups.get(0).getUser().getNickname()) + "</b> (В-" + reqDisplayId(destDups.get(0)) + ", "
                 + destDups.get(0).getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + ")";
+        String phoneLine = requester.getPhoneNumber() != null
+                ? "\n📱 Телефон: <code>" + escape(requester.getPhoneNumber()) + "</code>"
+                : "\n📱 Телефон: <b>не подтверждён</b>";
+        java.util.Optional<AppUser> phoneDupUser = userService.findDuplicatePhoneUser(requester.getPhoneNumber(), requester.getTelegramId());
+        String phoneDupWarning = phoneDupUser.isPresent()
+                ? "\n\n🚨 <b>МУЛЬТИАККАУНТ!</b> Этот номер телефона уже зарегистрирован на аккаунте: <b>" + escape(phoneDupUser.get().getNickname()) + "</b>"
+                : "";
+        java.util.Optional<AppUser> multiblockTarget = destDups.isEmpty()
+                ? phoneDupUser
+                : java.util.Optional.of(destDups.get(0).getUser());
         List<List<InlineKeyboardButton>> adminWdRows = new ArrayList<>();
         adminWdRows.add(List.of(
                 keyboardFactory.callback("✅ Выплачено", "admin:withdrawal:approve:" + req.getId()),
                 keyboardFactory.callback("❌ Отклонить", "admin:withdrawal:reject:" + req.getId())
         ));
-        if (!destDups.isEmpty()) {
-            long otherTgId = destDups.get(0).getUser().getTelegramId();
+        if (multiblockTarget.isPresent()) {
             adminWdRows.add(List.of(keyboardFactory.callback(
                     "🚫 Отклонить + заблокировать оба аккаунта",
-                    "admin:withdrawal:multiblock:" + req.getId() + ":" + otherTgId)));
+                    "admin:withdrawal:multiblock:" + req.getId() + ":" + multiblockTarget.get().getTelegramId())));
         }
         adminWdRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:withdrawals")));
         sendText(user.getTelegramId(),
@@ -5873,12 +5902,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
                         + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
                         + "🌍 Страна: <b>" + escape(requester.getCountry() != null ? requester.getCountry() : "Не указана") + "</b>\n"
+                        + phoneLine + "\n"
                         + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
                         + "💵 К выплате: <b>~" + rubles + " ₽</b>" + payoutSuffix
                         + detailsLine + "\n"
                         + monthlyLimitLine(requester)
                         + "📅 Дата: <b>" + req.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) + "</b>"
-                        + duplicateWarning + destDupWarning,
+                        + duplicateWarning + destDupWarning + phoneDupWarning,
                 keyboardFactory.rowsLayout(adminWdRows));
     }
 
@@ -7986,6 +8016,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 mainMenuKeyboard(user));
     }
 
+    private void handlePhoneShare(AppUser user, UserSession session, org.telegram.telegrambots.meta.api.objects.Contact contact) {
+        String phone = contact.getPhoneNumber();
+        String pendingWithdrawal = session.getData().get("pendingWithdrawal");
+        session.reset();
+        user.setPhoneNumber(phone);
+        userService.save(user);
+        removeReplyKeyboard(user.getTelegramId());
+        userService.findDuplicatePhoneUser(phone, user.getTelegramId()).ifPresent(dup -> {
+            user.setFraudSuspect(true);
+            userService.save(user);
+            log.warn("Phone duplicate detected: {} and {} share phone {}", user.getTelegramId(), dup.getTelegramId(), phone);
+        });
+        if ("rub".equals(pendingWithdrawal)) {
+            session.setState(SessionState.WITHDRAWAL_INPUT);
+            sendWithdrawalScreen(user);
+        } else if ("ton".equals(pendingWithdrawal)) {
+            sendWithdrawalTonWalletQuestion(user);
+        } else {
+            sendMainMenu(user, null);
+        }
+    }
+
     private void handleWithdrawalInput(AppUser user, UserSession session, String text) {
         long amount;
         try {
@@ -8624,16 +8676,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String destDupWarningMod = destDupsMod.isEmpty() ? "" : "\n\n🚨 <b>МУЛЬТИАККАУНТ!</b> Этот реквизит уже получил выплату другой аккаунт: <b>"
                 + escape(destDupsMod.get(0).getUser().getNickname()) + "</b> (В-" + reqDisplayId(destDupsMod.get(0)) + ", "
                 + destDupsMod.get(0).getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + ")";
+        String phoneLineMod = requester.getPhoneNumber() != null
+                ? "\n📱 Телефон: <code>" + escape(requester.getPhoneNumber()) + "</code>"
+                : "\n📱 Телефон: <b>не подтверждён</b>";
+        java.util.Optional<AppUser> phoneDupMod = userService.findDuplicatePhoneUser(requester.getPhoneNumber(), requester.getTelegramId());
+        String phoneDupWarningMod = phoneDupMod.isPresent()
+                ? "\n\n🚨 <b>МУЛЬТИАККАУНТ!</b> Этот номер телефона уже зарегистрирован на аккаунте: <b>" + escape(phoneDupMod.get().getNickname()) + "</b>"
+                : "";
+        java.util.Optional<AppUser> multiblockTargetMod = destDupsMod.isEmpty()
+                ? phoneDupMod
+                : java.util.Optional.of(destDupsMod.get(0).getUser());
         List<List<InlineKeyboardButton>> modWdRows = new ArrayList<>();
         modWdRows.add(List.of(
                 keyboardFactory.callback("✅ Выплачено", "mod:withdrawal:approve:" + req.getId()),
                 keyboardFactory.callback("❌ Отклонить", "mod:withdrawal:reject:" + req.getId())
         ));
-        if (!destDupsMod.isEmpty()) {
-            long otherTgIdMod = destDupsMod.get(0).getUser().getTelegramId();
+        if (multiblockTargetMod.isPresent()) {
             modWdRows.add(List.of(keyboardFactory.callback(
                     "🚫 Отклонить + заблокировать оба аккаунта",
-                    "mod:withdrawal:multiblock:" + req.getId() + ":" + otherTgIdMod)));
+                    "mod:withdrawal:multiblock:" + req.getId() + ":" + multiblockTargetMod.get().getTelegramId())));
         }
         modWdRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "mod:withdrawals")));
         sendText(user.getTelegramId(),
@@ -8641,12 +8702,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
                         + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
                         + "🌍 Страна: <b>" + escape(requester.getCountry() != null ? requester.getCountry() : "Не указана") + "</b>\n"
+                        + phoneLineMod + "\n"
                         + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
                         + "💵 К выплате: <b>~" + rubles + " ₽</b>" + payoutSuffix
                         + detailsLine + "\n"
                         + monthlyLimitLine(requester)
                         + "📅 Дата: <b>" + req.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) + "</b>"
-                        + dupWarning + destDupWarningMod,
+                        + dupWarning + destDupWarningMod + phoneDupWarningMod,
                 keyboardFactory.rowsLayout(modWdRows));
     }
 
@@ -9447,6 +9509,38 @@ String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошел�
             execute(message);
         } catch (TelegramApiException exception) {
             throw new IllegalStateException("Failed to send message to " + chatId, exception);
+        }
+    }
+
+    private void sendPhoneShareRequest(Long chatId) {
+        KeyboardButton btn = new KeyboardButton("📱 Поделиться номером телефона");
+        btn.setRequestContact(true);
+        ReplyKeyboardMarkup keyboard = ReplyKeyboardMarkup.builder()
+                .keyboardRow(List.of(btn))
+                .resizeKeyboard(true)
+                .oneTimeKeyboard(true)
+                .build();
+        SendMessage message = new SendMessage();
+        message.setChatId(chatId.toString());
+        message.setText("📱 <b>Подтверждение личности</b>\n\nДля вывода средств нужно один раз поделиться номером телефона.\n\nЭто займёт один клик — нажмите кнопку ниже. Данные используются только для защиты от мультиаккаунтов.");
+        message.setParseMode("HTML");
+        message.setReplyMarkup(keyboard);
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            throw new IllegalStateException("Failed to send phone share request to " + chatId, e);
+        }
+    }
+
+    private void removeReplyKeyboard(Long chatId) {
+        SendMessage message = new SendMessage();
+        message.setChatId(chatId.toString());
+        message.setText("✅ Номер телефона сохранён.");
+        message.setReplyMarkup(ReplyKeyboardRemove.builder().removeKeyboard(true).build());
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            log.warn("Failed to remove reply keyboard for {}", chatId, e);
         }
     }
 

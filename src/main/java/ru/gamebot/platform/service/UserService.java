@@ -113,6 +113,11 @@ public class UserService {
         return appUserRepository.findByTelegramId(telegramId);
     }
 
+    public Optional<AppUser> findDuplicatePhoneUser(String phoneNumber, Long excludeTelegramId) {
+        if (phoneNumber == null || phoneNumber.isBlank()) return Optional.empty();
+        return appUserRepository.findByPhoneNumberAndTelegramIdNot(phoneNumber, excludeTelegramId);
+    }
+
     public Optional<AppUser> findByNickname(String nickname) {
         return appUserRepository.findAll().stream()
                 .filter(u -> u.isRegistrationCompleted() && nickname.equalsIgnoreCase(u.getNickname()))
