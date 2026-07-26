@@ -5752,6 +5752,34 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), "❌ <b>Отклонение заявки на вывод</b>\n\nНапишите причину отклонения, она будет отправлена пользователю:", cancelKeyboard());
             return;
         }
+        if (action.startsWith("multiblock:")) {
+            String[] parts = action.substring("multiblock:".length()).split(":");
+            long reqId = parseLong(parts[0]);
+            long otherTgId = parseLong(parts[1]);
+            String blockReason = "Мультиаккаунт — нарушение п. 6 Правил EGC";
+            RewardRequest req = rewardService.rejectRequest(reqId, blockReason);
+            AppUser requester = req.getUser();
+            AppUser other = userService.findByTelegramId(otherTgId).orElse(null);
+            userService.blockUser(requester.getTelegramId(), blockReason);
+            String otherNick = "(неизвестен)";
+            if (other != null) {
+                userService.blockUser(other.getTelegramId(), blockReason);
+                otherNick = other.getNickname();
+            }
+            notifyUserWithdrawalRejected(req);
+            answer(callbackQuery.getId(), "🚫 Аккаунты заблокированы");
+            sendText(user.getTelegramId(),
+                    "🚫 <b>Готово</b>\n\n"
+                    + "Заявка В-" + reqDisplayId(req) + " отклонена.\n"
+                    + "Заблокированы аккаунты:\n"
+                    + "• <b>" + escape(requester.getNickname()) + "</b>\n"
+                    + "• <b>" + escape(otherNick) + "</b>\n\n"
+                    + "Причина: " + blockReason,
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("⬅️ К заявкам", "admin:withdrawals"))
+                    )));
+            return;
+        }
         sendAdminWithdrawals(user);
         answerSilently(callbackQuery.getId());
     }
@@ -5828,6 +5856,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String destDupWarning = destDups.isEmpty() ? "" : "\n\n🚨 <b>МУЛЬТИАККАУНТ!</b> Этот реквизит уже получил выплату другой аккаунт: <b>"
                 + escape(destDups.get(0).getUser().getNickname()) + "</b> (В-" + reqDisplayId(destDups.get(0)) + ", "
                 + destDups.get(0).getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + ")";
+        List<List<InlineKeyboardButton>> adminWdRows = new ArrayList<>();
+        adminWdRows.add(List.of(
+                keyboardFactory.callback("✅ Выплачено", "admin:withdrawal:approve:" + req.getId()),
+                keyboardFactory.callback("❌ Отклонить", "admin:withdrawal:reject:" + req.getId())
+        ));
+        if (!destDups.isEmpty()) {
+            long otherTgId = destDups.get(0).getUser().getTelegramId();
+            adminWdRows.add(List.of(keyboardFactory.callback(
+                    "🚫 Отклонить + заблокировать оба аккаунта",
+                    "admin:withdrawal:multiblock:" + req.getId() + ":" + otherTgId)));
+        }
+        adminWdRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:withdrawals")));
         sendText(user.getTelegramId(),
                 "💸 <b>Заявка на вывод В-" + reqDisplayId(req) + "</b>\n\n"
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
@@ -5839,13 +5879,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + monthlyLimitLine(requester)
                         + "📅 Дата: <b>" + req.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) + "</b>"
                         + duplicateWarning + destDupWarning,
-                keyboardFactory.rowsLayout(List.of(
-                        List.of(
-                                keyboardFactory.callback("✅ Выплачено", "admin:withdrawal:approve:" + req.getId()),
-                                keyboardFactory.callback("❌ Отклонить", "admin:withdrawal:reject:" + req.getId())
-                        ),
-                        List.of(keyboardFactory.callback("⬅️ Назад", "admin:withdrawals"))
-                )));
+                keyboardFactory.rowsLayout(adminWdRows));
     }
 
     /** Строка "остаток месячного лимита" для карточки заявки на вывод (эта заявка уже учтена в счётчике на момент подачи). */
@@ -8513,6 +8547,32 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.getData().put("rejectBack", "mod");
             session.setState(SessionState.REWARD_REJECT_COMMENT);
             sendText(user.getTelegramId(), "✏️ Введите причину отклонения заявки #" + reqId + ":", cancelKeyboard());
+        } else if (data.startsWith("mod:withdrawal:multiblock:")) {
+            String payload = data.substring("mod:withdrawal:multiblock:".length());
+            String[] parts = payload.split(":");
+            long reqId = Long.parseLong(parts[0]);
+            long otherTgId = Long.parseLong(parts[1]);
+            String blockReason = "Мультиаккаунт — нарушение п. 6 Правил EGC";
+            RewardRequest req = rewardService.rejectRequest(reqId, blockReason);
+            AppUser requester = req.getUser();
+            AppUser other = userService.findByTelegramId(otherTgId).orElse(null);
+            userService.blockUser(requester.getTelegramId(), blockReason);
+            String otherNick = "(неизвестен)";
+            if (other != null) {
+                userService.blockUser(other.getTelegramId(), blockReason);
+                otherNick = other.getNickname();
+            }
+            notifyUserWithdrawalRejected(req);
+            sendText(user.getTelegramId(),
+                    "🚫 <b>Готово</b>\n\n"
+                    + "Заявка В-" + reqDisplayId(req) + " отклонена.\n"
+                    + "Заблокированы аккаунты:\n"
+                    + "• <b>" + escape(requester.getNickname()) + "</b>\n"
+                    + "• <b>" + escape(otherNick) + "</b>\n\n"
+                    + "Причина: " + blockReason,
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("⬅️ К заявкам", "mod:withdrawals"))
+                    )));
         }
     }
 
@@ -8564,6 +8624,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String destDupWarningMod = destDupsMod.isEmpty() ? "" : "\n\n🚨 <b>МУЛЬТИАККАУНТ!</b> Этот реквизит уже получил выплату другой аккаунт: <b>"
                 + escape(destDupsMod.get(0).getUser().getNickname()) + "</b> (В-" + reqDisplayId(destDupsMod.get(0)) + ", "
                 + destDupsMod.get(0).getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + ")";
+        List<List<InlineKeyboardButton>> modWdRows = new ArrayList<>();
+        modWdRows.add(List.of(
+                keyboardFactory.callback("✅ Выплачено", "mod:withdrawal:approve:" + req.getId()),
+                keyboardFactory.callback("❌ Отклонить", "mod:withdrawal:reject:" + req.getId())
+        ));
+        if (!destDupsMod.isEmpty()) {
+            long otherTgIdMod = destDupsMod.get(0).getUser().getTelegramId();
+            modWdRows.add(List.of(keyboardFactory.callback(
+                    "🚫 Отклонить + заблокировать оба аккаунта",
+                    "mod:withdrawal:multiblock:" + req.getId() + ":" + otherTgIdMod)));
+        }
+        modWdRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "mod:withdrawals")));
         sendText(user.getTelegramId(),
                 "💸 <b>Заявка на вывод В-" + reqDisplayId(req) + "</b>\n\n"
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
@@ -8575,13 +8647,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + monthlyLimitLine(requester)
                         + "📅 Дата: <b>" + req.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) + "</b>"
                         + dupWarning + destDupWarningMod,
-                keyboardFactory.rowsLayout(List.of(
-                        List.of(
-                                keyboardFactory.callback("✅ Выплачено", "mod:withdrawal:approve:" + req.getId()),
-                                keyboardFactory.callback("❌ Отклонить", "mod:withdrawal:reject:" + req.getId())
-                        ),
-                        List.of(keyboardFactory.callback("⬅️ Назад", "mod:withdrawals"))
-                )));
+                keyboardFactory.rowsLayout(modWdRows));
     }
 
     public void notifyAdminsAboutRewardRequest(AppUser user, RewardItem reward) {
