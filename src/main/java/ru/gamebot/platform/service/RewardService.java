@@ -148,6 +148,21 @@ public class RewardService {
         return rewardRequestRepository.countPendingWithdrawalsByUser(user);
     }
 
+    public List<RewardRequest> findDuplicateDestinationWithdrawals(RewardRequest req) {
+        String pd = req.getPayoutDetails();
+        if (pd == null || pd.isBlank()) return List.of();
+        String key;
+        if (pd.startsWith("TON:")) {
+            String after = pd.substring(4);
+            int space = after.indexOf(' ');
+            key = (space > 0 ? after.substring(0, space) : after).trim();
+        } else {
+            key = pd.trim();
+        }
+        if (key.isBlank()) return List.of();
+        return rewardRequestRepository.findApprovedWithdrawalsWithPayoutDetailsContaining("%" + key + "%", req.getUser());
+    }
+
     public List<RewardRequest> findUserRequests(AppUser user) {
         return rewardRequestRepository.findAllByUserOrderByCreatedAtDesc(user);
     }

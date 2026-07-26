@@ -5766,6 +5766,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long duplicateCount = rewardService.countPendingWithdrawalsByUser(requester);
         String duplicateWarning = duplicateCount > 1
                 ? "\n\n⚠️ <b>ВНИМАНИЕ: у этого пользователя " + duplicateCount + " активные заявки на вывод!</b> Оплачивайте только эту." : "";
+        java.util.List<RewardRequest> destDups = rewardService.findDuplicateDestinationWithdrawals(req);
+        String destDupWarning = destDups.isEmpty() ? "" : "\n\n🚨 <b>МУЛЬТИАККАУНТ!</b> Этот реквизит уже получил выплату другой аккаунт: <b>"
+                + escape(destDups.get(0).getUser().getNickname()) + "</b> (В-" + reqDisplayId(destDups.get(0)) + ", "
+                + destDups.get(0).getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + ")";
         sendText(user.getTelegramId(),
                 "💸 <b>Заявка на вывод В-" + reqDisplayId(req) + "</b>\n\n"
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
@@ -5776,7 +5780,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + detailsLine + "\n"
                         + monthlyLimitLine(requester)
                         + "📅 Дата: <b>" + req.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) + "</b>"
-                        + duplicateWarning,
+                        + duplicateWarning + destDupWarning,
                 keyboardFactory.rowsLayout(List.of(
                         List.of(
                                 keyboardFactory.callback("✅ Выплачено", "admin:withdrawal:approve:" + req.getId()),
@@ -8498,6 +8502,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long dupCount = rewardService.countPendingWithdrawalsByUser(requester);
         String dupWarning = dupCount > 1
                 ? "\n\n⚠️ <b>ВНИМАНИЕ: у этого пользователя " + dupCount + " активные заявки на вывод!</b> Оплачивайте только эту." : "";
+        java.util.List<RewardRequest> destDupsMod = rewardService.findDuplicateDestinationWithdrawals(req);
+        String destDupWarningMod = destDupsMod.isEmpty() ? "" : "\n\n🚨 <b>МУЛЬТИАККАУНТ!</b> Этот реквизит уже получил выплату другой аккаунт: <b>"
+                + escape(destDupsMod.get(0).getUser().getNickname()) + "</b> (В-" + reqDisplayId(destDupsMod.get(0)) + ", "
+                + destDupsMod.get(0).getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + ")";
         sendText(user.getTelegramId(),
                 "💸 <b>Заявка на вывод В-" + reqDisplayId(req) + "</b>\n\n"
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
@@ -8508,7 +8516,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + detailsLine + "\n"
                         + monthlyLimitLine(requester)
                         + "📅 Дата: <b>" + req.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) + "</b>"
-                        + dupWarning,
+                        + dupWarning + destDupWarningMod,
                 keyboardFactory.rowsLayout(List.of(
                         List.of(
                                 keyboardFactory.callback("✅ Выплачено", "mod:withdrawal:approve:" + req.getId()),
