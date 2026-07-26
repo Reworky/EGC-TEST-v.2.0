@@ -2,6 +2,8 @@ server:
   port: ${SERVER_PORT:8090}
 
 spring:
+  jackson:
+    time-zone: Europe/Moscow
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:h2:file:${DB_PATH:/data/game-platform-bot};AUTO_SERVER=TRUE}
     driver-class-name: org.h2.Driver
