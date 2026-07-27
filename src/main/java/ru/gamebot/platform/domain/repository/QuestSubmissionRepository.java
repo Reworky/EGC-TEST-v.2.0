@@ -100,6 +100,11 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.status IN ('DRAFT','PENDING','NEEDS_INFO') AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP)")
     long countActiveInProgress();
 
+    @Query("SELECT CASE WHEN COUNT(s) > 0 THEN true ELSE false END FROM QuestSubmission s " +
+           "WHERE s.user.id <> :userId AND s.photoUniqueIds IS NOT NULL " +
+           "AND s.photoUniqueIds <> '' AND s.photoUniqueIds LIKE CONCAT('%', :uid, '%')")
+    boolean existsByPhotoUniqueIdFromOtherUser(@Param("uid") String uid, @Param("userId") Long userId);
+
     // 24ч кулдаун — обычные квесты (все кроме «Сложные» и спонсорских)
     @Query("SELECT s.user.telegramId, s.quest.gameName, s.quest.title " +
            "FROM QuestSubmission s " +

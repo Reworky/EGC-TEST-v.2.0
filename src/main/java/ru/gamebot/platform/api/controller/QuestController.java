@@ -190,6 +190,7 @@ public class QuestController {
 
         String mediaType = null;
         String fileId = null;
+        String photoUniqueIds = null;
         if (photo != null && !photo.isEmpty()) {
             String contentType = photo.getContentType() != null ? photo.getContentType() : "";
             boolean isVideo = contentType.startsWith("video/");
@@ -199,7 +200,9 @@ public class QuestController {
                     fileId = telegramFileService.uploadVideo(photo.getBytes(), filename, telegramId);
                     mediaType = "video";
                 } else {
-                    fileId = telegramFileService.uploadPhoto(photo.getBytes(), filename, telegramId);
+                    String[] uploaded = telegramFileService.uploadPhotoFull(photo.getBytes(), filename, telegramId);
+                    fileId = uploaded[0];
+                    photoUniqueIds = uploaded[1];
                     mediaType = "photo";
                 }
             } catch (IOException | InterruptedException e) {
@@ -216,7 +219,7 @@ public class QuestController {
         }
 
         QuestService.QuestActionResult result = questService.submitReportChecked(
-                user, quest, mediaType, fileId, externalLink, comment);
+                user, quest, mediaType, fileId, photoUniqueIds, externalLink, comment);
         return ResponseEntity.ok(toResponse(result));
     }
 

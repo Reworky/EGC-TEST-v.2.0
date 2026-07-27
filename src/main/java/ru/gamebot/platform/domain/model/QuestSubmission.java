@@ -49,6 +49,13 @@ public class QuestSubmission {
     @Column(length = 4000, columnDefinition = "varchar(4000) default ''")
     private String extraMediaFileIds;
 
+    // Anti-fraud: pipe-separated file_unique_id values for all submitted photos
+    @Column(length = 4000, columnDefinition = "varchar(4000) default ''")
+    private String photoUniqueIds;
+
+    @Column(columnDefinition = "boolean default false")
+    private boolean duplicatePhotoDetected;
+
     @Column(length = 1000)
     private String externalLink;
 

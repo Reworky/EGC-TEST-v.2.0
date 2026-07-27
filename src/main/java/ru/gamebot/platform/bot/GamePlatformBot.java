@@ -665,6 +665,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (data.startsWith("report:submit:")) {
             long submissionId = parseLong(data.substring("report:submit:".length()));
             String photos = session.getData().getOrDefault("report_photos", "");
+            String uniqueIds = session.getData().getOrDefault("report_photo_unique_ids", "");
             String comment = session.getData().getOrDefault("report_comment", "Без комментария");
             if (photos.isBlank()) {
                 answerSilently(callbackQuery.getId());
@@ -679,7 +680,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             QuestSubmission submission = questService.getSubmission(submissionId);
             submission.setExtraMediaFileIds(extra);
             try {
-                questService.submitReport(submission, "photo", firstPhoto, null, comment);
+                questService.submitReport(submission, "photo", firstPhoto, uniqueIds.isBlank() ? null : uniqueIds, null, comment);
             } catch (IllegalStateException e) {
                 answerSilently(callbackQuery.getId());
                 sendText(user.getTelegramId(), reportSubmitErrorMessage(e), backMenuKeyboard("menu:myquests"));
@@ -2860,12 +2861,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void handleReportMessage(AppUser user, UserSession session, Message message) {
         String mediaType = "text";
         String fileId = null;
+        String photoUniqueIds = null;
         String text = message.getCaption();
 
         if (message.hasPhoto()) {
             mediaType = "photo";
             List<PhotoSize> photos = message.getPhoto();
-            fileId = photos.get(photos.size() - 1).getFileId();
+            PhotoSize largest = photos.get(photos.size() - 1);
+            fileId = largest.getFileId();
+            photoUniqueIds = largest.getFileUniqueId();
         } else if (message.hasVideo()) {
             mediaType = "video";
             fileId = message.getVideo().getFileId();
@@ -2878,7 +2882,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         QuestSubmission submission = questService.getSubmission(session.getSubmissionId());
         String externalLink = extractUrl(text);
-        questService.submitReport(submission, mediaType, fileId, externalLink, text == null ? "Без комментария" : text);
+        questService.submitReport(submission, mediaType, fileId, photoUniqueIds, externalLink, text == null ? "Без комментария" : text);
         session.reset();
 
         notifyModeratorsAboutSubmission(submission.getId());
@@ -2891,16 +2895,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleReportCollecting(AppUser user, UserSession session, Message message) {
         String photos = session.getData().getOrDefault("report_photos", "");
+        String uniqueIds = session.getData().getOrDefault("report_photo_unique_ids", "");
         String comment = session.getData().getOrDefault("report_comment", "");
 
         if (message.hasPhoto()) {
             List<PhotoSize> photoList = message.getPhoto();
-            String fileId = photoList.get(photoList.size() - 1).getFileId();
+            PhotoSize largest = photoList.get(photoList.size() - 1);
+            String fileId = largest.getFileId();
+            String uniqueId = largest.getFileUniqueId();
             photos = photos.isBlank() ? fileId : photos + "||" + fileId;
+            uniqueIds = uniqueIds.isBlank() ? uniqueId : uniqueIds + "||" + uniqueId;
             if (message.getCaption() != null && !message.getCaption().isBlank()) {
                 comment = message.getCaption();
             }
             session.getData().put("report_photos", photos);
+            session.getData().put("report_photo_unique_ids", uniqueIds);
             session.getData().put("report_comment", comment);
 
             String mediaGroupId = message.getMediaGroupId();
@@ -4802,6 +4811,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String submitterLink = submitter.getTelegramUsername() != null
                 ? "<a href=\"https://t.me/" + submitter.getTelegramUsername() + "\">@" + submitter.getTelegramUsername() + "</a>"
                 : "<a href=\"tg://user?id=" + submitter.getTelegramId() + "\">" + escape(submitter.getNickname()) + "</a>";
+        String dupWarning = submission.isDuplicatePhotoDetected()
+                ? "\n🚨 <b>ДУБЛЬ СКРИНШОТА!</b> Этот файл уже использовался в отчёте другого игрока.\n"
+                : "";
         String caption = "🧾 <b>Заявка К-" + (submission.getDisplayId() != null ? submission.getDisplayId() : submission.getId()) + " на проверку</b>\n\n"
                 + "👤 Игрок: <b>" + escape(submitter.getNickname()) + "</b> (" + submitterLink + ")\n"
                 + "🆔 ID: <b>" + submitter.getTelegramId() + "</b>\n"
@@ -4810,7 +4822,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + rewardPreviewLine(submission) + "\n"
                 + "📅 Отправлено: <b>" + escape(submission.getUpdatedAt().format(DATE_TIME_FORMATTER)) + "</b>\n"
                 + "💬 Комментарий: " + escape(submission.getUserComment()) + "\n"
-                + (submission.getExternalLink() == null ? "" : "🔗 Ссылка: " + escape(submission.getExternalLink()) + "\n");
+                + (submission.getExternalLink() == null ? "" : "🔗 Ссылка: " + escape(submission.getExternalLink()) + "\n")
+                + dupWarning;
 
         InlineKeyboardMarkup markup = verticalWithBackMenu(List.of(
                 keyboardFactory.callback("✅ Одобрить", "mod:ok:" + submissionId),

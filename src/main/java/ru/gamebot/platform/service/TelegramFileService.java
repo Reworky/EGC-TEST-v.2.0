@@ -59,6 +59,39 @@ public class TelegramFileService {
         return sizes.get(sizes.size() - 1).path("file_id").asText();
     }
 
+    /** Returns [fileId, fileUniqueId] for the uploaded photo. */
+    public String[] uploadPhotoFull(byte[] imageBytes, String filename, Long chatId) throws IOException, InterruptedException {
+        String token = appProperties.getBotToken();
+        String boundary = "----EGC" + UUID.randomUUID();
+
+        ByteArrayOutputStream body = new ByteArrayOutputStream();
+        writeField(body, boundary, "chat_id", chatId.toString());
+        body.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
+        body.write(("Content-Disposition: form-data; name=\"photo\"; filename=\"" + filename + "\"\r\n").getBytes(StandardCharsets.UTF_8));
+        body.write("Content-Type: application/octet-stream\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+        body.write(imageBytes);
+        body.write("\r\n".getBytes(StandardCharsets.UTF_8));
+        body.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("https://api.telegram.org/bot" + token + "/sendPhoto"))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(body.toByteArray()))
+                .build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        JsonNode root = objectMapper.readTree(response.body());
+        if (!root.path("ok").asBoolean(false)) {
+            throw new IOException("Telegram sendPhoto failed: " + response.body());
+        }
+        JsonNode sizes = root.path("result").path("photo");
+        if (!sizes.isArray() || sizes.isEmpty()) {
+            throw new IOException("Telegram sendPhoto returned no photo sizes: " + response.body());
+        }
+        JsonNode largest = sizes.get(sizes.size() - 1);
+        return new String[]{largest.path("file_id").asText(), largest.path("file_unique_id").asText("")};
+    }
+
     public String uploadVideo(byte[] videoBytes, String filename, Long chatId) throws IOException, InterruptedException {
         String token = appProperties.getBotToken();
         String boundary = "----EGC" + UUID.randomUUID();

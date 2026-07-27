@@ -422,7 +422,7 @@ public class QuestService {
      */
     @Transactional
     public QuestActionResult submitReportChecked(AppUser user, Quest quest, String mediaType, String fileId,
-                                                  String externalLink, String comment) {
+                                                  String photoUniqueIds, String externalLink, String comment) {
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
 
@@ -455,7 +455,7 @@ public class QuestService {
             return QuestActionResult.of(QuestActionStatus.HAS_PENDING_REPORT, 0);
         }
 
-        QuestSubmission submitted = submitReport(latest, mediaType, fileId, externalLink, comment);
+        QuestSubmission submitted = submitReport(latest, mediaType, fileId, photoUniqueIds, externalLink, comment);
         // Уведомление модераторов — только этот путь (submitReportChecked) используется Mini App;
         // сам бот сдаёт отчёт через submitReport() напрямую и уведомляет модераторов сам, отдельно от этого события.
         eventPublisher.publishEvent(new ru.gamebot.platform.event.QuestReportSubmittedEvent(this, submitted.getId()));
@@ -474,6 +474,12 @@ public class QuestService {
     @Transactional
     public QuestSubmission submitReport(QuestSubmission submission, String mediaType, String fileId,
                                         String externalLink, String comment) {
+        return submitReport(submission, mediaType, fileId, null, externalLink, comment);
+    }
+
+    @Transactional
+    public QuestSubmission submitReport(QuestSubmission submission, String mediaType, String fileId,
+                                        String photoUniqueIds, String externalLink, String comment) {
         if (submission.getStatus() == SubmissionStatus.APPROVED) {
             throw new IllegalStateException("Этот квест уже одобрен и оплачен — повторная сдача отчёта невозможна.");
         }
@@ -482,13 +488,33 @@ public class QuestService {
         if (hasOtherPendingSubmission(submission.getUser(), submission.getQuest())) {
             throw new IllegalStateException("pending_report_exists");
         }
+
+        boolean dupFound = false;
+        if (photoUniqueIds != null && !photoUniqueIds.isBlank()) {
+            for (String uid : photoUniqueIds.split("\\|\\|")) {
+                if (!uid.isBlank() && questSubmissionRepository.existsByPhotoUniqueIdFromOtherUser(uid, submission.getUser().getId())) {
+                    dupFound = true;
+                    log.warn("[AntiDupe] Photo {} already used in another user's submission. Reporter: {}", uid, submission.getUser().getTelegramId());
+                    break;
+                }
+            }
+        }
+
         submission.setMediaType(mediaType);
         submission.setMediaFileId(fileId);
+        submission.setPhotoUniqueIds(photoUniqueIds);
+        submission.setDuplicatePhotoDetected(dupFound);
         submission.setExternalLink(externalLink);
         submission.setUserComment(comment);
         submission.setStatus(SubmissionStatus.PENDING);
         submission.setUpdatedAt(LocalDateTime.now());
         questSubmissionRepository.save(submission);
+
+        if (dupFound) {
+            AppUser u = submission.getUser();
+            u.setFraudSuspect(true);
+            appUserRepository.save(u);
+        }
 
         flagIfFastSubmit(submission);
         checkFraudSuspect(submission.getUser());
