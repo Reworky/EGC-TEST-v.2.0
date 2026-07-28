@@ -2665,10 +2665,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         String title = category == null ? "🎮 " + gameName : "🎮 " + gameName + " • " + category;
-        sendText(user.getTelegramId(),
-                "<b>" + escape(title) + "</b>\n\n"
-                        + "Ниже собраны активные задания по выбранной игре. Откройте карточку, чтобы увидеть награды и условия прохождения.",
-                verticalWithBackMenu(buttons, "⬅️ Назад", backData));
+        String caption = "<b>" + escape(title) + "</b>\n\n"
+                + "Ниже собраны активные задания по выбранной игре. Откройте карточку, чтобы увидеть награды и условия прохождения.";
+        InlineKeyboardMarkup keyboard = verticalWithBackMenu(buttons, "⬅️ Назад", backData);
+        if (category == null && !"UGC".equalsIgnoreCase(gameName)) {
+            gameCatalogService.getPhotoFileId(gameName).ifPresentOrElse(
+                    photoFileId -> sendPhotoCaption(user.getTelegramId(), photoFileId, caption, keyboard),
+                    () -> sendText(user.getTelegramId(), caption, keyboard)
+            );
+        } else {
+            sendText(user.getTelegramId(), caption, keyboard);
+        }
     }
 
     private void handleQuestListAction(CallbackQuery callbackQuery, AppUser user, String payload) {
