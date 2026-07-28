@@ -2747,12 +2747,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         String sponsorBadge = quest.isSponsored() ? "💎 <b>Спонсорский квест</b>\n" : "";
+        boolean questFlat = gameCatalogService.isFlat(quest.getGameName());
         sendText(user.getTelegramId(),
                 (notice == null ? "" : notice + "\n\n")
                         + sponsorBadge
                         + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n\n"
                         + (quest.isSponsored() ? "🎮 Название канала: <b>" : "🎮 Игра: <b>") + escape(quest.getGameName()) + "</b>\n"
-                        + (quest.isSponsored() || "UGC".equalsIgnoreCase(quest.getGameName()) ? "" : (quest.getCategory() != null ? "📚 Формат: <b>" + escape(quest.getCategory()) + "</b>\n" : "") + "🕹️ Платформа: <b>" + escape(quest.getPlatform()) + "</b>\n")
+                        + (quest.isSponsored() || "UGC".equalsIgnoreCase(quest.getGameName()) ? "" : (!questFlat && quest.getCategory() != null ? "📚 Формат: <b>" + escape(quest.getCategory()) + "</b>\n" : "") + "🕹️ Платформа: <b>" + escape(quest.getPlatform()) + "</b>\n")
                         + deadlineLine
                         + "📌 Статус: <b>" + escape(displayStatus) + "</b>\n\n"
                         + "🏆 <b>Награда:</b>\n"
@@ -2802,7 +2803,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 notice + "\n\n"
                         + "🎯 <b>" + escape(freshQuest.getTitle()) + "</b>\n\n"
                         + (freshQuest.isSponsored() ? "🎮 Название канала: <b>" : "🎮 Игра: <b>") + escape(freshQuest.getGameName()) + "</b>\n"
-                        + (freshQuest.isSponsored() || "UGC".equalsIgnoreCase(freshQuest.getGameName()) ? "" : (freshQuest.getCategory() != null ? "📚 Формат: <b>" + escape(freshQuest.getCategory()) + "</b>\n" : "") + "🕹️ Платформа: <b>" + escape(freshQuest.getPlatform()) + "</b>\n")
+                        + (freshQuest.isSponsored() || "UGC".equalsIgnoreCase(freshQuest.getGameName()) ? "" : (!gameCatalogService.isFlat(freshQuest.getGameName()) && freshQuest.getCategory() != null ? "📚 Формат: <b>" + escape(freshQuest.getCategory()) + "</b>\n" : "") + "🕹️ Платформа: <b>" + escape(freshQuest.getPlatform()) + "</b>\n")
                         + deadlineLine
                         + "📌 Статус: <b>В процессе</b>\n\n"
                         + "🏆 <b>Награда</b>\n"
@@ -6272,13 +6273,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .toList();
 
         String[] medals = {"🥇", "🥈", "🥉"};
+        boolean flatTop = gameCatalogService.isFlat(gameName);
         StringBuilder sb = new StringBuilder("🏆 <b>Топ квестов — " + escape(gameName) + "</b>\n\n");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (int i = 0; i < stats.size(); i++) {
             QuestStat s = stats.get(i);
             String place = i < medals.length ? medals[i] : (i + 1) + ".";
             String activeTag = s.quest().isActive() ? "" : " (неактивен)";
-            String catLabel = s.quest().getCategory() != null ? s.quest().getCategory() + " · " : "";
+            String catLabel = (!flatTop && s.quest().getCategory() != null) ? s.quest().getCategory() + " · " : "";
             sb.append(place).append(" <b>").append(escape(s.quest().getTitle())).append("</b>").append(activeTag).append("\n")
               .append("   ").append(catLabel)
               .append(s.count()).append(" выполн.\n\n");
@@ -6358,7 +6360,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ));
         String platformText = quest.getPlatform() != null ? quest.getPlatform() : "—";
         String photoMark = quest.getPhotoFileId() != null ? " 🖼️" : "";
-        String categoryLine = (quest.getCategory() != null && !quest.getCategory().isBlank())
+        String categoryLine = (!flatGame && quest.getCategory() != null && !quest.getCategory().isBlank())
                 ? "📚 Категория: <b>" + escape(quest.getCategory()) + "</b>\n" : "";
         sendText(user.getTelegramId(),
                 "✏️ <b>Редактор квеста</b>" + photoMark + "\n\n"
