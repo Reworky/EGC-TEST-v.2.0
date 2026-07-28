@@ -19,4 +19,13 @@ public class GameCatalog {
 
     @Column(name = "photo_file_id")
     private String photoFileId;
+
+    @Column(name = "difficulty_mode", columnDefinition = "VARCHAR(10) DEFAULT 'TIERED'")
+    private String difficultyMode = "TIERED";
+
+    @Column(name = "flat_reward_exc", columnDefinition = "BIGINT DEFAULT 1500")
+    private long flatRewardExc = 1500;
+
+    @Column(name = "flat_reward_xp", columnDefinition = "INT DEFAULT 50")
+    private int flatRewardXp = 50;
 }

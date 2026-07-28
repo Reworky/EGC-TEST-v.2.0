@@ -384,6 +384,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (session.getState() == SessionState.GAME_FLAT_XP) {
+            Integer flatXp = parseInteger(text.trim());
+            if (flatXp == null || flatXp < 0) {
+                sendText(user.getTelegramId(), "⚠️ Введите целое неотрицательное число (XP).", cancelKeyboard());
+                return;
+            }
+            session.getData().put("gameFlatXp", flatXp.toString());
+            session.setState(SessionState.GAME_FLAT_EXC);
+            sendText(user.getTelegramId(), "🪙 Теперь введите EXC за квест:", cancelKeyboard());
+            return;
+        }
+
+        if (session.getState() == SessionState.GAME_FLAT_EXC) {
+            Long flatExc = parsePositiveLong(text.trim());
+            if (flatExc == null) {
+                sendText(user.getTelegramId(), "⚠️ Введите целое положительное число (EXC).", cancelKeyboard());
+                return;
+            }
+            String gameName = session.getData().get("gameModeName");
+            int flatXp = Integer.parseInt(session.getData().getOrDefault("gameFlatXp", "50"));
+            gameCatalogService.setDifficultyMode(gameName, "FLAT", flatExc, flatXp);
+            session.reset();
+            sendText(user.getTelegramId(),
+                    "✅ Режим FLAT установлен для игры «" + escape(gameName) + "»\n"
+                            + "Награда за квест: <b>" + flatXp + " XP / " + flatExc + " EXC</b>", null);
+            sendAdminQuestCategories(user, gameName);
+            return;
+        }
+
         if (session.getState() == SessionState.SUPPORT_INPUT) {
             handleSupportMessage(user, session, message);
             return;
@@ -1533,9 +1562,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(user.getTelegramId(), "🎮 Напишите название игры.", cancelKeyboard());
             }
             case QUEST_CREATE_GAME -> {
-                session.getData().put("game", text.trim());
-                session.setState(SessionState.QUEST_CREATE_CATEGORY);
-                sendQuestCategoryKeyboard(user);
+                String enteredGame = text.trim();
+                session.getData().put("game", enteredGame);
+                if (gameCatalogService.isFlat(enteredGame)) {
+                    session.getData().put("flat", "true");
+                    session.getData().put("flatXp", String.valueOf(gameCatalogService.getFlatRewardXp(enteredGame)));
+                    session.getData().put("flatExc", String.valueOf(gameCatalogService.getFlatRewardExc(enteredGame)));
+                    session.setState(SessionState.QUEST_CREATE_PLATFORM);
+                    sendQuestPlatformKeyboard(user, session);
+                } else {
+                    session.setState(SessionState.QUEST_CREATE_CATEGORY);
+                    sendQuestCategoryKeyboard(user);
+                }
             }
             case QUEST_CREATE_PLATFORM -> {
                 session.setState(SessionState.QUEST_CREATE_DURATION);
@@ -1557,8 +1595,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
                 session.getData().put("durationDays", days.toString());
                 session.getData().put("duration", days + (days == 1 ? " день" : days < 5 ? " дня" : " дней"));
-                session.setState(SessionState.QUEST_CREATE_REWARD_XP);
-                sendText(user.getTelegramId(), "✨ Сколько XP начислять за квест?", cancelKeyboard());
+                if ("true".equals(session.getData().get("flat"))) {
+                    session.getData().put("xp", session.getData().getOrDefault("flatXp", "50"));
+                    session.getData().put("coins", session.getData().getOrDefault("flatExc", "1500"));
+                    session.getData().put("tickets", "0");
+                    session.setState(SessionState.QUEST_CREATE_INSTRUCTION);
+                    sendText(user.getTelegramId(), "📎 Отправьте инструкцию для игрока.", cancelKeyboard());
+                } else {
+                    session.setState(SessionState.QUEST_CREATE_REWARD_XP);
+                    sendText(user.getTelegramId(), "✨ Сколько XP начислять за квест?", cancelKeyboard());
+                }
             }
             case QUEST_CREATE_REWARD_XP -> {
                 Long xp = parsePositiveLong(text.trim());
@@ -2561,6 +2607,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        // FLAT-режим — без деления на сложность, сразу показываем все квесты игры
+        if (gameCatalogService.isFlat(gameName)) {
+            sendQuestList(user, gameName, null, "quests:section:gaming");
+            return;
+        }
+
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(
                 keyboardFactory.callback("⚡ Легкие", "quests:list:" + encodeGameToken(gameName) + ":fast"),
@@ -2700,8 +2752,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + sponsorBadge
                         + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n\n"
                         + (quest.isSponsored() ? "🎮 Название канала: <b>" : "🎮 Игра: <b>") + escape(quest.getGameName()) + "</b>\n"
-                        + (quest.isSponsored() || "UGC".equalsIgnoreCase(quest.getGameName()) ? "" : "📚 Формат: <b>" + escape(quest.getCategory()) + "</b>\n"
-                        + "🕹️ Платформа: <b>" + escape(quest.getPlatform()) + "</b>\n")
+                        + (quest.isSponsored() || "UGC".equalsIgnoreCase(quest.getGameName()) ? "" : (quest.getCategory() != null ? "📚 Формат: <b>" + escape(quest.getCategory()) + "</b>\n" : "") + "🕹️ Платформа: <b>" + escape(quest.getPlatform()) + "</b>\n")
                         + deadlineLine
                         + "📌 Статус: <b>" + escape(displayStatus) + "</b>\n\n"
                         + "🏆 <b>Награда:</b>\n"
@@ -2751,8 +2802,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 notice + "\n\n"
                         + "🎯 <b>" + escape(freshQuest.getTitle()) + "</b>\n\n"
                         + (freshQuest.isSponsored() ? "🎮 Название канала: <b>" : "🎮 Игра: <b>") + escape(freshQuest.getGameName()) + "</b>\n"
-                        + (freshQuest.isSponsored() || "UGC".equalsIgnoreCase(freshQuest.getGameName()) ? "" : "📚 Формат: <b>" + escape(freshQuest.getCategory()) + "</b>\n"
-                        + "🕹️ Платформа: <b>" + escape(freshQuest.getPlatform()) + "</b>\n")
+                        + (freshQuest.isSponsored() || "UGC".equalsIgnoreCase(freshQuest.getGameName()) ? "" : (freshQuest.getCategory() != null ? "📚 Формат: <b>" + escape(freshQuest.getCategory()) + "</b>\n" : "") + "🕹️ Платформа: <b>" + escape(freshQuest.getPlatform()) + "</b>\n")
                         + deadlineLine
                         + "📌 Статус: <b>В процессе</b>\n\n"
                         + "🏆 <b>Награда</b>\n"
@@ -5154,6 +5204,50 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendAdminGameQuestTop(user, gameName);
                     answerSilently(callbackQuery.getId());
                     return;
+                } else if (action.startsWith("game:mode:set:tiered:")) {
+                    String gameName = decodeGameToken(action.substring("game:mode:set:tiered:".length()));
+                    gameCatalogService.setDifficultyMode(gameName, "TIERED", 1500, 50);
+                    answer(callbackQuery.getId(), "Режим TIERED установлен");
+                    sendAdminQuestCategories(user, gameName);
+                    return;
+                } else if (action.startsWith("game:mode:set:flat:xp:")) {
+                    // format: game:mode:set:flat:xp:<gameName>
+                    String gameName = decodeGameToken(action.substring("game:mode:set:flat:xp:".length()));
+                    session.reset();
+                    session.setState(SessionState.GAME_FLAT_XP);
+                    session.getData().put("gameModeName", gameName);
+                    sendText(user.getTelegramId(),
+                            "✨ <b>Введите XP за квест для FLAT-режима игры «" + escape(gameName) + "»:</b>",
+                            cancelKeyboard());
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("game:mode:")) {
+                    String gameName = decodeGameToken(action.substring("game:mode:".length()));
+                    boolean flat = gameCatalogService.isFlat(gameName);
+                    List<List<InlineKeyboardButton>> modeRows = new ArrayList<>();
+                    if (flat) {
+                        long curExc = gameCatalogService.getFlatRewardExc(gameName);
+                        int curXp = gameCatalogService.getFlatRewardXp(gameName);
+                        modeRows.add(List.of(keyboardFactory.callback("✏️ Изменить награды", "admin:game:mode:set:flat:xp:" + encodeGameToken(gameName))));
+                        modeRows.add(List.of(keyboardFactory.callback("🔄 Переключить в TIERED", "admin:game:mode:set:tiered:" + encodeGameToken(gameName))));
+                        modeRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:quests:game:" + encodeGameToken(gameName))));
+                        sendText(user.getTelegramId(),
+                                "⚙️ <b>Режим квестов: " + escape(gameName) + "</b>\n\n"
+                                        + "Текущий режим: <b>FLAT</b>\n"
+                                        + "Фиксированная награда: <b>" + curXp + " XP / " + curExc + " EXC</b>\n\n"
+                                        + "В FLAT-режиме все квесты этой игры не имеют категории сложности и получают одинаковую награду.",
+                                keyboardFactory.rowsLayout(modeRows));
+                    } else {
+                        modeRows.add(List.of(keyboardFactory.callback("🔄 Переключить в FLAT", "admin:game:mode:set:flat:xp:" + encodeGameToken(gameName))));
+                        modeRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:quests:game:" + encodeGameToken(gameName))));
+                        sendText(user.getTelegramId(),
+                                "⚙️ <b>Режим квестов: " + escape(gameName) + "</b>\n\n"
+                                        + "Текущий режим: <b>TIERED</b> (Лёгкие / Средние / Сложные)\n\n"
+                                        + "В TIERED-режиме каждый квест имеет свою категорию сложности с индивидуальной наградой.",
+                                keyboardFactory.rowsLayout(modeRows));
+                    }
+                    answerSilently(callbackQuery.getId());
+                    return;
                 } else if (action.startsWith("game:photo:set:")) {
                     String gameName = decodeGameToken(action.substring("game:photo:set:".length()));
                     session.reset();
@@ -6121,16 +6215,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(
-                keyboardFactory.callback("⚡ Легкие", "admin:quests:list:" + encodeGameToken(gameName) + ":fast"),
-                keyboardFactory.callback("🎯 Средние", "admin:quests:list:" + encodeGameToken(gameName) + ":medium")
-        ));
-        rows.add(List.of(keyboardFactory.callback("🏰 Сложные", "admin:quests:list:" + encodeGameToken(gameName) + ":long")));
-        rows.add(List.of(keyboardFactory.callback("📚 Все квесты", "admin:quests:list:" + encodeGameToken(gameName) + ":all")));
-        rows.add(List.of(keyboardFactory.callback("🏆 Топ квестов", "admin:game:top:" + encodeGameToken(gameName))));
-
+        boolean flat = gameCatalogService.isFlat(gameName);
         boolean hasPhoto = gameCatalogService.getPhotoFileId(gameName).isPresent();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+
+        if (flat) {
+            rows.add(List.of(keyboardFactory.callback("📚 Квесты", "admin:quests:list:" + encodeGameToken(gameName) + ":all")));
+        } else {
+            rows.add(List.of(
+                    keyboardFactory.callback("⚡ Легкие", "admin:quests:list:" + encodeGameToken(gameName) + ":fast"),
+                    keyboardFactory.callback("🎯 Средние", "admin:quests:list:" + encodeGameToken(gameName) + ":medium")
+            ));
+            rows.add(List.of(keyboardFactory.callback("🏰 Сложные", "admin:quests:list:" + encodeGameToken(gameName) + ":long")));
+            rows.add(List.of(keyboardFactory.callback("📚 Все квесты", "admin:quests:list:" + encodeGameToken(gameName) + ":all")));
+        }
+        rows.add(List.of(keyboardFactory.callback("🏆 Топ квестов", "admin:game:top:" + encodeGameToken(gameName))));
+        rows.add(List.of(keyboardFactory.callback(
+                flat ? "⚙️ Режим: FLAT (без категорий)" : "⚙️ Режим: TIERED (категории)", "admin:game:mode:" + encodeGameToken(gameName))));
+
         if (hasPhoto) {
             rows.add(List.of(
                     keyboardFactory.callback("🖼 Обновить фото игры", "admin:game:photo:set:" + encodeGameToken(gameName)),
@@ -6146,10 +6248,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ));
 
         String photoStatus = hasPhoto ? "✅ Фото установлено" : "📷 Фото не добавлено";
+        String modeStatus = flat
+                ? "⚙️ Режим: FLAT · " + gameCatalogService.getFlatRewardXp(gameName) + " XP / " + gameCatalogService.getFlatRewardExc(gameName) + " EXC"
+                : "⚙️ Режим: TIERED (Easy / Medium / Hard)";
         sendText(user.getTelegramId(),
                 "🎮 <b>" + escape(gameName) + "</b>\n"
-                        + photoStatus + "\n\n"
-                        + "Выберите категорию, чтобы открыть нужную группу квестов по этой игре.",
+                        + photoStatus + "\n"
+                        + modeStatus + "\n\n"
+                        + (flat ? "Квесты без деления на категории сложности." : "Выберите категорию, чтобы открыть нужную группу квестов по этой игре."),
                 keyboardFactory.rowsLayout(rows));
     }
 
@@ -6172,8 +6278,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             QuestStat s = stats.get(i);
             String place = i < medals.length ? medals[i] : (i + 1) + ".";
             String activeTag = s.quest().isActive() ? "" : " (неактивен)";
+            String catLabel = s.quest().getCategory() != null ? s.quest().getCategory() + " · " : "";
             sb.append(place).append(" <b>").append(escape(s.quest().getTitle())).append("</b>").append(activeTag).append("\n")
-              .append("   ").append(s.quest().getCategory()).append(" · ")
+              .append("   ").append(catLabel)
               .append(s.count()).append(" выполн.\n\n");
             String catToken = categoryToken(s.quest().getCategory());
             String cb = "admin:quest:" + encodeGameToken(gameName) + ":" + catToken + ":" + s.quest().getId();
@@ -6222,35 +6329,41 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendAdminQuestEditor(AppUser user, Long questId, String backData) {
         Quest quest = questService.getQuest(questId);
+        boolean flatGame = gameCatalogService.isFlat(quest.getGameName());
         sessionService.get(user.getTelegramId()).getData().put("admin_quest_back_data", backData);
-        List<List<InlineKeyboardButton>> rows = List.of(
-                List.of(
-                        keyboardFactory.callback("✏️ Название", "admin:edit-title:" + questId),
-                        keyboardFactory.callback("📝 Описание", "admin:edit-description:" + questId)
-                ),
-                List.of(
-                        keyboardFactory.callback("✨ Награды", "admin:edit-reward:" + questId),
-                        keyboardFactory.callback("📚 Категория", "admin:edit-category:" + questId)
-                ),
-                List.of(
-                        keyboardFactory.callback("🕹️ Платформа", "admin:edit-platform:" + questId),
-                        keyboardFactory.callback("👥 Лимит", "admin:edit-limit:" + questId)
-                ),
-                List.of(
-                        keyboardFactory.callback(quest.isActive() ? "⏸️ Скрыть" : "▶️ Включить", "admin:toggle:" + questId),
-                        keyboardFactory.callback("🗑️ Удалить", "admin:delete:" + questId)
-                ),
-                List.of(
-                        keyboardFactory.callback("⬅️ Назад", backData),
-                        keyboardFactory.callback("🏠 Меню", "menu:admin")
-                )
-        );
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(
+                keyboardFactory.callback("✏️ Название", "admin:edit-title:" + questId),
+                keyboardFactory.callback("📝 Описание", "admin:edit-description:" + questId)
+        ));
+        if (flatGame) {
+            rows.add(List.of(keyboardFactory.callback("✨ Награды", "admin:edit-reward:" + questId)));
+        } else {
+            rows.add(List.of(
+                    keyboardFactory.callback("✨ Награды", "admin:edit-reward:" + questId),
+                    keyboardFactory.callback("📚 Категория", "admin:edit-category:" + questId)
+            ));
+        }
+        rows.add(List.of(
+                keyboardFactory.callback("🕹️ Платформа", "admin:edit-platform:" + questId),
+                keyboardFactory.callback("👥 Лимит", "admin:edit-limit:" + questId)
+        ));
+        rows.add(List.of(
+                keyboardFactory.callback(quest.isActive() ? "⏸️ Скрыть" : "▶️ Включить", "admin:toggle:" + questId),
+                keyboardFactory.callback("🗑️ Удалить", "admin:delete:" + questId)
+        ));
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", backData),
+                keyboardFactory.callback("🏠 Меню", "menu:admin")
+        ));
         String platformText = quest.getPlatform() != null ? quest.getPlatform() : "—";
         String photoMark = quest.getPhotoFileId() != null ? " 🖼️" : "";
+        String categoryLine = (quest.getCategory() != null && !quest.getCategory().isBlank())
+                ? "📚 Категория: <b>" + escape(quest.getCategory()) + "</b>\n" : "";
         sendText(user.getTelegramId(),
                 "✏️ <b>Редактор квеста</b>" + photoMark + "\n\n"
                         + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n"
-                        + "📚 Категория: <b>" + escape(quest.getCategory()) + "</b>\n"
+                        + categoryLine
                         + "🕹️ Платформа: <b>" + escape(platformText) + "</b>\n"
                         + "👥 Лимит: <b>" + quest.getParticipantLimit() + "</b>\n"
                         + "🎮 Игра: <b>" + escape(quest.getGameName()) + "</b>\n"
@@ -8416,7 +8529,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String text = "👁 <b>Превью квеста</b>\n\n"
                 + "🎯 <b>" + escape(d.getOrDefault("title", "—")) + "</b>\n\n"
                 + "🎮 Игра: <b>" + escape(d.getOrDefault("game", "—")) + "</b>\n"
-                + "📚 Формат: <b>" + escape(d.getOrDefault("category", "—")) + "</b>\n"
+                + ("true".equals(d.get("flat")) ? "" : "📚 Формат: <b>" + escape(d.getOrDefault("category", "—")) + "</b>\n")
                 + "🕹️ Платформа: <b>" + escape(d.getOrDefault("platform", "—")) + "</b>\n"
                 + "⏳ Темп: <b>" + escape(d.getOrDefault("duration", "—")) + "</b>\n"
                 + "👥 Лимит: <b>" + d.getOrDefault("limit", "—") + "</b>\n\n"
