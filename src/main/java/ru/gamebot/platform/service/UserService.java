@@ -481,6 +481,18 @@ public class UserService {
         return appUserRepository.countActiveOnDate(LocalDate.now());
     }
 
+    public long countActiveSince(java.time.LocalDate since) {
+        return appUserRepository.countActiveSince(since);
+    }
+
+    public long countRegisteredBetween(java.time.LocalDateTime from, java.time.LocalDateTime to) {
+        return appUserRepository.countRegisteredBetween(from, to);
+    }
+
+    public long countRegisteredBetweenAndActiveSince(java.time.LocalDateTime from, java.time.LocalDateTime to, java.time.LocalDate activeSince) {
+        return appUserRepository.countRegisteredBetweenAndActiveSince(from, to, activeSince);
+    }
+
     public List<AppUser> allRegisteredUsers() {
         return appUserRepository.findAll().stream()
                 .filter(AppUser::isRegistrationCompleted)

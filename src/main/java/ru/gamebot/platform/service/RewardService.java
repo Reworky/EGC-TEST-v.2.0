@@ -176,6 +176,10 @@ public class RewardService {
         return rewardRequestRepository.sumApprovedWithdrawalExc();
     }
 
+    public long countUniqueWithdrawalRecipients() {
+        return rewardRequestRepository.countDistinctUsersWithApprovedWithdrawals();
+    }
+
     public RewardRequest getRequest(Long requestId) {
         return rewardRequestRepository.findWithUserAndRewardItemById(requestId)
                 .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена."));

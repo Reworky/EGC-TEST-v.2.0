@@ -66,6 +66,12 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.status = 'APPROVED'")
     long countAllApproved();
 
+    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :since")
+    long countApprovedSince(@Param("since") LocalDateTime since);
+
+    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.status IN ('APPROVED', 'REJECTED')")
+    long countModerated();
+
     @Query("SELECT COALESCE(SUM(s.quest.rewardCoins), 0) FROM QuestSubmission s WHERE s.status = 'APPROVED'")
     long sumAllIssuedCoins();
 

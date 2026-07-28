@@ -772,6 +772,14 @@ public class QuestService {
         return questSubmissionRepository.countAllApproved();
     }
 
+    public long countApprovedSince(java.time.LocalDateTime since) {
+        return questSubmissionRepository.countApprovedSince(since);
+    }
+
+    public long countModerated() {
+        return questSubmissionRepository.countModerated();
+    }
+
     public long sumAllIssuedCoins() {
         return questSubmissionRepository.sumAllIssuedCoins();
     }
