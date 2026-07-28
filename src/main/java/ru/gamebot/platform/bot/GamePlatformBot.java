@@ -4967,6 +4967,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "stats:platform" -> sendAdminStatsPlatform(user);
             case "stats:topquests" -> sendAdminStatsTopQuests(user);
             case "stats:history" -> sendAdminStatsHistory(user);
+            case "stats:reset_weekly" -> sendAdminResetWeeklyConfirm(user);
+            case "stats:reset_weekly:confirm" -> doAdminResetWeeklyXp(user);
             case "live" -> sendAdminLiveStatus(user);
             case "queststats" -> sendAdminQuestStats(user);
             case "template" -> sendQuestTemplateGamePicker(user);
@@ -6311,7 +6313,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 keyboardFactory.callback("📊 Платформа", "admin:stats:platform"),
                                 keyboardFactory.callback("🔥 Топ недели", "admin:stats:topquests")
                         ),
+                        List.of(keyboardFactory.callback("🔄 Сбросить недельный XP", "admin:stats:reset_weekly")),
                         List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
+                )));
+    }
+
+    private void sendAdminResetWeeklyConfirm(AppUser user) {
+        sendText(user.getTelegramId(),
+                "⚠️ <b>Сброс недельного рейтинга</b>\n\n"
+                        + "Это обнулит <b>weeklyXp</b> всем игрокам прямо сейчас.\n"
+                        + "Уведомления и призы лиг отправлены <b>не будут</b> — только сброс счётчика.\n\n"
+                        + "Используй один раз для выравнивания данных. Далее сброс происходит автоматически каждый понедельник в 00:00 UTC.",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("✅ Подтвердить сброс", "admin:stats:reset_weekly:confirm"),
+                                keyboardFactory.callback("❌ Отмена", "admin:stats"))
+                )));
+    }
+
+    private void doAdminResetWeeklyXp(AppUser user) {
+        long count = userService.forceResetWeeklyXp();
+        sendText(user.getTelegramId(),
+                "✅ Недельный XP сброшен у <b>" + count + "</b> игроков.\n\nРейтинг чистый.",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("⬅️ Назад", "admin:stats"))
                 )));
     }
 

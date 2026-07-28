@@ -437,6 +437,20 @@ public class UserService {
     }
 
     @Transactional
+    public long forceResetWeeklyXp() {
+        List<AppUser> users = appUserRepository.findAll();
+        long count = 0;
+        for (AppUser u : users) {
+            if (u.isRegistrationCompleted() && u.getWeeklyXp() > 0) {
+                u.setWeeklyXp(0);
+                count++;
+            }
+        }
+        appUserRepository.saveAll(users);
+        return count;
+    }
+
+    @Transactional
     public void resetWeeklyXp() {
         List<AppUser> users = appUserRepository.findAll();
 
