@@ -134,6 +134,14 @@ public class UserService {
         return getRank(sorted, user.getTelegramId());
     }
 
+    public long getWeeklyRankFast(AppUser user) {
+        return appUserRepository.countWithMoreWeeklyXp(user.getWeeklyXp()) + 1;
+    }
+
+    public long countActiveThisWeek() {
+        return appUserRepository.countActiveThisWeek();
+    }
+
     private long getRank(List<AppUser> sorted, Long telegramId) {
         for (int i = 0; i < sorted.size(); i++) {
             if (sorted.get(i).getTelegramId().equals(telegramId)) {

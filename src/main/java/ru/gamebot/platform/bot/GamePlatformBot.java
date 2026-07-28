@@ -2317,13 +2317,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendProfile(AppUser user) {
-        long rank = userService.getOverallRank(user);
         String achievements = userService.getAchievements(user).isEmpty()
                 ? "Пока нет"
                 : String.join(", ", userService.getAchievements(user));
 
-        // Строка с титулом, уровнем (компактно)
-        String titlePart = user.getProfileTitle() != null ? "🏅 " + escape(user.getProfileTitle()) + " · " : "";
         int levelNum = userService.getLevelNumber(user.getXp());
         String levelName = escape(userService.getLevelName(user.getXp()));
 
@@ -2333,13 +2330,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (seasonService.hasActivePass(user)) badges += "🎫 Battle Pass  ";
         String badgeLine = badges.isEmpty() ? "" : badges.trim() + "\n";
 
-        // EXC бонус
         int excBonus = userService.getExcBonusPercent(user.getXp());
-        String boostSuffix = sinkShopService.isBoostActive(user) ? " (+20% буст)" : "";
         String league = ru.gamebot.platform.service.UserService.getLeague(user.getWeeklyXp()).displayName;
 
         String titleLine = user.getProfileTitle() != null ? "🏅 " + escape(user.getProfileTitle()) + "\n" : "";
         String boostNote = sinkShopService.isBoostActive(user) ? " +20% буст" : "";
+
+        // Недельный ранг
+        String leagueLine;
+        if (user.getWeeklyXp() > 0) {
+            long weeklyRank = userService.getWeeklyRankFast(user);
+            long weeklyTotal = userService.countActiveThisWeek();
+            leagueLine = "🏆 Лига: <b>" + league + "</b> · 📊 Место: <b>#" + weeklyRank + " из " + weeklyTotal + "</b>\n";
+        } else {
+            leagueLine = "🏆 Лига: <b>" + league + "</b> · Заработай XP, чтобы войти в рейтинг\n";
+        }
 
         String profileText = "🎮 <b>" + escape(user.getNickname()) + "</b>\n"
                 + badgeLine
@@ -2348,7 +2353,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + levelProgressBar(user) + "\n\n"
                 + "💰 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>"
                 + " (+" + excBonus + "% к награде" + boostNote + ")\n"
-                + "👑 Лига: <b>" + league + "</b> (#" + rank + " в рейтинге)\n\n"
+                + leagueLine + "\n"
                 + "📊 <b>Эта неделя</b>\n"
                 + "✅ Квестов: <b>" + user.getCompletedQuests() + "</b>"
                 + " · 🔥 Серия: <b>" + user.getStreakDays() + " дней</b>"

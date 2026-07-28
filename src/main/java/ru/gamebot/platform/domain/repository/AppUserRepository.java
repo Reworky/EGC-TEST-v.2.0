@@ -61,6 +61,12 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.lastActivityDate >= :since")
     long countActiveSince(@Param("since") java.time.LocalDate since);
 
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.weeklyXp > :weeklyXp")
+    long countWithMoreWeeklyXp(@Param("weeklyXp") long weeklyXp);
+
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.weeklyXp > 0")
+    long countActiveThisWeek();
+
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt >= :from AND u.createdAt < :to")
     long countRegisteredBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
