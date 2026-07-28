@@ -75,4 +75,8 @@ public class QuestSubmission {
     /** Рублёвый эквивалент награды, зафиксированный в момент одобрения (HR × EXC / 100). null = старые записи. */
     @Column(nullable = true)
     private Long fixedRubValue;
+
+    /** Флаг: уведомление «2 часа до дедлайна» уже отправлено. */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean deadlineWarningSent;
 }

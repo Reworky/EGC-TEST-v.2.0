@@ -111,6 +111,16 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
            "AND s.photoUniqueIds <> '' AND s.photoUniqueIds LIKE CONCAT('%', :uid, '%')")
     boolean existsByPhotoUniqueIdFromOtherUser(@Param("uid") String uid, @Param("userId") Long userId);
 
+    /** Все активные заявки (DRAFT/PENDING) у которых истёк дедлайн — для автоотмены. */
+    @EntityGraph(attributePaths = {"user", "quest"})
+    @Query("SELECT s FROM QuestSubmission s WHERE s.status IN ('DRAFT','PENDING') AND s.expiresAt IS NOT NULL AND s.expiresAt < CURRENT_TIMESTAMP")
+    List<QuestSubmission> findExpiredActive();
+
+    /** Активные заявки, дедлайн которых наступит в интервале (now, upperBound], предупреждение ещё не отправлено. */
+    @EntityGraph(attributePaths = {"user", "quest"})
+    @Query("SELECT s FROM QuestSubmission s WHERE s.status IN ('DRAFT','PENDING') AND s.expiresAt IS NOT NULL AND s.expiresAt > CURRENT_TIMESTAMP AND s.expiresAt <= :upperBound AND s.deadlineWarningSent = false")
+    List<QuestSubmission> findExpiringBefore(@Param("upperBound") LocalDateTime upperBound);
+
     // 24ч кулдаун — обычные квесты (все кроме «Сложные» и спонсорских)
     @Query("SELECT s.user.telegramId, s.quest.gameName, s.quest.title " +
            "FROM QuestSubmission s " +

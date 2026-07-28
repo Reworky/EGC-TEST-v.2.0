@@ -2663,13 +2663,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (questService.isExpired(latest)) {
                 deadlineLine = "⌛ Дедлайн: <b>истёк</b>\n";
             } else {
-                long hoursLeft = java.time.temporal.ChronoUnit.HOURS.between(LocalDateTime.now(), latest.getExpiresAt());
-                if (hoursLeft < 24) {
-                    deadlineLine = "⚠️ Дедлайн: <b>через " + hoursLeft + " ч</b>\n";
-                } else {
-                    long daysLeft = hoursLeft / 24;
-                    deadlineLine = "📅 Дедлайн: <b>через " + daysLeft + " д</b>\n";
-                }
+                deadlineLine = formatDeadlineLine(latest.getExpiresAt());
             }
         } else if (quest.getDurationDays() > 0 && (latest == null || latest.getStatus() == SubmissionStatus.REJECTED)) {
             deadlineLine = "⏳ Срок: <b>" + quest.getDurationText() + "</b> с момента старта\n";
@@ -2750,9 +2744,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         String deadlineLine = "";
         if (submission != null && submission.getExpiresAt() != null) {
-            long hoursLeft = java.time.temporal.ChronoUnit.HOURS.between(LocalDateTime.now(), submission.getExpiresAt());
-            long daysLeft = hoursLeft / 24;
-            deadlineLine = "📅 Дедлайн: <b>через " + daysLeft + " д</b>\n";
+            deadlineLine = questService.isExpired(submission) ? "⌛ Дедлайн: <b>истёк</b>\n" : formatDeadlineLine(submission.getExpiresAt());
         }
 
         sendText(user.getTelegramId(),
@@ -8027,6 +8019,39 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     @org.springframework.context.event.EventListener
+    public void onQuestExpired(ru.gamebot.platform.event.QuestExpiredEvent event) {
+        String msg = "⏰ <b>Время вышло</b>\n\n"
+                + "Квест «" + escape(event.getQuestTitle()) + "» просрочен — EXC не начислены.\n\n"
+                + "Можешь взять его снова и выполнить в срок 👇";
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("🗺️ К квестам", "menu:quests"))
+        ));
+        try {
+            sendText(event.getTelegramId(), msg, keyboard);
+        } catch (Exception e) {
+            log.warn("Failed to send quest expired notification to {}", event.getTelegramId(), e);
+        }
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onQuestDeadlineWarning(ru.gamebot.platform.event.QuestDeadlineWarningEvent event) {
+        long h = event.getMinutesLeft() / 60;
+        long m = event.getMinutesLeft() % 60;
+        String timeStr = h > 0 ? h + " ч " + m + " мин" : m + " мин";
+        String msg = "⚠️ <b>Квест истекает через " + timeStr + "!</b>\n\n"
+                + "«" + escape(event.getQuestTitle()) + "»\n\n"
+                + "Успей отправить доказательство 👇";
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("📤 Мои квесты", "menu:myquests"))
+        ));
+        try {
+            sendText(event.getTelegramId(), msg, keyboard);
+        } catch (Exception e) {
+            log.warn("Failed to send deadline warning to {}", event.getTelegramId(), e);
+        }
+    }
+
+    @org.springframework.context.event.EventListener
     public void onLeagueReward(LeagueRewardEvent event) {
         String msg = "🏆 <b>Итоги недели — " + escape(event.getLeagueName()) + "</b>\n\n"
                 + "Ты набрал <b>" + event.getWeeklyXp() + " XP</b> за эту неделю.\n\n"
@@ -9864,6 +9889,23 @@ String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошел�
                 .replace("&", "&amp;")
                 .replace("<", "&lt;")
                 .replace(">", "&gt;");
+    }
+
+    private String formatDeadlineLine(LocalDateTime expiresAt) {
+        long totalSeconds = java.time.temporal.ChronoUnit.SECONDS.between(LocalDateTime.now(), expiresAt);
+        if (totalSeconds <= 0) {
+            return "⌛ Дедлайн: <b>истёк</b>\n";
+        }
+        if (totalSeconds < 86_400) {
+            long h = totalSeconds / 3600;
+            long m = (totalSeconds % 3600) / 60;
+            long s = totalSeconds % 60;
+            String emoji = totalSeconds < 7_200 ? "⚠️" : "⏰";
+            return emoji + " Осталось: <b>" + String.format("%02d:%02d:%02d", h, m, s) + "</b>\n";
+        }
+        long days = totalSeconds / 86_400;
+        long h = (totalSeconds % 86_400) / 3600;
+        return "⏰ Осталось: <b>" + days + "д " + String.format("%02d:%02d", h, 0) + "</b>\n";
     }
 
     /** Живая строка соц-доказательства для приветствия новичков — реальное число игроков, округлённое вниз до 50. */

@@ -5,13 +5,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import ru.gamebot.platform.domain.enums.SubmissionStatus;
 import ru.gamebot.platform.domain.model.Poll;
+import ru.gamebot.platform.domain.model.QuestSubmission;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
 import ru.gamebot.platform.event.CooldownExpiredEvent;
 import ru.gamebot.platform.event.PollClosedEvent;
+import ru.gamebot.platform.event.QuestDeadlineWarningEvent;
+import ru.gamebot.platform.event.QuestExpiredEvent;
 import ru.gamebot.platform.service.TournamentService;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @Slf4j
@@ -79,6 +84,44 @@ public class WeeklyResetScheduler {
         // 336ч — только «Сложные»
         notifyExpired(questSubmissionRepository.findUsersWhoseHardQuestCooldownExpiredBetween(
                 now.minusHours(336).minusMinutes(5), now.minusHours(336)));
+    }
+
+    // Автоотмена просроченных заявок — каждый час
+    @Scheduled(fixedDelay = 3_600_000)
+    public void cancelExpiredSubmissions() {
+        List<QuestSubmission> expired = questSubmissionRepository.findExpiredActive();
+        for (QuestSubmission s : expired) {
+            try {
+                s.setStatus(SubmissionStatus.CANCELLED);
+                s.setUpdatedAt(LocalDateTime.now());
+                questSubmissionRepository.save(s);
+                eventPublisher.publishEvent(new QuestExpiredEvent(this,
+                        s.getUser().getTelegramId(), s.getQuest().getTitle()));
+            } catch (Exception e) {
+                log.warn("Failed to auto-cancel expired submission {}", s.getId(), e);
+            }
+        }
+        if (!expired.isEmpty()) {
+            log.info("Auto-cancelled {} expired quest submission(s)", expired.size());
+        }
+    }
+
+    // Предупреждение о дедлайне за 2 часа — каждые 10 минут
+    @Scheduled(fixedDelay = 600_000)
+    public void warnApproachingDeadlines() {
+        LocalDateTime twoHoursFromNow = LocalDateTime.now().plusMinutes(120);
+        List<QuestSubmission> expiring = questSubmissionRepository.findExpiringBefore(twoHoursFromNow);
+        for (QuestSubmission s : expiring) {
+            try {
+                long minutesLeft = ChronoUnit.MINUTES.between(LocalDateTime.now(), s.getExpiresAt());
+                s.setDeadlineWarningSent(true);
+                questSubmissionRepository.save(s);
+                eventPublisher.publishEvent(new QuestDeadlineWarningEvent(this,
+                        s.getUser().getTelegramId(), s.getQuest().getTitle(), minutesLeft));
+            } catch (Exception e) {
+                log.warn("Failed to send deadline warning for submission {}", s.getId(), e);
+            }
+        }
     }
 
     // Снапшот платформы — каждый день в 00:05 (после еженедельного сброса в 00:00 в понедельник)
