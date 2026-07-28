@@ -201,6 +201,17 @@ public class QuestService {
         return questRepository.save(quest);
     }
 
+    @Transactional
+    public int applyFlatRewardsToGame(String gameName, long xp, long exc) {
+        List<Quest> quests = questRepository.findAllByGameNameIgnoreCase(gameName);
+        for (Quest q : quests) {
+            q.setRewardXp(xp);
+            q.setRewardCoins(exc);
+        }
+        questRepository.saveAll(quests);
+        return quests.size();
+    }
+
     /**
      * Минимальный срок квеста в днях. Раньше зависел от категории (кулдаун сдачи отчёта в часах),
      * но с переходом на мягкий антифрод-флаг вместо блокировки стал единым для всех категорий.

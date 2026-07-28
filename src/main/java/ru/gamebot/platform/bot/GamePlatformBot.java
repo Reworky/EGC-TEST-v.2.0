@@ -405,10 +405,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String gameName = session.getData().get("gameModeName");
             int flatXp = Integer.parseInt(session.getData().getOrDefault("gameFlatXp", "50"));
             gameCatalogService.setDifficultyMode(gameName, "FLAT", flatExc, flatXp);
+            int updated = questService.applyFlatRewardsToGame(gameName, flatXp, flatExc);
             session.reset();
             sendText(user.getTelegramId(),
                     "✅ Режим FLAT установлен для игры «" + escape(gameName) + "»\n"
-                            + "Награда за квест: <b>" + flatXp + " XP / " + flatExc + " EXC</b>", null);
+                            + "Награда за квест: <b>" + flatXp + " XP / " + flatExc + " EXC</b>\n"
+                            + "Обновлено квестов: <b>" + updated + "</b>", null);
             sendAdminQuestCategories(user, gameName);
             return;
         }
