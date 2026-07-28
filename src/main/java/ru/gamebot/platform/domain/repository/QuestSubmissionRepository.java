@@ -111,6 +111,14 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
            "AND s.photoUniqueIds <> '' AND s.photoUniqueIds LIKE CONCAT('%', :uid, '%')")
     boolean existsByPhotoUniqueIdFromOtherUser(@Param("uid") String uid, @Param("userId") Long userId);
 
+    /** Сумма EXC (rewardCoins) по одобренным заявкам пользователя за период — для дайджеста. */
+    @Query("SELECT COALESCE(SUM(s.quest.rewardCoins), 0) FROM QuestSubmission s WHERE s.user = :user AND s.status = 'APPROVED' AND s.updatedAt >= :from AND s.updatedAt < :to")
+    long sumApprovedCoinsByUserBetween(@Param("user") AppUser user, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /** Рейтинг пользователей по XP за прошлую неделю: [userId, xpSum], по убыванию — для дайджеста. */
+    @Query("SELECT s.user.id, SUM(s.quest.rewardXp) FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :from AND s.updatedAt < :to GROUP BY s.user.id ORDER BY SUM(s.quest.rewardXp) DESC")
+    List<Object[]> findUserXpRankingBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
     /** Все активные заявки (DRAFT/PENDING) у которых истёк дедлайн — для автоотмены. */
     @EntityGraph(attributePaths = {"user", "quest"})
     @Query("SELECT s FROM QuestSubmission s WHERE s.status IN ('DRAFT','PENDING') AND s.expiresAt IS NOT NULL AND s.expiresAt < CURRENT_TIMESTAMP")

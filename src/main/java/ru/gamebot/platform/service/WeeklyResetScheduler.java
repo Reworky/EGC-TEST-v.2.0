@@ -6,18 +6,27 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import ru.gamebot.platform.domain.enums.SubmissionStatus;
+import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Poll;
 import ru.gamebot.platform.domain.model.QuestSubmission;
+import ru.gamebot.platform.domain.repository.QuestRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
+import ru.gamebot.platform.domain.repository.WheelSpinLogRepository;
 import ru.gamebot.platform.event.CooldownExpiredEvent;
 import ru.gamebot.platform.event.PollClosedEvent;
 import ru.gamebot.platform.event.QuestDeadlineWarningEvent;
 import ru.gamebot.platform.event.QuestExpiredEvent;
+import ru.gamebot.platform.event.WeeklyDigestActiveEvent;
+import ru.gamebot.platform.event.WeeklyDigestInactiveEvent;
 import ru.gamebot.platform.service.TournamentService;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Component
@@ -30,6 +39,8 @@ public class WeeklyResetScheduler {
     private final TournamentService tournamentService;
     private final SquadService squadService;
     private final QuestSubmissionRepository questSubmissionRepository;
+    private final QuestRepository questRepository;
+    private final WheelSpinLogRepository wheelSpinLogRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final PlatformSnapshotService platformSnapshotService;
 
@@ -122,6 +133,52 @@ public class WeeklyResetScheduler {
                 log.warn("Failed to send deadline warning for submission {}", s.getId(), e);
             }
         }
+    }
+
+    // Еженедельный дайджест — понедельник 10:00 UTC (через 10ч после сброса XP)
+    @Scheduled(cron = "0 0 10 * * MON")
+    public void sendWeeklyDigests() {
+        LocalDateTime weekEnd = LocalDate.now().with(DayOfWeek.MONDAY).atStartOfDay(); // сегодня 00:00
+        LocalDateTime weekStart = weekEnd.minusWeeks(1);                                 // прошлый пн 00:00
+
+        // Одним запросом: рейтинг всех пользователей по XP за прошлую неделю
+        List<Object[]> rankingRows = questSubmissionRepository.findUserXpRankingBetween(weekStart, weekEnd);
+        Map<Long, Long> userXpMap = new HashMap<>();
+        Map<Long, Integer> userRankMap = new HashMap<>();
+        int rankCounter = 1;
+        for (Object[] row : rankingRows) {
+            Long userId = (Long) row[0];
+            long xp = row[1] == null ? 0L : ((Number) row[1]).longValue();
+            userXpMap.put(userId, xp);
+            userRankMap.put(userId, rankCounter++);
+        }
+
+        long newQuestsCount = questRepository.countCreatedBetween(weekStart, weekEnd);
+        long totalSpins = wheelSpinLogRepository.countBetween(weekStart, weekEnd);
+
+        for (AppUser user : userService.allRegisteredUsers()) {
+            if (user.isBlocked()) continue;
+            try {
+                long completedQuests = questSubmissionRepository.countApprovedByUserBetween(user, weekStart, weekEnd);
+
+                if (completedQuests > 0) {
+                    long earnedExc = questSubmissionRepository.sumApprovedCoinsByUserBetween(user, weekStart, weekEnd);
+                    long lastWeekXp = userXpMap.getOrDefault(user.getId(), 0L);
+                    String leagueName = UserService.getLeague(lastWeekXp).displayName;
+                    int weeklyRank = userRankMap.getOrDefault(user.getId(), 0);
+                    long xpToNextLevel = Math.max(0, userService.nextLevelCeiling(user.getXp()) - user.getXp());
+                    eventPublisher.publishEvent(new WeeklyDigestActiveEvent(this,
+                            user.getTelegramId(), completedQuests, earnedExc, lastWeekXp,
+                            leagueName, weeklyRank, xpToNextLevel));
+                } else if (user.getCreatedAt() != null && user.getCreatedAt().isBefore(weekStart)) {
+                    eventPublisher.publishEvent(new WeeklyDigestInactiveEvent(this,
+                            user.getTelegramId(), newQuestsCount, totalSpins));
+                }
+            } catch (Exception e) {
+                log.warn("Failed to process weekly digest for user {}", user.getTelegramId(), e);
+            }
+        }
+        log.info("Weekly digests dispatched. Active window: {} – {}", weekStart, weekEnd);
     }
 
     // Снапшот платформы — каждый день в 00:05 (после еженедельного сброса в 00:00 в понедельник)

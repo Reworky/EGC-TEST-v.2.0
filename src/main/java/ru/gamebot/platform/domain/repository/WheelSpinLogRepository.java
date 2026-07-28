@@ -11,4 +11,7 @@ public interface WheelSpinLogRepository extends JpaRepository<WheelSpinLog, Long
 
     @Query("SELECT COUNT(w) FROM WheelSpinLog w WHERE w.user = :user AND w.createdAt >= :since")
     long countByUserSince(@Param("user") AppUser user, @Param("since") LocalDateTime since);
+
+    @Query("SELECT COUNT(w) FROM WheelSpinLog w WHERE w.createdAt >= :from AND w.createdAt < :to")
+    long countBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }

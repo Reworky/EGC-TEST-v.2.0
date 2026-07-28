@@ -8052,6 +8052,43 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     @org.springframework.context.event.EventListener
+    public void onWeeklyDigestActive(ru.gamebot.platform.event.WeeklyDigestActiveEvent event) {
+        String rankLine = event.getWeeklyRank() > 0 ? "#" + event.getWeeklyRank() : "—";
+        String msg = "📊 <b>Итоги твоей недели в EGC</b>\n\n"
+                + "✅ Квестов выполнено: <b>" + event.getCompletedQuests() + "</b>\n"
+                + "💰 EXC заработано: <b>" + String.format("%,d", event.getEarnedExc()).replace(',', ' ') + "</b>\n"
+                + "🏆 Место в лиге: <b>" + escape(event.getLeagueName()) + " · " + rankLine + "</b>\n"
+                + "⭐ XP за неделю: <b>" + event.getWeeklyXp() + "</b>\n"
+                + "📈 До следующего уровня: <b>" + event.getXpToNextLevel() + " XP</b>\n\n"
+                + "Новые квесты уже ждут 👉 /quests";
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("🗺️ Перейти к квестам", "menu:quests"))
+        ));
+        try {
+            sendText(event.getTelegramId(), msg, keyboard);
+        } catch (Exception e) {
+            log.warn("Failed to send weekly digest to {}", event.getTelegramId(), e);
+        }
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onWeeklyDigestInactive(ru.gamebot.platform.event.WeeklyDigestInactiveEvent event) {
+        String msg = "👋 <b>Давно не виделись!</b>\n\n"
+                + "На прошлой неделе ты пропустил:\n"
+                + "— <b>" + event.getNewQuestsCount() + "</b> новых квестов\n"
+                + "— Колесо фортуны крутили <b>" + event.getTotalSpinsCount() + "</b> раз\n\n"
+                + "Возвращайся — квесты ждут 👉 /quests";
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("🗺️ К квестам", "menu:quests"))
+        ));
+        try {
+            sendText(event.getTelegramId(), msg, keyboard);
+        } catch (Exception e) {
+            log.warn("Failed to send inactive digest to {}", event.getTelegramId(), e);
+        }
+    }
+
+    @org.springframework.context.event.EventListener
     public void onLeagueReward(LeagueRewardEvent event) {
         String msg = "🏆 <b>Итоги недели — " + escape(event.getLeagueName()) + "</b>\n\n"
                 + "Ты набрал <b>" + event.getWeeklyXp() + " XP</b> за эту неделю.\n\n"
