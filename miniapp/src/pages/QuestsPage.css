@@ -115,6 +115,7 @@
 .quest-card.q-medium::before { background: #ffa726; }
 .quest-card.q-hard::before   { background: #ef5350; }
 .quest-card.q-ugc::before    { background: #7B68EE; }
+.quest-card.q-flat::before   { background: #29B6F6; }
 
 .quest-card:active {
   transform: scale(0.985);

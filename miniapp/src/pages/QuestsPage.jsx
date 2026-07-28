@@ -199,20 +199,20 @@ function QuestActions({ quest, detail, onChanged }) {
 function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
   return (
     <div
-      className={`quest-card ${CATEGORY_CLASS[q.category] || 'q-ugc'} ${q.submissionStatus ? 'quest-card-taken' : ''}`}
+      className={`quest-card ${q.gameName === 'UGC' ? 'q-ugc' : (CATEGORY_CLASS[q.category] || 'q-flat')} ${q.submissionStatus ? 'quest-card-taken' : ''}`}
       onClick={() => onToggle(q.id)}
     >
       {/* Шапка: категория + статус */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        {!q.sponsored && q.gameName !== 'UGC' && q.category ? (
+        {q.sponsored ? (
+          <span className="quest-cat-badge sponsored">💼 Спонсорский</span>
+        ) : q.gameName === 'UGC' ? (
+          <span className="quest-cat-badge ugc">🤳 Контент</span>
+        ) : q.category ? (
           <span className={`quest-cat-badge ${CATEGORY_BADGE[q.category] || 'other'}`}>
             {q.category}
           </span>
-        ) : (
-          <span className={`quest-cat-badge ${q.sponsored ? 'sponsored' : 'ugc'}`}>
-            {q.sponsored ? '💼 Спонсорский' : '🤳 Контент'}
-          </span>
-        )}
+        ) : null}
         {q.submissionStatus && (
           <span className="quest-taken-badge" style={{ color: STATUS_COLORS[q.submissionStatus] }}>
             ● {STATUS_LABELS[q.submissionStatus] || q.submissionStatus}
