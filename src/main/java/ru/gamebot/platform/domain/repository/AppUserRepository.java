@@ -39,6 +39,9 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     @Query("SELECT COALESCE(SUM(u.coins), 0) FROM AppUser u")
     long sumAllCoins();
 
+    @Query("SELECT COALESCE(SUM(u.tickets), 0) FROM AppUser u")
+    long sumAllTickets();
+
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt >= :since")
     long countNewUsersSince(@Param("since") LocalDateTime since);
 

@@ -129,6 +129,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ExcTransactionService excTransactionService;
     private final ru.gamebot.platform.service.SquadService squadService;
     private final ru.gamebot.platform.service.WheelService wheelService;
+    private final ru.gamebot.platform.service.PlatformSnapshotService platformSnapshotService;
 
     private final Queue<String[]> pendingNewsQueue = new ConcurrentLinkedQueue<>();
     private final ScheduledExecutorService albumScheduler = Executors.newSingleThreadScheduledExecutor();
@@ -4965,6 +4966,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "stats" -> sendAdminStats(user);
             case "stats:platform" -> sendAdminStatsPlatform(user);
             case "stats:topquests" -> sendAdminStatsTopQuests(user);
+            case "stats:history" -> sendAdminStatsHistory(user);
             case "live" -> sendAdminLiveStatus(user);
             case "queststats" -> sendAdminQuestStats(user);
             case "template" -> sendQuestTemplateGamePicker(user);
@@ -6324,12 +6326,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long active30 = userService.countActiveSince(thirtyDaysAgo);
         long newUsersWeek = userService.countNewUsersSince(nowDt.minusDays(7));
 
-        // Retention: из зарегистрировавшихся 7-14 дней назад — сколько % заходили в последние 7 дней
         long cohort7 = userService.countRegisteredBetween(nowDt.minusDays(14), nowDt.minusDays(7));
         long retained7 = cohort7 > 0 ? userService.countRegisteredBetweenAndActiveSince(nowDt.minusDays(14), nowDt.minusDays(7), sevenDaysAgo) : 0;
         String retention7 = cohort7 > 0 ? (retained7 * 100 / cohort7) + "%" : "—";
 
-        // Retention: из зарегистрировавшихся 30-60 дней назад — сколько % заходили в последние 30 дней
         long cohort30 = userService.countRegisteredBetween(nowDt.minusDays(60), nowDt.minusDays(30));
         long retained30 = cohort30 > 0 ? userService.countRegisteredBetweenAndActiveSince(nowDt.minusDays(60), nowDt.minusDays(30), thirtyDaysAgo) : 0;
         String retention30 = cohort30 > 0 ? (retained30 * 100 / cohort30) + "%" : "—";
@@ -6341,41 +6341,96 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         long totalPaidOut = rewardService.totalPaidOutExc();
         long uniqueRecipients = rewardService.countUniqueWithdrawalRecipients();
-
-        List<AppUser> users = userService.allRegisteredUsers();
-        long totalCoins = users.stream().mapToLong(AppUser::getCoins).sum();
+        long totalCoins = userService.sumAllCoins();
+        long totalTickets = userService.sumAllTickets();
         long pendingQuests = questService.pendingCount();
         long pendingRewards = rewardService.countPendingRequests();
         long totalQuestsCreated = questService.countActive();
+
+        // Дельты vs вчера
+        java.util.Optional<ru.gamebot.platform.domain.model.PlatformSnapshot> prev = platformSnapshotService.getYesterday();
+        String dUsers = prev.map(s -> statsDelta(totalUsers, s.getTotalUsers())).orElse("");
+        String dActive7 = prev.map(s -> statsDelta(active7, s.getActive7Days())).orElse("");
+        String dApproved = prev.map(s -> statsDelta(totalApproved, s.getTotalApprovedQuests())).orElse("");
+        String dPaidOut = prev.map(s -> statsDelta(totalPaidOut, s.getTotalPaidOutExc())).orElse("");
+        String dCoins = prev.map(s -> statsDelta(totalCoins, s.getTotalCoinsOnAccounts())).orElse("");
 
         String pct7 = totalUsers > 0 ? " (" + (active7 * 100 / totalUsers) + "%)" : "";
         String pct30 = totalUsers > 0 ? " (" + (active30 * 100 / totalUsers) + "%)" : "";
 
         sendText(user.getTelegramId(),
                 "📊 <b>Статистика платформы</b>\n\n"
-                        + "👥 Всего игроков: <b>" + totalUsers + "</b>\n"
+                        + "👥 Всего игроков: <b>" + totalUsers + dUsers + "</b>\n"
                         + "🆕 Новых за 7 дней: <b>" + newUsersWeek + "</b>\n\n"
                         + "📈 <b>Активность</b>\n"
-                        + "🟢 Активных за 7 дней: <b>" + active7 + pct7 + "</b>\n"
-                        + "🔵 Активных за 30 дней: <b>" + active30 + pct30 + "</b>\n"
-                        + "🔄 Retention 7 дней: <b>" + retention7 + "</b> (когорта " + cohort7 + " чел.)\n"
-                        + "🔄 Retention 30 дней: <b>" + retention30 + "</b> (когорта " + cohort30 + " чел.)\n\n"
+                        + "🟢 За 7 дней: <b>" + active7 + pct7 + dActive7 + "</b>\n"
+                        + "🔵 За 30 дней: <b>" + active30 + pct30 + "</b>\n"
+                        + "🔄 Retention 7д: <b>" + retention7 + "</b> (когорта " + cohort7 + " чел.)\n"
+                        + "🔄 Retention 30д: <b>" + retention30 + "</b> (когорта " + cohort30 + " чел.)\n\n"
                         + "🎯 <b>Квесты</b>\n"
-                        + "✅ Выполнено всего: <b>" + totalApproved + "</b>\n"
-                        + "📅 Выполнено за месяц: <b>" + approvedMonth + "</b>\n"
+                        + "✅ Выполнено всего: <b>" + totalApproved + dApproved + "</b>\n"
+                        + "📅 За последний месяц: <b>" + approvedMonth + "</b>\n"
                         + "🎯 Completion rate: <b>" + completionRate + "</b>\n"
                         + "🗺️ Активных квестов: <b>" + totalQuestsCreated + "</b>\n"
                         + "📥 На модерации: <b>" + pendingQuests + "</b>\n\n"
                         + "💸 <b>Выплаты</b>\n"
-                        + "💸 Выплачено: <b>" + String.format("%,d", totalPaidOut).replace(',', ' ') + " EXC</b>\n"
-                        + "👤 Уникальных получателей: <b>" + uniqueRecipients + "</b>\n\n"
-                        + "💰 EXC на счетах: <b>" + totalCoins + " EXC</b>\n"
-                        + "🎟️ Билетов в обороте: <b>" + users.stream().mapToLong(AppUser::getTickets).sum() + "</b>\n"
+                        + "💸 Выплачено: <b>" + fmtExc(totalPaidOut) + " EXC" + dPaidOut + "</b>\n"
+                        + "👤 Получателей: <b>" + uniqueRecipients + "</b>\n\n"
+                        + "💰 EXC на счетах: <b>" + fmtExc(totalCoins) + " EXC" + dCoins + "</b>\n"
+                        + "🎟️ Билетов в обороте: <b>" + totalTickets + "</b>\n"
                         + "🎁 Заявок на награды: <b>" + pendingRewards + "</b>",
                 keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("📜 История", "admin:stats:history"),
+                                keyboardFactory.callback("🔄 Обновить", "admin:stats:platform")),
                         List.of(keyboardFactory.callback("⬅️ Назад", "admin:stats"),
                                 keyboardFactory.callback("🏠 Меню", "menu:main"))
                 )));
+    }
+
+    private void sendAdminStatsHistory(AppUser user) {
+        java.util.List<ru.gamebot.platform.domain.model.PlatformSnapshot> history =
+                platformSnapshotService.getHistory(14);
+
+        if (history.isEmpty()) {
+            sendText(user.getTelegramId(),
+                    "📜 <b>История статистики</b>\n\nСнапшоты ещё не накоплены — первый сохранится сегодня в 00:05.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("⬅️ Назад", "admin:stats:platform"))
+                    )));
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder("📜 <b>История статистики</b> (последние " + history.size() + " дней)\n\n");
+        for (int i = 0; i < history.size(); i++) {
+            ru.gamebot.platform.domain.model.PlatformSnapshot s = history.get(i);
+            ru.gamebot.platform.domain.model.PlatformSnapshot prev = (i + 1 < history.size()) ? history.get(i + 1) : null;
+
+            String dU = prev != null ? statsDelta(s.getTotalUsers(), prev.getTotalUsers()) : "";
+            String dA = prev != null ? statsDelta(s.getTotalApprovedQuests(), prev.getTotalApprovedQuests()) : "";
+            String dP = prev != null ? statsDelta(s.getTotalPaidOutExc(), prev.getTotalPaidOutExc()) : "";
+
+            sb.append("<b>").append(s.getSnapshotDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"))).append("</b>\n")
+              .append("   👥 ").append(s.getTotalUsers()).append(dU)
+              .append("  ✅ ").append(s.getTotalApprovedQuests()).append(dA)
+              .append("  💸 ").append(fmtExc(s.getTotalPaidOutExc())).append(dP).append("\n")
+              .append("   🟢 ").append(s.getActive7Days()).append(" за 7д")
+              .append("  💰 ").append(fmtExc(s.getTotalCoinsOnAccounts())).append(" EXC\n\n");
+        }
+
+        sendText(user.getTelegramId(), sb.toString(),
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("⬅️ Назад", "admin:stats:platform"))
+                )));
+    }
+
+    private String statsDelta(long current, long previous) {
+        long diff = current - previous;
+        if (diff == 0) return "";
+        return diff > 0 ? " ▲+" + diff : " ▼" + diff;
+    }
+
+    private String fmtExc(long value) {
+        return String.format("%,d", value).replace(',', ' ');
     }
 
     private void sendAdminStatsTopQuests(AppUser user) {

@@ -26,6 +26,7 @@ public class WeeklyResetScheduler {
     private final SquadService squadService;
     private final QuestSubmissionRepository questSubmissionRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final PlatformSnapshotService platformSnapshotService;
 
     @Scheduled(cron = "0 0 0 * * MON")
     public void resetWeeklyLeaderboard() {
@@ -66,6 +67,16 @@ public class WeeklyResetScheduler {
         // 336ч — только «Сложные»
         notifyExpired(questSubmissionRepository.findUsersWhoseHardQuestCooldownExpiredBetween(
                 now.minusHours(336).minusMinutes(5), now.minusHours(336)));
+    }
+
+    // Снапшот платформы — каждый день в 00:05 (после еженедельного сброса в 00:00 в понедельник)
+    @Scheduled(cron = "0 5 0 * * *")
+    public void takeDailyPlatformSnapshot() {
+        try {
+            platformSnapshotService.takeSnapshot();
+        } catch (Exception e) {
+            log.warn("Daily platform snapshot failed", e);
+        }
     }
 
     private void notifyExpired(List<Object[]> rows) {

@@ -485,6 +485,14 @@ public class UserService {
         return appUserRepository.countActiveSince(since);
     }
 
+    public long sumAllCoins() {
+        return appUserRepository.sumAllCoins();
+    }
+
+    public long sumAllTickets() {
+        return appUserRepository.sumAllTickets();
+    }
+
     public long countRegisteredBetween(java.time.LocalDateTime from, java.time.LocalDateTime to) {
         return appUserRepository.countRegisteredBetween(from, to);
     }
