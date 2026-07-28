@@ -289,6 +289,7 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged }) {
     getQuests(selectedGame).then(setQuests).finally(() => setLoading(false));
   }, [selectedGame]);
 
+  const flatQuests = quests.filter(q => !q.category);
   const grouped = CATEGORY_ORDER.reduce((acc, cat) => {
     const list = quests.filter(q => q.category === cat);
     if (list.length) acc[cat] = list;
@@ -322,6 +323,13 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged }) {
             {loading && (
               <div className="category-section">
                 {[1,2,3].map(i => <QuestSkeleton key={i} />)}
+              </div>
+            )}
+            {!loading && flatQuests.length > 0 && (
+              <div className="category-section">
+                {flatQuests.map(q => (
+                  <QuestCard key={q.id} q={q} expanded={expanded} onToggle={onToggle} details={details} onDetailChanged={onDetailChanged} />
+                ))}
               </div>
             )}
             {!loading && Object.entries(grouped).map(([cat, list]) => (
