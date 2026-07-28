@@ -8003,7 +8003,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "Ты набрал <b>" + event.getWeeklyXp() + " XP</b> за эту неделю.\n\n"
                 + "🪙 Призовые: <b>+" + event.getExcPrize() + " EXC</b> начислены на баланс!\n\n"
                 + "Новая неделя — новые квесты. Борись за более высокую лигу! 💪";
-        sendText(event.getTelegramId(), msg, null);
+        try {
+            sendText(event.getTelegramId(), msg, null);
+        } catch (Exception e) {
+            log.warn("Failed to send league reward notification to {}", event.getTelegramId(), e);
+        }
     }
 
     @org.springframework.context.event.EventListener

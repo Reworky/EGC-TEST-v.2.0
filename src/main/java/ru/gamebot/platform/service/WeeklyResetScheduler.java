@@ -30,10 +30,22 @@ public class WeeklyResetScheduler {
 
     @Scheduled(cron = "0 0 0 * * MON")
     public void resetWeeklyLeaderboard() {
-        squadService.rewardTopSquad();
-        userService.resetWeeklyXp();
-        log.info("Weekly XP has been reset.");
-        healthRatioService.recalculate();
+        try {
+            squadService.rewardTopSquad();
+        } catch (Exception e) {
+            log.error("Squad weekly reward failed — continuing with XP reset", e);
+        }
+        try {
+            userService.resetWeeklyXp();
+            log.info("Weekly XP has been reset.");
+        } catch (Exception e) {
+            log.error("Weekly XP reset failed", e);
+        }
+        try {
+            healthRatioService.recalculate();
+        } catch (Exception e) {
+            log.error("Health ratio recalculate after weekly reset failed", e);
+        }
     }
 
     @Scheduled(fixedDelay = 3_600_000)
