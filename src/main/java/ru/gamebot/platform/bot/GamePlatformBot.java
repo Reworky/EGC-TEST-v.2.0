@@ -1962,7 +1962,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String tournamentLabel = hasTournament ? "⚔️ Турнир 🔥" : "⚔️ Турнир";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("🗺️ Квесты", "menu:quests")),
-                List.of(keyboardFactory.callback("📊 Рейтинг", "menu:rating")),
+                List.of(keyboardFactory.callback("🏆 Рейтинг", "menu:rating")),
                 List.of(keyboardFactory.callback(tournamentLabel, "menu:tournament")),
                 List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
@@ -1990,7 +1990,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             log.warn("Failed to send quest banner", e);
             sendMenuCategory(user, "🎯 <b>Квесты и рейтинг</b>", List.of(
                     List.of(keyboardFactory.callback("🗺️ Квесты", "menu:quests")),
-                    List.of(keyboardFactory.callback("📊 Рейтинг", "menu:rating")),
+                    List.of(keyboardFactory.callback("🏆 Рейтинг", "menu:rating")),
                     List.of(keyboardFactory.callback(tournamentLabel, "menu:tournament"))
             ));
         }
