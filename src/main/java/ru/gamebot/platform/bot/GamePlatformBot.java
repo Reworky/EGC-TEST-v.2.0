@@ -8869,7 +8869,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    private void notifyAdminsAboutWithdrawal(AppUser user, RewardRequest req) {
+    public void notifyAdminsAboutWithdrawal(AppUser user, RewardRequest req) {
         String username = user.getTelegramUsername();
         String userLink = (username != null && !username.isBlank())
                 ? "\n✉️ Написать: <a href=\"https://t.me/" + username + "\">@" + username + "</a>"

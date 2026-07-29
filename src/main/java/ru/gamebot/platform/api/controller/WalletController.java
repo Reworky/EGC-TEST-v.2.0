@@ -20,6 +20,7 @@ import ru.gamebot.platform.api.dto.ShopActionResponseDto;
 import ru.gamebot.platform.api.dto.TonQuoteDto;
 import ru.gamebot.platform.api.dto.WalletDto;
 import ru.gamebot.platform.api.dto.WithdrawalRequestDto;
+import ru.gamebot.platform.bot.GamePlatformBot;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.RewardRequest;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
@@ -43,6 +44,7 @@ public class WalletController {
     private final HealthRatioService healthRatioService;
     private final ExchangeRateService exchangeRateService;
     private final RewardService rewardService;
+    private final GamePlatformBot gamePlatformBot;
 
     @Data
     public static class WithdrawRubRequest {
@@ -151,6 +153,7 @@ public class WalletController {
         long rubles = resolution.rubles();
         try {
             RewardRequest req = rewardService.createWithdrawalRequestWithDetails(user, body.getAmount(), rubles, resolution.fixedRubUsed(), requisites);
+            gamePlatformBot.notifyAdminsAboutWithdrawal(user, req);
             return ResponseEntity.ok(ShopActionResponseDto.builder()
                     .success(true)
                     .message("Заявка на вывод В-" + (req.getDisplayId() != null ? req.getDisplayId() : req.getId())
@@ -181,6 +184,7 @@ public class WalletController {
         long rubles = resolution.rubles();
         try {
             RewardRequest req = rewardService.createTonWithdrawalRequest(user, body.getAmount(), rubles, resolution.fixedRubUsed(), wallet);
+            gamePlatformBot.notifyAdminsAboutWithdrawal(user, req);
             BigDecimal tonAmount = exchangeRateService.rubToTon(BigDecimal.valueOf(rubles));
             return ResponseEntity.ok(ShopActionResponseDto.builder()
                     .success(true)
