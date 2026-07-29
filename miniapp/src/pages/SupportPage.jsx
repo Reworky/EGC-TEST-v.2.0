@@ -80,7 +80,7 @@ function TicketList() {
   }
 
   return (
-    <div className="category-section">
+    <div className="category-section" style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
       {tickets.map(t => (
         <div key={t.id} className="shop-card">
           <div className="shop-top">
@@ -121,7 +121,7 @@ export default function SupportPage() {
       </div>
 
       {view === 'new'
-        ? <div className="category-section"><NewTicketForm onCreated={() => { setView('mine'); setRefreshKey(k => k + 1); }} /></div>
+        ? <div className="category-section" style={{ padding: '12px 16px' }}><NewTicketForm onCreated={() => { setView('mine'); setRefreshKey(k => k + 1); }} /></div>
         : <TicketList key={refreshKey} />}
     </div>
   );
