@@ -72,7 +72,7 @@ export default function PollsPage() {
 
   return (
     <div className="ref-page">
-      <div style={{ padding: '16px 16px 0' }}><BackButton to="/profile" label="Профиль" /></div>
+      <div style={{ padding: '16px 16px 8px' }}><BackButton to="/profile" label="Профиль" /></div>
       <h2 className="ref-title">🗳 Голосования</h2>
 
       {error && <div className="page-center error-msg">{error}</div>}
