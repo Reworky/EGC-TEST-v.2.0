@@ -226,7 +226,7 @@ function WithdrawTonForm({ wallet, onDone }) {
          href="https://t.me/wallet/start?startapp=ref-3-PaQlujnvUGU" target="_blank" rel="noreferrer">
         💎 Открыть Telegram Wallet
       </a>
-      <button className="quest-btn" disabled={busy} onClick={handleSubmit}>{busy ? 'Секунду...' : 'Отправить заявку'}</button>
+      <button className="quest-btn" disabled={busy} onClick={handleSubmit} style={{ marginTop: 16 }}>{busy ? 'Секунду...' : 'Отправить заявку'}</button>
       {message && <div className="quest-message">{message}</div>}
     </div>
   );
