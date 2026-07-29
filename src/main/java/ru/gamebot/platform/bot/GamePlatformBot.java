@@ -2705,7 +2705,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "Карточка квеста недоступна");
             return;
         }
-        sendQuestCard(user, questId, backDataFromQuestViewToken(parts), "⬅️ Назад", null);
+
+        String nextQuestData = null;
+        if (parts.length == 3) {
+            String gameName = decodeGameToken(parts[0]);
+            String category = categoryFromToken(parts[1]);
+            if (gameName != null) {
+                List<Quest> quests = category == null
+                        ? questService.findActiveByGameName(gameName)
+                        : questService.findActiveByGameNameAndCategory(gameName, category);
+                for (int i = 0; i < quests.size() - 1; i++) {
+                    if (quests.get(i).getId().equals(questId)) {
+                        Long nextId = quests.get(i + 1).getId();
+                        nextQuestData = "quest:view:" + parts[0] + ":" + parts[1] + ":" + nextId;
+                        break;
+                    }
+                }
+            }
+        }
+
+        sendQuestCard(user, questId, backDataFromQuestViewToken(parts), "⬅️ Назад", null, nextQuestData);
         answerSilently(callbackQuery.getId());
     }
 
@@ -2714,6 +2733,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendQuestCard(AppUser user, Long questId, String backData, String backText, String notice) {
+        sendQuestCard(user, questId, backData, backText, notice, null);
+    }
+
+    private void sendQuestCard(AppUser user, Long questId, String backData, String backText, String notice, String nextQuestData) {
         sessionService.get(user.getTelegramId()).getData().put("quest_back_data", backData);
         Quest quest = questService.getQuest(questId);
         QuestSubmission latest = questService.getLatestSubmission(user, quest);
@@ -2751,6 +2774,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             buttons.add(keyboardFactory.callback("🚀 Взять", "quest:take:" + questId));
         }
         buttons.add(keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
+        if (nextQuestData != null) {
+            buttons.add(keyboardFactory.callback("➡️ Следующий квест", nextQuestData));
+        }
         if (isEffectiveAdmin(user)) {
             buttons.add(keyboardFactory.callback("✏️ Правка", "admin:quest:" + questId));
         }
