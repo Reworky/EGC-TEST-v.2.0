@@ -486,7 +486,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (srcCode != null) {
             trafficSourceService.recordClick(srcCode);
-            if (user.getTrafficSourceCode() == null) {
+            // Привязываем источник только новым пользователям — созданным в этом запросе.
+            // Иначе старый игрок, кликнувший ссылку спустя месяц, попадёт в «Регистраций».
+            boolean justCreated = user.getCreatedAt() != null
+                    && !user.getCreatedAt().isBefore(java.time.LocalDateTime.now().minusSeconds(60));
+            if (justCreated && user.getTrafficSourceCode() == null) {
                 user.setTrafficSourceCode(srcCode);
                 userService.save(user);
             }
@@ -6687,10 +6691,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("Источников пока нет.");
         } else {
             for (ru.gamebot.platform.domain.model.TrafficSource ts : sources) {
+                long clicks = ts.getClicks();
                 long regs = userService.countByTrafficSource(ts.getCode());
-                sb.append("• <b>").append(escape(ts.getName())).append("</b>")
-                        .append(" — переходов: <b>").append(ts.getClicks()).append("</b>")
-                        .append(", зарег.: <b>").append(regs).append("</b>\n");
+                String conv = clicks > 0 ? String.format("%.0f%%", regs * 100.0 / clicks) : "—";
+                sb.append("• <b>").append(escape(ts.getName())).append("</b>\n")
+                        .append("  👆 Переходов: <b>").append(clicks).append("</b>")
+                        .append(" · 👤 Регистраций: <b>").append(regs).append("</b>")
+                        .append(" · 📊 Конверсия: <b>").append(conv).append("</b>\n");
             }
         }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
@@ -6720,8 +6727,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             StringBuilder sb = new StringBuilder();
             sb.append("📈 <b>").append(escape(ts.getName())).append("</b>\n\n");
             sb.append("🔗 <code>").append(link).append("</code>\n");
-            sb.append("👆 Переходов: <b>").append(ts.getClicks()).append("</b>\n");
-            sb.append("👥 Регистраций: <b>").append(users.size()).append("</b>\n\n");
+            long clicks = ts.getClicks();
+            long regs = users.size();
+            String conv = clicks > 0 ? String.format("%.1f%%", regs * 100.0 / clicks) : "—";
+            sb.append("👆 Переходов: <b>").append(clicks).append("</b>\n");
+            sb.append("👤 Регистраций: <b>").append(regs).append("</b>\n");
+            sb.append("📊 Конверсия: <b>").append(conv).append("</b>\n\n");
             if (users.isEmpty()) {
                 sb.append("Пользователей пока нет.");
             } else {
