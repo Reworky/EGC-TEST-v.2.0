@@ -449,7 +449,7 @@ function MyPurchasesView() {
   }
 
   return (
-    <div className="category-section">
+    <div className="category-section" style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
       {rewards.map(r => (
         <div key={r.id} className="shop-card">
           <div className="shop-top">
