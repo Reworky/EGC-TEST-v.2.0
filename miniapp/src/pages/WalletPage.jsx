@@ -305,7 +305,7 @@ function WithdrawView({ wallet, onChanged }) {
   );
 }
 
-function MyWithdrawalsView() {
+function MyWithdrawalsView({ onWalletChanged }) {
   const [items, setItems] = useState(null);
   const [error, setError] = useState(null);
   const [busyId, setBusyId] = useState(null);
@@ -322,6 +322,7 @@ function MyWithdrawalsView() {
     try {
       await cancelReward(id);
       reload();
+      onWalletChanged?.();
     } finally {
       setBusyId(null);
     }
@@ -382,7 +383,7 @@ export default function WalletPage() {
       {!error && view !== 'mine' && wallet === null && <div className="page-center">Загрузка...</div>}
       {!error && view === 'balance' && wallet && <BalanceView wallet={wallet} onChanged={reload} />}
       {!error && view === 'withdraw' && wallet && <WithdrawView wallet={wallet} onChanged={reload} />}
-      {view === 'mine' && <MyWithdrawalsView />}
+      {view === 'mine' && <MyWithdrawalsView onWalletChanged={reload} />}
     </div>
   );
 }

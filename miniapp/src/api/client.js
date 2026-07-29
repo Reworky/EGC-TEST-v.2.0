@@ -227,6 +227,7 @@ export async function getWithdrawals() {
 
 export async function cancelReward(id) {
   const { data } = await api.post(`/api/profile/rewards/${id}/cancel`);
+  invalidateCache('wallet', 'profile');
   return data;
 }
 
