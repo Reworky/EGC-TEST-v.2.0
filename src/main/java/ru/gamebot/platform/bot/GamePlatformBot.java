@@ -2777,7 +2777,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else if (!hasActiveSubmission) {
             buttons.add(keyboardFactory.callback("🚀 Взять", "quest:take:" + questId));
         }
-        buttons.add(keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
+        if (hasActiveSubmission) {
+            buttons.add(keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
+        }
         if (nextQuestData != null) {
             buttons.add(keyboardFactory.callback("➡️ Следующий квест", nextQuestData));
         }
@@ -2883,8 +2885,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void handleReportStart(CallbackQuery callbackQuery, AppUser user, UserSession session, Long questId) {
         Quest quest = questService.getQuest(questId);
         QuestSubmission latest = questService.getLatestSubmission(user, quest);
-        if (latest == null) {
-            latest = questService.createDraftSubmission(user, quest);
+        if (latest == null || latest.getStatus() == SubmissionStatus.CANCELLED) {
+            answerSilently(callbackQuery.getId());
+            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                    "⚠️ Сначала возьмите квест кнопкой «🚀 Взять».");
+            return;
         } else if (latest.getStatus() == SubmissionStatus.PENDING) {
             answerSilently(callbackQuery.getId());
             sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
@@ -2894,11 +2899,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
                     "✅ <b>Этот квест уже одобрен и оплачен.</b>\n\nПовторная сдача отчёта по нему невозможна.");
-            return;
-        } else if (latest.getStatus() == SubmissionStatus.CANCELLED) {
-            answerSilently(callbackQuery.getId());
-            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
-                    "🚫 <b>Эта попытка была отменена.</b>\n\nЧтобы попробовать снова, возьмите квест заново кнопкой «🚀 Взять».");
             return;
         } else if (latest.getStatus() == SubmissionStatus.REJECTED || latest.getStatus() == SubmissionStatus.NEEDS_INFO) {
             // Fix 4: cooldown 1h after rejection to prevent instant resubmit spam
