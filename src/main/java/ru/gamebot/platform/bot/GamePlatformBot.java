@@ -2659,7 +2659,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<InlineKeyboardButton> buttons = new ArrayList<>();
         for (Quest quest : quests) {
             buttons.add(keyboardFactory.callback(
-                    "🎯 " + trim(quest.getTitle(), 32),
+                    "🎯 " + trim(quest.getDescription(), 32),
                     "quest:view:" + encodeGameToken(gameName) + ":" + categoryToken(category) + ":" + quest.getId()
             ));
         }
