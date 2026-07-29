@@ -548,7 +548,7 @@ function TournamentView() {
             {busy ? 'Секунду...' : `⚔️ Участвовать (${tournament.entryFeeExc.toLocaleString()} EXC)`}
           </button>
         )}
-        {tournament.entered && <div className="quest-status quest-status-approved">✅ Вы зарегистрированы!</div>}
+        {tournament.entered && <div className="quest-status quest-status-approved" style={{ marginTop: 16 }}>✅ Вы зарегистрированы!</div>}
         {message && <div className="quest-message">{message}</div>}
 
         {(tournament.entered || isActive) && (

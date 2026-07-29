@@ -53,7 +53,7 @@ function PollCard({ poll, onChanged }) {
         })}
       </div>
 
-      {poll.voted && <div className="quest-status quest-status-approved">✅ Вы уже проголосовали</div>}
+      {poll.voted && <div className="quest-status quest-status-approved" style={{ marginTop: 16 }}>✅ Вы уже проголосовали</div>}
       {message && <div className="quest-message">{message}</div>}
     </div>
   );
