@@ -22,6 +22,15 @@ public class NewsService {
     }
 
     @Transactional
+    public int archiveOldNews(int keepDays) {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(keepDays);
+        List<NewsPost> old = newsPostRepository.findByActiveTrueAndPublishedAtBefore(cutoff);
+        old.forEach(p -> p.setActive(false));
+        newsPostRepository.saveAll(old);
+        return old.size();
+    }
+
+    @Transactional
     public NewsPost createPost(String title, String body) {
         NewsPost post = new NewsPost();
         post.setTitle(title);

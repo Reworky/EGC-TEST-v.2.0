@@ -43,6 +43,7 @@ public class WeeklyResetScheduler {
     private final WheelSpinLogRepository wheelSpinLogRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final PlatformSnapshotService platformSnapshotService;
+    private final NewsService newsService;
 
     @Scheduled(cron = "0 0 0 * * MON")
     public void resetWeeklyLeaderboard() {
@@ -182,6 +183,16 @@ public class WeeklyResetScheduler {
     }
 
     // Снапшот платформы — каждый день в 00:05 (после еженедельного сброса в 00:00 в понедельник)
+    @Scheduled(cron = "0 10 0 * * *")
+    public void archiveOldNews() {
+        try {
+            int count = newsService.archiveOldNews(10);
+            if (count > 0) log.info("Archived {} old news post(s)", count);
+        } catch (Exception e) {
+            log.warn("News archiving failed", e);
+        }
+    }
+
     @Scheduled(cron = "0 5 0 * * *")
     public void takeDailyPlatformSnapshot() {
         try {
