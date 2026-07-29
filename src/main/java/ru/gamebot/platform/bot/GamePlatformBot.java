@@ -6686,20 +6686,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendAdminTrafficList(AppUser user) {
         List<ru.gamebot.platform.domain.model.TrafficSource> sources = trafficSourceService.findAll();
-        String header = sources.isEmpty()
-                ? "📈 <b>Источники трафика</b>\n\nИсточников пока нет."
-                : "📈 <b>Источники трафика</b>\n\nНажмите на ссылку, чтобы открыть список пришедших игроков.";
+        StringBuilder sb = new StringBuilder("📈 <b>Источники трафика</b>\n\n");
+        if (sources.isEmpty()) {
+            sb.append("Источников пока нет.");
+        } else {
+            for (ru.gamebot.platform.domain.model.TrafficSource ts : sources) {
+                long clicks = ts.getClicks();
+                long regs = userService.countByTrafficSource(ts.getCode());
+                String conv = clicks > 0 ? String.format("%.0f%%", regs * 100.0 / clicks) : "—";
+                sb.append("• <b>").append(escape(ts.getName())).append("</b>\n")
+                        .append("  👆 Переходов: <b>").append(clicks).append("</b>")
+                        .append(" · 👤 Регистраций: <b>").append(regs).append("</b>")
+                        .append(" · 📊 Конверсия: <b>").append(conv).append("</b>\n");
+            }
+        }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (ru.gamebot.platform.domain.model.TrafficSource ts : sources) {
-            long clicks = ts.getClicks();
-            long regs = userService.countByTrafficSource(ts.getCode());
-            String conv = clicks > 0 ? String.format("%.0f%%", regs * 100.0 / clicks) : "—";
-            String label = ts.getName() + "  |  " + clicks + "▶ · " + regs + "👤 · " + conv;
-            rows.add(List.of(keyboardFactory.callback(label, "admin:traffic:view:" + ts.getId())));
+            rows.add(List.of(keyboardFactory.callback("👁 " + ts.getName(), "admin:traffic:view:" + ts.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("➕ Создать источник", "admin:traffic:create")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
-        sendText(user.getTelegramId(), header, keyboardFactory.rowsLayout(rows));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     private void sendAdminTrafficView(AppUser user, Long sourceId) {
