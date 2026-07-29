@@ -2546,7 +2546,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (String game : games) {
-            rows.add(List.of(keyboardFactory.callback("🎮 " + trim(game, 28), "quests:game:" + encodeGameToken(game))));
+            rows.add(List.of(keyboardFactory.callback(trim(game, 28), "quests:game:" + encodeGameToken(game))));
         }
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", "menu:quests"),
@@ -2664,7 +2664,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             ));
         }
 
-        String title = category == null ? "🎮 " + gameName : "🎮 " + gameName + " • " + category;
+        String title = category == null ? gameName : gameName + " • " + category;
         String caption = "<b>" + escape(title) + "</b>\n\n"
                 + "Ниже собраны активные задания по выбранной игре. Откройте карточку, чтобы увидеть награды и условия прохождения.";
         InlineKeyboardMarkup keyboard = verticalWithBackMenu(buttons, "⬅️ Назад", backData);
@@ -5563,7 +5563,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendQuestTemplateGamePicker(AppUser user) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (String game : QUEST_TEMPLATES.keySet()) {
-            rows.add(List.of(keyboardFactory.callback("🎮 " + game, "admin:qt:game:" + game)));
+            rows.add(List.of(keyboardFactory.callback(game, "admin:qt:game:" + game)));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
         sendText(user.getTelegramId(),
@@ -6174,7 +6174,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (String game : games) {
             long count = questService.countActiveByGameName(game);
-            rows.add(List.of(keyboardFactory.callback("🎮 " + trim(game, 28) + " (" + count + ")", "admin:quests:game:" + encodeGameToken(game))));
+            rows.add(List.of(keyboardFactory.callback(trim(game, 28) + " (" + count + ")", "admin:quests:game:" + encodeGameToken(game))));
         }
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", "admin:edit"),
