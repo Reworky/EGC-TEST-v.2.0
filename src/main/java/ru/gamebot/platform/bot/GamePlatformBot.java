@@ -979,7 +979,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "polls" -> sendPollList(user);
             case "battlepass" -> sendBattlePass(user);
             case "support" -> sendSupport(user);
-            case "rules" -> sendRulesMessage(user, backMenuKeyboard("cat:help"));
+            case "rules" -> sendRulesMessage(user, backMenuKeyboard("menu:cat:help"));
             case "quickstart" -> { answerSilently(callbackQuery.getId()); sendQuickStartGuide(user); }
             case "admin" -> sendAdminPanel(user);
             case "moderation" -> sendModerationHub(user);
