@@ -333,7 +333,7 @@ function MyWithdrawalsView({ onWalletChanged }) {
   if (items.length === 0) return <div className="page-center">📭 У вас ещё нет заявок на вывод EXC.</div>;
 
   return (
-    <div className="category-section">
+    <div className="category-section" style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
       {items.map(r => (
         <div key={r.id} className="shop-card">
           <div className="shop-top">
