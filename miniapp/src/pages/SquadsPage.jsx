@@ -162,7 +162,7 @@ function LeaderboardView() {
   if (entries.length === 0) return <div className="page-center">Рейтинг отрядов пуст.</div>;
 
   return (
-    <div className="category-section">
+    <div className="category-section" style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
       {entries.map(e => (
         <div key={e.rank} className="shop-card" style={{ padding: '10px 14px' }}>
           <div className="shop-top">
