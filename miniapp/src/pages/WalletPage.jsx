@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getWallet, claimDailyBonus, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone } from '../api/client';
+import { getWallet, claimDailyBonus, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone, invalidateCache } from '../api/client';
 import BackButton from '../components/BackButton';
 import BorderBeamCard from '../components/BorderBeamCard';
 import ShimmerButton from '../components/ShimmerButton';
@@ -367,6 +367,14 @@ export default function WalletPage() {
     getWallet().then(setWallet).catch(() => setError('Не удалось загрузить кошелёк. Попробуйте ещё раз.'));
   }
 
+  function switchTab(newView) {
+    if (newView === 'withdraw' || newView === 'balance') {
+      invalidateCache('wallet');
+      reload();
+    }
+    setView(newView);
+  }
+
   useEffect(() => { reload(); }, []);
 
   return (
@@ -374,9 +382,9 @@ export default function WalletPage() {
       <div style={{ padding: '16px 16px 0' }}><BackButton to="/profile" label="Профиль" /></div>
 
       <div className="view-toggle">
-        <button className={`view-tab ${view === 'balance' ? 'active' : ''}`} onClick={() => setView('balance')}>Баланс</button>
-        <button className={`view-tab ${view === 'withdraw' ? 'active' : ''}`} onClick={() => setView('withdraw')}>Вывод</button>
-        <button className={`view-tab ${view === 'mine' ? 'active' : ''}`} onClick={() => setView('mine')}>Мои заявки</button>
+        <button className={`view-tab ${view === 'balance' ? 'active' : ''}`} onClick={() => switchTab('balance')}>Баланс</button>
+        <button className={`view-tab ${view === 'withdraw' ? 'active' : ''}`} onClick={() => switchTab('withdraw')}>Вывод</button>
+        <button className={`view-tab ${view === 'mine' ? 'active' : ''}`} onClick={() => switchTab('mine')}>Мои заявки</button>
       </div>
 
       {error && <div className="page-center error-msg">{error}</div>}
