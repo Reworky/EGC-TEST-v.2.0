@@ -18,4 +18,5 @@ public class WalletDto {
     private int streakDays;
     private long nextDailyBonusExc;
     private long fixedRubBalance;
+    private boolean phoneConfirmed;
 }

@@ -56,6 +56,11 @@ public class WalletController {
         private String walletAddress;
     }
 
+    @Data
+    public static class ConfirmPhoneRequest {
+        private String phone;
+    }
+
     @GetMapping
     public ResponseEntity<WalletDto> wallet(@AuthenticationPrincipal Long telegramId) {
         AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
@@ -77,6 +82,7 @@ public class WalletController {
                 .streakDays(user.getStreakDays())
                 .nextDailyBonusExc(nextDailyBonus)
                 .fixedRubBalance(user.getFixedRubBalance())
+                .phoneConfirmed(user.getPhoneNumber() != null)
                 .build());
     }
 
@@ -184,6 +190,29 @@ public class WalletController {
         } catch (IllegalArgumentException e) {
             return errorResponse(e.getMessage());
         }
+    }
+
+    @PostMapping("/phone")
+    public ResponseEntity<ShopActionResponseDto> confirmPhone(
+            @AuthenticationPrincipal Long telegramId, @RequestBody ConfirmPhoneRequest body) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        String phone = body.getPhone() != null ? body.getPhone().trim() : "";
+        if (phone.length() < 7) {
+            return errorResponse("Некорректный номер телефона.");
+        }
+        if (user.getPhoneNumber() != null) {
+            return ResponseEntity.ok(ShopActionResponseDto.builder().success(true).message("Телефон уже подтверждён.").build());
+        }
+        user.setPhoneNumber(phone);
+        userService.save(user);
+        userService.findDuplicatePhoneUser(phone, user.getTelegramId()).ifPresent(dup -> {
+            user.setFraudSuspect(true);
+            userService.save(user);
+        });
+        return ResponseEntity.ok(ShopActionResponseDto.builder().success(true).message("Телефон подтверждён.").build());
     }
 
     @GetMapping("/withdrawals")

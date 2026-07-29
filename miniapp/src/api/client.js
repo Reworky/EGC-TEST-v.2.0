@@ -214,6 +214,12 @@ export async function withdrawTon(amount, walletAddress) {
   return data;
 }
 
+export async function confirmPhone(phone) {
+  const { data } = await api.post('/api/wallet/phone', { phone });
+  invalidateCache('wallet');
+  return data;
+}
+
 export async function getWithdrawals() {
   const { data } = await api.get('/api/wallet/withdrawals');
   return data;

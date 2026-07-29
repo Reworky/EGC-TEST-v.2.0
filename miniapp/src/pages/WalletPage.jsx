@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getWallet, claimDailyBonus, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward } from '../api/client';
+import { getWallet, claimDailyBonus, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone } from '../api/client';
 import BackButton from '../components/BackButton';
 import BorderBeamCard from '../components/BorderBeamCard';
 import ShimmerButton from '../components/ShimmerButton';
@@ -232,8 +232,67 @@ function WithdrawTonForm({ wallet, onDone }) {
   );
 }
 
+function PhoneGate({ onConfirmed }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  function handleRequest() {
+    const tg = window.Telegram?.WebApp;
+    if (!tg?.requestContact) {
+      setError('Обновите Telegram до версии 6.9 или выше.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      tg.requestContact((ok, event) => {
+        if (!ok) {
+          setBusy(false);
+          setError('Вы отказались поделиться номером. Подтверждение телефона обязательно для вывода.');
+          return;
+        }
+        const phone = event?.responseUnsafe?.contact?.phone_number;
+        if (!phone) {
+          setBusy(false);
+          setError('Не удалось получить номер. Попробуйте ещё раз.');
+          return;
+        }
+        confirmPhone(phone)
+          .then(res => {
+            if (res.success) onConfirmed();
+            else setError(res.message);
+          })
+          .catch(() => setError('Ошибка сети. Попробуйте ещё раз.'))
+          .finally(() => setBusy(false));
+      });
+    } catch (e) {
+      setBusy(false);
+      setError('Не удалось запросить номер. Попробуйте ещё раз.');
+    }
+  }
+
+  return (
+    <div className="ref-link-card" style={{ margin: '16px', textAlign: 'center' }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>📱</div>
+      <div className="ref-link-label">Подтверждение телефона</div>
+      <p className="shop-desc">
+        Для вывода средств необходимо один раз подтвердить ваш номер телефона через Telegram. Это защищает от мультиаккаунтов.
+      </p>
+      <button className="quest-btn" disabled={busy} onClick={handleRequest}>
+        {busy ? 'Ожидание Telegram...' : '📲 Подтвердить номер'}
+      </button>
+      {error && <div className="quest-message" style={{ marginTop: 10 }}>{error}</div>}
+    </div>
+  );
+}
+
 function WithdrawView({ wallet, onChanged }) {
   const [method, setMethod] = useState('rub');
+  const [phoneConfirmed, setPhoneConfirmed] = useState(wallet.phoneConfirmed);
+
+  if (!phoneConfirmed) {
+    return <PhoneGate onConfirmed={() => { setPhoneConfirmed(true); onChanged(); }} />;
+  }
 
   return (
     <>
