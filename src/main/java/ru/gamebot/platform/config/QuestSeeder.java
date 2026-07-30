@@ -1184,7 +1184,8 @@ public class QuestSeeder implements CommandLineRunner {
             q.setPlatform(platform);
             q.setDurationDays(durationDays);
             q.setDurationText(durationText);
-            // Rewards are managed by admin via FLAT mode — don't override
+            q.setRewardXp(rewardXp);
+            q.setRewardCoins(rewardCoins);
             q.setDescription(description);
             q.setInstruction(instruction);
             q.setRequirements(requirements);
