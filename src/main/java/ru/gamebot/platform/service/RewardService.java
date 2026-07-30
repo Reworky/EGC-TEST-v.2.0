@@ -168,7 +168,7 @@ public class RewardService {
     }
 
     public long countPendingRequests() {
-        return rewardRequestRepository.countByStatusIn(
+        return rewardRequestRepository.countNonWithdrawalByStatusIn(
                 java.util.List.of(RewardRequestStatus.PENDING, RewardRequestStatus.IN_PROGRESS));
     }
 
@@ -260,7 +260,9 @@ public class RewardService {
     }
 
     public List<RewardItem> findAllRewards() {
-        return rewardItemRepository.findAll();
+        return rewardItemRepository.findAll().stream()
+                .filter(i -> !WITHDRAWAL_CATEGORY.equals(i.getCategory()))
+                .toList();
     }
 
     @Transactional

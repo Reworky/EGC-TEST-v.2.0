@@ -31,6 +31,9 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
 
     long countByStatusIn(java.util.Collection<RewardRequestStatus> statuses);
 
+    @Query("SELECT COUNT(r) FROM RewardRequest r WHERE r.status IN :statuses AND r.rewardItem.category <> 'Вывод'")
+    long countNonWithdrawalByStatusIn(@Param("statuses") java.util.Collection<RewardRequestStatus> statuses);
+
     @Query("SELECT DISTINCT r FROM RewardRequest r JOIN FETCH r.user JOIN FETCH r.rewardItem WHERE r.status = :status AND r.rewardItem.category = :category ORDER BY r.createdAt ASC")
     List<RewardRequest> findAllByStatusAndRewardItemCategoryOrderByCreatedAtAsc(@Param("status") RewardRequestStatus status, @Param("category") String category);
 
