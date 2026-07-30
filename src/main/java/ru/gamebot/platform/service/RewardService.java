@@ -135,6 +135,11 @@ public class RewardService {
                 RewardRequestStatus.PENDING, "Вывод");
     }
 
+    public org.springframework.data.domain.Page<RewardRequest> findWithdrawalHistory(int page) {
+        return rewardRequestRepository.findAllByRewardItemCategoryOrderByCreatedAtDesc(
+                "Вывод", org.springframework.data.domain.PageRequest.of(page, 10));
+    }
+
     public boolean hasPendingWithdrawal(AppUser user) {
         return rewardRequestRepository.countPendingWithdrawalsByUser(user) > 0;
     }

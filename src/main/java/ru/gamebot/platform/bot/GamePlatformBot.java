@@ -5887,6 +5887,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     // ── Withdrawal requests admin ─────────────────────────────────────────────
 
     private void handleAdminWithdrawalAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
+        if (action.startsWith("history:")) {
+            int pg = 0;
+            try { pg = Integer.parseInt(action.substring("history:".length())); } catch (NumberFormatException ignored) {}
+            sendAdminWithdrawalHistory(user, pg);
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if (action.startsWith("req:")) {
             sendAdminWithdrawalCard(user, parseLong(action.substring("req:".length())));
             answerSilently(callbackQuery.getId());
@@ -5979,12 +5986,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendAdminWithdrawals(AppUser user) {
         List<RewardRequest> pending = rewardService.findPendingWithdrawals();
-        if (pending.isEmpty()) {
-            sendText(user.getTelegramId(),
-                    "💸 <b>Заявки на вывод EXC</b>\n\nНет новых заявок.",
-                    backMenuKeyboard("menu:admin"));
-            return;
-        }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (RewardRequest req : pending) {
             String uname = req.getUser().getTelegramUsername() != null
@@ -5995,10 +5996,55 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "В-" + reqDisplayId(req) + " " + uname + " — " + type + " " + req.getRewardItem().getPriceCoins() + " EXC",
                     "admin:withdrawal:req:" + req.getId())));
         }
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
-        sendText(user.getTelegramId(),
-                "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>",
-                keyboardFactory.rowsLayout(rows));
+        rows.add(List.of(
+                keyboardFactory.callback("📋 История", "admin:withdrawal:history:0"),
+                keyboardFactory.callback("⬅️ Назад", "menu:admin")));
+        String header = pending.isEmpty()
+                ? "💸 <b>Заявки на вывод EXC</b>\n\nНет новых заявок."
+                : "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>";
+        sendText(user.getTelegramId(), header, keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendAdminWithdrawalHistory(AppUser user, int page) {
+        org.springframework.data.domain.Page<RewardRequest> histPage =
+                rewardService.findWithdrawalHistory(Math.max(0, page));
+        List<RewardRequest> items = histPage.getContent();
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yy HH:mm");
+        StringBuilder sb = new StringBuilder("📋 <b>История заявок на вывод</b>");
+        if (histPage.getTotalPages() > 1) {
+            sb.append(" (стр. ").append(page + 1).append("/").append(histPage.getTotalPages()).append(")");
+        }
+        sb.append("\n\n");
+        if (items.isEmpty()) {
+            sb.append("Заявок пока нет.");
+        } else {
+            for (RewardRequest req : items) {
+                String statusEmoji = switch (req.getStatus()) {
+                    case PENDING -> "⏳";
+                    case IN_PROGRESS -> "🔄";
+                    case APPROVED -> "✅";
+                    case REJECTED -> "❌";
+                    case CANCELLED -> "🚫";
+                };
+                String uname = req.getUser().getTelegramUsername() != null
+                        ? "@" + req.getUser().getTelegramUsername()
+                        : "#" + req.getUser().getTelegramId();
+                String type = isCryptoWithdrawal(req) ? "💎" : "💸";
+                String nick = escape(req.getUser().getNickname());
+                if (nick.length() > 12) nick = nick.substring(0, 12) + "…";
+                sb.append(statusEmoji).append(" <b>В-").append(reqDisplayId(req)).append("</b> ")
+                  .append(type).append(" ").append(req.getRewardItem().getPriceCoins()).append(" EXC")
+                  .append(" | ").append(nick).append(" (").append(escape(uname)).append(")")
+                  .append(" | ").append(req.getCreatedAt().format(fmt)).append("\n");
+            }
+        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        List<InlineKeyboardButton> navRow = new ArrayList<>();
+        if (histPage.hasPrevious()) navRow.add(keyboardFactory.callback("⬅️", "admin:withdrawal:history:" + (page - 1)));
+        if (histPage.hasNext()) navRow.add(keyboardFactory.callback("➡️", "admin:withdrawal:history:" + (page + 1)));
+        if (!navRow.isEmpty()) rows.add(navRow);
+        rows.add(List.of(keyboardFactory.callback("⬅️ К заявкам", "admin:withdrawals")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     private void sendAdminWithdrawalCard(AppUser user, Long reqId) {

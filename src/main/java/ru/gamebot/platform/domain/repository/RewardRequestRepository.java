@@ -2,6 +2,8 @@ package ru.gamebot.platform.domain.repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -65,6 +67,9 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
 
     @Query("SELECT COUNT(DISTINCT r.user.id) FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED'")
     long countDistinctUsersWithApprovedWithdrawals();
+
+    @EntityGraph(attributePaths = {"user", "rewardItem"})
+    Page<RewardRequest> findAllByRewardItemCategoryOrderByCreatedAtDesc(String category, Pageable pageable);
 
     @Query("SELECT COALESCE(MAX(r.displayId), 0) FROM RewardRequest r WHERE r.rewardItem.category <> 'Вывод'")
     long findMaxShopDisplayId();
