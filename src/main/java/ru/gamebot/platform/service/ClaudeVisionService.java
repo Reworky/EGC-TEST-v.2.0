@@ -7,7 +7,6 @@ import com.anthropic.models.messages.ContentBlockParam;
 import com.anthropic.models.messages.ImageBlockParam;
 import com.anthropic.models.messages.Message;
 import com.anthropic.models.messages.MessageCreateParams;
-import com.anthropic.models.messages.Model;
 import com.anthropic.models.messages.TextBlockParam;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -143,7 +142,7 @@ public class ClaudeVisionService {
 
     private AiVerificationResult callClaudeApi(String base64Image, String prompt) {
         MessageCreateParams params = MessageCreateParams.builder()
-                .model(Model.CLAUDE_OPUS_4_8)
+                .model("claude-opus-4-8")
                 .maxTokens(512L)
                 .addUserMessageOfBlockParams(List.of(
                         ContentBlockParam.ofImage(ImageBlockParam.builder()
