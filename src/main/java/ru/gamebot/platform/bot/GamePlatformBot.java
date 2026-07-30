@@ -130,6 +130,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.SquadService squadService;
     private final ru.gamebot.platform.service.WheelService wheelService;
     private final ru.gamebot.platform.service.PlatformSnapshotService platformSnapshotService;
+    private final ru.gamebot.platform.service.ClaudeVisionService claudeVisionService;
 
     private final Queue<String[]> pendingNewsQueue = new ConcurrentLinkedQueue<>();
     private final ScheduledExecutorService albumScheduler = Executors.newSingleThreadScheduledExecutor();
@@ -8810,6 +8811,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void notifyModeratorsAboutSubmission(Long submissionId) {
         QuestSubmission submission = questService.getSubmission(submissionId);
+
+        // AI verification for photo submissions
+        String aiNote = "";
+        if (claudeVisionService.isEnabled() && "photo".equals(submission.getMediaType())) {
+            try {
+                ru.gamebot.platform.service.AiVerificationResult aiResult =
+                        claudeVisionService.verify(submission);
+                if (aiResult != null) {
+                    questService.saveAiResult(submissionId, aiResult);
+                    if (aiResult.isApprove()) {
+                        aiAutoApprove(submission, aiResult);
+                        return;
+                    } else if (aiResult.isReject()) {
+                        aiAutoReject(submission, aiResult);
+                        return;
+                    }
+                    // MANUAL — show AI note to moderators
+                    int pct = (int) Math.round(aiResult.confidence() * 100);
+                    aiNote = "\n\n🤖 <b>AI:</b> MANUAL (" + pct + "%) — " + escape(aiResult.reason());
+                }
+            } catch (Exception e) {
+                log.warn("AI check failed for submission {}, falling back to manual review", submissionId, e);
+            }
+        }
+
         AppUser notifUser = submission.getUser();
         String notifUserLink = notifUser.getTelegramUsername() != null
                 ? "<a href=\"https://t.me/" + notifUser.getTelegramUsername() + "\">@" + notifUser.getTelegramUsername() + "</a>"
@@ -8821,7 +8847,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🎮 Игра: <b>" + escape(submission.getQuest().getGameName()) + "</b>\n"
                 + rewardPreviewLine(submission) + "\n"
                 + "📅 Отправлено: <b>" + submission.getUpdatedAt().format(DATE_TIME_FORMATTER) + "</b>\n"
-                + "💬 Комментарий: " + escape(submission.getUserComment());
+                + "💬 Комментарий: " + escape(submission.getUserComment())
+                + aiNote;
 
         InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
                 keyboardFactory.callback("✅ Одобрить", "mod:ok:" + submissionId),
@@ -8868,6 +8895,49 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             } catch (TelegramApiException exception) {
                 log.warn("Failed to notify moderator {}", recipient, exception);
             }
+        }
+    }
+
+    private void aiAutoApprove(QuestSubmission submission, ru.gamebot.platform.service.AiVerificationResult aiResult) {
+        try {
+            UserService.RewardGrant rewardGrant = userService.previewReward(
+                    submission.getUser(),
+                    submission.getQuest().getRewardXp(),
+                    submission.getQuest().getRewardCoins(),
+                    0
+            );
+            boolean isFirstQuest = submission.getUser().getCompletedQuests() == 0;
+            QuestSubmission approved = questService.approveSubmission(submission.getId());
+            String firstQuestBonus = isFirstQuest && approved.getUser().getReferredByTelegramId() != null
+                    ? "\n🎁 Бонус за первый квест: <b>+3 000 EXC</b>" : "";
+            int pct = (int) Math.round(aiResult.confidence() * 100);
+            notifyUser(approved.getUser().getTelegramId(),
+                    "🤖 <b>Автопроверка пройдена!</b>\n\n"
+                    + "Ваш отчёт по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> одобрен AI-модератором (" + pct + "%).\n\n"
+                    + "🏅 Квест З-" + approved.getCompletionDisplayId() + "\n"
+                    + "✨ XP: <b>+" + rewardGrant.xp() + "</b>\n"
+                    + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>\n"
+                    + formatExcBonusLine(rewardGrant)
+                    + firstQuestBonus);
+            log.info("AI auto-approved submission {} (confidence={})", submission.getId(), aiResult.confidence());
+        } catch (Exception e) {
+            log.error("Failed to auto-approve submission {}: {}", submission.getId(), e.getMessage(), e);
+        }
+    }
+
+    private void aiAutoReject(QuestSubmission submission, ru.gamebot.platform.service.AiVerificationResult aiResult) {
+        try {
+            String rejectComment = "AI-проверка: " + aiResult.reason();
+            questService.rejectSubmission(submission.getId(), rejectComment);
+            int pct = (int) Math.round(aiResult.confidence() * 100);
+            notifyUser(submission.getUser().getTelegramId(),
+                    "🤖 <b>Автопроверка</b>\n\n"
+                    + "Ваш отчёт по квесту <b>" + escape(submission.getQuest().getTitle()) + "</b> не прошёл автоматическую проверку (" + pct + "%).\n\n"
+                    + "❌ Причина: " + escape(aiResult.reason()) + "\n\n"
+                    + "Вы можете подать повторный отчёт через 1 час с более чёткими доказательствами.");
+            log.info("AI auto-rejected submission {} (confidence={}): {}", submission.getId(), aiResult.confidence(), aiResult.reason());
+        } catch (Exception e) {
+            log.error("Failed to auto-reject submission {}: {}", submission.getId(), e.getMessage(), e);
         }
     }
 

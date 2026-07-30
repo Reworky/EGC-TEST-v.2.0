@@ -829,6 +829,19 @@ public class QuestService {
         return submissions;
     }
 
+    @Transactional
+    public void saveAiResult(Long submissionId, AiVerificationResult result) {
+        questSubmissionRepository.findById(submissionId).ifPresent(s -> {
+            s.setAiDecision(result.decision());
+            s.setAiConfidence(result.confidence());
+            s.setAiReason(result.reason());
+            s.setAiChecks(result.checksJson());
+            s.setAiReviewedAt(LocalDateTime.now());
+            s.setReviewedBy("AI");
+            questSubmissionRepository.save(s);
+        });
+    }
+
     public long countActiveDrafts(AppUser user) {
         return questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user).stream()
                 .filter(s -> (s.getStatus() == SubmissionStatus.DRAFT || s.getStatus() == SubmissionStatus.PENDING) && !isExpired(s))

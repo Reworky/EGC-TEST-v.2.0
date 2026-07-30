@@ -79,4 +79,27 @@ public class QuestSubmission {
     /** Флаг: уведомление «2 часа до дедлайна» уже отправлено. */
     @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean deadlineWarningSent;
+
+    /** AI verdict: APPROVE, REJECT, MANUAL (null = not checked yet) */
+    @Column(length = 10)
+    private String aiDecision;
+
+    /** AI confidence score 0.0–1.0 */
+    @Column
+    private Double aiConfidence;
+
+    /** Human-readable reason returned by AI */
+    @Column(length = 2000)
+    private String aiReason;
+
+    /** JSON-encoded checks map from AI response */
+    @Column(length = 4000)
+    private String aiChecks;
+
+    /** Timestamp when AI (or moderator) reviewed the submission */
+    private LocalDateTime aiReviewedAt;
+
+    /** Who reviewed: "AI" or moderator nickname */
+    @Column(length = 100)
+    private String reviewedBy;
 }
