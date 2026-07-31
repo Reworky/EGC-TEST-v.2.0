@@ -2745,16 +2745,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sessionService.get(user.getTelegramId()).getData().put("quest_back_data", backData);
         Quest quest = questService.getQuest(questId);
         QuestSubmission latest = questService.getLatestSubmission(user, quest);
-        String statusText = latest == null ? "Не начат" : humanStatus(latest.getStatus());
+        boolean latestExpired = latest != null && questService.isExpired(latest);
+        String statusText = latest == null ? "Не начат"
+                : (latestExpired ? "Истёк срок" : humanStatus(latest.getStatus()));
 
         String deadlineLine = "";
         if (latest != null && latest.getStatus() == SubmissionStatus.DRAFT && latest.getExpiresAt() != null) {
-            if (questService.isExpired(latest)) {
+            if (latestExpired) {
                 deadlineLine = "⌛ Дедлайн: <b>истёк</b>\n";
             } else {
                 deadlineLine = formatDeadlineLine(latest.getExpiresAt());
             }
-        } else if (quest.getDurationDays() > 0 && (latest == null || latest.getStatus() == SubmissionStatus.REJECTED)) {
+        } else if (quest.getDurationDays() > 0 && (latest == null || latest.getStatus() == SubmissionStatus.REJECTED || latestExpired)) {
             deadlineLine = "⏳ Срок: <b>" + quest.getDurationText() + "</b> с момента старта\n";
         }
 
@@ -2764,7 +2766,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : statusText;
 
         List<InlineKeyboardButton> buttons = new ArrayList<>();
-        boolean hasActiveSubmission = latest != null && latest.getStatus() != SubmissionStatus.CANCELLED;
+        // Expired drafts are treated as "not active" — user should be able to retake
+        boolean hasActiveSubmission = latest != null
+                && latest.getStatus() != SubmissionStatus.CANCELLED
+                && !latestExpired;
         long activeSlots = questService.countActiveDrafts(user);
         long maxSlots = sinkShopService.getMaxQuestSlots(user);
         boolean slotsFull = activeSlots >= maxSlots && !hasActiveSubmission;
@@ -2772,7 +2777,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (cooldownLeft > 0) {
             buttons.add(keyboardFactory.callback("⏳ Доступно через " + cooldownLeft + " ч", "noop"));
         } else if (slotsFull) {
-            buttons.add(keyboardFactory.callback("📂 Квест уже активен", "noop"));
+            buttons.add(keyboardFactory.callback("🔒 Сначала сдай активный квест", "noop"));
         } else if (gameCooldown) {
             buttons.add(keyboardFactory.callback("⏳ Кулдаун 24ч по этой игре", "noop"));
         } else if (!hasActiveSubmission) {

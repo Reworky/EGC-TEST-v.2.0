@@ -375,7 +375,7 @@ public class QuestService {
 
         QuestSubmission latest = getLatestSubmission(lockedUser, quest);
         if (latest != null) {
-            if (latest.getStatus() == SubmissionStatus.DRAFT) {
+            if (latest.getStatus() == SubmissionStatus.DRAFT && !isExpired(latest)) {
                 return QuestActionResult.of(QuestActionStatus.ALREADY_DRAFT, 0);
             }
             if (latest.getStatus() == SubmissionStatus.PENDING) {
