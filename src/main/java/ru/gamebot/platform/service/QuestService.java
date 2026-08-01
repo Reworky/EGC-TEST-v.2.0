@@ -450,8 +450,12 @@ public class QuestService {
             if (!quest.isSponsored()) {
                 LocalDateTime rejectedAt = latest.getUpdatedAt();
                 if (rejectedAt != null && LocalDateTime.now().isBefore(rejectedAt.plusHours(1))) {
-                    long minutesLeft = ChronoUnit.MINUTES.between(LocalDateTime.now(), rejectedAt.plusHours(1));
-                    return QuestActionResult.of(QuestActionStatus.REJECT_COOLDOWN, Math.max(1, minutesLeft));
+                    if (lockedUser.isRetryInsuranceActive()) {
+                        sinkShopService.consumeInsurance(lockedUser);
+                    } else {
+                        long minutesLeft = ChronoUnit.MINUTES.between(LocalDateTime.now(), rejectedAt.plusHours(1));
+                        return QuestActionResult.of(QuestActionStatus.REJECT_COOLDOWN, Math.max(1, minutesLeft));
+                    }
                 }
             }
             latest = resetToDraft(latest);
@@ -596,7 +600,7 @@ public class QuestService {
 
     public RewardPreview computeReward(AppUser user, Quest quest) {
         long baseCoins = quest.getRewardCoins();
-        long adjustedCoins = baseCoins; // EXC начисляются полные; HR влияет только на рублёвый эквивалент
+        long adjustedCoins = baseCoins;
 
         // 3.4 Antifaud: diminishing returns after 3 completions of same type per week
         LocalDateTime weekAgo = LocalDateTime.now().minusWeeks(1);
@@ -606,6 +610,10 @@ public class QuestService {
         if (diminished) {
             adjustedCoins = adjustedCoins / 2;
         }
+
+        // Apply EXC boost
+        int excBoostPct = sinkShopService.getBoostPercent(user);
+        adjustedCoins = adjustedCoins + (adjustedCoins * excBoostPct / 100);
 
         // Apply XP boost
         long baseXp = quest.getRewardXp();
