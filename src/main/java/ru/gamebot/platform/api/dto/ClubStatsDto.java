@@ -7,6 +7,7 @@ import lombok.Data;
 @Builder
 public class ClubStatsDto {
     private long totalPlayers;
+    private long newUsersWeek;
     private long totalQuestsCompleted;
     private long totalExcIssued;
     private String topGame;
