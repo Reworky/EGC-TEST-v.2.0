@@ -375,9 +375,8 @@ public class QuestService {
             if (latest.getStatus() == SubmissionStatus.PENDING) {
                 return QuestActionResult.of(QuestActionStatus.ALREADY_PENDING, 0);
             }
-            if (latest.getStatus() == SubmissionStatus.APPROVED) {
-                return QuestActionResult.of(QuestActionStatus.ALREADY_APPROVED, 0);
-            }
+            // APPROVED: квест можно пройти повторно после кулдауна — не блокируем здесь,
+            // isSameQuestCooldownActive ниже покажет корректный статус пока кулдаун активен.
             if (latest.getStatus() == SubmissionStatus.REJECTED || latest.getStatus() == SubmissionStatus.NEEDS_INFO) {
                 return QuestActionResult.of(QuestActionStatus.HAS_REJECTED_REPORT, 0);
             }

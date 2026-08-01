@@ -2769,6 +2769,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Expired drafts are treated as "not active" — user should be able to retake
         boolean hasActiveSubmission = latest != null
                 && latest.getStatus() != SubmissionStatus.CANCELLED
+                && latest.getStatus() != SubmissionStatus.APPROVED
                 && !latestExpired;
         long activeSlots = questService.countActiveDrafts(user);
         long maxSlots = sinkShopService.getMaxQuestSlots(user);
