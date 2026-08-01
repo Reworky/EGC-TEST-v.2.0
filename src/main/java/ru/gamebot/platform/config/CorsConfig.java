@@ -15,6 +15,16 @@ public class CorsConfig {
 
     @Bean
     public CorsFilter corsFilter() {
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+
+        // Public stats endpoint — open to any origin (no credentials needed)
+        CorsConfiguration publicStats = new CorsConfiguration();
+        publicStats.addAllowedOrigin("*");
+        publicStats.addAllowedHeader("*");
+        publicStats.addAllowedMethod("GET");
+        source.registerCorsConfiguration("/api/stats", publicStats);
+
+        // Authenticated API endpoints
         CorsConfiguration config = new CorsConfiguration();
         for (String origin : props.getCorsAllowedOrigins().split(",")) {
             config.addAllowedOrigin(origin.trim());
@@ -22,9 +32,8 @@ public class CorsConfig {
         config.addAllowedHeader("*");
         config.addAllowedMethod("*");
         config.setAllowCredentials(true);
-
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", config);
+
         return new CorsFilter(source);
     }
 }
