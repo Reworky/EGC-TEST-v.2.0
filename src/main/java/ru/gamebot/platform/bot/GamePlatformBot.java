@@ -2876,7 +2876,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "📂 У вас уже есть активные квесты. Завершите или отмените один из них, либо купите доп. слот (2 000 EXC) в разделе Предметы клуба.";
             case SAME_QUEST_COOLDOWN -> "⏳ Этот квест можно выполнять не чаще 1 раза в 24 часа.";
             case GAME_COOLDOWN ->
-                    "⏳ Кулдаун активен. Повторный квест в этой игре доступен через 24 часа.\n\n💡 Можно снять кулдаун за 1 500 EXC в разделе Предметы клуба.";
+                    "⏳ Кулдаун активен. Повторный квест в этой игре доступен через 24 часа.\n\n💡 Можно снять кулдаун за 2 000 EXC в разделе Предметы клуба.";
             case TAKE_COOLDOWN -> "⏳ Новый квест можно брать раз в час. Подождите ещё <b>" + result.minutesLeft() + " мин.</b>";
             default -> "⚠️ Не удалось взять квест.";
         };
@@ -3657,7 +3657,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("📂 Доп. слот квеста 48ч — 2 000 EXC", "sink:extraslot")));
         }
 
-        rows.add(List.of(keyboardFactory.callback("⏱️ Снятие кулдауна — 1 500 EXC", "sink:cooldown_info")));
+        rows.add(List.of(keyboardFactory.callback("⏱️ Снятие кулдауна — 2 000 EXC", "sink:cooldown_info")));
 
         rows.add(List.of(keyboardFactory.callback("— Социальные —", "sink:noop")));
         rows.add(List.of(keyboardFactory.callback("🎁 Подарок другу (буст) — 4 500 EXC", "sink:gift")));
@@ -3720,17 +3720,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case "cooldown_info" -> {
                 List<List<InlineKeyboardButton>> rows2 = new ArrayList<>();
-                rows2.add(List.of(keyboardFactory.callback("⏱️ Купить снятие — 1 500 EXC", "sink:buycooldown")));
+                rows2.add(List.of(keyboardFactory.callback("⏱️ Купить снятие — 2 000 EXC", "sink:buycooldown")));
                 rows2.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:sink")));
                 sendText(user.getTelegramId(),
-                    "⏱️ <b>Снятие кулдауна</b>\n\nСнимает 24-часовой кулдаун для следующего квеста в любой игре.\nСтоимость: 1 500 EXC. Лимит: 2 раза в сутки.\n\n💡 После покупки перейдите к нужному квесту — кулдаун будет снят автоматически при взятии.",
+                    "⏱️ <b>Снятие кулдауна</b>\n\nСнимает 24-часовой кулдаун для следующего квеста в любой игре.\nСтоимость: 2 000 EXC. Лимит: 2 раза в сутки.\n\n💡 После покупки перейдите к нужному квесту — кулдаун будет снят автоматически при взятии.",
                     keyboardFactory.rowsLayout(rows2));
             }
             case "buycooldown" -> {
                 try {
                     sinkShopService.purchaseCooldownRemoval(user);
                     sendText(user.getTelegramId(),
-                        "⏱️ <b>Снятие кулдауна активировано!</b>\n\nВаш следующий квест, если на него действует кулдаун, будет доступен без ожидания.\nСписано 1 500 EXC.",
+                        "⏱️ <b>Снятие кулдауна активировано!</b>\n\nВаш следующий квест, если на него действует кулдаун, будет доступен без ожидания.\nСписано 2 000 EXC.",
                         backMenuKeyboard("menu:sink"));
                 } catch (IllegalArgumentException e) {
                     sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));

@@ -26,7 +26,7 @@ public class SinkShopService {
     public static final long PRICE_XP_BOOST_72H = 7_500;
     public static final long PRICE_EXC_BOOST_72H = 7_500;
     public static final long PRICE_EXTRA_SLOT = 2_000;
-    public static final long PRICE_COOLDOWN_REMOVAL = 1_500;
+    public static final long PRICE_COOLDOWN_REMOVAL = 2_000;
     public static final long PRICE_GIFT_BOOST = 4_500;
 
     private static final int BOOST_DURATION_HOURS = 24;
