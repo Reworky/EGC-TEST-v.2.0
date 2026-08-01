@@ -413,7 +413,6 @@ function PerksView({ expanded, onToggle }) {
 
       <div className="category-section">
         <div className="category-header">Социальные</div>
-        <TransferCard expanded={expanded === 'transfer'} onToggle={onToggle} />
         <GiftCard expanded={expanded === 'gift'} onToggle={onToggle} />
       </div>
     </>

@@ -3662,7 +3662,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         rows.add(List.of(keyboardFactory.callback("— Социальные —", "sink:noop")));
         rows.add(List.of(keyboardFactory.callback("🎁 Подарок другу (буст) — 4 500 EXC", "sink:gift")));
-        rows.add(List.of(keyboardFactory.callback("🔄 Перевод EXC другу — 10% комиссия", "sink:transfer")));
+        rows.add(List.of(keyboardFactory.callback("🔄 🔒 Перевод EXC — Скоро", "sink:soon")));
         rows.add(List.of(keyboardFactory.callback("⚔️ 🔒 Дуэль — Скоро", "sink:soon")));
         rows.add(List.of(keyboardFactory.callback("📢 🔒 Место в ТОП-посте — Скоро", "sink:soon")));
 
