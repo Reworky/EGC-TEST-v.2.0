@@ -270,14 +270,8 @@ public class QuestService {
     public boolean isCooldownActive(AppUser user, Quest quest) {
         Optional<LocalDateTime> lastApproved = questSubmissionRepository
                 .findLastApprovedDateByUserAndGameAndCategory(user, quest.getGameName(), quest.getCategory());
-        if (lastApproved.isPresent() && LocalDateTime.now().isBefore(lastApproved.get().plusHours(cooldownHours(quest)))) {
-            if (sinkShopService.hasCooldownBypass(user, quest.getGameName())) {
-                sinkShopService.consumeCooldownBypass(user, quest.getGameName());
-                return false;
-            }
-            return true;
-        }
-        return false;
+        return lastApproved.isPresent()
+                && LocalDateTime.now().isBefore(lastApproved.get().plusHours(cooldownHours(quest)));
     }
 
     /** Возвращает сколько часов осталось до снятия кулдауна (0 = нет кулдауна) */
@@ -398,12 +392,18 @@ public class QuestService {
             }
 
             if (isSameQuestCooldownActive(lockedUser, quest)) {
-                return QuestActionResult.of(QuestActionStatus.SAME_QUEST_COOLDOWN, cooldownHours(quest) * 60L);
-            }
-
-            if (isCooldownActive(lockedUser, quest)) {
-                long hoursLeft = getCooldownHoursLeft(lockedUser, quest);
-                return QuestActionResult.of(QuestActionStatus.GAME_COOLDOWN, hoursLeft * 60L);
+                if (sinkShopService.hasCooldownBypass(lockedUser, quest.getGameName())) {
+                    sinkShopService.consumeCooldownBypass(lockedUser, quest.getGameName());
+                } else {
+                    return QuestActionResult.of(QuestActionStatus.SAME_QUEST_COOLDOWN, cooldownHours(quest) * 60L);
+                }
+            } else if (isCooldownActive(lockedUser, quest)) {
+                if (sinkShopService.hasCooldownBypass(lockedUser, quest.getGameName())) {
+                    sinkShopService.consumeCooldownBypass(lockedUser, quest.getGameName());
+                } else {
+                    long hoursLeft = getCooldownHoursLeft(lockedUser, quest);
+                    return QuestActionResult.of(QuestActionStatus.GAME_COOLDOWN, hoursLeft * 60L);
+                }
             }
 
             if (lockedUser.getLastQuestTakenAt() != null) {
