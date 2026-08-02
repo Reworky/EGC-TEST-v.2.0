@@ -14,4 +14,4 @@ docker run -d \
   -v /root/gamebot/data:/data \
   --env-file /root/gamebot/.env \
   gamebot
-docker logs gamebot --tail 20 -f
+docker logs gamebot --tail 20
