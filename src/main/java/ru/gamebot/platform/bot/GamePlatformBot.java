@@ -6067,8 +6067,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else {
             detailsLine = "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>";
         }
-        long rubles = parseRubFromWithdrawalTitle(
-                req.getRewardItem().getTitle(), req.getRewardItem().getPriceCoins());
+        long rubles = Math.round(req.getRewardItem().getPriceCoins() * healthRatioService.getCurrentRatio() / 100.0);
         String payoutSuffix = isCryptoWithdrawal(req) ? cryptoPayoutSuffix(rubles) : "";
         long duplicateCount = rewardService.countPendingWithdrawalsByUser(requester);
         String duplicateWarning = duplicateCount > 1
@@ -6132,14 +6131,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long questsDone = questService.countApprovedByUser(player);
         long totalEarned = questService.sumEarnedCoinsByUser(player);
 
+        long rubForLine = Math.round(exc * healthRatioService.getCurrentRatio() / 100.0);
         String withdrawLine;
         if (isCryptoWithdrawal(req)) {
-            long rubles = parseRubFromPayoutDetails(req.getPayoutDetails(), exc);
-            java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(rubles));
+            java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(rubForLine));
             withdrawLine = exc + " EXC → ~" + tonAmount + " GRAM";
         } else {
-            long rub = parseRubFromWithdrawalTitle(req.getRewardItem().getTitle(), exc);
-            withdrawLine = exc + " EXC → " + rub + " ₽";
+            withdrawLine = exc + " EXC → " + rubForLine + " ₽";
         }
 
         String text = "🎉 <b>Перевод выполнен!</b>\n\n"
@@ -9006,7 +9004,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (payoutDetails != null && payoutDetails.startsWith("TON:")) {
             // Формат: TON:<wallet>:rubles=<N>
             String wallet = cryptoWalletFromPayoutDetails(payoutDetails);
-            long rubles = parseRubFromWithdrawalTitle(req.getRewardItem().getTitle(), req.getRewardItem().getPriceCoins());
+            long rubles = Math.round(req.getRewardItem().getPriceCoins() * healthRatioService.getCurrentRatio() / 100.0);
             java.math.BigDecimal tonRate = exchangeRateService.getTonRubRate();
             java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(rubles));
             details = "\n💰 К отправке: ~<b>" + tonAmount + " GRAM (TON)</b>"
@@ -9135,8 +9133,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else {
             detailsLine = "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>";
         }
-        long rubles = parseRubFromWithdrawalTitle(
-                req.getRewardItem().getTitle(), req.getRewardItem().getPriceCoins());
+        long rubles = Math.round(req.getRewardItem().getPriceCoins() * healthRatioService.getCurrentRatio() / 100.0);
         String payoutSuffix = isCryptoWithdrawal(req) ? cryptoPayoutSuffix(rubles) : "";
         long dupCount = rewardService.countPendingWithdrawalsByUser(requester);
         String dupWarning = dupCount > 1
