@@ -7668,8 +7668,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 case PENDING -> "⏳";
                 default -> "📌";
             };
+            String completionTag = s.getCompletionDisplayId() != null ? " (З-" + s.getCompletionDisplayId() + ")" : "";
             sb.append(startNum + i).append(". ").append(statusIcon)
-              .append(" <b>").append(escape(s.getQuest().getTitle())).append("</b>").append("\n")
+              .append(" <b>").append(escape(s.getQuest().getTitle())).append("</b>").append(completionTag).append("\n")
               .append("   🎮 ").append(escape(s.getQuest().getGameName()))
               .append(" · 💰 ").append(s.getQuest().getRewardCoins()).append(" EXC\n")
               .append("   📅 ").append(dateStr).append("\n\n");
