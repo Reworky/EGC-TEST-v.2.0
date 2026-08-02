@@ -21,7 +21,7 @@ const PERK_CATEGORIES = [
       { key: 'reroll', title: '🔀 Реролл квеста', price: 2000, description: 'Заменяет ваш текущий набор доступных квестов на новый.' },
       { key: 'insurance', title: '🛡️ Страховка провала', price: 1500, blockedBy: 'insuranceActive', description: 'Если следующий отчёт отклонят — сможете отправить его повторно без штрафа.' },
       { key: 'extraslot', title: '📂 Доп. слот квеста 48ч', price: 2000, blockedBy: 'extraSlotActive', activeUntilField: 'extraSlotUntil', description: 'Позволяет вести 3 квеста одновременно вместо 1.' },
-      { key: 'cooldown', title: '⏱️ Снятие кулдауна', price: 1500, blockedBy: 'cooldownBypassActive', description: 'Снимает кулдаун для следующего взятого квеста в любой игре. Лимит: 2 раза в сутки.' },
+      { key: 'cooldown', title: '⏱️ Снятие кулдауна', price: 1500, blockedBy: 'cooldownBypassActive', activeLabel: 'Ждёт квест с кулдауном', description: 'Снимает кулдаун для следующего квеста в любой игре. Применится автоматически при взятии квеста с кулдауном. Лимит: 2 раза в сутки.' },
     ],
   },
   {
@@ -212,13 +212,13 @@ function PerkCard({ item, state, expanded, onToggle, onPurchased }) {
         <div className="shop-price">{item.price.toLocaleString()} EXC</div>
       </div>
       {active && (
-        <div className="shop-status"><i className="ti ti-circle-check"></i> Активен{untilText ? ` до ${untilText}` : ''}</div>
+        <div className="shop-status"><i className="ti ti-circle-check"></i> {item.activeLabel || ('Активен' + (untilText ? ` до ${untilText}` : ''))}</div>
       )}
       {expanded && (
         <div className="shop-detail" onClick={e => e.stopPropagation()}>
           {item.description && <p className="shop-desc">{item.description}</p>}
           <button className="quest-btn" disabled={busy || active} onClick={handleBuy}>
-            {busy ? 'Секунду...' : active ? 'Уже активен' : 'Купить'}
+            {busy ? 'Секунду...' : active ? (item.activeLabel || 'Уже активен') : 'Купить'}
           </button>
           {message && <div className="quest-message">{message}</div>}
         </div>
