@@ -8186,7 +8186,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     @org.springframework.context.event.EventListener
     public void onQuestReportSubmitted(ru.gamebot.platform.event.QuestReportSubmittedEvent event) {
-        notifyModeratorsAboutSubmission(event.getSubmissionId());
+        try {
+            notifyModeratorsAboutSubmission(event.getSubmissionId());
+        } catch (Exception e) {
+            log.error("[QuestReport] Failed to notify moderators for submission {}", event.getSubmissionId(), e);
+        }
     }
 
     @org.springframework.context.event.EventListener
