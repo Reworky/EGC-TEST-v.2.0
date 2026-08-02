@@ -277,31 +277,9 @@ public class WalletController {
 
     private record RubResolution(long rubles, long fixedRubUsed) {}
 
-    /**
-     * Рассчитывает рублёвый эквивалент для вывода excAmount EXC.
-     * Если зафиксированный баланс (fixedRubBalance) даёт больше, чем текущий HR —
-     * используется гарантированная сумма. Иначе — текущий HR.
-     * fixedRubUsed — сколько нужно списать с fixedRubBalance при создании заявки.
-     */
     private RubResolution resolveRubValue(AppUser user, long excAmount) {
         double ratio = healthRatioService.getCurrentRatio();
         long hrRub = Math.round(excAmount * ratio / 100.0);
-
-        long fixedRubBalance = user.getFixedRubBalance();
-        if (fixedRubBalance <= 0) return new RubResolution(hrRub, 0);
-
-        long totalCoins = user.getCoins();
-        if (totalCoins <= 0) return new RubResolution(hrRub, 0);
-
-        // Пропорциональная доля фиксированного баланса, относящаяся к выводимым EXC
-        long usedFixed = Math.round((double) fixedRubBalance * excAmount / totalCoins);
-        usedFixed = Math.min(usedFixed, fixedRubBalance);
-
-        if (hrRub >= usedFixed) {
-            // Текущий HR не хуже гарантированного — fixed баланс не расходуем
-            return new RubResolution(hrRub, 0);
-        }
-        // Fixed rate выгоднее — используем гарантированную сумму
-        return new RubResolution(usedFixed, usedFixed);
+        return new RubResolution(hrRub, 0);
     }
 }
