@@ -1,8 +1,10 @@
 package ru.gamebot.platform.service;
 
+import jakarta.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.model.HealthRatioSnapshot;
@@ -22,6 +24,18 @@ public class HealthRatioService {
     private final PayoutPoolEntryRepository payoutPoolEntryRepository;
     private final HealthRatioSnapshotRepository healthRatioSnapshotRepository;
     private final AppUserRepository appUserRepository;
+
+    @PostConstruct
+    @Transactional
+    public void initOnStartup() {
+        recalculate();
+    }
+
+    @Scheduled(cron = "0 0 */4 * * *")
+    @Transactional
+    public void scheduledRecalculate() {
+        recalculate();
+    }
 
     @Transactional
     public void addToPayoutPool(long amountRub, Long adminTelegramId) {
