@@ -7525,6 +7525,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if ("withdrawals".equals(action)) {
+            sendUserWithdrawalHistory(admin, telegramId, "admin");
+            return;
+        }
+
         if ("resetquests".equals(action)) {
             AppUser target = userService.findByTelegramId(telegramId).orElse(null);
             if (target == null) {
@@ -7766,6 +7771,88 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(staff.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
+    private void sendUserWithdrawalHistory(AppUser staff, Long telegramId, String prefix) {
+        AppUser target = userService.findByTelegramId(telegramId).orElse(null);
+        if (target == null) {
+            sendText(staff.getTelegramId(), "⚠️ Пользователь не найден.",
+                    backMenuKeyboard("admin".equals(prefix) ? "admin:users:0" : "menu:main"));
+            return;
+        }
+        List<ru.gamebot.platform.domain.model.RewardRequest> all = rewardService.findUserRequests(target).stream()
+                .filter(r -> "Вывод".equals(r.getRewardItem().getCategory()))
+                .sorted(java.util.Comparator.comparing(ru.gamebot.platform.domain.model.RewardRequest::getCreatedAt))
+                .toList();
+
+        long monthlyLimit = sinkShopService.getMonthlyLimit(target.getXp());
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("💸 <b>История выводов</b>\n")
+          .append("👤 <b>").append(escape(displayUserName(target))).append("</b> (ID: ").append(telegramId).append(")\n")
+          .append("📊 Месячный лимит: <b>").append(monthlyLimit).append(" EXC</b>\n\n");
+
+        if (all.isEmpty()) {
+            sb.append("Заявок на вывод нет.");
+        } else {
+            java.time.format.DateTimeFormatter monthFmt =
+                    java.time.format.DateTimeFormatter.ofPattern("LLLL yyyy", new java.util.Locale("ru"));
+            java.util.Map<java.time.YearMonth, java.util.List<ru.gamebot.platform.domain.model.RewardRequest>> byMonth =
+                    new java.util.LinkedHashMap<>();
+            for (ru.gamebot.platform.domain.model.RewardRequest r : all) {
+                java.time.YearMonth ym = java.time.YearMonth.from(r.getCreatedAt());
+                byMonth.computeIfAbsent(ym, k -> new java.util.ArrayList<>()).add(r);
+            }
+            for (java.util.Map.Entry<java.time.YearMonth, java.util.List<ru.gamebot.platform.domain.model.RewardRequest>> entry : byMonth.entrySet()) {
+                String monthName = entry.getKey().atDay(1).format(monthFmt);
+                monthName = Character.toUpperCase(monthName.charAt(0)) + monthName.substring(1);
+                sb.append("── <b>").append(escape(monthName)).append("</b> ──\n");
+                long monthTotal = 0;
+                for (ru.gamebot.platform.domain.model.RewardRequest r : entry.getValue()) {
+                    ru.gamebot.platform.domain.model.RewardRequestStatus st = r.getStatus();
+                    long exc = r.getRewardItem().getPriceCoins();
+                    String statusIcon = switch (st) {
+                        case PENDING  -> "⏳";
+                        case APPROVED -> "✅";
+                        case REJECTED -> "❌";
+                        case CANCELLED -> "🚫";
+                    };
+                    String statusName = switch (st) {
+                        case PENDING   -> "Ожидает";
+                        case APPROVED  -> "Одобрена";
+                        case REJECTED  -> "Отклонена";
+                        case CANCELLED -> "Отменена";
+                    };
+                    boolean countable = st == ru.gamebot.platform.domain.model.RewardRequestStatus.APPROVED
+                            || st == ru.gamebot.platform.domain.model.RewardRequestStatus.PENDING;
+                    if (countable) monthTotal += exc;
+
+                    String rubStr = "";
+                    String pd = r.getPayoutDetails();
+                    if (pd != null && pd.contains("rubles=")) {
+                        try {
+                            String val = pd.substring(pd.indexOf("rubles=") + 7).split("[^0-9]")[0];
+                            rubStr = " → " + val + " ₽";
+                        } catch (Exception ignored) {}
+                    }
+                    String displayId = r.getDisplayId() != null ? "В-" + r.getDisplayId() : "В-" + r.getId();
+                    sb.append(statusIcon).append(" <b>").append(displayId).append("</b>")
+                      .append(" | ").append(exc).append(" EXC")
+                      .append(rubStr)
+                      .append(" — ").append(statusName);
+                    if (r.getAdminComment() != null && !r.getAdminComment().isBlank()) {
+                        sb.append(" (<i>").append(escape(r.getAdminComment())).append("</i>)");
+                    }
+                    sb.append("\n");
+                }
+                sb.append("📦 Итого за месяц: <b>").append(monthTotal).append(" / ").append(monthlyLimit).append(" EXC</b>\n\n");
+            }
+        }
+
+        sendText(staff.getTelegramId(), sb.toString(),
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("⬅️ Назад к карточке", prefix + ":user:view:" + telegramId + ":0"))
+                )));
+    }
+
     /** Обработчик "mod:user:*" — урезанная карточка игрока для модератора (без смены роли/блокировки). */
     private void handleModUserAction(AppUser mod, String payload) {
         String[] parts = payload.split(":");
@@ -7792,6 +7879,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if ("exc".equals(action)) {
             sendUserExcHistory(mod, telegramId, page == null ? 0 : page, "mod");
+            return;
+        }
+        if ("withdrawals".equals(action)) {
+            sendUserWithdrawalHistory(mod, telegramId, "mod");
             return;
         }
         sendText(mod.getTelegramId(), "⚠️ Действие с пользователем не распознано.", backMenuKeyboard("menu:main"));
@@ -7825,6 +7916,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("📋 Квесты игрока", "mod:user:quests:" + telegramId + ":0")),
                 List.of(keyboardFactory.callback("💳 История EXC", "mod:user:exc:" + telegramId + ":0")),
+                List.of(keyboardFactory.callback("💸 История выводов", "mod:user:withdrawals:" + telegramId + ":0")),
                 List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
         ));
         sendText(mod.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
@@ -7861,6 +7953,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("📋 Квесты игрока", "admin:user:quests:" + telegramId + ":" + page)),
                 List.of(keyboardFactory.callback("💳 История EXC", "admin:user:exc:" + telegramId + ":0")),
+                List.of(keyboardFactory.callback("💸 История выводов", "admin:user:withdrawals:" + telegramId + ":0")),
                 List.of(keyboardFactory.callback("🗑 Сбросить активные квесты", "admin:user:resetquests:" + telegramId + ":" + page)),
                 List.of(keyboardFactory.callback("👤 Сделать игроком", "admin:user:role:" + telegramId + ":" + page + ":" + ROLE_USER)),
                 List.of(keyboardFactory.callback("🛡️ Сделать модератором", "admin:user:role:" + telegramId + ":" + page + ":" + ROLE_MODER)),
