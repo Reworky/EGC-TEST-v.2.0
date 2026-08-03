@@ -7807,7 +7807,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sb.append("── <b>").append(escape(monthName)).append("</b> ──\n");
                 long monthTotal = 0;
                 for (ru.gamebot.platform.domain.model.RewardRequest r : entry.getValue()) {
-                    ru.gamebot.platform.domain.model.RewardRequestStatus st = r.getStatus();
+                    ru.gamebot.platform.domain.enums.RewardRequestStatus st = r.getStatus();
                     long exc = r.getRewardItem().getPriceCoins();
                     String statusIcon = switch (st) {
                         case PENDING  -> "⏳";
@@ -7821,8 +7821,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         case REJECTED  -> "Отклонена";
                         case CANCELLED -> "Отменена";
                     };
-                    boolean countable = st == ru.gamebot.platform.domain.model.RewardRequestStatus.APPROVED
-                            || st == ru.gamebot.platform.domain.model.RewardRequestStatus.PENDING;
+                    boolean countable = st == ru.gamebot.platform.domain.enums.RewardRequestStatus.APPROVED
+                            || st == ru.gamebot.platform.domain.enums.RewardRequestStatus.PENDING;
                     if (countable) monthTotal += exc;
 
                     String rubStr = "";
