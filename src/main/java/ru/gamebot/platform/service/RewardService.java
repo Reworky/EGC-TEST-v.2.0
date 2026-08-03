@@ -146,7 +146,8 @@ public class RewardService {
 
     public boolean hasWithdrawalTodayOrPending(AppUser user) {
         LocalDateTime since = LocalDateTime.now().minusHours(24);
-        return rewardRequestRepository.countWithdrawalsByUserSince(user, since) > 0;
+        return rewardRequestRepository.countWithdrawalsByUserSince(user, since) > 0
+                || rewardRequestRepository.countPendingWithdrawalsByUser(user) > 0;
     }
 
     public long countPendingWithdrawalsByUser(AppUser user) {
