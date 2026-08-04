@@ -182,6 +182,28 @@ public class RewardService {
         return rewardRequestRepository.sumApprovedWithdrawalExc();
     }
 
+    /** Возвращает [rubTotal, tonRubEquivalent] — суммы в рублях по рублёвым и GRAM-выводам отдельно. */
+    public long[] totalPaidOutRubAndTonRub() {
+        long rubTotal = 0;
+        long tonRubTotal = 0;
+        for (var r : rewardRequestRepository.findAllApprovedWithdrawals()) {
+            String pd = r.getPayoutDetails();
+            String title = r.getRewardItem() != null ? r.getRewardItem().getTitle() : "";
+            if (pd != null && (pd.startsWith("TON:") || pd.startsWith("USDT"))) {
+                if (pd.contains("rubles=")) {
+                    String num = pd.substring(pd.indexOf("rubles=") + 7).split("[^0-9]")[0];
+                    try { tonRubTotal += Long.parseLong(num); } catch (Exception ignored) {}
+                }
+            } else if (title.contains("→") && title.contains("₽")) {
+                // "Вывод N EXC → M ₽"
+                String part = title.substring(title.lastIndexOf("→") + 2).trim();
+                String num = part.split("[^0-9]")[0];
+                try { rubTotal += Long.parseLong(num); } catch (Exception ignored) {}
+            }
+        }
+        return new long[]{rubTotal, tonRubTotal};
+    }
+
     public long countUniqueWithdrawalRecipients() {
         return rewardRequestRepository.countDistinctUsersWithApprovedWithdrawals();
     }

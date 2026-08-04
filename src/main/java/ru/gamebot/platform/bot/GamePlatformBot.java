@@ -6566,6 +6566,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         long totalPaidOut = rewardService.totalPaidOutExc();
         long uniqueRecipients = rewardService.countUniqueWithdrawalRecipients();
+        long[] rubAndTon = rewardService.totalPaidOutRubAndTonRub();
+        long totalPaidRub = rubAndTon[0];
+        long totalPaidTonRub = rubAndTon[1];
+        java.math.BigDecimal totalPaidGram = totalPaidTonRub > 0
+                ? exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(totalPaidTonRub))
+                : java.math.BigDecimal.ZERO;
         long totalCoins = userService.sumAllCoins();
         long totalTickets = userService.sumAllTickets();
         long pendingQuests = questService.pendingCount();
@@ -6582,6 +6588,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         String pct7 = totalUsers > 0 ? " (" + (active7 * 100 / totalUsers) + "%)" : "";
         String pct30 = totalUsers > 0 ? " (" + (active30 * 100 / totalUsers) + "%)" : "";
+
+        String gramLine = totalPaidTonRub > 0
+                ? "💎 В GRAM: <b>~" + totalPaidGram.setScale(2, java.math.RoundingMode.HALF_DOWN) + " GRAM</b> (≈ " + fmtExc(totalPaidTonRub) + " ₽)\n"
+                : "";
 
         sendText(user.getTelegramId(),
                 "📊 <b>Статистика платформы</b>\n\n"
@@ -6600,6 +6610,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📥 На модерации: <b>" + pendingQuests + "</b>\n\n"
                         + "💸 <b>Выплаты</b>\n"
                         + "💸 Выплачено: <b>" + fmtExc(totalPaidOut) + " EXC" + dPaidOut + "</b>\n"
+                        + "💵 В рублях: <b>" + fmtExc(totalPaidRub) + " ₽</b>\n"
+                        + gramLine
                         + "👤 Получателей: <b>" + uniqueRecipients + "</b>\n\n"
                         + "💰 EXC на счетах: <b>" + fmtExc(totalCoins) + " EXC" + dCoins + "</b>\n"
                         + "🎟️ Билетов в обороте: <b>" + totalTickets + "</b>\n"
