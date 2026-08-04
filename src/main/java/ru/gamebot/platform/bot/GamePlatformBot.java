@@ -4977,10 +4977,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleModerationApprove(CallbackQuery callbackQuery, Long submissionId) {
         QuestSubmission currentSubmission = questService.getSubmission(submissionId);
+        // Используем computeReward (с учётом снижения) — то же что применит approveSubmission
+        QuestService.RewardPreview computed = questService.computeReward(currentSubmission.getUser(), currentSubmission.getQuest());
         UserService.RewardGrant rewardGrant = userService.previewReward(
                 currentSubmission.getUser(),
-                currentSubmission.getQuest().getRewardXp(),
-                currentSubmission.getQuest().getRewardCoins(),
+                computed.xp(),
+                computed.coins(),
                 0
         );
         boolean isFirstQuest = currentSubmission.getUser().getCompletedQuests() == 0;
@@ -9061,10 +9063,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void aiAutoApprove(QuestSubmission submission, ru.gamebot.platform.service.AiVerificationResult aiResult) {
         try {
+            // Используем computeReward (с учётом снижения) — то же что применит approveSubmission
+            QuestService.RewardPreview computed = questService.computeReward(submission.getUser(), submission.getQuest());
             UserService.RewardGrant rewardGrant = userService.previewReward(
                     submission.getUser(),
-                    submission.getQuest().getRewardXp(),
-                    submission.getQuest().getRewardCoins(),
+                    computed.xp(),
+                    computed.coins(),
                     0
             );
             boolean isFirstQuest = submission.getUser().getCompletedQuests() == 0;
