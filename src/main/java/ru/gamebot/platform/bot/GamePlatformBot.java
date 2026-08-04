@@ -8362,7 +8362,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🏆 Место в лиге: <b>" + escape(event.getLeagueName()) + " · " + rankLine + "</b>\n"
                 + "⭐ XP за неделю: <b>" + event.getWeeklyXp() + "</b>\n"
                 + "📈 До следующего уровня: <b>" + event.getXpToNextLevel() + " XP</b>\n\n"
-                + "Новые квесты уже ждут 👉 /quests";
+                + "Новые квесты уже ждут! 👇";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("🗺️ Перейти к квестам", "menu:quests"))
         ));
@@ -8379,7 +8379,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "На прошлой неделе ты пропустил:\n"
                 + "— <b>" + event.getNewQuestsCount() + "</b> новых квестов\n"
                 + "— Колесо фортуны крутили <b>" + event.getTotalSpinsCount() + "</b> раз\n\n"
-                + "Возвращайся — квесты ждут 👉 /quests";
+                + "Возвращайся — квесты ждут! 👇";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("🗺️ К квестам", "menu:quests"))
         ));
