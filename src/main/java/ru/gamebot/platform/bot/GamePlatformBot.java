@@ -4989,12 +4989,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         QuestSubmission submission = questService.approveSubmission(submissionId);
         String firstQuestBonus = isFirstQuest && submission.getUser().getReferredByTelegramId() != null
                 ? "\n🎁 Бонус за первый квест: <b>+3 000 EXC</b>" : "";
-        notifyUser(submission.getUser().getTelegramId(),
-                "🎉 Ваш отчёт по квесту <b>" + escape(submission.getQuest().getTitle()) + "</b> одобрен!\n\n"
-                        + "✨ XP: <b>+" + rewardGrant.xp() + "</b>\n"
-                        + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>\n"
-                        + formatExcBonusLine(rewardGrant)
-                        + firstQuestBonus);
+        try {
+            notifyUser(submission.getUser().getTelegramId(),
+                    "🎉 Ваш отчёт по квесту <b>" + escape(submission.getQuest().getTitle()) + "</b> одобрен!\n\n"
+                            + "✨ XP: <b>+" + rewardGrant.xp() + "</b>\n"
+                            + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>\n"
+                            + formatExcBonusLine(rewardGrant)
+                            + firstQuestBonus);
+        } catch (Exception e) {
+            log.warn("Could not notify user {} about quest approval: {}", submission.getUser().getTelegramId(), e.getMessage());
+        }
         sendModerationQueue(callbackQuery.getFrom().getId());
         answer(callbackQuery.getId(), "Заявка одобрена");
     }
@@ -9076,14 +9080,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String firstQuestBonus = isFirstQuest && approved.getUser().getReferredByTelegramId() != null
                     ? "\n🎁 Бонус за первый квест: <b>+3 000 EXC</b>" : "";
             int pct = (int) Math.round(aiResult.confidence() * 100);
-            notifyUser(approved.getUser().getTelegramId(),
-                    "🤖 <b>Автопроверка пройдена!</b>\n\n"
-                    + "Ваш отчёт по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> одобрен AI-модератором (" + pct + "%).\n\n"
-                    + "✨ XP: <b>+" + rewardGrant.xp() + "</b>\n"
-                    + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>\n"
-                    + formatExcBonusLine(rewardGrant)
-                    + firstQuestBonus);
             log.info("AI auto-approved submission {} (confidence={})", submission.getId(), aiResult.confidence());
+            try {
+                notifyUser(approved.getUser().getTelegramId(),
+                        "🤖 <b>Автопроверка пройдена!</b>\n\n"
+                        + "Ваш отчёт по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> одобрен AI-модератором (" + pct + "%).\n\n"
+                        + "✨ XP: <b>+" + rewardGrant.xp() + "</b>\n"
+                        + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>\n"
+                        + formatExcBonusLine(rewardGrant)
+                        + firstQuestBonus);
+            } catch (Exception e) {
+                log.warn("Could not notify user {} about AI approval: {}", approved.getUser().getTelegramId(), e.getMessage());
+            }
         } catch (Exception e) {
             log.error("Failed to auto-approve submission {}: {}", submission.getId(), e.getMessage(), e);
         }
