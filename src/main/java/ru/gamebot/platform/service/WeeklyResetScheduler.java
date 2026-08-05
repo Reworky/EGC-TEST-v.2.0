@@ -13,6 +13,7 @@ import ru.gamebot.platform.domain.repository.QuestRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
 import ru.gamebot.platform.domain.repository.WheelSpinLogRepository;
 import ru.gamebot.platform.event.CooldownExpiredEvent;
+import ru.gamebot.platform.event.OnboardingReminderEvent;
 import ru.gamebot.platform.event.PollClosedEvent;
 import ru.gamebot.platform.event.QuestDeadlineWarningEvent;
 import ru.gamebot.platform.event.QuestExpiredEvent;
@@ -27,6 +28,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import ru.gamebot.platform.domain.repository.AppUserRepository;
 
 @Slf4j
 @Component
@@ -44,6 +46,7 @@ public class WeeklyResetScheduler {
     private final ApplicationEventPublisher eventPublisher;
     private final PlatformSnapshotService platformSnapshotService;
     private final NewsService newsService;
+    private final AppUserRepository appUserRepository;
 
     @Scheduled(cron = "0 0 0 * * MON")
     public void resetWeeklyLeaderboard() {
@@ -199,6 +202,37 @@ public class WeeklyResetScheduler {
             platformSnapshotService.takeSnapshot();
         } catch (Exception e) {
             log.warn("Daily platform snapshot failed", e);
+        }
+    }
+
+    // Напоминания об онбординге — каждый час
+    @Scheduled(fixedDelay = 3_600_000)
+    public void sendOnboardingReminders() {
+        LocalDateTime now = LocalDateTime.now();
+        for (AppUser user : appUserRepository.findUsersWithIncompleteOnboarding()) {
+            try {
+                if (user.getOnboardingStartedAt() == null) continue;
+                int sent = user.getOnboardingNotificationsSent();
+                LocalDateTime lastSent = user.getLastOnboardingNotification();
+
+                boolean shouldSend = false;
+                if (sent == 0 && now.isAfter(user.getOnboardingStartedAt().plusMinutes(30))) {
+                    shouldSend = true;
+                } else if (sent == 1 && lastSent != null && now.isAfter(lastSent.plusHours(24))) {
+                    shouldSend = true;
+                } else if (sent == 2 && lastSent != null && now.isAfter(lastSent.plusHours(48))) {
+                    shouldSend = true;
+                }
+
+                if (shouldSend) {
+                    user.setOnboardingNotificationsSent(sent + 1);
+                    user.setLastOnboardingNotification(now);
+                    appUserRepository.save(user);
+                    eventPublisher.publishEvent(new OnboardingReminderEvent(this, user.getTelegramId(), sent + 1));
+                }
+            } catch (Exception e) {
+                log.warn("Failed to process onboarding reminder for user {}", user.getTelegramId(), e);
+            }
         }
     }
 

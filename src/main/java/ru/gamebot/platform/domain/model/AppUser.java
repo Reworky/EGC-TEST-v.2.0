@@ -140,4 +140,21 @@ public class AppUser {
 
     // Squad membership
     private Long squadId;
+
+    // Onboarding flow
+    @Column(columnDefinition = "int default 0")
+    private int onboardingStep;
+
+    @Column(columnDefinition = "boolean default false")
+    private boolean onboardingCompleted;
+
+    private String onboardingGame;
+    private Long onboardingQuestId;
+    private LocalDateTime onboardingStartedAt;
+    private LocalDateTime onboardingCompletedAt;
+
+    @Column(columnDefinition = "int default 0")
+    private int onboardingNotificationsSent;
+
+    private LocalDateTime lastOnboardingNotification;
 }

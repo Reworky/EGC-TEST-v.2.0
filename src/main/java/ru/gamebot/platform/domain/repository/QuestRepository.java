@@ -27,4 +27,12 @@ public interface QuestRepository extends JpaRepository<Quest, Long> {
 
     @Query("SELECT COUNT(q) FROM Quest q WHERE q.createdAt >= :from AND q.createdAt < :to")
     long countCreatedBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query("SELECT q FROM Quest q WHERE q.active = true AND LOWER(q.gameName) = LOWER(:gameName) AND LOWER(q.category) = 'лёгкие' ORDER BY q.createdAt DESC")
+    List<Quest> findActiveEasyQuestsByGameName(@Param("gameName") String gameName);
+
+    List<Quest> findAllByActiveTrueAndGameNameIgnoreCaseOrderByCreatedAtDesc(String gameName);
+
+    @Query("SELECT q FROM Quest q WHERE q.active = true AND LOWER(q.category) = 'лёгкие' ORDER BY q.createdAt DESC")
+    List<Quest> findAllActiveEasyQuests();
 }

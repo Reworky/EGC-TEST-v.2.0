@@ -78,4 +78,7 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     long countBySquadId(Long squadId);
 
     Optional<AppUser> findByPhoneNumberAndTelegramIdNot(String phoneNumber, Long excludeTelegramId);
+
+    @Query("SELECT u FROM AppUser u WHERE u.registrationCompleted = true AND u.onboardingCompleted = false AND u.onboardingStartedAt IS NOT NULL AND u.onboardingNotificationsSent < 3 AND u.blocked = false")
+    List<AppUser> findUsersWithIncompleteOnboarding();
 }
