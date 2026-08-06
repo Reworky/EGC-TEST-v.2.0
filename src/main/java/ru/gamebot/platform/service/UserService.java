@@ -537,6 +537,14 @@ public class UserService {
         return appUserRepository.countByTrafficSourceCode(code);
     }
 
+    public long countRegisteredByTrafficSource(String code) {
+        return appUserRepository.countByTrafficSourceCodeAndRegistrationCompletedTrue(code);
+    }
+
+    public long countActivatedByTrafficSource(String code) {
+        return appUserRepository.countByTrafficSourceCodeAndWelcomeBonusPaidTrue(code);
+    }
+
     public List<AppUser> allUsersSorted() {
         return appUserRepository.findAll().stream()
                 .sorted(Comparator.comparing(AppUser::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder()))

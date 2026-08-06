@@ -55,6 +55,10 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     long countByTrafficSourceCode(String trafficSourceCode);
 
+    long countByTrafficSourceCodeAndRegistrationCompletedTrue(String trafficSourceCode);
+
+    long countByTrafficSourceCodeAndWelcomeBonusPaidTrue(String trafficSourceCode);
+
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.lastActivityDate = :today")
     long countActiveOnDate(@Param("today") java.time.LocalDate today);
 

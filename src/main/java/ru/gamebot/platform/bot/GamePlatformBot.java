@@ -6987,9 +6987,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (ru.gamebot.platform.domain.model.TrafficSource ts : sources) {
             long clicks = ts.getClicks();
-            long regs = userService.countByTrafficSource(ts.getCode());
-            String conv = clicks > 0 ? String.format("%.0f%%", regs * 100.0 / clicks) : "—";
-            String label = ts.getName() + " · " + clicks + " пер. · " + regs + " рег. · " + conv;
+            long started = userService.countByTrafficSource(ts.getCode());
+            long activated = userService.countActivatedByTrafficSource(ts.getCode());
+            String conv = clicks > 0 ? String.format("%.0f%%", activated * 100.0 / clicks) : "—";
+            String label = ts.getName() + " · " + clicks + " кл · " + started + " зш · " + activated + " акт · " + conv;
             rows.add(List.of(keyboardFactory.callback(label, "admin:traffic:view:" + ts.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("➕ Создать источник", "admin:traffic:create")));
@@ -7016,11 +7017,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("📈 <b>").append(escape(ts.getName())).append("</b>\n\n");
             sb.append("🔗 <code>").append(link).append("</code>\n");
             long clicks = ts.getClicks();
-            long regs = users.size();
-            String conv = clicks > 0 ? String.format("%.1f%%", regs * 100.0 / clicks) : "—";
-            sb.append("👆 Переходов: <b>").append(clicks).append("</b>\n");
-            sb.append("👤 Регистраций: <b>").append(regs).append("</b>\n");
-            sb.append("📊 Конверсия: <b>").append(conv).append("</b>\n\n");
+            long started = users.size();
+            long registered = userService.countRegisteredByTrafficSource(ts.getCode());
+            long activated = userService.countActivatedByTrafficSource(ts.getCode());
+            String conv = clicks > 0 ? String.format("%.1f%%", activated * 100.0 / clicks) : "—";
+            sb.append("👆 Кликов по ссылке: <b>").append(clicks).append("</b>\n");
+            sb.append("🚀 Зашли в бот: <b>").append(started).append("</b>\n");
+            sb.append("📝 Заполнили профиль: <b>").append(registered).append("</b>\n");
+            sb.append("✅ Активировали аккаунт: <b>").append(activated).append("</b>\n");
+            sb.append("📊 Конверсия (клик→акт.): <b>").append(conv).append("</b>\n\n");
             if (users.isEmpty()) {
                 sb.append("Пользователей пока нет.");
             } else {
