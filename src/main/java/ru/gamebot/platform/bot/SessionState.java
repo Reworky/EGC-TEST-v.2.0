@@ -3,10 +3,8 @@ package ru.gamebot.platform.bot;
 public enum SessionState {
     NONE,
     REG_NAME,
-    REG_AGE,
-    REG_COUNTRY,
-    REG_PLATFORMS,
-    REG_INTERESTS,
+    EDIT_AGE,
+    EDIT_COUNTRY,
     REPORT_MEDIA,
     SUPPORT_INPUT,
     SUPPORT_REPLY,

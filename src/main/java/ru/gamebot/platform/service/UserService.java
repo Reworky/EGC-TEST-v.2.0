@@ -188,13 +188,8 @@ public class UserService {
     }
 
     @Transactional
-    public AppUser completeRegistration(AppUser user, String nickname, Integer age, String country,
-                                        List<String> platforms, List<String> interests) {
+    public AppUser completeRegistration(AppUser user, String nickname) {
         user.setNickname(nickname);
-        user.setAge(age);
-        user.setCountry(country);
-        user.setPlatformsCsv(String.join(", ", platforms));
-        user.setInterestsCsv(interests.isEmpty() ? "Не выбраны" : String.join(", ", interests));
         user.setProfileCompleted(true);
         user.setRegistrationCompleted(false);
         return appUserRepository.save(user);
