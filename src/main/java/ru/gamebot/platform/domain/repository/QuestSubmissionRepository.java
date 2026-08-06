@@ -42,7 +42,7 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
 
     void deleteAllByQuest(Quest quest);
 
-    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.user = :user AND s.quest.gameName = :gameName AND s.quest.category = :category AND s.status = 'APPROVED' AND s.updatedAt >= :since")
+    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.user = :user AND s.quest.gameName = :gameName AND (:category IS NULL AND s.quest.category IS NULL OR s.quest.category = :category) AND s.status = 'APPROVED' AND s.updatedAt >= :since")
     long countApprovedByUserAndGameAndCategorySince(@Param("user") AppUser user, @Param("gameName") String gameName, @Param("category") String category, @Param("since") LocalDateTime since);
 
     @Query("SELECT MAX(s.updatedAt) FROM QuestSubmission s WHERE s.user = :user AND s.quest.gameName = :gameName AND s.status = 'APPROVED'")

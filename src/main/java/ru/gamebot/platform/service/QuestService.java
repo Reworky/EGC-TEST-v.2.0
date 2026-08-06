@@ -635,17 +635,20 @@ public class QuestService {
         if (submission.getStatus() == SubmissionStatus.APPROVED) {
             return submission;
         }
-        submission.setStatus(SubmissionStatus.APPROVED);
-        submission.setModeratorComment("Принято. Отличная работа!");
-        submission.setUpdatedAt(LocalDateTime.now());
-        submission.setCompletionDisplayId(questSubmissionRepository.findMaxCompletionDisplayId() + 1);
 
         AppUser user = submission.getUser();
         Quest quest = submission.getQuest();
 
+        // Считаем награду ДО смены статуса на APPROVED, чтобы Hibernate-flush не включил
+        // текущую заявку в COUNT-запрос и не сбил счётчик недельного лимита
         RewardPreview reward = computeReward(user, quest);
         long adjustedCoins = reward.coins();
         long adjustedXp = reward.xp();
+
+        submission.setStatus(SubmissionStatus.APPROVED);
+        submission.setModeratorComment("Принято. Отличная работа!");
+        submission.setUpdatedAt(LocalDateTime.now());
+        submission.setCompletionDisplayId(questSubmissionRepository.findMaxCompletionDisplayId() + 1);
 
         // Фиксируем рублёвый эквивалент по HR на момент одобрения
         double currentHR = healthRatioService.getCurrentRatio();
