@@ -2259,33 +2259,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         answer(callbackQuery.getId(), "Подписка не найдена");
     }
 
-    private void sendActivationSuccess(AppUser user,
-            ru.gamebot.platform.service.UserService.ReferralActivationResult referral) {
-        String referralLine = referral != null
-                ? "\n🪙 <b>Реферальный бонус: +" + referral.invitedBonus() + " EXC</b> уже на балансе!\n"
-                        + "Ещё <b>3 000 EXC</b> придут после первого выполненного квеста.\n"
-                : "";
-        sendText(user.getTelegramId(),
-                "✅ <b>Поздравляем! Ваш игровой профиль активирован.</b>\n\n"
-                        + "🎁 <b>Приветственный бонус: +200 EXC</b> уже на балансе!\n"
-                        + referralLine
-                        + "\nТеперь вам доступны:\n"
-                        + "Игровые задания\n"
-                        + "XP и EXC\n"
-                        + "Рейтинг игроков\n"
-                        + "Магазин наград\n"
-                        + "Реферальная программа и многое другое",
-                keyboardFactory.rowsLayout(List.of(
-                        List.of(keyboardFactory.callback("🚀 Перейти в профиль", "activation:profile")),
-                        List.of(keyboardFactory.url("📨 Пригласить друга",
-                                "https://t.me/share/url?url=https://t.me/" + getBotUsername()
-                                + "?start=ref_" + user.getTelegramId()
-                                + "&text=" + java.net.URLEncoder.encode(
-                                        "Зарабатывай EXC за игровые квесты в EXPERIENCE GAMING CLUB! 🎮",
-                                        java.nio.charset.StandardCharsets.UTF_8)))
-                )));
-    }
-
     // ─── Onboarding ──────────────────────────────────────────────────────────────
 
     private void startOnboarding(AppUser user, ru.gamebot.platform.service.UserService.ReferralActivationResult referral) {
@@ -2541,18 +2514,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private List<String> getOnboardingGames(AppUser user) {
+        // CSV stores display values (e.g. "Android", "Стратегии"), not enum codes
         Set<String> platforms = parseCsvSet(user.getPlatformsCsv());
         Set<String> interests = parseCsvSet(user.getInterestsCsv());
         List<String> games = new ArrayList<>();
 
-        boolean hasMobile = platforms.contains("ANDROID") || platforms.contains("IPHONE");
+        boolean hasMobile = platforms.contains("Android") || platforms.contains("iPhone");
         boolean hasPC = platforms.contains("PC");
-        boolean hasConsole = platforms.contains("PS5") || platforms.contains("XBOX");
+        boolean hasConsole = platforms.contains("PS5") || platforms.contains("Xbox");
 
         if (hasPC && interests.contains("FPS")) { addOnboardingGames(games, "PUBG PC", "CS2"); }
-        if (hasPC && interests.contains("STRATEGY")) { addOnboardingGames(games, "Dota 2"); }
+        if (hasPC && interests.contains("Стратегии")) { addOnboardingGames(games, "Dota 2"); }
         if (hasMobile && interests.contains("FPS")) { addOnboardingGames(games, "PUBG Mobile"); }
-        if (hasMobile && interests.contains("CASUAL")) { addOnboardingGames(games, "Brawl Stars", "Clash Royale", "Clash of Clans"); }
+        if (hasMobile && interests.contains("Казуальные")) { addOnboardingGames(games, "Brawl Stars", "Clash Royale", "Clash of Clans"); }
         if (hasMobile && interests.contains("RPG")) { addOnboardingGames(games, "Grim Soul", "Mobile Legends"); }
         if (hasConsole) { addOnboardingGames(games, "GTA V Online", "EA FC 26"); }
 
