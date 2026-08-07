@@ -12,6 +12,9 @@ ALTER TABLE app_users ADD COLUMN IF NOT EXISTS last_onboarding_notification TIME
 -- Existing registered users skip onboarding
 UPDATE app_users SET onboarding_completed = TRUE WHERE registration_completed = TRUE;
 
+-- Unique index on nickname (prevents duplicate nicknames under concurrent load)
+ALTER TABLE app_users ADD CONSTRAINT IF NOT EXISTS uk_app_users_nickname UNIQUE (nickname);
+
 -- AI verification columns for quest_submissions
 ALTER TABLE quest_submissions ADD COLUMN IF NOT EXISTS ai_decision VARCHAR(10);
 ALTER TABLE quest_submissions ADD COLUMN IF NOT EXISTS ai_confidence DOUBLE;

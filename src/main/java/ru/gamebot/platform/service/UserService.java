@@ -119,9 +119,7 @@ public class UserService {
     }
 
     public Optional<AppUser> findByNickname(String nickname) {
-        return appUserRepository.findAll().stream()
-                .filter(u -> u.isRegistrationCompleted() && nickname.equalsIgnoreCase(u.getNickname()))
-                .findFirst();
+        return appUserRepository.findByNicknameIgnoreCase(nickname);
     }
 
     public long getOverallRank(AppUser user) {
@@ -200,6 +198,20 @@ public class UserService {
         user.setProfileCompleted(true);
         user.setRegistrationCompleted(true);
         return appUserRepository.save(user);
+    }
+
+    @Transactional
+    public boolean applyWelcomeBonus(AppUser user) {
+        AppUser fresh = appUserRepository.findByIdForUpdate(user.getId()).orElse(null);
+        if (fresh == null || fresh.isWelcomeBonusPaid()) {
+            return false;
+        }
+        fresh.setCoins(fresh.getCoins() + 200);
+        fresh.setWelcomeBonusPaid(true);
+        fresh.setLastBonusDate(LocalDate.now());
+        appUserRepository.save(fresh);
+        excTx.log(fresh, 200, ExcTransactionService.WELCOME_BONUS, "Приветственный бонус за регистрацию");
+        return true;
     }
 
     public List<AppUser> topOverall() {

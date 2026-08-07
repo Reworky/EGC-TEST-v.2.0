@@ -27,6 +27,7 @@ public class AppUser {
     private String telegramUsername;
     private String telegramFirstName;
     private String telegramLastName;
+    @Column(unique = true)
     private String nickname;
     private String staffRole;
     private Integer age;

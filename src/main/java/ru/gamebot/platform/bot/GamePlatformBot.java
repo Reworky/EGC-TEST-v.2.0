@@ -1118,9 +1118,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             null);
                     return;
                 }
-                AppUser saved = userService.completeRegistration(user, regNick);
-                session.reset();
-                sendCommunityActivationPrompt(saved, null);
+                try {
+                    AppUser saved = userService.completeRegistration(user, regNick);
+                    session.reset();
+                    sendCommunityActivationPrompt(saved, null);
+                } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                    sendText(user.getTelegramId(),
+                            "⚠️ Никнейм <b>" + escape(regNick) + "</b> уже занят.\n\nПридумайте другой и введите его:",
+                            null);
+                }
             }
             case NICKNAME_CHANGE -> {
                 String newNick = text.trim();
@@ -2276,13 +2282,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 userService.save(user);
             }
             AppUser activated = userService.activateAccount(user);
-            if (!activated.isWelcomeBonusPaid()) {
-                activated.setCoins(activated.getCoins() + 200);
-                activated.setWelcomeBonusPaid(true);
-                activated.setLastBonusDate(java.time.LocalDate.now());
-                userService.save(activated);
-                excTransactionService.log(activated, 200, ru.gamebot.platform.service.ExcTransactionService.WELCOME_BONUS, "Приветственный бонус за регистрацию");
-            }
+            userService.applyWelcomeBonus(activated);
             ru.gamebot.platform.service.UserService.ReferralActivationResult referral =
                     userService.grantReferralReward(activated);
             startOnboarding(activated, referral);
