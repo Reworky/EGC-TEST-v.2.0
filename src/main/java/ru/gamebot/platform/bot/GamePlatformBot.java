@@ -2323,61 +2323,39 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "✅ Тебе начислено <b>200 EXC</b> за регистрацию — это твой стартовый капитал.\n"
                         + referralLine,
                 keyboardFactory.rowsLayout(List.of(
-                        List.of(keyboardFactory.callback("Отлично, что дальше? →", "onboarding:game_start"))
+                        List.of(keyboardFactory.callback("Отлично, что дальше? →", "onboarding:guide"))
                 )));
     }
 
-    private void sendOnboardingGameSelection(AppUser user) {
-        List<String> games = getOnboardingGames(user);
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        for (String game : games) {
-            rows.add(List.of(keyboardFactory.callback("🎮 " + game, "onboarding:game:" + game)));
-        }
-        rows.add(List.of(keyboardFactory.callback("📋 Смотреть все квесты", "onboarding:browse_all")));
-        rows.add(List.of(keyboardFactory.callback("→ В профиль", "onboarding:skip")));
+    private void sendOnboardingGuide(AppUser user) {
         sendText(user.getTelegramId(),
-                "🎮 <b>С какой игры начнём?</b>\n"
-                        + "Выбери игру — покажу первый квест специально для тебя:",
-                keyboardFactory.rowsLayout(rows));
+                "📖 <b>Как зарабатывать EXC</b>\n\n"
+                        + "1️⃣ <b>Возьми квест</b>\n"
+                        + "Выбери игру → нажми «Взять квест».\n\n"
+                        + "2️⃣ <b>Выполни задание</b>\n"
+                        + "Сделай скриншот результата прямо в игре. Вернись в бот → «Мои квесты» → отправь скриншот.\n\n"
+                        + "3️⃣ <b>Получи EXC</b>\n"
+                        + "Модератор проверит скриншот в течение 24 часов. После одобрения EXC и XP зачислятся автоматически.\n\n"
+                        + "4️⃣ <b>Выведи деньги</b>\n"
+                        + "Раздел 🛍️ Магазин → Вывод EXC. Минимум <b>5 000 EXC</b> (50 ₽). Курс: <b>100 EXC = 1 ₽</b>.",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("🗺️ Смотреть квесты", "onboarding:browse_all")),
+                        List.of(keyboardFactory.callback("👤 В профиль", "onboarding:skip"))
+                )));
     }
 
     private void resumeOnboarding(AppUser user) {
-        if (user.getOnboardingGame() == null) {
-            sendOnboardingGameSelection(user);
-        } else {
-            sendOnboardingQuestSuggestion(user, user.getOnboardingGame());
-        }
+        sendOnboardingGuide(user);
     }
 
     private void handleOnboardingCallback(CallbackQuery callbackQuery, AppUser user, String sub) {
-        UserSession session = sessionService.get(user.getTelegramId());
-        if ("game_start".equals(sub)) {
+        if ("guide".equals(sub)) {
             answerSilently(callbackQuery.getId());
-            sendOnboardingGameSelection(user);
-        } else if (sub.startsWith("game:")) {
-            String gameName = sub.substring("game:".length());
-            user.setOnboardingGame(gameName);
-            user.setOnboardingStep(2);
-            userService.save(user);
-            answerSilently(callbackQuery.getId());
-            sendOnboardingQuestSuggestion(user, gameName);
-        } else if (sub.startsWith("take:")) {
-            long questId = parseLong(sub.substring("take:".length()));
-            answerSilently(callbackQuery.getId());
-            handleOnboardingTakeQuest(user, questId);
-        } else if (sub.startsWith("another:")) {
-            String gameName = sub.substring("another:".length());
-            answerSilently(callbackQuery.getId());
-            sendOnboardingQuestSuggestion(user, gameName);
+            sendOnboardingGuide(user);
         } else if ("browse_all".equals(sub)) {
             completeOnboarding(user);
             answerSilently(callbackQuery.getId());
             sendGamingQuestGames(user);
-        } else if (sub.startsWith("browse:")) {
-            String gameName = sub.substring("browse:".length());
-            completeOnboarding(user);
-            answerSilently(callbackQuery.getId());
-            sendQuestCategories(user, gameName);
         } else if ("skip".equals(sub)) {
             completeOnboarding(user);
             answerSilently(callbackQuery.getId());
@@ -2385,138 +2363,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    private void sendOnboardingQuestSuggestion(AppUser user, String gameName) {
-        ru.gamebot.platform.domain.model.Quest quest = pickOnboardingQuest(gameName);
-
-        if (quest == null) {
-            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-            rows.add(List.of(keyboardFactory.callback("📋 Смотреть все квесты", "onboarding:browse_all")));
-            rows.add(List.of(keyboardFactory.callback("→ К профилю", "onboarding:skip")));
-            sendText(user.getTelegramId(),
-                    "😕 Для игры <b>" + escape(gameName) + "</b> пока нет активных квестов.\n\n"
-                            + "Посмотри другие квесты — там точно найдётся что-то интересное!",
-                    keyboardFactory.rowsLayout(rows));
-            return;
-        }
-
-        user.setOnboardingQuestId(quest.getId());
-        userService.save(user);
-
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.callback("🚀 Взять квест", "onboarding:take:" + quest.getId())));
-        rows.add(List.of(keyboardFactory.callback("🔄 Другой квест", "onboarding:another:" + gameName)));
-        rows.add(List.of(keyboardFactory.callback("📋 Все квесты " + gameName, "onboarding:browse:" + gameName)));
-        rows.add(List.of(keyboardFactory.callback("→ К профилю", "onboarding:skip")));
-
-        String rewardLine = "🪙 <b>+" + quest.getRewardCoins() + " EXC</b>"
-                + (quest.getRewardXp() > 0 ? "  ✨ <b>+" + quest.getRewardXp() + " XP</b>" : "")
-                + (quest.getTicketReward() > 0 ? "  🎟 <b>+" + quest.getTicketReward() + " билет(а)</b>" : "");
-
-        sendText(user.getTelegramId(),
-                "🎯 <b>Первый квест для тебя в " + escape(gameName) + "!</b>\n\n"
-                        + "📌 <b>" + escape(quest.getTitle()) + "</b>\n\n"
-                        + (quest.getDescription() != null ? escape(quest.getDescription()) + "\n\n" : "")
-                        + rewardLine + "\n\n"
-                        + "⏱ Срок: <b>" + escape(quest.getDurationText() != null ? quest.getDurationText() : "не указан") + "</b>\n\n"
-                        + "Выполни задание и получи первые EXC! 💰",
-                keyboardFactory.rowsLayout(rows));
-    }
-
-    private void handleOnboardingTakeQuest(AppUser user, long questId) {
-        ru.gamebot.platform.domain.model.Quest quest = questService.getQuest(questId);
-        QuestService.QuestActionResult result = questService.takeQuestChecked(user, quest);
-
-        if (result.status() != QuestActionStatus.OK) {
-            String errMsg = takeQuestErrorMessage(user, quest, result);
-            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-            if (user.getOnboardingGame() != null) {
-                rows.add(List.of(keyboardFactory.callback("🔄 Другой квест", "onboarding:another:" + user.getOnboardingGame())));
-            }
-            rows.add(List.of(keyboardFactory.callback("📋 Все квесты", "onboarding:browse_all")));
-            rows.add(List.of(keyboardFactory.callback("→ К профилю", "onboarding:skip")));
-            sendText(user.getTelegramId(), errMsg, keyboardFactory.rowsLayout(rows));
-            return;
-        }
-
-        completeOnboarding(user);
-
-        QuestSubmission submission = result.submission();
-        String deadlineLine = (submission != null && submission.getExpiresAt() != null)
-                ? formatDeadlineLine(submission.getExpiresAt())
-                : "";
-
-        sendText(user.getTelegramId(),
-                "🚀 <b>Отличный старт! Квест взят!</b>\n\n"
-                        + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n"
-                        + deadlineLine
-                        + "\n📌 <b>Что делать дальше:</b>\n"
-                        + "1. Выполни задание в игре\n"
-                        + "2. Сделай скриншот доказательства\n"
-                        + "3. Открой «Мои квесты» и отправь отчёт\n\n"
-                        + "После одобрения модератором EXC зачислятся автоматически. Удачи! 🏆",
-                keyboardFactory.rowsLayout(List.of(
-                        List.of(keyboardFactory.callback("📤 Отправить отчёт", "quest:report:" + questId)),
-                        List.of(keyboardFactory.callback("🏠 Главное меню", "menu:main"))
-                )));
-    }
-
     private void completeOnboarding(AppUser user) {
         user.setOnboardingCompleted(true);
         user.setOnboardingCompletedAt(java.time.LocalDateTime.now());
         userService.save(user);
-    }
-
-    private ru.gamebot.platform.domain.model.Quest pickOnboardingQuest(String gameName) {
-        List<ru.gamebot.platform.domain.model.Quest> easy = questRepository.findActiveEasyQuestsByGameName(gameName);
-        if (!easy.isEmpty()) {
-            return easy.get(new java.util.Random().nextInt(easy.size()));
-        }
-        List<ru.gamebot.platform.domain.model.Quest> any = questRepository.findAllByActiveTrueAndGameNameIgnoreCaseOrderByCreatedAtDesc(gameName);
-        if (!any.isEmpty()) {
-            return any.get(new java.util.Random().nextInt(Math.min(any.size(), 5)));
-        }
-        List<ru.gamebot.platform.domain.model.Quest> fallback = questRepository.findAllActiveEasyQuests();
-        if (!fallback.isEmpty()) {
-            return fallback.get(new java.util.Random().nextInt(Math.min(fallback.size(), 5)));
-        }
-        return null;
-    }
-
-    private List<String> getOnboardingGames(AppUser user) {
-        // CSV stores display values (e.g. "Android", "Стратегии"), not enum codes
-        Set<String> platforms = parseCsvSet(user.getPlatformsCsv());
-        Set<String> interests = parseCsvSet(user.getInterestsCsv());
-        List<String> games = new ArrayList<>();
-
-        boolean hasMobile = platforms.contains("Android") || platforms.contains("iPhone");
-        boolean hasPC = platforms.contains("PC");
-        boolean hasConsole = platforms.contains("PS5") || platforms.contains("Xbox");
-
-        if (hasPC && interests.contains("FPS")) { addOnboardingGames(games, "PUBG PC", "CS2"); }
-        if (hasPC && interests.contains("Стратегии")) { addOnboardingGames(games, "Dota 2"); }
-        if (hasMobile && interests.contains("FPS")) { addOnboardingGames(games, "PUBG Mobile"); }
-        if (hasMobile && interests.contains("Казуальные")) { addOnboardingGames(games, "Brawl Stars", "Clash Royale", "Clash of Clans"); }
-        if (hasMobile && interests.contains("RPG")) { addOnboardingGames(games, "Grim Soul", "Mobile Legends"); }
-        if (hasConsole) { addOnboardingGames(games, "GTA V Online", "EA FC 26"); }
-
-        if (games.isEmpty()) {
-            games.addAll(List.of("Brawl Stars", "PUBG Mobile", "CS2"));
-        }
-        return games.stream().limit(4).collect(java.util.stream.Collectors.toList());
-    }
-
-    private void addOnboardingGames(List<String> list, String... games) {
-        for (String g : games) {
-            if (!list.contains(g)) list.add(g);
-        }
-    }
-
-    private Set<String> parseCsvSet(String csv) {
-        if (csv == null || csv.isBlank()) return Set.of();
-        return java.util.Arrays.stream(csv.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .collect(java.util.stream.Collectors.toSet());
     }
 
     // ─── End Onboarding ───────────────────────────────────────────────────────────
