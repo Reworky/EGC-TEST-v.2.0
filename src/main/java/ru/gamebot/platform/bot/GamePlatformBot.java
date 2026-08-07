@@ -1052,7 +1052,52 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 + "Напиши страну, из которой играешь:",
                         backOnlyKeyboard("profile:edit"));
             }
-            default -> sendProfile(user);
+            case "edit_platforms" -> sendProfilePlatformEdit(user, session);
+            case "edit_genres" -> sendProfileGenreEdit(user, session);
+            default -> {
+                if (action.startsWith("platform:")) {
+                    String platformAction = action.substring("platform:".length());
+                    if ("done".equals(platformAction)) {
+                        List<String> platforms = resolveSelections(session, "prof_platforms", PLATFORM_OPTIONS);
+                        if (platforms.isEmpty()) {
+                            answer(callbackQuery.getId(), "Выбери хотя бы одну платформу");
+                            return;
+                        }
+                        user.setPlatformsCsv(String.join(", ", platforms));
+                        userService.save(user);
+                        session.getData().remove("prof_platforms");
+                        sendProfileEdit(user);
+                    } else {
+                        toggleSelection(session, "prof_platforms", platformAction);
+                        editProfilePlatformEdit(callbackQuery, session);
+                        answer(callbackQuery.getId(), "Выбор обновлён");
+                        return;
+                    }
+                } else if (action.startsWith("genre:")) {
+                    String genreAction = action.substring("genre:".length());
+                    if ("done".equals(genreAction)) {
+                        List<String> genres = resolveSelections(session, "prof_genres", INTEREST_OPTIONS);
+                        if (genres.isEmpty()) {
+                            answer(callbackQuery.getId(), "Выбери хотя бы один жанр или нажми «Пропустить»");
+                            return;
+                        }
+                        user.setInterestsCsv(String.join(", ", genres));
+                        userService.save(user);
+                        session.getData().remove("prof_genres");
+                        sendProfileEdit(user);
+                    } else if ("skip".equals(genreAction)) {
+                        session.getData().remove("prof_genres");
+                        sendProfileEdit(user);
+                    } else {
+                        toggleSelection(session, "prof_genres", genreAction);
+                        editProfileGenreEdit(callbackQuery, session);
+                        answer(callbackQuery.getId(), "Выбор обновлён");
+                        return;
+                    }
+                } else {
+                    sendProfile(user);
+                }
+            }
         }
         answerSilently(callbackQuery.getId());
     }
@@ -2278,40 +2323,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "✅ Тебе начислено <b>200 EXC</b> за регистрацию — это твой стартовый капитал.\n"
                         + referralLine,
                 keyboardFactory.rowsLayout(List.of(
-                        List.of(keyboardFactory.callback("Отлично, что дальше? →", "onboarding:platform:start"))
+                        List.of(keyboardFactory.callback("Отлично, что дальше? →", "onboarding:game_start"))
                 )));
-    }
-
-    private void sendOnboardingPlatformQuestion(AppUser user, UserSession session) {
-        List<String> selected = resolveSelections(session, "ob_platforms", PLATFORM_OPTIONS);
-        sendText(user.getTelegramId(),
-                "🎯 <b>На каких платформах играешь?</b>\n\n"
-                        + "Выбрано: <b>" + escape(selected.isEmpty() ? "ничего" : String.join(", ", selected)) + "</b>",
-                selectionKeyboard(PLATFORM_OPTIONS, selected, "onboarding:platform:", true, false, false));
-    }
-
-    private void editOnboardingPlatformQuestion(CallbackQuery callbackQuery, UserSession session) {
-        List<String> selected = resolveSelections(session, "ob_platforms", PLATFORM_OPTIONS);
-        editRegistrationSelectionMessage(callbackQuery,
-                "🎯 <b>На каких платформах играешь?</b>\n\n"
-                        + "Выбрано: <b>" + escape(selected.isEmpty() ? "ничего" : String.join(", ", selected)) + "</b>",
-                selectionKeyboard(PLATFORM_OPTIONS, selected, "onboarding:platform:", true, false, false));
-    }
-
-    private void sendOnboardingInterestQuestion(AppUser user, UserSession session) {
-        List<String> selected = resolveSelections(session, "ob_interests", INTEREST_OPTIONS);
-        sendText(user.getTelegramId(),
-                "🧠 <b>Какие жанры предпочитаешь?</b>\n\n"
-                        + "Выбрано: <b>" + escape(selected.isEmpty() ? "ничего" : String.join(", ", selected)) + "</b>",
-                selectionKeyboard(INTEREST_OPTIONS, selected, "onboarding:interest:", true, true, false));
-    }
-
-    private void editOnboardingInterestQuestion(CallbackQuery callbackQuery, UserSession session) {
-        List<String> selected = resolveSelections(session, "ob_interests", INTEREST_OPTIONS);
-        editRegistrationSelectionMessage(callbackQuery,
-                "🧠 <b>Какие жанры предпочитаешь?</b>\n\n"
-                        + "Выбрано: <b>" + escape(selected.isEmpty() ? "ничего" : String.join(", ", selected)) + "</b>",
-                selectionKeyboard(INTEREST_OPTIONS, selected, "onboarding:interest:", true, true, false));
     }
 
     private void sendOnboardingGameSelection(AppUser user) {
@@ -2329,13 +2342,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void resumeOnboarding(AppUser user) {
-        UserSession session = sessionService.get(user.getTelegramId());
-        int step = user.getOnboardingStep();
-        if (step <= 1) {
-            sendOnboardingPlatformQuestion(user, session);
-        } else if (step == 2) {
-            sendOnboardingInterestQuestion(user, session);
-        } else if (step == 3 || user.getOnboardingGame() == null) {
+        if (user.getOnboardingGame() == null) {
             sendOnboardingGameSelection(user);
         } else {
             sendOnboardingQuestSuggestion(user, user.getOnboardingGame());
@@ -2344,51 +2351,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleOnboardingCallback(CallbackQuery callbackQuery, AppUser user, String sub) {
         UserSession session = sessionService.get(user.getTelegramId());
-        if ("platform:start".equals(sub)) {
+        if ("game_start".equals(sub)) {
             answerSilently(callbackQuery.getId());
-            sendOnboardingPlatformQuestion(user, session);
-        } else if (sub.startsWith("platform:")) {
-            String action = sub.substring("platform:".length());
-            if ("done".equals(action)) {
-                List<String> platforms = resolveSelections(session, "ob_platforms", PLATFORM_OPTIONS);
-                if (platforms.isEmpty()) {
-                    answer(callbackQuery.getId(), "Выбери хотя бы одну платформу");
-                    return;
-                }
-                user.setPlatformsCsv(String.join(", ", platforms));
-                user.setOnboardingStep(2);
-                userService.save(user);
-                answerSilently(callbackQuery.getId());
-                sendOnboardingInterestQuestion(user, session);
-            } else {
-                toggleSelection(session, "ob_platforms", action);
-                editOnboardingPlatformQuestion(callbackQuery, session);
-                answer(callbackQuery.getId(), "Выбор обновлён");
-            }
-        } else if (sub.startsWith("interest:")) {
-            String action = sub.substring("interest:".length());
-            if ("done".equals(action) || "skip".equals(action)) {
-                if ("done".equals(action)) {
-                    List<String> interests = resolveSelections(session, "ob_interests", INTEREST_OPTIONS);
-                    if (interests.isEmpty()) {
-                        answer(callbackQuery.getId(), "Выбери хотя бы один жанр или нажми «Пропустить»");
-                        return;
-                    }
-                    user.setInterestsCsv(String.join(", ", interests));
-                }
-                user.setOnboardingStep(3);
-                userService.save(user);
-                answerSilently(callbackQuery.getId());
-                sendOnboardingGameSelection(user);
-            } else {
-                toggleSelection(session, "ob_interests", action);
-                editOnboardingInterestQuestion(callbackQuery, session);
-                answer(callbackQuery.getId(), "Выбор обновлён");
-            }
+            sendOnboardingGameSelection(user);
         } else if (sub.startsWith("game:")) {
             String gameName = sub.substring("game:".length());
             user.setOnboardingGame(gameName);
-            user.setOnboardingStep(4);
+            user.setOnboardingStep(2);
             userService.save(user);
             answerSilently(callbackQuery.getId());
             sendOnboardingQuestSuggestion(user, gameName);
@@ -2657,18 +2626,89 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String nickname = escape(user.getNickname());
         String age = user.getAge() != null ? String.valueOf(user.getAge()) : "не указан";
         String country = user.getCountry() != null ? escape(user.getCountry()) : "не указана";
+        String platforms = user.getPlatformsCsv() != null ? escape(user.getPlatformsCsv()) : "не указаны";
+        String genres = user.getInterestsCsv() != null ? escape(user.getInterestsCsv()) : "не указаны";
 
         sendText(user.getTelegramId(),
                 "✏️ <b>Редактировать профиль</b>\n\n"
                         + "👤 Никнейм: <b>" + nickname + "</b>\n"
                         + "🎂 Возраст: <b>" + age + "</b>\n"
-                        + "🌍 Страна: <b>" + country + "</b>",
+                        + "🌍 Страна: <b>" + country + "</b>\n"
+                        + "🎮 Платформы: <b>" + platforms + "</b>\n"
+                        + "🧩 Жанры: <b>" + genres + "</b>",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("✏️ Изменить никнейм", "profile:nickname")),
                         List.of(keyboardFactory.callback("🎂 " + (user.getAge() != null ? "Изменить возраст" : "Указать возраст"), "profile:edit_age")),
                         List.of(keyboardFactory.callback("🌍 " + (user.getCountry() != null ? "Изменить страну" : "Указать страну"), "profile:edit_country")),
+                        List.of(keyboardFactory.callback("🎮 " + (user.getPlatformsCsv() != null ? "Изменить платформы" : "Указать платформы"), "profile:edit_platforms")),
+                        List.of(keyboardFactory.callback("🧩 " + (user.getInterestsCsv() != null ? "Изменить жанры" : "Указать жанры"), "profile:edit_genres")),
                         List.of(keyboardFactory.callback("⬅️ Назад", "menu:profile"))
                 )));
+    }
+
+    private void sendProfilePlatformEdit(AppUser user, UserSession session) {
+        loadDisplayCsvToSession(session, "prof_platforms", user.getPlatformsCsv(), PLATFORM_OPTIONS);
+        List<String> selected = resolveSelections(session, "prof_platforms", PLATFORM_OPTIONS);
+        sendText(user.getTelegramId(),
+                "🎮 <b>Платформы</b>\n\nВыбери платформы, на которых играешь:\n\n"
+                        + "Выбрано: <b>" + escape(selected.isEmpty() ? "ничего" : String.join(", ", selected)) + "</b>",
+                profileSelectionKeyboard(PLATFORM_OPTIONS, selected, "profile:platform:", false));
+    }
+
+    private void editProfilePlatformEdit(CallbackQuery callbackQuery, UserSession session) {
+        List<String> selected = resolveSelections(session, "prof_platforms", PLATFORM_OPTIONS);
+        editRegistrationSelectionMessage(callbackQuery,
+                "🎮 <b>Платформы</b>\n\nВыбери платформы, на которых играешь:\n\n"
+                        + "Выбрано: <b>" + escape(selected.isEmpty() ? "ничего" : String.join(", ", selected)) + "</b>",
+                profileSelectionKeyboard(PLATFORM_OPTIONS, selected, "profile:platform:", false));
+    }
+
+    private void sendProfileGenreEdit(AppUser user, UserSession session) {
+        loadDisplayCsvToSession(session, "prof_genres", user.getInterestsCsv(), INTEREST_OPTIONS);
+        List<String> selected = resolveSelections(session, "prof_genres", INTEREST_OPTIONS);
+        sendText(user.getTelegramId(),
+                "🧩 <b>Жанры</b>\n\nВыбери игровые жанры, которые тебе нравятся:\n\n"
+                        + "Выбрано: <b>" + escape(selected.isEmpty() ? "ничего" : String.join(", ", selected)) + "</b>",
+                profileSelectionKeyboard(INTEREST_OPTIONS, selected, "profile:genre:", true));
+    }
+
+    private void editProfileGenreEdit(CallbackQuery callbackQuery, UserSession session) {
+        List<String> selected = resolveSelections(session, "prof_genres", INTEREST_OPTIONS);
+        editRegistrationSelectionMessage(callbackQuery,
+                "🧩 <b>Жанры</b>\n\nВыбери игровые жанры, которые тебе нравятся:\n\n"
+                        + "Выбрано: <b>" + escape(selected.isEmpty() ? "ничего" : String.join(", ", selected)) + "</b>",
+                profileSelectionKeyboard(INTEREST_OPTIONS, selected, "profile:genre:", true));
+    }
+
+    private InlineKeyboardMarkup profileSelectionKeyboard(Map<String, String> options, List<String> selected,
+                                                           String prefix, boolean withSkip) {
+        List<InlineKeyboardButton> buttons = new ArrayList<>();
+        for (Map.Entry<String, String> entry : options.entrySet()) {
+            boolean isSelected = selected.contains(entry.getValue());
+            String label = (isSelected ? "✅ " : "▫️ ") + entry.getValue();
+            buttons.add(keyboardFactory.callback(label, prefix + entry.getKey()));
+        }
+        buttons.add(keyboardFactory.callback("✅ Сохранить", prefix + "done"));
+        if (withSkip) {
+            buttons.add(keyboardFactory.callback("⏭️ Пропустить", prefix + "skip"));
+        }
+        buttons.add(keyboardFactory.callback("⬅️ Назад", "profile:edit"));
+        return keyboardFactory.smartLayout(buttons);
+    }
+
+    private void loadDisplayCsvToSession(UserSession session, String key, String displayCsv,
+                                          Map<String, String> options) {
+        if (displayCsv == null || displayCsv.isBlank()) {
+            session.getData().remove(key);
+            return;
+        }
+        Set<String> displayValues = java.util.Arrays.stream(displayCsv.split(","))
+                .map(String::trim).collect(java.util.stream.Collectors.toSet());
+        String codes = options.entrySet().stream()
+                .filter(e -> displayValues.contains(e.getValue()))
+                .map(Map.Entry::getKey)
+                .collect(java.util.stream.Collectors.joining(","));
+        session.getData().put(key, codes);
     }
 
     private void sendDailyBonus(CallbackQuery callbackQuery, AppUser user) {
