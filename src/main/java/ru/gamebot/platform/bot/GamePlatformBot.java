@@ -90,6 +90,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private static final Map<String, String> PLATFORM_OPTIONS = new LinkedHashMap<>();
     private static final Map<String, String> INTEREST_OPTIONS = new LinkedHashMap<>();
     private volatile String shopBannerFileId = null;
+    private volatile String hallOfFameFileId = null;
 
     static {
         PLATFORM_OPTIONS.put("ANDROID", "Android");
@@ -8594,14 +8595,41 @@ public class GamePlatformBot extends TelegramLongPollingBot {
           .append("👏 Поздравляем лучших игроков недели!\n")
           .append("🎯 Новая неделя уже началась — новые квесты, новые шансы попасть в топ.\n\n")
           .append("Присоединяйся → @").append(getBotUsername());
+
+        String caption = sb.toString();
+        String chatId = requiredChannelChatId();
+
+        // Пробуем отправить с баннером
         try {
-            SendMessage msg = new SendMessage();
-            msg.setChatId(requiredChannelChatId());
-            msg.setText(sb.toString());
-            msg.setParseMode("HTML");
-            execute(msg);
-        } catch (TelegramApiException e) {
-            log.error("Failed to post hall of fame to channel", e);
+            SendPhoto sendPhoto = new SendPhoto();
+            sendPhoto.setChatId(chatId);
+            sendPhoto.setCaption(caption);
+            sendPhoto.setParseMode("HTML");
+
+            if (hallOfFameFileId != null) {
+                sendPhoto.setPhoto(new InputFile(hallOfFameFileId));
+            } else {
+                try (java.io.InputStream is = getClass().getResourceAsStream("/hall_of_fame.png")) {
+                    if (is == null) throw new java.io.IOException("hall_of_fame.png not found");
+                    sendPhoto.setPhoto(new InputFile(new java.io.ByteArrayInputStream(is.readAllBytes()), "hall_of_fame.png"));
+                }
+            }
+
+            org.telegram.telegrambots.meta.api.objects.Message sent = execute(sendPhoto);
+            if (hallOfFameFileId == null && sent.getPhoto() != null && !sent.getPhoto().isEmpty()) {
+                hallOfFameFileId = sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to send hall of fame with banner, falling back to text", e);
+            try {
+                SendMessage msg = new SendMessage();
+                msg.setChatId(chatId);
+                msg.setText(caption);
+                msg.setParseMode("HTML");
+                execute(msg);
+            } catch (TelegramApiException ex) {
+                log.error("Failed to post hall of fame to channel", ex);
+            }
         }
     }
 
