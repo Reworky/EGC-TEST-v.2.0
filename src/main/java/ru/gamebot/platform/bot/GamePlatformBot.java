@@ -3471,6 +3471,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendWithdrawalMethodChoice(AppUser user) {
+        if (user.getCountry() == null || user.getCountry().isBlank()) {
+            sendText(user.getTelegramId(),
+                    "⚠️ <b>Для вывода средств необходимо указать страну.</b>\n\n"
+                    + "Перейдите в профиль → «✏️ Редактировать профиль» и укажите вашу страну.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("👤 Редактировать профиль", "profile:edit")),
+                            List.of(keyboardFactory.callback("❌ Отмена", "menu:balance"))
+                    )));
+            return;
+        }
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
         int ratioPercent = (int) Math.round(healthRatioService.getCurrentRatio() * 100);
         String text = "💸 <b>Вывод EXC</b>\n\n"
