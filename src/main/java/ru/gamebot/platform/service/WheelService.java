@@ -8,11 +8,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.util.Arrays;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.WheelSpinLog;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.WheelSpinLogRepository;
-import ru.gamebot.platform.service.RewardService;
 
 @Slf4j
 @Service
@@ -38,7 +38,6 @@ public class WheelService {
     private final WheelSpinLogRepository wheelSpinLogRepository;
     private final SinkShopService sinkShopService;
     private final ExcTransactionService excTx;
-    private final RewardService rewardService;
 
     public record SpinResult(String type, long excAmount, String label) {}
 
@@ -91,7 +90,12 @@ public class WheelService {
             case "AVATAR_FRAME" -> {
                 user.setAvatarFrameColor("#7C3AED");
                 user.setAvatarFrameImage("egc");
-                rewardService.addOwnedFrame(user, "egc");
+                String csv = user.getOwnedFramesCsv();
+                if (csv == null || csv.isBlank()) {
+                    user.setOwnedFramesCsv("egc");
+                } else if (!Arrays.asList(csv.split(",")).contains("egc")) {
+                    user.setOwnedFramesCsv(csv + ",egc");
+                }
                 label = "👑 Рамка аватара «EGC»";
             }
         }
