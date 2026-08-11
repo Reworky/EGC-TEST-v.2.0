@@ -12,6 +12,7 @@ import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.WheelSpinLog;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.WheelSpinLogRepository;
+import ru.gamebot.platform.service.RewardService;
 
 @Slf4j
 @Service
@@ -37,6 +38,7 @@ public class WheelService {
     private final WheelSpinLogRepository wheelSpinLogRepository;
     private final SinkShopService sinkShopService;
     private final ExcTransactionService excTx;
+    private final RewardService rewardService;
 
     public record SpinResult(String type, long excAmount, String label) {}
 
@@ -89,6 +91,7 @@ public class WheelService {
             case "AVATAR_FRAME" -> {
                 user.setAvatarFrameColor("#7C3AED");
                 user.setAvatarFrameImage("egc");
+                rewardService.addOwnedFrame(user, "egc");
                 label = "👑 Рамка аватара «EGC»";
             }
         }

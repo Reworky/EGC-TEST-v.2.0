@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getProfile, getWallet, getBattlePass, getAvatarUrl } from '../api/client';
+import { getProfile, getWallet, getBattlePass, getAvatarUrl, equipFrame, invalidateCache } from '../api/client';
 import AnimatedNumber from '../components/AnimatedNumber';
 import fireFrame from '../assets/frames/fire.png';
 import iceFrame from '../assets/frames/ice.png';
@@ -201,6 +201,69 @@ function XpBar({ xp, level, levelName }) {
   );
 }
 
+const FRAME_LABELS = { fire: '🔥 Огонь', ice: '❄️ Лёд', purple: '💜 Фиолет', gold: '👑 Золото', egc: '👑 EGC' };
+const FRAME_COLORS = { fire: '#ef4444', ice: '#38bdf8', purple: '#a855f7', gold: '#fbbf24', egc: '#7C3AED' };
+
+function FrameCollection({ ownedFrames, activeFrame, onEquip }) {
+  const [busy, setBusy] = useState(null);
+
+  async function handleEquip(key) {
+    if (key === activeFrame || busy) return;
+    setBusy(key);
+    try { await onEquip(key); } finally { setBusy(null); }
+  }
+
+  return (
+    <div style={{ margin: '0 16px 20px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: '14px 16px' }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>
+        Коллекция рамок
+      </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        {ownedFrames.map(key => {
+          const img = FRAME_IMAGES[key];
+          const color = FRAME_COLORS[key] || '#7C3AED';
+          const isActive = key === activeFrame;
+          const isLoading = busy === key;
+          return (
+            <button
+              key={key}
+              onClick={() => handleEquip(key)}
+              disabled={isActive || !!busy}
+              style={{
+                position: 'relative', width: 64, height: 64, borderRadius: 12, border: `2px solid ${isActive ? color : 'rgba(255,255,255,0.1)'}`,
+                background: isActive ? `${color}18` : 'rgba(255,255,255,0.04)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                gap: 2, cursor: isActive ? 'default' : 'pointer', transition: 'all 0.18s',
+                boxShadow: isActive ? `0 0 12px ${color}44` : 'none', padding: 0, outline: 'none',
+              }}
+            >
+              {img
+                ? <img src={img} alt={key} style={{ width: 44, height: 44, objectFit: 'contain', opacity: isLoading ? 0.4 : 1 }} />
+                : <div style={{ width: 36, height: 36, borderRadius: '50%', border: `3px solid ${color}`, opacity: isLoading ? 0.4 : 1 }} />
+              }
+              {isActive && (
+                <div style={{ position: 'absolute', bottom: 3, fontSize: 9, fontWeight: 700, color, letterSpacing: '0.04em' }}>
+                  ✓
+                </div>
+              )}
+              {isLoading && (
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}>
+                  <div style={{ width: 16, height: 16, border: `2px solid ${color}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {ownedFrames.length > 0 && (
+        <div style={{ marginTop: 8, fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>
+          Нажми на рамку чтобы надеть — бесплатно
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const [profile, setProfile] = useState(null);
   const [wallet, setWallet] = useState(null);
@@ -297,6 +360,20 @@ export default function ProfilePage() {
 
       {/* ── XP Bar ───────────────────────────────────────────── */}
       <XpBar xp={profile.xp} level={profile.level} levelName={profile.levelName} />
+
+      {/* ── Коллекция рамок ─────────────────────────────────── */}
+      {profile.ownedFrames?.length > 0 && (
+        <FrameCollection
+          ownedFrames={profile.ownedFrames}
+          activeFrame={profile.avatarFrameImage}
+          onEquip={async (key) => {
+            await equipFrame(key);
+            invalidateCache('profile');
+            const updated = await getProfile();
+            setProfile(updated);
+          }}
+        />
+      )}
 
       {/* ── Stats cards 2×2 ─────────────────────────────────── */}
       <div className="p-cards-grid">

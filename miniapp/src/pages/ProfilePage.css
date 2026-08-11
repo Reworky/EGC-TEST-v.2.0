@@ -285,3 +285,7 @@
   border-bottom: 0.5px solid rgba(255,255,255,0.05);
 }
 .p-extra-row:last-child { border-bottom: none; }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

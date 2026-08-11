@@ -112,6 +112,12 @@ export async function purchaseItem(id, userData) {
   return data;
 }
 
+export async function equipFrame(frameImage) {
+  const { data } = await api.post(`/api/profile/frame/${frameImage}`);
+  invalidateCache('profile');
+  return data;
+}
+
 export async function getMyRewards() {
   const { data } = await api.get('/api/profile/rewards');
   return data;

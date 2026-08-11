@@ -52,6 +52,7 @@ public class ShopController {
                     .statusNote(statusNote)
                     .locked(locked)
                     .userDataPrompt(item.getUserDataPrompt())
+                    .avatarFrameImage(item.getAvatarFrameImage())
                     .build();
         }).toList();
     }

@@ -1,5 +1,10 @@
 ALTER TABLE quest ADD COLUMN IF NOT EXISTS ticket_reward INT DEFAULT 0 NOT NULL;
 
+-- Коллекция купленных рамок аватара (CSV ключей, например "fire,ice,gold")
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS owned_frames_csv VARCHAR(500);
+-- Заполнить уже купленные рамки из текущего активного поля
+UPDATE app_users SET owned_frames_csv = avatar_frame_image WHERE avatar_frame_image IS NOT NULL AND owned_frames_csv IS NULL;
+
 -- Onboarding flow columns for app_users
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS onboarding_step INT DEFAULT 0;
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE;

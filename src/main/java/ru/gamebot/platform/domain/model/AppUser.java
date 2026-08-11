@@ -60,6 +60,8 @@ public class AppUser {
     private String avatarFrameColor;
     /** Ключ картинки рамки аватара (например "fire"), купленной в магазине. null = обычная цветная обводка. */
     private String avatarFrameImage;
+    /** CSV-список ключей рамок, которыми владеет пользователь (например "fire,ice,gold"). */
+    private String ownedFramesCsv;
 
     // Antifaud
     @Column(columnDefinition = "boolean default false")

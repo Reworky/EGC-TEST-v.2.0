@@ -2,6 +2,7 @@ package ru.gamebot.platform.service;
 
 import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -74,6 +75,11 @@ public class RewardService {
         shopLimitService.checkAllLimits(lockedUser, rewardItem);
 
         boolean isAvatarFrame = "avatar_frame".equals(rewardItem.getPurchaseGroup());
+
+        if (isAvatarFrame && isFrameOwned(lockedUser, rewardItem.getAvatarFrameImage())) {
+            throw new IllegalArgumentException("Эта рамка уже в вашей коллекции. Переключитесь бесплатно в профиле.");
+        }
+
         long price = effectivePrice(rewardItem);
 
         // 3.3 Withdrawal limit check (min 5000 EXC per model)
@@ -112,8 +118,8 @@ public class RewardService {
         if (rewardItem.getAvatarFrameColor() != null) {
             // Цифровая косметика — применяется мгновенно, без очереди на одобрение администратора
             lockedUser.setAvatarFrameColor(rewardItem.getAvatarFrameColor());
-            // Картинка рамки заменяет предыдущую (в т.ч. сбрасывает её, если новая рамка — просто цвет без картинки)
             lockedUser.setAvatarFrameImage(rewardItem.getAvatarFrameImage());
+            addOwnedFrame(lockedUser, rewardItem.getAvatarFrameImage());
             userService.save(lockedUser);
             request.setStatus(RewardRequestStatus.APPROVED);
         } else {
@@ -429,6 +435,21 @@ public class RewardService {
         request.setCreatedAt(LocalDateTime.now());
         request.setDisplayId(rewardRequestRepository.findMaxWithdrawalDisplayId() + 1);
         return rewardRequestRepository.save(request);
+    }
+
+    public boolean isFrameOwned(AppUser user, String frameKey) {
+        if (frameKey == null || user.getOwnedFramesCsv() == null) return false;
+        return Arrays.asList(user.getOwnedFramesCsv().split(",")).contains(frameKey);
+    }
+
+    public void addOwnedFrame(AppUser user, String frameKey) {
+        if (frameKey == null) return;
+        String csv = user.getOwnedFramesCsv();
+        if (csv == null || csv.isBlank()) {
+            user.setOwnedFramesCsv(frameKey);
+        } else if (!Arrays.asList(csv.split(",")).contains(frameKey)) {
+            user.setOwnedFramesCsv(csv + "," + frameKey);
+        }
     }
 
 }

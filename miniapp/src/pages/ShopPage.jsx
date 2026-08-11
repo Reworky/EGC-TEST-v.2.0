@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getShopItems, getShopStats, purchaseItem, getMyRewards, getProfile, getPerksState, purchasePerk, sendGiftBoost, sendExcTransfer, cancelReward } from '../api/client';
+import { getShopItems, getShopStats, purchaseItem, getMyRewards, getProfile, getPerksState, purchasePerk, sendGiftBoost, sendExcTransfer, cancelReward, equipFrame } from '../api/client';
 import BackButton from '../components/BackButton';
 import './QuestsPage.css';
 import './ShopPage.css';
@@ -49,10 +49,15 @@ const STATUS_COLORS = {
   CANCELLED: '#888',
 };
 
-function ShopItemCard({ item, expanded, onToggle, onPurchased }) {
+function ShopItemCard({ item, expanded, onToggle, onPurchased, ownedFrames, activeFrame }) {
   const [userData, setUserData] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
+
+  const frameKey = item.avatarFrameImage;
+  const isFrame = !!frameKey;
+  const isOwned = isFrame && ownedFrames?.includes(frameKey);
+  const isActive = isFrame && activeFrame === frameKey;
 
   async function handleBuy() {
     if (item.userDataPrompt && !userData.trim()) {
@@ -73,17 +78,34 @@ function ShopItemCard({ item, expanded, onToggle, onPurchased }) {
     }
   }
 
+  async function handleEquip() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      await equipFrame(frameKey);
+      setMessage('✅ Рамка надета!');
+      onPurchased();
+    } catch {
+      setMessage('Ошибка. Попробуйте ещё раз.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className={`shop-card ${item.locked ? 'shop-card-locked' : ''}`} onClick={() => onToggle(item.id)}>
       <div className="shop-top">
         <div className="shop-title">{item.title}</div>
-        <div className="shop-price">{item.effectivePrice.toLocaleString()} EXC</div>
+        {isOwned
+          ? <div className="shop-price" style={{ color: isActive ? '#22c55e' : '#a855f7' }}>{isActive ? '✓ Надета' : 'В коллекции'}</div>
+          : <div className="shop-price">{item.effectivePrice.toLocaleString()} EXC</div>
+        }
       </div>
       {item.statusNote && <div className="shop-status">{item.statusNote}</div>}
       {expanded && (
         <div className="shop-detail" onClick={e => e.stopPropagation()}>
           <p className="shop-desc">{item.description}</p>
-          {item.userDataPrompt && (
+          {!isOwned && item.userDataPrompt && (
             <>
               <div className="quest-section-title">{item.userDataPrompt}</div>
               <input
@@ -95,9 +117,16 @@ function ShopItemCard({ item, expanded, onToggle, onPurchased }) {
               />
             </>
           )}
-          <button className="quest-btn" disabled={busy || item.locked} onClick={handleBuy}>
-            {busy ? 'Секунду...' : item.locked ? 'Недоступно' : 'Купить'}
-          </button>
+          {isOwned ? (
+            <button className="quest-btn" disabled={busy || isActive} onClick={handleEquip}
+              style={isActive ? { opacity: 0.5 } : {}}>
+              {busy ? 'Секунду...' : isActive ? 'Уже надета' : 'Надеть'}
+            </button>
+          ) : (
+            <button className="quest-btn" disabled={busy || item.locked} onClick={handleBuy}>
+              {busy ? 'Секунду...' : item.locked ? 'Недоступно' : 'Купить'}
+            </button>
+          )}
           {message && <div className="quest-message">{message}</div>}
         </div>
       )}
@@ -361,12 +390,14 @@ function GiftCard({ expanded, onToggle }) {
 function PerksView({ expanded, onToggle }) {
   const [state, setState] = useState(null);
   const [frames, setFrames] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [error, setError] = useState(null);
 
   function reload() {
     setError(null);
     getPerksState().then(setState).catch(() => setError('Не удалось загрузить предметы. Попробуйте ещё раз.'));
     getShopItems().then(items => setFrames(items.filter(i => i.category === 'Кастомизация'))).catch(() => setFrames([]));
+    getProfile().then(setProfile).catch(() => {});
   }
 
   useEffect(() => { reload(); }, []);
@@ -405,6 +436,8 @@ function PerksView({ expanded, onToggle }) {
                 expanded={expanded === item.id}
                 onToggle={onToggle}
                 onPurchased={reload}
+                ownedFrames={profile?.ownedFrames}
+                activeFrame={profile?.avatarFrameImage}
               />
             ))}
           </div>

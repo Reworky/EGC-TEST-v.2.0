@@ -1,5 +1,6 @@
 package ru.gamebot.platform.api.dto;
 
+import java.util.List;
 import lombok.Builder;
 import lombok.Data;
 
@@ -25,4 +26,6 @@ public class UserProfileDto {
     private String avatarFrameColor;
     /** Ключ картинки рамки аватара (например "fire"), купленной в магазине. null = обычная цветная обводка. */
     private String avatarFrameImage;
+    /** Список ключей всех рамок, которыми владеет пользователь (["fire", "ice", "gold"]). */
+    private List<String> ownedFrames;
 }

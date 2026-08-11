@@ -18,4 +18,6 @@ public class RewardItemDto {
     private boolean locked;
     /** Если задано — перед покупкой нужно запросить у игрока эти данные (см. userDataPrompt). */
     private String userDataPrompt;
+    /** Ключ рамки аватара (например "fire") — заполнен только для рамок (purchase_group=avatar_frame). */
+    private String avatarFrameImage;
 }
