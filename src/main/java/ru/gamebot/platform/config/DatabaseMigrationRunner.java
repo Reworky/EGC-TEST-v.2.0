@@ -40,6 +40,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         seedGtaVCatalog();
         deleteGamesAndQuests();
         fixNullDurationText();
+        backfillOwnedFrames();
     }
 
     private void deduplicateNicknames() {
@@ -234,6 +235,17 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             log.info("[DBMigration] Inserted EGC avatar frame");
         } catch (Exception e) {
             log.error("[DBMigration] seedEgcAvatarFrame failed: {}", e.getMessage());
+        }
+    }
+
+    private void backfillOwnedFrames() {
+        try {
+            int updated = jdbcTemplate.update(
+                "UPDATE app_users SET owned_frames_csv = avatar_frame_image " +
+                "WHERE avatar_frame_image IS NOT NULL AND owned_frames_csv IS NULL");
+            if (updated > 0) log.info("[DBMigration] backfillOwnedFrames: {} users updated", updated);
+        } catch (Exception e) {
+            log.warn("[DBMigration] backfillOwnedFrames failed: {}", e.getMessage());
         }
     }
 
