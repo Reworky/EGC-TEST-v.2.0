@@ -23,7 +23,8 @@ const DEFAULT_RANK = { primary: '#9CA3AF', icon: '🥚' };
 
 const TIER_THRESHOLDS = [0, 1000, 5000, 15000, 35000, 75000, 150000, 300000];
 const FRAME_IMAGES = { fire: fireFrame, ice: iceFrame, purple: purpleFrame, gold: goldFrame, egc: egcFrame };
-const FRAME_SIZES = { fire: 122, ice: 120, purple: 118, gold: 126, egc: 128 };
+const FRAME_SIZES = { fire: 130, ice: 128, purple: 126, gold: 134, egc: 160 };
+const FRAME_BLEND = { egc: 'screen' };
 
 // ── SVG illustrations ────────────────────────────────────────
 const SVG_EXC = (
@@ -318,14 +319,14 @@ export default function ProfilePage() {
         <div className="p-hero-content">
           {/* Avatar */}
           <div style={{ position: 'relative', display: 'inline-block' }}>
-            <div className="p-avatar" style={{ borderColor: ringColor, color: ringColor, background: avatarUrl ? 'transparent' : `${ringColor}22` }}>
+            <div className="p-avatar" style={{ borderColor: frameImage ? 'transparent' : ringColor, color: ringColor, background: avatarUrl ? 'transparent' : `${ringColor}22` }}>
               {avatarUrl
                 ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
                 : (profile.nickname?.[0]?.toUpperCase() || '?')}
             </div>
-            <div className="p-avatar-ring" style={{ borderColor: `${ringColor}44` }} />
+            {!frameImage && <div className="p-avatar-ring" style={{ borderColor: `${ringColor}44` }} />}
             {frameImage && (
-              <img src={frameImage} alt="" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: frameSize, height: frameSize, pointerEvents: 'none' }} />
+              <img src={frameImage} alt="" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: frameSize, height: frameSize, pointerEvents: 'none', mixBlendMode: FRAME_BLEND[profile.avatarFrameImage] || 'normal' }} />
             )}
           </div>
 
