@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "deploy": "npm run build && npx wrangler pages deploy dist"
+    "deploy": "npm run build && CLOUDFLARE_ACCOUNT_ID=3314ff26e74f44273245950aca19fa12 npx wrangler pages deploy dist"
   },
   "dependencies": {
     "@tabler/icons-webfont": "^3.44.0",
