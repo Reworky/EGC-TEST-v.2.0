@@ -545,11 +545,11 @@ public class UserService {
     }
 
     public long countRegisteredByTrafficSource(String code) {
-        return appUserRepository.countByTrafficSourceCodeAndRegistrationCompletedTrue(code);
+        return appUserRepository.countByTrafficSourceCodeAndProfileCompletedTrue(code);
     }
 
     public long countActivatedByTrafficSource(String code) {
-        return appUserRepository.countByTrafficSourceCodeAndWelcomeBonusPaidTrue(code);
+        return appUserRepository.countByTrafficSourceCodeAndRegistrationCompletedTrue(code);
     }
 
     public List<AppUser> allUsersSorted() {

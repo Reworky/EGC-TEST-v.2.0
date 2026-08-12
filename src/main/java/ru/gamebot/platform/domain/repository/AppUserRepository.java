@@ -57,6 +57,8 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     long countByTrafficSourceCode(String trafficSourceCode);
 
+    long countByTrafficSourceCodeAndProfileCompletedTrue(String trafficSourceCode);
+
     long countByTrafficSourceCodeAndRegistrationCompletedTrue(String trafficSourceCode);
 
     long countByTrafficSourceCodeAndWelcomeBonusPaidTrue(String trafficSourceCode);
