@@ -3471,10 +3471,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendWithdrawalMethodChoice(AppUser user) {
-        if (user.getCountry() == null || user.getCountry().isBlank()) {
+        boolean noCountry = user.getCountry() == null || user.getCountry().isBlank();
+        boolean noAge = user.getAge() == null;
+        if (noCountry || noAge) {
+            String missing = (noCountry && noAge) ? "страну и возраст" : (noCountry ? "страну" : "возраст");
             sendText(user.getTelegramId(),
-                    "⚠️ <b>Для вывода средств необходимо указать страну.</b>\n\n"
-                    + "Перейдите в профиль → «✏️ Редактировать профиль» и укажите вашу страну.",
+                    "⚠️ <b>Для вывода средств необходимо указать " + missing + ".</b>\n\n"
+                    + "Перейдите в профиль → «✏️ Редактировать профиль» и заполните данные.",
                     keyboardFactory.rowsLayout(List.of(
                             List.of(keyboardFactory.callback("👤 Редактировать профиль", "profile:edit")),
                             List.of(keyboardFactory.callback("❌ Отмена", "menu:balance"))

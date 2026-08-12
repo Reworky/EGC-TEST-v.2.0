@@ -140,8 +140,8 @@ public class WalletController {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
-        if (user.getCountry() == null || user.getCountry().isBlank()) {
-            return errorResponse("Укажите страну в профиле перед выводом средств.");
+        if (user.getCountry() == null || user.getCountry().isBlank() || user.getAge() == null) {
+            return errorResponse("Укажите страну и возраст в профиле перед выводом средств.");
         }
         String requisites = body.getRequisites() != null ? body.getRequisites().trim() : "";
         if (requisites.length() < 6) {
@@ -174,8 +174,8 @@ public class WalletController {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
-        if (user.getCountry() == null || user.getCountry().isBlank()) {
-            return errorResponse("Укажите страну в профиле перед выводом средств.");
+        if (user.getCountry() == null || user.getCountry().isBlank() || user.getAge() == null) {
+            return errorResponse("Укажите страну и возраст в профиле перед выводом средств.");
         }
         String wallet = body.getWalletAddress() != null ? body.getWalletAddress().trim() : "";
         if (wallet.length() < 20 || wallet.contains(" ")) {
