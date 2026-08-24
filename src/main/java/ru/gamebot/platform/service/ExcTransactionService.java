@@ -1,5 +1,6 @@
 package ru.gamebot.platform.service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -52,6 +53,10 @@ public class ExcTransactionService {
 
     public long countAll(AppUser user) {
         return repo.countByUser(user);
+    }
+
+    public long sumEarnedSince(LocalDateTime since) {
+        return repo.sumEarnedSince(since);
     }
 
     public static String typeLabel(String type) {

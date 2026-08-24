@@ -6707,6 +6707,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long moderated = questService.countModerated();
         String completionRate = moderated > 0 ? (totalApproved * 100 / moderated) + "%" : "—";
 
+        long earnedWeek = excTransactionService.sumEarnedSince(nowDt.minusDays(7));
         long totalPaidOut = rewardService.totalPaidOutExc();
         long uniqueRecipients = rewardService.countUniqueWithdrawalRecipients();
         long[] rubAndTon = rewardService.totalPaidOutRubAndTonRub();
@@ -6751,6 +6752,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🎯 Completion rate: <b>" + completionRate + "</b>\n"
                         + "🗺️ Активных квестов: <b>" + totalQuestsCreated + "</b>\n"
                         + "📥 На модерации: <b>" + pendingQuests + "</b>\n\n"
+                        + "💰 Заработано за 7 дней: <b>" + fmtExc(earnedWeek) + " EXC</b>\n\n"
                         + "💸 <b>Выплаты</b>\n"
                         + "💸 Выплачено: <b>" + fmtExc(totalPaidOut) + " EXC" + dPaidOut + "</b>\n"
                         + "💵 В рублях: <b>" + fmtExc(totalPaidRub) + " ₽</b>\n"
