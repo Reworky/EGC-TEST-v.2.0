@@ -1786,6 +1786,54 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         null);
                 sendAdminUserCard(user, targetId, blockPage, "✅ Пользователь заблокирован.");
             }
+            case MULTIACC_BLOCK_OTHER_ID -> {
+                Long targetId = session.getQuestId();
+                String query = text.trim();
+                AppUser other = resolveUserBySearch(query);
+                if (other == null) {
+                    sendText(user.getTelegramId(), "❌ Пользователь «" + escape(query) + "» не найден (ни по TG ID, ни по нику). Введите ещё раз:", cancelKeyboard());
+                    return;
+                }
+                if (other.getTelegramId().equals(targetId)) {
+                    sendText(user.getTelegramId(), "⚠️ Это тот же самый аккаунт. Введите ID/ник другого аккаунта:", cancelKeyboard());
+                    return;
+                }
+                session.getData().put("multiaccOtherId", String.valueOf(other.getTelegramId()));
+                session.setState(SessionState.MULTIACC_BLOCK_REASON);
+                sendText(user.getTelegramId(),
+                        "🚫 <b>Блокировка мультиаккаунта</b>\n\n"
+                                + "Второй аккаунт: " + escape(displayUserName(other)) + " (ID: " + other.getTelegramId() + ")\n\n"
+                                + "Напишите причину блокировки — она будет сохранена и отправлена обоим пользователям:",
+                        cancelKeyboard());
+            }
+            case MULTIACC_BLOCK_REASON -> {
+                Long targetId = session.getQuestId();
+                Long otherId = Long.valueOf(session.getData().get("multiaccOtherId"));
+                int blockPage = parseInteger(session.getData().getOrDefault("blockPage", "0"));
+                String reason = text.trim();
+                session.reset();
+                AppUser target = userService.findByTelegramId(targetId).orElse(null);
+                AppUser other = userService.findByTelegramId(otherId).orElse(null);
+                if (target == null || other == null) {
+                    sendText(user.getTelegramId(), "⚠️ Один из пользователей не найден.", backMenuKeyboard("admin:users:0"));
+                    return;
+                }
+                userService.blockAndConfiscate(targetId, reason);
+                userService.blockAndConfiscate(otherId, reason);
+                sendText(targetId,
+                        "🚫 <b>Ваш аккаунт заблокирован</b>\n\n"
+                                + "Причина: <i>" + escape(reason) + "</i>\n\n"
+                                + "Если считаете это ошибкой — обратитесь в поддержку клуба.",
+                        null);
+                sendText(otherId,
+                        "🚫 <b>Ваш аккаунт заблокирован</b>\n\n"
+                                + "Причина: <i>" + escape(reason) + "</i>\n\n"
+                                + "Если считаете это ошибкой — обратитесь в поддержку клуба.",
+                        null);
+                sendAdminUserCard(user, targetId, blockPage,
+                        "✅ Оба аккаунта заблокированы, EXC конфискован: "
+                                + escape(displayUserName(target)) + " и " + escape(displayUserName(other)) + ".");
+            }
             case QUEST_REJECT_COMMENT -> {
                 Long submissionId = session.getQuestId();
                 session.reset();
@@ -7729,6 +7777,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if ("multiacc".equals(action)) {
+            AppUser target = userService.findByTelegramId(telegramId).orElse(null);
+            if (target == null) {
+                sendText(admin.getTelegramId(), "⚠️ Пользователь не найден.", backMenuKeyboard("admin:users:0"));
+                return;
+            }
+            session.reset();
+            session.setQuestId(telegramId);
+            session.getData().put("blockPage", String.valueOf(page == null ? 0 : page));
+            session.setState(SessionState.MULTIACC_BLOCK_OTHER_ID);
+            sendText(admin.getTelegramId(),
+                    "🚫 <b>Блокировка мультиаккаунта</b>\n\n"
+                            + "👤 " + escape(displayUserName(target)) + " (ID: " + telegramId + ")\n\n"
+                            + "Введите TG ID или ник <b>второго</b> аккаунта того же человека:",
+                    cancelKeyboard());
+            return;
+        }
+
         if ("unblock".equals(action)) {
             AppUser target = userService.findByTelegramId(telegramId).orElse(null);
             if (target == null) {
@@ -8126,6 +8192,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(target.isBlocked()
                         ? keyboardFactory.callback("✅ Разблокировать", "admin:user:unblock:" + telegramId + ":" + page)
                         : keyboardFactory.callback("🚫 Заблокировать", "admin:user:block:" + telegramId + ":" + page)),
+                List.of(keyboardFactory.callback("🚫 Заблокировать как мультиаккаунт", "admin:user:multiacc:" + telegramId + ":" + page)),
                 List.of(
                         keyboardFactory.callback("🎁 Бонус", "admin:user:bonus:" + telegramId + ":" + page),
                         keyboardFactory.callback("➖ Списание", "admin:user:debit:" + telegramId + ":" + page)
