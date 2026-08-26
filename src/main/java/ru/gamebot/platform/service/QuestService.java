@@ -375,7 +375,12 @@ public class QuestService {
             if (latest.getStatus() == SubmissionStatus.PENDING) {
                 return QuestActionResult.of(QuestActionStatus.ALREADY_PENDING, 0);
             }
-            // APPROVED: квест можно пройти повторно после кулдауна — не блокируем здесь,
+            // Внешние (auto-approve) квесты одноразовые: пересдать после одобрения нельзя —
+            // иначе повторный постбек (ретрай сети) на новый DRAFT начислит EXC второй раз.
+            if (latest.getStatus() == SubmissionStatus.APPROVED && quest.isExternalAutoApprove()) {
+                return QuestActionResult.of(QuestActionStatus.ALREADY_APPROVED, 0);
+            }
+            // Остальные APPROVED-квесты можно пройти повторно после кулдауна — не блокируем здесь,
             // isSameQuestCooldownActive ниже покажет корректный статус пока кулдаун активен.
             if (latest.getStatus() == SubmissionStatus.REJECTED || latest.getStatus() == SubmissionStatus.NEEDS_INFO) {
                 return QuestActionResult.of(QuestActionStatus.HAS_REJECTED_REPORT, 0);

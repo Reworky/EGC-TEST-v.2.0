@@ -2957,7 +2957,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             buttons.add(keyboardFactory.callback("🚀 Взять", "quest:take:" + questId));
         }
         if (hasActiveSubmission) {
-            buttons.add(keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
+            buttons.add(quest.isExternalAutoApprove()
+                    ? keyboardFactory.callback("⏳ Ждём подтверждения от партнёра", "noop")
+                    : keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
         }
         if (nextQuestData != null) {
             buttons.add(keyboardFactory.callback("➡️ Следующий квест", nextQuestData));
@@ -3014,7 +3016,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         Quest freshQuest = questService.getQuest(questId);
         QuestSubmission submission = result.submission();
         List<InlineKeyboardButton> buttons = new ArrayList<>();
-        buttons.add(keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
+        buttons.add(freshQuest.isExternalAutoApprove()
+                ? keyboardFactory.callback("⏳ Ждём подтверждения от партнёра", "noop")
+                : keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
         buttons.add(keyboardFactory.callback("📂 Мои квесты", "menu:myquests"));
         buttons.add(keyboardFactory.callback("🏠 Меню", "menu:main"));
         if (isEffectiveAdmin(user)) {
@@ -3048,6 +3052,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         ? "⌛ Срок выполнения квеста истёк. Вы не успели сдать отчёт вовремя."
                         : "🧭 Этот квест уже добавлен в работу. Ниже оставил карточку с кнопкой для отчёта.";
             }
+            case ALREADY_APPROVED when quest.isExternalAutoApprove() ->
+                    "✅ Этот квест уже выполнен и одобрен — награда начислена, повторно пройти его нельзя.";
             case ALREADY_PENDING, ALREADY_APPROVED ->
                     "📌 По этому квесту уже есть активный прогресс. Используйте карточку ниже, чтобы посмотреть статус или отправить отчёт.";
             case HAS_REJECTED_REPORT ->
