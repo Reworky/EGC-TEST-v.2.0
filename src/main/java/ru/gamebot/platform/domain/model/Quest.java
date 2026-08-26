@@ -61,6 +61,9 @@ public class Quest {
     @Column(columnDefinition = "boolean default false")
     private boolean externalAutoApprove;
 
+    /** ID оффера в actionpay (макрос {offer} в постбеке) — по нему постбек находит нужный квест среди нескольких активных. */
+    private String externalOfferId;
+
     private String photoFileId;
     private LocalDateTime createdAt;
 }

@@ -1205,9 +1205,41 @@ public class QuestSeeder implements CommandLineRunner {
             wowQuest.setParticipantLimit(1000);
             wowQuest.setActive(true);
             wowQuest.setExternalAutoApprove(true);
+            wowQuest.setExternalOfferId("14951");
             wowQuest.setCreatedAt(LocalDateTime.now());
             questRepository.save(wowQuest);
             log.info("[QuestSeeder] Created external quest: World of Warships (actionpay)");
+        } else {
+            // Бэкафилл ID оффера для уже созданных ранее записей (до появления этого поля)
+            questRepository.findFirstByTitleAndGameName("Зарегистрируйся в World of Warships", "World of Warships")
+                    .filter(q -> q.getExternalOfferId() == null)
+                    .ifPresent(q -> { q.setExternalOfferId("14951"); questRepository.save(q); });
+        }
+
+        // ── Внешний CPA-квест: Skyeng (actionpay) ───────────────────────────────────
+        gameCatalogService.setDifficultyMode("Skyeng", "FLAT", 2000L, 0);
+        if (questRepository.findFirstByTitleAndGameName("Пройди вводный урок в Skyeng", "Skyeng").isEmpty()) {
+            Quest skyengQuest = new Quest();
+            skyengQuest.setTitle("Пройди вводный урок в Skyeng");
+            skyengQuest.setGameName("Skyeng");
+            skyengQuest.setPlatform("Онлайн");
+            skyengQuest.setDurationDays(50);
+            skyengQuest.setDurationText("50 дней");
+            skyengQuest.setRewardXp(0);
+            skyengQuest.setRewardCoins(2000);
+            skyengQuest.setDescription("Запишись и пройди бесплатный вводный урок английского в Skyeng по своей персональной ссылке.");
+            skyengQuest.setInstruction("🔗 Перейди по своей персональной ссылке и запишись на бесплатный вводный урок:\n"
+                    + "https://apartssa.com/click/6a8f20ce2bfa81327b132c34/186462/360227/{TG_ID}\n\n"
+                    + "Важно: нужно реально пройти вводный урок, а не просто оставить заявку — иначе партнёр не подтвердит выполнение.");
+            skyengQuest.setRequirements("Подтверждение приходит от партнёра автоматически — обычно за несколько дней, иногда до 50. "
+                    + "Отчёт отправлять не нужно, EXC начислится сам, как только придёт подтверждение.");
+            skyengQuest.setParticipantLimit(1000);
+            skyengQuest.setActive(true);
+            skyengQuest.setExternalAutoApprove(true);
+            skyengQuest.setExternalOfferId("17271");
+            skyengQuest.setCreatedAt(LocalDateTime.now());
+            questRepository.save(skyengQuest);
+            log.info("[QuestSeeder] Created external quest: Skyeng (actionpay)");
         }
     }
 

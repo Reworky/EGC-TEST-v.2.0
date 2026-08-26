@@ -41,7 +41,8 @@ public class PostbackController {
             @RequestParam(required = false) String token,
             @RequestParam(required = false) String subaccount,
             @RequestParam(required = false) String event,
-            @RequestParam(required = false) String uniqueid) {
+            @RequestParam(required = false) String uniqueid,
+            @RequestParam(required = false) String offer) {
 
         if (expectedToken == null || expectedToken.isBlank() || !expectedToken.equals(token)) {
             log.warn("[ActionPay] Postback rejected: bad token");
@@ -70,10 +71,14 @@ public class PostbackController {
             return ResponseEntity.ok("user not found");
         }
 
-        Quest quest = questRepository.findFirstByExternalAutoApproveTrueAndActiveTrue().orElse(null);
+        if (offer == null || offer.isBlank()) {
+            log.warn("[ActionPay] Postback rejected: missing offer id, subaccount={}", subaccount);
+            return ResponseEntity.badRequest().body("missing offer");
+        }
+        Quest quest = questRepository.findFirstByExternalAutoApproveTrueAndActiveTrueAndExternalOfferId(offer.trim()).orElse(null);
         if (quest == null) {
-            log.error("[ActionPay] Postback received but no active external quest configured");
-            return ResponseEntity.ok("no active external quest");
+            log.error("[ActionPay] Postback received for unknown/inactive offer id={}, subaccount={}", offer, subaccount);
+            return ResponseEntity.ok("no active quest for this offer");
         }
 
         QuestSubmission existing = questService.getLatestSubmission(user, quest);

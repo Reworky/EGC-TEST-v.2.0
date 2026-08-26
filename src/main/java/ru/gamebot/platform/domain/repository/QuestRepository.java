@@ -36,5 +36,5 @@ public interface QuestRepository extends JpaRepository<Quest, Long> {
     @Query("SELECT q FROM Quest q WHERE q.active = true AND LOWER(q.category) = 'лёгкие' ORDER BY q.createdAt DESC")
     List<Quest> findAllActiveEasyQuests();
 
-    java.util.Optional<Quest> findFirstByExternalAutoApproveTrueAndActiveTrue();
+    java.util.Optional<Quest> findFirstByExternalAutoApproveTrueAndActiveTrueAndExternalOfferId(String externalOfferId);
 }
