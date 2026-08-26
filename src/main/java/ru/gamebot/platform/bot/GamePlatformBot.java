@@ -3008,8 +3008,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         long weeklyCount = questService.getWeeklyCompletionsOfType(user, quest);
-        String notice = "🚀 Квест активен! Приступайте к игре, когда выполните задание, отправьте отчёт прямо из этой карточки.";
-        if (weeklyCount >= 3) {
+        String notice = quest.isExternalAutoApprove()
+                ? "🚀 Квест активен! Перейди по своей ссылке ниже — отчёт отправлять не нужно, EXC начислится автоматически."
+                : "🚀 Квест активен! Приступайте к игре, когда выполните задание, отправьте отчёт прямо из этой карточки.";
+        if (!quest.isExternalAutoApprove() && weeklyCount >= 3) {
             notice += "\n\n⚠️ Вы уже выполнили 3+ таких квеста за неделю — награда EXC будет снижена на 50%.";
         }
 
@@ -3040,7 +3042,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🏆 <b>Награда</b>\n"
                         + "✨ +" + freshQuest.getRewardXp() + " XP\n"
                         + "🪙 +" + freshQuest.getRewardCoins() + " монет"
-                        + (!freshQuest.isSponsored() && !"UGC".equalsIgnoreCase(freshQuest.getGameName()) && freshQuest.getTicketReward() > 0 ? "\n🎟 +" + freshQuest.getTicketReward() + " билет(а) для Колеса фортуны" : ""),
+                        + (!freshQuest.isSponsored() && !"UGC".equalsIgnoreCase(freshQuest.getGameName()) && freshQuest.getTicketReward() > 0 ? "\n🎟 +" + freshQuest.getTicketReward() + " билет(а) для Колеса фортуны" : "")
+                        + (freshQuest.isExternalAutoApprove()
+                            ? "\n\n📎 <b>Что нужно сделать:</b>\n" + escape(personalizeInstruction(freshQuest.getInstruction(), user.getTelegramId()))
+                            : ""),
                 keyboardFactory.smartLayout(buttons));
     }
 
