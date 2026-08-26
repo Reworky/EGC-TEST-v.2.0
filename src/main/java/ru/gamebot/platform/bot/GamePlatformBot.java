@@ -2968,6 +2968,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         String sponsorBadge = quest.isSponsored() ? "💎 <b>Спонсорский квест</b>\n" : "";
         boolean questFlat = gameCatalogService.isFlat(quest.getGameName());
+        String personalizedInstruction = personalizeInstruction(quest.getInstruction(), user.getTelegramId());
         sendText(user.getTelegramId(),
                 (notice == null ? "" : notice + "\n\n")
                         + sponsorBadge
@@ -2982,10 +2983,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + (!quest.isSponsored() && !"UGC".equalsIgnoreCase(quest.getGameName()) && quest.getTicketReward() > 0 ? "🎟 +" + quest.getTicketReward() + " билет(а) для Колеса фортуны\n" : "")
                         + "\n"
                         + "📝 <b>Суть задания:</b>\n" + escape(quest.getDescription()) + "\n\n"
-                        + (quest.getInstruction() != null && !quest.getInstruction().isBlank()
-                            ? (quest.isSponsored() ? "📎 <b>Ссылки:</b>\n" : "📎 <b>Что нужно сделать:</b>\n") + escape(quest.getInstruction()) + (quest.isSponsored() ? "" : "\n\n✅ <b>Что примет модерация:</b>\n" + escape(quest.getRequirements()))
-                            : (quest.isSponsored() ? "" : "📎 <b>Что нужно сделать:</b>\n" + escape(quest.getInstruction()) + "\n\n✅ <b>Что примет модерация:</b>\n" + escape(quest.getRequirements()))),
+                        + (personalizedInstruction != null && !personalizedInstruction.isBlank()
+                            ? (quest.isSponsored() ? "📎 <b>Ссылки:</b>\n" : "📎 <b>Что нужно сделать:</b>\n") + escape(personalizedInstruction)
+                                + (quest.isSponsored() ? "" : (quest.isExternalAutoApprove() ? "\n\nℹ️ " : "\n\n✅ <b>Что примет модерация:</b>\n") + escape(quest.getRequirements()))
+                            : (quest.isSponsored() ? "" : "📎 <b>Что нужно сделать:</b>\n" + escape(personalizedInstruction) + "\n\n✅ <b>Что примет модерация:</b>\n" + escape(quest.getRequirements()))),
                 verticalWithBackMenu(buttons, backText, backData));
+    }
+
+    /** Подставляет telegram_id вместо плейсхолдера {TG_ID} в тексте инструкции внешних (actionpay и т.п.) квестов. */
+    private String personalizeInstruction(String instruction, Long telegramId) {
+        return instruction == null ? null : instruction.replace("{TG_ID}", String.valueOf(telegramId));
     }
 
     private void handleTakeQuest(CallbackQuery callbackQuery, AppUser user, Long questId) {
@@ -8512,6 +8519,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyModeratorsAboutSubmission(event.getSubmissionId());
         } catch (Exception e) {
             log.error("[QuestReport] Failed to notify moderators for submission {}", event.getSubmissionId(), e);
+        }
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onExternalQuestApproved(ru.gamebot.platform.event.ExternalQuestApprovedEvent event) {
+        try {
+            QuestSubmission approved = questService.getSubmission(event.getSubmissionId());
+            notifyUser(approved.getUser().getTelegramId(),
+                    "✅ <b>Партнёр подтвердил выполнение!</b>\n\n"
+                    + "Квест <b>" + escape(approved.getQuest().getTitle()) + "</b> засчитан.\n\n"
+                    + "🪙 EXC: <b>+" + approved.getQuest().getRewardCoins() + "</b>");
+        } catch (Exception e) {
+            log.error("[ActionPay] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
         }
     }
 

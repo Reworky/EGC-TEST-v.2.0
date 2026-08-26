@@ -58,6 +58,9 @@ public class Quest {
 
     private Long sponsorId;
 
+    @Column(columnDefinition = "boolean default false")
+    private boolean externalAutoApprove;
+
     private String photoFileId;
     private LocalDateTime createdAt;
 }

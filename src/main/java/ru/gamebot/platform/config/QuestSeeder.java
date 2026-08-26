@@ -1182,6 +1182,32 @@ public class QuestSeeder implements CommandLineRunner {
         // Квесты не удаляются, только деактивируются — чтобы вернуть доступ, достаточно убрать строку.
         deactivateGame("EA FC 26");
         deactivateGame("Mobile Legends: Bang Bang");
+
+        // ── Внешний CPA-квест: World of Warships (actionpay) ───────────────────────
+        // Авто-одобрение через постбек actionpay (см. PostbackController), без ручной проверки скриншота.
+        // {TG_ID} в ссылке подставляется на telegram_id игрока при показе карточки квеста (personalizeInstruction).
+        if (questRepository.findFirstByTitleAndGameName("Зарегистрируйся в World of Warships", "World of Warships").isEmpty()) {
+            Quest wowQuest = new Quest();
+            wowQuest.setTitle("Зарегистрируйся в World of Warships");
+            wowQuest.setGameName("World of Warships");
+            wowQuest.setPlatform("PC");
+            wowQuest.setDurationDays(45);
+            wowQuest.setDurationText("45 дней");
+            wowQuest.setRewardXp(0);
+            wowQuest.setRewardCoins(3000);
+            wowQuest.setDescription("Скачай и зарегистрируйся в World of Warships по своей персональной ссылке.");
+            wowQuest.setInstruction("🔗 Перейди по своей персональной ссылке, скачай игру и зарегистрируйся:\n"
+                    + "https://apygame.com/click/6a8ea0d42bfa81706f3e7f55/179724/360227/{TG_ID}?erid=LatgBuBKy\n\n"
+                    + "Важно: нужна не просто регистрация, а реальный запуск игры — иначе партнёр не подтвердит выполнение.");
+            wowQuest.setRequirements("Подтверждение приходит от партнёра автоматически — обычно за несколько дней, иногда до 30. "
+                    + "Отчёт отправлять не нужно, EXC начислится сам, как только придёт подтверждение.");
+            wowQuest.setParticipantLimit(1000);
+            wowQuest.setActive(true);
+            wowQuest.setExternalAutoApprove(true);
+            wowQuest.setCreatedAt(LocalDateTime.now());
+            questRepository.save(wowQuest);
+            log.info("[QuestSeeder] Created external quest: World of Warships (actionpay)");
+        }
     }
 
     private void deactivateGame(String gameName) {

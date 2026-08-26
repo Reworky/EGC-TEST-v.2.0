@@ -382,8 +382,8 @@ public class QuestService {
             }
         }
 
-        // Спонсорские квесты: никаких кулдаунов и ограничений по слотам
-        if (!quest.isSponsored()) {
+        // Спонсорские и внешние (auto-approve через постбек) квесты: никаких кулдаунов и ограничений по слотам
+        if (!quest.isSponsored() && !quest.isExternalAutoApprove()) {
             long activeSlots = countActiveDrafts(lockedUser);
             long maxSlots = sinkShopService.getMaxQuestSlots(lockedUser);
             if (activeSlots >= maxSlots) {
@@ -447,7 +447,7 @@ public class QuestService {
             return QuestActionResult.of(QuestActionStatus.ALREADY_APPROVED, 0);
         }
         if (latest.getStatus() == SubmissionStatus.REJECTED || latest.getStatus() == SubmissionStatus.NEEDS_INFO) {
-            if (!quest.isSponsored()) {
+            if (!quest.isSponsored() && !quest.isExternalAutoApprove()) {
                 LocalDateTime rejectedAt = latest.getUpdatedAt();
                 if (rejectedAt != null && LocalDateTime.now().isBefore(rejectedAt.plusHours(1))) {
                     if (lockedUser.isRetryInsuranceActive()) {
@@ -465,7 +465,7 @@ public class QuestService {
             return QuestActionResult.of(QuestActionStatus.EXPIRED, 0);
         }
 
-        if (!quest.isSponsored() && hasOtherPendingSubmission(lockedUser, quest)) {
+        if (!quest.isSponsored() && !quest.isExternalAutoApprove() && hasOtherPendingSubmission(lockedUser, quest)) {
             return QuestActionResult.of(QuestActionStatus.HAS_PENDING_REPORT, 0);
         }
 
@@ -627,6 +627,24 @@ public class QuestService {
         long adjustedXp = baseXp + (baseXp * xpBoostPct / 100);
 
         return new RewardPreview(adjustedXp, adjustedCoins, diminished, xpBoostPct > 0);
+    }
+
+    /**
+     * Одобрение внешнего (auto-approve) квеста по постбеку от партнёрской сети.
+     * Идемпотентно: если у пользователя уже есть APPROVED-заявка по этому квесту — просто возвращает её,
+     * повторный постбек (ретрай сети) EXC повторно не начислит. Если пользователь квест не брал —
+     * заявка создаётся автоматически, подтверждение партнёра важнее локального шага "Взять квест".
+     */
+    @Transactional
+    public QuestSubmission approveExternalConversion(AppUser user, Quest quest) {
+        QuestSubmission latest = getLatestSubmission(user, quest);
+        if (latest == null) {
+            latest = createDraftSubmission(user, quest);
+        }
+        if (latest.getStatus() == SubmissionStatus.APPROVED) {
+            return latest;
+        }
+        return approveSubmission(latest.getId());
     }
 
     @Transactional
