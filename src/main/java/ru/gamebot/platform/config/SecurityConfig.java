@@ -36,6 +36,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/quests/**").permitAll()
                         .requestMatchers("/api/shop/**").permitAll()
                         .requestMatchers("/api/stats").permitAll()
+                        .requestMatchers("/api/postback/**").permitAll()
                         // Личный кабинет — нужен JWT
                         .requestMatchers("/api/profile/**").authenticated()
                         .anyRequest().authenticated()
