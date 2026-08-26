@@ -154,7 +154,7 @@ public class QuestService {
 
     public List<Quest> findAllSponsored() {
         return questRepository.findAll().stream()
-                .filter(Quest::isSponsored)
+                .filter(q -> q.isSponsored() || q.isExternalAutoApprove())
                 .sorted(Comparator.comparing(Quest::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
     }
