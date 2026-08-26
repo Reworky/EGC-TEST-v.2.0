@@ -1186,6 +1186,7 @@ public class QuestSeeder implements CommandLineRunner {
         // ── Внешний CPA-квест: World of Warships (actionpay) ───────────────────────
         // Авто-одобрение через постбек actionpay (см. PostbackController), без ручной проверки скриншота.
         // {TG_ID} в ссылке подставляется на telegram_id игрока при показе карточки квеста (personalizeInstruction).
+        gameCatalogService.setDifficultyMode("World of Warships", "FLAT", 3000L, 0);
         if (questRepository.findFirstByTitleAndGameName("Зарегистрируйся в World of Warships", "World of Warships").isEmpty()) {
             Quest wowQuest = new Quest();
             wowQuest.setTitle("Зарегистрируйся в World of Warships");
