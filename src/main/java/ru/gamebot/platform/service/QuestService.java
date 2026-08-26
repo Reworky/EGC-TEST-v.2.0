@@ -62,7 +62,7 @@ public class QuestService {
     }
 
     public List<Quest> findActiveSponsored() {
-        return findActiveQuests().stream().filter(Quest::isSponsored).toList();
+        return findActiveQuests().stream().filter(q -> q.isSponsored() || q.isExternalAutoApprove()).toList();
     }
 
     public List<Quest> findActiveUgc() {
@@ -92,7 +92,7 @@ public class QuestService {
 
     public List<String> findActiveGameNames() {
         return findActiveQuests().stream()
-                .filter(q -> !q.isSponsored() && q.getSponsorId() == null && !"UGC".equalsIgnoreCase(q.getGameName()))
+                .filter(q -> !q.isSponsored() && !q.isExternalAutoApprove() && q.getSponsorId() == null && !"UGC".equalsIgnoreCase(q.getGameName()))
                 .map(Quest::getGameName)
                 .filter(name -> name != null && !name.isBlank() && isValidGameName(name))
                 .distinct()
