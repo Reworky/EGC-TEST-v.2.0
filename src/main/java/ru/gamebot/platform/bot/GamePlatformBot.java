@@ -6487,7 +6487,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         List<InlineKeyboardButton> buttons = new ArrayList<>();
         for (Quest q : quests) {
-            buttons.add(keyboardFactory.callback("🎯 " + trim(q.getTitle(), 32), "admin:edit-quest:" + q.getId()));
+            buttons.add(keyboardFactory.callback("🎯 " + trim(q.getTitle(), 32), "admin:quest:" + q.getId()));
         }
         sendText(user.getTelegramId(),
                 "💼 <b>Спонсорские квесты</b>\n\nВыберите квест для редактирования:",
@@ -6504,7 +6504,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         List<InlineKeyboardButton> buttons = new ArrayList<>();
         for (Quest q : quests) {
-            buttons.add(keyboardFactory.callback("📋 " + trim(q.getTitle(), 32), "admin:edit-quest:" + q.getId()));
+            buttons.add(keyboardFactory.callback("📋 " + trim(q.getTitle(), 32), "admin:quest:" + q.getId()));
         }
         sendText(user.getTelegramId(),
                 "📋 <b>Квесты под отчёт</b>\n\nВыберите квест для редактирования:",
