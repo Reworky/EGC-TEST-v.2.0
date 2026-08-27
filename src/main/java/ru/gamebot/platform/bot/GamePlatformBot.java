@@ -926,7 +926,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if (data.startsWith("mod:no:") && isEffectiveModerator(user)) {
-            handleModerationReject(callbackQuery, user, session, parseLong(data.substring("mod:no:".length())));
+            handleModerationReject(callbackQuery, user, parseLong(data.substring("mod:no:".length())));
+            return;
+        }
+        if (data.startsWith("mod:no-custom:") && isEffectiveModerator(user)) {
+            handleModerationRejectCustom(callbackQuery, user, session, parseLong(data.substring("mod:no-custom:".length())));
+            return;
+        }
+        if (data.startsWith("mod:no-back:") && isEffectiveModerator(user)) {
+            handleModerationRejectBack(callbackQuery, parseLong(data.substring("mod:no-back:".length())));
             return;
         }
         if (data.startsWith("mod:rejtpl:") && isEffectiveModerator(user)) {
@@ -5191,13 +5199,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + (submission.getExternalLink() == null ? "" : "🔗 Ссылка: " + escape(submission.getExternalLink()) + "\n")
                 + dupWarning;
 
-        List<InlineKeyboardButton> submissionCardButtons = new ArrayList<>(List.of(
+        InlineKeyboardMarkup markup = verticalWithBackMenu(List.of(
                 keyboardFactory.callback("✅ Одобрить", "mod:ok:" + submissionId),
-                keyboardFactory.callback("❌ Отклонить", "mod:no:" + submissionId)
-        ));
-        submissionCardButtons.addAll(quickRejectButtons(submissionId));
-        submissionCardButtons.add(keyboardFactory.callback("❓ Уточнить", "mod:more:" + submissionId));
-        InlineKeyboardMarkup markup = verticalWithBackMenu(submissionCardButtons, "⬅️ Назад", "mod:support:quests");
+                keyboardFactory.callback("❌ Отклонить", "mod:no:" + submissionId),
+                keyboardFactory.callback("❓ Уточнить", "mod:more:" + submissionId)
+        ), "⬅️ Назад", "mod:support:quests");
 
         String mediaFileId = submission.getMediaFileId();
         String mediaType = submission.getMediaType();
@@ -5276,7 +5282,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         answer(callbackQuery.getId(), "Заявка одобрена");
     }
 
-    private void handleModerationReject(CallbackQuery callbackQuery, AppUser user, UserSession session, Long submissionId) {
+    private void handleModerationReject(CallbackQuery callbackQuery, AppUser user, Long submissionId) {
+        List<InlineKeyboardButton> reasonButtons = new ArrayList<>(quickRejectButtons(submissionId));
+        reasonButtons.add(keyboardFactory.callback("✏️ Своя причина", "mod:no-custom:" + submissionId));
+        InlineKeyboardMarkup markup = verticalWithBackMenu(reasonButtons, "⬅️ Назад", "mod:no-back:" + submissionId);
+        answer(callbackQuery.getId(), "Выберите причину");
+        sendText(user.getTelegramId(),
+                "❌ <b>Причина отклонения</b>\n\nВыберите готовую причину или укажите свою:",
+                markup);
+    }
+
+    private void handleModerationRejectCustom(CallbackQuery callbackQuery, AppUser user, UserSession session, Long submissionId) {
         session.reset();
         session.setState(SessionState.QUEST_REJECT_COMMENT);
         session.setQuestId(submissionId);
@@ -5284,6 +5300,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "❌ <b>Отклонение отчёта</b>\n\nНапишите причину отклонения — она будет отправлена игроку, чтобы он понимал, что исправить:",
                 cancelKeyboard());
+    }
+
+    private void handleModerationRejectBack(CallbackQuery callbackQuery, Long submissionId) {
+        answer(callbackQuery.getId(), "Отменено");
+        sendSubmissionCard(callbackQuery.getFrom().getId(), submissionId);
     }
 
     private void handleModerationClarify(CallbackQuery callbackQuery, Long submissionId) {
@@ -9416,14 +9437,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "💬 Комментарий: " + escape(submission.getUserComment())
                 + aiNote;
 
-        List<InlineKeyboardButton> notifyButtons = new ArrayList<>(List.of(
+        InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
                 keyboardFactory.callback("✅ Одобрить", "mod:ok:" + submissionId),
-                keyboardFactory.callback("❌ Отклонить", "mod:no:" + submissionId)
+                keyboardFactory.callback("❌ Отклонить", "mod:no:" + submissionId),
+                keyboardFactory.callback("❓ Уточнить", "mod:more:" + submissionId),
+                keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
-        notifyButtons.addAll(quickRejectButtons(submissionId));
-        notifyButtons.add(keyboardFactory.callback("❓ Уточнить", "mod:more:" + submissionId));
-        notifyButtons.add(keyboardFactory.callback("🏠 Меню", "menu:main"));
-        InlineKeyboardMarkup markup = keyboardFactory.smartLayout(notifyButtons);
 
         // Только модераторы, без админов — по явному запросу пользователя.
         Set<Long> recipients = adminService.strictModeratorIds();
