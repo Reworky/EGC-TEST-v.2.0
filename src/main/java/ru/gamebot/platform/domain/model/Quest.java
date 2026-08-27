@@ -75,4 +75,8 @@ public class Quest {
 
     private String photoFileId;
     private LocalDateTime createdAt;
+
+    /** Краткое условие (до ~150 символов) для подстановки в шаблон быстрого отклонения «Недостаточно данных». */
+    @Column(length = 200)
+    private String shortCondition;
 }

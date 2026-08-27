@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.gamebot.platform.domain.enums.RejectionReasonCode;
 import ru.gamebot.platform.domain.enums.SubmissionStatus;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Quest;
@@ -757,9 +758,22 @@ public class QuestService {
 
     @Transactional
     public QuestSubmission rejectSubmission(Long submissionId, String moderatorComment) {
+        return rejectSubmission(submissionId, moderatorComment, null, null);
+    }
+
+    /**
+     * Отклонение с фиксацией причины и модератора — для быстрых кнопок отклонения и ручного ввода причины.
+     * reasonCode/moderatorTelegramId остаются null для AI-автоотклонения (двухпараметровый вызов выше) —
+     * там причина уже зафиксирована в aiReason/reviewedBy.
+     */
+    @Transactional
+    public QuestSubmission rejectSubmission(Long submissionId, String moderatorComment,
+                                             RejectionReasonCode reasonCode, Long moderatorTelegramId) {
         QuestSubmission submission = getSubmission(submissionId);
         submission.setStatus(SubmissionStatus.REJECTED);
         submission.setModeratorComment(moderatorComment);
+        submission.setRejectionReasonCode(reasonCode);
+        submission.setModeratorTelegramId(moderatorTelegramId);
         submission.setUpdatedAt(LocalDateTime.now());
         return questSubmissionRepository.save(submission);
     }

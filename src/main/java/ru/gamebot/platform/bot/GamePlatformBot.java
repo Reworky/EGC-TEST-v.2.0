@@ -52,6 +52,7 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 import ru.gamebot.platform.config.AppProperties;
+import ru.gamebot.platform.domain.enums.RejectionReasonCode;
 import ru.gamebot.platform.domain.enums.RewardRequestStatus;
 import ru.gamebot.platform.domain.enums.SubmissionStatus;
 import ru.gamebot.platform.domain.model.AppUser;
@@ -926,6 +927,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.startsWith("mod:no:") && isEffectiveModerator(user)) {
             handleModerationReject(callbackQuery, user, session, parseLong(data.substring("mod:no:".length())));
+            return;
+        }
+        if (data.startsWith("mod:rejtpl:") && isEffectiveModerator(user)) {
+            String[] rejtplParts = data.substring("mod:rejtpl:".length()).split(":", 2);
+            handleModerationQuickReject(callbackQuery, user, Integer.parseInt(rejtplParts[0]), parseLong(rejtplParts[1]));
             return;
         }
         if (data.startsWith("mod:more:") && isEffectiveModerator(user)) {
@@ -1837,7 +1843,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case QUEST_REJECT_COMMENT -> {
                 Long submissionId = session.getQuestId();
                 session.reset();
-                QuestSubmission submission = questService.rejectSubmission(submissionId, text.trim());
+                QuestSubmission submission = questService.rejectSubmission(
+                        submissionId, text.trim(), RejectionReasonCode.OTHER, user.getTelegramId());
                 notifyUser(submission.getUser().getTelegramId(),
                         "⚠️ Отчёт по квесту <b>" + escape(submission.getQuest().getTitle()) + "</b> отклонён.\n\n"
                                 + escape(submission.getModeratorComment()));
@@ -1856,6 +1863,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case QUEST_EDIT_TITLE -> updateQuestTitle(user, session, text);
             case QUEST_EDIT_DESCRIPTION -> updateQuestDescription(user, session, text);
+            case QUEST_EDIT_CONDITION -> updateQuestCondition(user, session, text);
             case QUEST_EDIT_REWARD -> updateQuestReward(user, session, text);
             case QUEST_EDIT_LIMIT -> {
                 Integer limit = parseInteger(text.trim());
@@ -5105,6 +5113,64 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.smartLayout(buttons));
     }
 
+    private static final String[] QUICK_REJECT_LABELS = {
+            "❌ Не по теме",
+            "❌ Ник не совпадает",
+            "❌ Недостаточно данных"
+    };
+
+    private static final RejectionReasonCode[] QUICK_REJECT_CODES = {
+            RejectionReasonCode.NOT_RELEVANT,
+            RejectionReasonCode.NICKNAME_MISMATCH,
+            RejectionReasonCode.INSUFFICIENT_DATA
+    };
+
+    private List<InlineKeyboardButton> quickRejectButtons(Long submissionId) {
+        List<InlineKeyboardButton> buttons = new ArrayList<>();
+        for (int i = 0; i < QUICK_REJECT_LABELS.length; i++) {
+            buttons.add(keyboardFactory.callback(QUICK_REJECT_LABELS[i], "mod:rejtpl:" + i + ":" + submissionId));
+        }
+        return buttons;
+    }
+
+    /** Подставляет реальные данные заявки в шаблон отклонения (см. {@link AppProperties}). */
+    private String fillRejectTemplate(String template, QuestSubmission submission) {
+        Quest quest = submission.getQuest();
+        String shortCondition = quest.getShortCondition();
+        if (shortCondition == null || shortCondition.isBlank()) {
+            shortCondition = quest.getRequirements() != null ? quest.getRequirements() : "см. описание задания";
+        }
+        return template
+                .replace("{название_задания}", quest.getTitle())
+                .replace("{никнейм_в_боте}", submission.getUser().getNickname())
+                .replace("{краткое_условие_задания}", shortCondition);
+    }
+
+    private String rejectTemplateFor(RejectionReasonCode code) {
+        return switch (code) {
+            case NOT_RELEVANT -> appProperties.getRejectTemplateNotRelevant();
+            case NICKNAME_MISMATCH -> appProperties.getRejectTemplateNicknameMismatch();
+            case INSUFFICIENT_DATA -> appProperties.getRejectTemplateInsufficientData();
+            case OTHER -> throw new IllegalArgumentException("OTHER не имеет шаблона — это свободный текст");
+        };
+    }
+
+    private void handleModerationQuickReject(CallbackQuery callbackQuery, AppUser moderator, int templateIndex, Long submissionId) {
+        if (templateIndex < 0 || templateIndex >= QUICK_REJECT_CODES.length) {
+            answer(callbackQuery.getId(), "Неизвестный шаблон");
+            return;
+        }
+        RejectionReasonCode reasonCode = QUICK_REJECT_CODES[templateIndex];
+        QuestSubmission current = questService.getSubmission(submissionId);
+        String message = fillRejectTemplate(rejectTemplateFor(reasonCode), current);
+        QuestSubmission submission = questService.rejectSubmission(submissionId, message, reasonCode, moderator.getTelegramId());
+        notifyUser(submission.getUser().getTelegramId(),
+                "⚠️ Отчёт по квесту <b>" + escape(submission.getQuest().getTitle()) + "</b> отклонён.\n\n"
+                        + escape(submission.getModeratorComment()));
+        sendModerationQueue(callbackQuery.getFrom().getId());
+        answer(callbackQuery.getId(), "Отклонено: " + QUICK_REJECT_LABELS[templateIndex]);
+    }
+
     private void sendSubmissionCard(Long chatId, Long submissionId) {
         QuestSubmission submission = questService.getSubmission(submissionId);
         AppUser submitter = submission.getUser();
@@ -5125,11 +5191,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + (submission.getExternalLink() == null ? "" : "🔗 Ссылка: " + escape(submission.getExternalLink()) + "\n")
                 + dupWarning;
 
-        InlineKeyboardMarkup markup = verticalWithBackMenu(List.of(
+        List<InlineKeyboardButton> submissionCardButtons = new ArrayList<>(List.of(
                 keyboardFactory.callback("✅ Одобрить", "mod:ok:" + submissionId),
-                keyboardFactory.callback("❌ Отклонить", "mod:no:" + submissionId),
-                keyboardFactory.callback("❓ Уточнить", "mod:more:" + submissionId)
-        ), "⬅️ Назад", "mod:support:quests");
+                keyboardFactory.callback("❌ Отклонить", "mod:no:" + submissionId)
+        ));
+        submissionCardButtons.addAll(quickRejectButtons(submissionId));
+        submissionCardButtons.add(keyboardFactory.callback("❓ Уточнить", "mod:more:" + submissionId));
+        InlineKeyboardMarkup markup = verticalWithBackMenu(submissionCardButtons, "⬅️ Назад", "mod:support:quests");
 
         String mediaFileId = submission.getMediaFileId();
         String mediaType = submission.getMediaType();
@@ -5418,6 +5486,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     ru.gamebot.platform.domain.model.Quest qCur = questService.getQuest(qid);
                     sendText(user.getTelegramId(),
                             "📝 <b>Изменить описание</b>\n\nСейчас:\n<i>" + escape(qCur.getDescription()) + "</i>\n\nОтправьте новое описание:",
+                            cancelKeyboard());
+                } else if (action.startsWith("edit-condition:")) {
+                    long qid = parseLong(action.substring("edit-condition:".length()));
+                    session.reset();
+                    session.setQuestId(qid);
+                    session.setState(SessionState.QUEST_EDIT_CONDITION);
+                    ru.gamebot.platform.domain.model.Quest qCur = questService.getQuest(qid);
+                    String currentCondition = qCur.getShortCondition() != null ? qCur.getShortCondition() : "—";
+                    sendText(user.getTelegramId(),
+                            "📋 <b>Краткое условие</b>\n\nИспользуется в шаблоне быстрого отклонения «Недостаточно данных» "
+                                    + "(до ~150 символов, например: «нужен скриншот итогового экрана боя»).\n\n"
+                                    + "Сейчас: <i>" + escape(currentCondition) + "</i>\n\nОтправьте новый текст условия:",
                             cancelKeyboard());
                 } else if (action.startsWith("edit-reward:")) {
                     long qid = parseLong(action.substring("edit-reward:".length()));
@@ -6652,6 +6732,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("👥 Лимит", "admin:edit-limit:" + questId)
         ));
         rows.add(List.of(
+                keyboardFactory.callback("📋 Условие (для отклонения)", "admin:edit-condition:" + questId)
+        ));
+        rows.add(List.of(
                 keyboardFactory.callback(quest.isActive() ? "⏸️ Скрыть" : "▶️ Включить", "admin:toggle:" + questId),
                 keyboardFactory.callback("🗑️ Удалить", "admin:delete:" + questId)
         ));
@@ -6663,6 +6746,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String photoMark = quest.getPhotoFileId() != null ? " 🖼️" : "";
         String categoryLine = (!flatGame && quest.getCategory() != null && !quest.getCategory().isBlank())
                 ? "📚 Категория: <b>" + escape(quest.getCategory()) + "</b>\n" : "";
+        String conditionLine = (quest.getShortCondition() != null && !quest.getShortCondition().isBlank())
+                ? "📋 Условие: <b>" + escape(quest.getShortCondition()) + "</b>\n" : "";
         sendText(user.getTelegramId(),
                 "✏️ <b>Редактор квеста</b>" + photoMark + "\n\n"
                         + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n"
@@ -6673,6 +6758,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "✨ XP: <b>+" + quest.getRewardXp() + "</b>\n"
                         + "🪙 Монеты: <b>+" + quest.getRewardCoins() + "</b>\n"
                         + (quest.getTicketReward() > 0 ? "🎟 Билеты: <b>+" + quest.getTicketReward() + "</b>\n" : "")
+                        + conditionLine
                         + "📡 Статус: <b>" + (quest.isActive() ? "активен" : "скрыт") + "</b>",
                 keyboardFactory.rowsLayout(rows));
     }
@@ -6696,6 +6782,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(
                         keyboardFactory.callback("✨ Награды", "admin:edit-reward:" + questId),
                         keyboardFactory.callback("📋 Примечание", "admin:sq-edit-note:" + questId)
+                ),
+                List.of(
+                        keyboardFactory.callback("📋 Условие (для отклонения)", "admin:edit-condition:" + questId)
                 ),
                 List.of(
                         keyboardFactory.callback(quest.isActive() ? "⏸️ Скрыть" : "▶️ Включить", "admin:toggle:" + questId),
@@ -9217,6 +9306,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         returnToQuestEditor(user, quest, backData);
     }
 
+    private void updateQuestCondition(AppUser user, UserSession session, String text) {
+        String trimmed = text.trim();
+        if (trimmed.length() > 150) {
+            sendText(user.getTelegramId(),
+                    "⚠️ Слишком длинно (" + trimmed.length() + " символов, максимум 150). Сократите и отправьте снова:",
+                    cancelKeyboard());
+            return;
+        }
+        Quest quest = questService.getQuest(session.getQuestId());
+        quest.setShortCondition(trimmed);
+        questService.save(quest);
+        String backData = session.getData().getOrDefault("admin_quest_back_data", "admin:edit");
+        session.reset();
+        returnToQuestEditor(user, quest, backData);
+    }
+
     private void updateQuestReward(AppUser user, UserSession session, String text) {
         String[] parts = text.trim().split("\\s+");
         if (parts.length != 2) {
@@ -9311,12 +9416,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "💬 Комментарий: " + escape(submission.getUserComment())
                 + aiNote;
 
-        InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
+        List<InlineKeyboardButton> notifyButtons = new ArrayList<>(List.of(
                 keyboardFactory.callback("✅ Одобрить", "mod:ok:" + submissionId),
-                keyboardFactory.callback("❌ Отклонить", "mod:no:" + submissionId),
-                keyboardFactory.callback("❓ Уточнить", "mod:more:" + submissionId),
-                keyboardFactory.callback("🏠 Меню", "menu:main")
+                keyboardFactory.callback("❌ Отклонить", "mod:no:" + submissionId)
         ));
+        notifyButtons.addAll(quickRejectButtons(submissionId));
+        notifyButtons.add(keyboardFactory.callback("❓ Уточнить", "mod:more:" + submissionId));
+        notifyButtons.add(keyboardFactory.callback("🏠 Меню", "menu:main"));
+        InlineKeyboardMarkup markup = keyboardFactory.smartLayout(notifyButtons);
 
         // Только модераторы, без админов — по явному запросу пользователя.
         Set<Long> recipients = adminService.strictModeratorIds();

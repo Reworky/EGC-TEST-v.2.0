@@ -14,6 +14,7 @@ import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
+import ru.gamebot.platform.domain.enums.RejectionReasonCode;
 import ru.gamebot.platform.domain.enums.SubmissionStatus;
 
 @Getter
@@ -102,4 +103,11 @@ public class QuestSubmission {
     /** Who reviewed: "AI" or moderator nickname */
     @Column(length = 100)
     private String reviewedBy;
+
+    /** Причина отклонения (для быстрых кнопок отклонения); null у AI-отклонений и старых записей. */
+    @Enumerated(EnumType.STRING)
+    private RejectionReasonCode rejectionReasonCode;
+
+    /** Telegram ID модератора, который принял решение об отклонении (для аналитики, если модераторов несколько). */
+    private Long moderatorTelegramId;
 }
