@@ -61,8 +61,17 @@ public class Quest {
     @Column(columnDefinition = "boolean default false")
     private boolean externalAutoApprove;
 
-    /** ID оффера в actionpay (макрос {offer} в постбеке) — по нему постбек находит нужный квест среди нескольких активных. */
+    /** ID оффера в партнёрской сети (макрос {offer} в постбеке) — по нему постбек находит нужный квест среди нескольких активных. */
     private String externalOfferId;
+
+    /** Партнёрская сеть, из которой приходит постбек: "actionpay", "admitad" и т.д. Вместе с externalOfferId однозначно определяет квест. */
+    private String externalNetwork;
+
+    /** "REGISTRATION" — засчитывается любое подтверждение; "PURCHASE" — дополнительно проверяется externalMinPaymentRub. */
+    private String externalTargetType;
+
+    /** Минимальная сумма покупки в рублях для externalTargetType=PURCHASE — постбеки с меньшей суммой игнорируются. */
+    private Long externalMinPaymentRub;
 
     private String photoFileId;
     private LocalDateTime createdAt;

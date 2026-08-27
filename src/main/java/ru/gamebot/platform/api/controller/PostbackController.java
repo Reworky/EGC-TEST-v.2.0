@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import ru.gamebot.platform.domain.enums.SubmissionStatus;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.model.QuestSubmission;
@@ -18,9 +19,14 @@ import ru.gamebot.platform.event.ExternalQuestApprovedEvent;
 import ru.gamebot.platform.service.QuestService;
 
 /**
- * Приём постбеков от партнёрских CPA-сетей (сейчас — actionpay) для внешних квестов
- * с {@link Quest#isExternalAutoApprove()}. Одобрение идёт через {@link QuestService#approveExternalConversion}
- * — тот же путь начисления награды, что и у обычной модерации, только без ручной проверки скриншота.
+ * Приём постбеков от партнёрских CPA-сетей для внешних квестов с {@link Quest#isExternalAutoApprove()}.
+ * Одобрение идёт через {@link QuestService#approveExternalConversion} — тот же путь начисления награды,
+ * что и у обычной модерации, только без ручной проверки скриншота.
+ *
+ * Каждая сеть — отдельный эндпоинт (свои имена параметров/макросов), но вся общая логика
+ * (поиск игрока, поиск квеста по сети+ID оффера, идемпотентность, проверка минимальной суммы
+ * покупки для PURCHASE-квестов) — в одном месте, {@link #processConversion}. Добавление новой
+ * сети — это новый метод-обёртка с маппингом её параметров, без дублирования логики одобрения.
  */
 @Slf4j
 @RestController
@@ -34,7 +40,10 @@ public class PostbackController {
     private final ApplicationEventPublisher eventPublisher;
 
     @Value("${app.actionpay-postback-token:}")
-    private String expectedToken;
+    private String actionpayToken;
+
+    @Value("${app.admitad-postback-token:}")
+    private String admitadToken;
 
     @GetMapping("/actionpay")
     public ResponseEntity<String> actionPay(
@@ -42,18 +51,53 @@ public class PostbackController {
             @RequestParam(required = false) String subaccount,
             @RequestParam(required = false) String event,
             @RequestParam(required = false) String uniqueid,
-            @RequestParam(required = false) String offer) {
+            @RequestParam(required = false) String offer,
+            @RequestParam(required = false) String payment) {
 
-        if (expectedToken == null || expectedToken.isBlank() || !expectedToken.equals(token)) {
+        if (!isValidToken(token, actionpayToken)) {
             log.warn("[ActionPay] Postback rejected: bad token");
             return ResponseEntity.status(403).body("forbidden");
         }
-
         if (!"accepted".equalsIgnoreCase(event)) {
             log.info("[ActionPay] Postback ignored, event={}, subaccount={}", event, subaccount);
             return ResponseEntity.ok("ignored");
         }
 
+        return processConversion("actionpay", subaccount, offer, uniqueid, payment);
+    }
+
+    /**
+     * NB: точные имена параметров/макросов Admitad ещё не сверены с их документацией по постбекам —
+     * при реальной настройке постбека в кабинете Admitad нужно свериться, как у них называются
+     * аналоги subaccount/offer/event/payment, и поправить сигнатуру при необходимости.
+     */
+    @GetMapping("/admitad")
+    public ResponseEntity<String> admitad(
+            @RequestParam(required = false) String token,
+            @RequestParam(required = false) String subaccount,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String orderId,
+            @RequestParam(required = false) String offer,
+            @RequestParam(required = false) String payment) {
+
+        if (!isValidToken(token, admitadToken)) {
+            log.warn("[Admitad] Postback rejected: bad token");
+            return ResponseEntity.status(403).body("forbidden");
+        }
+        if (!"approved".equalsIgnoreCase(status) && !"confirmed".equalsIgnoreCase(status)) {
+            log.info("[Admitad] Postback ignored, status={}, subaccount={}", status, subaccount);
+            return ResponseEntity.ok("ignored");
+        }
+
+        return processConversion("admitad", subaccount, offer, orderId, payment);
+    }
+
+    private boolean isValidToken(String provided, String expected) {
+        return expected != null && !expected.isBlank() && expected.equals(provided);
+    }
+
+    private ResponseEntity<String> processConversion(String network, String subaccount, String offer,
+                                                       String externalId, String paymentRaw) {
         if (subaccount == null || subaccount.isBlank()) {
             return ResponseEntity.badRequest().body("missing subaccount");
         }
@@ -61,37 +105,58 @@ public class PostbackController {
         try {
             telegramId = Long.parseLong(subaccount.trim());
         } catch (NumberFormatException e) {
-            log.warn("[ActionPay] Postback rejected: subaccount is not a telegram id: {}", subaccount);
+            log.warn("[{}] Postback rejected: subaccount is not a telegram id: {}", network, subaccount);
             return ResponseEntity.badRequest().body("bad subaccount");
         }
 
         AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
         if (user == null) {
-            log.warn("[ActionPay] Postback: user not found for telegramId={}", telegramId);
+            log.warn("[{}] Postback: user not found for telegramId={}", network, telegramId);
             return ResponseEntity.ok("user not found");
         }
 
         if (offer == null || offer.isBlank()) {
-            log.warn("[ActionPay] Postback rejected: missing offer id, subaccount={}", subaccount);
+            log.warn("[{}] Postback rejected: missing offer id, subaccount={}", network, subaccount);
             return ResponseEntity.badRequest().body("missing offer");
         }
-        Quest quest = questRepository.findFirstByExternalAutoApproveTrueAndActiveTrueAndExternalOfferId(offer.trim()).orElse(null);
+        Quest quest = questRepository
+                .findFirstByExternalAutoApproveTrueAndActiveTrueAndExternalNetworkAndExternalOfferId(network, offer.trim())
+                .orElse(null);
         if (quest == null) {
-            log.error("[ActionPay] Postback received for unknown/inactive offer id={}, subaccount={}", offer, subaccount);
+            log.error("[{}] Postback received for unknown/inactive offer id={}, subaccount={}", network, offer, subaccount);
             return ResponseEntity.ok("no active quest for this offer");
         }
 
-        QuestSubmission existing = questService.getLatestSubmission(user, quest);
-        boolean alreadyApproved = existing != null && existing.getStatus() == ru.gamebot.platform.domain.enums.SubmissionStatus.APPROVED;
+        Long paymentRub = parsePaymentRub(paymentRaw);
 
-        QuestSubmission submission = questService.approveExternalConversion(user, quest);
-        log.info("[ActionPay] Postback processed for telegramId={}, uniqueid={}, submissionId={}, alreadyApproved={}",
-                telegramId, uniqueid, submission.getId(), alreadyApproved);
+        QuestSubmission existing = questService.getLatestSubmission(user, quest);
+        boolean alreadyApproved = existing != null && existing.getStatus() == SubmissionStatus.APPROVED;
+
+        QuestSubmission submission = questService.approveExternalConversion(user, quest, paymentRub);
+        if (submission == null) {
+            log.info("[{}] Postback below minimum payment threshold, telegramId={}, offer={}, payment={}",
+                    network, telegramId, offer, paymentRaw);
+            return ResponseEntity.ok("below minimum payment");
+        }
+
+        log.info("[{}] Postback processed for telegramId={}, externalId={}, submissionId={}, alreadyApproved={}",
+                network, telegramId, externalId, submission.getId(), alreadyApproved);
 
         if (!alreadyApproved) {
             eventPublisher.publishEvent(new ExternalQuestApprovedEvent(this, submission.getId()));
         }
 
         return ResponseEntity.ok("ok");
+    }
+
+    private Long parsePaymentRub(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return Math.round(Double.parseDouble(raw.trim().replace(",", ".")));
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }

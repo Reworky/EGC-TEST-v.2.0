@@ -1206,14 +1206,21 @@ public class QuestSeeder implements CommandLineRunner {
             wowQuest.setActive(true);
             wowQuest.setExternalAutoApprove(true);
             wowQuest.setExternalOfferId("14951");
+            wowQuest.setExternalNetwork("actionpay");
+            wowQuest.setExternalTargetType("REGISTRATION");
             wowQuest.setCreatedAt(LocalDateTime.now());
             questRepository.save(wowQuest);
             log.info("[QuestSeeder] Created external quest: World of Warships (actionpay)");
         } else {
-            // Бэкафилл ID оффера для уже созданных ранее записей (до появления этого поля)
+            // Бэкафилл полей для уже созданных ранее записей (до появления externalNetwork/externalTargetType)
             questRepository.findFirstByTitleAndGameName("Зарегистрируйся в World of Warships", "World of Warships")
-                    .filter(q -> q.getExternalOfferId() == null)
-                    .ifPresent(q -> { q.setExternalOfferId("14951"); questRepository.save(q); });
+                    .filter(q -> q.getExternalNetwork() == null)
+                    .ifPresent(q -> {
+                        q.setExternalOfferId("14951");
+                        q.setExternalNetwork("actionpay");
+                        q.setExternalTargetType("REGISTRATION");
+                        questRepository.save(q);
+                    });
         }
 
         // ── Внешний CPA-квест: Skyeng (actionpay) ───────────────────────────────────
@@ -1237,9 +1244,20 @@ public class QuestSeeder implements CommandLineRunner {
             skyengQuest.setActive(true);
             skyengQuest.setExternalAutoApprove(true);
             skyengQuest.setExternalOfferId("17271");
+            skyengQuest.setExternalNetwork("actionpay");
+            skyengQuest.setExternalTargetType("REGISTRATION");
             skyengQuest.setCreatedAt(LocalDateTime.now());
             questRepository.save(skyengQuest);
             log.info("[QuestSeeder] Created external quest: Skyeng (actionpay)");
+        } else {
+            questRepository.findFirstByTitleAndGameName("Пройди вводный урок в Skyeng", "Skyeng")
+                    .filter(q -> q.getExternalNetwork() == null)
+                    .ifPresent(q -> {
+                        q.setExternalOfferId("17271");
+                        q.setExternalNetwork("actionpay");
+                        q.setExternalTargetType("REGISTRATION");
+                        questRepository.save(q);
+                    });
         }
     }
 

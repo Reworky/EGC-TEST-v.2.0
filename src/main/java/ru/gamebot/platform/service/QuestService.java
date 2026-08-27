@@ -635,6 +635,22 @@ public class QuestService {
     }
 
     /**
+     * Перегрузка для квестов типа PURCHASE (externalTargetType) — например, покупка в магазине ключей/донат-сервисе.
+     * Сумма из постбека сверяется с externalMinPaymentRub квеста; если меньше порога — конверсия игнорируется,
+     * возвращается null. Для REGISTRATION-квестов сумма не проверяется, вызывается обычное одобрение.
+     */
+    @Transactional
+    public QuestSubmission approveExternalConversion(AppUser user, Quest quest, Long paymentRub) {
+        if ("PURCHASE".equals(quest.getExternalTargetType())) {
+            Long minPayment = quest.getExternalMinPaymentRub();
+            if (minPayment != null && (paymentRub == null || paymentRub < minPayment)) {
+                return null;
+            }
+        }
+        return approveExternalConversion(user, quest);
+    }
+
+    /**
      * Одобрение внешнего (auto-approve) квеста по постбеку от партнёрской сети.
      * Идемпотентно: если у пользователя уже есть APPROVED-заявка по этому квесту — просто возвращает её,
      * повторный постбек (ретрай сети) EXC повторно не начислит. Если пользователь квест не брал —
