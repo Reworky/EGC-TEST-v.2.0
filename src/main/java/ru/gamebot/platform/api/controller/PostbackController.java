@@ -67,29 +67,31 @@ public class PostbackController {
     }
 
     /**
-     * NB: точные имена параметров/макросов Admitad ещё не сверены с их документацией по постбекам —
-     * при реальной настройке постбека в кабинете Admitad нужно свериться, как у них называются
-     * аналоги subaccount/offer/event/payment, и поправить сигнатуру при необходимости.
+     * Параметры сверены с личным кабинетом Admitad («Инструменты» → «Код оптимизации», макросы
+     * в квадратных скобках [[...]]): subid — наш идентификатор, offer_id — ID программы, order_id —
+     * номер заказа (уникальный ID конверсии, для логов), order_sum — сумма заказа покупателя
+     * (используется для порога PURCHASE-квестов, НЕ путать с payment_sum — это наша комиссия),
+     * payment_status — new/approved/declined/pending.
      */
     @GetMapping("/admitad")
     public ResponseEntity<String> admitad(
             @RequestParam(required = false) String token,
-            @RequestParam(required = false) String subaccount,
-            @RequestParam(required = false) String status,
-            @RequestParam(required = false) String orderId,
-            @RequestParam(required = false) String offer,
-            @RequestParam(required = false) String payment) {
+            @RequestParam(required = false) String subid,
+            @RequestParam(value = "payment_status", required = false) String paymentStatus,
+            @RequestParam(value = "order_id", required = false) String orderId,
+            @RequestParam(value = "offer_id", required = false) String offerId,
+            @RequestParam(value = "order_sum", required = false) String orderSum) {
 
         if (!isValidToken(token, admitadToken)) {
             log.warn("[Admitad] Postback rejected: bad token");
             return ResponseEntity.status(403).body("forbidden");
         }
-        if (!"approved".equalsIgnoreCase(status) && !"confirmed".equalsIgnoreCase(status)) {
-            log.info("[Admitad] Postback ignored, status={}, subaccount={}", status, subaccount);
+        if (!"approved".equalsIgnoreCase(paymentStatus)) {
+            log.info("[Admitad] Postback ignored, payment_status={}, subid={}", paymentStatus, subid);
             return ResponseEntity.ok("ignored");
         }
 
-        return processConversion("admitad", subaccount, offer, orderId, payment);
+        return processConversion("admitad", subid, offerId, orderId, orderSum);
     }
 
     private boolean isValidToken(String provided, String expected) {
