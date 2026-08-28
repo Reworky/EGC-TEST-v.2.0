@@ -122,6 +122,21 @@ public class UserService {
         return appUserRepository.findByNicknameIgnoreCase(nickname);
     }
 
+    /**
+     * Освобождает никнейм у аккаунта (для повторной регистрации другим человеком под тем же ником).
+     * Аккаунт не блокируется и не удаляется, только теряет ник — уникальность поля допускает
+     * несколько null-значений одновременно. Возвращает освобождённый ник для уведомления админа.
+     */
+    @Transactional
+    public String releaseNickname(Long telegramId) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId)
+                .orElseThrow(() -> new IllegalArgumentException("Игрок не найден."));
+        String oldNickname = user.getNickname();
+        user.setNickname(null);
+        appUserRepository.save(user);
+        return oldNickname;
+    }
+
     public long getOverallRank(AppUser user) {
         List<AppUser> sorted = appUserRepository.findAllByRegistrationCompletedTrueOrderByXpDescTelegramIdAsc();
         return getRank(sorted, user.getTelegramId());

@@ -7933,6 +7933,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if ("freenick".equals(action)) {
+            AppUser target = userService.findByTelegramId(telegramId).orElse(null);
+            if (target == null) {
+                sendText(admin.getTelegramId(), "⚠️ Пользователь не найден.", backMenuKeyboard("admin:users:0"));
+                return;
+            }
+            String oldNickname = userService.releaseNickname(telegramId);
+            if (oldNickname == null || oldNickname.isBlank()) {
+                sendAdminUserCard(admin, telegramId, page == null ? 0 : page, "ℹ️ У этого аккаунта и так не было ника.");
+                return;
+            }
+            sendText(telegramId,
+                    "ℹ️ Администратор освободил ваш никнейм «" + escape(oldNickname) + "». "
+                            + "Задайте новый через профиль, если понадобится.",
+                    null);
+            sendAdminUserCard(admin, telegramId, page == null ? 0 : page,
+                    "✅ Никнейм «" + escape(oldNickname) + "» освобождён и доступен для новой регистрации.");
+            return;
+        }
+
         if ("bonus".equals(action)) {
             AppUser target = userService.findByTelegramId(telegramId).orElse(null);
             if (target == null) {
@@ -8319,6 +8339,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         ? keyboardFactory.callback("✅ Разблокировать", "admin:user:unblock:" + telegramId + ":" + page)
                         : keyboardFactory.callback("🚫 Заблокировать", "admin:user:block:" + telegramId + ":" + page)),
                 List.of(keyboardFactory.callback("🚫 Заблокировать как мультиаккаунт", "admin:user:multiacc:" + telegramId + ":" + page)),
+                List.of(keyboardFactory.callback("🏷️ Освободить ник", "admin:user:freenick:" + telegramId + ":" + page)),
                 List.of(
                         keyboardFactory.callback("🎁 Бонус", "admin:user:bonus:" + telegramId + ":" + page),
                         keyboardFactory.callback("➖ Списание", "admin:user:debit:" + telegramId + ":" + page)
