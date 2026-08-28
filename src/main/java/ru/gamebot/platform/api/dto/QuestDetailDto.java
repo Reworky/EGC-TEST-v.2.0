@@ -20,6 +20,9 @@ public class QuestDetailDto {
     private int ticketReward;
     private boolean councilOnly;
 
+    /** Внешний авто-квест (партнёрская сеть): вместо отчёта нужно просто перейти по ссылке из instruction. */
+    private boolean externalAutoApprove;
+
     /** null, если пользователь ещё не брал этот квест */
     private String submissionStatus;
     private String moderatorComment;

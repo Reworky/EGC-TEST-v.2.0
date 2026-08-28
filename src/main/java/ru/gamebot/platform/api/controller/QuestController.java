@@ -74,6 +74,7 @@ public class QuestController {
                 .ticketReward(q.getTicketReward())
                 .councilOnly(q.isCouncilOnly())
                 .sponsored(q.isSponsored())
+                .externalAutoApprove(q.isExternalAutoApprove())
                 .submissionStatus(statusByQuestId.get(q.getId()))
                 .build()).toList();
     }
@@ -101,6 +102,7 @@ public class QuestController {
                 .durationDays(q.getDurationDays()).rewardXp(q.getRewardXp()).rewardCoins(q.getRewardCoins())
                 .ticketReward(q.getTicketReward())
                 .councilOnly(q.isCouncilOnly()).sponsored(true)
+                .externalAutoApprove(q.isExternalAutoApprove())
                 .submissionStatus(statusByQuestId.get(q.getId()))
                 .build()).toList();
     }
@@ -114,11 +116,15 @@ public class QuestController {
             return ResponseEntity.notFound().build();
         }
 
+        String instruction = telegramId != null
+                ? questService.personalizeInstruction(quest.getInstruction(), telegramId)
+                : quest.getInstruction();
+
         QuestDetailDto.QuestDetailDtoBuilder builder = QuestDetailDto.builder()
                 .id(quest.getId())
                 .title(quest.getTitle())
                 .description(quest.getDescription())
-                .instruction(quest.getInstruction())
+                .instruction(instruction)
                 .requirements(quest.getRequirements())
                 .gameName(quest.getGameName())
                 .category(quest.getCategory())
@@ -127,7 +133,8 @@ public class QuestController {
                 .rewardXp(quest.getRewardXp())
                 .rewardCoins(quest.getRewardCoins())
                 .ticketReward(quest.getTicketReward())
-                .councilOnly(quest.isCouncilOnly());
+                .councilOnly(quest.isCouncilOnly())
+                .externalAutoApprove(quest.isExternalAutoApprove());
 
         if (telegramId != null) {
             appUserRepository.findByTelegramId(telegramId).ifPresent(user -> {

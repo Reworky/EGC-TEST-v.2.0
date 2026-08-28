@@ -19,6 +19,9 @@ public class QuestDto {
     private boolean councilOnly;
     private boolean sponsored;
 
+    /** Внешний авто-квест (партнёрская сеть): вместо отчёта нужно просто перейти по ссылке. */
+    private boolean externalAutoApprove;
+
     /** null, если пользователь ещё не брал этот квест */
     private String submissionStatus;
 }

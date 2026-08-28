@@ -589,6 +589,11 @@ public class QuestService {
                 .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена."));
     }
 
+    /** Подставляет реальный telegramId вместо макроса {TG_ID} в тексте инструкции внешнего квеста. */
+    public String personalizeInstruction(String instruction, Long telegramId) {
+        return instruction == null ? null : instruction.replace("{TG_ID}", String.valueOf(telegramId));
+    }
+
     public List<QuestSubmission> getPendingSubmissions() {
         return questSubmissionRepository.findAllByStatusOrderByCreatedAtAsc(SubmissionStatus.PENDING);
     }

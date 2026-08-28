@@ -2986,7 +2986,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         String sponsorBadge = quest.isSponsored() ? "💎 <b>Спонсорский квест</b>\n" : "";
         boolean questFlat = gameCatalogService.isFlat(quest.getGameName());
-        String personalizedInstruction = personalizeInstruction(quest.getInstruction(), user.getTelegramId());
+        String personalizedInstruction = questService.personalizeInstruction(quest.getInstruction(), user.getTelegramId());
         sendText(user.getTelegramId(),
                 (notice == null ? "" : notice + "\n\n")
                         + sponsorBadge
@@ -3006,11 +3006,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 + (quest.isSponsored() ? "" : (quest.isExternalAutoApprove() ? "\n\nℹ️ " : "\n\n✅ <b>Что примет модерация:</b>\n") + escape(quest.getRequirements()))
                             : (quest.isSponsored() ? "" : "📎 <b>Что нужно сделать:</b>\n" + escape(personalizedInstruction) + "\n\n✅ <b>Что примет модерация:</b>\n" + escape(quest.getRequirements()))),
                 verticalWithBackMenu(buttons, backText, backData));
-    }
-
-    /** Подставляет telegram_id вместо плейсхолдера {TG_ID} в тексте инструкции внешних (actionpay и т.п.) квестов. */
-    private String personalizeInstruction(String instruction, Long telegramId) {
-        return instruction == null ? null : instruction.replace("{TG_ID}", String.valueOf(telegramId));
     }
 
     private void handleTakeQuest(CallbackQuery callbackQuery, AppUser user, Long questId) {
@@ -3060,7 +3055,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🪙 +" + freshQuest.getRewardCoins() + " монет"
                         + (!freshQuest.isSponsored() && !"UGC".equalsIgnoreCase(freshQuest.getGameName()) && freshQuest.getTicketReward() > 0 ? "\n🎟 +" + freshQuest.getTicketReward() + " билет(а) для Колеса фортуны" : "")
                         + (freshQuest.isExternalAutoApprove()
-                            ? "\n\n📎 <b>Что нужно сделать:</b>\n" + escape(personalizeInstruction(freshQuest.getInstruction(), user.getTelegramId()))
+                            ? "\n\n📎 <b>Что нужно сделать:</b>\n" + escape(questService.personalizeInstruction(freshQuest.getInstruction(), user.getTelegramId()))
                             : ""),
                 keyboardFactory.smartLayout(buttons));
     }
