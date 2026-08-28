@@ -78,21 +78,6 @@ export default function App() {
     return () => window.removeEventListener('egc:offline', handler);
   }, []);
 
-  useEffect(() => {
-    if (!ready) return;
-    if (typeof window.show_11676772 !== 'function') return;
-    window.show_11676772({
-      type: 'inApp',
-      inAppSettings: {
-        frequency: 2,
-        capping: 0.1,
-        interval: 30,
-        timeout: 5,
-        everyPage: false,
-      },
-    });
-  }, [ready]);
-
   if (offline) {
     return <MaintenanceScreen onRetry={() => { setOffline(false); if (initData) doAuth(initData); }} />;
   }
