@@ -11,4 +11,5 @@ public interface SeasonRepository extends JpaRepository<Season, Long> {
     List<Season> findAllByOrderByCreatedAtDesc();
     Optional<Season> findFirstByActiveTrueAndStartDateBeforeAndEndDateAfterOrderByCreatedAtDesc(
             LocalDateTime now1, LocalDateTime now2);
+    Optional<Season> findFirstByOrderByCreatedAtDesc();
 }

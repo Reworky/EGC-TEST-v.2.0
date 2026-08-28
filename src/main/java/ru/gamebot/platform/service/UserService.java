@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.stream.Stream;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,7 @@ import ru.gamebot.platform.domain.repository.SupportAttachmentRepository;
 import ru.gamebot.platform.domain.repository.SupportTicketRepository;
 import ru.gamebot.platform.event.LeagueRewardEvent;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -260,6 +262,7 @@ public class UserService {
             user.setStreakDays(1);
         }
         user.setLastActivityDate(today);
+        user.setLastDormancyTierNotified(0);
 
         long xpBonus = 0;
         if (user.getStreakDays() == 7) {
@@ -478,6 +481,44 @@ public class UserService {
         }
         appUserRepository.saveAll(users);
         return count;
+    }
+
+    private static final int REFERRAL_TOP_N = 5;
+    private static final long REFERRAL_WEEKLY_POOL = 2_000L;
+    private static final long[] REFERRAL_SHARE_BPS = {4000, 2500, 1500, 1200, 800};
+
+    public record ReferralRankEntry(AppUser user, int rank, long weeklyReferralExc, long prizeExc) {}
+
+    /**
+     * Награда топ-5 рефереров недели из пула {@link #REFERRAL_WEEKLY_POOL} EXC (у отрядов пул больше —
+     * 10 000 EXC/нед, — реферальная награда сознательно меньше, доступна более широкому кругу игроков).
+     * referralEarnedExc на AppUser — накопительный итог за всё время, недельный доход считаем отдельно
+     * через ExcTransaction (тип REFERRAL), не трогая накопительное поле.
+     */
+    @Transactional
+    public void rewardTopReferrers(LocalDateTime weekStart, LocalDateTime weekEnd) {
+        List<Object[]> rows = excTx.findReferralEarningsRankingBetween(weekStart, weekEnd);
+        if (rows.isEmpty()) return;
+
+        int n = Math.min(REFERRAL_TOP_N, rows.size());
+        List<ReferralRankEntry> winners = new java.util.ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            Long userId = (Long) rows.get(i)[0];
+            long weeklyReferralExc = ((Number) rows.get(i)[1]).longValue();
+            AppUser user = appUserRepository.findById(userId).orElse(null);
+            if (user == null) continue;
+
+            long prize = REFERRAL_WEEKLY_POOL * REFERRAL_SHARE_BPS[i] / 10_000;
+            user.setCoins(user.getCoins() + prize);
+            appUserRepository.save(user);
+            excTx.log(user, prize, ExcTransactionService.REFERRAL,
+                    "Топ-" + (i + 1) + " реферер недели (+" + prize + " EXC)");
+            winners.add(new ReferralRankEntry(user, i + 1, weeklyReferralExc, prize));
+        }
+        if (!winners.isEmpty()) {
+            eventPublisher.publishEvent(new ru.gamebot.platform.event.ReferralLeaderboardRewardEvent(this, winners));
+            log.info("Referral weekly leaderboard rewarded: {} winner(s), pool={} EXC", winners.size(), REFERRAL_WEEKLY_POOL);
+        }
     }
 
     @Transactional

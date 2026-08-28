@@ -1,16 +1,19 @@
 package ru.gamebot.platform.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Season;
 import ru.gamebot.platform.domain.repository.SeasonRepository;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SeasonService {
@@ -77,5 +80,42 @@ public class SeasonService {
             s.setActive(false);
             seasonRepository.save(s);
         });
+    }
+
+    /**
+     * Если сейчас нет активного сезона и последний известный реально истёк — клонирует следующий
+     * с теми же параметрами (name/priceExc/xpBoostPercent), той же длительностью. Раньше сезоны
+     * создавал только админ вручную, между циклами могли быть паузы без доступного Season Pass.
+     * Если сезонов никогда не было — ничего не делает, первый по-прежнему создаёт админ.
+     */
+    @Transactional
+    public void autoContinueIfLapsed() {
+        if (findCurrentSeason().isPresent()) {
+            return;
+        }
+        Optional<Season> lastOpt = seasonRepository.findFirstByOrderByCreatedAtDesc();
+        if (lastOpt.isEmpty()) {
+            return;
+        }
+        Season last = lastOpt.get();
+        if (last.getEndDate() == null || LocalDateTime.now().isBefore(last.getEndDate())) {
+            return;
+        }
+
+        if (last.isActive()) {
+            deactivate(last.getId());
+        }
+
+        Duration duration = last.getStartDate() != null
+                ? Duration.between(last.getStartDate(), last.getEndDate())
+                : Duration.ofDays(30);
+        if (duration.isNegative() || duration.isZero()) {
+            duration = Duration.ofDays(30);
+        }
+
+        LocalDateTime newStart = LocalDateTime.now();
+        Season next = create(last.getName(), last.getPriceExc(), last.getXpBoostPercent(),
+                newStart, newStart.plus(duration));
+        log.info("Auto-created continuation season {} (from lapsed season {})", next.getId(), last.getId());
     }
 }

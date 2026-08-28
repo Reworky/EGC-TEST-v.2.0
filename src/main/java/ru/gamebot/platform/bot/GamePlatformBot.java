@@ -8812,6 +8812,48 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     @org.springframework.context.event.EventListener
+    public void onDormancyReengagement(ru.gamebot.platform.event.DormancyReengagementEvent event) {
+        String msg = switch (event.getTier()) {
+            case 1 -> "👋 <b>Давно не заходил!</b>\n\n"
+                    + "Прошло уже " + event.getDaysSinceActive() + " дней. Мы соскучились — держи <b>+"
+                    + event.getExcGranted() + " EXC</b>, чтобы было проще вернуться в игру! 🎁";
+            case 2 -> "🔥 <b>Месяц без тебя — это долго!</b>\n\n"
+                    + "За это время появилось много новых квестов и турниров. Специально для тебя: <b>+"
+                    + event.getExcGranted() + " EXC</b> на баланс. Заходи и посмотри, что нового! 🚀";
+            default -> "🎉 <b>С возвращением!</b>\n\n"
+                    + "Тебя не было " + event.getDaysSinceActive() + " дней — этого более чем достаточно, чтобы соскучиться. "
+                    + "Лови <b>+" + event.getExcGranted() + " EXC</b> и заходи глянуть, что изменилось на платформе.";
+        };
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("🗺️ К квестам", "menu:quests"))
+        ));
+        try {
+            sendText(event.getTelegramId(), msg, keyboard);
+        } catch (Exception e) {
+            log.warn("Failed to send dormancy re-engagement message to {}", event.getTelegramId(), e);
+        }
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onReferralLeaderboardReward(ru.gamebot.platform.event.ReferralLeaderboardRewardEvent event) {
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("🤝 Рефералы", "menu:referrals"))
+        ));
+        for (ru.gamebot.platform.service.UserService.ReferralRankEntry entry : event.getWinners()) {
+            String msg = "🤝 <b>Топ рефереров недели!</b>\n\n"
+                    + "Ты занял <b>#" + entry.rank() + "</b> место по реферальным доходам за неделю "
+                    + "(+" + entry.weeklyReferralExc() + " EXC от рефералов).\n\n"
+                    + "🎁 Бонус за место в топе: <b>+" + entry.prizeExc() + " EXC</b>!\n\n"
+                    + "Приглашай друзей и зарабатывай ещё больше 👇";
+            try {
+                sendText(entry.user().getTelegramId(), msg, keyboard);
+            } catch (Exception e) {
+                log.warn("Failed to notify referral leaderboard winner {}", entry.user().getTelegramId(), e);
+            }
+        }
+    }
+
+    @org.springframework.context.event.EventListener
     public void onOnboardingReminder(ru.gamebot.platform.event.OnboardingReminderEvent event) {
         String msg = switch (event.getNotificationNumber()) {
             case 1 -> "🎮 <b>Ты почти начал!</b>\n\n"

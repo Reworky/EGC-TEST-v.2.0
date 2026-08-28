@@ -52,6 +52,11 @@ public class AppUser {
     private Long referredByTelegramId;
     private boolean referralRewardProcessed;
     private LocalDate lastActivityDate;
+
+    /** Какой уровень дормант-реэнгейджмента уже отправлен (0 = ни один); сбрасывается при возврате в registerActivity(). */
+    @Column(columnDefinition = "int default 0")
+    private int lastDormancyTierNotified;
+
     private LocalDateTime createdAt;
 
     // Avatar

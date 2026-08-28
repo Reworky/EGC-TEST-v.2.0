@@ -13,6 +13,7 @@ import ru.gamebot.platform.domain.repository.TournamentEntryRepository;
 import ru.gamebot.platform.domain.repository.TournamentRepository;
 import ru.gamebot.platform.event.TournamentFinishedEvent;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -134,6 +135,7 @@ public class TournamentService {
         if (entries.isEmpty()) {
             tournament.setStatus(Tournament.Status.FINISHED);
             tournamentRepository.save(tournament);
+            autoCreateNextTournament(tournament);
             return;
         }
 
@@ -176,5 +178,31 @@ public class TournamentService {
 
         eventPublisher.publishEvent(new TournamentFinishedEvent(this, tournament, entries));
         log.info("Tournament {} settled. Pool={} EXC, participants={}", tournament.getId(), pool, entries.size());
+        autoCreateNextTournament(tournament);
+    }
+
+    /**
+     * Клонирует завершённый турнир (те же name/gameName/entryFeeExc и длительность), чтобы всегда было
+     * что-то активное для игроков — раньше турниры создавал только админ вручную, между циклами
+     * бывали долгие паузы без активного турнира.
+     */
+    private void autoCreateNextTournament(Tournament finished) {
+        try {
+            if (finished.getStartDate() == null || finished.getEndDate() == null) {
+                log.warn("Tournament {} has no start/end dates, skipping auto-continuation", finished.getId());
+                return;
+            }
+            Duration duration = Duration.between(finished.getStartDate(), finished.getEndDate());
+            if (duration.isNegative() || duration.isZero()) {
+                log.warn("Tournament {} has invalid duration, skipping auto-continuation", finished.getId());
+                return;
+            }
+            LocalDateTime newStart = LocalDateTime.now();
+            Tournament next = create(finished.getName(), finished.getGameName(), finished.getEntryFeeExc(),
+                    newStart, newStart.plus(duration));
+            log.info("Auto-created continuation tournament {} (from finished {})", next.getId(), finished.getId());
+        } catch (Exception e) {
+            log.error("Failed to auto-create continuation tournament after {}", finished.getId(), e);
+        }
     }
 }

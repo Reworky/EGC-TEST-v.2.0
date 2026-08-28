@@ -13,6 +13,7 @@ import ru.gamebot.platform.domain.repository.QuestRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
 import ru.gamebot.platform.domain.repository.WheelSpinLogRepository;
 import ru.gamebot.platform.event.CooldownExpiredEvent;
+import ru.gamebot.platform.event.DormancyReengagementEvent;
 import ru.gamebot.platform.event.OnboardingReminderEvent;
 import ru.gamebot.platform.event.PollClosedEvent;
 import ru.gamebot.platform.event.QuestDeadlineWarningEvent;
@@ -47,6 +48,11 @@ public class WeeklyResetScheduler {
     private final PlatformSnapshotService platformSnapshotService;
     private final NewsService newsService;
     private final AppUserRepository appUserRepository;
+    private final SeasonService seasonService;
+    private final ExcTransactionService excTx;
+
+    private static final int[] DORMANCY_TIER_DAYS = {14, 30, 60};
+    private static final long[] DORMANCY_TIER_EXC = {300, 750, 1500};
 
     @Scheduled(cron = "0 0 0 * * MON")
     public void resetWeeklyLeaderboard() {
@@ -54,6 +60,13 @@ public class WeeklyResetScheduler {
             squadService.rewardTopSquad();
         } catch (Exception e) {
             log.error("Squad weekly reward failed — continuing with XP reset", e);
+        }
+        try {
+            LocalDateTime weekEnd = LocalDate.now().with(DayOfWeek.MONDAY).atStartOfDay();
+            LocalDateTime weekStart = weekEnd.minusWeeks(1);
+            userService.rewardTopReferrers(weekStart, weekEnd);
+        } catch (Exception e) {
+            log.error("Referral weekly leaderboard reward failed — continuing with XP reset", e);
         }
         try {
             userService.resetWeeklyXp();
@@ -205,6 +218,16 @@ public class WeeklyResetScheduler {
         }
     }
 
+    // Автопродолжение Season («Battle Pass»), если предыдущий истёк и новый не создали вручную — раз в день
+    @Scheduled(cron = "0 15 0 * * *")
+    public void checkSeasonContinuity() {
+        try {
+            seasonService.autoContinueIfLapsed();
+        } catch (Exception e) {
+            log.error("Season auto-continuation check failed", e);
+        }
+    }
+
     // Напоминания об онбординге — каждый час
     @Scheduled(fixedDelay = 3_600_000)
     public void sendOnboardingReminders() {
@@ -232,6 +255,45 @@ public class WeeklyResetScheduler {
                 }
             } catch (Exception e) {
                 log.warn("Failed to process onboarding reminder for user {}", user.getTelegramId(), e);
+            }
+        }
+    }
+
+    // Многоуровневые сообщения неактивным (14/30/60 дней без активности) — раз в день.
+    // Дополняет, а не заменяет, еженедельный дайджест неактивным (sendWeeklyDigests) — тот лёгкий
+    // и без EXC, этот — редкий, с ощутимым подарком за конкретный порог отсутствия.
+    @Scheduled(cron = "0 30 0 * * *")
+    public void checkDormancyTiers() {
+        LocalDate today = LocalDate.now();
+        for (AppUser user : userService.allRegisteredUsers()) {
+            if (user.isBlocked()) continue;
+            try {
+                LocalDate lastActive = user.getLastActivityDate();
+                if (lastActive == null) continue;
+                long daysSince = ChronoUnit.DAYS.between(lastActive, today);
+
+                int highestEligibleTier = 0;
+                for (int i = DORMANCY_TIER_DAYS.length; i >= 1; i--) {
+                    if (daysSince >= DORMANCY_TIER_DAYS[i - 1]) {
+                        highestEligibleTier = i;
+                        break;
+                    }
+                }
+                if (highestEligibleTier == 0 || user.getLastDormancyTierNotified() >= highestEligibleTier) {
+                    continue;
+                }
+
+                long grant = DORMANCY_TIER_EXC[highestEligibleTier - 1];
+                userService.addReward(user, 0, grant);
+                excTx.log(user, grant, ExcTransactionService.BONUS,
+                        "Возвращение после " + daysSince + " дн. отсутствия (тир " + highestEligibleTier + ")");
+                user.setLastDormancyTierNotified(highestEligibleTier);
+                appUserRepository.save(user);
+
+                eventPublisher.publishEvent(new DormancyReengagementEvent(
+                        this, user.getTelegramId(), highestEligibleTier, daysSince, grant));
+            } catch (Exception e) {
+                log.warn("Failed to process dormancy tier for user {}", user.getTelegramId(), e);
             }
         }
     }

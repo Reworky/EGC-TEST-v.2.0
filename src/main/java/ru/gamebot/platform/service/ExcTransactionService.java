@@ -59,6 +59,10 @@ public class ExcTransactionService {
         return repo.sumEarnedSince(since);
     }
 
+    public List<Object[]> findReferralEarningsRankingBetween(LocalDateTime from, LocalDateTime to) {
+        return repo.findReferralEarningsRankingBetween(from, to);
+    }
+
     public static String typeLabel(String type) {
         return switch (type) {
             case QUEST      -> "🎯 Квест";
