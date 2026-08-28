@@ -1279,7 +1279,6 @@ public class QuestSeeder implements CommandLineRunner {
         if (existing.isPresent()) {
             Quest q = existing.get();
             q.setCategory(null);
-            q.setActive(true);
             q.setPlatform(platform);
             q.setDurationDays(durationDays);
             q.setDurationText(durationText);
