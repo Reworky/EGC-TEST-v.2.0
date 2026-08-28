@@ -8029,7 +8029,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         List<ru.gamebot.platform.domain.model.QuestSubmission> all =
-                questService.findAllByUser(target);
+                questService.findAllByUser(target).stream()
+                        .filter(s -> s.getStatus() != ru.gamebot.platform.domain.enums.SubmissionStatus.CANCELLED)
+                        .toList();
 
         long approvedCount = all.stream()
                 .filter(s -> s.getStatus() == ru.gamebot.platform.domain.enums.SubmissionStatus.APPROVED)
