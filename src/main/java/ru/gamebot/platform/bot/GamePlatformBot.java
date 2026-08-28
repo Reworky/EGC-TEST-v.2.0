@@ -7857,6 +7857,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if ("cancelsub".equals(action) && parts.length >= 4) {
+            AppUser target = userService.findByTelegramId(telegramId).orElse(null);
+            if (target == null) {
+                sendText(admin.getTelegramId(), "⚠️ Пользователь не найден.", backMenuKeyboard("admin:users:0"));
+                return;
+            }
+            Long submissionId = parseLong(parts[3]);
+            try {
+                questService.cancelSubmission(submissionId, target);
+                sendText(target.getTelegramId(),
+                        "ℹ️ Администратор отменил вашу заявку на квест. При вопросах обратитесь в поддержку.", null);
+            } catch (IllegalArgumentException e) {
+                // Уже одобрен/отменён — просто покажем список заново, без падения
+            }
+            sendAdminUserQuestHistory(admin, telegramId, page == null ? 0 : page);
+            return;
+        }
+
         if ("exc".equals(action)) {
             sendAdminUserExcHistory(admin, telegramId, page == null ? 0 : page);
             return;
@@ -8036,6 +8054,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         StringBuilder sb = new StringBuilder(header);
         java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yy HH:mm");
         int startNum = safePage * pageSize + 1;
+        List<InlineKeyboardButton> cancelButtons = new ArrayList<>();
         for (int i = 0; i < pageItems.size(); i++) {
             ru.gamebot.platform.domain.model.QuestSubmission s = pageItems.get(i);
             String dateStr = s.getUpdatedAt() != null ? s.getUpdatedAt().format(fmt) : "—";
@@ -8047,11 +8066,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 default -> "📌";
             };
             String completionTag = s.getCompletionDisplayId() != null ? " (З-" + s.getCompletionDisplayId() + ")" : "";
-            sb.append(startNum + i).append(". ").append(statusIcon)
+            int num = startNum + i;
+            sb.append(num).append(". ").append(statusIcon)
               .append(" <b>").append(escape(s.getQuest().getTitle())).append("</b>").append(completionTag).append("\n")
               .append("   🎮 ").append(escape(s.getQuest().getGameName()))
               .append(" · 💰 ").append(s.getQuest().getRewardCoins()).append(" EXC\n")
               .append("   📅 ").append(dateStr).append("\n\n");
+            boolean cancelable = s.getStatus() != ru.gamebot.platform.domain.enums.SubmissionStatus.APPROVED
+                    && s.getStatus() != ru.gamebot.platform.domain.enums.SubmissionStatus.CANCELLED;
+            if ("admin".equals(prefix) && cancelable) {
+                cancelButtons.add(keyboardFactory.callback("❌ Отменить №" + num,
+                        prefix + ":user:cancelsub:" + telegramId + ":" + page + ":" + s.getId()));
+            }
         }
         if (totalPages > 1) {
             sb.append("📄 Страница ").append(safePage + 1).append(" из ").append(totalPages);
@@ -8066,6 +8092,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (InlineKeyboardButton b : cancelButtons) {
+            rows.add(List.of(b));
+        }
         if (!navRow.isEmpty()) rows.add(navRow);
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад к карточке", prefix + ":user:view:" + telegramId + ":" + page)));
 
