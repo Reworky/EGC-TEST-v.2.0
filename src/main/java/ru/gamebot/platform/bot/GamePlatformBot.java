@@ -5143,9 +5143,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (shortCondition == null || shortCondition.isBlank()) {
             shortCondition = quest.getRequirements() != null ? quest.getRequirements() : "см. описание задания";
         }
+        String nickname = submission.getUser().getNickname();
         return template
                 .replace("{название_задания}", quest.getTitle())
-                .replace("{никнейм_в_боте}", submission.getUser().getNickname())
+                .replace("{никнейм_в_боте}", nickname != null ? nickname : "—")
                 .replace("{краткое_условие_задания}", shortCondition);
     }
 
