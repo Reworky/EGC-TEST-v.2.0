@@ -12,6 +12,8 @@ import java.time.LocalDateTime;
 @Table(name = "tournament_entries")
 public class TournamentEntry {
 
+    public enum SnapshotStatus { PENDING, OK, FAILED }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -34,4 +36,26 @@ public class TournamentEntry {
     private long prizeExc;
 
     private LocalDateTime createdAt;
+
+    // Brawl Stars trophy-marathon fields (null/default for QUEST_COUNT tournaments)
+    private String gameTag;
+    private Integer trophiesAtRegistration;
+    private Integer trophiesStart;
+    private Integer trophiesEnd;
+
+    @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(16) default 'PENDING'")
+    private SnapshotStatus snapshotStatus = SnapshotStatus.PENDING;
+
+    @Column(columnDefinition = "boolean default false")
+    private boolean anomalyFlag;
+
+    @Column(columnDefinition = "boolean default false")
+    private boolean anomalyResolved;
+
+    @Column(columnDefinition = "boolean default false")
+    private boolean disqualified;
+
+    @Column(columnDefinition = "boolean default false")
+    private boolean payoutHeld;
 }

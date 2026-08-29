@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 public class Tournament {
 
     public enum Status { REGISTRATION, ACTIVE, FINISHED }
+    public enum ScoringType { QUEST_COUNT, BRAWL_TROPHIES }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -33,6 +34,10 @@ public class Tournament {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Status status;
+
+    @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(32) default 'QUEST_COUNT'")
+    private ScoringType scoringType = ScoringType.QUEST_COUNT;
 
     private LocalDateTime createdAt;
 }

@@ -134,6 +134,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.PlatformSnapshotService platformSnapshotService;
     private final ru.gamebot.platform.service.ClaudeVisionService claudeVisionService;
     private final ru.gamebot.platform.domain.repository.QuestRepository questRepository;
+    private final ru.gamebot.platform.service.BrawlStarsTournamentService brawlStarsTournamentService;
+    private final ru.gamebot.platform.domain.repository.TournamentEntryRepository tournamentEntryRepository;
 
     private final Queue<String[]> pendingNewsQueue = new ConcurrentLinkedQueue<>();
     private final ScheduledExecutorService albumScheduler = Executors.newSingleThreadScheduledExecutor();
@@ -862,6 +864,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (data.startsWith("tournament:join:")) {
             long tid = parseLong(data.substring("tournament:join:".length()));
             tournamentService.findById(tid).ifPresentOrElse(t -> {
+                if (t.getScoringType() == ru.gamebot.platform.domain.model.Tournament.ScoringType.BRAWL_TROPHIES) {
+                    session.reset();
+                    session.getData().put("brawlTournamentId", String.valueOf(tid));
+                    session.setState(SessionState.BRAWL_TAG_INPUT);
+                    sendText(user.getTelegramId(),
+                            "🏷️ Введите ваш игровой тег Brawl Stars (например: <code>#ABC123</code>):",
+                            cancelKeyboard());
+                    answerSilently(callbackQuery.getId());
+                    return;
+                }
                 ru.gamebot.platform.service.TournamentService.JoinResult res = tournamentService.join(user, t);
                 if (res.success()) {
                     answer(callbackQuery.getId(), "✅ Вы зарегистрированы! Взнос списан.");
@@ -870,6 +882,61 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     answer(callbackQuery.getId(), "❌ " + res.error());
                 }
             }, () -> answer(callbackQuery.getId(), "❌ Турнир не найден."));
+            return;
+        }
+        if (data.startsWith("brawl:confirm:")) {
+            long tid = parseLong(data.substring("brawl:confirm:".length()));
+            tournamentService.findById(tid).ifPresentOrElse(t -> {
+                String tag = session.getData().get("brawlTag");
+                String name = session.getData().get("brawlName");
+                String trophiesStr = session.getData().get("brawlTrophies");
+                if (tag == null || trophiesStr == null) {
+                    answer(callbackQuery.getId(), "❌ Сессия истекла, начните регистрацию заново.");
+                    session.reset();
+                    return;
+                }
+                var playerInfo = new ru.gamebot.platform.service.BrawlStarsApiService.PlayerInfo(tag, name, Integer.parseInt(trophiesStr));
+                ru.gamebot.platform.service.TournamentService.JoinResult res = brawlStarsTournamentService.confirmAndJoin(user, t, playerInfo);
+                session.reset();
+                if (res.success()) {
+                    answer(callbackQuery.getId(), "✅ Вы зарегистрированы! Взнос списан.");
+                    sendTournament(user);
+                } else {
+                    answer(callbackQuery.getId(), "❌ " + res.error());
+                }
+            }, () -> answer(callbackQuery.getId(), "❌ Турнир не найден."));
+            return;
+        }
+        if (data.startsWith("brawl:retry:")) {
+            long tid = parseLong(data.substring("brawl:retry:".length()));
+            session.getData().put("brawlTournamentId", String.valueOf(tid));
+            session.setState(SessionState.BRAWL_TAG_INPUT);
+            sendText(user.getTelegramId(), "🏷️ Введите игровой тег ещё раз:", cancelKeyboard());
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if ("brawl:anomalies".equals(data) && isEffectiveModerator(user)) {
+            sendBrawlAnomalies(user.getTelegramId());
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if (data.startsWith("brawl:anomaly:") && isEffectiveModerator(user)) {
+            handleBrawlAnomalyAction(callbackQuery, user, parseLong(data.substring("brawl:anomaly:".length())));
+            return;
+        }
+        if (data.startsWith("brawl:clear_anomaly:") && isEffectiveModerator(user)) {
+            long entryId = parseLong(data.substring("brawl:clear_anomaly:".length()));
+            brawlStarsTournamentService.clearAnomaly(entryId);
+            brawlStarsTournamentService.releaseHeldPayout(entryId);
+            sendText(user.getTelegramId(), "✅ Флаг снят.", backOnlyKeyboard("brawl:anomalies"));
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if (data.startsWith("brawl:disqualify:") && isEffectiveModerator(user)) {
+            long entryId = parseLong(data.substring("brawl:disqualify:".length()));
+            brawlStarsTournamentService.disqualify(entryId);
+            sendText(user.getTelegramId(), "🚫 Игрок дисквалифицирован.", backOnlyKeyboard("brawl:anomalies"));
+            answerSilently(callbackQuery.getId());
             return;
         }
         if (data.startsWith("tournament:leaderboard:")) {
@@ -1528,6 +1595,32 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 finalizeSponsorQuest(user, session, note);
             }
 
+            case BRAWL_TAG_INPUT -> {
+                long tid = Long.parseLong(session.getData().get("brawlTournamentId"));
+                ru.gamebot.platform.domain.model.Tournament t = tournamentService.findById(tid).orElse(null);
+                if (t == null) {
+                    session.reset();
+                    sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("menu:tournament"));
+                    return;
+                }
+                ru.gamebot.platform.service.BrawlStarsTournamentService.TagLookupResult res =
+                        brawlStarsTournamentService.lookupTag(t, text.trim());
+                if (!res.success()) {
+                    sendText(user.getTelegramId(), "❌ " + res.error() + "\n\nПопробуйте ещё раз:", cancelKeyboard());
+                    return;
+                }
+                session.getData().put("brawlTag", res.playerInfo().tag());
+                session.getData().put("brawlName", res.playerInfo().name());
+                session.getData().put("brawlTrophies", String.valueOf(res.playerInfo().trophies()));
+                session.setState(SessionState.BRAWL_TAG_CONFIRM);
+                sendText(user.getTelegramId(),
+                        "🎮 Найден игрок: <b>" + escape(res.playerInfo().name()) + "</b> (" + res.playerInfo().trophies() + " 🏆)\n\nЭто вы?",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("✅ Да, это я", "brawl:confirm:" + tid)),
+                                List.of(keyboardFactory.callback("✏️ Ввести другой тег", "brawl:retry:" + tid)),
+                                List.of(keyboardFactory.callback("❌ Отмена", "menu:tournament"))
+                        )));
+            }
             case TOURNAMENT_CREATE_NAME -> {
                 session.getData().put("tName", text.trim());
                 session.setState(SessionState.TOURNAMENT_CREATE_GAME);
@@ -5824,6 +5917,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendAdminTournamentView(user, parseLong(action.substring("tournaments:view:".length())));
                     answerSilently(callbackQuery.getId());
                     return;
+                } else if (action.startsWith("tournaments:brawlparticipants:")) {
+                    sendAdminBrawlParticipants(user, parseLong(action.substring("tournaments:brawlparticipants:".length())));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("tournaments:resnapshot:")) {
+                    long entryId = parseLong(action.substring("tournaments:resnapshot:".length()));
+                    boolean ok = brawlStarsTournamentService.reSnapshotEntry(entryId);
+                    tournamentEntryRepository.findById(entryId).ifPresent(e -> sendAdminBrawlParticipants(user, e.getTournament().getId()));
+                    answer(callbackQuery.getId(), ok ? "✅ Снапшот обновлён" : "❌ Не удалось получить данные");
+                    return;
                 } else if (action.startsWith("polls:view:")) {
                     sendAdminPollView(user, parseLong(action.substring("polls:view:".length())));
                     answerSilently(callbackQuery.getId());
@@ -7452,6 +7555,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     icon + " " + t.getName() + " (" + entries + " уч.)",
                     "admin:tournaments:view:" + t.getId())));
         }
+        long anomalyCount = tournamentEntryRepository.countByAnomalyFlagTrueAndAnomalyResolvedFalse();
+        if (anomalyCount > 0) {
+            rows.add(List.of(keyboardFactory.callback("⚠️ Аномалии Brawl Stars (" + anomalyCount + ")", "brawl:anomalies")));
+        }
         rows.add(List.of(keyboardFactory.callback("➕ Создать турнир", "admin:tournaments:create")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
@@ -7474,12 +7581,85 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (t.getEndDate() != null) sb.append("⏰ Финиш: ").append(t.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))).append("\n");
 
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-            if (t.getStatus() != ru.gamebot.platform.domain.model.Tournament.Status.FINISHED) {
+            if (t.getScoringType() == ru.gamebot.platform.domain.model.Tournament.ScoringType.BRAWL_TROPHIES) {
+                rows.add(List.of(keyboardFactory.callback("👥 Участники (Brawl Stars)", "admin:tournaments:brawlparticipants:" + tid)));
+            } else if (t.getStatus() != ru.gamebot.platform.domain.model.Tournament.Status.FINISHED) {
                 rows.add(List.of(keyboardFactory.callback("📊 Участники", "tournament:leaderboard:" + tid)));
             }
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:tournaments")));
             sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
         }, () -> sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("admin:tournaments")));
+    }
+
+    private void sendAdminBrawlParticipants(AppUser user, long tid) {
+        tournamentService.findById(tid).ifPresentOrElse(t -> {
+            List<ru.gamebot.platform.domain.model.TournamentEntry> entries =
+                    tournamentEntryRepository.findAllWithUserByTournamentUnordered(t);
+            StringBuilder sb = new StringBuilder("👥 <b>Участники (Brawl Stars) — " + escape(t.getName()) + "</b>\n\n");
+            if (entries.isEmpty()) sb.append("Пока никто не зарегистрировался.");
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            for (ru.gamebot.platform.domain.model.TournamentEntry e : entries) {
+                String statusIcon = switch (e.getSnapshotStatus()) {
+                    case PENDING -> "⏳"; case OK -> "✅"; case FAILED -> "❌";
+                };
+                String anomalyIcon = e.isAnomalyFlag() && !e.isAnomalyResolved() ? " ⚠️" : "";
+                String nick = e.getUser().getNickname() != null ? e.getUser().getNickname() : "ID:" + e.getUser().getTelegramId();
+                String line = statusIcon + anomalyIcon + " " + trim(nick, 16)
+                        + " " + (e.getGameTag() != null ? e.getGameTag() : "—")
+                        + " старт:" + (e.getTrophiesStart() != null ? e.getTrophiesStart() : "—")
+                        + " финиш:" + (e.getTrophiesEnd() != null ? e.getTrophiesEnd() : "—");
+                rows.add(List.of(keyboardFactory.callback(line, "admin:tournaments:resnapshot:" + e.getId())));
+            }
+            rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:tournaments:view:" + tid)));
+            sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+        }, () -> sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("admin:tournaments")));
+    }
+
+    private void sendBrawlAnomalies(Long chatId) {
+        List<ru.gamebot.platform.domain.model.TournamentEntry> flagged =
+                tournamentEntryRepository.findAllByAnomalyFlagTrueAndAnomalyResolvedFalse();
+        if (flagged.isEmpty()) {
+            sendText(chatId, "✅ Подозрительных турнирных заявок нет.", backOnlyKeyboard("admin:tournaments"));
+            return;
+        }
+        List<InlineKeyboardButton> buttons = new ArrayList<>();
+        for (ru.gamebot.platform.domain.model.TournamentEntry e : flagged) {
+            String nick = e.getUser().getNickname() != null ? e.getUser().getNickname() : "ID:" + e.getUser().getTelegramId();
+            buttons.add(keyboardFactory.callback(
+                    "⚠️ " + trim(nick, 20) + " (" + e.getTournament().getName() + ")",
+                    "brawl:anomaly:" + e.getId()));
+        }
+        buttons.add(keyboardFactory.callback("⬅️ Назад", "admin:tournaments"));
+        sendText(chatId,
+                "⚠️ <b>Подозрительные заявки (Brawl Stars)</b>\n\n"
+                        + "Падение трофеев больше 300 между регистрацией и стартом турнира.\n\n"
+                        + "Проверьте вручную: снимите флаг (честно) или дисквалифицируйте.",
+                keyboardFactory.smartLayout(buttons));
+    }
+
+    private void handleBrawlAnomalyAction(CallbackQuery callbackQuery, AppUser moderator, Long entryId) {
+        ru.gamebot.platform.domain.model.TournamentEntry e = tournamentEntryRepository.findById(entryId).orElse(null);
+        if (e == null) {
+            sendText(moderator.getTelegramId(), "⚠️ Заявка не найдена.", backOnlyKeyboard("brawl:anomalies"));
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        String nick = e.getUser().getNickname() != null ? e.getUser().getNickname() : "ID:" + e.getUser().getTelegramId();
+        int drop = e.getTrophiesAtRegistration() - e.getTrophiesStart();
+        sendText(moderator.getTelegramId(),
+                "⚠️ <b>Подозрительная заявка</b>\n\n"
+                        + "👤 " + escape(nick) + "\n"
+                        + "🏆 Турнир: " + escape(e.getTournament().getName()) + "\n"
+                        + "🏷️ Тег: " + e.getGameTag() + "\n"
+                        + "📉 Трофеи: было " + e.getTrophiesAtRegistration() + " → на старте " + e.getTrophiesStart()
+                        + " (падение " + drop + ")\n\n"
+                        + "Если игрок честный — снимите флаг.",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("✅ Снять флаг", "brawl:clear_anomaly:" + entryId)),
+                        List.of(keyboardFactory.callback("🚫 Дисквалифицировать", "brawl:disqualify:" + entryId)),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "brawl:anomalies"))
+                )));
+        answerSilently(callbackQuery.getId());
     }
 
     private void sendTournamentLeaderboard(AppUser user, long tid) {
@@ -7535,18 +7715,72 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             log.error("Failed to publish tournament results for tournament {}", t.getId(), e);
         }
 
-        // Notify each prize winner in private
+        boolean isBrawl = t.getScoringType() == ru.gamebot.platform.domain.model.Tournament.ScoringType.BRAWL_TROPHIES;
+
+        // Notify each prize winner in private (Brawl tournaments also notify non-winners with their result)
         for (ru.gamebot.platform.domain.model.TournamentEntry e : entries) {
+            boolean scored = !isBrawl || (e.getSnapshotStatus() == ru.gamebot.platform.domain.model.TournamentEntry.SnapshotStatus.OK
+                    && !e.isDisqualified() && e.getTrophiesStart() != null && e.getTrophiesEnd() != null);
             if (e.getPrizeExc() > 0) {
                 try {
+                    String delta = isBrawl && scored ? "\n📈 Прирост трофеев: <b>+" + (e.getTrophiesEnd() - e.getTrophiesStart()) + "</b>" : "";
+                    String prizeNote = e.isPayoutHeld()
+                            ? "\n⏳ Приз временно удержан (идёт проверка), будет зачислен после."
+                            : "\n💰 Приз зачислен: <b>+" + e.getPrizeExc() + " EXC</b>";
                     sendText(e.getUser().getTelegramId(),
                             "🏆 <b>Турнир завершён!</b>\n\n"
-                            + "Вы заняли <b>" + e.getRank() + " место</b> в турнире «" + escape(t.getName()) + "»\n"
-                            + "💰 Приз зачислен: <b>+" + e.getPrizeExc() + " EXC</b>",
+                            + "Вы заняли <b>" + e.getRank() + " место</b> в турнире «" + escape(t.getName()) + "»"
+                            + delta + prizeNote,
                             backMenuKeyboard("menu:main"));
                 } catch (Exception ex) {
                     log.warn("Failed to notify user {} about tournament prize", e.getUser().getTelegramId());
                 }
+            } else if (isBrawl && scored) {
+                try {
+                    int delta = e.getTrophiesEnd() - e.getTrophiesStart();
+                    sendText(e.getUser().getTelegramId(),
+                            "🏆 <b>Турнир завершён!</b>\n\n"
+                            + "Вы заняли <b>" + e.getRank() + " место</b> в турнире «" + escape(t.getName()) + "»\n"
+                            + "📈 Прирост трофеев: <b>" + (delta >= 0 ? "+" : "") + delta + "</b>\n"
+                            + "Приза в этот раз нет — попробуйте в следующем турнире!",
+                            backMenuKeyboard("menu:main"));
+                } catch (Exception ex) {
+                    log.warn("Failed to notify user {} about tournament result", e.getUser().getTelegramId());
+                }
+            }
+        }
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onBrawlStartSnapshotTaken(ru.gamebot.platform.event.BrawlStarsSnapshotTakenEvent event) {
+        ru.gamebot.platform.domain.model.TournamentEntry entry = event.getEntry();
+        try {
+            sendText(entry.getUser().getTelegramId(),
+                    "🏁 <b>Турнир начался!</b>\n\n"
+                    + "Ваши стартовые трофеи зафиксированы: <b>" + entry.getTrophiesStart() + " 🏆</b>\n"
+                    + "Удачи в марафоне!",
+                    backMenuKeyboard("menu:main"));
+        } catch (Exception ex) {
+            log.warn("Failed to notify user {} about Brawl start snapshot", entry.getUser().getTelegramId());
+        }
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onBrawlSnapshotBatchFailed(ru.gamebot.platform.event.BrawlStarsSnapshotBatchFailedEvent event) {
+        String phaseLabel = "start".equals(event.getPhase()) ? "стартовый" : "финишный";
+        String text = "🚨 <b>Проблема с турниром Brawl Stars</b>\n\n"
+                + "Турнир «" + escape(event.getTournament().getName()) + "»: " + phaseLabel
+                + " снимок трофеев не удалось получить ни для одного участника.\n"
+                + "Проверьте статус API-токена / IP и повторите снимок вручную из карточки турнира.";
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                SendMessage msg = new SendMessage();
+                msg.setChatId(adminId.toString());
+                msg.setText(text);
+                msg.setParseMode("HTML");
+                execute(msg);
+            } catch (TelegramApiException e) {
+                log.warn("Failed to alert admin {} about Brawl snapshot batch failure", adminId, e);
             }
         }
     }

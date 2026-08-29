@@ -101,5 +101,7 @@ public enum SessionState {
     SQUAD_JOIN_CODE,
     AWAITING_PHONE_SHARE,
     GAME_FLAT_XP,
-    GAME_FLAT_EXC
+    GAME_FLAT_EXC,
+    BRAWL_TAG_INPUT,
+    BRAWL_TAG_CONFIRM
 }

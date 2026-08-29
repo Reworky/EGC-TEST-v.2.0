@@ -18,4 +18,14 @@ public interface TournamentEntryRepository extends JpaRepository<TournamentEntry
 
     @Query("SELECT e FROM TournamentEntry e JOIN FETCH e.user WHERE e.tournament = :t ORDER BY e.rank ASC")
     List<TournamentEntry> findAllWithUserByTournament(@Param("t") Tournament tournament);
+
+    boolean existsByTournamentAndGameTag(Tournament tournament, String gameTag);
+
+    @Query("SELECT e FROM TournamentEntry e JOIN FETCH e.user WHERE e.tournament = :t")
+    List<TournamentEntry> findAllWithUserByTournamentUnordered(@Param("t") Tournament tournament);
+
+    @Query("SELECT e FROM TournamentEntry e JOIN FETCH e.user WHERE e.anomalyFlag = true AND e.anomalyResolved = false")
+    List<TournamentEntry> findAllByAnomalyFlagTrueAndAnomalyResolvedFalse();
+
+    long countByAnomalyFlagTrueAndAnomalyResolvedFalse();
 }

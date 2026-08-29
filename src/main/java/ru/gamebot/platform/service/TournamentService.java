@@ -33,6 +33,7 @@ public class TournamentService {
     private final UserService userService;
     private final ApplicationEventPublisher eventPublisher;
     private final ExcTransactionService excTx;
+    private final BrawlStarsTournamentService brawlStarsTournamentService;
 
     public Optional<Tournament> findActive() {
         return tournamentRepository.findFirstByStatusOrderByCreatedAtDesc(Tournament.Status.ACTIVE);
@@ -72,6 +73,8 @@ public class TournamentService {
 
     @Transactional
     public JoinResult join(AppUser user, Tournament tournament) {
+        if (tournament.getScoringType() == Tournament.ScoringType.BRAWL_TROPHIES)
+            return new JoinResult(false, "Регистрация на этот турнир — только через Telegram-бота (нужен игровой тег).");
         if (tournament.getStatus() != Tournament.Status.REGISTRATION)
             return new JoinResult(false, "Регистрация закрыта.");
         if (hasEntered(tournament, user))
@@ -104,27 +107,45 @@ public class TournamentService {
         t.setStartDate(startDate);
         t.setEndDate(endDate);
         t.setStatus(Tournament.Status.REGISTRATION);
+        t.setScoringType("Brawl Stars".equalsIgnoreCase(gameName) ? Tournament.ScoringType.BRAWL_TROPHIES : Tournament.ScoringType.QUEST_COUNT);
         t.setCreatedAt(LocalDateTime.now());
         return tournamentRepository.save(t);
     }
 
-    @Transactional
+    /**
+     * No blanket @Transactional here: Brawl Stars tournaments trigger a sequential batch of
+     * outbound HTTP calls (trophy snapshots) that must not run inside an open DB transaction.
+     * Each individual repository call below is already transactional on its own (Spring Data JPA
+     * wraps every save()/findAllBy...() call), so the status flip is still safely persisted —
+     * this method just no longer wraps the whole loop plus network I/O in one big transaction.
+     */
     public void activateRegistrationTournaments() {
         List<Tournament> regs = tournamentRepository.findAllByStatusOrderByCreatedAtDesc(Tournament.Status.REGISTRATION);
+        List<Tournament> justActivated = new ArrayList<>();
         for (Tournament t : regs) {
             if (t.getStartDate() != null && LocalDateTime.now().isAfter(t.getStartDate())) {
                 t.setStatus(Tournament.Status.ACTIVE);
                 tournamentRepository.save(t);
                 log.info("Tournament {} started", t.getId());
+                justActivated.add(t);
+            }
+        }
+        for (Tournament t : justActivated) {
+            if (t.getScoringType() == Tournament.ScoringType.BRAWL_TROPHIES) {
+                brawlStarsTournamentService.takeStartSnapshots(t);
             }
         }
     }
 
-    @Transactional
+    /** No blanket @Transactional — see activateRegistrationTournaments() for why. */
     public void settleFinishedTournaments() {
         List<Tournament> active = tournamentRepository.findAllByStatusOrderByCreatedAtDesc(Tournament.Status.ACTIVE);
         for (Tournament t : active) {
             if (t.getEndDate() != null && LocalDateTime.now().isAfter(t.getEndDate())) {
+                if (t.getScoringType() == Tournament.ScoringType.BRAWL_TROPHIES) {
+                    List<TournamentEntry> entries = tournamentEntryRepository.findAllWithUserByTournament(t);
+                    brawlStarsTournamentService.takeEndSnapshots(t, entries);
+                }
                 settle(t);
             }
         }
@@ -139,13 +160,20 @@ public class TournamentService {
             return;
         }
 
-        // Count quests approved during tournament window for each participant
         record EntryScore(TournamentEntry entry, long score) {}
         List<EntryScore> scored = new ArrayList<>();
-        for (TournamentEntry e : entries) {
-            long score = questSubmissionRepository.countApprovedByUserBetween(
-                    e.getUser(), tournament.getStartDate(), tournament.getEndDate());
-            scored.add(new EntryScore(e, score));
+        if (tournament.getScoringType() == Tournament.ScoringType.BRAWL_TROPHIES) {
+            for (TournamentEntry e : entries) {
+                Integer score = brawlStarsTournamentService.computeScore(e);
+                if (score != null) scored.add(new EntryScore(e, score));
+            }
+        } else {
+            // Count quests approved during tournament window for each participant
+            for (TournamentEntry e : entries) {
+                long score = questSubmissionRepository.countApprovedByUserBetween(
+                        e.getUser(), tournament.getStartDate(), tournament.getEndDate());
+                scored.add(new EntryScore(e, score));
+            }
         }
         scored.sort(Comparator.comparingLong(EntryScore::score).reversed());
 
@@ -164,7 +192,11 @@ public class TournamentService {
                 prize = rest / (top - 1);
             }
             entry.setPrizeExc(prize);
-            if (prize > 0) {
+
+            boolean payoutWithheld = entry.isAnomalyFlag() && !entry.isAnomalyResolved();
+            if (payoutWithheld) {
+                entry.setPayoutHeld(true);
+            } else if (prize > 0) {
                 AppUser user = entry.getUser();
                 user.setCoins(user.getCoins() + prize);
                 userService.save(user);

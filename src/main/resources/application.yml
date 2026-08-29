@@ -47,3 +47,6 @@ app:
 claude:
   api-key: ${CLAUDE_API_KEY:}
   confidence-threshold: 0.85
+
+brawlstars:
+  api-token: ${BRAWL_STARS_API_TOKEN:}
