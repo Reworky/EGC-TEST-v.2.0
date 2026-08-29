@@ -2970,9 +2970,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        List<Quest> quests = category == null
+        List<Quest> quests = new ArrayList<>(category == null
                 ? questService.findActiveByGameName(gameName)
-                : questService.findActiveByGameNameAndCategory(gameName, category);
+                : questService.findActiveByGameNameAndCategory(gameName, category));
         if (quests.isEmpty()) {
             sendText(user.getTelegramId(),
                     "📭 В этой категории пока нет активных квестов. Проверьте позже или выберите другую подборку.",
@@ -2980,13 +2980,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        quests.sort((a, b) -> a.getTitle().compareToIgnoreCase(b.getTitle()));
+
         String title = category == null ? gameName : gameName + " • " + category;
         StringBuilder captionBuilder = new StringBuilder("<b>" + escape(title) + "</b>\n\n");
         captionBuilder.append("Награды видно сразу в списке — откройте карточку по номеру, чтобы увидеть условия прохождения.\n\n");
         List<InlineKeyboardButton> openButtons = new ArrayList<>();
         for (int i = 0; i < quests.size(); i++) {
             Quest quest = quests.get(i);
-            captionBuilder.append(i + 1).append(". 🎯 <b>").append(escape(quest.getTitle())).append("</b>");
+            captionBuilder.append(i + 1).append(". <b>").append(escape(quest.getTitle())).append("</b>");
             if (quest.getRewardXp() > 0 || quest.getRewardCoins() > 0) {
                 captionBuilder.append(" — ");
                 if (quest.getRewardXp() > 0) captionBuilder.append("+").append(quest.getRewardXp()).append(" XP");
