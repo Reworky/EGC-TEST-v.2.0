@@ -108,6 +108,11 @@ public class TournamentService {
 
     @Transactional
     public Tournament create(String name, String gameName, long entryFeeExc, LocalDateTime startDate, LocalDateTime endDate) {
+        return create(name, gameName, entryFeeExc, startDate, endDate, null);
+    }
+
+    @Transactional
+    public Tournament create(String name, String gameName, long entryFeeExc, LocalDateTime startDate, LocalDateTime endDate, String photoFileId) {
         Tournament t = new Tournament();
         t.setName(name);
         t.setGameName(gameName);
@@ -116,6 +121,7 @@ public class TournamentService {
         t.setEndDate(endDate);
         t.setStatus(Tournament.Status.REGISTRATION);
         t.setScoringType("Brawl Stars".equalsIgnoreCase(gameName) ? Tournament.ScoringType.BRAWL_TROPHIES : Tournament.ScoringType.QUEST_COUNT);
+        t.setPhotoFileId(photoFileId);
         t.setCreatedAt(LocalDateTime.now());
         return tournamentRepository.save(t);
     }
@@ -239,7 +245,7 @@ public class TournamentService {
             }
             LocalDateTime newStart = LocalDateTime.now();
             Tournament next = create(finished.getName(), finished.getGameName(), finished.getEntryFeeExc(),
-                    newStart, newStart.plus(duration));
+                    newStart, newStart.plus(duration), finished.getPhotoFileId());
             log.info("Auto-created continuation tournament {} (from finished {})", next.getId(), finished.getId());
         } catch (Exception e) {
             log.error("Failed to auto-create continuation tournament after {}", finished.getId(), e);

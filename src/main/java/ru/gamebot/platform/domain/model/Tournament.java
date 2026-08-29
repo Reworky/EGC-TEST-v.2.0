@@ -40,4 +40,6 @@ public class Tournament {
     private ScoringType scoringType = ScoringType.QUEST_COUNT;
 
     private LocalDateTime createdAt;
+
+    private String photoFileId;
 }

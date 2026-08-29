@@ -353,6 +353,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (session.getState() == SessionState.TOURNAMENT_CREATE_PHOTO) {
+            if (message.hasPhoto()) {
+                List<PhotoSize> photos = message.getPhoto();
+                session.getData().put("tPhotoFileId", photos.get(photos.size() - 1).getFileId());
+            }
+            finalizeTournamentCreation(user, session);
+            return;
+        }
+
         if (session.getState() == SessionState.WITHDRAWAL_RECEIPT) {
             // Команды переключения роли и навигации сбрасывают состояние
             if (text != null && (text.startsWith("/start") || text.equals("/moder") || text.equals("/admin") || text.equals("/user") || text.equals("/menu"))) {
@@ -835,6 +844,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (data.startsWith("reward_create:") && isEffectiveAdmin(user)) {
             if ("reward_create:photo:skip".equals(data) && session.getState() == SessionState.REWARD_CREATE_PHOTO) {
                 finalizeRewardCreation(user, session);
+            }
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if (data.startsWith("tournament_create:") && isEffectiveAdmin(user)) {
+            if ("tournament_create:photo:skip".equals(data) && session.getState() == SessionState.TOURNAMENT_CREATE_PHOTO) {
+                finalizeTournamentCreation(user, session);
             }
             answerSilently(callbackQuery.getId());
             return;
@@ -1677,19 +1693,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 if (!endDate.isAfter(startDate)) {
                     sendText(user.getTelegramId(), "❌ Дата окончания должна быть позже даты начала.", cancelKeyboard()); return;
                 }
-                String tName = session.getData().get("tName");
-                String tGame = session.getData().get("tGame");
-                long fee = Long.parseLong(session.getData().get("tFee"));
-                ru.gamebot.platform.domain.model.Tournament t = tournamentService.create(tName, tGame, fee, startDate, endDate);
-                session.reset();
+                session.getData().put("tEnd", text.trim());
+                session.setState(SessionState.TOURNAMENT_CREATE_PHOTO);
                 sendText(user.getTelegramId(),
-                        "✅ <b>Турнир создан!</b>\n\n"
-                        + "📌 " + escape(t.getName()) + "\n"
-                        + "💰 Взнос: <b>" + t.getEntryFeeExc() + " EXC</b>\n"
-                        + "🔒 Закрытие регистрации / старт: " + t.getStartDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + " (UTC)\n"
-                        + "⏰ Финиш: " + t.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + " (UTC)\n\n"
-                        + "Регистрация уже открыта — турнир виден пользователям прямо сейчас.",
-                        backMenuKeyboard("admin:tournaments"));
+                        "🖼️ Прикрепите промо-картинку турнира или пропустите шаг.",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("⏭️ Пропустить фото", "tournament_create:photo:skip")),
+                                List.of(keyboardFactory.callback("❌ Отмена", "admin:cancel"))
+                        )));
             }
             case QUEST_CREATE_TITLE -> {
                 session.getData().put("title", text.trim());
@@ -4523,7 +4534,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("📊 Список участников", "tournament:leaderboard:" + t.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
-        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+        InlineKeyboardMarkup tournamentKeyboard = keyboardFactory.rowsLayout(rows);
+        if (t.getPhotoFileId() != null) {
+            sendPhotoCaption(user.getTelegramId(), t.getPhotoFileId(), sb.toString(), tournamentKeyboard);
+        } else {
+            sendText(user.getTelegramId(), sb.toString(), tournamentKeyboard);
+        }
     }
 
     private void sendNews(AppUser user) {
@@ -6160,6 +6176,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), "✅ Награда добавлена в магазин.", backMenuKeyboard("admin:rewards"));
     }
 
+    private void finalizeTournamentCreation(AppUser user, UserSession session) {
+        Map<String, String> d = session.getData();
+        String tName = d.get("tName");
+        String tGame = d.get("tGame");
+        long fee = Long.parseLong(d.get("tFee"));
+        java.time.format.DateTimeFormatter dtFmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+        java.time.LocalDateTime startDate = java.time.LocalDateTime.parse(d.get("tStart"), dtFmt);
+        java.time.LocalDateTime endDate = java.time.LocalDateTime.parse(d.get("tEnd"), dtFmt);
+        ru.gamebot.platform.domain.model.Tournament t = tournamentService.create(
+                tName, tGame, fee, startDate, endDate, d.get("tPhotoFileId"));
+        session.reset();
+        String text = "✅ <b>Турнир создан!</b>\n\n"
+                + "📌 " + escape(t.getName()) + "\n"
+                + "💰 Взнос: <b>" + t.getEntryFeeExc() + " EXC</b>\n"
+                + "🔒 Закрытие регистрации / старт: " + t.getStartDate().format(dtFmt) + " (UTC)\n"
+                + "⏰ Финиш: " + t.getEndDate().format(dtFmt) + " (UTC)\n\n"
+                + "Регистрация уже открыта — турнир виден пользователям прямо сейчас.";
+        InlineKeyboardMarkup keyboard = backMenuKeyboard("admin:tournaments");
+        if (t.getPhotoFileId() != null) {
+            sendPhotoCaption(user.getTelegramId(), t.getPhotoFileId(), text, keyboard);
+        } else {
+            sendText(user.getTelegramId(), text, keyboard);
+        }
+    }
+
     private void sendAdminRewardList(AppUser user) {
         List<RewardItem> items = rewardService.findAllRewards();
         long pendingCount = rewardService.countPendingRequests();
@@ -7610,7 +7651,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             rows.add(List.of(keyboardFactory.callback("🗑️ Удалить турнир", "admin:tournaments:delete_confirm:" + tid)));
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:tournaments")));
-            sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+            InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
+            if (t.getPhotoFileId() != null) {
+                sendPhotoCaption(user.getTelegramId(), t.getPhotoFileId(), sb.toString(), keyboard);
+            } else {
+                sendText(user.getTelegramId(), sb.toString(), keyboard);
+            }
         }, () -> sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("admin:tournaments")));
     }
 
