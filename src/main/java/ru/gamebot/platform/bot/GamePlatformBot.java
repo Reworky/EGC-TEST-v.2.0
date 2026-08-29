@@ -3488,7 +3488,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .with(java.time.DayOfWeek.MONDAY).atStartOfDay();
         List<Object[]> rows = excTransactionService.findReferralEarningsRankingBetween(weekStart, LocalDateTime.now());
 
-        StringBuilder sb = new StringBuilder("🏆 <b>Рейтинг рефереров — эта неделя</b>\n\n");
+        StringBuilder sb = new StringBuilder("🏆 <b>Рейтинг рефереров за неделю</b>\n\n");
         if (rows.isEmpty()) {
             sb.append("Пока никто не заработал на рефералах на этой неделе.\n"
                     + "Пригласи друга первым — и окажешься в топе! 🚀");
@@ -3499,15 +3499,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 long earned = ((Number) rows.get(i)[1]).longValue();
                 boolean isMe = userId.equals(user.getId());
                 if (isMe) myRank = i + 1;
-                String name = isMe ? "Ты" : escape(userService.findById(userId).map(this::displayUserName).orElse("Игрок"));
-                sb.append(i + 1).append(". ").append(name).append(" — <b>+").append(earned).append(" EXC</b>")
+                AppUser rowUser = isMe ? user : userService.findById(userId).orElse(null);
+                String name = escape(rowUser != null ? displayUserName(rowUser) : "Игрок");
+                int invited = rowUser != null ? rowUser.getInvitedFriends() : 0;
+                sb.append(i + 1).append(". ").append(name)
+                        .append(" — 👥 ").append(invited)
+                        .append(" (+").append(earned).append(" EXC)")
                         .append(isMe ? " 👈" : "").append("\n");
             }
             if (myRank == -1) {
                 for (int i = 5; i < rows.size(); i++) {
                     if (((Long) rows.get(i)[0]).equals(user.getId())) {
-                        long earned = ((Number) rows.get(i)[1]).longValue();
-                        sb.append("\n...\n").append(i + 1).append(". Ты — <b>+").append(earned).append(" EXC</b>");
+                        sb.append("\n").append(i + 1).append(". ").append(escape(displayUserName(user)))
+                                .append(" - ваше место");
                         break;
                     }
                 }
