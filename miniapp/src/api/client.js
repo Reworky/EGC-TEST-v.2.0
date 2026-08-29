@@ -153,6 +153,11 @@ export async function getReferrals() {
   return data;
 }
 
+export async function getReferralRanking() {
+  const { data } = await api.get('/api/profile/referrals/ranking');
+  return data;
+}
+
 export async function getTournament() {
   const { data } = await api.get('/api/tournament');
   return data;

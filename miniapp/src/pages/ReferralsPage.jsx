@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getReferrals } from '../api/client';
+import { getReferrals, getReferralRanking } from '../api/client';
 import BackButton from '../components/BackButton';
 import './ReferralsPage.css';
 
@@ -19,9 +19,11 @@ export default function ReferralsPage() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [ranking, setRanking] = useState(null);
 
   useEffect(() => {
     getReferrals().then(setData).catch(() => setError('Не удалось загрузить данные. Попробуйте ещё раз.'));
+    getReferralRanking().then(setRanking).catch(() => setRanking(null));
   }, []);
 
   function copyLink() {
@@ -90,6 +92,27 @@ export default function ReferralsPage() {
         </div>
         <div className="ref-progress-pct">{pct}%</div>
       </div>
+
+      {ranking && (ranking.top?.length > 0) && (
+        <div className="ref-rank-card">
+          <div className="ref-rank-title">🏆 Рейтинг рефереров за неделю</div>
+          {ranking.top.map(entry => (
+            <div key={entry.rank} className={`ref-rank-row${entry.isMe ? ' ref-rank-row-me' : ''}`}>
+              <span className="ref-rank-num">{entry.rank}.</span>
+              <span className="ref-rank-name">{entry.nickname || 'Игрок'}</span>
+              <span className="ref-rank-invited">👥 {entry.invitedFriends}</span>
+              <span className="ref-rank-exc">+{entry.weeklyExc.toLocaleString()} EXC</span>
+              {entry.isMe && <span className="ref-rank-me-tag">👈</span>}
+            </div>
+          ))}
+          {ranking.yourEntry && (
+            <div className="ref-rank-you">
+              {ranking.yourEntry.rank}. {ranking.yourEntry.nickname || 'Ты'} - ваше место
+            </div>
+          )}
+          <div className="ref-rank-footer">📅 Топ-5 в конце недели (в понедельник) получит бонус из пула 2000 EXC.</div>
+        </div>
+      )}
 
       <div className="ref-how-card">
         <div className="ref-how-title">Как это работает</div>
