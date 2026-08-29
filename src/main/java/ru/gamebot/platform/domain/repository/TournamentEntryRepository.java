@@ -28,4 +28,6 @@ public interface TournamentEntryRepository extends JpaRepository<TournamentEntry
     List<TournamentEntry> findAllByAnomalyFlagTrueAndAnomalyResolvedFalse();
 
     long countByAnomalyFlagTrueAndAnomalyResolvedFalse();
+
+    void deleteAllByTournament(Tournament tournament);
 }

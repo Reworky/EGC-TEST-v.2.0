@@ -57,6 +57,14 @@ public class TournamentService {
         return tournamentRepository.findById(id);
     }
 
+    @Transactional
+    public void delete(Long id) {
+        tournamentRepository.findById(id).ifPresent(t -> {
+            tournamentEntryRepository.deleteAllByTournament(t);
+            tournamentRepository.delete(t);
+        });
+    }
+
     public boolean hasEntered(Tournament tournament, AppUser user) {
         return tournamentEntryRepository.existsByTournamentAndUser(tournament, user);
     }

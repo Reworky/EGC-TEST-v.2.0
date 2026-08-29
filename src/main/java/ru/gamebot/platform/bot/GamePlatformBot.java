@@ -5929,6 +5929,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     tournamentEntryRepository.findById(entryId).ifPresent(e -> sendAdminBrawlParticipants(user, e.getTournament().getId()));
                     answer(callbackQuery.getId(), ok ? "✅ Снапшот обновлён" : "❌ Не удалось получить данные");
                     return;
+                } else if (action.startsWith("tournaments:delete_confirm:")) {
+                    long tid = parseLong(action.substring("tournaments:delete_confirm:".length()));
+                    tournamentService.findById(tid).ifPresentOrElse(t -> sendText(user.getTelegramId(),
+                            "🗑️ Удалить турнир «" + escape(t.getName()) + "» безвозвратно?\n\n"
+                                    + "Все заявки участников и история этого турнира будут удалены. Взносы игрокам НЕ возвращаются автоматически.",
+                            keyboardFactory.rowsLayout(List.of(
+                                    List.of(keyboardFactory.callback("✅ Да, удалить", "admin:tournaments:delete:" + tid),
+                                            keyboardFactory.callback("❌ Отмена", "admin:tournaments:view:" + tid))
+                            ))), () -> sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("admin:tournaments")));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("tournaments:delete:")) {
+                    long tid = parseLong(action.substring("tournaments:delete:".length()));
+                    tournamentService.delete(tid);
+                    answer(callbackQuery.getId(), "🗑️ Турнир удалён.");
+                    sendAdminTournamentList(user);
+                    return;
                 } else if (action.startsWith("polls:view:")) {
                     sendAdminPollView(user, parseLong(action.substring("polls:view:".length())));
                     answerSilently(callbackQuery.getId());
@@ -7553,8 +7570,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 case FINISHED -> "🏁";
             };
             long entries = tournamentService.entryCount(t);
+            String dateLabel = t.getStartDate() != null
+                    ? " · " + t.getStartDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm"))
+                    : "";
             rows.add(List.of(keyboardFactory.callback(
-                    icon + " " + t.getName() + " (" + entries + " уч.)",
+                    icon + " " + t.getName() + " (" + entries + " уч.)" + dateLabel,
                     "admin:tournaments:view:" + t.getId())));
         }
         long anomalyCount = tournamentEntryRepository.countByAnomalyFlagTrueAndAnomalyResolvedFalse();
@@ -7588,6 +7608,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             } else if (t.getStatus() != ru.gamebot.platform.domain.model.Tournament.Status.FINISHED) {
                 rows.add(List.of(keyboardFactory.callback("📊 Участники", "tournament:leaderboard:" + tid)));
             }
+            rows.add(List.of(keyboardFactory.callback("🗑️ Удалить турнир", "admin:tournaments:delete_confirm:" + tid)));
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:tournaments")));
             sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
         }, () -> sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("admin:tournaments")));
