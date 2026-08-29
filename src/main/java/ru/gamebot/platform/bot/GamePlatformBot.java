@@ -1644,7 +1644,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.getData().put("tFee", String.valueOf(fee));
                 session.setState(SessionState.TOURNAMENT_CREATE_START);
                 sendText(user.getTelegramId(),
-                        "🚀 Дата и время начала регистрации (формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>):",
+                        "🔒 Регистрация откроется сразу после создания турнира.\n\n"
+                        + "Введите дату и время, когда регистрация ЗАКРОЕТСЯ и турнир станет активным "
+                        + "(формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>, время сервера — <b>UTC</b>, это на 3 часа меньше московского):",
                         cancelKeyboard());
             }
             case TOURNAMENT_CREATE_START -> {
@@ -1658,7 +1660,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.getData().put("tStart", text.trim());
                 session.setState(SessionState.TOURNAMENT_CREATE_END);
                 sendText(user.getTelegramId(),
-                        "⏰ Дата и время окончания турнира (формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>):",
+                        "⏰ Дата и время окончания турнира (формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>, время сервера — UTC):",
                         cancelKeyboard());
             }
             case TOURNAMENT_CREATE_END -> {
@@ -1684,9 +1686,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         "✅ <b>Турнир создан!</b>\n\n"
                         + "📌 " + escape(t.getName()) + "\n"
                         + "💰 Взнос: <b>" + t.getEntryFeeExc() + " EXC</b>\n"
-                        + "🚀 Старт: " + t.getStartDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + "\n"
-                        + "⏰ Финиш: " + t.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + "\n\n"
-                        + "Турнир будет виден пользователям с момента начала регистрации.",
+                        + "🔒 Закрытие регистрации / старт: " + t.getStartDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + " (UTC)\n"
+                        + "⏰ Финиш: " + t.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + " (UTC)\n\n"
+                        + "Регистрация уже открыта — турнир виден пользователям прямо сейчас.",
                         backMenuKeyboard("admin:tournaments"));
             }
             case QUEST_CREATE_TITLE -> {
@@ -4494,8 +4496,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("💰 Взнос: <b>").append(t.getEntryFeeExc()).append(" EXC</b>\n");
         sb.append("🏅 Призовой фонд: <b>").append(pool).append(" EXC</b>\n");
         sb.append("👥 Участников: <b>").append(entries).append("</b>\n");
-        if (t.getStartDate() != null) sb.append("🚀 Старт: ").append(t.getStartDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm"))).append("\n");
-        if (t.getEndDate() != null) sb.append("⏰ Финиш: ").append(t.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm"))).append("\n");
+        if (t.getStartDate() != null) sb.append("🔒 Закрытие регистрации: ").append(t.getStartDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm"))).append(" (UTC)\n");
+        if (t.getEndDate() != null) sb.append("⏰ Финиш: ").append(t.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm"))).append(" (UTC)\n");
         sb.append("\n");
 
         boolean isReg = t.getStatus() == ru.gamebot.platform.domain.model.Tournament.Status.REGISTRATION;
@@ -7577,8 +7579,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("💰 Взнос: <b>").append(t.getEntryFeeExc()).append(" EXC</b>\n");
             sb.append("🏅 Призовой фонд: <b>").append(t.getPrizePoolExc()).append(" EXC</b>\n");
             sb.append("👥 Участников: <b>").append(entries).append("</b>\n");
-            if (t.getStartDate() != null) sb.append("🚀 Старт: ").append(t.getStartDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))).append("\n");
-            if (t.getEndDate() != null) sb.append("⏰ Финиш: ").append(t.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))).append("\n");
+            if (t.getStartDate() != null) sb.append("🔒 Закрытие регистрации: ").append(t.getStartDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))).append(" (UTC)\n");
+            if (t.getEndDate() != null) sb.append("⏰ Финиш: ").append(t.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))).append(" (UTC)\n");
 
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
             if (t.getScoringType() == ru.gamebot.platform.domain.model.Tournament.ScoringType.BRAWL_TROPHIES) {

@@ -536,8 +536,8 @@ function TournamentView() {
         <p className="quest-desc" style={{ margin: '0 0 8px' }}>
           💰 Взнос: <b>{tournament.entryFeeExc.toLocaleString()} EXC</b><br />
           🏅 Призовой фонд: <b>{tournament.prizePoolExc.toLocaleString()} EXC</b><br />
-          {tournament.startDate && <>🚀 Старт: {tournament.startDate}<br /></>}
-          {tournament.endDate && <>⏰ Финиш: {tournament.endDate}<br /></>}
+          {tournament.startDate && <>🔒 Закрытие регистрации: {tournament.startDate} (UTC)<br /></>}
+          {tournament.endDate && <>⏰ Финиш: {tournament.endDate} (UTC)<br /></>}
         </p>
         {(isReg || isActive) && (
           <p className="quest-desc" style={{ margin: '0 0 8px' }}>
