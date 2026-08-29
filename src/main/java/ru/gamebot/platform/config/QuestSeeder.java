@@ -1394,6 +1394,12 @@ public class QuestSeeder implements CommandLineRunner {
             q.setDescription(description);
             q.setInstruction(instruction);
             q.setRequirements(requirements);
+            // Реактивируем: keepBsTitles-очистка выше в этом же прогоне видит ещё СТАРЫЙ title
+            // (переименование ещё не произошло) и деактивирует запись как "не из списка" —
+            // без этого переименованный квест навсегда остаётся active=false после первого деплоя.
+            // Срабатывает только один раз (при следующем запуске пойдёт в ветку byNewTitle ниже),
+            // так что не наступает на уже исправленный ранее баг "seedFlat каждый раз включает квест".
+            q.setActive(true);
             questRepository.save(q);
             log.info("[QuestSeeder] Full update: '{}' -> '{}'", oldTitle, newTitle);
             return;
