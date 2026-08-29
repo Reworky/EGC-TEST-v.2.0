@@ -2980,18 +2980,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        List<InlineKeyboardButton> buttons = new ArrayList<>();
-        for (Quest quest : quests) {
-            buttons.add(keyboardFactory.callback(
-                    "🎯 " + trim(quest.getTitle(), 32),
+        String title = category == null ? gameName : gameName + " • " + category;
+        StringBuilder captionBuilder = new StringBuilder("<b>" + escape(title) + "</b>\n\n");
+        captionBuilder.append("Награды видно сразу в списке — откройте карточку по номеру, чтобы увидеть условия прохождения.\n\n");
+        List<InlineKeyboardButton> openButtons = new ArrayList<>();
+        for (int i = 0; i < quests.size(); i++) {
+            Quest quest = quests.get(i);
+            captionBuilder.append(i + 1).append(". 🎯 <b>").append(escape(quest.getTitle())).append("</b>");
+            if (quest.getRewardXp() > 0 || quest.getRewardCoins() > 0) {
+                captionBuilder.append(" — ");
+                if (quest.getRewardXp() > 0) captionBuilder.append("+").append(quest.getRewardXp()).append(" XP");
+                if (quest.getRewardXp() > 0 && quest.getRewardCoins() > 0) captionBuilder.append(", ");
+                if (quest.getRewardCoins() > 0) captionBuilder.append("+").append(quest.getRewardCoins()).append(" EXC");
+            }
+            captionBuilder.append("\n");
+            openButtons.add(keyboardFactory.callback(
+                    String.valueOf(i + 1),
                     "quest:view:" + encodeGameToken(gameName) + ":" + categoryToken(category) + ":" + quest.getId()
             ));
         }
-
-        String title = category == null ? gameName : gameName + " • " + category;
-        String caption = "<b>" + escape(title) + "</b>\n\n"
-                + "Ниже собраны активные задания по выбранной игре. Откройте карточку, чтобы увидеть награды и условия прохождения.";
-        InlineKeyboardMarkup keyboard = verticalWithBackMenu(buttons, "⬅️ Назад", backData);
+        String caption = captionBuilder.toString();
+        InlineKeyboardMarkup keyboard = numberedGridWithBackMenu(openButtons, "⬅️ Назад", backData);
         if (category == null && !"UGC".equalsIgnoreCase(gameName)) {
             gameCatalogService.getPhotoFileId(gameName).ifPresentOrElse(
                     photoFileId -> sendPhotoCaption(user.getTelegramId(), photoFileId, caption, keyboard),
@@ -10412,6 +10421,20 @@ String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошел�
         return keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("⬅️ Назад", backData))
         ));
+    }
+
+    private static final int NUMBERED_GRID_COLUMNS = 5;
+
+    private InlineKeyboardMarkup numberedGridWithBackMenu(List<InlineKeyboardButton> buttons, String backText, String backData) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (int i = 0; i < buttons.size(); i += NUMBERED_GRID_COLUMNS) {
+            rows.add(new ArrayList<>(buttons.subList(i, Math.min(i + NUMBERED_GRID_COLUMNS, buttons.size()))));
+        }
+        rows.add(List.of(
+                keyboardFactory.callback(backText, backData),
+                keyboardFactory.callback("🏠 Меню", "menu:main")
+        ));
+        return keyboardFactory.rowsLayout(rows);
     }
 
     private InlineKeyboardMarkup verticalWithBackMenu(List<InlineKeyboardButton> buttons, String backText, String backData) {
