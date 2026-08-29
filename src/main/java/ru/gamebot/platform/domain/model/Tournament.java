@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @Table(name = "tournaments")
 public class Tournament {
 
-    public enum Status { REGISTRATION, ACTIVE, FINISHED }
+    public enum Status { REGISTRATION, ACTIVE, FINISHED, CANCELLED_LOW_TURNOUT }
     public enum ScoringType { QUEST_COUNT, BRAWL_TROPHIES }
 
     @Id
@@ -42,4 +42,7 @@ public class Tournament {
     private LocalDateTime createdAt;
 
     private String photoFileId;
+
+    // null = no minimum enforced, turnir always proceeds to ACTIVE regardless of entry count
+    private Integer minParticipants;
 }

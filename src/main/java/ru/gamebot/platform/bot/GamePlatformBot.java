@@ -1700,6 +1700,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendText(user.getTelegramId(), "❌ Дата окончания должна быть позже даты начала.", cancelKeyboard()); return;
                 }
                 session.getData().put("tEnd", text.trim());
+                session.setState(SessionState.TOURNAMENT_CREATE_MIN_PARTICIPANTS);
+                sendText(user.getTelegramId(),
+                        "👥 Минимальное число участников для проведения турнира.\n\n"
+                        + "Если к моменту закрытия регистрации наберётся меньше — турнир автоматически отменится, "
+                        + "а взнос вернётся всем зарегистрированным.\n\n"
+                        + "Введите число, или <code>0</code> — без минимума (турнир пройдёт при любом числе участников):",
+                        cancelKeyboard());
+            }
+            case TOURNAMENT_CREATE_MIN_PARTICIPANTS -> {
+                Integer minParticipants;
+                try {
+                    int n = Integer.parseInt(text.trim());
+                    if (n < 0) throw new NumberFormatException();
+                    minParticipants = n == 0 ? null : n;
+                } catch (NumberFormatException e) {
+                    sendText(user.getTelegramId(), "❌ Введите целое число ≥ 0.", cancelKeyboard()); return;
+                }
+                session.getData().put("tMinParticipants", minParticipants != null ? minParticipants.toString() : "");
                 session.setState(SessionState.TOURNAMENT_CREATE_PHOTO);
                 sendText(user.getTelegramId(),
                         "🖼️ Прикрепите промо-картинку турнира или пропустите шаг.",
@@ -4578,9 +4596,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "• Один участник — один игровой аккаунт\n"
                     + "• Подозрительная активность (резкая потеря трофеев перед стартом с последующим набором) проверяется вручную и может привести к дисквалификации\n"
                     + "• Взнос не возвращается ни в каком случае, включая дисквалификацию\n\n"
-                    + "🚫 <b>Минимальное число участников</b>\n"
-                    + "Турнир состоится только при 5 и более зарегистрированных участниках. Если к моменту закрытия регистрации "
-                    + "набралось меньше — турнир отменяется, взнос возвращается всем участникам в полном объёме.\n\n"
+                    + (t.getMinParticipants() != null
+                        ? "🚫 <b>Минимальное число участников</b>\n"
+                          + "Турнир состоится только при " + t.getMinParticipants() + " и более зарегистрированных участниках. "
+                          + "Если к моменту закрытия регистрации набралось меньше — турнир отменяется, взнос возвращается всем участникам в полном объёме.\n\n"
+                        : "")
                     + "🔒 <b>Ключевые даты</b>\n"
                     + "• Закрытие регистрации: " + start + "\n"
                     + "• Финиш турнира: " + end;
@@ -6230,12 +6250,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         java.time.format.DateTimeFormatter dtFmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
         java.time.LocalDateTime startDate = java.time.LocalDateTime.parse(d.get("tStart"), dtFmt);
         java.time.LocalDateTime endDate = java.time.LocalDateTime.parse(d.get("tEnd"), dtFmt);
+        String minStr = d.get("tMinParticipants");
+        Integer minParticipants = (minStr != null && !minStr.isBlank()) ? Integer.parseInt(minStr) : null;
         ru.gamebot.platform.domain.model.Tournament t = tournamentService.create(
-                tName, tGame, fee, startDate, endDate, d.get("tPhotoFileId"));
+                tName, tGame, fee, startDate, endDate, minParticipants, d.get("tPhotoFileId"));
         session.reset();
+        String minLine = minParticipants != null
+                ? "👥 Минимум участников: <b>" + minParticipants + "</b> (иначе турнир отменится, взносы вернутся)\n"
+                : "";
         String text = "✅ <b>Турнир создан!</b>\n\n"
                 + "📌 " + escape(t.getName()) + "\n"
                 + "💰 Взнос: <b>" + t.getEntryFeeExc() + " EXC</b>\n"
+                + minLine
                 + "🔒 Закрытие регистрации / старт: " + t.getStartDate().format(dtFmt) + " (UTC)\n"
                 + "⏰ Финиш: " + t.getEndDate().format(dtFmt) + " (UTC)\n\n"
                 + "Регистрация уже открыта — турнир виден пользователям прямо сейчас.";
@@ -7655,6 +7681,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 case REGISTRATION -> "📋";
                 case ACTIVE -> "🔥";
                 case FINISHED -> "🏁";
+                case CANCELLED_LOW_TURNOUT -> "🚫";
             };
             long entries = tournamentService.entryCount(t);
             String dateLabel = t.getStartDate() != null
@@ -7681,13 +7708,32 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 case REGISTRATION -> "📋 Регистрация";
                 case ACTIVE -> "🔥 Активен";
                 case FINISHED -> "🏁 Завершён";
+                case CANCELLED_LOW_TURNOUT -> "🚫 Отменён (недобор участников)";
             }).append("\n");
             if (t.getGameName() != null) sb.append("🎮 Игра: ").append(escape(t.getGameName())).append("\n");
             sb.append("💰 Взнос: <b>").append(t.getEntryFeeExc()).append(" EXC</b>\n");
+            if (t.getMinParticipants() != null) sb.append("👥 Минимум участников: <b>").append(t.getMinParticipants()).append("</b>\n");
             sb.append("🏅 Призовой фонд: <b>").append(t.getPrizePoolExc()).append(" EXC</b>\n");
             sb.append("👥 Участников: <b>").append(entries).append("</b>\n");
             if (t.getStartDate() != null) sb.append("🔒 Закрытие регистрации: ").append(t.getStartDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))).append(" (UTC)\n");
             if (t.getEndDate() != null) sb.append("⏰ Финиш: ").append(t.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))).append(" (UTC)\n");
+            if (t.getStatus() == ru.gamebot.platform.domain.model.Tournament.Status.CANCELLED_LOW_TURNOUT) {
+                List<ru.gamebot.platform.domain.model.TournamentEntry> refundedEntries = tournamentEntryRepository.findAllWithUserByTournamentUnordered(t);
+                sb.append("\n💸 <b>Возвраты:</b>\n");
+                if (refundedEntries.isEmpty()) {
+                    sb.append("Участников не было — возвращать некому.\n");
+                } else {
+                    java.time.format.DateTimeFormatter refundFmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm");
+                    for (ru.gamebot.platform.domain.model.TournamentEntry e : refundedEntries) {
+                        String nick = e.getUser().getNickname() != null ? e.getUser().getNickname() : "ID:" + e.getUser().getTelegramId();
+                        String when = e.getRefundedAt() != null ? e.getRefundedAt().format(refundFmt) : "—";
+                        sb.append(e.isRefunded() ? "✅ " : "⏳ ").append(escape(nick))
+                                .append(" — ").append(e.getEntryFeeExc()).append(" EXC");
+                        if (e.isRefunded()) sb.append(" (").append(when).append(")");
+                        sb.append("\n");
+                    }
+                }
+            }
 
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
             if (t.getScoringType() == ru.gamebot.platform.domain.model.Tournament.ScoringType.BRAWL_TROPHIES) {
@@ -7862,6 +7908,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 } catch (Exception ex) {
                     log.warn("Failed to notify user {} about tournament result", e.getUser().getTelegramId());
                 }
+            }
+        }
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onTournamentCancelled(ru.gamebot.platform.event.TournamentCancelledEvent event) {
+        ru.gamebot.platform.domain.model.Tournament t = event.getTournament();
+        for (ru.gamebot.platform.domain.model.TournamentEntry e : event.getRefundedEntries()) {
+            try {
+                sendText(e.getUser().getTelegramId(),
+                        "🚫 <b>Турнир отменён</b>\n\n"
+                        + "Турнир «" + escape(t.getName()) + "» не набрал минимального числа участников ("
+                        + t.getMinParticipants() + ") к моменту закрытия регистрации.\n\n"
+                        + "💰 Взнос возвращён на баланс: <b>+" + e.getEntryFeeExc() + " EXC</b>",
+                        backMenuKeyboard("menu:main"));
+            } catch (Exception ex) {
+                log.warn("Failed to notify user {} about tournament cancellation refund", e.getUser().getTelegramId());
             }
         }
     }

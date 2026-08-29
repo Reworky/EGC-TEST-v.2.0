@@ -11,6 +11,7 @@ import ru.gamebot.platform.domain.model.TournamentEntry;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
 import ru.gamebot.platform.domain.repository.TournamentEntryRepository;
 import ru.gamebot.platform.domain.repository.TournamentRepository;
+import ru.gamebot.platform.event.TournamentCancelledEvent;
 import ru.gamebot.platform.event.TournamentFinishedEvent;
 
 import java.time.Duration;
@@ -108,11 +109,12 @@ public class TournamentService {
 
     @Transactional
     public Tournament create(String name, String gameName, long entryFeeExc, LocalDateTime startDate, LocalDateTime endDate) {
-        return create(name, gameName, entryFeeExc, startDate, endDate, null);
+        return create(name, gameName, entryFeeExc, startDate, endDate, null, null);
     }
 
     @Transactional
-    public Tournament create(String name, String gameName, long entryFeeExc, LocalDateTime startDate, LocalDateTime endDate, String photoFileId) {
+    public Tournament create(String name, String gameName, long entryFeeExc, LocalDateTime startDate, LocalDateTime endDate,
+                              Integer minParticipants, String photoFileId) {
         Tournament t = new Tournament();
         t.setName(name);
         t.setGameName(gameName);
@@ -121,6 +123,7 @@ public class TournamentService {
         t.setEndDate(endDate);
         t.setStatus(Tournament.Status.REGISTRATION);
         t.setScoringType("Brawl Stars".equalsIgnoreCase(gameName) ? Tournament.ScoringType.BRAWL_TROPHIES : Tournament.ScoringType.QUEST_COUNT);
+        t.setMinParticipants(minParticipants);
         t.setPhotoFileId(photoFileId);
         t.setCreatedAt(LocalDateTime.now());
         return tournamentRepository.save(t);
@@ -138,6 +141,11 @@ public class TournamentService {
         List<Tournament> justActivated = new ArrayList<>();
         for (Tournament t : regs) {
             if (t.getStartDate() != null && LocalDateTime.now().isAfter(t.getStartDate())) {
+                long entryCount = tournamentEntryRepository.countByTournament(t);
+                if (t.getMinParticipants() != null && entryCount < t.getMinParticipants()) {
+                    cancelForLowTurnout(t);
+                    continue;
+                }
                 t.setStatus(Tournament.Status.ACTIVE);
                 tournamentRepository.save(t);
                 log.info("Tournament {} started", t.getId());
@@ -149,6 +157,35 @@ public class TournamentService {
                 brawlStarsTournamentService.takeStartSnapshots(t);
             }
         }
+    }
+
+    /**
+     * Registration closed without reaching minParticipants: cancel instead of activating,
+     * refund every registered entry's fee (idempotent via entry.refunded), no start snapshot is taken.
+     * Does NOT auto-continue — a tournament that failed to reach its minimum shouldn't silently relaunch itself.
+     */
+    private void cancelForLowTurnout(Tournament t) {
+        t.setStatus(Tournament.Status.CANCELLED_LOW_TURNOUT);
+        tournamentRepository.save(t);
+
+        List<TournamentEntry> entries = tournamentEntryRepository.findAllWithUserByTournament(t);
+        List<TournamentEntry> refunded = new ArrayList<>();
+        for (TournamentEntry e : entries) {
+            if (e.isRefunded()) continue;
+            AppUser participant = e.getUser();
+            participant.setCoins(participant.getCoins() + e.getEntryFeeExc());
+            userService.save(participant);
+            excTx.log(participant, e.getEntryFeeExc(), ExcTransactionService.TOURNAMENT,
+                    "Возврат взноса (турнир отменён — недобор участников): " + t.getName());
+            e.setRefunded(true);
+            e.setRefundedAt(LocalDateTime.now());
+            tournamentEntryRepository.save(e);
+            refunded.add(e);
+        }
+
+        log.info("Tournament {} cancelled: {} entries < min {}. Refunded {} entries.",
+                t.getId(), entries.size(), t.getMinParticipants(), refunded.size());
+        eventPublisher.publishEvent(new TournamentCancelledEvent(this, t, refunded));
     }
 
     /** No blanket @Transactional — see activateRegistrationTournaments() for why. */
@@ -245,7 +282,7 @@ public class TournamentService {
             }
             LocalDateTime newStart = LocalDateTime.now();
             Tournament next = create(finished.getName(), finished.getGameName(), finished.getEntryFeeExc(),
-                    newStart, newStart.plus(duration), finished.getPhotoFileId());
+                    newStart, newStart.plus(duration), finished.getMinParticipants(), finished.getPhotoFileId());
             log.info("Auto-created continuation tournament {} (from finished {})", next.getId(), finished.getId());
         } catch (Exception e) {
             log.error("Failed to auto-create continuation tournament after {}", finished.getId(), e);

@@ -58,4 +58,10 @@ public class TournamentEntry {
 
     @Column(columnDefinition = "boolean default false")
     private boolean payoutHeld;
+
+    // Refund on tournament cancellation due to low turnout (Tournament.Status.CANCELLED_LOW_TURNOUT)
+    @Column(columnDefinition = "boolean default false")
+    private boolean refunded;
+
+    private LocalDateTime refundedAt;
 }
