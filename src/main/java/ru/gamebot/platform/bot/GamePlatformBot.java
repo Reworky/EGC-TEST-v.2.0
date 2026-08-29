@@ -2983,34 +2983,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         quests.sort((a, b) -> a.getTitle().compareToIgnoreCase(b.getTitle()));
 
         String title = category == null ? gameName : gameName + " • " + category;
-        StringBuilder captionBuilder = new StringBuilder("<b>" + escape(title) + "</b>\n\n");
-        captionBuilder.append("Награды видно сразу в списке — откройте карточку по номеру, чтобы увидеть условия прохождения.\n\n");
+        StringBuilder listBuilder = new StringBuilder();
         List<InlineKeyboardButton> openButtons = new ArrayList<>();
         for (int i = 0; i < quests.size(); i++) {
             Quest quest = quests.get(i);
-            captionBuilder.append(i + 1).append(". <b>").append(escape(quest.getTitle())).append("</b>");
-            if (quest.getRewardXp() > 0 || quest.getRewardCoins() > 0) {
-                captionBuilder.append(" — ");
-                if (quest.getRewardXp() > 0) captionBuilder.append("+").append(quest.getRewardXp()).append(" XP");
-                if (quest.getRewardXp() > 0 && quest.getRewardCoins() > 0) captionBuilder.append(", ");
-                if (quest.getRewardCoins() > 0) captionBuilder.append("+").append(quest.getRewardCoins()).append(" EXC");
-            }
-            captionBuilder.append("\n");
+            listBuilder.append(i + 1).append(". ").append(escape(quest.getTitle())).append("\n");
             openButtons.add(keyboardFactory.callback(
                     String.valueOf(i + 1),
                     "quest:view:" + encodeGameToken(gameName) + ":" + categoryToken(category) + ":" + quest.getId()
             ));
         }
-        String caption = captionBuilder.toString();
         InlineKeyboardMarkup keyboard = numberedGridWithBackMenu(openButtons, "⬅️ Назад", backData);
-        if (category == null && !"UGC".equalsIgnoreCase(gameName)) {
-            gameCatalogService.getPhotoFileId(gameName).ifPresentOrElse(
-                    photoFileId -> sendPhotoCaption(user.getTelegramId(), photoFileId, caption, keyboard),
-                    () -> sendText(user.getTelegramId(), caption, keyboard)
-            );
-        } else {
-            sendText(user.getTelegramId(), caption, keyboard);
+        String listText = "<b>" + escape(title) + "</b>\n\n"
+                + "Откройте карточку по номеру, чтобы увидеть награду и условия прохождения.\n\n"
+                + listBuilder;
+
+        // Photo caption has a 1024-char Telegram limit that a long quest list easily exceeds —
+        // send the banner on its own (short caption, no keyboard) and the full list as a separate message.
+        boolean wantsPhoto = category == null && !"UGC".equalsIgnoreCase(gameName);
+        java.util.Optional<String> photoFileId = wantsPhoto ? gameCatalogService.getPhotoFileId(gameName) : java.util.Optional.empty();
+        if (photoFileId.isPresent()) {
+            sendPhotoCaption(user.getTelegramId(), photoFileId.get(), "<b>" + escape(title) + "</b>", null);
         }
+        sendText(user.getTelegramId(), listText, keyboard);
     }
 
     private void handleQuestListAction(CallbackQuery callbackQuery, AppUser user, String payload) {
