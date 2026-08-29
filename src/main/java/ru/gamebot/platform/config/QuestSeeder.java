@@ -9,6 +9,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import ru.gamebot.platform.domain.enums.BrawlVerifyType;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.repository.QuestRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
@@ -271,6 +272,37 @@ public class QuestSeeder implements CommandLineRunner {
                 "Победи 5 раз в режиме «Оборона Мехи» в Brawl Stars.",
                 "Выбери режим «Оборона Мехи» и набери 5 побед. Прогресс суммируется из разных сессий.",
                 mechReq);
+
+        // ── Brawl Stars — авто-верификация через официальный API ────────────────
+        // "Любое столкновение" встречается вторым вариантом почти в каждом квесте с режимом — по факту
+        // это означает "или любой другой режим", т.е. фильтр по режиму для таких квестов не нужен вовсе
+        // (modeKeys=null). Строки типа боя/побед проверены на реальном ответе battlelog для аккаунта
+        // с тегом #2VQPV98C88 (type="ranked", result="victory" для командных режимов, rank==1 на
+        // самом battle для Showdown). Бойцы Наджия/Старр Нова — не опознаны в реальных данных (похоже,
+        // добавлены в игру позже даты обучения модели) — оставлены заглушки, требуют проверки вживую.
+        setBrawlVerify("Сразись в бою 6 раз", BrawlVerifyType.BATTLES, 6, false, false, false, null, null);
+        setBrawlVerify("Победи врага 9 раз", BrawlVerifyType.BATTLES, 9, true, false, false, null, null);
+        setBrawlVerify("Набери 80 трофеев", BrawlVerifyType.TROPHIES, 80, false, false, false, null, null);
+        setBrawlVerify("Выиграй бой 5 раз в ранговом режиме", BrawlVerifyType.BATTLES, 5, true, true, false, null, null);
+        setBrawlVerify("Сыграй 5 матчей в команде", BrawlVerifyType.BATTLES, 5, false, false, true, null, null);
+        setBrawlVerify("Победи врага 15 раз с бойцом Фрэнк, Гавс или Ларри и Лори", BrawlVerifyType.BATTLES, 15, true, false, false, null, "FRANK,GUS,LARRY & LAWRIE");
+        setBrawlVerify("Выиграй бой 5 раз с бойцом Кольт, Джеки или Клэнси", BrawlVerifyType.BATTLES, 5, true, false, false, null, "COLT,JACKY,CLANCY");
+        setBrawlVerify("Выиграй бой 5 раз с бойцом Роза, Виллоу или Хэнк", BrawlVerifyType.BATTLES, 5, true, false, false, null, "ROSA,WILLOW,HANK");
+        setBrawlVerify("Выиграй бой 5 раз с бойцом Макс, Базз или Хэнк", BrawlVerifyType.BATTLES, 5, true, false, false, null, "MAX,BUZZ,HANK");
+        setBrawlVerify("Выиграй бой 5 раз с бойцом Фрэнк, Спраут или Наджия", BrawlVerifyType.BATTLES, 5, true, false, false, null, "FRANK,SPROUT,TBD_NADIA");
+        setBrawlVerify("Выиграй бой 5 раз с бойцом Гром, Перл или Ларри и Лори", BrawlVerifyType.BATTLES, 5, true, false, false, null, "GROM,PEARL,LARRY & LAWRIE");
+        setBrawlVerify("Выиграй бой 5 раз с бойцом Дэррил, Тик или Старр Нова", BrawlVerifyType.BATTLES, 5, true, false, false, null, "DARRYL,TICK,TBD_STARR_NOVA");
+        setBrawlVerify("Выиграй бой 5 раз в режиме «Захват кристаллов» или «Любое столкновение»", BrawlVerifyType.BATTLES, 5, true, false, false, null, null);
+        setBrawlVerify("Победи врага 15 раз в режиме «Броулбол» или «Любое столкновение»", BrawlVerifyType.BATTLES, 15, true, false, false, null, null);
+        setBrawlVerify("Выиграй бой 8 раз в режиме «Любое столкновение» или «Арена»", BrawlVerifyType.BATTLES, 8, true, false, false, null, null);
+        setBrawlVerify("Победи врага 15 раз в режиме «Любое столкновение» или «Горячая зона»", BrawlVerifyType.BATTLES, 15, true, false, false, null, null);
+        setBrawlVerify("Выиграй бой 5 раз в режиме «Броулбол» или «Любое столкновение»", BrawlVerifyType.BATTLES, 5, true, false, false, null, null);
+        setBrawlVerify("Выиграй бой 5 раз в режиме «Любое столкновение» или «Баскетбол»", BrawlVerifyType.BATTLES, 5, true, false, false, null, null);
+        // "Оборона Мехи" — не встретилось в реальных данных battlelog; лучшая догадка по смыслу — roboRumble
+        // (кооп-режим против роботов). ТРЕБУЕТ проверки вживую (сыграть матч, свериться с battlelog).
+        setBrawlVerify("Выиграй бой 1 раз в режиме «Оборона Мехи»", BrawlVerifyType.BATTLES, 1, true, false, false, "roboRumble", null);
+        setBrawlVerify("Выиграй бой 3 раза в режиме «Оборона Мехи»", BrawlVerifyType.BATTLES, 3, true, false, false, "roboRumble", null);
+        setBrawlVerify("Выиграй бой 5 раз в режиме «Оборона Мехи»", BrawlVerifyType.BATTLES, 5, true, false, false, "roboRumble", null);
 
         // ── PUBG PC — Лёгкие ────────────────────────────────────────────────────
 
@@ -1378,5 +1410,26 @@ public class QuestSeeder implements CommandLineRunner {
         // Neither found — create fresh
         seed(newTitle, gameName, category, platform, durationDays, durationText,
                 rewardXp, rewardCoins, description, instruction, requirements);
+    }
+
+    /**
+     * Проставляет структурные данные авто-верификации Brawl Stars квесту, уже созданному через seedFlat().
+     * Идемпотентен — вызывается на каждом деплое, просто перезаписывает поля. Отдельный метод (не параметр
+     * seedFlat) — seedFlat переиспользуется квестами многих игр и не должен обрастать Brawl-специфичными
+     * параметрами.
+     */
+    private void setBrawlVerify(String title, BrawlVerifyType type, int targetCount,
+                                 boolean requireVictory, boolean requireRanked, boolean requireTeam,
+                                 String modeKeys, String brawlerNames) {
+        questRepository.findFirstByTitleAndGameName(title, "Brawl Stars").ifPresentOrElse(q -> {
+            q.setBrawlVerifyType(type);
+            q.setBrawlTargetCount(targetCount);
+            q.setBrawlRequireVictory(requireVictory);
+            q.setBrawlRequireRanked(requireRanked);
+            q.setBrawlRequireTeam(requireTeam);
+            q.setBrawlModeKeys(modeKeys);
+            q.setBrawlBrawlerNames(brawlerNames);
+            questRepository.save(q);
+        }, () -> log.warn("[QuestSeeder] setBrawlVerify: quest not found (seedFlat must run first): '{}'", title));
     }
 }

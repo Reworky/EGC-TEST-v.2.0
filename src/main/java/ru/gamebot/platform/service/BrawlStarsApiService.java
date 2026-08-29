@@ -186,8 +186,9 @@ public class BrawlStarsApiService {
                 if (battle.has("result")) {
                     victory = "victory".equalsIgnoreCase(battle.path("result").asText(""));
                 } else {
-                    // Showdown/Duels-style: no top-level result, win = rank 1
-                    victory = ownEntry.path("rank").asInt(Integer.MAX_VALUE) == 1;
+                    // Showdown-style (soloShowdown/duoShowdown): no "result", "rank" is on battle itself
+                    // (this player's own battlelog, so it's already their placement) — verified live, rank 1 = win.
+                    victory = battle.path("rank").asInt(Integer.MAX_VALUE) == 1;
                 }
                 out.add(new BattleLogEntry(battleTime, mode, type, victory, isTeamMode, brawlerName));
             }
