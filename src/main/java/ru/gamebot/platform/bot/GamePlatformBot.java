@@ -3168,7 +3168,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (hasActiveSubmission) {
             buttons.add(quest.isExternalAutoApprove()
                     ? keyboardFactory.callback("⏳ Ждём подтверждения от партнёра", "noop")
-                    : keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
+                    : quest.getBrawlVerifyType() != null
+                        ? keyboardFactory.callback("⏳ Прогресс отслеживается автоматически", "noop")
+                        : keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
         }
         if (nextQuestData != null) {
             buttons.add(keyboardFactory.callback("➡️ Следующий квест", nextQuestData));
@@ -3196,8 +3198,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📝 <b>Суть задания:</b>\n" + escape(quest.getDescription()) + "\n\n"
                         + (personalizedInstruction != null && !personalizedInstruction.isBlank()
                             ? (quest.isSponsored() ? "📎 <b>Ссылки:</b>\n" : "📎 <b>Что нужно сделать:</b>\n") + escape(personalizedInstruction)
-                                + (quest.isSponsored() ? "" : (quest.isExternalAutoApprove() ? "\n\nℹ️ " : "\n\n✅ <b>Что примет модерация:</b>\n") + escape(quest.getRequirements()))
-                            : (quest.isSponsored() ? "" : "📎 <b>Что нужно сделать:</b>\n" + escape(personalizedInstruction) + "\n\n✅ <b>Что примет модерация:</b>\n" + escape(quest.getRequirements()))),
+                                + (quest.isSponsored() ? "" : (quest.isExternalAutoApprove() || quest.getBrawlVerifyType() != null ? "\n\nℹ️ " : "\n\n✅ <b>Что примет модерация:</b>\n") + escape(quest.getRequirements()))
+                            : (quest.isSponsored() ? "" : "📎 <b>Что нужно сделать:</b>\n" + escape(personalizedInstruction)
+                                + (quest.getBrawlVerifyType() != null ? "\n\nℹ️ " : "\n\n✅ <b>Что примет модерация:</b>\n") + escape(quest.getRequirements()))),
                 verticalWithBackMenu(buttons, backText, backData));
     }
 
