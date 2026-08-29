@@ -305,6 +305,29 @@ public class QuestSeeder implements CommandLineRunner {
         setBrawlVerify("Выиграй бой 5 раз в режиме «Броулбол» или «Любое столкновение»", BrawlVerifyType.BATTLES, 5, true, false, false, null, null);
         setBrawlVerify("Выиграй бой 5 раз в режиме «Любое столкновение» или «Баскетбол»", BrawlVerifyType.BATTLES, 5, true, false, false, null, null);
 
+        // Одноразовая починка: эти 8 квестов уже переименовались на предыдущих деплоях ДО фикса
+        // в updateQuest() (баг: keepBsTitles-очистка деактивировала их по старому названию раньше,
+        // чем происходило само переименование) — раз переименование уже случилось, ветка "byOldTitle"
+        // в updateQuest() больше не сработает для них, а ветка "byNewTitle" active не трогает.
+        // Можно удалить этот блок после подтверждения, что квесты снова видны в списке.
+        Set<String> stuckByRenameBug = Set.of(
+                "Победи врага 15 раз с бойцом Эль Примо, Дэррил или Эдгар",
+                "Выиграй бой 5 раз с бойцом Эль Примо, Дэррил или Эдгар",
+                "Выиграй бой 8 раз с бойцом Шелли, Нита или Дэррил",
+                "Выиграй бой 10 раз с бойцом Шелли, Эль Примо или Эдгар",
+                "Выиграй бой 5 раз с бойцом Шелли, Эль Примо или Эдгар",
+                "Выиграй бой 5 раз с бойцом Шелли, Нита или Дэррил",
+                "Выиграй бой 8 раз в режиме «Любое столкновение» или «Нокаут»",
+                "Нанеси 100 000 урона в режиме «Любое столкновение» или «Нокаут»"
+        );
+        questRepository.findAll().stream()
+                .filter(q -> "Brawl Stars".equalsIgnoreCase(q.getGameName()) && stuckByRenameBug.contains(q.getTitle()) && !q.isActive())
+                .forEach(q -> {
+                    q.setActive(true);
+                    questRepository.save(q);
+                    log.info("[QuestSeeder] Reactivated quest stuck by rename-order bug: '{}'", q.getTitle());
+                });
+
         // ── PUBG PC — Лёгкие ────────────────────────────────────────────────────
 
         seed("Выживи до Топ-50", "PUBG PC",
