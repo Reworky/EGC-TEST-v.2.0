@@ -178,8 +178,11 @@ public class QuestSeeder implements CommandLineRunner {
                 "Выбери одного из трёх бойцов. Победы с разными бойцами суммируются. Прогресс — в «Квестах сезона».",
                 bsReq);
 
-        seedFlat("Выиграй бой 5 раз с бойцом Фрэнк, Спраут или Наджия", "Brawl Stars", "Mobile", 7, "7 дней", 50, 2000,
-                "Победи в 5 боях, играя за Фрэнка, Спраута или Наджию — в любом режиме.",
+        // Переименовано с "Фрэнк, Спраут или Наджия" — Наджия не опознана ни в реальном battlelog,
+        // ни в текущих скриншотах внутриигровых квестов; заменено на подтверждённую актуальную тройку.
+        updateQuest("Выиграй бой 5 раз с бойцом Фрэнк, Спраут или Наджия", "Brawl Stars",
+                "Выиграй бой 5 раз с бойцом Шелли, Эль Примо или Эдгар", null, "Mobile", 7, "7 дней", 50, 2000,
+                "Победи в 5 боях, играя за Шелли, Эль Примо или Эдгара — в любом режиме.",
                 "Выбери одного из трёх бойцов. Победы с разными бойцами суммируются. Прогресс — в «Квестах сезона».",
                 bsReq);
 
@@ -188,8 +191,11 @@ public class QuestSeeder implements CommandLineRunner {
                 "Выбери одного из трёх бойцов. Победы с разными бойцами суммируются. Прогресс — в «Квестах сезона».",
                 bsReq);
 
-        seedFlat("Выиграй бой 5 раз с бойцом Дэррил, Тик или Старр Нова", "Brawl Stars", "Mobile", 7, "7 дней", 50, 2000,
-                "Победи в 5 боях, играя за Дэррила, Тика или Старр Нову — в любом режиме.",
+        // Переименовано с "Дэррил, Тик или Старр Нова" — Старр Нова не опознана ни в реальном battlelog,
+        // ни в текущих скриншотах внутриигровых квестов; заменено на подтверждённую актуальную тройку.
+        updateQuest("Выиграй бой 5 раз с бойцом Дэррил, Тик или Старр Нова", "Brawl Stars",
+                "Выиграй бой 5 раз с бойцом Шелли, Нита или Дэррил", null, "Mobile", 7, "7 дней", 50, 2000,
+                "Победи в 5 боях, играя за Шелли, Ниту или Дэррила — в любом режиме.",
                 "Выбери одного из трёх бойцов. Победы с разными бойцами суммируются. Прогресс — в «Квестах сезона».",
                 bsReq);
 
@@ -278,8 +284,9 @@ public class QuestSeeder implements CommandLineRunner {
         // это означает "или любой другой режим", т.е. фильтр по режиму для таких квестов не нужен вовсе
         // (modeKeys=null). Строки типа боя/побед проверены на реальном ответе battlelog для аккаунта
         // с тегом #2VQPV98C88 (type="ranked", result="victory" для командных режимов, rank==1 на
-        // самом battle для Showdown). Бойцы Наджия/Старр Нова — не опознаны в реальных данных (похоже,
-        // добавлены в игру позже даты обучения модели) — оставлены заглушки, требуют проверки вживую.
+        // самом battle для Showdown). Бойцы/режимы сверены с актуальными скриншотами внутриигровых
+        // квестов пользователя (2026-08-30) — два квеста с неопознанными бойцами (Наджия, Старр Нова,
+        // видимо новые бойцы после даты обучения модели) переименованы на подтверждённые актуальные тройки.
         setBrawlVerify("Сразись в бою 6 раз", BrawlVerifyType.BATTLES, 6, false, false, false, null, null);
         setBrawlVerify("Победи врага 9 раз", BrawlVerifyType.BATTLES, 9, true, false, false, null, null);
         setBrawlVerify("Набери 80 трофеев", BrawlVerifyType.TROPHIES, 80, false, false, false, null, null);
@@ -289,9 +296,9 @@ public class QuestSeeder implements CommandLineRunner {
         setBrawlVerify("Выиграй бой 5 раз с бойцом Кольт, Джеки или Клэнси", BrawlVerifyType.BATTLES, 5, true, false, false, null, "COLT,JACKY,CLANCY");
         setBrawlVerify("Выиграй бой 5 раз с бойцом Роза, Виллоу или Хэнк", BrawlVerifyType.BATTLES, 5, true, false, false, null, "ROSA,WILLOW,HANK");
         setBrawlVerify("Выиграй бой 5 раз с бойцом Макс, Базз или Хэнк", BrawlVerifyType.BATTLES, 5, true, false, false, null, "MAX,BUZZ,HANK");
-        setBrawlVerify("Выиграй бой 5 раз с бойцом Фрэнк, Спраут или Наджия", BrawlVerifyType.BATTLES, 5, true, false, false, null, "FRANK,SPROUT,TBD_NADIA");
+        setBrawlVerify("Выиграй бой 5 раз с бойцом Шелли, Эль Примо или Эдгар", BrawlVerifyType.BATTLES, 5, true, false, false, null, "SHELLY,EL PRIMO,EDGAR");
         setBrawlVerify("Выиграй бой 5 раз с бойцом Гром, Перл или Ларри и Лори", BrawlVerifyType.BATTLES, 5, true, false, false, null, "GROM,PEARL,LARRY & LAWRIE");
-        setBrawlVerify("Выиграй бой 5 раз с бойцом Дэррил, Тик или Старр Нова", BrawlVerifyType.BATTLES, 5, true, false, false, null, "DARRYL,TICK,TBD_STARR_NOVA");
+        setBrawlVerify("Выиграй бой 5 раз с бойцом Шелли, Нита или Дэррил", BrawlVerifyType.BATTLES, 5, true, false, false, null, "SHELLY,NITA,DARRYL");
         setBrawlVerify("Выиграй бой 5 раз в режиме «Захват кристаллов» или «Любое столкновение»", BrawlVerifyType.BATTLES, 5, true, false, false, null, null);
         setBrawlVerify("Победи врага 15 раз в режиме «Броулбол» или «Любое столкновение»", BrawlVerifyType.BATTLES, 15, true, false, false, null, null);
         setBrawlVerify("Выиграй бой 8 раз в режиме «Любое столкновение» или «Арена»", BrawlVerifyType.BATTLES, 8, true, false, false, null, null);
