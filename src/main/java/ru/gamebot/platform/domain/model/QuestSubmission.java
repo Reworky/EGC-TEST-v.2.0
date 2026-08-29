@@ -110,4 +110,15 @@ public class QuestSubmission {
 
     /** Telegram ID модератора, который принял решение об отклонении (для аналитики, если модераторов несколько). */
     private Long moderatorTelegramId;
+
+    /** TROPHIES: трофеи на момент первого опроса после взятия квеста (не в момент взятия — без сетевого вызова в takeQuestChecked). null = ещё не захвачено. */
+    private Integer brawlBaselineTrophies;
+
+    /** BATTLES: battleTime (формат Brawl) последнего учтённого боя. null = курсор ещё не инициализирован — при первом опросе берётся из createdAt. */
+    @Column(length = 32)
+    private String brawlBattleCursor;
+
+    /** BATTLES: количество боёв, прошедших фильтры квеста, накопленное с момента взятия. */
+    @Column(columnDefinition = "integer default 0")
+    private int brawlProgressCount;
 }

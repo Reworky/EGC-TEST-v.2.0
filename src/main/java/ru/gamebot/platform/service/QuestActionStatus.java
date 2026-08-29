@@ -15,5 +15,6 @@ public enum QuestActionStatus {
     TAKE_COOLDOWN,
     REJECT_COOLDOWN,
     HAS_PENDING_REPORT,
-    EXPIRED
+    EXPIRED,
+    NEEDS_BRAWL_TAG
 }

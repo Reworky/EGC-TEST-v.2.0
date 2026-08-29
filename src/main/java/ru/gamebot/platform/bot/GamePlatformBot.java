@@ -135,6 +135,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ClaudeVisionService claudeVisionService;
     private final ru.gamebot.platform.domain.repository.QuestRepository questRepository;
     private final ru.gamebot.platform.service.BrawlStarsTournamentService brawlStarsTournamentService;
+    private final ru.gamebot.platform.service.BrawlQuestVerificationService brawlQuestVerificationService;
     private final ru.gamebot.platform.domain.repository.TournamentEntryRepository tournamentEntryRepository;
 
     private final Queue<String[]> pendingNewsQueue = new ConcurrentLinkedQueue<>();
@@ -702,7 +703,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if (data.startsWith("quest:take:")) {
-            handleTakeQuest(callbackQuery, user, parseLong(data.substring("quest:take:".length())));
+            handleTakeQuest(callbackQuery, user, session, parseLong(data.substring("quest:take:".length())));
             return;
         }
         if (data.startsWith("quest:report:")) {
@@ -901,7 +902,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if (data.startsWith("brawl:confirm:")) {
-            long tid = parseLong(data.substring("brawl:confirm:".length()));
+            String confirmSuffix = data.substring("brawl:confirm:".length());
+            if ("quest".equals(confirmSuffix) || "profile".equals(confirmSuffix)) {
+                String tag = session.getData().get("brawlTag");
+                String name = session.getData().get("brawlName");
+                String trophiesStr = session.getData().get("brawlTrophies");
+                if (tag == null || trophiesStr == null) {
+                    answer(callbackQuery.getId(), "❌ Сессия истекла, начните заново.");
+                    session.reset();
+                    return;
+                }
+                var playerInfo = new ru.gamebot.platform.service.BrawlStarsApiService.PlayerInfo(tag, name, Integer.parseInt(trophiesStr));
+                brawlQuestVerificationService.linkTag(user, playerInfo);
+                String pendingQuestIdStr = session.getData().get("brawlPendingQuestId");
+                session.reset();
+                answer(callbackQuery.getId(), "✅ Тег привязан!");
+                if ("quest".equals(confirmSuffix) && pendingQuestIdStr != null) {
+                    handleTakeQuest(callbackQuery, user, session, Long.parseLong(pendingQuestIdStr));
+                } else {
+                    sendText(user.getTelegramId(), "✅ Тег Brawl Stars привязан: " + escape(tag), backMenuKeyboard("menu:profile"));
+                }
+                return;
+            }
+            long tid = parseLong(confirmSuffix);
             tournamentService.findById(tid).ifPresentOrElse(t -> {
                 String tag = session.getData().get("brawlTag");
                 String name = session.getData().get("brawlName");
@@ -924,8 +947,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if (data.startsWith("brawl:retry:")) {
-            long tid = parseLong(data.substring("brawl:retry:".length()));
-            session.getData().put("brawlTournamentId", String.valueOf(tid));
+            String retrySuffix = data.substring("brawl:retry:".length());
+            if (!"quest".equals(retrySuffix) && !"profile".equals(retrySuffix)) {
+                session.getData().put("brawlTournamentId", retrySuffix);
+            }
             session.setState(SessionState.BRAWL_TAG_INPUT);
             sendText(user.getTelegramId(), "🏷️ Введите игровой тег ещё раз:", cancelKeyboard());
             answerSilently(callbackQuery.getId());
@@ -1139,6 +1164,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         backOnlyKeyboard("menu:profile"));
             }
             case "edit" -> sendProfileEdit(user);
+            case "brawl_tag" -> {
+                session.reset();
+                session.getData().put("brawlLinkPurpose", "profile");
+                session.setState(SessionState.BRAWL_TAG_INPUT);
+                sendText(user.getTelegramId(), "🏷️ Введите ваш игровой тег Brawl Stars (например: <code>#ABC123</code>):", cancelKeyboard());
+            }
             case "edit_age" -> {
                 session.setState(SessionState.EDIT_AGE);
                 String currentAge = user.getAge() != null ? String.valueOf(user.getAge()) : "не указан";
@@ -1618,30 +1649,51 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
 
             case BRAWL_TAG_INPUT -> {
-                long tid = Long.parseLong(session.getData().get("brawlTournamentId"));
-                ru.gamebot.platform.domain.model.Tournament t = tournamentService.findById(tid).orElse(null);
-                if (t == null) {
-                    session.reset();
-                    sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("menu:tournament"));
-                    return;
+                String purpose = session.getData().getOrDefault("brawlLinkPurpose", "tournament");
+                if ("tournament".equals(purpose)) {
+                    long tid = Long.parseLong(session.getData().get("brawlTournamentId"));
+                    ru.gamebot.platform.domain.model.Tournament t = tournamentService.findById(tid).orElse(null);
+                    if (t == null) {
+                        session.reset();
+                        sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("menu:tournament"));
+                        return;
+                    }
+                    ru.gamebot.platform.service.BrawlStarsTournamentService.TagLookupResult res =
+                            brawlStarsTournamentService.lookupTag(t, text.trim());
+                    if (!res.success()) {
+                        sendText(user.getTelegramId(), "❌ " + res.error() + "\n\nПопробуйте ещё раз:", cancelKeyboard());
+                        return;
+                    }
+                    session.getData().put("brawlTag", res.playerInfo().tag());
+                    session.getData().put("brawlName", res.playerInfo().name());
+                    session.getData().put("brawlTrophies", String.valueOf(res.playerInfo().trophies()));
+                    session.setState(SessionState.BRAWL_TAG_CONFIRM);
+                    sendText(user.getTelegramId(),
+                            "🎮 Найден игрок: <b>" + escape(res.playerInfo().name()) + "</b> (" + res.playerInfo().trophies() + " 🏆)\n\nЭто вы?",
+                            keyboardFactory.rowsLayout(List.of(
+                                    List.of(keyboardFactory.callback("✅ Да, это я", "brawl:confirm:" + tid)),
+                                    List.of(keyboardFactory.callback("✏️ Ввести другой тег", "brawl:retry:" + tid)),
+                                    List.of(keyboardFactory.callback("❌ Отмена", "menu:tournament"))
+                            )));
+                } else {
+                    ru.gamebot.platform.service.BrawlQuestVerificationService.TagLookupResult res =
+                            brawlQuestVerificationService.lookupTag(text.trim());
+                    if (!res.success()) {
+                        sendText(user.getTelegramId(), "❌ " + res.error() + "\n\nПопробуйте ещё раз:", cancelKeyboard());
+                        return;
+                    }
+                    session.getData().put("brawlTag", res.playerInfo().tag());
+                    session.getData().put("brawlName", res.playerInfo().name());
+                    session.getData().put("brawlTrophies", String.valueOf(res.playerInfo().trophies()));
+                    session.setState(SessionState.BRAWL_TAG_CONFIRM);
+                    sendText(user.getTelegramId(),
+                            "🎮 Найден игрок: <b>" + escape(res.playerInfo().name()) + "</b> (" + res.playerInfo().trophies() + " 🏆)\n\nЭто вы?",
+                            keyboardFactory.rowsLayout(List.of(
+                                    List.of(keyboardFactory.callback("✅ Да, это я", "brawl:confirm:" + purpose)),
+                                    List.of(keyboardFactory.callback("✏️ Ввести другой тег", "brawl:retry:" + purpose)),
+                                    List.of(keyboardFactory.callback("❌ Отмена", "menu:quests"))
+                            )));
                 }
-                ru.gamebot.platform.service.BrawlStarsTournamentService.TagLookupResult res =
-                        brawlStarsTournamentService.lookupTag(t, text.trim());
-                if (!res.success()) {
-                    sendText(user.getTelegramId(), "❌ " + res.error() + "\n\nПопробуйте ещё раз:", cancelKeyboard());
-                    return;
-                }
-                session.getData().put("brawlTag", res.playerInfo().tag());
-                session.getData().put("brawlName", res.playerInfo().name());
-                session.getData().put("brawlTrophies", String.valueOf(res.playerInfo().trophies()));
-                session.setState(SessionState.BRAWL_TAG_CONFIRM);
-                sendText(user.getTelegramId(),
-                        "🎮 Найден игрок: <b>" + escape(res.playerInfo().name()) + "</b> (" + res.playerInfo().trophies() + " 🏆)\n\nЭто вы?",
-                        keyboardFactory.rowsLayout(List.of(
-                                List.of(keyboardFactory.callback("✅ Да, это я", "brawl:confirm:" + tid)),
-                                List.of(keyboardFactory.callback("✏️ Ввести другой тег", "brawl:retry:" + tid)),
-                                List.of(keyboardFactory.callback("❌ Отмена", "menu:tournament"))
-                        )));
             }
             case TOURNAMENT_CREATE_NAME -> {
                 session.getData().put("tName", text.trim());
@@ -2688,6 +2740,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         List.of(keyboardFactory.callback("🌍 " + (user.getCountry() != null ? "Изменить страну" : "Указать страну"), "profile:edit_country")),
                         List.of(keyboardFactory.callback("🎮 " + (user.getPlatformsCsv() != null ? "Изменить платформы" : "Указать платформы"), "profile:edit_platforms")),
                         List.of(keyboardFactory.callback("🧩 " + (user.getInterestsCsv() != null ? "Изменить жанры" : "Указать жанры"), "profile:edit_genres")),
+                        List.of(keyboardFactory.callback("🏷️ " + (user.getBrawlStarsTag() != null ? "Изменить тег Brawl Stars" : "Привязать тег Brawl Stars"), "profile:brawl_tag")),
                         List.of(keyboardFactory.callback("⬅️ Назад", "menu:profile"))
                 )));
     }
@@ -3148,8 +3201,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 verticalWithBackMenu(buttons, backText, backData));
     }
 
-    private void handleTakeQuest(CallbackQuery callbackQuery, AppUser user, Long questId) {
+    private void handleTakeQuest(CallbackQuery callbackQuery, AppUser user, UserSession session, Long questId) {
         Quest quest = questService.getQuest(questId);
+        if (quest.getBrawlVerifyType() != null && user.getBrawlStarsTag() == null) {
+            answerSilently(callbackQuery.getId());
+            session.reset();
+            session.getData().put("brawlLinkPurpose", "quest");
+            session.getData().put("brawlPendingQuestId", String.valueOf(questId));
+            session.setState(SessionState.BRAWL_TAG_INPUT);
+            sendText(user.getTelegramId(),
+                    "🏷️ Для этого квеста нужен привязанный тег Brawl Stars — прогресс отслеживается автоматически.\n\n"
+                            + "Введите ваш игровой тег (например: <code>#ABC123</code>):",
+                    cancelKeyboard());
+            return;
+        }
         QuestService.QuestActionResult result = questService.takeQuestChecked(user, quest);
         answerSilently(callbackQuery.getId());
 
@@ -3161,16 +3226,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long weeklyCount = questService.getWeeklyCompletionsOfType(user, quest);
         String notice = quest.isExternalAutoApprove()
                 ? "🚀 Квест активен! Перейди по своей ссылке ниже — отчёт отправлять не нужно, EXC начислится автоматически."
-                : "🚀 Квест активен! Приступайте к игре, когда выполните задание, отправьте отчёт прямо из этой карточки.";
-        if (!quest.isExternalAutoApprove() && weeklyCount >= 3) {
+                : quest.getBrawlVerifyType() != null
+                    ? "🚀 Квест активен! ⏳ Прогресс отслеживается автоматически по вашему аккаунту Brawl Stars — отчёт отправлять не нужно."
+                    : "🚀 Квест активен! Приступайте к игре, когда выполните задание, отправьте отчёт прямо из этой карточки.";
+        if (!quest.isExternalAutoApprove() && quest.getBrawlVerifyType() == null && weeklyCount >= 3) {
             notice += "\n\n⚠️ Вы уже выполнили 3+ таких квеста за неделю — награда EXC будет снижена на 50%.";
         }
 
         Quest freshQuest = questService.getQuest(questId);
         QuestSubmission submission = result.submission();
         List<InlineKeyboardButton> buttons = new ArrayList<>();
-        buttons.add(freshQuest.isExternalAutoApprove()
-                ? keyboardFactory.callback("⏳ Ждём подтверждения от партнёра", "noop")
+        buttons.add(freshQuest.isExternalAutoApprove() || freshQuest.getBrawlVerifyType() != null
+                ? keyboardFactory.callback(freshQuest.getBrawlVerifyType() != null ? "⏳ Прогресс отслеживается автоматически" : "⏳ Ждём подтверждения от партнёра", "noop")
                 : keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
         buttons.add(keyboardFactory.callback("📂 Мои квесты", "menu:myquests"));
         buttons.add(keyboardFactory.callback("🏠 Меню", "menu:main"));
@@ -9158,6 +9225,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyModeratorsAboutSubmission(event.getSubmissionId());
         } catch (Exception e) {
             log.error("[QuestReport] Failed to notify moderators for submission {}", event.getSubmissionId(), e);
+        }
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onBrawlQuestAutoVerified(ru.gamebot.platform.event.BrawlQuestAutoVerifiedEvent event) {
+        try {
+            QuestSubmission approved = questService.getSubmission(event.getSubmissionId());
+            notifyUser(approved.getUser().getTelegramId(),
+                    "✅ <b>Квест выполнен автоматически!</b>\n\n"
+                    + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в Brawl Stars засчитан.\n\n"
+                    + "🪙 EXC: <b>+" + approved.getQuest().getRewardCoins() + "</b>\n"
+                    + "✨ XP: <b>+" + approved.getQuest().getRewardXp() + "</b>");
+        } catch (Exception e) {
+            log.error("[BrawlAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
         }
     }
 

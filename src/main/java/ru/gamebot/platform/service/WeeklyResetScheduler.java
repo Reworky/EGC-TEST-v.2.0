@@ -50,6 +50,7 @@ public class WeeklyResetScheduler {
     private final AppUserRepository appUserRepository;
     private final SeasonService seasonService;
     private final ExcTransactionService excTx;
+    private final BrawlQuestVerificationService brawlQuestVerificationService;
 
     private static final int[] DORMANCY_TIER_DAYS = {14, 30, 60};
     private static final long[] DORMANCY_TIER_EXC = {300, 750, 1500};
@@ -131,6 +132,16 @@ public class WeeklyResetScheduler {
         }
         if (!expired.isEmpty()) {
             log.info("Auto-cancelled {} expired quest submission(s)", expired.size());
+        }
+    }
+
+    // Проверка прогресса авто-верификации квестов Brawl Stars — каждые 10 минут
+    @Scheduled(fixedDelay = 600_000)
+    public void checkBrawlAutoVerifyProgress() {
+        try {
+            brawlQuestVerificationService.checkInProgressSubmissions();
+        } catch (Exception e) {
+            log.error("Brawl auto-verify check failed", e);
         }
     }
 

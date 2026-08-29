@@ -154,6 +154,10 @@ function QuestActions({ quest, detail, onChanged }) {
     return <div className="quest-status quest-status-pending"><i className="ti ti-clock"></i> Ждём подтверждения от партнёра — отчёт отправлять не нужно</div>;
   }
 
+  if (detail.brawlAutoVerify && status === 'DRAFT') {
+    return <div className="quest-status quest-status-pending"><i className="ti ti-clock"></i> Прогресс отслеживается автоматически по вашему аккаунту Brawl Stars — отчёт отправлять не нужно</div>;
+  }
+
   if (status === 'DRAFT' || status === 'REJECTED' || status === 'NEEDS_INFO') {
     return (
       <div className="quest-submit-form">

@@ -148,4 +148,10 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     List<Object[]> findUsersWhoseHardQuestCooldownExpiredBetween(
             @Param("from") java.time.LocalDateTime from,
             @Param("to") java.time.LocalDateTime to);
+
+    /** Незавершённые заявки на квесты с включённой авто-верификацией через Brawl Stars API, у пользователя привязан тег, срок не истёк. */
+    @EntityGraph(attributePaths = {"user", "quest"})
+    @Query("SELECT s FROM QuestSubmission s WHERE s.status = 'DRAFT' AND s.quest.brawlVerifyType IS NOT NULL " +
+           "AND s.user.brawlStarsTag IS NOT NULL AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP)")
+    List<QuestSubmission> findInProgressBrawlAutoVerify();
 }

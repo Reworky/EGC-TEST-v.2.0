@@ -75,6 +75,7 @@ public class QuestController {
                 .councilOnly(q.isCouncilOnly())
                 .sponsored(q.isSponsored())
                 .externalAutoApprove(q.isExternalAutoApprove())
+                .brawlAutoVerify(q.getBrawlVerifyType() != null)
                 .submissionStatus(statusByQuestId.get(q.getId()))
                 .build()).toList();
     }
@@ -103,6 +104,7 @@ public class QuestController {
                 .ticketReward(q.getTicketReward())
                 .councilOnly(q.isCouncilOnly()).sponsored(true)
                 .externalAutoApprove(q.isExternalAutoApprove())
+                .brawlAutoVerify(q.getBrawlVerifyType() != null)
                 .submissionStatus(statusByQuestId.get(q.getId()))
                 .build()).toList();
     }
@@ -134,7 +136,8 @@ public class QuestController {
                 .rewardCoins(quest.getRewardCoins())
                 .ticketReward(quest.getTicketReward())
                 .councilOnly(quest.isCouncilOnly())
-                .externalAutoApprove(quest.isExternalAutoApprove());
+                .externalAutoApprove(quest.isExternalAutoApprove())
+                .brawlAutoVerify(quest.getBrawlVerifyType() != null);
 
         if (telegramId != null) {
             appUserRepository.findByTelegramId(telegramId).ifPresent(user -> {
@@ -305,6 +308,7 @@ public class QuestController {
             case HAS_PENDING_REPORT -> "У вас уже есть отчёт на проверке у модератора — дождитесь решения, прежде чем отправлять следующий.";
             case EXPIRED -> "Срок выполнения этого квеста истёк.";
             case QUEST_INACTIVE -> "Этот квест больше недоступен.";
+            case NEEDS_BRAWL_TAG -> "🏷️ Для этого квеста нужно сначала привязать тег Brawl Stars — откройте бота и выполните привязку в разделе «Профиль».";
         };
     }
 }

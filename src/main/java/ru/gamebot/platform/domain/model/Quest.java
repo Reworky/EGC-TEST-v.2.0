@@ -2,6 +2,8 @@ package ru.gamebot.platform.domain.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -9,6 +11,7 @@ import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
+import ru.gamebot.platform.domain.enums.BrawlVerifyType;
 
 @Getter
 @Setter
@@ -75,6 +78,32 @@ public class Quest {
 
     private String photoFileId;
     private LocalDateTime createdAt;
+
+    /** null = обычный ручной квест со скриншотом — единственный флаг "включена авто-верификация через Brawl Stars API". */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private BrawlVerifyType brawlVerifyType;
+
+    /** Дельта трофеев (TROPHIES) или число засчитанных боёв (BATTLES). */
+    private Integer brawlTargetCount;
+
+    @Column(columnDefinition = "boolean default false")
+    private boolean brawlRequireVictory;
+
+    @Column(columnDefinition = "boolean default false")
+    private boolean brawlRequireRanked;
+
+    /** Бой должен быть в командном режиме (не соло/дуо Showdown). */
+    @Column(columnDefinition = "boolean default false")
+    private boolean brawlRequireTeam;
+
+    /** CSV допустимых ключей режима API (например "gemGrab,brawlBall"), OR-логика. null = любой режим. */
+    @Column(length = 500)
+    private String brawlModeKeys;
+
+    /** CSV допустимых имён бойцов API — засчитывается боец ИГРОКА в этом бою, OR-логика. null = любой боец. */
+    @Column(length = 500)
+    private String brawlBrawlerNames;
 
     /** Краткое условие (до ~150 символов) для подстановки в шаблон быстрого отклонения «Недостаточно данных». */
     @Column(length = 200)

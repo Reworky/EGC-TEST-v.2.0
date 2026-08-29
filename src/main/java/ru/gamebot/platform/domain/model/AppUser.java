@@ -120,6 +120,10 @@ public class AppUser {
     // Traffic source tracking
     private String trafficSourceCode;
 
+    /** Подтверждённый игровой тег Brawl Stars (например "#ABC123"). Общий для всех квестов (и в будущем — турниров), привязывается один раз. */
+    private String brawlStarsTag;
+    private LocalDateTime brawlTagConfirmedAt;
+
     // Season Pass
     private java.time.LocalDateTime seasonPassActiveUntil;
 

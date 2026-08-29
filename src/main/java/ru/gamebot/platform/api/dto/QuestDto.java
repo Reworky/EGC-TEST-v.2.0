@@ -22,6 +22,9 @@ public class QuestDto {
     /** Внешний авто-квест (партнёрская сеть): вместо отчёта нужно просто перейти по ссылке. */
     private boolean externalAutoApprove;
 
+    /** Brawl Stars авто-верификация: прогресс отслеживается по battlelog/трофеям, отчёт не нужен. */
+    private boolean brawlAutoVerify;
+
     /** null, если пользователь ещё не брал этот квест */
     private String submissionStatus;
 }

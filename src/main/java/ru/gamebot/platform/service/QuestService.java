@@ -364,6 +364,9 @@ public class QuestService {
         if (!quest.isActive()) {
             return QuestActionResult.of(QuestActionStatus.QUEST_INACTIVE, 0);
         }
+        if (quest.getBrawlVerifyType() != null && user.getBrawlStarsTag() == null) {
+            return QuestActionResult.of(QuestActionStatus.NEEDS_BRAWL_TAG, 0);
+        }
 
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
