@@ -2994,16 +2994,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             ));
         }
         InlineKeyboardMarkup keyboard = numberedGridWithBackMenu(openButtons, "⬅️ Назад", backData);
-        String listText = "<b>" + escape(title) + "</b>\n\n"
-                + "Откройте карточку по номеру, чтобы увидеть награду и условия прохождения.\n\n"
-                + listBuilder;
 
         // Photo caption has a 1024-char Telegram limit that a long quest list easily exceeds —
         // send the banner on its own (short caption, no keyboard) and the full list as a separate message.
         boolean wantsPhoto = category == null && !"UGC".equalsIgnoreCase(gameName);
         java.util.Optional<String> photoFileId = wantsPhoto ? gameCatalogService.getPhotoFileId(gameName) : java.util.Optional.empty();
+        String listText;
         if (photoFileId.isPresent()) {
             sendPhotoCaption(user.getTelegramId(), photoFileId.get(), "<b>" + escape(title) + "</b>", null);
+            listText = "Откройте карточку по номеру, чтобы увидеть награду и условия прохождения.\n\n" + listBuilder;
+        } else {
+            listText = "<b>" + escape(title) + "</b>\n\n"
+                    + "Откройте карточку по номеру, чтобы увидеть награду и условия прохождения.\n\n"
+                    + listBuilder;
         }
         sendText(user.getTelegramId(), listText, keyboard);
     }
