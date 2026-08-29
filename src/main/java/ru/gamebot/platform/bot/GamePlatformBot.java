@@ -955,6 +955,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if (data.startsWith("tournament:rules:")) {
+            long tid = parseLong(data.substring("tournament:rules:".length()));
+            sendBrawlTournamentRules(user, tid);
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if (data.startsWith("tournament:leaderboard:")) {
             long tid = parseLong(data.substring("tournament:leaderboard:".length()));
             sendTournamentLeaderboard(user, tid);
@@ -4533,6 +4539,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (entered || isActive) {
             rows.add(List.of(keyboardFactory.callback("📊 Список участников", "tournament:leaderboard:" + t.getId())));
         }
+        if (t.getScoringType() == ru.gamebot.platform.domain.model.Tournament.ScoringType.BRAWL_TROPHIES) {
+            rows.add(List.of(keyboardFactory.callback("📜 Правила турнира", "tournament:rules:" + t.getId())));
+        }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
         InlineKeyboardMarkup tournamentKeyboard = keyboardFactory.rowsLayout(rows);
         if (t.getPhotoFileId() != null) {
@@ -4540,6 +4549,43 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else {
             sendText(user.getTelegramId(), sb.toString(), tournamentKeyboard);
         }
+    }
+
+    private void sendBrawlTournamentRules(AppUser user, long tid) {
+        tournamentService.findById(tid).ifPresentOrElse(t -> {
+            java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm");
+            String start = t.getStartDate() != null ? t.getStartDate().format(fmt) + " UTC" : "—";
+            String end = t.getEndDate() != null ? t.getEndDate().format(fmt) + " UTC" : "—";
+            String text = "📜 <b>" + escape(t.getName()) + " — Правила</b>\n\n"
+                    + "📌 <b>Суть турнира</b>\n"
+                    + "Побеждает не тот, у кого больше трофеев, а тот, кто нарастил их больше всех за время турнира. "
+                    + "У новичка с 500 трофеями и профи с 30 000 — равные шансы на победу.\n\n"
+                    + "🎮 <b>Как участвовать</b>\n"
+                    + "1. Нажмите «⚔️ Участвовать» и оплатите взнос\n"
+                    + "2. Привяжите свой игровой тег Brawl Stars (#XXXXXXX)\n"
+                    + "3. Дождитесь закрытия регистрации — с этого момента фиксируется ваш стартовый результат\n\n"
+                    + "💰 <b>Взнос и призовой фонд</b>\n"
+                    + "Взнос за участие: <b>" + t.getEntryFeeExc() + " EXC</b>. Все взносы участников формируют общий призовой фонд — "
+                    + "чем больше игроков, тем крупнее призы.\n\n"
+                    + "📊 <b>Как считаются призовые места</b>\n"
+                    + "• В стартовый момент (" + start + ") фиксируются трофеи всех участников\n"
+                    + "• В финальный момент (" + end + ") фиксируются трофеи повторно\n"
+                    + "• Место в рейтинге определяется по приросту трофеев: финал минус старт\n"
+                    + "• 🥇 1 место — 60% призового фонда\n"
+                    + "• Остальные места — оставшиеся 40% делятся поровну между всеми участниками, кроме первого места\n\n"
+                    + "⚠️ <b>Важно</b>\n"
+                    + "• Игровой ник должен совпадать с ником, привязанным в EGC\n"
+                    + "• Один участник — один игровой аккаунт\n"
+                    + "• Подозрительная активность (резкая потеря трофеев перед стартом с последующим набором) проверяется вручную и может привести к дисквалификации\n"
+                    + "• Взнос не возвращается ни в каком случае, включая дисквалификацию\n\n"
+                    + "🚫 <b>Минимальное число участников</b>\n"
+                    + "Турнир состоится только при 5 и более зарегистрированных участниках. Если к моменту закрытия регистрации "
+                    + "набралось меньше — турнир отменяется, взнос возвращается всем участникам в полном объёме.\n\n"
+                    + "🔒 <b>Ключевые даты</b>\n"
+                    + "• Закрытие регистрации: " + start + "\n"
+                    + "• Финиш турнира: " + end;
+            sendText(user.getTelegramId(), text, backOnlyKeyboard("menu:tournament"));
+        }, () -> sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("menu:main")));
     }
 
     private void sendNews(AppUser user) {
