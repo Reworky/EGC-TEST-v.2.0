@@ -115,6 +115,10 @@ public class UserService {
         return appUserRepository.findByTelegramId(telegramId);
     }
 
+    public Optional<AppUser> findById(Long id) {
+        return appUserRepository.findById(id);
+    }
+
     public Optional<AppUser> findDuplicatePhoneUser(String phoneNumber, Long excludeTelegramId) {
         if (phoneNumber == null || phoneNumber.isBlank()) return Optional.empty();
         return appUserRepository.findByPhoneNumberAndTelegramIdNot(phoneNumber, excludeTelegramId);

@@ -982,6 +982,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "balance" -> sendBalance(user);
             case "rating" -> sendRatingMenu(user);
             case "referrals" -> sendReferrals(user);
+            case "referral-rating" -> sendReferralRanking(user);
             case "shop" -> sendShop(user);
             case "sink" -> sendSinkShop(user);
             case "my-rewards" -> sendUserRewardRequests(user);
@@ -3473,7 +3474,48 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "Шаг 3 — друг зарабатывает квестами\n"
                         + "• Ты получаешь <b>3% от каждого его EXC</b> в течение первых 14 дней автоматически\n\n"
                         + "Скопируй ссылку и отправь другу — остальное система сделает сама.",
-                backMenuKeyboard("menu:main"));
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("🏆 Рейтинг недели", "menu:referral-rating")),
+                        List.of(
+                                keyboardFactory.callback("⬅️ Назад", "menu:main"),
+                                keyboardFactory.callback("🏠 Меню", "menu:main")
+                        )
+                )));
+    }
+
+    private void sendReferralRanking(AppUser user) {
+        LocalDateTime weekStart = java.time.LocalDate.now()
+                .with(java.time.DayOfWeek.MONDAY).atStartOfDay();
+        List<Object[]> rows = excTransactionService.findReferralEarningsRankingBetween(weekStart, LocalDateTime.now());
+
+        StringBuilder sb = new StringBuilder("🏆 <b>Рейтинг рефереров — эта неделя</b>\n\n");
+        if (rows.isEmpty()) {
+            sb.append("Пока никто не заработал на рефералах на этой неделе.\n"
+                    + "Пригласи друга первым — и окажешься в топе! 🚀");
+        } else {
+            int myRank = -1;
+            for (int i = 0; i < Math.min(5, rows.size()); i++) {
+                Long userId = (Long) rows.get(i)[0];
+                long earned = ((Number) rows.get(i)[1]).longValue();
+                boolean isMe = userId.equals(user.getId());
+                if (isMe) myRank = i + 1;
+                String name = isMe ? "Ты" : escape(userService.findById(userId).map(this::displayUserName).orElse("Игрок"));
+                sb.append(i + 1).append(". ").append(name).append(" — <b>+").append(earned).append(" EXC</b>")
+                        .append(isMe ? " 👈" : "").append("\n");
+            }
+            if (myRank == -1) {
+                for (int i = 5; i < rows.size(); i++) {
+                    if (((Long) rows.get(i)[0]).equals(user.getId())) {
+                        long earned = ((Number) rows.get(i)[1]).longValue();
+                        sb.append("\n...\n").append(i + 1).append(". Ты — <b>+").append(earned).append(" EXC</b>");
+                        break;
+                    }
+                }
+            }
+            sb.append("\n\n📅 Топ-5 в конце недели (в понедельник) получит бонус из пула 2000 EXC.");
+        }
+
+        sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:referrals"));
     }
 
     private void sendShop(AppUser user) {
