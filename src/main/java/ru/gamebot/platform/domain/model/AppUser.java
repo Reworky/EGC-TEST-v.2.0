@@ -95,6 +95,7 @@ public class AppUser {
     private LocalDate dailyGiftSentDate;
     private int dailyGiftsReceived;
     private LocalDate dailyGiftReceivedDate;
+    @Column(columnDefinition = "integer default 0")
     private int adRewardCount;
     private LocalDate adRewardDate;
 
