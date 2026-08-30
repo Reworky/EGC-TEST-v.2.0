@@ -78,6 +78,17 @@ export default function App() {
     return () => window.removeEventListener('egc:offline', handler);
   }, []);
 
+  // Interstitial-реклама Adsgram — один раз при открытии мини-аппа, сразу после авторизации.
+  useEffect(() => {
+    if (!ready || !window.Adsgram) return;
+    try {
+      const AdController = window.Adsgram.init({ blockId: 'int-45243' });
+      AdController.show().catch(() => {});
+    } catch {
+      // рекламный SDK недоступен (например, заблокирован) — молча пропускаем, не мешаем работе приложения
+    }
+  }, [ready]);
+
   if (offline) {
     return <MaintenanceScreen onRetry={() => { setOffline(false); if (initData) doAuth(initData); }} />;
   }
