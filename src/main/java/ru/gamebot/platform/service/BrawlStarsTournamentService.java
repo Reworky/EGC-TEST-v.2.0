@@ -202,8 +202,16 @@ public class BrawlStarsTournamentService {
     @Transactional
     public boolean reSnapshotEntry(Long entryId) {
         return tournamentEntryRepository.findById(entryId).map(entry -> {
-            boolean isStartAttempt = entry.getTournament().getStatus() != Tournament.Status.FINISHED
-                    && entry.getTrophiesStart() == null;
+            Tournament.Status status = entry.getTournament().getStatus();
+            // Во время регистрации официального старта ещё не было — снимать нечего, стартовый
+            // снимок возьмёт автоматика при реальной активации турнира (TournamentService.processTournaments).
+            // Раньше здесь проверялось только "!= FINISHED", из-за чего тап по участнику ДО старта
+            // (пока trophiesStart у всех ещё null) ошибочно считался взятием стартового снимка и
+            // рассылал игроку "Турнир начался!" даже во время регистрации.
+            if (status == Tournament.Status.REGISTRATION || status == Tournament.Status.CANCELLED_LOW_TURNOUT) {
+                return false;
+            }
+            boolean isStartAttempt = status == Tournament.Status.ACTIVE && entry.getTrophiesStart() == null;
             return snapshotOne(entry, isStartAttempt);
         }).orElse(false);
     }
