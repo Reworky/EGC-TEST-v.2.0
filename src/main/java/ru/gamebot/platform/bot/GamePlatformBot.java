@@ -2517,7 +2517,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "При HR &lt; 100% курс EXC к рублю снижается пропорционально.\n"
                 + "Текущий HR всегда виден в боте перед выводом.\n\n"
                 + "<b>5. Реферальная программа</b>\n"
-                + "• Тебе: +300 EXC сразу, +3% от EXC друга в первые 14 дней\n"
+                + "• Тебе: +300 EXC сразу, +3% от EXC друга пока он активен (квест хотя бы раз в 14 дней)\n"
                 + "• Другу: +500 EXC сразу, +3 000 EXC после первого квеста\n"
                 + "Самореферал и технические аккаунты не засчитываются.\n\n"
                 + "<b>6. Блокировка аккаунтов</b>\n"
@@ -2557,7 +2557,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         "🎉 <b>Твой реферал присоединился!</b>\n\n"
                                 + "👤 <b>" + escape(referral.invitedNickname()) + "</b> только что активировал аккаунт по твоей ссылке.\n\n"
                                 + "🪙 Тебе начислено: <b>+" + referral.referrerBonus() + " EXC</b>\n\n"
-                                + "Ты будешь получать <b>3% от EXC</b>, которые он заработает на квестах в первые 14 дней.",
+                                + "Ты будешь получать <b>3% от EXC</b>, которые он заработает на квестах, пока он активен (выполняет квесты хотя бы раз в 14 дней).",
                         null);
             }
             notifyAdminsNewRegistration(activated);
@@ -2654,7 +2654,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "Курс: <b>100 EXC = 1 ₽</b>.\n\n"
                 + "5️⃣ <b>Приглашай друзей</b>\n"
                 + "Раздел 🤝 Рефералы → получи ссылку.\n"
-                + "Ты будешь получать <b>3% от EXC</b> друга первые 14 дней.\n\n"
+                + "Ты будешь получать <b>3% от EXC</b> друга, пока он активен (квест хотя бы раз в 14 дней).\n\n"
                 + "❓ Остались вопросы — пиши в 🆘 Поддержку.";
         sendText(user.getTelegramId(), text,
                 keyboardFactory.rowsLayout(List.of(
@@ -10738,30 +10738,34 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return keyboardFactory.rowsLayout(rows);
         }
 
-        rows.add(List.of(keyboardFactory.callback("👤 Профиль", "menu:profile")));
-
         boolean hasTournament = tournamentService.findCurrentForUser().isPresent();
         String questsLabel = hasTournament ? "🎯 Квесты и рейтинг 🔥" : "🎯 Квесты и рейтинг";
         rows.add(List.of(keyboardFactory.callback(questsLabel, "menu:cat:quests")));
 
-        rows.add(List.of(keyboardFactory.callback("⚔️ Отряды", "menu:squads")));
+        rows.add(List.of(keyboardFactory.callback("🤝 Рефералы", "menu:referrals")));
 
-String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошелёк 🔔" : "💰 Кошелёк";
-        rows.add(List.of(keyboardFactory.callback(walletLabel, "menu:cat:wallet")));
-
-        rows.add(List.of(keyboardFactory.callback("🛍️ Магазин", "menu:cat:shop")));
-
+        String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошелёк 🔔" : "💰 Кошелёк";
         String wheelLabel = user.getTickets() > 0
                 ? "🎰 Колесо фортуны 🎟 " + user.getTickets()
                 : "🎰 Колесо фортуны";
-        rows.add(List.of(keyboardFactory.callback(wheelLabel, "wheel:menu")));
-
         long activePolls = pollService.findActive().size();
         String clubLabel = activePolls > 0 ? "👥 Клуб (" + activePolls + ")" : "👥 Клуб";
-        rows.add(List.of(keyboardFactory.callback(clubLabel, "menu:cat:club")));
 
-        rows.add(List.of(keyboardFactory.callback("🆘 Помощь", "menu:cat:help")));
+        rows.add(List.of(
+                keyboardFactory.callback("👤 Профиль", "menu:profile"),
+                keyboardFactory.callback("⚔️ Отряды", "menu:squads")
+        ));
+        rows.add(List.of(
+                keyboardFactory.callback(walletLabel, "menu:cat:wallet"),
+                keyboardFactory.callback("🛍️ Магазин", "menu:cat:shop")
+        ));
+        rows.add(List.of(
+                keyboardFactory.callback(wheelLabel, "wheel:menu"),
+                keyboardFactory.callback(clubLabel, "menu:cat:club")
+        ));
+
         rows.add(List.of(keyboardFactory.webApp("🌐 Открыть Mini App", "https://experience-gaming-club.pages.dev")));
+        rows.add(List.of(keyboardFactory.callback("🆘 Помощь", "menu:cat:help")));
         return keyboardFactory.rowsLayout(rows);
     }
 
@@ -10843,7 +10847,10 @@ String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошел�
     private String mainMenuText(AppUser user) {
         String role = resolveMenuRole(user, sessionService.get(user.getTelegramId()));
         if (ROLE_USER.equals(role)) {
+            String balanceLine = "💰 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>"
+                    + "   ⭐ Ур. " + userService.getLevelNumber(user.getXp()) + " — " + escape(userService.getLevelName(user.getXp()));
             return "Здравствуйте, " + escape(user.getNickname()) + ".\n\n"
+                    + balanceLine + "\n\n"
                     + "Здесь вы можете брать задания, накапливать XP, подниматься в рейтинге, приглашать друзей и обменивать монеты на награды.\n\n"
                     + "Выберите нужный раздел ниже и продолжайте прогресс.";
         }
