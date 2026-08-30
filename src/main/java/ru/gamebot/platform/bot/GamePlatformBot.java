@@ -9395,7 +9395,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🏆 Награда: +" + quest.getRewardXp() + " XP, +" + quest.getRewardCoins() + " EXC\n"
                 + "📅 Засчитано: <b>" + submission.getUpdatedAt().format(DATE_TIME_FORMATTER) + "</b>\n\n"
                 + "ℹ️ Действие не требуется — просто для информации.";
-        for (Long recipient : adminService.allModeratorIds()) {
+        for (Long recipient : adminService.strictModeratorIds()) {
             try {
                 sendText(recipient, text, null);
             } catch (Exception e) {
