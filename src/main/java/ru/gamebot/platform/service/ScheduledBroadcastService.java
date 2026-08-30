@@ -52,6 +52,17 @@ public class ScheduledBroadcastService {
                 .orElse(false);
     }
 
+    /** Немедленно ставит уже запланированную рассылку в очередь на отправку, минуя scheduledAt. */
+    public boolean triggerNow(Long id) {
+        return scheduledBroadcastRepository.findById(id)
+                .filter(b -> b.getStatus() == ScheduledBroadcastStatus.PENDING)
+                .map(b -> {
+                    eventPublisher.publishEvent(new ScheduledBroadcastDueEvent(this, id));
+                    return true;
+                })
+                .orElse(false);
+    }
+
     /** Только читает и публикует события — сам в Telegram не отправляет, это делает GamePlatformBot. */
     public void checkDue() {
         List<ScheduledBroadcast> due = scheduledBroadcastRepository.findByStatusAndScheduledAtBefore(

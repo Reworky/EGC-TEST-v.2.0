@@ -6134,6 +6134,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendAdminScheduledBroadcasts(user);
                     answerSilently(callbackQuery.getId());
                     return;
+                } else if (action.startsWith("broadcast:scheduled:view:")) {
+                    long scheduledId = parseLong(action.substring("broadcast:scheduled:view:".length()));
+                    sendAdminScheduledBroadcastView(user, scheduledId);
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("broadcast:scheduled:sendnow:")) {
+                    long scheduledId = parseLong(action.substring("broadcast:scheduled:sendnow:".length()));
+                    boolean triggered = scheduledBroadcastService.triggerNow(scheduledId);
+                    answer(callbackQuery.getId(), triggered ? "📤 Рассылка отправляется…" : "⚠️ Уже отправлена или отменена.");
+                    sendAdminScheduledBroadcasts(user);
+                    return;
                 } else if (action.startsWith("broadcast:scheduled:cancel:")) {
                     long scheduledId = parseLong(action.substring("broadcast:scheduled:cancel:".length()));
                     boolean cancelled = scheduledBroadcastService.cancel(scheduledId);
@@ -6699,14 +6710,43 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     : ((b.getCaption() == null || b.getCaption().isBlank()) ? "[фото]" : "[фото] " + b.getCaption());
             if (preview.length() > 40) preview = preview.substring(0, 40) + "…";
             rows.add(List.of(keyboardFactory.callback(
-                    "🗑 " + b.getScheduledAt().format(fmt) + " — " + preview,
-                    "admin:broadcast:scheduled:cancel:" + b.getId())));
+                    "🕒 " + b.getScheduledAt().format(fmt) + " — " + preview,
+                    "admin:broadcast:scheduled:view:" + b.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
         String header = pending.isEmpty()
                 ? "📅 <b>Запланированные рассылки</b>\n\nНет запланированных рассылок."
-                : "📅 <b>Запланированные рассылки</b>\n\nНажми на рассылку, чтобы отменить её.";
+                : "📅 <b>Запланированные рассылки</b>\n\nНажми на рассылку, чтобы посмотреть её и отправить сейчас или отменить.";
         sendText(user.getTelegramId(), header, keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendAdminScheduledBroadcastView(AppUser user, long id) {
+        ru.gamebot.platform.domain.model.ScheduledBroadcast b = scheduledBroadcastService.getById(id);
+        if (b == null) {
+            sendText(user.getTelegramId(), "❌ Рассылка не найдена.", backMenuKeyboard("admin:broadcast:scheduled"));
+            return;
+        }
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+        String content = b.getText() != null
+                ? escape(b.getText())
+                : "[фото]" + ((b.getCaption() == null || b.getCaption().isBlank()) ? "" : "\n" + escape(b.getCaption()));
+        String statusLine = switch (b.getStatus()) {
+            case PENDING -> "⏳ Ожидает отправки";
+            case SENT -> "✅ Уже отправлена (" + b.getDeliveredCount() + " получателей)";
+            case CANCELLED -> "🗑 Отменена";
+        };
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (b.getStatus() == ru.gamebot.platform.domain.enums.ScheduledBroadcastStatus.PENDING) {
+            rows.add(List.of(keyboardFactory.callback("📤 Отправить сейчас", "admin:broadcast:scheduled:sendnow:" + b.getId())));
+            rows.add(List.of(keyboardFactory.callback("🗑 Отменить", "admin:broadcast:scheduled:cancel:" + b.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:broadcast:scheduled")));
+        sendText(user.getTelegramId(),
+                "📅 <b>Запланированная рассылка</b>\n\n"
+                        + "🕒 Время: <b>" + b.getScheduledAt().format(fmt) + " (UTC)</b>\n"
+                        + "📌 Статус: " + statusLine + "\n\n"
+                        + content,
+                keyboardFactory.rowsLayout(rows));
     }
 
     private void sendAdminWithdrawalHistory(AppUser user, int page) {
