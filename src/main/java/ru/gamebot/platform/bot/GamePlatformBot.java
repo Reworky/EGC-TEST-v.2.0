@@ -137,6 +137,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.BrawlStarsTournamentService brawlStarsTournamentService;
     private final ru.gamebot.platform.service.BrawlQuestVerificationService brawlQuestVerificationService;
     private final ru.gamebot.platform.service.ScheduledBroadcastService scheduledBroadcastService;
+    private final ru.gamebot.platform.service.AdsgramBotAdService adsgramBotAdService;
     private final ru.gamebot.platform.domain.repository.TournamentEntryRepository tournamentEntryRepository;
 
     private final Queue<String[]> pendingNewsQueue = new ConcurrentLinkedQueue<>();
@@ -1122,6 +1123,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "admin" -> sendAdminPanel(user);
             case "moderation" -> sendModerationHub(user);
             case "daily" -> { sendDailyBonus(callbackQuery, user); return; }
+            case "watchad" -> { sendWatchAdOffer(callbackQuery, user); return; }
             case "cat:quests" -> sendQuestsCategory(user);
             case "cat:wallet" -> sendWalletCategory(user);
             case "cat:shop" -> sendShopCategory(user);
@@ -2258,9 +2260,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String dailyLabel = userService.isDailyBonusAvailable(user)
                 ? "🎁 Забрать ежедневный бонус 🔔"
                 : "✅ Бонус за вход получен";
+        int adsLeft = userService.getAdRewardsRemainingToday(user);
+        String watchAdLabel = adsLeft > 0 ? "🎬 Смотреть рекламу 🔔" : "🎬 Смотреть рекламу";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
                 List.of(keyboardFactory.callback(dailyLabel, "menu:daily")),
+                List.of(keyboardFactory.callback(watchAdLabel, "menu:watchad")),
                 List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
@@ -2287,7 +2292,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             log.warn("Failed to send wallet banner", e);
             sendMenuCategory(user, "💰 <b>Кошелёк</b>", List.of(
                     List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
-                    List.of(keyboardFactory.callback(dailyLabel, "menu:daily"))
+                    List.of(keyboardFactory.callback(dailyLabel, "menu:daily")),
+                    List.of(keyboardFactory.callback(watchAdLabel, "menu:watchad"))
             ));
         }
     }
@@ -2859,6 +2865,85 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         msg.append("\n\nВозвращайся завтра — тебя ждёт <b>+").append(nextBonus).append(" EXC</b>.");
         answer(callbackQuery.getId(), "+" + result.totalExc() + " EXC получено!");
         sendText(user.getTelegramId(), msg.toString(), backMenuKeyboard("menu:main"));
+    }
+
+    private void sendWatchAdOffer(CallbackQuery callbackQuery, AppUser user) {
+        int remaining = userService.getAdRewardsRemainingToday(user);
+        if (remaining <= 0) {
+            answer(callbackQuery.getId(), "На сегодня показы рекламы закончились — приходи завтра!");
+            return;
+        }
+        if (!adsgramBotAdService.isEnabled()) {
+            answer(callbackQuery.getId(), "Реклама временно недоступна.");
+            return;
+        }
+        java.util.Optional<ru.gamebot.platform.service.AdsgramBotAdService.AdContent> adOpt =
+                adsgramBotAdService.fetchAd(user.getTelegramId());
+        if (adOpt.isEmpty()) {
+            answer(callbackQuery.getId(), "Сейчас нет доступной рекламы, попробуй чуть позже.");
+            return;
+        }
+        ru.gamebot.platform.service.AdsgramBotAdService.AdContent ad = adOpt.get();
+        userService.markAdRequested(user);
+        answerSilently(callbackQuery.getId());
+
+        List<InlineKeyboardButton> buttons = new ArrayList<>();
+        buttons.add(keyboardFactory.url(ad.buttonName(), ad.clickUrl()));
+        if (ad.rewardUrl() != null) {
+            buttons.add(keyboardFactory.url(ad.buttonRewardName(), ad.rewardUrl()));
+        }
+        InlineKeyboardMarkup keyboard = keyboardFactory.smartLayout(buttons);
+
+        try {
+            if (ad.imageUrl() != null) {
+                SendPhoto sendPhoto = new SendPhoto();
+                sendPhoto.setChatId(user.getTelegramId().toString());
+                sendPhoto.setPhoto(new InputFile(ad.imageUrl()));
+                sendPhoto.setCaption(ad.textHtml());
+                sendPhoto.setParseMode("HTML");
+                sendPhoto.setProtectContent(true);
+                sendPhoto.setReplyMarkup(keyboard);
+                execute(sendPhoto);
+            } else {
+                SendMessage msg = new SendMessage();
+                msg.setChatId(user.getTelegramId().toString());
+                msg.setText(ad.textHtml());
+                msg.setParseMode("HTML");
+                msg.setProtectContent(true);
+                msg.setReplyMarkup(keyboard);
+                execute(msg);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to send AdsGram bot ad to {}", user.getTelegramId(), e);
+            sendText(user.getTelegramId(), "⚠️ Не получилось показать рекламу, попробуй ещё раз позже.", backMenuKeyboard("menu:cat:wallet"));
+        }
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onAdRewardGranted(ru.gamebot.platform.event.AdRewardGrantedEvent event) {
+        try {
+            AppUser player = userService.findById(event.getUserId()).orElse(null);
+            if (player == null) return;
+            notifyUser(player.getTelegramId(),
+                    "✅ <b>+" + event.getExcGranted() + " EXC</b> начислено за просмотр рекламы!");
+
+            String channel = appProperties.getPayoutChannelUsername();
+            if (channel != null && !channel.isBlank()) {
+                try {
+                    SendMessage msg = new SendMessage();
+                    msg.setChatId(channel);
+                    msg.setText("🎬 <b>Выплата за рекламу</b>\n\n"
+                            + "👤 " + escape(player.getNickname()) + "\n"
+                            + "🪙 +" + event.getExcGranted() + " EXC");
+                    msg.setParseMode("HTML");
+                    execute(msg);
+                } catch (TelegramApiException ex) {
+                    log.warn("Failed to post ad-reward confirmation to payout channel", ex);
+                }
+            }
+        } catch (Exception e) {
+            log.error("[AdsgramReward] Failed to notify about granted reward, userId={}", event.getUserId(), e);
+        }
     }
 
     private static String dayWord(int days) {
