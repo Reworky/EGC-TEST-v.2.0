@@ -9349,6 +9349,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в Brawl Stars засчитан.\n\n"
                     + "🪙 EXC: <b>+" + approved.getQuest().getRewardCoins() + "</b>\n"
                     + "✨ XP: <b>+" + approved.getQuest().getRewardXp() + "</b>");
+            notifyModeratorsAboutAutoApproval(approved, "проверка через Brawl Stars API");
         } catch (Exception e) {
             log.error("[BrawlAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
         }
@@ -9362,8 +9363,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>Партнёр подтвердил выполнение!</b>\n\n"
                     + "Квест <b>" + escape(approved.getQuest().getTitle()) + "</b> засчитан.\n\n"
                     + "🪙 EXC: <b>+" + approved.getQuest().getRewardCoins() + "</b>");
+            notifyModeratorsAboutAutoApproval(approved, "подтверждено партнёрской сетью");
         } catch (Exception e) {
             log.error("[ActionPay] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
+        }
+    }
+
+    /** Чисто информационное уведомление модераторам об автоматически закрытом квесте — без кнопок, действие не требуется. */
+    private void notifyModeratorsAboutAutoApproval(QuestSubmission submission, String methodLabel) {
+        AppUser player = submission.getUser();
+        String playerLink = player.getTelegramUsername() != null
+                ? "<a href=\"https://t.me/" + player.getTelegramUsername() + "\">@" + player.getTelegramUsername() + "</a>"
+                : "<a href=\"tg://user?id=" + player.getTelegramId() + "\">" + escape(player.getNickname()) + "</a>";
+        Quest quest = submission.getQuest();
+        long completionNumber = submission.getCompletionDisplayId() != null ? submission.getCompletionDisplayId() : submission.getId();
+        String text = "🤖 <b>Квест закрыт автоматически (З-" + completionNumber + ")</b>\n\n"
+                + "👤 Игрок: <b>" + escape(player.getNickname()) + "</b> (" + playerLink + ")\n"
+                + "🆔 ID: <b>" + player.getTelegramId() + "</b>\n"
+                + "🎯 Квест: <b>" + escape(quest.getTitle()) + "</b>\n"
+                + "🎮 Игра: <b>" + escape(quest.getGameName()) + "</b>\n"
+                + "⚙️ Способ: " + methodLabel + "\n"
+                + "🏆 Награда: +" + quest.getRewardXp() + " XP, +" + quest.getRewardCoins() + " EXC\n"
+                + "📅 Засчитано: <b>" + submission.getUpdatedAt().format(DATE_TIME_FORMATTER) + "</b>\n\n"
+                + "ℹ️ Действие не требуется — просто для информации.";
+        for (Long recipient : adminService.allModeratorIds()) {
+            try {
+                sendText(recipient, text, null);
+            } catch (Exception e) {
+                log.warn("Failed to notify moderator {} about auto-approved submission {}", recipient, submission.getId(), e);
+            }
         }
     }
 
