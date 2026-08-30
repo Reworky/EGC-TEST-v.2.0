@@ -10764,8 +10764,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback(clubLabel, "menu:cat:club")
         ));
 
-        rows.add(List.of(keyboardFactory.webApp("🌐 Открыть Mini App", "https://experience-gaming-club.pages.dev")));
         rows.add(List.of(keyboardFactory.callback("🆘 Помощь", "menu:cat:help")));
+        rows.add(List.of(keyboardFactory.webApp("🌐 Открыть Mini App", "https://experience-gaming-club.pages.dev")));
         return keyboardFactory.rowsLayout(rows);
     }
 
@@ -10849,7 +10849,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (ROLE_USER.equals(role)) {
             String balanceLine = "💰 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>"
                     + "   ⭐ Ур. " + userService.getLevelNumber(user.getXp()) + " — " + escape(userService.getLevelName(user.getXp()));
-            return "Здравствуйте, " + escape(user.getNickname()) + ".\n\n"
+            return "Никнейм: " + escape(user.getNickname()) + "\n\n"
                     + balanceLine + "\n\n"
                     + "Здесь вы можете брать задания, накапливать XP, подниматься в рейтинге, приглашать друзей и обменивать монеты на награды.\n\n"
                     + "Выберите нужный раздел ниже и продолжайте прогресс.";
