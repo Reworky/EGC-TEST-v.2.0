@@ -72,12 +72,12 @@ public class QuestSeeder implements CommandLineRunner {
 
         Set<String> keepBsTitles = Set.of(
                 "Сразись в бою 6 раз",
-                "Победи врага 9 раз",
+                "Выиграй бой 9 раз",
                 "Воспользуйся кнопкой «Играть снова» 10 раз",
                 "Набери 80 трофеев",
                 "Выиграй бой 5 раз в ранговом режиме",
                 "Сыграй 5 матчей в команде",
-                "Победи врага 15 раз с бойцом Эль Примо, Дэррил или Эдгар",
+                "Выиграй бой 15 раз с бойцом Эль Примо, Дэррил или Эдгар",
                 "Выиграй бой 5 раз с бойцом Эль Примо, Дэррил или Эдгар",
                 "Нанеси 100 000 урона с бойцом Эш, Бонни или Даг",
                 "Нанеси 100 000 урона с бойцом Гром, Ева или Мелоди",
@@ -88,9 +88,9 @@ public class QuestSeeder implements CommandLineRunner {
                 "Выиграй бой 5 раз с бойцом Шелли, Нита или Дэррил",
                 "Нанеси 100 000 урона в режиме «Захват кристаллов» или «Дуэли»",
                 "Выиграй бой 5 раз в режиме «Захват кристаллов» или «Любое столкновение»",
-                "Победи врага 15 раз в режиме «Броулбол» или «Любое столкновение»",
+                "Выиграй бой 15 раз в режиме «Броулбол» или «Любое столкновение»",
                 "Выиграй бой 8 раз в режиме «Любое столкновение» или «Нокаут»",
-                "Победи врага 15 раз в режиме «Любое столкновение» или «Горячая зона»",
+                "Выиграй бой 15 раз в режиме «Любое столкновение» или «Горячая зона»",
                 "Нанеси 100 000 урона в режиме «Броулбол» или «Любое столкновение»",
                 "Выиграй бой 5 раз в режиме «Броулбол» или «Любое столкновение»",
                 "Нанеси 100 000 урона в режиме «Любое столкновение» или «Нокаут»",
@@ -125,7 +125,11 @@ public class QuestSeeder implements CommandLineRunner {
                 "Играй в любом режиме — победа не обязательна. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
                 bsAutoReq);
 
-        seedFlat("Победи врага 9 раз", "Brawl Stars", "Mobile", 5, "5 дней", 50, 2000,
+        // Переименовано с "Победи врага N раз" — название читалось как "N фрагов", хотя проверка
+        // API считает именно выигранные бои целиком (requireVictory=true), что и стало причиной
+        // жалобы игрока "автоматически не засчиталось" (2026-08-30).
+        updateQuest("Победи врага 9 раз", "Brawl Stars",
+                "Выиграй бой 9 раз", null, "Mobile", 5, "5 дней", 50, 2000,
                 "Победи в 9 боях Brawl Stars — режим любой.",
                 "Играй в любом режиме и побеждай — победы суммируются из разных сессий. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
                 bsAutoReq);
@@ -227,7 +231,9 @@ public class QuestSeeder implements CommandLineRunner {
                 "Победы в обоих режимах суммируются. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
                 bsAutoReq);
 
-        seedFlat("Победи врага 15 раз в режиме «Броулбол» или «Любое столкновение»", "Brawl Stars", "Mobile", 7, "7 дней", 50, 2000,
+        // Переименовано с "Победи врага N раз" — см. пояснение выше (квест "Победи врага 9 раз").
+        updateQuest("Победи врага 15 раз в режиме «Броулбол» или «Любое столкновение»", "Brawl Stars",
+                "Выиграй бой 15 раз в режиме «Броулбол» или «Любое столкновение»", null, "Mobile", 7, "7 дней", 50, 2000,
                 "Победи суммарно в 15 боях в режимах «Броулбол» или «Любое столкновение».",
                 "Победы в обоих режимах суммируются. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
                 bsAutoReq);
@@ -240,7 +246,9 @@ public class QuestSeeder implements CommandLineRunner {
                 "Победы в обоих режимах суммируются. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
                 bsAutoReq);
 
-        seedFlat("Победи врага 15 раз в режиме «Любое столкновение» или «Горячая зона»", "Brawl Stars", "Mobile", 7, "7 дней", 50, 2000,
+        // Переименовано с "Победи врага N раз" — см. пояснение выше (квест "Победи врага 9 раз").
+        updateQuest("Победи врага 15 раз в режиме «Любое столкновение» или «Горячая зона»", "Brawl Stars",
+                "Выиграй бой 15 раз в режиме «Любое столкновение» или «Горячая зона»", null, "Mobile", 7, "7 дней", 50, 2000,
                 "Победи суммарно в 15 боях в режимах «Любое столкновение» или «Горячая зона».",
                 "Победы в обоих режимах суммируются. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
                 bsAutoReq);
@@ -294,11 +302,11 @@ public class QuestSeeder implements CommandLineRunner {
         // квестов пользователя (2026-08-30) — два квеста с неопознанными бойцами (Наджия, Старр Нова,
         // видимо новые бойцы после даты обучения модели) переименованы на подтверждённые актуальные тройки.
         setBrawlVerify("Сразись в бою 6 раз", BrawlVerifyType.BATTLES, 6, false, false, false, null, null);
-        setBrawlVerify("Победи врага 9 раз", BrawlVerifyType.BATTLES, 9, true, false, false, null, null);
+        setBrawlVerify("Выиграй бой 9 раз", BrawlVerifyType.BATTLES, 9, true, false, false, null, null);
         setBrawlVerify("Набери 80 трофеев", BrawlVerifyType.TROPHIES, 80, false, false, false, null, null);
         setBrawlVerify("Выиграй бой 5 раз в ранговом режиме", BrawlVerifyType.BATTLES, 5, true, true, false, null, null);
         setBrawlVerify("Сыграй 5 матчей в команде", BrawlVerifyType.BATTLES, 5, false, false, true, null, null);
-        setBrawlVerify("Победи врага 15 раз с бойцом Эль Примо, Дэррил или Эдгар", BrawlVerifyType.BATTLES, 15, true, false, false, null, "EL PRIMO,DARRYL,EDGAR");
+        setBrawlVerify("Выиграй бой 15 раз с бойцом Эль Примо, Дэррил или Эдгар", BrawlVerifyType.BATTLES, 15, true, false, false, null, "EL PRIMO,DARRYL,EDGAR");
         setBrawlVerify("Выиграй бой 5 раз с бойцом Эль Примо, Дэррил или Эдгар", BrawlVerifyType.BATTLES, 5, true, false, false, null, "EL PRIMO,DARRYL,EDGAR");
         setBrawlVerify("Выиграй бой 8 раз с бойцом Шелли, Нита или Дэррил", BrawlVerifyType.BATTLES, 8, true, false, false, null, "SHELLY,NITA,DARRYL");
         setBrawlVerify("Выиграй бой 10 раз с бойцом Шелли, Эль Примо или Эдгар", BrawlVerifyType.BATTLES, 10, true, false, false, null, "SHELLY,EL PRIMO,EDGAR");
@@ -306,9 +314,9 @@ public class QuestSeeder implements CommandLineRunner {
         setBrawlVerify("Выиграй бой 5 раз с бойцом Гром, Перл или Ларри и Лори", BrawlVerifyType.BATTLES, 5, true, false, false, null, "GROM,PEARL,LARRY & LAWRIE");
         setBrawlVerify("Выиграй бой 5 раз с бойцом Шелли, Нита или Дэррил", BrawlVerifyType.BATTLES, 5, true, false, false, null, "SHELLY,NITA,DARRYL");
         setBrawlVerify("Выиграй бой 5 раз в режиме «Захват кристаллов» или «Любое столкновение»", BrawlVerifyType.BATTLES, 5, true, false, false, null, null);
-        setBrawlVerify("Победи врага 15 раз в режиме «Броулбол» или «Любое столкновение»", BrawlVerifyType.BATTLES, 15, true, false, false, null, null);
+        setBrawlVerify("Выиграй бой 15 раз в режиме «Броулбол» или «Любое столкновение»", BrawlVerifyType.BATTLES, 15, true, false, false, null, null);
         setBrawlVerify("Выиграй бой 8 раз в режиме «Любое столкновение» или «Нокаут»", BrawlVerifyType.BATTLES, 8, true, false, false, null, null);
-        setBrawlVerify("Победи врага 15 раз в режиме «Любое столкновение» или «Горячая зона»", BrawlVerifyType.BATTLES, 15, true, false, false, null, null);
+        setBrawlVerify("Выиграй бой 15 раз в режиме «Любое столкновение» или «Горячая зона»", BrawlVerifyType.BATTLES, 15, true, false, false, null, null);
         setBrawlVerify("Выиграй бой 5 раз в режиме «Броулбол» или «Любое столкновение»", BrawlVerifyType.BATTLES, 5, true, false, false, null, null);
         setBrawlVerify("Выиграй бой 5 раз в режиме «Любое столкновение» или «Баскетбол»", BrawlVerifyType.BATTLES, 5, true, false, false, null, null);
 
@@ -335,6 +343,21 @@ public class QuestSeeder implements CommandLineRunner {
                     log.info("[QuestSeeder] Reactivated quest stuck by rename-order bug: '{}'", q.getTitle());
                 });
 
+        // Одноразовое ВТОРОЕ переименование: этот квест уже прошёл миграцию через updateQuest() выше
+        // (byOldTitle давно не находит "Фрэнк, Гавс или Ларри и Лори" — переименование случилось раньше),
+        // поэтому updateQuest() для него сейчас в ветке "byNewTitle" и не тронет title при повторном
+        // переименовании — правим напрямую по тому же паттерну, что и реактивация выше. setActive(true)
+        // здесь обязателен по той же причине: keepBsTitles-очистка в этом прогоне уже не содержит
+        // старый title и деактивирует запись раньше, чем сработает этот блок.
+        questRepository.findFirstByTitleAndGameName("Победи врага 15 раз с бойцом Эль Примо, Дэррил или Эдгар", "Brawl Stars")
+                .ifPresent(q -> {
+                    q.setTitle("Выиграй бой 15 раз с бойцом Эль Примо, Дэррил или Эдгар");
+                    q.setActive(true);
+                    questRepository.save(q);
+                    log.info("[QuestSeeder] Renamed (2nd time) for title-clarity fix: '{}' -> 'Выиграй бой 15 раз с бойцом Эль Примо, Дэррил или Эдгар'",
+                            "Победи врага 15 раз с бойцом Эль Примо, Дэррил или Эдгар");
+                });
+
         // Одноразовая починка контента: эти 7 авто-верифицируемых квестов уже прошли миграцию
         // через updateQuest() (та же группа, что и stuckByRenameBug выше) и теперь навсегда попадают
         // в его ветку "byNewTitle" (обновляет только rewardXp/rewardCoins) — поэтому правки
@@ -342,7 +365,7 @@ public class QuestSeeder implements CommandLineRunner {
         // "Нанеси 100 000 урона в режиме «Любое столкновение» или «Нокаут»" сюда не входит — это
         // обычный ручной квест на урон, его requirements (bsReq) менять не нужно.
         Map<String, String[]> stuckAutoVerifyContent = Map.ofEntries(
-                Map.entry("Победи врага 15 раз с бойцом Эль Примо, Дэррил или Эдгар", new String[]{
+                Map.entry("Выиграй бой 15 раз с бойцом Эль Примо, Дэррил или Эдгар", new String[]{
                         "Победи 15 раз, играя за Эль Примо, Дэррила или Эдгара — в любом режиме.",
                         "Выбери одного из трёх бойцов. Победы с разными бойцами суммируются. Прогресс отслеживается автоматически, ничего сообщать не нужно."}),
                 Map.entry("Выиграй бой 5 раз с бойцом Эль Примо, Дэррил или Эдгар", new String[]{
