@@ -69,6 +69,10 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :since")
     long countApprovedSince(@Param("since") LocalDateTime since);
 
+    @Query("SELECT CASE WHEN COUNT(s) > 0 THEN true ELSE false END FROM QuestSubmission s " +
+           "WHERE s.user = :user AND s.status = 'APPROVED' AND s.updatedAt >= :since")
+    boolean existsApprovedByUserSince(@Param("user") AppUser user, @Param("since") LocalDateTime since);
+
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.status IN ('APPROVED', 'REJECTED')")
     long countModerated();
 

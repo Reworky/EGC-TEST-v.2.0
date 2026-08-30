@@ -641,6 +641,10 @@ public class UserService {
         return appUserRepository.findAllByTrafficSourceCodeOrderByCreatedAtDesc(code);
     }
 
+    public List<AppUser> findReferredFriends(Long telegramId) {
+        return appUserRepository.findAllByReferredByTelegramId(telegramId);
+    }
+
     public long countByTrafficSource(String code) {
         return appUserRepository.countByTrafficSourceCode(code);
     }

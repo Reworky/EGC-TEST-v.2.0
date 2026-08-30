@@ -34,7 +34,6 @@ public class QuestService {
         return "Сложные".equals(quest.getCategory()) ? HARD_COOLDOWN_HOURS : COOLDOWN_HOURS;
     }
     private static final int REFERRAL_BONUS_PERCENT = 3;
-    private static final int REFERRAL_DAYS_WINDOW = 14;
 
     // Жёсткий кулдаун на отправку отчёта убран по решению пользователя (2026-07-11) — throughput и так
     // ограничен часовым кулдауном на взятие, лимитом слотов, 24ч на повтор того же квеста и diminishing returns.
@@ -744,17 +743,16 @@ public class QuestService {
         if (referrerTelegramId.equals(invitedUser.getTelegramId())) {
             return;
         }
-        if (invitedUser.getCreatedAt() == null) {
-            return;
-        }
-        long daysSinceJoin = ChronoUnit.DAYS.between(invitedUser.getCreatedAt(), LocalDateTime.now());
-        // Fix 10: off-by-one — was >, should be >= to correctly close window on day 14
-        if (daysSinceJoin >= REFERRAL_DAYS_WINDOW) {
-            return;
-        }
         AppUser referrer = appUserRepository.findByTelegramId(referrerTelegramId).orElse(null);
         if (referrer == null) {
             return;
+        }
+        // Одобренный квест сам по себе доказывает текущую активность — жёсткого дедлайна от даты
+        // регистрации больше нет (комиссия платится, пока приглашённый активен, без ограничения по
+        // числу дней). Молча возобновляем флаг, если до этого он считался "пропавшим" — без события,
+        // повторное уведомление о возобновлении сознательно не шлём.
+        if (!invitedUser.isReferralActive()) {
+            invitedUser.setReferralActive(true);
         }
         long bonus = Math.max(1, earnedCoins * REFERRAL_BONUS_PERCENT / 100);
         userService.addReward(referrer, 0, bonus);

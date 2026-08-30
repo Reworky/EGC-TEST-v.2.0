@@ -320,6 +320,25 @@ public class WeeklyResetScheduler {
         }
     }
 
+    private static final int REFERRAL_INACTIVITY_DAYS = 14;
+
+    // Друг молчит 14+ дней без одобренного квеста — приостанавливаем комиссию рефереру, уведомляем один раз
+    @Scheduled(cron = "0 20 0 * * *")
+    public void checkReferralFriendActivity() {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(REFERRAL_INACTIVITY_DAYS);
+        for (AppUser invited : appUserRepository.findAllByReferredByTelegramIdIsNotNullAndReferralActiveTrue()) {
+            try {
+                if (questSubmissionRepository.existsApprovedByUserSince(invited, cutoff)) continue;
+                invited.setReferralActive(false);
+                appUserRepository.save(invited);
+                eventPublisher.publishEvent(new ru.gamebot.platform.event.ReferralFriendInactiveEvent(
+                        this, invited.getReferredByTelegramId(), invited.getNickname()));
+            } catch (Exception e) {
+                log.warn("Failed to check referral activity for user {}", invited.getTelegramId(), e);
+            }
+        }
+    }
+
     private void notifyExpired(List<Object[]> rows) {
         for (Object[] row : rows) {
             try {

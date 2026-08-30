@@ -89,4 +89,8 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     @Query("SELECT u FROM AppUser u WHERE u.registrationCompleted = true AND u.onboardingCompleted = false AND u.onboardingStartedAt IS NOT NULL AND u.onboardingNotificationsSent < 3 AND u.blocked = false")
     List<AppUser> findUsersWithIncompleteOnboarding();
+
+    List<AppUser> findAllByReferredByTelegramIdIsNotNullAndReferralActiveTrue();
+
+    List<AppUser> findAllByReferredByTelegramId(Long telegramId);
 }

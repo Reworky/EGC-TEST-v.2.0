@@ -1108,6 +1108,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "rating" -> sendRatingMenu(user);
             case "referrals" -> sendReferrals(user);
             case "referral-rating" -> sendReferralRanking(user);
+            case "referral-friends" -> sendReferralFriendsList(user);
             case "shop" -> sendShop(user);
             case "sink" -> sendSinkShop(user);
             case "my-rewards" -> sendUserRewardRequests(user);
@@ -2946,6 +2947,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    @org.springframework.context.event.EventListener
+    public void onReferralFriendInactive(ru.gamebot.platform.event.ReferralFriendInactiveEvent event) {
+        try {
+            notifyUser(event.getReferrerTelegramId(),
+                    "😴 <b>" + escape(event.getFriendNickname()) + "</b> давно не выполнял квесты — "
+                            + "комиссия с рефералов по этому другу приостановлена.\n\n"
+                            + "Напомни другу вернуться к квестам — как только он выполнит хотя бы один, "
+                            + "комиссия возобновится автоматически.");
+        } catch (Exception e) {
+            log.error("[Referral] Failed to notify referrer {} about inactive friend", event.getReferrerTelegramId(), e);
+        }
+    }
+
     private static String dayWord(int days) {
         if (days % 100 >= 11 && days % 100 <= 19) return "дней";
         return switch (days % 10) {
@@ -3777,15 +3791,33 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "Шаг 2 — друг выполняет первый квест\n"
                         + "• Другу бонусом: <b>+3 000 EXC</b>\n\n"
                         + "Шаг 3 — друг зарабатывает квестами\n"
-                        + "• Ты получаешь <b>3% от каждого его EXC</b> в течение первых 14 дней автоматически\n\n"
+                        + "• Ты получаешь <b>3% от каждого его EXC</b> — пока друг активен (выполняет квесты хотя бы раз в 14 дней)\n\n"
                         + "Скопируй ссылку и отправь другу — остальное система сделает сама.",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("🏆 Рейтинг недели", "menu:referral-rating")),
+                        List.of(keyboardFactory.callback("👥 Мои друзья", "menu:referral-friends")),
                         List.of(
                                 keyboardFactory.callback("⬅️ Назад", "menu:main"),
                                 keyboardFactory.callback("🏠 Меню", "menu:main")
                         )
                 )));
+    }
+
+    private void sendReferralFriendsList(AppUser user) {
+        List<AppUser> friends = userService.findReferredFriends(user.getTelegramId());
+        if (friends.isEmpty()) {
+            sendText(user.getTelegramId(), "👥 <b>Мои друзья</b>\n\nВы пока никого не пригласили.",
+                    backMenuKeyboard("menu:referrals"));
+            return;
+        }
+        StringBuilder sb = new StringBuilder("👥 <b>Мои друзья</b>\n\n");
+        for (AppUser friend : friends) {
+            sb.append(friend.isReferralActive() ? "🟢 " : "⚪ ")
+              .append(escape(displayUserName(friend)))
+              .append(friend.isReferralActive() ? " — активен" : " — неактивен (комиссия на паузе)")
+              .append("\n");
+        }
+        sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:referrals"));
     }
 
     private void sendReferralRanking(AppUser user) {

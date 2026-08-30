@@ -51,6 +51,11 @@ public class AppUser {
     private int streakDays;
     private Long referredByTelegramId;
     private boolean referralRewardProcessed;
+
+    /** Был ли приглашённый активен на момент последней ежедневной проверки — только для уведомления
+     *  реферера о паузе, саму выплату комиссии не гейтит (она и так завязана на факт одобрения квеста). */
+    @Column(columnDefinition = "boolean default true")
+    private boolean referralActive = true;
     private LocalDate lastActivityDate;
 
     /** Какой уровень дормант-реэнгейджмента уже отправлен (0 = ни один); сбрасывается при возврате в registerActivity(). */
