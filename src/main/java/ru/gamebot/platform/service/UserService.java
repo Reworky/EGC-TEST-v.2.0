@@ -360,6 +360,47 @@ public class UserService {
             long xpBonus, int streakDays, String milestoneText
     ) {}
 
+    private static final int AD_REWARD_DAILY_CAP = 5;
+    private static final long AD_REWARD_EXC = 30;
+
+    public int getAdRewardsRemainingToday(AppUser user) {
+        if (user.getAdRewardDate() == null || !user.getAdRewardDate().equals(LocalDate.now())) {
+            return AD_REWARD_DAILY_CAP;
+        }
+        return Math.max(0, AD_REWARD_DAILY_CAP - user.getAdRewardCount());
+    }
+
+    @Transactional
+    public void markAdRequested(AppUser user) {
+        user.setPendingAdRewardAt(LocalDateTime.now());
+        appUserRepository.save(user);
+    }
+
+    /** Засчитывает награду за просмотр рекламы AdsGram — только если у игрока есть непросроченный
+     * "ожидающий показ" (выставляется в {@link #markAdRequested}), иначе тихо отказывает. Одноразово. */
+    @Transactional
+    public boolean claimPendingAdReward(Long telegramId) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (user == null || user.getPendingAdRewardAt() == null) {
+            return false;
+        }
+        if (user.getPendingAdRewardAt().isBefore(LocalDateTime.now().minusHours(1))) {
+            return false;
+        }
+        user.setPendingAdRewardAt(null);
+        LocalDate today = LocalDate.now();
+        if (user.getAdRewardDate() == null || !user.getAdRewardDate().equals(today)) {
+            user.setAdRewardDate(today);
+            user.setAdRewardCount(0);
+        }
+        user.setAdRewardCount(user.getAdRewardCount() + 1);
+        user.setCoins(user.getCoins() + AD_REWARD_EXC);
+        appUserRepository.save(user);
+        excTx.log(user, AD_REWARD_EXC, ExcTransactionService.AD_REWARD, "Просмотр рекламы в боте");
+        eventPublisher.publishEvent(new ru.gamebot.platform.event.AdRewardGrantedEvent(this, user.getId(), AD_REWARD_EXC));
+        return true;
+    }
+
     public record ReferralActivationResult(
             long invitedBonus,
             Long referrerTelegramId,

@@ -95,6 +95,11 @@ public class AppUser {
     private LocalDate dailyGiftSentDate;
     private int dailyGiftsReceived;
     private LocalDate dailyGiftReceivedDate;
+    private int adRewardCount;
+    private LocalDate adRewardDate;
+
+    /** Момент запроса рекламы AdsGram, ждущей подтверждения просмотра; null = нет активного показа. */
+    private LocalDateTime pendingAdRewardAt;
 
     // Withdrawal limits
     @Column(columnDefinition = "bigint default 0")

@@ -34,6 +34,7 @@ public class ExcTransactionService {
     public static final String TRANSFER       = "TRANSFER";
     public static final String WELCOME_BONUS  = "WELCOME_BONUS";
     public static final String CONFISCATE     = "CONFISCATE";
+    public static final String AD_REWARD      = "AD_REWARD";
 
     @Transactional(propagation = Propagation.REQUIRED)
     public void log(AppUser user, long amount, String type, String description) {
@@ -82,6 +83,7 @@ public class ExcTransactionService {
             case TRANSFER       -> "🔄 Перевод";
             case WELCOME_BONUS  -> "🎉 Приветственный бонус";
             case CONFISCATE     -> "🚫 Конфискация";
+            case AD_REWARD      -> "🎬 За рекламу";
             default             -> "📌 Прочее";
         };
     }

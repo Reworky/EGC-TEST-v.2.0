@@ -1,9 +1,11 @@
 package ru.gamebot.platform.api.controller;
 
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -17,6 +19,7 @@ import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.QuestRepository;
 import ru.gamebot.platform.event.ExternalQuestApprovedEvent;
 import ru.gamebot.platform.service.QuestService;
+import ru.gamebot.platform.service.UserService;
 
 /**
  * Приём постбеков от партнёрских CPA-сетей для внешних квестов с {@link Quest#isExternalAutoApprove()}.
@@ -37,6 +40,7 @@ public class PostbackController {
     private final AppUserRepository appUserRepository;
     private final QuestRepository questRepository;
     private final QuestService questService;
+    private final UserService userService;
     private final ApplicationEventPublisher eventPublisher;
 
     @Value("${app.actionpay-postback-token:}")
@@ -44,6 +48,9 @@ public class PostbackController {
 
     @Value("${app.admitad-postback-token:}")
     private String admitadToken;
+
+    @Value("${app.adsgram-reward-token:}")
+    private String adsgramRewardToken;
 
     @GetMapping("/actionpay")
     public ResponseEntity<String> actionPay(
@@ -92,6 +99,55 @@ public class PostbackController {
         }
 
         return processConversion("admitad", subid, offerId, orderId, orderSum);
+    }
+
+    /**
+     * Reward URL для рекламных постов AdsGram в самом боте (не мини-апп). В отличие от actionpay/admitad
+     * это НЕ сервер-сервер вызов — сюда переходит реальный браузер игрока после клика по "Забрать награду",
+     * поэтому ответ — читаемый HTML, а не голый текст. AdsGram не документирует точное имя параметра
+     * с ID игрока в финальном редиректе — логируем все параметры целиком, чтобы свериться с реальностью
+     * при первом тестовом проходе (см. память проекта / план фичи), и пробуем несколько вероятных имён.
+     * Награда начисляется только если у игрока есть непросроченный "ожидающий показ"
+     * ({@link UserService#markAdRequested}) — сам по себе токен в URL не секрет для конкретного игрока
+     * (Telegram ID не является тайной), это вторая линия защиты от прямого вызова эндпоинта.
+     */
+    @GetMapping(value = "/adsgram", produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> adsgramReward(@RequestParam Map<String, String> params) {
+        if (!isValidToken(params.get("token"), adsgramRewardToken)) {
+            log.warn("[AdsgramReward] Postback rejected: bad token");
+            return ResponseEntity.status(403).body(adsgramRewardPage(false));
+        }
+        log.info("[AdsgramReward] incoming params: {}", params);
+
+        Long telegramId = parseFirstLong(params, "tgid", "userid", "user_id", "uid");
+        boolean granted = telegramId != null && userService.claimPendingAdReward(telegramId);
+        if (!granted) {
+            log.warn("[AdsgramReward] Reward not granted (telegramId={}, params={})", telegramId, params);
+        }
+        return ResponseEntity.ok(adsgramRewardPage(granted));
+    }
+
+    private Long parseFirstLong(Map<String, String> params, String... keys) {
+        for (String key : keys) {
+            String raw = params.get(key);
+            if (raw != null && !raw.isBlank()) {
+                try {
+                    return Long.parseLong(raw.trim());
+                } catch (NumberFormatException ignored) {
+                    // пробуем следующее имя параметра
+                }
+            }
+        }
+        return null;
+    }
+
+    private String adsgramRewardPage(boolean granted) {
+        String message = granted
+                ? "✅ Награда начислена!"
+                : "Не удалось начислить награду — попробуйте посмотреть рекламу заново.";
+        return "<html><body style=\"font-family:sans-serif;text-align:center;padding:40px\">"
+                + message + "<br><br><a href=\"https://t.me/invitetogamebot\">Вернуться в бота</a>"
+                + "</body></html>";
     }
 
     private boolean isValidToken(String provided, String expected) {
