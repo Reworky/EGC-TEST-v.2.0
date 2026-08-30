@@ -23,6 +23,9 @@ public class SchemaMigrationRunner implements CommandLineRunner {
     @Override
     public void run(String... args) {
         addColumnIfMissing("app_users", "welcome_bonus_paid", "BOOLEAN DEFAULT FALSE");
+        addColumnIfMissing("app_users", "ad_reward_count", "INTEGER DEFAULT 0");
+        addColumnIfMissing("app_users", "ad_reward_date", "DATE");
+        addColumnIfMissing("app_users", "pending_ad_reward_at", "TIMESTAMP");
     }
 
     private void addColumnIfMissing(String table, String column, String definition) {
