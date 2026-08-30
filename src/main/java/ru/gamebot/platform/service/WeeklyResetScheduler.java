@@ -51,6 +51,7 @@ public class WeeklyResetScheduler {
     private final SeasonService seasonService;
     private final ExcTransactionService excTx;
     private final BrawlQuestVerificationService brawlQuestVerificationService;
+    private final ScheduledBroadcastService scheduledBroadcastService;
 
     private static final int[] DORMANCY_TIER_DAYS = {14, 30, 60};
     private static final long[] DORMANCY_TIER_EXC = {300, 750, 1500};
@@ -142,6 +143,16 @@ public class WeeklyResetScheduler {
             brawlQuestVerificationService.checkInProgressSubmissions();
         } catch (Exception e) {
             log.error("Brawl auto-verify check failed", e);
+        }
+    }
+
+    // Рассылки, запланированные админом на конкретное время — проверяем раз в минуту
+    @Scheduled(fixedDelay = 60_000)
+    public void checkScheduledBroadcasts() {
+        try {
+            scheduledBroadcastService.checkDue();
+        } catch (Exception e) {
+            log.error("Scheduled broadcast check failed", e);
         }
     }
 

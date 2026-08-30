@@ -136,6 +136,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.domain.repository.QuestRepository questRepository;
     private final ru.gamebot.platform.service.BrawlStarsTournamentService brawlStarsTournamentService;
     private final ru.gamebot.platform.service.BrawlQuestVerificationService brawlQuestVerificationService;
+    private final ru.gamebot.platform.service.ScheduledBroadcastService scheduledBroadcastService;
     private final ru.gamebot.platform.domain.repository.TournamentEntryRepository tournamentEntryRepository;
 
     private final Queue<String[]> pendingNewsQueue = new ConcurrentLinkedQueue<>();
@@ -1318,6 +1319,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case BONUS_INPUT -> handleBonusInput(user, session, text);
             case DEBIT_INPUT -> handleDebitInput(user, session, text);
             case BROADCAST_MESSAGE -> handleBroadcast(user, session, text);
+            case BROADCAST_SCHEDULE_TIME -> handleBroadcastScheduleTime(user, session, text);
             case PAYOUT_POOL_INPUT -> handlePayoutPoolInput(user, session, text);
             case TRAFFIC_SOURCE_NAME -> {
                 session.getData().put("trafficName", text.trim());
@@ -6128,6 +6130,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         sendAdminPollList(user);
                     });
                     return;
+                } else if ("broadcast:scheduled".equals(action)) {
+                    sendAdminScheduledBroadcasts(user);
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("broadcast:scheduled:cancel:")) {
+                    long scheduledId = parseLong(action.substring("broadcast:scheduled:cancel:".length()));
+                    boolean cancelled = scheduledBroadcastService.cancel(scheduledId);
+                    answer(callbackQuery.getId(), cancelled ? "🗑 Рассылка отменена." : "⚠️ Уже отправлена или отменена.");
+                    sendAdminScheduledBroadcasts(user);
+                    return;
                 } else if (action.startsWith("withdrawal:")) {
                     handleAdminWithdrawalAction(callbackQuery, user, session, action.substring("withdrawal:".length()));
                     return;
@@ -6675,6 +6687,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String header = pending.isEmpty()
                 ? "💸 <b>Заявки на вывод EXC</b>\n\nНет новых заявок."
                 : "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>";
+        sendText(user.getTelegramId(), header, keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendAdminScheduledBroadcasts(AppUser user) {
+        List<ru.gamebot.platform.domain.model.ScheduledBroadcast> pending = scheduledBroadcastService.findPending();
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (ru.gamebot.platform.domain.model.ScheduledBroadcast b : pending) {
+            String preview = b.getText() != null ? b.getText()
+                    : ((b.getCaption() == null || b.getCaption().isBlank()) ? "[фото]" : "[фото] " + b.getCaption());
+            if (preview.length() > 40) preview = preview.substring(0, 40) + "…";
+            rows.add(List.of(keyboardFactory.callback(
+                    "🗑 " + b.getScheduledAt().format(fmt) + " — " + preview,
+                    "admin:broadcast:scheduled:cancel:" + b.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
+        String header = pending.isEmpty()
+                ? "📅 <b>Запланированные рассылки</b>\n\nНет запланированных рассылок."
+                : "📅 <b>Запланированные рассылки</b>\n\nНажми на рассылку, чтобы отменить её.";
         sendText(user.getTelegramId(), header, keyboardFactory.rowsLayout(rows));
     }
 
@@ -9190,16 +9221,54 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void handleBroadcast(AppUser user, UserSession session, String text) {
-        int delivered = broadcastToAll("📣 <b>Новости платформы</b>\n\n" + escape(text));
-        session.reset();
-        sendText(user.getTelegramId(), "✅ Рассылка отправлена. Получателей: <b>" + delivered + "</b>.", mainMenuKeyboard(user));
+        session.getData().put("bcastText", text);
+        session.setState(SessionState.BROADCAST_SCHEDULE_TIME);
+        sendText(user.getTelegramId(),
+                "🕒 Когда отправить рассылку?\n\nВведите дату и время в формате <code>ДД.ММ.ГГГГ ЧЧ:ММ</code> "
+                        + "(время сервера — <b>UTC</b>), либо отправьте <b>0</b>, чтобы разослать прямо сейчас.",
+                cancelKeyboard());
     }
 
     private void handleBroadcastPhoto(AppUser user, UserSession session, String fileId, String caption) {
-        String html = caption.isBlank() ? "" : "📣 <b>Новости платформы</b>\n\n" + escape(caption);
-        int delivered = broadcastPhotoToAll(fileId, html);
+        session.getData().put("bcastPhotoFileId", fileId);
+        session.getData().put("bcastCaption", caption);
+        session.setState(SessionState.BROADCAST_SCHEDULE_TIME);
+        sendText(user.getTelegramId(),
+                "🕒 Когда отправить рассылку?\n\nВведите дату и время в формате <code>ДД.ММ.ГГГГ ЧЧ:ММ</code> "
+                        + "(время сервера — <b>UTC</b>), либо отправьте <b>0</b>, чтобы разослать прямо сейчас.",
+                cancelKeyboard());
+    }
+
+    private void handleBroadcastScheduleTime(AppUser user, UserSession session, String text) {
+        String trimmed = text.trim();
+        String bcastText = session.getData().get("bcastText");
+        String bcastPhotoFileId = session.getData().get("bcastPhotoFileId");
+        String bcastCaption = session.getData().get("bcastCaption");
+
+        if ("0".equals(trimmed)) {
+            int delivered = bcastPhotoFileId != null
+                    ? broadcastPhotoToAll(bcastPhotoFileId, (bcastCaption == null || bcastCaption.isBlank()) ? "" : "📣 <b>Новости платформы</b>\n\n" + escape(bcastCaption))
+                    : broadcastToAll("📣 <b>Новости платформы</b>\n\n" + escape(bcastText));
+            session.reset();
+            sendText(user.getTelegramId(), "✅ Рассылка отправлена. Получателей: <b>" + delivered + "</b>.", mainMenuKeyboard(user));
+            return;
+        }
+
+        java.time.LocalDateTime scheduledAt;
+        try {
+            scheduledAt = java.time.LocalDateTime.parse(trimmed, java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+        } catch (Exception e) {
+            sendText(user.getTelegramId(), "❌ Неверный формат. Используйте ДД.ММ.ГГГГ ЧЧ:ММ или 0 для немедленной отправки.", cancelKeyboard());
+            return;
+        }
+        if (!scheduledAt.isAfter(java.time.LocalDateTime.now())) {
+            sendText(user.getTelegramId(), "❌ Дата и время должны быть в будущем.", cancelKeyboard());
+            return;
+        }
+
+        scheduledBroadcastService.schedule(bcastText, bcastPhotoFileId, bcastCaption, scheduledAt, user.getTelegramId());
         session.reset();
-        sendText(user.getTelegramId(), "✅ Рассылка с фото отправлена. Получателей: <b>" + delivered + "</b>.", mainMenuKeyboard(user));
+        sendText(user.getTelegramId(), "✅ Рассылка запланирована на <b>" + trimmed + " (UTC)</b>.", mainMenuKeyboard(user));
     }
 
     private int broadcastPhotoToAll(String fileId, String caption) {
@@ -9505,6 +9574,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String message = "📰 <b>" + escape(event.getTitle()) + "</b>\n\n" + event.getBody();
         int delivered = broadcastToAll(message);
         log.info("[News] Broadcast '{}' → {} users", event.getTitle(), delivered);
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onScheduledBroadcastDue(ru.gamebot.platform.event.ScheduledBroadcastDueEvent event) {
+        try {
+            ru.gamebot.platform.domain.model.ScheduledBroadcast b = scheduledBroadcastService.getById(event.getBroadcastId());
+            if (b == null || b.getStatus() != ru.gamebot.platform.domain.enums.ScheduledBroadcastStatus.PENDING) return;
+            int delivered = b.getPhotoFileId() != null
+                    ? broadcastPhotoToAll(b.getPhotoFileId(), (b.getCaption() == null || b.getCaption().isBlank()) ? "" : "📣 <b>Новости платформы</b>\n\n" + escape(b.getCaption()))
+                    : broadcastToAll("📣 <b>Новости платформы</b>\n\n" + escape(b.getText()));
+            scheduledBroadcastService.markSent(b.getId(), delivered);
+            log.info("[ScheduledBroadcast] Sent #{} -> {} users", b.getId(), delivered);
+        } catch (Exception e) {
+            log.error("[ScheduledBroadcast] Failed to send due broadcast {}", event.getBroadcastId(), e);
+        }
     }
 
     public void requestNewsApproval(String title, String body) {
@@ -10432,6 +10516,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback("🎁 Магазин наград", "admin:rewards"),
                     keyboardFactory.callback("📣 Рассылка", "admin:broadcast")
             ));
+            rows.add(List.of(keyboardFactory.callback("📅 Запланированные рассылки", "admin:broadcast:scheduled")));
             rows.add(List.of(keyboardFactory.callback("💳 Пополнить Payout Pool", "admin:payout")));
             long pendingWithdrawals = rewardService.findPendingWithdrawals().size();
             String wLabel = pendingWithdrawals > 0
