@@ -559,6 +559,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         }
 
+        // Deep link из мини-аппа: "нужен тег Brawl Stars для авто-квеста" → сразу в диалог привязки
+        if (startPayload.equals("brawltag") && user.isRegistrationCompleted()) {
+            session.reset();
+            session.getData().put("brawlLinkPurpose", "profile");
+            session.setState(SessionState.BRAWL_TAG_INPUT);
+            sendText(user.getTelegramId(), "🏷️ Введите ваш игровой тег Brawl Stars (например: <code>#ABC123</code>):", cancelKeyboard());
+            return;
+        }
+
         // Возобновить незавершённый онбординг
         if (!user.isOnboardingCompleted()) {
             resumeOnboarding(user);

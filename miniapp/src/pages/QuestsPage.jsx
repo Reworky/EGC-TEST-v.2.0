@@ -87,6 +87,7 @@ const CANCELABLE_STATUSES = ['DRAFT', 'PENDING', 'NEEDS_INFO', 'REJECTED'];
 function QuestActions({ quest, detail, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
+  const [needsBrawlTag, setNeedsBrawlTag] = useState(false);
   const [photo, setPhoto] = useState(null);
   const [externalLink, setExternalLink] = useState('');
   const [comment, setComment] = useState('');
@@ -107,12 +108,20 @@ function QuestActions({ quest, detail, onChanged }) {
     return <div className="quest-detail-loading">Загрузка...</div>;
   }
 
+  function openBotForBrawlTag() {
+    const tg = window.Telegram?.WebApp;
+    const url = 'https://t.me/invitetogamebot?start=brawltag';
+    if (tg) tg.openTelegramLink(url); else window.open(url, '_blank', 'noopener');
+  }
+
   async function handleTake() {
     setBusy(true);
     setMessage(null);
+    setNeedsBrawlTag(false);
     try {
       const res = await takeQuest(quest.id);
       setMessage(res.message);
+      setNeedsBrawlTag(res.status === 'NEEDS_BRAWL_TAG');
       if (res.success) onChanged();
     } finally {
       setBusy(false);
@@ -199,7 +208,16 @@ function QuestActions({ quest, detail, onChanged }) {
       <button className="quest-btn" disabled={busy} onClick={handleTake}>
         {busy ? 'Секунду...' : 'Взять квест'}
       </button>
-      {message && <div className="quest-message">{message}</div>}
+      {message && (
+        <div className="quest-message">
+          {message}
+          {needsBrawlTag && (
+            <button className="quest-btn" style={{ marginTop: 8 }} onClick={openBotForBrawlTag}>
+              🏷️ Открыть бота и привязать тег
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -223,7 +241,9 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
         ) : null}
         {q.submissionStatus && (
           <span className="quest-taken-badge" style={{ color: STATUS_COLORS[q.submissionStatus] }}>
-            ● {STATUS_LABELS[q.submissionStatus] || q.submissionStatus}
+            ● {q.submissionStatus === 'DRAFT' && (q.brawlAutoVerify || q.externalAutoApprove)
+                ? 'Авто-отслеживание'
+                : (STATUS_LABELS[q.submissionStatus] || q.submissionStatus)}
           </span>
         )}
       </div>
@@ -253,7 +273,9 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
           )}
           {details[q.id]?.requirements && (
             <>
-              <div className="quest-section-title">Требования</div>
+              <div className="quest-section-title">
+                {(details[q.id]?.brawlAutoVerify || details[q.id]?.externalAutoApprove) ? 'ℹ️ Информация' : 'Требования'}
+              </div>
               <p className="quest-requirements">{renderTextWithLinks(details[q.id].requirements)}</p>
             </>
           )}
@@ -446,7 +468,11 @@ function MyQuestsView({ expanded, details, onToggle, onDetailChanged }) {
             </div>
           </div>
           <div className="quest-meta">
-            <span style={{ color: STATUS_COLORS[m.status] }}>● {STATUS_LABELS[m.status] || m.status}</span>
+            <span style={{ color: STATUS_COLORS[m.status] }}>
+              ● {m.status === 'DRAFT' && (m.brawlAutoVerify || m.externalAutoApprove)
+                  ? 'Авто-отслеживание'
+                  : (STATUS_LABELS[m.status] || m.status)}
+            </span>
             <span className="quest-platform">{m.gameName}</span>
           </div>
           {expanded === m.questId && (

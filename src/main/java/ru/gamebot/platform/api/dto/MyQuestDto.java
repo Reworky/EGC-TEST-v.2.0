@@ -11,6 +11,8 @@ public class MyQuestDto {
     private String title;
     private String gameName;
     private String category;
+    private boolean externalAutoApprove;
+    private boolean brawlAutoVerify;
     private String status;
     private String updatedAt;
     private String expiresAt;

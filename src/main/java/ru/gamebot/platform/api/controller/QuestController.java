@@ -247,6 +247,8 @@ public class QuestController {
                         .title(s.getQuest().getTitle())
                         .gameName(s.getQuest().getGameName())
                         .category(s.getQuest().getCategory())
+                        .externalAutoApprove(s.getQuest().isExternalAutoApprove())
+                        .brawlAutoVerify(s.getQuest().getBrawlVerifyType() != null)
                         .status(s.getStatus().name())
                         .updatedAt(s.getUpdatedAt() != null ? s.getUpdatedAt().format(ISO_FMT) : null)
                         .expiresAt(s.getExpiresAt() != null ? s.getExpiresAt().format(ISO_FMT) : null)
