@@ -6815,7 +6815,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else {
             detailsLine = "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>";
         }
-        long rubles = Math.round(req.getRewardItem().getPriceCoins() * healthRatioService.getCurrentRatio() / 100.0);
+        long rubles = fixedOrCurrentRub(req);
         String payoutSuffix = isCryptoWithdrawal(req) ? cryptoPayoutSuffix(rubles) : "";
         long duplicateCount = rewardService.countPendingWithdrawalsByUser(requester);
         String duplicateWarning = duplicateCount > 1
@@ -6879,7 +6879,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long questsDone = questService.countApprovedByUser(player);
         long totalEarned = questService.sumEarnedCoinsByUser(player);
 
-        long rubForLine = Math.round(exc * healthRatioService.getCurrentRatio() / 100.0);
+        long rubForLine = fixedOrCurrentRub(req);
         String withdrawLine;
         if (isCryptoWithdrawal(req)) {
             java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(rubForLine));
@@ -10346,7 +10346,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (payoutDetails != null && payoutDetails.startsWith("TON:")) {
             // Формат: TON:<wallet>:rubles=<N>
             String wallet = cryptoWalletFromPayoutDetails(payoutDetails);
-            long rubles = Math.round(req.getRewardItem().getPriceCoins() * healthRatioService.getCurrentRatio() / 100.0);
+            long rubles = fixedOrCurrentRub(req);
             java.math.BigDecimal tonRate = exchangeRateService.getTonRubRate();
             java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(rubles));
             details = "\n💰 К отправке: ~<b>" + tonAmount + " GRAM (TON)</b>"
@@ -10475,7 +10475,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else {
             detailsLine = "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>";
         }
-        long rubles = Math.round(req.getRewardItem().getPriceCoins() * healthRatioService.getCurrentRatio() / 100.0);
+        long rubles = fixedOrCurrentRub(req);
         String payoutSuffix = isCryptoWithdrawal(req) ? cryptoPayoutSuffix(rubles) : "";
         long dupCount = rewardService.countPendingWithdrawalsByUser(requester);
         String dupWarning = dupCount > 1
@@ -11092,6 +11092,15 @@ String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошел�
 
     private long reqDisplayId(ru.gamebot.platform.domain.model.RewardRequest req) {
         return req.getDisplayId() != null ? req.getDisplayId() : req.getId();
+    }
+
+    /** Рублёвый эквивалент заявки на вывод — берём зафиксированный на момент подачи, чтобы не "плавал"
+     * при изменении курса между созданием заявки и её обработкой модератором/админом. Пересчёт по
+     * текущему курсу — только запасной вариант для старых заявок без сохранённого значения. */
+    private long fixedOrCurrentRub(ru.gamebot.platform.domain.model.RewardRequest req) {
+        return req.getFixedRubValue() != null
+                ? req.getFixedRubValue()
+                : Math.round(req.getRewardItem().getPriceCoins() * healthRatioService.getCurrentRatio() / 100.0);
     }
 
     private String displayUserName(AppUser user) {

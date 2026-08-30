@@ -371,6 +371,7 @@ public class RewardService {
         // код чтения (isCryptoWithdrawal/cryptoWalletFromPayoutDetails в GamePlatformBot) понимает оба варианта.
         request.setPayoutDetails("TON:" + tonWallet + ":rubles=" + rubles);
         request.setDisplayId(rewardRequestRepository.findMaxWithdrawalDisplayId() + 1);
+        request.setFixedRubValue(rubles);
         return rewardRequestRepository.save(request);
     }
 
@@ -434,6 +435,7 @@ public class RewardService {
         request.setPayoutDetails(payoutDetails);
         request.setCreatedAt(LocalDateTime.now());
         request.setDisplayId(rewardRequestRepository.findMaxWithdrawalDisplayId() + 1);
+        request.setFixedRubValue(rubles);
         return rewardRequestRepository.save(request);
     }
 
