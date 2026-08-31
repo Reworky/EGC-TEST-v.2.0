@@ -28,6 +28,11 @@ public class QuestDetailDto {
      *  отслеживается автоматически, отчёт не нужен. */
     private boolean brawlAutoVerify;
 
+    /** Только для авто-верифицируемых квестов с активной заявкой. null = ещё не авто-квест, либо
+     *  (если target тоже null) идёт первый замер после взятия — baseline ещё не зафиксирован API. */
+    private Integer autoVerifyProgress;
+    private Integer autoVerifyTarget;
+
     /** null, если пользователь ещё не брал этот квест */
     private String submissionStatus;
     private String moderatorComment;

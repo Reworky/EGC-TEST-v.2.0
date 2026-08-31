@@ -170,7 +170,23 @@ function QuestActions({ quest, detail, onChanged }) {
   }
 
   if (detail.brawlAutoVerify && status === 'DRAFT') {
-    return <div className="quest-status quest-status-pending"><i className="ti ti-clock"></i> Прогресс отслеживается автоматически по вашему аккаунту {detail.gameName} — отчёт отправлять не нужно</div>;
+    const target = detail.autoVerifyTarget;
+    const progress = detail.autoVerifyProgress;
+    if (target != null && progress != null) {
+      const pct = Math.min(100, Math.round((progress / target) * 100));
+      return (
+        <div className="quest-status quest-status-pending">
+          <div><i className="ti ti-clock"></i> Прогресс отслеживается автоматически по вашему аккаунту {detail.gameName}</div>
+          <div className="quest-progress-track"><div className="quest-progress-fill" style={{ width: pct + '%' }} /></div>
+          <div className="quest-progress-label">{progress} / {target}</div>
+        </div>
+      );
+    }
+    return (
+      <div className="quest-status quest-status-pending">
+        <i className="ti ti-clock"></i> Прогресс отслеживается автоматически по вашему аккаунту {detail.gameName} — идёт первый замер…
+      </div>
+    );
   }
 
   if (status === 'DRAFT' || status === 'REJECTED' || status === 'NEEDS_INFO') {

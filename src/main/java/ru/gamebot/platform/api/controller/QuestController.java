@@ -41,6 +41,32 @@ public class QuestController {
     private final AppUserRepository appUserRepository;
     private final TelegramFileService telegramFileService;
 
+    /** Числовой прогресс для авто-верифицируемого квеста — тот же расчёт, что и в GamePlatformBot.autoVerifyProgressLabel,
+     *  но без готового текста: фронтенд Mini App рисует прогресс сам (бар/проценты), не текстовой строкой. */
+    private record AutoVerifyProgress(Integer progress, Integer target) {
+        static final AutoVerifyProgress NONE = new AutoVerifyProgress(null, null);
+    }
+
+    private AutoVerifyProgress computeAutoVerifyProgress(Quest quest, QuestSubmission submission) {
+        if (submission == null) {
+            return AutoVerifyProgress.NONE;
+        }
+        if (quest.getBrawlVerifyType() != null) {
+            boolean measured = quest.getBrawlVerifyType() != ru.gamebot.platform.domain.enums.BrawlVerifyType.TROPHIES
+                    || submission.getBrawlBaselineTrophies() != null;
+            return new AutoVerifyProgress(measured ? submission.getBrawlProgressCount() : null, quest.getBrawlTargetCount());
+        }
+        if (quest.getClashVerifyType() != null) {
+            boolean measured = submission.getClashBaselineValue() != null;
+            return new AutoVerifyProgress(measured ? submission.getClashProgressCount() : null, quest.getClashTargetCount());
+        }
+        if (quest.getClashRoyaleVerifyType() != null) {
+            boolean measured = submission.getClashRoyaleBaselineValue() != null;
+            return new AutoVerifyProgress(measured ? submission.getClashRoyaleProgressCount() : null, quest.getClashRoyaleTargetCount());
+        }
+        return AutoVerifyProgress.NONE;
+    }
+
     @GetMapping
     public List<QuestDto> quests(
             @RequestParam(required = false) String game,
@@ -148,6 +174,9 @@ public class QuestController {
                     if (latest.getExpiresAt() != null) {
                         builder.expiresAt(latest.getExpiresAt().format(ISO_FMT));
                     }
+                    AutoVerifyProgress progress = computeAutoVerifyProgress(quest, latest);
+                    builder.autoVerifyProgress(progress.progress());
+                    builder.autoVerifyTarget(progress.target());
                 }
             });
         }
@@ -241,7 +270,9 @@ public class QuestController {
         }
 
         List<MyQuestDto> result = questService.getUserSubmissions(user).stream()
-                .map(s -> MyQuestDto.builder()
+                .map(s -> {
+                    AutoVerifyProgress progress = computeAutoVerifyProgress(s.getQuest(), s);
+                    return MyQuestDto.builder()
                         .submissionId(s.getId())
                         .questId(s.getQuest().getId())
                         .title(s.getQuest().getTitle())
@@ -249,13 +280,16 @@ public class QuestController {
                         .category(s.getQuest().getCategory())
                         .externalAutoApprove(s.getQuest().isExternalAutoApprove())
                         .brawlAutoVerify(s.getQuest().getBrawlVerifyType() != null || s.getQuest().getClashVerifyType() != null || s.getQuest().getClashRoyaleVerifyType() != null)
+                        .autoVerifyProgress(progress.progress())
+                        .autoVerifyTarget(progress.target())
                         .status(s.getStatus().name())
                         .updatedAt(s.getUpdatedAt() != null ? s.getUpdatedAt().format(ISO_FMT) : null)
                         .expiresAt(s.getExpiresAt() != null ? s.getExpiresAt().format(ISO_FMT) : null)
                         .moderatorComment(s.getModeratorComment())
                         .rewardXp(s.getQuest().getRewardXp())
                         .rewardCoins(s.getQuest().getRewardCoins())
-                        .build())
+                        .build();
+                })
                 .toList();
         return ResponseEntity.ok(result);
     }
