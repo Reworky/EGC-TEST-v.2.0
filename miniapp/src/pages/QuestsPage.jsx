@@ -87,7 +87,7 @@ const CANCELABLE_STATUSES = ['DRAFT', 'PENDING', 'NEEDS_INFO', 'REJECTED'];
 function QuestActions({ quest, detail, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
-  const [needsBrawlTag, setNeedsBrawlTag] = useState(false);
+  const [needsTagLink, setNeedsTagLink] = useState(null);
   const [photo, setPhoto] = useState(null);
   const [externalLink, setExternalLink] = useState('');
   const [comment, setComment] = useState('');
@@ -108,20 +108,26 @@ function QuestActions({ quest, detail, onChanged }) {
     return <div className="quest-detail-loading">Загрузка...</div>;
   }
 
-  function openBotForBrawlTag() {
+  const TAG_LINK_DEEPLINK = {
+    NEEDS_BRAWL_TAG: 'brawltag',
+    NEEDS_CLASH_TAG: 'clashtag',
+    NEEDS_CLASH_ROYALE_TAG: 'crtag',
+  };
+
+  function openBotForTag(startParam) {
     const tg = window.Telegram?.WebApp;
-    const url = 'https://t.me/invitetogamebot?start=brawltag';
+    const url = `https://t.me/invitetogamebot?start=${startParam}`;
     if (tg) tg.openTelegramLink(url); else window.open(url, '_blank', 'noopener');
   }
 
   async function handleTake() {
     setBusy(true);
     setMessage(null);
-    setNeedsBrawlTag(false);
+    setNeedsTagLink(null);
     try {
       const res = await takeQuest(quest.id);
       setMessage(res.message);
-      setNeedsBrawlTag(res.status === 'NEEDS_BRAWL_TAG');
+      setNeedsTagLink(TAG_LINK_DEEPLINK[res.status] || null);
       if (res.success) onChanged();
     } finally {
       setBusy(false);
@@ -164,7 +170,7 @@ function QuestActions({ quest, detail, onChanged }) {
   }
 
   if (detail.brawlAutoVerify && status === 'DRAFT') {
-    return <div className="quest-status quest-status-pending"><i className="ti ti-clock"></i> Прогресс отслеживается автоматически по вашему аккаунту Brawl Stars — отчёт отправлять не нужно</div>;
+    return <div className="quest-status quest-status-pending"><i className="ti ti-clock"></i> Прогресс отслеживается автоматически по вашему аккаунту {detail.gameName} — отчёт отправлять не нужно</div>;
   }
 
   if (status === 'DRAFT' || status === 'REJECTED' || status === 'NEEDS_INFO') {
@@ -211,8 +217,8 @@ function QuestActions({ quest, detail, onChanged }) {
       {message && (
         <div className="quest-message">
           {message}
-          {needsBrawlTag && (
-            <button className="quest-btn" style={{ marginTop: 8 }} onClick={openBotForBrawlTag}>
+          {needsTagLink && (
+            <button className="quest-btn" style={{ marginTop: 8 }} onClick={() => openBotForTag(needsTagLink)}>
               🏷️ Открыть бота и привязать тег
             </button>
           )}
