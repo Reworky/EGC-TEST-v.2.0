@@ -11,6 +11,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.enums.BrawlVerifyType;
+import ru.gamebot.platform.domain.enums.ClashVerifyType;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.repository.QuestRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
@@ -703,6 +704,26 @@ public class QuestSeeder implements CommandLineRunner {
                 "Участвуй в Клановых войнах, атакуй соразмерных или слабых противников для гарантированных трёх звёзд. Журнал Клановых войн хранит историю всех атак.",
                 "Скриншот журнала Клановых войн с 10 последовательными атаками на 3 звезды и никнеймом деревни. Все 10 атак и ник должны быть видны — при необходимости допустимо два скриншота подряд.");
 
+        // ── Clash of Clans — авто-верификация через официальный API (тот же паттерн, что Brawl Stars) ──
+        // "Собери 25 000 золота..." раньше был помечен oneTimePerAccount как временная заглушка от фарма
+        // накопленного баланса (см. ниже) — теперь это больше не нужно: дельта считается по-настоящему
+        // с момента взятия квеста через achievements "Gold Grab"/"Elixir Escapade" в API.
+        clearOneTimePerAccount("Собери 25 000 золота или эликсира за день", "Clash of Clans");
+        String clashAutoReq = "Ничего отправлять не нужно — прогресс проверяется автоматически через официальный API "
+                + "Clash of Clans, награда зачислится сама после выполнения условия.";
+        setClashVerify("Выиграй 3 атаки в мультиплеере", ClashVerifyType.ATTACK_WINS, 3,
+                "Победи в 3 атаках мультиплеера Clash of Clans — прогресс считается автоматически.",
+                "Атакуй в обычном мультиплеере и побеждай — победы суммируются из разных сессий. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
+                clashAutoReq);
+        setClashVerify("Собери 25 000 золота или эликсира за день", ClashVerifyType.RESOURCES, 25000,
+                "Добудь суммарно 25 000 золота или эликсира с момента взятия квеста — прогресс считается автоматически.",
+                "Собирай ресурсы из шахт, атакуй деревни и разрушай хранилища противника. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
+                clashAutoReq);
+        setClashVerify("Улучши Ратушу до следующего уровня", ClashVerifyType.TOWN_HALL, 1,
+                "Прокачай Ратушу своей деревни на один уровень выше текущего — прогресс считается автоматически.",
+                "Накопи необходимые ресурсы и запусти улучшение Ратуши. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
+                clashAutoReq);
+
         // ── Grim Soul: удаляем все старые квесты ────────────────────────────────
         Set<String> keepGrimSoulTitles = Set.of(
                 "Исследуй 3 локации за день",
@@ -1390,7 +1411,9 @@ public class QuestSeeder implements CommandLineRunner {
         // на квест "Собери 25 000 золота", 2026-08-30). Список — только 13 самых жёстких случаев
         // (баланс валюты + порог ранга/лиги); более мягкие (уровень здания, комплект брони, счётчики
         // выживания) сознательно не трогаем в этом заходе.
-        markOneTimePerAccount("Собери 25 000 золота или эликсира за день", "Clash of Clans");
+        // "Собери 25 000 золота..." сюда больше не входит — теперь верифицируется по-настоящему через
+        // Clash of Clans API (дельта с момента взятия квеста, см. setClashVerify ниже), oneTimePerAccount
+        // для него снят отдельным вызовом ниже, это была временная заглушка до нормального фикса.
         markOneTimePerAccount("Достигни лиги Голем 19 и выше", "Clash of Clans");
         markOneTimePerAccount("Достигни 5 000 Кубков", "Clash Royale");
         markOneTimePerAccount("Достигни лиги Претендент II", "Clash Royale");
@@ -1418,6 +1441,33 @@ public class QuestSeeder implements CommandLineRunner {
                     questRepository.save(q);
                     log.info("[QuestSeeder] Marked one-time-per-account: '{}' ({})", title, gameName);
                 });
+    }
+
+    /** Снимает ранее выставленный oneTimePerAccount — для квестов, которые перешли на настоящую API-верификацию. */
+    private void clearOneTimePerAccount(String title, String gameName) {
+        questRepository.findFirstByTitleAndGameName(title, gameName)
+                .filter(Quest::isOneTimePerAccount)
+                .ifPresent(q -> {
+                    q.setOneTimePerAccount(false);
+                    questRepository.save(q);
+                    log.info("[QuestSeeder] Cleared one-time-per-account (superseded by API verification): '{}' ({})", title, gameName);
+                });
+    }
+
+    /**
+     * Проставляет структурные данные авто-верификации Clash of Clans квесту, уже созданному через seed()/updateQuest().
+     * Идемпотентен — вызывается на каждом деплое. Игра всегда "Clash of Clans" — единственная, где сейчас есть эта авто-верификация.
+     */
+    private void setClashVerify(String title, ClashVerifyType type, int targetCount,
+                                 String description, String instruction, String requirements) {
+        questRepository.findFirstByTitleAndGameName(title, "Clash of Clans").ifPresentOrElse(q -> {
+            q.setClashVerifyType(type);
+            q.setClashTargetCount(targetCount);
+            q.setDescription(description);
+            q.setInstruction(instruction);
+            q.setRequirements(requirements);
+            questRepository.save(q);
+        }, () -> log.warn("[QuestSeeder] setClashVerify: quest not found (seed must run first): '{}'", title));
     }
 
     private void deactivateGame(String gameName) {

@@ -136,6 +136,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.domain.repository.QuestRepository questRepository;
     private final ru.gamebot.platform.service.BrawlStarsTournamentService brawlStarsTournamentService;
     private final ru.gamebot.platform.service.BrawlQuestVerificationService brawlQuestVerificationService;
+    private final ru.gamebot.platform.service.ClashQuestVerificationService clashQuestVerificationService;
     private final ru.gamebot.platform.service.ScheduledBroadcastService scheduledBroadcastService;
     private final ru.gamebot.platform.service.AdsgramBotAdService adsgramBotAdService;
     private final ru.gamebot.platform.domain.repository.TournamentEntryRepository tournamentEntryRepository;
@@ -967,6 +968,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if ("clash:confirm".equals(data)) {
+            String tag = session.getData().get("clashTag");
+            String name = session.getData().get("clashName");
+            String townHallStr = session.getData().get("clashTownHall");
+            if (tag == null || townHallStr == null) {
+                answer(callbackQuery.getId(), "❌ Сессия истекла, начните заново.");
+                session.reset();
+                return;
+            }
+            // linkTag использует только playerInfo.tag() — остальные поля (attackWins/золото/эликсир) для
+            // привязки не нужны, поэтому их не сохраняем в сессии и восстанавливаем нулями.
+            var playerInfo = new ru.gamebot.platform.service.ClashOfClansApiService.PlayerInfo(tag, name, Integer.parseInt(townHallStr), 0, 0, 0);
+            clashQuestVerificationService.linkTag(user, playerInfo);
+            String pendingQuestIdStr = session.getData().get("clashPendingQuestId");
+            session.reset();
+            answer(callbackQuery.getId(), "✅ Тег привязан!");
+            if (pendingQuestIdStr != null) {
+                handleTakeQuest(callbackQuery, user, session, Long.parseLong(pendingQuestIdStr));
+            } else {
+                sendText(user.getTelegramId(), "✅ Тег Clash of Clans привязан: " + escape(tag), backMenuKeyboard("menu:profile"));
+            }
+            return;
+        }
+        if ("clash:retry".equals(data)) {
+            session.setState(SessionState.CLASH_TAG_INPUT);
+            sendText(user.getTelegramId(), "🏷️ Введите игровой тег ещё раз:", cancelKeyboard());
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if ("brawl:anomalies".equals(data) && isEffectiveModerator(user)) {
             sendBrawlAnomalies(user.getTelegramId());
             answerSilently(callbackQuery.getId());
@@ -1708,6 +1738,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                     List.of(keyboardFactory.callback("❌ Отмена", "menu:quests"))
                             )));
                 }
+            }
+            case CLASH_TAG_INPUT -> {
+                ru.gamebot.platform.service.ClashQuestVerificationService.TagLookupResult res =
+                        clashQuestVerificationService.lookupTag(text.trim());
+                if (!res.success()) {
+                    sendText(user.getTelegramId(), "❌ " + res.error() + "\n\nПопробуйте ещё раз:", cancelKeyboard());
+                    return;
+                }
+                session.getData().put("clashTag", res.playerInfo().tag());
+                session.getData().put("clashName", res.playerInfo().name());
+                session.getData().put("clashTownHall", String.valueOf(res.playerInfo().townHallLevel()));
+                session.setState(SessionState.CLASH_TAG_CONFIRM);
+                sendText(user.getTelegramId(),
+                        "🎮 Найден игрок: <b>" + escape(res.playerInfo().name()) + "</b> (Ратуша " + res.playerInfo().townHallLevel() + ")\n\nЭто вы?",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("✅ Да, это я", "clash:confirm")),
+                                List.of(keyboardFactory.callback("✏️ Ввести другой тег", "clash:retry")),
+                                List.of(keyboardFactory.callback("❌ Отмена", "menu:quests"))
+                        )));
             }
             case TOURNAMENT_CREATE_NAME -> {
                 session.getData().put("tName", text.trim());
@@ -3278,7 +3327,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (hasActiveSubmission) {
             buttons.add(quest.isExternalAutoApprove()
                     ? keyboardFactory.callback("⏳ Ждём подтверждения от партнёра", "noop")
-                    : quest.getBrawlVerifyType() != null
+                    : (quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null)
                         ? keyboardFactory.callback("⏳ Прогресс отслеживается автоматически", "noop")
                         : keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
         }
@@ -3310,9 +3359,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📝 <b>Суть задания:</b>\n" + escape(quest.getDescription()) + "\n\n"
                         + (personalizedInstruction != null && !personalizedInstruction.isBlank()
                             ? (quest.isSponsored() ? "📎 <b>Ссылки:</b>\n" : "📎 <b>Что нужно сделать:</b>\n") + escape(personalizedInstruction)
-                                + (quest.isSponsored() ? "" : (quest.isExternalAutoApprove() || quest.getBrawlVerifyType() != null ? "\n\nℹ️ " : "\n\n✅ <b>Что примет модерация:</b>\n") + escape(quest.getRequirements()))
+                                + (quest.isSponsored() ? "" : (quest.isExternalAutoApprove() || quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null ? "\n\nℹ️ " : "\n\n✅ <b>Что примет модерация:</b>\n") + escape(quest.getRequirements()))
                             : (quest.isSponsored() ? "" : "📎 <b>Что нужно сделать:</b>\n" + escape(personalizedInstruction)
-                                + (quest.getBrawlVerifyType() != null ? "\n\nℹ️ " : "\n\n✅ <b>Что примет модерация:</b>\n") + escape(quest.getRequirements()))),
+                                + (quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null ? "\n\nℹ️ " : "\n\n✅ <b>Что примет модерация:</b>\n") + escape(quest.getRequirements()))),
                 verticalWithBackMenu(buttons, backText, backData));
     }
 
@@ -3330,6 +3379,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     cancelKeyboard());
             return;
         }
+        if (quest.getClashVerifyType() != null && user.getClashOfClansTag() == null) {
+            answerSilently(callbackQuery.getId());
+            session.reset();
+            session.getData().put("clashPendingQuestId", String.valueOf(questId));
+            session.setState(SessionState.CLASH_TAG_INPUT);
+            sendText(user.getTelegramId(),
+                    "🏷️ Для этого квеста нужен привязанный тег Clash of Clans — прогресс отслеживается автоматически.\n\n"
+                            + "Введите ваш игровой тег (например: <code>#ABC123</code>):",
+                    cancelKeyboard());
+            return;
+        }
         QuestService.QuestActionResult result = questService.takeQuestChecked(user, quest);
         answerSilently(callbackQuery.getId());
 
@@ -3343,16 +3403,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? "🚀 Квест активен! Перейди по своей ссылке ниже — отчёт отправлять не нужно, EXC начислится автоматически."
                 : quest.getBrawlVerifyType() != null
                     ? "🚀 Квест активен! ⏳ Прогресс отслеживается автоматически по вашему аккаунту Brawl Stars — отчёт отправлять не нужно."
-                    : "🚀 Квест активен! Приступайте к игре, когда выполните задание, отправьте отчёт прямо из этой карточки.";
-        if (!quest.isExternalAutoApprove() && quest.getBrawlVerifyType() == null && weeklyCount >= 3) {
+                    : quest.getClashVerifyType() != null
+                        ? "🚀 Квест активен! ⏳ Прогресс отслеживается автоматически по вашему аккаунту Clash of Clans — отчёт отправлять не нужно."
+                        : "🚀 Квест активен! Приступайте к игре, когда выполните задание, отправьте отчёт прямо из этой карточки.";
+        if (!quest.isExternalAutoApprove() && quest.getBrawlVerifyType() == null && quest.getClashVerifyType() == null && weeklyCount >= 3) {
             notice += "\n\n⚠️ Вы уже выполнили 3+ таких квеста за неделю — награда EXC будет снижена на 50%.";
         }
 
         Quest freshQuest = questService.getQuest(questId);
         QuestSubmission submission = result.submission();
         List<InlineKeyboardButton> buttons = new ArrayList<>();
-        buttons.add(freshQuest.isExternalAutoApprove() || freshQuest.getBrawlVerifyType() != null
-                ? keyboardFactory.callback(freshQuest.getBrawlVerifyType() != null ? "⏳ Прогресс отслеживается автоматически" : "⏳ Ждём подтверждения от партнёра", "noop")
+        buttons.add(freshQuest.isExternalAutoApprove() || freshQuest.getBrawlVerifyType() != null || freshQuest.getClashVerifyType() != null
+                ? keyboardFactory.callback((freshQuest.getBrawlVerifyType() != null || freshQuest.getClashVerifyType() != null) ? "⏳ Прогресс отслеживается автоматически" : "⏳ Ждём подтверждения от партнёра", "noop")
                 : keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
         buttons.add(keyboardFactory.callback("📂 Мои квесты", "menu:myquests"));
         buttons.add(keyboardFactory.callback("🏠 Меню", "menu:main"));
@@ -9518,6 +9580,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyModeratorsAboutAutoApproval(approved, "проверка через Brawl Stars API");
         } catch (Exception e) {
             log.error("[BrawlAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
+        }
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onClashQuestAutoVerified(ru.gamebot.platform.event.ClashQuestAutoVerifiedEvent event) {
+        try {
+            QuestSubmission approved = questService.getSubmission(event.getSubmissionId());
+            notifyUser(approved.getUser().getTelegramId(),
+                    "✅ <b>Квест выполнен автоматически!</b>\n\n"
+                    + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в Clash of Clans засчитан.\n\n"
+                    + "🪙 EXC: <b>+" + approved.getQuest().getRewardCoins() + "</b>\n"
+                    + "✨ XP: <b>+" + approved.getQuest().getRewardXp() + "</b>");
+            notifyModeratorsAboutAutoApproval(approved, "проверка через Clash of Clans API");
+        } catch (Exception e) {
+            log.error("[ClashAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
         }
     }
 

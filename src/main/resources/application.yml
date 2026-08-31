@@ -54,3 +54,6 @@ claude:
 
 brawlstars:
   api-token: ${BRAWL_STARS_API_TOKEN:}
+
+clashofclans:
+  api-token: ${CLASH_OF_CLANS_API_TOKEN:}

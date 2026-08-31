@@ -166,4 +166,10 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT s FROM QuestSubmission s WHERE s.status = 'DRAFT' AND s.quest.brawlVerifyType IS NOT NULL " +
            "AND s.user.brawlStarsTag IS NOT NULL AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP)")
     List<QuestSubmission> findInProgressBrawlAutoVerify();
+
+    /** Незавершённые заявки на квесты с включённой авто-верификацией через Clash of Clans API, у пользователя привязан тег, срок не истёк. */
+    @EntityGraph(attributePaths = {"user", "quest"})
+    @Query("SELECT s FROM QuestSubmission s WHERE s.status = 'DRAFT' AND s.quest.clashVerifyType IS NOT NULL " +
+           "AND s.user.clashOfClansTag IS NOT NULL AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP)")
+    List<QuestSubmission> findInProgressClashAutoVerify();
 }

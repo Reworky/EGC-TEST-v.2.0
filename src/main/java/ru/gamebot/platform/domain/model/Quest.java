@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
 import ru.gamebot.platform.domain.enums.BrawlVerifyType;
+import ru.gamebot.platform.domain.enums.ClashVerifyType;
 
 @Getter
 @Setter
@@ -110,6 +111,14 @@ public class Quest {
     /** CSV допустимых имён бойцов API — засчитывается боец ИГРОКА в этом бою, OR-логика. null = любой боец. */
     @Column(length = 500)
     private String brawlBrawlerNames;
+
+    /** null = обычный квест (или уже авто-верифицируемый через brawlVerifyType) — включает авто-верификацию через официальный Clash of Clans API. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private ClashVerifyType clashVerifyType;
+
+    /** Целевая дельта с момента взятия квеста: побед в атаках (ATTACK_WINS), золота/эликсира (RESOURCES, берётся максимум из двух) или уровней Ратуши (TOWN_HALL). */
+    private Integer clashTargetCount;
 
     /** Краткое условие (до ~150 символов) для подстановки в шаблон быстрого отклонения «Недостаточно данных». */
     @Column(length = 200)

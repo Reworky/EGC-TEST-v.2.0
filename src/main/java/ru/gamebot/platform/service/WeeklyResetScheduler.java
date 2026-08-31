@@ -51,6 +51,7 @@ public class WeeklyResetScheduler {
     private final SeasonService seasonService;
     private final ExcTransactionService excTx;
     private final BrawlQuestVerificationService brawlQuestVerificationService;
+    private final ClashQuestVerificationService clashQuestVerificationService;
     private final ScheduledBroadcastService scheduledBroadcastService;
 
     private static final int[] DORMANCY_TIER_DAYS = {14, 30, 60};
@@ -143,6 +144,16 @@ public class WeeklyResetScheduler {
             brawlQuestVerificationService.checkInProgressSubmissions();
         } catch (Exception e) {
             log.error("Brawl auto-verify check failed", e);
+        }
+    }
+
+    // Проверка прогресса авто-верификации квестов Clash of Clans — каждые 10 минут
+    @Scheduled(fixedDelay = 600_000)
+    public void checkClashAutoVerifyProgress() {
+        try {
+            clashQuestVerificationService.checkInProgressSubmissions();
+        } catch (Exception e) {
+            log.error("Clash auto-verify check failed", e);
         }
     }
 

@@ -135,6 +135,10 @@ public class AppUser {
     private String brawlStarsTag;
     private LocalDateTime brawlTagConfirmedAt;
 
+    /** Подтверждённый игровой тег Clash of Clans (например "#ABC123"), для авто-верификации квестов через официальный API. */
+    private String clashOfClansTag;
+    private LocalDateTime clashTagConfirmedAt;
+
     // Season Pass
     private java.time.LocalDateTime seasonPassActiveUntil;
 

@@ -121,4 +121,14 @@ public class QuestSubmission {
     /** BATTLES: количество боёв, прошедших фильтры квеста, накопленное с момента взятия. */
     @Column(columnDefinition = "integer default 0")
     private int brawlProgressCount;
+
+    /** ATTACK_WINS: attackWins, RESOURCES: золото, TOWN_HALL: townHallLevel — на момент первого опроса после взятия. null = ещё не захвачено. */
+    private Integer clashBaselineValue;
+
+    /** RESOURCES only: эликсир на момент первого опроса — второй ресурс для OR-логики "золото ИЛИ эликсир" (берётся максимум из двух дельт). */
+    private Integer clashBaselineValue2;
+
+    /** Текущий прогресс (макс. достигнутая дельта с момента первого опроса). */
+    @Column(columnDefinition = "integer default 0")
+    private int clashProgressCount;
 }
