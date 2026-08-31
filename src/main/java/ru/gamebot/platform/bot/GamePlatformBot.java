@@ -3390,7 +3390,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             buttons.add(quest.isExternalAutoApprove()
                     ? keyboardFactory.callback("⏳ Ждём подтверждения от партнёра", "noop")
                     : (quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null)
-                        ? keyboardFactory.callback("⏳ Прогресс отслеживается автоматически", "noop")
+                        ? keyboardFactory.callback(autoVerifyProgressLabel(quest, latest), "noop")
                         : keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
         }
         if (nextQuestData != null) {
@@ -3489,8 +3489,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         Quest freshQuest = questService.getQuest(questId);
         QuestSubmission submission = result.submission();
         List<InlineKeyboardButton> buttons = new ArrayList<>();
-        buttons.add(freshQuest.isExternalAutoApprove() || freshQuest.getBrawlVerifyType() != null || freshQuest.getClashVerifyType() != null || freshQuest.getClashRoyaleVerifyType() != null
-                ? keyboardFactory.callback((freshQuest.getBrawlVerifyType() != null || freshQuest.getClashVerifyType() != null || freshQuest.getClashRoyaleVerifyType() != null) ? "⏳ Прогресс отслеживается автоматически" : "⏳ Ждём подтверждения от партнёра", "noop")
+        boolean freshQuestAutoVerified = freshQuest.getBrawlVerifyType() != null || freshQuest.getClashVerifyType() != null || freshQuest.getClashRoyaleVerifyType() != null;
+        buttons.add(freshQuest.isExternalAutoApprove() || freshQuestAutoVerified
+                ? keyboardFactory.callback(freshQuestAutoVerified ? autoVerifyProgressLabel(freshQuest, submission) : "⏳ Ждём подтверждения от партнёра", "noop")
                 : keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
         buttons.add(keyboardFactory.callback("📂 Мои квесты", "menu:myquests"));
         buttons.add(keyboardFactory.callback("🏠 Меню", "menu:main"));
@@ -3794,7 +3795,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         buttons.add(quest.isExternalAutoApprove()
                 ? keyboardFactory.callback("⏳ Ждём подтверждения от партнёра", "noop")
                 : autoVerified
-                    ? keyboardFactory.callback("⏳ Прогресс отслеживается автоматически", "noop")
+                    ? keyboardFactory.callback(autoVerifyProgressLabel(quest, submission), "noop")
                     : keyboardFactory.callback("📤 Отчёт", "quest:report:" + quest.getId()));
         if (canCancel) {
             buttons.add(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + submission.getId()));
@@ -11507,6 +11508,30 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + (user.getClashRoyaleTag() != null
                     ? "✅ Clash Royale: <code>" + escape(user.getClashRoyaleTag()) + "</code>\n"
                     : "❌ Clash Royale: не привязан\n");
+    }
+
+    /** Текст для кнопки авто-верифицируемого квеста — с текущим прогрессом, если он уже известен
+     *  (после первого опроса API), или общей фразой, пока идёт первый замер (baseline ещё не зафиксирован). */
+    private String autoVerifyProgressLabel(Quest quest, QuestSubmission submission) {
+        if (quest.getBrawlVerifyType() != null) {
+            if (submission.getBrawlBaselineTrophies() == null && quest.getBrawlVerifyType() == ru.gamebot.platform.domain.enums.BrawlVerifyType.TROPHIES) {
+                return "⏳ Идёт первый замер…";
+            }
+            return "⏳ Прогресс: " + submission.getBrawlProgressCount() + "/" + quest.getBrawlTargetCount();
+        }
+        if (quest.getClashVerifyType() != null) {
+            if (submission.getClashBaselineValue() == null) {
+                return "⏳ Идёт первый замер…";
+            }
+            return "⏳ Прогресс: " + submission.getClashProgressCount() + "/" + quest.getClashTargetCount();
+        }
+        if (quest.getClashRoyaleVerifyType() != null) {
+            if (submission.getClashRoyaleBaselineValue() == null) {
+                return "⏳ Идёт первый замер…";
+            }
+            return "⏳ Прогресс: " + submission.getClashRoyaleProgressCount() + "/" + quest.getClashRoyaleTargetCount();
+        }
+        return "⏳ Прогресс отслеживается автоматически";
     }
 
     private String displayTag(AppUser user) {
