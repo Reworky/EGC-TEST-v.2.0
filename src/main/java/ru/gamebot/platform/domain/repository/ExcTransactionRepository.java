@@ -15,6 +15,8 @@ public interface ExcTransactionRepository extends JpaRepository<ExcTransaction, 
 
     long countByUser(AppUser user);
 
+    boolean existsByUserAndDescription(AppUser user, String description);
+
     @Query("SELECT COALESCE(SUM(t.amount), 0) FROM ExcTransaction t WHERE t.amount > 0 AND t.createdAt >= :since")
     long sumEarnedSince(@Param("since") LocalDateTime since);
 
