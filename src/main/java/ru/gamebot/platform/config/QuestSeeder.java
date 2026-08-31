@@ -652,6 +652,9 @@ public class QuestSeeder implements CommandLineRunner {
                 "Играй ранговые матчи регулярно и набирай очки рейтинга. Ранг Легенда открывается после Эпика. При достижении появится анимация повышения ранга.",
                 "Скриншот профиля аккаунта с иконкой ранга Легенда и никнеймом + ID игрока. Ранг Легенда, ник и ID должны быть чётко видны в одном кадре.");
 
+        // ── Clash of Clans: FLAT-режим, по аналогии с Brawl Stars — без деления на сложность, 2000 EXC ──
+        gameCatalogService.setDifficultyMode("Clash of Clans", "FLAT", 2000L, 50);
+
         // ── Clash of Clans: удаляем все старые квесты ───────────────────────────
         Set<String> keepCocTitles = Set.of(
                 "Атакуй 3 деревни в мультиплеере",
@@ -774,6 +777,25 @@ public class QuestSeeder implements CommandLineRunner {
                 "Задонать суммарно 300 и более единиц войск участникам своего клана — прогресс считается автоматически.",
                 "Отвечай на запросы войск в клановом чате или донать напрямую участникам. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
                 clashAutoReq);
+
+        // ── Clash of Clans: убираем деление на сложность — 50 XP / 2000 EXC каждому, как у Brawl Stars.
+        // seed()/updateQuest() либо пропускают уже существующие квесты, либо (byNewTitle) обновляют только
+        // rewardXp/rewardCoins, но не category — поэтому category=null форсим отдельно, тем же
+        // деплой-принудительным паттерном, что и markOneTimePerAccount/deactivateQuests.
+        for (String title : new String[]{
+                "Выиграй 3 атаки в мультиплеере",
+                "Собери 25 000 золота или эликсира за день",
+                "Улучши любое здание",
+                "Выиграй 5 сражений в Клановых войнах",
+                "Улучши Ратушу до следующего уровня",
+                "Достигни лиги Голем 19 и выше",
+                "3 звезды в 10 атаках подряд в Клановых войнах",
+                "Набери 80 трофеев",
+                "Заработай 10 звёзд в Клановых войнах",
+                "Задонай 300 войск клану"
+        }) {
+            flattenQuest(title, "Clash of Clans", 2000, 50);
+        }
 
         // ── Clash of Clans: скрыть неавтоматизированные квесты (по аналогии с Brawl Stars) ──
         // API не отдаёт уровень произвольного здания (только Ратуши) и не даёт удобно сверить
@@ -1540,6 +1562,17 @@ public class QuestSeeder implements CommandLineRunner {
                     questRepository.save(q);
                     log.info("[QuestSeeder] Closed access (deactivated): '{}' [{}]", q.getTitle(), gameName);
                 });
+    }
+
+    /** Форсит category=null и фиксированную награду на каждом деплое — для игр, переведённых в FLAT-режим
+     *  после того как часть их квестов уже создана через seed()/updateQuest() (те category не трогают). */
+    private void flattenQuest(String title, String gameName, long rewardCoins, int rewardXp) {
+        questRepository.findFirstByTitleAndGameName(title, gameName).ifPresent(q -> {
+            q.setCategory(null);
+            q.setRewardCoins(rewardCoins);
+            q.setRewardXp(rewardXp);
+            questRepository.save(q);
+        });
     }
 
     /** Как deactivateGame, но точечно по названиям — форсит active=false на каждом деплое независимо
