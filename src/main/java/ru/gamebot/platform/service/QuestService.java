@@ -366,6 +366,12 @@ public class QuestService {
         if (quest.getBrawlVerifyType() != null && user.getBrawlStarsTag() == null) {
             return QuestActionResult.of(QuestActionStatus.NEEDS_BRAWL_TAG, 0);
         }
+        if (quest.getClashVerifyType() != null && user.getClashOfClansTag() == null) {
+            return QuestActionResult.of(QuestActionStatus.NEEDS_CLASH_TAG, 0);
+        }
+        if (quest.getClashRoyaleVerifyType() != null && user.getClashRoyaleTag() == null) {
+            return QuestActionResult.of(QuestActionStatus.NEEDS_CLASH_ROYALE_TAG, 0);
+        }
 
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));

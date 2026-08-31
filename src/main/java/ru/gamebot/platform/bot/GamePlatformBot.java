@@ -570,6 +570,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), "🏷️ Введите ваш игровой тег Brawl Stars (например: <code>#ABC123</code>):", cancelKeyboard());
             return;
         }
+        // Deep link из мини-аппа: та же логика для Clash of Clans / Clash Royale (см. brawltag выше).
+        if (startPayload.equals("clashtag") && user.isRegistrationCompleted()) {
+            session.reset();
+            session.setState(SessionState.CLASH_TAG_INPUT);
+            sendText(user.getTelegramId(), "🏷️ Введите ваш игровой тег Clash of Clans (например: <code>#ABC123</code>):", cancelKeyboard());
+            return;
+        }
+        if (startPayload.equals("crtag") && user.isRegistrationCompleted()) {
+            session.reset();
+            session.setState(SessionState.CR_TAG_INPUT);
+            sendText(user.getTelegramId(), "🏷️ Введите ваш игровой тег Clash Royale (например: <code>#ABC123</code>):", cancelKeyboard());
+            return;
+        }
 
         // Возобновить незавершённый онбординг
         if (!user.isOnboardingCompleted()) {

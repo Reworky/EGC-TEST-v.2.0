@@ -75,7 +75,7 @@ public class QuestController {
                 .councilOnly(q.isCouncilOnly())
                 .sponsored(q.isSponsored())
                 .externalAutoApprove(q.isExternalAutoApprove())
-                .brawlAutoVerify(q.getBrawlVerifyType() != null)
+                .brawlAutoVerify(q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null)
                 .submissionStatus(statusByQuestId.get(q.getId()))
                 .build()).toList();
     }
@@ -104,7 +104,7 @@ public class QuestController {
                 .ticketReward(q.getTicketReward())
                 .councilOnly(q.isCouncilOnly()).sponsored(true)
                 .externalAutoApprove(q.isExternalAutoApprove())
-                .brawlAutoVerify(q.getBrawlVerifyType() != null)
+                .brawlAutoVerify(q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null)
                 .submissionStatus(statusByQuestId.get(q.getId()))
                 .build()).toList();
     }
@@ -137,7 +137,7 @@ public class QuestController {
                 .ticketReward(quest.getTicketReward())
                 .councilOnly(quest.isCouncilOnly())
                 .externalAutoApprove(quest.isExternalAutoApprove())
-                .brawlAutoVerify(quest.getBrawlVerifyType() != null);
+                .brawlAutoVerify(quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null);
 
         if (telegramId != null) {
             appUserRepository.findByTelegramId(telegramId).ifPresent(user -> {
@@ -248,7 +248,7 @@ public class QuestController {
                         .gameName(s.getQuest().getGameName())
                         .category(s.getQuest().getCategory())
                         .externalAutoApprove(s.getQuest().isExternalAutoApprove())
-                        .brawlAutoVerify(s.getQuest().getBrawlVerifyType() != null)
+                        .brawlAutoVerify(s.getQuest().getBrawlVerifyType() != null || s.getQuest().getClashVerifyType() != null || s.getQuest().getClashRoyaleVerifyType() != null)
                         .status(s.getStatus().name())
                         .updatedAt(s.getUpdatedAt() != null ? s.getUpdatedAt().format(ISO_FMT) : null)
                         .expiresAt(s.getExpiresAt() != null ? s.getExpiresAt().format(ISO_FMT) : null)
@@ -310,7 +310,9 @@ public class QuestController {
             case HAS_PENDING_REPORT -> "У вас уже есть отчёт на проверке у модератора — дождитесь решения, прежде чем отправлять следующий.";
             case EXPIRED -> "Срок выполнения этого квеста истёк.";
             case QUEST_INACTIVE -> "Этот квест больше недоступен.";
-            case NEEDS_BRAWL_TAG -> "🏷️ Для этого квеста нужно сначала привязать тег Brawl Stars — откройте бота и выполните привязку в разделе «Профиль».";
+            case NEEDS_BRAWL_TAG -> "🏷️ Для этого квеста нужно сначала привязать тег Brawl Stars — откройте бота и возьмите этот квест там, бот попросит ввести тег.";
+            case NEEDS_CLASH_TAG -> "🏷️ Для этого квеста нужно сначала привязать тег Clash of Clans — откройте бота и возьмите этот квест там, бот попросит ввести тег.";
+            case NEEDS_CLASH_ROYALE_TAG -> "🏷️ Для этого квеста нужно сначала привязать тег Clash Royale — откройте бота и возьмите этот квест там, бот попросит ввести тег.";
         };
     }
 }
