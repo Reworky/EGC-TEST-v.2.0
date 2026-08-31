@@ -451,6 +451,10 @@ public class QuestService {
     @Transactional
     public QuestActionResult submitReportChecked(AppUser user, Quest quest, String mediaType, String fileId,
                                                   String photoUniqueIds, String externalLink, String comment) {
+        if (quest.isExternalAutoApprove() || quest.getBrawlVerifyType() != null
+                || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null) {
+            return QuestActionResult.of(QuestActionStatus.AUTO_VERIFIED_NO_REPORT, 0);
+        }
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
 
@@ -514,6 +518,11 @@ public class QuestService {
                                         String photoUniqueIds, String externalLink, String comment) {
         if (submission.getStatus() == SubmissionStatus.APPROVED) {
             throw new IllegalStateException("Этот квест уже одобрен и оплачен — повторная сдача отчёта невозможна.");
+        }
+        Quest reportQuest = submission.getQuest();
+        if (reportQuest.isExternalAutoApprove() || reportQuest.getBrawlVerifyType() != null
+                || reportQuest.getClashVerifyType() != null || reportQuest.getClashRoyaleVerifyType() != null) {
+            throw new IllegalStateException("Этот квест подтверждается автоматически — ручной отчёт не принимается.");
         }
         // Защита от гонки/обхода: те же правила, что и в submitReportChecked, продублированы здесь,
         // т.к. бот исторически вызывал submitReport напрямую в некоторых местах, минуя проверки.

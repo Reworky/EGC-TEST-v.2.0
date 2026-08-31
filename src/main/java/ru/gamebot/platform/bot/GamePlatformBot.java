@@ -3553,6 +3553,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleReportStart(CallbackQuery callbackQuery, AppUser user, UserSession session, Long questId) {
         Quest quest = questService.getQuest(questId);
+        // Серверная проверка, не только скрытие кнопки в UI — иначе кнопка "Отчёт" из другого экрана
+        // (или просто старое сообщение с ней) даёт вручную отправить отчёт по квесту, который должен
+        // подтверждаться только через API (инцидент 2026-08-31, см. sendMyQuestCard).
+        if (quest.isExternalAutoApprove() || quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null) {
+            answerSilently(callbackQuery.getId());
+            sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                    "ℹ️ Этот квест подтверждается автоматически — отправлять отчёт не нужно и нельзя.");
+            return;
+        }
         QuestSubmission latest = questService.getLatestSubmission(user, quest);
         if (latest == null || latest.getStatus() == SubmissionStatus.CANCELLED) {
             answerSilently(callbackQuery.getId());
@@ -3777,7 +3786,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 || submission.getStatus() == SubmissionStatus.REJECTED;
 
         List<InlineKeyboardButton> buttons = new ArrayList<>();
-        buttons.add(keyboardFactory.callback("📤 Отчёт", "quest:report:" + quest.getId()));
+        // Тот же гейт, что и в sendQuestCard/handleTakeQuest — без него игрок мог вручную отправить
+        // отчёт по квесту, который должен подтверждаться только через API (лазейка, инцидент 2026-08-31,
+        // поймана на живой заявке К-1333 "Сразись в бою 6 раз" — квест с BrawlVerifyType).
+        boolean autoVerified = quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null;
+        buttons.add(quest.isExternalAutoApprove()
+                ? keyboardFactory.callback("⏳ Ждём подтверждения от партнёра", "noop")
+                : autoVerified
+                    ? keyboardFactory.callback("⏳ Прогресс отслеживается автоматически", "noop")
+                    : keyboardFactory.callback("📤 Отчёт", "quest:report:" + quest.getId()));
         if (canCancel) {
             buttons.add(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + submission.getId()));
         }
