@@ -891,6 +891,10 @@ public class QuestService {
                 LocalDateTime.now().minusDays(7));
     }
 
+    public List<Object[]> getOneTimeQuestRepeatOffenders() {
+        return questSubmissionRepository.findOneTimeQuestRepeatOffenders();
+    }
+
     @Transactional
     public long deleteQuest(Long questId) {
         Quest quest = getQuest(questId);

@@ -100,6 +100,14 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT s.quest.id, s.quest.title, s.quest.gameName, s.quest.rewardCoins, COUNT(s) as cnt FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :since GROUP BY s.quest.id, s.quest.title, s.quest.gameName, s.quest.rewardCoins ORDER BY cnt DESC")
     List<Object[]> findTopQuestsByCompletionsSince(@Param("since") java.time.LocalDateTime since);
 
+    /** Антифрод-аудит: аккаунты с 2+ одобренными заявками по квесту, помеченному oneTimePerAccount —
+     *  это те, кто фармил такой квест ДО фикса (проверка текущего состояния аккаунта вместо действия). */
+    @Query("SELECT s.user.id, s.user.nickname, s.user.telegramId, s.quest.title, s.quest.gameName, s.quest.rewardCoins, COUNT(s) as cnt " +
+           "FROM QuestSubmission s WHERE s.quest.oneTimePerAccount = true AND s.status = 'APPROVED' " +
+           "GROUP BY s.user.id, s.user.nickname, s.user.telegramId, s.quest.title, s.quest.gameName, s.quest.rewardCoins " +
+           "HAVING COUNT(s) > 1 ORDER BY cnt DESC")
+    List<Object[]> findOneTimeQuestRepeatOffenders();
+
     @EntityGraph(attributePaths = {"user", "quest"})
     @Query("SELECT s FROM QuestSubmission s WHERE s.user = :user AND s.status = 'APPROVED' ORDER BY s.updatedAt DESC")
     List<QuestSubmission> findAllApprovedByUserOrderByUpdatedAtDesc(@Param("user") AppUser user);

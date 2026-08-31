@@ -5792,6 +5792,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "stats:reset_weekly:confirm" -> doAdminResetWeeklyXp(user);
             case "live" -> sendAdminLiveStatus(user);
             case "queststats" -> sendAdminQuestStats(user);
+            case "onetimeabuse" -> sendAdminOneTimeQuestAbuse(user);
             case "template" -> sendQuestTemplateGamePicker(user);
             case "rewards" -> sendAdminRewardList(user);
             case "withdrawals" -> { sendAdminWithdrawals(user); answerSilently(callbackQuery.getId()); return; }
@@ -7622,6 +7623,43 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (i >= 20) break;
             i++;
         }
+        sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:admin"));
+    }
+
+    private void sendAdminOneTimeQuestAbuse(AppUser user) {
+        List<Object[]> rows = questService.getOneTimeQuestRepeatOffenders();
+        if (rows.isEmpty()) {
+            sendText(user.getTelegramId(),
+                    "🕵️ <b>Повторы разовых квестов</b>\n\nНичего не найдено — повторных одобрений по разовым квестам нет.",
+                    backMenuKeyboard("menu:admin"));
+            return;
+        }
+        StringBuilder sb = new StringBuilder("🕵️ <b>Повторы разовых квестов</b>\n\n"
+                + "Эти квесты теперь одноразовые (антифрод-фикс 2026-08-30 — проверка баланса/ранга/лиги "
+                + "вместо свежего действия), но ниже — аккаунты, успевшие пройти их несколько раз ДО фикса:\n\n");
+        long totalExtraExc = 0;
+        int shown = 0;
+        for (Object[] row : rows) {
+            if (shown >= 30) {
+                sb.append("… и ещё ").append(rows.size() - shown).append(" запис(ей), не поместились в сообщение.\n\n");
+                break;
+            }
+            String nickname = (String) row[1];
+            Long telegramId = (Long) row[2];
+            String title = (String) row[3];
+            String game = (String) row[4];
+            long rewardCoins = ((Number) row[5]).longValue();
+            long count = ((Number) row[6]).longValue();
+            long extra = (count - 1) * rewardCoins;
+            totalExtraExc += extra;
+            sb.append("👤 <b>").append(escape(nickname)).append("</b> (ID: <code>").append(telegramId).append("</code>)\n")
+              .append("   🎯 ").append(escape(title)).append(" · ").append(escape(game)).append("\n")
+              .append("   🔁 ").append(count).append(" раз(а) · ~").append(extra).append(" EXC лишних\n\n");
+            shown++;
+        }
+        sb.append("💰 Итого лишних начислений: ~<b>").append(totalExtraExc).append(" EXC</b>\n\n")
+          .append("<i>Суммы примерные — по текущей награде квеста, без учёта возможных исторических изменений "
+                  + "награды и снижения за 3+ квестов одного типа в неделю.</i>");
         sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:admin"));
     }
 
@@ -10708,6 +10746,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback("✏️ Квесты", "admin:edit"),
                     keyboardFactory.callback("📈 Топ квестов", "admin:queststats")
             ));
+            rows.add(List.of(keyboardFactory.callback("🕵️ Повторы разовых квестов", "admin:onetimeabuse")));
             rows.add(List.of(
                     keyboardFactory.callback("🎁 Магазин наград", "admin:rewards"),
                     keyboardFactory.callback("📣 Рассылка", "admin:broadcast")
