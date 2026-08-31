@@ -979,7 +979,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             // linkTag использует только playerInfo.tag() — остальные поля (attackWins/золото/эликсир) для
             // привязки не нужны, поэтому их не сохраняем в сессии и восстанавливаем нулями.
-            var playerInfo = new ru.gamebot.platform.service.ClashOfClansApiService.PlayerInfo(tag, name, Integer.parseInt(townHallStr), 0, 0, 0);
+            var playerInfo = new ru.gamebot.platform.service.ClashOfClansApiService.PlayerInfo(tag, name, Integer.parseInt(townHallStr), 0, 0, 0, 0, 0, 0, 0, 0, 0);
             clashQuestVerificationService.linkTag(user, playerInfo);
             String pendingQuestIdStr = session.getData().get("clashPendingQuestId");
             session.reset();
