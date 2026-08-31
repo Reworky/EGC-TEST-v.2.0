@@ -1653,6 +1653,8 @@ public class QuestSeeder implements CommandLineRunner {
             q.setDescription(description);
             q.setInstruction(instruction);
             q.setRequirements(requirements);
+            // см. оговорку у setBrawlVerify — seed() не реактивирует случайно выключенную строку.
+            q.setActive(true);
             questRepository.save(q);
         }, () -> log.warn("[QuestSeeder] setClashVerify: quest not found (seed must run first): '{}'", title));
     }
@@ -1669,6 +1671,11 @@ public class QuestSeeder implements CommandLineRunner {
             q.setDescription(description);
             q.setInstruction(instruction);
             q.setRequirements(requirements);
+            // см. оговорку у setBrawlVerify — seed() не реактивирует случайно выключенную строку.
+            // Это и был реальный баг: "Победи 20 раз в Клановых войнах за сезон" был active=false
+            // (скорее всего случайно выключен в админке до этой сессии), seed()/этот метод его не
+            // включали обратно — квест существовал и верифицировался, но не показывался игрокам.
+            q.setActive(true);
             questRepository.save(q);
         }, () -> log.warn("[QuestSeeder] setClashRoyaleVerify: quest not found (seed must run first): '{}'", title));
     }
@@ -1838,6 +1845,10 @@ public class QuestSeeder implements CommandLineRunner {
             q.setBrawlRequireTeam(requireTeam);
             q.setBrawlModeKeys(modeKeys);
             q.setBrawlBrawlerNames(brawlerNames);
+            // seed()/seedFlat() не реактивируют уже существующую (случайно выключенную) строку —
+            // раз мы явно настраиваем авто-верификацию, квест точно должен быть виден игрокам
+            // (инцидент 2026-08-31: "Победи 20 раз в Клановых войнах за сезон" молча оказался active=false).
+            q.setActive(true);
             questRepository.save(q);
         }, () -> log.warn("[QuestSeeder] setBrawlVerify: quest not found (seedFlat must run first): '{}'", title));
     }
