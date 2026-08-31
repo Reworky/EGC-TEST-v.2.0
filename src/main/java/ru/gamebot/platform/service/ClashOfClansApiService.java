@@ -48,14 +48,16 @@ public class ClashOfClansApiService {
     /**
      * goldLooted/elixirLooted — накопленные за ВСЮ историю аккаунта значения из achievements "Gold Grab"/
      * "Elixir Escapade" (0, если ачивка не нашлась в ответе — не должно происходить в норме, но не валим на этом).
-     * townHallLevel/attackWins/trophies/warStars/donations — top-level поля ответа /players/{tag}.
+     * townHallLevel/attackWins/trophies/warStars/donations/defenseWins/expLevel/builderBaseTrophies —
+     * top-level поля ответа /players/{tag}.
      * ЕЩЁ НЕ СВЕРЕНО на живом ответе API — токен уже настроен и задеплоен, но реальный первый прогон
      * (взять квест, привязать тег, дождаться опроса) ещё не подтверждён. Сверить точные названия ачивок
      * и что все перечисленные поля действительно лежат на верхнем уровне, а не вложенно, прежде чем
      * доверять фиче полностью (та же оговорка, что была для battlelog Brawl Stars до его сверки).
+     * builderBaseTrophies — в некоторых версиях API называлось versusTrophies, стоит перепроверить.
      */
     public record PlayerInfo(String tag, String name, int townHallLevel, int attackWins, int goldLooted, int elixirLooted,
-                              int trophies, int warStars, int donations) {}
+                              int trophies, int warStars, int donations, int defenseWins, int expLevel, int builderBaseTrophies) {}
 
     public static class ClashApiTransientException extends Exception {
         public ClashApiTransientException(String message) { super(message); }
@@ -127,7 +129,10 @@ public class ClashOfClansApiService {
                     elixirLooted,
                     node.path("trophies").asInt(0),
                     node.path("warStars").asInt(0),
-                    node.path("donations").asInt(0));
+                    node.path("donations").asInt(0),
+                    node.path("defenseWins").asInt(0),
+                    node.path("expLevel").asInt(0),
+                    node.path("builderBaseTrophies").asInt(node.path("versusTrophies").asInt(0)));
         } catch (Exception e) {
             throw new ClashApiTransientException("Failed to parse Clash of Clans player response", e);
         }

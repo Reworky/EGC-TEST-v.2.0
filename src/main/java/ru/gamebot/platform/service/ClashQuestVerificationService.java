@@ -87,6 +87,9 @@ public class ClashQuestVerificationService {
             case TROPHIES -> info.trophies();
             case WAR_STARS -> info.warStars();
             case DONATIONS -> info.donations();
+            case DEFENSE_WINS -> info.defenseWins();
+            case EXP_LEVEL -> info.expLevel();
+            case BUILDER_TROPHIES -> info.builderBaseTrophies();
             default -> info.attackWins(); // ATTACK_WINS
         };
         checkSingleValue(submission, quest, current);
