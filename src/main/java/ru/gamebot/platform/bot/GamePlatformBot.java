@@ -5948,6 +5948,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "live" -> sendAdminLiveStatus(user);
             case "queststats" -> sendAdminQuestStats(user);
             case "onetimeabuse" -> sendAdminOneTimeQuestAbuse(user);
+            case "clashtags" -> sendAdminClashTagsList(user);
             case "template" -> sendQuestTemplateGamePicker(user);
             case "rewards" -> sendAdminRewardList(user);
             case "withdrawals" -> { sendAdminWithdrawals(user); answerSilently(callbackQuery.getId()); return; }
@@ -7777,6 +7778,34 @@ public class GamePlatformBot extends TelegramLongPollingBot {
               .append(" · <b>").append(count).append("</b> раз\n\n");
             if (i >= 20) break;
             i++;
+        }
+        sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:admin"));
+    }
+
+    private void sendAdminClashTagsList(AppUser user) {
+        List<AppUser> users = userService.findUsersWithClashTags();
+        if (users.isEmpty()) {
+            sendText(user.getTelegramId(),
+                    "🏷️ <b>Привязанные теги Clash of Clans / Clash Royale</b>\n\nНи один игрок ещё не привязал тег.",
+                    backMenuKeyboard("menu:admin"));
+            return;
+        }
+        StringBuilder sb = new StringBuilder("🏷️ <b>Привязанные теги Clash of Clans / Clash Royale</b>\n\n");
+        int shown = 0;
+        for (AppUser u : users) {
+            if (shown >= 40) {
+                sb.append("… и ещё ").append(users.size() - shown).append(" запис(ей), не поместились в сообщение.\n\n");
+                break;
+            }
+            sb.append("👤 <b>").append(escape(u.getNickname())).append("</b> (ID: <code>").append(u.getTelegramId()).append("</code>)\n");
+            if (u.getClashOfClansTag() != null) {
+                sb.append("   ✅ Clash of Clans: <code>").append(escape(u.getClashOfClansTag())).append("</code>\n");
+            }
+            if (u.getClashRoyaleTag() != null) {
+                sb.append("   ✅ Clash Royale: <code>").append(escape(u.getClashRoyaleTag())).append("</code>\n");
+            }
+            sb.append("\n");
+            shown++;
         }
         sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:admin"));
     }
@@ -10934,6 +10963,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback("📈 Топ квестов", "admin:queststats")
             ));
             rows.add(List.of(keyboardFactory.callback("🕵️ Повторы разовых квестов", "admin:onetimeabuse")));
+            rows.add(List.of(keyboardFactory.callback("🏷️ Теги CoC/Clash Royale", "admin:clashtags")));
             rows.add(List.of(
                     keyboardFactory.callback("🎁 Магазин наград", "admin:rewards"),
                     keyboardFactory.callback("📣 Рассылка", "admin:broadcast")

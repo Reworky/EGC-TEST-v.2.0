@@ -93,4 +93,7 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     List<AppUser> findAllByReferredByTelegramIdIsNotNullAndReferralActiveTrue();
 
     List<AppUser> findAllByReferredByTelegramId(Long telegramId);
+
+    @Query("SELECT u FROM AppUser u WHERE u.clashOfClansTag IS NOT NULL OR u.clashRoyaleTag IS NOT NULL ORDER BY u.telegramId")
+    List<AppUser> findAllWithClashTags();
 }

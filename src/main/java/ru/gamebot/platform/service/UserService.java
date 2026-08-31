@@ -645,6 +645,10 @@ public class UserService {
         return appUserRepository.findAllByReferredByTelegramId(telegramId);
     }
 
+    public List<AppUser> findUsersWithClashTags() {
+        return appUserRepository.findAllWithClashTags();
+    }
+
     public long countByTrafficSource(String code) {
         return appUserRepository.countByTrafficSourceCode(code);
     }
