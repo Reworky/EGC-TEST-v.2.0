@@ -1384,6 +1384,40 @@ public class QuestSeeder implements CommandLineRunner {
                         questRepository.save(q);
                     });
         }
+        // ── Антифрод: разовые квесты (проверка текущего состояния аккаунта, а не свежего действия) ──
+        // Баланс/ранг/лига не сбрасываются между попытками — без этого флага такие квесты фармились
+        // повторно каждый кулдаун без единого нового действия (жалоба игрока, скриншот с 4.25М золота
+        // на квест "Собери 25 000 золота", 2026-08-30). Список — только 13 самых жёстких случаев
+        // (баланс валюты + порог ранга/лиги); более мягкие (уровень здания, комплект брони, счётчики
+        // выживания) сознательно не трогаем в этом заходе.
+        markOneTimePerAccount("Собери 25 000 золота или эликсира за день", "Clash of Clans");
+        markOneTimePerAccount("Достигни лиги Голем 19 и выше", "Clash of Clans");
+        markOneTimePerAccount("Достигни 5 000 Кубков", "Clash Royale");
+        markOneTimePerAccount("Достигни лиги Претендент II", "Clash Royale");
+        markOneTimePerAccount("Войди в топ-1000 своей Арены", "Clash Royale");
+        markOneTimePerAccount("Достигни ранга Серебро I или выше", "CS2");
+        markOneTimePerAccount("Достигни ранга Золото или выше", "CS2");
+        markOneTimePerAccount("Ранговый прорыв — достигни звания Gold Nova I или выше", "CS2");
+        markOneTimePerAccount("Достигни ранга Эпик", "Mobile Legends: Bang Bang");
+        markOneTimePerAccount("Достигни ранга Легенда", "Mobile Legends: Bang Bang");
+        markOneTimePerAccount("Достигни дивизиона Gold в Division Rivals", "EA FC 26");
+        markOneTimePerAccount("Достигни дивизиона Elite в Division Rivals", "EA FC 26");
+        markOneTimePerAccount("Заработай 1 000 000 $ в GTA Online", "GTA V");
+    }
+
+    /**
+     * Помечает уже существующий квест одноразовым для аккаунта — награда начисляется один раз навсегда,
+     * повторное взятие после одобрения блокируется (QuestService.takeQuestChecked, тот же путь, что и у
+     * externalAutoApprove). Идемпотентен — вызывается на каждом деплое.
+     */
+    private void markOneTimePerAccount(String title, String gameName) {
+        questRepository.findFirstByTitleAndGameName(title, gameName)
+                .filter(q -> !q.isOneTimePerAccount())
+                .ifPresent(q -> {
+                    q.setOneTimePerAccount(true);
+                    questRepository.save(q);
+                    log.info("[QuestSeeder] Marked one-time-per-account: '{}' ({})", title, gameName);
+                });
     }
 
     private void deactivateGame(String gameName) {

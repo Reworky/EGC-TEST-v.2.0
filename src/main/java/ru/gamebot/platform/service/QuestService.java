@@ -380,7 +380,11 @@ public class QuestService {
             }
             // Внешние (auto-approve) квесты одноразовые: пересдать после одобрения нельзя —
             // иначе повторный постбек (ретрай сети) на новый DRAFT начислит EXC второй раз.
-            if (latest.getStatus() == SubmissionStatus.APPROVED && quest.isExternalAutoApprove()) {
+            // oneTimePerAccount — та же блокировка для квестов, где скриншот подтверждает текущее
+            // состояние аккаунта (баланс/ранг/лига), а не свежее действие: без неё квест фармится
+            // повторно каждый кулдаун без усилий, т.к. состояние не сбрасывается между попытками.
+            if (latest.getStatus() == SubmissionStatus.APPROVED
+                    && (quest.isExternalAutoApprove() || quest.isOneTimePerAccount())) {
                 return QuestActionResult.of(QuestActionStatus.ALREADY_APPROVED, 0);
             }
             // Остальные APPROVED-квесты можно пройти повторно после кулдауна — не блокируем здесь,

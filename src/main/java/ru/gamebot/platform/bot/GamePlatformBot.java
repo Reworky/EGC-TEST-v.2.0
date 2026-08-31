@@ -3290,11 +3290,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         String sponsorBadge = quest.isSponsored() ? "💎 <b>Спонсорский квест</b>\n" : "";
+        String oneTimeBadge = quest.isOneTimePerAccount() ? "🔂 <b>Разовый квест</b> — доступен один раз за аккаунт\n" : "";
         boolean questFlat = gameCatalogService.isFlat(quest.getGameName());
         String personalizedInstruction = questService.personalizeInstruction(quest.getInstruction(), user.getTelegramId());
         sendText(user.getTelegramId(),
                 (notice == null ? "" : notice + "\n\n")
                         + sponsorBadge
+                        + oneTimeBadge
                         + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n\n"
                         + (quest.isSponsored() ? "🎮 Название канала: <b>" : "🎮 Игра: <b>") + escape(quest.getGameName()) + "</b>\n"
                         + (quest.isSponsored() || "UGC".equalsIgnoreCase(quest.getGameName()) ? "" : (!questFlat && quest.getCategory() != null ? "📚 Формат: <b>" + escape(quest.getCategory()) + "</b>\n" : "") + "🕹️ Платформа: <b>" + escape(quest.getPlatform()) + "</b>\n")
@@ -3389,8 +3391,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         : "🧭 Этот квест уже добавлен в работу. Ниже оставил карточку с кнопкой для отчёта.";
             }
             case ALREADY_APPROVED ->
-                    quest.isExternalAutoApprove()
-                        ? "✅ Этот квест уже выполнен и одобрен — награда начислена, повторно пройти его нельзя."
+                    quest.isExternalAutoApprove() || quest.isOneTimePerAccount()
+                        ? "✅ Этот квест одноразовый и уже выполнен — награда начислена, повторно пройти его нельзя."
                         : "📌 По этому квесту уже есть активный прогресс. Используйте карточку ниже, чтобы посмотреть статус или отправить отчёт.";
             case ALREADY_PENDING ->
                     "📌 По этому квесту уже есть активный прогресс. Используйте карточку ниже, чтобы посмотреть статус или отправить отчёт.";

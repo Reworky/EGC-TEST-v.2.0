@@ -64,6 +64,12 @@ public class Quest {
     @Column(columnDefinition = "boolean default false")
     private boolean externalAutoApprove;
 
+    /** Квест проверяется по ТЕКУЩЕМУ состоянию аккаунта (баланс, ранг, лига), а не по свежему действию —
+     *  без этого флага такой квест фармится повторно каждый кулдаун без усилий. Блокирует повторное
+     *  взятие после APPROVED тем же путём, что и externalAutoApprove (см. QuestService.takeQuestChecked). */
+    @Column(columnDefinition = "boolean default false")
+    private boolean oneTimePerAccount;
+
     /** ID оффера в партнёрской сети (макрос {offer} в постбеке) — по нему постбек находит нужный квест среди нескольких активных. */
     private String externalOfferId;
 
