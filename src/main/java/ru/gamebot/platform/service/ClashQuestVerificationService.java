@@ -80,12 +80,16 @@ public class ClashQuestVerificationService {
 
         if (quest.getClashVerifyType() == ClashVerifyType.RESOURCES) {
             checkResources(submission, quest, info);
-        } else {
-            int current = quest.getClashVerifyType() == ClashVerifyType.TOWN_HALL
-                    ? info.townHallLevel()
-                    : info.attackWins();
-            checkSingleValue(submission, quest, current);
+            return;
         }
+        int current = switch (quest.getClashVerifyType()) {
+            case TOWN_HALL -> info.townHallLevel();
+            case TROPHIES -> info.trophies();
+            case WAR_STARS -> info.warStars();
+            case DONATIONS -> info.donations();
+            default -> info.attackWins(); // ATTACK_WINS
+        };
+        checkSingleValue(submission, quest, current);
     }
 
     private void checkSingleValue(QuestSubmission submission, Quest quest, int current) {

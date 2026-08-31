@@ -1,3 +1,3 @@
 package ru.gamebot.platform.domain.enums;
 
-public enum ClashVerifyType { ATTACK_WINS, RESOURCES, TOWN_HALL }
+public enum ClashVerifyType { ATTACK_WINS, RESOURCES, TOWN_HALL, TROPHIES, WAR_STARS, DONATIONS }

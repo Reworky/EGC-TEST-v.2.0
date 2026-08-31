@@ -48,12 +48,14 @@ public class ClashOfClansApiService {
     /**
      * goldLooted/elixirLooted — накопленные за ВСЮ историю аккаунта значения из achievements "Gold Grab"/
      * "Elixir Escapade" (0, если ачивка не нашлась в ответе — не должно происходить в норме, но не валим на этом).
-     * НЕ ПРОВЕРЕНО на живом ответе API (нет токена на момент написания) — при первом реальном запуске
-     * обязательно сверить точные названия ачивок и что townHallLevel/attackWins лежат на верхнем уровне
-     * ответа, а не вложенно, прежде чем доверять фиче полностью (та же оговорка, что была для battlelog
-     * Brawl Stars до его сверки с реальным ответом).
+     * townHallLevel/attackWins/trophies/warStars/donations — top-level поля ответа /players/{tag}.
+     * ЕЩЁ НЕ СВЕРЕНО на живом ответе API — токен уже настроен и задеплоен, но реальный первый прогон
+     * (взять квест, привязать тег, дождаться опроса) ещё не подтверждён. Сверить точные названия ачивок
+     * и что все перечисленные поля действительно лежат на верхнем уровне, а не вложенно, прежде чем
+     * доверять фиче полностью (та же оговорка, что была для battlelog Brawl Stars до его сверки).
      */
-    public record PlayerInfo(String tag, String name, int townHallLevel, int attackWins, int goldLooted, int elixirLooted) {}
+    public record PlayerInfo(String tag, String name, int townHallLevel, int attackWins, int goldLooted, int elixirLooted,
+                              int trophies, int warStars, int donations) {}
 
     public static class ClashApiTransientException extends Exception {
         public ClashApiTransientException(String message) { super(message); }
@@ -122,7 +124,10 @@ public class ClashOfClansApiService {
                     node.path("townHallLevel").asInt(0),
                     node.path("attackWins").asInt(0),
                     goldLooted,
-                    elixirLooted);
+                    elixirLooted,
+                    node.path("trophies").asInt(0),
+                    node.path("warStars").asInt(0),
+                    node.path("donations").asInt(0));
         } catch (Exception e) {
             throw new ClashApiTransientException("Failed to parse Clash of Clans player response", e);
         }
