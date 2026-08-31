@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
 import ru.gamebot.platform.domain.enums.BrawlVerifyType;
+import ru.gamebot.platform.domain.enums.ClashRoyaleVerifyType;
 import ru.gamebot.platform.domain.enums.ClashVerifyType;
 
 @Getter
@@ -86,9 +87,12 @@ public class Quest {
     private String photoFileId;
     private LocalDateTime createdAt;
 
-    /** null = обычный ручной квест со скриншотом — единственный флаг "включена авто-верификация через Brawl Stars API". */
+    /** null = обычный ручной квест со скриншотом — единственный флаг "включена авто-верификация через Brawl Stars API".
+     *  columnDefinition принудительно VARCHAR — иначе H2 создаёт нативный ENUM с фиксированным списком значений
+     *  на момент первого деплоя, и расширение Java-enum'а потом падает с "Value not permitted" (инцидент 2026-08-31,
+     *  см. clashVerifyType ниже — там баг реально выстрелил). */
     @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(columnDefinition = "varchar(20)")
     private BrawlVerifyType brawlVerifyType;
 
     /** Дельта трофеев (TROPHIES) или число засчитанных боёв (BATTLES). */
@@ -112,13 +116,24 @@ public class Quest {
     @Column(length = 500)
     private String brawlBrawlerNames;
 
-    /** null = обычный квест (или уже авто-верифицируемый через brawlVerifyType) — включает авто-верификацию через официальный Clash of Clans API. */
+    /** null = обычный квест (или уже авто-верифицируемый через brawlVerifyType) — включает авто-верификацию через официальный Clash of Clans API.
+     *  columnDefinition = varchar принудительно — см. оговорку у brawlVerifyType (инцидент 2026-08-31: H2
+     *  создал нативный ENUM('ATTACK_WINS','RESOURCES','TOWN_HALL') на первом деплое, расширение enum'а
+     *  до 9 значений уронило бота на старте, чинили ALTER COLUMN ... VARCHAR(20) вручную через H2 Shell). */
     @Enumerated(EnumType.STRING)
-    @Column(length = 20)
+    @Column(columnDefinition = "varchar(20)")
     private ClashVerifyType clashVerifyType;
 
     /** Целевая дельта с момента взятия квеста: побед в атаках (ATTACK_WINS), золота/эликсира (RESOURCES, берётся максимум из двух) или уровней Ратуши (TOWN_HALL). */
     private Integer clashTargetCount;
+
+    /** null = обычный квест — включает авто-верификацию через официальный Clash Royale API. varchar принудительно (см. clashVerifyType). */
+    @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(20)")
+    private ClashRoyaleVerifyType clashRoyaleVerifyType;
+
+    /** Целевая дельта с момента взятия квеста — для всех типов Clash Royale верификации. */
+    private Integer clashRoyaleTargetCount;
 
     /** Краткое условие (до ~150 символов) для подстановки в шаблон быстрого отклонения «Недостаточно данных». */
     @Column(length = 200)

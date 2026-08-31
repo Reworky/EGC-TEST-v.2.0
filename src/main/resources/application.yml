@@ -57,3 +57,6 @@ brawlstars:
 
 clashofclans:
   api-token: ${CLASH_OF_CLANS_API_TOKEN:}
+
+clashroyale:
+  api-token: ${CLASH_ROYALE_API_TOKEN:}

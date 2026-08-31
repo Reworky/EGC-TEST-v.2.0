@@ -131,4 +131,10 @@ public class QuestSubmission {
     /** Текущий прогресс (макс. достигнутая дельта с момента первого опроса). */
     @Column(columnDefinition = "integer default 0")
     private int clashProgressCount;
+
+    /** Значение выбранного clashRoyaleVerifyType-поля на момент первого опроса после взятия. null = ещё не захвачено. */
+    private Integer clashRoyaleBaselineValue;
+
+    @Column(columnDefinition = "integer default 0")
+    private int clashRoyaleProgressCount;
 }

@@ -139,6 +139,10 @@ public class AppUser {
     private String clashOfClansTag;
     private LocalDateTime clashTagConfirmedAt;
 
+    /** Подтверждённый игровой тег Clash Royale (например "#ABC123"), для авто-верификации квестов через официальный API. */
+    private String clashRoyaleTag;
+    private LocalDateTime clashRoyaleTagConfirmedAt;
+
     // Season Pass
     private java.time.LocalDateTime seasonPassActiveUntil;
 
