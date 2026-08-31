@@ -398,6 +398,24 @@ public class QuestSeeder implements CommandLineRunner {
                     questRepository.save(q);
                 });
 
+        // ── Brawl Stars: скрыть неавтоматизированные квесты (только урон + "Играть снова") ──
+        // По решению пользователя (2026-08-31): раз официальный API не отдаёт урон за бой (см. ответ
+        // игроку про К-1320), эти квесты остаются только ручными и путают игроков вперемешку с
+        // автоматическими — скрыты навсегда. Работает независимо от keepBsTitles/seedFlat (deactivateQuests
+        // форсит active=false на каждом деплое, а не просто чистит устаревшее) — переключить обратно
+        // сможет только сознательная правка кода, не переживёт случайный админ-тоггл или редеплой.
+        deactivateQuests("Brawl Stars", Set.of(
+                "Воспользуйся кнопкой «Играть снова» 10 раз",
+                "Нанеси 100 000 урона с бойцом Эш, Бонни или Даг",
+                "Нанеси 100 000 урона с бойцом Гром, Ева или Мелоди",
+                "Нанеси 100 000 урона в режиме «Захват кристаллов» или «Дуэли»",
+                "Нанеси 100 000 урона в режиме «Броулбол» или «Любое столкновение»",
+                "Нанеси 100 000 урона в режиме «Любое столкновение» или «Нокаут»",
+                "Нанеси 100 000 урона в режиме «Любое столкновение» или «Горячая зона»",
+                "Нанеси 100 000 урона в режиме «Любое столкновение» или «Баскетбол»",
+                "Нанеси 100 000 урона в режиме «Ограбление» или «Любое столкновение»"
+        ));
+
         // ── PUBG PC — Лёгкие ────────────────────────────────────────────────────
 
         seed("Выживи до Топ-50", "PUBG PC",
@@ -1473,6 +1491,18 @@ public class QuestSeeder implements CommandLineRunner {
     private void deactivateGame(String gameName) {
         questRepository.findAll().stream()
                 .filter(q -> gameName.equalsIgnoreCase(q.getGameName()) && q.isActive())
+                .forEach(q -> {
+                    q.setActive(false);
+                    questRepository.save(q);
+                    log.info("[QuestSeeder] Closed access (deactivated): '{}' [{}]", q.getTitle(), gameName);
+                });
+    }
+
+    /** Как deactivateGame, но точечно по названиям — форсит active=false на каждом деплое независимо
+     *  от keepXxxTitles/seedFlat, переживает случайный ручной "включить" в админке. */
+    private void deactivateQuests(String gameName, Set<String> titles) {
+        questRepository.findAll().stream()
+                .filter(q -> gameName.equalsIgnoreCase(q.getGameName()) && titles.contains(q.getTitle()) && q.isActive())
                 .forEach(q -> {
                     q.setActive(false);
                     questRepository.save(q);
