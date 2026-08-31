@@ -2823,7 +2823,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🎂 Возраст: <b>" + (user.getAge() != null ? user.getAge() : "не указан") + "</b>\n"
                 + "🌍 Страна: <b>" + escape(displayValue(user.getCountry(), "не указана")) + "</b>\n\n"
                 + "🏆 Достижения: " + escape(achievements) + "\n"
-                + "👥 Приглашено друзей: <b>" + user.getInvitedFriends() + "</b>"
+                + "👥 Приглашено друзей: <b>" + user.getInvitedFriends() + "</b>\n\n"
+                + buildGameTagsBlock(user)
                 + incompleteHint;
 
         String avatarBtn = user.getAvatarFileId() != null ? "📷 Сменить аватар" : "📷 Загрузить аватар";
@@ -9248,7 +9249,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 + (target.getBlockReason() != null && !target.getBlockReason().isBlank()
                                         ? "\n   Причина: <i>" + escape(target.getBlockReason()) + "</i>"
                                         : "")
-                        : "🟢 Статус: <b>активен</b>");
+                        : "🟢 Статус: <b>активен</b>")
+                + "\n\n" + buildGameTagsBlock(target);
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("📋 Квесты игрока", "mod:user:quests:" + telegramId + ":0")),
@@ -9285,7 +9287,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 + (target.getBlockReason() != null && !target.getBlockReason().isBlank()
                                         ? "\n   Причина: <i>" + escape(target.getBlockReason()) + "</i>"
                                         : "")
-                        : "🟢 Статус: <b>активен</b>");
+                        : "🟢 Статус: <b>активен</b>")
+                + "\n\n" + buildGameTagsBlock(target);
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("📋 Квесты игрока", "admin:user:quests:" + telegramId + ":" + page)),
@@ -11460,6 +11463,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return user.getTelegramFirstName();
         }
         return "Игрок";
+    }
+
+    /** Статус привязки игровых тегов для авто-верификации квестов (Brawl Stars/Clash of Clans/Clash Royale). */
+    private String buildGameTagsBlock(AppUser user) {
+        return "🏷️ <b>Игровые теги</b>\n"
+                + (user.getBrawlStarsTag() != null
+                    ? "✅ Brawl Stars: <code>" + escape(user.getBrawlStarsTag()) + "</code>\n"
+                    : "❌ Brawl Stars: не привязан\n")
+                + (user.getClashOfClansTag() != null
+                    ? "✅ Clash of Clans: <code>" + escape(user.getClashOfClansTag()) + "</code>\n"
+                    : "❌ Clash of Clans: не привязан\n")
+                + (user.getClashRoyaleTag() != null
+                    ? "✅ Clash Royale: <code>" + escape(user.getClashRoyaleTag()) + "</code>\n"
+                    : "❌ Clash Royale: не привязан\n");
     }
 
     private String displayTag(AppUser user) {
