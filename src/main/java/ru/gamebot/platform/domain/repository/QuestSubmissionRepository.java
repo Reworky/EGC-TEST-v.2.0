@@ -141,10 +141,13 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT s FROM QuestSubmission s WHERE s.status IN ('DRAFT','PENDING') AND s.expiresAt IS NOT NULL AND s.expiresAt > CURRENT_TIMESTAMP AND s.expiresAt <= :upperBound AND s.deadlineWarningSent = false")
     List<QuestSubmission> findExpiringBefore(@Param("upperBound") LocalDateTime upperBound);
 
-    // 24ч кулдаун — обычные квесты (все кроме «Сложные» и спонсорских)
+    // 24ч кулдаун — обычные квесты (все кроме «Сложные» и спонсорских). Категория «Сложные» != NULL
+    // сравнивается через IS NULL OR <> — иначе FLAT-квесты (category IS NULL, все автоматизированные
+    // Brawl Stars/Clash of Clans/Clash Royale) молча выпадали из выборки: NULL <> 'Сложные' в SQL/JPQL
+    // всегда UNKNOWN, а не TRUE. Баг обнаружен 2026-09-01 — авто-квесты никогда не получали это уведомление.
     @Query("SELECT s.user.telegramId, s.quest.gameName, s.quest.title " +
            "FROM QuestSubmission s " +
-           "WHERE s.status = 'APPROVED' AND s.quest.category <> 'Сложные' AND s.quest.sponsored = false " +
+           "WHERE s.status = 'APPROVED' AND (s.quest.category IS NULL OR s.quest.category <> 'Сложные') AND s.quest.sponsored = false " +
            "GROUP BY s.user.telegramId, s.quest.id, s.quest.gameName, s.quest.title " +
            "HAVING MAX(s.updatedAt) BETWEEN :from AND :to")
     List<Object[]> findUsersWhoseNormalQuestCooldownExpiredBetween(
