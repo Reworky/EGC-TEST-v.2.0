@@ -242,6 +242,16 @@ export async function cancelReward(id) {
   return data;
 }
 
+export async function getAdStatus() {
+  const { data } = await api.get('/api/ads/status');
+  return data;
+}
+
+export async function requestAdWatch() {
+  const { data } = await api.post('/api/ads/watch');
+  return data;
+}
+
 export async function getBattlePass() {
   const { data } = await api.get('/api/battlepass');
   return data;
