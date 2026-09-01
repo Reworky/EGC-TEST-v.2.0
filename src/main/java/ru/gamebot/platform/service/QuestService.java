@@ -910,6 +910,24 @@ public class QuestService {
         return questSubmissionRepository.findOneTimeQuestRepeatOffenders();
     }
 
+    private static final List<String> AUTO_QUEST_GAMES = List.of("Brawl Stars", "Clash of Clans", "Clash Royale");
+
+    public record AutoQuestGameStat(String gameName, long activeUsers30d, long approvals30d) {}
+    public record AutoQuestActivityReport(List<AutoQuestGameStat> games, long totalDebtExc, long totalUsers) {}
+
+    /** Быстрый срез активности по автоматизированным (API-верифицируемым) играм — для админ-кнопки
+     * "Активность автоквестов". Считает за последние 30 дней. */
+    public AutoQuestActivityReport getAutoQuestActivityReport() {
+        LocalDateTime since = LocalDateTime.now().minusDays(30);
+        List<AutoQuestGameStat> games = AUTO_QUEST_GAMES.stream()
+                .map(game -> new AutoQuestGameStat(
+                        game,
+                        questSubmissionRepository.countDistinctApprovedUsersByGameSince(game, since),
+                        questSubmissionRepository.countApprovedByGameSince(game, since)))
+                .toList();
+        return new AutoQuestActivityReport(games, appUserRepository.sumAllCoins(), appUserRepository.count());
+    }
+
     @Transactional
     public long deleteQuest(Long questId) {
         Quest quest = getQuest(questId);

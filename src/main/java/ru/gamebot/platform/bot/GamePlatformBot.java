@@ -5982,6 +5982,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "queststats" -> sendAdminQuestStats(user);
             case "onetimeabuse" -> sendAdminOneTimeQuestAbuse(user);
             case "clashtags" -> sendAdminClashTagsList(user);
+            case "autoquest-activity" -> sendAdminAutoQuestActivity(user);
             case "template" -> sendQuestTemplateGamePicker(user);
             case "rewards" -> sendAdminRewardList(user);
             case "withdrawals" -> { sendAdminWithdrawals(user); answerSilently(callbackQuery.getId()); return; }
@@ -8006,6 +8007,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("\n");
             shown++;
         }
+        sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:admin"));
+    }
+
+    private void sendAdminAutoQuestActivity(AppUser user) {
+        ru.gamebot.platform.service.QuestService.AutoQuestActivityReport report = questService.getAutoQuestActivityReport();
+        StringBuilder sb = new StringBuilder("🔁 <b>Активность автоквестов</b> (за 30 дней)\n\n");
+        for (ru.gamebot.platform.service.QuestService.AutoQuestGameStat g : report.games()) {
+            double avg = g.activeUsers30d() == 0 ? 0 : (double) g.approvals30d() / g.activeUsers30d();
+            sb.append("🎮 <b>").append(escape(g.gameName())).append("</b>\n")
+              .append("   👥 Активных игроков: ").append(g.activeUsers30d()).append("\n")
+              .append("   ✅ Одобрений: ").append(g.approvals30d())
+              .append(" (в среднем ").append(String.format("%.1f", avg)).append(" на игрока)\n\n");
+        }
+        sb.append("💰 Накопленный долг: <b>").append(report.totalDebtExc()).append(" EXC</b>\n")
+          .append("👤 Всего игроков в проекте: <b>").append(report.totalUsers()).append("</b>");
         sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:admin"));
     }
 
@@ -11163,6 +11179,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             ));
             rows.add(List.of(keyboardFactory.callback("🕵️ Повторы разовых квестов", "admin:onetimeabuse")));
             rows.add(List.of(keyboardFactory.callback("🏷️ Теги CoC/Clash Royale", "admin:clashtags")));
+            rows.add(List.of(keyboardFactory.callback("🔁 Активность автоквестов", "admin:autoquest-activity")));
             rows.add(List.of(
                     keyboardFactory.callback("🎁 Магазин наград", "admin:rewards"),
                     keyboardFactory.callback("📣 Рассылка", "admin:broadcast")

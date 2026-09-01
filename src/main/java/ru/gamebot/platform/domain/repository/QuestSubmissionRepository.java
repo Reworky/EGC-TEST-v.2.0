@@ -164,6 +164,16 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
             @Param("from") java.time.LocalDateTime from,
             @Param("to") java.time.LocalDateTime to);
 
+    /** Для отчёта "Активность автоквестов" — сколько разных игроков получили одобрение по игре с указанной даты. */
+    @Query("SELECT COUNT(DISTINCT s.user.id) FROM QuestSubmission s " +
+           "WHERE s.quest.gameName = :gameName AND s.status = 'APPROVED' AND s.updatedAt >= :since")
+    long countDistinctApprovedUsersByGameSince(@Param("gameName") String gameName, @Param("since") LocalDateTime since);
+
+    /** Для отчёта "Активность автоквестов" — сколько всего одобрений по игре с указанной даты. */
+    @Query("SELECT COUNT(s) FROM QuestSubmission s " +
+           "WHERE s.quest.gameName = :gameName AND s.status = 'APPROVED' AND s.updatedAt >= :since")
+    long countApprovedByGameSince(@Param("gameName") String gameName, @Param("since") LocalDateTime since);
+
     /** Незавершённые заявки на квесты с включённой авто-верификацией через Brawl Stars API, у пользователя привязан тег, срок не истёк. */
     @EntityGraph(attributePaths = {"user", "quest"})
     @Query("SELECT s FROM QuestSubmission s WHERE s.status = 'DRAFT' AND s.quest.brawlVerifyType IS NOT NULL " +
