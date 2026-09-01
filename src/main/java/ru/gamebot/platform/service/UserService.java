@@ -239,6 +239,10 @@ public class UserService {
         return appUserRepository.findTop20ByRegistrationCompletedTrueOrderByXpDescTelegramIdAsc();
     }
 
+    public List<AppUser> findPendingChannelActivation() {
+        return appUserRepository.findAllByProfileCompletedTrueAndRegistrationCompletedFalse();
+    }
+
     public List<AppUser> topWeekly() {
         // Только weeklyXp > 0 — иначе список добивался неактивными игроками (0 XP за неделю, отсортированы по TG ID).
         return appUserRepository.findTop20ByRegistrationCompletedTrueAndWeeklyXpGreaterThanOrderByWeeklyXpDescTelegramIdAsc(0);

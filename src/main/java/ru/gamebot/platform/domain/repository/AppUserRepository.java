@@ -31,6 +31,10 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     List<AppUser> findTop20ByRegistrationCompletedTrueOrderByXpDescTelegramIdAsc();
 
+    /** Ввёл никнейм, но не подтвердил подписку на канал — кандидаты на автоактивацию,
+     * если бот сам обнаружит, что они уже подписались (не дождавшись возврата в бота). */
+    List<AppUser> findAllByProfileCompletedTrueAndRegistrationCompletedFalse();
+
     List<AppUser> findTop20ByRegistrationCompletedTrueOrderByWeeklyXpDescTelegramIdAsc();
 
     /** Только реально активные на этой неделе игроки — без этого топ-20 добивался нулями (неактивные, но с малым TG ID). */

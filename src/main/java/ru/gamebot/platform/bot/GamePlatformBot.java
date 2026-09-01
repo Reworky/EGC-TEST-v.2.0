@@ -2678,31 +2678,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🔐 <b>Последний шаг!</b>\n\n"
                 + "Подпишись на канал <b>" + escape(requiredChannelLabel()) + "</b> и прими правила клуба.\n\n"
                 + "Подписавшись, ты автоматически соглашаешься с правилами платформы.\n\n"
-                + "Это займёт 10 секунд — и тебе откроются квесты, награды и рейтинг!";
+                + "Это займёт 10 секунд — и тебе сразу начислится <b>+200 EXC</b>, плюс откроются квесты, награды и рейтинг!";
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
 
     private void handleActivationCheck(CallbackQuery callbackQuery, AppUser user) {
         if (isRequiredChannelMember(user.getTelegramId())) {
-            subscriptionCheckCache.put(user.getTelegramId(), System.currentTimeMillis());
-            if (!user.isRulesAccepted()) {
-                user.setRulesAccepted(true);
-                userService.save(user);
-            }
-            AppUser activated = userService.activateAccount(user);
-            userService.applyWelcomeBonus(activated);
-            ru.gamebot.platform.service.UserService.ReferralActivationResult referral =
-                    userService.grantReferralReward(activated);
-            startOnboarding(activated, referral);
-            if (referral != null) {
-                sendText(referral.referrerTelegramId(),
-                        "🎉 <b>Твой реферал присоединился!</b>\n\n"
-                                + "👤 <b>" + escape(referral.invitedNickname()) + "</b> только что активировал аккаунт по твоей ссылке.\n\n"
-                                + "🪙 Тебе начислено: <b>+" + referral.referrerBonus() + " EXC</b>\n\n"
-                                + "Ты будешь получать <b>3% от EXC</b>, которые он заработает на квестах, пока он активен (выполняет квесты хотя бы раз в 14 дней).",
-                        null);
-            }
-            notifyAdminsNewRegistration(activated);
+            activatePlayer(user);
             answer(callbackQuery.getId(), "Аккаунт активирован");
             return;
         }
@@ -2710,6 +2692,46 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendCommunityActivationPrompt(user,
                 "⚠️ Подписка пока не подтверждена. Убедитесь, что вы подписались на канал, и нажмите кнопку ещё раз.");
         answer(callbackQuery.getId(), "Подписка не найдена");
+    }
+
+    /** Общая логика активации аккаунта после подтверждённой подписки на канал — используется и
+     * при ручном нажатии "Я подписался", и автоматической фоновой проверкой {@link #checkPendingChannelActivations}. */
+    private void activatePlayer(AppUser user) {
+        subscriptionCheckCache.put(user.getTelegramId(), System.currentTimeMillis());
+        if (!user.isRulesAccepted()) {
+            user.setRulesAccepted(true);
+            userService.save(user);
+        }
+        AppUser activated = userService.activateAccount(user);
+        userService.applyWelcomeBonus(activated);
+        ru.gamebot.platform.service.UserService.ReferralActivationResult referral =
+                userService.grantReferralReward(activated);
+        startOnboarding(activated, referral);
+        if (referral != null) {
+            sendText(referral.referrerTelegramId(),
+                    "🎉 <b>Твой реферал присоединился!</b>\n\n"
+                            + "👤 <b>" + escape(referral.invitedNickname()) + "</b> только что активировал аккаунт по твоей ссылке.\n\n"
+                            + "🪙 Тебе начислено: <b>+" + referral.referrerBonus() + " EXC</b>\n\n"
+                            + "Ты будешь получать <b>3% от EXC</b>, которые он заработает на квестах, пока он активен (выполняет квесты хотя бы раз в 14 дней).",
+                    null);
+        }
+        notifyAdminsNewRegistration(activated);
+    }
+
+    /** Игрок ввёл ник, подписался на канал, но не вернулся нажать "Я подписался" — бот сам замечает
+     * подписку и активирует аккаунт, без необходимости возвращаться в чат и жать кнопку вручную.
+     * Найдено 2026-09-02 при разборе воронки регистрации: ~14% введших ник теряются именно на этом шаге. */
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 300_000)
+    public void checkPendingChannelActivations() {
+        for (AppUser user : userService.findPendingChannelActivation()) {
+            try {
+                if (isRequiredChannelMember(user.getTelegramId())) {
+                    activatePlayer(user);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to auto-activate user {} after detecting channel membership", user.getTelegramId(), e);
+            }
+        }
     }
 
     // ─── Onboarding ──────────────────────────────────────────────────────────────
