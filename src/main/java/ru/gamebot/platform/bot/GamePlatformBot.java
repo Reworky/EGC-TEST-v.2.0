@@ -9887,8 +9887,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if ("0".equals(trimmed)) {
             int delivered = bcastPhotoFileId != null
-                    ? broadcastPhotoToAll(bcastPhotoFileId, (bcastCaption == null || bcastCaption.isBlank()) ? "" : "📣 <b>Новости платформы</b>\n\n" + escape(bcastCaption))
-                    : broadcastToAll("📣 <b>Новости платформы</b>\n\n" + escape(bcastText));
+                    ? broadcastPhotoToAll(bcastPhotoFileId, (bcastCaption == null || bcastCaption.isBlank()) ? "" : escape(bcastCaption))
+                    : broadcastToAll(escape(bcastText));
             session.reset();
             sendText(user.getTelegramId(), "✅ Рассылка отправлена. Получателей: <b>" + delivered + "</b>.", mainMenuKeyboard(user));
             return;
@@ -10280,8 +10280,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             ru.gamebot.platform.domain.model.ScheduledBroadcast b = scheduledBroadcastService.getById(event.getBroadcastId());
             if (b == null || b.getStatus() != ru.gamebot.platform.domain.enums.ScheduledBroadcastStatus.PENDING) return;
             int delivered = b.getPhotoFileId() != null
-                    ? broadcastPhotoToAll(b.getPhotoFileId(), (b.getCaption() == null || b.getCaption().isBlank()) ? "" : "📣 <b>Новости платформы</b>\n\n" + escape(b.getCaption()))
-                    : broadcastToAll("📣 <b>Новости платформы</b>\n\n" + escape(b.getText()));
+                    ? broadcastPhotoToAll(b.getPhotoFileId(), (b.getCaption() == null || b.getCaption().isBlank()) ? "" : escape(b.getCaption()))
+                    : broadcastToAll(escape(b.getText()));
             scheduledBroadcastService.markSent(b.getId(), delivered);
             log.info("[ScheduledBroadcast] Sent #{} -> {} users", b.getId(), delivered);
         } catch (Exception e) {
