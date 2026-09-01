@@ -19,6 +19,32 @@ const BattlePassPage = lazy(() => import('./pages/BattlePassPage'));
 const SquadsPage     = lazy(() => import('./pages/SquadsPage'));
 const WheelPage      = lazy(() => import('./pages/WheelPage'));
 
+/** Показывается вместо ошибки, когда страница открыта вне Telegram (initData отсутствует) —
+ * например, при проверке ссылки рекламной сетью или прямом переходе по Web App URL в браузере.
+ * Раньше здесь был текст-предупреждение без содержимого — внешние краулеры (AdsGram) считали
+ * такую страницу нерабочей. Эта версия отдаёт валидный контент + кнопку открытия в Telegram. */
+function OpenInTelegramScreen() {
+  return (
+    <div className="page-center" style={{ flexDirection: 'column', gap: 16, padding: '0 32px', textAlign: 'center' }}>
+      <div style={{ fontSize: 52 }}>🎮</div>
+      <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--tg-theme-text-color, #e2e8f0)' }}>EGC Mini App</div>
+      <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.45)', lineHeight: 1.5 }}>
+        Квесты, рефералы, отряды и обмен EXC на призы — доступно внутри Telegram.
+      </div>
+      <a
+        href="https://t.me/invitetogamebot/app"
+        style={{
+          marginTop: 8, padding: '10px 24px', borderRadius: 10,
+          background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.35)',
+          color: '#a78bfa', fontSize: 14, textDecoration: 'none'
+        }}
+      >
+        Открыть в Telegram
+      </a>
+    </div>
+  );
+}
+
 function MaintenanceScreen({ onRetry }) {
   return (
     <div className="page-center" style={{ flexDirection: 'column', gap: 16, padding: '0 32px', textAlign: 'center' }}>
@@ -46,6 +72,7 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState(null);
   const [offline, setOffline] = useState(false);
+  const [noContext, setNoContext] = useState(false);
 
   const doAuth = (data) => {
     authMiniApp(data)
@@ -65,7 +92,7 @@ export default function App() {
       if (localStorage.getItem('egc_token')) {
         setReady(true);
       } else {
-        setError('Приложение доступно только через мобильную версию Telegram.');
+        setNoContext(true);
       }
       return;
     }
@@ -77,6 +104,10 @@ export default function App() {
     window.addEventListener('egc:offline', handler);
     return () => window.removeEventListener('egc:offline', handler);
   }, []);
+
+  if (noContext) {
+    return <OpenInTelegramScreen />;
+  }
 
   if (offline) {
     return <MaintenanceScreen onRetry={() => { setOffline(false); if (initData) doAuth(initData); }} />;
