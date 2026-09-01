@@ -7325,7 +7325,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         review.setCreatedAt(LocalDateTime.now());
         review = botReviewRepository.save(review);
         session.reset();
-        sendText(user.getTelegramId(), "🙏 Спасибо за отзыв! Он появится в канале после проверки модератором.", null);
+        sendText(user.getTelegramId(), "🙏 Спасибо за отзыв! Он появится в канале после проверки модератором.",
+                backMenuKeyboard("menu:main"));
         sendReviewModerationCard(review);
     }
 
