@@ -56,6 +56,7 @@ import ru.gamebot.platform.domain.enums.RejectionReasonCode;
 import ru.gamebot.platform.domain.enums.RewardRequestStatus;
 import ru.gamebot.platform.domain.enums.SubmissionStatus;
 import ru.gamebot.platform.domain.model.AppUser;
+import ru.gamebot.platform.domain.model.BotReview;
 import ru.gamebot.platform.domain.model.NewsPost;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.model.QuestSubmission;
@@ -141,6 +142,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ScheduledBroadcastService scheduledBroadcastService;
     private final ru.gamebot.platform.service.AdsgramBotAdService adsgramBotAdService;
     private final ru.gamebot.platform.domain.repository.TournamentEntryRepository tournamentEntryRepository;
+    private final ru.gamebot.platform.domain.repository.BotReviewRepository botReviewRepository;
 
     private final Queue<String[]> pendingNewsQueue = new ConcurrentLinkedQueue<>();
     private final ScheduledExecutorService albumScheduler = Executors.newSingleThreadScheduledExecutor();
@@ -386,6 +388,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             RewardRequest req = rewardService.approveRequest(reqId);
             notifyUserWithdrawalApproved(req, fileId);
             sendPayoutConfirmedCard(user, req, isModReceiptFlow);
+            return;
+        }
+
+        if (session.getState() == SessionState.WITHDRAWAL_REVIEW_TEXT) {
+            if (text != null && (text.startsWith("/start") || text.equals("/moder") || text.equals("/admin") || text.equals("/user") || text.equals("/menu"))) {
+                session.reset();
+                sendMainMenu(user, roleWelcomeText(user, null));
+                return;
+            }
+            InlineKeyboardMarkup finishKeyboard = keyboardFactory.rowsLayout(
+                    List.of(List.of(keyboardFactory.callback("✅ Готово", "review:finish"))));
+            if (message.hasPhoto()) {
+                List<PhotoSize> photos = message.getPhoto();
+                session.getData().put("reviewPhotoFileId", photos.get(photos.size() - 1).getFileId());
+                sendText(user.getTelegramId(), "📎 Скриншот добавлен. Можешь дописать текст или нажать «Готово».", finishKeyboard);
+                return;
+            }
+            if (text != null && !text.isBlank()) {
+                session.getData().put("reviewText", text.length() > 500 ? text.substring(0, 500) : text);
+                sendText(user.getTelegramId(), "✏️ Текст сохранён. Можешь приложить скриншот или нажать «Готово».", finishKeyboard);
+                return;
+            }
             return;
         }
 
@@ -1095,6 +1119,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.startsWith("wheel:")) {
             handleWheelAction(callbackQuery, user, data.substring("wheel:".length()));
+            return;
+        }
+        if (data.startsWith("review:")) {
+            handleReviewAction(callbackQuery, user, session, data.substring("review:".length()));
+            return;
+        }
+        if (data.startsWith("revmod:") && isEffectiveModerator(user)) {
+            handleReviewModAction(callbackQuery, data.substring("revmod:".length()));
             return;
         }
         if ("mod:suspects".equals(data) && isEffectiveModerator(user)) {
@@ -7218,6 +7250,172 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             try { execute(photo); } catch (TelegramApiException e) { log.error("Failed to send receipt", e); }
         } else {
             sendText(req.getUser().getTelegramId(), caption, null);
+        }
+        promptWithdrawalReview(req);
+    }
+
+    // ── Отзывы после вывода EXC ─────────────────────────────────────────────
+
+    /** По желанию игрока — просит оценить качество вывода 1-5 звёзд после его закрытия.
+     * Собранный отзыв уходит на модерацию ({@link #sendReviewModerationCard}), затем публикуется
+     * в канал отзывов ({@link #publishReviewToChannel}). */
+    private void promptWithdrawalReview(RewardRequest req) {
+        Long telegramId = req.getUser().getTelegramId();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(
+                keyboardFactory.callback("⭐️⭐️⭐️⭐️⭐️", "review:stars:" + req.getId() + ":5"),
+                keyboardFactory.callback("⭐️⭐️⭐️⭐️", "review:stars:" + req.getId() + ":4")));
+        rows.add(List.of(
+                keyboardFactory.callback("⭐️⭐️⭐️", "review:stars:" + req.getId() + ":3"),
+                keyboardFactory.callback("⭐️⭐️", "review:stars:" + req.getId() + ":2"),
+                keyboardFactory.callback("⭐️", "review:stars:" + req.getId() + ":1")));
+        rows.add(List.of(keyboardFactory.callback("Не сейчас", "review:skip:" + req.getId())));
+        sendText(telegramId,
+                "🙏 Оцени, пожалуйста, качество вывода — это необязательно, но очень помогает клубу.",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleReviewAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
+        if (action.startsWith("stars:")) {
+            String[] parts = action.substring("stars:".length()).split(":");
+            long reqId = Long.parseLong(parts[0]);
+            int stars = Integer.parseInt(parts[1]);
+            session.reset();
+            session.getData().put("reviewReqId", String.valueOf(reqId));
+            session.getData().put("reviewStars", String.valueOf(stars));
+            session.setState(SessionState.WITHDRAWAL_REVIEW_TEXT);
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "Спасибо!");
+            sendText(user.getTelegramId(),
+                    "Спасибо за оценку! Хочешь добавить пару слов и/или скриншот? Отправь текст и/или фото, а затем нажми «Готово» — можно нажать сразу, без текста.",
+                    keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("✅ Готово", "review:finish")))));
+            return;
+        }
+        if (action.startsWith("skip:")) {
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "Хорошо, спасибо!");
+            return;
+        }
+        if (action.equals("finish")) {
+            if (session.getState() != SessionState.WITHDRAWAL_REVIEW_TEXT) {
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            finalizeWithdrawalReview(user, session);
+            clearInlineKeyboard(callbackQuery);
+            answerSilently(callbackQuery.getId());
+        }
+    }
+
+    private void finalizeWithdrawalReview(AppUser user, UserSession session) {
+        String reqIdStr = session.getData().get("reviewReqId");
+        String starsStr = session.getData().get("reviewStars");
+        if (reqIdStr == null || starsStr == null) {
+            session.reset();
+            return;
+        }
+        BotReview review = new BotReview();
+        review.setUser(user);
+        review.setRewardRequestId(Long.parseLong(reqIdStr));
+        review.setStars(Integer.parseInt(starsStr));
+        review.setText(session.getData().get("reviewText"));
+        review.setPhotoFileId(session.getData().get("reviewPhotoFileId"));
+        review.setStatus(ru.gamebot.platform.domain.enums.BotReviewStatus.PENDING);
+        review.setCreatedAt(LocalDateTime.now());
+        review = botReviewRepository.save(review);
+        session.reset();
+        sendText(user.getTelegramId(), "🙏 Спасибо за отзыв! Он появится в канале после проверки модератором.", null);
+        sendReviewModerationCard(review);
+    }
+
+    private void sendReviewModerationCard(BotReview review) {
+        String stars = "⭐️".repeat(Math.max(0, Math.min(5, review.getStars())));
+        String reviewText = review.getText();
+        String caption = "🧾 <b>Новый отзыв</b>\n\n"
+                + "👤 " + escape(review.getUser().getNickname()) + " · " + stars + "\n"
+                + (reviewText != null && !reviewText.isBlank() ? "\"" + escape(reviewText) + "\"" : "<i>без текста</i>");
+        InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
+                keyboardFactory.callback("✅ Опубликовать", "revmod:approve:" + review.getId()),
+                keyboardFactory.callback("❌ Отклонить", "revmod:reject:" + review.getId())));
+        for (Long recipient : adminService.allModeratorIds()) {
+            try {
+                if (review.getPhotoFileId() != null) {
+                    SendPhoto sendPhoto = new SendPhoto();
+                    sendPhoto.setChatId(recipient.toString());
+                    sendPhoto.setPhoto(new InputFile(review.getPhotoFileId()));
+                    sendPhoto.setCaption(caption);
+                    sendPhoto.setParseMode("HTML");
+                    sendPhoto.setReplyMarkup(markup);
+                    execute(sendPhoto);
+                } else {
+                    SendMessage msg = new SendMessage();
+                    msg.setChatId(recipient.toString());
+                    msg.setText(caption);
+                    msg.setParseMode("HTML");
+                    msg.setReplyMarkup(markup);
+                    execute(msg);
+                }
+            } catch (TelegramApiException e) {
+                log.warn("Failed to send review moderation card to {}", recipient, e);
+            }
+        }
+    }
+
+    private void handleReviewModAction(CallbackQuery callbackQuery, String action) {
+        if (action.startsWith("approve:")) {
+            long id = parseLong(action.substring("approve:".length()));
+            botReviewRepository.findById(id).ifPresent(review -> {
+                if (review.getStatus() != ru.gamebot.platform.domain.enums.BotReviewStatus.PENDING) return;
+                review.setStatus(ru.gamebot.platform.domain.enums.BotReviewStatus.PUBLISHED);
+                botReviewRepository.save(review);
+                publishReviewToChannel(review);
+            });
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "✅ Опубликовано");
+            return;
+        }
+        if (action.startsWith("reject:")) {
+            long id = parseLong(action.substring("reject:".length()));
+            botReviewRepository.findById(id).ifPresent(review -> {
+                if (review.getStatus() != ru.gamebot.platform.domain.enums.BotReviewStatus.PENDING) return;
+                review.setStatus(ru.gamebot.platform.domain.enums.BotReviewStatus.REJECTED);
+                botReviewRepository.save(review);
+            });
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "❌ Отклонено");
+        }
+    }
+
+    private void publishReviewToChannel(BotReview review) {
+        String channel = appProperties.getPayoutChannelUsername();
+        if (channel == null || channel.isBlank()) return;
+        String stars = "⭐️".repeat(Math.max(0, Math.min(5, review.getStars())));
+        StringBuilder sb = new StringBuilder();
+        sb.append(stars).append("\n");
+        sb.append("Отзыв с бота 🤖\n\n");
+        sb.append("<b>").append(escape(review.getUser().getNickname())).append("</b>");
+        String reviewText = review.getText();
+        if (reviewText != null && !reviewText.isBlank()) {
+            sb.append("\n").append(escape(reviewText));
+        }
+        String text = sb.toString();
+        try {
+            if (review.getPhotoFileId() != null) {
+                SendPhoto photo = new SendPhoto();
+                photo.setChatId(channel);
+                photo.setPhoto(new InputFile(review.getPhotoFileId()));
+                photo.setCaption(text);
+                photo.setParseMode("HTML");
+                execute(photo);
+            } else {
+                SendMessage msg = new SendMessage();
+                msg.setChatId(channel);
+                msg.setText(text);
+                msg.setParseMode("HTML");
+                execute(msg);
+            }
+        } catch (TelegramApiException e) {
+            log.error("Failed to publish review {} to channel", review.getId(), e);
         }
     }
 
