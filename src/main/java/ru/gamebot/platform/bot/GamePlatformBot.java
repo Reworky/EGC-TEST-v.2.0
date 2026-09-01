@@ -5998,6 +5998,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "stats:platform" -> sendAdminStatsPlatform(user);
             case "stats:topquests" -> sendAdminStatsTopQuests(user);
             case "stats:history" -> sendAdminStatsHistory(user);
+            case "stats:snapshot" -> {
+                platformSnapshotService.takeSnapshot();
+                sendAdminStatsPlatform(user);
+                answer(callbackQuery.getId(), "📸 Снепшот сохранён");
+                return;
+            }
             case "stats:reset_weekly" -> sendAdminResetWeeklyConfirm(user);
             case "stats:reset_weekly:confirm" -> doAdminResetWeeklyXp(user);
             case "live" -> sendAdminLiveStatus(user);
@@ -7878,6 +7884,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("📜 История", "admin:stats:history"),
                                 keyboardFactory.callback("🔄 Обновить", "admin:stats:platform")),
+                        List.of(keyboardFactory.callback("📸 Снепшот сейчас", "admin:stats:snapshot")),
                         List.of(keyboardFactory.callback("⬅️ Назад", "admin:stats"),
                                 keyboardFactory.callback("🏠 Меню", "menu:main"))
                 )));
@@ -7910,7 +7917,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
               .append("  ✅ ").append(s.getTotalApprovedQuests()).append(dA)
               .append("  💸 ").append(fmtExc(s.getTotalPaidOutExc())).append(dP).append("\n")
               .append("   🟢 ").append(s.getActive7Days()).append(" за 7д")
-              .append("  💰 ").append(fmtExc(s.getTotalCoinsOnAccounts())).append(" EXC\n\n");
+              .append("  💰 ").append(fmtExc(s.getTotalCoinsOnAccounts())).append(" EXC\n")
+              .append("   🔄 Возврат 7д: ").append(s.getRetention7Pct()).append("% (из ").append(s.getRetention7Cohort()).append(")")
+              .append("  30д: ").append(s.getRetention30Pct()).append("% (из ").append(s.getRetention30Cohort()).append(")")
+              .append("  🎯 ").append(s.getCompletionRatePct()).append("%\n\n");
         }
 
         sendText(user.getTelegramId(), sb.toString(),

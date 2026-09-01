@@ -57,6 +57,22 @@ public class PlatformSnapshot {
     @Column(columnDefinition = "bigint default 0")
     private long activeQuestsCount;
 
+    // Воронка вовлечённости — для сравнения "лучше/хуже" по дням (см. кнопка "📸 Снепшот сейчас")
+    @Column(columnDefinition = "bigint default 0")
+    private long retention7Cohort;
+
+    @Column(columnDefinition = "bigint default 0")
+    private long retention7Pct;
+
+    @Column(columnDefinition = "bigint default 0")
+    private long retention30Cohort;
+
+    @Column(columnDefinition = "bigint default 0")
+    private long retention30Pct;
+
+    @Column(columnDefinition = "bigint default 0")
+    private long completionRatePct;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 }

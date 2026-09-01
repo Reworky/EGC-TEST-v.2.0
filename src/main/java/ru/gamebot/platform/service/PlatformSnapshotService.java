@@ -47,6 +47,23 @@ public class PlatformSnapshotService {
         snap.setTotalCoinsOnAccounts(appUserRepository.sumAllCoins());
         snap.setTotalTickets(appUserRepository.sumAllTickets());
         snap.setActiveQuestsCount(questRepository.countByActiveTrue());
+
+        // Воронка вовлечённости — те же формулы, что и в admin:stats:platform (когорта 7-14 / 30-60 дней назад)
+        long cohort7 = appUserRepository.countRegisteredBetween(nowDt.minusDays(14), nowDt.minusDays(7));
+        long retained7 = cohort7 > 0 ? appUserRepository.countRegisteredBetweenAndActiveSince(
+                nowDt.minusDays(14), nowDt.minusDays(7), today.minusDays(7)) : 0;
+        snap.setRetention7Cohort(cohort7);
+        snap.setRetention7Pct(cohort7 > 0 ? retained7 * 100 / cohort7 : 0);
+
+        long cohort30 = appUserRepository.countRegisteredBetween(nowDt.minusDays(60), nowDt.minusDays(30));
+        long retained30 = cohort30 > 0 ? appUserRepository.countRegisteredBetweenAndActiveSince(
+                nowDt.minusDays(60), nowDt.minusDays(30), today.minusDays(30)) : 0;
+        snap.setRetention30Cohort(cohort30);
+        snap.setRetention30Pct(cohort30 > 0 ? retained30 * 100 / cohort30 : 0);
+
+        long moderated = questSubmissionRepository.countModerated();
+        snap.setCompletionRatePct(moderated > 0 ? snap.getTotalApprovedQuests() * 100 / moderated : 0);
+
         snap.setCreatedAt(nowDt);
 
         PlatformSnapshot saved = snapshotRepository.save(snap);
