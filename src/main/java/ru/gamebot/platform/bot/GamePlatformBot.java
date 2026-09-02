@@ -303,6 +303,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (text != null && text.startsWith("/resendreview") && isEffectiveAdmin(user)) {
+            String[] parts = text.trim().split("\\s+");
+            if (parts.length == 2) {
+                try {
+                    long reviewId = Long.parseLong(parts[1]);
+                    botReviewRepository.findWithUserById(reviewId).ifPresentOrElse(review -> {
+                        sendReviewModerationCard(review);
+                        sendText(user.getTelegramId(), "✅ Карточка отзыва #" + reviewId + " отправлена заново.", null);
+                    }, () -> sendText(user.getTelegramId(), "❌ Отзыв не найден: " + reviewId, null));
+                } catch (NumberFormatException e) {
+                    sendText(user.getTelegramId(), "❌ Неверный формат ID", null);
+                }
+            } else {
+                sendText(user.getTelegramId(), "Использование: /resendreview <id отзыва>", null);
+            }
+            return;
+        }
+
         if (text != null && text.startsWith("/add_sponsor") && isEffectiveAdmin(user)) {
             handleAddSponsor(user, text);
             return;
