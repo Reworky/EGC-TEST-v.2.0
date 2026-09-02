@@ -12,12 +12,14 @@ import ru.gamebot.platform.domain.model.QuestSubmission;
 import ru.gamebot.platform.domain.repository.QuestRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
 import ru.gamebot.platform.domain.repository.WheelSpinLogRepository;
+import ru.gamebot.platform.event.AutoPollCreatedEvent;
 import ru.gamebot.platform.event.CooldownExpiredEvent;
 import ru.gamebot.platform.event.DormancyReengagementEvent;
 import ru.gamebot.platform.event.OnboardingReminderEvent;
 import ru.gamebot.platform.event.PollClosedEvent;
 import ru.gamebot.platform.event.QuestDeadlineWarningEvent;
 import ru.gamebot.platform.event.QuestExpiredEvent;
+import ru.gamebot.platform.event.SquadMidweekTeaserEvent;
 import ru.gamebot.platform.event.WeeklyDigestActiveEvent;
 import ru.gamebot.platform.event.WeeklyDigestInactiveEvent;
 import ru.gamebot.platform.service.TournamentService;
@@ -29,6 +31,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 
 @Slf4j
@@ -82,6 +85,49 @@ public class WeeklyResetScheduler {
             healthRatioService.recalculate();
         } catch (Exception e) {
             log.error("Health ratio recalculate after weekly reset failed", e);
+        }
+    }
+
+    // Тизер рейтинга отрядов в середине недели — держит канал живым между "Залом Славы"
+    // по понедельникам и выплатой приза; время 12:00, а не полночь, чтобы попасть в активные часы.
+    @Scheduled(cron = "0 0 12 * * WED")
+    public void postSquadMidweekTeaser() {
+        try {
+            List<SquadService.SquadRankEntry> top = squadService.getLeaderboard().stream().limit(5).toList();
+            if (top.isEmpty()) return;
+            eventPublisher.publishEvent(new SquadMidweekTeaserEvent(this, top));
+        } catch (Exception e) {
+            log.error("Squad midweek teaser failed", e);
+        }
+    }
+
+    private record PollTemplate(String question, List<String> options) {}
+
+    private static final List<PollTemplate> POLL_TEMPLATES = List.of(
+            new PollTemplate("Какая игра тебе заходит больше всего?", List.of("PUBG Mobile", "Brawl Stars", "Clash of Clans", "Clash Royale", "CS2")),
+            new PollTemplate("Сколько времени в день проводишь в EGC?", List.of("<15 мин", "15-30 мин", "30-60 мин", "больше часа")),
+            new PollTemplate("На что копишь EXC?", List.of("Вывод в рубли", "Вывод в GRAM", "Косметику в магазине", "Ещё не решил")),
+            new PollTemplate("Какой формат турниров интереснее?", List.of("Соло", "Командные", "Отрядные", "Всё равно")),
+            new PollTemplate("Что хочешь видеть в EGC в первую очередь?", List.of("Больше квестов", "Больше игр", "Больше турниров", "Улучшение вывода")),
+            new PollTemplate("Как ты нашёл наш клуб?", List.of("Реклама", "Друг позвал", "Поиск в Telegram", "Другое")),
+            new PollTemplate("Какой режим Brawl Stars любимый?", List.of("Захват кристаллов", "Нокаут", "Осада", "Дуэль")),
+            new PollTemplate("Сколько бойцов в Brawl Stars у тебя прокачано?", List.of("1-5", "6-15", "16-30", "30+")),
+            new PollTemplate("Что важнее в квестах?", List.of("Награда побольше", "Задание попроще", "Разнообразие игр", "Скорость проверки")),
+            new PollTemplate("Готов пригласить друга в EGC?", List.of("Уже пригласил", "Планирую", "Пока не думал", "Не хочу")),
+            new PollTemplate("Какая механика нравится больше?", List.of("Квесты", "Турниры", "Отряды", "Колесо фортуны")),
+            new PollTemplate("Как быстро проверяют твои квесты?", List.of("Очень быстро", "Нормально", "Долго", "Ещё не отправлял"))
+    );
+
+    // Бесплатный (priceExc=0) авто-опрос каждые ~3 дня — держит канал живым между крупными
+    // событиями. Случайный выбор шаблона вместо очереди — не нужно хранить индекс/состояние.
+    @Scheduled(fixedDelay = 3L * 24 * 60 * 60 * 1000)
+    public void postScheduledPoll() {
+        try {
+            PollTemplate t = POLL_TEMPLATES.get(new Random().nextInt(POLL_TEMPLATES.size()));
+            Poll poll = pollService.create(t.question(), t.options(), 0L, LocalDateTime.now().plusDays(2));
+            eventPublisher.publishEvent(new AutoPollCreatedEvent(this, poll));
+        } catch (Exception e) {
+            log.error("Scheduled poll creation failed", e);
         }
     }
 

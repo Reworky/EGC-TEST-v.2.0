@@ -7321,7 +7321,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else {
             sendText(req.getUser().getTelegramId(), caption, null);
         }
+        postWithdrawalToActivityFeed(req);
         promptWithdrawalReview(req);
+    }
+
+    /** Публичная лента активности — крупные выводы EXC постятся в основной канал (не @egc_payouts,
+     * тот зарезервирован под технические AdsGram/отзыв-уведомления). Без порога — выводов исторически
+     * мало (десятки уникальных получателей за всё время), спама не будет. Найдено 2026-09-02 при
+     * разборе рекомендаций по вовлечённости канала — прецедент того же паблика ника+суммы уже есть
+     * в onAdRewardGranted, ничего нового в подходе к приватности не вводится. */
+    private void postWithdrawalToActivityFeed(RewardRequest req) {
+        try {
+            SendMessage msg = new SendMessage();
+            msg.setChatId(requiredChannelChatId());
+            msg.setText("💸 Игрок <b>" + escape(req.getUser().getNickname()) + "</b> вывел <b>"
+                    + req.getRewardItem().getPriceCoins() + " EXC</b>!");
+            msg.setParseMode("HTML");
+            execute(msg);
+        } catch (Exception e) {
+            log.warn("Failed to post withdrawal to activity feed", e);
+        }
     }
 
     // ── Отзывы после вывода EXC ─────────────────────────────────────────────
@@ -8916,6 +8935,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         publishPollResults(event.getPoll());
     }
 
+    @org.springframework.context.event.EventListener
+    public void onAutoPollCreated(ru.gamebot.platform.event.AutoPollCreatedEvent event) {
+        ru.gamebot.platform.domain.model.Poll poll = event.getPoll();
+        List<String> options = pollService.getOptions(poll);
+        StringBuilder sb = new StringBuilder("🗳 <b>Новый опрос!</b>\n\n");
+        sb.append("❓ <b>").append(escape(poll.getQuestion())).append("</b>\n\n");
+        for (int i = 0; i < options.size(); i++) {
+            sb.append(i + 1).append(". ").append(escape(options.get(i))).append("\n");
+        }
+        sb.append("\nГолосование бесплатное — выбери вариант в боте 👇");
+        try {
+            SendMessage msg = new SendMessage();
+            msg.setChatId(requiredChannelChatId());
+            msg.setText(sb.toString());
+            msg.setParseMode("HTML");
+            msg.setReplyMarkup(keyboardFactory.rowsLayout(List.of(
+                    List.of(keyboardFactory.url("🗳 Проголосовать", "https://t.me/" + appProperties.getBotUsername())))));
+            execute(msg);
+        } catch (Exception e) {
+            log.error("Failed to publish auto-poll announcement for poll {}", poll.getId(), e);
+        }
+    }
+
     private void sendAdminUsersPage(AppUser admin, Integer requestedPage) {
         List<AppUser> users = userService.allUsersSorted();
         if (users.isEmpty()) {
@@ -10306,6 +10348,33 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             } catch (TelegramApiException ex) {
                 log.error("Failed to post hall of fame to channel", ex);
             }
+        }
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onSquadMidweekTeaser(ru.gamebot.platform.event.SquadMidweekTeaserEvent event) {
+        StringBuilder sb = new StringBuilder("🛡️ <b>Гонка отрядов — экватор недели</b>\n\n");
+        int rank = 1;
+        for (ru.gamebot.platform.service.SquadService.SquadRankEntry entry : event.getTopSquads()) {
+            String medal = switch (rank) {
+                case 1 -> "🥇";
+                case 2 -> "🥈";
+                case 3 -> "🥉";
+                default -> rank + ".";
+            };
+            sb.append(medal).append(" <b>").append(escape(entry.squad().getName())).append("</b>\n")
+              .append("   ⚡️ ").append(entry.weeklyXp()).append(" XP · 👥 ").append(entry.memberCount()).append(" чел.\n\n");
+            rank++;
+        }
+        sb.append("🏆 Приз победителю — 10 000 EXC на всех участников! Финиш в воскресенье.");
+        try {
+            SendMessage msg = new SendMessage();
+            msg.setChatId(requiredChannelChatId());
+            msg.setText(sb.toString());
+            msg.setParseMode("HTML");
+            execute(msg);
+        } catch (Exception e) {
+            log.error("Failed to post squad midweek teaser to channel", e);
         }
     }
 
