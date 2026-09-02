@@ -7513,7 +7513,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void handleReviewModAction(CallbackQuery callbackQuery, String action) {
         if (action.startsWith("approve:")) {
             long id = parseLong(action.substring("approve:".length()));
-            botReviewRepository.findById(id).ifPresent(review -> {
+            botReviewRepository.findWithUserById(id).ifPresent(review -> {
                 if (review.getStatus() != ru.gamebot.platform.domain.enums.BotReviewStatus.PENDING) return;
                 review.setStatus(ru.gamebot.platform.domain.enums.BotReviewStatus.PUBLISHED);
                 botReviewRepository.save(review);
@@ -7678,7 +7678,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 msg.setParseMode("HTML");
                 execute(msg);
             }
-        } catch (TelegramApiException e) {
+        } catch (Exception e) {
             log.error("Failed to publish review {} to channel", review.getId(), e);
         }
     }
