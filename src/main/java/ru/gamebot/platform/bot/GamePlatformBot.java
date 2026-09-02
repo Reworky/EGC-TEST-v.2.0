@@ -7672,18 +7672,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String channel = appProperties.getPayoutChannelUsername();
         if (channel == null || channel.isBlank()) return;
         String stars = "⭐️".repeat(Math.max(0, Math.min(5, review.getStars())));
-        StringBuilder sb = new StringBuilder();
-        sb.append(stars).append("\n");
-        sb.append("Отзыв с бота 🤖\n\n");
         AppUser reviewer = review.getUser();
         String nickname = escape(reviewer.getNickname());
         String profileLink = reviewer.getTelegramUsername() != null && !reviewer.getTelegramUsername().isBlank()
                 ? "https://t.me/" + reviewer.getTelegramUsername()
                 : "tg://user?id=" + reviewer.getTelegramId();
-        sb.append("<b><a href=\"").append(profileLink).append("\">").append(nickname).append("</a></b>");
+        StringBuilder sb = new StringBuilder();
+        sb.append("Отзыв с бота 🤖\n");
+        sb.append("Игрок: <b><a href=\"").append(profileLink).append("\">").append(nickname).append("</a></b>\n");
+        sb.append(stars);
         String reviewText = review.getText();
         if (reviewText != null && !reviewText.isBlank()) {
-            sb.append("\n").append(escape(reviewText));
+            sb.append("\n\n\"").append(escape(reviewText)).append("\"");
         }
         String text = sb.toString();
         try {
