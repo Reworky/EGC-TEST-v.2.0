@@ -1466,6 +1466,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendText(user.getTelegramId(), "❌ " + e.getMessage(), cancelKeyboard());
                 }
             }
+            case TRAFFIC_BATCH_COUNT -> {
+                Integer count = parseInteger(text.trim());
+                if (count == null || count < 1 || count > 50) {
+                    sendText(user.getTelegramId(), "❌ Введите целое число от 1 до 50.", cancelKeyboard());
+                    return;
+                }
+                session.getData().put("batchCount", String.valueOf(count));
+                sendText(user.getTelegramId(),
+                        "📦 Создать <b>" + count + "</b> новых ссылок?",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("✅ Генерировать", "admin:traffic:batch:confirm"),
+                                        keyboardFactory.callback("❌ Отмена", "common:cancel"))
+                        )));
+            }
             case POLL_CREATE_QUESTION -> {
                 session.getData().put("pollQuestion", text.trim());
                 session.setState(SessionState.POLL_CREATE_OPTIONS);
@@ -6073,6 +6087,33 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         "📈 <b>Новый источник трафика</b>\n\nВведите название (например: Instagram, VK, Блогер Петя):",
                         cancelKeyboard());
             }
+            case "traffic:batch" -> {
+                session.reset();
+                session.setState(SessionState.TRAFFIC_BATCH_COUNT);
+                sendText(user.getTelegramId(),
+                        "📦 <b>Пачка ссылок</b>\n\nСколько новых уникальных ссылок сгенерировать? Введите число от 1 до 50.",
+                        cancelKeyboard());
+            }
+            case "traffic:batch:confirm" -> {
+                String countStr = session.getData().get("batchCount");
+                session.reset();
+                Integer count = countStr != null ? parseInteger(countStr) : null;
+                if (count == null || count < 1 || count > 50) {
+                    sendText(user.getTelegramId(), "❌ Не удалось создать пачку — попробуйте ещё раз.", backMenuKeyboard("admin:traffic"));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                }
+                List<ru.gamebot.platform.domain.model.TrafficSource> batch = trafficSourceService.createBatch(count);
+                StringBuilder sb = new StringBuilder("✅ <b>Создано ссылок: " + batch.size() + "</b>\n\n");
+                int idx = 1;
+                for (ru.gamebot.platform.domain.model.TrafficSource ts : batch) {
+                    sb.append(idx++).append(". <code>https://t.me/").append(appProperties.getBotUsername())
+                      .append("?start=src_").append(ts.getCode()).append("</code>\n");
+                }
+                sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("admin:traffic"));
+                answerSilently(callbackQuery.getId());
+                return;
+            }
             case "payout" -> {
                 session.reset();
                 session.setState(SessionState.PAYOUT_POOL_INPUT);
@@ -8108,6 +8149,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback(label, "admin:traffic:view:" + ts.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("➕ Создать источник", "admin:traffic:create")));
+        rows.add(List.of(keyboardFactory.callback("📦 Пачка ссылок", "admin:traffic:batch")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
