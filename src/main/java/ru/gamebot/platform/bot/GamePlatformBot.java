@@ -10337,6 +10337,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 msg.setText(text);
                 msg.setParseMode("HTML");
                 msg.setDisableWebPagePreview(true);
+                msg.setReplyMarkup(keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
                 execute(msg);
             } catch (Exception e) {
                 log.warn("Failed to notify moderator {} about auto-approved submission {}", recipient, submission.getId(), e);
