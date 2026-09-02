@@ -151,6 +151,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ConcurrentHashMap<Long, Long> subscriptionCheckCache = new ConcurrentHashMap<>();
     private static final long SUBSCRIPTION_CHECK_TTL_MS = 3_600_000L;
 
+    /** Кандидат авто-опроса, ждущий одобрения администратора — только один одновременно
+     * (следующий, через ~3 дня, просто перезапишет, если этот не обработали). */
+    private record PendingPollCandidate(String question, List<String> options) {}
+    private volatile PendingPollCandidate pendingPollCandidate;
+
     @EventListener(ApplicationReadyEvent.class)
     public void registerBot() throws TelegramApiException {
         TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
@@ -1127,6 +1132,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.startsWith("revmod:") && isEffectiveModerator(user)) {
             handleReviewModAction(callbackQuery, data.substring("revmod:".length()));
+            return;
+        }
+        if (data.startsWith("adminfeed:") && isEffectiveAdmin(user)) {
+            handleAdminFeedAction(callbackQuery, data.substring("adminfeed:".length()));
             return;
         }
         if ("mod:suspects".equals(data) && isEffectiveModerator(user)) {
@@ -7329,17 +7338,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * тот зарезервирован под технические AdsGram/отзыв-уведомления). Без порога — выводов исторически
      * мало (десятки уникальных получателей за всё время), спама не будет. Найдено 2026-09-02 при
      * разборе рекомендаций по вовлечённости канала — прецедент того же паблика ника+суммы уже есть
-     * в onAdRewardGranted, ничего нового в подходе к приватности не вводится. */
+     * в onAdRewardGranted, ничего нового в подходе к приватности не вводится.
+     * Публикация — только после одобрения администратора (см. {@link #handleAdminFeedAction}). */
+    private String buildWithdrawalFeedText(RewardRequest req) {
+        return "💸 Игрок <b>" + escape(req.getUser().getNickname()) + "</b> вывел <b>"
+                + req.getRewardItem().getPriceCoins() + " EXC</b>!";
+    }
+
     private void postWithdrawalToActivityFeed(RewardRequest req) {
-        try {
-            SendMessage msg = new SendMessage();
-            msg.setChatId(requiredChannelChatId());
-            msg.setText("💸 Игрок <b>" + escape(req.getUser().getNickname()) + "</b> вывел <b>"
-                    + req.getRewardItem().getPriceCoins() + " EXC</b>!");
-            msg.setParseMode("HTML");
-            execute(msg);
-        } catch (Exception e) {
-            log.warn("Failed to post withdrawal to activity feed", e);
+        String preview = "🧾 <b>Лента активности — на согласование</b>\n\n" + buildWithdrawalFeedText(req);
+        InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
+                keyboardFactory.callback("✅ Опубликовать", "adminfeed:withdrawal:approve:" + req.getId()),
+                keyboardFactory.callback("❌ Отклонить", "adminfeed:withdrawal:reject")));
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, preview, markup);
+            } catch (Exception e) {
+                log.warn("Failed to send withdrawal feed candidate to admin {}", adminId, e);
+            }
         }
     }
 
@@ -7471,6 +7487,76 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 review.setStatus(ru.gamebot.platform.domain.enums.BotReviewStatus.REJECTED);
                 botReviewRepository.save(review);
             });
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "❌ Отклонено");
+        }
+    }
+
+    /** Согласование автопостов канала администратором — тизер отрядов, лента крупных выводов,
+     * авто-опросы. Введено 2026-09-02 по явному запросу: ничего из этих трёх не должно публиковаться
+     * без одобрения. */
+    private void handleAdminFeedAction(CallbackQuery callbackQuery, String action) {
+        if (action.equals("squad:approve")) {
+            List<ru.gamebot.platform.service.SquadService.SquadRankEntry> top =
+                    squadService.getLeaderboard().stream().limit(5).toList();
+            if (!top.isEmpty()) {
+                try {
+                    SendMessage msg = new SendMessage();
+                    msg.setChatId(requiredChannelChatId());
+                    msg.setText(buildSquadTeaserText(top));
+                    msg.setParseMode("HTML");
+                    execute(msg);
+                } catch (Exception e) {
+                    log.error("Failed to post approved squad teaser to channel", e);
+                }
+            }
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "✅ Опубликовано");
+            return;
+        }
+        if (action.equals("squad:reject")) {
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "❌ Отклонено");
+            return;
+        }
+        if (action.startsWith("withdrawal:approve:")) {
+            long reqId = parseLong(action.substring("withdrawal:approve:".length()));
+            try {
+                RewardRequest req = rewardService.getRequest(reqId);
+                SendMessage msg = new SendMessage();
+                msg.setChatId(requiredChannelChatId());
+                msg.setText(buildWithdrawalFeedText(req));
+                msg.setParseMode("HTML");
+                execute(msg);
+            } catch (Exception e) {
+                log.error("Failed to post approved withdrawal to activity feed", e);
+            }
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "✅ Опубликовано");
+            return;
+        }
+        if (action.equals("withdrawal:reject")) {
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "❌ Отклонено");
+            return;
+        }
+        if (action.equals("poll:approve")) {
+            PendingPollCandidate candidate = pendingPollCandidate;
+            if (candidate == null) {
+                clearInlineKeyboard(callbackQuery);
+                answer(callbackQuery.getId(), "Уже обработано");
+                return;
+            }
+            pendingPollCandidate = null;
+            ru.gamebot.platform.domain.model.Poll poll = pollService.create(
+                    candidate.question(), candidate.options(), 0L, LocalDateTime.now().plusDays(2));
+            onAutoPollCreated(new ru.gamebot.platform.event.AutoPollCreatedEvent(this, poll));
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "✅ Опубликовано");
+            return;
+        }
+        if (action.equals("poll:reject")) {
+            pendingPollCandidate = null;
             clearInlineKeyboard(callbackQuery);
             answer(callbackQuery.getId(), "❌ Отклонено");
         }
@@ -8958,6 +9044,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Кандидат авто-опроса на согласование — сам Poll создаётся только после одобрения
+     * (см. {@link #handleAdminFeedAction}), чтобы неодобренный вопрос не был "живым" в разделе бота. */
+    @org.springframework.context.event.EventListener
+    public void onScheduledPollCandidate(ru.gamebot.platform.event.ScheduledPollCandidateEvent event) {
+        pendingPollCandidate = new PendingPollCandidate(event.getQuestion(), event.getOptions());
+        StringBuilder sb = new StringBuilder("🧾 <b>Авто-опрос — на согласование</b>\n\n");
+        sb.append("❓ <b>").append(escape(event.getQuestion())).append("</b>\n\n");
+        List<String> options = event.getOptions();
+        for (int i = 0; i < options.size(); i++) {
+            sb.append(i + 1).append(". ").append(escape(options.get(i))).append("\n");
+        }
+        InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
+                keyboardFactory.callback("✅ Опубликовать", "adminfeed:poll:approve"),
+                keyboardFactory.callback("❌ Отклонить", "adminfeed:poll:reject")));
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, sb.toString(), markup);
+            } catch (Exception e) {
+                log.warn("Failed to send scheduled poll candidate to admin {}", adminId, e);
+            }
+        }
+    }
+
     private void sendAdminUsersPage(AppUser admin, Integer requestedPage) {
         List<AppUser> users = userService.allUsersSorted();
         if (users.isEmpty()) {
@@ -10351,11 +10460,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    @org.springframework.context.event.EventListener
-    public void onSquadMidweekTeaser(ru.gamebot.platform.event.SquadMidweekTeaserEvent event) {
+    private String buildSquadTeaserText(List<ru.gamebot.platform.service.SquadService.SquadRankEntry> topSquads) {
         StringBuilder sb = new StringBuilder("🛡️ <b>Гонка отрядов — экватор недели</b>\n\n");
         int rank = 1;
-        for (ru.gamebot.platform.service.SquadService.SquadRankEntry entry : event.getTopSquads()) {
+        for (ru.gamebot.platform.service.SquadService.SquadRankEntry entry : topSquads) {
             String medal = switch (rank) {
                 case 1 -> "🥇";
                 case 2 -> "🥈";
@@ -10367,14 +10475,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rank++;
         }
         sb.append("🏆 Приз победителю — 10 000 EXC на всех участников! Финиш в воскресенье.");
-        try {
-            SendMessage msg = new SendMessage();
-            msg.setChatId(requiredChannelChatId());
-            msg.setText(sb.toString());
-            msg.setParseMode("HTML");
-            execute(msg);
-        } catch (Exception e) {
-            log.error("Failed to post squad midweek teaser to channel", e);
+        return sb.toString();
+    }
+
+    /** Публикация — только после одобрения администратора (см. {@link #handleAdminFeedAction}). */
+    @org.springframework.context.event.EventListener
+    public void onSquadMidweekTeaser(ru.gamebot.platform.event.SquadMidweekTeaserEvent event) {
+        String preview = "🧾 <b>Тизер отрядов — на согласование</b>\n\n" + buildSquadTeaserText(event.getTopSquads());
+        InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
+                keyboardFactory.callback("✅ Опубликовать", "adminfeed:squad:approve"),
+                keyboardFactory.callback("❌ Отклонить", "adminfeed:squad:reject")));
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, preview, markup);
+            } catch (Exception e) {
+                log.warn("Failed to send squad teaser candidate to admin {}", adminId, e);
+            }
         }
     }
 

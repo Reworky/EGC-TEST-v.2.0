@@ -12,13 +12,13 @@ import ru.gamebot.platform.domain.model.QuestSubmission;
 import ru.gamebot.platform.domain.repository.QuestRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
 import ru.gamebot.platform.domain.repository.WheelSpinLogRepository;
-import ru.gamebot.platform.event.AutoPollCreatedEvent;
 import ru.gamebot.platform.event.CooldownExpiredEvent;
 import ru.gamebot.platform.event.DormancyReengagementEvent;
 import ru.gamebot.platform.event.OnboardingReminderEvent;
 import ru.gamebot.platform.event.PollClosedEvent;
 import ru.gamebot.platform.event.QuestDeadlineWarningEvent;
 import ru.gamebot.platform.event.QuestExpiredEvent;
+import ru.gamebot.platform.event.ScheduledPollCandidateEvent;
 import ru.gamebot.platform.event.SquadMidweekTeaserEvent;
 import ru.gamebot.platform.event.WeeklyDigestActiveEvent;
 import ru.gamebot.platform.event.WeeklyDigestInactiveEvent;
@@ -123,11 +123,12 @@ public class WeeklyResetScheduler {
     @Scheduled(fixedDelay = 3L * 24 * 60 * 60 * 1000)
     public void postScheduledPoll() {
         try {
+            // Poll не создаётся здесь — только предлагается администратору на согласование
+            // (см. GamePlatformBot.onScheduledPollCandidate). Создание — только после одобрения.
             PollTemplate t = POLL_TEMPLATES.get(new Random().nextInt(POLL_TEMPLATES.size()));
-            Poll poll = pollService.create(t.question(), t.options(), 0L, LocalDateTime.now().plusDays(2));
-            eventPublisher.publishEvent(new AutoPollCreatedEvent(this, poll));
+            eventPublisher.publishEvent(new ScheduledPollCandidateEvent(this, t.question(), t.options()));
         } catch (Exception e) {
-            log.error("Scheduled poll creation failed", e);
+            log.error("Scheduled poll candidate generation failed", e);
         }
     }
 
