@@ -10325,11 +10325,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🎮 Игра: <b>" + escape(quest.getGameName()) + "</b>\n"
                 + "⚙️ Способ: " + methodLabel + "\n"
                 + "🏆 Награда: +" + quest.getRewardXp() + " XP, +" + quest.getRewardCoins() + " EXC\n"
-                + "📅 Засчитано: <b>" + submission.getUpdatedAt().format(DATE_TIME_FORMATTER) + "</b>\n\n"
-                + "ℹ️ Действие не требуется — просто для информации.";
+                + "📅 Засчитано: <b>" + submission.getUpdatedAt().format(DATE_TIME_FORMATTER) + "</b>";
         for (Long recipient : adminService.strictModeratorIds()) {
             try {
-                sendText(recipient, text, null);
+                // Превью веб-страницы отключено намеренно: ссылка на профиль игрока (playerLink)
+                // может показать чужеродный/подставной preview с чужого t.me-профиля (замечено
+                // 2026-09-02 — со ссылки на аккаунт игрока подтягивалась карточка с посторонней
+                // ссылкой telegra.ph, похожей на фишинг). Обычный sendText() такой флаг не даёт.
+                SendMessage msg = new SendMessage();
+                msg.setChatId(recipient.toString());
+                msg.setText(text);
+                msg.setParseMode("HTML");
+                msg.setDisableWebPagePreview(true);
+                execute(msg);
             } catch (Exception e) {
                 log.warn("Failed to notify moderator {} about auto-approved submission {}", recipient, submission.getId(), e);
             }
