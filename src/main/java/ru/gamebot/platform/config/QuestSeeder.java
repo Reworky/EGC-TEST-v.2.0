@@ -73,7 +73,7 @@ public class QuestSeeder implements CommandLineRunner {
         gameCatalogService.setDifficultyMode("Brawl Stars", "FLAT", 2000L, 50);
 
         Set<String> keepBsTitles = Set.of(
-                "Сразись в бою 6 раз",
+                "Сразись в бою 8 раз",
                 "Выиграй бой 9 раз",
                 "Воспользуйся кнопкой «Играть снова» 10 раз",
                 "Набери 80 трофеев",
@@ -122,8 +122,11 @@ public class QuestSeeder implements CommandLineRunner {
                 + "награда зачислится сама после выполнения условия.";
 
         // Квесты дня (простые)
-        seedFlat("Сразись в бою 6 раз", "Brawl Stars", "Mobile", 5, "5 дней", 50, 2000,
-                "Проведи 6 боёв в любом режиме Brawl Stars — победа не обязательна.",
+        // Переименовано 6->8 раз (2026-09-02, экономика/удержание) — через updateQuest (не seedFlat),
+        // чтобы сохранить ID квеста и не оборвать прогресс уже взявших его игроков (см. feedback про
+        // keepBsTitles: seedFlat с новым title создал бы дубликат вместо переименования старой записи).
+        updateQuest("Сразись в бою 6 раз", "Brawl Stars", "Сразись в бою 8 раз", null, "Mobile", 5, "5 дней", 50, 2000,
+                "Проведи 8 боёв в любом режиме Brawl Stars — победа не обязательна.",
                 "Играй в любом режиме — победа не обязательна. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
                 bsAutoReq);
 
@@ -303,7 +306,7 @@ public class QuestSeeder implements CommandLineRunner {
         // самом battle для Showdown). Бойцы/режимы сверены с актуальными скриншотами внутриигровых
         // квестов пользователя (2026-08-30) — два квеста с неопознанными бойцами (Наджия, Старр Нова,
         // видимо новые бойцы после даты обучения модели) переименованы на подтверждённые актуальные тройки.
-        setBrawlVerify("Сразись в бою 6 раз", BrawlVerifyType.BATTLES, 6, false, false, false, null, null);
+        setBrawlVerify("Сразись в бою 8 раз", BrawlVerifyType.BATTLES, 8, false, false, false, null, null);
         setBrawlVerify("Выиграй бой 9 раз", BrawlVerifyType.BATTLES, 9, true, false, false, null, null);
         setBrawlVerify("Набери 80 трофеев", BrawlVerifyType.TROPHIES, 80, false, false, false, null, null);
         setBrawlVerify("Выиграй бой 5 раз в ранговом режиме", BrawlVerifyType.BATTLES, 5, true, true, false, null, null);
