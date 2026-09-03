@@ -836,6 +836,17 @@ public class QuestSeeder implements CommandLineRunner {
                 "Атакуй в Строительной Базе и набирай кубки за победы. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
                 clashAutoReq);
 
+        // Короткие подписи для кнопок в списке квестов (см. Quest.shortLabel / sendQuestList).
+        setShortLabel("Выиграй 3 атаки в мультиплеере", "Clash of Clans", "Победа×3: Мультиплеер");
+        setShortLabel("Собери 25 000 золота или эликсира за день", "Clash of Clans", "25000 золота/эликсир/день");
+        setShortLabel("Улучши Ратушу до следующего уровня", "Clash of Clans", "Ратуша +1 уровень");
+        setShortLabel("Набери 80 трофеев", "Clash of Clans", "80 трофеев");
+        setShortLabel("Заработай 10 звёзд в Клановых войнах", "Clash of Clans", "10 звёзд в КВ");
+        setShortLabel("Задонать 300 войск клану", "Clash of Clans", "Донат 300 войск");
+        setShortLabel("Успешно защитись 3 раза", "Clash of Clans", "3 защиты");
+        setShortLabel("Повысь уровень персонажа на 2", "Clash of Clans", "Герой +2 уровня");
+        setShortLabel("Набери 80 кубков в Строительной Базе", "Clash of Clans", "80 кубков (Стройбаза)");
+
         // ── Clash of Clans: убираем деление на сложность — 50 XP / 2000 EXC каждому, как у Brawl Stars.
         // seed()/updateQuest() либо пропускают уже существующие квесты, либо (byNewTitle) обновляют только
         // rewardXp/rewardCoins, но не category — поэтому category=null форсим отдельно, тем же
@@ -1098,6 +1109,15 @@ public class QuestSeeder implements CommandLineRunner {
                 "Задонать суммарно 100 и более карт участникам своего клана — прогресс считается автоматически.",
                 "Отвечай на запросы карт в клановом чате. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
                 crAutoReq);
+
+        // Короткие подписи для кнопок в списке квестов (см. Quest.shortLabel / sendQuestList).
+        setShortLabel("Победи в 3 боях в Арене", "Clash Royale", "Победа×3: Арена");
+        setShortLabel("Победи 5 раз в Арене", "Clash Royale", "Победа×5: Арена");
+        setShortLabel("Набери 3 Короны за один бой", "Clash Royale", "3 короны×2 боя");
+        setShortLabel("Достигни 5 000 Кубков", "Clash Royale", "5000 кубков");
+        setShortLabel("Победи 20 раз в Клановых войнах за сезон", "Clash Royale", "Победа×20: Войны сезона");
+        setShortLabel("Сыграй 5 боёв", "Clash Royale", "5 боёв");
+        setShortLabel("Задонать 100 карт клану", "Clash Royale", "Донат 100 карт");
 
         // ── Clash Royale: скрыть неавтоматизированные квесты (по аналогии с Brawl Stars/Clash of Clans) ──
         // API не даёт: уровень произвольной карты (нужен разбор карточной коллекции), победы конкретно в
