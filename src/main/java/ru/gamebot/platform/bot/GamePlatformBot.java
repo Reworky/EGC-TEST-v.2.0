@@ -3386,18 +3386,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         quests.sort((a, b) -> a.getTitle().compareToIgnoreCase(b.getTitle()));
 
+        boolean useLabels = quests.stream().allMatch(q -> q.getShortLabel() != null && !q.getShortLabel().isBlank());
+
         String title = category == null ? gameName : gameName + " • " + category;
         StringBuilder listBuilder = new StringBuilder();
         List<InlineKeyboardButton> openButtons = new ArrayList<>();
         for (int i = 0; i < quests.size(); i++) {
             Quest quest = quests.get(i);
-            listBuilder.append(i + 1).append(". ").append(escape(quest.getTitle())).append("\n");
-            openButtons.add(keyboardFactory.callback(
-                    String.valueOf(i + 1),
-                    "quest:view:" + encodeGameToken(gameName) + ":" + categoryToken(category) + ":" + quest.getId()
-            ));
+            String callback = "quest:view:" + encodeGameToken(gameName) + ":" + categoryToken(category) + ":" + quest.getId();
+            if (useLabels) {
+                openButtons.add(keyboardFactory.callback(quest.getShortLabel(), callback));
+            } else {
+                listBuilder.append(i + 1).append(". ").append(escape(quest.getTitle())).append("\n");
+                openButtons.add(keyboardFactory.callback(String.valueOf(i + 1), callback));
+            }
         }
-        InlineKeyboardMarkup keyboard = numberedGridWithBackMenu(openButtons, "⬅️ Назад", backData);
+        // С короткими подписями кнопки самодостаточны (видно суть квеста сразу) — раскладываем
+        // по одной в ряд для читаемости вместо тесной цифровой сетки.
+        InlineKeyboardMarkup keyboard = useLabels
+                ? verticalWithBackMenu(openButtons, "⬅️ Назад", backData)
+                : numberedGridWithBackMenu(openButtons, "⬅️ Назад", backData);
 
         // Photo caption has a 1024-char Telegram limit that a long quest list easily exceeds —
         // send the banner on its own (short caption, no keyboard) and the full list as a separate message.
@@ -3406,11 +3414,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String listText;
         if (photoFileId.isPresent()) {
             sendPhotoCaption(user.getTelegramId(), photoFileId.get(), "<b>" + escape(title) + "</b>", null);
-            listText = "Откройте карточку по номеру, чтобы увидеть награду и условия прохождения.\n\n" + listBuilder;
+            listText = useLabels
+                    ? "Нажмите на квест, чтобы увидеть награду и условия прохождения."
+                    : "Откройте карточку по номеру, чтобы увидеть награду и условия прохождения.\n\n" + listBuilder;
         } else {
-            listText = "<b>" + escape(title) + "</b>\n\n"
-                    + "Откройте карточку по номеру, чтобы увидеть награду и условия прохождения.\n\n"
-                    + listBuilder;
+            listText = useLabels
+                    ? "<b>" + escape(title) + "</b>\n\nНажмите на квест, чтобы увидеть награду и условия прохождения."
+                    : "<b>" + escape(title) + "</b>\n\n"
+                        + "Откройте карточку по номеру, чтобы увидеть награду и условия прохождения.\n\n"
+                        + listBuilder;
         }
         sendText(user.getTelegramId(), listText, keyboard);
     }

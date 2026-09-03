@@ -325,6 +325,27 @@ public class QuestSeeder implements CommandLineRunner {
         setBrawlVerify("Выиграй бой 5 раз в режиме «Броулбол» или «Любое столкновение»", BrawlVerifyType.BATTLES, 5, true, false, false, null, null);
         setBrawlVerify("Выиграй бой 5 раз в режиме «Любое столкновение» или «Баскетбол»", BrawlVerifyType.BATTLES, 5, true, false, false, null, null);
 
+        // Короткие подписи для кнопок в списке квестов (вместо порядкового номера) — полные названия
+        // с перечислением бойцов/режимов слишком длинные для кнопки (см. sendQuestList в GamePlatformBot).
+        setShortLabel("Сразись в бою 8 раз", "Brawl Stars", "Сразись 8 раз");
+        setShortLabel("Выиграй бой 9 раз", "Brawl Stars", "Победа×9");
+        setShortLabel("Набери 80 трофеев", "Brawl Stars", "80 трофеев");
+        setShortLabel("Выиграй бой 5 раз в ранговом режиме", "Brawl Stars", "Победа×5: Ранговый режим");
+        setShortLabel("Сыграй 5 матчей в команде", "Brawl Stars", "5 матчей в команде");
+        setShortLabel("Выиграй бой 15 раз с бойцом Эль Примо, Дэррил или Эдгар", "Brawl Stars", "Победа×15: Примо/Дэррил/Эдгар");
+        setShortLabel("Выиграй бой 5 раз с бойцом Эль Примо, Дэррил или Эдгар", "Brawl Stars", "Победа×5: Примо/Дэррил/Эдгар");
+        setShortLabel("Выиграй бой 8 раз с бойцом Шелли, Нита или Дэррил", "Brawl Stars", "Победа×8: Шелли/Нита/Дэррил");
+        setShortLabel("Выиграй бой 10 раз с бойцом Шелли, Эль Примо или Эдгар", "Brawl Stars", "Победа×10: Шелли/Примо/Эдгар");
+        setShortLabel("Выиграй бой 5 раз с бойцом Шелли, Эль Примо или Эдгар", "Brawl Stars", "Победа×5: Шелли/Примо/Эдгар");
+        setShortLabel("Выиграй бой 5 раз с бойцом Гром, Перл или Ларри и Лори", "Brawl Stars", "Победа×5: Гром/Перл/Ларри-Лори");
+        setShortLabel("Выиграй бой 5 раз с бойцом Шелли, Нита или Дэррил", "Brawl Stars", "Победа×5: Шелли/Нита/Дэррил");
+        setShortLabel("Выиграй бой 5 раз в режиме «Захват кристаллов» или «Любое столкновение»", "Brawl Stars", "Победа×5: Кристаллы/Любое");
+        setShortLabel("Выиграй бой 15 раз в режиме «Броулбол» или «Любое столкновение»", "Brawl Stars", "Победа×15: Броулбол/Любое");
+        setShortLabel("Выиграй бой 8 раз в режиме «Любое столкновение» или «Нокаут»", "Brawl Stars", "Победа×8: Любое/Нокаут");
+        setShortLabel("Выиграй бой 15 раз в режиме «Любое столкновение» или «Горячая зона»", "Brawl Stars", "Победа×15: Любое/Гор.зона");
+        setShortLabel("Выиграй бой 5 раз в режиме «Броулбол» или «Любое столкновение»", "Brawl Stars", "Победа×5: Броулбол/Любое");
+        setShortLabel("Выиграй бой 5 раз в режиме «Любое столкновение» или «Баскетбол»", "Brawl Stars", "Победа×5: Любое/Баскетбол");
+
         // Одноразовая починка: эти 8 квестов уже переименовались на предыдущих деплоях ДО фикса
         // в updateQuest() (баг: keepBsTitles-очистка деактивировала их по старому названию раньше,
         // чем происходило само переименование) — раз переименование уже случилось, ветка "byOldTitle"
@@ -1875,5 +1896,13 @@ public class QuestSeeder implements CommandLineRunner {
             q.setActive(true);
             questRepository.save(q);
         }, () -> log.warn("[QuestSeeder] setBrawlVerify: quest not found (seedFlat must run first): '{}'", title));
+    }
+
+    /** Короткая подпись для кнопки в списке квестов (см. Quest.shortLabel / sendQuestList). */
+    private void setShortLabel(String title, String gameName, String label) {
+        questRepository.findFirstByTitleAndGameName(title, gameName).ifPresentOrElse(q -> {
+            q.setShortLabel(label);
+            questRepository.save(q);
+        }, () -> log.warn("[QuestSeeder] setShortLabel: quest not found (seedFlat must run first): '{}'", title));
     }
 }

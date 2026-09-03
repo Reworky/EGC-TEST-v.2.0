@@ -31,6 +31,10 @@ public class Quest {
     @Column(nullable = false, length = 4000)
     private String description;
 
+    /** Короткая подпись для кнопки в списке квестов — если задана, кнопка показывает её вместо
+     * порядкового номера (см. sendQuestList в GamePlatformBot). Null — прежнее поведение (номер). */
+    private String shortLabel;
+
     private String gameName;
     private String category;
     private String platform;
