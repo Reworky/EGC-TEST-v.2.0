@@ -8361,7 +8361,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             long started = userService.countByTrafficSource(ts.getCode());
             long activated = userService.countActivatedByTrafficSource(ts.getCode());
             String conv = clicks > 0 ? String.format("%.0f%%", activated * 100.0 / clicks) : "—";
-            String label = ts.getName() + " · " + clicks + " кл · " + started + " зш · " + activated + " акт · " + conv;
+            String link = "t.me/" + appProperties.getBotUsername() + "?start=src_" + ts.getCode();
+            String label = link + " · " + clicks + " кл · " + started + " зш · " + activated + " акт · " + conv;
             rows.add(List.of(keyboardFactory.callback(label, "admin:traffic:view:" + ts.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("➕ Создать источник", "admin:traffic:create")));
