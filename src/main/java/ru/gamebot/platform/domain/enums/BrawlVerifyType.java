@@ -1,3 +1,3 @@
 package ru.gamebot.platform.domain.enums;
 
-public enum BrawlVerifyType { TROPHIES, BATTLES }
+public enum BrawlVerifyType { TROPHIES, BATTLES, NEW_BRAWLER }

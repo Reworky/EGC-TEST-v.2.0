@@ -57,6 +57,26 @@ public class BrawlStarsApiService {
      * or immediately on 403 (token not authorized for this IP).
      */
     public Optional<PlayerInfo> fetchPlayer(String rawTag) throws BrawlStarsTransientException {
+        String normalizedTag = normalizeTag(rawTag);
+        return fetchPlayerNode(rawTag).map(node -> new PlayerInfo(
+                node.path("tag").asText("#" + normalizedTag),
+                node.path("name").asText(""),
+                node.path("trophies").asInt(0)));
+    }
+
+    /** NEW_BRAWLER: имена всех бойцов, которыми игрок уже владеет (поле "brawlers" в ответе players/{tag}). */
+    public java.util.Set<String> fetchOwnedBrawlerNames(String rawTag) throws BrawlStarsTransientException {
+        Optional<JsonNode> node = fetchPlayerNode(rawTag);
+        if (node.isEmpty()) return java.util.Set.of();
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (JsonNode b : node.get().path("brawlers")) {
+            String n = b.path("name").asText(null);
+            if (n != null) names.add(n);
+        }
+        return names;
+    }
+
+    private Optional<JsonNode> fetchPlayerNode(String rawTag) throws BrawlStarsTransientException {
         if (!enabled) {
             throw new IllegalStateException("BrawlStarsApiService is disabled (no API token configured)");
         }
@@ -73,11 +93,7 @@ public class BrawlStarsApiService {
                 HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
 
                 if (resp.statusCode() == 200) {
-                    JsonNode node = objectMapper.readTree(resp.body());
-                    return Optional.of(new PlayerInfo(
-                            node.path("tag").asText("#" + normalizedTag),
-                            node.path("name").asText(""),
-                            node.path("trophies").asInt(0)));
+                    return Optional.of(objectMapper.readTree(resp.body()));
                 }
                 if (resp.statusCode() == 404 || resp.statusCode() == 400) {
                     return Optional.empty();

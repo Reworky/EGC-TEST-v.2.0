@@ -122,6 +122,11 @@ public class QuestSubmission {
     @Column(columnDefinition = "integer default 0")
     private int brawlProgressCount;
 
+    /** NEW_BRAWLER: имена бойцов игрока (через запятую) на момент первого опроса после взятия квеста.
+     * null = ещё не захвачено. Квест засчитывается, когда в текущем списке появляется имя, которого тут нет. */
+    @Column(length = 2000)
+    private String brawlBaselineBrawlers;
+
     /** ATTACK_WINS: attackWins, RESOURCES: золото, TOWN_HALL: townHallLevel — на момент первого опроса после взятия. null = ещё не захвачено. */
     private Integer clashBaselineValue;
 

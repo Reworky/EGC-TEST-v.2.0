@@ -3395,7 +3395,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             Quest quest = quests.get(i);
             String callback = "quest:view:" + encodeGameToken(gameName) + ":" + categoryToken(category) + ":" + quest.getId();
             if (useLabels) {
-                openButtons.add(keyboardFactory.callback("🎯 " + quest.getShortLabel(), callback));
+                // Квесты с явным маркером новизны (🔥 Новое) не дублируют его стандартным 🎯.
+                String label = quest.getShortLabel();
+                String prefix = label.startsWith("🔥") ? "" : "🎯 ";
+                openButtons.add(keyboardFactory.callback(prefix + label, callback));
             } else {
                 listBuilder.append(i + 1).append(". ").append(escape(quest.getTitle())).append("\n");
                 openButtons.add(keyboardFactory.callback(String.valueOf(i + 1), callback));

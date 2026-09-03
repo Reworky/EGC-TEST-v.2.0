@@ -78,10 +78,28 @@ public class BrawlQuestVerificationService {
     private void checkOne(QuestSubmission submission) throws BrawlStarsApiService.BrawlStarsTransientException {
         Quest quest = submission.getQuest();
         String tag = submission.getUser().getBrawlStarsTag();
-        if (quest.getBrawlVerifyType() == BrawlVerifyType.TROPHIES) {
-            checkTrophies(submission, quest, tag);
-        } else {
-            checkBattles(submission, quest, tag);
+        switch (quest.getBrawlVerifyType()) {
+            case TROPHIES -> checkTrophies(submission, quest, tag);
+            case NEW_BRAWLER -> checkNewBrawler(submission, tag);
+            default -> checkBattles(submission, quest, tag);
+        }
+    }
+
+    /** Засчитывается, когда в списке бойцов игрока появляется имя, которого не было на момент первого опроса —
+     * API не показывает, ЧЕРЕЗ ЧТО именно получен боец (ивент/Trophy Road/Starr Drop/покупка), поэтому
+     * проверяем сам факт появления нового бойца в коллекции, а не конкретный способ его получения. */
+    private void checkNewBrawler(QuestSubmission submission, String tag) throws BrawlStarsApiService.BrawlStarsTransientException {
+        java.util.Set<String> current = brawlStarsApiService.fetchOwnedBrawlerNames(tag);
+        if (current.isEmpty()) return; // тег невалиден или временная ошибка API — пропускаем цикл
+        if (submission.getBrawlBaselineBrawlers() == null) {
+            submission.setBrawlBaselineBrawlers(String.join(",", current));
+            questSubmissionRepository.save(submission);
+            return; // первый опрос только фиксирует базу, ничего не засчитывает
+        }
+        java.util.Set<String> baseline = java.util.Set.of(submission.getBrawlBaselineBrawlers().split(","));
+        boolean hasNew = current.stream().anyMatch(name -> !baseline.contains(name));
+        if (hasNew) {
+            completeSubmission(submission);
         }
     }
 
