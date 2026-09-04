@@ -748,6 +748,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if ("quests:section:ads".equals(data)) {
+            sendAdsList(user);
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if (data.startsWith("quests:game:")) {
             sendQuestCategories(user, decodeGameToken(data.substring("quests:game:".length())));
             answer(callbackQuery.getId(), "Квесты обновлены");
@@ -3244,7 +3249,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "quests:section:gaming")));
         rows.add(List.of(keyboardFactory.callback("💼 Спонсорские квесты", "quests:section:sponsored")));
         rows.add(List.of(keyboardFactory.callback("🤳 UGC", "quests:section:ugc")));
-        rows.add(List.of(keyboardFactory.callback(watchAdLabel, "menu:watchad")));
+        rows.add(List.of(keyboardFactory.callback(watchAdLabel, "quests:section:ads")));
         rows.add(List.of(keyboardFactory.callback("📂 Мои квесты", "menu:myquests")));
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(),
@@ -3292,6 +3297,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendUgcQuestList(AppUser user) {
         sendQuestList(user, "UGC", null, "menu:quests");
+    }
+
+    /** Подраздел «Реклама» в Квестах — список доступных источников рекламы за EXC. Пока один источник
+     * (AdsGram bot-блок), но сделан как список, а не прямая кнопка — задел на добавление других сетей. */
+    private void sendAdsList(AppUser user) {
+        int remaining = userService.getAdRewardsRemainingToday(user);
+        String label = remaining > 0 ? "🎬 AdsGram — реклама в боте 🔔" : "🎬 AdsGram — реклама в боте";
+        List<InlineKeyboardButton> buttons = new ArrayList<>(List.of(
+                keyboardFactory.callback(label, "menu:watchad")));
+        sendText(user.getTelegramId(),
+                "📺 <b>Реклама</b>\n\nПосмотри рекламу — получи EXC. Осталось показов сегодня: <b>" + remaining + "</b>.",
+                verticalWithBackMenu(buttons, "⬅️ Назад", "menu:quests"));
     }
 
     private void sendQuestCategories(AppUser user) {
