@@ -52,6 +52,9 @@ public class PostbackController {
     @Value("${app.adsgram-reward-token:}")
     private String adsgramRewardToken;
 
+    @Value("${app.telega-reward-token:}")
+    private String telegaRewardToken;
+
     @GetMapping("/actionpay")
     public ResponseEntity<String> actionPay(
             @RequestParam(required = false) String token,
@@ -115,7 +118,7 @@ public class PostbackController {
     public ResponseEntity<String> adsgramReward(@RequestParam Map<String, String> params) {
         if (!isValidToken(params.get("token"), adsgramRewardToken)) {
             log.warn("[AdsgramReward] Postback rejected: bad token");
-            return ResponseEntity.status(403).body(adsgramRewardPage(false));
+            return ResponseEntity.status(403).body(rewardPage(false));
         }
         log.info("[AdsgramReward] incoming params: {}", params);
 
@@ -124,7 +127,27 @@ public class PostbackController {
         if (!granted) {
             log.warn("[AdsgramReward] Reward not granted (telegramId={}, params={})", telegramId, params);
         }
-        return ResponseEntity.ok(adsgramRewardPage(granted));
+        return ResponseEntity.ok(rewardPage(granted));
+    }
+
+    /** Тот же паттерн, что и adsgramReward — Telega.io зовёт GET на этот URL при наступлении REWARD-события
+     * в мини-аппе, [userid] в примере из их формы (docs всплывающая подсказка "What is a Reward URL?")
+     * заменяется реальным Telegram ID. Реиспользует тот же UserService.claimPendingAdReward/markAdRequested,
+     * что и бот-реклама AdsGram — источник рекламы (какая именно сеть) для лимита/защиты не важен. */
+    @GetMapping(value = "/telega", produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> telegaReward(@RequestParam Map<String, String> params) {
+        if (!isValidToken(params.get("token"), telegaRewardToken)) {
+            log.warn("[TelegaReward] Postback rejected: bad token");
+            return ResponseEntity.status(403).body(rewardPage(false));
+        }
+        log.info("[TelegaReward] incoming params: {}", params);
+
+        Long telegramId = parseFirstLong(params, "userid", "user_id", "tgid", "uid");
+        boolean granted = telegramId != null && userService.claimPendingAdReward(telegramId);
+        if (!granted) {
+            log.warn("[TelegaReward] Reward not granted (telegramId={}, params={})", telegramId, params);
+        }
+        return ResponseEntity.ok(rewardPage(granted));
     }
 
     private Long parseFirstLong(Map<String, String> params, String... keys) {
@@ -141,7 +164,7 @@ public class PostbackController {
         return null;
     }
 
-    private String adsgramRewardPage(boolean granted) {
+    private String rewardPage(boolean granted) {
         String message = granted
                 ? "✅ Награда начислена!"
                 : "Не удалось начислить награду — попробуйте посмотреть рекламу заново.";
