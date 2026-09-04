@@ -7410,7 +7410,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * Публикация — только после одобрения администратора (см. {@link #handleAdminFeedAction}). */
     private String buildWithdrawalFeedText(RewardRequest req) {
         return "💸 Игрок <b>" + escape(req.getUser().getNickname()) + "</b> вывел <b>"
-                + req.getRewardItem().getPriceCoins() + " EXC</b>!";
+                + req.getRewardItem().getPriceCoins() + " EXC</b>!\n\n"
+                + "Больше отзывов: @egc_payouts";
     }
 
     private void postWithdrawalToActivityFeed(RewardRequest req) {
