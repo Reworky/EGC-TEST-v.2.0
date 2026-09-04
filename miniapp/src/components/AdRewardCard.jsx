@@ -6,6 +6,14 @@ import { useAdsgram } from '../hooks/useAdsgram';
 const ADSGRAM_BLOCK_ID = import.meta.env.VITE_ADSGRAM_BLOCK_ID;
 const ADSGRAM_BLOCK_ID_FALLBACK = import.meta.env.VITE_ADSGRAM_BLOCK_ID_FALLBACK;
 
+/** Оба блока по очереди пробуются как равноправные "основные" — порядок случайно перемешивается
+ * при каждом открытии карточки, а не всегда 45630 первым. Это даёт им сопоставимый объём показов
+ * для честного сравнения CPM (второй блок в цепочке остаётся подстраховкой на случай ошибки первого). */
+function pickBlockOrder() {
+  const ids = [ADSGRAM_BLOCK_ID, ADSGRAM_BLOCK_ID_FALLBACK].filter(Boolean);
+  return Math.random() < 0.5 ? ids : ids.slice().reverse();
+}
+
 /** Карточка "Смотреть рекламу" — 4-й раздел на странице Квестов (см. QuestsPage), оформлена как
  * обычная quest-card для единообразия с соседними разделами. Бот открывает мини-апп webApp-кнопкой
  * прямо на /quests?section=ads, чтобы этот раздел был сразу развёрнут. */
@@ -17,8 +25,9 @@ export default function AdRewardCard() {
 
   useEffect(() => { getAdStatus().then(s => setRemaining(s.remainingToday)).catch(() => {}); }, []);
 
+  const [blockOrder] = useState(pickBlockOrder);
   const showAd = useAdsgram({
-    blockIds: [ADSGRAM_BLOCK_ID, ADSGRAM_BLOCK_ID_FALLBACK],
+    blockIds: blockOrder,
     onReward: () => {
       setMessage('✅ Награда начислена!');
       playParticles?.('streakBonus', 3000);
