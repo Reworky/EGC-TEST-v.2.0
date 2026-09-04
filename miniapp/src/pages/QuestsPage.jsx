@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { getQuests, getSponsoredQuests, getGames, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard } from '../api/client';
 import { useLottie } from '../components/LottieContext';
 import { useParticles } from '../components/ParticlesContext';
+import AdRewardCard from '../components/AdRewardCard';
 import './QuestsPage.css';
 
 const CATEGORY_ORDER = ['Лёгкие', 'Средние', 'Сложные'];
@@ -321,7 +322,7 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged }) {
   const [ugcLoading, setUgcLoading] = useState(false);
   const [sponsoredQuests, setSponsoredQuests] = useState([]);
   const [sponsoredLoading, setSponsoredLoading] = useState(false);
-  const [openSections, setOpenSections] = useState({ gaming: false, sponsored: false, ugc: false });
+  const [openSections, setOpenSections] = useState({ gaming: false, sponsored: false, ugc: false, ads: false });
 
   useEffect(() => {
     getGames().then(g => {
@@ -437,6 +438,18 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged }) {
               </div>
             )}
           </>
+        )}
+      </div>
+
+      <div className="quest-section-group">
+        <button className="quest-section-header" onClick={() => toggleSection('ads')}>
+          <span>🎬 Забери халявные EXC</span>
+          <span className={`quest-section-chevron ${openSections.ads ? 'open' : ''}`}>›</span>
+        </button>
+        {openSections.ads && (
+          <div className="category-section">
+            <AdRewardCard />
+          </div>
         )}
       </div>
     </>
