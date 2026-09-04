@@ -2484,12 +2484,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String dailyLabel = userService.isDailyBonusAvailable(user)
                 ? "🎁 Забрать ежедневный бонус 🔔"
                 : "✅ Бонус за вход получен";
-        int adsLeft = userService.getAdRewardsRemainingToday(user);
-        String watchAdLabel = adsLeft > 0 ? "🎬 Смотреть рекламу 🔔" : "🎬 Смотреть рекламу";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
                 List.of(keyboardFactory.callback(dailyLabel, "menu:daily")),
-                List.of(keyboardFactory.callback(watchAdLabel, "menu:watchad")),
                 List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
