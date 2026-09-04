@@ -3299,13 +3299,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendQuestList(user, "UGC", null, "menu:quests");
     }
 
-    /** Подраздел «Реклама» в Квестах — список доступных источников рекламы за EXC. Пока один источник
-     * (AdsGram bot-блок), но сделан как список, а не прямая кнопка — задел на добавление других сетей. */
+    /** Подраздел «Реклама» в Квестах — список доступных источников рекламы за EXC. Два источника:
+     * бот-реклама (AdsGram bot-блок, прямо в чате) и баннер в мини-аппе (AdsGram Reward-блок 45630,
+     * ранее жил только в Кошельке мини-аппа — перенесён сюда как второй пункт списка). */
     private void sendAdsList(AppUser user) {
         int remaining = userService.getAdRewardsRemainingToday(user);
         String label = remaining > 0 ? "🎬 Реклама в боте 🔔" : "🎬 Реклама в боте";
         List<InlineKeyboardButton> buttons = new ArrayList<>(List.of(
-                keyboardFactory.callback(label, "menu:watchad")));
+                keyboardFactory.callback(label, "menu:watchad"),
+                keyboardFactory.webApp("🎬 Реклама в приложении", "https://experience-gaming-club.pages.dev/wallet")));
         sendText(user.getTelegramId(),
                 "📺 <b>Реклама</b>\n\nПосмотри рекламу — получи EXC. Осталось показов сегодня: <b>" + remaining + "</b>.",
                 verticalWithBackMenu(buttons, "⬅️ Назад", "menu:quests"));
