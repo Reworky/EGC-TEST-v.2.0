@@ -1,71 +1,10 @@
 import { useEffect, useState } from 'react';
-import { getWallet, claimDailyBonus, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone, invalidateCache, getAdStatus, requestAdWatch } from '../api/client';
+import { getWallet, claimDailyBonus, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone, invalidateCache } from '../api/client';
 import BackButton from '../components/BackButton';
 import BorderBeamCard from '../components/BorderBeamCard';
 import ShimmerButton from '../components/ShimmerButton';
 import AnimatedNumber from '../components/AnimatedNumber';
 import { useParticles } from '../components/ParticlesContext';
-import { useAdsgram } from '../hooks/useAdsgram';
-
-const ADSGRAM_BLOCK_ID = import.meta.env.VITE_ADSGRAM_BLOCK_ID;
-
-function AdRewardBlock({ onChanged }) {
-  const [remaining, setRemaining] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState(null);
-  const playParticles = useParticles();
-
-  useEffect(() => { getAdStatus().then(s => setRemaining(s.remainingToday)).catch(() => {}); }, []);
-
-  const showAd = useAdsgram({
-    blockId: ADSGRAM_BLOCK_ID,
-    onReward: () => {
-      setMessage('✅ Награда начислена!');
-      playParticles?.('streakBonus', 3000);
-      setTimeout(() => {
-        invalidateCache('wallet');
-        onChanged();
-        getAdStatus().then(s => setRemaining(s.remainingToday)).catch(() => {});
-      }, 1500);
-      setBusy(false);
-    },
-    onError: () => {
-      setMessage('Не удалось показать рекламу, попробуйте ещё раз позже.');
-      setBusy(false);
-    },
-  });
-
-  async function handleClick() {
-    setBusy(true);
-    setMessage(null);
-    try {
-      await requestAdWatch();
-      showAd();
-    } catch {
-      setMessage('Сейчас нет доступных показов, загляните позже.');
-      setBusy(false);
-    }
-  }
-
-  if (!ADSGRAM_BLOCK_ID || remaining === null) return null;
-
-  return (
-    <div className="ref-link-card">
-      <div className="ref-link-label">Смотреть рекламу</div>
-      {remaining > 0 ? (
-        <>
-          <p className="shop-desc"><i className="ti ti-video"></i> +30 EXC за просмотр · Осталось сегодня: {remaining}/5</p>
-          <ShimmerButton disabled={busy} onClick={handleClick}>
-            {busy ? 'Секунду...' : <><i className="ti ti-player-play" style={{ marginRight: 6 }} /> Смотреть</>}
-          </ShimmerButton>
-        </>
-      ) : (
-        <p className="shop-desc"><i className="ti ti-circle-check"></i> Лимит показов на сегодня исчерпан. Возвращайтесь завтра.</p>
-      )}
-      {message && <div className="quest-message">{message}</div>}
-    </div>
-  );
-}
 import './QuestsPage.css';
 import './ShopPage.css';
 import './ReferralsPage.css';
@@ -186,9 +125,6 @@ function BalanceView({ wallet, onChanged }) {
         )}
         {message && <div className="quest-message">{message}</div>}
       </div>
-
-      <AdRewardBlock onChanged={onChanged} />
-
     </>
   );
 }

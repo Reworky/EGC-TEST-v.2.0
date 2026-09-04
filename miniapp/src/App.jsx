@@ -13,6 +13,7 @@ const ShopPage       = lazy(() => import('./pages/ShopPage'));
 const LeaderboardPage= lazy(() => import('./pages/LeaderboardPage'));
 const ReferralsPage  = lazy(() => import('./pages/ReferralsPage'));
 const WalletPage     = lazy(() => import('./pages/WalletPage'));
+const AdsPage        = lazy(() => import('./pages/AdsPage'));
 const PollsPage      = lazy(() => import('./pages/PollsPage'));
 const SupportPage    = lazy(() => import('./pages/SupportPage'));
 const BattlePassPage = lazy(() => import('./pages/BattlePassPage'));
@@ -138,6 +139,7 @@ export default function App() {
           <Route path="/top" element={<LeaderboardPage />} />
           <Route path="/referrals" element={<ReferralsPage />} />
           <Route path="/wallet" element={<WalletPage />} />
+          <Route path="/ads" element={<AdsPage />} />
           <Route path="/polls" element={<PollsPage />} />
           <Route path="/support" element={<SupportPage />} />
           <Route path="/battlepass" element={<BattlePassPage />} />
