@@ -6,34 +6,22 @@ import { useAdsgram } from '../hooks/useAdsgram';
 const ADSGRAM_BLOCK_ID = import.meta.env.VITE_ADSGRAM_BLOCK_ID;
 const ADSGRAM_BLOCK_ID_FALLBACK = import.meta.env.VITE_ADSGRAM_BLOCK_ID_FALLBACK;
 
-/** Оба блока по очереди пробуются как равноправные "основные" — порядок случайно перемешивается
- * при каждом открытии карточки, а не всегда 45630 первым. Это даёт им сопоставимый объём показов
- * для честного сравнения CPM (второй блок в цепочке остаётся подстраховкой на случай ошибки первого). */
-function pickBlockOrder() {
-  const ids = [ADSGRAM_BLOCK_ID, ADSGRAM_BLOCK_ID_FALLBACK].filter(Boolean);
-  return Math.random() < 0.5 ? ids : ids.slice().reverse();
-}
-
-/** Карточка "Смотреть рекламу" — 4-й раздел на странице Квестов (см. QuestsPage), оформлена как
- * обычная quest-card для единообразия с соседними разделами. Бот открывает мини-апп webApp-кнопкой
- * прямо на /quests?section=ads, чтобы этот раздел был сразу развёрнут. */
-export default function AdRewardCard() {
-  const [remaining, setRemaining] = useState(null);
+/** Один рекламный блок — своя кнопка, свой AdsGram Unit, без переключения на другой при неудаче.
+ * Так у обеих плашек набирается сопоставимый и честно сравнимый объём показов/CPM в кабинете AdsGram.
+ * Лимит показов в день (5) общий на аккаунт — remaining/onWatched приходят от родителя (AdRewardCard). */
+function AdSlot({ blockId, label, remaining, onWatched }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const playParticles = useParticles();
 
-  useEffect(() => { getAdStatus().then(s => setRemaining(s.remainingToday)).catch(() => {}); }, []);
-
-  const [blockOrder] = useState(pickBlockOrder);
   const showAd = useAdsgram({
-    blockIds: blockOrder,
+    blockIds: [blockId],
     onReward: () => {
       setMessage('✅ Награда начислена!');
       playParticles?.('streakBonus', 3000);
       setTimeout(() => {
         invalidateCache('wallet');
-        getAdStatus().then(s => setRemaining(s.remainingToday)).catch(() => {});
+        onWatched();
       }, 1500);
       setBusy(false);
     },
@@ -58,9 +46,9 @@ export default function AdRewardCard() {
   const available = remaining !== null && remaining > 0;
 
   return (
-    <div className="quest-card q-ads">
+    <div className="quest-card q-ads" style={{ marginBottom: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span className="quest-cat-badge ads">🎬 Реклама</span>
+        <span className="quest-cat-badge ads">🎬 {label}</span>
       </div>
 
       <div className="quest-top">
@@ -71,11 +59,7 @@ export default function AdRewardCard() {
       </div>
 
       <div className="quest-meta" style={{ marginBottom: 12 }}>
-        {remaining === null ? (
-          <span>Загрузка...</span>
-        ) : (
-          <span>⏱ Осталось сегодня: {remaining}/5</span>
-        )}
+        {remaining === null ? <span>Загрузка...</span> : <span>⏱ Осталось сегодня: {remaining}/5</span>}
       </div>
 
       {remaining !== null && (
@@ -91,5 +75,27 @@ export default function AdRewardCard() {
       )}
       {message && <div className="quest-message">{message}</div>}
     </div>
+  );
+}
+
+/** Два независимых рекламных блока (45630 и 46037) на отдельных кнопках — для честного сравнения
+ * CPM между ними в кабинете AdsGram (раньше один был "основным", другой почти не получал показов).
+ * Лимит на просмотры в день общий на аккаунт, поэтому remaining хранится тут и передаётся в оба слота. */
+export default function AdRewardCard() {
+  const [remaining, setRemaining] = useState(null);
+
+  function reload() {
+    getAdStatus().then(s => setRemaining(s.remainingToday)).catch(() => {});
+  }
+
+  useEffect(() => { reload(); }, []);
+
+  return (
+    <>
+      <AdSlot blockId={ADSGRAM_BLOCK_ID} label="Реклама 1" remaining={remaining} onWatched={reload} />
+      {ADSGRAM_BLOCK_ID_FALLBACK && (
+        <AdSlot blockId={ADSGRAM_BLOCK_ID_FALLBACK} label="Реклама 2" remaining={remaining} onWatched={reload} />
+      )}
+    </>
   );
 }
