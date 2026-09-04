@@ -3243,7 +3243,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendQuestGames(AppUser user) {
-        String watchAdLabel = "🎬 Смотри рекламу — получай EXC";
+        String watchAdLabel = "🎬 Забери халявные EXC";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "quests:section:gaming")));
         rows.add(List.of(keyboardFactory.callback("💼 Спонсорские квесты", "quests:section:sponsored")));
