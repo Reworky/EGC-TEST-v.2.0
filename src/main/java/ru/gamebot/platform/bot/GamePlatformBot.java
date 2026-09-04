@@ -2513,8 +2513,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             log.warn("Failed to send wallet banner", e);
             sendMenuCategory(user, "💰 <b>Кошелёк</b>", List.of(
                     List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
-                    List.of(keyboardFactory.callback(dailyLabel, "menu:daily")),
-                    List.of(keyboardFactory.callback(watchAdLabel, "menu:watchad"))
+                    List.of(keyboardFactory.callback(dailyLabel, "menu:daily"))
             ));
         }
     }
