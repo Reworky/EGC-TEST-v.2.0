@@ -3303,7 +3303,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * (AdsGram bot-блок), но сделан как список, а не прямая кнопка — задел на добавление других сетей. */
     private void sendAdsList(AppUser user) {
         int remaining = userService.getAdRewardsRemainingToday(user);
-        String label = remaining > 0 ? "🎬 AdsGram — реклама в боте 🔔" : "🎬 AdsGram — реклама в боте";
+        String label = remaining > 0 ? "🎬 Реклама в боте 🔔" : "🎬 Реклама в боте";
         List<InlineKeyboardButton> buttons = new ArrayList<>(List.of(
                 keyboardFactory.callback(label, "menu:watchad")));
         sendText(user.getTelegramId(),
