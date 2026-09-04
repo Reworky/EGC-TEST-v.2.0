@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { getAdStatus, requestAdWatch, invalidateCache } from '../api/client';
-import ShimmerButton from './ShimmerButton';
 import { useParticles } from './ParticlesContext';
 import { useAdsgram } from '../hooks/useAdsgram';
 
@@ -8,7 +7,8 @@ const ADSGRAM_BLOCK_ID = import.meta.env.VITE_ADSGRAM_BLOCK_ID;
 const ADSGRAM_BLOCK_ID_FALLBACK = import.meta.env.VITE_ADSGRAM_BLOCK_ID_FALLBACK;
 
 /** Карточка "Смотреть рекламу" — переиспользуется на отдельной странице /ads (открывается из бота
- * webApp-кнопкой) и прямо внутри Квестов мини-аппа (см. QuestsPage). */
+ * webApp-кнопкой) и прямо внутри Квестов мини-аппа (см. QuestsPage), оформлена как обычная quest-card
+ * для единообразия с соседними разделами. */
 export default function AdRewardCard() {
   const [remaining, setRemaining] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -46,20 +46,39 @@ export default function AdRewardCard() {
     }
   }
 
+  const available = remaining !== null && remaining > 0;
+
   return (
-    <div className="ref-link-card">
-      <div className="ref-link-label">Смотреть рекламу</div>
-      {remaining === null ? (
-        <p className="shop-desc">Загрузка...</p>
-      ) : remaining > 0 ? (
-        <>
-          <p className="shop-desc"><i className="ti ti-video"></i> +30 EXC за просмотр · Осталось сегодня: {remaining}/5</p>
-          <ShimmerButton disabled={busy} onClick={handleClick}>
+    <div className="quest-card q-ads">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <span className="quest-cat-badge ads">🎬 Реклама</span>
+      </div>
+
+      <div className="quest-top">
+        <div className="quest-title">Посмотри рекламу — получи EXC</div>
+        <div className="quest-rewards">
+          <span className="reward-exc"><i className="ti ti-coin"></i> +30 EXC</span>
+        </div>
+      </div>
+
+      <div className="quest-meta" style={{ marginBottom: 12 }}>
+        {remaining === null ? (
+          <span>Загрузка...</span>
+        ) : (
+          <span>⏱ Осталось сегодня: {remaining}/5</span>
+        )}
+      </div>
+
+      {remaining !== null && (
+        available ? (
+          <button className="quest-btn" disabled={busy} onClick={handleClick}>
             {busy ? 'Секунду...' : <><i className="ti ti-player-play" style={{ marginRight: 6 }} /> Смотреть</>}
-          </ShimmerButton>
-        </>
-      ) : (
-        <p className="shop-desc"><i className="ti ti-circle-check"></i> Лимит показов на сегодня исчерпан. Возвращайтесь завтра.</p>
+          </button>
+        ) : (
+          <div className="quest-status quest-status-pending">
+            <i className="ti ti-circle-check"></i> Лимит показов на сегодня исчерпан. Возвращайтесь завтра.
+          </div>
+        )
       )}
       {message && <div className="quest-message">{message}</div>}
     </div>

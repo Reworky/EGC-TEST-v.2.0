@@ -116,6 +116,8 @@
 .quest-card.q-hard::before   { background: #ef5350; }
 .quest-card.q-ugc::before    { background: #7B68EE; }
 .quest-card.q-flat::before   { background: #29B6F6; }
+.quest-card.q-ads::before    { background: #f472b6; }
+.quest-card.q-ads           { cursor: default; }
 
 .quest-card:active {
   transform: scale(0.985);
@@ -199,6 +201,7 @@
 .quest-cat-badge.other     { background: rgba(123,104,238,0.15); color: #a78bfa; border: 0.5px solid rgba(123,104,238,0.3); }
 .quest-cat-badge.sponsored { background: rgba(251,191,36,0.15);  color: #fbbf24; border: 0.5px solid rgba(251,191,36,0.3); }
 .quest-cat-badge.ugc       { background: rgba(52,211,153,0.15);  color: #34d399; border: 0.5px solid rgba(52,211,153,0.3); }
+.quest-cat-badge.ads       { background: rgba(244,114,182,0.15); color: #f472b6; border: 0.5px solid rgba(244,114,182,0.3); }
 
 /* ── Quest detail (expanded) ── */
 .quest-detail {
