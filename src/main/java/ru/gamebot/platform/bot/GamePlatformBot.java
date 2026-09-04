@@ -3294,14 +3294,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendQuestList(user, "UGC", null, "menu:quests");
     }
 
-    /** Подраздел «Реклама» в Квестах — список доступных источников рекламы за EXC. Сейчас один источник:
-     * баннер в мини-аппе (AdsGram Reward-блок 45630, ранее жил только в Кошельке мини-аппа — перенесён
-     * сюда). Бот-реклама (AdsGram bot-блок, прямо в чате) убрана — платформа-бот в AdsGram ещё не
-     * прошла модерацию, кнопка была нерабочей. Вернуть через menu:watchad -> sendWatchAdOffer, когда
-     * появится рабочий ADSGRAM_API_TOKEN/ADSGRAM_BOT_BLOCK_ID. */
+    /** Подраздел «Реклама» в Квестах — список доступных источников рекламы за EXC. Два источника:
+     * баннер в мини-аппе (AdsGram Reward-блок 45630/46037, ранее жил только в Кошельке мини-аппа —
+     * перенесён сюда) и бот-реклама (AdsGram bot-блок, прямо в чате, sendWatchAdOffer). Кнопка
+     * "Реклама в боте" сейчас ошибается без рабочего ADSGRAM_API_TOKEN/ADSGRAM_BOT_BLOCK_ID (платформа
+     * ещё не прошла модерацию AdsGram) — но должна оставаться видимой: модерация AdsGram отклоняет
+     * bot-платформу, если не может найти в живом боте место размещения рекламы (см. правило
+     * "cannot be determined where exactly in the bot the ad will be placed" в docs.adsgram.ai/bots/moderation). */
     private void sendAdsList(AppUser user) {
         int remaining = userService.getAdRewardsRemainingToday(user);
+        String watchAdLabel = remaining > 0 ? "🎬 Реклама в боте 🔔" : "🎬 Реклама в боте";
         List<InlineKeyboardButton> buttons = new ArrayList<>(List.of(
+                keyboardFactory.callback(watchAdLabel, "menu:watchad"),
                 keyboardFactory.webApp("🎬 Реклама в приложении", "https://experience-gaming-club.pages.dev/quests?section=ads")));
         sendText(user.getTelegramId(),
                 "📺 <b>Реклама</b>\n\nПосмотри рекламу — получи EXC. Осталось показов сегодня: <b>" + remaining + "</b>.",
