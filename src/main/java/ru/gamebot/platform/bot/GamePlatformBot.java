@@ -3168,21 +3168,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (player == null) return;
             notifyUser(player.getTelegramId(),
                     "✅ <b>+" + event.getExcGranted() + " EXC</b> начислено за просмотр рекламы!");
-
-            String channel = appProperties.getPayoutChannelUsername();
-            if (channel != null && !channel.isBlank()) {
-                try {
-                    SendMessage msg = new SendMessage();
-                    msg.setChatId(channel);
-                    msg.setText("🎬 <b>Выплата за рекламу</b>\n\n"
-                            + "👤 " + escape(player.getNickname()) + "\n"
-                            + "🪙 +" + event.getExcGranted() + " EXC");
-                    msg.setParseMode("HTML");
-                    execute(msg);
-                } catch (TelegramApiException ex) {
-                    log.warn("Failed to post ad-reward confirmation to payout channel", ex);
-                }
-            }
         } catch (Exception e) {
             log.error("[AdsgramReward] Failed to notify about granted reward, userId={}", event.getUserId(), e);
         }
@@ -7405,8 +7390,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Публичная лента активности — крупные выводы EXC постятся в основной канал (не @egc_payouts,
      * тот зарезервирован под технические AdsGram/отзыв-уведомления). Без порога — выводов исторически
      * мало (десятки уникальных получателей за всё время), спама не будет. Найдено 2026-09-02 при
-     * разборе рекомендаций по вовлечённости канала — прецедент того же паблика ника+суммы уже есть
-     * в onAdRewardGranted, ничего нового в подходе к приватности не вводится.
+     * разборе рекомендаций по вовлечённости канала.
      * Публикация — только после одобрения администратора (см. {@link #handleAdminFeedAction}). */
     private String buildWithdrawalFeedText(RewardRequest req) {
         return "💸 Игрок <b>" + escape(req.getUser().getNickname()) + "</b> вывел <b>"
