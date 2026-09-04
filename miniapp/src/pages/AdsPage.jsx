@@ -10,6 +10,7 @@ import './ReferralsPage.css';
 import './WalletPage.css';
 
 const ADSGRAM_BLOCK_ID = import.meta.env.VITE_ADSGRAM_BLOCK_ID;
+const ADSGRAM_BLOCK_ID_FALLBACK = import.meta.env.VITE_ADSGRAM_BLOCK_ID_FALLBACK;
 
 export default function AdsPage() {
   const [remaining, setRemaining] = useState(null);
@@ -20,7 +21,7 @@ export default function AdsPage() {
   useEffect(() => { getAdStatus().then(s => setRemaining(s.remainingToday)).catch(() => {}); }, []);
 
   const showAd = useAdsgram({
-    blockId: ADSGRAM_BLOCK_ID,
+    blockIds: [ADSGRAM_BLOCK_ID, ADSGRAM_BLOCK_ID_FALLBACK],
     onReward: () => {
       setMessage('✅ Награда начислена!');
       playParticles?.('streakBonus', 3000);
