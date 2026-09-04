@@ -3306,7 +3306,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String label = remaining > 0 ? "🎬 Реклама в боте 🔔" : "🎬 Реклама в боте";
         List<InlineKeyboardButton> buttons = new ArrayList<>(List.of(
                 keyboardFactory.callback(label, "menu:watchad"),
-                keyboardFactory.webApp("🎬 Реклама в приложении", "https://experience-gaming-club.pages.dev/ads")));
+                keyboardFactory.webApp("🎬 Реклама в приложении", "https://experience-gaming-club.pages.dev/quests?section=ads")));
         sendText(user.getTelegramId(),
                 "📺 <b>Реклама</b>\n\nПосмотри рекламу — получи EXC. Осталось показов сегодня: <b>" + remaining + "</b>.",
                 verticalWithBackMenu(buttons, "⬅️ Назад", "menu:quests"));

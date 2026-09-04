@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getQuests, getSponsoredQuests, getGames, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard } from '../api/client';
 import { useLottie } from '../components/LottieContext';
 import { useParticles } from '../components/ParticlesContext';
@@ -313,7 +314,7 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
   );
 }
 
-function AllQuestsView({ expanded, details, onToggle, onDetailChanged }) {
+function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSection }) {
   const [games, setGames] = useState([]);
   const [selectedGame, setSelectedGame] = useState(null);
   const [quests, setQuests] = useState([]);
@@ -322,7 +323,9 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged }) {
   const [ugcLoading, setUgcLoading] = useState(false);
   const [sponsoredQuests, setSponsoredQuests] = useState([]);
   const [sponsoredLoading, setSponsoredLoading] = useState(false);
-  const [openSections, setOpenSections] = useState({ gaming: false, sponsored: false, ugc: false, ads: false });
+  const [openSections, setOpenSections] = useState({
+    gaming: false, sponsored: false, ugc: false, ads: initialSection === 'ads',
+  });
 
   useEffect(() => {
     getGames().then(g => {
@@ -632,6 +635,8 @@ function TournamentView() {
 }
 
 export default function QuestsPage() {
+  const [searchParams] = useSearchParams();
+  const initialSection = searchParams.get('section');
   const [view, setView] = useState('all');
   const [expanded, setExpanded] = useState(null);
   const [details, setDetails] = useState({});
@@ -668,7 +673,7 @@ export default function QuestsPage() {
         </button>
       </div>
 
-      {view === 'all' && <AllQuestsView expanded={expanded} details={details} onToggle={toggleExpand} onDetailChanged={loadDetail} />}
+      {view === 'all' && <AllQuestsView expanded={expanded} details={details} onToggle={toggleExpand} onDetailChanged={loadDetail} initialSection={initialSection} />}
       {view === 'mine' && <MyQuestsView expanded={expanded} details={details} onToggle={toggleExpand} onDetailChanged={loadDetail} />}
       {view === 'tournament' && <TournamentView />}
     </div>

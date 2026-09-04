@@ -6,9 +6,9 @@ import { useAdsgram } from '../hooks/useAdsgram';
 const ADSGRAM_BLOCK_ID = import.meta.env.VITE_ADSGRAM_BLOCK_ID;
 const ADSGRAM_BLOCK_ID_FALLBACK = import.meta.env.VITE_ADSGRAM_BLOCK_ID_FALLBACK;
 
-/** Карточка "Смотреть рекламу" — переиспользуется на отдельной странице /ads (открывается из бота
- * webApp-кнопкой) и прямо внутри Квестов мини-аппа (см. QuestsPage), оформлена как обычная quest-card
- * для единообразия с соседними разделами. */
+/** Карточка "Смотреть рекламу" — 4-й раздел на странице Квестов (см. QuestsPage), оформлена как
+ * обычная quest-card для единообразия с соседними разделами. Бот открывает мини-апп webApp-кнопкой
+ * прямо на /quests?section=ads, чтобы этот раздел был сразу развёрнут. */
 export default function AdRewardCard() {
   const [remaining, setRemaining] = useState(null);
   const [busy, setBusy] = useState(false);
