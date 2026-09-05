@@ -7414,7 +7414,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * разборе рекомендаций по вовлечённости канала.
      * Публикация — только после одобрения администратора (см. {@link #handleAdminFeedAction}). */
     private String buildWithdrawalFeedText(RewardRequest req) {
-        return "💸 Игрок <b>" + escape(req.getUser().getNickname()) + "</b> вывел <b>"
+        AppUser player = req.getUser();
+        String nickname = escape(player.getNickname());
+        String profileLink = player.getTelegramUsername() != null && !player.getTelegramUsername().isBlank()
+                ? "https://t.me/" + player.getTelegramUsername()
+                : "tg://user?id=" + player.getTelegramId();
+        return "💸 Игрок <b><a href=\"" + profileLink + "\">" + nickname + "</a></b> вывел <b>"
                 + req.getRewardItem().getPriceCoins() + " EXC</b>!\n\n"
                 + "Больше отзывов: @egc_payouts";
     }
@@ -7624,6 +7629,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 msg.setChatId(requiredChannelChatId());
                 msg.setText(text);
                 msg.setParseMode("HTML");
+                msg.setDisableWebPagePreview(true);
                 execute(msg);
             } catch (Exception e) {
                 log.error("Failed to post approved withdrawal to activity feed", e);
