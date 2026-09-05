@@ -364,8 +364,12 @@ public class UserService {
             long xpBonus, int streakDays, String milestoneText
     ) {}
 
-    private static final int AD_REWARD_DAILY_CAP = 5;
+    private static final int AD_REWARD_DAILY_CAP = 10;
     private static final long AD_REWARD_EXC = 30;
+
+    public int getAdRewardDailyCap() {
+        return AD_REWARD_DAILY_CAP;
+    }
 
     public int getAdRewardsRemainingToday(AppUser user) {
         if (user.getAdRewardDate() == null || !user.getAdRewardDate().equals(LocalDate.now())) {

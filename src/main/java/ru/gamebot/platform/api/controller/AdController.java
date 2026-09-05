@@ -22,7 +22,7 @@ public class AdController {
     @GetMapping("/status")
     public ResponseEntity<AdStatusDto> status(@AuthenticationPrincipal Long telegramId) {
         AppUser user = appUserRepository.findByTelegramId(telegramId).orElseThrow();
-        return ResponseEntity.ok(new AdStatusDto(userService.getAdRewardsRemainingToday(user)));
+        return ResponseEntity.ok(new AdStatusDto(userService.getAdRewardsRemainingToday(user), userService.getAdRewardDailyCap()));
     }
 
     @PostMapping("/watch")
@@ -30,11 +30,11 @@ public class AdController {
         AppUser user = appUserRepository.findByTelegramId(telegramId).orElseThrow();
         int remaining = userService.getAdRewardsRemainingToday(user);
         if (remaining <= 0) {
-            return ResponseEntity.status(409).body(new AdStatusDto(0));
+            return ResponseEntity.status(409).body(new AdStatusDto(0, userService.getAdRewardDailyCap()));
         }
         userService.markAdRequested(user);
-        return ResponseEntity.ok(new AdStatusDto(remaining));
+        return ResponseEntity.ok(new AdStatusDto(remaining, userService.getAdRewardDailyCap()));
     }
 
-    record AdStatusDto(int remainingToday) {}
+    record AdStatusDto(int remainingToday, int dailyCap) {}
 }
