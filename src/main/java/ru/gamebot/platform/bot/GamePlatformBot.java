@@ -3303,9 +3303,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * "cannot be determined where exactly in the bot the ad will be placed" в docs.adsgram.ai/bots/moderation). */
     private void sendAdsList(AppUser user) {
         int remaining = userService.getAdRewardsRemainingToday(user, ru.gamebot.platform.service.UserService.AdRewardSource.ADSGRAM);
-        String watchAdLabel = remaining > 0
-                ? "🎬 Реклама в боте (" + remaining + ") 🔔"
-                : "🎬 Реклама в боте";
+        String watchAdLabel = remaining > 0 ? "🎬 Реклама в боте 🔔" : "🎬 Реклама в боте";
         List<InlineKeyboardButton> buttons = new ArrayList<>(List.of(
                 keyboardFactory.callback(watchAdLabel, "menu:watchad"),
                 keyboardFactory.webApp("🎬 Реклама в приложении", "https://experience-gaming-club.pages.dev/quests?section=ads")));
