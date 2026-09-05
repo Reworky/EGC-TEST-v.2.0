@@ -7660,8 +7660,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (reviewId != null) {
                 botReviewRepository.findWithUserById(reviewId).ifPresent(review -> {
                     try {
-                        org.telegram.telegrambots.meta.api.methods.forwardmessage.ForwardMessage fwd =
-                                new org.telegram.telegrambots.meta.api.methods.forwardmessage.ForwardMessage();
+                        org.telegram.telegrambots.meta.api.methods.ForwardMessage fwd =
+                                new org.telegram.telegrambots.meta.api.methods.ForwardMessage();
                         fwd.setChatId(requiredChannelChatId());
                         fwd.setFromChatId(appProperties.getPayoutChannelUsername());
                         fwd.setMessageId(review.getPublishedMessageId());
