@@ -18,6 +18,7 @@ import ru.gamebot.platform.event.OnboardingReminderEvent;
 import ru.gamebot.platform.event.PollClosedEvent;
 import ru.gamebot.platform.event.QuestDeadlineWarningEvent;
 import ru.gamebot.platform.event.QuestExpiredEvent;
+import ru.gamebot.platform.event.ReviewRepostCandidateEvent;
 import ru.gamebot.platform.event.ScheduledPollCandidateEvent;
 import ru.gamebot.platform.event.SquadMidweekTeaserEvent;
 import ru.gamebot.platform.event.WeeklyDigestActiveEvent;
@@ -47,6 +48,7 @@ public class WeeklyResetScheduler {
     private final QuestSubmissionRepository questSubmissionRepository;
     private final QuestRepository questRepository;
     private final WheelSpinLogRepository wheelSpinLogRepository;
+    private final ru.gamebot.platform.domain.repository.BotReviewRepository botReviewRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final PlatformSnapshotService platformSnapshotService;
     private final NewsService newsService;
@@ -98,6 +100,21 @@ public class WeeklyResetScheduler {
             eventPublisher.publishEvent(new SquadMidweekTeaserEvent(this, top));
         } catch (Exception e) {
             log.error("Squad midweek teaser failed", e);
+        }
+    }
+
+    // Раз в неделю — предложить админу репостнуть лучший ещё не предлагавшийся отзыв (4-5⭐️,
+    // уже опубликованный в @egc_payouts) в основной канал как соцдоказательство. Пятница вечер —
+    // не пересекается с "Залом Славы" (понедельник) и тизером отрядов (среда).
+    @Scheduled(cron = "0 0 18 * * FRI")
+    public void postReviewRepostCandidate() {
+        try {
+            List<ru.gamebot.platform.domain.model.BotReview> candidates =
+                    botReviewRepository.findRepostCandidates(org.springframework.data.domain.PageRequest.of(0, 1));
+            if (candidates.isEmpty()) return;
+            eventPublisher.publishEvent(new ReviewRepostCandidateEvent(this, candidates.get(0).getId()));
+        } catch (Exception e) {
+            log.error("Review repost candidate selection failed", e);
         }
     }
 

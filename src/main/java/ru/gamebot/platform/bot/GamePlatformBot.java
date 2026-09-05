@@ -169,6 +169,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * с постом о выводе в @egc_payouts, если менеджер его загрузил (не заполнено при "Пропустить"). */
     private final ConcurrentHashMap<Long, String> pendingWithdrawalReceiptFileIds = new ConcurrentHashMap<>();
 
+    /** ID отзыва — кандидата на еженедельный репост в основной канал, ждущего одобрения. Один "слот",
+     * как у тизера отрядов — новый кандидат появляется раз в неделю, к тому времени старый уже обработан. */
+    private volatile Long pendingReviewRepostId;
+
     @EventListener(ApplicationReadyEvent.class)
     public void registerBot() throws TelegramApiException {
         TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
@@ -7651,6 +7655,42 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "❌ Отклонено");
             return;
         }
+        if (action.equals("reviewrepost:approve")) {
+            Long reviewId = pendingReviewRepostId;
+            if (reviewId != null) {
+                botReviewRepository.findWithUserById(reviewId).ifPresent(review -> {
+                    try {
+                        org.telegram.telegrambots.meta.api.methods.forwardmessage.ForwardMessage fwd =
+                                new org.telegram.telegrambots.meta.api.methods.forwardmessage.ForwardMessage();
+                        fwd.setChatId(requiredChannelChatId());
+                        fwd.setFromChatId(appProperties.getPayoutChannelUsername());
+                        fwd.setMessageId(review.getPublishedMessageId());
+                        execute(fwd);
+                    } catch (Exception e) {
+                        log.error("Failed to repost review {} to main channel", review.getId(), e);
+                    }
+                    review.setRepostedToMainChannel(true);
+                    botReviewRepository.save(review);
+                });
+            }
+            pendingReviewRepostId = null;
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "✅ Репостнуто");
+            return;
+        }
+        if (action.equals("reviewrepost:reject")) {
+            Long reviewId = pendingReviewRepostId;
+            if (reviewId != null) {
+                botReviewRepository.findById(reviewId).ifPresent(review -> {
+                    review.setRepostedToMainChannel(true);
+                    botReviewRepository.save(review);
+                });
+            }
+            pendingReviewRepostId = null;
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "❌ Отклонено");
+            return;
+        }
         if (action.startsWith("withdrawal:approve:")) {
             long reqId = parseLong(action.substring("withdrawal:approve:".length()));
             String text = pendingWithdrawalTexts.remove(reqId);
@@ -7758,20 +7798,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         String text = sb.toString();
         try {
+            org.telegram.telegrambots.meta.api.objects.Message sent;
             if (review.getPhotoFileId() != null) {
                 SendPhoto photo = new SendPhoto();
                 photo.setChatId(channel);
                 photo.setPhoto(new InputFile(review.getPhotoFileId()));
                 photo.setCaption(text);
                 photo.setParseMode("HTML");
-                execute(photo);
+                sent = execute(photo);
             } else {
                 SendMessage msg = new SendMessage();
                 msg.setChatId(channel);
                 msg.setText(text);
                 msg.setParseMode("HTML");
-                execute(msg);
+                sent = execute(msg);
             }
+            review.setPublishedMessageId(sent.getMessageId());
+            botReviewRepository.save(review);
         } catch (Exception e) {
             log.error("Failed to publish review {} to channel", review.getId(), e);
         }
@@ -10699,6 +10742,39 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 log.warn("Failed to send squad teaser candidate to admin {}", adminId, e);
             }
         }
+    }
+
+    /** Раз в неделю (см. WeeklyResetScheduler.postReviewRepostCandidate) — предлагает репостнуть
+     * лучший ещё не использованный отзыв из @egc_payouts в основной канал как соцдоказательство.
+     * Публикация — только после одобрения администратора (см. {@link #handleAdminFeedAction}). */
+    @org.springframework.context.event.EventListener
+    public void onReviewRepostCandidate(ru.gamebot.platform.event.ReviewRepostCandidateEvent event) {
+        pendingReviewRepostId = event.getReviewId();
+        sendReviewRepostCard();
+    }
+
+    private void sendReviewRepostCard() {
+        Long reviewId = pendingReviewRepostId;
+        if (reviewId == null) return;
+        botReviewRepository.findWithUserById(reviewId).ifPresent(review -> {
+            String stars = "⭐️".repeat(Math.max(0, Math.min(5, review.getStars())));
+            String nickname = escape(review.getUser().getNickname());
+            StringBuilder preview = new StringBuilder("🧾 <b>Репост отзыва в канал — на согласование</b>\n\n");
+            preview.append("👤 ").append(nickname).append(" ").append(stars);
+            if (review.getText() != null && !review.getText().isBlank()) {
+                preview.append("\n\n\"").append(escape(review.getText())).append("\"");
+            }
+            InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
+                    keyboardFactory.callback("✅ Репостнуть", "adminfeed:reviewrepost:approve"),
+                    keyboardFactory.callback("❌ Не публиковать", "adminfeed:reviewrepost:reject")));
+            for (Long adminId : adminService.resolvedAdminIds()) {
+                try {
+                    sendText(adminId, preview.toString(), markup);
+                } catch (Exception e) {
+                    log.warn("Failed to send review repost candidate to admin {}", adminId, e);
+                }
+            }
+        });
     }
 
     @org.springframework.context.event.EventListener

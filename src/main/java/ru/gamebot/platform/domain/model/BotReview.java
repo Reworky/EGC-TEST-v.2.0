@@ -48,4 +48,12 @@ public class BotReview {
     private BotReviewStatus status;
 
     private LocalDateTime createdAt;
+
+    /** ID сообщения в @egc_payouts после публикации — нужен, чтобы потом сделать forwardMessage
+     * в основной канал (см. репост лучших отзывов, GamePlatformBot.onReviewRepostCandidate). */
+    private Integer publishedMessageId;
+
+    /** true — уже был кандидатом на репост в основной канал (одобрен или отклонён), повторно не предлагать. */
+    @Column(columnDefinition = "boolean default false")
+    private boolean repostedToMainChannel;
 }
