@@ -365,8 +365,10 @@ public class QuestSeeder implements CommandLineRunner {
         setShortLabel("Выиграй бой 15 раз в режиме «Любое столкновение» или «Горячая зона»", "Brawl Stars", "Победа×15: Любое/Гор.зона");
         setShortLabel("Выиграй бой 5 раз в режиме «Броулбол» или «Любое столкновение»", "Brawl Stars", "Победа×5: Броулбол/Любое");
         setShortLabel("Выиграй бой 5 раз в режиме «Любое столкновение» или «Баскетбол»", "Brawl Stars", "Победа×5: Любое/Баскетбол");
-        setShortLabel("Выиграй 3 боя с новым бойцом (Космо или Винс)", "Brawl Stars", "🔥 Новое: Победа×3 Космо/Винс");
-        setShortLabel("Получи любого нового бойца", "Brawl Stars", "🔥 Новое: Любой боец");
+        setShortLabel("Выиграй 3 боя с новым бойцом (Космо или Винс)", "Brawl Stars", "Победа×3 Космо/Винс");
+        setShortLabel("Получи любого нового бойца", "Brawl Stars", "Любой боец");
+        setQuestHighlightNew("Выиграй 3 боя с новым бойцом (Космо или Винс)", "Brawl Stars");
+        setQuestHighlightNew("Получи любого нового бойца", "Brawl Stars");
 
         // Одноразовая починка: эти 8 квестов уже переименовались на предыдущих деплоях ДО фикса
         // в updateQuest() (баг: keepBsTitles-очистка деактивировала их по старому названию раньше,
@@ -1946,5 +1948,14 @@ public class QuestSeeder implements CommandLineRunner {
             q.setShortLabel(label);
             questRepository.save(q);
         }, () -> log.warn("[QuestSeeder] setShortLabel: quest not found (seedFlat must run first): '{}'", title));
+    }
+
+    /** Помечает кнопку квеста меткой 🆕 (см. Quest.highlightNew / sendQuestList). Снять вручную,
+     * когда квест перестанет быть "новым" — прямым UPDATE или отдельным вызовом с false. */
+    private void setQuestHighlightNew(String title, String gameName) {
+        questRepository.findFirstByTitleAndGameName(title, gameName).ifPresentOrElse(q -> {
+            q.setHighlightNew(true);
+            questRepository.save(q);
+        }, () -> log.warn("[QuestSeeder] setQuestHighlightNew: quest not found (seedFlat must run first): '{}'", title));
     }
 }

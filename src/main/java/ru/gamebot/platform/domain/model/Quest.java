@@ -35,6 +35,11 @@ public class Quest {
      * порядкового номера (см. sendQuestList в GamePlatformBot). Null — прежнее поведение (номер). */
     private String shortLabel;
 
+    /** true — кнопка получает пометку 🆕 перед стандартным 🎯 (см. sendQuestList). Для недавно
+     * добавленных квестов, снимается вручную когда квест перестаёт быть "новым". */
+    @Column(columnDefinition = "boolean default false")
+    private boolean highlightNew;
+
     private String gameName;
     private String category;
     private String platform;
