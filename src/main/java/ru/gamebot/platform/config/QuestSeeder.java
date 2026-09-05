@@ -1478,6 +1478,12 @@ public class QuestSeeder implements CommandLineRunner {
                 "Опубликуй Story в своём Telegram с упоминанием клуба и реферальной ссылкой (посмотреть в разделе «Реферальная программа»). История должна провисеть не менее 24 часов.",
                 "Скриншот опубликованной Истории с видимым упоминанием EGC/ссылкой — прикрепи как фото к отчёту.");
 
+        // Короткие подписи для кнопок в списке квестов (см. Quest.shortLabel / sendQuestList).
+        setShortLabel("Instagram Reels про EGC", "UGC", "Reels в Instagram");
+        setShortLabel("TikTok видео про EGC", "UGC", "Видео в TikTok");
+        setShortLabel("YouTube Shorts про EGC", "UGC", "Shorts на YouTube");
+        setShortLabel("Telegram Stories про EGC", "UGC", "Stories в Telegram");
+
         // ── Dota 2 — деактивация старых квестов ──────────────────────────────────
         java.util.Set<String> keepDotaTitles = java.util.Set.of(
                 "Набери 8 убийств за матч",
