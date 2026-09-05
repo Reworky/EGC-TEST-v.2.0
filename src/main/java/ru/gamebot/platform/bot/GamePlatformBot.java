@@ -3111,7 +3111,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendWatchAdOffer(CallbackQuery callbackQuery, AppUser user) {
-        int remaining = userService.getAdRewardsRemainingToday(user);
+        int remaining = userService.getAdRewardsRemainingToday(user, ru.gamebot.platform.service.UserService.AdRewardSource.ADSGRAM);
         if (remaining <= 0) {
             answer(callbackQuery.getId(), "На сегодня показы рекламы закончились — приходи завтра!");
             return;
@@ -3302,13 +3302,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * bot-платформу, если не может найти в живом боте место размещения рекламы (см. правило
      * "cannot be determined where exactly in the bot the ad will be placed" в docs.adsgram.ai/bots/moderation). */
     private void sendAdsList(AppUser user) {
-        int remaining = userService.getAdRewardsRemainingToday(user);
-        String watchAdLabel = remaining > 0 ? "🎬 Реклама в боте 🔔" : "🎬 Реклама в боте";
+        int remaining = userService.getAdRewardsRemainingToday(user, ru.gamebot.platform.service.UserService.AdRewardSource.ADSGRAM);
+        String watchAdLabel = remaining > 0
+                ? "🎬 Реклама в боте (" + remaining + ") 🔔"
+                : "🎬 Реклама в боте";
         List<InlineKeyboardButton> buttons = new ArrayList<>(List.of(
                 keyboardFactory.callback(watchAdLabel, "menu:watchad"),
                 keyboardFactory.webApp("🎬 Реклама в приложении", "https://experience-gaming-club.pages.dev/quests?section=ads")));
         sendText(user.getTelegramId(),
-                "📺 <b>Реклама</b>\n\nПосмотри рекламу — получи EXC. Осталось показов сегодня: <b>" + remaining + "</b>.",
+                "📺 <b>Реклама</b>\n\nПосмотри рекламу — получи EXC. У каждого источника свой дневной лимит показов.",
                 verticalWithBackMenu(buttons, "⬅️ Назад", "menu:quests"));
     }
 

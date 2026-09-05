@@ -123,7 +123,7 @@ public class PostbackController {
         log.info("[AdsgramReward] incoming params: {}", params);
 
         Long telegramId = parseFirstLong(params, "tgid", "userid", "user_id", "uid");
-        boolean granted = telegramId != null && userService.claimPendingAdReward(telegramId);
+        boolean granted = telegramId != null && userService.claimPendingAdReward(telegramId, UserService.AdRewardSource.ADSGRAM);
         if (!granted) {
             log.warn("[AdsgramReward] Reward not granted (telegramId={}, params={})", telegramId, params);
         }
@@ -143,7 +143,7 @@ public class PostbackController {
         log.info("[TelegaReward] incoming params: {}", params);
 
         Long telegramId = parseFirstLong(params, "userid", "user_id", "tgid", "uid");
-        boolean granted = telegramId != null && userService.claimPendingAdReward(telegramId);
+        boolean granted = telegramId != null && userService.claimPendingAdReward(telegramId, UserService.AdRewardSource.TELEGA);
         if (!granted) {
             log.warn("[TelegaReward] Reward not granted (telegramId={}, params={})", telegramId, params);
         }

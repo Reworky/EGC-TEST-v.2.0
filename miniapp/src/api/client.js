@@ -242,13 +242,13 @@ export async function cancelReward(id) {
   return data;
 }
 
-export async function getAdStatus() {
-  const { data } = await api.get('/api/ads/status');
+export async function getAdStatus(source) {
+  const { data } = await api.get('/api/ads/status', { params: { source } });
   return data;
 }
 
-export async function requestAdWatch() {
-  const { data } = await api.post('/api/ads/watch');
+export async function requestAdWatch(source) {
+  const { data } = await api.post('/api/ads/watch', null, { params: { source } });
   return data;
 }
 

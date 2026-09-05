@@ -364,18 +364,37 @@ public class UserService {
             long xpBonus, int streakDays, String milestoneText
     ) {}
 
-    private static final int AD_REWARD_DAILY_CAP = 10;
-    private static final long AD_REWARD_EXC = 30;
+    /** У каждой рекламной сети свой дневной лимит показов на игрока — antifraud-риски и реальная
+     * монетизация повторных показов различаются по сети, единый лимит на всех не годится. */
+    public enum AdRewardSource {
+        ADSGRAM(10), TELEGA(5);
 
-    public int getAdRewardDailyCap() {
-        return AD_REWARD_DAILY_CAP;
+        private final int dailyCap;
+
+        AdRewardSource(int dailyCap) {
+            this.dailyCap = dailyCap;
+        }
+
+        public int getDailyCap() {
+            return dailyCap;
+        }
     }
 
-    public int getAdRewardsRemainingToday(AppUser user) {
+    private static final long AD_REWARD_EXC = 30;
+
+    public int getAdRewardDailyCap(AdRewardSource source) {
+        return source.getDailyCap();
+    }
+
+    private int adRewardCountToday(AppUser user, AdRewardSource source) {
         if (user.getAdRewardDate() == null || !user.getAdRewardDate().equals(LocalDate.now())) {
-            return AD_REWARD_DAILY_CAP;
+            return 0;
         }
-        return Math.max(0, AD_REWARD_DAILY_CAP - user.getAdRewardCount());
+        return source == AdRewardSource.ADSGRAM ? user.getAdRewardCountAdsgram() : user.getAdRewardCountTelega();
+    }
+
+    public int getAdRewardsRemainingToday(AppUser user, AdRewardSource source) {
+        return Math.max(0, source.getDailyCap() - adRewardCountToday(user, source));
     }
 
     @Transactional
@@ -384,10 +403,12 @@ public class UserService {
         appUserRepository.save(user);
     }
 
-    /** Засчитывает награду за просмотр рекламы AdsGram — только если у игрока есть непросроченный
-     * "ожидающий показ" (выставляется в {@link #markAdRequested}), иначе тихо отказывает. Одноразово. */
+    /** Засчитывает награду за просмотр рекламы — только если у игрока есть непросроченный
+     * "ожидающий показ" (выставляется в {@link #markAdRequested}), иначе тихо отказывает. Одноразово.
+     * source определяется вызывающим постбек-эндпоинтом (своя сеть — свой URL), не хранится отдельно
+     * от pendingAdRewardAt: сам факт "показ был запрошен недавно" не завязан на конкретную сеть. */
     @Transactional
-    public boolean claimPendingAdReward(Long telegramId) {
+    public boolean claimPendingAdReward(Long telegramId, AdRewardSource source) {
         AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
         if (user == null || user.getPendingAdRewardAt() == null) {
             return false;
@@ -399,12 +420,17 @@ public class UserService {
         LocalDate today = LocalDate.now();
         if (user.getAdRewardDate() == null || !user.getAdRewardDate().equals(today)) {
             user.setAdRewardDate(today);
-            user.setAdRewardCount(0);
+            user.setAdRewardCountAdsgram(0);
+            user.setAdRewardCountTelega(0);
         }
-        user.setAdRewardCount(user.getAdRewardCount() + 1);
+        if (source == AdRewardSource.ADSGRAM) {
+            user.setAdRewardCountAdsgram(user.getAdRewardCountAdsgram() + 1);
+        } else {
+            user.setAdRewardCountTelega(user.getAdRewardCountTelega() + 1);
+        }
         user.setCoins(user.getCoins() + AD_REWARD_EXC);
         appUserRepository.save(user);
-        excTx.log(user, AD_REWARD_EXC, ExcTransactionService.AD_REWARD, "Просмотр рекламы в боте");
+        excTx.log(user, AD_REWARD_EXC, ExcTransactionService.AD_REWARD, "Просмотр рекламы (" + source + ")");
         eventPublisher.publishEvent(new ru.gamebot.platform.event.AdRewardGrantedEvent(this, user.getId(), AD_REWARD_EXC));
         return true;
     }

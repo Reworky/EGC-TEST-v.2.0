@@ -45,9 +45,26 @@ function AdSlotView({ label, remaining, dailyCap, busy, message, onClick }) {
   );
 }
 
+/** Общий стейт "статус лимита для источника X" — у AdsGram и Telega.io разные дневные лимиты
+ * (см. UserService.AdRewardSource на бэкенде), поэтому каждый слот следит за своим счётчиком отдельно,
+ * а не делит один remaining на всех, как было раньше. */
+function useAdSlotStatus(source) {
+  const [remaining, setRemaining] = useState(null);
+  const [dailyCap, setDailyCap] = useState(null);
+
+  function reload() {
+    getAdStatus(source).then(s => { setRemaining(s.remainingToday); setDailyCap(s.dailyCap); }).catch(() => {});
+  }
+
+  useEffect(() => { reload(); }, []);
+
+  return { remaining, dailyCap, reload };
+}
+
 /** AdsGram-блок 45630. Второй блок (46037) пробовали параллельно для сравнения CPM — разница
  * оказалась статистическим шумом на маленькой выборке, выключили, оставили только этот. */
-function AdsgramSlot({ blockId, label, remaining, dailyCap, onWatched }) {
+function AdsgramSlot({ blockId, label }) {
+  const { remaining, dailyCap, reload } = useAdSlotStatus('ADSGRAM');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const playParticles = useParticles();
@@ -59,7 +76,7 @@ function AdsgramSlot({ blockId, label, remaining, dailyCap, onWatched }) {
       playParticles?.('streakBonus', 3000);
       setTimeout(() => {
         invalidateCache('wallet');
-        onWatched();
+        reload();
       }, 1500);
       setBusy(false);
     },
@@ -73,7 +90,7 @@ function AdsgramSlot({ blockId, label, remaining, dailyCap, onWatched }) {
     setBusy(true);
     setMessage(null);
     try {
-      await requestAdWatch();
+      await requestAdWatch('ADSGRAM');
       showAd();
     } catch {
       setMessage('Сейчас нет доступных показов, загляните позже.');
@@ -84,9 +101,10 @@ function AdsgramSlot({ blockId, label, remaining, dailyCap, onWatched }) {
   return <AdSlotView label={label} remaining={remaining} dailyCap={dailyCap} busy={busy} message={message} onClick={handleClick} />;
 }
 
-/** Рекламный блок Telega.io (отдельная сеть/SDK от AdsGram) — тот же общий дневной лимит и та же
+/** Рекламный блок Telega.io (отдельная сеть/SDK от AdsGram) — свой дневной лимит и та же
  * серверная защита через pendingAdRewardAt (см. PostbackController.telegaReward). */
-function TelegaSlot({ adBlockUuid, label, remaining, dailyCap, onWatched }) {
+function TelegaSlot({ adBlockUuid, label }) {
+  const { remaining, dailyCap, reload } = useAdSlotStatus('TELEGA');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const playParticles = useParticles();
@@ -98,7 +116,7 @@ function TelegaSlot({ adBlockUuid, label, remaining, dailyCap, onWatched }) {
       playParticles?.('streakBonus', 3000);
       setTimeout(() => {
         invalidateCache('wallet');
-        onWatched();
+        reload();
       }, 1500);
       setBusy(false);
     },
@@ -112,7 +130,7 @@ function TelegaSlot({ adBlockUuid, label, remaining, dailyCap, onWatched }) {
     setBusy(true);
     setMessage(null);
     try {
-      await requestAdWatch();
+      await requestAdWatch('TELEGA');
       showAd();
     } catch {
       setMessage('Сейчас нет доступных показов, загляните позже.');
@@ -123,23 +141,13 @@ function TelegaSlot({ adBlockUuid, label, remaining, dailyCap, onWatched }) {
   return <AdSlotView label={label} remaining={remaining} dailyCap={dailyCap} busy={busy} message={message} onClick={handleClick} />;
 }
 
-/** Два независимых рекламных блока (AdsGram 45630 + Telega.io) на отдельных кнопках. Лимит
- * на просмотры в день общий на аккаунт, поэтому remaining хранится тут и передаётся в оба слота. */
+/** Два независимых рекламных блока (AdsGram 45630 + Telega.io), у каждого свой дневной лимит. */
 export default function AdRewardCard() {
-  const [remaining, setRemaining] = useState(null);
-  const [dailyCap, setDailyCap] = useState(null);
-
-  function reload() {
-    getAdStatus().then(s => { setRemaining(s.remainingToday); setDailyCap(s.dailyCap); }).catch(() => {});
-  }
-
-  useEffect(() => { reload(); }, []);
-
   return (
     <>
-      <AdsgramSlot blockId={ADSGRAM_BLOCK_ID} label="Реклама 1" remaining={remaining} dailyCap={dailyCap} onWatched={reload} />
+      <AdsgramSlot blockId={ADSGRAM_BLOCK_ID} label="Реклама 1" />
       {TELEGA_AD_BLOCK_UUID && (
-        <TelegaSlot adBlockUuid={TELEGA_AD_BLOCK_UUID} label="Реклама 2" remaining={remaining} dailyCap={dailyCap} onWatched={reload} />
+        <TelegaSlot adBlockUuid={TELEGA_AD_BLOCK_UUID} label="Реклама 2" />
       )}
     </>
   );

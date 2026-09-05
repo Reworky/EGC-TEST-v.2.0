@@ -100,8 +100,13 @@ public class AppUser {
     private LocalDate dailyGiftSentDate;
     private int dailyGiftsReceived;
     private LocalDate dailyGiftReceivedDate;
+    /** Счётчики за сегодня по каждому источнику рекламы отдельно — у каждой сети свой дневной лимит
+     * (см. UserService.AdRewardSource). adRewardDate — общая дата "сегодня", оба счётчика обнуляются
+     * вместе при смене дня. */
     @Column(columnDefinition = "integer default 0")
-    private int adRewardCount;
+    private int adRewardCountAdsgram;
+    @Column(columnDefinition = "integer default 0")
+    private int adRewardCountTelega;
     private LocalDate adRewardDate;
 
     /** Момент запроса рекламы AdsGram, ждущей подтверждения просмотра; null = нет активного показа. */
