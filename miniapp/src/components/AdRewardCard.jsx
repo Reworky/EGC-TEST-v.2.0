@@ -120,8 +120,9 @@ function TelegaSlot({ adBlockUuid, label }) {
       }, 1500);
       setBusy(false);
     },
-    onError: () => {
-      setMessage('Не удалось показать рекламу, попробуйте ещё раз позже.');
+    onError: (result) => {
+      const detail = result?.description || result?.message || (typeof result === 'string' ? result : null);
+      setMessage(detail ? `Не удалось показать рекламу: ${detail}` : 'Не удалось показать рекламу, попробуйте ещё раз позже.');
       setBusy(false);
     },
   });
