@@ -7408,10 +7408,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         promptWithdrawalReview(req);
     }
 
-    /** Публичная лента активности — крупные выводы EXC постятся в основной канал (не @egc_payouts,
-     * тот зарезервирован под технические AdsGram/отзыв-уведомления). Без порога — выводов исторически
-     * мало (десятки уникальных получателей за всё время), спама не будет. Найдено 2026-09-02 при
-     * разборе рекомендаций по вовлечённости канала.
+    /** Публичная лента активности — выводы EXC постятся в канал отзывов и выплат (@egc_payouts),
+     * туда же, куда уходят публикуемые отзывы (см. {@link #publishReviewToChannel}). Без порога —
+     * выводов исторически мало (десятки уникальных получателей за всё время), спама не будет.
+     * Найдено 2026-09-02 при разборе рекомендаций по вовлечённости канала.
      * Публикация — только после одобрения администратора (см. {@link #handleAdminFeedAction}). */
     private String buildWithdrawalFeedText(RewardRequest req) {
         AppUser player = req.getUser();
@@ -7626,7 +7626,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     text = buildWithdrawalFeedText(rewardService.getRequest(reqId));
                 }
                 SendMessage msg = new SendMessage();
-                msg.setChatId(requiredChannelChatId());
+                msg.setChatId(appProperties.getPayoutChannelUsername());
                 msg.setText(text);
                 msg.setParseMode("HTML");
                 msg.setDisableWebPagePreview(true);
