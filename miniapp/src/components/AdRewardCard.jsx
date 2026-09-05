@@ -5,7 +5,6 @@ import { useAdsgram } from '../hooks/useAdsgram';
 import { useTelegaAds } from '../hooks/useTelegaAds';
 
 const ADSGRAM_BLOCK_ID = import.meta.env.VITE_ADSGRAM_BLOCK_ID;
-const ADSGRAM_BLOCK_ID_FALLBACK = import.meta.env.VITE_ADSGRAM_BLOCK_ID_FALLBACK;
 const TELEGA_AD_BLOCK_UUID = import.meta.env.VITE_TELEGA_AD_BLOCK_UUID;
 
 /** Общая карточка одного рекламного блока — сеть/SDK передаётся снаружи через showAd (уже готовую
@@ -46,9 +45,8 @@ function AdSlotView({ label, remaining, busy, message, onClick }) {
   );
 }
 
-/** Один AdsGram-блок — своя кнопка, свой Unit, без переключения на другой при неудаче. Так у обеих
- * плашек набирается сопоставимый и честно сравнимый объём показов/CPM в кабинете AdsGram. Лимит
- * показов в день (5) общий на аккаунт — remaining/onWatched приходят от родителя (AdRewardCard). */
+/** AdsGram-блок 45630. Второй блок (46037) пробовали параллельно для сравнения CPM — разница
+ * оказалась статистическим шумом на маленькой выборке, выключили, оставили только этот. */
 function AdsgramSlot({ blockId, label, remaining, onWatched }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
@@ -125,8 +123,8 @@ function TelegaSlot({ adBlockUuid, label, remaining, onWatched }) {
   return <AdSlotView label={label} remaining={remaining} busy={busy} message={message} onClick={handleClick} />;
 }
 
-/** Три независимых рекламных блока (AdsGram 45630/46037 + Telega.io) на отдельных кнопках. Лимит
- * на просмотры в день общий на аккаунт, поэтому remaining хранится тут и передаётся во все слоты. */
+/** Два независимых рекламных блока (AdsGram 45630 + Telega.io) на отдельных кнопках. Лимит
+ * на просмотры в день общий на аккаунт, поэтому remaining хранится тут и передаётся в оба слота. */
 export default function AdRewardCard() {
   const [remaining, setRemaining] = useState(null);
 
@@ -139,11 +137,8 @@ export default function AdRewardCard() {
   return (
     <>
       <AdsgramSlot blockId={ADSGRAM_BLOCK_ID} label="Реклама 1" remaining={remaining} onWatched={reload} />
-      {ADSGRAM_BLOCK_ID_FALLBACK && (
-        <AdsgramSlot blockId={ADSGRAM_BLOCK_ID_FALLBACK} label="Реклама 2" remaining={remaining} onWatched={reload} />
-      )}
       {TELEGA_AD_BLOCK_UUID && (
-        <TelegaSlot adBlockUuid={TELEGA_AD_BLOCK_UUID} label="Реклама 3" remaining={remaining} onWatched={reload} />
+        <TelegaSlot adBlockUuid={TELEGA_AD_BLOCK_UUID} label="Реклама 2" remaining={remaining} onWatched={reload} />
       )}
     </>
   );
