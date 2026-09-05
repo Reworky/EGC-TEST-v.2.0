@@ -165,6 +165,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * может быть несколько заявок на согласовании (в отличие от тизера/опроса — там один "слот"). */
     private final ConcurrentHashMap<Long, String> pendingWithdrawalTexts = new ConcurrentHashMap<>();
 
+    /** Скриншот чека (fileId), прикреплённый менеджером при закрытии заявки — публикуется вместе
+     * с постом о выводе в @egc_payouts, если менеджер его загрузил (не заполнено при "Пропустить"). */
+    private final ConcurrentHashMap<Long, String> pendingWithdrawalReceiptFileIds = new ConcurrentHashMap<>();
+
     @EventListener(ApplicationReadyEvent.class)
     public void registerBot() throws TelegramApiException {
         TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
@@ -414,11 +418,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             List<PhotoSize> photos = message.getPhoto();
             String fileId = photos.get(photos.size() - 1).getFileId();
+            String receiptCaption = message.getCaption();
             Long reqId = session.getQuestId();
             boolean isModReceiptFlow = "mod".equals(session.getData().get("receiptFlow"));
             session.reset();
             RewardRequest req = rewardService.approveRequest(reqId);
-            notifyUserWithdrawalApproved(req, fileId);
+            notifyUserWithdrawalApproved(req, fileId, receiptCaption);
             sendPayoutConfirmedCard(user, req, isModReceiptFlow);
             return;
         }
@@ -7081,7 +7086,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.setState(SessionState.WITHDRAWAL_RECEIPT);
             answer(callbackQuery.getId(), "Загрузите фото чека");
             sendText(user.getTelegramId(),
-                    "🧾 <b>Загрузите скриншот чека</b>\n\nОтправьте фото подтверждения оплаты — оно будет отправлено пользователю.\n\nИли нажмите «Пропустить» если чек не нужен.",
+                    "🧾 <b>Загрузите скриншот чека</b>\n\nОтправьте фото подтверждения оплаты — оно будет отправлено пользователю и опубликовано в @egc_payouts (после вашего одобрения). Подпись к фото (например, ссылка на чек) тоже попадёт в пост.\n\nИли нажмите «Пропустить» если чек не нужен.",
                     keyboardFactory.rowsLayout(List.of(
                             List.of(keyboardFactory.callback("⏭️ Пропустить", "admin:withdrawal:approve:skip:" + reqId))
                     )));
@@ -7387,6 +7392,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void notifyUserWithdrawalApproved(RewardRequest req, String receiptFileId) {
+        notifyUserWithdrawalApproved(req, receiptFileId, null);
+    }
+
+    private void notifyUserWithdrawalApproved(RewardRequest req, String receiptFileId, String receiptCaption) {
         // Было: isUsdt = payoutDetails != null — ловило и рублёвые реквизиты тоже, не только крипту. Исправлено.
         String method = isCryptoWithdrawal(req) ? cryptoMethodLabel(req.getPayoutDetails()) : "рубли (СБП / Сбербанк)";
         String caption = "✅ <b>Ваш вывод EXC выполнен!</b>\n\n"
@@ -7404,7 +7413,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else {
             sendText(req.getUser().getTelegramId(), caption, null);
         }
-        postWithdrawalToActivityFeed(req);
+        postWithdrawalToActivityFeed(req, receiptFileId, receiptCaption);
         promptWithdrawalReview(req);
     }
 
@@ -7414,18 +7423,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * Найдено 2026-09-02 при разборе рекомендаций по вовлечённости канала.
      * Публикация — только после одобрения администратора (см. {@link #handleAdminFeedAction}). */
     private String buildWithdrawalFeedText(RewardRequest req) {
+        return buildWithdrawalFeedText(req, null);
+    }
+
+    private String buildWithdrawalFeedText(RewardRequest req, String receiptCaption) {
         AppUser player = req.getUser();
         String nickname = escape(player.getNickname());
         String profileLink = player.getTelegramUsername() != null && !player.getTelegramUsername().isBlank()
                 ? "https://t.me/" + player.getTelegramUsername()
                 : "tg://user?id=" + player.getTelegramId();
-        return "💸 Игрок <b><a href=\"" + profileLink + "\">" + nickname + "</a></b> вывел <b>"
-                + req.getRewardItem().getPriceCoins() + " EXC</b>!\n\n"
-                + "Больше отзывов: @egc_payouts";
+        String text = "💸 Игрок <b><a href=\"" + profileLink + "\">" + nickname + "</a></b> вывел <b>"
+                + req.getRewardItem().getPriceCoins() + " EXC</b>!";
+        if (receiptCaption != null && !receiptCaption.isBlank()) {
+            text += "\n\n" + escape(receiptCaption.trim());
+        }
+        return text;
     }
 
-    private void postWithdrawalToActivityFeed(RewardRequest req) {
-        pendingWithdrawalTexts.put(req.getId(), buildWithdrawalFeedText(req));
+    /** receiptFileId/receiptCaption — скриншот чека и сопроводительный текст (например, ссылка на чек),
+     * которые менеджер прикладывает при закрытии заявки (см. WITHDRAWAL_RECEIPT). Публикуются одним
+     * постом вместе с основным текстом, а не отдельно. */
+    private void postWithdrawalToActivityFeed(RewardRequest req, String receiptFileId, String receiptCaption) {
+        pendingWithdrawalTexts.put(req.getId(), buildWithdrawalFeedText(req, receiptCaption));
+        if (receiptFileId != null) {
+            pendingWithdrawalReceiptFileIds.put(req.getId(), receiptFileId);
+        }
         sendWithdrawalFeedCard(req.getId());
     }
 
@@ -7437,9 +7459,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("✅ Опубликовать", "adminfeed:withdrawal:approve:" + reqId),
                 keyboardFactory.callback("✏️ Изменить", "adminfeed:withdrawal:edit:" + reqId),
                 keyboardFactory.callback("❌ Отклонить", "adminfeed:withdrawal:reject:" + reqId)));
+        String receiptFileId = pendingWithdrawalReceiptFileIds.get(reqId);
         for (Long adminId : adminService.resolvedAdminIds()) {
             try {
-                sendText(adminId, preview, markup);
+                if (receiptFileId != null) {
+                    SendPhoto photo = new SendPhoto();
+                    photo.setChatId(adminId.toString());
+                    photo.setPhoto(new InputFile(receiptFileId));
+                    photo.setCaption(preview);
+                    photo.setParseMode("HTML");
+                    photo.setReplyMarkup(markup);
+                    execute(photo);
+                } else {
+                    sendText(adminId, preview, markup);
+                }
             } catch (Exception e) {
                 log.warn("Failed to send withdrawal feed candidate to admin {}", adminId, e);
             }
@@ -7621,16 +7654,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (action.startsWith("withdrawal:approve:")) {
             long reqId = parseLong(action.substring("withdrawal:approve:".length()));
             String text = pendingWithdrawalTexts.remove(reqId);
+            String receiptFileId = pendingWithdrawalReceiptFileIds.remove(reqId);
             try {
                 if (text == null) {
                     text = buildWithdrawalFeedText(rewardService.getRequest(reqId));
                 }
-                SendMessage msg = new SendMessage();
-                msg.setChatId(appProperties.getPayoutChannelUsername());
-                msg.setText(text);
-                msg.setParseMode("HTML");
-                msg.setDisableWebPagePreview(true);
-                execute(msg);
+                if (receiptFileId != null) {
+                    SendPhoto photo = new SendPhoto();
+                    photo.setChatId(appProperties.getPayoutChannelUsername());
+                    photo.setPhoto(new InputFile(receiptFileId));
+                    photo.setCaption(text);
+                    photo.setParseMode("HTML");
+                    execute(photo);
+                } else {
+                    SendMessage msg = new SendMessage();
+                    msg.setChatId(appProperties.getPayoutChannelUsername());
+                    msg.setText(text);
+                    msg.setParseMode("HTML");
+                    msg.setDisableWebPagePreview(true);
+                    execute(msg);
+                }
             } catch (Exception e) {
                 log.error("Failed to post approved withdrawal to activity feed", e);
             }
@@ -7654,6 +7697,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (action.startsWith("withdrawal:reject:")) {
             long reqId = parseLong(action.substring("withdrawal:reject:".length()));
             pendingWithdrawalTexts.remove(reqId);
+            pendingWithdrawalReceiptFileIds.remove(reqId);
             clearInlineKeyboard(callbackQuery);
             answer(callbackQuery.getId(), "❌ Отклонено");
             return;
@@ -11407,7 +11451,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.getData().put("receiptFlow", "mod");
             session.setState(SessionState.WITHDRAWAL_RECEIPT);
             sendText(user.getTelegramId(),
-                    "🧾 <b>Загрузите скриншот чека</b>\n\nОтправьте фото подтверждения оплаты — оно будет отправлено пользователю.\n\nИли нажмите «Пропустить» если чек не нужен.",
+                    "🧾 <b>Загрузите скриншот чека</b>\n\nОтправьте фото подтверждения оплаты — оно будет отправлено пользователю и опубликовано в @egc_payouts (после вашего одобрения). Подпись к фото (например, ссылка на чек) тоже попадёт в пост.\n\nИли нажмите «Пропустить» если чек не нужен.",
                     keyboardFactory.rowsLayout(List.of(
                             List.of(keyboardFactory.callback("⏭️ Пропустить", "mod:withdrawal:approve:skip:" + reqId))
                     )));
