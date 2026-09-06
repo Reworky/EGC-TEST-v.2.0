@@ -465,6 +465,9 @@ public class QuestSeeder implements CommandLineRunner {
                 "Нанеси 100 000 урона в режиме «Ограбление» или «Любое столкновение»"
         ));
 
+        // ── PUBG PC: FLAT-режим — единый список без выбора категории, по образцу Brawl Stars/Clash of Clans/Clash Royale ──
+        gameCatalogService.setDifficultyMode("PUBG PC", "FLAT", 2000L, 50);
+
         // ── PUBG PC — Лёгкие ────────────────────────────────────────────────────
 
         seed("Выживи до Топ-50", "PUBG PC",
@@ -513,6 +516,17 @@ public class QuestSeeder implements CommandLineRunner {
 
         // ── PUBG PC — Сложные ────────────────────────────────────────────────────
 
+        // ── PUBG PC: короткие подписи на кнопках списка квестов (см. Quest.shortLabel / sendQuestList) ──
+        setShortLabel("Выживи до Топ-50", "PUBG PC", "Топ-50");
+        setShortLabel("Сделай 3 убийства за один матч", "PUBG PC", "3 фрага/матч");
+        setShortLabel("Сыграй 3 матча подряд", "PUBG PC", "3 матча подряд");
+        setShortLabel("Победи в матче — Chicken Dinner", "PUBG PC", "Chicken Dinner");
+        setShortLabel("Нанеси 1 000 урона за один матч", "PUBG PC", "1000 урона/матч");
+        setShortLabel("Финишируй в Топ-10 трижды за неделю", "PUBG PC", "Топ-10×3/неделя");
+        setShortLabel("15 убийств в одном матче", "PUBG PC", "15 фрагов/матч");
+
+        // ── PUBG Mobile: FLAT-режим — единый список без выбора категории, по образцу Brawl Stars/Clash of Clans/Clash Royale ──
+        gameCatalogService.setDifficultyMode("PUBG Mobile", "FLAT", 2000L, 50);
 
         // ── PUBG Mobile — деактивация старых квестов ─────────────────────────────
         java.util.Set<String> keepPubgMobileTitles = java.util.Set.of(
@@ -612,6 +626,24 @@ public class QuestSeeder implements CommandLineRunner {
                 "Скриншот экрана результатов матча, где в колонке Возвраты стоит 3+ напротив твоего ника. Должны быть видны дата матча и ник игрока.");
 
 
+        // ── PUBG Mobile: короткие подписи на кнопках списка квестов (см. Quest.shortLabel / sendQuestList) ──
+        setShortLabel("Уничтожь 5 врагов за матч", "PUBG Mobile", "5 фрагов/матч");
+        setShortLabel("Уничтожь 15 врагов за матч", "PUBG Mobile", "15 фрагов/матч");
+        setShortLabel("Помоги команде 3 раза за матч", "PUBG Mobile", "3 ассиста/матч");
+        setShortLabel("Помоги команде 9 раз за матч", "PUBG Mobile", "9 ассистов/матч");
+        setShortLabel("Нанеси 1,200 урона за матч", "PUBG Mobile", "1200 урона/матч");
+        setShortLabel("Нанеси 2,400 урона за матч", "PUBG Mobile", "2400 урона/матч");
+        setShortLabel("Продержись 15 минут за матч", "PUBG Mobile", "15 мин в матче");
+        setShortLabel("Продержись 25 минут за матч", "PUBG Mobile", "25 мин в матче");
+        setShortLabel("Спаси 1 союзника за матч", "PUBG Mobile", "1 спасение/матч");
+        setShortLabel("Спаси 4 союзников за матч", "PUBG Mobile", "4 спасения/матч");
+        setShortLabel("Сделай 1 возврат за матч", "PUBG Mobile", "1 возврат/матч");
+        setShortLabel("Сделай 3 возврата за матч", "PUBG Mobile", "3 возврата/матч");
+
+        // ── Mobile Legends: FLAT-режим — единый список без выбора категории, по образцу Brawl Stars/Clash of Clans/Clash Royale ──
+        // (игра сейчас скрыта от игроков, см. deactivateGame ниже — готовим формат заранее на момент возврата)
+        gameCatalogService.setDifficultyMode("Mobile Legends: Bang Bang", "FLAT", 2000L, 50);
+
         // ── Mobile Legends: удаляем все старые квесты, оставляем только 10 актуальных ──
         Set<String> keepMlTitles = Set.of(
                 "Сыграй 3 матча в классическом режиме",
@@ -700,6 +732,18 @@ public class QuestSeeder implements CommandLineRunner {
                 "Повысься до ранга Легенда (Legend) I, II или III в ранговом режиме Mobile Legends.",
                 "Играй ранговые матчи регулярно и набирай очки рейтинга. Ранг Легенда открывается после Эпика. При достижении появится анимация повышения ранга.",
                 "Скриншот профиля аккаунта с иконкой ранга Легенда и никнеймом + ID игрока. Ранг Легенда, ник и ID должны быть чётко видны в одном кадре.");
+
+        // ── Mobile Legends: короткие подписи на кнопках списка квестов (см. Quest.shortLabel / sendQuestList) ──
+        setShortLabel("Сыграй 3 матча в классическом режиме", "Mobile Legends: Bang Bang", "3 матча: Классика");
+        setShortLabel("Сделай 5 убийств за один матч", "Mobile Legends: Bang Bang", "5 килов/матч");
+        setShortLabel("Победи в 2 матчах подряд", "Mobile Legends: Bang Bang", "Победа×2 подряд");
+        setShortLabel("Набери MVP в одном матче", "Mobile Legends: Bang Bang", "MVP матча");
+        setShortLabel("Победи в 5 ранговых матчах", "Mobile Legends: Bang Bang", "Победа×5: Ранг");
+        setShortLabel("Набери 10 ассистов за один матч", "Mobile Legends: Bang Bang", "10 ассистов/матч");
+        setShortLabel("Достигни ранга Эпик", "Mobile Legends: Bang Bang", "Ранг Эпик");
+        setShortLabel("Набери 15 убийств в одном матче", "Mobile Legends: Bang Bang", "15 килов/матч");
+        setShortLabel("Победи в 10 ранговых матчах за неделю", "Mobile Legends: Bang Bang", "Победа×10: Ранг/неделя");
+        setShortLabel("Достигни ранга Легенда", "Mobile Legends: Bang Bang", "Ранг Легенда");
 
         // ── Clash of Clans: FLAT-режим, по аналогии с Brawl Stars — без деления на сложность, 2000 EXC ──
         gameCatalogService.setDifficultyMode("Clash of Clans", "FLAT", 2000L, 50);
@@ -904,6 +948,10 @@ public class QuestSeeder implements CommandLineRunner {
                 "3 звезды в 10 атаках подряд в Клановых войнах"
         ));
 
+        // ── Grim Soul: FLAT-режим — единый список без выбора категории, по образцу Brawl Stars/Clash of Clans/Clash Royale ──
+        // (игра сейчас скрыта от игроков, см. deactivateQuests ниже — готовим формат заранее на момент возврата)
+        gameCatalogService.setDifficultyMode("Grim Soul: Dark Survival RPG", "FLAT", 2000L, 50);
+
         // ── Grim Soul: удаляем все старые квесты ────────────────────────────────
         Set<String> keepGrimSoulTitles = Set.of(
                 "Исследуй 3 локации за день",
@@ -992,6 +1040,18 @@ public class QuestSeeder implements CommandLineRunner {
                 "Накопи суммарно 30 дней выживания в Grim Soul без сброса персонажа.",
                 "Играй регулярно и избегай смерти — счётчик дней обнуляется при гибели персонажа. Текущее количество дней выживания отображается в профиле персонажа на главном экране.",
                 "Скриншот профиля персонажа со счётчиком 30+ дней выживания и никнеймом. Количество дней и ник должны быть чётко видны в одном кадре.");
+
+        // ── Grim Soul: короткие подписи на кнопках списка квестов (см. Quest.shortLabel / sendQuestList) ──
+        setShortLabel("Исследуй 3 локации за день", "Grim Soul: Dark Survival RPG", "3 локации/день");
+        setShortLabel("Скрафти 10 предметов", "Grim Soul: Dark Survival RPG", "10 предметов крафта");
+        setShortLabel("Убей 20 врагов за один выход", "Grim Soul: Dark Survival RPG", "20 врагов/выход");
+        setShortLabel("Победи Проклятого храмовника", "Grim Soul: Dark Survival RPG", "Победи Храмовника");
+        setShortLabel("Собери 200 единиц дерева за один поход", "Grim Soul: Dark Survival RPG", "200 дерева/поход");
+        setShortLabel("Улучши замок до следующего уровня", "Grim Soul: Dark Survival RPG", "Замок +1 уровень");
+        setShortLabel("Выживи 7 дней подряд без гибели", "Grim Soul: Dark Survival RPG", "7 дней без смерти");
+        setShortLabel("Победи Босса из Склепа", "Grim Soul: Dark Survival RPG", "Босс Склепа");
+        setShortLabel("Собери полный комплект железной брони", "Grim Soul: Dark Survival RPG", "Комплект брони");
+        setShortLabel("Достигни 30 дней выживания", "Grim Soul: Dark Survival RPG", "30 дней выживания");
 
         // ── Grim Soul: временно скрыта от пользователей (просьба 2026-09-06) — квесты не удаляем,
         // seed() выше их не трогает (пропускает уже существующие), поэтому деактивация держится
@@ -1178,6 +1238,10 @@ public class QuestSeeder implements CommandLineRunner {
             flattenQuest(title, "Clash Royale", 2000, 50);
         }
 
+        // ── EA FC 26: FLAT-режим — единый список без выбора категории, по образцу Brawl Stars/Clash of Clans/Clash Royale ──
+        // (игра сейчас скрыта от игроков, см. deactivateGame ниже — готовим формат заранее на момент возврата)
+        gameCatalogService.setDifficultyMode("EA FC 26", "FLAT", 2000L, 50);
+
         // ── EA FC 26: удаляем все старые квесты ─────────────────────────────────
         Set<String> keepEaFcTitles = Set.of(
                 "Сыграй 3 матча в любом режиме",
@@ -1267,6 +1331,20 @@ public class QuestSeeder implements CommandLineRunner {
                 "Побеждай в Division Rivals и набирай очки дивизиона до достижения уровня Elite. Текущий дивизион отображается в разделе Ultimate Team → Division Rivals.",
                 "Скриншот экрана Division Rivals с дивизионом Elite и никнеймом аккаунта EA. Дивизион Elite и ник должны быть чётко видны в одном кадре.");
 
+        // ── EA FC 26: короткие подписи на кнопках списка квестов (см. Quest.shortLabel / sendQuestList) ──
+        setShortLabel("Сыграй 3 матча в любом режиме", "EA FC 26", "3 матча");
+        setShortLabel("Забей 5 голов за один матч", "EA FC 26", "5 голов/матч");
+        setShortLabel("Победи в матче Volta Football", "EA FC 26", "Победа: Volta");
+        setShortLabel("Выиграй 3 матча Division Rivals подряд", "EA FC 26", "Победа×3 подряд: Rivals");
+        setShortLabel("Забей хет-трик в одном матче Ultimate Team", "EA FC 26", "Хет-трик: Ultimate Team");
+        setShortLabel("Достигни дивизиона Gold в Division Rivals", "EA FC 26", "Див. Gold: Rivals");
+        setShortLabel("Выиграй Weekend League (7+ побед)", "EA FC 26", "7+ побед: Weekend League");
+        setShortLabel("Пройди испытание Squad Building Challenge уровня Elite", "EA FC 26", "SBC Elite");
+        setShortLabel("Победи 20 раз в Division Rivals за сезон", "EA FC 26", "Победа×20: Rivals/сезон");
+        setShortLabel("Достигни дивизиона Elite в Division Rivals", "EA FC 26", "Див. Elite: Rivals");
+
+        // ── CS2: FLAT-режим — единый список без выбора категории, по образцу Brawl Stars/Clash of Clans/Clash Royale ──
+        gameCatalogService.setDifficultyMode("CS2", "FLAT", 2000L, 50);
 
         // ── CS2: удаляем все старые квесты ──────────────────────────────────────
         Set<String> keepCs2Titles = Set.of(
@@ -1445,6 +1523,30 @@ public class QuestSeeder implements CommandLineRunner {
         questRepository.findFirstByTitleAndGameName("Ранговый прорыв — достигни звания Gold Nova I или выше", "CS2")
                 .ifPresent(q -> { if (q.getParticipantLimit() == null || q.getParticipantLimit() == 100) { q.setParticipantLimit(50); questRepository.save(q); } });
 
+        // ── CS2: короткие подписи на кнопках списка квестов (см. Quest.shortLabel / sendQuestList) ──
+        setShortLabel("Сыграй 3 матча в любом режиме", "CS2", "3 матча");
+        setShortLabel("Сделай 10 убийств за один матч", "CS2", "10 убийств/матч");
+        setShortLabel("Победи в одном матче", "CS2", "Победа×1");
+        setShortLabel("Набери 15 убийств за матч", "CS2", "15 убийств/матч");
+        setShortLabel("Помоги команде 5 раз за матч", "CS2", "5 ассистов/матч");
+        setShortLabel("Умри не более 5 раз за матч", "CS2", "≤5 смертей/матч");
+        setShortLabel("Набери 30 убийств за матч", "CS2", "30 убийств/матч");
+        setShortLabel("Помоги команде 13 раз за матч", "CS2", "13 ассистов/матч");
+        setShortLabel("Умри не более 3 раз за матч", "CS2", "≤3 смерти/матч");
+        setShortLabel("Получи 3 звезды MVP за матч", "CS2", "3★ MVP/матч");
+        setShortLabel("Набери счёт 45+ за матч", "CS2", "Счёт 45+/матч");
+        setShortLabel("Набери 20 убийств в одном матче", "CS2", "20 убийств/матч");
+        setShortLabel("Выиграй 5 соревновательных матчей", "CS2", "Победа×5: Рейтинг");
+        setShortLabel("Завершить матч с K/D выше 2.0", "CS2", "K/D выше 2.0");
+        setShortLabel("Достигни ранга Серебро I или выше", "CS2", "Ранг Серебро I+");
+        setShortLabel("Получи 6 звёзд MVP за матч", "CS2", "6★ MVP/матч");
+        setShortLabel("Набери счёт 60+ за матч", "CS2", "Счёт 60+/матч");
+        setShortLabel("Сделай 5 убийств с одним ножом за матч", "CS2", "5 килов ножом/матч");
+        setShortLabel("Достигни ранга Золото или выше", "CS2", "Ранг Золото+");
+        setShortLabel("Выиграй 10 соревновательных матчей за 2 недели", "CS2", "Победа×10: Рейтинг/2нед");
+        setShortLabel("Первая кровь — 10 убийств в одном матче", "CS2", "Первая кровь: 10 килов");
+        setShortLabel("Ранговый прорыв — достигни звания Gold Nova I или выше", "CS2", "Ранг Gold Nova I+");
+
         // ── Last Day on Earth: Survival — удалить все квесты ───────────────────
         questRepository.findAll().stream()
                 .filter(q -> "Last Day on Earth: Survival".equalsIgnoreCase(q.getGameName()))
@@ -1488,6 +1590,9 @@ public class QuestSeeder implements CommandLineRunner {
         setShortLabel("TikTok видео про EGC", "UGC", "Видео в TikTok");
         setShortLabel("YouTube Shorts про EGC", "UGC", "Shorts на YouTube");
         setShortLabel("Telegram Stories про EGC", "UGC", "Stories в Telegram");
+
+        // ── Dota 2: FLAT-режим — единый список без выбора категории, по образцу Brawl Stars/Clash of Clans/Clash Royale ──
+        gameCatalogService.setDifficultyMode("Dota 2", "FLAT", 2000L, 50);
 
         // ── Dota 2 — деактивация старых квестов ──────────────────────────────────
         java.util.Set<String> keepDotaTitles = java.util.Set.of(
@@ -1586,6 +1691,23 @@ public class QuestSeeder implements CommandLineRunner {
                 "1. Сыграй полный матч длительностью 45+ минут\n2. После матча зайди на opendota.com → введи свой Steam ID → открой страницу этого матча\n3. Сделай скриншот — должны быть видны: твой ник, длительность матча 45:00+, дата\n4. Загрузи скриншот как отчёт",
                 "Скриншот экрана результатов матча, где длительность показывает 45:00 и более. Должны быть видны дата матча и ник игрока.");
 
+        // ── Dota 2: короткие подписи на кнопках списка квестов (см. Quest.shortLabel / sendQuestList) ──
+        setShortLabel("Набери 8 убийств за матч", "Dota 2", "8 килов/матч");
+        setShortLabel("Набери 15 убийств за матч", "Dota 2", "15 килов/матч");
+        setShortLabel("Сделай 10 ассистов за матч", "Dota 2", "10 ассистов/матч");
+        setShortLabel("Сделай 15 ассистов за матч", "Dota 2", "15 ассистов/матч");
+        setShortLabel("Умри не более 8 раз за матч", "Dota 2", "≤8 смертей/матч");
+        setShortLabel("Умри не более 5 раз за матч", "Dota 2", "≤5 смертей/матч");
+        setShortLabel("Заработай 15,000 золота за матч", "Dota 2", "15000 золота/матч");
+        setShortLabel("Заработай 25,000 золота за матч", "Dota 2", "25000 золота/матч");
+        setShortLabel("Достигни 20 уровня героя за матч", "Dota 2", "20 ур. героя/матч");
+        setShortLabel("Достигни 25 уровня героя за матч", "Dota 2", "25 ур. героя/матч");
+        setShortLabel("Сыграй матч длительностью 30+ минут", "Dota 2", "Матч 30+ мин");
+        setShortLabel("Сыграй матч длительностью 45+ минут", "Dota 2", "Матч 45+ мин");
+
+        // ── GTA V: FLAT-режим — единый список без выбора категории, по образцу Brawl Stars/Clash of Clans/Clash Royale ──
+        gameCatalogService.setDifficultyMode("GTA V", "FLAT", 2000L, 50);
+
         // ── GTA V — переименование квестов ──────────────────────────────────────
         updateQuest("Добро пожаловать в Лос-Сантос", "GTA V", "Сыграй одну миссию в GTA Online",
                 "Лёгкие", "PC, PS4/5, Xbox", 3, "3 дня", 50, 1500,
@@ -1607,6 +1729,12 @@ public class QuestSeeder implements CommandLineRunner {
                 "Купи любую недвижимость в GTA Online — гараж, квартиру, бизнес или клубный дом. Покупка должна быть совершена в рамках текущей игровой сессии.",
                 "1. Зайди в GTA Online\n2. Открой карту или сайт в игре и выбери недвижимость для покупки\n3. Подтверди покупку\n4. Сделай скриншот экрана подтверждения покупки\n5. Загрузи скриншот как отчёт",
                 "Скриншот экрана подтверждения покупки с названием недвижимости и суммой сделки. Ник персонажа должен быть виден.");
+
+        // ── GTA V: короткие подписи на кнопках списка квестов (см. Quest.shortLabel / sendQuestList) ──
+        setShortLabel("Сыграй одну миссию в GTA Online", "GTA V", "1 миссия");
+        setShortLabel("Заработай 1 000 000 $ в GTA Online", "GTA V", "$1,000,000");
+        setShortLabel("Продержись с 5 звёздами розыска 3 минуты", "GTA V", "5★ розыск 3 мин");
+        setShortLabel("Купи любую недвижимость в GTA Online", "GTA V", "Купи недвижимость");
 
         // ── Временно закрыт доступ игрокам: EA FC 26, Mobile Legends («скоро откроется») ──
         // Квесты не удаляются, только деактивируются — чтобы вернуть доступ, достаточно убрать строку.
