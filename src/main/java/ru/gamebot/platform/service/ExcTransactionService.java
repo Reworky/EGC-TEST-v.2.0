@@ -35,6 +35,15 @@ public class ExcTransactionService {
     public static final String WELCOME_BONUS  = "WELCOME_BONUS";
     public static final String CONFISCATE     = "CONFISCATE";
     public static final String AD_REWARD      = "AD_REWARD";
+    /** Разовый бонус ПРИГЛАШЁННОМУ за вступление по ссылке — намеренно ОТДЕЛЬНЫЙ тип от REFERRAL:
+     *  findReferralEarningsRankingBetween считает только REFERRAL (заработок самого реферера — инстант-бонус
+     *  рефереру + 3% с квестов), иначе в "топ рефереров" попадали люди, которые сами никого не пригласили,
+     *  а просто недавно присоединились по чьей-то ссылке (баг найден 2026-09-06 — все в топ-5 показывали 👥 0). */
+    public static final String REFERRAL_WELCOME = "REFERRAL_WELCOME";
+    /** Выплата призового пула топ-5 рефереров недели — тоже ОТДЕЛЬНЫЙ тип от REFERRAL: этот перевод создаётся
+     *  ровно в 00:00 понедельника (см. WeeklyResetScheduler), т.е. в первую же секунду НОВОЙ недели, и раньше
+     *  засчитывался в её рейтинг раньше, чем игрок успевал хоть что-то заработать на этой неделе. */
+    public static final String REFERRAL_PRIZE = "REFERRAL_PRIZE";
 
     @Transactional(propagation = Propagation.REQUIRED)
     public void log(AppUser user, long amount, String type, String description) {
@@ -84,6 +93,8 @@ public class ExcTransactionService {
             case WELCOME_BONUS  -> "🎉 Приветственный бонус";
             case CONFISCATE     -> "🚫 Конфискация";
             case AD_REWARD      -> "🎬 За рекламу";
+            case REFERRAL_WELCOME -> "🤝 Бонус за вступление";
+            case REFERRAL_PRIZE   -> "🏆 Приз топ-рефереров";
             default             -> "📌 Прочее";
         };
     }

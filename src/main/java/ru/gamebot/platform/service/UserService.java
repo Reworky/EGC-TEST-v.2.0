@@ -487,7 +487,7 @@ public class UserService {
         // Instant bonus: 500 EXC to invited user
         long invitedBonus = 500;
         invitedUser.setCoins(invitedUser.getCoins() + invitedBonus);
-        excTx.log(invitedUser, invitedBonus, ExcTransactionService.REFERRAL, "Реферальный бонус (приглашён)");
+        excTx.log(invitedUser, invitedBonus, ExcTransactionService.REFERRAL_WELCOME, "Реферальный бонус (приглашён)");
 
         // Instant bonus: 300 EXC to referrer
         long referrerBonus = 300;
@@ -615,7 +615,7 @@ public class UserService {
             long prize = REFERRAL_WEEKLY_POOL * REFERRAL_SHARE_BPS[i] / 10_000;
             user.setCoins(user.getCoins() + prize);
             appUserRepository.save(user);
-            excTx.log(user, prize, ExcTransactionService.REFERRAL,
+            excTx.log(user, prize, ExcTransactionService.REFERRAL_PRIZE,
                     "Топ-" + (i + 1) + " реферер недели (+" + prize + " EXC)");
             winners.add(new ReferralRankEntry(user, i + 1, weeklyReferralExc, prize));
         }
