@@ -89,6 +89,14 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     long countBySquadId(Long squadId);
 
+    /** Топ стран по числу игроков — для статистики под рекламодателя. country — свободный текст
+     *  (self-reported через profile:edit_country), возможны дубли из-за разного написания/регистра. */
+    @Query("SELECT u.country, COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.country IS NOT NULL AND u.country <> '' GROUP BY u.country ORDER BY COUNT(u) DESC")
+    List<Object[]> countUsersByCountry();
+
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt >= :since AND u.referredByTelegramId IS NOT NULL")
+    long countReferredNewUsersSince(@Param("since") LocalDateTime since);
+
     Optional<AppUser> findByPhoneNumberAndTelegramIdNot(String phoneNumber, Long excludeTelegramId);
 
     @Query("SELECT u FROM AppUser u WHERE u.registrationCompleted = true AND u.onboardingCompleted = false AND u.onboardingStartedAt IS NOT NULL AND u.onboardingNotificationsSent < 3 AND u.blocked = false")

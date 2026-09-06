@@ -6117,6 +6117,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 answer(callbackQuery.getId(), "📸 Снепшот сохранён");
                 return;
             }
+            case "advstats" -> sendAdminAdvertiserStats(user);
             case "stats:reset_weekly" -> sendAdminResetWeeklyConfirm(user);
             case "stats:reset_weekly:confirm" -> doAdminResetWeeklyXp(user);
             case "live" -> sendAdminLiveStatus(user);
@@ -8265,6 +8266,67 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         List.of(keyboardFactory.callback("📸 Снепшот сейчас", "admin:stats:snapshot")),
                         List.of(keyboardFactory.callback("⬅️ Назад", "admin:stats"),
                                 keyboardFactory.callback("🏠 Меню", "menu:main"))
+                )));
+    }
+
+    /** Сводка метрик для презентации потенциальному рекламодателю — отдельная от внутренней
+     *  "📊 Статистика", т.к. состав и подача другие (аудитория/вовлечённость/виральность,
+     *  а не операционка платформы). Считается вживую по запросу, без снепшотов/истории. */
+    private void sendAdminAdvertiserStats(AppUser user) {
+        java.time.LocalDate now = java.time.LocalDate.now();
+        java.time.LocalDate sevenDaysAgo = now.minusDays(7);
+        java.time.LocalDate thirtyDaysAgo = now.minusDays(30);
+        java.time.LocalDateTime nowDt = java.time.LocalDateTime.now();
+
+        long totalUsers = userService.totalRegisteredUsers();
+        long newUsersWeek = userService.countNewUsersSince(nowDt.minusDays(7));
+        long active7 = userService.countActiveSince(sevenDaysAgo);
+        long active30 = userService.countActiveSince(thirtyDaysAgo);
+        String pct7 = totalUsers > 0 ? " (" + (active7 * 100 / totalUsers) + "%)" : "";
+        String pct30 = totalUsers > 0 ? " (" + (active30 * 100 / totalUsers) + "%)" : "";
+
+        List<Object[]> countryRows = userService.countUsersByCountry();
+        StringBuilder countriesBlock = new StringBuilder();
+        int shown = 0;
+        for (Object[] row : countryRows) {
+            if (shown >= 5) break;
+            String country = (String) row[0];
+            long count = ((Number) row[1]).longValue();
+            shown++;
+            countriesBlock.append(shown).append(". ").append(escape(country)).append(" — ").append(count).append("\n");
+        }
+        if (countriesBlock.isEmpty()) {
+            countriesBlock.append("<i>Данные о стране не заполнены у игроков</i>\n");
+        }
+
+        long approvedWeek = questService.countApprovedSince(nowDt.minusDays(7));
+        long totalCoins = userService.sumAllCoins();
+        long paidOutMonth = rewardService.totalPaidOutExcSince(nowDt.minusDays(30));
+
+        long newUsersMonth = userService.countNewUsersSince(nowDt.minusDays(30));
+        long referredNewMonth = userService.countReferredNewUsersSince(nowDt.minusDays(30));
+        String referralShare = newUsersMonth > 0 ? (referredNewMonth * 100 / newUsersMonth) + "%" : "—";
+
+        sendText(user.getTelegramId(),
+                "📊 <b>Статистика для рекламодателя</b>\n\n"
+                        + "👥 Всего пользователей: <b>" + totalUsers + "</b>\n"
+                        + "🆕 Новых за 7 дней: <b>" + newUsersWeek + "</b>\n\n"
+                        + "📈 <b>Активность</b>\n"
+                        + "🟢 За 7 дней: <b>" + active7 + pct7 + "</b>\n"
+                        + "🔵 За 30 дней: <b>" + active30 + pct30 + "</b>\n\n"
+                        + "🌍 <b>Топ стран</b> (по данным профиля)\n"
+                        + countriesBlock
+                        + "\n🎯 Квестов выполнено за 7 дней: <b>" + approvedWeek + "</b>\n\n"
+                        + "💰 <b>Экономика</b>\n"
+                        + "💰 EXC на счетах (в обороте): <b>" + fmtExc(totalCoins) + " EXC</b>\n"
+                        + "💸 Выплачено за 30 дней: <b>" + fmtExc(paidOutMonth) + " EXC</b>\n\n"
+                        + "🤝 <b>Виральность</b>\n"
+                        + "Доля новых за 30 дней, пришедших по реферальной ссылке: <b>" + referralShare + "</b> ("
+                        + referredNewMonth + " из " + newUsersMonth + ")\n\n"
+                        + "<i>Гео — самостоятельно указано игроками в профиле, точность не гарантирована.</i>",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("🔄 Обновить", "admin:advstats")),
+                        List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
                 )));
     }
 
@@ -11766,6 +11828,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback("📊 Статистика", "admin:stats")
             ));
             rows.add(List.of(keyboardFactory.callback("📡 Сейчас на платформе", "admin:live")));
+            rows.add(List.of(keyboardFactory.callback("📊 Статистика для рекламодателя", "admin:advstats")));
             rows.add(List.of(
                     keyboardFactory.callback("➕ Квест", "admin:create"),
                     keyboardFactory.callback("📋 По шаблону", "admin:template")

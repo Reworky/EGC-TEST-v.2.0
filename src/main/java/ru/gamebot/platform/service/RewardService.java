@@ -188,6 +188,10 @@ public class RewardService {
         return rewardRequestRepository.sumApprovedWithdrawalExc();
     }
 
+    public long totalPaidOutExcSince(java.time.LocalDateTime since) {
+        return rewardRequestRepository.sumApprovedWithdrawalExcSince(since);
+    }
+
     /** Возвращает [rubTotal, tonRubEquivalent] — суммы в рублях по рублёвым и GRAM-выводам отдельно. */
     public long[] totalPaidOutRubAndTonRub() {
         long rubTotal = 0;

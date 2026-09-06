@@ -685,6 +685,15 @@ public class UserService {
         return appUserRepository.sumAllCoins();
     }
 
+    /** Топ стран по числу игроков, [страна, количество] — для статистики под рекламодателя. */
+    public List<Object[]> countUsersByCountry() {
+        return appUserRepository.countUsersByCountry();
+    }
+
+    public long countReferredNewUsersSince(java.time.LocalDateTime since) {
+        return appUserRepository.countReferredNewUsersSince(since);
+    }
+
     public long sumAllTickets() {
         return appUserRepository.sumAllTickets();
     }
