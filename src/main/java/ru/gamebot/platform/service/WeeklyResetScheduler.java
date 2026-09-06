@@ -59,6 +59,7 @@ public class WeeklyResetScheduler {
     private final ClashQuestVerificationService clashQuestVerificationService;
     private final ClashRoyaleQuestVerificationService clashRoyaleQuestVerificationService;
     private final ScheduledBroadcastService scheduledBroadcastService;
+    private final AchievementCheckService achievementCheckService;
 
     private static final int[] DORMANCY_TIER_DAYS = {14, 30, 60};
     private static final long[] DORMANCY_TIER_EXC = {300, 750, 1500};
@@ -229,6 +230,16 @@ public class WeeklyResetScheduler {
             clashRoyaleQuestVerificationService.checkInProgressSubmissions();
         } catch (Exception e) {
             log.error("Clash Royale auto-verify check failed", e);
+        }
+    }
+
+    // Проверка достижений (новый XP-уровень / круглая сумма EXC) — каждые 10 минут
+    @Scheduled(fixedDelay = 600_000)
+    public void checkAchievementMilestones() {
+        try {
+            achievementCheckService.checkMilestones();
+        } catch (Exception e) {
+            log.error("Achievement milestone check failed", e);
         }
     }
 

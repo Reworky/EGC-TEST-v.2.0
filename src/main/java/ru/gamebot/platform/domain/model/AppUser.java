@@ -52,6 +52,14 @@ public class AppUser {
     private Long referredByTelegramId;
     private boolean referralRewardProcessed;
 
+    /** Последний XP-уровень, о котором уже прислано уведомление-достижение (см. AchievementCheckService).
+     *  null = ещё не проверяли — первый проход поллера просто фиксирует текущий уровень, без уведомления. */
+    private Integer lastNotifiedLevelNumber;
+
+    /** Последний пройденный EXC-майлстоун, о котором уже прислано уведомление-достижение.
+     *  null = ещё не проверяли (тот же паттерн первого замера, что и lastNotifiedLevelNumber). */
+    private Long lastNotifiedExcMilestone;
+
     /** Был ли приглашённый активен на момент последней ежедневной проверки — только для уведомления
      *  реферера о паузе, саму выплату комиссии не гейтит (она и так завязана на факт одобрения квеста). */
     @Column(columnDefinition = "boolean default true")

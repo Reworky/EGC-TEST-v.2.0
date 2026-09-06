@@ -1,11 +1,14 @@
 package ru.gamebot.platform.service;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Stream;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +17,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.telegram.telegrambots.meta.api.objects.User;
+import ru.gamebot.platform.config.AppProperties;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.SupportTicket;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
@@ -74,6 +78,27 @@ public class UserService {
     private final ApplicationEventPublisher eventPublisher;
     private final SupportAttachmentRepository supportAttachmentRepository;
     private final WheelService wheelService;
+    private final AppProperties appProperties;
+
+    /** Варианты текста для кнопки «Поделиться» (Telegram share-ссылка) — случайный выбор при каждом
+     *  построении, чтобы сообщения разных отправителей не выглядели как рассылка одного шаблона. */
+    private static final String[] SHARE_TEMPLATES = {
+            "Залетай в EGC — там реально платят за игру 🎮 У меня уже {баланс_EXC} EXC, ранг «{ранг}».",
+            "Я в EGC уже «{ранг}» и заработал {баланс_EXC} EXC просто за квесты в играх. Присоединяйся:",
+            "Нашёл клуб, где платят EXC за прохождение квестов в играх — уже накопил {баланс_EXC}, ранг «{ранг}». Залетай:"
+    };
+
+    /** Ссылка вида t.me/share/url?... — открывает нативный пикер пересылки Telegram с готовым текстом
+     *  и реферальной ссылкой, без специального Bot API метода (просто обычная URL-кнопка). */
+    public String buildShareUrl(AppUser user) {
+        String referralLink = "https://t.me/" + appProperties.getBotUsername() + "?start=ref_" + user.getTelegramId();
+        String template = SHARE_TEMPLATES[ThreadLocalRandom.current().nextInt(SHARE_TEMPLATES.length)];
+        String text = template
+                .replace("{баланс_EXC}", String.valueOf(user.getCoins()))
+                .replace("{ранг}", getLevelName(user.getXp()));
+        return "https://t.me/share/url?url=" + URLEncoder.encode(referralLink, StandardCharsets.UTF_8)
+                + "&text=" + URLEncoder.encode(text, StandardCharsets.UTF_8);
+    }
 
     @Transactional
     public AppUser getOrCreate(User telegramUser, Long referredByTelegramId) {

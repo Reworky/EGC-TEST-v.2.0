@@ -4115,6 +4115,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "• Ты получаешь <b>3% от каждого его EXC</b> — пока друг активен (выполняет квесты хотя бы раз в 14 дней)\n\n"
                         + "Скопируй ссылку и отправь другу — остальное система сделает сама.",
                 keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.url("🔗 Поделиться", userService.buildShareUrl(user))),
                         List.of(keyboardFactory.callback("🏆 Рейтинг недели", "menu:referral-rating")),
                         List.of(keyboardFactory.callback("👥 Мои друзья", "menu:referral-friends")),
                         List.of(
@@ -9016,6 +9017,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "Вы заняли <b>" + e.getRank() + " место</b> в турнире «" + escape(t.getName()) + "»"
                             + delta + prizeNote,
                             backMenuKeyboard("menu:main"));
+                    if (e.getRank() == 1) {
+                        sendAchievementCard(e.getUser().getTelegramId(), ru.gamebot.platform.domain.enums.AchievementType.TOURNAMENT_WIN, t.getName());
+                    }
                 } catch (Exception ex) {
                     log.warn("Failed to notify user {} about tournament prize", e.getUser().getTelegramId());
                 }
@@ -10754,6 +10758,30 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     public void onReviewRepostCandidate(ru.gamebot.platform.event.ReviewRepostCandidateEvent event) {
         pendingReviewRepostId = event.getReviewId();
         sendReviewRepostCard();
+    }
+
+    /** Новый XP-уровень или круглая сумма EXC (см. AchievementCheckService, каждые 10 минут). Победа в
+     * турнире шлётся тем же методом напрямую из onTournamentFinished — без отдельного события, т.к. это
+     * уже обработчик TournamentFinishedEvent в этом же классе. */
+    @org.springframework.context.event.EventListener
+    public void onAchievement(ru.gamebot.platform.event.AchievementEvent event) {
+        sendAchievementCard(event.getTelegramId(), event.getType(), event.getDetail());
+    }
+
+    /** Карточка-достижение (текст, без генерации изображения — визуал добавляется отдельно позже) с
+     * кнопкой «Поделиться», ведущей на реферальную ссылку получателя. */
+    private void sendAchievementCard(Long telegramId, ru.gamebot.platform.domain.enums.AchievementType type, String detail) {
+        userService.findByTelegramId(telegramId).ifPresent(user -> {
+            String text = switch (type) {
+                case TOURNAMENT_WIN -> "🏆 <b>Достижение разблокировано!</b>\n\nТы выиграл турнир «" + escape(detail) + "»! Расскажи друзьям — пусть тоже попробуют:";
+                case RANK_UP -> "⭐ <b>Новый ранг!</b>\n\nТы достиг звания «" + escape(detail) + "»! Похвастайся друзьям:";
+                case EXC_MILESTONE -> "💰 <b>Круглая сумма!</b>\n\nТы заработал уже " + detail + " EXC в EGC! Позови друзей за компанию:";
+            };
+            sendText(telegramId, text, keyboardFactory.rowsLayout(List.of(
+                    List.of(keyboardFactory.url("🔗 Поделиться", userService.buildShareUrl(user))),
+                    List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
+            )));
+        });
     }
 
     private void sendReviewRepostCard() {
