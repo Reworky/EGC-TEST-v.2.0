@@ -41,8 +41,13 @@ function SquadCard({ squad, onChanged }) {
     <div className="ref-link-card" style={{ margin: '12px 16px' }}>
       <div className="ref-link-label">⚔️ {squad.name}</div>
       <p className="shop-desc">
-        Участников: <b>{squad.members.length}</b> · XP за неделю: <b>{squad.weeklyXp.toLocaleString()}</b>
+        Участников: <b>{squad.members.length}</b> · Рейтинг за неделю: <b>{squad.weeklyXp.toLocaleString()}</b>
       </p>
+      {squad.weeklyBonusPoints > 0 && (
+        <p className="shop-desc" style={{ marginTop: -8 }}>
+          🎉 Бонус за рефералов: <b>+{squad.weeklyBonusPoints.toLocaleString()}</b>
+        </p>
+      )}
 
       <div className="category-section" style={{ marginTop: 8 }}>
         {squad.members.map(m => (

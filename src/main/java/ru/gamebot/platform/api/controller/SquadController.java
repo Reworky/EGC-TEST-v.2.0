@@ -87,7 +87,10 @@ public class SquadController {
 
     private SquadDto toDto(Squad squad, AppUser user, Long telegramId) {
         List<AppUser> members = squadService.getMembers(squad);
-        long weeklyXp = members.stream().mapToLong(AppUser::getWeeklyXp).sum();
+        // squadService.squadWeeklyXp() — не сумма по участникам напрямую, т.к. включает ещё
+        // weeklyBonusPoints (реферал вступил в отряд пригласившего, см. Squad.java) — раньше здесь
+        // считали сумму по members напрямую, бонус был не виден в Mini App (тот же баг чинили в боте).
+        long weeklyXp = squadService.squadWeeklyXp(squad);
         boolean isCaptain = telegramId.equals(squad.getCaptainTelegramId());
         List<MemberDto> memberDtos = members.stream()
                 .map(m -> new MemberDto(
@@ -98,11 +101,11 @@ public class SquadController {
                         m.getTelegramId().equals(squad.getCaptainTelegramId())))
                 .toList();
         return new SquadDto(squad.getId(), squad.getName(), squad.getInviteCode(),
-                isCaptain, weeklyXp, memberDtos);
+                isCaptain, weeklyXp, squad.getWeeklyBonusPoints(), memberDtos);
     }
 
     record SquadDto(Long id, String name, String inviteCode, boolean isCaptain,
-                    long weeklyXp, List<MemberDto> members) {}
+                    long weeklyXp, long weeklyBonusPoints, List<MemberDto> members) {}
     record MemberDto(Long telegramId, String nickname, String levelName, long weeklyXp, boolean isCaptain) {}
     record LeaderboardEntry(int rank, String name, long weeklyXp, long memberCount) {}
     record CreateRequest(String name) {}
