@@ -4,6 +4,7 @@ import BackButton from '../components/BackButton';
 import BorderBeamCard from '../components/BorderBeamCard';
 import ShimmerButton from '../components/ShimmerButton';
 import AnimatedNumber from '../components/AnimatedNumber';
+import AdRewardCard from '../components/AdRewardCard';
 import { useParticles } from '../components/ParticlesContext';
 import './QuestsPage.css';
 import './ShopPage.css';
@@ -124,6 +125,11 @@ function BalanceView({ wallet, onChanged }) {
           <p className="shop-desc"><i className="ti ti-circle-check"></i> Бонус за сегодня уже получен. Серия: {wallet.streakDays} дн. Возвращайся завтра за +{wallet.nextDailyBonusExc} EXC.</p>
         )}
         {message && <div className="quest-message">{message}</div>}
+      </div>
+
+      <div className="category-section" style={{ marginTop: 12 }}>
+        <div className="ref-link-label" style={{ marginBottom: 10 }}>🎬 Забери халявные EXC</div>
+        <AdRewardCard />
       </div>
     </>
   );

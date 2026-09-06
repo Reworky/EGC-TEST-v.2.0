@@ -758,7 +758,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if ("quests:section:ads".equals(data)) {
-            sendAdsList(user);
+            sendAdsList(user, "menu:quests");
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if ("wallet:section:ads".equals(data)) {
+            sendAdsList(user, "menu:cat:wallet");
             answerSilently(callbackQuery.getId());
             return;
         }
@@ -2496,6 +2501,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
                 List.of(keyboardFactory.callback(dailyLabel, "menu:daily")),
+                List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads")),
                 List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
@@ -2522,7 +2528,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             log.warn("Failed to send wallet banner", e);
             sendMenuCategory(user, "💰 <b>Кошелёк</b>", List.of(
                     List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
-                    List.of(keyboardFactory.callback(dailyLabel, "menu:daily"))
+                    List.of(keyboardFactory.callback(dailyLabel, "menu:daily")),
+                    List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads"))
             ));
         }
     }
@@ -3310,7 +3317,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * ещё не прошла модерацию AdsGram) — но должна оставаться видимой: модерация AdsGram отклоняет
      * bot-платформу, если не может найти в живом боте место размещения рекламы (см. правило
      * "cannot be determined where exactly in the bot the ad will be placed" в docs.adsgram.ai/bots/moderation). */
-    private void sendAdsList(AppUser user) {
+    private void sendAdsList(AppUser user, String backTarget) {
         int remaining = userService.getAdRewardsRemainingToday(user, ru.gamebot.platform.service.UserService.AdRewardSource.ADSGRAM);
         String watchAdLabel = remaining > 0 ? "🎬 Реклама в боте 🔔" : "🎬 Реклама в боте";
         List<InlineKeyboardButton> buttons = new ArrayList<>(List.of(
@@ -3318,7 +3325,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.webApp("🎬 Реклама в приложении", "https://experience-gaming-club.pages.dev/quests?section=ads")));
         sendText(user.getTelegramId(),
                 "📺 <b>Реклама</b>\n\nПосмотри рекламу — получи EXC. У каждого источника свой дневной лимит показов.",
-                verticalWithBackMenu(buttons, "⬅️ Назад", "menu:quests"));
+                verticalWithBackMenu(buttons, "⬅️ Назад", backTarget));
     }
 
     private void sendQuestCategories(AppUser user) {
