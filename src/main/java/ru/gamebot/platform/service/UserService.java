@@ -96,8 +96,15 @@ public class UserService {
         String text = template
                 .replace("{баланс_EXC}", String.valueOf(user.getCoins()))
                 .replace("{ранг}", getLevelName(user.getXp()));
-        return "https://t.me/share/url?url=" + URLEncoder.encode(referralLink, StandardCharsets.UTF_8)
-                + "&text=" + URLEncoder.encode(text, StandardCharsets.UTF_8);
+        return "https://t.me/share/url?url=" + encodeUrlComponent(referralLink)
+                + "&text=" + encodeUrlComponent(text);
+    }
+
+    /** URLEncoder кодирует пробел как '+' (правило application/x-www-form-urlencoded) — Telegram при
+     *  открытии t.me/share/url его обратно в пробел не разворачивает, и в тексте показываются буквально
+     *  плюсы вместо пробелов. Нужен настоящий percent-encoding (пробел → %20), поэтому докручиваем вручную. */
+    private static String encodeUrlComponent(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
     @Transactional
