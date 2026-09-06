@@ -254,15 +254,18 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
     >
       {/* Шапка: категория + статус */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        {q.sponsored ? (
-          <span className="quest-cat-badge sponsored">💼 Спонсорский</span>
-        ) : q.gameName === 'UGC' ? (
-          <span className="quest-cat-badge ugc">🤳 Контент</span>
-        ) : q.category ? (
-          <span className={`quest-cat-badge ${CATEGORY_BADGE[q.category] || 'other'}`}>
-            {q.category}
-          </span>
-        ) : null}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {q.sponsored ? (
+            <span className="quest-cat-badge sponsored">💼 Спонсорский</span>
+          ) : q.gameName === 'UGC' ? (
+            <span className="quest-cat-badge ugc">🤳 Контент</span>
+          ) : q.category ? (
+            <span className={`quest-cat-badge ${CATEGORY_BADGE[q.category] || 'other'}`}>
+              {q.category}
+            </span>
+          ) : null}
+          {q.highlightNew && <span className="quest-cat-badge new">🆕 Новое</span>}
+        </div>
         {q.submissionStatus && (
           <span className="quest-taken-badge" style={{ color: STATUS_COLORS[q.submissionStatus] }}>
             ● {q.submissionStatus === 'DRAFT' && (q.brawlAutoVerify || q.externalAutoApprove)

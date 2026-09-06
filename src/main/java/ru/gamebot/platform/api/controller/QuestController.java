@@ -102,6 +102,7 @@ public class QuestController {
                 .sponsored(q.isSponsored())
                 .externalAutoApprove(q.isExternalAutoApprove())
                 .brawlAutoVerify(q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null)
+                .highlightNew(q.isHighlightNew())
                 .submissionStatus(statusByQuestId.get(q.getId()))
                 .build()).toList();
     }
@@ -131,6 +132,7 @@ public class QuestController {
                 .councilOnly(q.isCouncilOnly()).sponsored(true)
                 .externalAutoApprove(q.isExternalAutoApprove())
                 .brawlAutoVerify(q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null)
+                .highlightNew(q.isHighlightNew())
                 .submissionStatus(statusByQuestId.get(q.getId()))
                 .build()).toList();
     }

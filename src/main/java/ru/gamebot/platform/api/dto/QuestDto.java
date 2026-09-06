@@ -19,6 +19,9 @@ public class QuestDto {
     private boolean councilOnly;
     private boolean sponsored;
 
+    /** См. Quest.highlightNew — карточка получает пометку 🆕 в Mini App (парность с sendQuestList в боте). */
+    private boolean highlightNew;
+
     /** Внешний авто-квест (партнёрская сеть): вместо отчёта нужно просто перейти по ссылке. */
     private boolean externalAutoApprove;
 

@@ -202,6 +202,7 @@
 .quest-cat-badge.sponsored { background: rgba(251,191,36,0.15);  color: #fbbf24; border: 0.5px solid rgba(251,191,36,0.3); }
 .quest-cat-badge.ugc       { background: rgba(52,211,153,0.15);  color: #34d399; border: 0.5px solid rgba(52,211,153,0.3); }
 .quest-cat-badge.ads       { background: rgba(244,114,182,0.15); color: #f472b6; border: 0.5px solid rgba(244,114,182,0.3); }
+.quest-cat-badge.new       { background: rgba(239,68,68,0.15);   color: #ef4444; border: 0.5px solid rgba(239,68,68,0.3); }
 
 /* ── Quest detail (expanded) ── */
 .quest-detail {
