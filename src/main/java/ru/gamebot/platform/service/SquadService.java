@@ -15,6 +15,7 @@ import ru.gamebot.platform.domain.model.Squad;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.SquadRepository;
 import ru.gamebot.platform.event.SquadPrizeEvent;
+import ru.gamebot.platform.event.SquadReferralBonusEvent;
 
 @Slf4j
 @Service
@@ -24,6 +25,8 @@ public class SquadService {
     private static final int MAX_MEMBERS = 5;
     private static final int MIN_MEMBERS = 2;
     private static final long WEEKLY_PRIZE_POOL = 10_000L;
+    private static final long REFERRAL_SQUAD_BONUS_POINTS = 100;
+    private static final int REFERRAL_SQUAD_JOIN_WINDOW_DAYS = 7;
 
     private final SquadRepository squadRepository;
     private final AppUserRepository appUserRepository;
@@ -48,7 +51,7 @@ public class SquadService {
     }
 
     public long squadWeeklyXp(Squad squad) {
-        return getMembers(squad).stream().mapToLong(AppUser::getWeeklyXp).sum();
+        return getMembers(squad).stream().mapToLong(AppUser::getWeeklyXp).sum() + squad.getWeeklyBonusPoints();
     }
 
     public boolean isNameTaken(String name) {
@@ -92,7 +95,40 @@ public class SquadService {
         }
         user.setSquadId(squad.getId());
         appUserRepository.save(user);
+        awardReferralSquadBonus(user, squad);
         return squad;
+    }
+
+    /** Модуль "Реферал усиливает Отряд" (максимизация рефералки, Модуль 2): если вступивший был приглашён
+     *  кем-то и вступает именно в отряд ПРИГЛАСИВШЕГО (не в любой отряд вообще) в течение
+     *  {@link #REFERRAL_SQUAD_JOIN_WINDOW_DAYS} дней с момента СВОЕЙ регистрации — отряду начисляются
+     *  бонусные очки к недельному рейтингу и все участники получают уведомление. */
+    private void awardReferralSquadBonus(AppUser invitedUser, Squad squad) {
+        Long referrerTelegramId = invitedUser.getReferredByTelegramId();
+        if (referrerTelegramId == null) return;
+        if (invitedUser.getCreatedAt() == null
+                || invitedUser.getCreatedAt().plusDays(REFERRAL_SQUAD_JOIN_WINDOW_DAYS).isBefore(LocalDateTime.now())) {
+            return; // окно "за счёт приглашения" истекло
+        }
+        AppUser referrer = appUserRepository.findByTelegramId(referrerTelegramId).orElse(null);
+        if (referrer == null || referrer.getSquadId() == null || !referrer.getSquadId().equals(squad.getId())) {
+            return; // вступил не в отряд именно пригласившего
+        }
+        squad.setWeeklyBonusPoints(squad.getWeeklyBonusPoints() + REFERRAL_SQUAD_BONUS_POINTS);
+        squadRepository.save(squad);
+        List<AppUser> members = getMembers(squad);
+        eventPublisher.publishEvent(new SquadReferralBonusEvent(this, squad, members, invitedUser, REFERRAL_SQUAD_BONUS_POINTS));
+    }
+
+    /** Раз в неделю (см. WeeklyResetScheduler), после того как rewardTopSquad() прочитал итоговый счёт —
+     *  иначе бонусные очки накапливались бы бессрочно вместо действия только на текущую неделю. */
+    @Transactional
+    public void resetWeeklyBonusPoints() {
+        List<Squad> all = squadRepository.findAll();
+        for (Squad s : all) {
+            s.setWeeklyBonusPoints(0);
+        }
+        squadRepository.saveAll(all);
     }
 
     @Transactional

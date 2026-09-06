@@ -33,4 +33,11 @@ public class Squad {
     private String status; // ACTIVE / DISBANDED
 
     private LocalDateTime createdAt;
+
+    /** Бонусные очки к недельному рейтингу отряда (см. SquadService.squadWeeklyXp) — начисляются, когда
+     *  реферал вступает в отряд ПРИГЛАСИВШЕГО в течение 7 дней после своей регистрации (см.
+     *  SquadService.awardReferralSquadBonus). Сбрасывается вместе с остальным недельным рейтингом
+     *  в WeeklyResetScheduler, чтобы не накапливаться бессрочно. */
+    @Column(columnDefinition = "bigint default 0")
+    private long weeklyBonusPoints;
 }

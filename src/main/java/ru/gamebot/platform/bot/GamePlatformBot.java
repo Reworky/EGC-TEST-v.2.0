@@ -5178,7 +5178,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendSquadCard(AppUser user, ru.gamebot.platform.domain.model.Squad squad) {
         List<ru.gamebot.platform.domain.model.AppUser> members = squadService.getMembers(squad);
-        long weeklyXp = members.stream().mapToLong(ru.gamebot.platform.domain.model.AppUser::getWeeklyXp).sum();
+        long weeklyXp = squadService.squadWeeklyXp(squad);
         boolean isCaptain = user.getTelegramId().equals(squad.getCaptainTelegramId());
 
         StringBuilder sb = new StringBuilder();
@@ -5190,7 +5190,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     .append(crown)
                     .append(" — ").append(String.format("%,d", m.getWeeklyXp()).replace(',', ' ')).append(" XP\n");
         }
-        sb.append("\n📊 XP отряда за неделю: <b>")
+        if (squad.getWeeklyBonusPoints() > 0) {
+            sb.append("🎉 Бонус за рефералов: <b>+").append(squad.getWeeklyBonusPoints()).append(" очков</b>\n");
+        }
+        sb.append("\n📊 Рейтинг отряда за неделю: <b>")
                 .append(String.format("%,d", weeklyXp).replace(',', ' ')).append("</b>\n\n");
         sb.append("🎁 Топ-отряд каждую неделю получает <b>10 000 EXC</b>");
 
@@ -10481,6 +10484,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(member.getTelegramId(), msg, keyboard);
             } catch (Exception e) {
                 log.warn("Failed to notify squad member {} about prize", member.getTelegramId(), e);
+            }
+        }
+    }
+
+    /** Модуль "Реферал усиливает Отряд" (см. SquadService.awardReferralSquadBonus) — реферал вступил
+     *  в отряд своего пригласившего в течение окна "за счёт приглашения", отряду начислен бонус. */
+    @org.springframework.context.event.EventListener
+    public void onSquadReferralBonus(ru.gamebot.platform.event.SquadReferralBonusEvent event) {
+        String invitedName = escape(displayUserName(event.getInvitedUser()));
+        String msg = "🎉 <b>Отряд получил бонус!</b>\n\n"
+                + invitedName + " вступил(а) в отряд «" + escape(event.getSquad().getName()) + "» по приглашению — "
+                + "<b>+" + event.getBonusPoints() + " очков</b> к недельному рейтингу отряда!";
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("⚔️ Мой отряд", "menu:squads"))
+        ));
+        for (ru.gamebot.platform.domain.model.AppUser member : event.getMembers()) {
+            try {
+                sendText(member.getTelegramId(), msg, keyboard);
+            } catch (Exception e) {
+                log.warn("Failed to notify squad member {} about referral bonus", member.getTelegramId(), e);
             }
         }
     }
