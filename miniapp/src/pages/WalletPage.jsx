@@ -19,6 +19,29 @@ const STATUS_LABELS = {
   CANCELLED: <><i className="ti ti-circle-x"></i> Отменено</>,
 };
 
+/** Статичный баннер партнёра (не квест — без награды EXC, обычная баннерная реклама; для нашей
+ * площадки этот тип трафика разрешён без согласования, в отличие от мотивированного/квестового).
+ * Картинка отдаётся динамически с сервера Admitad — своих ассетов не нужно. Один хардкодный баннер
+ * под текущего партнёра (Puzzle Movies) — при добавлении второго стоит вынести в массив. */
+function SponsorBanner() {
+  const BANNER_IMG = 'https://aflink.ru/b/vzfiwgube7e999950e9542f9f2178b/';
+  const BANNER_LINK = 'https://dhwnh.com/g/vzfiwgube7e999950e9542f9f2178b/?i=4&erid=2bL9aMPo2e49hMef4piV5ABPED';
+
+  function handleClick() {
+    const tg = window.Telegram?.WebApp;
+    if (tg) tg.openLink(BANNER_LINK); else window.open(BANNER_LINK, '_blank', 'noopener');
+  }
+
+  return (
+    <div style={{ margin: '0 16px 12px', cursor: 'pointer' }} onClick={handleClick}>
+      <img src={BANNER_IMG} alt="Puzzle Movies" style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 12 }} />
+      <div style={{ fontSize: 10, opacity: 0.5, marginTop: 4, textAlign: 'right' }}>
+        Реклама · erid: 2bL9aMPo2e49hMef4piV5ABPED
+      </div>
+    </div>
+  );
+}
+
 function BalanceView({ wallet, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
@@ -57,6 +80,8 @@ function BalanceView({ wallet, onChanged }) {
           ≈ {+(wallet.coins * wallet.healthRatioPercent / 100 / 100).toFixed(1)} ₽ · фонд {wallet.healthRatioPercent}%
         </div>
       </BorderBeamCard>
+
+      <SponsorBanner />
 
       <div className="w-stats-grid">
         <div className="w-stat-card">
