@@ -137,7 +137,7 @@ export default function ReferralsPage() {
           <div className="ref-step-num">3</div>
           <div className="ref-step-body">
             <div className="ref-step-title">Друг зарабатывает квестами</div>
-            <div className="ref-step-desc">Ты получаешь <b>3% от каждого его EXC</b> в течение первых 14 дней автоматически</div>
+            <div className="ref-step-desc">Ты получаешь <b>10% от каждого его EXC</b> в течение первых 14 дней автоматически</div>
           </div>
         </div>
 

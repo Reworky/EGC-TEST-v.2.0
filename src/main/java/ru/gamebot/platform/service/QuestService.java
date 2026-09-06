@@ -33,7 +33,7 @@ public class QuestService {
     private static int cooldownHours(Quest quest) {
         return "Сложные".equals(quest.getCategory()) ? HARD_COOLDOWN_HOURS : COOLDOWN_HOURS;
     }
-    private static final int REFERRAL_BONUS_PERCENT = 3;
+    private static final int REFERRAL_BONUS_PERCENT = 10;
 
     // Жёсткий кулдаун на отправку отчёта убран по решению пользователя (2026-07-11) — throughput и так
     // ограничен часовым кулдауном на взятие, лимитом слотов, 24ч на повтор того же квеста и diminishing returns.
@@ -776,7 +776,7 @@ public class QuestService {
         long bonus = Math.max(1, earnedCoins * REFERRAL_BONUS_PERCENT / 100);
         userService.addReward(referrer, 0, bonus);
         excTx.log(referrer, bonus, ExcTransactionService.REFERRAL,
-                "3% с квеста реферала " + invitedUser.getNickname());
+                REFERRAL_BONUS_PERCENT + "% с квеста реферала " + invitedUser.getNickname());
         referrer.setReferralEarnedExc(referrer.getReferralEarnedExc() + bonus);
         appUserRepository.save(referrer);
     }
