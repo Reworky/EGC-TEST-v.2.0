@@ -2674,7 +2674,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long activePolls = pollService.findActive().size();
         String pollLabel = activePolls > 0 ? "🗳 Голосования (" + activePolls + ")" : "🗳 Голосования";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
-                List.of(keyboardFactory.callback("🤝 Рефералы", "menu:referrals")),
                 List.of(keyboardFactory.callback("🛡️ EGC Council", "menu:council")),
                 List.of(keyboardFactory.callback(pollLabel, "menu:polls")),
                 List.of(keyboardFactory.callback("📰 Новости", "menu:news")),
@@ -2703,7 +2702,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } catch (Exception e) {
             log.warn("Failed to send club banner", e);
             sendMenuCategory(user, "👥 <b>Клуб</b>", List.of(
-                    List.of(keyboardFactory.callback("🤝 Рефералы", "menu:referrals")),
                     List.of(keyboardFactory.callback("🛡️ EGC Council", "menu:council")),
                     List.of(keyboardFactory.callback(pollLabel, "menu:polls")),
                     List.of(keyboardFactory.callback("📰 Новости", "menu:news"))
