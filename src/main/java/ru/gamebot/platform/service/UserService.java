@@ -33,6 +33,7 @@ import ru.gamebot.platform.event.LeagueRewardEvent;
 public class UserService {
 
     private final ExcTransactionService excTx;
+    private final ReferralBoostService referralBoostService;
 
     private static final List<LevelTier> LEVEL_TIERS = List.of(
             new LevelTier(1, "Новичок", 0, 0),
@@ -491,16 +492,20 @@ public class UserService {
         }
         referrer.setInvitedFriends(referrer.getInvitedFriends() + 1);
 
+        // Модуль 5 максимизации рефералки: буст-уикенд умножает только мгновенную награду
+        int boostMultiplier = referralBoostService.currentMultiplier();
+        String boostSuffix = boostMultiplier > 1 ? " (буст ×" + boostMultiplier + ")" : "";
+
         // Instant bonus: 500 EXC to invited user
-        long invitedBonus = 500;
+        long invitedBonus = 500L * boostMultiplier;
         invitedUser.setCoins(invitedUser.getCoins() + invitedBonus);
-        excTx.log(invitedUser, invitedBonus, ExcTransactionService.REFERRAL_WELCOME, "Реферальный бонус (приглашён)");
+        excTx.log(invitedUser, invitedBonus, ExcTransactionService.REFERRAL_WELCOME, "Реферальный бонус (приглашён)" + boostSuffix);
 
         // Instant bonus: 300 EXC to referrer
-        long referrerBonus = 300;
+        long referrerBonus = 300L * boostMultiplier;
         referrer.setCoins(referrer.getCoins() + referrerBonus);
         excTx.log(referrer, referrerBonus, ExcTransactionService.REFERRAL,
-                "Реферальный бонус за приглашение: " + invitedUser.getNickname());
+                "Реферальный бонус за приглашение: " + invitedUser.getNickname() + boostSuffix);
         referrer.setReferralEarnedExc(referrer.getReferralEarnedExc() + referrerBonus);
 
         appUserRepository.save(referrer);

@@ -11,4 +11,7 @@ public class ReferralDto {
     private long earnedExc;
     private long nextMilestone;
     private int progressPercent;
+    private boolean boostActive;
+    private Integer boostMultiplier;
+    private String boostEndsAt;
 }

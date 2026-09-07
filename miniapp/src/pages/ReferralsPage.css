@@ -2,6 +2,26 @@
   padding: 0 0 calc(80px + env(safe-area-inset-bottom, 0px));
 }
 
+/* ── Boost weekend banner ── */
+.ref-boost-banner {
+  margin: 12px 16px 0;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, rgba(251,191,36,0.22), rgba(249,115,22,0.15));
+  border: 1px solid rgba(251,191,36,0.35);
+  border-radius: 14px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+.ref-boost-banner-timer {
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+}
+
 /* ── Header hero ── */
 .ref-hero {
   margin: 12px 16px;

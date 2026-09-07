@@ -128,6 +128,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.PollService pollService;
     private final ru.gamebot.platform.service.TournamentService tournamentService;
     private final ru.gamebot.platform.service.SeasonService seasonService;
+    private final ru.gamebot.platform.service.ReferralBoostService referralBoostService;
     private final ru.gamebot.platform.service.SponsorService sponsorService;
     private final ru.gamebot.platform.service.ExcTransactionService excTransactionService;
     private final ru.gamebot.platform.service.SquadService squadService;
@@ -1687,6 +1688,65 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🚀 Начало: " + s.getStartDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + "\n"
                         + "⏰ Конец: " + s.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")),
                         backMenuKeyboard("admin:seasons"));
+            }
+            case REFERRAL_BOOST_START -> {
+                java.time.LocalDateTime startDate;
+                try {
+                    startDate = java.time.LocalDateTime.parse(text.trim(),
+                            java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                } catch (Exception e) {
+                    sendText(user.getTelegramId(), "❌ Неверный формат. Используйте ДД.ММ.ГГГГ ЧЧ:ММ", cancelKeyboard()); return;
+                }
+                session.getData().put("rbStart", text.trim());
+                session.setState(SessionState.REFERRAL_BOOST_END);
+                sendText(user.getTelegramId(),
+                        "⏰ Дата и время окончания буста (формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>):",
+                        cancelKeyboard());
+            }
+            case REFERRAL_BOOST_END -> {
+                java.time.LocalDateTime endDate;
+                try {
+                    endDate = java.time.LocalDateTime.parse(text.trim(),
+                            java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                } catch (Exception e) {
+                    sendText(user.getTelegramId(), "❌ Неверный формат.", cancelKeyboard()); return;
+                }
+                java.time.LocalDateTime startDate = java.time.LocalDateTime.parse(
+                        session.getData().get("rbStart"),
+                        java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                if (!endDate.isAfter(startDate)) {
+                    sendText(user.getTelegramId(), "❌ Дата окончания должна быть позже даты начала.", cancelKeyboard()); return;
+                }
+                session.getData().put("rbEnd", text.trim());
+                session.setState(SessionState.REFERRAL_BOOST_MULTIPLIER);
+                sendText(user.getTelegramId(),
+                        "✖️ Множитель мгновенной награды (например <code>2</code> — удвоит +500/+300 EXC за активацию; рекомендуем 2):",
+                        cancelKeyboard());
+            }
+            case REFERRAL_BOOST_MULTIPLIER -> {
+                int multiplier;
+                try { multiplier = Integer.parseInt(text.trim()); } catch (NumberFormatException e) {
+                    sendText(user.getTelegramId(), "❌ Введите целое число.", cancelKeyboard()); return;
+                }
+                if (multiplier <= 1 || multiplier > 10) {
+                    sendText(user.getTelegramId(), "❌ Укажите множитель от 2 до 10.", cancelKeyboard()); return;
+                }
+                java.time.format.DateTimeFormatter rbFmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+                java.time.LocalDateTime startDate = java.time.LocalDateTime.parse(session.getData().get("rbStart"), rbFmt);
+                java.time.LocalDateTime endDate = java.time.LocalDateTime.parse(session.getData().get("rbEnd"), rbFmt);
+                ru.gamebot.platform.domain.model.ReferralBoostEvent boost = referralBoostService.create(startDate, endDate, multiplier);
+                session.reset();
+                sendText(user.getTelegramId(),
+                        "✅ <b>Буст-уикенд запущен!</b>\n\n"
+                        + "🚀 Начало: " + startDate.format(rbFmt) + "\n"
+                        + "⏰ Конец: " + endDate.format(rbFmt) + "\n"
+                        + "✖️ Множитель: <b>×" + multiplier + "</b>\n\n"
+                        + "Мгновенная награда за активацию реферала на время буста: приглашённому <b>" + (500 * multiplier)
+                        + " EXC</b>, рефереру <b>" + (300 * multiplier) + " EXC</b>.",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("📢 Разослать анонс", "admin:refboost:announce:" + boost.getId())),
+                                List.of(keyboardFactory.callback("⬅️ Назад", "admin:refboost"))
+                        )));
             }
             case SPONSOR_CREATE_NAME -> {
                 session.getData().put("spName", text.trim());
@@ -4098,8 +4158,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         int filled = progressPct / 10;
         String bar = "█".repeat(filled) + "░".repeat(10 - filled);
 
+        String boostBanner = referralBoostService.findActiveBoost()
+                .map(b -> "🚀 <b>Буст-уикенд ×" + b.getMultiplier() + " активен!</b>\n" + formatDeadlineLine(b.getEndAt()) + "\n")
+                .orElse("");
+
         sendText(user.getTelegramId(),
                 "🤝 <b>Реферальная программа EGC</b>\n\n"
+                        + boostBanner
                         + "🔗 Ваша ссылка:\n" + escape(referralLink) + "\n\n"
                         + "👥 Приглашено друзей: <b>" + user.getInvitedFriends() + "</b>\n"
                         + "💎 Заработано на рефералах: <b>" + earned + " EXC</b>\n\n"
@@ -6161,6 +6226,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 answerSilently(callbackQuery.getId());
                 return;
             }
+            case "refboost" -> { sendAdminReferralBoostStatus(user); answerSilently(callbackQuery.getId()); return; }
+            case "refboost:create" -> {
+                session.reset();
+                session.setState(SessionState.REFERRAL_BOOST_START);
+                sendText(user.getTelegramId(),
+                        "🚀 <b>Новый буст-уикенд рефералки</b>\n\nВведите дату и время начала буста (формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>):",
+                        cancelKeyboard());
+                answerSilently(callbackQuery.getId());
+                return;
+            }
             case "tournaments" -> { sendAdminTournamentList(user); answerSilently(callbackQuery.getId()); return; }
             case "tournaments:create" -> {
                 session.reset();
@@ -6565,6 +6640,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     seasonService.deactivate(parseLong(action.substring("seasons:deactivate:".length())));
                     answer(callbackQuery.getId(), "Сезон деактивирован.");
                     sendAdminSeasonList(user);
+                    return;
+                } else if (action.startsWith("refboost:announce:")) {
+                    sendReferralBoostAnnouncement(user, parseLong(action.substring("refboost:announce:".length())));
+                    answerSilently(callbackQuery.getId());
                     return;
                 } else if (action.startsWith("tournaments:view:")) {
                     sendAdminTournamentView(user, parseLong(action.substring("tournaments:view:".length())));
@@ -8855,6 +8934,53 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:seasons")));
             sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
         }, () -> sendText(user.getTelegramId(), "❌ Сезон не найден.", backMenuKeyboard("admin:seasons")));
+    }
+
+    // ─── Referral boost weekends (Модуль 5 максимизации рефералки) ────────────
+
+    private void sendAdminReferralBoostStatus(AppUser user) {
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+        StringBuilder sb = new StringBuilder("🚀 <b>Буст-уикенды рефералки</b>\n\n");
+
+        var active = referralBoostService.findActiveBoost();
+        if (active.isPresent()) {
+            var b = active.get();
+            sb.append("🟢 Сейчас активен: ×").append(b.getMultiplier())
+                    .append(" до ").append(b.getEndAt().format(fmt)).append("\n\n");
+        } else {
+            sb.append("⚫ Сейчас буста нет.\n\n");
+        }
+
+        List<ru.gamebot.platform.domain.model.ReferralBoostEvent> recent = referralBoostService.findAll();
+        if (!recent.isEmpty()) {
+            sb.append("Последние:\n");
+            recent.stream().limit(5).forEach(b -> sb.append("• ×").append(b.getMultiplier())
+                    .append(" ").append(b.getStartAt().format(fmt)).append(" → ").append(b.getEndAt().format(fmt)).append("\n"));
+        }
+
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("➕ Запустить буст-уикенд", "admin:refboost:create")),
+                List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin"))
+        )));
+    }
+
+    private void sendReferralBoostAnnouncement(AppUser user, long boostId) {
+        referralBoostService.findById(boostId).ifPresentOrElse(boost -> {
+            java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+            int m = boost.getMultiplier();
+            String announceText = "🚀 <b>Буст-уикенд в EGC!</b>\n\n"
+                    + "С " + boost.getStartAt().format(fmt) + " до " + boost.getEndAt().format(fmt)
+                    + " мгновенная награда за приглашённого друга ×" + m + "!\n"
+                    + "Другу за вступление: <b>" + (500 * m) + " EXC</b>, тебе за приглашение: <b>" + (300 * m) + " EXC</b>.\n\n"
+                    + "Успей позвать друзей, пока буст активен 👇";
+
+            int delivered = broadcastToAll(announceText);
+
+            sendText(user.getTelegramId(),
+                    "✅ Анонс разослан в боте: <b>" + delivered + "</b> игрокам.\n\n"
+                    + "📋 <b>Текст для ручной публикации в канал:</b>\n\n<code>" + escape(announceText.replace("<b>", "").replace("</b>", "")) + "</code>",
+                    backMenuKeyboard("admin:refboost"));
+        }, () -> sendText(user.getTelegramId(), "❌ Буст не найден.", backMenuKeyboard("admin:refboost")));
     }
 
     // ─── Tournaments ──────────────────────────────────────────────────────────
@@ -11855,6 +11981,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("🗳 Голосования", "admin:polls")));
             rows.add(List.of(keyboardFactory.callback("🏆 Турниры", "admin:tournaments")));
             rows.add(List.of(keyboardFactory.callback("🎫 Battle Pass", "admin:seasons")));
+            rows.add(List.of(keyboardFactory.callback("🚀 Буст рефералки", "admin:refboost")));
             return keyboardFactory.rowsLayout(rows);
         }
 

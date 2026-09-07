@@ -3,6 +3,16 @@ import { getReferrals, getReferralRanking } from '../api/client';
 import BackButton from '../components/BackButton';
 import './ReferralsPage.css';
 
+function formatCountdown(endsAtIso) {
+  const diff = new Date(endsAtIso).getTime() - Date.now();
+  if (diff <= 0) return null;
+  const totalSeconds = Math.floor(diff / 1000);
+  const h = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+  const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+  const s = String(totalSeconds % 60).padStart(2, '0');
+  return `${h}:${m}:${s}`;
+}
+
 function fallbackCopy(text, onDone) {
   const textarea = document.createElement('textarea');
   textarea.value = text;
@@ -20,11 +30,20 @@ export default function ReferralsPage() {
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
   const [ranking, setRanking] = useState(null);
+  const [countdown, setCountdown] = useState(null);
 
   useEffect(() => {
     getReferrals().then(setData).catch(() => setError('Не удалось загрузить данные. Попробуйте ещё раз.'));
     getReferralRanking().then(setRanking).catch(() => setRanking(null));
   }, []);
+
+  useEffect(() => {
+    if (!data?.boostActive || !data?.boostEndsAt) { setCountdown(null); return; }
+    const tick = () => setCountdown(formatCountdown(data.boostEndsAt));
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [data?.boostActive, data?.boostEndsAt]);
 
   function copyLink() {
     const markCopied = () => { setCopied(true); setTimeout(() => setCopied(false), 2000); };
@@ -50,6 +69,13 @@ export default function ReferralsPage() {
   return (
     <div className="ref-page">
       <div style={{ padding: '16px 16px 0' }}><BackButton to="/profile" label="Профиль" /></div>
+
+      {data.boostActive && countdown && (
+        <div className="ref-boost-banner">
+          🚀 Буст-уикенд ×{data.boostMultiplier}! Мгновенная награда за друга умножена
+          <div className="ref-boost-banner-timer">Осталось: {countdown}</div>
+        </div>
+      )}
 
       <div className="ref-hero">
         <div className="ref-hero-icon">🤝</div>
