@@ -1700,7 +1700,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.getData().put("rbStart", text.trim());
                 session.setState(SessionState.REFERRAL_BOOST_END);
                 sendText(user.getTelegramId(),
-                        "⏰ Дата и время окончания буста (формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>):",
+                        "⏰ Дата и время окончания буста (формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>, время сервера — <b>UTC</b>):",
                         cancelKeyboard());
             }
             case REFERRAL_BOOST_END -> {
@@ -1739,8 +1739,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 String announcePreview = buildReferralBoostAnnouncementText(boost);
                 sendText(user.getTelegramId(),
                         "✅ <b>Буст-уикенд запущен!</b>\n\n"
-                        + "🚀 Начало: " + startDate.format(rbFmt) + "\n"
-                        + "⏰ Конец: " + endDate.format(rbFmt) + "\n"
+                        + "🚀 Начало: " + startDate.format(rbFmt) + " (UTC)\n"
+                        + "⏰ Конец: " + endDate.format(rbFmt) + " (UTC)\n"
                         + "✖️ Множитель: <b>×" + multiplier + "</b>\n\n"
                         + "Мгновенная награда за активацию реферала на время буста: приглашённому <b>" + (500 * multiplier)
                         + " EXC</b>, рефереру <b>" + (300 * multiplier) + " EXC</b>.\n\n"
@@ -6255,7 +6255,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.reset();
                 session.setState(SessionState.REFERRAL_BOOST_START);
                 sendText(user.getTelegramId(),
-                        "🚀 <b>Новый буст-уикенд рефералки</b>\n\nВведите дату и время начала буста (формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>):",
+                        "🚀 <b>Новый буст-уикенд рефералки</b>\n\nВведите дату и время начала буста "
+                        + "(формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>, время сервера — <b>UTC</b>, это на 3 часа меньше московского):",
                         cancelKeyboard());
                 answerSilently(callbackQuery.getId());
                 return;
@@ -9006,14 +9007,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (active.isPresent()) {
             var b = active.get();
             sb.append("🟢 Сейчас активен: ×").append(b.getMultiplier())
-                    .append(" до ").append(b.getEndAt().format(fmt)).append("\n\n");
+                    .append(" до ").append(b.getEndAt().format(fmt)).append(" (UTC)\n\n");
         } else {
             sb.append("⚫ Сейчас буста нет.\n\n");
         }
 
         List<ru.gamebot.platform.domain.model.ReferralBoostEvent> recent = referralBoostService.findAll();
         if (!recent.isEmpty()) {
-            sb.append("Последние:\n");
+            sb.append("Последние (даты — UTC):\n");
             recent.stream().limit(5).forEach(b -> sb.append("• ×").append(b.getMultiplier())
                     .append(" ").append(b.getStartAt().format(fmt)).append(" → ").append(b.getEndAt().format(fmt)).append("\n"));
         }
@@ -9032,7 +9033,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
         int m = boost.getMultiplier();
         return "🚀 <b>Буст-уикенд в EGC!</b>\n\n"
-                + "С " + boost.getStartAt().format(fmt) + " до " + boost.getEndAt().format(fmt)
+                + "С " + boost.getStartAt().format(fmt) + " до " + boost.getEndAt().format(fmt) + " (UTC)"
                 + " мгновенная награда за приглашённого друга ×" + m + "!\n"
                 + "Другу за вступление: <b>" + (500 * m) + " EXC</b>, тебе за приглашение: <b>" + (300 * m) + " EXC</b>.\n\n"
                 + "Успей позвать друзей, пока буст активен 👇";
