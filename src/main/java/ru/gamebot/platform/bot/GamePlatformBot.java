@@ -1736,13 +1736,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 java.time.LocalDateTime endDate = java.time.LocalDateTime.parse(session.getData().get("rbEnd"), rbFmt);
                 ru.gamebot.platform.domain.model.ReferralBoostEvent boost = referralBoostService.create(startDate, endDate, multiplier);
                 session.reset();
+                String announcePreview = buildReferralBoostAnnouncementText(boost);
                 sendText(user.getTelegramId(),
                         "✅ <b>Буст-уикенд запущен!</b>\n\n"
                         + "🚀 Начало: " + startDate.format(rbFmt) + "\n"
                         + "⏰ Конец: " + endDate.format(rbFmt) + "\n"
                         + "✖️ Множитель: <b>×" + multiplier + "</b>\n\n"
                         + "Мгновенная награда за активацию реферала на время буста: приглашённому <b>" + (500 * multiplier)
-                        + " EXC</b>, рефереру <b>" + (300 * multiplier) + " EXC</b>.",
+                        + " EXC</b>, рефереру <b>" + (300 * multiplier) + " EXC</b>.\n\n"
+                        + "📢 <b>Текст анонса (превью):</b>\n\n" + announcePreview,
                         keyboardFactory.rowsLayout(List.of(
                                 List.of(keyboardFactory.callback("📢 Разослать анонс", "admin:refboost:announce:" + boost.getId())),
                                 List.of(keyboardFactory.callback("⬅️ Назад", "admin:refboost"))
@@ -8979,16 +8981,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         )));
     }
 
+    private String buildReferralBoostAnnouncementText(ru.gamebot.platform.domain.model.ReferralBoostEvent boost) {
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+        int m = boost.getMultiplier();
+        return "🚀 <b>Буст-уикенд в EGC!</b>\n\n"
+                + "С " + boost.getStartAt().format(fmt) + " до " + boost.getEndAt().format(fmt)
+                + " мгновенная награда за приглашённого друга ×" + m + "!\n"
+                + "Другу за вступление: <b>" + (500 * m) + " EXC</b>, тебе за приглашение: <b>" + (300 * m) + " EXC</b>.\n\n"
+                + "Успей позвать друзей, пока буст активен 👇";
+    }
+
     private void sendReferralBoostAnnouncement(AppUser user, long boostId) {
         referralBoostService.findById(boostId).ifPresentOrElse(boost -> {
-            java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
-            int m = boost.getMultiplier();
-            String announceText = "🚀 <b>Буст-уикенд в EGC!</b>\n\n"
-                    + "С " + boost.getStartAt().format(fmt) + " до " + boost.getEndAt().format(fmt)
-                    + " мгновенная награда за приглашённого друга ×" + m + "!\n"
-                    + "Другу за вступление: <b>" + (500 * m) + " EXC</b>, тебе за приглашение: <b>" + (300 * m) + " EXC</b>.\n\n"
-                    + "Успей позвать друзей, пока буст активен 👇";
-
+            String announceText = buildReferralBoostAnnouncementText(boost);
             int delivered = broadcastToAll(announceText);
 
             sendText(user.getTelegramId(),
