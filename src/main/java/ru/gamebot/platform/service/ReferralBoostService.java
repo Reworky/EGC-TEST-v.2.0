@@ -54,4 +54,20 @@ public class ReferralBoostService {
             repository.save(event);
         });
     }
+
+    @Transactional
+    public void updateStartAt(Long id, LocalDateTime startAt) {
+        repository.findById(id).ifPresent(event -> {
+            event.setStartAt(startAt);
+            repository.save(event);
+        });
+    }
+
+    @Transactional
+    public void updateEndAt(Long id, LocalDateTime endAt) {
+        repository.findById(id).ifPresent(event -> {
+            event.setEndAt(endAt);
+            repository.save(event);
+        });
+    }
 }

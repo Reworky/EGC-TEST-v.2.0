@@ -1756,6 +1756,42 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.reset();
                 sendReferralBoostAnnouncePreview(user, announceBoostId);
             }
+            case REFERRAL_BOOST_EDIT_START -> {
+                long editBoostId = Long.parseLong(session.getData().get("rbEditBoostId"));
+                java.time.format.DateTimeFormatter rbeFmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+                java.time.LocalDateTime newStart;
+                try {
+                    newStart = java.time.LocalDateTime.parse(text.trim(), rbeFmt);
+                } catch (Exception e) {
+                    sendText(user.getTelegramId(), "❌ Неверный формат. Используйте ДД.ММ.ГГГГ ЧЧ:ММ", cancelKeyboard()); return;
+                }
+                var editedBoost = referralBoostService.findById(editBoostId);
+                if (editedBoost.isEmpty()) { sendText(user.getTelegramId(), "❌ Буст не найден.", backMenuKeyboard("admin:refboost")); return; }
+                if (!newStart.isBefore(editedBoost.get().getEndAt())) {
+                    sendText(user.getTelegramId(), "❌ Начало должно быть раньше текущего конца буста.", cancelKeyboard()); return;
+                }
+                referralBoostService.updateStartAt(editBoostId, newStart);
+                session.reset();
+                sendReferralBoostEditMenu(user, editBoostId);
+            }
+            case REFERRAL_BOOST_EDIT_END -> {
+                long editBoostId = Long.parseLong(session.getData().get("rbEditBoostId"));
+                java.time.format.DateTimeFormatter rbeFmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+                java.time.LocalDateTime newEnd;
+                try {
+                    newEnd = java.time.LocalDateTime.parse(text.trim(), rbeFmt);
+                } catch (Exception e) {
+                    sendText(user.getTelegramId(), "❌ Неверный формат.", cancelKeyboard()); return;
+                }
+                var editedBoost = referralBoostService.findById(editBoostId);
+                if (editedBoost.isEmpty()) { sendText(user.getTelegramId(), "❌ Буст не найден.", backMenuKeyboard("admin:refboost")); return; }
+                if (!newEnd.isAfter(editedBoost.get().getStartAt())) {
+                    sendText(user.getTelegramId(), "❌ Конец должен быть позже текущего начала буста.", cancelKeyboard()); return;
+                }
+                referralBoostService.updateEndAt(editBoostId, newEnd);
+                session.reset();
+                sendReferralBoostEditMenu(user, editBoostId);
+            }
             case SPONSOR_CREATE_NAME -> {
                 session.getData().put("spName", text.trim());
                 session.setState(SessionState.SPONSOR_CREATE_CONTACT);
@@ -6688,6 +6724,30 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendReferralBoostAnnouncePreview(user, parseLong(action.substring("refboost:announce:".length())));
                     answerSilently(callbackQuery.getId());
                     return;
+                } else if (action.startsWith("refboost:edit:start:")) {
+                    long editStartId = parseLong(action.substring("refboost:edit:start:".length()));
+                    session.reset();
+                    session.setState(SessionState.REFERRAL_BOOST_EDIT_START);
+                    session.getData().put("rbEditBoostId", String.valueOf(editStartId));
+                    sendText(user.getTelegramId(),
+                            "🕐 Новая дата и время начала буста (формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>, время сервера — <b>UTC</b>, это на 3 часа меньше московского):",
+                            cancelKeyboard());
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("refboost:edit:end:")) {
+                    long editEndId = parseLong(action.substring("refboost:edit:end:".length()));
+                    session.reset();
+                    session.setState(SessionState.REFERRAL_BOOST_EDIT_END);
+                    session.getData().put("rbEditBoostId", String.valueOf(editEndId));
+                    sendText(user.getTelegramId(),
+                            "⏰ Новая дата и время окончания буста (формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>, время сервера — <b>UTC</b>):",
+                            cancelKeyboard());
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("refboost:edit:")) {
+                    sendReferralBoostEditMenu(user, parseLong(action.substring("refboost:edit:".length())));
+                    answerSilently(callbackQuery.getId());
+                    return;
                 } else if (action.startsWith("tournaments:view:")) {
                     sendAdminTournamentView(user, parseLong(action.substring("tournaments:view:".length())));
                     answerSilently(callbackQuery.getId());
@@ -8962,6 +9022,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
+    private void sendReferralBoostEditMenu(AppUser user, long boostId) {
+        referralBoostService.findById(boostId).ifPresentOrElse(boost -> {
+            java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+            boolean isActive = referralBoostService.findActiveBoost()
+                    .map(ru.gamebot.platform.domain.model.ReferralBoostEvent::getId).map(id -> id.equals(boostId)).orElse(false);
+            String status = isActive ? "🟢 Активен сейчас" : "⚫ Пока не активен";
+            sendText(user.getTelegramId(),
+                    "✏️ <b>Редактирование буста</b>\n\n"
+                    + status + "\n"
+                    + "🚀 Начало: <b>" + boost.getStartAt().format(fmt) + " (UTC)</b>\n"
+                    + "⏰ Конец: <b>" + boost.getEndAt().format(fmt) + " (UTC)</b>\n"
+                    + "✖️ Множитель: <b>×" + boost.getMultiplier() + "</b>",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("🕐 Изменить начало", "admin:refboost:edit:start:" + boostId)),
+                            List.of(keyboardFactory.callback("⏰ Изменить конец", "admin:refboost:edit:end:" + boostId)),
+                            List.of(keyboardFactory.callback("✏️ Текст анонса", "admin:refboost:announce:edit:" + boostId)),
+                            List.of(keyboardFactory.callback("📢 Разослать анонс", "admin:refboost:announce:confirm:" + boostId)),
+                            List.of(keyboardFactory.callback("⬅️ Назад", "admin:refboost"))
+                    )));
+        }, () -> sendText(user.getTelegramId(), "❌ Буст не найден.", backMenuKeyboard("admin:refboost")));
+    }
+
     private void sendAdminSeasonList(AppUser user) {
         List<ru.gamebot.platform.domain.model.Season> seasons = seasonService.findAll();
         StringBuilder sb = new StringBuilder("🎫 <b>Battle Pass — сезоны</b>\n\n");
@@ -9019,9 +9101,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     .append(" ").append(b.getStartAt().format(fmt)).append(" → ").append(b.getEndAt().format(fmt)).append("\n"));
         }
 
+        // Кнопки анонса/редактирования — для активного буста, а если такого нет, для последнего
+        // созданного (например ещё не наступившего из-за путаницы с часовым поясом при вводе).
+        Long targetId = active.map(ru.gamebot.platform.domain.model.ReferralBoostEvent::getId)
+                .orElse(recent.isEmpty() ? null : recent.get(0).getId());
+
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        if (active.isPresent()) {
-            rows.add(List.of(keyboardFactory.callback("📢 Анонс текущего буста", "admin:refboost:announce:" + active.get().getId())));
+        if (targetId != null) {
+            rows.add(List.of(keyboardFactory.callback("✏️ Редактировать", "admin:refboost:edit:" + targetId)));
+            rows.add(List.of(keyboardFactory.callback("📢 Анонс", "admin:refboost:announce:" + targetId)));
         }
         rows.add(List.of(keyboardFactory.callback("➕ Запустить буст-уикенд", "admin:refboost:create")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
