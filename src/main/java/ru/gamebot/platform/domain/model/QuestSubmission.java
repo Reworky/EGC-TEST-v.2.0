@@ -142,4 +142,13 @@ public class QuestSubmission {
 
     @Column(columnDefinition = "integer default 0")
     private int clashRoyaleProgressCount;
+
+    /** match_id последнего обработанного матча Dota (курсор дедупликации — Dota match_id монотонно
+     *  возрастает глобально, надёжнее battleTime у Brawl). null = ещё не инициализирован — первый опрос
+     *  учитывает только матчи, сыгранные после createdAt квеста. */
+    private Long dotaLastProcessedMatchId;
+
+    /** Лучший показатель среди уже проверенных матчей — только для прогресс-бара в UI, в логике
+     *  завершения не участвует (квест засчитывается по ОДНОМУ подходящему матчу, не накоплению). */
+    private Integer dotaBestValue;
 }

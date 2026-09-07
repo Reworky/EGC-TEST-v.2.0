@@ -62,5 +62,8 @@ clashofclans:
 clashroyale:
   api-token: ${CLASH_ROYALE_API_TOKEN:}
 
+steam:
+  api-key: ${STEAM_API_KEY:}
+
 achievement:
   exc-milestones: ${ACHIEVEMENT_EXC_MILESTONES:10000,50000,100000,500000,1000000}

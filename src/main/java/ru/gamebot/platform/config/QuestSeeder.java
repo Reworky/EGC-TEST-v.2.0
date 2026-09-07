@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.enums.BrawlVerifyType;
 import ru.gamebot.platform.domain.enums.ClashRoyaleVerifyType;
 import ru.gamebot.platform.domain.enums.ClashVerifyType;
+import ru.gamebot.platform.domain.enums.DotaVerifyType;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.repository.QuestRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
@@ -1705,6 +1706,28 @@ public class QuestSeeder implements CommandLineRunner {
         setShortLabel("Сыграй матч длительностью 30+ минут", "Dota 2", "Матч 30+ мин");
         setShortLabel("Сыграй матч длительностью 45+ минут", "Dota 2", "Матч 45+ мин");
 
+        // ── Dota 2: авто-верификация через Steam Web API (retrofit существующих 12 квестов выше,
+        // не создание новых). Настраиваем поля (dotaVerifyType/dotaTargetCount) уже сейчас, но пока
+        // STEAM_API_KEY не добавлен в .env — квесты сразу деактивируются ниже (deactivateGame), чтобы
+        // игроки их вообще не видели: с dotaVerifyType уже проставленным ручной отчёт заблокирован,
+        // а привязать аккаунт нельзя (Dota2ApiService выключен), т.е. без деактивации квест был бы
+        // "виден, но невыполним". Активировать обратно — удалить/закомментировать deactivateGame("Dota 2")
+        // ниже ПОСЛЕ того, как ключ добавлен и живой вызов API проверен.
+        setDotaVerify("Набери 8 убийств за матч", DotaVerifyType.KILLS, 8);
+        setDotaVerify("Набери 15 убийств за матч", DotaVerifyType.KILLS, 15);
+        setDotaVerify("Сделай 10 ассистов за матч", DotaVerifyType.ASSISTS, 10);
+        setDotaVerify("Сделай 15 ассистов за матч", DotaVerifyType.ASSISTS, 15);
+        setDotaVerify("Умри не более 8 раз за матч", DotaVerifyType.DEATHS_MAX, 8);
+        setDotaVerify("Умри не более 5 раз за матч", DotaVerifyType.DEATHS_MAX, 5);
+        setDotaVerify("Заработай 15,000 золота за матч", DotaVerifyType.GOLD, 15000);
+        setDotaVerify("Заработай 25,000 золота за матч", DotaVerifyType.GOLD, 25000);
+        setDotaVerify("Достигни 20 уровня героя за матч", DotaVerifyType.HERO_LEVEL, 20);
+        setDotaVerify("Достигни 25 уровня героя за матч", DotaVerifyType.HERO_LEVEL, 25);
+        setDotaVerify("Сыграй матч длительностью 30+ минут", DotaVerifyType.DURATION_MINUTES, 30);
+        setDotaVerify("Сыграй матч длительностью 45+ минут", DotaVerifyType.DURATION_MINUTES, 45);
+        // TODO: убрать эту строку, когда STEAM_API_KEY добавлен и авто-верификация проверена живым вызовом.
+        deactivateGame("Dota 2");
+
         // ── GTA V: FLAT-режим — единый список без выбора категории, по образцу Brawl Stars/Clash of Clans/Clash Royale ──
         gameCatalogService.setDifficultyMode("GTA V", "FLAT", 2000L, 50);
 
@@ -2079,6 +2102,22 @@ public class QuestSeeder implements CommandLineRunner {
             q.setActive(true);
             questRepository.save(q);
         }, () -> log.warn("[QuestSeeder] setBrawlVerify: quest not found (seedFlat must run first): '{}'", title));
+    }
+
+    /**
+     * Проставляет авто-верификацию Dota 2 (Steam Web API) уже существующему ручному квесту (retrofit,
+     * не создание новых квестов — все 12 квестов Dota давно есть в seed() ниже). В отличие от setBrawlVerify
+     * нет параметров-фильтров по герою/режиму/победе — ни один из 12 квестов Dota их не требует
+     * ("любой герой", "любой режим", "победа или поражение не важны"). Идемпотентен, вызывается на каждом деплое.
+     */
+    private void setDotaVerify(String title, DotaVerifyType type, int targetCount) {
+        questRepository.findFirstByTitleAndGameName(title, "Dota 2").ifPresentOrElse(q -> {
+            q.setDotaVerifyType(type);
+            q.setDotaTargetCount(targetCount);
+            // см. оговорку у setBrawlVerify — seed() не реактивирует случайно выключенную строку.
+            q.setActive(true);
+            questRepository.save(q);
+        }, () -> log.warn("[QuestSeeder] setDotaVerify: quest not found (seed must run first): '{}'", title));
     }
 
     /** Короткая подпись для кнопки в списке квестов (см. Quest.shortLabel / sendQuestList). */

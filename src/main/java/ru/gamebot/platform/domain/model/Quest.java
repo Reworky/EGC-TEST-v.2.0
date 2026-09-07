@@ -14,6 +14,7 @@ import lombok.Setter;
 import ru.gamebot.platform.domain.enums.BrawlVerifyType;
 import ru.gamebot.platform.domain.enums.ClashRoyaleVerifyType;
 import ru.gamebot.platform.domain.enums.ClashVerifyType;
+import ru.gamebot.platform.domain.enums.DotaVerifyType;
 
 @Getter
 @Setter
@@ -143,6 +144,17 @@ public class Quest {
 
     /** Целевая дельта с момента взятия квеста — для всех типов Clash Royale верификации. */
     private Integer clashRoyaleTargetCount;
+
+    /** null = обычный квест — включает авто-верификацию через Steam Web API (Dota 2). Все 12 существующих
+     *  квестов Dota проверяют одну характеристику ЗА ОДИН МАТЧ (не дельту/накопление), поэтому в отличие
+     *  от Brawl/Clash/Clash Royale здесь нет полей-фильтров по герою/режиму/победе — они квестам не нужны.
+     *  varchar принудительно (см. clashVerifyType — тот же инцидент с нативным H2 ENUM). */
+    @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(20)")
+    private DotaVerifyType dotaVerifyType;
+
+    /** Пороговое значение характеристики за матч (килы/ассисты/золото/уровень/минуты), либо максимум смертей для DEATHS_MAX. */
+    private Integer dotaTargetCount;
 
     /** Краткое условие (до ~150 символов) для подстановки в шаблон быстрого отклонения «Недостаточно данных». */
     @Column(length = 200)

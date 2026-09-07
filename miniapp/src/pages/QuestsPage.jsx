@@ -114,6 +114,7 @@ function QuestActions({ quest, detail, onChanged }) {
     NEEDS_BRAWL_TAG: 'brawltag',
     NEEDS_CLASH_TAG: 'clashtag',
     NEEDS_CLASH_ROYALE_TAG: 'crtag',
+    NEEDS_DOTA_LINK: 'dotalink',
   };
 
   function openBotForTag(startParam) {

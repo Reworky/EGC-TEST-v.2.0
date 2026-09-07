@@ -372,6 +372,9 @@ public class QuestService {
         if (quest.getClashRoyaleVerifyType() != null && user.getClashRoyaleTag() == null) {
             return QuestActionResult.of(QuestActionStatus.NEEDS_CLASH_ROYALE_TAG, 0);
         }
+        if (quest.getDotaVerifyType() != null && user.getDotaAccountId() == null) {
+            return QuestActionResult.of(QuestActionStatus.NEEDS_DOTA_LINK, 0);
+        }
 
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
@@ -452,7 +455,8 @@ public class QuestService {
     public QuestActionResult submitReportChecked(AppUser user, Quest quest, String mediaType, String fileId,
                                                   String photoUniqueIds, String externalLink, String comment) {
         if (quest.isExternalAutoApprove() || quest.getBrawlVerifyType() != null
-                || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null) {
+                || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null
+                || quest.getDotaVerifyType() != null) {
             return QuestActionResult.of(QuestActionStatus.AUTO_VERIFIED_NO_REPORT, 0);
         }
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
@@ -521,7 +525,8 @@ public class QuestService {
         }
         Quest reportQuest = submission.getQuest();
         if (reportQuest.isExternalAutoApprove() || reportQuest.getBrawlVerifyType() != null
-                || reportQuest.getClashVerifyType() != null || reportQuest.getClashRoyaleVerifyType() != null) {
+                || reportQuest.getClashVerifyType() != null || reportQuest.getClashRoyaleVerifyType() != null
+                || reportQuest.getDotaVerifyType() != null) {
             throw new IllegalStateException("Этот квест подтверждается автоматически — ручной отчёт не принимается.");
         }
         // Защита от гонки/обхода: те же правила, что и в submitReportChecked, продублированы здесь,

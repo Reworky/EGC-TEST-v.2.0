@@ -160,6 +160,10 @@ public class AppUser {
     private String clashRoyaleTag;
     private LocalDateTime clashRoyaleTagConfirmedAt;
 
+    /** Подтверждённый Dota 2 account_id (32-битный, НЕ SteamID64), для авто-верификации квестов через Steam Web API. */
+    private Long dotaAccountId;
+    private LocalDateTime dotaLinkedAt;
+
     // Season Pass
     private java.time.LocalDateTime seasonPassActiveUntil;
 

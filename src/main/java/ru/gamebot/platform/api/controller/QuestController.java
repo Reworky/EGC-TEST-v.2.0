@@ -64,6 +64,9 @@ public class QuestController {
             boolean measured = submission.getClashRoyaleBaselineValue() != null;
             return new AutoVerifyProgress(measured ? submission.getClashRoyaleProgressCount() : null, quest.getClashRoyaleTargetCount());
         }
+        if (quest.getDotaVerifyType() != null) {
+            return new AutoVerifyProgress(submission.getDotaBestValue(), quest.getDotaTargetCount());
+        }
         return AutoVerifyProgress.NONE;
     }
 
@@ -101,7 +104,7 @@ public class QuestController {
                 .councilOnly(q.isCouncilOnly())
                 .sponsored(q.isSponsored())
                 .externalAutoApprove(q.isExternalAutoApprove())
-                .brawlAutoVerify(q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null)
+                .brawlAutoVerify(q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null || q.getDotaVerifyType() != null)
                 .highlightNew(q.isHighlightNew())
                 .submissionStatus(statusByQuestId.get(q.getId()))
                 .build()).toList();
@@ -131,7 +134,7 @@ public class QuestController {
                 .ticketReward(q.getTicketReward())
                 .councilOnly(q.isCouncilOnly()).sponsored(true)
                 .externalAutoApprove(q.isExternalAutoApprove())
-                .brawlAutoVerify(q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null)
+                .brawlAutoVerify(q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null || q.getDotaVerifyType() != null)
                 .highlightNew(q.isHighlightNew())
                 .submissionStatus(statusByQuestId.get(q.getId()))
                 .build()).toList();
@@ -165,7 +168,7 @@ public class QuestController {
                 .ticketReward(quest.getTicketReward())
                 .councilOnly(quest.isCouncilOnly())
                 .externalAutoApprove(quest.isExternalAutoApprove())
-                .brawlAutoVerify(quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null);
+                .brawlAutoVerify(quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null);
 
         if (telegramId != null) {
             appUserRepository.findByTelegramId(telegramId).ifPresent(user -> {
@@ -281,7 +284,7 @@ public class QuestController {
                         .gameName(s.getQuest().getGameName())
                         .category(s.getQuest().getCategory())
                         .externalAutoApprove(s.getQuest().isExternalAutoApprove())
-                        .brawlAutoVerify(s.getQuest().getBrawlVerifyType() != null || s.getQuest().getClashVerifyType() != null || s.getQuest().getClashRoyaleVerifyType() != null)
+                        .brawlAutoVerify(s.getQuest().getBrawlVerifyType() != null || s.getQuest().getClashVerifyType() != null || s.getQuest().getClashRoyaleVerifyType() != null || s.getQuest().getDotaVerifyType() != null)
                         .autoVerifyProgress(progress.progress())
                         .autoVerifyTarget(progress.target())
                         .status(s.getStatus().name())
@@ -349,6 +352,7 @@ public class QuestController {
             case NEEDS_BRAWL_TAG -> "🏷️ Для этого квеста нужно сначала привязать тег Brawl Stars — откройте бота и возьмите этот квест там, бот попросит ввести тег.";
             case NEEDS_CLASH_TAG -> "🏷️ Для этого квеста нужно сначала привязать тег Clash of Clans — откройте бота и возьмите этот квест там, бот попросит ввести тег.";
             case NEEDS_CLASH_ROYALE_TAG -> "🏷️ Для этого квеста нужно сначала привязать тег Clash Royale — откройте бота и возьмите этот квест там, бот попросит ввести тег.";
+            case NEEDS_DOTA_LINK -> "🏷️ Для этого квеста нужно сначала привязать аккаунт Dota 2 — откройте бота и возьмите этот квест там, бот попросит ввести account_id.";
             case AUTO_VERIFIED_NO_REPORT -> "ℹ️ Этот квест подтверждается автоматически — отправлять отчёт не нужно и нельзя.";
         };
     }

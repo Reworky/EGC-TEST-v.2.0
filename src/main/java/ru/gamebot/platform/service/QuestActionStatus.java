@@ -19,5 +19,6 @@ public enum QuestActionStatus {
     NEEDS_BRAWL_TAG,
     NEEDS_CLASH_TAG,
     NEEDS_CLASH_ROYALE_TAG,
+    NEEDS_DOTA_LINK,
     AUTO_VERIFIED_NO_REPORT
 }
