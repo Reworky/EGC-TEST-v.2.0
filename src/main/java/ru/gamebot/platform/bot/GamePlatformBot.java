@@ -9018,10 +9018,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     .append(" ").append(b.getStartAt().format(fmt)).append(" → ").append(b.getEndAt().format(fmt)).append("\n"));
         }
 
-        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(List.of(
-                List.of(keyboardFactory.callback("➕ Запустить буст-уикенд", "admin:refboost:create")),
-                List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin"))
-        )));
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (active.isPresent()) {
+            rows.add(List.of(keyboardFactory.callback("📢 Анонс текущего буста", "admin:refboost:announce:" + active.get().getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("➕ Запустить буст-уикенд", "admin:refboost:create")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
+
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     private String buildReferralBoostAnnouncementText(ru.gamebot.platform.domain.model.ReferralBoostEvent boost) {
