@@ -193,6 +193,11 @@ public class AppUser {
     // Squad membership
     private Long squadId;
 
+    /** Код приглашения в отряд из комбинированной реферальной ссылки (ref_<id>_sq_<code>),
+     *  ожидающий применения после завершения регистрации — join нельзя сделать сразу в /start,
+     *  т.к. анкета ещё не пройдена. Обнуляется после попытки применения в activatePlayer(). */
+    private String pendingSquadInviteCode;
+
     // Onboarding flow
     @Column(columnDefinition = "int default 0")
     private int onboardingStep;

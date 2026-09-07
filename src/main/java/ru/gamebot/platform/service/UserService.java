@@ -23,6 +23,7 @@ import ru.gamebot.platform.domain.model.SupportTicket;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
 import ru.gamebot.platform.domain.repository.RewardRequestRepository;
+import ru.gamebot.platform.domain.repository.SquadRepository;
 import ru.gamebot.platform.domain.repository.SupportAttachmentRepository;
 import ru.gamebot.platform.domain.repository.SupportTicketRepository;
 import ru.gamebot.platform.event.LeagueRewardEvent;
@@ -80,6 +81,7 @@ public class UserService {
     private final SupportAttachmentRepository supportAttachmentRepository;
     private final WheelService wheelService;
     private final AppProperties appProperties;
+    private final SquadRepository squadRepository;
 
     /** Варианты текста для кнопки «Поделиться» (Telegram share-ссылка) — случайный выбор при каждом
      *  построении, чтобы сообщения разных отправителей не выглядели как рассылка одного шаблона. */
@@ -89,11 +91,32 @@ public class UserService {
             "Нашёл клуб, где платят EXC за прохождение квестов в играх — уже накопил {баланс_EXC}, ранг «{ранг}». Залетай:"
     };
 
+    /** Вариант для игроков с отрядом — акцент на "играть вместе", а не на разовый бонус
+     *  (слияние "Поделиться" с приглашением в отряд, см. combined deep-link ref_<id>_sq_<code>). */
+    private static final String[] SQUAD_SHARE_TEMPLATES = {
+            "Собираю команду в EGC — я уже «{ранг}», {баланс_EXC} EXC на счету. Врывайся в мой отряд, будем зарабатывать вместе:",
+            "У меня отряд в EGC, играем вместе за EXC. Присоединяйся — сразу окажешься в команде:",
+            "Ищу людей в отряд EGC — топ-отряд недели получает 10 000 EXC. Заходи, играем вместе:"
+    };
+
     /** Ссылка вида t.me/share/url?... — открывает нативный пикер пересылки Telegram с готовым текстом
-     *  и реферальной ссылкой, без специального Bot API метода (просто обычная URL-кнопка). */
+     *  и реферальной ссылкой, без специального Bot API метода (просто обычная URL-кнопка). Если у
+     *  отправителя есть отряд — ссылка комбинированная (ref_<id>_sq_<code>), и новый игрок после
+     *  завершения регистрации автоматически вступает в тот же отряд (см. GamePlatformBot.consumePendingSquadInvite). */
     public String buildShareUrl(AppUser user) {
+        String[] templates = SHARE_TEMPLATES;
         String referralLink = "https://t.me/" + appProperties.getBotUsername() + "?start=ref_" + user.getTelegramId();
-        String template = SHARE_TEMPLATES[ThreadLocalRandom.current().nextInt(SHARE_TEMPLATES.length)];
+        if (user.getSquadId() != null) {
+            String inviteCode = squadRepository.findById(user.getSquadId())
+                    .filter(s -> "ACTIVE".equals(s.getStatus()))
+                    .map(ru.gamebot.platform.domain.model.Squad::getInviteCode)
+                    .orElse(null);
+            if (inviteCode != null) {
+                referralLink = referralLink + "_sq_" + inviteCode;
+                templates = SQUAD_SHARE_TEMPLATES;
+            }
+        }
+        String template = templates[ThreadLocalRandom.current().nextInt(templates.length)];
         String text = template
                 .replace("{баланс_EXC}", String.valueOf(user.getCoins()))
                 .replace("{ранг}", getLevelName(user.getXp()));

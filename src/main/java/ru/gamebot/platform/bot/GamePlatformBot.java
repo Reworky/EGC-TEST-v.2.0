@@ -562,9 +562,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void handleStart(Message message) {
         String srcCode = parseStartTrafficSource(message.getText());
         Long referredBy = parseStartReferral(message.getText());
+        String squadInviteCode = parseStartSquadCode(message.getText());
         AppUser user = userService.getOrCreate(message.getFrom(), referredBy);
         UserSession session = sessionService.get(user.getTelegramId());
         ensureRoleConsistency(user, session);
+
+        // Комбинированная ссылка "ref_<id>_sq_<code>" — вступление откладывается до activatePlayer(),
+        // т.к. регистрация (анкета + подписка на канал) ещё не пройдена.
+        if (squadInviteCode != null && user.getSquadId() == null && user.getPendingSquadInviteCode() == null) {
+            user.setPendingSquadInviteCode(squadInviteCode);
+            userService.save(user);
+        }
 
         if (user.isBlocked() && !adminService.isAdmin(user.getTelegramId())) {
             sendBlockedNotice(user);
@@ -2965,6 +2973,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         userService.applyWelcomeBonus(activated);
         ru.gamebot.platform.service.UserService.ReferralActivationResult referral =
                 userService.grantReferralReward(activated);
+        consumePendingSquadInvite(activated);
         startOnboarding(activated, referral);
         if (referral != null) {
             sendText(referral.referrerTelegramId(),
@@ -2975,6 +2984,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     null);
         }
         notifyAdminsNewRegistration(activated);
+    }
+
+    /** Применяет отложенное вступление в отряд из комбинированной ссылки "Поделиться" (ref_<id>_sq_<code>),
+     *  сохранённое в handleStart() ещё до прохождения анкеты. Мягко: отряд мог за это время
+     *  расформироваться/заполниться — тогда просто пропускаем, не мешая обычной активации. */
+    private void consumePendingSquadInvite(AppUser activated) {
+        String code = activated.getPendingSquadInviteCode();
+        if (code == null) return;
+        try {
+            if (activated.getSquadId() == null) {
+                ru.gamebot.platform.domain.model.Squad joinedSquad = squadService.joinByInviteCode(activated, code);
+                sendText(activated.getTelegramId(),
+                        "⚔️ <b>Вы вступили в отряд «" + escape(joinedSquad.getName()) + "»!</b>\n\n"
+                                + "Зарабатывайте XP вместе — топ-отряд получает 10 000 EXC каждую неделю!",
+                        backMenuKeyboard("menu:squads"));
+            }
+        } catch (Exception e) {
+            log.warn("Failed to apply pending squad invite '{}' for user {}: {}", code, activated.getTelegramId(), e.getMessage());
+        } finally {
+            activated.setPendingSquadInviteCode(null);
+            userService.save(activated);
+        }
     }
 
     /** Игрок ввёл ник, подписался на канал, но не вернулся нажать "Я подписался" — бот сам замечает
@@ -5364,9 +5395,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (squad == null) {
             sendText(user.getTelegramId(),
                     "⚔️ <b>Отряды</b>\n\n"
-                            + "Собирайте команду из 2–5 игроков.\n"
+                            + "Собирайте отряд — от 2 игроков, чем больше, тем сильнее конкуренция за призовые места.\n"
                             + "Суммарный XP участников — рейтинг вашего отряда.\n"
-                            + "Каждую неделю топ-отряд делит <b>10 000 EXC</b> на всех.\n\n"
+                            + "Каждую неделю топ-отряд делит <b>10 000 EXC</b> между лучшими игроками недели.\n\n"
                             + "Зовите друзей и играйте вместе 🔥",
                     keyboardFactory.verticalLayout(List.of(
                             keyboardFactory.callback("➕ Создать отряд", "squad:create"),
@@ -5384,14 +5415,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long weeklyXp = squadService.squadWeeklyXp(squad);
         boolean isCaptain = user.getTelegramId().equals(squad.getCaptainTelegramId());
 
+        List<ru.gamebot.platform.domain.model.AppUser> sortedMembers = members.stream()
+                .sorted(java.util.Comparator.comparingLong(ru.gamebot.platform.domain.model.AppUser::getWeeklyXp).reversed())
+                .toList();
+        int shown = Math.min(sortedMembers.size(), 15);
+
         StringBuilder sb = new StringBuilder();
         sb.append("⚔️ <b>Отряд «").append(escape(squad.getName())).append("»</b>\n\n");
-        sb.append("👥 Состав (").append(members.size()).append("/5):\n");
-        for (ru.gamebot.platform.domain.model.AppUser m : members) {
+        sb.append("👥 Состав (").append(members.size()).append(" участников):\n");
+        for (int i = 0; i < shown; i++) {
+            ru.gamebot.platform.domain.model.AppUser m = sortedMembers.get(i);
             String crown = m.getTelegramId().equals(squad.getCaptainTelegramId()) ? " 👑" : "";
             sb.append("• <b>").append(escape(m.getNickname())).append("</b>")
                     .append(crown)
                     .append(" — ").append(String.format("%,d", m.getWeeklyXp()).replace(',', ' ')).append(" XP\n");
+        }
+        if (sortedMembers.size() > shown) {
+            sb.append("… и ещё ").append(sortedMembers.size() - shown).append(" участников\n");
         }
         if (squad.getWeeklyBonusPoints() > 0) {
             sb.append("🎉 Бонус за рефералов: <b>+").append(squad.getWeeklyBonusPoints()).append(" очков</b>\n");
@@ -5571,18 +5611,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 if (squad == null || !user.getTelegramId().equals(squad.getCaptainTelegramId())) {
                     answerSilently(callbackQuery.getId()); return;
                 }
-                List<ru.gamebot.platform.domain.model.AppUser> members = squadService.getMembers(squad);
+                List<ru.gamebot.platform.domain.model.AppUser> members = squadService.getMembers(squad).stream()
+                        .filter(m -> !m.getTelegramId().equals(user.getTelegramId()))
+                        .sorted(java.util.Comparator.comparingLong(ru.gamebot.platform.domain.model.AppUser::getWeeklyXp).reversed())
+                        .toList();
                 List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-                for (ru.gamebot.platform.domain.model.AppUser m : members) {
-                    if (!m.getTelegramId().equals(user.getTelegramId())) {
-                        rows.add(List.of(keyboardFactory.callback(
-                                "👢 " + escape(m.getNickname()),
-                                "squad:kick:" + m.getTelegramId()
-                        )));
-                    }
+                int kickShown = Math.min(members.size(), 30);
+                for (int i = 0; i < kickShown; i++) {
+                    ru.gamebot.platform.domain.model.AppUser m = members.get(i);
+                    rows.add(List.of(keyboardFactory.callback(
+                            "👢 " + escape(m.getNickname()),
+                            "squad:kick:" + m.getTelegramId()
+                    )));
                 }
                 rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:squads")));
-                sendText(user.getTelegramId(), "👢 <b>Исключить участника</b>\n\nВыберите кого исключить:", keyboardFactory.rowsLayout(rows));
+                String kickText = members.size() > kickShown
+                        ? "👢 <b>Исключить участника</b>\n\nПоказаны топ-30 по XP. Выберите кого исключить:"
+                        : "👢 <b>Исключить участника</b>\n\nВыберите кого исключить:";
+                sendText(user.getTelegramId(), kickText, keyboardFactory.rowsLayout(rows));
                 answerSilently(callbackQuery.getId());
             }
             default -> {
@@ -13182,7 +13228,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (payload.startsWith("ref_")) {
             payload = payload.substring(4);
         }
+        int squadIdx = payload.indexOf("_sq_");
+        if (squadIdx >= 0) {
+            payload = payload.substring(0, squadIdx);
+        }
         return parseLong(payload);
+    }
+
+    /** Комбинированная ссылка "Поделиться" из отряда: ref_<id>_sq_<inviteCode>. */
+    private String parseStartSquadCode(String text) {
+        if (text == null || !text.contains(" ")) return null;
+        String payload = text.substring(text.indexOf(' ') + 1).trim();
+        int idx = payload.indexOf("_sq_");
+        return idx < 0 ? null : payload.substring(idx + 4);
     }
 
     private Long parseLong(String value) {

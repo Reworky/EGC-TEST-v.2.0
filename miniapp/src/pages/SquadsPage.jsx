@@ -37,6 +37,11 @@ function SquadCard({ squad, onChanged }) {
     navigator.clipboard?.writeText(inviteLink).catch(() => {});
   }
 
+  const sortedMembers = [...squad.members].sort((a, b) => b.weeklyXp - a.weeklyXp);
+  const MAX_SHOWN = 30;
+  const shownMembers = sortedMembers.slice(0, MAX_SHOWN);
+  const hiddenCount = sortedMembers.length - shownMembers.length;
+
   return (
     <div className="ref-link-card" style={{ margin: '12px 16px' }}>
       <div className="ref-link-label">⚔️ {squad.name}</div>
@@ -50,7 +55,7 @@ function SquadCard({ squad, onChanged }) {
       )}
 
       <div className="category-section" style={{ marginTop: 8 }}>
-        {squad.members.map(m => (
+        {shownMembers.map(m => (
           <div key={m.telegramId} className="shop-card" style={{ padding: '10px 14px' }}>
             <div className="shop-top">
               <div className="shop-title">
@@ -74,6 +79,11 @@ function SquadCard({ squad, onChanged }) {
             )}
           </div>
         ))}
+        {hiddenCount > 0 && (
+          <div className="shop-desc" style={{ textAlign: 'center', opacity: 0.6, padding: '6px 0' }}>
+            …и ещё {hiddenCount} участников
+          </div>
+        )}
       </div>
 
       <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
