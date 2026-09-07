@@ -326,7 +326,7 @@ export default function ProfilePage() {
             </div>
             {!frameImage && <div className="p-avatar-ring" style={{ borderColor: `${ringColor}44` }} />}
             {frameImage && (
-              <img src={frameImage} alt="" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: frameSize, height: frameSize, pointerEvents: 'none', mixBlendMode: FRAME_BLEND[profile.avatarFrameImage] || 'normal' }} />
+              <img src={frameImage} alt="" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: frameSize, height: 'auto', pointerEvents: 'none', mixBlendMode: FRAME_BLEND[profile.avatarFrameImage] || 'normal' }} />
             )}
           </div>
 
