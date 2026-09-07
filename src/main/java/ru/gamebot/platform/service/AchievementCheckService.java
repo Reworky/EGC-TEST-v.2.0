@@ -3,6 +3,7 @@ package ru.gamebot.platform.service;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -49,6 +50,7 @@ public class AchievementCheckService {
             if (!user.isRegistrationCompleted()) continue;
             checkLevel(user);
             checkExcMilestone(user, milestones);
+            checkInvitedFriendsMilestone(user);
         }
     }
 
@@ -90,6 +92,26 @@ public class AchievementCheckService {
             appUserRepository.save(user);
             eventPublisher.publishEvent(new AchievementEvent(this, user.getTelegramId(),
                     AchievementType.EXC_MILESTONE, String.valueOf(highestReached)));
+        }
+    }
+
+    /** Модуль 3 максимизации рефералки — майлстоуны по количеству приглашённых друзей (независимо
+     *  от денежного EXC_MILESTONE выше). Тот же паттерн первого замера без уведомления. */
+    private void checkInvitedFriendsMilestone(AppUser user) {
+        Optional<Integer> highest = userService.highestInvitedFriendsMilestone(user.getInvitedFriends());
+        if (highest.isEmpty()) return;
+
+        Integer lastNotified = user.getLastNotifiedInvitedFriendsMilestone();
+        if (lastNotified == null) {
+            user.setLastNotifiedInvitedFriendsMilestone(highest.get());
+            appUserRepository.save(user);
+            return;
+        }
+        if (highest.get() > lastNotified) {
+            user.setLastNotifiedInvitedFriendsMilestone(highest.get());
+            appUserRepository.save(user);
+            eventPublisher.publishEvent(new AchievementEvent(this, user.getTelegramId(),
+                    AchievementType.INVITED_FRIENDS_MILESTONE, String.valueOf(highest.get())));
         }
     }
 }

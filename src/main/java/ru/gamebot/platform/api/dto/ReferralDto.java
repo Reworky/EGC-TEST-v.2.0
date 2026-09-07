@@ -14,4 +14,7 @@ public class ReferralDto {
     private boolean boostActive;
     private Integer boostMultiplier;
     private String boostEndsAt;
+    private String currentFriendBadge;
+    private Integer nextFriendMilestone;
+    private int friendProgressPercent;
 }

@@ -59,6 +59,8 @@ public class ProfileController {
                             .avatarFrameColor(user.getAvatarFrameColor())
                             .avatarFrameImage(user.getAvatarFrameImage())
                             .ownedFrames(parseOwnedFrames(user.getOwnedFramesCsv()))
+                            .invitedFriends(user.getInvitedFriends())
+                            .friendBadgeName(userService.currentInvitedFriendsBadge(user.getInvitedFriends()).orElse(null))
                             .build()))
                 .orElse(ResponseEntity.notFound().build());
     }

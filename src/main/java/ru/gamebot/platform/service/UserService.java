@@ -228,6 +228,44 @@ public class UserService {
         return LEVEL_TIERS.get(nextIndex).minXp();
     }
 
+    // Модуль 3 максимизации рефералки — майлстоуны по КОЛИЧЕСТВУ приглашённых друзей (независимо
+    // от денежной шкалы майлстоунов заработка с рефералов). Пороги+названия — один список пар, не
+    // раздельные yml-числа/Java-названия, чтобы не разъезжались при правке одного без другого.
+    private record InvitedFriendsBadge(int threshold, String name) {}
+
+    private static final List<InvitedFriendsBadge> INVITED_FRIENDS_BADGES = List.of(
+            new InvitedFriendsBadge(5, "🥉 Проводник"),
+            new InvitedFriendsBadge(10, "🥈 Посол клуба"),
+            new InvitedFriendsBadge(25, "🥇 Легенда рефералки"),
+            new InvitedFriendsBadge(50, "💎 Икона EGC")
+    );
+
+    public Optional<Integer> highestInvitedFriendsMilestone(int invitedFriends) {
+        Integer result = null;
+        for (InvitedFriendsBadge b : INVITED_FRIENDS_BADGES) {
+            if (invitedFriends >= b.threshold()) result = b.threshold(); else break;
+        }
+        return Optional.ofNullable(result);
+    }
+
+    public String invitedFriendsBadgeName(int threshold) {
+        return INVITED_FRIENDS_BADGES.stream()
+                .filter(b -> b.threshold() == threshold).findFirst()
+                .map(InvitedFriendsBadge::name).orElse("🎖️ " + threshold + " друзей");
+    }
+
+    public Optional<String> currentInvitedFriendsBadge(int invitedFriends) {
+        return highestInvitedFriendsMilestone(invitedFriends).map(this::invitedFriendsBadgeName);
+    }
+
+    /** null = все бейджи уже получены. */
+    public Integer nextInvitedFriendsMilestone(int invitedFriends) {
+        for (InvitedFriendsBadge b : INVITED_FRIENDS_BADGES) {
+            if (invitedFriends < b.threshold()) return b.threshold();
+        }
+        return null;
+    }
+
     public List<String> getAchievements(AppUser user) {
         return Stream.of(
                 user.getCompletedQuests() >= 1 ? "🏅 Первое задание" : null,

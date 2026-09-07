@@ -28,4 +28,7 @@ public class UserProfileDto {
     private String avatarFrameImage;
     /** Список ключей всех рамок, которыми владеет пользователь (["fire", "ice", "gold"]). */
     private List<String> ownedFrames;
+    private int invitedFriends;
+    /** Название бейджа за число приглашённых друзей (Модуль 3 максимизации рефералки). null = ещё нет бейджа. */
+    private String friendBadgeName;
 }

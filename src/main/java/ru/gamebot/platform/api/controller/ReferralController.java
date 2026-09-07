@@ -18,6 +18,7 @@ import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.service.ExcTransactionService;
 import ru.gamebot.platform.service.ReferralBoostService;
+import ru.gamebot.platform.service.UserService;
 
 @RestController
 @RequestMapping("/api/profile/referrals")
@@ -31,6 +32,7 @@ public class ReferralController {
     private final AppProperties appProperties;
     private final ExcTransactionService excTransactionService;
     private final ReferralBoostService referralBoostService;
+    private final UserService userService;
 
     @GetMapping
     public ResponseEntity<ReferralDto> referrals(@AuthenticationPrincipal Long telegramId) {
@@ -47,6 +49,11 @@ public class ReferralController {
 
         var activeBoost = referralBoostService.findActiveBoost();
 
+        Integer nextFriendMilestone = userService.nextInvitedFriendsMilestone(user.getInvitedFriends());
+        int friendProgressPercent = nextFriendMilestone == null
+                ? 100
+                : (int) Math.min(100, user.getInvitedFriends() * 100L / nextFriendMilestone);
+
         return ResponseEntity.ok(ReferralDto.builder()
                 .referralLink("https://t.me/" + appProperties.getBotUsername() + "?start=ref_" + user.getTelegramId())
                 .invitedFriends(user.getInvitedFriends())
@@ -56,6 +63,9 @@ public class ReferralController {
                 .boostActive(activeBoost.isPresent())
                 .boostMultiplier(activeBoost.map(b -> b.getMultiplier()).orElse(null))
                 .boostEndsAt(activeBoost.map(b -> b.getEndAt().toString()).orElse(null))
+                .currentFriendBadge(userService.currentInvitedFriendsBadge(user.getInvitedFriends()).orElse(null))
+                .nextFriendMilestone(nextFriendMilestone)
+                .friendProgressPercent(friendProgressPercent)
                 .build());
     }
 

@@ -157,6 +157,13 @@
   color: #c4b5fd;
 }
 
+.ref-friend-badge-current {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fbbf24;
+  margin-bottom: 10px;
+}
+
 /* ── Progress ── */
 .ref-progress-card {
   margin: 0 16px 12px;

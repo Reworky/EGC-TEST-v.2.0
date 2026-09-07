@@ -354,6 +354,11 @@ export default function ProfilePage() {
                   <span>{profile.profileTitle}</span>
                 </div>
               )}
+              {profile.friendBadgeName && (
+                <div className="p-rank-badge" style={{ display: 'inline-flex', borderColor: 'rgba(251,191,36,0.35)', color: '#fbbf24', background: 'rgba(251,191,36,0.12)' }}>
+                  <span>{profile.friendBadgeName}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

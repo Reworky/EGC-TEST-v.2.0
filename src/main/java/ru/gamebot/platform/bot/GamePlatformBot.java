@@ -2990,6 +2990,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String badges = "";
         if (councilService.isCouncilMember(user)) badges += "🛡️ EGC Council  ";
         if (seasonService.hasActivePass(user)) badges += "🎫 Battle Pass  ";
+        java.util.Optional<String> friendBadge = userService.currentInvitedFriendsBadge(user.getInvitedFriends());
+        if (friendBadge.isPresent()) badges += friendBadge.get() + "  ";
         String badgeLine = badges.isEmpty() ? "" : badges.trim() + "\n";
 
         int excBonus = userService.getExcBonusPercent(user.getXp());
@@ -4162,6 +4164,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .map(b -> "🚀 <b>Буст-уикенд ×" + b.getMultiplier() + " активен!</b>\n" + formatDeadlineLine(b.getEndAt()) + "\n")
                 .orElse("");
 
+        Integer nextFriendMilestone = userService.nextInvitedFriendsMilestone(user.getInvitedFriends());
+        String friendBadgeProgress;
+        if (nextFriendMilestone == null) {
+            friendBadgeProgress = "🏆 Все бейджи за друзей получены!\n\n";
+        } else {
+            int friendPct = (int) Math.min(100, user.getInvitedFriends() * 100L / nextFriendMilestone);
+            int friendFilled = friendPct / 10;
+            String friendBar = "█".repeat(friendFilled) + "░".repeat(10 - friendFilled);
+            friendBadgeProgress = "🎖️ Прогресс до бейджа «" + userService.invitedFriendsBadgeName(nextFriendMilestone)
+                    + "» (" + nextFriendMilestone + " друзей):\n[" + friendBar + "] " + friendPct + "%\n\n";
+        }
+
         sendText(user.getTelegramId(),
                 "🤝 <b>Реферальная программа EGC</b>\n\n"
                         + boostBanner
@@ -4170,6 +4184,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "💎 Заработано на рефералах: <b>" + earned + " EXC</b>\n\n"
                         + "📊 Прогресс до " + nextMilestone + " EXC:\n"
                         + "[" + bar + "] " + progressPct + "%\n\n"
+                        + friendBadgeProgress
                         + "🎁 <b>Как работает:</b>\n\n"
                         + "Шаг 1 — друг вступает в клуб\n"
                         + "• Тебе сразу: <b>+300 EXC</b>\n"
@@ -10987,6 +11002,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 case TOURNAMENT_WIN -> "🏆 <b>Достижение разблокировано!</b>\n\nТы выиграл турнир «" + escape(detail) + "»! Расскажи друзьям — пусть тоже попробуют:";
                 case RANK_UP -> "⭐ <b>Новый ранг!</b>\n\nТы достиг звания «" + escape(detail) + "»! Похвастайся друзьям:";
                 case EXC_MILESTONE -> "💰 <b>Круглая сумма!</b>\n\nТы заработал уже " + detail + " EXC в EGC! Позови друзей за компанию:";
+                case INVITED_FRIENDS_MILESTONE -> {
+                    int threshold = Integer.parseInt(detail);
+                    String badgeName = userService.invitedFriendsBadgeName(threshold);
+                    yield "🎖️ <b>Новый бейдж!</b>\n\nТы пригласил " + threshold + " друзей и получил бейдж «"
+                            + escape(badgeName) + "»! Похвастайся друзьям:";
+                }
             };
             sendText(telegramId, text, keyboardFactory.rowsLayout(List.of(
                     List.of(keyboardFactory.url("🔗 Поделиться", userService.buildShareUrl(user))),

@@ -119,6 +119,23 @@ export default function ReferralsPage() {
         <div className="ref-progress-pct">{pct}%</div>
       </div>
 
+      <div className="ref-progress-card">
+        {data.currentFriendBadge && (
+          <div className="ref-friend-badge-current">{data.currentFriendBadge}</div>
+        )}
+        {data.nextFriendMilestone ? (
+          <>
+            <div className="ref-progress-label">Прогресс до следующего бейджа ({data.nextFriendMilestone} друзей)</div>
+            <div className="ref-progress-track">
+              <div className="ref-progress-fill" style={{ width: data.friendProgressPercent + '%' }} />
+            </div>
+            <div className="ref-progress-pct">{data.friendProgressPercent}%</div>
+          </>
+        ) : (
+          <div className="ref-progress-label">🏆 Все бейджи за друзей получены!</div>
+        )}
+      </div>
+
       {ranking && (ranking.top?.length > 0) && (
         <div className="ref-rank-card">
           <div className="ref-rank-title">🏆 Рейтинг рефереров за неделю</div>
