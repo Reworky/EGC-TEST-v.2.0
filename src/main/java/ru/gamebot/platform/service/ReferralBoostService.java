@@ -46,4 +46,12 @@ public class ReferralBoostService {
         event.setCreatedAt(LocalDateTime.now());
         return repository.save(event);
     }
+
+    @Transactional
+    public void setCustomAnnounceText(Long id, String text) {
+        repository.findById(id).ifPresent(event -> {
+            event.setCustomAnnounceText(text);
+            repository.save(event);
+        });
+    }
 }

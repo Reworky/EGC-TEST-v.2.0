@@ -1746,9 +1746,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + " EXC</b>, рефереру <b>" + (300 * multiplier) + " EXC</b>.\n\n"
                         + "📢 <b>Текст анонса (превью):</b>\n\n" + announcePreview,
                         keyboardFactory.rowsLayout(List.of(
-                                List.of(keyboardFactory.callback("📢 Разослать анонс", "admin:refboost:announce:" + boost.getId())),
+                                List.of(keyboardFactory.callback("📢 Анонс", "admin:refboost:announce:" + boost.getId())),
                                 List.of(keyboardFactory.callback("⬅️ Назад", "admin:refboost"))
                         )));
+            }
+            case REFERRAL_BOOST_ANNOUNCE_EDIT -> {
+                long announceBoostId = Long.parseLong(session.getData().get("rbAnnounceBoostId"));
+                referralBoostService.setCustomAnnounceText(announceBoostId, text.trim());
+                session.reset();
+                sendReferralBoostAnnouncePreview(user, announceBoostId);
             }
             case SPONSOR_CREATE_NAME -> {
                 session.getData().put("spName", text.trim());
@@ -6658,8 +6664,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     answer(callbackQuery.getId(), "Сезон деактивирован.");
                     sendAdminSeasonList(user);
                     return;
+                } else if (action.startsWith("refboost:announce:edit:")) {
+                    long editBoostId = parseLong(action.substring("refboost:announce:edit:".length()));
+                    session.reset();
+                    session.setState(SessionState.REFERRAL_BOOST_ANNOUNCE_EDIT);
+                    session.getData().put("rbAnnounceBoostId", String.valueOf(editBoostId));
+                    sendText(user.getTelegramId(),
+                            "✏️ Отправьте новый текст анонса. Можно использовать HTML-теги Telegram (например <code>&lt;b&gt;жирный&lt;/b&gt;</code>).",
+                            cancelKeyboard());
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("refboost:announce:confirm:")) {
+                    sendReferralBoostAnnounceConfirm(user, parseLong(action.substring("refboost:announce:confirm:".length())));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("refboost:announce:send:")) {
+                    sendReferralBoostAnnounceFinal(user, parseLong(action.substring("refboost:announce:send:".length())));
+                    answerSilently(callbackQuery.getId());
+                    return;
                 } else if (action.startsWith("refboost:announce:")) {
-                    sendReferralBoostAnnouncement(user, parseLong(action.substring("refboost:announce:".length())));
+                    sendReferralBoostAnnouncePreview(user, parseLong(action.substring("refboost:announce:".length())));
                     answerSilently(callbackQuery.getId());
                     return;
                 } else if (action.startsWith("tournaments:view:")) {
@@ -8991,9 +9015,43 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "Успей позвать друзей, пока буст активен 👇";
     }
 
-    private void sendReferralBoostAnnouncement(AppUser user, long boostId) {
+    /** Кастомный текст (если админ отредактировал) либо шаблон по умолчанию. */
+    private String resolveReferralBoostAnnounceText(ru.gamebot.platform.domain.model.ReferralBoostEvent boost) {
+        return boost.getCustomAnnounceText() != null ? boost.getCustomAnnounceText() : buildReferralBoostAnnouncementText(boost);
+    }
+
+    /** Экран превью анонса — текст + «Редактировать»/«Разослать» (ведёт на подтверждение)/«Назад».
+     * Доступен и сразу после создания буста, и позже из «🚀 Буст рефералки» — та же кнопка/callback. */
+    private void sendReferralBoostAnnouncePreview(AppUser user, long boostId) {
         referralBoostService.findById(boostId).ifPresentOrElse(boost -> {
-            String announceText = buildReferralBoostAnnouncementText(boost);
+            String text = resolveReferralBoostAnnounceText(boost);
+            sendText(user.getTelegramId(),
+                    "📢 <b>Анонс буста</b>\n\n" + text,
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("✏️ Редактировать текст", "admin:refboost:announce:edit:" + boostId)),
+                            List.of(keyboardFactory.callback("🚀 Разослать анонс", "admin:refboost:announce:confirm:" + boostId)),
+                            List.of(keyboardFactory.callback("⬅️ Назад", "admin:refboost"))
+                    )));
+        }, () -> sendText(user.getTelegramId(), "❌ Буст не найден.", backMenuKeyboard("admin:refboost")));
+    }
+
+    /** Второй шаг подтверждения — необратимая массовая рассылка, поэтому явное «да» отдельным нажатием. */
+    private void sendReferralBoostAnnounceConfirm(AppUser user, long boostId) {
+        referralBoostService.findById(boostId).ifPresentOrElse(boost -> {
+            int recipients = userService.allRegisteredUsers().size();
+            sendText(user.getTelegramId(),
+                    "⚠️ <b>Точно разослать анонс?</b>\n\nСообщение уйдёт в личку примерно <b>" + recipients
+                    + "</b> игрокам прямо сейчас. Отменить отправку после нажатия будет нельзя.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("✅ Да, отправить всем", "admin:refboost:announce:send:" + boostId)),
+                            List.of(keyboardFactory.callback("❌ Отмена", "admin:refboost:announce:" + boostId))
+                    )));
+        }, () -> sendText(user.getTelegramId(), "❌ Буст не найден.", backMenuKeyboard("admin:refboost")));
+    }
+
+    private void sendReferralBoostAnnounceFinal(AppUser user, long boostId) {
+        referralBoostService.findById(boostId).ifPresentOrElse(boost -> {
+            String announceText = resolveReferralBoostAnnounceText(boost);
             int delivered = broadcastToAll(announceText);
 
             sendText(user.getTelegramId(),

@@ -24,4 +24,9 @@ public class ReferralBoostEvent {
     private boolean active;
 
     private LocalDateTime createdAt;
+
+    /** Отредактированный админом текст анонса (HTML). null = используется шаблон по умолчанию
+     *  (см. GamePlatformBot.buildReferralBoostAnnouncementText). */
+    @Column(length = 3000)
+    private String customAnnounceText;
 }
