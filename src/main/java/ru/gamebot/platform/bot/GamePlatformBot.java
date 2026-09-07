@@ -6372,6 +6372,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "live" -> sendAdminLiveStatus(user);
             case "queststats" -> sendAdminQuestStats(user);
             case "ugcstats" -> sendUgcQuestStats(user);
+            case "brawlstats" -> sendGameQuestStats(user, "Brawl Stars");
             case "onetimeabuse" -> sendAdminOneTimeQuestAbuse(user);
             case "clashtags" -> sendAdminClashTagsList(user);
             case "autoquest-activity" -> sendAdminAutoQuestActivity(user);
@@ -8778,6 +8779,37 @@ public class GamePlatformBot extends TelegramLongPollingBot {
               .append("   💰 Награда: <b>").append(s.rewardCoins()).append(" EXC</b> · ⏰ Дедлайн: ").append(s.durationDays()).append(" дн.\n\n");
         }
         sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:admin"));
+    }
+
+    /** Универсальный срез "выполнено на самом деле" по любой игре (переиспользует ту же статистику,
+     *  что и sendUgcQuestStats) — нужен для тюнинга наград по реальной популярности/сложности квеста,
+     *  а не по дедлайну (дедлайн не отражает реальный эффорт). Бьёт на сообщения по ~15 квестов —
+     *  у Brawl Stars их ~35, в одно сообщение с лимитом Telegram 4096 символов не помещается. */
+    private void sendGameQuestStats(AppUser user, String gameName) {
+        List<ru.gamebot.platform.service.QuestService.QuestCompletionStat> stats = questService.getQuestCompletionStatsByGame(gameName);
+        if (stats.isEmpty()) {
+            sendText(user.getTelegramId(), "📊 <b>Статистика " + escape(gameName) + "</b>\n\nАктивных квестов не найдено.", backMenuKeyboard("menu:admin"));
+            return;
+        }
+        int perMessage = 15;
+        for (int start = 0; start < stats.size(); start += perMessage) {
+            int end = Math.min(start + perMessage, stats.size());
+            StringBuilder sb = new StringBuilder();
+            if (start == 0) {
+                sb.append("📊 <b>Статистика ").append(escape(gameName)).append("</b>\n\n")
+                  .append("Отсортировано по числу одобренных выполнений за всё время (самый популярный — первый):\n\n");
+            }
+            for (ru.gamebot.platform.service.QuestService.QuestCompletionStat s : stats.subList(start, end)) {
+                long rejected = s.totalSubmissions() - s.approvedSubmissions();
+                sb.append("<b>").append(escape(s.title())).append("</b>\n")
+                  .append("   ✅ Одобрено: <b>").append(s.approvedSubmissions()).append("</b>")
+                  .append(" · 📨 Всего заявок: ").append(s.totalSubmissions())
+                  .append(" · ❌ Отклонено/др.: ").append(rejected).append("\n")
+                  .append("   💰 Награда: <b>").append(s.rewardCoins()).append(" EXC</b> · ⏰ Дедлайн: ").append(s.durationDays()).append(" дн.\n\n");
+            }
+            boolean last = end >= stats.size();
+            sendText(user.getTelegramId(), sb.toString(), last ? backMenuKeyboard("menu:admin") : null);
+        }
     }
 
     private void sendAdminClashTagsList(AppUser user) {
@@ -12301,6 +12333,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             ));
             rows.add(List.of(keyboardFactory.callback("🕵️ Повторы разовых квестов", "admin:onetimeabuse")));
             rows.add(List.of(keyboardFactory.callback("📊 Статистика UGC-квестов", "admin:ugcstats")));
+            rows.add(List.of(keyboardFactory.callback("📊 Статистика Brawl Stars", "admin:brawlstats")));
             rows.add(List.of(keyboardFactory.callback("🏷️ Теги CoC/Clash Royale", "admin:clashtags")));
             rows.add(List.of(keyboardFactory.callback("🔁 Активность автоквестов", "admin:autoquest-activity")));
             rows.add(List.of(
