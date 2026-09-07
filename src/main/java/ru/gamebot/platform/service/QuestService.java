@@ -910,6 +910,22 @@ public class QuestService {
         return questSubmissionRepository.findOneTimeQuestRepeatOffenders();
     }
 
+    public record QuestCompletionStat(Long questId, String title, long rewardCoins, int durationDays,
+                                       long totalSubmissions, long approvedSubmissions) {}
+
+    /** Срез "сколько раз реально выполнили" по всем активным квестам одной псевдо-игры (например
+     *  "UGC") — для балансировки наград под фактическую сложность/популярность. Сортировка по
+     *  числу одобренных заявок по убыванию (самый популярный/лёгкий — первый). */
+    public List<QuestCompletionStat> getQuestCompletionStatsByGame(String gameName) {
+        return questRepository.findAllByActiveTrueAndGameNameIgnoreCaseOrderByCreatedAtDesc(gameName).stream()
+                .map(q -> new QuestCompletionStat(
+                        q.getId(), q.getTitle(), q.getRewardCoins(), q.getDurationDays(),
+                        questSubmissionRepository.countByQuest(q),
+                        questSubmissionRepository.countApprovedByQuest(q)))
+                .sorted(Comparator.comparingLong(QuestCompletionStat::approvedSubmissions).reversed())
+                .toList();
+    }
+
     private static final List<String> AUTO_QUEST_GAMES = List.of("Brawl Stars", "Clash of Clans", "Clash Royale");
 
     public record AutoQuestGameStat(String gameName, long activeUsers30d, long approvals30d) {}

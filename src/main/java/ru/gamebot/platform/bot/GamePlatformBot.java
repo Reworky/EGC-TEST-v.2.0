@@ -6210,6 +6210,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "stats:reset_weekly:confirm" -> doAdminResetWeeklyXp(user);
             case "live" -> sendAdminLiveStatus(user);
             case "queststats" -> sendAdminQuestStats(user);
+            case "ugcstats" -> sendUgcQuestStats(user);
             case "onetimeabuse" -> sendAdminOneTimeQuestAbuse(user);
             case "clashtags" -> sendAdminClashTagsList(user);
             case "autoquest-activity" -> sendAdminAutoQuestActivity(user);
@@ -8571,6 +8572,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
               .append(" · <b>").append(count).append("</b> раз\n\n");
             if (i >= 20) break;
             i++;
+        }
+        sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:admin"));
+    }
+
+    private void sendUgcQuestStats(AppUser user) {
+        List<ru.gamebot.platform.service.QuestService.QuestCompletionStat> stats = questService.getQuestCompletionStatsByGame("UGC");
+        if (stats.isEmpty()) {
+            sendText(user.getTelegramId(), "📊 <b>Статистика UGC-квестов</b>\n\nАктивных UGC-квестов не найдено.", backMenuKeyboard("menu:admin"));
+            return;
+        }
+        StringBuilder sb = new StringBuilder("📊 <b>Статистика UGC-квестов</b>\n\nОтсортировано по числу одобренных выполнений (самый популярный — первый):\n\n");
+        for (ru.gamebot.platform.service.QuestService.QuestCompletionStat s : stats) {
+            long rejected = s.totalSubmissions() - s.approvedSubmissions();
+            sb.append("<b>").append(escape(s.title())).append("</b>\n")
+              .append("   ✅ Одобрено: <b>").append(s.approvedSubmissions()).append("</b>")
+              .append(" · 📨 Всего заявок: ").append(s.totalSubmissions())
+              .append(" · ❌ Отклонено/др.: ").append(rejected).append("\n")
+              .append("   💰 Награда: <b>").append(s.rewardCoins()).append(" EXC</b> · ⏰ Дедлайн: ").append(s.durationDays()).append(" дн.\n\n");
         }
         sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:admin"));
     }
@@ -12048,6 +12067,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback("📈 Топ квестов", "admin:queststats")
             ));
             rows.add(List.of(keyboardFactory.callback("🕵️ Повторы разовых квестов", "admin:onetimeabuse")));
+            rows.add(List.of(keyboardFactory.callback("📊 Статистика UGC-квестов", "admin:ugcstats")));
             rows.add(List.of(keyboardFactory.callback("🏷️ Теги CoC/Clash Royale", "admin:clashtags")));
             rows.add(List.of(keyboardFactory.callback("🔁 Активность автоквестов", "admin:autoquest-activity")));
             rows.add(List.of(
