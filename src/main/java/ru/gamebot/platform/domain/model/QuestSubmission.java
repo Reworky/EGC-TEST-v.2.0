@@ -127,6 +127,12 @@ public class QuestSubmission {
     @Column(length = 2000)
     private String brawlBaselineBrawlers;
 
+    /** PARTNER_BATTLES: тег партнёра (реферала/отрядника), выбранного при взятии квеста — бой засчитывается,
+     * только если этот тег встречается среди тиммейтов в battlelog. Выбирается один раз при взятии,
+     * не меняется до пересдачи квеста. */
+    @Column(length = 20)
+    private String brawlPartnerTag;
+
     /** ATTACK_WINS: attackWins, RESOURCES: золото, TOWN_HALL: townHallLevel — на момент первого опроса после взятия. null = ещё не захвачено. */
     private Integer clashBaselineValue;
 

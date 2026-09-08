@@ -130,7 +130,7 @@ public class BrawlQuestVerificationService {
         String newCursor = oldCursor;
         int matched = 0;
         for (BrawlStarsApiService.BattleLogEntry e : entries) {
-            if (e.battleTime().compareTo(oldCursor) > 0 && matchesFilters(e, quest)) {
+            if (e.battleTime().compareTo(oldCursor) > 0 && matchesFilters(e, quest, submission)) {
                 matched++;
             }
             if (e.battleTime().compareTo(newCursor) > 0) {
@@ -145,12 +145,20 @@ public class BrawlQuestVerificationService {
         }
     }
 
-    private boolean matchesFilters(BrawlStarsApiService.BattleLogEntry e, Quest quest) {
+    private boolean matchesFilters(BrawlStarsApiService.BattleLogEntry e, Quest quest, QuestSubmission submission) {
         if (quest.isBrawlRequireVictory() && !e.victory()) return false;
         if (quest.isBrawlRequireRanked() && !"ranked".equalsIgnoreCase(e.type())) return false;
         if (quest.isBrawlRequireTeam() && !e.isTeamMode()) return false;
         if (quest.getBrawlModeKeys() != null && !csvContains(quest.getBrawlModeKeys(), e.mode())) return false;
         if (quest.getBrawlBrawlerNames() != null && !csvContains(quest.getBrawlBrawlerNames(), e.playerBrawlerName())) return false;
+        // PARTNER_BATTLES: бой засчитывается, только если выбранный при взятии партнёр реально был
+        // тиммейтом в этом бою — без этого условия квест ничем не отличался бы от обычного "команда".
+        if (quest.getBrawlVerifyType() == BrawlVerifyType.PARTNER_BATTLES) {
+            String partnerTag = submission.getBrawlPartnerTag();
+            if (partnerTag == null) return false;
+            boolean partnerPresent = e.teammateTags().stream().anyMatch(t -> t.equalsIgnoreCase(partnerTag));
+            if (!partnerPresent) return false;
+        }
         return true;
     }
 

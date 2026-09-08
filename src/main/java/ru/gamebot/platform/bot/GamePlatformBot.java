@@ -834,6 +834,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleTakeQuest(callbackQuery, user, session, parseLong(data.substring("quest:take:".length())));
             return;
         }
+        if (data.startsWith("quest:takepartner:")) {
+            String[] parts = data.substring("quest:takepartner:".length()).split(":");
+            handleTakeQuestWithPartner(callbackQuery, user, parseLong(parts[0]), parseLong(parts[1]));
+            return;
+        }
         if (data.startsWith("quest:report:")) {
             handleReportStart(callbackQuery, user, session, parseLong(data.substring("quest:report:".length())));
             return;
@@ -3811,6 +3816,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     cancelKeyboard());
             return;
         }
+        if (quest.getBrawlVerifyType() == ru.gamebot.platform.domain.enums.BrawlVerifyType.PARTNER_BATTLES) {
+            answerSilently(callbackQuery.getId());
+            sendPartnerPicker(user, quest);
+            return;
+        }
         if (quest.getClashVerifyType() != null && user.getClashOfClansTag() == null) {
             answerSilently(callbackQuery.getId());
             session.reset();
@@ -3847,7 +3857,60 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         QuestService.QuestActionResult result = questService.takeQuestChecked(user, quest);
         answerSilently(callbackQuery.getId());
+        renderTakeQuestResult(user, questId, quest, result);
+    }
 
+    /** Выбор партнёра для PARTNER_BATTLES — список рефералов/отрядников с привязанным тегом Brawl Stars. */
+    private void sendPartnerPicker(AppUser user, Quest quest) {
+        java.util.LinkedHashMap<Long, AppUser> candidates = new java.util.LinkedHashMap<>();
+        for (AppUser referral : userService.findReferredFriends(user.getTelegramId())) {
+            if (referral.getBrawlStarsTag() != null) candidates.put(referral.getTelegramId(), referral);
+        }
+        squadService.findByUser(user).ifPresent(squad -> {
+            for (AppUser member : squadService.getMembers(squad)) {
+                if (!member.getTelegramId().equals(user.getTelegramId()) && member.getBrawlStarsTag() != null) {
+                    candidates.put(member.getTelegramId(), member);
+                }
+            }
+        });
+
+        if (candidates.isEmpty()) {
+            sendText(user.getTelegramId(),
+                    "🤝 <b>Нужен партнёр</b>\n\n"
+                            + "Для этого квеста нужен реферал или участник отряда с уже привязанным тегом Brawl Stars — таких пока нет.\n\n"
+                            + "Пригласи друга или собери отряд, попроси его привязать тег в профиле — и возвращайся сюда.",
+                    backMenuKeyboard(currentQuestBackData(user)));
+            return;
+        }
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (AppUser candidate : candidates.values()) {
+            rows.add(List.of(keyboardFactory.callback(
+                    "🎮 " + escape(candidate.getNickname()),
+                    "quest:takepartner:" + quest.getId() + ":" + candidate.getTelegramId()
+            )));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", currentQuestBackData(user))));
+        sendText(user.getTelegramId(),
+                "🤝 <b>Выбери партнёра</b>\n\nС кем сыграете 3 боя в команде вместе?",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleTakeQuestWithPartner(CallbackQuery callbackQuery, AppUser user, Long questId, Long partnerTelegramId) {
+        Quest quest = questService.getQuest(questId);
+        AppUser partner = userService.findByTelegramId(partnerTelegramId).orElse(null);
+        if (partner == null || partner.getBrawlStarsTag() == null) {
+            answerSilently(callbackQuery.getId());
+            sendText(user.getTelegramId(), "⚠️ Партнёр не найден или отвязал тег Brawl Stars. Выбери другого.", backMenuKeyboard(currentQuestBackData(user)));
+            return;
+        }
+        QuestService.QuestActionResult result = questService.takeQuestChecked(user, quest, partner.getBrawlStarsTag());
+        answerSilently(callbackQuery.getId());
+        renderTakeQuestResult(user, questId, quest, result);
+    }
+
+    /** Общий рендер карточки после попытки взять квест — переиспользуется обычным взятием и взятием с партнёром. */
+    private void renderTakeQuestResult(AppUser user, Long questId, Quest quest, QuestService.QuestActionResult result) {
         if (result.status() != QuestActionStatus.OK) {
             sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад", takeQuestErrorMessage(user, quest, result));
             return;

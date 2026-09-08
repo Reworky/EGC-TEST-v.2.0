@@ -102,7 +102,8 @@ public class QuestSeeder implements CommandLineRunner {
                 "Нанеси 100 000 урона в режиме «Любое столкновение» или «Баскетбол»",
                 "Нанеси 100 000 урона в режиме «Ограбление» или «Любое столкновение»",
                 "Выиграй 3 боя с новым бойцом (Космо или Винс)",
-                "Получи любого нового бойца"
+                "Получи любого нового бойца",
+                "Сыграй 3 боя в команде с другом"
         );
         questRepository.findAll().stream()
                 .filter(q -> "Brawl Stars".equalsIgnoreCase(q.getGameName()) && !keepBsTitles.contains(q.getTitle()))
@@ -161,6 +162,15 @@ public class QuestSeeder implements CommandLineRunner {
         seedFlat("Сыграй 5 матчей в команде", "Brawl Stars", "Mobile", 5, "5 дней", 50, 2000,
                 "Проведи 5 боёв, играя в составе команды с другими игроками.",
                 "Зайди в бой через режим команды — победа не обязательна. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
+                bsAutoReq);
+
+        // Максимизация рефералки, часть 2 — квест "на двоих": при взятии игрок выбирает партнёра
+        // (своего реферала или отрядника с уже привязанным тегом), бой засчитывается только если
+        // этот партнёр реально был тиммейтом (сверка тегов по battlelog, см. BrawlQuestVerificationService).
+        seedFlat("Сыграй 3 боя в команде с другом", "Brawl Stars", "Mobile", 7, "7 дней", 50, 2400,
+                "Проведи 3 боя в команде вместе со своим рефералом или участником отряда — победа не обязательна.",
+                "При взятии квеста выбери партнёра из списка (реферал или отрядник с привязанным тегом Brawl Stars). "
+                        + "Зайдите в бой вместе через режим команды. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
                 bsAutoReq);
 
         // Квесты с конкретными бойцами
@@ -330,6 +340,7 @@ public class QuestSeeder implements CommandLineRunner {
         setBrawlVerify("Набери 80 трофеев", BrawlVerifyType.TROPHIES, 80, false, false, false, null, null);
         setBrawlVerify("Выиграй бой 5 раз в ранговом режиме", BrawlVerifyType.BATTLES, 5, true, true, false, null, null);
         setBrawlVerify("Сыграй 5 матчей в команде", BrawlVerifyType.BATTLES, 5, false, false, true, null, null);
+        setBrawlVerify("Сыграй 3 боя в команде с другом", BrawlVerifyType.PARTNER_BATTLES, 3, false, false, true, null, null);
         setBrawlVerify("Выиграй бой 15 раз с бойцом Эль Примо, Дэррил или Эдгар", BrawlVerifyType.BATTLES, 15, true, false, false, null, "EL PRIMO,DARRYL,EDGAR");
         setBrawlVerify("Выиграй бой 5 раз с бойцом Эль Примо, Дэррил или Эдгар", BrawlVerifyType.BATTLES, 5, true, false, false, null, "EL PRIMO,DARRYL,EDGAR");
         setBrawlVerify("Выиграй бой 8 раз с бойцом Шелли, Нита или Дэррил", BrawlVerifyType.BATTLES, 8, true, false, false, null, "SHELLY,NITA,DARRYL");
@@ -353,6 +364,7 @@ public class QuestSeeder implements CommandLineRunner {
         setShortLabel("Набери 80 трофеев", "Brawl Stars", "80 трофеев");
         setShortLabel("Выиграй бой 5 раз в ранговом режиме", "Brawl Stars", "Победа×5: Ранговый режим");
         setShortLabel("Сыграй 5 матчей в команде", "Brawl Stars", "5 матчей в команде");
+        setShortLabel("Сыграй 3 боя в команде с другом", "Brawl Stars", "3 боя с другом");
         setShortLabel("Выиграй бой 15 раз с бойцом Эль Примо, Дэррил или Эдгар", "Brawl Stars", "Победа×15: Примо/Дэррил/Эдгар");
         setShortLabel("Выиграй бой 5 раз с бойцом Эль Примо, Дэррил или Эдгар", "Brawl Stars", "Победа×5: Примо/Дэррил/Эдгар");
         setShortLabel("Выиграй бой 8 раз с бойцом Шелли, Нита или Дэррил", "Brawl Stars", "Победа×8: Шелли/Нита/Дэррил");

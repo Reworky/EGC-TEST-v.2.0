@@ -122,7 +122,8 @@ public class BrawlStarsApiService {
             String type,
             boolean victory,
             boolean isTeamMode,
-            String playerBrawlerName  // the queried tag's own brawler in this battle
+            String playerBrawlerName, // the queried tag's own brawler in this battle
+            List<String> teammateTags // other players in the SAME team as self (team-mode only, empty otherwise)
     ) {}
 
     /**
@@ -183,11 +184,22 @@ public class BrawlStarsApiService {
                 if (battleTime == null || mode == null) continue;
 
                 JsonNode ownEntry = null;
+                List<String> teammateTags = new ArrayList<>();
                 boolean isTeamMode = battle.has("teams") && battle.path("teams").size() > 0;
                 if (isTeamMode) {
                     for (JsonNode team : battle.path("teams")) {
+                        boolean selfInThisTeam = false;
                         for (JsonNode player : team) {
-                            if (selfTag.equalsIgnoreCase(player.path("tag").asText(""))) ownEntry = player;
+                            if (selfTag.equalsIgnoreCase(player.path("tag").asText(""))) {
+                                ownEntry = player;
+                                selfInThisTeam = true;
+                            }
+                        }
+                        if (selfInThisTeam) {
+                            for (JsonNode player : team) {
+                                String t = player.path("tag").asText("");
+                                if (!selfTag.equalsIgnoreCase(t)) teammateTags.add(t);
+                            }
                         }
                     }
                 } else {
@@ -206,7 +218,7 @@ public class BrawlStarsApiService {
                     // (this player's own battlelog, so it's already their placement) — verified live, rank 1 = win.
                     victory = battle.path("rank").asInt(Integer.MAX_VALUE) == 1;
                 }
-                out.add(new BattleLogEntry(battleTime, mode, type, victory, isTeamMode, brawlerName));
+                out.add(new BattleLogEntry(battleTime, mode, type, victory, isTeamMode, brawlerName, teammateTags));
             }
         } catch (Exception e) {
             log.warn("Failed to parse Brawl Stars battlelog response", e);

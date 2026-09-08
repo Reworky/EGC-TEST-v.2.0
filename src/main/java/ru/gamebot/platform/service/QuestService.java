@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.gamebot.platform.domain.enums.BrawlVerifyType;
 import ru.gamebot.platform.domain.enums.RejectionReasonCode;
 import ru.gamebot.platform.domain.enums.SubmissionStatus;
 import ru.gamebot.platform.domain.model.AppUser;
@@ -360,11 +361,24 @@ public class QuestService {
      */
     @Transactional
     public QuestActionResult takeQuestChecked(AppUser user, Quest quest) {
+        return takeQuestChecked(user, quest, null);
+    }
+
+    /** brawlPartnerTag — только для BrawlVerifyType.PARTNER_BATTLES: тег партнёра, выбранного игроком
+     * перед взятием (см. GamePlatformBot — там сначала показывается список рефералов/отрядников
+     * с привязанным тегом, и уже с выбранным партнёром вызывается этот метод). Mini App пока не умеет
+     * выбирать партнёра — вызывает двухаргументную версию выше, получает NEEDS_BRAWL_PARTNER и не может
+     * взять этот конкретный квест до появления такого же UI там. */
+    @Transactional
+    public QuestActionResult takeQuestChecked(AppUser user, Quest quest, String brawlPartnerTag) {
         if (!quest.isActive()) {
             return QuestActionResult.of(QuestActionStatus.QUEST_INACTIVE, 0);
         }
         if (quest.getBrawlVerifyType() != null && user.getBrawlStarsTag() == null) {
             return QuestActionResult.of(QuestActionStatus.NEEDS_BRAWL_TAG, 0);
+        }
+        if (quest.getBrawlVerifyType() == BrawlVerifyType.PARTNER_BATTLES && brawlPartnerTag == null) {
+            return QuestActionResult.of(QuestActionStatus.NEEDS_BRAWL_PARTNER, 0);
         }
         if (quest.getClashVerifyType() != null && user.getClashOfClansTag() == null) {
             return QuestActionResult.of(QuestActionStatus.NEEDS_CLASH_TAG, 0);
@@ -438,6 +452,10 @@ public class QuestService {
         }
 
         QuestSubmission created = createDraftSubmission(lockedUser, quest);
+        if (brawlPartnerTag != null) {
+            created.setBrawlPartnerTag(brawlPartnerTag);
+            questSubmissionRepository.save(created);
+        }
         return QuestActionResult.ok(created);
     }
 
