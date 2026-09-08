@@ -499,7 +499,7 @@ function MyQuestsView({ expanded, details, onToggle, onDetailChanged }) {
   }
 
   return (
-    <div className="category-section">
+    <div className="category-section" style={{ marginTop: 12 }}>
       {myQuests.map(m => (
         <div key={m.submissionId} className="quest-card" onClick={() => onToggle(m.questId)}>
           <div className="quest-top">
@@ -596,7 +596,7 @@ function TournamentView() {
   const isActive = tournament.status === 'ACTIVE';
 
   return (
-    <div className="category-section">
+    <div className="category-section" style={{ marginTop: 12 }}>
       <div className="quest-card" style={{ cursor: 'default' }}>
         <div className="quest-top">
           <div className="quest-title">📌 {tournament.name}</div>

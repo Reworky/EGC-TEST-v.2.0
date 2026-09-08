@@ -1,3 +1,10 @@
+.ref-title {
+  padding: 4px 16px 14px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+}
+
 .poll-question {
   font-size: 15px;
   font-weight: 700;
