@@ -5,6 +5,7 @@ import BorderBeamCard from '../components/BorderBeamCard';
 import ShimmerButton from '../components/ShimmerButton';
 import AnimatedNumber from '../components/AnimatedNumber';
 import AdRewardCard from '../components/AdRewardCard';
+import AdBanner from '../components/AdBanner';
 import { useParticles } from '../components/ParticlesContext';
 import './QuestsPage.css';
 import './ShopPage.css';
@@ -18,29 +19,6 @@ const STATUS_LABELS = {
   REJECTED: <><i className="ti ti-circle-x"></i> Отклонено</>,
   CANCELLED: <><i className="ti ti-circle-x"></i> Отменено</>,
 };
-
-/** Статичный баннер партнёра (не квест — без награды EXC, обычная баннерная реклама; для нашей
- * площадки этот тип трафика разрешён без согласования, в отличие от мотивированного/квестового).
- * Картинка отдаётся динамически с сервера Admitad — своих ассетов не нужно. Один хардкодный баннер
- * под текущего партнёра (Puzzle Movies) — при добавлении второго стоит вынести в массив. */
-function SponsorBanner() {
-  const BANNER_IMG = 'https://aflink.ru/b/vzfiwgube7e999950e9542f9f2178b/';
-  const BANNER_LINK = 'https://dhwnh.com/g/vzfiwgube7e999950e9542f9f2178b/?i=4&erid=2bL9aMPo2e49hMef4piV5ABPED';
-
-  function handleClick() {
-    const tg = window.Telegram?.WebApp;
-    if (tg) tg.openLink(BANNER_LINK); else window.open(BANNER_LINK, '_blank', 'noopener');
-  }
-
-  return (
-    <div style={{ cursor: 'pointer' }} onClick={handleClick}>
-      <img src={BANNER_IMG} alt="Puzzle Movies" style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 12 }} />
-      <div style={{ fontSize: 10, opacity: 0.5, marginTop: 4, textAlign: 'right' }}>
-        Реклама · erid: 2bL9aMPo2e49hMef4piV5ABPED
-      </div>
-    </div>
-  );
-}
 
 function BalanceView({ wallet, onChanged }) {
   const [busy, setBusy] = useState(false);
@@ -154,7 +132,12 @@ function BalanceView({ wallet, onChanged }) {
         <div className="ref-link-label" style={{ marginBottom: 10 }}>🎬 Забери халявные EXC</div>
         <AdRewardCard />
         <div style={{ marginTop: 12 }}>
-          <SponsorBanner />
+          <AdBanner
+            img="https://aflink.ru/b/vzfiwgube7e999950e9542f9f2178b/"
+            link="https://dhwnh.com/g/vzfiwgube7e999950e9542f9f2178b/?i=4&erid=2bL9aMPo2e49hMef4piV5ABPED"
+            alt="Puzzle Movies"
+            erid="2bL9aMPo2e49hMef4piV5ABPED"
+          />
         </div>
       </div>
     </>

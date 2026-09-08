@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getShopItems, getShopStats, purchaseItem, getMyRewards, getProfile, getPerksState, purchasePerk, sendGiftBoost, sendExcTransfer, cancelReward, equipFrame } from '../api/client';
 import BackButton from '../components/BackButton';
+import AdBanner from '../components/AdBanner';
 import './QuestsPage.css';
 import './ShopPage.css';
 
@@ -196,6 +197,15 @@ function ShopItemsView({ expanded, onToggle }) {
           )}
         </>
       )}
+      </div>
+
+      <div style={{ margin: '12px 16px 0' }}>
+        <AdBanner
+          img="https://aflink.ru/b/vgbqo405hfe999950e957b456b25e2/"
+          link="https://heqgr.com/g/vgbqo405hfe999950e957b456b25e2/?i=4&erid=2bL9aMPo2e49hMef4rqyCwDQyf"
+          alt="Zaka-zaka [CPS] RU + CIS"
+          erid="2bL9aMPo2e49hMef4rqyCwDQyf"
+        />
       </div>
 
       {Object.entries(grouped).map(([cat, list]) => (
