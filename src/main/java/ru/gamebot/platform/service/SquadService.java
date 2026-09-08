@@ -222,6 +222,28 @@ public class SquadService {
                 .toList();
     }
 
+    /** Сумма ПОСТОЯННОГО (не недельного) XP текущих участников — не сбрасывается никогда,
+     *  в отличие от squadWeeklyXp(). Показывает общую "прокачанность" отряда, а не только
+     *  последнюю неделю. Без weeklyBonusPoints — тот бонус специфичен для недельного рейтинга. */
+    public long squadTotalXp(Squad squad) {
+        return getMembers(squad).stream().mapToLong(AppUser::getXp).sum();
+    }
+
+    /** Общий (не сбрасывающийся) рейтинг топ-20 активных отрядов по сумме постоянного XP участников. */
+    public List<SquadRankEntry> getOverallLeaderboard() {
+        List<Squad> active = squadRepository.findAllByStatus("ACTIVE");
+        return active.stream()
+                .map(s -> {
+                    long xp = squadTotalXp(s);
+                    long count = memberCount(s);
+                    return new SquadRankEntry(s, xp, count);
+                })
+                .filter(e -> e.weeklyXp() > 0)
+                .sorted(Comparator.comparingLong(SquadRankEntry::weeklyXp).reversed())
+                .limit(20)
+                .toList();
+    }
+
     /** Called before weekly XP reset. Pays 10 000 EXC split equally to members of the top squad. */
     @Transactional
     public void rewardTopSquad() {

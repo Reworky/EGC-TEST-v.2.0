@@ -85,6 +85,18 @@ public class SquadController {
         return ResponseEntity.ok(result);
     }
 
+    /** Общий (не сбрасывающийся) рейтинг — по сумме постоянного XP участников, см. SquadService.getOverallLeaderboard. */
+    @GetMapping("/leaderboard/overall")
+    public ResponseEntity<List<LeaderboardEntry>> overallLeaderboard() {
+        List<SquadService.SquadRankEntry> entries = squadService.getOverallLeaderboard();
+        List<LeaderboardEntry> result = new java.util.ArrayList<>();
+        for (int i = 0; i < entries.size(); i++) {
+            SquadService.SquadRankEntry e = entries.get(i);
+            result.add(new LeaderboardEntry(i + 1, e.squad().getName(), e.weeklyXp(), e.memberCount()));
+        }
+        return ResponseEntity.ok(result);
+    }
+
     private SquadDto toDto(Squad squad, AppUser user, Long telegramId) {
         List<AppUser> members = squadService.getMembers(squad);
         // squadService.squadWeeklyXp() — не сумма по участникам напрямую, т.к. включает ещё
@@ -107,7 +119,8 @@ public class SquadController {
     record SquadDto(Long id, String name, String inviteCode, boolean isCaptain,
                     long weeklyXp, long weeklyBonusPoints, List<MemberDto> members) {}
     record MemberDto(Long telegramId, String nickname, String levelName, long weeklyXp, boolean isCaptain) {}
-    record LeaderboardEntry(int rank, String name, long weeklyXp, long memberCount) {}
+    /** xp — недельный или общий XP в зависимости от эндпоинта (/leaderboard vs /leaderboard/overall). */
+    record LeaderboardEntry(int rank, String name, long xp, long memberCount) {}
     record CreateRequest(String name) {}
     record JoinRequest(String code) {}
 }

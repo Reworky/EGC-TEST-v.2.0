@@ -5572,7 +5572,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 answerSilently(callbackQuery.getId());
             }
             case "leaderboard" -> {
-                sendSquadLeaderboard(user);
+                sendSquadLeaderboard(user, false);
+                answerSilently(callbackQuery.getId());
+            }
+            case "leaderboard_overall" -> {
+                sendSquadLeaderboard(user, true);
                 answerSilently(callbackQuery.getId());
             }
             case "leave_confirm" -> {
@@ -5655,15 +5659,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    private void sendSquadLeaderboard(AppUser user) {
-        List<ru.gamebot.platform.service.SquadService.SquadRankEntry> top = squadService.getLeaderboard();
+    private void sendSquadLeaderboard(AppUser user, boolean overall) {
+        List<ru.gamebot.platform.service.SquadService.SquadRankEntry> top =
+                overall ? squadService.getOverallLeaderboard() : squadService.getLeaderboard();
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(
+                keyboardFactory.callback((overall ? "• " : "") + "Неделя", "squad:leaderboard"),
+                keyboardFactory.callback((overall ? "• " : "") + "Общий", "squad:leaderboard_overall")
+        ));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:squads")));
+
         if (top.isEmpty()) {
-            sendText(user.getTelegramId(),
-                    "🏆 <b>Рейтинг отрядов</b>\n\nПока нет активных отрядов с XP на этой неделе.\n\nСоздайте отряд и заработайте XP вместе!",
-                    backMenuKeyboard("menu:squads"));
+            String emptyText = overall
+                    ? "🏆 <b>Рейтинг отрядов</b>\n\nПока нет активных отрядов с XP участников.\n\nСоздайте отряд и заработайте XP вместе!"
+                    : "🏆 <b>Рейтинг отрядов</b>\n\nПока нет активных отрядов с XP на этой неделе.\n\nСоздайте отряд и заработайте XP вместе!";
+            sendText(user.getTelegramId(), emptyText, keyboardFactory.rowsLayout(rows));
             return;
         }
-        StringBuilder sb = new StringBuilder("🏆 <b>Топ отрядов — эта неделя</b>\n\n");
+        StringBuilder sb = new StringBuilder(overall
+                ? "🏆 <b>Топ отрядов — общий рейтинг</b>\n\n"
+                : "🏆 <b>Топ отрядов — эта неделя</b>\n\n");
         String[] medals = {"🥇", "🥈", "🥉"};
         int rank = 1;
         for (ru.gamebot.platform.service.SquadService.SquadRankEntry entry : top) {
@@ -5673,8 +5689,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     .append(" (").append(entry.memberCount()).append(" чел.)\n");
             rank++;
         }
-        sb.append("\n🎁 Каждую неделю топ-отряд получает <b>10 000 EXC</b>");
-        sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:squads"));
+        if (!overall) {
+            sb.append("\n🎁 Каждую неделю топ-отряд получает <b>10 000 EXC</b>");
+        } else {
+            sb.append("\n♾️ Общий рейтинг никогда не сбрасывается — сумма всего XP участников");
+        }
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     private void handleSquadCreateNameInput(AppUser user, UserSession session, String text) {

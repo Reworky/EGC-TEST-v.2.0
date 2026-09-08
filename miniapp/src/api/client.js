@@ -294,6 +294,11 @@ export async function getSquadLeaderboard() {
   return data;
 }
 
+export async function getSquadOverallLeaderboard() {
+  const { data } = await api.get('/api/squads/leaderboard/overall');
+  return data;
+}
+
 export async function getWheelStatus() {
   const { data } = await api.get('/api/wheel');
   return data;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getMySquad, createSquad, joinSquad, leaveSquad, disbandSquad, kickSquadMember, getSquadLeaderboard } from '../api/client';
+import { getMySquad, createSquad, joinSquad, leaveSquad, disbandSquad, kickSquadMember, getSquadLeaderboard, getSquadOverallLeaderboard } from '../api/client';
 import BackButton from '../components/BackButton';
 import './QuestsPage.css';
 import './ShopPage.css';
@@ -165,30 +165,42 @@ function NoSquadView({ onChanged }) {
 }
 
 function LeaderboardView() {
+  const [period, setPeriod] = useState('week'); // 'week' | 'overall'
   const [entries, setEntries] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    getSquadLeaderboard().then(setEntries).catch(() => setError('Не удалось загрузить рейтинг.'));
-  }, []);
-
-  if (error) return <div className="page-center error-msg">{error}</div>;
-  if (!entries) return <div className="page-center">Загрузка...</div>;
-  if (entries.length === 0) return <div className="page-center">Рейтинг отрядов пуст.</div>;
+    setEntries(null);
+    setError(null);
+    const fetcher = period === 'week' ? getSquadLeaderboard : getSquadOverallLeaderboard;
+    fetcher().then(setEntries).catch(() => setError('Не удалось загрузить рейтинг.'));
+  }, [period]);
 
   return (
-    <div className="category-section" style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {entries.map(e => (
-        <div key={e.rank} className="shop-card" style={{ padding: '10px 14px' }}>
-          <div className="shop-top">
-            <div className="shop-title">
-              {e.rank <= 3 ? MEDALS[e.rank - 1] : `#${e.rank}`} {e.name}
-            </div>
-            <div className="shop-price" style={{ fontSize: 13 }}>{e.weeklyXp.toLocaleString()} XP</div>
+    <div>
+      <div className="view-toggle" style={{ margin: '12px 16px 0' }}>
+        <button className={`view-tab ${period === 'week' ? 'active' : ''}`} onClick={() => setPeriod('week')}>Неделя</button>
+        <button className={`view-tab ${period === 'overall' ? 'active' : ''}`} onClick={() => setPeriod('overall')}>Общий</button>
+      </div>
+
+      {error ? <div className="page-center error-msg">{error}</div>
+        : !entries ? <div className="page-center">Загрузка...</div>
+        : entries.length === 0 ? <div className="page-center">Рейтинг отрядов пуст.</div>
+        : (
+          <div className="category-section" style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {entries.map(e => (
+              <div key={e.rank} className="shop-card" style={{ padding: '10px 14px' }}>
+                <div className="shop-top">
+                  <div className="shop-title">
+                    {e.rank <= 3 ? MEDALS[e.rank - 1] : `#${e.rank}`} {e.name}
+                  </div>
+                  <div className="shop-price" style={{ fontSize: 13 }}>{e.xp.toLocaleString()} XP</div>
+                </div>
+                <div className="shop-meta"><span style={{ opacity: 0.6 }}>Участников: {e.memberCount}</span></div>
+              </div>
+            ))}
           </div>
-          <div className="shop-meta"><span style={{ opacity: 0.6 }}>Участников: {e.memberCount}</span></div>
-        </div>
-      ))}
+        )}
     </div>
   );
 }
