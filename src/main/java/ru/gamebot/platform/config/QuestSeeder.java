@@ -380,8 +380,10 @@ public class QuestSeeder implements CommandLineRunner {
         setShortLabel("Выиграй бой 5 раз в режиме «Любое столкновение» или «Баскетбол»", "Brawl Stars", "Победа×5: Любое/Баскетбол");
         setShortLabel("Выиграй 3 боя с новым бойцом (Космо или Винс)", "Brawl Stars", "Победа×3 Космо/Винс");
         setShortLabel("Получи любого нового бойца", "Brawl Stars", "Любой боец");
-        setQuestHighlightNew("Выиграй 3 боя с новым бойцом (Космо или Винс)", "Brawl Stars");
-        setQuestHighlightNew("Получи любого нового бойца", "Brawl Stars");
+        // Сняты 2026-09-07 — эти два больше не "новые", актуальную метку теперь несёт квест "на двоих" ниже.
+        setQuestHighlightNew("Выиграй 3 боя с новым бойцом (Космо или Винс)", "Brawl Stars", false);
+        setQuestHighlightNew("Получи любого нового бойца", "Brawl Stars", false);
+        setQuestHighlightNew("Сыграй 3 боя в команде с другом", "Brawl Stars", true);
 
         // ── Brawl Stars: тюнинг наград по реальной сложности (2026-09-07) ──────────────────
         // Раньше все квесты платили одинаковый flat 2000 EXC. Дедлайн (3/5/7/10 дней) не использован
@@ -2184,11 +2186,10 @@ public class QuestSeeder implements CommandLineRunner {
         }, () -> log.warn("[QuestSeeder] setShortLabel: quest not found (seedFlat must run first): '{}'", title));
     }
 
-    /** Помечает кнопку квеста меткой 🆕 (см. Quest.highlightNew / sendQuestList). Снять вручную,
-     * когда квест перестанет быть "новым" — прямым UPDATE или отдельным вызовом с false. */
-    private void setQuestHighlightNew(String title, String gameName) {
+    /** Помечает (или снимает, highlight=false) кнопку квеста меткой 🆕 (см. Quest.highlightNew / sendQuestList). */
+    private void setQuestHighlightNew(String title, String gameName, boolean highlight) {
         questRepository.findFirstByTitleAndGameName(title, gameName).ifPresentOrElse(q -> {
-            q.setHighlightNew(true);
+            q.setHighlightNew(highlight);
             questRepository.save(q);
         }, () -> log.warn("[QuestSeeder] setQuestHighlightNew: quest not found (seedFlat must run first): '{}'", title));
     }

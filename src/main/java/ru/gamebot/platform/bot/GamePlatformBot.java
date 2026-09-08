@@ -1398,6 +1398,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.setState(SessionState.BRAWL_TAG_INPUT);
                 sendText(user.getTelegramId(), "🏷️ Введите ваш игровой тег Brawl Stars (например: <code>#ABC123</code>):", cancelKeyboard());
             }
+            case "clash_tag" -> {
+                session.reset();
+                session.setState(SessionState.CLASH_TAG_INPUT);
+                sendText(user.getTelegramId(), "🏷️ Введите ваш игровой тег Clash of Clans (например: <code>#ABC123</code>):", cancelKeyboard());
+            }
+            case "cr_tag" -> {
+                session.reset();
+                session.setState(SessionState.CR_TAG_INPUT);
+                sendText(user.getTelegramId(), "🏷️ Введите ваш игровой тег Clash Royale (например: <code>#ABC123</code>):", cancelKeyboard());
+            }
             case "dota_link" -> {
                 session.reset();
                 session.getData().put("dotaLinkPurpose", "profile");
@@ -3226,6 +3236,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         List.of(keyboardFactory.callback("🎮 " + (user.getPlatformsCsv() != null ? "Изменить платформы" : "Указать платформы"), "profile:edit_platforms")),
                         List.of(keyboardFactory.callback("🧩 " + (user.getInterestsCsv() != null ? "Изменить жанры" : "Указать жанры"), "profile:edit_genres")),
                         List.of(keyboardFactory.callback("🏷️ " + (user.getBrawlStarsTag() != null ? "Изменить тег Brawl Stars" : "Привязать тег Brawl Stars"), "profile:brawl_tag")),
+                        List.of(keyboardFactory.callback("🏷️ " + (user.getClashOfClansTag() != null ? "Изменить тег Clash of Clans" : "Привязать тег Clash of Clans"), "profile:clash_tag")),
+                        List.of(keyboardFactory.callback("🏷️ " + (user.getClashRoyaleTag() != null ? "Изменить тег Clash Royale" : "Привязать тег Clash Royale"), "profile:cr_tag")),
                         List.of(keyboardFactory.callback("🎮 " + (user.getDotaAccountId() != null ? "Изменить аккаунт Dota 2" : "Привязать аккаунт Dota 2"), "profile:dota_link")),
                         List.of(keyboardFactory.callback("⬅️ Назад", "menu:profile"))
                 )));
