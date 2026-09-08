@@ -3998,9 +3998,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "❌ Ваш отчёт по этому квесту был отклонён. Нажмите «📤 Отчёт», чтобы исправить ошибки и переотправить.";
             case SLOTS_FULL ->
                     "📂 У вас уже есть активные квесты. Завершите или отмените один из них, либо купите доп. слот (2 000 EXC) в разделе Предметы клуба.";
-            case SAME_QUEST_COOLDOWN -> "⏳ Этот квест можно выполнять не чаще 1 раза в 24 часа.";
+            case SAME_QUEST_COOLDOWN ->
+                    "⏳ Этот квест можно выполнять не чаще 1 раза в " + formatCooldownDuration(result.minutesLeft()) + ".";
             case GAME_COOLDOWN ->
-                    "⏳ Кулдаун активен. Повторный квест в этой игре доступен через 24 часа.\n\n💡 Можно снять кулдаун за 2 000 EXC в разделе Предметы клуба.";
+                    "⏳ Кулдаун активен. Повторный квест в этой игре доступен через " + formatCooldownDuration(result.minutesLeft())
+                            + ".\n\n💡 Можно снять кулдаун за 2 000 EXC в разделе Предметы клуба.";
             case TAKE_COOLDOWN -> "⏳ Новый квест можно брать раз в час. Подождите ещё <b>" + result.minutesLeft() + " мин.</b>";
             default -> "⚠️ Не удалось взять квест.";
         };
@@ -4959,7 +4961,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows2.add(List.of(keyboardFactory.callback("⏱️ Купить снятие — 2 000 EXC", "sink:buycooldown")));
                 rows2.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:sink")));
                 sendText(user.getTelegramId(),
-                    "⏱️ <b>Снятие кулдауна</b>\n\nСнимает 24-часовой кулдаун для следующего квеста в любой игре.\nСтоимость: 2 000 EXC. Лимит: 2 раза в сутки.\n\n💡 После покупки перейдите к нужному квесту — кулдаун будет снят автоматически при взятии.",
+                    "⏱️ <b>Снятие кулдауна</b>\n\nСнимает текущий кулдаун для следующего квеста в любой игре (для «Сложных» квестов это 14 дней).\nСтоимость: 2 000 EXC. Лимит: 2 раза в сутки.\n\n💡 После покупки перейдите к нужному квесту — кулдаун будет снят автоматически при взятии.",
                     keyboardFactory.rowsLayout(rows2));
             }
             case "buycooldown" -> {
@@ -8822,6 +8824,34 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case 2, 3, 4 -> "выполнения";
             default -> "выполнений";
         };
+    }
+
+    private String pluralHours(long n) {
+        if (n % 100 >= 11 && n % 100 <= 14) return "часов";
+        return switch ((int) (n % 10)) {
+            case 1 -> "час";
+            case 2, 3, 4 -> "часа";
+            default -> "часов";
+        };
+    }
+
+    private String pluralDays(long n) {
+        if (n % 100 >= 11 && n % 100 <= 14) return "дней";
+        return switch ((int) (n % 10)) {
+            case 1 -> "день";
+            case 2, 3, 4 -> "дня";
+            default -> "дней";
+        };
+    }
+
+    /** Реальная длительность кулдауна в человекочитаемом виде (часы для обычных квестов, дни для «Сложных» — 336ч). */
+    private String formatCooldownDuration(long minutes) {
+        long hours = Math.max(1, minutes / 60);
+        if (hours < 24) {
+            return hours + " " + pluralHours(hours);
+        }
+        long days = hours / 24;
+        return days + " " + pluralDays(days);
     }
 
     private void sendAdminLiveStatus(AppUser user) {
