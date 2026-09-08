@@ -20,7 +20,7 @@ public class AuthController {
     /** Ручной рубильник техработ мини-аппа (2026-09-07) — доступ временно оставлен только
      *  указанным никам для тестирования, остальные видят "Технические работы". Пользуются ботом
      *  как обычно, это не затрагивает GamePlatformBot вообще. Снять — вернуть MAINTENANCE в false. */
-    private static final boolean MINI_APP_MAINTENANCE = true;
+    private static final boolean MINI_APP_MAINTENANCE = false;
     private static final Set<String> MAINTENANCE_ALLOWLIST = Set.of("brokengame");
 
     private final TelegramAuthService telegramAuthService;
