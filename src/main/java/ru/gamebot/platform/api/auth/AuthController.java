@@ -1,12 +1,14 @@
 package ru.gamebot.platform.api.auth;
 
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.service.UserService;
 
@@ -14,6 +16,12 @@ import ru.gamebot.platform.service.UserService;
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
+
+    /** Ручной рубильник техработ мини-аппа (2026-09-07) — доступ временно оставлен только
+     *  указанным никам для тестирования, остальные видят "Технические работы". Пользуются ботом
+     *  как обычно, это не затрагивает GamePlatformBot вообще. Снять — вернуть MAINTENANCE в false. */
+    private static final boolean MINI_APP_MAINTENANCE = true;
+    private static final Set<String> MAINTENANCE_ALLOWLIST = Set.of("brokengame");
 
     private final TelegramAuthService telegramAuthService;
     private final JwtService jwtService;
@@ -63,11 +71,18 @@ public class AuthController {
         if (telegramId == null) {
             return ResponseEntity.status(401).body(Map.of("error", "Invalid initData"));
         }
+
+        AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (MINI_APP_MAINTENANCE) {
+            String nickname = user != null ? user.getNickname() : null;
+            boolean allowed = nickname != null && MAINTENANCE_ALLOWLIST.contains(nickname.toLowerCase());
+            if (!allowed) {
+                return ResponseEntity.status(503).body(Map.of("maintenance", true));
+            }
+        }
         userService.touchMiniAppOpen(telegramId);
 
-        boolean registered = appUserRepository.findByTelegramId(telegramId)
-                .map(u -> u.isRegistrationCompleted())
-                .orElse(false);
+        boolean registered = user != null && user.isRegistrationCompleted();
 
         String token = jwtService.generate(telegramId);
         return ResponseEntity.ok(Map.of(

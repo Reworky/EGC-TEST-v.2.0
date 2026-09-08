@@ -78,7 +78,7 @@ export default function App() {
     authMiniApp(data)
       .then(() => { setOffline(false); setReady(true); })
       .catch((e) => {
-        if (!e?.response) {
+        if (!e?.response || e.response.data?.maintenance) {
           setOffline(true);
         } else {
           localStorage.removeItem('egc_token');
