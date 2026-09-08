@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import ru.gamebot.platform.api.dto.ReferralDto;
 import ru.gamebot.platform.api.dto.ReferralRankingDto;
-import ru.gamebot.platform.config.AppProperties;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.service.ExcTransactionService;
@@ -29,7 +28,6 @@ public class ReferralController {
     private static final int TOP_N = 5;
 
     private final AppUserRepository appUserRepository;
-    private final AppProperties appProperties;
     private final ExcTransactionService excTransactionService;
     private final ReferralBoostService referralBoostService;
     private final UserService userService;
@@ -55,7 +53,8 @@ public class ReferralController {
                 : (int) Math.min(100, user.getInvitedFriends() * 100L / nextFriendMilestone);
 
         return ResponseEntity.ok(ReferralDto.builder()
-                .referralLink("https://t.me/" + appProperties.getBotUsername() + "?start=ref_" + user.getTelegramId())
+                .referralLink(userService.buildReferralLink(user))
+                .shareUrl(userService.buildShareUrl(user))
                 .invitedFriends(user.getInvitedFriends())
                 .earnedExc(earned)
                 .nextMilestone(nextMilestone)

@@ -7,6 +7,7 @@ import lombok.Data;
 @Builder
 public class ReferralDto {
     private String referralLink;
+    private String shareUrl;
     private int invitedFriends;
     private long earnedExc;
     private long nextMilestone;

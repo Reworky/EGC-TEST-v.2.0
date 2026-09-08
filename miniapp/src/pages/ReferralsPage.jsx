@@ -55,10 +55,9 @@ export default function ReferralsPage() {
   }
 
   function shareLink() {
-    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(data.referralLink)}&text=${encodeURIComponent('Присоединяйся к EXPERIENCE GAMING CLUB!')}`;
     const tg = window.Telegram?.WebApp;
-    if (tg?.openTelegramLink) tg.openTelegramLink(shareUrl);
-    else window.open(shareUrl, '_blank');
+    if (tg?.openTelegramLink) tg.openTelegramLink(data.shareUrl);
+    else window.open(data.shareUrl, '_blank');
   }
 
   if (error) return <div style={{ padding: 32, color: '#ef4444', textAlign: 'center' }}>{error}</div>;

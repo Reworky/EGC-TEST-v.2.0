@@ -99,12 +99,11 @@ public class UserService {
             "Ищу людей в отряд EGC — топ-отряд недели получает 10 000 EXC. Заходи, играем вместе:"
     };
 
-    /** Ссылка вида t.me/share/url?... — открывает нативный пикер пересылки Telegram с готовым текстом
-     *  и реферальной ссылкой, без специального Bot API метода (просто обычная URL-кнопка). Если у
-     *  отправителя есть отряд — ссылка комбинированная (ref_<id>_sq_<code>), и новый игрок после
-     *  завершения регистрации автоматически вступает в тот же отряд (см. GamePlatformBot.consumePendingSquadInvite). */
-    public String buildShareUrl(AppUser user) {
-        String[] templates = SHARE_TEMPLATES;
+    /** Голая реферальная ссылка (для копирования и для отображения в UI) — ref_<id>, либо
+     *  комбинированная ref_<id>_sq_<inviteCode>, если у отправителя есть активный отряд. Единая точка
+     *  построения — переиспользуется buildShareUrl() и ReferralController (бот и мини-апп не должны
+     *  каждый по-своему собирать эту ссылку, иначе легко разойтись, как уже случилось с мини-аппом). */
+    public String buildReferralLink(AppUser user) {
         String referralLink = "https://t.me/" + appProperties.getBotUsername() + "?start=ref_" + user.getTelegramId();
         if (user.getSquadId() != null) {
             String inviteCode = squadRepository.findById(user.getSquadId())
@@ -113,9 +112,18 @@ public class UserService {
                     .orElse(null);
             if (inviteCode != null) {
                 referralLink = referralLink + "_sq_" + inviteCode;
-                templates = SQUAD_SHARE_TEMPLATES;
             }
         }
+        return referralLink;
+    }
+
+    /** Ссылка вида t.me/share/url?... — открывает нативный пикер пересылки Telegram с готовым текстом
+     *  и реферальной ссылкой, без специального Bot API метода (просто обычная URL-кнопка). Если у
+     *  отправителя есть отряд — ссылка комбинированная (ref_<id>_sq_<code>), и новый игрок после
+     *  завершения регистрации автоматически вступает в тот же отряд (см. GamePlatformBot.consumePendingSquadInvite). */
+    public String buildShareUrl(AppUser user) {
+        String referralLink = buildReferralLink(user);
+        String[] templates = referralLink.contains("_sq_") ? SQUAD_SHARE_TEMPLATES : SHARE_TEMPLATES;
         String template = templates[ThreadLocalRandom.current().nextInt(templates.length)];
         String text = template
                 .replace("{баланс_EXC}", String.valueOf(user.getCoins()))
