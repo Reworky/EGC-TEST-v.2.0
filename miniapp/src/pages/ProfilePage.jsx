@@ -205,28 +205,36 @@ function XpBar({ xp, level, levelName }) {
 const FRAME_LABELS = { fire: '🔥 Огонь', ice: '❄️ Лёд', purple: '💜 Фиолет', gold: '👑 Золото', egc: '👑 EGC' };
 const FRAME_COLORS = { fire: '#ef4444', ice: '#38bdf8', purple: '#a855f7', gold: '#fbbf24', egc: '#7C3AED' };
 
-/** Герб достижений — 4 сектора, каждый закрашивается своей категорией прогресса. Незакрытый
- *  сектор — серый силуэт, стимул закрыть все 4. Данные уже есть в профиле, новых сущностей не нужно. */
+/** Герб достижений — 4 карточки-сектора на всю ширину экрана. Незакрытая карточка — серая,
+ *  с подписью "(не открыт)", стимул закрыть все 4. Данные уже есть в профиле, новых сущностей не нужно. */
 function CrestShield({ level, friendBadgeName, inSquad, streakDays }) {
   const rankColor = level >= 7 ? '#fbbf24' : level >= 5 ? '#c0c0c0' : level >= 3 ? '#cd7f32' : '#9ca3af';
   const sectors = [
-    { icon: 'ti-crown', active: true, color: rankColor },
-    { icon: 'ti-users', active: !!friendBadgeName, color: '#fbbf24' },
-    { icon: 'ti-swords', active: !!inSquad, color: '#a855f7' },
-    { icon: 'ti-flame', active: streakDays >= 7, color: '#f97316' },
+    { icon: 'ti-crown', active: true, color: rankColor, label: 'Ранг / лига' },
+    { icon: 'ti-users', active: !!friendBadgeName, color: '#fbbf24', label: 'Рефералы' },
+    { icon: 'ti-swords', active: !!inSquad, color: '#a855f7', label: 'Отряд' },
+    { icon: 'ti-flame', active: streakDays >= 7, color: '#f97316', label: 'Стрик' },
   ];
   return (
-    <div style={{
-      width: 76, height: 88, flexShrink: 0,
-      clipPath: 'polygon(0 0, 100% 0, 100% 62%, 50% 100%, 0 62%)',
-      background: 'rgba(255,255,255,0.35)',
-      display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr', gap: 2,
-    }}>
-      {sectors.map((s, i) => (
-        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: s.active ? `${s.color}22` : 'rgba(20,20,28,0.9)' }}>
-          <i className={`ti ${s.icon}`} style={{ fontSize: 18, color: s.active ? s.color : 'rgba(255,255,255,0.15)' }} aria-hidden="true" />
-        </div>
-      ))}
+    <div style={{ margin: '12px 16px 20px' }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>
+        Герб достижений
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        {sectors.map((s, i) => (
+          <div key={i} style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
+            padding: '18px 8px', borderRadius: 14,
+            background: s.active ? `${s.color}14` : 'rgba(255,255,255,0.03)',
+            border: `1px solid ${s.active ? s.color + '33' : 'rgba(255,255,255,0.07)'}`,
+          }}>
+            <i className={`ti ${s.icon}`} style={{ fontSize: 26, color: s.active ? s.color : 'rgba(255,255,255,0.25)' }} aria-hidden="true" />
+            <span style={{ fontSize: 13, color: s.active ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.35)' }}>
+              {s.label}{!s.active && ' (не открыт)'}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -343,25 +351,17 @@ export default function ProfilePage() {
         <div className="p-hero-glow" />
         <div className="p-hero-glow2" />
         <div className="p-hero-content">
-          {/* Avatar + герб достижений */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-            <div style={{ position: 'relative', display: 'inline-block' }}>
-              <div className="p-avatar" style={{ borderColor: frameImage ? 'transparent' : ringColor, color: ringColor, background: avatarUrl ? 'transparent' : `${ringColor}22` }}>
-                {avatarUrl
-                  ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                  : (profile.nickname?.[0]?.toUpperCase() || '?')}
-              </div>
-              {!frameImage && <div className="p-avatar-ring" style={{ borderColor: `${ringColor}44` }} />}
-              {frameImage && (
-                <img src={frameImage} alt="" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: frameSize, height: 'auto', pointerEvents: 'none', mixBlendMode: FRAME_BLEND[profile.avatarFrameImage] || 'normal' }} />
-              )}
+          {/* Avatar */}
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <div className="p-avatar" style={{ borderColor: frameImage ? 'transparent' : ringColor, color: ringColor, background: avatarUrl ? 'transparent' : `${ringColor}22` }}>
+              {avatarUrl
+                ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                : (profile.nickname?.[0]?.toUpperCase() || '?')}
             </div>
-            <CrestShield
-              level={profile.level}
-              friendBadgeName={profile.friendBadgeName}
-              inSquad={profile.inSquad}
-              streakDays={profile.streakDays}
-            />
+            {!frameImage && <div className="p-avatar-ring" style={{ borderColor: `${ringColor}44` }} />}
+            {frameImage && (
+              <img src={frameImage} alt="" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: frameSize, height: 'auto', pointerEvents: 'none', mixBlendMode: FRAME_BLEND[profile.avatarFrameImage] || 'normal' }} />
+            )}
           </div>
 
           <div style={{
@@ -400,6 +400,14 @@ export default function ProfilePage() {
 
       {/* ── XP Bar ───────────────────────────────────────────── */}
       <XpBar xp={profile.xp} level={profile.level} levelName={profile.levelName} />
+
+      {/* ── Герб достижений ──────────────────────────────────── */}
+      <CrestShield
+        level={profile.level}
+        friendBadgeName={profile.friendBadgeName}
+        inSquad={profile.inSquad}
+        streakDays={profile.streakDays}
+      />
 
       {/* ── Коллекция рамок ─────────────────────────────────── */}
       {profile.ownedFrames?.length > 0 && (
