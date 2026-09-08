@@ -33,7 +33,7 @@ function SponsorBanner() {
   }
 
   return (
-    <div style={{ margin: '0 16px 12px', cursor: 'pointer' }} onClick={handleClick}>
+    <div style={{ cursor: 'pointer' }} onClick={handleClick}>
       <img src={BANNER_IMG} alt="Puzzle Movies" style={{ width: '100%', height: 'auto', display: 'block', borderRadius: 12 }} />
       <div style={{ fontSize: 10, opacity: 0.5, marginTop: 4, textAlign: 'right' }}>
         Реклама · erid: 2bL9aMPo2e49hMef4piV5ABPED
@@ -80,8 +80,6 @@ function BalanceView({ wallet, onChanged }) {
           ≈ {+(wallet.coins * wallet.healthRatioPercent / 100 / 100).toFixed(1)} ₽ · фонд {wallet.healthRatioPercent}%
         </div>
       </BorderBeamCard>
-
-      <SponsorBanner />
 
       <div className="w-stats-grid">
         <div className="w-stat-card">
@@ -155,6 +153,9 @@ function BalanceView({ wallet, onChanged }) {
       <div className="category-section" style={{ marginTop: 12 }}>
         <div className="ref-link-label" style={{ marginBottom: 10 }}>🎬 Забери халявные EXC</div>
         <AdRewardCard />
+        <div style={{ marginTop: 12 }}>
+          <SponsorBanner />
+        </div>
       </div>
     </>
   );
