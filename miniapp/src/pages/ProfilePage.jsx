@@ -215,7 +215,7 @@ function FrameCollection({ ownedFrames, activeFrame, onEquip }) {
   }
 
   return (
-    <div style={{ margin: '0 16px 20px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: '14px 16px' }}>
+    <div style={{ margin: '12px 16px 20px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 16, padding: '14px 16px' }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>
         Коллекция рамок
       </div>
