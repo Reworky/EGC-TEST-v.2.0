@@ -61,6 +61,7 @@ public class ProfileController {
                             .ownedFrames(parseOwnedFrames(user.getOwnedFramesCsv()))
                             .invitedFriends(user.getInvitedFriends())
                             .friendBadgeName(userService.currentInvitedFriendsBadge(user.getInvitedFriends()).orElse(null))
+                            .inSquad(user.getSquadId() != null)
                             .build()))
                 .orElse(ResponseEntity.notFound().build());
     }

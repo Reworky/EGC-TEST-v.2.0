@@ -31,4 +31,6 @@ public class UserProfileDto {
     private int invitedFriends;
     /** Название бейджа за число приглашённых друзей (Модуль 3 максимизации рефералки). null = ещё нет бейджа. */
     private String friendBadgeName;
+    /** Состоит ли в отряде прямо сейчас — сектор "Отряд" в гербе достижений на профиле. */
+    private boolean inSquad;
 }
