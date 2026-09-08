@@ -217,22 +217,22 @@ function CrestShield({ level, friendBadgeName, inSquad, streakDays, compact }) {
     { icon: 'ti-flame', active: streakDays >= 7, color: '#f97316', label: 'Стрик' },
   ];
   return (
-    <div style={compact ? { width: 172, flexShrink: 0 } : { margin: '12px 16px 20px' }}>
+    <div style={compact ? { flex: 1, minWidth: 0 } : { margin: '12px 16px 20px' }}>
       {!compact && (
         <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>
           Герб достижений
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: compact ? 6 : 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: compact ? 10 : 10 }}>
         {sectors.map((s, i) => (
           <div key={i} style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: compact ? 4 : 8,
-            padding: compact ? '8px 4px' : '18px 8px', borderRadius: compact ? 10 : 14,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: compact ? 6 : 8,
+            padding: compact ? '14px 6px' : '18px 8px', borderRadius: compact ? 13 : 14,
             background: s.active ? `${s.color}14` : 'rgba(255,255,255,0.03)',
             border: `1px solid ${s.active ? s.color + '33' : 'rgba(255,255,255,0.07)'}`,
           }}>
-            <i className={`ti ${s.icon}`} style={{ fontSize: compact ? 16 : 26, color: s.active ? s.color : 'rgba(255,255,255,0.25)' }} aria-hidden="true" />
-            <span style={{ fontSize: compact ? 10 : 13, textAlign: 'center', lineHeight: 1.2, color: s.active ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.35)' }}>
+            <i className={`ti ${s.icon}`} style={{ fontSize: compact ? 26 : 26, color: s.active ? s.color : 'rgba(255,255,255,0.25)' }} aria-hidden="true" />
+            <span style={{ fontSize: compact ? 13 : 13, textAlign: 'center', lineHeight: 1.2, color: s.active ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.35)' }}>
               {s.label}{!compact && !s.active && ' (не открыт)'}
             </span>
           </div>
