@@ -11035,8 +11035,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyUser(approved.getUser().getTelegramId(),
                     "✅ <b>Квест выполнен автоматически!</b>\n\n"
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в Brawl Stars засчитан.\n\n"
-                    + "🪙 EXC: <b>+" + approved.getQuest().getRewardCoins() + "</b>\n"
-                    + "✨ XP: <b>+" + approved.getQuest().getRewardXp() + "</b>");
+                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>\n"
+                    + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>");
             notifyModeratorsAboutAutoApproval(approved, "проверка через Brawl Stars API");
         } catch (Exception e) {
             log.error("[BrawlAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
@@ -11050,8 +11050,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyUser(approved.getUser().getTelegramId(),
                     "✅ <b>Квест выполнен автоматически!</b>\n\n"
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в Clash of Clans засчитан.\n\n"
-                    + "🪙 EXC: <b>+" + approved.getQuest().getRewardCoins() + "</b>\n"
-                    + "✨ XP: <b>+" + approved.getQuest().getRewardXp() + "</b>");
+                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>\n"
+                    + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>");
             notifyModeratorsAboutAutoApproval(approved, "проверка через Clash of Clans API");
         } catch (Exception e) {
             log.error("[ClashAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
@@ -11065,8 +11065,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyUser(approved.getUser().getTelegramId(),
                     "✅ <b>Квест выполнен автоматически!</b>\n\n"
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в Clash Royale засчитан.\n\n"
-                    + "🪙 EXC: <b>+" + approved.getQuest().getRewardCoins() + "</b>\n"
-                    + "✨ XP: <b>+" + approved.getQuest().getRewardXp() + "</b>");
+                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>\n"
+                    + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>");
             notifyModeratorsAboutAutoApproval(approved, "проверка через Clash Royale API");
         } catch (Exception e) {
             log.error("[ClashRoyaleAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
@@ -11080,8 +11080,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyUser(approved.getUser().getTelegramId(),
                     "✅ <b>Квест выполнен автоматически!</b>\n\n"
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в Dota 2 засчитан.\n\n"
-                    + "🪙 EXC: <b>+" + approved.getQuest().getRewardCoins() + "</b>\n"
-                    + "✨ XP: <b>+" + approved.getQuest().getRewardXp() + "</b>");
+                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>\n"
+                    + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>");
             notifyModeratorsAboutAutoApproval(approved, "проверка через Steam Web API (Dota 2)");
         } catch (Exception e) {
             log.error("[DotaAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
@@ -11095,11 +11095,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyUser(approved.getUser().getTelegramId(),
                     "✅ <b>Партнёр подтвердил выполнение!</b>\n\n"
                     + "Квест <b>" + escape(approved.getQuest().getTitle()) + "</b> засчитан.\n\n"
-                    + "🪙 EXC: <b>+" + approved.getQuest().getRewardCoins() + "</b>");
+                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>");
             notifyModeratorsAboutAutoApproval(approved, "подтверждено партнёрской сетью");
         } catch (Exception e) {
             log.error("[ActionPay] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
         }
+    }
+
+    /** Фактически начисленные EXC на момент одобрения (с учётом diminishing returns/бустов), а не номинал квеста. */
+    private long awardedCoinsOf(QuestSubmission submission) {
+        Long awarded = submission.getAwardedCoins();
+        return awarded != null ? awarded : submission.getQuest().getRewardCoins();
+    }
+
+    private long awardedXpOf(QuestSubmission submission) {
+        Long awarded = submission.getAwardedXp();
+        return awarded != null ? awarded : submission.getQuest().getRewardXp();
     }
 
     /** Чисто информационное уведомление модераторам об автоматически закрытом квесте — без кнопок, действие не требуется. */
@@ -11116,7 +11127,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🎯 Квест: <b>" + escape(quest.getTitle()) + "</b>\n"
                 + "🎮 Игра: <b>" + escape(quest.getGameName()) + "</b>\n"
                 + "⚙️ Способ: " + methodLabel + "\n"
-                + "🏆 Награда: +" + quest.getRewardXp() + " XP, +" + quest.getRewardCoins() + " EXC\n"
+                + "🏆 Награда: +" + awardedXpOf(submission) + " XP, +" + awardedCoinsOf(submission) + " EXC\n"
                 + "📅 Засчитано: <b>" + submission.getUpdatedAt().format(DATE_TIME_FORMATTER) + "</b>";
         for (Long recipient : adminService.strictModeratorIds()) {
             try {

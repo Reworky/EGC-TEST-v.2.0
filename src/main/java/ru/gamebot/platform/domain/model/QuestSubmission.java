@@ -77,6 +77,13 @@ public class QuestSubmission {
     @Column(nullable = true)
     private Long fixedRubValue;
 
+    /** Фактически начисленные EXC/XP на момент одобрения (с учётом diminishing returns и бустов) — null = старые записи. */
+    @Column(nullable = true)
+    private Long awardedCoins;
+
+    @Column(nullable = true)
+    private Long awardedXp;
+
     /** Флаг: уведомление «2 часа до дедлайна» уже отправлено. */
     @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean deadlineWarningSent;

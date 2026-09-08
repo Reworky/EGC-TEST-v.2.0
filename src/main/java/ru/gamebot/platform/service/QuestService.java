@@ -743,6 +743,8 @@ public class QuestService {
         double currentHR = healthRatioService.getCurrentRatio();
         long fixedRub = Math.round(adjustedCoins * currentHR / 100.0);
         submission.setFixedRubValue(fixedRub);
+        submission.setAwardedCoins(adjustedCoins);
+        submission.setAwardedXp(adjustedXp);
 
         // 3.5 3000 EXC bonus on first quest (before completedQuests increment)
         userService.grantFirstQuestReferralBonus(user);
