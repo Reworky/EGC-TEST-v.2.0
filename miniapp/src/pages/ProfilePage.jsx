@@ -223,18 +223,20 @@ function CrestShield({ level, friendBadgeName, inSquad, streakDays, compact }) {
           Герб достижений
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: compact ? 10 : 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: compact ? 4 : 10 }}>
         {sectors.map((s, i) => (
-          <div key={i} style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: compact ? 6 : 8,
-            padding: compact ? '14px 6px' : '18px 8px', borderRadius: compact ? 13 : 14,
+          <div key={i} title={s.label} style={{
+            display: 'flex', flexDirection: compact ? 'row' : 'column', alignItems: 'center', justifyContent: 'center', gap: compact ? 0 : 8,
+            padding: compact ? '5px 2px' : '18px 8px', borderRadius: compact ? 8 : 14,
             background: s.active ? `${s.color}14` : 'rgba(255,255,255,0.03)',
             border: `1px solid ${s.active ? s.color + '33' : 'rgba(255,255,255,0.07)'}`,
           }}>
-            <i className={`ti ${s.icon}`} style={{ fontSize: compact ? 26 : 26, color: s.active ? s.color : 'rgba(255,255,255,0.25)' }} aria-hidden="true" />
-            <span style={{ fontSize: compact ? 13 : 13, textAlign: 'center', lineHeight: 1.2, color: s.active ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.35)' }}>
-              {s.label}{!compact && !s.active && ' (не открыт)'}
-            </span>
+            <i className={`ti ${s.icon}`} style={{ fontSize: compact ? 15 : 26, color: s.active ? s.color : 'rgba(255,255,255,0.25)' }} aria-label={compact ? s.label : undefined} aria-hidden={compact ? undefined : true} />
+            {!compact && (
+              <span style={{ fontSize: 13, textAlign: 'center', lineHeight: 1.2, color: s.active ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.35)' }}>
+                {s.label}{!s.active && ' (не открыт)'}
+              </span>
+            )}
           </div>
         ))}
       </div>
