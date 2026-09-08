@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
+import ru.gamebot.platform.service.UserService;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -17,6 +18,7 @@ public class AuthController {
     private final TelegramAuthService telegramAuthService;
     private final JwtService jwtService;
     private final AppUserRepository appUserRepository;
+    private final UserService userService;
 
     /**
      * POST /api/auth/telegram
@@ -61,6 +63,7 @@ public class AuthController {
         if (telegramId == null) {
             return ResponseEntity.status(401).body(Map.of("error", "Invalid initData"));
         }
+        userService.touchMiniAppOpen(telegramId);
 
         boolean registered = appUserRepository.findByTelegramId(telegramId)
                 .map(u -> u.isRegistrationCompleted())

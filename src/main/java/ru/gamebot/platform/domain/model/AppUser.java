@@ -198,6 +198,12 @@ public class AppUser {
      *  т.к. анкета ещё не пройдена. Обнуляется после попытки применения в activatePlayer(). */
     private String pendingSquadInviteCode;
 
+    /** Метки последней активности по каждой поверхности — для сравнения "бот vs мини-апп" (нет другого
+     *  способа отличить одно от другого, обе поверхности зовут одни и те же сервисы). Обновляются
+     *  с троттлингом раз в день (см. UserService.touchBotActivity/touchMiniAppOpen), не на каждый запрос. */
+    private LocalDateTime lastBotActivityAt;
+    private LocalDateTime lastMiniAppOpenAt;
+
     // Onboarding flow
     @Column(columnDefinition = "int default 0")
     private int onboardingStep;

@@ -16,6 +16,10 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     Optional<AppUser> findByNicknameIgnoreCase(String nickname);
 
+    long countByLastBotActivityAtAfter(LocalDateTime since);
+
+    long countByLastMiniAppOpenAtAfter(LocalDateTime since);
+
     /**
      * Блокирует строку пользователя на время транзакции (SELECT ... FOR UPDATE).
      * Нужно везде, где идёт схема "проверить лимит → записать" (взятие квеста и т.п.),

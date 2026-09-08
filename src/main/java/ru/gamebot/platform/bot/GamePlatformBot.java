@@ -239,6 +239,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     @Override
     public void onUpdateReceived(Update update) {
         try {
+            Long fromId = update.hasCallbackQuery() ? update.getCallbackQuery().getFrom().getId()
+                    : update.hasMessage() && update.getMessage().getFrom() != null ? update.getMessage().getFrom().getId() : null;
+            if (fromId != null) {
+                userService.touchBotActivity(fromId);
+            }
             if (update.hasCallbackQuery()) {
                 handleCallback(update.getCallbackQuery());
             } else if (update.hasMessage()) {
@@ -6376,6 +6381,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "onetimeabuse" -> sendAdminOneTimeQuestAbuse(user);
             case "clashtags" -> sendAdminClashTagsList(user);
             case "autoquest-activity" -> sendAdminAutoQuestActivity(user);
+            case "surface-activity" -> sendAdminSurfaceActivity(user);
             case "template" -> sendQuestTemplateGamePicker(user);
             case "rewards" -> sendAdminRewardList(user);
             case "withdrawals" -> { sendAdminWithdrawals(user); answerSilently(callbackQuery.getId()); return; }
@@ -8853,6 +8859,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("💰 Накопленный долг: <b>").append(report.totalDebtExc()).append(" EXC</b>\n")
           .append("👤 Всего игроков в проекте: <b>").append(report.totalUsers()).append("</b>");
         sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:admin"));
+    }
+
+    /** Замер введён 2026-09-07 — раньше нечем было сравнить, у бота и мини-аппа не было отдельных
+     *  меток активности (оба зовут одни и те же сервисы). Троттлинг записи раз в день на пользователя,
+     *  см. UserService.touchBotActivity/touchMiniAppOpen — цифры за первые дни будут неполными,
+     *  пока не накопится история. */
+    private void sendAdminSurfaceActivity(AppUser user) {
+        ru.gamebot.platform.service.UserService.SurfaceActivityReport r = userService.getSurfaceActivityReport();
+        String text = "📱 <b>Бот vs Мини-апп</b>\n\n"
+                + "🤖 <b>Бот</b>\n"
+                + "   За 7 дней: <b>" + r.botActive7d() + "</b> игроков\n"
+                + "   За 30 дней: <b>" + r.botActive30d() + "</b> игроков\n\n"
+                + "📲 <b>Мини-апп</b>\n"
+                + "   За 7 дней: <b>" + r.miniAppActive7d() + "</b> игроков\n"
+                + "   За 30 дней: <b>" + r.miniAppActive30d() + "</b> игроков\n\n"
+                + "ℹ️ Замер введён недавно — если прошло меньше 7-30 дней с деплоя, цифры неполные.";
+        sendText(user.getTelegramId(), text, backMenuKeyboard("menu:admin"));
     }
 
     private void sendAdminOneTimeQuestAbuse(AppUser user) {
@@ -12336,6 +12359,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("📊 Статистика Brawl Stars", "admin:brawlstats")));
             rows.add(List.of(keyboardFactory.callback("🏷️ Теги CoC/Clash Royale", "admin:clashtags")));
             rows.add(List.of(keyboardFactory.callback("🔁 Активность автоквестов", "admin:autoquest-activity")));
+            rows.add(List.of(keyboardFactory.callback("📱 Бот vs Мини-апп", "admin:surface-activity")));
             rows.add(List.of(
                     keyboardFactory.callback("🎁 Магазин наград", "admin:rewards"),
                     keyboardFactory.callback("📣 Рассылка", "admin:broadcast")

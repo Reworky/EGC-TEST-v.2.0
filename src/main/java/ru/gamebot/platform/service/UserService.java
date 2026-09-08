@@ -350,6 +350,46 @@ public class UserService {
         return appUserRepository.countNewUsersSince(since);
     }
 
+    /** Троттлинг раз в день на запись (не на чтение) — иначе каждое сообщение/callback в боте писало бы
+     *  в БД, а бот получает такие апдейты на порядки чаще, чем открытия мини-аппа. */
+    @Transactional
+    public void touchBotActivity(Long telegramId) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (user == null) return;
+        LocalDateTime now = LocalDateTime.now();
+        if (user.getLastBotActivityAt() != null && user.getLastBotActivityAt().toLocalDate().equals(now.toLocalDate())) {
+            return;
+        }
+        user.setLastBotActivityAt(now);
+        appUserRepository.save(user);
+    }
+
+    @Transactional
+    public void touchMiniAppOpen(Long telegramId) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (user == null) return;
+        LocalDateTime now = LocalDateTime.now();
+        if (user.getLastMiniAppOpenAt() != null && user.getLastMiniAppOpenAt().toLocalDate().equals(now.toLocalDate())) {
+            return;
+        }
+        user.setLastMiniAppOpenAt(now);
+        appUserRepository.save(user);
+    }
+
+    public record SurfaceActivityReport(long botActive7d, long botActive30d, long miniAppActive7d, long miniAppActive30d) {}
+
+    /** Сравнение "бот vs мини-апп" по числу уникальных активных игроков за 7/30 дней — для admin-кнопки. */
+    public SurfaceActivityReport getSurfaceActivityReport() {
+        LocalDateTime since7d = LocalDateTime.now().minusDays(7);
+        LocalDateTime since30d = LocalDateTime.now().minusDays(30);
+        return new SurfaceActivityReport(
+                appUserRepository.countByLastBotActivityAtAfter(since7d),
+                appUserRepository.countByLastBotActivityAtAfter(since30d),
+                appUserRepository.countByLastMiniAppOpenAtAfter(since7d),
+                appUserRepository.countByLastMiniAppOpenAtAfter(since30d)
+        );
+    }
+
     @Transactional
     public String registerActivity(AppUser user) {
         LocalDate today = LocalDate.now();
