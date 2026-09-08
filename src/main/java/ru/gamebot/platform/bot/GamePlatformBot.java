@@ -572,11 +572,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         UserSession session = sessionService.get(user.getTelegramId());
         ensureRoleConsistency(user, session);
 
-        // Комбинированная ссылка "ref_<id>_sq_<code>" — вступление откладывается до activatePlayer(),
-        // т.к. регистрация (анкета + подписка на канал) ещё не пройдена.
-        if (squadInviteCode != null && user.getSquadId() == null && user.getPendingSquadInviteCode() == null) {
-            user.setPendingSquadInviteCode(squadInviteCode);
-            userService.save(user);
+        // Комбинированная ссылка "ref_<id>_sq_<code>". Если пользователь уже зарегистрирован (самый
+        // частый сценарий: "у меня уже есть друг в EGC, зову в свой отряд") — вступаем сразу, как и
+        // для старого формата "squad_<code>" ниже, иначе код тихо потеряется: activatePlayer(), где
+        // раньше происходило вступление, для уже активного аккаунта повторно не вызывается.
+        // Для нового пользователя регистрация (анкета + подписка на канал) ещё не пройдена —
+        // откладываем до activatePlayer().
+        if (squadInviteCode != null && user.getSquadId() == null) {
+            if (user.isRegistrationCompleted()) {
+                try {
+                    ru.gamebot.platform.domain.model.Squad joinedSquad = squadService.joinByInviteCode(user, squadInviteCode);
+                    sendText(user.getTelegramId(),
+                            "⚔️ <b>Вы вступили в отряд «" + escape(joinedSquad.getName()) + "»!</b>\n\n"
+                                    + "Зарабатывайте XP вместе — топ-отряд получает 10 000 EXC каждую неделю!",
+                            null);
+                } catch (Exception e) {
+                    log.warn("[SquadInvite] Failed to join squad via combined link for user {}: {}", user.getTelegramId(), e.getMessage());
+                }
+            } else if (user.getPendingSquadInviteCode() == null) {
+                user.setPendingSquadInviteCode(squadInviteCode);
+                userService.save(user);
+            }
         }
 
         if (user.isBlocked() && !adminService.isAdmin(user.getTelegramId())) {
@@ -5639,7 +5655,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "invite" -> {
                 ru.gamebot.platform.domain.model.Squad squad = squadService.findByUser(user).orElse(null);
                 if (squad == null) { answerSilently(callbackQuery.getId()); return; }
-                String link = "https://t.me/" + appProperties.getBotUsername() + "?start=squad_" + squad.getInviteCode();
+                String link = userService.buildReferralLink(user);
                 sendText(user.getTelegramId(),
                         "📤 <b>Ссылка для вступления в отряд</b>\n\n"
                                 + "Отправьте другу:\n" + escape(link) + "\n\n"
@@ -5784,7 +5800,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             ru.gamebot.platform.domain.model.Squad squad = squadService.create(user, name);
             userService.save(user);
-            String inviteLink = "https://t.me/" + appProperties.getBotUsername() + "?start=squad_" + squad.getInviteCode();
+            String inviteLink = userService.buildReferralLink(user);
             sendText(user.getTelegramId(),
                     "⚔️ <b>Отряд «" + escape(squad.getName()) + "» создан!</b>\n\n"
                             + "Вы капитан. Пригласите от 1 до 4 друзей.\n\n"

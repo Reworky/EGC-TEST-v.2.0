@@ -10,8 +10,7 @@ const MEDALS = ['🥇', '🥈', '🥉'];
 function SquadCard({ squad, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [kickTarget, setKickTarget] = useState(null);
-  const botUsername = 'invitetogamebot';
-  const inviteLink = `https://t.me/${botUsername}?start=squad_${squad.inviteCode}`;
+  const inviteLink = squad.inviteLink;
 
   async function handleLeave() {
     if (!confirm('Покинуть отряд?')) return;

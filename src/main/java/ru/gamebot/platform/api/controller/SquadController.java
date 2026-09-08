@@ -112,11 +112,14 @@ public class SquadController {
                         m.getWeeklyXp(),
                         m.getTelegramId().equals(squad.getCaptainTelegramId())))
                 .toList();
-        return new SquadDto(squad.getId(), squad.getName(), squad.getInviteCode(),
+        // Готовая ссылка для "Поделиться" — единая точка построения (buildReferralLink), та же,
+        // что использует бот, чтобы мини-апп не собирал свой формат ссылки заново (см. UserService).
+        String inviteLink = userService.buildReferralLink(user);
+        return new SquadDto(squad.getId(), squad.getName(), squad.getInviteCode(), inviteLink,
                 isCaptain, weeklyXp, squad.getWeeklyBonusPoints(), memberDtos);
     }
 
-    record SquadDto(Long id, String name, String inviteCode, boolean isCaptain,
+    record SquadDto(Long id, String name, String inviteCode, String inviteLink, boolean isCaptain,
                     long weeklyXp, long weeklyBonusPoints, List<MemberDto> members) {}
     record MemberDto(Long telegramId, String nickname, String levelName, long weeklyXp, boolean isCaptain) {}
     /** xp — недельный или общий XP в зависимости от эндпоинта (/leaderboard vs /leaderboard/overall). */
