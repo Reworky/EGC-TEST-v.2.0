@@ -7534,6 +7534,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if (action.equals("stats")) {
+            sendAdminWithdrawalStats(user);
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if (action.startsWith("approve:skip:")) {
             long reqId = parseLong(action.substring("approve:skip:".length()));
             session.reset();
@@ -7633,7 +7638,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         rows.add(List.of(
                 keyboardFactory.callback("📋 История", "admin:withdrawal:history:0"),
-                keyboardFactory.callback("⬅️ Назад", "menu:admin")));
+                keyboardFactory.callback("📊 Статистика", "admin:withdrawal:stats")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
         String header = pending.isEmpty()
                 ? "💸 <b>Заявки на вывод EXC</b>\n\nНет новых заявок."
                 : "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>";
@@ -7728,6 +7734,37 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!navRow.isEmpty()) rows.add(navRow);
         rows.add(List.of(keyboardFactory.callback("⬅️ К заявкам", "admin:withdrawals")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Отчёт по выполненным выводам за неделю и месяц — для поста в канале (2026-09-09). */
+    private void sendAdminWithdrawalStats(AppUser user) {
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        RewardService.WithdrawalPeriodStats week = rewardService.withdrawalStatsSince(now.minusDays(7));
+        RewardService.WithdrawalPeriodStats month = rewardService.withdrawalStatsSince(now.minusDays(30));
+
+        String text = "📊 <b>Статистика выводов</b>\n\n"
+                + withdrawalPeriodBlock("🗓 За неделю", week)
+                + "\n\n"
+                + withdrawalPeriodBlock("📅 За месяц", month);
+
+        sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("⬅️ К заявкам", "admin:withdrawals"))
+        )));
+    }
+
+    private String withdrawalPeriodBlock(String title, RewardService.WithdrawalPeriodStats stats) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<b>").append(title).append("</b>\n")
+          .append("Выполнено выводов: <b>").append(stats.count()).append("</b>\n")
+          .append("Всего EXC: <b>").append(stats.totalExc()).append("</b>");
+        if (stats.totalRub() > 0) {
+            sb.append("\n💸 Рублями: <b>").append(stats.totalRub()).append(" ₽</b>");
+        }
+        if (stats.totalTonRub() > 0) {
+            java.math.BigDecimal gram = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(stats.totalTonRub()));
+            sb.append("\n💎 GRAM (TON): <b>").append(gram).append("</b> (~").append(stats.totalTonRub()).append(" ₽)");
+        }
+        return sb.toString();
     }
 
     private void sendAdminWithdrawalCard(AppUser user, Long reqId) {

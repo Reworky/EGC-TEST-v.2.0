@@ -194,9 +194,13 @@ public class RewardService {
 
     /** Возвращает [rubTotal, tonRubEquivalent] — суммы в рублях по рублёвым и GRAM-выводам отдельно. */
     public long[] totalPaidOutRubAndTonRub() {
+        return rubAndTonRubOf(rewardRequestRepository.findAllApprovedWithdrawals());
+    }
+
+    private long[] rubAndTonRubOf(List<RewardRequest> requests) {
         long rubTotal = 0;
         long tonRubTotal = 0;
-        for (var r : rewardRequestRepository.findAllApprovedWithdrawals()) {
+        for (var r : requests) {
             String pd = r.getPayoutDetails();
             String title = r.getRewardItem() != null ? r.getRewardItem().getTitle() : "";
             if (pd != null && (pd.startsWith("TON:") || pd.startsWith("USDT"))) {
@@ -216,6 +220,18 @@ public class RewardService {
 
     public long countUniqueWithdrawalRecipients() {
         return rewardRequestRepository.countDistinctUsersWithApprovedWithdrawals();
+    }
+
+    public record WithdrawalPeriodStats(long count, long totalExc, long totalRub, long totalTonRub) {}
+
+    /** Для поста в канал (недельный/месячный отчёт по выполненным выводам) — см. запрос пользователя
+     *  2026-09-09. Период — скользящее окно от now-N дней, как и остальные N-дневные метрики в проекте
+     *  (см. sendAdminStats), а не календарная неделя/месяц. */
+    public WithdrawalPeriodStats withdrawalStatsSince(java.time.LocalDateTime since) {
+        List<RewardRequest> requests = rewardRequestRepository.findApprovedWithdrawalsSince(since);
+        long totalExc = requests.stream().mapToLong(r -> r.getRewardItem().getPriceCoins()).sum();
+        long[] rubAndTon = rubAndTonRubOf(requests);
+        return new WithdrawalPeriodStats(requests.size(), totalExc, rubAndTon[0], rubAndTon[1]);
     }
 
     public RewardRequest getRequest(Long requestId) {

@@ -82,4 +82,10 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
     @EntityGraph(attributePaths = {"rewardItem"})
     @Query("SELECT r FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED'")
     List<RewardRequest> findAllApprovedWithdrawals();
+
+    /** Та же приближённая фильтрация по createdAt, что и в sumApprovedWithdrawalExcSince — для
+     *  недельного/месячного отчёта по выводам (см. RewardService.withdrawalStatsSince). */
+    @EntityGraph(attributePaths = {"rewardItem"})
+    @Query("SELECT r FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED' AND r.createdAt >= :since")
+    List<RewardRequest> findApprovedWithdrawalsSince(@Param("since") LocalDateTime since);
 }
