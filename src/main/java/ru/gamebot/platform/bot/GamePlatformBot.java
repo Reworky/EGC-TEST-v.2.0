@@ -753,6 +753,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "Отменено");
             return;
         }
+        if ("broadcast:back".equals(data)) {
+            session.setState(SessionState.BROADCAST_MESSAGE);
+            String previousText = session.getData().get("bcastText");
+            String previousCaption = session.getData().get("bcastCaption");
+            String reference = previousText != null
+                    ? "\n\n✏️ Текущий текст:\n\n" + escape(previousText)
+                    : (previousCaption != null && !previousCaption.isBlank()
+                        ? "\n\n✏️ Текущая подпись:\n\n" + escape(previousCaption) : "");
+            sendText(user.getTelegramId(),
+                    "📣 Отправьте текст рассылки или фото с подписью.\n\nЯ доставлю его всем зарегистрированным игрокам." + reference,
+                    cancelKeyboard());
+            answerSilently(callbackQuery.getId());
+            return;
+        }
 
         if ("news:approve".equals(data) && isEffectiveAdmin(user) && session.getState() == SessionState.NEWS_APPROVAL) {
             String newsTitle = session.getData().get("pending_news_title");
@@ -11171,7 +11185,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "🕒 Когда отправить рассылку?\n\nВведите дату и время в формате <code>ДД.ММ.ГГГГ ЧЧ:ММ</code> "
                         + "(время сервера — <b>UTC</b>), либо отправьте <b>0</b>, чтобы разослать прямо сейчас.",
-                cancelKeyboard());
+                backOrCancelKeyboard("broadcast:back"));
     }
 
     private void handleBroadcastPhoto(AppUser user, UserSession session, String fileId, String caption) {
@@ -11181,7 +11195,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "🕒 Когда отправить рассылку?\n\nВведите дату и время в формате <code>ДД.ММ.ГГГГ ЧЧ:ММ</code> "
                         + "(время сервера — <b>UTC</b>), либо отправьте <b>0</b>, чтобы разослать прямо сейчас.",
-                cancelKeyboard());
+                backOrCancelKeyboard("broadcast:back"));
     }
 
     private void handleBroadcastScheduleTime(AppUser user, UserSession session, String text) {
@@ -11203,11 +11217,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             scheduledAt = java.time.LocalDateTime.parse(trimmed, java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
         } catch (Exception e) {
-            sendText(user.getTelegramId(), "❌ Неверный формат. Используйте ДД.ММ.ГГГГ ЧЧ:ММ или 0 для немедленной отправки.", cancelKeyboard());
+            sendText(user.getTelegramId(), "❌ Неверный формат. Используйте ДД.ММ.ГГГГ ЧЧ:ММ или 0 для немедленной отправки.", backOrCancelKeyboard("broadcast:back"));
             return;
         }
         if (!scheduledAt.isAfter(java.time.LocalDateTime.now())) {
-            sendText(user.getTelegramId(), "❌ Дата и время должны быть в будущем.", cancelKeyboard());
+            sendText(user.getTelegramId(), "❌ Дата и время должны быть в будущем.", backOrCancelKeyboard("broadcast:back"));
             return;
         }
 
@@ -12814,6 +12828,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private InlineKeyboardMarkup cancelKeyboard() {
         return keyboardFactory.smartLayout(List.of(keyboardFactory.callback("❌ Отмена", "common:cancel")));
+    }
+
+    private InlineKeyboardMarkup backOrCancelKeyboard(String backData) {
+        return keyboardFactory.rowsLayout(List.of(
+                List.of(
+                        keyboardFactory.callback("⬅️ Назад", backData),
+                        keyboardFactory.callback("❌ Отмена", "common:cancel")
+                )
+        ));
     }
 
     private InlineKeyboardMarkup selectionKeyboard(Map<String, String> options, List<String> selected,
