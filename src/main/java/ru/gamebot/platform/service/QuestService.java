@@ -425,6 +425,16 @@ public class QuestService {
                 return QuestActionResult.of(QuestActionStatus.SLOTS_FULL, 0);
             }
 
+            // Общий лимит "1 квест в час" проверяется ДО игрового кулдауна и до расхода купленного
+            // бонуса "Снятие кулдауна" — иначе бонус мог списаться впустую: игровой кулдаун снят,
+            // а взять квест всё равно нельзя из-за этого отдельного, не связанного с бонусом лимита.
+            if (lockedUser.getLastQuestTakenAt() != null) {
+                long minutesSince = ChronoUnit.MINUTES.between(lockedUser.getLastQuestTakenAt(), LocalDateTime.now());
+                if (minutesSince < 60) {
+                    return QuestActionResult.of(QuestActionStatus.TAKE_COOLDOWN, 60 - minutesSince);
+                }
+            }
+
             if (isSameQuestCooldownActive(lockedUser, quest)) {
                 if (sinkShopService.hasCooldownBypass(lockedUser, quest.getGameName())) {
                     sinkShopService.consumeCooldownBypass(lockedUser, quest.getGameName());
@@ -437,13 +447,6 @@ public class QuestService {
                 } else {
                     long hoursLeft = getCooldownHoursLeft(lockedUser, quest);
                     return QuestActionResult.of(QuestActionStatus.GAME_COOLDOWN, hoursLeft * 60L);
-                }
-            }
-
-            if (lockedUser.getLastQuestTakenAt() != null) {
-                long minutesSince = ChronoUnit.MINUTES.between(lockedUser.getLastQuestTakenAt(), LocalDateTime.now());
-                if (minutesSince < 60) {
-                    return QuestActionResult.of(QuestActionStatus.TAKE_COOLDOWN, 60 - minutesSince);
                 }
             }
 

@@ -22,7 +22,7 @@ const PERK_CATEGORIES = [
       { key: 'reroll', title: '🔀 Реролл квеста', price: 2000, description: 'Заменяет ваш текущий набор доступных квестов на новый.' },
       { key: 'insurance', title: '🛡️ Страховка провала', price: 1500, blockedBy: 'insuranceActive', description: 'Если следующий отчёт отклонят — сможете отправить его повторно без штрафа.' },
       { key: 'extraslot', title: '📂 Доп. слот квеста 48ч', price: 2000, blockedBy: 'extraSlotActive', activeUntilField: 'extraSlotUntil', description: 'Позволяет вести 3 квеста одновременно вместо 1.' },
-      { key: 'cooldown', title: '⏱️ Снятие кулдауна', price: 1500, blockedBy: 'cooldownBypassActive', activeLabel: 'Ждёт квест с кулдауном', description: 'Снимает кулдаун для следующего квеста в любой игре. Применится автоматически при взятии квеста с кулдауном. Лимит: 2 раза в сутки.' },
+      { key: 'cooldown', title: '⏱️ Снятие кулдауна', price: 2000, blockedBy: 'cooldownBypassActive', activeLabel: 'Ждёт квест с кулдауном', description: 'Снимает кулдаун для следующего квеста в любой игре. Применится автоматически при взятии квеста с кулдауном. Не снимает отдельный лимит «1 квест в час» между любыми квестами. Лимит: 2 раза в сутки.' },
     ],
   },
   {
