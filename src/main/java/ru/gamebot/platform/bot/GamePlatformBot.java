@@ -3430,8 +3430,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             AppUser player = userService.findById(event.getUserId()).orElse(null);
             if (player == null) return;
-            notifyUser(player.getTelegramId(),
-                    "✅ <b>+" + event.getExcGranted() + " EXC</b> начислено за просмотр рекламы!");
+            String text = "✅ <b>+" + event.getExcGranted() + " EXC</b> начислено за просмотр рекламы!";
+            if (event.getMilestoneBonus() > 0) {
+                text += "\n🎯 Включая бонус за прогресс: +" + event.getMilestoneBonus() + " EXC";
+            }
+            notifyUser(player.getTelegramId(), text);
         } catch (Exception e) {
             log.error("[AdsgramReward] Failed to notify about granted reward, userId={}", event.getUserId(), e);
         }

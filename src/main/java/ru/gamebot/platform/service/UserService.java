@@ -547,18 +547,33 @@ public class UserService {
         appUserRepository.save(user);
     }
 
+    public record AdRewardResult(boolean granted, long totalExc, long milestoneBonus, int viewsToday, int dailyCap) {
+        public static final AdRewardResult NOT_GRANTED = new AdRewardResult(false, 0, 0, 0, 0);
+    }
+
+    /** Бонус за отметки прогресса (2026-09-09) — подталкивает досматривать лимит сети целиком,
+     * а не бросать на середине: без него часть игроков не добирает дневной лимит, и клуб теряет
+     * рекламный доход на недосмотренных показах. Суммы небольшие относительно базовой награды
+     * (30 EXC/показ), чтобы не обесценить сам факт просмотра как источник дохода. */
+    private long adRewardMilestoneBonus(AdRewardSource source, int viewsToday) {
+        return switch (source) {
+            case ADSGRAM -> viewsToday == 5 ? 50 : viewsToday == 10 ? 100 : 0;
+            case TELEGA -> viewsToday == 3 ? 50 : viewsToday == 5 ? 75 : 0;
+        };
+    }
+
     /** Засчитывает награду за просмотр рекламы — только если у игрока есть непросроченный
      * "ожидающий показ" (выставляется в {@link #markAdRequested}), иначе тихо отказывает. Одноразово.
      * source определяется вызывающим постбек-эндпоинтом (своя сеть — свой URL), не хранится отдельно
      * от pendingAdRewardAt: сам факт "показ был запрошен недавно" не завязан на конкретную сеть. */
     @Transactional
-    public boolean claimPendingAdReward(Long telegramId, AdRewardSource source) {
+    public AdRewardResult claimPendingAdReward(Long telegramId, AdRewardSource source) {
         AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
         if (user == null || user.getPendingAdRewardAt() == null) {
-            return false;
+            return AdRewardResult.NOT_GRANTED;
         }
         if (user.getPendingAdRewardAt().isBefore(LocalDateTime.now().minusHours(1))) {
-            return false;
+            return AdRewardResult.NOT_GRANTED;
         }
         user.setPendingAdRewardAt(null);
         LocalDate today = LocalDate.now();
@@ -567,16 +582,26 @@ public class UserService {
             user.setAdRewardCountAdsgram(0);
             user.setAdRewardCountTelega(0);
         }
+        int viewsToday;
         if (source == AdRewardSource.ADSGRAM) {
-            user.setAdRewardCountAdsgram(user.getAdRewardCountAdsgram() + 1);
+            viewsToday = user.getAdRewardCountAdsgram() + 1;
+            user.setAdRewardCountAdsgram(viewsToday);
         } else {
-            user.setAdRewardCountTelega(user.getAdRewardCountTelega() + 1);
+            viewsToday = user.getAdRewardCountTelega() + 1;
+            user.setAdRewardCountTelega(viewsToday);
         }
-        user.setCoins(user.getCoins() + AD_REWARD_EXC);
+        long milestoneBonus = adRewardMilestoneBonus(source, viewsToday);
+        long totalExc = AD_REWARD_EXC + milestoneBonus;
+        user.setCoins(user.getCoins() + totalExc);
         appUserRepository.save(user);
-        excTx.log(user, AD_REWARD_EXC, ExcTransactionService.AD_REWARD, "Просмотр рекламы (" + source + ")");
-        eventPublisher.publishEvent(new ru.gamebot.platform.event.AdRewardGrantedEvent(this, user.getId(), AD_REWARD_EXC));
-        return true;
+        String description = "Просмотр рекламы (" + source + ")";
+        if (milestoneBonus > 0) {
+            description += " + бонус за " + viewsToday + "/" + source.getDailyCap() + " просмотров";
+        }
+        excTx.log(user, totalExc, ExcTransactionService.AD_REWARD, description);
+        eventPublisher.publishEvent(new ru.gamebot.platform.event.AdRewardGrantedEvent(
+                this, user.getId(), totalExc, milestoneBonus));
+        return new AdRewardResult(true, totalExc, milestoneBonus, viewsToday, source.getDailyCap());
     }
 
     public record ReferralActivationResult(

@@ -123,11 +123,13 @@ public class PostbackController {
         log.info("[AdsgramReward] incoming params: {}", params);
 
         Long telegramId = parseFirstLong(params, "tgid", "userid", "user_id", "uid");
-        boolean granted = telegramId != null && userService.claimPendingAdReward(telegramId, UserService.AdRewardSource.ADSGRAM);
-        if (!granted) {
+        UserService.AdRewardResult result = telegramId == null
+                ? UserService.AdRewardResult.NOT_GRANTED
+                : userService.claimPendingAdReward(telegramId, UserService.AdRewardSource.ADSGRAM);
+        if (!result.granted()) {
             log.warn("[AdsgramReward] Reward not granted (telegramId={}, params={})", telegramId, params);
         }
-        return ResponseEntity.ok(rewardPage(granted));
+        return ResponseEntity.ok(rewardPage(result));
     }
 
     /** Тот же паттерн, что и adsgramReward — Telega.io зовёт GET на этот URL при наступлении REWARD-события
@@ -143,11 +145,13 @@ public class PostbackController {
         log.info("[TelegaReward] incoming params: {}", params);
 
         Long telegramId = parseFirstLong(params, "userid", "user_id", "tgid", "uid");
-        boolean granted = telegramId != null && userService.claimPendingAdReward(telegramId, UserService.AdRewardSource.TELEGA);
-        if (!granted) {
+        UserService.AdRewardResult result = telegramId == null
+                ? UserService.AdRewardResult.NOT_GRANTED
+                : userService.claimPendingAdReward(telegramId, UserService.AdRewardSource.TELEGA);
+        if (!result.granted()) {
             log.warn("[TelegaReward] Reward not granted (telegramId={}, params={})", telegramId, params);
         }
-        return ResponseEntity.ok(rewardPage(granted));
+        return ResponseEntity.ok(rewardPage(result));
     }
 
     private Long parseFirstLong(Map<String, String> params, String... keys) {
@@ -164,10 +168,16 @@ public class PostbackController {
         return null;
     }
 
-    private String rewardPage(boolean granted) {
-        String message = granted
-                ? "✅ Награда начислена!"
-                : "Не удалось начислить награду — попробуйте посмотреть рекламу заново.";
+    private String rewardPage(UserService.AdRewardResult result) {
+        String message;
+        if (!result.granted()) {
+            message = "Не удалось начислить награду — попробуйте посмотреть рекламу заново.";
+        } else if (result.milestoneBonus() > 0) {
+            message = "✅ Награда начислена! +" + result.totalExc() + " EXC (включая бонус за "
+                    + result.viewsToday() + "/" + result.dailyCap() + " просмотров сегодня)";
+        } else {
+            message = "✅ Награда начислена! +" + result.totalExc() + " EXC";
+        }
         return "<html><body style=\"font-family:sans-serif;text-align:center;padding:40px\">"
                 + message + "<br><br><a href=\"https://t.me/invitetogamebot\">Вернуться в бота</a>"
                 + "</body></html>";
