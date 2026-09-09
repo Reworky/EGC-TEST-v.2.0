@@ -3450,6 +3450,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    @org.springframework.context.event.EventListener
+    public void onReferrerFirstQuestBonus(ru.gamebot.platform.event.ReferrerFirstQuestBonusEvent event) {
+        try {
+            notifyUser(event.getReferrerTelegramId(),
+                    "🎉 <b>+" + event.getBonusExc() + " EXC</b> — твой друг <b>" + escape(event.getFriendNickname())
+                            + "</b> выполнил первый квест!\n\n"
+                            + "Это разовый бонус за приглашение, реферальные 10% с его квестов продолжат поступать как обычно.");
+        } catch (Exception e) {
+            log.error("[Referral] Failed to notify referrer {} about first-quest bonus", event.getReferrerTelegramId(), e);
+        }
+    }
+
     private static String dayWord(int days) {
         if (days % 100 >= 11 && days % 100 <= 19) return "дней";
         return switch (days % 10) {

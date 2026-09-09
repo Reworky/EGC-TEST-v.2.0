@@ -44,6 +44,12 @@ public class ExcTransactionService {
      *  ровно в 00:00 понедельника (см. WeeklyResetScheduler), т.е. в первую же секунду НОВОЙ недели, и раньше
      *  засчитывался в её рейтинг раньше, чем игрок успевал хоть что-то заработать на этой неделе. */
     public static final String REFERRAL_PRIZE = "REFERRAL_PRIZE";
+    /** Разовый бонус РЕФЕРЕРУ за первый одобренный квест приглашённого друга (2026-09-09) —
+     *  намеренно ОТДЕЛЬНЫЙ тип от REFERRAL: этот тип уже смешивал инстант-бонус "+300 за
+     *  приглашение" и 10%-ручеёк с квестов, различимые только по тексту заметки транзакции —
+     *  баг с завышенной вдвое метрикой "средний ручеёк на реферала" в отчёте "Экономика рефералки"
+     *  (см. UserService.referralEconomicsSnapshot) уже случился именно из-за этого. Не повторять. */
+    public static final String REFERRAL_FIRST_QUEST_BONUS = "REFERRAL_FIRST_QUEST_BONUS";
 
     @Transactional(propagation = Propagation.REQUIRED)
     public void log(AppUser user, long amount, String type, String description) {
@@ -95,6 +101,7 @@ public class ExcTransactionService {
             case AD_REWARD      -> "🎬 За рекламу";
             case REFERRAL_WELCOME -> "🤝 Бонус за вступление";
             case REFERRAL_PRIZE   -> "🏆 Приз топ-рефереров";
+            case REFERRAL_FIRST_QUEST_BONUS -> "🤝 Бонус за первый квест друга";
             default             -> "📌 Прочее";
         };
     }

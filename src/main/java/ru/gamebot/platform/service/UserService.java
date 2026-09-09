@@ -632,16 +632,42 @@ public class UserService {
         );
     }
 
-    // 3.5: 3000 EXC bonus to invited user on their first approved quest
+    // Разовый бонус рефереру (2026-09-09) — по обратной связи игроков гарантированная крупная
+    // награда мотивирует звать друзей сильнее, чем размазанные во времени 10% отчисления
+    // (которые остаются без изменений, это ДОПОЛНИТЕЛЬНЫЙ бонус). Порог реальных данных перед
+    // внедрением: средний ручеёк на активированного реферала оказался ~213 EXC (отчёт
+    // "Экономика рефералки"), 2500 EXC — сознательное решение поднять стоимость привлечения.
+    private static final long REFERRER_FIRST_QUEST_BONUS = 2_500;
+
+    // 3.5: 3000 EXC bonus to invited user on their first approved quest + разовый бонус рефереру
     @Transactional
     public boolean grantFirstQuestReferralBonus(AppUser invitedUser) {
-        if (invitedUser.getReferredByTelegramId() == null) {
+        Long referrerTelegramId = invitedUser.getReferredByTelegramId();
+        if (referrerTelegramId == null) {
             return false;
         }
         if (invitedUser.getCompletedQuests() != 0) {
             return false; // only on first quest (completedQuests is incremented before this call)
         }
         addReward(invitedUser, 0, 3_000);
+
+        // Самореферал не награждаем (та же защита, что и в QuestService.grantReferralBonus);
+        // если referrer не найден — бонус приглашённому выше всё равно уже начислен.
+        if (!referrerTelegramId.equals(invitedUser.getTelegramId())) {
+            appUserRepository.findByTelegramId(referrerTelegramId).ifPresent(referrer -> {
+                // addReward применяет %-бонус уровня игрока к сумме (системное поведение) — логируем и
+                // показываем в уведомлении РЕАЛЬНО начисленную сумму (totalExc), а не сырую константу,
+                // иначе у реферера с бонусом уровня баланс разойдётся с тем, что написано в уведомлении.
+                RewardGrant grant = addReward(referrer, 0, REFERRER_FIRST_QUEST_BONUS);
+                long awardedExc = grant.totalExc();
+                excTx.log(referrer, awardedExc, ExcTransactionService.REFERRAL_FIRST_QUEST_BONUS,
+                        "Бонус за первый квест друга: " + invitedUser.getNickname());
+                referrer.setReferralEarnedExc(referrer.getReferralEarnedExc() + awardedExc);
+                appUserRepository.save(referrer);
+                eventPublisher.publishEvent(new ru.gamebot.platform.event.ReferrerFirstQuestBonusEvent(
+                        this, referrer.getTelegramId(), invitedUser.getNickname(), awardedExc));
+            });
+        }
         return true;
     }
 
