@@ -159,6 +159,15 @@ const SVG_MENU_SUPPORT = (
   </svg>
 );
 
+function pluralQuests(n) {
+  if (n % 100 >= 11 && n % 100 <= 14) return 'квестов';
+  switch (n % 10) {
+    case 1: return 'квест';
+    case 2: case 3: case 4: return 'квеста';
+    default: return 'квестов';
+  }
+}
+
 // ── Streak dots ───────────────────────────────────────────────
 function StreakDots({ days }) {
   return (
@@ -414,6 +423,23 @@ export default function ProfilePage() {
 
       {/* ── XP Bar ───────────────────────────────────────────── */}
       <XpBar xp={profile.xp} level={profile.level} levelName={profile.levelName} />
+
+      {/* ── Новичковый темп: короче кулдауны, пока не наберётся 5 квестов ───── */}
+      {profile.onboardingQuestsLeft > 0 && (
+        <div style={{
+          margin: '0 16px 12px', padding: '10px 14px', borderRadius: 12,
+          background: 'linear-gradient(135deg,#0a1a0f,#080f0a)', border: '1px solid rgba(34,197,94,0.25)',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ fontSize: 20 }}>🌱</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#4ade80' }}>Новичковый темп активен</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
+              Кулдауны короче, пока не выполните ещё {profile.onboardingQuestsLeft} {pluralQuests(profile.onboardingQuestsLeft)}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Коллекция рамок ─────────────────────────────────── */}
       {profile.ownedFrames?.length > 0 && (

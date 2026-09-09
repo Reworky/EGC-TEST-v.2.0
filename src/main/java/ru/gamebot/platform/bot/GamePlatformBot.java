@@ -76,6 +76,7 @@ import ru.gamebot.platform.service.SessionService;
 import ru.gamebot.platform.service.SinkShopService;
 import ru.gamebot.platform.service.SupportService;
 import ru.gamebot.platform.service.UserService;
+import ru.gamebot.platform.util.DurationFormatter;
 
 @Slf4j
 @Component
@@ -2956,6 +2957,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "⏳ 1ч между взятием любых квестов\n"
                 + "📂 Максимум 1 активный квест одновременно\n"
                 + "📉 3+ квестов одного типа за неделю → награда −50%\n"
+                + "🌱 Для новичка (первые 5 одобренных квестов) кулдауны короче — см. профиль\n"
                 + "💸 1 заявка на вывод в 24ч, новую нельзя создать пока активна текущая\n\n"
                 + "<b>4. Health Ratio</b>\n"
                 + "HR — соотношение фонда клуба к балансу игроков.\n"
@@ -3188,7 +3190,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean profileIncomplete = user.getAge() == null || user.getCountry() == null;
         String incompleteHint = profileIncomplete ? "\n💡 <i>Заполни профиль полностью — укажи возраст и страну</i>\n" : "";
 
+        int onboardingLeft = Math.max(0, QuestService.ONBOARDING_QUEST_THRESHOLD - user.getCompletedQuests());
+        String onboardingLine = onboardingLeft > 0
+                ? "🌱 <b>Новичковый темп активен</b> — кулдауны короче, пока не выполните ещё "
+                        + onboardingLeft + " " + pluralQuests(onboardingLeft) + "\n\n"
+                : "";
+
         String profileText = "🎮 <b>" + escape(user.getNickname()) + "</b>\n"
+                + onboardingLine
                 + badgeLine
                 + titleLine
                 + "\nУровень " + levelNum + ": <b>" + levelName + "</b>\n"
@@ -3785,7 +3794,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else if (slotsFull) {
             buttons.add(keyboardFactory.callback("🔒 Сначала сдай активный квест", "noop"));
         } else if (gameCooldown) {
-            buttons.add(keyboardFactory.callback("⏳ Кулдаун 24ч по этой игре", "noop"));
+            buttons.add(keyboardFactory.callback("⏳ Кулдаун по этой игре", "noop"));
         } else if (!hasActiveSubmission) {
             buttons.add(keyboardFactory.callback("🚀 Взять", "quest:take:" + questId));
         }
@@ -3956,9 +3965,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             : quest.getDotaVerifyType() != null
                                 ? "🚀 Квест активен! ⏳ Прогресс отслеживается автоматически по вашему аккаунту Dota 2 — отчёт отправлять не нужно."
                                 : "🚀 Квест активен! Приступайте к игре, когда выполните задание, отправьте отчёт прямо из этой карточки.";
+        int weeklyLimit = QuestService.weeklyQuestTypeLimit(user);
         if (!quest.isExternalAutoApprove() && quest.getBrawlVerifyType() == null && quest.getClashVerifyType() == null
-                && quest.getClashRoyaleVerifyType() == null && quest.getDotaVerifyType() == null && weeklyCount >= 3) {
-            notice += "\n\n⚠️ Вы уже выполнили 3+ таких квеста за неделю — награда EXC будет снижена на 50%.";
+                && quest.getClashRoyaleVerifyType() == null && quest.getDotaVerifyType() == null && weeklyCount >= weeklyLimit) {
+            notice += "\n\n⚠️ Вы уже выполнили " + weeklyLimit + "+ " + pluralQuests(weeklyLimit) + " такого типа за неделю — награда EXC будет снижена на 50%.";
         }
 
         Quest freshQuest = questService.getQuest(questId);
@@ -4015,11 +4025,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case SLOTS_FULL ->
                     "📂 У вас уже есть активные квесты. Завершите или отмените один из них, либо купите доп. слот (2 000 EXC) в разделе Предметы клуба.";
             case SAME_QUEST_COOLDOWN ->
-                    "⏳ Этот квест можно выполнять не чаще 1 раза в " + formatCooldownDuration(result.minutesLeft()) + ".";
+                    "⏳ Этот квест можно выполнять не чаще 1 раза в " + DurationFormatter.format(result.minutesLeft()) + ".";
             case GAME_COOLDOWN ->
-                    "⏳ Кулдаун активен. Повторный квест в этой игре доступен через " + formatCooldownDuration(result.minutesLeft())
+                    "⏳ Кулдаун активен. Повторный квест в этой игре доступен через " + DurationFormatter.format(result.minutesLeft())
                             + ".\n\n💡 Можно снять кулдаун за 2 000 EXC в разделе Предметы клуба.";
-            case TAKE_COOLDOWN -> "⏳ Новый квест можно брать раз в час. Подождите ещё <b>" + result.minutesLeft() + " мин.</b>";
+            // Без фиксированного "раз в час" в тексте — порог для новичка короче (15 мин), не всегда час.
+            case TAKE_COOLDOWN -> "⏳ Новый квест можно будет взять чуть позже. Подождите ещё <b>" + result.minutesLeft() + " мин.</b>";
             default -> "⚠️ Не удалось взять квест.";
         };
     }
@@ -8842,32 +8853,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         };
     }
 
-    private String pluralHours(long n) {
-        if (n % 100 >= 11 && n % 100 <= 14) return "часов";
+    private String pluralQuests(long n) {
+        if (n % 100 >= 11 && n % 100 <= 14) return "квестов";
         return switch ((int) (n % 10)) {
-            case 1 -> "час";
-            case 2, 3, 4 -> "часа";
-            default -> "часов";
+            case 1 -> "квест";
+            case 2, 3, 4 -> "квеста";
+            default -> "квестов";
         };
-    }
-
-    private String pluralDays(long n) {
-        if (n % 100 >= 11 && n % 100 <= 14) return "дней";
-        return switch ((int) (n % 10)) {
-            case 1 -> "день";
-            case 2, 3, 4 -> "дня";
-            default -> "дней";
-        };
-    }
-
-    /** Реальная длительность кулдауна в человекочитаемом виде (часы для обычных квестов, дни для «Сложных» — 336ч). */
-    private String formatCooldownDuration(long minutes) {
-        long hours = Math.max(1, minutes / 60);
-        if (hours < 24) {
-            return hours + " " + pluralHours(hours);
-        }
-        long days = hours / 24;
-        return days + " " + pluralDays(days);
     }
 
     private void sendAdminLiveStatus(AppUser user) {

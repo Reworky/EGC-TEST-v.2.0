@@ -31,7 +31,31 @@ public class QuestService {
     private static final int COOLDOWN_HOURS = 24;
     private static final int HARD_COOLDOWN_HOURS = 336; // 14 дней для Сложных
 
-    private static int cooldownHours(Quest quest) {
+    // Новичковый темп (2026-09-09): жёсткие антифрод-лимиты рассчитаны против опытных
+    // фермеров/мультиаккаунтов, но на практике сильнее всего бьют по новичку на 2-3-м квесте —
+    // ровно там, где он должен "зацепиться" за проект (обратная связь от игроков: "долго
+    // качаться", "долго ждать вторую выплату"). Пока у игрока меньше ONBOARDING_QUEST_THRESHOLD
+    // одобренных квестов — лимиты смягчены; размер награды не трогаем, это только про темп.
+    public static final int ONBOARDING_QUEST_THRESHOLD = 5;
+    private static final int ONBOARDING_TAKE_COOLDOWN_MINUTES = 15;
+    private static final int ONBOARDING_SAME_QUEST_COOLDOWN_HOURS = 4;
+    private static final int ONBOARDING_WEEKLY_QUEST_TYPE_LIMIT = 5;
+
+    private static boolean isOnboarding(AppUser user) {
+        return user.getCompletedQuests() < ONBOARDING_QUEST_THRESHOLD;
+    }
+
+    /** Порог "квестов одного типа в неделю" до срабатывания diminishing returns (-50%) — единая
+     * точка, используется и в computeReward (сам расчёт), и в GamePlatformBot (предупреждение
+     * сразу после взятия квеста) — раньше расходились: там было зашито "3" безусловно. */
+    public static int weeklyQuestTypeLimit(AppUser user) {
+        return isOnboarding(user) ? ONBOARDING_WEEKLY_QUEST_TYPE_LIMIT : WEEKLY_QUEST_TYPE_LIMIT;
+    }
+
+    private static int cooldownHours(Quest quest, AppUser user) {
+        if (isOnboarding(user)) {
+            return ONBOARDING_SAME_QUEST_COOLDOWN_HOURS;
+        }
         return "Сложные".equals(quest.getCategory()) ? HARD_COOLDOWN_HOURS : COOLDOWN_HOURS;
     }
     private static final int REFERRAL_BONUS_PERCENT = 10;
@@ -253,7 +277,7 @@ public class QuestService {
     public boolean isSameQuestCooldownActive(AppUser user, Quest quest) {
         Optional<LocalDateTime> lastApproved = questSubmissionRepository
                 .findLastApprovedDateByUserAndQuest(user, quest);
-        if (lastApproved.isPresent() && LocalDateTime.now().isBefore(lastApproved.get().plusHours(cooldownHours(quest)))) {
+        if (lastApproved.isPresent() && LocalDateTime.now().isBefore(lastApproved.get().plusHours(cooldownHours(quest, user)))) {
             return true;
         }
         // Fix 5: cancelled submissions also block retake for 1h to prevent cancel-retake abuse
@@ -272,18 +296,22 @@ public class QuestService {
         Optional<LocalDateTime> lastApproved = questSubmissionRepository
                 .findLastApprovedDateByUserAndGameAndCategory(user, quest.getGameName(), quest.getCategory());
         return lastApproved.isPresent()
-                && LocalDateTime.now().isBefore(lastApproved.get().plusHours(cooldownHours(quest)));
+                && LocalDateTime.now().isBefore(lastApproved.get().plusHours(cooldownHours(quest, user)));
     }
 
     /** Возвращает сколько часов осталось до снятия кулдауна (0 = нет кулдауна) */
     public long getCooldownHoursLeft(AppUser user, Quest quest) {
         Optional<LocalDateTime> lastApproved = questSubmissionRepository
                 .findLastApprovedDateByUserAndQuest(user, quest);
-        int cd = cooldownHours(quest);
+        int cd = cooldownHours(quest, user);
         if (lastApproved.isPresent()) {
             LocalDateTime until = lastApproved.get().plusHours(cd);
             if (LocalDateTime.now().isBefore(until)) {
-                return Math.max(1, java.time.temporal.ChronoUnit.HOURS.between(LocalDateTime.now(), until));
+                // Округляем ВВЕРХ (не ChronoUnit.HOURS.between — оно отбрасывает остаток часа и
+                // может занизить показанное время ожидания, особенно заметно на коротких окнах
+                // новичкового темпа). Игрок не должен вернуться раньше, чем кулдаун реально снят.
+                long minutesUntil = java.time.temporal.ChronoUnit.MINUTES.between(LocalDateTime.now(), until);
+                return Math.max(1, (minutesUntil + 59) / 60);
             }
         }
         Optional<LocalDateTime> lastGame = questSubmissionRepository
@@ -291,7 +319,11 @@ public class QuestService {
         if (lastGame.isPresent()) {
             LocalDateTime until = lastGame.get().plusHours(cd);
             if (LocalDateTime.now().isBefore(until)) {
-                return Math.max(1, java.time.temporal.ChronoUnit.HOURS.between(LocalDateTime.now(), until));
+                // Округляем ВВЕРХ (не ChronoUnit.HOURS.between — оно отбрасывает остаток часа и
+                // может занизить показанное время ожидания, особенно заметно на коротких окнах
+                // новичкового темпа). Игрок не должен вернуться раньше, чем кулдаун реально снят.
+                long minutesUntil = java.time.temporal.ChronoUnit.MINUTES.between(LocalDateTime.now(), until);
+                return Math.max(1, (minutesUntil + 59) / 60);
             }
         }
         return 0;
@@ -428,10 +460,12 @@ public class QuestService {
             // Общий лимит "1 квест в час" проверяется ДО игрового кулдауна и до расхода купленного
             // бонуса "Снятие кулдауна" — иначе бонус мог списаться впустую: игровой кулдаун снят,
             // а взять квест всё равно нельзя из-за этого отдельного, не связанного с бонусом лимита.
+            // Для новичка (см. isOnboarding) порог короче — 15 мин вместо часа.
             if (lockedUser.getLastQuestTakenAt() != null) {
+                int takeCooldownMinutes = isOnboarding(lockedUser) ? ONBOARDING_TAKE_COOLDOWN_MINUTES : 60;
                 long minutesSince = ChronoUnit.MINUTES.between(lockedUser.getLastQuestTakenAt(), LocalDateTime.now());
-                if (minutesSince < 60) {
-                    return QuestActionResult.of(QuestActionStatus.TAKE_COOLDOWN, 60 - minutesSince);
+                if (minutesSince < takeCooldownMinutes) {
+                    return QuestActionResult.of(QuestActionStatus.TAKE_COOLDOWN, takeCooldownMinutes - minutesSince);
                 }
             }
 
@@ -439,7 +473,7 @@ public class QuestService {
                 if (sinkShopService.hasCooldownBypass(lockedUser, quest.getGameName())) {
                     sinkShopService.consumeCooldownBypass(lockedUser, quest.getGameName());
                 } else {
-                    return QuestActionResult.of(QuestActionStatus.SAME_QUEST_COOLDOWN, cooldownHours(quest) * 60L);
+                    return QuestActionResult.of(QuestActionStatus.SAME_QUEST_COOLDOWN, cooldownHours(quest, lockedUser) * 60L);
                 }
             } else if (isCooldownActive(lockedUser, quest)) {
                 if (sinkShopService.hasCooldownBypass(lockedUser, quest.getGameName())) {
@@ -661,10 +695,11 @@ public class QuestService {
         long adjustedCoins = baseCoins;
 
         // 3.4 Antifaud: diminishing returns after 3 completions of same type per week
+        // (для новичка порог мягче — 5 вместо 3, см. isOnboarding)
         LocalDateTime weekAgo = LocalDateTime.now().minusWeeks(1);
         long weeklyCount = questSubmissionRepository.countApprovedByUserAndGameAndCategorySince(
                 user, quest.getGameName(), quest.getCategory(), weekAgo);
-        boolean diminished = weeklyCount >= WEEKLY_QUEST_TYPE_LIMIT;
+        boolean diminished = weeklyCount >= weeklyQuestTypeLimit(user);
         if (diminished) {
             adjustedCoins = adjustedCoins / 2;
         }

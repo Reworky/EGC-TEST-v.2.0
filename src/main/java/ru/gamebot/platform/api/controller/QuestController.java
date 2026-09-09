@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import ru.gamebot.platform.api.dto.MyQuestDto;
+import ru.gamebot.platform.util.DurationFormatter;
 import ru.gamebot.platform.api.dto.QuestActionResponseDto;
 import ru.gamebot.platform.api.dto.QuestDetailDto;
 import ru.gamebot.platform.api.dto.QuestDto;
@@ -333,7 +334,6 @@ public class QuestController {
     }
 
     private String messageFor(QuestService.QuestActionResult result) {
-        long hours = (result.minutesLeft() + 59) / 60;
         return switch (result.status()) {
             case OK -> "Готово.";
             case ALREADY_DRAFT -> "Этот квест уже взят в работу.";
@@ -342,9 +342,10 @@ public class QuestController {
             case HAS_REJECTED_REPORT -> "Отчёт по этому квесту был отклонён — исправьте и отправьте заново через «Отчёт», брать квест повторно не нужно.";
             case NOT_TAKEN -> "Сначала возьмите квест.";
             case SLOTS_FULL -> "Достигнут лимит активных квестов. Завершите текущий или купите доп. слот.";
-            case SAME_QUEST_COOLDOWN -> "Этот квест можно выполнять не чаще 1 раза в 24 часа.";
-            case GAME_COOLDOWN -> "Кулдаун по этой игре: ещё " + hours + " ч.";
-            case TAKE_COOLDOWN -> "Между взятием квестов должен пройти час. Осталось " + result.minutesLeft() + " мин.";
+            case SAME_QUEST_COOLDOWN -> "Этот квест можно выполнять не чаще 1 раза в " + DurationFormatter.format(result.minutesLeft()) + ".";
+            case GAME_COOLDOWN -> "Кулдаун по этой игре: ещё " + DurationFormatter.format(result.minutesLeft()) + ".";
+            // Без фиксированного "час" — порог для новичка короче (15 мин), не всегда час.
+            case TAKE_COOLDOWN -> "Новый квест можно будет взять чуть позже. Осталось " + result.minutesLeft() + " мин.";
             case REJECT_COOLDOWN -> "После отклонения повторный отчёт можно отправить через " + result.minutesLeft() + " мин.";
             case HAS_PENDING_REPORT -> "У вас уже есть отчёт на проверке у модератора — дождитесь решения, прежде чем отправлять следующий.";
             case EXPIRED -> "Срок выполнения этого квеста истёк.";

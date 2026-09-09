@@ -33,4 +33,7 @@ public class UserProfileDto {
     private String friendBadgeName;
     /** Состоит ли в отряде прямо сейчас — сектор "Отряд" в гербе достижений на профиле. */
     private boolean inSquad;
+    /** Сколько ещё одобренных квестов до конца новичкового темпа (короче кулдауны/лимиты).
+     * 0 = новичковый темп уже закончился, обычные лимиты. */
+    private int onboardingQuestsLeft;
 }

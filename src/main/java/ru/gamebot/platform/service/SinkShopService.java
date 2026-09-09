@@ -223,7 +223,12 @@ public class SinkShopService {
     public long getMaxQuestSlots(AppUser user) {
         boolean boostActive = user.getQuestSlotExtraUntil() != null
                 && LocalDateTime.now().isBefore(user.getQuestSlotExtraUntil());
-        return boostActive ? 3 : 1;
+        if (boostActive) {
+            return 3;
+        }
+        // Новичковый темп: пока у игрока меньше ONBOARDING_QUEST_THRESHOLD одобренных квестов,
+        // разрешаем вести 2 квеста параллельно, чтобы не простаивать в ожидании модерации первого.
+        return user.getCompletedQuests() < QuestService.ONBOARDING_QUEST_THRESHOLD ? 2 : 1;
     }
 
     @Transactional

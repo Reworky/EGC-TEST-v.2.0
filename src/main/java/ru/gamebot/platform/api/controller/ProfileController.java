@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import ru.gamebot.platform.api.dto.UserProfileDto;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
+import ru.gamebot.platform.service.QuestService;
 import ru.gamebot.platform.service.RewardService;
 import ru.gamebot.platform.service.SinkShopService;
 import ru.gamebot.platform.service.TelegramFileService;
@@ -62,6 +63,7 @@ public class ProfileController {
                             .invitedFriends(user.getInvitedFriends())
                             .friendBadgeName(userService.currentInvitedFriendsBadge(user.getInvitedFriends()).orElse(null))
                             .inSquad(user.getSquadId() != null)
+                            .onboardingQuestsLeft(Math.max(0, QuestService.ONBOARDING_QUEST_THRESHOLD - user.getCompletedQuests()))
                             .build()))
                 .orElse(ResponseEntity.notFound().build());
     }
