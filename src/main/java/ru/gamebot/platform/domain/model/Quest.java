@@ -159,9 +159,15 @@ public class Quest {
 
     /** null = обычный квест — включает авто-верификацию через Steam Web API (CS2, appid 730). Как и
      *  Clash Royale — дельта кумулятивных career-счётчиков с момента взятия квеста (полной истории
-     *  отдельных матчей в открытом API для CS2 нет). varchar принудительно (см. clashVerifyType). */
+     *  отдельных матчей в открытом API для CS2 нет). varchar принудительно (см. clashVerifyType).
+     *  varchar(30), НЕ 20 — реальный инцидент 2026-09-09: LAST_MATCH_DEATHS_MAX (21 символ) не влез
+     *  в varchar(20), скопированный с других игр без проверки длины самого длинного значения своего
+     *  enum'а, уронил прод на старте (JdbcSQLDataException). ddl-auto может не расширить уже
+     *  существующую колонку автоматически (H2 в этой версии падает на ALTER ... SET DATA TYPE с
+     *  синтаксической ошибкой для похожего случая в этом же логе) — при апгрейде с varchar(20)
+     *  может понадобиться ручной ALTER TABLE через H2 Shell на сервере. */
     @Enumerated(EnumType.STRING)
-    @Column(columnDefinition = "varchar(20)")
+    @Column(columnDefinition = "varchar(30)")
     private Cs2VerifyType cs2VerifyType;
 
     /** Целевая дельта с момента взятия квеста — для всех типов CS2 верификации. */
