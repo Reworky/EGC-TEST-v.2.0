@@ -7742,7 +7742,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         RewardService.WithdrawalPeriodStats week = rewardService.withdrawalStatsSince(now.minusDays(7));
         RewardService.WithdrawalPeriodStats month = rewardService.withdrawalStatsSince(now.minusDays(30));
 
-        String text = "📊 <b>Статистика выводов</b>\n\n"
+        String text = "📊 <b>Статистика выводов</b>\n"
+                + "🕒 Отчёт на: <b>" + now.format(DATE_TIME_FORMATTER) + "</b>\n\n"
                 + withdrawalPeriodBlock("🗓 За неделю", week)
                 + "\n\n"
                 + withdrawalPeriodBlock("📅 За месяц", month);
