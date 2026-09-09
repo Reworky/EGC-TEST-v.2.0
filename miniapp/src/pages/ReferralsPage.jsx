@@ -171,7 +171,7 @@ export default function ReferralsPage() {
           <div className="ref-step-num">2</div>
           <div className="ref-step-body">
             <div className="ref-step-title">Друг выполняет первый квест</div>
-            <div className="ref-step-desc">Другу бонусом: <b>+3 000 EXC</b></div>
+            <div className="ref-step-desc">Тебе бонусом: <b>+2 500 EXC</b> · Другу бонусом: <b>+3 000 EXC</b></div>
           </div>
         </div>
 
@@ -179,7 +179,7 @@ export default function ReferralsPage() {
           <div className="ref-step-num">3</div>
           <div className="ref-step-body">
             <div className="ref-step-title">Друг зарабатывает квестами</div>
-            <div className="ref-step-desc">Ты получаешь <b>10% от каждого его EXC</b> в течение первых 14 дней автоматически</div>
+            <div className="ref-step-desc">Ты получаешь <b>10% от каждого его EXC</b> — пока друг активен (квест хотя бы раз в 14 дней)</div>
           </div>
         </div>
 
