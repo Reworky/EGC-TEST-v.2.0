@@ -118,7 +118,7 @@ public class PostbackController {
     public ResponseEntity<String> adsgramReward(@RequestParam Map<String, String> params) {
         if (!isValidToken(params.get("token"), adsgramRewardToken)) {
             log.warn("[AdsgramReward] Postback rejected: bad token");
-            return ResponseEntity.status(403).body(rewardPage(false));
+            return ResponseEntity.status(403).body(rewardPage(UserService.AdRewardResult.NOT_GRANTED));
         }
         log.info("[AdsgramReward] incoming params: {}", params);
 
@@ -140,7 +140,7 @@ public class PostbackController {
     public ResponseEntity<String> telegaReward(@RequestParam Map<String, String> params) {
         if (!isValidToken(params.get("token"), telegaRewardToken)) {
             log.warn("[TelegaReward] Postback rejected: bad token");
-            return ResponseEntity.status(403).body(rewardPage(false));
+            return ResponseEntity.status(403).body(rewardPage(UserService.AdRewardResult.NOT_GRANTED));
         }
         log.info("[TelegaReward] incoming params: {}", params);
 
