@@ -11241,6 +11241,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     photo.setCaption(caption);
                     photo.setParseMode("HTML");
                 }
+                photo.setReplyMarkup(singleMenuKeyboard());
                 execute(photo);
                 delivered++;
             } catch (Exception e) {
