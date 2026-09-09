@@ -7874,7 +7874,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             photo.setParseMode("HTML");
             try { execute(photo); } catch (TelegramApiException e) { log.error("Failed to send receipt", e); }
         } else {
-            sendText(req.getUser().getTelegramId(), caption, null);
+            // Та же защита, что и в promptWithdrawalReview ниже: недоступный игрок не должен ронять
+            // остаток флоу (пост в ленту активности, приглашение оценить вывод) с ошибкой у админа.
+            try {
+                sendText(req.getUser().getTelegramId(), caption, null);
+            } catch (Exception e) {
+                log.warn("Failed to notify user {} about withdrawal approval", req.getUser().getTelegramId(), e);
+            }
         }
         postWithdrawalToActivityFeed(req, receiptFileId, receiptCaption);
         promptWithdrawalReview(req);
@@ -7958,9 +7964,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("⭐️⭐️", "review:stars:" + req.getId() + ":2"),
                 keyboardFactory.callback("⭐️", "review:stars:" + req.getId() + ":1")));
         rows.add(List.of(keyboardFactory.callback("Не сейчас", "review:skip:" + req.getId())));
-        sendText(telegramId,
-                "🙏 Оцени, пожалуйста, качество вывода — это необязательно, но очень помогает клубу.",
-                keyboardFactory.rowsLayout(rows));
+        // Недоступный игрок (заблокировал бота/удалил аккаунт) не должен ронять весь флоу закрытия
+        // заявки — sendText пробрасывает исключение наружу при неудаче, а этот вызов идёт последним
+        // в notifyUserWithdrawalApproved, уже после того как заявка одобрена и чек отправлен.
+        try {
+            sendText(telegramId,
+                    "🙏 Оцени, пожалуйста, качество вывода — это необязательно, но очень помогает клубу.",
+                    keyboardFactory.rowsLayout(rows));
+        } catch (Exception e) {
+            log.warn("Failed to prompt withdrawal review for user {}", telegramId, e);
+        }
     }
 
     private void handleReviewAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
