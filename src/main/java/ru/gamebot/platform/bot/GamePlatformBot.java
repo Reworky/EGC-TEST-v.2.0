@@ -6488,6 +6488,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "stats" -> sendAdminStats(user);
             case "stats:platform" -> sendAdminStatsPlatform(user);
             case "stats:topquests" -> sendAdminStatsTopQuests(user);
+            case "stats:referral" -> sendAdminReferralEconomics(user);
             case "stats:history" -> sendAdminStatsHistory(user);
             case "stats:snapshot" -> {
                 platformSnapshotService.takeSnapshot();
@@ -8594,8 +8595,41 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 keyboardFactory.callback("📊 Платформа", "admin:stats:platform"),
                                 keyboardFactory.callback("🔥 Топ недели", "admin:stats:topquests")
                         ),
+                        List.of(keyboardFactory.callback("🤝 Экономика рефералки", "admin:stats:referral")),
                         List.of(keyboardFactory.callback("🔄 Сбросить недельный XP", "admin:stats:reset_weekly")),
                         List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
+                )));
+    }
+
+    /** Снапшот экономики рефералки — для решения "разовый бонус рефереру vs текущие 10%
+     * отчисления" (обсуждение 2026-09-09). Сравнивает реальный средний ручеёк на одного
+     * "активированного" (сделавшего хотя бы 1 квест) реферала с кандидатом на разовый бонус. */
+    private void sendAdminReferralEconomics(AppUser user) {
+        UserService.ReferralEconomicsSnapshot s = userService.referralEconomicsSnapshot();
+        long candidateBonus = 2500;
+        long avgTrickle = s.avgTrickleExcPerActivatedReferral();
+        String verdict = s.referredWithAtLeastOneQuest() == 0
+                ? "Недостаточно данных (нет активированных рефералов с квестами)."
+                : avgTrickle < candidateBonus
+                    ? "✅ Разовый бонус " + candidateBonus + " EXC ДОРОЖЕ среднего ручейка (" + avgTrickle + " EXC) — типичный реферал получит больше, чем сейчас."
+                    : "⚠️ Разовый бонус " + candidateBonus + " EXC ДЕШЕВЛЕ среднего ручейка (" + avgTrickle + " EXC) — типичный реферал получит меньше, чем сейчас.";
+
+        String activationPct = s.totalReferred() == 0 ? "—"
+                : String.format("%.0f%%", s.referredWithAtLeastOneQuest() * 100.0 / s.totalReferred());
+
+        sendText(user.getTelegramId(),
+                "🤝 <b>Экономика рефералки</b>\n\n"
+                        + "Всего рефералов: <b>" + s.totalReferred() + "</b>\n"
+                        + "Сделали хотя бы 1 квест: <b>" + s.referredWithAtLeastOneQuest() + "</b> (" + activationPct + ")\n"
+                        + "Среднее число одобренных квестов у реферала: <b>" + String.format("%.1f", s.avgCompletedQuestsAmongReferred()) + "</b>\n\n"
+                        + "Выплачено реферерам через 10% отчисления за всё время: <b>" + s.totalReferralEarnedExc() + " EXC</b>\n"
+                        + "Рефереров с реальным доходом от отчислений: <b>" + s.referrersWithEarnings() + "</b>\n"
+                        + "Средний ручеёк на 1 активированного реферала: <b>" + avgTrickle + " EXC</b>\n\n"
+                        + "<b>Кандидат на разовый бонус: " + candidateBonus + " EXC</b>\n" + verdict + "\n\n"
+                        + "<i>Это общая сумма за всё время работы рефералки, не за месяц — для оценки динамики сравнивайте с этим же отчётом через несколько недель.</i>",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("🔄 Обновить", "admin:stats:referral")),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "admin:stats"))
                 )));
     }
 

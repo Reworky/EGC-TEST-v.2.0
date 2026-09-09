@@ -795,6 +795,31 @@ public class UserService {
         return appUserRepository.countActiveSince(since);
     }
 
+    /** Снапшот экономики рефералки (2026-09-09) — для решения "разовый бонус рефереру vs текущие
+     * 10% отчислений": сколько всего рефералов, сколько из них реально сделали хотя бы 1 квест
+     * (порог, на который планируется завязать разовый бонус), сколько уже выплачено ручейком. */
+    public record ReferralEconomicsSnapshot(
+            long totalReferred,
+            long referredWithAtLeastOneQuest,
+            double avgCompletedQuestsAmongReferred,
+            long totalReferralEarnedExc,
+            long referrersWithEarnings
+    ) {
+        public long avgTrickleExcPerActivatedReferral() {
+            return referredWithAtLeastOneQuest == 0 ? 0 : totalReferralEarnedExc / referredWithAtLeastOneQuest;
+        }
+    }
+
+    public ReferralEconomicsSnapshot referralEconomicsSnapshot() {
+        return new ReferralEconomicsSnapshot(
+                appUserRepository.countAllReferredUsers(),
+                appUserRepository.countReferredUsersWithAtLeastOneQuest(),
+                appUserRepository.avgCompletedQuestsAmongReferred(),
+                appUserRepository.totalReferralEarnedExc(),
+                appUserRepository.countReferrersWithEarnings()
+        );
+    }
+
     public long sumAllCoins() {
         return appUserRepository.sumAllCoins();
     }

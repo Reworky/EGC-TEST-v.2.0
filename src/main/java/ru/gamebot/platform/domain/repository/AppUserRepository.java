@@ -101,6 +101,22 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt >= :since AND u.referredByTelegramId IS NOT NULL")
     long countReferredNewUsersSince(@Param("since") LocalDateTime since);
 
+    // ── Экономика рефералки (2026-09-09) — для расчёта разового бонуса рефереру vs текущие 10% ──
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.referredByTelegramId IS NOT NULL")
+    long countAllReferredUsers();
+
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.referredByTelegramId IS NOT NULL AND u.completedQuests >= 1")
+    long countReferredUsersWithAtLeastOneQuest();
+
+    @Query("SELECT COALESCE(AVG(u.completedQuests), 0) FROM AppUser u WHERE u.registrationCompleted = true AND u.referredByTelegramId IS NOT NULL")
+    double avgCompletedQuestsAmongReferred();
+
+    @Query("SELECT COALESCE(SUM(u.referralEarnedExc), 0) FROM AppUser u")
+    long totalReferralEarnedExc();
+
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.referralEarnedExc > 0")
+    long countReferrersWithEarnings();
+
     Optional<AppUser> findByPhoneNumberAndTelegramIdNot(String phoneNumber, Long excludeTelegramId);
 
     @Query("SELECT u FROM AppUser u WHERE u.registrationCompleted = true AND u.onboardingCompleted = false AND u.onboardingStartedAt IS NOT NULL AND u.onboardingNotificationsSent < 3 AND u.blocked = false")
