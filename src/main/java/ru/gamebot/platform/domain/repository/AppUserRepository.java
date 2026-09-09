@@ -110,12 +110,10 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     @Query("SELECT COALESCE(AVG(u.completedQuests), 0) FROM AppUser u WHERE u.registrationCompleted = true AND u.referredByTelegramId IS NOT NULL")
     double avgCompletedQuestsAmongReferred();
-
-    @Query("SELECT COALESCE(SUM(u.referralEarnedExc), 0) FROM AppUser u")
-    long totalReferralEarnedExc();
-
-    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.referralEarnedExc > 0")
-    long countReferrersWithEarnings();
+    // Суммы по referralEarnedExc сознательно НЕ используем для этого отчёта — поле смешивает
+    // разовый инстант-бонус "+300 EXC за приглашение" и еженедельный "10% с квеста реферала" под
+    // одним и тем же полем/типом транзакции. См. ExcTransactionRepository.sumReferralTrickleOnly —
+    // там они разделены по тексту заметки.
 
     Optional<AppUser> findByPhoneNumberAndTelegramIdNot(String phoneNumber, Long excludeTelegramId);
 

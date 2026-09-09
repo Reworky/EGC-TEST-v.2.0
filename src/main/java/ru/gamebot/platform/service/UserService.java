@@ -21,6 +21,7 @@ import ru.gamebot.platform.config.AppProperties;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.SupportTicket;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
+import ru.gamebot.platform.domain.repository.ExcTransactionRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
 import ru.gamebot.platform.domain.repository.RewardRequestRepository;
 import ru.gamebot.platform.domain.repository.SquadRepository;
@@ -74,6 +75,7 @@ public class UserService {
     }
 
     private final AppUserRepository appUserRepository;
+    private final ExcTransactionRepository excTransactionRepository;
     private final QuestSubmissionRepository questSubmissionRepository;
     private final RewardRequestRepository rewardRequestRepository;
     private final SupportTicketRepository supportTicketRepository;
@@ -797,16 +799,20 @@ public class UserService {
 
     /** Снапшот экономики рефералки (2026-09-09) — для решения "разовый бонус рефереру vs текущие
      * 10% отчислений": сколько всего рефералов, сколько из них реально сделали хотя бы 1 квест
-     * (порог, на который планируется завязать разовый бонус), сколько уже выплачено ручейком. */
+     * (порог, на который планируется завязать разовый бонус), сколько уже выплачено ручейком.
+     * ВАЖНО: totalReferralTrickleExc — это ТОЛЬКО 10% с квестов, БЕЗ разового инстант-бонуса
+     * "+300 EXC за приглашение" (оба логируются под одним типом REFERRAL, различаются по тексту
+     * заметки транзакции — см. ExcTransactionRepository.sumReferralTrickleOnly). Смешивать их нельзя:
+     * инстант-бонус в любом случае остаётся неизменным независимо от решения по разовому бонусу. */
     public record ReferralEconomicsSnapshot(
             long totalReferred,
             long referredWithAtLeastOneQuest,
             double avgCompletedQuestsAmongReferred,
-            long totalReferralEarnedExc,
-            long referrersWithEarnings
+            long totalReferralTrickleExc,
+            long referrersWithTrickleEarnings
     ) {
         public long avgTrickleExcPerActivatedReferral() {
-            return referredWithAtLeastOneQuest == 0 ? 0 : totalReferralEarnedExc / referredWithAtLeastOneQuest;
+            return referredWithAtLeastOneQuest == 0 ? 0 : totalReferralTrickleExc / referredWithAtLeastOneQuest;
         }
     }
 
@@ -815,8 +821,8 @@ public class UserService {
                 appUserRepository.countAllReferredUsers(),
                 appUserRepository.countReferredUsersWithAtLeastOneQuest(),
                 appUserRepository.avgCompletedQuestsAmongReferred(),
-                appUserRepository.totalReferralEarnedExc(),
-                appUserRepository.countReferrersWithEarnings()
+                excTransactionRepository.sumReferralTrickleOnly(),
+                excTransactionRepository.countReferrersWithTrickleEarnings()
         );
     }
 

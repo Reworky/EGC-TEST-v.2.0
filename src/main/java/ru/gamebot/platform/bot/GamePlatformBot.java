@@ -8622,8 +8622,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "Всего рефералов: <b>" + s.totalReferred() + "</b>\n"
                         + "Сделали хотя бы 1 квест: <b>" + s.referredWithAtLeastOneQuest() + "</b> (" + activationPct + ")\n"
                         + "Среднее число одобренных квестов у реферала: <b>" + String.format("%.1f", s.avgCompletedQuestsAmongReferred()) + "</b>\n\n"
-                        + "Выплачено реферерам через 10% отчисления за всё время: <b>" + s.totalReferralEarnedExc() + " EXC</b>\n"
-                        + "Рефереров с реальным доходом от отчислений: <b>" + s.referrersWithEarnings() + "</b>\n"
+                        + "Выплачено через 10% отчисления за всё время (БЕЗ инстант-бонуса +300 за приглашение — он не меняется): <b>" + s.totalReferralTrickleExc() + " EXC</b>\n"
+                        + "Рефереров с реальным доходом от отчислений: <b>" + s.referrersWithTrickleEarnings() + "</b>\n"
                         + "Средний ручеёк на 1 активированного реферала: <b>" + avgTrickle + " EXC</b>\n\n"
                         + "<b>Кандидат на разовый бонус: " + candidateBonus + " EXC</b>\n" + verdict + "\n\n"
                         + "<i>Это общая сумма за всё время работы рефералки, не за месяц — для оценки динамики сравнивайте с этим же отчётом через несколько недель.</i>",
