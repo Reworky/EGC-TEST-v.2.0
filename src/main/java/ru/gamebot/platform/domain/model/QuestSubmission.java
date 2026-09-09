@@ -164,4 +164,10 @@ public class QuestSubmission {
     /** Лучший показатель среди уже проверенных матчей — только для прогресс-бара в UI, в логике
      *  завершения не участвует (квест засчитывается по ОДНОМУ подходящему матчу, не накоплению). */
     private Integer dotaBestValue;
+
+    /** Значение выбранного cs2VerifyType-поля на момент первого опроса после взятия. null = ещё не захвачено. */
+    private Long cs2BaselineValue;
+
+    @Column(columnDefinition = "integer default 0")
+    private int cs2ProgressCount;
 }

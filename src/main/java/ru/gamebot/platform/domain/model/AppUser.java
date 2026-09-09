@@ -164,6 +164,12 @@ public class AppUser {
     private Long dotaAccountId;
     private LocalDateTime dotaLinkedAt;
 
+    /** Подтверждённый SteamID64 (64-битный, НЕ account_id — в отличие от dotaAccountId) для авто-верификации
+     *  квестов CS2 через ISteamUserStats/GetUserStatsForGame. Отдельное поле от dotaAccountId — разные форматы
+     *  ID и разные эндпоинты Steam Web API, объединять преждевременно (см. project_cs2_quests_planned.md). */
+    private Long cs2SteamId64;
+    private LocalDateTime cs2LinkedAt;
+
     // Season Pass
     private java.time.LocalDateTime seasonPassActiveUntil;
 

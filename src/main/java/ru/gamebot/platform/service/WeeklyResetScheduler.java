@@ -59,6 +59,7 @@ public class WeeklyResetScheduler {
     private final ClashQuestVerificationService clashQuestVerificationService;
     private final ClashRoyaleQuestVerificationService clashRoyaleQuestVerificationService;
     private final Dota2QuestVerificationService dota2QuestVerificationService;
+    private final Cs2QuestVerificationService cs2QuestVerificationService;
     private final ScheduledBroadcastService scheduledBroadcastService;
     private final AchievementCheckService achievementCheckService;
 
@@ -246,6 +247,16 @@ public class WeeklyResetScheduler {
             dota2QuestVerificationService.checkInProgressSubmissions();
         } catch (Exception e) {
             log.error("Dota auto-verify check failed", e);
+        }
+    }
+
+    // Проверка прогресса авто-верификации квестов CS2 (Steam Web API) — каждые 10 минут
+    @Scheduled(fixedDelay = 600_000)
+    public void checkCs2AutoVerifyProgress() {
+        try {
+            cs2QuestVerificationService.checkInProgressSubmissions();
+        } catch (Exception e) {
+            log.error("CS2 auto-verify check failed", e);
         }
     }
 

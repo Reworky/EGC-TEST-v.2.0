@@ -14,6 +14,7 @@ import lombok.Setter;
 import ru.gamebot.platform.domain.enums.BrawlVerifyType;
 import ru.gamebot.platform.domain.enums.ClashRoyaleVerifyType;
 import ru.gamebot.platform.domain.enums.ClashVerifyType;
+import ru.gamebot.platform.domain.enums.Cs2VerifyType;
 import ru.gamebot.platform.domain.enums.DotaVerifyType;
 
 @Getter
@@ -155,6 +156,16 @@ public class Quest {
 
     /** Пороговое значение характеристики за матч (килы/ассисты/золото/уровень/минуты), либо максимум смертей для DEATHS_MAX. */
     private Integer dotaTargetCount;
+
+    /** null = обычный квест — включает авто-верификацию через Steam Web API (CS2, appid 730). Как и
+     *  Clash Royale — дельта кумулятивных career-счётчиков с момента взятия квеста (полной истории
+     *  отдельных матчей в открытом API для CS2 нет). varchar принудительно (см. clashVerifyType). */
+    @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(20)")
+    private Cs2VerifyType cs2VerifyType;
+
+    /** Целевая дельта с момента взятия квеста — для всех типов CS2 верификации. */
+    private Integer cs2TargetCount;
 
     /** Краткое условие (до ~150 символов) для подстановки в шаблон быстрого отклонения «Недостаточно данных». */
     @Column(length = 200)

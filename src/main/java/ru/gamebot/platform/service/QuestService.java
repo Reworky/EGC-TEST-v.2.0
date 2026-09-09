@@ -421,6 +421,9 @@ public class QuestService {
         if (quest.getDotaVerifyType() != null && user.getDotaAccountId() == null) {
             return QuestActionResult.of(QuestActionStatus.NEEDS_DOTA_LINK, 0);
         }
+        if (quest.getCs2VerifyType() != null && user.getCs2SteamId64() == null) {
+            return QuestActionResult.of(QuestActionStatus.NEEDS_CS2_LINK, 0);
+        }
 
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
@@ -511,7 +514,7 @@ public class QuestService {
                                                   String photoUniqueIds, String externalLink, String comment) {
         if (quest.isExternalAutoApprove() || quest.getBrawlVerifyType() != null
                 || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null
-                || quest.getDotaVerifyType() != null) {
+                || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null) {
             return QuestActionResult.of(QuestActionStatus.AUTO_VERIFIED_NO_REPORT, 0);
         }
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
@@ -581,7 +584,7 @@ public class QuestService {
         Quest reportQuest = submission.getQuest();
         if (reportQuest.isExternalAutoApprove() || reportQuest.getBrawlVerifyType() != null
                 || reportQuest.getClashVerifyType() != null || reportQuest.getClashRoyaleVerifyType() != null
-                || reportQuest.getDotaVerifyType() != null) {
+                || reportQuest.getDotaVerifyType() != null || reportQuest.getCs2VerifyType() != null) {
             throw new IllegalStateException("Этот квест подтверждается автоматически — ручной отчёт не принимается.");
         }
         // Защита от гонки/обхода: те же правила, что и в submitReportChecked, продублированы здесь,
