@@ -14,20 +14,26 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-/** Steam Web API для авто-верификации квестов Dota 2 — по образцу BrawlStarsApiService, но с двумя
- *  отличиями транспортного уровня: ключ передаётся query-параметром (не Bearer header), и получение
- *  данных о матче — двухшаговое (GetMatchHistory даёт список, GetMatchDetails — статистику игрока).
+/** Steam Web API для авто-верификации квестов Dota 2 — по образцу BrawlStarsApiService, с одним
+ *  отличием транспортного уровня: ключ передаётся query-параметром (не Bearer header).
  *
- *  ВАЖНО: точные имена полей в ответе GetMatchDetails (kills/assists/deaths/level/gold/gold_spent/duration)
- *  взяты по документации Steam Web API — сверить живым вызовом до первого прод-деплоя с реальным ключом,
- *  см. implementation-план. Известный риск (принят как есть): GetMatchDetails периодически отдаёт 500
- *  после патчей игры — обрабатывается как транзиентная ошибка с ретраем на следующем цикле поллера. */
+ *  Получение данных о матче — двухшаговое, но из ДВУХ РАЗНЫХ источников:
+ *  1. Valve GetMatchHistory (список match_id аккаунта) — подтверждено живым вызовом 2026-09-10, поля
+ *     совпадают с кодом 1:1, работает нормально (нужен STEAM_API_KEY + включённая в клиенте Dota 2
+ *     настройка "Expose Public Match Data" — это отдельная от Steam-приватности профиля галочка).
+ *  2. OpenDota API (детали конкретного матча: kills/assists/deaths/level/gold/gold_spent/duration) —
+ *     используется ВМЕСТО Valve GetMatchDetails, который сломан платформенно с патча 7.36 (май 2024,
+ *     https://github.com/ValveSoftware/Dota2-Gameplay/issues/17910) и отдаёт пустой результат на ЛЮБОМ
+ *     матче, не только приватном — подтверждено живыми вызовами 2026-09-10 на 3 разных матчах разного
+ *     возраста. OpenDota — бесплатный публичный API без ключа, парсит матчи независимо через Game
+ *     Coordinator; названия полей ответа совпадают с тем, что ожидал код под старый Valve-эндпоинт,
+ *     так что сама логика верификации не менялась. */
 @Slf4j
 @Service
 public class Dota2ApiService {
 
     private static final String MATCH_HISTORY_URL = "https://api.steampowered.com/IDOTA2Match_570/GetMatchHistory/v1/";
-    private static final String MATCH_DETAILS_URL = "https://api.steampowered.com/IDOTA2Match_570/GetMatchDetails/v1/";
+    private static final String OPENDOTA_MATCH_URL = "https://api.opendota.com/api/matches/";
     private static final int MAX_ATTEMPTS = 3;
     private static final long BASE_BACKOFF_MS = 500;
     private static final long STEAM_ID_64_BASE = 76561197960265728L;
@@ -96,17 +102,17 @@ public class Dota2ApiService {
         return out;
     }
 
-    /** null — матч не найден, приватный, либо игрок не участвовал (не должно случаться при корректном accountId). */
+    /** null — матч ещё не разобран OpenDota (крайне редко, обычно готов почти сразу после игры),
+     *  либо игрок не участвовал (не должно случаться при корректном accountId). */
     public Optional<MatchResult> fetchMatchDetails(long matchId, long accountId) throws Dota2TransientException {
         if (!enabled) {
             throw new IllegalStateException("Dota2ApiService is disabled (no API key configured)");
         }
-        String url = MATCH_DETAILS_URL + "?key=" + apiKey + "&match_id=" + matchId;
-        JsonNode result = fetchJson(url, "result");
-        if (result == null) return Optional.empty();
+        JsonNode match = fetchOpenDotaMatch(matchId);
+        if (match == null) return Optional.empty();
 
-        int duration = result.path("duration").asInt(0);
-        for (JsonNode player : result.path("players")) {
+        int duration = match.path("duration").asInt(0);
+        for (JsonNode player : match.path("players")) {
             if (player.path("account_id").asLong(-1) == accountId) {
                 int kills = player.path("kills").asInt(0);
                 int assists = player.path("assists").asInt(0);
@@ -118,6 +124,35 @@ public class Dota2ApiService {
             }
         }
         return Optional.empty();
+    }
+
+    /** OpenDota отдаёт объект матча напрямую, без обёртки "result"/"status" (в отличие от Valve API) —
+     *  свой, упрощённый цикл ретраев вместо переиспользования fetchJson. Ключ не нужен. */
+    private JsonNode fetchOpenDotaMatch(long matchId) throws Dota2TransientException {
+        String url = OPENDOTA_MATCH_URL + matchId;
+        Dota2TransientException lastError = null;
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            try {
+                HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
+                HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+
+                if (resp.statusCode() == 200) {
+                    JsonNode root = objectMapper.readTree(resp.body());
+                    return root.has("players") ? root : null;
+                }
+                if (resp.statusCode() == 404) {
+                    return null;
+                }
+                lastError = new Dota2TransientException("OpenDota HTTP " + resp.statusCode() + ": " + resp.body());
+            } catch (IOException | InterruptedException e) {
+                if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+                lastError = new Dota2TransientException("Network error calling OpenDota API", e);
+            }
+            if (attempt < MAX_ATTEMPTS) {
+                sleepBackoff(attempt);
+            }
+        }
+        throw lastError;
     }
 
     private JsonNode fetchJson(String url, String resultField) throws Dota2TransientException {

@@ -1904,12 +1904,11 @@ public class QuestSeeder implements CommandLineRunner {
         setShortLabel("Сыграй матч длительностью 45+ минут", "Dota 2", "Матч 45+ мин");
 
         // ── Dota 2: авто-верификация через Steam Web API (retrofit существующих 12 квестов выше,
-        // не создание новых). Настраиваем поля (dotaVerifyType/dotaTargetCount) уже сейчас, но пока
-        // STEAM_API_KEY не добавлен в .env — квесты сразу деактивируются ниже (deactivateGame), чтобы
-        // игроки их вообще не видели: с dotaVerifyType уже проставленным ручной отчёт заблокирован,
-        // а привязать аккаунт нельзя (Dota2ApiService выключен), т.е. без деактивации квест был бы
-        // "виден, но невыполним". Активировать обратно — удалить/закомментировать deactivateGame("Dota 2")
-        // ниже ПОСЛЕ того, как ключ добавлен и живой вызов API проверен.
+        // не создание новых). Ключ добавлен, живой вызов проверен 2026-09-10: GetMatchHistory (Valve)
+        // работает штатно; GetMatchDetails (Valve) оказался сломан платформенно с патча 7.36 (май 2024,
+        // отдаёт пустой результат на любом матче) — переключили Dota2ApiService на OpenDota API для
+        // деталей матча (см. Dota2ApiService.java), поля совпали 1:1, код верификации не менялся.
+        // deactivateGame("Dota 2") больше не нужен — квесты снова видны игрокам.
         setDotaVerify("Набери 8 убийств за матч", DotaVerifyType.KILLS, 8);
         setDotaVerify("Набери 15 убийств за матч", DotaVerifyType.KILLS, 15);
         setDotaVerify("Сделай 10 ассистов за матч", DotaVerifyType.ASSISTS, 10);
@@ -1922,8 +1921,6 @@ public class QuestSeeder implements CommandLineRunner {
         setDotaVerify("Достигни 25 уровня героя за матч", DotaVerifyType.HERO_LEVEL, 25);
         setDotaVerify("Сыграй матч длительностью 30+ минут", DotaVerifyType.DURATION_MINUTES, 30);
         setDotaVerify("Сыграй матч длительностью 45+ минут", DotaVerifyType.DURATION_MINUTES, 45);
-        // TODO: убрать эту строку, когда STEAM_API_KEY добавлен и авто-верификация проверена живым вызовом.
-        deactivateGame("Dota 2");
 
         // ── CS2 — ещё 3 новых квеста на темы, которых не было среди ручных (HEADSHOTS/BOMBS_PLANTED/
         // BOMBS_DEFUSED — не пересекаются с переведёнными выше kills/wins/MVP/score/K-D). Авто-верификация
