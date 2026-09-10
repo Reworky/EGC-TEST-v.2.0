@@ -925,6 +925,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 backMenuKeyboard("menu:shop"));
             return;
         }
+        if (data.startsWith("myexc:")) {
+            answerSilently(callbackQuery.getId());
+            int page = Integer.parseInt(data.substring("myexc:".length()));
+            sendMyExcHistory(user, page);
+            return;
+        }
         if (data.equals("shop:withdraw")) {
             answerSilently(callbackQuery.getId());
             if (rewardService.hasWithdrawalTodayOrPending(user)) {
@@ -3570,7 +3576,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📊 <b>Состояние фонда клуба: " + ratioPercent + "%</b>\n"
                         + hrExplanationLine(ratioPercent, effectiveQuestReward),
                 keyboardFactory.rowsLayout(List.of(
-                        List.of(keyboardFactory.callback("💸 Вывести EXC", "shop:withdraw")),
+                        List.of(
+                                keyboardFactory.callback("💸 Вывести EXC", "shop:withdraw"),
+                                keyboardFactory.callback("📜 История операций", "myexc:0")
+                        ),
                         List.of(keyboardFactory.callback("⬅️ Назад", backData))
                 )));
     }
@@ -10702,6 +10711,66 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад к карточке", prefix + ":user:view:" + telegramId + ":0")));
 
         sendText(staff.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Игрок смотрит свою же историю EXC — та же вёрстка, что и у sendUserExcHistory для админа/модератора,
+     *  но без чужого telegramId в параметрах и с возвратом в «Баланс» вместо карточки пользователя. */
+    private void sendMyExcHistory(AppUser user, int page) {
+        int pageSize = 10;
+        long total = excTransactionService.countAll(user);
+        int totalPages = total == 0 ? 1 : (int) ((total + pageSize - 1) / pageSize);
+        int safePage = Math.max(0, Math.min(page, totalPages - 1));
+        List<ru.gamebot.platform.domain.model.ExcTransaction> items =
+                excTransactionService.getHistory(user, safePage, pageSize);
+        java.util.Collections.reverse(items);
+
+        String header = "📜 <b>История операций</b>\n"
+                + "💰 Баланс: <b>" + user.getCoins() + " EXC</b>\n"
+                + "Всего операций: <b>" + total + "</b>\n\n";
+
+        if (items.isEmpty()) {
+            sendText(user.getTelegramId(), header + "Операций пока нет.", backMenuKeyboard("menu:balance"));
+            return;
+        }
+
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yy HH:mm");
+        StringBuilder sb = new StringBuilder(header);
+        for (ru.gamebot.platform.domain.model.ExcTransaction tx : items) {
+            String sign = tx.getAmount() >= 0 ? "+" : "";
+            String desc = tx.getDescription() != null ? escape(tx.getDescription()) : "";
+            String meta = tx.getCreatedAt().format(fmt) + (desc.isEmpty() ? "" : ", " + desc);
+
+            Long after = tx.getBalanceAfter();
+            if (after != null) {
+                long before = after - tx.getAmount();
+                sb.append("💸 Было <b>").append(before).append(" EXC</b>\n")
+                  .append(ru.gamebot.platform.service.ExcTransactionService.typeLabel(tx.getType()))
+                  .append("  <b>").append(sign).append(tx.getAmount()).append(" EXC</b>")
+                  .append(" (").append(meta).append(")\n")
+                  .append("💸 Стало <b>").append(after).append(" EXC</b>\n\n");
+            } else {
+                sb.append(ru.gamebot.platform.service.ExcTransactionService.typeLabel(tx.getType()))
+                  .append("  <b>").append(sign).append(tx.getAmount()).append(" EXC</b>")
+                  .append(" (").append(meta).append(")\n\n");
+            }
+        }
+        if (totalPages > 1) {
+            sb.append("📄 Стр. ").append(safePage + 1).append(" / ").append(totalPages);
+        }
+
+        List<InlineKeyboardButton> navRow = new ArrayList<>();
+        if (safePage > 0) {
+            navRow.add(keyboardFactory.callback("⬅️", "myexc:" + (safePage - 1)));
+        }
+        if (safePage < totalPages - 1) {
+            navRow.add(keyboardFactory.callback("➡️", "myexc:" + (safePage + 1)));
+        }
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (!navRow.isEmpty()) rows.add(navRow);
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:balance")));
+
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     private void sendUserWithdrawalHistory(AppUser staff, Long telegramId, String prefix) {
