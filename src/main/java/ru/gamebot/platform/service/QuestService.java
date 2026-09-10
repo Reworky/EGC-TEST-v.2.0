@@ -890,6 +890,14 @@ public class QuestService {
         if (submission.getStatus() == SubmissionStatus.CANCELLED) {
             throw new IllegalArgumentException("Квест уже отменён.");
         }
+        // Отмена квеста, по которому ещё не отправлен отчёт (DRAFT) — значит игрок просто передумал
+        // сразу после взятия, реальной работы/слота модерации это не потратило. Снимаем общий часовой
+        // лимит "1 квест в час" (см. QuestService.java:467-473), иначе ошибочный выбор квеста надолго
+        // блокирует взятие любого другого — пожаловался реальный игрок (2026-09-10).
+        if (submission.getStatus() == SubmissionStatus.DRAFT) {
+            user.setLastQuestTakenAt(null);
+            appUserRepository.save(user);
+        }
         submission.setStatus(SubmissionStatus.CANCELLED);
         submission.setUpdatedAt(LocalDateTime.now());
         return questSubmissionRepository.save(submission);
