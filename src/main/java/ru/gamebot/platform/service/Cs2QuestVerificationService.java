@@ -88,6 +88,7 @@ public class Cs2QuestVerificationService {
     /** Точка входа шедулера. Не @Transactional — последовательные сетевые вызовы, как у остальных Steam/Clash-сервисов. */
     public void checkInProgressSubmissions() {
         List<QuestSubmission> pending = questSubmissionRepository.findInProgressCs2AutoVerify();
+        log.info("[Cs2AutoVerify] poll cycle: {} submission(s) in progress", pending.size());
         for (QuestSubmission submission : pending) {
             try {
                 checkOne(submission);
@@ -106,7 +107,11 @@ public class Cs2QuestVerificationService {
         Quest quest = submission.getQuest();
         long steamId64 = submission.getUser().getCs2SteamId64();
         Optional<Cs2ApiService.PlayerStats> statsOpt = cs2ApiService.fetchStats(steamId64);
-        if (statsOpt.isEmpty()) return; // статистика временно недоступна/стала приватной — пропускаем цикл
+        if (statsOpt.isEmpty()) {
+            log.warn("[Cs2AutoVerify] submission={} steamId64={} — fetchStats returned empty (private/no data), skipping cycle",
+                    submission.getId(), steamId64);
+            return; // статистика временно недоступна/стала приватной — пропускаем цикл
+        }
         Cs2ApiService.PlayerStats stats = statsOpt.get();
 
         if (LAST_MATCH_TYPES.contains(quest.getCs2VerifyType())) {
@@ -149,9 +154,13 @@ public class Cs2QuestVerificationService {
         if (submission.getCs2BaselineValue() == null) {
             submission.setCs2BaselineValue(stats.matchesPlayed());
             questSubmissionRepository.save(submission);
+            log.info("[Cs2AutoVerify] submission={} quest='{}' type={} — baseline captured: matchesPlayed={}",
+                    submission.getId(), quest.getTitle(), quest.getCs2VerifyType(), stats.matchesPlayed());
             return;
         }
         if (stats.matchesPlayed() <= submission.getCs2BaselineValue()) {
+            log.info("[Cs2AutoVerify] submission={} quest='{}' — no new match yet: matchesPlayed={} baseline={}",
+                    submission.getId(), quest.getTitle(), stats.matchesPlayed(), submission.getCs2BaselineValue());
             return; // новых матчей с прошлой проверки не было
         }
         boolean qualifies = switch (quest.getCs2VerifyType()) {
@@ -165,6 +174,12 @@ public class Cs2QuestVerificationService {
                     : stats.lastMatchKills() * 100 >= (long) quest.getCs2TargetCount() * stats.lastMatchDeaths();
             default -> false;
         };
+        log.info("[Cs2AutoVerify] submission={} quest='{}' type={} target={} — new match detected: "
+                        + "matchesPlayed {}→{}, lastMatchKills={} lastMatchDeaths={} lastMatchMvps={} lastMatchScore={} "
+                        + "qualifies={}",
+                submission.getId(), quest.getTitle(), quest.getCs2VerifyType(), quest.getCs2TargetCount(),
+                submission.getCs2BaselineValue(), stats.matchesPlayed(), stats.lastMatchKills(), stats.lastMatchDeaths(),
+                stats.lastMatchMvps(), stats.lastMatchScore(), qualifies);
         submission.setCs2BaselineValue(stats.matchesPlayed());
         questSubmissionRepository.save(submission);
         if (qualifies) {
