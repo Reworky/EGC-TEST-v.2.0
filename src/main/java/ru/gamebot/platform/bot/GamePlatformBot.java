@@ -6611,6 +6611,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "queststats" -> sendAdminQuestStats(user);
             case "ugcstats" -> sendUgcQuestStats(user);
             case "brawlstats" -> sendGameQuestStats(user, "Brawl Stars");
+            case "clashstats" -> sendGameQuestStats(user, "Clash of Clans");
+            case "clashroyalestats" -> sendGameQuestStats(user, "Clash Royale");
             case "onetimeabuse" -> sendAdminOneTimeQuestAbuse(user);
             case "clashtags" -> sendAdminClashTagsList(user);
             case "autoquest-activity" -> sendAdminAutoQuestActivity(user);
@@ -12710,6 +12712,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("🕵️ Повторы разовых квестов", "admin:onetimeabuse")));
             rows.add(List.of(keyboardFactory.callback("📊 Статистика UGC-квестов", "admin:ugcstats")));
             rows.add(List.of(keyboardFactory.callback("📊 Статистика Brawl Stars", "admin:brawlstats")));
+            rows.add(List.of(
+                    keyboardFactory.callback("📊 Статистика CoC", "admin:clashstats"),
+                    keyboardFactory.callback("📊 Статистика Clash Royale", "admin:clashroyalestats")
+            ));
             rows.add(List.of(keyboardFactory.callback("🏷️ Теги CoC/Clash Royale", "admin:clashtags")));
             rows.add(List.of(keyboardFactory.callback("🔁 Активность автоквестов", "admin:autoquest-activity")));
             rows.add(List.of(keyboardFactory.callback("📱 Бот vs Мини-апп", "admin:surface-activity")));
