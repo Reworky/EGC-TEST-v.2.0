@@ -1925,10 +1925,11 @@ public class QuestSeeder implements CommandLineRunner {
         setShortLabel("Продержись с 5 звёздами розыска 3 минуты", "GTA V", "5★ розыск 3 мин");
         setShortLabel("Купи любую недвижимость в GTA Online", "GTA V", "Купи недвижимость");
 
-        // ── Временно закрыт доступ игрокам: EA FC 26, Mobile Legends («скоро откроется») ──
+        // ── Временно закрыт доступ игрокам: EA FC 26, Mobile Legends («скоро откроется»), GTA V ──
         // Квесты не удаляются, только деактивируются — чтобы вернуть доступ, достаточно убрать строку.
         deactivateGame("EA FC 26");
         deactivateGame("Mobile Legends: Bang Bang");
+        deactivateGame("GTA V");
 
         // ── Внешний CPA-квест: World of Warships (actionpay) ───────────────────────
         // Авто-одобрение через постбек actionpay (см. PostbackController), без ручной проверки скриншота.
