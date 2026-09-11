@@ -261,6 +261,14 @@ public class UserService {
         return LEVEL_TIERS.get(nextIndex).minXp();
     }
 
+    public record LevelTierInfo(int number, String name, long minXp, int excBonusPercent) {}
+
+    public List<LevelTierInfo> getAllLevelTiers() {
+        return LEVEL_TIERS.stream()
+                .map(t -> new LevelTierInfo(t.number(), t.name(), t.minXp(), t.excBonusPercent()))
+                .toList();
+    }
+
     // Модуль 3 максимизации рефералки — майлстоуны по КОЛИЧЕСТВУ приглашённых друзей (независимо
     // от денежной шкалы майлстоунов заработка с рефералов). Пороги+названия — один список пар, не
     // раздельные yml-числа/Java-названия, чтобы не разъезжались при правке одного без другого.

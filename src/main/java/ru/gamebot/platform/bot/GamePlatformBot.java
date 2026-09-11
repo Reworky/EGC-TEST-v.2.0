@@ -931,6 +931,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendMyExcHistory(user, page);
             return;
         }
+        if (data.equals("shop:ranks")) {
+            answerSilently(callbackQuery.getId());
+            sendRanksTable(user, "shop:withdraw");
+            return;
+        }
         if (data.equals("shop:withdraw")) {
             answerSilently(callbackQuery.getId());
             if (rewardService.hasWithdrawalTodayOrPending(user)) {
@@ -1465,6 +1470,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         backOnlyKeyboard("menu:profile"));
             }
             case "edit" -> sendProfileEdit(user);
+            case "ranks" -> sendRanksTable(user, "menu:profile");
             case "brawl_tag" -> {
                 session.reset();
                 session.getData().put("brawlLinkPurpose", "profile");
@@ -3310,6 +3316,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         keyboardFactory.callback("🏆 Рейтинг", "menu:rating"),
                         keyboardFactory.callback("🤝 Рефералы", "menu:referrals")
                 ),
+                List.of(keyboardFactory.callback("📊 Все ранги", "profile:ranks")),
                 List.of(keyboardFactory.callback(avatarBtn, "profile:avatar")),
                 List.of(keyboardFactory.callback("✏️ Редактировать профиль", "profile:edit")),
                 List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
@@ -3320,6 +3327,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else {
             sendText(user.getTelegramId(), profileText, profileKeyboard);
         }
+    }
+
+    private void sendRanksTable(AppUser user, String backCallback) {
+        int currentLevel = userService.getLevelNumber(user.getXp());
+        StringBuilder sb = new StringBuilder("📊 <b>Все ранги</b>\n\n");
+        for (UserService.LevelTierInfo tier : userService.getAllLevelTiers()) {
+            long limit = sinkShopService.getMonthlyLimit(tier.minXp());
+            String marker = tier.number() == currentLevel ? "▶️ " : "";
+            sb.append(marker).append("<b>").append(tier.number()).append(". ").append(escape(tier.name())).append("</b>\n")
+                    .append("от ").append(String.format("%,d", tier.minXp()).replace(',', ' ')).append(" XP")
+                    .append(" · +").append(tier.excBonusPercent()).append("% к наградам")
+                    .append(" · лимит вывода ").append(String.format("%,d", limit).replace(',', ' ')).append(" EXC/мес\n\n");
+        }
+        sb.append("Лимит вывода — по XP, а не по уровню в лиге: он растёт вместе с общим опытом, а не сбрасывается каждую неделю.");
+        sendText(user.getTelegramId(), sb.toString(), backOnlyKeyboard(backCallback));
     }
 
     private void sendProfileEdit(AppUser user) {
@@ -4741,6 +4763,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("💸 В рублях (Сбербанк / СБП)", "shop:withdraw:rub")));
         rows.add(List.of(keyboardFactory.callback("💎 В TON (Telegram Wallet)", "shop:withdraw:ton")));
         rows.add(List.of(keyboardFactory.callback("📋 Мои заявки на вывод", "menu:my-withdrawals")));
+        rows.add(List.of(keyboardFactory.callback("📊 Лимиты по всем рангам", "shop:ranks")));
         rows.add(List.of(keyboardFactory.callback("❌ Отмена", "menu:balance")));
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }

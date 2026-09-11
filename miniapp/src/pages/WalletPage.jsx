@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getWallet, claimDailyBonus, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone, invalidateCache } from '../api/client';
+import { RANKS_DATA, getLevelFromXp } from '../data/ranks';
 import BackButton from '../components/BackButton';
 import BorderBeamCard from '../components/BorderBeamCard';
 import ShimmerButton from '../components/ShimmerButton';
@@ -20,9 +21,29 @@ const STATUS_LABELS = {
   CANCELLED: <><i className="ti ti-circle-x"></i> Отменено</>,
 };
 
+function RanksModal({ currentXp, onClose }) {
+  const currentLevel = getLevelFromXp(currentXp);
+  return (
+    <div className="fund-modal-overlay" onClick={onClose}>
+      <div className="fund-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 340, maxHeight: '80vh', overflowY: 'auto' }}>
+        <div className="fund-modal-title">📊 Все ранги</div>
+        {RANKS_DATA.map(r => (
+          <p key={r.number} className="fund-modal-text" style={r.number === currentLevel ? { color: '#a78bfa', fontWeight: 600 } : undefined}>
+            {r.number === currentLevel ? '▶️ ' : ''}{r.number}. {r.name} — от {r.minXp.toLocaleString('ru-RU')} XP,
+            +{r.bonus}% к наградам, лимит {r.limit.toLocaleString('ru-RU')} EXC/мес
+          </p>
+        ))}
+        <p className="fund-modal-text" style={{ opacity: 0.6 }}>Лимит вывода растёт вместе с общим опытом и не сбрасывается каждую неделю.</p>
+        <button className="fund-modal-close" onClick={onClose}>Понятно</button>
+      </div>
+    </div>
+  );
+}
+
 function BalanceView({ wallet, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
+  const [showRanks, setShowRanks] = useState(false);
   const playParticles = useParticles();
 
   async function handleClaim() {
@@ -106,6 +127,9 @@ function BalanceView({ wallet, onChanged }) {
         <div className="ref-progress-label">
           💸 Лимит вывода: {wallet.remainingWithdrawalLimit.toLocaleString()} / {wallet.monthlyWithdrawalLimit.toLocaleString()} EXC в этом месяце
         </div>
+        <div className="ref-progress-label" style={{ color: 'rgba(167,139,250,0.85)', cursor: 'pointer' }} onClick={() => setShowRanks(true)}>
+          📊 Лимиты по всем рангам →
+        </div>
         {wallet.fixedRubBalance > 0 && (
           <div className="ref-progress-label">
             <i className="ti ti-circle-check"></i> Гарантировано к выводу: {wallet.fixedRubBalance.toLocaleString()} ₽
@@ -140,6 +164,8 @@ function BalanceView({ wallet, onChanged }) {
           />
         </div>
       </div>
+
+      {showRanks && <RanksModal currentXp={wallet.xp} onClose={() => setShowRanks(false)} />}
     </>
   );
 }

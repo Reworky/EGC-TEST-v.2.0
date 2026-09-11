@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getProfile, getWallet, getBattlePass, getAvatarUrl, equipFrame, invalidateCache } from '../api/client';
+import { RANKS_DATA } from '../data/ranks';
 import AnimatedNumber from '../components/AnimatedNumber';
 import fireFrame from '../assets/frames/fire.png';
 import iceFrame from '../assets/frames/ice.png';
@@ -211,6 +212,42 @@ function XpBar({ xp, level, levelName }) {
   );
 }
 
+function RanksModal({ currentLevel, onClose }) {
+  return (
+    <div className="ranks-modal-overlay" onClick={onClose}>
+      <div className="ranks-modal" onClick={e => e.stopPropagation()}>
+        <div className="ranks-modal-title">📊 Все ранги</div>
+        <div className="ranks-modal-list">
+          {RANKS_DATA.map(r => {
+            const style = RANK_STYLES[r.name] || DEFAULT_RANK;
+            const isCurrent = r.number === currentLevel;
+            return (
+              <div
+                key={r.number}
+                className={`ranks-modal-row${isCurrent ? ' current' : ''}`}
+                style={isCurrent ? { borderColor: `${style.primary}55`, background: `${style.primary}12` } : undefined}
+              >
+                <div className="ranks-modal-row-head">
+                  <span>{style.icon}</span>
+                  <span className="ranks-modal-row-name" style={{ color: isCurrent ? style.primary : 'rgba(255,255,255,0.9)' }}>
+                    {r.number}. {r.name}
+                  </span>
+                  {isCurrent && <span className="ranks-modal-row-tag" style={{ color: style.primary, borderColor: `${style.primary}55` }}>сейчас</span>}
+                </div>
+                <div className="ranks-modal-row-meta">
+                  от {r.minXp.toLocaleString('ru-RU')} XP · +{r.bonus}% к наградам · лимит {r.limit.toLocaleString('ru-RU')} EXC/мес
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="ranks-modal-note">Лимит вывода растёт вместе с общим опытом и не сбрасывается каждую неделю.</div>
+        <button className="ranks-modal-close" onClick={onClose}>Понятно</button>
+      </div>
+    </div>
+  );
+}
+
 const FRAME_LABELS = { fire: '🔥 Огонь', ice: '❄️ Лёд', purple: '💜 Фиолет', gold: '👑 Золото', egc: '👑 EGC' };
 const FRAME_COLORS = { fire: '#ef4444', ice: '#38bdf8', purple: '#a855f7', gold: '#fbbf24', egc: '#7C3AED' };
 
@@ -319,6 +356,7 @@ export default function ProfilePage() {
   const [bp, setBp] = useState(null);
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [error, setError] = useState(null);
+  const [showRanks, setShowRanks] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -423,6 +461,8 @@ export default function ProfilePage() {
 
       {/* ── XP Bar ───────────────────────────────────────────── */}
       <XpBar xp={profile.xp} level={profile.level} levelName={profile.levelName} />
+      <div className="p-ranks-link" onClick={() => setShowRanks(true)}>📊 Посмотреть все ранги и лимиты →</div>
+      {showRanks && <RanksModal currentLevel={profile.level} onClose={() => setShowRanks(false)} />}
 
       {/* ── Новичковый темп: короче кулдауны, пока не наберётся 5 квестов ───── */}
       {profile.onboardingQuestsLeft > 0 && (
