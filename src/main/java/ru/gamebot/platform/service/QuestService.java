@@ -52,9 +52,17 @@ public class QuestService {
         return isOnboarding(user) ? ONBOARDING_WEEKLY_QUEST_TYPE_LIMIT : WEEKLY_QUEST_TYPE_LIMIT;
     }
 
+    // UGC — короче обычного 24ч кулдауна на повтор одного и того же квеста (2026-09-11, по просьбе
+    // пользователя): цель — максимально вовлечь в съёмку роликов про клуб, не открывая при этом лазейку
+    // для фарма через накрутку просмотров (полное снятие кулдауна создавало бы именно такой риск).
+    private static final int UGC_SAME_QUEST_COOLDOWN_HOURS = 12;
+
     private static int cooldownHours(Quest quest, AppUser user) {
         if (isOnboarding(user)) {
             return ONBOARDING_SAME_QUEST_COOLDOWN_HOURS;
+        }
+        if ("UGC".equalsIgnoreCase(quest.getGameName())) {
+            return UGC_SAME_QUEST_COOLDOWN_HOURS;
         }
         return "Сложные".equals(quest.getCategory()) ? HARD_COOLDOWN_HOURS : COOLDOWN_HOURS;
     }
@@ -293,6 +301,13 @@ public class QuestService {
     }
 
     public boolean isCooldownActive(AppUser user, Quest quest) {
+        // UGC-квесты (Stories/TikTok/Shorts/Reels) намеренно не делят общий кулдаун между собой —
+        // публикация в нескольких соцсетях в один день это нормальное поведение реального создателя
+        // контента, не фарм (2026-09-11). Ограничение остаётся только на повтор ТОГО ЖЕ квеста
+        // (см. isSameQuestCooldownActive/cooldownHours).
+        if ("UGC".equalsIgnoreCase(quest.getGameName())) {
+            return false;
+        }
         Optional<LocalDateTime> lastApproved = questSubmissionRepository
                 .findLastApprovedDateByUserAndGameAndCategory(user, quest.getGameName(), quest.getCategory());
         return lastApproved.isPresent()
