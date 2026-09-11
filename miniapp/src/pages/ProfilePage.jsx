@@ -213,6 +213,15 @@ function XpBar({ xp, level, levelName }) {
 }
 
 function RanksModal({ currentLevel, onClose }) {
+  // Блокируем скролл фоновой страницы, пока открыта модалка — иначе на iOS
+  // WebView скролл списка внутри модалки конкурирует со скроллом страницы
+  // под ней и ощущается как дёрганый/неровный.
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, []);
+
   return (
     <div className="ranks-modal-overlay" onClick={onClose}>
       <div className="ranks-modal" onClick={e => e.stopPropagation()}>

@@ -123,17 +123,21 @@
   opacity: 0.7;
 }
 
-/* ── Модалка «Все ранги» ── */
+/* ── Модалка «Все ранги» ──
+   Без backdrop-filter — на iOS WebView (Telegram Mini App) блюр поверх
+   фикс-оверлея пересчитывается на каждый кадр скролла и превращает
+   прокрутку списка внутри в дёрганую. Плотный полупрозрачный фон вместо
+   блюра решает это без потери визуального разделения слоёв. */
 .ranks-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.65);
+  background: rgba(8,8,14,0.88);
   z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
-  backdrop-filter: blur(4px);
+  overscroll-behavior: contain;
 }
 .ranks-modal {
   background: #13131f;
@@ -144,6 +148,8 @@
   width: 100%;
   max-height: 80vh;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   box-shadow: 0 12px 40px rgba(0,0,0,0.5);
 }
 .ranks-modal-title {

@@ -23,9 +23,23 @@ const STATUS_LABELS = {
 
 function RanksModal({ currentXp, onClose }) {
   const currentLevel = getLevelFromXp(currentXp);
+
+  // Блокируем скролл фоновой страницы, пока открыта модалка, и убираем
+  // backdrop-filter (см. тот же фикс в ProfilePage.jsx/RanksModal) — на iOS
+  // WebView блюр поверх фикс-оверлея дёргает скролл списка внутри.
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, []);
+
   return (
-    <div className="fund-modal-overlay" onClick={onClose}>
-      <div className="fund-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 340, maxHeight: '80vh', overflowY: 'auto' }}>
+    <div className="fund-modal-overlay" onClick={onClose} style={{ backdropFilter: 'none', background: 'rgba(8,8,14,0.88)', overscrollBehavior: 'contain' }}>
+      <div
+        className="fund-modal"
+        onClick={e => e.stopPropagation()}
+        style={{ maxWidth: 340, maxHeight: '80vh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+      >
         <div className="fund-modal-title">📊 Все ранги</div>
         {RANKS_DATA.map(r => (
           <p key={r.number} className="fund-modal-text" style={r.number === currentLevel ? { color: '#a78bfa', fontWeight: 600 } : undefined}>
