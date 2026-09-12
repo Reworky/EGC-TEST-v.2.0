@@ -6629,6 +6629,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "stats:platform" -> sendAdminStatsPlatform(user);
             case "stats:topquests" -> sendAdminStatsTopQuests(user);
             case "stats:referral" -> sendAdminReferralEconomics(user);
+            case "stats:funnel" -> sendAdminNewCohortFunnel(user);
             case "stats:history" -> sendAdminStatsHistory(user);
             case "stats:snapshot" -> {
                 platformSnapshotService.takeSnapshot();
@@ -8789,9 +8790,38 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 keyboardFactory.callback("🔥 Топ недели", "admin:stats:topquests")
                         ),
                         List.of(keyboardFactory.callback("🤝 Экономика рефералки", "admin:stats:referral")),
+                        List.of(keyboardFactory.callback("📉 Воронка новичков", "admin:stats:funnel")),
                         List.of(keyboardFactory.callback("🔄 Сбросить недельный XP", "admin:stats:reset_weekly")),
                         List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
                 )));
+    }
+
+    /** Диагностика для конкретного вопроса (2026-09-13): куда деваются новички после закупки трафика -
+     *  не успевают взять первый квест, или берут один и не возвращаются за вторым. Окно жёстко задано
+     *  под конкретную кампанию 24.08-07.09.2026, обсуждавшуюся с пользователем; при следующей кампании
+     *  даты нужно поменять вручную на актуальные. */
+    private void sendAdminNewCohortFunnel(AppUser user) {
+        java.time.LocalDateTime from = java.time.LocalDateTime.of(2026, 8, 24, 0, 0);
+        java.time.LocalDateTime to = java.time.LocalDateTime.of(2026, 9, 7, 0, 0);
+
+        long total = userService.countRegisteredBetween(from, to);
+        long zero = userService.countRegisteredBetweenWithCompletedQuestsBetween(from, to, 0, 0);
+        long one = userService.countRegisteredBetweenWithCompletedQuestsBetween(from, to, 1, 1);
+        long twoThree = userService.countRegisteredBetweenWithCompletedQuestsBetween(from, to, 2, 3);
+        long fourPlus = userService.countRegisteredBetweenWithCompletedQuestsBetween(from, to, 4, 999_999);
+
+        sendText(user.getTelegramId(),
+                "📉 <b>Воронка новичков 24.08-07.09</b>\n\n"
+                        + "Всего зарегистрировалось: <b>" + total + "</b>\n\n"
+                        + "0 квестов (даже не начали): <b>" + zero + "</b>"
+                        + (total > 0 ? " (" + (zero * 100 / total) + "%)" : "") + "\n"
+                        + "Ровно 1 квест (попробовали и ушли): <b>" + one + "</b>"
+                        + (total > 0 ? " (" + (one * 100 / total) + "%)" : "") + "\n"
+                        + "2-3 квеста: <b>" + twoThree + "</b>"
+                        + (total > 0 ? " (" + (twoThree * 100 / total) + "%)" : "") + "\n"
+                        + "4+ квеста (закрепились): <b>" + fourPlus + "</b>"
+                        + (total > 0 ? " (" + (fourPlus * 100 / total) + "%)" : "") + "\n",
+                backMenuKeyboard("admin:stats"));
     }
 
     /** Снапшот экономики рефералки — для решения "разовый бонус рефереру vs текущие 10%

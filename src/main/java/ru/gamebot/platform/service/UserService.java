@@ -910,6 +910,10 @@ public class UserService {
         return appUserRepository.countRegisteredBetweenAndActiveSince(from, to, activeSince);
     }
 
+    public long countRegisteredBetweenWithCompletedQuestsBetween(java.time.LocalDateTime from, java.time.LocalDateTime to, int minQuests, int maxQuests) {
+        return appUserRepository.countRegisteredBetweenWithCompletedQuestsBetween(from, to, minQuests, maxQuests);
+    }
+
     public List<AppUser> allRegisteredUsers() {
         return appUserRepository.findAll().stream()
                 .filter(AppUser::isRegistrationCompleted)

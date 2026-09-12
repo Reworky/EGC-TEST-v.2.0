@@ -89,6 +89,11 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt >= :from AND u.createdAt < :to AND u.lastActivityDate >= :activeSince")
     long countRegisteredBetweenAndActiveSince(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to, @Param("activeSince") java.time.LocalDate activeSince);
 
+    /** Воронка "сколько квестов реально сделал новый игрок" — для диагностики, отваливаются ли
+     *  новички после первого квеста (проблема вовлечения) или ещё раньше (проблема первого опыта). */
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt >= :from AND u.createdAt < :to AND u.completedQuests >= :minQuests AND u.completedQuests <= :maxQuests")
+    long countRegisteredBetweenWithCompletedQuestsBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to, @Param("minQuests") int minQuests, @Param("maxQuests") int maxQuests);
+
     List<AppUser> findAllBySquadId(Long squadId);
 
     long countBySquadId(Long squadId);
