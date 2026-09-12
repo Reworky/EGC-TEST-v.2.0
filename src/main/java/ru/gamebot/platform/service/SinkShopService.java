@@ -25,8 +25,12 @@ public class SinkShopService {
     public static final long PRICE_DOUBLE_BOOST_24H = 5_000;
     public static final long PRICE_XP_BOOST_72H = 7_500;
     public static final long PRICE_EXC_BOOST_72H = 7_500;
-    public static final long PRICE_EXTRA_SLOT = 2_000;
-    public static final long PRICE_COOLDOWN_REMOVAL = 2_000;
+    // Цены пересчитаны 2026-09-12 от реального текущего диапазона наград квестов (1400-4500 EXC,
+    // категории "Сложные"/10000 EXC в проде больше нет — все игры с такой наградой деактивированы).
+    // Раньше 2000 EXC почти всегда были выгоднее награды, которую разблокировали — перекрывали
+    // анти-фарм смысл кулдауна/лимита слотов.
+    public static final long PRICE_EXTRA_SLOT = 3_500;
+    public static final long PRICE_COOLDOWN_REMOVAL = 3_000;
     public static final long PRICE_GIFT_BOOST = 4_500;
 
     private static final int BOOST_DURATION_HOURS = 24;
