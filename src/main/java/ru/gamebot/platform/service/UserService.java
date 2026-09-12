@@ -914,6 +914,21 @@ public class UserService {
         return appUserRepository.countRegisteredBetweenWithCompletedQuestsBetween(from, to, minQuests, maxQuests);
     }
 
+    public record ZeroQuestBreakdown(long neverReturned, long returnedButNoQuest) {}
+
+    /** Из тех, кто не взял ни одного квеста — сколько вообще ни разу не открывали бота повторно
+     *  (lastBotActivityAt совпадает с днём регистрации), а сколько возвращались, но так и не взяли
+     *  квест (lastBotActivityAt позже дня регистрации). Различает "продукт не зацепил вообще" от
+     *  "человек искал квест и не нашёл/не разобрался". */
+    public ZeroQuestBreakdown breakdownZeroQuestUsers(java.time.LocalDateTime from, java.time.LocalDateTime to) {
+        List<AppUser> users = appUserRepository.findRegisteredBetweenWithCompletedQuests(from, to, 0);
+        long returnedLater = users.stream()
+                .filter(u -> u.getLastBotActivityAt() != null
+                        && u.getLastBotActivityAt().toLocalDate().isAfter(u.getCreatedAt().toLocalDate()))
+                .count();
+        return new ZeroQuestBreakdown(users.size() - returnedLater, returnedLater);
+    }
+
     public List<AppUser> allRegisteredUsers() {
         return appUserRepository.findAll().stream()
                 .filter(AppUser::isRegistrationCompleted)

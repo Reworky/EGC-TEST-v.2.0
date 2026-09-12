@@ -8809,12 +8809,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long one = userService.countRegisteredBetweenWithCompletedQuestsBetween(from, to, 1, 1);
         long twoThree = userService.countRegisteredBetweenWithCompletedQuestsBetween(from, to, 2, 3);
         long fourPlus = userService.countRegisteredBetweenWithCompletedQuestsBetween(from, to, 4, 999_999);
+        UserService.ZeroQuestBreakdown zeroBreakdown = userService.breakdownZeroQuestUsers(from, to);
 
         sendText(user.getTelegramId(),
                 "📉 <b>Воронка новичков 24.08-07.09</b>\n\n"
                         + "Всего зарегистрировалось: <b>" + total + "</b>\n\n"
                         + "0 квестов (даже не начали): <b>" + zero + "</b>"
                         + (total > 0 ? " (" + (zero * 100 / total) + "%)" : "") + "\n"
+                        + "   ├ ни разу не заходили в бота повторно: <b>" + zeroBreakdown.neverReturned() + "</b>\n"
+                        + "   └ заходили снова, но квест не взяли: <b>" + zeroBreakdown.returnedButNoQuest() + "</b>\n"
                         + "Ровно 1 квест (попробовали и ушли): <b>" + one + "</b>"
                         + (total > 0 ? " (" + (one * 100 / total) + "%)" : "") + "\n"
                         + "2-3 квеста: <b>" + twoThree + "</b>"

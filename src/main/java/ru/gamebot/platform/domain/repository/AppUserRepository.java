@@ -94,6 +94,12 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt >= :from AND u.createdAt < :to AND u.completedQuests >= :minQuests AND u.completedQuests <= :maxQuests")
     long countRegisteredBetweenWithCompletedQuestsBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to, @Param("minQuests") int minQuests, @Param("maxQuests") int maxQuests);
 
+    /** Для разбивки "0 квестов" на "не вернулись вовсе" vs "вернулись, но квест не взяли" —
+     *  сравнение lastBotActivityAt/createdAt по конкретным строкам делается в Java (UserService),
+     *  дата-функции в JPQL не переносимы между H2/прод БД. */
+    @Query("SELECT u FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt >= :from AND u.createdAt < :to AND u.completedQuests = :completedQuests")
+    List<AppUser> findRegisteredBetweenWithCompletedQuests(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to, @Param("completedQuests") int completedQuests);
+
     List<AppUser> findAllBySquadId(Long squadId);
 
     long countBySquadId(Long squadId);
