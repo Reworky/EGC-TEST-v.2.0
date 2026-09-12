@@ -1789,6 +1789,9 @@ public class QuestSeeder implements CommandLineRunner {
         setShortLabel("YouTube Shorts про EGC", "UGC", "Shorts на YouTube");
         setShortLabel("Telegram Stories про EGC", "UGC", "Stories в Telegram");
 
+        // Telegram Stories убран из UGC-квестов по решению пользователя (2026-09-12).
+        deactivateQuests("UGC", Set.of("Telegram Stories про EGC"));
+
         // ── Dota 2: FLAT-режим — единый список без выбора категории, по образцу Brawl Stars/Clash of Clans/Clash Royale ──
         gameCatalogService.setDifficultyMode("Dota 2", "FLAT", 2000L, 50);
 
