@@ -36,26 +36,28 @@ public class RewardSeeder implements CommandLineRunner {
 
         // ── Подарочные карты ────────────────────────────────────────────────────
 
+        // Цены пересчитаны на паритет с курсом вывода EXC->руб (100 EXC = 1 ₽ при 100% Health Ratio,
+        // см. RewardService.effectivePrice/HealthRatioService) — 2026-09-12, себестоимость = номинал карты.
         seed("Gift Card Steam — 100 ₽",
                 "Цифровой код пополнения Steam-кошелька на 100 рублей. "
                         + "Доставляется в Telegram после одобрения заявки администратором. "
                         + "Код действует на аккаунты любого региона.",
-                "Подарочные карты", 12_000, null, 1_000, "gift_card");
+                "Подарочные карты", 10_000, null, 1_000, "gift_card");
 
         seed("Gift Card Steam — 250 ₽",
                 "Цифровой код пополнения Steam-кошелька на 250 рублей. "
                         + "Доставляется в Telegram после одобрения заявки администратором.",
-                "Подарочные карты", 28_000, null, 5_000, "gift_card");
+                "Подарочные карты", 25_000, null, 5_000, "gift_card");
 
         seed("Gift Card Steam — 500 ₽",
                 "Цифровой код пополнения Steam-кошелька на 500 рублей. "
                         + "Доставляется в Telegram после одобрения заявки администратором.",
-                "Подарочные карты", 55_000, null, 15_000, "gift_card");
+                "Подарочные карты", 50_000, null, 15_000, "gift_card");
 
         seed("Gift Card PSN — 500 ₽",
                 "Цифровой код пополнения PlayStation Network на 500 рублей. "
                         + "Доставляется в Telegram после одобрения заявки администратором.",
-                "Подарочные карты", 55_000, null, 15_000, "gift_card");
+                "Подарочные карты", 50_000, null, 15_000, "gift_card");
 
         // ── EGC Эксклюзив ───────────────────────────────────────────────────────
 
@@ -81,17 +83,18 @@ public class RewardSeeder implements CommandLineRunner {
             if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
         });
 
+        // Цены пересчитаны на паритет с курсом вывода (себестоимость закупки × 100) — 2026-09-12.
         seed("PUBG PC - G-Coin 100",
                 "Пополнение 100 G-Coin на аккаунт PUBG PC. Доставляется по электронной почте. Срок доставки — до 24 ч.",
-                "PUBG PC", 10_000, null, 1_000, "pubg_pc");
+                "PUBG PC", 8_400, null, 1_000, "pubg_pc");
 
         seed("PUBG PC - G-Coin 500",
                 "Пополнение 500 G-Coin на аккаунт PUBG PC. Доставляется по электронной почте. Срок доставки — до 24 ч.",
-                "PUBG PC", 51_500, null, 15_000, "pubg_pc");
+                "PUBG PC", 42_000, null, 15_000, "pubg_pc");
 
         seed("PUBG PC - G-Coin 1000",
                 "Пополнение 1000 G-Coin на аккаунт PUBG PC. Доставляется по электронной почте. Срок доставки — до 24 ч.",
-                "PUBG PC", 108_000, null, 75_000, "pubg_pc");
+                "PUBG PC", 85_300, null, 75_000, "pubg_pc");
 
         // Deactivate old PUBG Mobile entry
         rewardItemRepository.findByTitle("PUBG Mobile — 60 UC").ifPresent(old -> {
@@ -104,11 +107,11 @@ public class RewardSeeder implements CommandLineRunner {
 
         seed("PUBG Mobile - UC 120",
                 "Пополнение 120 UC на аккаунт PUBG Mobile. Зачисляется по Player ID без входа в аккаунт. Срок доставки — до 24 ч.",
-                "PUBG Mobile", 21_500, pubgMobilePrompt, 1_000, "pubg_mobile");
+                "PUBG Mobile", 16_800, pubgMobilePrompt, 1_000, "pubg_mobile");
 
         seed("PUBG Mobile - UC 240",
                 "Пополнение 240 UC на аккаунт PUBG Mobile. Зачисляется по Player ID без входа в аккаунт. Срок доставки — до 24 ч.",
-                "PUBG Mobile", 42_000, pubgMobilePrompt, 5_000, "pubg_mobile");
+                "PUBG Mobile", 33_600, pubgMobilePrompt, 5_000, "pubg_mobile");
 
         // EA FC 26 — coming soon (visible but not purchasable)
         rewardItemRepository.findByTitle("EA FC 26 — 500 FC Points").ifPresent(item -> {
@@ -145,15 +148,15 @@ public class RewardSeeder implements CommandLineRunner {
 
         seed("Clash Royale - Gems 160",
                 "Пополнение 160 гемов на аккаунт Clash Royale. Доставка на email. Срок доставки — до 24 ч.",
-                "Clash Royale", 30_000, crPrompt, 1_000, "clash_royale");
+                "Clash Royale", 23_700, crPrompt, 1_000, "clash_royale");
 
         seed("Clash Royale - Gems 500",
                 "Пополнение 500 гемов на аккаунт Clash Royale. Доставка на email. Срок доставки — до 24 ч.",
-                "Clash Royale", 72_000, crPrompt, 5_000, "clash_royale");
+                "Clash Royale", 54_900, crPrompt, 5_000, "clash_royale");
 
         seed("Clash Royale - Gems 1200",
                 "Пополнение 1200 гемов на аккаунт Clash Royale. Доставка на email. Срок доставки — до 24 ч.",
-                "Clash Royale", 141_000, crPrompt, 15_000, "clash_royale");
+                "Clash Royale", 107_200, crPrompt, 15_000, "clash_royale");
 
         rewardItemRepository.findByTitle("Brawl Stars — 80 Gems").ifPresent(old -> {
             if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
@@ -166,15 +169,15 @@ public class RewardSeeder implements CommandLineRunner {
 
         seed("Brawl Stars - Gems 30",
                 "Пополнение 30 гемов на аккаунт Brawl Stars. Доставка на email. Срок доставки — до 24 ч.",
-                "Brawl Stars", 30_000, brawlPrompt, 1_000, "brawl_stars");
+                "Brawl Stars", 25_500, brawlPrompt, 1_000, "brawl_stars");
 
         seed("Brawl Stars - Gems 60",
                 "Пополнение 60 гемов на аккаунт Brawl Stars. Доставка на email. Срок доставки — до 24 ч.",
-                "Brawl Stars", 58_000, brawlPrompt, 5_000, "brawl_stars");
+                "Brawl Stars", 48_200, brawlPrompt, 5_000, "brawl_stars");
 
         seed("Brawl Stars - Gems 110",
                 "Пополнение 110 гемов на аккаунт Brawl Stars. Доставка на email. Срок доставки — до 24 ч.",
-                "Brawl Stars", 98_000, brawlPrompt, 15_000, "brawl_stars");
+                "Brawl Stars", 80_800, brawlPrompt, 15_000, "brawl_stars");
 
         rewardItemRepository.findByTitle("Clash of Clans — 80 Gems").ifPresent(old -> {
             if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
@@ -185,15 +188,21 @@ public class RewardSeeder implements CommandLineRunner {
 
         seed("Clash of Clans - Gems 80",
                 "Пополнение 80 гемов на аккаунт Clash of Clans. Доставка через Supercell ID. Срок доставки — до 24 ч.",
-                "Clash of Clans", 16_000, cocPrompt, 1_000, "clash_of_clans");
+                "Clash of Clans", 13_400, cocPrompt, 1_000, "clash_of_clans");
 
-        seed("Clash of Clans - Gems 260",
-                "Пополнение 260 гемов на аккаунт Clash of Clans. Доставка через Supercell ID. Срок доставки — до 24 ч.",
-                "Clash of Clans", 29_500, cocPrompt, 5_000, "clash_of_clans");
+        // Количество пачки уменьшено 260 -> 160 гемов (2026-09-12) — старый тайтл деактивируем,
+        // чтобы не остался дублирующим активным товаром по старой цене/объёму.
+        rewardItemRepository.findByTitle("Clash of Clans - Gems 260").ifPresent(old -> {
+            if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
+        });
+
+        seed("Clash of Clans - Gems 160",
+                "Пополнение 160 гемов на аккаунт Clash of Clans. Доставка через Supercell ID. Срок доставки — до 24 ч.",
+                "Clash of Clans", 24_400, cocPrompt, 5_000, "clash_of_clans");
 
         seed("Clash of Clans - Gems 500",
                 "Пополнение 500 гемов на аккаунт Clash of Clans. Доставка через Supercell ID. Срок доставки — до 24 ч.",
-                "Clash of Clans", 72_500, cocPrompt, 15_000, "clash_of_clans");
+                "Clash of Clans", 57_600, cocPrompt, 15_000, "clash_of_clans");
 
         rewardItemRepository.findByTitle("Mobile Legends — 86 Diamonds").ifPresent(old -> {
             if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
@@ -226,17 +235,17 @@ public class RewardSeeder implements CommandLineRunner {
         seed("CS2 - Пополнение Steam 150 ₽",
                 "Пополнение баланса Steam на ~150 ₽ для CS2 (PC). "
                         + "Зачисляется напрямую на ваш Steam-аккаунт по логину. Срок доставки — до 24 ч.",
-                "CS2", 19_000, cs2Prompt, 5_000, "cs2");
+                "CS2", 15_000, cs2Prompt, 5_000, "cs2");
 
         seed("CS2 - Пополнение Steam 250 ₽",
                 "Пополнение баланса Steam на ~250 ₽ для CS2 (PC). "
                         + "Зачисляется напрямую на ваш Steam-аккаунт по логину. Срок доставки — до 24 ч.",
-                "CS2", 32_000, cs2Prompt, 5_000, "cs2");
+                "CS2", 25_000, cs2Prompt, 5_000, "cs2");
 
         seed("CS2 - Пополнение Steam 500 ₽",
                 "Пополнение баланса Steam на ~500 ₽ для CS2 (PC). "
                         + "Зачисляется напрямую на ваш Steam-аккаунт по логину. Срок доставки — до 24 ч.",
-                "CS2", 63_000, cs2Prompt, 15_000, "cs2");
+                "CS2", 50_000, cs2Prompt, 15_000, "cs2");
 
         // ── Временно закрыт доступ игрокам: CS2, Mobile Legends («скоро откроется») ──
         // Товары не удаляются, только помечаются «скоро» — чтобы вернуть доступ, достаточно убрать этот блок.
