@@ -4762,6 +4762,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("💸 В рублях (Сбербанк / СБП)", "shop:withdraw:rub")));
         rows.add(List.of(keyboardFactory.callback("💎 В TON (Telegram Wallet)", "shop:withdraw:ton")));
+        rows.add(List.of(keyboardFactory.callback("⭐ В звёздах Telegram", "shop:group:telegram_stars")));
         rows.add(List.of(keyboardFactory.callback("📋 Мои заявки на вывод", "menu:my-withdrawals")));
         rows.add(List.of(keyboardFactory.callback("📊 Лимиты по всем рангам", "shop:ranks")));
         rows.add(List.of(keyboardFactory.callback("❌ Отмена", "menu:balance")));
@@ -7738,6 +7739,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return details != null && (details.startsWith("TON") || details.startsWith("USDT"));
     }
 
+    private boolean isStarsWithdrawal(RewardRequest req) {
+        return "telegram_stars".equals(req.getRewardItem().getPurchaseGroup());
+    }
+
+    /** Игрок мог ввести юзернейм и с "@", и без — нормализуем перед показом, чтобы не задваивать "@@". */
+    private String starsUsername(RewardRequest req) {
+        String raw = req.getPayoutDetails();
+        if (raw == null) return "";
+        return raw.trim().replaceFirst("^@", "");
+    }
+
     private String cryptoWalletFromPayoutDetails(String payoutDetails) {
         String[] parts = payoutDetails.split(":");
         return parts.length > 1 ? parts[1] : payoutDetails;
@@ -7762,7 +7774,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String uname = req.getUser().getTelegramUsername() != null
                     ? "@" + req.getUser().getTelegramUsername()
                     : "#" + req.getUser().getTelegramId();
-            String type = isCryptoWithdrawal(req) ? "💎 TON" : "💸 ₽";
+            String type = isStarsWithdrawal(req) ? "⭐ Stars" : isCryptoWithdrawal(req) ? "💎 TON" : "💸 ₽";
             rows.add(List.of(keyboardFactory.callback(
                     "В-" + reqDisplayId(req) + " " + uname + " — " + type + " " + req.getRewardItem().getPriceCoins() + " EXC",
                     "admin:withdrawal:req:" + req.getId())));
@@ -7849,7 +7861,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 String uname = req.getUser().getTelegramUsername() != null
                         ? "@" + req.getUser().getTelegramUsername()
                         : "#" + req.getUser().getTelegramId();
-                String type = isCryptoWithdrawal(req) ? "💎" : "💸";
+                String type = isStarsWithdrawal(req) ? "⭐" : isCryptoWithdrawal(req) ? "💎" : "💸";
                 String nick = escape(req.getUser().getNickname());
                 if (nick.length() > 12) nick = nick.substring(0, 12) + "…";
                 sb.append(statusEmoji).append(" <b>В-").append(reqDisplayId(req)).append("</b> ")
@@ -7906,7 +7918,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? "<a href=\"https://t.me/" + requester.getTelegramUsername() + "\">@" + requester.getTelegramUsername() + "</a>"
                 : "<a href=\"tg://user?id=" + requester.getTelegramId() + "\">" + requester.getTelegramId() + "</a>";
         String detailsLine;
-        if (isCryptoWithdrawal(req)) {
+        if (isStarsWithdrawal(req)) {
+            detailsLine = "\n⭐ Способ: <b>Telegram Stars (через реселлера, вручную)</b>\n👤 Юзернейм получателя: <code>@" + escape(starsUsername(req)) + "</code>";
+        } else if (isCryptoWithdrawal(req)) {
             String wallet = cryptoWalletFromPayoutDetails(req.getPayoutDetails());
             detailsLine = "\n💎 Способ: <b>" + cryptoMethodLabel(req.getPayoutDetails()) + "</b>\n📬 Кошелёк: <code>" + escape(wallet) + "</code>";
         } else if (req.getPayoutDetails() != null) {
@@ -7980,7 +7994,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         long rubForLine = fixedOrCurrentRub(req);
         String withdrawLine;
-        if (isCryptoWithdrawal(req)) {
+        if (isStarsWithdrawal(req)) {
+            String denom = req.getRewardItem().getTitle().replaceAll(".*— ", "");
+            withdrawLine = exc + " EXC → " + denom;
+        } else if (isCryptoWithdrawal(req)) {
             java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(rubForLine));
             withdrawLine = exc + " EXC → ~" + tonAmount + " GRAM";
         } else {
@@ -8029,7 +8046,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void notifyUserWithdrawalApproved(RewardRequest req, String receiptFileId, String receiptCaption) {
         // Было: isUsdt = payoutDetails != null — ловило и рублёвые реквизиты тоже, не только крипту. Исправлено.
-        String method = isCryptoWithdrawal(req) ? cryptoMethodLabel(req.getPayoutDetails()) : "рубли (СБП / Сбербанк)";
+        String method = isStarsWithdrawal(req) ? "Telegram Stars (@" + starsUsername(req) + ")"
+                : isCryptoWithdrawal(req) ? cryptoMethodLabel(req.getPayoutDetails()) : "рубли (СБП / Сбербанк)";
         String caption = "✅ <b>Ваш вывод EXC выполнен!</b>\n\n"
                 + "🔢 Номер заявки: <b>В-" + reqDisplayId(req) + "</b>\n"
                 + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
@@ -12713,7 +12731,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? "<a href=\"https://t.me/" + requester.getTelegramUsername() + "\">@" + requester.getTelegramUsername() + "</a>"
                 : "<a href=\"tg://user?id=" + requester.getTelegramId() + "\">" + requester.getTelegramId() + "</a>";
         String detailsLine;
-        if (isCryptoWithdrawal(req)) {
+        if (isStarsWithdrawal(req)) {
+            detailsLine = "\n⭐ Способ: <b>Telegram Stars (через реселлера, вручную)</b>\n👤 Юзернейм получателя: <code>@" + escape(starsUsername(req)) + "</code>";
+        } else if (isCryptoWithdrawal(req)) {
             String wallet = cryptoWalletFromPayoutDetails(req.getPayoutDetails());
             detailsLine = "\n💎 Способ: <b>" + cryptoMethodLabel(req.getPayoutDetails()) + "</b>\n📬 Кошелёк: <code>" + escape(wallet) + "</code>";
         } else if (req.getPayoutDetails() != null) {

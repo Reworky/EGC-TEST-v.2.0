@@ -33,9 +33,19 @@ public class ShopLimitService {
             return;
         }
         checkLevelAccess(user, item);
-        checkItemQuantityLimit(user, item);
+        // Вывод в звёздах — это ВЫВОД, а не товар магазина (как рубли/TON, которые вообще не проходят
+        // через ShopLimitService). Частоту уже ограничивает отдельная проверка "1 заявка на вывод в
+        // сутки" на входе в меню способа вывода — количественный лимит "1 в группу в месяц" и общий
+        // ценовой cooldown (который иначе блокировал бы покупку НЕСВЯЗАННЫХ товаров магазина в том же
+        // ценовом диапазоне) здесь не нужны и не должны применяться.
+        boolean isStarsWithdrawal = "telegram_stars".equals(item.getPurchaseGroup());
+        if (!isStarsWithdrawal) {
+            checkItemQuantityLimit(user, item);
+        }
         checkMonthlySpendsLimit(user, item);
-        checkCooldown(user, item);
+        if (!isStarsWithdrawal) {
+            checkCooldown(user, item);
+        }
     }
 
     /** Слой 1: уровень доступа */
@@ -172,22 +182,26 @@ public class ShopLimitService {
             return "🔒 Заблокировано до уровня " + requiredLevel + " — нужно ещё " + needed + " XP";
         }
 
-        // Слой 4
-        long price = item.getPriceCoins();
+        boolean isStarsWithdrawal = "telegram_stars".equals(item.getPurchaseGroup());
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime cooldownUntil = null;
-        if (price <= COOLDOWN_SMALL_THRESHOLD) cooldownUntil = user.getShopCooldownSmallUntil();
-        else if (price <= COOLDOWN_MEDIUM_THRESHOLD) cooldownUntil = user.getShopCooldownMediumUntil();
-        else cooldownUntil = user.getShopCooldownLargeUntil();
 
-        if (cooldownUntil != null && now.isBefore(cooldownUntil)) {
-            long daysLeft = java.time.temporal.ChronoUnit.DAYS.between(now, cooldownUntil) + 1;
-            return "⏳ Cooldown — следующая покупка через " + daysLeft + " дн.";
+        // Слой 4 — не применяется к выводу в звёздах, см. checkAllLimits.
+        if (!isStarsWithdrawal) {
+            long price = item.getPriceCoins();
+            LocalDateTime cooldownUntil;
+            if (price <= COOLDOWN_SMALL_THRESHOLD) cooldownUntil = user.getShopCooldownSmallUntil();
+            else if (price <= COOLDOWN_MEDIUM_THRESHOLD) cooldownUntil = user.getShopCooldownMediumUntil();
+            else cooldownUntil = user.getShopCooldownLargeUntil();
+
+            if (cooldownUntil != null && now.isBefore(cooldownUntil)) {
+                long daysLeft = java.time.temporal.ChronoUnit.DAYS.between(now, cooldownUntil) + 1;
+                return "⏳ Cooldown — следующая покупка через " + daysLeft + " дн.";
+            }
         }
 
-        // Слой 2
+        // Слой 2 — не применяется к выводу в звёздах, см. checkAllLimits.
         String group = item.getPurchaseGroup();
-        if (group != null) {
+        if (group != null && !isStarsWithdrawal) {
             LocalDateTime monthStart = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
             boolean blocked = switch (group) {
                 case "gift_card" -> rewardRequestRepository.countActiveByUserAndGroupSince(user, "gift_card", monthStart) > 0;

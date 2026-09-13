@@ -32,7 +32,13 @@ public class RewardService {
     private final AppUserRepository appUserRepository;
 
     public List<RewardItem> findAvailableRewards() {
-        return rewardItemRepository.findAllByActiveTrueOrderByPriceCoinsAsc();
+        // Категория "Вывод" (сейчас — Telegram Stars) сознательно исключена из общего каталога магазина
+        // (бот и мини-апп используют этот метод) — это способ вывода, доступный только через меню
+        // вывода (shop:group:telegram_stars), где уже применена проверка "1 заявка на вывод в сутки".
+        // В общем каталоге эта проверка не срабатывает вообще.
+        return rewardItemRepository.findAllByActiveTrueOrderByPriceCoinsAsc().stream()
+                .filter(item -> !"Вывод".equals(item.getCategory()))
+                .toList();
     }
 
     public List<RewardItem> findByPurchaseGroup(String purchaseGroup) {
@@ -106,7 +112,11 @@ public class RewardService {
             // Рамки не учитываются в месячном лимите трат и не ставят cooldown — по требованию пользователя,
             // они полностью без ограничений и не должны мешать другим покупкам в магазине.
             sinkShopService.recordWithdrawal(lockedUser, price);
-            shopLimitService.recordPurchaseCooldown(lockedUser, rewardItem.getPriceCoins());
+            // Вывод в звёздах не должен ставить общий ценовой cooldown — иначе он блокировал бы
+            // покупку несвязанных товаров магазина в том же ценовом диапазоне (см. ShopLimitService.checkAllLimits).
+            if (!"telegram_stars".equals(rewardItem.getPurchaseGroup())) {
+                shopLimitService.recordPurchaseCooldown(lockedUser, rewardItem.getPriceCoins());
+            }
         }
 
         RewardRequest request = new RewardRequest();
