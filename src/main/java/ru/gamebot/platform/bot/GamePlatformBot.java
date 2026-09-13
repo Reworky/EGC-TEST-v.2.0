@@ -1614,7 +1614,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 try {
                     AppUser saved = userService.completeRegistration(user, regNick);
                     session.reset();
-                    sendCommunityActivationPrompt(saved, null);
+                    // Подписка на канал больше не запрашивается сразу после анкеты — только в момент
+                    // взятия квеста (см. handleTakeQuest/handleTakeQuestWithPartner), поэтому здесь
+                    // просто открываем главное меню, как для уже зарегистрированного пользователя.
+                    sendMainMenu(saved, roleWelcomeText(saved, null));
                 } catch (org.springframework.dao.DataIntegrityViolationException e) {
                     sendText(user.getTelegramId(),
                             "⚠️ Никнейм <b>" + escape(regNick) + "</b> уже занят.\n\nПридумайте другой и введите его:",
