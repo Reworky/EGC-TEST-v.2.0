@@ -22,6 +22,7 @@ import ru.gamebot.platform.util.DurationFormatter;
 import ru.gamebot.platform.api.dto.QuestActionResponseDto;
 import ru.gamebot.platform.api.dto.QuestDetailDto;
 import ru.gamebot.platform.api.dto.QuestDto;
+import ru.gamebot.platform.bot.GamePlatformBot;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.model.QuestSubmission;
@@ -41,6 +42,7 @@ public class QuestController {
     private final QuestService questService;
     private final AppUserRepository appUserRepository;
     private final TelegramFileService telegramFileService;
+    private final GamePlatformBot gamePlatformBot;
 
     /** Числовой прогресс для авто-верифицируемого квеста — тот же расчёт, что и в GamePlatformBot.autoVerifyProgressLabel,
      *  но без готового текста: фронтенд Mini App рисует прогресс сам (бар/проценты), не текстовой строкой. */
@@ -200,9 +202,11 @@ public class QuestController {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
-        // Та же точечная проверка подписки, что и в боте (см. GamePlatformBot.handleTakeQuest) — без
-        // неё мини-апп был бы обходным путём мимо этого правила, раз общая блокировка снята.
-        if (!user.isRegistrationCompleted()) {
+        // Та же точечная проверка подписки, что и в боте (см. GamePlatformBot.isActivelySubscribed) — без
+        // неё мини-апп был бы обходным путём мимо этого правила, раз общая блокировка снята. Важно: это
+        // живая проверка через кэш (час), а не разовый флаг isRegistrationCompleted() — тот остаётся true
+        // навсегда, даже если человек потом отписался от канала.
+        if (!gamePlatformBot.isActivelySubscribed(user)) {
             return ResponseEntity.ok(QuestActionResponseDto.builder()
                     .success(false)
                     .status(QuestActionStatus.NEEDS_CHANNEL_SUBSCRIPTION.name())

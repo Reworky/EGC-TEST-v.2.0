@@ -4030,13 +4030,32 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 verticalWithBackMenu(buttons, backText, backData));
     }
 
-    private void handleTakeQuest(CallbackQuery callbackQuery, AppUser user, UserSession session, Long questId) {
-        if (!user.isRegistrationCompleted() && !isEffectiveModerator(user)) {
-            answerSilently(callbackQuery.getId());
-            session.getData().put("pendingQuestTakeId", String.valueOf(questId));
+    /** Гейт перед взятием квеста: проверяет подписку НЕ по разовому флагу isRegistrationCompleted()
+     * (он остаётся true навсегда, даже после отписки), а живьём — через isActivelySubscribed(), с кэшем.
+     * Если подписки сейчас нет — сохраняет квест (и партнёра, если есть) в сессии для возобновления
+     * сразу после подтверждения (см. handleActivationCheck) и показывает разный текст для новичка
+     * и для того, кто уже был подписан, но отписался. */
+    private boolean requireActiveSubscriptionForQuest(CallbackQuery callbackQuery, AppUser user, UserSession session,
+                                                        Long questId, Long partnerTelegramId) {
+        if (isEffectiveModerator(user) || isActivelySubscribed(user)) {
+            return true;
+        }
+        answerSilently(callbackQuery.getId());
+        session.getData().put("pendingQuestTakeId", String.valueOf(questId));
+        if (partnerTelegramId != null) {
+            session.getData().put("pendingQuestTakePartnerId", String.valueOf(partnerTelegramId));
+        } else {
             session.getData().remove("pendingQuestTakePartnerId");
-            sendCommunityActivationPrompt(user,
-                    "🎯 Чтобы взять этот квест и начать зарабатывать EXC, сначала подпишись на канал — это займёт 10 секунд.");
+        }
+        String notice = user.isRegistrationCompleted()
+                ? "⚠️ Похоже, вы отписались от канала. Подпишитесь снова, чтобы продолжить брать квесты."
+                : "🎯 Чтобы взять этот квест и начать зарабатывать EXC, сначала подпишись на канал — это займёт 10 секунд.";
+        sendCommunityActivationPrompt(user, notice);
+        return false;
+    }
+
+    private void handleTakeQuest(CallbackQuery callbackQuery, AppUser user, UserSession session, Long questId) {
+        if (!requireActiveSubscriptionForQuest(callbackQuery, user, session, questId, null)) {
             return;
         }
         Quest quest = questService.getQuest(questId);
@@ -4145,13 +4164,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void handleTakeQuestWithPartner(CallbackQuery callbackQuery, AppUser user, Long questId, Long partnerTelegramId) {
-        if (!user.isRegistrationCompleted() && !isEffectiveModerator(user)) {
-            answerSilently(callbackQuery.getId());
-            UserSession session = sessionService.get(user.getTelegramId());
-            session.getData().put("pendingQuestTakeId", String.valueOf(questId));
-            session.getData().put("pendingQuestTakePartnerId", String.valueOf(partnerTelegramId));
-            sendCommunityActivationPrompt(user,
-                    "🎯 Чтобы взять этот квест и начать зарабатывать EXC, сначала подпишись на канал — это займёт 10 секунд.");
+        UserSession session = sessionService.get(user.getTelegramId());
+        if (!requireActiveSubscriptionForQuest(callbackQuery, user, session, questId, partnerTelegramId)) {
             return;
         }
         Quest quest = questService.getQuest(questId);
@@ -13414,6 +13428,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private boolean isSubscriptionCacheValid(Long telegramId) {
         Long checked = subscriptionCheckCache.get(telegramId);
         return checked != null && (System.currentTimeMillis() - checked) < SUBSCRIPTION_CHECK_TTL_MS;
+    }
+
+    /** Подписан ли человек на канал ПРЯМО СЕЙЧАС — с кэшем на час, чтобы не дёргать Telegram API на
+     * каждое действие. Не путать с user.isRegistrationCompleted(): это разовый факт "когда-то подтвердил
+     * подписку" и навсегда остаётся true, тогда как этот метод перепроверяет её точечно — отписавшийся
+     * после регистрации пользователь здесь вернёт false. Используется и ботом (handleTakeQuest,
+     * handleTakeQuestWithPartner), и мини-аппом (см. QuestController.takeQuest). */
+    public boolean isActivelySubscribed(AppUser user) {
+        if (!user.isRegistrationCompleted()) {
+            return false;
+        }
+        if (isSubscriptionCacheValid(user.getTelegramId())) {
+            return true;
+        }
+        if (isRequiredChannelMember(user.getTelegramId())) {
+            subscriptionCheckCache.put(user.getTelegramId(), System.currentTimeMillis());
+            return true;
+        }
+        return false;
     }
 
     private boolean isRequiredChannelMember(Long telegramId) {
