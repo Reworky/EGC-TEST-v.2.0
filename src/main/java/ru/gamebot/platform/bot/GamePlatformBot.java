@@ -4031,13 +4031,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Гейт перед взятием квеста: проверяет подписку НЕ по разовому флагу isRegistrationCompleted()
-     * (он остаётся true навсегда, даже после отписки), а живьём — через isActivelySubscribed(), с кэшем.
+     * (он остаётся true навсегда, даже после отписки), а живьём и без кэша — через isActivelySubscribedFresh().
      * Если подписки сейчас нет — сохраняет квест (и партнёра, если есть) в сессии для возобновления
      * сразу после подтверждения (см. handleActivationCheck) и показывает разный текст для новичка
      * и для того, кто уже был подписан, но отписался. */
     private boolean requireActiveSubscriptionForQuest(CallbackQuery callbackQuery, AppUser user, UserSession session,
                                                         Long questId, Long partnerTelegramId) {
-        if (isEffectiveModerator(user) || isActivelySubscribed(user)) {
+        if (isEffectiveModerator(user) || isActivelySubscribedFresh(user)) {
             return true;
         }
         answerSilently(callbackQuery.getId());
@@ -13431,10 +13431,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Подписан ли человек на канал ПРЯМО СЕЙЧАС — с кэшем на час, чтобы не дёргать Telegram API на
-     * каждое действие. Не путать с user.isRegistrationCompleted(): это разовый факт "когда-то подтвердил
+     * каждое действие (используется там, где актуальность в пределах часа не критична, например
+     * sendMainMenu). Не путать с user.isRegistrationCompleted(): это разовый факт "когда-то подтвердил
      * подписку" и навсегда остаётся true, тогда как этот метод перепроверяет её точечно — отписавшийся
-     * после регистрации пользователь здесь вернёт false. Используется и ботом (handleTakeQuest,
-     * handleTakeQuestWithPartner), и мини-аппом (см. QuestController.takeQuest). */
+     * после регистрации пользователь здесь вернёт false, ЕСЛИ кэш уже устарел. Для взятия квеста кэш
+     * слишком грубый (можно подписаться, взять квест, отписаться и весь час брать ещё) — там нужен
+     * {@link #isActivelySubscribedFresh}. */
     public boolean isActivelySubscribed(AppUser user) {
         if (!user.isRegistrationCompleted()) {
             return false;
@@ -13447,6 +13449,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return true;
         }
         return false;
+    }
+
+    /** Как {@link #isActivelySubscribed}, но игнорирует часовой кэш на чтение — всегда живьём бьёт в
+     * Telegram API. Нужно именно для взятия квеста: единственное место, где "час назад был подписан"
+     * не должно означать "подписан сейчас" — иначе отписавшийся сразу после взятия квеста игрок мог бы
+     * продолжать брать новые квесты весь оставшийся час. Результат всё равно кладётся в кэш (или
+     * убирается из него), чтобы следующий sendMainMenu не дублировал только что сделанный запрос. */
+    public boolean isActivelySubscribedFresh(AppUser user) {
+        if (!user.isRegistrationCompleted()) {
+            return false;
+        }
+        boolean member = isRequiredChannelMember(user.getTelegramId());
+        if (member) {
+            subscriptionCheckCache.put(user.getTelegramId(), System.currentTimeMillis());
+        } else {
+            subscriptionCheckCache.remove(user.getTelegramId());
+        }
+        return member;
     }
 
     private boolean isRequiredChannelMember(Long telegramId) {

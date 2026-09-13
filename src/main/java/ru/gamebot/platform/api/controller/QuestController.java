@@ -202,11 +202,11 @@ public class QuestController {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
-        // Та же точечная проверка подписки, что и в боте (см. GamePlatformBot.isActivelySubscribed) — без
-        // неё мини-апп был бы обходным путём мимо этого правила, раз общая блокировка снята. Важно: это
-        // живая проверка через кэш (час), а не разовый флаг isRegistrationCompleted() — тот остаётся true
-        // навсегда, даже если человек потом отписался от канала.
-        if (!gamePlatformBot.isActivelySubscribed(user)) {
+        // Та же точечная проверка подписки, что и в боте (см. GamePlatformBot.isActivelySubscribedFresh) —
+        // без неё мини-апп был бы обходным путём мимо этого правила, раз общая блокировка снята. Именно
+        // "Fresh"-вариант, без часового кэша: разовый флаг isRegistrationCompleted() остаётся true
+        // навсегда, а кэшированная проверка позволила бы весь час брать квесты после отписки.
+        if (!gamePlatformBot.isActivelySubscribedFresh(user)) {
             return ResponseEntity.ok(QuestActionResponseDto.builder()
                     .success(false)
                     .status(QuestActionStatus.NEEDS_CHANNEL_SUBSCRIPTION.name())
