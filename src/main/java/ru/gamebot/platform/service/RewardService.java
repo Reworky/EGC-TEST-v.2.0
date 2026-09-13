@@ -202,7 +202,8 @@ public class RewardService {
         return rewardRequestRepository.sumApprovedWithdrawalExcSince(since);
     }
 
-    /** Возвращает [rubTotal, tonRubEquivalent] — суммы в рублях по рублёвым и GRAM-выводам отдельно. */
+    /** Возвращает [rubTotal, tonRubEquivalent, starsTotal] — суммы в рублях по рублёвым и GRAM-выводам
+     *  отдельно, и суммарное число звёзд Telegram по выводам через реселлера. */
     public long[] totalPaidOutRubAndTonRub() {
         return rubAndTonRubOf(rewardRequestRepository.findAllApprovedWithdrawals());
     }
@@ -210,10 +211,16 @@ public class RewardService {
     private long[] rubAndTonRubOf(List<RewardRequest> requests) {
         long rubTotal = 0;
         long tonRubTotal = 0;
+        long starsTotal = 0;
         for (var r : requests) {
             String pd = r.getPayoutDetails();
-            String title = r.getRewardItem() != null ? r.getRewardItem().getTitle() : "";
-            if (pd != null && (pd.startsWith("TON:") || pd.startsWith("USDT"))) {
+            RewardItem item = r.getRewardItem();
+            String title = item != null ? item.getTitle() : "";
+            if ("telegram_stars".equals(item != null ? item.getPurchaseGroup() : null)) {
+                // "Telegram Stars - 50 ⭐" — номинал сразу после дефиса.
+                String num = title.replaceAll(".*- (\\d+).*", "$1");
+                try { starsTotal += Long.parseLong(num); } catch (Exception ignored) {}
+            } else if (pd != null && (pd.startsWith("TON:") || pd.startsWith("USDT"))) {
                 if (pd.contains("rubles=")) {
                     String num = pd.substring(pd.indexOf("rubles=") + 7).split("[^0-9]")[0];
                     try { tonRubTotal += Long.parseLong(num); } catch (Exception ignored) {}
@@ -225,14 +232,14 @@ public class RewardService {
                 try { rubTotal += Long.parseLong(num); } catch (Exception ignored) {}
             }
         }
-        return new long[]{rubTotal, tonRubTotal};
+        return new long[]{rubTotal, tonRubTotal, starsTotal};
     }
 
     public long countUniqueWithdrawalRecipients() {
         return rewardRequestRepository.countDistinctUsersWithApprovedWithdrawals();
     }
 
-    public record WithdrawalPeriodStats(long count, long totalExc, long totalRub, long totalTonRub) {}
+    public record WithdrawalPeriodStats(long count, long totalExc, long totalRub, long totalTonRub, long totalStars) {}
 
     /** Для поста в канал (недельный/месячный отчёт по выполненным выводам) — см. запрос пользователя
      *  2026-09-09. Период — скользящее окно от now-N дней, как и остальные N-дневные метрики в проекте
@@ -241,7 +248,7 @@ public class RewardService {
         List<RewardRequest> requests = rewardRequestRepository.findApprovedWithdrawalsSince(since);
         long totalExc = requests.stream().mapToLong(r -> r.getRewardItem().getPriceCoins()).sum();
         long[] rubAndTon = rubAndTonRubOf(requests);
-        return new WithdrawalPeriodStats(requests.size(), totalExc, rubAndTon[0], rubAndTon[1]);
+        return new WithdrawalPeriodStats(requests.size(), totalExc, rubAndTon[0], rubAndTon[1], rubAndTon[2]);
     }
 
     public RewardRequest getRequest(Long requestId) {

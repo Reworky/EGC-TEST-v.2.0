@@ -7908,6 +7908,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             java.math.BigDecimal gram = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(stats.totalTonRub()));
             sb.append("\n💎 GRAM (TON): <b>").append(gram).append("</b> (~").append(stats.totalTonRub()).append(" ₽)");
         }
+        if (stats.totalStars() > 0) {
+            sb.append("\n⭐ Звёздами Telegram: <b>").append(fmtExc(stats.totalStars())).append("</b>");
+        }
         return sb.toString();
     }
 
@@ -8929,6 +8932,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long[] rubAndTon = rewardService.totalPaidOutRubAndTonRub();
         long totalPaidRub = rubAndTon[0];
         long totalPaidTonRub = rubAndTon[1];
+        long totalPaidStars = rubAndTon[2];
         java.math.BigDecimal totalPaidGram = totalPaidTonRub > 0
                 ? exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(totalPaidTonRub))
                 : java.math.BigDecimal.ZERO;
@@ -8952,6 +8956,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String gramLine = totalPaidTonRub > 0
                 ? "💎 В GRAM: <b>~" + totalPaidGram.setScale(2, java.math.RoundingMode.HALF_DOWN) + " GRAM</b> (≈ " + fmtExc(totalPaidTonRub) + " ₽)\n"
                 : "";
+        String starsLine = totalPaidStars > 0
+                ? "⭐ Звёздами Telegram: <b>" + fmtExc(totalPaidStars) + "</b>\n"
+                : "";
 
         sendText(user.getTelegramId(),
                 "📊 <b>Статистика платформы</b>\n\n"
@@ -8974,6 +8981,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "💸 Выплачено всего: <b>" + fmtExc(totalPaidOut) + " EXC" + dPaidOut + "</b>\n"
                         + "💵 В рублях: <b>" + fmtExc(totalPaidRub) + " ₽</b>\n"
                         + gramLine
+                        + starsLine
                         + "👤 Получателей: <b>" + uniqueRecipients + "</b>\n\n"
                         + "💰 EXC на счетах: <b>" + fmtExc(totalCoins) + " EXC" + dCoins + "</b>\n"
                         + "🎟️ Билетов в обороте: <b>" + totalTickets + "</b>\n"

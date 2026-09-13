@@ -38,23 +38,33 @@ public class ShopController {
     @GetMapping("/items")
     public List<RewardItemDto> items(@AuthenticationPrincipal Long telegramId) {
         AppUser user = telegramId != null ? appUserRepository.findByTelegramId(telegramId).orElse(null) : null;
-        return rewardService.findAvailableRewards().stream().map(item -> {
-            String statusNote = user != null ? shopLimitService.getItemStatus(user, item) : null;
-            boolean locked = statusNote != null
-                    && (statusNote.startsWith("🔒") || statusNote.startsWith("⏳") || statusNote.startsWith("🚫"));
-            return RewardItemDto.builder()
-                    .id(item.getId())
-                    .title(item.getTitle())
-                    .description(item.getDescription())
-                    .category(item.getCategory())
-                    .priceCoins(item.getPriceCoins())
-                    .effectivePrice(rewardService.effectivePrice(item))
-                    .statusNote(statusNote)
-                    .locked(locked)
-                    .userDataPrompt(item.getUserDataPrompt())
-                    .avatarFrameImage(item.getAvatarFrameImage())
-                    .build();
-        }).toList();
+        return rewardService.findAvailableRewards().stream().map(item -> toDto(item, user)).toList();
+    }
+
+    /** Вывод в Telegram Stars — сознательно НЕ в findAvailableRewards()/общем каталоге (см. RewardService),
+     *  доступен только через экран вывода в мини-аппе (Кошелёк), как рубли/TON. */
+    @GetMapping("/withdraw/stars")
+    public List<RewardItemDto> withdrawStarsItems(@AuthenticationPrincipal Long telegramId) {
+        AppUser user = telegramId != null ? appUserRepository.findByTelegramId(telegramId).orElse(null) : null;
+        return rewardService.findByPurchaseGroup("telegram_stars").stream().map(item -> toDto(item, user)).toList();
+    }
+
+    private RewardItemDto toDto(RewardItem item, AppUser user) {
+        String statusNote = user != null ? shopLimitService.getItemStatus(user, item) : null;
+        boolean locked = statusNote != null
+                && (statusNote.startsWith("🔒") || statusNote.startsWith("⏳") || statusNote.startsWith("🚫"));
+        return RewardItemDto.builder()
+                .id(item.getId())
+                .title(item.getTitle())
+                .description(item.getDescription())
+                .category(item.getCategory())
+                .priceCoins(item.getPriceCoins())
+                .effectivePrice(rewardService.effectivePrice(item))
+                .statusNote(statusNote)
+                .locked(locked)
+                .userDataPrompt(item.getUserDataPrompt())
+                .avatarFrameImage(item.getAvatarFrameImage())
+                .build();
     }
 
     @GetMapping("/stats")

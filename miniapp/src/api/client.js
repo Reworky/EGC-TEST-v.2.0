@@ -102,13 +102,17 @@ export async function getShopItems() {
   return cached('shopItems', async () => { const { data } = await api.get('/api/shop/items'); return data; });
 }
 
+export async function getStarsWithdrawItems() {
+  return cached('starsWithdrawItems', async () => { const { data } = await api.get('/api/shop/withdraw/stars'); return data; });
+}
+
 export async function getShopStats() {
   return cached('shopStats', async () => { const { data } = await api.get('/api/shop/stats'); return data; });
 }
 
 export async function purchaseItem(id, userData) {
   const { data } = await api.post(`/api/shop/items/${id}/purchase`, { userData });
-  invalidateCache('shopItems', 'shopStats', 'profile', 'wallet');
+  invalidateCache('shopItems', 'shopStats', 'profile', 'wallet', 'starsWithdrawItems');
   return data;
 }
 

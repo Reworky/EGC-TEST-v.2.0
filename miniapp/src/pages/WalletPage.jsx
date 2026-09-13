@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getWallet, claimDailyBonus, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone, invalidateCache } from '../api/client';
+import { getWallet, claimDailyBonus, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone, invalidateCache, getStarsWithdrawItems, purchaseItem } from '../api/client';
 import { RANKS_DATA, getLevelFromXp } from '../data/ranks';
 import BackButton from '../components/BackButton';
 import BorderBeamCard from '../components/BorderBeamCard';
@@ -286,6 +286,64 @@ function WithdrawTonForm({ wallet, onDone }) {
   );
 }
 
+function WithdrawStarsForm({ wallet, onDone }) {
+  const [items, setItems] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
+  const [username, setUsername] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  useEffect(() => { getStarsWithdrawItems().then(setItems).catch(() => setItems([])); }, []);
+
+  function denom(title) { return title.replace(/.*- /, ''); }
+
+  async function handleSubmit() {
+    if (!selectedId) { setMessage('Выберите номинал.'); return; }
+    if (!username.trim()) { setMessage('Введите юзернейм получателя.'); return; }
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await purchaseItem(selectedId, username.trim().replace(/^@/, ''));
+      setMessage(res.message);
+      if (res.success) {
+        setSelectedId(null);
+        setUsername('');
+        getStarsWithdrawItems().then(setItems).catch(() => {});
+        onDone();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="ref-link-card">
+      <div className="ref-link-label">Вывод в звёздах Telegram</div>
+      <p className="shop-desc">Доступно: {wallet.remainingWithdrawalLimit.toLocaleString()} EXC. Отправляется вручную по юзернейму, в течение 24 ч.</p>
+      {items === null ? (
+        <p className="shop-desc">Загрузка...</p>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
+          {items.map(item => (
+            <button
+              key={item.id}
+              className={`quest-btn ${selectedId === item.id ? '' : 'quest-btn-secondary'}`}
+              disabled={item.locked}
+              onClick={() => setSelectedId(item.id)}
+              style={{ fontSize: 12, lineHeight: 1.5, padding: '8px 6px', opacity: item.locked ? 0.5 : 1 }}
+            >
+              {denom(item.title)}<br />{item.effectivePrice.toLocaleString()} EXC
+            </button>
+          ))}
+        </div>
+      )}
+      <input type="text" className="quest-text-input" placeholder="Юзернейм получателя (без @)" value={username} onChange={e => setUsername(e.target.value)} style={{ marginTop: 12 }} />
+      <button className="quest-btn" disabled={busy} onClick={handleSubmit} style={{ marginTop: 16 }}>{busy ? 'Секунду...' : 'Отправить заявку'}</button>
+      {message && <div className="quest-message">{message}</div>}
+    </div>
+  );
+}
+
 function PhoneGate({ onConfirmed }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -353,8 +411,11 @@ function WithdrawView({ wallet, onChanged }) {
       <div className="view-toggle" style={{ padding: '10px 16px 12px' }}>
         <button className={`view-tab ${method === 'rub' ? 'active' : ''}`} onClick={() => setMethod('rub')}>💸 Рубли</button>
         <button className={`view-tab ${method === 'ton' ? 'active' : ''}`} onClick={() => setMethod('ton')}>💎 GRAM (TON)</button>
+        <button className={`view-tab ${method === 'stars' ? 'active' : ''}`} onClick={() => setMethod('stars')}>⭐ Stars</button>
       </div>
-      {method === 'rub' ? <WithdrawRubForm wallet={wallet} onDone={onChanged} /> : <WithdrawTonForm wallet={wallet} onDone={onChanged} />}
+      {method === 'rub' && <WithdrawRubForm wallet={wallet} onDone={onChanged} />}
+      {method === 'ton' && <WithdrawTonForm wallet={wallet} onDone={onChanged} />}
+      {method === 'stars' && <WithdrawStarsForm wallet={wallet} onDone={onChanged} />}
     </>
   );
 }
