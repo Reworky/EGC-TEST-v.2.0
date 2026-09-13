@@ -1614,10 +1614,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 try {
                     AppUser saved = userService.completeRegistration(user, regNick);
                     session.reset();
-                    // Стартовый бонус 200 EXC и приветствие с гайдом — всем сразу после ввода никнейма,
-                    // независимо от подписки на канал (подписка нужна только для взятия квеста — см.
-                    // handleTakeQuest/handleTakeQuestWithPartner).
+                    // Стартовый бонус 200 EXC, уведомление админам и приветствие с гайдом — всем сразу
+                    // после ввода никнейма, независимо от подписки на канал (подписка нужна только для
+                    // взятия квеста — см. handleTakeQuest/handleTakeQuestWithPartner).
                     userService.applyWelcomeBonus(saved);
+                    notifyAdminsNewRegistration(saved);
                     startOnboarding(saved);
                     // Если человек уже подписан на канал (например, пришёл из самого канала) — сразу же
                     // полноценно активируем аккаунт (нужно для взятия квеста и реферальных начислений),
@@ -3141,11 +3142,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Общая логика активации аккаунта после подтверждённой подписки на канал — используется и
      * при ручном нажатии "Я подписался", и автоматической фоновой проверкой {@link #checkPendingChannelActivations}.
-     * Стартовый бонус 200 EXC сюда не входит — он начисляется всем сразу при вводе никнейма, независимо
-     * от подписки (см. REG_NAME); applyWelcomeBonus() здесь — просто безопасный no-op на случай пользователей,
-     * зарегистрированных до этого изменения (идемпотентен, смотрит на флаг welcomeBonusPaid). Активация
-     * нужна для взятия квестов и реферальных начислений — реферальный бонус (если есть) подтверждается
-     * отдельным сообщением через {@link #sendReferralBonusMessage} в месте вызова. */
+     * Стартовый бонус 200 EXC и уведомление админам о новой регистрации сюда не входят — они уходят
+     * сразу при вводе никнейма, независимо от подписки (см. REG_NAME); applyWelcomeBonus() здесь —
+     * просто безопасный no-op на случай пользователей, зарегистрированных до этого изменения (идемпотентен,
+     * смотрит на флаг welcomeBonusPaid). Активация нужна для взятия квестов и реферальных начислений —
+     * реферальный бонус (если есть) подтверждается отдельным сообщением через {@link #sendReferralBonusMessage}
+     * в месте вызова. */
     private ru.gamebot.platform.service.UserService.ReferralActivationResult activatePlayer(AppUser user) {
         subscriptionCheckCache.put(user.getTelegramId(), System.currentTimeMillis());
         if (!user.isRulesAccepted()) {
@@ -3165,7 +3167,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "Ты будешь получать <b>10% от EXC</b>, которые он заработает на квестах, пока он активен (выполняет квесты хотя бы раз в 14 дней).",
                     null);
         }
-        notifyAdminsNewRegistration(activated);
         return referral;
     }
 
