@@ -320,6 +320,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        // Сброс произвольного игрока до состояния "только что создан" — для тестирования регистрации/
+        // воронки с нуля на отдельном тестовом Telegram ID (не self, в отличие от /clearme). Через
+        // подтверждение с карточкой, потому что опечатка в ID стёрла бы прогресс реального игрока.
+        if (text != null && text.startsWith("/resetuser") && isEffectiveAdmin(user)) {
+            String[] parts = text.trim().split("\\s+");
+            if (parts.length == 2) {
+                try {
+                    long targetId = Long.parseLong(parts[1]);
+                    sendResetUserConfirmation(user, targetId);
+                } catch (NumberFormatException e) {
+                    sendText(user.getTelegramId(), "❌ Неверный формат ID", null);
+                }
+            } else {
+                sendText(user.getTelegramId(), "Использование: /resetuser <telegram_id>", null);
+            }
+            return;
+        }
+
         if (text != null && text.startsWith("/resendreview") && isEffectiveAdmin(user)) {
             String[] parts = text.trim().split("\\s+");
             if (parts.length == 2) {
@@ -6853,6 +6871,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendAdminDebitUsersPage(user, session, parseInteger(action.substring("debitpage:".length())), null);
                 } else if (action.startsWith("user:")) {
                     handleAdminUserAction(user, session, action.substring("user:".length()));
+                } else if (action.startsWith("resetuser:confirm:")) {
+                    long targetId = parseLong(action.substring("resetuser:confirm:".length()));
+                    clearInlineKeyboard(callbackQuery);
+                    try {
+                        userService.clearPersonalProgress(targetId);
+                        sessionService.get(targetId).reset();
+                        answer(callbackQuery.getId(), "Сброшено");
+                        sendText(user.getTelegramId(),
+                                "✅ Игрок " + targetId + " сброшен до состояния «только что создан».", null);
+                    } catch (IllegalArgumentException e) {
+                        answer(callbackQuery.getId(), "Ошибка");
+                        sendText(user.getTelegramId(), "❌ " + escape(e.getMessage()), null);
+                    }
+                } else if ("resetuser:cancel".equals(action)) {
+                    clearInlineKeyboard(callbackQuery);
+                    answer(callbackQuery.getId(), "Отменено");
                 } else if (action.startsWith("delete:")) {
                     deleteQuest(user, parseLong(action.substring("delete:".length())));
                 } else if (action.startsWith("toggle:")) {
@@ -13315,6 +13349,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "<b>ВАЖНО! Ник в боте должен совпадать с ником в игре</b>",
                 null);
         return true;
+    }
+
+    /** Карточка подтверждения перед /resetuser — показывает текущее состояние цели, чтобы опечатка
+     *  в ID не стёрла прогресс реального игрока без возможности заметить это заранее. */
+    private void sendResetUserConfirmation(AppUser admin, long targetId) {
+        AppUser target = userService.findByTelegramId(targetId).orElse(null);
+        if (target == null) {
+            sendText(admin.getTelegramId(), "❌ Пользователь не найден: " + targetId, null);
+            return;
+        }
+        String nickname = target.getNickname() != null ? target.getNickname() : "— (анкета не заполнена)";
+        String createdAt = target.getCreatedAt() != null
+                ? target.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))
+                : "—";
+        sendText(admin.getTelegramId(),
+                "⚠️ <b>Подтверди сброс игрока до состояния «только что создан»</b>\n\n"
+                        + "🆔 Telegram ID: <b>" + targetId + "</b>\n"
+                        + "👤 Никнейм: <b>" + escape(nickname) + "</b>\n"
+                        + "🪙 Баланс: <b>" + target.getCoins() + " EXC</b>\n"
+                        + "✅ Квестов выполнено: <b>" + target.getCompletedQuests() + "</b>\n"
+                        + "📅 Зарегистрирован: <b>" + createdAt + "</b>\n\n"
+                        + "Анкета, привязки игр, отряд, EXC, история квестов и заявок будут удалены/обнулены. "
+                        + "Проверь, что это действительно тестовый аккаунт — действие необратимо.",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(
+                                keyboardFactory.callback("✅ Подтвердить сброс", "admin:resetuser:confirm:" + targetId),
+                                keyboardFactory.callback("❌ Отмена", "admin:resetuser:cancel")
+                        )
+                )));
     }
 
     private boolean isSubscriptionCacheValid(Long telegramId) {

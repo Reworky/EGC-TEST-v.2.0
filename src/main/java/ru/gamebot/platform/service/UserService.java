@@ -1043,6 +1043,89 @@ public class UserService {
         user.setReferredByTelegramId(null);
         user.setReferralRewardProcessed(false);
         user.setLastActivityDate(null);
+
+        // Расширено 2026-09-14 для запроса "сбросить до состояния только что создан" (тестирование
+        // воронки регистрации с нуля) — раньше сбрасывались только анкета и базовый прогресс, теперь
+        // ещё и всё, что могло бы повлиять на прохождение флоу заново (привязки игр, отряд, буст/кулдаун
+        // состояния, онбординг, телефон, welcome-бонус). Намеренно НЕ трогаем: id, telegramId, staffRole,
+        // blocked/blockReason/blockedAt, fraudSuspect — это не про "анкету", а про права доступа и
+        // модерацию, сбрасывать их тут было бы неожиданно и рискованно.
+        user.setCreatedAt(java.time.LocalDateTime.now());
+        user.setWelcomeBonusPaid(false);
+        user.setRulesAccepted(false);
+        user.setReferralActive(true);
+        user.setReferralEarnedExc(0);
+        user.setPendingSquadInviteCode(null);
+        user.setSquadId(null);
+        user.setTrafficSourceCode(null);
+        user.setProfileTitle(null);
+        user.setAvatarFileId(null);
+        user.setAvatarFrameColor(null);
+        user.setAvatarFrameImage(null);
+        user.setOwnedFramesCsv(null);
+        user.setPhoneNumber(null);
+        user.setLastQuestTakenAt(null);
+        user.setLastNotifiedLevelNumber(null);
+        user.setLastNotifiedExcMilestone(null);
+        user.setLastNotifiedInvitedFriendsMilestone(null);
+        user.setLastDormancyTierNotified(0);
+        user.setLastBotActivityAt(null);
+        user.setLastMiniAppOpenAt(null);
+        user.setFixedRubBalance(0);
+
+        // Привязки игровых аккаунтов (авто-верификация квестов)
+        user.setBrawlStarsTag(null);
+        user.setBrawlTagConfirmedAt(null);
+        user.setClashOfClansTag(null);
+        user.setClashTagConfirmedAt(null);
+        user.setClashRoyaleTag(null);
+        user.setClashRoyaleTagConfirmedAt(null);
+        user.setDotaAccountId(null);
+        user.setDotaLinkedAt(null);
+        user.setCs2SteamId64(null);
+        user.setCs2LinkedAt(null);
+        user.setSeasonPassActiveUntil(null);
+
+        // Бусты/страховка/кулдауны магазина
+        user.setExcBoostActiveUntil(null);
+        user.setXpBoostActiveUntil(null);
+        user.setQuestSlotExtraUntil(null);
+        user.setCooldownBypassGame(null);
+        user.setRetryInsuranceActive(false);
+        user.setShopCooldownSmallUntil(null);
+        user.setShopCooldownMediumUntil(null);
+        user.setShopCooldownLargeUntil(null);
+        user.setLastBonusDate(null);
+
+        // Дневные/месячные счётчики
+        user.setDailyRerollCount(0);
+        user.setDailyRerollDate(null);
+        user.setDailyBoostCount(0);
+        user.setDailyBoostDate(null);
+        user.setDailyCooldownRemovals(0);
+        user.setDailyCooldownDate(null);
+        user.setDailyGiftsSent(0);
+        user.setDailyGiftSentDate(null);
+        user.setDailyGiftsReceived(0);
+        user.setDailyGiftReceivedDate(null);
+        user.setAdRewardCountAdsgram(0);
+        user.setAdRewardCountTelega(0);
+        user.setAdRewardDate(null);
+        user.setPendingAdRewardAt(null);
+        user.setMonthlyWithdrawnExc(0);
+        user.setWithdrawalMonth(0);
+        user.setWithdrawalYear(0);
+
+        // Онбординг-гайд ("быстрый старт")
+        user.setOnboardingStep(0);
+        user.setOnboardingCompleted(false);
+        user.setOnboardingGame(null);
+        user.setOnboardingQuestId(null);
+        user.setOnboardingStartedAt(null);
+        user.setOnboardingCompletedAt(null);
+        user.setOnboardingNotificationsSent(0);
+        user.setLastOnboardingNotification(null);
+
         return appUserRepository.save(user);
     }
 
