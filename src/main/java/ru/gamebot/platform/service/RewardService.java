@@ -124,6 +124,10 @@ public class RewardService {
         request.setRewardItem(rewardItem);
         request.setCreatedAt(LocalDateTime.now());
         request.setDisplayId(rewardRequestRepository.findMaxShopDisplayId() + 1);
+        // Снимок реально списанной суммы — rewardItem переиспользуется всеми покупками этой позиции,
+        // а effectivePrice меняется вместе с Health Ratio, так что позже (при отмене/отклонении) без
+        // этого снимка невозможно узнать, сколько было списано именно в этот раз.
+        request.setPaidPriceCoins(price);
 
         if (rewardItem.getAvatarFrameColor() != null) {
             // Цифровая косметика — применяется мгновенно, без очереди на одобрение администратора
@@ -284,6 +288,18 @@ public class RewardService {
         return excFallback / 100;
     }
 
+    /** Сколько EXC реально было списано при создании ЭТОЙ заявки — приоритет у снимка paidPriceCoins
+     *  (не совпадает с текущей rewardItem.getPriceCoins()/effectivePrice(), если Health Ratio с момента
+     *  покупки изменился, а сам RewardItem — общий переиспользуемый каталог, не персональная копия).
+     *  Фолбэк на старую логику — для заявок, созданных до появления этого поля. */
+    private long actualPaidPrice(RewardRequest req) {
+        if (req.getPaidPriceCoins() != null) {
+            return req.getPaidPriceCoins();
+        }
+        boolean isWithdrawal = "Вывод".equals(req.getRewardItem().getCategory());
+        return isWithdrawal ? req.getRewardItem().getPriceCoins() : effectivePrice(req.getRewardItem());
+    }
+
     @Transactional
     public RewardRequest cancelRequest(Long requestId, AppUser requester) {
         RewardRequest req = getRequest(requestId);
@@ -296,8 +312,7 @@ public class RewardService {
             throw new IllegalArgumentException("Заявку можно отменить только в статусе «Ожидает».");
         }
         req.setStatus(RewardRequestStatus.CANCELLED);
-        boolean isWithdrawal = "Вывод".equals(req.getRewardItem().getCategory());
-        long price = isWithdrawal ? req.getRewardItem().getPriceCoins() : effectivePrice(req.getRewardItem());
+        long price = actualPaidPrice(req);
         requester.setCoins(requester.getCoins() + price);
         excTx.log(requester, price, ExcTransactionService.SHOP_REFUND, "Отмена заявки: " + req.getRewardItem().getTitle());
         userService.save(requester);
@@ -313,7 +328,7 @@ public class RewardService {
         req.setAdminComment(comment);
         AppUser user = req.getUser();
         boolean isWithdrawal = "Вывод".equals(req.getRewardItem().getCategory());
-        long price = isWithdrawal ? req.getRewardItem().getPriceCoins() : effectivePrice(req.getRewardItem());
+        long price = actualPaidPrice(req);
         user.setCoins(user.getCoins() + price);
         excTx.log(user, price, ExcTransactionService.SHOP_REFUND, "Возврат (отклонение): " + req.getRewardItem().getTitle());
         userService.save(user);
@@ -409,6 +424,7 @@ public class RewardService {
         request.setPayoutDetails("TON:" + tonWallet + ":rubles=" + rubles);
         request.setDisplayId(rewardRequestRepository.findMaxWithdrawalDisplayId() + 1);
         request.setFixedRubValue(rubles);
+        request.setPaidPriceCoins(excAmount);
         return rewardRequestRepository.save(request);
     }
 
@@ -473,6 +489,7 @@ public class RewardService {
         request.setCreatedAt(LocalDateTime.now());
         request.setDisplayId(rewardRequestRepository.findMaxWithdrawalDisplayId() + 1);
         request.setFixedRubValue(rubles);
+        request.setPaidPriceCoins(excAmount);
         return rewardRequestRepository.save(request);
     }
 
