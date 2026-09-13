@@ -1614,16 +1614,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 try {
                     AppUser saved = userService.completeRegistration(user, regNick);
                     session.reset();
-                    // Приветствие с гайдом показываются всегда сразу после ввода никнейма, независимо
-                    // от подписки на канал (проверка подписки нужна только для взятия квеста — см.
-                    // handleTakeQuest/handleTakeQuestWithPartner). Если человек уже подписан (например,
-                    // пришёл из самого канала) — сразу же и активируем аккаунт (реальное начисление
-                    // бонуса), не дожидаясь фоновой проверки раз в 5 минут (checkPendingChannelActivations).
+                    // Стартовый бонус 200 EXC и приветствие с гайдом — всем сразу после ввода никнейма,
+                    // независимо от подписки на канал (подписка нужна только для взятия квеста — см.
+                    // handleTakeQuest/handleTakeQuestWithPartner).
+                    userService.applyWelcomeBonus(saved);
+                    startOnboarding(saved);
+                    // Если человек уже подписан на канал (например, пришёл из самого канала) — сразу же
+                    // полноценно активируем аккаунт (нужно для взятия квеста и реферальных начислений),
+                    // не дожидаясь фоновой проверки раз в 5 минут (checkPendingChannelActivations).
                     if (isRequiredChannelMember(saved.getTelegramId())) {
                         ru.gamebot.platform.service.UserService.ReferralActivationResult referral = activatePlayer(saved);
-                        startOnboarding(saved, true, referral);
-                    } else {
-                        startOnboarding(saved, false, null);
+                        if (referral != null) {
+                            sendReferralBonusMessage(saved, referral);
+                        }
                     }
                 } catch (org.springframework.dao.DataIntegrityViolationException e) {
                     sendText(user.getTelegramId(),
@@ -3109,7 +3112,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void handleActivationCheck(CallbackQuery callbackQuery, AppUser user) {
         if (isRequiredChannelMember(user.getTelegramId())) {
             ru.gamebot.platform.service.UserService.ReferralActivationResult referral = activatePlayer(user);
-            sendActivationBonusMessage(user, referral);
+            if (referral != null) {
+                sendReferralBonusMessage(user, referral);
+            }
             // Если подписку запросили в момент попытки взять квест — сразу продолжаем взятие ЭТОГО ЖЕ
             // квеста, а не возвращаем в меню лишним шагом (см. handleTakeQuest/handleTakeQuestWithPartner).
             UserSession session = sessionService.get(user.getTelegramId());
@@ -3137,10 +3142,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Общая логика активации аккаунта после подтверждённой подписки на канал — используется и
      * при ручном нажатии "Я подписался", и автоматической фоновой проверкой {@link #checkPendingChannelActivations}.
-     * Приветствие с гайдом ({@link #startOnboarding}) сюда не входит — оно теперь отправляется один раз,
-     * сразу после ввода никнейма, независимо от того, подписан человек уже или нет (см. REG_NAME).
-     * Здесь только начисления и уведомления, а видимое подтверждение — отдельным коротким сообщением
-     * через {@link #sendActivationBonusMessage} в месте вызова. */
+     * Стартовый бонус 200 EXC сюда не входит — он начисляется всем сразу при вводе никнейма, независимо
+     * от подписки (см. REG_NAME); applyWelcomeBonus() здесь — просто безопасный no-op на случай пользователей,
+     * зарегистрированных до этого изменения (идемпотентен, смотрит на флаг welcomeBonusPaid). Активация
+     * нужна для взятия квестов и реферальных начислений — реферальный бонус (если есть) подтверждается
+     * отдельным сообщением через {@link #sendReferralBonusMessage} в месте вызова. */
     private ru.gamebot.platform.service.UserService.ReferralActivationResult activatePlayer(AppUser user) {
         subscriptionCheckCache.put(user.getTelegramId(), System.currentTimeMillis());
         if (!user.isRulesAccepted()) {
@@ -3164,18 +3170,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return referral;
     }
 
-    /** Короткое подтверждение фактического начисления стартового бонуса — для случаев, когда
-     * приветствие с гайдом ({@link #startOnboarding}) уже было показано раньше (сразу после анкеты),
-     * а подписка на канал подтвердилась только сейчас (клик "Я подписался" или фоновая проверка). */
-    private void sendActivationBonusMessage(AppUser user, ru.gamebot.platform.service.UserService.ReferralActivationResult referral) {
-        String referralLine = referral != null
-                ? "\n🪙 <b>Реферальный бонус: +" + referral.invitedBonus() + " EXC</b> уже на балансе!\n"
-                        + "Ещё <b>3 000 EXC</b> придут после первого выполненного квеста.\n"
-                : "";
+    /** Сообщение о реферальном бонусе новому игроку — приходит отдельно от общего приветствия
+     * (см. {@link #startOnboarding}), т.к. известно только в момент подтверждённой подписки/активации. */
+    private void sendReferralBonusMessage(AppUser user, ru.gamebot.platform.service.UserService.ReferralActivationResult referral) {
         sendText(user.getTelegramId(),
-                "✅ <b>Подписка подтверждена!</b>\n\n"
-                        + "Начислено <b>+200 EXC</b> — стартовый капитал.\n"
-                        + referralLine,
+                "🪙 <b>Реферальный бонус: +" + referral.invitedBonus() + " EXC</b> уже на балансе!\n\n"
+                        + "Ещё <b>3 000 EXC</b> придут после первого выполненного квеста.",
                 null);
     }
 
@@ -3210,7 +3210,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             try {
                 if (isRequiredChannelMember(user.getTelegramId())) {
                     ru.gamebot.platform.service.UserService.ReferralActivationResult referral = activatePlayer(user);
-                    sendActivationBonusMessage(user, referral);
+                    if (referral != null) {
+                        sendReferralBonusMessage(user, referral);
+                    }
                 }
             } catch (Exception e) {
                 log.warn("Failed to auto-activate user {} after detecting channel membership", user.getTelegramId(), e);
@@ -3220,31 +3222,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     // ─── Onboarding ──────────────────────────────────────────────────────────────
 
-    /** Приветствие + гайд отправляются один раз, сразу после ввода никнейма (см. REG_NAME) — независимо
-     * от того, подписан человек на канал уже в этот момент или нет: {@code activated} только меняет
-     * формулировку про стартовый бонус (уже начислен / начислится при подтверждении подписки), сам факт
-     * показа приветствия и гайда от подписки не зависит. Если на момент ввода ника подписки ещё не было,
-     * фактическое начисление и отдельное короткое подтверждение придут позже — см. {@link #sendActivationBonusMessage}. */
-    private void startOnboarding(AppUser user, boolean activated, ru.gamebot.platform.service.UserService.ReferralActivationResult referral) {
+    /** Приветствие + гайд — одно и то же сообщение всем сразу после ввода никнейма (см. REG_NAME),
+     * независимо от подписки на канал: стартовый бонус 200 EXC начисляется всем сразу (см. вызов
+     * userService.applyWelcomeBonus() в REG_NAME, до этого метода), поэтому текст не зависит от статуса
+     * подписки. Реферальный бонус (если есть) по-прежнему известен только при подтверждённой подписке —
+     * приходит отдельным сообщением через {@link #sendReferralBonusMessage}. */
+    private void startOnboarding(AppUser user) {
         user.setOnboardingStep(1);
         user.setOnboardingStartedAt(java.time.LocalDateTime.now());
         user.setOnboardingCompleted(false);
         user.setOnboardingNotificationsSent(0);
         userService.save(user);
 
-        String bonusLine = activated
-                ? "✅ Тебе начислено <b>200 EXC</b> за регистрацию — это твой стартовый капитал.\n"
-                : "🎁 Стартовый капитал <b>200 EXC</b> начислим, как только подтвердишь подписку на канал — это понадобится при выполнении первого квеста.\n";
-
-        String referralLine = (activated && referral != null)
-                ? "\n🪙 <b>Реферальный бонус: +" + referral.invitedBonus() + " EXC</b> уже на балансе!\n"
-                        + "Ещё <b>3 000 EXC</b> придут после первого выполненного квеста.\n"
-                : "";
-
         sendText(user.getTelegramId(),
                 "🎮 <b>Добро пожаловать в EGC!</b>\n\n"
-                        + bonusLine
-                        + referralLine,
+                        + "✅ Тебе начислено <b>200 EXC</b> за регистрацию — это твой стартовый капитал.\n",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("Отлично, что дальше? →", "onboarding:guide"))
                 )));
