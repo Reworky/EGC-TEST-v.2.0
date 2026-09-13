@@ -22,5 +22,9 @@ public enum QuestActionStatus {
     NEEDS_DOTA_LINK,
     NEEDS_CS2_LINK,
     AUTO_VERIFIED_NO_REPORT,
-    NEEDS_BRAWL_PARTNER
+    NEEDS_BRAWL_PARTNER,
+    /** Подписка на канал теперь проверяется точечно при взятии квеста (2026-09-14), а не сразу
+     *  после анкеты — см. GamePlatformBot.handleTakeQuest. Мини-апп должен запретить взятие квеста
+     *  тем же образом, иначе через API можно обойти проверку, которая есть в боте. */
+    NEEDS_CHANNEL_SUBSCRIPTION
 }

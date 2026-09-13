@@ -111,11 +111,14 @@ function QuestActions({ quest, detail, onChanged }) {
   }
 
   const TAG_LINK_DEEPLINK = {
-    NEEDS_BRAWL_TAG: 'brawltag',
-    NEEDS_CLASH_TAG: 'clashtag',
-    NEEDS_CLASH_ROYALE_TAG: 'crtag',
-    NEEDS_DOTA_LINK: 'dotalink',
-    NEEDS_CS2_LINK: 'cs2link',
+    NEEDS_BRAWL_TAG: { startParam: 'brawltag', label: '🏷️ Открыть бота и привязать тег' },
+    NEEDS_CLASH_TAG: { startParam: 'clashtag', label: '🏷️ Открыть бота и привязать тег' },
+    NEEDS_CLASH_ROYALE_TAG: { startParam: 'crtag', label: '🏷️ Открыть бота и привязать тег' },
+    NEEDS_DOTA_LINK: { startParam: 'dotalink', label: '🏷️ Открыть бота и привязать тег' },
+    NEEDS_CS2_LINK: { startParam: 'cs2link', label: '🏷️ Открыть бота и привязать тег' },
+    // Подписка на канал теперь проверяется при взятии квеста, а не сразу после анкеты (2026-09-14) —
+    // тот же принцип, что и с привязкой тега: показать сообщение и увести в бота для завершения шага.
+    NEEDS_CHANNEL_SUBSCRIPTION: { startParam: 'subscribe', label: '📢 Открыть бота и подписаться' },
   };
 
   function openBotForTag(startParam) {
@@ -238,8 +241,8 @@ function QuestActions({ quest, detail, onChanged }) {
         <div className="quest-message">
           {message}
           {needsTagLink && (
-            <button className="quest-btn" style={{ marginTop: 8 }} onClick={() => openBotForTag(needsTagLink)}>
-              🏷️ Открыть бота и привязать тег
+            <button className="quest-btn" style={{ marginTop: 8 }} onClick={() => openBotForTag(needsTagLink.startParam)}>
+              {needsTagLink.label}
             </button>
           )}
         </div>

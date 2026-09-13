@@ -370,10 +370,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        if (user.isProfileCompleted() && !user.isRegistrationCompleted() && !isEffectiveModerator(user)) {
-            sendCommunityActivationPrompt(user, null);
-            return;
-        }
+        // Подписка на канал больше не блокирует использование бота целиком сразу после анкеты —
+        // проверяется точечно, в момент взятия квеста (см. handleTakeQuest/handleTakeQuestWithPartner).
+        // Игрок может свободно листать меню/квесты/профиль без подписки, просто не сможет запустить квест.
 
         if (session.getState() == SessionState.REPORT_MEDIA) {
             handleReportMessage(user, session, message);
@@ -636,15 +635,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        if (!user.isRegistrationCompleted()) {
-            sendCommunityActivationPrompt(user, null);
-            return;
-        }
+        // Подписка на канал больше не запрашивается сразу после анкеты — только в момент взятия
+        // квеста (см. handleTakeQuest/handleTakeQuestWithPartner). Дальше по коду ветки с явной
+        // проверкой isRegistrationCompleted() (диплинки отряда/тегов) для неподписанных просто не
+        // сработают и код упадёт до resumeOnboarding()/sendMainMenu() ниже — это ожидаемо.
 
         // Handle squad invite deep link: /start squad_<inviteCode>
         String startPayload = message.getText().contains(" ")
                 ? message.getText().substring(message.getText().indexOf(' ') + 1).trim()
                 : "";
+        // Deep link из мини-аппа: попытка взять квест без подписки (см. QuestController.takeQuest) —
+        // сразу показываем экран подписки, а не главное меню, чтобы не заставлять искать её самому.
+        if (startPayload.equals("subscribe") && !user.isRegistrationCompleted()) {
+            sendCommunityActivationPrompt(user, null);
+            return;
+        }
         if (startPayload.startsWith("squad_") && user.isRegistrationCompleted()) {
             String code = startPayload.substring("squad_".length());
             try {
@@ -793,11 +798,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        if (!isEffectiveModerator(user) && !user.isRegistrationCompleted()) {
-            answer(callbackQuery.getId(), "Сначала активируйте аккаунт");
-            sendCommunityActivationPrompt(user, null);
-            return;
-        }
+        // Подписка на канал больше не блокирует использование бота целиком — проверяется точечно,
+        // в момент взятия квеста (см. handleTakeQuest/handleTakeQuestWithPartner), а не здесь для
+        // вообще любого нажатия. Игрок может свободно листать меню/квесты/профиль без подписки.
 
         if (data.startsWith("onboarding:")) {
             handleOnboardingCallback(callbackQuery, user, data.substring("onboarding:".length()));
@@ -3068,16 +3071,32 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("✅ Я подписался", "activation:check")));
 
         String text = (notice == null || notice.isBlank() ? "" : notice + "\n\n")
-                + "🔐 <b>Последний шаг!</b>\n\n"
+                + "🔐 <b>Нужна подписка на канал</b>\n\n"
                 + "Подпишись на канал <b>" + escape(requiredChannelLabel()) + "</b> и прими правила клуба.\n\n"
                 + "Подписавшись, ты автоматически соглашаешься с правилами платформы.\n\n"
-                + "Это займёт 10 секунд — и тебе сразу начислится <b>+200 EXC</b>, плюс откроются квесты, награды и рейтинг!";
+                + "Это займёт 10 секунд — и тебе сразу начислится <b>+200 EXC</b>.";
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
 
     private void handleActivationCheck(CallbackQuery callbackQuery, AppUser user) {
         if (isRequiredChannelMember(user.getTelegramId())) {
             activatePlayer(user);
+            // Если подписку запросили в момент попытки взять квест — сразу продолжаем взятие ЭТОГО ЖЕ
+            // квеста, а не возвращаем в меню лишним шагом (см. handleTakeQuest/handleTakeQuestWithPartner).
+            UserSession session = sessionService.get(user.getTelegramId());
+            String pendingQuestId = session.getData().remove("pendingQuestTakeId");
+            if (pendingQuestId != null) {
+                String pendingPartnerId = session.getData().remove("pendingQuestTakePartnerId");
+                try {
+                    Long questId = Long.parseLong(pendingQuestId);
+                    if (pendingPartnerId != null) {
+                        handleTakeQuestWithPartner(callbackQuery, user, questId, Long.parseLong(pendingPartnerId));
+                    } else {
+                        handleTakeQuest(callbackQuery, user, session, questId);
+                    }
+                    return;
+                } catch (NumberFormatException ignored) {}
+            }
             answer(callbackQuery.getId(), "Аккаунт активирован");
             return;
         }
@@ -3963,6 +3982,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void handleTakeQuest(CallbackQuery callbackQuery, AppUser user, UserSession session, Long questId) {
+        if (!user.isRegistrationCompleted() && !isEffectiveModerator(user)) {
+            answerSilently(callbackQuery.getId());
+            session.getData().put("pendingQuestTakeId", String.valueOf(questId));
+            session.getData().remove("pendingQuestTakePartnerId");
+            sendCommunityActivationPrompt(user,
+                    "🎯 Чтобы взять этот квест и начать зарабатывать EXC, сначала подпишись на канал — это займёт 10 секунд.");
+            return;
+        }
         Quest quest = questService.getQuest(questId);
         if (quest.getBrawlVerifyType() != null && user.getBrawlStarsTag() == null) {
             answerSilently(callbackQuery.getId());
@@ -4069,6 +4096,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void handleTakeQuestWithPartner(CallbackQuery callbackQuery, AppUser user, Long questId, Long partnerTelegramId) {
+        if (!user.isRegistrationCompleted() && !isEffectiveModerator(user)) {
+            answerSilently(callbackQuery.getId());
+            UserSession session = sessionService.get(user.getTelegramId());
+            session.getData().put("pendingQuestTakeId", String.valueOf(questId));
+            session.getData().put("pendingQuestTakePartnerId", String.valueOf(partnerTelegramId));
+            sendCommunityActivationPrompt(user,
+                    "🎯 Чтобы взять этот квест и начать зарабатывать EXC, сначала подпишись на канал — это займёт 10 секунд.");
+            return;
+        }
         Quest quest = questService.getQuest(questId);
         AppUser partner = userService.findByTelegramId(partnerTelegramId).orElse(null);
         if (partner == null || partner.getBrawlStarsTag() == null) {

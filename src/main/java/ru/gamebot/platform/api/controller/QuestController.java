@@ -200,6 +200,15 @@ public class QuestController {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
+        // Та же точечная проверка подписки, что и в боте (см. GamePlatformBot.handleTakeQuest) — без
+        // неё мини-апп был бы обходным путём мимо этого правила, раз общая блокировка снята.
+        if (!user.isRegistrationCompleted()) {
+            return ResponseEntity.ok(QuestActionResponseDto.builder()
+                    .success(false)
+                    .status(QuestActionStatus.NEEDS_CHANNEL_SUBSCRIPTION.name())
+                    .message("Чтобы взять этот квест и начать зарабатывать EXC, сначала подпишись на канал в боте.")
+                    .build());
+        }
         Quest quest;
         try {
             quest = questService.getQuest(id);
