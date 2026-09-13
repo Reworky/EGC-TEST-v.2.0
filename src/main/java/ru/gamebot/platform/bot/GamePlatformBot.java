@@ -5006,7 +5006,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String text = "🚫 <b>Заявка отменена пользователем</b>\n\n"
                 + "👤 " + usernameStr + " (<b>" + escape(user.getNickname()) + "</b>)\n"
                 + "🎁 <b>" + escape(req.getRewardItem().getTitle()) + "</b>\n"
-                + "🪙 " + req.getRewardItem().getPriceCoins() + " EXC возвращено";
+                + "🪙 " + rewardService.actualPaidPrice(req) + " EXC возвращено";
         for (Long adminId : adminService.allAdminIds()) {
             sendText(adminId, text, null);
         }
@@ -7624,7 +7624,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "📋 <b>Заявка М-" + reqDisplayId(req) + "</b>\n\n"
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + usernameStr + ")\n"
                         + "🎁 Награда: <b>" + escape(req.getRewardItem().getTitle()) + "</b>\n"
-                        + "🪙 Цена: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>"
+                        + "🪙 Цена: <b>" + rewardService.actualPaidPrice(req) + " EXC</b>"
                         + userDataLine + "\n"
                         + "📅 Дата: <b>" + req.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) + "</b>"
                         + statusLine,
@@ -7782,7 +7782,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     : "#" + req.getUser().getTelegramId();
             String type = isStarsWithdrawal(req) ? "⭐ Stars" : isCryptoWithdrawal(req) ? "💎 TON" : "💸 ₽";
             rows.add(List.of(keyboardFactory.callback(
-                    "В-" + reqDisplayId(req) + " " + uname + " — " + type + " " + req.getRewardItem().getPriceCoins() + " EXC",
+                    "В-" + reqDisplayId(req) + " " + uname + " — " + type + " " + rewardService.actualPaidPrice(req) + " EXC",
                     "admin:withdrawal:req:" + req.getId())));
         }
         rows.add(List.of(
@@ -7871,7 +7871,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 String nick = escape(req.getUser().getNickname());
                 if (nick.length() > 12) nick = nick.substring(0, 12) + "…";
                 sb.append(statusEmoji).append(" <b>В-").append(reqDisplayId(req)).append("</b> ")
-                  .append(type).append(" ").append(req.getRewardItem().getPriceCoins()).append(" EXC")
+                  .append(type).append(" ").append(rewardService.actualPaidPrice(req)).append(" EXC")
                   .append(" | ").append(nick).append(" (").append(escape(uname)).append(")")
                   .append(" | ").append(req.getCreatedAt().format(fmt)).append("\n");
             }
@@ -7973,7 +7973,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
                         + "🌍 Страна: <b>" + escape(requester.getCountry() != null ? requester.getCountry() : "Не указана") + "</b>\n"
                         + phoneLine + "\n"
-                        + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
+                        + "🪙 Сумма: <b>" + rewardService.actualPaidPrice(req) + " EXC</b>\n"
                         + "💵 К выплате: <b>~" + rubles + " ₽</b>" + payoutSuffix
                         + detailsLine + "\n"
                         + monthlyLimitLine(requester)
@@ -7992,7 +7992,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendPayoutConfirmedCard(AppUser admin, RewardRequest req, boolean isModFlow) {
         AppUser player = req.getUser();
-        long exc = req.getRewardItem().getPriceCoins();
+        long exc = rewardService.actualPaidPrice(req);
         String withdrawalsCallback = isModFlow ? "mod:withdrawals" : "admin:withdrawals";
 
         String usernameStr = player.getTelegramUsername() != null
@@ -8059,7 +8059,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : isCryptoWithdrawal(req) ? cryptoMethodLabel(req.getPayoutDetails()) : "рубли (СБП / Сбербанк)";
         String caption = "✅ <b>Ваш вывод EXC выполнен!</b>\n\n"
                 + "🔢 Номер заявки: <b>В-" + reqDisplayId(req) + "</b>\n"
-                + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
+                + "🪙 Сумма: <b>" + rewardService.actualPaidPrice(req) + " EXC</b>\n"
                 + "💵 Способ: <b>" + method + "</b>\n\n"
                 + "Средства отправлены. Если не получили — напишите в поддержку.";
         if (receiptFileId != null) {
@@ -8098,7 +8098,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? "https://t.me/" + player.getTelegramUsername()
                 : "tg://user?id=" + player.getTelegramId();
         String text = "💸 Игрок <b><a href=\"" + profileLink + "\">" + nickname + "</a></b> вывел <b>"
-                + req.getRewardItem().getPriceCoins() + " EXC</b>!";
+                + rewardService.actualPaidPrice(req) + " EXC</b>!";
         if (receiptCaption != null && !receiptCaption.isBlank()) {
             text += "\n\n" + escape(receiptCaption.trim());
         }
@@ -8492,7 +8492,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String comment = req.getAdminComment() != null ? req.getAdminComment() : "—";
         sendText(req.getUser().getTelegramId(),
                 "❌ <b>Заявка на вывод отклонена</b>\n\n"
-                        + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
+                        + "🪙 Сумма: <b>" + rewardService.actualPaidPrice(req) + " EXC</b>\n"
                         + "📝 Причина: " + escape(comment) + "\n\n"
                         + "EXC возвращены на ваш баланс.",
                 null);
@@ -10900,7 +10900,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 long monthTotal = 0;
                 for (ru.gamebot.platform.domain.model.RewardRequest r : entry.getValue()) {
                     ru.gamebot.platform.domain.enums.RewardRequestStatus st = r.getStatus();
-                    long exc = r.getRewardItem().getPriceCoins();
+                    long exc = rewardService.actualPaidPrice(r);
                     String statusIcon = switch (st) {
                         case PENDING     -> "⏳";
                         case IN_PROGRESS -> "🔄";
@@ -12642,7 +12642,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🆔 Telegram ID: <b>" + user.getTelegramId() + "</b>"
                 + userLink + "\n"
                 + "🌍 Страна: <b>" + escape(user.getCountry() != null ? user.getCountry() : "Не указана") + "</b>\n"
-                + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
+                + "🪙 Сумма: <b>" + rewardService.actualPaidPrice(req) + " EXC</b>\n"
                 + "📦 Тип: <b>" + escape(req.getRewardItem().getTitle()) + "</b>"
                 + details;
         Set<Long> adminIds = adminService.allAdminIds();
@@ -12731,7 +12731,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     : "#" + req.getUser().getTelegramId();
             String type = isCryptoWithdrawal(req) ? "💎 TON" : "💸 ₽";
             rows.add(List.of(keyboardFactory.callback(
-                    "В-" + reqDisplayId(req) + " " + uname + " — " + type + " " + req.getRewardItem().getPriceCoins() + " EXC",
+                    "В-" + reqDisplayId(req) + " " + uname + " — " + type + " " + rewardService.actualPaidPrice(req) + " EXC",
                     "mod:withdrawal:req:" + req.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:moderation")));
@@ -12793,7 +12793,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
                         + "🌍 Страна: <b>" + escape(requester.getCountry() != null ? requester.getCountry() : "Не указана") + "</b>\n"
                         + phoneLineMod + "\n"
-                        + "🪙 Сумма: <b>" + req.getRewardItem().getPriceCoins() + " EXC</b>\n"
+                        + "🪙 Сумма: <b>" + rewardService.actualPaidPrice(req) + " EXC</b>\n"
                         + "💵 К выплате: <b>~" + rubles + " ₽</b>" + payoutSuffix
                         + detailsLine + "\n"
                         + monthlyLimitLine(requester)
@@ -12819,7 +12819,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "👤 Игрок: <b>" + escape(user.getNickname()) + "</b>\n"
                             + "🆔 Telegram ID: <b>" + user.getTelegramId() + "</b>\n"
                             + "🎁 Награда: <b>" + escape(reward.getTitle()) + "</b>\n"
-                            + "🪙 Стоимость: <b>" + reward.getPriceCoins() + " EXC</b>"
+                            + "🪙 Стоимость: <b>" + rewardService.effectivePrice(reward) + " EXC</b>"
                             + dataLine,
                     markup);
         }

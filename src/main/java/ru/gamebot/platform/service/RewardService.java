@@ -250,7 +250,7 @@ public class RewardService {
      *  (см. sendAdminStats), а не календарная неделя/месяц. */
     public WithdrawalPeriodStats withdrawalStatsSince(java.time.LocalDateTime since) {
         List<RewardRequest> requests = rewardRequestRepository.findApprovedWithdrawalsSince(since);
-        long totalExc = requests.stream().mapToLong(r -> r.getRewardItem().getPriceCoins()).sum();
+        long totalExc = requests.stream().mapToLong(this::actualPaidPrice).sum();
         long[] rubAndTon = rubAndTonRubOf(requests);
         return new WithdrawalPeriodStats(requests.size(), totalExc, rubAndTon[0], rubAndTon[1], rubAndTon[2]);
     }
@@ -292,7 +292,7 @@ public class RewardService {
      *  (не совпадает с текущей rewardItem.getPriceCoins()/effectivePrice(), если Health Ratio с момента
      *  покупки изменился, а сам RewardItem — общий переиспользуемый каталог, не персональная копия).
      *  Фолбэк на старую логику — для заявок, созданных до появления этого поля. */
-    private long actualPaidPrice(RewardRequest req) {
+    public long actualPaidPrice(RewardRequest req) {
         if (req.getPaidPriceCoins() != null) {
             return req.getPaidPriceCoins();
         }

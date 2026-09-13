@@ -240,17 +240,20 @@ public class WalletController {
 
     private WithdrawalRequestDto toWithdrawalDto(RewardRequest r) {
         String payoutDetails = r.getPayoutDetails();
-        boolean isCrypto = payoutDetails != null && (payoutDetails.startsWith("TON") || payoutDetails.startsWith("USDT"));
-        String method = isCrypto ? (payoutDetails.startsWith("USDT") ? "USDT · TON" : "GRAM (TON)") : "Рубли";
+        boolean isStars = "telegram_stars".equals(r.getRewardItem().getPurchaseGroup());
+        boolean isCrypto = !isStars && payoutDetails != null && (payoutDetails.startsWith("TON") || payoutDetails.startsWith("USDT"));
+        String method = isStars ? "Telegram Stars" : isCrypto ? (payoutDetails.startsWith("USDT") ? "USDT · TON" : "GRAM (TON)") : "Рубли";
         String details = payoutDetails;
-        if (isCrypto && payoutDetails != null) {
+        if (isStars && payoutDetails != null) {
+            details = "@" + payoutDetails.trim().replaceFirst("^@", "");
+        } else if (isCrypto && payoutDetails != null) {
             String[] parts = payoutDetails.split(":");
             details = parts.length > 1 ? parts[1] : payoutDetails;
         }
         return WithdrawalRequestDto.builder()
                 .id(r.getId())
                 .displayId(r.getDisplayId() != null ? r.getDisplayId() : r.getId())
-                .amountExc(r.getRewardItem().getPriceCoins())
+                .amountExc(rewardService.actualPaidPrice(r))
                 .status(r.getStatus().name())
                 .adminComment(r.getAdminComment())
                 .createdAt(r.getCreatedAt() != null ? r.getCreatedAt().format(FMT) : null)

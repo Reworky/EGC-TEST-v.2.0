@@ -62,12 +62,15 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
     @Query("SELECT r FROM RewardRequest r JOIN FETCH r.user JOIN FETCH r.rewardItem WHERE r.rewardItem.category = 'Вывод' AND r.status IN ('APPROVED','PENDING','IN_PROGRESS') AND r.payoutDetails LIKE :needle AND r.user <> :excludeUser")
     List<RewardRequest> findApprovedWithdrawalsWithPayoutDetailsContaining(@Param("needle") String needle, @Param("excludeUser") AppUser excludeUser);
 
-    @Query("SELECT COALESCE(SUM(r.rewardItem.priceCoins), 0) FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED'")
+    // COALESCE на paidPriceCoins — снимок реально списанной суммы (см. RewardService.actualPaidPrice).
+    // rewardItem.priceCoins один на всех, кто когда-либо купил эту позицию каталога (звёзды, игровая
+    // валюта) — без снимка сумма "плыла" бы каждый раз, когда меняется Health Ratio.
+    @Query("SELECT COALESCE(SUM(COALESCE(r.paidPriceCoins, r.rewardItem.priceCoins)), 0) FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED'")
     long sumApprovedWithdrawalExc();
 
     /** Приближение — фильтр по createdAt заявки, не по моменту одобрения (отдельного поля даты
      *  одобрения у RewardRequest нет). Для отчёта под рекламодателя точность до дня не критична. */
-    @Query("SELECT COALESCE(SUM(r.rewardItem.priceCoins), 0) FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED' AND r.createdAt >= :since")
+    @Query("SELECT COALESCE(SUM(COALESCE(r.paidPriceCoins, r.rewardItem.priceCoins)), 0) FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED' AND r.createdAt >= :since")
     long sumApprovedWithdrawalExcSince(@Param("since") LocalDateTime since);
 
     @Query("SELECT COUNT(DISTINCT r.user.id) FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED'")

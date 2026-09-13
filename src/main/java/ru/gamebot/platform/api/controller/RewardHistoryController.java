@@ -65,7 +65,7 @@ public class RewardHistoryController {
                 .displayId(r.getDisplayId() != null ? r.getDisplayId() : r.getId())
                 .rewardTitle(r.getRewardItem().getTitle())
                 .category(r.getRewardItem().getCategory())
-                .priceCoins(r.getRewardItem().getPriceCoins())
+                .priceCoins(rewardService.actualPaidPrice(r))
                 .status(r.getStatus().name())
                 .adminComment(r.getAdminComment())
                 .createdAt(r.getCreatedAt() != null ? r.getCreatedAt().format(FMT) : null)
