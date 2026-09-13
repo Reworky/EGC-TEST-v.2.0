@@ -123,6 +123,11 @@ public class ShopController {
         String message;
         if (item.getAvatarFrameColor() != null) {
             message = "Рамка применена! Открой «Профиль», чтобы увидеть.";
+        } else if ("Вывод".equals(item.getCategory())) {
+            // Как в боте — вывод (сейчас Telegram Stars) уведомляет модераторов через тот же канал,
+            // что и рубли/TON, а не общий "новая заявка в магазине" админам.
+            gamePlatformBot.notifyAdminsAboutWithdrawal(user, req);
+            message = "Заявка на вывод отправлена. Как только выплата будет выполнена, вы получите уведомление.";
         } else {
             gamePlatformBot.notifyAdminsAboutRewardRequest(user, item, userData);
             message = "Заявка отправлена. Как только выдача будет подтверждена, вы получите уведомление.";

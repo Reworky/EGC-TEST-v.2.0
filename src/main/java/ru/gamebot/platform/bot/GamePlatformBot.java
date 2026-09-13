@@ -5453,7 +5453,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        notifyAdminsAboutRewardRequest(user, reward, userGameData);
+        // Категория "Вывод" (сейчас — Telegram Stars) идёт через тот же канал уведомлений, что и
+        // рубли/TON — модераторам, а не общий "новая заявка в магазине" админам.
+        if ("Вывод".equals(reward.getCategory())) {
+            notifyAdminsAboutWithdrawal(user, req);
+        } else {
+            notifyAdminsAboutRewardRequest(user, reward, userGameData);
+        }
         sendText(user.getTelegramId(),
                 "✅ <b>Заявка на награду отправлена</b>\n\n"
                         + "🎁 Награда: <b>" + escape(reward.getTitle()) + "</b>\n"
@@ -12615,7 +12621,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         String details = "";
         String payoutDetails = req.getPayoutDetails();
-        if (payoutDetails != null && payoutDetails.startsWith("TON:")) {
+        if (isStarsWithdrawal(req)) {
+            details = "\n⭐ Юзернейм получателя: <code>@" + escape(starsUsername(req)) + "</code>";
+        } else if (payoutDetails != null && payoutDetails.startsWith("TON:")) {
             // Формат: TON:<wallet>:rubles=<N>
             String wallet = cryptoWalletFromPayoutDetails(payoutDetails);
             long rubles = fixedOrCurrentRub(req);
