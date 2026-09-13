@@ -30,7 +30,7 @@ public class RewardHistoryController {
     @GetMapping
     public ResponseEntity<?> rewards(@AuthenticationPrincipal Long telegramId) {
         return appUserRepository.findByTelegramId(telegramId)
-                .filter(AppUser::isRegistrationCompleted)
+                .filter(AppUser::isProfileCompleted)
                 .map(user -> {
                     // Заявки на вывод EXC показываются отдельно на странице Кошелька — см. WalletController.
                     List<RewardRequestDto> list = rewardService.findUserRequests(user).stream()

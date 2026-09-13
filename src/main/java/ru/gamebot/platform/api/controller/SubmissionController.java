@@ -25,7 +25,7 @@ public class SubmissionController {
     @GetMapping
     public ResponseEntity<?> submissions(@AuthenticationPrincipal Long telegramId) {
         return appUserRepository.findByTelegramId(telegramId)
-                .filter(u -> u.isRegistrationCompleted())
+                .filter(u -> u.isProfileCompleted())
                 .map(user -> {
                     List<QuestSubmissionDto> list = questService.getUserSubmissions(user).stream()
                             .map(s -> QuestSubmissionDto.builder()

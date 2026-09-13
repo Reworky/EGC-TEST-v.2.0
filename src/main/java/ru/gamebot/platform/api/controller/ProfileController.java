@@ -40,7 +40,7 @@ public class ProfileController {
     @GetMapping
     public ResponseEntity<?> getProfile(@AuthenticationPrincipal Long telegramId) {
         return appUserRepository.findByTelegramId(telegramId)
-                .filter(AppUser::isRegistrationCompleted)
+                .filter(AppUser::isProfileCompleted)
                 .map(user -> ResponseEntity.ok(UserProfileDto.builder()
                             .telegramId(user.getTelegramId())
                             .nickname(user.getNickname())
