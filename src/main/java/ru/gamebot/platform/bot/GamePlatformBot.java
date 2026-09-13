@@ -5323,7 +5323,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         RewardItem reward = rewardService.getRewardItem(rewardId);
         long effectivePrice = rewardService.effectivePrice(reward);
         String priceNote = effectivePrice != reward.getPriceCoins()
-                ? " (базовая: " + reward.getPriceCoins() + " EXC)"
+                ? " (при Health Ratio 100%: " + reward.getPriceCoins() + " EXC)"
                 : "";
         String limitStatus = shopLimitService.getItemStatus(user, reward);
         String text = (notice == null ? "" : notice + "\n\n")
