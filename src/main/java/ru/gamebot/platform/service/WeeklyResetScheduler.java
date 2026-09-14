@@ -433,6 +433,42 @@ public class WeeklyResetScheduler {
         }
     }
 
+    private static final int QUEST_NUDGE_ACTIVE_WITHIN_DAYS = 3;
+    private static final int QUEST_NUDGE_QUEST_GAP_DAYS = 7;
+    private static final int QUEST_NUDGE_RESEND_AFTER_DAYS = 7;
+
+    /** "Заходишь, а квесты не берёшь" — отдельная от спячки (DormancyReengagementEvent, срабатывает
+     * по общей неактивности) и от онбординга (только для тех, кто вообще не брал первый квест) ниша:
+     * игрок реально пользуется ботом/мини-аппом (заходил за последние 3 дня), но квест не берёт уже
+     * неделю. lastQuestTakenAt == null исключён намеренно — это тот, кто вообще не начинал, им уже
+     * занимается онбординг. Повторно не слать чаще раза в неделю одному и тому же игроку
+     * (lastQuestNudgeAt) — запрошено 2026-09-14, конкретный пункт из аудита вовлечённости. */
+    @Scheduled(cron = "0 0 10 * * *")
+    public void checkQuestGapNudge() {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime activeSince = now.minusDays(QUEST_NUDGE_ACTIVE_WITHIN_DAYS);
+        LocalDateTime questGapCutoff = now.minusDays(QUEST_NUDGE_QUEST_GAP_DAYS);
+        LocalDateTime resendCutoff = now.minusDays(QUEST_NUDGE_RESEND_AFTER_DAYS);
+        for (AppUser user : userService.allRegisteredUsers()) {
+            if (user.isBlocked()) continue;
+            try {
+                LocalDateTime lastQuest = user.getLastQuestTakenAt();
+                if (lastQuest == null || lastQuest.isAfter(questGapCutoff)) continue;
+                boolean activeRecently = (user.getLastBotActivityAt() != null && user.getLastBotActivityAt().isAfter(activeSince))
+                        || (user.getLastMiniAppOpenAt() != null && user.getLastMiniAppOpenAt().isAfter(activeSince));
+                if (!activeRecently) continue;
+                if (user.getLastQuestNudgeAt() != null && user.getLastQuestNudgeAt().isAfter(resendCutoff)) continue;
+
+                long daysSince = ChronoUnit.DAYS.between(lastQuest, now);
+                user.setLastQuestNudgeAt(now);
+                appUserRepository.save(user);
+                eventPublisher.publishEvent(new ru.gamebot.platform.event.QuestGapNudgeEvent(this, user.getTelegramId(), daysSince));
+            } catch (Exception e) {
+                log.warn("Failed to process quest-gap nudge for user {}", user.getTelegramId(), e);
+            }
+        }
+    }
+
     private static final int REFERRAL_INACTIVITY_DAYS = 14;
 
     // Друг молчит 14+ дней без одобренного квеста — приостанавливаем комиссию рефереру, уведомляем один раз

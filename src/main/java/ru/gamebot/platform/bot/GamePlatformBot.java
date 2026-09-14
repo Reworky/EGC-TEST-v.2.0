@@ -12017,6 +12017,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** "Заходишь, а квесты не берёшь" — см. WeeklyResetScheduler.checkQuestGapNudge. Отдельная от
+     * спячки (общая неактивность) и онбординга (для тех, кто вообще не начинал) ниша. */
+    @org.springframework.context.event.EventListener
+    public void onQuestGapNudge(ru.gamebot.platform.event.QuestGapNudgeEvent event) {
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("🗺️ Смотреть квесты", "menu:quests"))
+        ));
+        String msg = "👀 <b>Ты заходишь, а квесты не берёшь</b>\n\n"
+                + "Последний квест был " + event.getDaysSinceLastQuest() + " дн. назад — а EXC за это время так и не капало.\n\n"
+                + "Загляни в раздел квестов, там наверняка найдётся что-то на 5-10 минут.";
+        try {
+            sendText(event.getTelegramId(), msg, keyboard);
+        } catch (Exception e) {
+            log.warn("Failed to send quest-gap nudge to {}", event.getTelegramId(), e);
+        }
+    }
+
     @org.springframework.context.event.EventListener
     public void onReferralLeaderboardReward(ru.gamebot.platform.event.ReferralLeaderboardRewardEvent event) {
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(

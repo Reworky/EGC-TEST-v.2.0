@@ -180,6 +180,10 @@ public class AppUser {
     // Quest take cooldown (1 per hour global)
     private java.time.LocalDateTime lastQuestTakenAt;
 
+    /** Когда последний раз отправляли "заходишь, а квесты не берёшь" (см. WeeklyResetScheduler.
+     * checkQuestGapNudge) — троттлинг, чтобы не слать это каждый день подряд одному и тому же игроку. */
+    private java.time.LocalDateTime lastQuestNudgeAt;
+
     @Column(columnDefinition = "boolean default false")
     private boolean rulesAccepted;
 
