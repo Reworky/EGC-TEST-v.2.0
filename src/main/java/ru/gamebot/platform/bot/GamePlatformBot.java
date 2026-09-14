@@ -2989,6 +2989,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
                 List.of(keyboardFactory.callback(dailyLabel, "menu:daily")),
                 List.of(keyboardFactory.webApp(chestLabel, "https://experience-gaming-club.pages.dev/wallet?section=chest")),
+                List.of(keyboardFactory.callback("🔁 Улучшенный сундук — " + CHEST_REROLL_STARS_PRICE + " ⭐", "menu:chestreroll")),
                 List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads")),
                 List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
@@ -3017,6 +3018,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendMenuCategory(user, "💰 <b>Кошелёк</b>", List.of(
                     List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
                     List.of(keyboardFactory.callback(dailyLabel, "menu:daily")),
+                    List.of(keyboardFactory.webApp(chestLabel, "https://experience-gaming-club.pages.dev/wallet?section=chest")),
+                    List.of(keyboardFactory.callback("🔁 Улучшенный сундук — " + CHEST_REROLL_STARS_PRICE + " ⭐", "menu:chestreroll")),
                     List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads"))
             ));
         }
@@ -5441,6 +5444,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else {
             rows.add(List.of(keyboardFactory.callback("👑 Рамка аватара «EGC» — " + AVATAR_FRAME_STARS_PRICE + " ⭐", "sink:frame_stars")));
         }
+        rows.add(List.of(keyboardFactory.callback("🔁 Улучшенный сундук дня — " + CHEST_REROLL_STARS_PRICE + " ⭐", "menu:chestreroll")));
 
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
 
