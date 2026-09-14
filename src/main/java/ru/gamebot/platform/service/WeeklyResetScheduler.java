@@ -18,7 +18,7 @@ import ru.gamebot.platform.event.OnboardingReminderEvent;
 import ru.gamebot.platform.event.PollClosedEvent;
 import ru.gamebot.platform.event.QuestDeadlineWarningEvent;
 import ru.gamebot.platform.event.QuestExpiredEvent;
-import ru.gamebot.platform.event.ReviewRepostCandidateEvent;
+import ru.gamebot.platform.event.WeeklyReviewSummaryEvent;
 import ru.gamebot.platform.event.SquadMidweekTeaserEvent;
 import ru.gamebot.platform.event.StreakAtRiskEvent;
 import ru.gamebot.platform.event.WeeklyDigestActiveEvent;
@@ -112,18 +112,22 @@ public class WeeklyResetScheduler {
         }
     }
 
-    // Раз в неделю — предложить админу репостнуть лучший ещё не предлагавшийся отзыв (4-5⭐️,
-    // уже опубликованный в @egc_payouts) в основной канал как соцдоказательство. Пятница вечер —
-    // не пересекается с "Залом Славы" (понедельник) и тизером отрядов (среда).
-    @Scheduled(cron = "0 0 18 * * FRI")
-    public void postReviewRepostCandidate() {
+    // Раз в неделю, утро понедельника — предложить админу обобщённый отчёт по отзывам за прошлую
+    // неделю для репоста в основной канал как соцдоказательство. Заменяет репост одного отдельного
+    // отзыва (по явному запросу 2026-09-14: "не конкретный отзыв, а один обобщённый за неделю") —
+    // приурочено к тому, что админ сам готовит недельный итоговый отчёт по понедельникам.
+    @Scheduled(cron = "0 0 9 * * MON")
+    public void postWeeklyReviewSummary() {
         try {
-            List<ru.gamebot.platform.domain.model.BotReview> candidates =
-                    botReviewRepository.findRepostCandidates(org.springframework.data.domain.PageRequest.of(0, 1));
-            if (candidates.isEmpty()) return;
-            eventPublisher.publishEvent(new ReviewRepostCandidateEvent(this, candidates.get(0).getId()));
+            LocalDateTime weekAgo = LocalDateTime.now().minusDays(7);
+            List<ru.gamebot.platform.domain.model.BotReview> weekReviews =
+                    botReviewRepository.findAllByStatusAndCreatedAtAfterOrderByStarsDescCreatedAtDesc(
+                            ru.gamebot.platform.domain.enums.BotReviewStatus.PUBLISHED, weekAgo);
+            if (weekReviews.isEmpty()) return;
+            eventPublisher.publishEvent(new WeeklyReviewSummaryEvent(this,
+                    weekReviews.stream().map(ru.gamebot.platform.domain.model.BotReview::getId).toList()));
         } catch (Exception e) {
-            log.error("Review repost candidate selection failed", e);
+            log.error("Weekly review summary failed", e);
         }
     }
 

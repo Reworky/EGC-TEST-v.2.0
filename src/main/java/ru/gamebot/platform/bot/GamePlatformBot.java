@@ -184,9 +184,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * с постом о выводе в @egc_payouts, если менеджер его загрузил (не заполнено при "Пропустить"). */
     private final ConcurrentHashMap<Long, String> pendingWithdrawalReceiptFileIds = new ConcurrentHashMap<>();
 
-    /** ID отзыва — кандидата на еженедельный репост в основной канал, ждущего одобрения. Один "слот",
-     * как у тизера отрядов — новый кандидат появляется раз в неделю, к тому времени старый уже обработан. */
-    private volatile Long pendingReviewRepostId;
+    /** Текст обобщённого недельного отчёта по отзывам, ждущий одобрения администратора перед публикацией
+     * в основной канал (см. {@link #handleAdminFeedAction}). Один "слот", как у тизера отрядов — новый
+     * кандидат появляется раз в неделю, к тому времени старый уже обработан. */
+    private volatile String pendingReviewSummaryText;
 
     @EventListener(ApplicationReadyEvent.class)
     public void registerBot() throws TelegramApiException {
@@ -1803,6 +1804,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 } else if (target.equals("weekendboost")) {
                     pendingWeekendBoostFeedText = text.trim();
                     sendWeekendBoostFeedCard();
+                } else if (target.equals("reviewsummary")) {
+                    pendingReviewSummaryText = text.trim();
+                    sendReviewSummaryFeedCard();
                 } else if (target.startsWith("withdrawal:")) {
                     long reqId = parseLong(target.substring("withdrawal:".length()));
                     pendingWithdrawalTexts.put(reqId, text.trim());
@@ -8725,9 +8729,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Согласование автопостов канала администратором — тизер отрядов, лента крупных выводов, итоги
-     * турниров, розыгрыши билетов и анонсы буста выходных (все три добавлены 2026-09-14). Введено
-     * 2026-09-02 по явному запросу: ничего из этого не должно публиковаться без одобрения. Дополнено
-     * возможностью правки текста прямо перед одобрением/отклонением. */
+     * турниров, розыгрыши билетов, анонсы буста выходных и недельный отчёт по отзывам (все четыре
+     * добавлены/переделаны 2026-09-14). Введено 2026-09-02 по явному запросу: ничего из этого не должно
+     * публиковаться без одобрения. Дополнено возможностью правки текста прямо перед одобрением/отклонением. */
     private void handleAdminFeedAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
         if (action.equals("squad:approve")) {
             String text = pendingSquadTeaserText;
@@ -8869,38 +8873,37 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "❌ Отклонено");
             return;
         }
-        if (action.equals("reviewrepost:approve")) {
-            Long reviewId = pendingReviewRepostId;
-            if (reviewId != null) {
-                botReviewRepository.findWithUserById(reviewId).ifPresent(review -> {
-                    try {
-                        org.telegram.telegrambots.meta.api.methods.ForwardMessage fwd =
-                                new org.telegram.telegrambots.meta.api.methods.ForwardMessage();
-                        fwd.setChatId(requiredChannelChatId());
-                        fwd.setFromChatId(appProperties.getPayoutChannelUsername());
-                        fwd.setMessageId(review.getPublishedMessageId());
-                        execute(fwd);
-                    } catch (Exception e) {
-                        log.error("Failed to repost review {} to main channel", review.getId(), e);
-                    }
-                    review.setRepostedToMainChannel(true);
-                    botReviewRepository.save(review);
-                });
+        if (action.equals("reviewsummary:approve")) {
+            String text = pendingReviewSummaryText;
+            if (text != null) {
+                try {
+                    SendMessage msg = new SendMessage();
+                    msg.setChatId(requiredChannelChatId());
+                    msg.setText(text);
+                    msg.setParseMode("HTML");
+                    execute(msg);
+                } catch (Exception e) {
+                    log.error("Failed to post approved weekly review summary to channel", e);
+                }
             }
-            pendingReviewRepostId = null;
+            pendingReviewSummaryText = null;
             clearInlineKeyboard(callbackQuery);
-            answer(callbackQuery.getId(), "✅ Репостнуто");
+            answer(callbackQuery.getId(), "✅ Опубликовано");
             return;
         }
-        if (action.equals("reviewrepost:reject")) {
-            Long reviewId = pendingReviewRepostId;
-            if (reviewId != null) {
-                botReviewRepository.findById(reviewId).ifPresent(review -> {
-                    review.setRepostedToMainChannel(true);
-                    botReviewRepository.save(review);
-                });
-            }
-            pendingReviewRepostId = null;
+        if (action.equals("reviewsummary:edit")) {
+            session.reset();
+            session.setState(SessionState.ADMINFEED_EDIT);
+            session.getData().put("editTarget", "reviewsummary");
+            answerSilently(callbackQuery.getId());
+            sendText(user.getTelegramId(),
+                    "✏️ Текущий текст:\n\n" + (pendingReviewSummaryText != null ? pendingReviewSummaryText : "—")
+                            + "\n\nПришлите новый текст поста:",
+                    cancelKeyboard());
+            return;
+        }
+        if (action.equals("reviewsummary:reject")) {
+            pendingReviewSummaryText = null;
             clearInlineKeyboard(callbackQuery);
             answer(callbackQuery.getId(), "❌ Отклонено");
             return;
@@ -12522,13 +12525,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    /** Раз в неделю (см. WeeklyResetScheduler.postReviewRepostCandidate) — предлагает репостнуть
-     * лучший ещё не использованный отзыв из @egc_payouts в основной канал как соцдоказательство.
-     * Публикация — только после одобрения администратора (см. {@link #handleAdminFeedAction}). */
+    /** Раз в неделю (см. WeeklyResetScheduler.postWeeklyReviewSummary) — предлагает обобщённый отчёт
+     * по отзывам за неделю для репоста в основной канал как соцдоказательство, вместо одного отдельного
+     * отзыва. Публикация — только после одобрения администратора (см. {@link #handleAdminFeedAction}). */
     @org.springframework.context.event.EventListener
-    public void onReviewRepostCandidate(ru.gamebot.platform.event.ReviewRepostCandidateEvent event) {
-        pendingReviewRepostId = event.getReviewId();
-        sendReviewRepostCard();
+    public void onWeeklyReviewSummary(ru.gamebot.platform.event.WeeklyReviewSummaryEvent event) {
+        List<ru.gamebot.platform.domain.model.BotReview> reviews = event.getReviewIds().stream()
+                .map(id -> botReviewRepository.findWithUserById(id).orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        if (reviews.isEmpty()) return;
+        pendingReviewSummaryText = buildWeeklyReviewSummaryText(reviews);
+        sendReviewSummaryFeedCard();
     }
 
     /** Новый XP-уровень или круглая сумма EXC (см. AchievementCheckService, каждые 10 минут). Победа в
@@ -12561,28 +12569,52 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         });
     }
 
-    private void sendReviewRepostCard() {
-        Long reviewId = pendingReviewRepostId;
-        if (reviewId == null) return;
-        botReviewRepository.findWithUserById(reviewId).ifPresent(review -> {
-            String stars = "⭐️".repeat(Math.max(0, Math.min(5, review.getStars())));
-            String nickname = escape(review.getUser().getNickname());
-            StringBuilder preview = new StringBuilder("🧾 <b>Репост отзыва в канал — на согласование</b>\n\n");
-            preview.append("👤 ").append(nickname).append(" ").append(stars);
-            if (review.getText() != null && !review.getText().isBlank()) {
-                preview.append("\n\n\"").append(escape(review.getText())).append("\"");
+    /** Обобщённая сводка за неделю (кол-во отзывов, средняя оценка, до 2 цитат) — черновик, который
+     * администратор может опубликовать как есть или переписать своими словами (✏️ Изменить), например
+     * как часть собственного недельного итогового отчёта (запрошено 2026-09-14). */
+    private String buildWeeklyReviewSummaryText(List<ru.gamebot.platform.domain.model.BotReview> reviews) {
+        int count = reviews.size();
+        double avgStars = reviews.stream().mapToInt(ru.gamebot.platform.domain.model.BotReview::getStars).average().orElse(0);
+        StringBuilder sb = new StringBuilder("📊 <b>Итоги недели по отзывам</b>\n\n");
+        sb.append("За неделю — <b>").append(count).append("</b> ").append(reviewWord(count))
+                .append(", средняя оценка <b>").append(String.format("%.1f", avgStars)).append(" ⭐️</b>\n\n");
+        List<ru.gamebot.platform.domain.model.BotReview> quoted = reviews.stream()
+                .filter(r -> r.getText() != null && !r.getText().isBlank())
+                .limit(2)
+                .toList();
+        for (ru.gamebot.platform.domain.model.BotReview r : quoted) {
+            String stars = "⭐️".repeat(Math.max(0, Math.min(5, r.getStars())));
+            sb.append("«").append(escape(r.getText())).append("» — ")
+                    .append(escape(r.getUser().getNickname())).append(" ").append(stars).append("\n\n");
+        }
+        sb.append("Спасибо всем, кто делится впечатлениями! 🙌");
+        return sb.toString();
+    }
+
+    private static String reviewWord(int count) {
+        if (count % 100 >= 11 && count % 100 <= 19) return "отзывов";
+        return switch (count % 10) {
+            case 1 -> "отзыв";
+            case 2, 3, 4 -> "отзыва";
+            default -> "отзывов";
+        };
+    }
+
+    private void sendReviewSummaryFeedCard() {
+        String text = pendingReviewSummaryText;
+        if (text == null) return;
+        String preview = "🧾 <b>Недельный отчёт по отзывам — на согласование</b>\n\n" + text;
+        InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
+                keyboardFactory.callback("✅ Опубликовать", "adminfeed:reviewsummary:approve"),
+                keyboardFactory.callback("✏️ Изменить", "adminfeed:reviewsummary:edit"),
+                keyboardFactory.callback("❌ Отклонить", "adminfeed:reviewsummary:reject")));
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, preview, markup);
+            } catch (Exception e) {
+                log.warn("Failed to send weekly review summary candidate to admin {}", adminId, e);
             }
-            InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
-                    keyboardFactory.callback("✅ Репостнуть", "adminfeed:reviewrepost:approve"),
-                    keyboardFactory.callback("❌ Не публиковать", "adminfeed:reviewrepost:reject")));
-            for (Long adminId : adminService.resolvedAdminIds()) {
-                try {
-                    sendText(adminId, preview.toString(), markup);
-                } catch (Exception e) {
-                    log.warn("Failed to send review repost candidate to admin {}", adminId, e);
-                }
-            }
-        });
+        }
     }
 
     @org.springframework.context.event.EventListener

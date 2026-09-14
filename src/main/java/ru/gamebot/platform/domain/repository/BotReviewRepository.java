@@ -1,11 +1,11 @@
 package ru.gamebot.platform.domain.repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.domain.Pageable;
+import ru.gamebot.platform.domain.enums.BotReviewStatus;
 import ru.gamebot.platform.domain.model.BotReview;
 
 public interface BotReviewRepository extends JpaRepository<BotReview, Long> {
@@ -17,12 +17,10 @@ public interface BotReviewRepository extends JpaRepository<BotReview, Long> {
     @EntityGraph(attributePaths = {"user"})
     Optional<BotReview> findWithUserById(Long id);
 
-    /** Кандидаты на еженедельный репост в основной канал — уже опубликованные в @egc_payouts (есть
-     * messageId), с высоким рейтингом, ещё не предлагавшиеся. Сортировка — сначала выше рейтинг,
-     * затем свежее, берём один через Pageable.ofSize(1) (см. onReviewRepostCandidate). */
+    /** Отзывы для обобщённого недельного отчёта (см. WeeklyResetScheduler.postWeeklyReviewSummary,
+     * 2026-09-14 — по явному запросу заменили репост ОДНОГО отзыва на обобщённую сводку за неделю,
+     * приуроченную к тому, что админ сам готовит недельный итог по понедельникам). Сначала более
+     * высокая оценка, затем свежее — чтобы лучшие отзывы недели попадали в цитаты первыми. */
     @EntityGraph(attributePaths = {"user"})
-    @Query("SELECT r FROM BotReview r WHERE r.status = 'PUBLISHED' AND r.publishedMessageId IS NOT NULL "
-            + "AND r.repostedToMainChannel = false AND r.stars >= 4 "
-            + "ORDER BY r.stars DESC, r.createdAt DESC")
-    List<BotReview> findRepostCandidates(Pageable pageable);
+    List<BotReview> findAllByStatusAndCreatedAtAfterOrderByStarsDescCreatedAtDesc(BotReviewStatus status, LocalDateTime after);
 }

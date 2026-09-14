@@ -49,11 +49,13 @@ public class BotReview {
 
     private LocalDateTime createdAt;
 
-    /** ID сообщения в @egc_payouts после публикации — нужен, чтобы потом сделать forwardMessage
-     * в основной канал (см. репост лучших отзывов, GamePlatformBot.onReviewRepostCandidate). */
+    /** ID сообщения в @egc_payouts после публикации отзыва. */
     private Integer publishedMessageId;
 
-    /** true — уже был кандидатом на репост в основной канал (одобрен или отклонён), повторно не предлагать. */
+    /** УСТАРЕЛО (2026-09-14): использовалось для репоста ОДНОГО отзыва в основной канал — эта механика
+     * заменена обобщённым недельным отчётом (см. WeeklyResetScheduler.postWeeklyReviewSummary,
+     * GamePlatformBot.onWeeklyReviewSummary), который отбирает отзывы по дате, а не по этому флагу.
+     * Поле оставлено в БД как есть (без риска для схемы), но больше нигде не читается/не пишется. */
     @Column(columnDefinition = "boolean default false")
     private boolean repostedToMainChannel;
 }
