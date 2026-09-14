@@ -405,7 +405,7 @@ function EgcFrameShopCard({ onPurchased }) {
         <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>Эксклюзивная рамка клуба, навсегда</div>
         {message && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>{message}</div>}
       </div>
-      <button className="quest-btn" disabled={busy} onClick={handleBuy} style={{ flexShrink: 0, padding: '8px 14px', fontSize: 13 }}>
+      <button className="quest-btn" disabled={busy} onClick={handleBuy} style={{ flexShrink: 0, width: 'auto', marginTop: 0, padding: '8px 14px', fontSize: 13 }}>
         {busy ? '...' : `${AVATAR_FRAME_STARS_PRICE} ⭐`}
       </button>
     </div>
@@ -459,7 +459,7 @@ function PatronTitleShopCard({ onPurchased }) {
         <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>Эксклюзивный статус, недоступен за EXC — виден всем в клубе</div>
         {message && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>{message}</div>}
       </div>
-      <button className="quest-btn" disabled={busy} onClick={handleBuy} style={{ flexShrink: 0, padding: '8px 14px', fontSize: 13 }}>
+      <button className="quest-btn" disabled={busy} onClick={handleBuy} style={{ flexShrink: 0, width: 'auto', marginTop: 0, padding: '8px 14px', fontSize: 13 }}>
         {busy ? '...' : `${PATRON_TITLE_STARS_PRICE} ⭐`}
       </button>
     </div>
