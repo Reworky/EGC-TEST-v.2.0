@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getWallet, claimDailyBonus, openChest, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone, invalidateCache, getStarsWithdrawItems, purchaseItem, getStarsInvoiceLink } from '../api/client';
 import { openStarsInvoice } from '../utils/stars';
+import chestRegularImg from '../assets/chests/regular.png';
+import chestPremiumImg from '../assets/chests/premium.png';
 import { RANKS_DATA, getLevelFromXp } from '../data/ranks';
 import BackButton from '../components/BackButton';
 import BorderBeamCard from '../components/BorderBeamCard';
@@ -289,20 +291,33 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
         className={`ref-link-card${chestPulse ? ' chest-pulse' : ''}`}
         style={{ marginTop: 12 }}
       >
-        <div className="ref-link-label">🎁 Сундук дня</div>
-        {wallet.chestAvailable ? (
-          <>
-            <p className="shop-desc"><i className="ti ti-sparkles"></i> Раз в сутки — случайный приз: EXC, билет колеса фортуны или джекпот.</p>
-            <ShimmerButton disabled={chestBusy} onClick={handleOpenChest}>
-              {chestBusy ? 'Открываем...' : <><i className="ti ti-gift" style={{ marginRight: 6 }} /> Открыть сундук</>}
-            </ShimmerButton>
-          </>
-        ) : (
-          <p className="shop-desc"><i className="ti ti-circle-check"></i> Сундук на сегодня открыт. Возвращайся завтра за новым призом.</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <img src={chestRegularImg} alt="" style={{ width: 72, height: 72, objectFit: 'contain', flexShrink: 0, opacity: wallet.chestAvailable ? 1 : 0.4, transition: 'opacity 0.2s' }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="ref-link-label">Сундук дня</div>
+            {wallet.chestAvailable ? (
+              <p className="shop-desc"><i className="ti ti-sparkles"></i> Раз в сутки — случайный приз: EXC, билет колеса фортуны или джекпот.</p>
+            ) : (
+              <p className="shop-desc"><i className="ti ti-circle-check"></i> Сундук на сегодня открыт. Возвращайся завтра за новым призом.</p>
+            )}
+          </div>
+        </div>
+        {wallet.chestAvailable && (
+          <ShimmerButton disabled={chestBusy} onClick={handleOpenChest} style={{ marginTop: 10 }}>
+            {chestBusy ? 'Открываем...' : <><i className="ti ti-gift" style={{ marginRight: 6 }} /> Открыть сундук</>}
+          </ShimmerButton>
         )}
         {chestMessage && <div className="quest-message">{chestMessage}</div>}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+          <img src={chestPremiumImg} alt="" style={{ width: 72, height: 72, objectFit: 'contain', flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="ref-link-label">Улучшенный сундук</div>
+            <p className="shop-desc"><i className="ti ti-sparkles"></i> Призы заметно щедрее бесплатного — за Stars, можно сколько угодно раз.</p>
+          </div>
+        </div>
         <ShimmerButton disabled={rerollBusy} onClick={handleBuyReroll} style={{ marginTop: 10 }}>
-          {rerollBusy ? 'Секунду...' : <><i className="ti ti-sparkles" style={{ marginRight: 6 }} /> Улучшенный сундук — {CHEST_REROLL_STARS_PRICE} ⭐</>}
+          {rerollBusy ? 'Секунду...' : <><i className="ti ti-sparkles" style={{ marginRight: 6 }} /> Купить — {CHEST_REROLL_STARS_PRICE} ⭐</>}
         </ShimmerButton>
         <p className="ref-progress-label" style={{ color: 'rgba(167,139,250,0.85)', cursor: 'pointer', marginTop: 8 }} onClick={() => setShowChestPrizes(true)}>
           📋 Все призы →
