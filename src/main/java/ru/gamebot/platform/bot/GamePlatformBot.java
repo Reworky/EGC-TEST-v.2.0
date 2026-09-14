@@ -396,7 +396,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "Чтобы открыть квесты, рейтинг и награды, давайте быстро оформим профиль.\n"
                             + "Напишите ваш игровой никнейм.\n\n"
                             + "<b>ВАЖНО! Ник в боте должен совпадать с ником в игре</b>",
-                    null);
+                    reviewsLinkKeyboard());
             return;
         }
 
@@ -678,7 +678,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "Здесь вас ждут квесты, XP, рейтинг, награды и реферальная программа.\n"
                             + "Начнем с профиля. Напишите ваш игровой никнейм.\n\n"
                             + "<b>ВАЖНО! Ник в боте должен совпадать с ником в игре</b>",
-                    null);
+                    reviewsLinkKeyboard());
             return;
         }
 
@@ -14763,6 +14763,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long registered = userService.totalRegisteredUsers();
         long roundedBase = (registered / 50) * 50;
         return roundedBase >= 50 ? "👥 Уже <b>" + roundedBase + "+</b> игроков в клубе\n\n" : "";
+    }
+
+    /** Ссылка на канал отзывов рядом с socialProofLine — в самом первом сообщении новичку, до анкеты,
+     * пока он ещё решает, довериться ли платформе (запрошено 2026-09-14: сейчас отзывы были зарыты
+     * в Помощи, новичок сам туда не забредёт). */
+    private InlineKeyboardMarkup reviewsLinkKeyboard() {
+        return keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.url("⭐ Отзывы игроков", "https://t.me/egc_payouts"))
+        ));
     }
 
     // ── Sponsor quest creation ───────────────────────────────────────────────
