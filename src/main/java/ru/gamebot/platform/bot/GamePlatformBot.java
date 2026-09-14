@@ -893,6 +893,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleQuestView(callbackQuery, user, session, data.substring("quest:view:".length()));
             return;
         }
+        if ("quest:recommend".equals(data)) {
+            answerSilently(callbackQuery.getId());
+            questService.recommendQuest(user).ifPresentOrElse(
+                    quest -> sendQuestCard(user, quest.getId(), "menu:main", "⬅️ Назад", "🎯 Подобрали специально для тебя!"),
+                    () -> sendText(user.getTelegramId(),
+                            "🎯 Сейчас нечего предложить — либо всё уже взято, либо кулдауны. Загляни в полный список квестов.",
+                            keyboardFactory.rowsLayout(List.of(
+                                    List.of(keyboardFactory.callback("🗺️ Все квесты", "menu:quests")),
+                                    List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
+                            ))));
+            return;
+        }
         if (data.startsWith("myquest:cancel:")) {
             long submissionId = parseLong(data.substring("myquest:cancel:".length()));
             answerSilently(callbackQuery.getId());
@@ -13290,6 +13302,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean hasTournament = tournamentService.findCurrentForUser().isPresent();
         String questsLabel = hasTournament ? "🎯 Квесты и рейтинг 🔥" : "🎯 Квесты и рейтинг";
         rows.add(List.of(keyboardFactory.callback(questsLabel, "menu:cat:quests")));
+        rows.add(List.of(keyboardFactory.callback("🎯 Квест для тебя", "quest:recommend")));
 
         rows.add(List.of(keyboardFactory.callback("🤝 Рефералы", "menu:referrals")));
 

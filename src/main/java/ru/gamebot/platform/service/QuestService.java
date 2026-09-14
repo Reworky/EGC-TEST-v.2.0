@@ -171,6 +171,41 @@ public class QuestService {
                 .toList();
     }
 
+    /** Подбирает 1 квест "для тебя" — по игре последнего взятого квеста (любой статус, самый свежий
+     * отчёт), либо из всего активного пула, если истории ещё нет. Исключает то, что сейчас нельзя
+     * реально взять: уже открытый отчёт (DRAFT/PENDING) или активный кулдаун после одобрения.
+     * Предпочитает сложность "Средние", если такие есть среди подходящих — не самое лёгкое (мало
+     * ценности) и не самое сложное (отпугнёт при случайном заходе). Введено 2026-09-14 (аудит
+     * вовлечённости, "персонализированный показ квестов при заходе"). interestsCsv не используется —
+     * там жанры (FPS/RPG/...), а не названия игр, без отдельного маппинга сопоставить их с Quest.gameName
+     * нельзя. */
+    public Optional<Quest> recommendQuest(AppUser user) {
+        List<QuestSubmission> history = questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user);
+        String preferredGame = history.isEmpty() ? null : history.get(0).getQuest().getGameName();
+
+        List<Quest> eligible = preferredGame != null ? eligibleForRecommendation(user, findActiveByGameName(preferredGame)) : List.of();
+        if (eligible.isEmpty()) {
+            eligible = eligibleForRecommendation(user, findActiveQuests());
+        }
+        if (eligible.isEmpty()) return Optional.empty();
+
+        List<Quest> medium = eligible.stream().filter(q -> "Средние".equals(q.getCategory())).toList();
+        List<Quest> pool = medium.isEmpty() ? eligible : medium;
+        return Optional.of(pool.get(java.util.concurrent.ThreadLocalRandom.current().nextInt(pool.size())));
+    }
+
+    private List<Quest> eligibleForRecommendation(AppUser user, List<Quest> candidates) {
+        return candidates.stream()
+                .filter(q -> !q.isSponsored() && !q.isExternalAutoApprove())
+                .filter(q -> {
+                    QuestSubmission latest = getLatestSubmission(user, q);
+                    boolean inProgress = latest != null
+                            && (latest.getStatus() == SubmissionStatus.DRAFT || latest.getStatus() == SubmissionStatus.PENDING);
+                    return !inProgress && !isSameQuestCooldownActive(user, q);
+                })
+                .toList();
+    }
+
     public List<Quest> findAllByGameName(String gameName) {
         return questRepository.findAll().stream()
                 .filter(quest -> sameGame(quest.getGameName(), gameName))
