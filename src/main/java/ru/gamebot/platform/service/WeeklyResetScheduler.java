@@ -47,6 +47,7 @@ public class WeeklyResetScheduler {
     private final QuestSubmissionRepository questSubmissionRepository;
     private final QuestRepository questRepository;
     private final WheelSpinLogRepository wheelSpinLogRepository;
+    private final WheelService wheelService;
     private final ru.gamebot.platform.domain.repository.BotReviewRepository botReviewRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final PlatformSnapshotService platformSnapshotService;
@@ -430,6 +431,45 @@ public class WeeklyResetScheduler {
             } catch (Exception e) {
                 log.warn("Failed to process streak-at-risk check for user {}", user.getTelegramId(), e);
             }
+        }
+    }
+
+    private static final int TICKET_RAFFLE_MIN_WINNERS = 3;
+    private static final int TICKET_RAFFLE_MAX_WINNERS = 5;
+
+    /** Ежедневный розыгрыш билетов колеса фортуны среди тех, кто заходил сегодня (бот, мини-апп или
+     * /start) — лёгкий повод зайти "а вдруг выиграю", держит канал живым. Случайное число победителей
+     * (3-5, не больше реального числа активных сегодня), по 1 билету каждому — билеты начисляются сразу
+     * (WheelService.addTickets), пост в канал — только после одобрения администратора (см.
+     * GamePlatformBot.onTicketRaffleDrawn / handleAdminFeedAction), личный выигрыш ждать не должен.
+     * Запрошено 2026-09-14 (аудит вовлечённости). */
+    @Scheduled(cron = "0 5 20 * * *")
+    public void drawDailyTicketRaffle() {
+        try {
+            LocalDate today = LocalDate.now();
+            LocalDateTime todayStart = today.atStartOfDay();
+            List<AppUser> activeToday = new java.util.ArrayList<>();
+            for (AppUser user : userService.allRegisteredUsers()) {
+                if (user.isBlocked()) continue;
+                boolean active = today.equals(user.getLastActivityDate())
+                        || (user.getLastBotActivityAt() != null && !user.getLastBotActivityAt().isBefore(todayStart))
+                        || (user.getLastMiniAppOpenAt() != null && !user.getLastMiniAppOpenAt().isBefore(todayStart));
+                if (active) activeToday.add(user);
+            }
+            if (activeToday.isEmpty()) return;
+
+            int span = TICKET_RAFFLE_MAX_WINNERS - TICKET_RAFFLE_MIN_WINNERS + 1;
+            int winnerCount = Math.min(activeToday.size(),
+                    TICKET_RAFFLE_MIN_WINNERS + java.util.concurrent.ThreadLocalRandom.current().nextInt(span));
+            java.util.Collections.shuffle(activeToday);
+            List<AppUser> winners = new java.util.ArrayList<>(activeToday.subList(0, winnerCount));
+
+            for (AppUser winner : winners) {
+                wheelService.addTickets(winner, 1, "Ежедневный розыгрыш билетов");
+            }
+            eventPublisher.publishEvent(new ru.gamebot.platform.event.TicketRaffleDrawnEvent(this, winners));
+        } catch (Exception e) {
+            log.error("Daily ticket raffle failed", e);
         }
     }
 
