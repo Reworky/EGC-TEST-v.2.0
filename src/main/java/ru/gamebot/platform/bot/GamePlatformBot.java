@@ -3466,8 +3466,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         int onboardingLeft = Math.max(0, QuestService.ONBOARDING_QUEST_THRESHOLD - user.getCompletedQuests());
         String onboardingLine = onboardingLeft > 0
-                ? "🌱 <b>Новичковый темп активен</b> — кулдауны короче, пока не выполните ещё "
-                        + onboardingLeft + " " + pluralQuests(onboardingLeft) + "\n\n"
+                ? "🌱 <b>Новичковый темп:</b> первые " + QuestService.ONBOARDING_QUEST_THRESHOLD + " квестов — кулдауны в разы короче.\n"
+                        + "Берите чаще, зарабатывайте быстрее, пока действует бонус.\n"
+                        + "Осталось: <b>" + onboardingLeft + " " + pluralQuests(onboardingLeft) + "</b> до конца льготного периода.\n\n"
                 : "";
 
         String profileText = "🎮 <b>" + escape(user.getNickname()) + "</b>\n"
