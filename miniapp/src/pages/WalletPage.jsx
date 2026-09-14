@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getWallet, claimDailyBonus, openChest, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone, invalidateCache, getStarsWithdrawItems, purchaseItem } from '../api/client';
 import { RANKS_DATA, getLevelFromXp } from '../data/ranks';
 import BackButton from '../components/BackButton';
@@ -86,14 +87,26 @@ function RanksModal({ currentXp, onClose }) {
   );
 }
 
-function BalanceView({ wallet, onChanged }) {
+function BalanceView({ wallet, onChanged, highlightChest }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const [chestBusy, setChestBusy] = useState(false);
   const [chestMessage, setChestMessage] = useState(null);
   const [showRanks, setShowRanks] = useState(false);
   const [showChestPrizes, setShowChestPrizes] = useState(false);
+  const [chestPulse, setChestPulse] = useState(false);
+  const chestRef = useRef(null);
   const playParticles = useParticles();
+
+  // Переход из бота по ссылке "Сундук дня" (?section=chest) — скроллим к карточке и подсвечиваем
+  // её, вместо того чтобы открывать сундук прямо в чате бота (запрошено 2026-09-15).
+  useEffect(() => {
+    if (!highlightChest || !chestRef.current) return;
+    chestRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setChestPulse(true);
+    const t = setTimeout(() => setChestPulse(false), 2200);
+    return () => clearTimeout(t);
+  }, [highlightChest]);
 
   async function handleClaim() {
     setBusy(true);
@@ -221,7 +234,11 @@ function BalanceView({ wallet, onChanged }) {
         {message && <div className="quest-message">{message}</div>}
       </div>
 
-      <div className="ref-link-card" style={{ marginTop: 12 }}>
+      <div
+        ref={chestRef}
+        className={`ref-link-card${chestPulse ? ' chest-pulse' : ''}`}
+        style={{ marginTop: 12 }}
+      >
         <div className="ref-link-label">🎁 Сундук дня</div>
         {wallet.chestAvailable ? (
           <>
@@ -551,6 +568,8 @@ export default function WalletPage() {
   const [view, setView] = useState('balance');
   const [wallet, setWallet] = useState(null);
   const [error, setError] = useState(null);
+  const [searchParams] = useSearchParams();
+  const highlightChest = searchParams.get('section') === 'chest';
 
   function reload() {
     getWallet().then(setWallet).catch(() => setError('Не удалось загрузить кошелёк. Попробуйте ещё раз.'));
@@ -578,7 +597,7 @@ export default function WalletPage() {
 
       {error && <div className="page-center error-msg">{error}</div>}
       {!error && view !== 'mine' && wallet === null && <div className="page-center">Загрузка...</div>}
-      {!error && view === 'balance' && wallet && <BalanceView wallet={wallet} onChanged={reload} />}
+      {!error && view === 'balance' && wallet && <BalanceView wallet={wallet} onChanged={reload} highlightChest={highlightChest} />}
       {!error && view === 'withdraw' && wallet && <WithdrawView wallet={wallet} onChanged={reload} />}
       {view === 'mine' && <MyWithdrawalsView onWalletChanged={reload} />}
     </div>
