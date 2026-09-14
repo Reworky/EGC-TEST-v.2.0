@@ -134,6 +134,45 @@ public class QuestService {
                 .toList();
     }
 
+    /** Жанр игры — статическая карта: в проекте нет отдельного поля жанра у Quest/игры, а сами жанры
+     *  общеизвестны и меняются редко, заводить под это поле в БД избыточно. Используется только для
+     *  сортировки списка игр по интересам профиля (см. sortGamesByInterest) — на выдачу квестов и
+     *  награды не влияет. Ключи — те же display-значения, что в GamePlatformBot.INTEREST_OPTIONS/
+     *  interestsCsv. Перенесено сюда из GamePlatformBot 2026-09-14, чтобы Mini App API (QuestController)
+     *  мог применять ту же сортировку, что и бот, а не дублировать карту в двух местах. */
+    private static final java.util.Map<String, String> GAME_GENRE = new java.util.LinkedHashMap<>();
+    static {
+        GAME_GENRE.put("CS2", "FPS");
+        GAME_GENRE.put("PUBG PC", "FPS");
+        GAME_GENRE.put("PUBG Mobile", "FPS");
+        GAME_GENRE.put("Dota 2", "Стратегии");
+        GAME_GENRE.put("Mobile Legends: Bang Bang", "Стратегии");
+        GAME_GENRE.put("Clash Royale", "Стратегии");
+        GAME_GENRE.put("Clash of Clans", "Стратегии");
+        GAME_GENRE.put("World of Warships", "Стратегии");
+        GAME_GENRE.put("Brawl Stars", "Казуальные");
+        GAME_GENRE.put("EA FC 26", "Спорт");
+        GAME_GENRE.put("Grim Soul: Dark Survival RPG", "RPG");
+    }
+
+    /** Сегментация по интересам (аудит вовлечённости, 2026-09-14): игры, чей жанр входит в интересы
+     *  игрока (профиль → жанры, user.interestsCsv), поднимаются в начало списка. Сортировка стабильна —
+     *  относительный порядок внутри "подходит"/"не подходит" не меняется. Без интересов в профиле —
+     *  порядок как был. Общая для бота (sendGamingQuestGames) и Mini App API (QuestController.games). */
+    public List<String> sortGamesByInterest(AppUser user, List<String> games) {
+        String csv = user.getInterestsCsv();
+        if (csv == null || csv.isBlank()) {
+            return games;
+        }
+        java.util.Set<String> interests = java.util.Arrays.stream(csv.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .collect(java.util.stream.Collectors.toSet());
+        return games.stream()
+                .sorted(Comparator.comparingInt(g -> interests.contains(GAME_GENRE.get(g)) ? 0 : 1))
+                .toList();
+    }
+
     public List<String> findAllGameNames() {
         return questRepository.findAll().stream()
                 .filter(q -> !q.isSponsored() && q.getSponsorId() == null && !"UGC".equalsIgnoreCase(q.getGameName()))

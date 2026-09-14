@@ -83,6 +83,7 @@ public class WalletController {
                 .dailyBonusAvailable(userService.isDailyBonusAvailable(user))
                 .streakDays(user.getStreakDays())
                 .nextDailyBonusExc(nextDailyBonus)
+                .chestAvailable(userService.isChestAvailable(user))
                 .fixedRubBalance(user.getFixedRubBalance())
                 .phoneConfirmed(user.getPhoneNumber() != null)
                 .build());
@@ -111,6 +112,30 @@ public class WalletController {
                 .xpBonus(result.xpBonus())
                 .streakDays(result.streakDays())
                 .milestoneText(result.milestoneText())
+                .newBalance(user.getCoins())
+                .build());
+    }
+
+    @PostMapping("/chest")
+    public ResponseEntity<ru.gamebot.platform.api.dto.ChestResponseDto> openChest(@AuthenticationPrincipal Long telegramId) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        UserService.ChestResult result = userService.openChest(user);
+        if (result == null) {
+            return ResponseEntity.ok(ru.gamebot.platform.api.dto.ChestResponseDto.builder()
+                    .success(false)
+                    .message("Сундук уже открыт сегодня.")
+                    .newBalance(user.getCoins())
+                    .build());
+        }
+        return ResponseEntity.ok(ru.gamebot.platform.api.dto.ChestResponseDto.builder()
+                .success(true)
+                .message(result.prizeLabel())
+                .prizeLabel(result.prizeLabel())
+                .exc(result.exc())
+                .tickets(result.tickets())
                 .newBalance(user.getCoins())
                 .build());
     }

@@ -66,6 +66,15 @@ export async function getGames() {
   return cached('games', async () => { const { data } = await api.get('/api/quests/games'); return data; });
 }
 
+export async function getRecommendedQuest() {
+  const { data } = await api.get('/api/quests/recommended');
+  return data || null;
+}
+
+export async function getQuestBoost() {
+  return cached('questBoost', async () => { const { data } = await api.get('/api/quests/boost'); return data; });
+}
+
 export async function getQuestDetail(id) {
   const { data } = await api.get(`/api/quests/${id}`);
   return data;
@@ -209,6 +218,12 @@ export async function getWallet() {
 
 export async function claimDailyBonus() {
   const { data } = await api.post('/api/wallet/daily-bonus');
+  return data;
+}
+
+export async function openChest() {
+  const { data } = await api.post('/api/wallet/chest');
+  invalidateCache('wallet');
   return data;
 }
 

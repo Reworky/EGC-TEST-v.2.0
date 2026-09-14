@@ -3908,43 +3908,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.rowsLayout(rows));
     }
 
-    /** Жанр игры — статическая карта: в проекте нет отдельного поля жанра у Quest/игры, а сами жанры
-     *  общеизвестны и меняются редко, заводить под это поле в БД избыточно. Используется только для
-     *  сортировки списка игр по интересам профиля (см. sortGamesByInterest) — на выдачу квестов и
-     *  награды не влияет. Ключи — те же display-значения, что в INTEREST_OPTIONS/interestsCsv. */
-    private static final Map<String, String> GAME_GENRE = new LinkedHashMap<>();
-    static {
-        GAME_GENRE.put("CS2", "FPS");
-        GAME_GENRE.put("PUBG PC", "FPS");
-        GAME_GENRE.put("PUBG Mobile", "FPS");
-        GAME_GENRE.put("Dota 2", "Стратегии");
-        GAME_GENRE.put("Mobile Legends: Bang Bang", "Стратегии");
-        GAME_GENRE.put("Clash Royale", "Стратегии");
-        GAME_GENRE.put("Clash of Clans", "Стратегии");
-        GAME_GENRE.put("World of Warships", "Стратегии");
-        GAME_GENRE.put("Brawl Stars", "Казуальные");
-        GAME_GENRE.put("EA FC 26", "Спорт");
-        GAME_GENRE.put("Grim Soul: Dark Survival RPG", "RPG");
-    }
-
-    /** Сегментация по интересам (аудит вовлечённости, 2026-09-14): игры, чей жанр входит в интересы
-     *  игрока (профиль → жанры, user.interestsCsv), поднимаются в начало списка. Сортировка стабильна —
-     *  относительный порядок внутри "подходит"/"не подходит" не меняется. Без интересов в профиле —
-     *  порядок как был. */
-    private List<String> sortGamesByInterest(AppUser user, List<String> games) {
-        String csv = user.getInterestsCsv();
-        if (csv == null || csv.isBlank()) {
-            return games;
-        }
-        Set<String> interests = java.util.Arrays.stream(csv.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isBlank())
-                .collect(java.util.stream.Collectors.toSet());
-        return games.stream()
-                .sorted(java.util.Comparator.comparingInt(g -> interests.contains(GAME_GENRE.get(g)) ? 0 : 1))
-                .toList();
-    }
-
     private void sendGamingQuestGames(AppUser user) {
         List<String> games = questService.findActiveGameNames();
         if (games.isEmpty()) {
@@ -3953,7 +3916,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     backMenuKeyboard("menu:quests"));
             return;
         }
-        games = sortGamesByInterest(user, games);
+        games = questService.sortGamesByInterest(user, games);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (String game : games) {
             rows.add(List.of(keyboardFactory.callback(trim(game, 28), "quests:game:" + encodeGameToken(game))));

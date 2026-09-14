@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getWallet, claimDailyBonus, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone, invalidateCache, getStarsWithdrawItems, purchaseItem } from '../api/client';
+import { getWallet, claimDailyBonus, openChest, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone, invalidateCache, getStarsWithdrawItems, purchaseItem } from '../api/client';
 import { RANKS_DATA, getLevelFromXp } from '../data/ranks';
 import BackButton from '../components/BackButton';
 import BorderBeamCard from '../components/BorderBeamCard';
@@ -57,6 +57,8 @@ function RanksModal({ currentXp, onClose }) {
 function BalanceView({ wallet, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
+  const [chestBusy, setChestBusy] = useState(false);
+  const [chestMessage, setChestMessage] = useState(null);
   const [showRanks, setShowRanks] = useState(false);
   const playParticles = useParticles();
 
@@ -76,6 +78,26 @@ function BalanceView({ wallet, onChanged }) {
       }
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleOpenChest() {
+    setChestBusy(true);
+    setChestMessage(null);
+    try {
+      const res = await openChest();
+      if (res.success) {
+        let msg = res.prizeLabel;
+        if (res.exc > 0) msg += ` · +${res.exc} EXC`;
+        if (res.tickets > 0) msg += ` · +${res.tickets} 🎟️`;
+        setChestMessage(msg);
+        playParticles?.('streakBonus', 3000);
+        onChanged();
+      } else {
+        setChestMessage(res.message);
+      }
+    } finally {
+      setChestBusy(false);
     }
   }
 
@@ -164,6 +186,21 @@ function BalanceView({ wallet, onChanged }) {
           <p className="shop-desc"><i className="ti ti-circle-check"></i> Бонус за сегодня уже получен. Серия: {wallet.streakDays} дн. Возвращайся завтра за +{wallet.nextDailyBonusExc} EXC.</p>
         )}
         {message && <div className="quest-message">{message}</div>}
+      </div>
+
+      <div className="ref-link-card" style={{ marginTop: 12 }}>
+        <div className="ref-link-label">🎁 Сундук дня</div>
+        {wallet.chestAvailable ? (
+          <>
+            <p className="shop-desc"><i className="ti ti-sparkles"></i> Раз в сутки — случайный приз: EXC, билет колеса фортуны или джекпот.</p>
+            <ShimmerButton disabled={chestBusy} onClick={handleOpenChest}>
+              {chestBusy ? 'Открываем...' : <><i className="ti ti-gift" style={{ marginRight: 6 }} /> Открыть сундук</>}
+            </ShimmerButton>
+          </>
+        ) : (
+          <p className="shop-desc"><i className="ti ti-circle-check"></i> Сундук на сегодня открыт. Возвращайся завтра за новым призом.</p>
+        )}
+        {chestMessage && <div className="quest-message">{chestMessage}</div>}
       </div>
 
       <div className="category-section" style={{ marginTop: 12 }}>

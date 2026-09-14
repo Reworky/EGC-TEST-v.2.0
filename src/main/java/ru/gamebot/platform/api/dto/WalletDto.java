@@ -17,6 +17,7 @@ public class WalletDto {
     private boolean dailyBonusAvailable;
     private int streakDays;
     private long nextDailyBonusExc;
+    private boolean chestAvailable;
     private long fixedRubBalance;
     private boolean phoneConfirmed;
 }

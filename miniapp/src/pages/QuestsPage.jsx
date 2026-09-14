@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getQuests, getSponsoredQuests, getGames, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard } from '../api/client';
+import { getQuests, getSponsoredQuests, getGames, getRecommendedQuest, getQuestBoost, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard } from '../api/client';
 import { useLottie } from '../components/LottieContext';
 import { useParticles } from '../components/ParticlesContext';
 import AdRewardCard from '../components/AdRewardCard';
@@ -322,6 +322,57 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
   );
 }
 
+function QuestBoostBanner() {
+  const [boost, setBoost] = useState(null);
+  const [countdown, setCountdown] = useState(null);
+
+  useEffect(() => {
+    getQuestBoost().then(setBoost).catch(() => setBoost(null));
+  }, []);
+
+  useEffect(() => {
+    if (!boost?.active || !boost?.endsAt) { setCountdown(null); return; }
+    const tick = () => {
+      const diff = new Date(boost.endsAt).getTime() - Date.now();
+      if (diff <= 0) { setCountdown(null); return; }
+      const totalSeconds = Math.floor(diff / 1000);
+      const h = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+      const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+      const s = String(totalSeconds % 60).padStart(2, '0');
+      setCountdown(`${h}:${m}:${s}`);
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [boost?.active, boost?.endsAt]);
+
+  if (!boost?.active || !countdown) return null;
+
+  return (
+    <div className="quest-boost-banner">
+      🔥 Буст выходных ×{boost.multiplier}! EXC за квесты умножены
+      <div className="quest-boost-banner-timer">Осталось: {countdown}</div>
+    </div>
+  );
+}
+
+function RecommendedQuestSection({ expanded, details, onToggle, onDetailChanged }) {
+  const [quest, setQuest] = useState(undefined);
+
+  useEffect(() => {
+    getRecommendedQuest().then(setQuest).catch(() => setQuest(null));
+  }, []);
+
+  if (!quest) return null;
+
+  return (
+    <div className="quest-recommended-card">
+      <div className="quest-recommended-label">🎯 Квест для тебя</div>
+      <QuestCard q={quest} expanded={expanded} onToggle={onToggle} details={details} onDetailChanged={onDetailChanged} />
+    </div>
+  );
+}
+
 function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSection }) {
   const [games, setGames] = useState([]);
   const [selectedGame, setSelectedGame] = useState(null);
@@ -366,6 +417,9 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
 
   return (
     <>
+      <QuestBoostBanner />
+      <RecommendedQuestSection expanded={expanded} details={details} onToggle={onToggle} onDetailChanged={onDetailChanged} />
+
       <div className="quest-section-group">
         <button className="quest-section-header" onClick={() => toggleSection('gaming')}>
           <span>🎮 Игровые квесты</span>
@@ -609,6 +663,9 @@ function TournamentView() {
           {tournament.gameName && <span>🎮 {tournament.gameName}</span>}
           <span>👥 {tournament.entryCount} участников</span>
         </div>
+        {tournament.description && (
+          <p className="quest-desc" style={{ margin: '0 0 8px' }}>{tournament.description}</p>
+        )}
         <p className="quest-desc" style={{ margin: '0 0 8px' }}>
           💰 Взнос: <b>{tournament.entryFeeExc.toLocaleString()} EXC</b><br />
           🏅 Призовой фонд: <b>{tournament.prizePoolExc.toLocaleString()} EXC</b><br />

@@ -81,6 +81,7 @@ public class TournamentController {
         return TournamentDto.builder()
                 .id(t.getId())
                 .name(t.getName())
+                .description(t.getDescription())
                 .gameName(t.getGameName())
                 .entryFeeExc(t.getEntryFeeExc())
                 .prizePoolExc(t.getPrizePoolExc())

@@ -43,6 +43,7 @@ public class QuestController {
     private final AppUserRepository appUserRepository;
     private final TelegramFileService telegramFileService;
     private final GamePlatformBot gamePlatformBot;
+    private final ru.gamebot.platform.service.QuestRewardBoostService questRewardBoostService;
 
     /** Числовой прогресс для авто-верифицируемого квеста — тот же расчёт, что и в GamePlatformBot.autoVerifyProgressLabel,
      *  но без готового текста: фронтенд Mini App рисует прогресс сам (бар/проценты), не текстовой строкой. */
@@ -121,8 +122,60 @@ public class QuestController {
     }
 
     @GetMapping("/games")
-    public List<String> games() {
-        return questService.findActiveGameNames();
+    public List<String> games(@AuthenticationPrincipal Long telegramId) {
+        List<String> games = questService.findActiveGameNames();
+        if (telegramId == null) {
+            return games;
+        }
+        return appUserRepository.findByTelegramId(telegramId)
+                .map(user -> questService.sortGamesByInterest(user, games))
+                .orElse(games);
+    }
+
+    /** Персонализированный показ 1-2 квестов при заходе (аудит вовлечённости, 2026-09-14) — тот же
+     *  подбор, что и кнопка "🎯 Квест для тебя" в боте (см. QuestService.recommendQuest). 204, если
+     *  подобрать нечего (всё уже взято или на кулдауне) — фронтенд просто не показывает секцию. */
+    @GetMapping("/recommended")
+    public ResponseEntity<QuestDto> recommended(@AuthenticationPrincipal Long telegramId) {
+        if (telegramId == null) {
+            return ResponseEntity.noContent().build();
+        }
+        AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (user == null) {
+            return ResponseEntity.noContent().build();
+        }
+        return questService.recommendQuest(user)
+                .map(q -> ResponseEntity.ok(QuestDto.builder()
+                        .id(q.getId())
+                        .title(q.getTitle())
+                        .description(q.getDescription())
+                        .gameName(q.getGameName())
+                        .category(q.getCategory())
+                        .platform(q.getPlatform())
+                        .durationDays(q.getDurationDays())
+                        .rewardXp(q.getRewardXp())
+                        .rewardCoins(q.getRewardCoins())
+                        .ticketReward(q.getTicketReward())
+                        .councilOnly(q.isCouncilOnly())
+                        .sponsored(q.isSponsored())
+                        .externalAutoApprove(q.isExternalAutoApprove())
+                        .brawlAutoVerify(q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null || q.getDotaVerifyType() != null || q.getCs2VerifyType() != null)
+                        .highlightNew(q.isEffectivelyNew())
+                        .build()))
+                .orElse(ResponseEntity.noContent().build());
+    }
+
+    /** Буст выходных на EXC за квесты (аудит вовлечённости, 2026-09-14) — та же информация, что уходит
+     *  игрокам в канал при старте буста (см. WeeklyResetScheduler.startWeekendBoost), но для баннера
+     *  в Mini App. Параллель с ReferralController.boostActive/boostMultiplier/boostEndsAt для рефералки. */
+    @GetMapping("/boost")
+    public ru.gamebot.platform.api.dto.QuestBoostDto boost() {
+        var activeBoost = questRewardBoostService.findActiveBoost();
+        return ru.gamebot.platform.api.dto.QuestBoostDto.builder()
+                .active(activeBoost.isPresent())
+                .multiplier(activeBoost.map(b -> 1 + b.getBoostPercent() / 100).orElse(null))
+                .endsAt(activeBoost.map(b -> b.getEndAt().toString()).orElse(null))
+                .build();
     }
 
     @GetMapping("/sponsored")

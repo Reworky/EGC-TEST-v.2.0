@@ -8,6 +8,7 @@ import lombok.Data;
 public class TournamentDto {
     private Long id;
     private String name;
+    private String description;
     private String gameName;
     private long entryFeeExc;
     private long prizePoolExc;
