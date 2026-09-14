@@ -8043,7 +8043,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "<a href=\"tg://user?id=" + requester.getTelegramId() + "\">" + requester.getTelegramId() + "</a>";
         String detailsLine;
         if (isStarsWithdrawal(req)) {
-            detailsLine = "\n⭐ Способ: <b>Telegram Stars (через реселлера, вручную)</b>\n👤 Юзернейм получателя: <code>@" + escape(starsUsername(req)) + "</code>";
+            String starsAmount = req.getRewardItem().getTitle().replaceAll(".*- ", "");
+            detailsLine = "\n⭐ Способ: <b>Telegram Stars (через реселлера, вручную)</b>\n⭐ Количество звёзд: <b>" + escape(starsAmount) + "</b>\n👤 Юзернейм получателя: <code>@" + escape(starsUsername(req)) + "</code>";
         } else if (isCryptoWithdrawal(req)) {
             String wallet = cryptoWalletFromPayoutDetails(req.getPayoutDetails());
             detailsLine = "\n💎 Способ: <b>" + cryptoMethodLabel(req.getPayoutDetails()) + "</b>\n📬 Кошелёк: <code>" + escape(wallet) + "</code>";
@@ -8119,7 +8120,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long rubForLine = fixedOrCurrentRub(req);
         String withdrawLine;
         if (isStarsWithdrawal(req)) {
-            String denom = req.getRewardItem().getTitle().replaceAll(".*— ", "");
+            String denom = req.getRewardItem().getTitle().replaceAll(".*- ", "");
             withdrawLine = exc + " EXC → " + denom;
         } else if (isCryptoWithdrawal(req)) {
             java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(rubForLine));
@@ -12863,7 +12864,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "<a href=\"tg://user?id=" + requester.getTelegramId() + "\">" + requester.getTelegramId() + "</a>";
         String detailsLine;
         if (isStarsWithdrawal(req)) {
-            detailsLine = "\n⭐ Способ: <b>Telegram Stars (через реселлера, вручную)</b>\n👤 Юзернейм получателя: <code>@" + escape(starsUsername(req)) + "</code>";
+            String starsAmount = req.getRewardItem().getTitle().replaceAll(".*- ", "");
+            detailsLine = "\n⭐ Способ: <b>Telegram Stars (через реселлера, вручную)</b>\n⭐ Количество звёзд: <b>" + escape(starsAmount) + "</b>\n👤 Юзернейм получателя: <code>@" + escape(starsUsername(req)) + "</code>";
         } else if (isCryptoWithdrawal(req)) {
             String wallet = cryptoWalletFromPayoutDetails(req.getPayoutDetails());
             detailsLine = "\n💎 Способ: <b>" + cryptoMethodLabel(req.getPayoutDetails()) + "</b>\n📬 Кошелёк: <code>" + escape(wallet) + "</code>";
