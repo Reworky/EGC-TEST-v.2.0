@@ -396,7 +396,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "✍️ Напишите ваш игровой никнейм, чтобы начать.\n"
                             + "<b>Ник должен совпадать с ником в игре.</b>\n\n"
                             + "⭐ <a href=\"https://t.me/egc_payouts\">Почитать отзывы игроков</a>",
-                    null);
+                    null, true);
             return;
         }
 
@@ -678,7 +678,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "✍️ Напишите ваш игровой никнейм, чтобы начать.\n"
                             + "<b>Ник должен совпадать с ником в игре.</b>\n\n"
                             + "⭐ <a href=\"https://t.me/egc_payouts\">Почитать отзывы игроков</a>",
-                    null);
+                    null, true);
             return;
         }
 
@@ -14494,11 +14494,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendText(Long chatId, String text, InlineKeyboardMarkup keyboard) {
+        sendText(chatId, text, keyboard, false);
+    }
+
+    /** disablePreview — когда в тексте есть ссылка, но не нужна её превью-карточка (баннер/картинка
+     * под сообщением) — например, ссылка на канал отзывов в приветствии новичка выглядела как отдельный
+     * вылетающий баннер, отвлекающий от инструкции (запрошено 2026-09-14). */
+    private void sendText(Long chatId, String text, InlineKeyboardMarkup keyboard, boolean disablePreview) {
         SendMessage message = new SendMessage();
         message.setChatId(chatId.toString());
         message.setText(text);
         message.setParseMode("HTML");
         message.setReplyMarkup(keyboard);
+        message.setDisableWebPagePreview(disablePreview);
         try {
             execute(message);
         } catch (TelegramApiException exception) {
