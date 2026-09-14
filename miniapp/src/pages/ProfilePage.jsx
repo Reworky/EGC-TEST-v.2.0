@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getProfile, getWallet, getBattlePass, getAvatarUrl, equipFrame, invalidateCache } from '../api/client';
+import { getProfile, getWallet, getBattlePass, getAvatarUrl, equipFrame, invalidateCache, getStarsInvoiceLink } from '../api/client';
+import { openStarsInvoice } from '../utils/stars';
 import { RANKS_DATA } from '../data/ranks';
 import AnimatedNumber from '../components/AnimatedNumber';
 import fireFrame from '../assets/frames/fire.png';
@@ -360,6 +361,57 @@ function FrameCollection({ ownedFrames, activeFrame, onEquip }) {
   );
 }
 
+const AVATAR_FRAME_STARS_PRICE = 35;
+
+/** Покупка рамки «EGC» за Telegram Stars прямо из мини-аппа (Telegram.WebApp.openInvoice) — до
+ * этого товар продавался только в чате бота (⚙️ Сундук → магазин), где его почти никто не видел,
+ * хотя это чистая графика и её смысл именно в профиле мини-аппа (запрошено 2026-09-15). */
+function EgcFrameShopCard({ onPurchased }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  async function handleBuy() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const invoice = await getStarsInvoiceLink('AVATAR_FRAME');
+      if (!invoice.success) {
+        setMessage(invoice.message);
+        return;
+      }
+      const status = await openStarsInvoice(invoice.url);
+      if (status === 'paid') {
+        setMessage('✅ Рамка куплена!');
+        await new Promise(r => setTimeout(r, 800));
+        await onPurchased();
+      } else if (status === 'failed') {
+        setMessage('Платёж не прошёл. Попробуйте ещё раз.');
+      }
+    } catch (e) {
+      setMessage(e.message || 'Не удалось открыть оплату.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{
+      margin: '12px 16px 20px', background: 'rgba(124,58,237,0.07)', border: '1px solid rgba(124,58,237,0.28)',
+      borderRadius: 16, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14,
+    }}>
+      <img src={egcFrame} alt="" style={{ width: 56, height: 56, objectFit: 'contain', flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#e9d5ff' }}>👑 Рамка «EGC»</div>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>Эксклюзивная рамка клуба, навсегда</div>
+        {message && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>{message}</div>}
+      </div>
+      <button className="quest-btn" disabled={busy} onClick={handleBuy} style={{ flexShrink: 0, padding: '8px 14px', fontSize: 13 }}>
+        {busy ? '...' : `${AVATAR_FRAME_STARS_PRICE} ⭐`}
+      </button>
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const [profile, setProfile] = useState(null);
   const [wallet, setWallet] = useState(null);
@@ -503,6 +555,13 @@ export default function ProfilePage() {
             setProfile(updated);
           }}
         />
+      )}
+      {!(profile.ownedFrames || []).includes('egc') && (
+        <EgcFrameShopCard onPurchased={async () => {
+          invalidateCache('profile');
+          const updated = await getProfile();
+          setProfile(updated);
+        }} />
       )}
 
       {/* ── Stats cards 2×2 ─────────────────────────────────── */}

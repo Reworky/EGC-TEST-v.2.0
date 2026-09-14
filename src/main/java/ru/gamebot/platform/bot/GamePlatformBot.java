@@ -5645,16 +5645,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * отказе от идеи со слот-стикером). */
     private static final int CHEST_REROLL_STARS_PRICE = 15;
 
+    private record StarsItemSpec(String title, String description, String priceLabel, int priceStars) {}
+
+    /** Единый каталог Stars-товаров — источник правды и для инвойса в чате бота (sendInvoice), и
+     * для ссылки на инвойс в мини-аппе (createInvoiceLink, см. createStarsInvoiceLink). Раньше цена/
+     * текст были захардкожены в двух местах под каждый товар — теперь каждый новый Stars-товар
+     * достаточно добавить сюда один раз, и он автоматически продаётся в обоих местах. */
+    private static final Map<String, StarsItemSpec> STARS_ITEMS = Map.of(
+            "starsitem:AVATAR_FRAME", new StarsItemSpec(
+                    "Рамка аватара «EGC»",
+                    "Эксклюзивная фиолетовая рамка аватара клуба — украшает профиль.",
+                    "Рамка аватара «EGC»", AVATAR_FRAME_STARS_PRICE),
+            "starsitem:CHEST_REROLL", new StarsItemSpec(
+                    "Сундук дня — ещё раз",
+                    "Открыть улучшенный сундук — призы заметно щедрее бесплатного (больше джекпот, 2 билета колеса, выше диапазоны EXC). Полная таблица призов — «📋 Призы».",
+                    "Сундук дня — реролл", CHEST_REROLL_STARS_PRICE)
+    );
+
     private void sendAvatarFrameStarsInvoice(AppUser user) {
-        sendStarsInvoice(user, "Рамка аватара «EGC»",
-                "Эксклюзивная фиолетовая рамка аватара клуба — украшает профиль.",
-                "starsitem:AVATAR_FRAME", "Рамка аватара «EGC»", AVATAR_FRAME_STARS_PRICE);
+        sendStarsInvoice(user, "starsitem:AVATAR_FRAME");
     }
 
     private void sendChestRerollStarsInvoice(AppUser user) {
-        sendStarsInvoice(user, "Сундук дня — ещё раз",
-                "Открыть улучшенный сундук — призы заметно щедрее бесплатного (больше джекпот, 2 билета колеса, выше диапазоны EXC). Полная таблица призов — «📋 Призы».",
-                "starsitem:CHEST_REROLL", "Сундук дня — реролл", CHEST_REROLL_STARS_PRICE);
+        sendStarsInvoice(user, "starsitem:CHEST_REROLL");
     }
 
     /** Отправка sendInvoice напрямую через HTTP, в обход библиотеки telegrambots. Актуальная версия
@@ -5666,13 +5679,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * successful_payment этот баг не задевает — там нет providerToken, обрабатываются штатно библиотекой.
      * Общий метод для ЛЮБОГО платного товара за Stars — каждый новый товар просто вызывает этот метод
      * со своим payload, без повторения HTTP-обвязки (см. sendAvatarFrameStarsInvoice, sendChestRerollStarsInvoice). */
-    private void sendStarsInvoice(AppUser user, String title, String description, String payload, String priceLabel, int priceStars) {
+    private void sendStarsInvoice(AppUser user, String payload) {
+        StarsItemSpec spec = STARS_ITEMS.get(payload);
+        if (spec == null) {
+            log.error("Unknown Stars item payload '{}'", payload);
+            return;
+        }
         try {
-            Map<String, Object> price = Map.of("label", priceLabel, "amount", priceStars);
+            Map<String, Object> price = Map.of("label", spec.priceLabel(), "amount", spec.priceStars());
             Map<String, Object> body = new java.util.LinkedHashMap<>();
             body.put("chat_id", user.getTelegramId());
-            body.put("title", title);
-            body.put("description", description);
+            body.put("title", spec.title());
+            body.put("description", spec.description());
             body.put("payload", payload);
             body.put("provider_token", "");
             body.put("currency", "XTR");
@@ -5689,6 +5707,46 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         } catch (Exception e) {
             log.error("Failed to send Stars invoice ({}) to {}", payload, user.getTelegramId(), e);
+        }
+    }
+
+    /** То же самое, что sendStarsInvoice, но не отправляет инвойс в чат бота, а создаёт ссылку на
+     * него (createInvoiceLink) — для Telegram.WebApp.openInvoice() внутри мини-аппа. Нужно, чтобы
+     * Stars-товары (сейчас это в основном графика — рамки), которые в чате бота никто не видит,
+     * были доступны там, где игроки реально проводят время. Оплата и выдача товара идут по тому же
+     * pre_checkout_query/successful_payment пути, что и для инвойсов из бота — Telegram не различает
+     * источник открытия инвойса. Возвращает null при ошибке или неизвестном payload. */
+    public String createStarsInvoiceLink(String payload) {
+        StarsItemSpec spec = STARS_ITEMS.get(payload);
+        if (spec == null) {
+            log.error("Unknown Stars item payload '{}'", payload);
+            return null;
+        }
+        try {
+            Map<String, Object> price = Map.of("label", spec.priceLabel(), "amount", spec.priceStars());
+            Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("title", spec.title());
+            body.put("description", spec.description());
+            body.put("payload", payload);
+            body.put("provider_token", "");
+            body.put("currency", "XTR");
+            body.put("prices", List.of(price));
+            String json = objectMapper.writeValueAsString(body);
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create("https://api.telegram.org/bot" + appProperties.getBotToken() + "/createInvoiceLink"))
+                    .header("Content-Type", "application/json")
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(json))
+                    .build();
+            java.net.http.HttpResponse<String> response = starsHttpClient.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+            com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(response.body());
+            if (response.statusCode() == 200 && root.path("ok").asBoolean(false)) {
+                return root.path("result").asText();
+            }
+            log.error("Failed to create Stars invoice link ({}): HTTP {} — {}", payload, response.statusCode(), response.body());
+            return null;
+        } catch (Exception e) {
+            log.error("Failed to create Stars invoice link ({})", payload, e);
+            return null;
         }
     }
 

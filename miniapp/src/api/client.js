@@ -329,3 +329,8 @@ export async function spinWheel() {
   const { data } = await api.post('/api/wheel/spin');
   return data;
 }
+
+export async function getStarsInvoiceLink(itemType) {
+  const { data } = await api.post(`/api/stars/invoice/${itemType}`);
+  return data;
+}

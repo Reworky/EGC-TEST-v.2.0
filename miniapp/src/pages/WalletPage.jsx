@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getWallet, claimDailyBonus, openChest, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone, invalidateCache, getStarsWithdrawItems, purchaseItem } from '../api/client';
+import { getWallet, claimDailyBonus, openChest, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone, invalidateCache, getStarsWithdrawItems, purchaseItem, getStarsInvoiceLink } from '../api/client';
+import { openStarsInvoice } from '../utils/stars';
 import { RANKS_DATA, getLevelFromXp } from '../data/ranks';
 import BackButton from '../components/BackButton';
 import BorderBeamCard from '../components/BorderBeamCard';
@@ -22,11 +23,20 @@ const STATUS_LABELS = {
   CANCELLED: <><i className="ti ti-circle-x"></i> Отменено</>,
 };
 
+const CHEST_REROLL_STARS_PRICE = 15;
+
 const CHEST_PRIZES = [
   { label: '🎉 500 EXC (джекпот)', chance: '2%' },
   { label: '🎟️ Билет колеса фортуны', chance: '8%' },
   { label: '✨ 150-250 EXC', chance: '25%' },
-  { label: '🪙 50-100 EXC', chance: '65%' },
+  { label: '🪙 75-125 EXC', chance: '65%' },
+];
+
+const CHEST_REROLL_PRIZES = [
+  { label: '🎉 2 000 EXC (джекпот)', chance: '5%' },
+  { label: '🎟️ 2 билета колеса фортуны', chance: '15%' },
+  { label: '✨ 400-600 EXC', chance: '40%' },
+  { label: '🪙 200-350 EXC', chance: '40%' },
 ];
 
 function ChestPrizesModal({ onClose }) {
@@ -44,10 +54,14 @@ function ChestPrizesModal({ onClose }) {
         style={{ maxWidth: 340, maxHeight: '80vh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
       >
         <div className="fund-modal-title">📋 Призы сундука дня</div>
+        <p className="fund-modal-text" style={{ opacity: 0.6, marginTop: 0 }}>Бесплатно (раз в сутки):</p>
         {CHEST_PRIZES.map(p => (
           <p key={p.label} className="fund-modal-text">{p.label} — {p.chance}</p>
         ))}
-        <p className="fund-modal-text" style={{ opacity: 0.6 }}>Открывается раз в сутки, бесплатно.</p>
+        <p className="fund-modal-text" style={{ opacity: 0.6, marginTop: 12 }}>Реролл за {CHEST_REROLL_STARS_PRICE}⭐ (можно сколько угодно раз):</p>
+        {CHEST_REROLL_PRIZES.map(p => (
+          <p key={p.label} className="fund-modal-text">{p.label} — {p.chance}</p>
+        ))}
         <button className="fund-modal-close" onClick={onClose}>Понятно</button>
       </div>
     </div>
@@ -92,6 +106,7 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
   const [message, setMessage] = useState(null);
   const [chestBusy, setChestBusy] = useState(false);
   const [chestMessage, setChestMessage] = useState(null);
+  const [rerollBusy, setRerollBusy] = useState(false);
   const [showRanks, setShowRanks] = useState(false);
   const [showChestPrizes, setShowChestPrizes] = useState(false);
   const [chestPulse, setChestPulse] = useState(false);
@@ -144,6 +159,41 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
       }
     } finally {
       setChestBusy(false);
+    }
+  }
+
+  async function handleBuyReroll() {
+    setRerollBusy(true);
+    setChestMessage(null);
+    try {
+      const invoice = await getStarsInvoiceLink('CHEST_REROLL');
+      if (!invoice.success) {
+        setChestMessage(invoice.message);
+        return;
+      }
+      const status = await openStarsInvoice(invoice.url);
+      if (status === 'failed') {
+        setChestMessage('Платёж не прошёл. Попробуйте ещё раз.');
+        return;
+      }
+      if (status !== 'paid') return;
+      // Приз начисляется на сервере асинхронно (successful_payment от Telegram) — даём секунду
+      // и сравниваем баланс до/после, чтобы показать реальный результат, как в боте.
+      await new Promise(r => setTimeout(r, 1200));
+      invalidateCache('wallet');
+      const fresh = await getWallet();
+      let msg = '✅ Сундук открыт!';
+      const dCoins = fresh.coins - wallet.coins;
+      const dTickets = fresh.tickets - wallet.tickets;
+      if (dCoins > 0) msg += ` · +${dCoins} EXC`;
+      if (dTickets > 0) msg += ` · +${dTickets} 🎟️`;
+      setChestMessage(msg);
+      playParticles?.('streakBonus', 3000);
+      onChanged();
+    } catch (e) {
+      setChestMessage(e.message || 'Не удалось открыть оплату.');
+    } finally {
+      setRerollBusy(false);
     }
   }
 
@@ -251,6 +301,9 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
           <p className="shop-desc"><i className="ti ti-circle-check"></i> Сундук на сегодня открыт. Возвращайся завтра за новым призом.</p>
         )}
         {chestMessage && <div className="quest-message">{chestMessage}</div>}
+        <ShimmerButton disabled={rerollBusy} onClick={handleBuyReroll} style={{ marginTop: 10 }}>
+          {rerollBusy ? 'Секунду...' : <><i className="ti ti-sparkles" style={{ marginRight: 6 }} /> Улучшенный сундук — {CHEST_REROLL_STARS_PRICE} ⭐</>}
+        </ShimmerButton>
         <p className="ref-progress-label" style={{ color: 'rgba(167,139,250,0.85)', cursor: 'pointer', marginTop: 8 }} onClick={() => setShowChestPrizes(true)}>
           📋 Все призы →
         </p>
