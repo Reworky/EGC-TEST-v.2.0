@@ -24,8 +24,7 @@ const DEFAULT_RANK = { primary: '#9CA3AF', icon: '🥚' };
 
 const TIER_THRESHOLDS = [0, 1000, 5000, 15000, 35000, 75000, 150000, 300000];
 const FRAME_IMAGES = { fire: fireFrame, ice: iceFrame, purple: purpleFrame, gold: goldFrame, egc: egcFrame };
-const FRAME_SIZES = { fire: 130, ice: 128, purple: 126, gold: 134, egc: 160 };
-const FRAME_BLEND = { egc: 'screen' };
+const FRAME_SIZES = { fire: 130, ice: 128, purple: 126, gold: 134, egc: 130 };
 
 // ── SVG illustrations ────────────────────────────────────────
 const SVG_EXC = (
@@ -422,7 +421,7 @@ export default function ProfilePage() {
               </div>
               {!frameImage && <div className="p-avatar-ring" style={{ borderColor: `${ringColor}44` }} />}
               {frameImage && (
-                <img src={frameImage} alt="" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: frameSize, height: 'auto', pointerEvents: 'none', mixBlendMode: FRAME_BLEND[profile.avatarFrameImage] || 'normal' }} />
+                <img src={frameImage} alt="" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: frameSize, height: 'auto', pointerEvents: 'none' }} />
               )}
             </div>
             <CrestShield
