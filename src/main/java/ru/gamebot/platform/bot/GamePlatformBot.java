@@ -1492,6 +1492,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "moderation" -> sendModerationHub(user);
             case "daily" -> { sendDailyBonus(callbackQuery, user); return; }
             case "chest" -> { sendChest(callbackQuery, user); return; }
+            case "chestprizes" -> sendChestPrizeList(user);
             case "watchad" -> { sendWatchAdOffer(callbackQuery, user); return; }
             case "cat:quests" -> sendQuestsCategory(user);
             case "cat:wallet" -> sendWalletCategory(user);
@@ -2976,7 +2977,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
                 List.of(keyboardFactory.callback(dailyLabel, "menu:daily")),
-                List.of(keyboardFactory.callback(chestLabel, "menu:chest")),
+                List.of(
+                        keyboardFactory.callback(chestLabel, "menu:chest"),
+                        keyboardFactory.callback("📋 Призы", "menu:chestprizes")
+                ),
                 List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads")),
                 List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
@@ -3717,6 +3721,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         msg.append("\n💰 Баланс: <b>").append(user.getCoins()).append(" EXC</b>");
         msg.append("\n\nВозвращайся завтра за новым призом.");
         sendText(user.getTelegramId(), msg.toString(), backMenuKeyboard("menu:main"));
+    }
+
+    /** Таблица призов сундука дня по запросу игрока — те же вероятности, что в UserService.openChest,
+     *  открыто показаны так же, как уже давно показывается таблица призов Колеса фортуны. */
+    private void sendChestPrizeList(AppUser user) {
+        sendText(user.getTelegramId(),
+                "📋 <b>Призы сундука дня</b>\n\n"
+                        + "🎉 500 EXC (джекпот) — 2%\n"
+                        + "🎟️ Билет колеса фортуны — 8%\n"
+                        + "✨ 150-250 EXC — 25%\n"
+                        + "🪙 50-100 EXC — 65%\n\n"
+                        + "Открывается раз в сутки, бесплатно.",
+                backMenuKeyboard("menu:cat:wallet"));
     }
 
     private void sendWatchAdOffer(CallbackQuery callbackQuery, AppUser user) {
