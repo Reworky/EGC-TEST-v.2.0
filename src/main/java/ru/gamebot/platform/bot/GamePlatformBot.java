@@ -6736,6 +6736,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "stats:topquests" -> sendAdminStatsTopQuests(user);
             case "stats:referral" -> sendAdminReferralEconomics(user);
             case "stats:funnel" -> sendAdminNewCohortFunnel(user);
+            case "stats:engagement" -> sendAdminEngagementStats(user);
             case "stats:history" -> sendAdminStatsHistory(user);
             case "stats:snapshot" -> {
                 platformSnapshotService.takeSnapshot();
@@ -8934,6 +8935,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         ),
                         List.of(keyboardFactory.callback("🤝 Экономика рефералки", "admin:stats:referral")),
                         List.of(keyboardFactory.callback("📉 Воронка новичков", "admin:stats:funnel")),
+                        List.of(keyboardFactory.callback("📈 Вовлечённость", "admin:stats:engagement")),
                         List.of(keyboardFactory.callback("🔄 Сбросить недельный XP", "admin:stats:reset_weekly")),
                         List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
                 )));
@@ -8967,6 +8969,30 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + (total > 0 ? " (" + (twoThree * 100 / total) + "%)" : "") + "\n"
                         + "4+ квеста (закрепились): <b>" + fourPlus + "</b>"
                         + (total > 0 ? " (" + (fourPlus * 100 / total) + "%)" : "") + "\n",
+                backMenuKeyboard("admin:stats"));
+    }
+
+    /** Три метрики вовлечённости для бота — аналог ER канала (обсуждение 2026-09-14), но с нормами под
+     *  продукт, где "вовлечение" требует реального действия (сыграть + отправить отчёт), а не просто
+     *  увидеть пост. Нормы — общие ориентиры из гейм-индустрии, не измеренный бенчмарк именно EGC. */
+    private void sendAdminEngagementStats(AppUser user) {
+        UserService.EngagementReport r = userService.getEngagementReport();
+        sendText(user.getTelegramId(),
+                "📈 <b>Вовлечённость</b>\n\n"
+                        + "<b>1. DAU/MAU</b> — доля дневных активных от месячных\n"
+                        + "Активны за 24ч (DAU): <b>" + r.dau() + "</b>\n"
+                        + "Активны за 30д (MAU): <b>" + r.mau() + "</b>\n"
+                        + "Соотношение: <b>" + String.format("%.1f", r.dauMauPercent()) + "%</b>\n"
+                        + "Норма: 10-20% — окей, 20%+ — хорошо, 25-30%+ — уровень топ-игр\n\n"
+                        + "<b>2. Взяли квест за неделю</b> — доля от MAU, а не от всех регистраций\n"
+                        + "Выполнили ≥1 квест за 7д: <b>" + r.weeklyQuestTakers() + "</b>\n"
+                        + "Доля от MAU: <b>" + String.format("%.1f", r.weeklyQuestPercent()) + "%</b>\n"
+                        + "Норма: 5-15% — окей, 15%+ — сильно\n\n"
+                        + "<b>3. Вернулись за вторым квестом</b> — реальный ретеншен, не разовая проба\n"
+                        + "В когорте (1-й квест ≥7д назад, есть время вернуться): <b>" + r.retentionCohort() + "</b>\n"
+                        + "Вернулись за вторым в течение недели: <b>" + r.retentionReturned() + "</b>\n"
+                        + "Доля: <b>" + String.format("%.1f", r.retentionPercent()) + "%</b>\n"
+                        + "Единого стандарта нет — смотри в динамике месяц к месяцу, рост важнее абсолютного числа",
                 backMenuKeyboard("admin:stats"));
     }
 

@@ -408,6 +408,66 @@ public class UserService {
         );
     }
 
+    /** Три метрики вовлечённости, аналог ER канала, но для продукта с активным (не пассивным) действием —
+     *  см. обсуждение 2026-09-14: у канала 20-30% дневного охвата уже отлично, но для бота, где "вовлечение"
+     *  требует реально сыграть и отправить отчёт, а не просто увидеть пост, ориентиры ниже и считаются иначе. */
+    public record EngagementReport(
+            long dau, long mau, double dauMauPercent,
+            long weeklyQuestTakers, double weeklyQuestPercent,
+            long retentionCohort, long retentionReturned, double retentionPercent
+    ) {}
+
+    public EngagementReport getEngagementReport() {
+        LocalDateTime since1d = LocalDateTime.now().minusDays(1);
+        LocalDateTime since7d = LocalDateTime.now().minusDays(7);
+        LocalDateTime since30d = LocalDateTime.now().minusDays(30);
+
+        long dau = appUserRepository.countDistinctActiveSince(since1d);
+        long mau = appUserRepository.countDistinctActiveSince(since30d);
+        double dauMauPercent = mau > 0 ? dau * 100.0 / mau : 0;
+
+        long weeklyQuestTakers = questSubmissionRepository.countDistinctUsersWithApprovedSince(since7d);
+        double weeklyQuestPercent = mau > 0 ? weeklyQuestTakers * 100.0 / mau : 0;
+
+        SecondQuestRetention retention = secondQuestRetention();
+
+        return new EngagementReport(dau, mau, dauMauPercent,
+                weeklyQuestTakers, weeklyQuestPercent,
+                retention.cohortSize(), retention.returned(), retention.ratePercent());
+    }
+
+    private record SecondQuestRetention(long cohortSize, long returned, double ratePercent) {}
+
+    /** Из всех, кто выполнил свой первый одобренный квест не позже чем 7 дней назад (иначе рано судить,
+     *  у них ещё есть время вернуться) — какая доля выполнила второй одобренный квест в течение недели
+     *  после первого. Считается в Java, а не в JPQL: оконные функции по группам ("второе значение в
+     *  отсортированной группе") плохо переносятся между H2 (тесты) и Postgres (прод), а объём данных
+     *  (одобренные квесты по всем игрокам) на текущем масштабе проекта не проблема для in-memory группировки. */
+    private SecondQuestRetention secondQuestRetention() {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(7);
+        List<Object[]> rows = questSubmissionRepository.findApprovedUserIdAndDateForRetention();
+        java.util.Map<Long, List<LocalDateTime>> byUser = new java.util.HashMap<>();
+        for (Object[] row : rows) {
+            Long telegramId = (Long) row[0];
+            LocalDateTime approvedAt = (LocalDateTime) row[1];
+            byUser.computeIfAbsent(telegramId, k -> new java.util.ArrayList<>()).add(approvedAt);
+        }
+        long cohort = 0;
+        long returned = 0;
+        for (List<LocalDateTime> dates : byUser.values()) {
+            if (dates.isEmpty()) continue;
+            java.util.Collections.sort(dates);
+            LocalDateTime first = dates.get(0);
+            if (first.isAfter(cutoff)) continue;
+            cohort++;
+            if (dates.size() >= 2 && !dates.get(1).isAfter(first.plusDays(7))) {
+                returned++;
+            }
+        }
+        double rate = cohort > 0 ? returned * 100.0 / cohort : 0;
+        return new SecondQuestRetention(cohort, returned, rate);
+    }
+
     @Transactional
     public String registerActivity(AppUser user) {
         LocalDate today = LocalDate.now();

@@ -54,6 +54,17 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT MAX(s.updatedAt) FROM QuestSubmission s WHERE s.user = :user AND s.quest = :quest AND s.status = 'APPROVED'")
     Optional<LocalDateTime> findLastApprovedDateByUserAndQuest(@Param("user") AppUser user, @Param("quest") Quest quest);
 
+    /** Уникальные игроки, у кого одобрен хотя бы один квест с такого-то момента — для метрики
+     *  "% выполнивших квест за неделю" (см. UserService.getEngagementReport). */
+    @Query("SELECT COUNT(DISTINCT s.user) FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :since")
+    long countDistinctUsersWithApprovedSince(@Param("since") LocalDateTime since);
+
+    /** Telegram ID игрока + дата одобрения для каждого одобренного квеста — сырьё для расчёта
+     *  ретеншена "вернулся ли за вторым квестом в течение недели после первого" в Java, а не в JPQL
+     *  (оконные функции по группам неудобно/невозможно выразить переносимо между H2 и Postgres). */
+    @Query("SELECT s.user.telegramId, s.updatedAt FROM QuestSubmission s WHERE s.status = 'APPROVED'")
+    List<Object[]> findApprovedUserIdAndDateForRetention();
+
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.user = :user AND s.status IN ('APPROVED', 'REJECTED', 'NEEDS_INFO')")
     long countReviewedByUser(@Param("user") AppUser user);
 

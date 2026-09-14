@@ -20,6 +20,11 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     long countByLastMiniAppOpenAtAfter(LocalDateTime since);
 
+    /** Уникальные активные игроки за период — активность в боте ИЛИ в мини-аппе, без двойного счёта
+     *  тех, кто пользуется обеими поверхностями. Основа для DAU/MAU (см. UserService.getEngagementReport). */
+    @Query("SELECT COUNT(DISTINCT u) FROM AppUser u WHERE u.lastBotActivityAt >= :since OR u.lastMiniAppOpenAt >= :since")
+    long countDistinctActiveSince(@Param("since") LocalDateTime since);
+
     /**
      * Блокирует строку пользователя на время транзакции (SELECT ... FOR UPDATE).
      * Нужно везде, где идёт схема "проверить лимит → записать" (взятие квеста и т.п.),
