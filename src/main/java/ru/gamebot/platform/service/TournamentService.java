@@ -28,6 +28,12 @@ public class TournamentService {
 
     private static final int MAX_RANKED = 10;
 
+    /** Окно регистрации для авто-продолженного турнира (см. autoCreateNextTournament). Без него новый
+     * турнир активировался бы на следующем тике планировщика (~60 сек после создания) — у игроков
+     * физически не было бы времени зарегистрироваться (инцидент 2026-09-14: обнаружено на живом
+     * Brawl Stars турнире). */
+    private static final Duration AUTO_CONTINUATION_REGISTRATION_WINDOW = Duration.ofHours(24);
+
     private final TournamentRepository tournamentRepository;
     private final TournamentEntryRepository tournamentEntryRepository;
     private final QuestSubmissionRepository questSubmissionRepository;
@@ -267,7 +273,10 @@ public class TournamentService {
     /**
      * Клонирует завершённый турнир (те же name/gameName/entryFeeExc и длительность), чтобы всегда было
      * что-то активное для игроков — раньше турниры создавал только админ вручную, между циклами
-     * бывали долгие паузы без активного турнира.
+     * бывали долгие паузы без активного турнира. Новый турнир открывается в REGISTRATION с реальным
+     * окном на регистрацию (AUTO_CONTINUATION_REGISTRATION_WINDOW) — раньше startDate ставился в
+     * LocalDateTime.now(), и турнир активировался на следующем тике планировщика (~60 сек), фактически
+     * без единого шанса зарегистрироваться (найдено 2026-09-14 на живом Brawl Stars турнире).
      */
     private void autoCreateNextTournament(Tournament finished) {
         try {
@@ -280,10 +289,11 @@ public class TournamentService {
                 log.warn("Tournament {} has invalid duration, skipping auto-continuation", finished.getId());
                 return;
             }
-            LocalDateTime newStart = LocalDateTime.now();
+            LocalDateTime newStart = LocalDateTime.now().plus(AUTO_CONTINUATION_REGISTRATION_WINDOW);
             Tournament next = create(finished.getName(), finished.getGameName(), finished.getEntryFeeExc(),
                     newStart, newStart.plus(duration), finished.getMinParticipants(), finished.getPhotoFileId());
-            log.info("Auto-created continuation tournament {} (from finished {})", next.getId(), finished.getId());
+            log.info("Auto-created continuation tournament {} (from finished {}), registration open until {}",
+                    next.getId(), finished.getId(), newStart);
         } catch (Exception e) {
             log.error("Failed to auto-create continuation tournament after {}", finished.getId(), e);
         }

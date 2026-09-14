@@ -160,6 +160,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * запрошенный рейтинг. */
     private volatile String pendingSquadTeaserText;
 
+    /** Итоги турнира, ждущие одобрения/правки администратора перед публикацией в канал (2026-09-14) —
+     * личные уведомления победителям при этом уходят сразу, без ожидания: приз уже зачислен, держать
+     * игрока в неведении о собственном результате не нужно, только сам пост в канал требует согласования. */
+    private volatile String pendingTournamentFeedText;
+
     /** Тела постов ленты активности (выводы), ждущие одобрения — ключ req.getId(), т.к. одновременно
      * может быть несколько заявок на согласовании (в отличие от тизера/опроса — там один "слот"). */
     private final ConcurrentHashMap<Long, String> pendingWithdrawalTexts = new ConcurrentHashMap<>();
@@ -1736,6 +1741,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 if (target.equals("squad")) {
                     pendingSquadTeaserText = text.trim();
                     sendSquadFeedCard();
+                } else if (target.equals("tournament")) {
+                    pendingTournamentFeedText = text.trim();
+                    sendTournamentFeedCard();
                 } else if (target.startsWith("withdrawal:")) {
                     long reqId = parseLong(target.substring("withdrawal:".length()));
                     pendingWithdrawalTexts.put(reqId, text.trim());
@@ -8383,9 +8391,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    /** Согласование автопостов канала администратором — тизер отрядов, лента крупных выводов,
-     * авто-опросы. Введено 2026-09-02 по явному запросу: ничего из этих трёх не должно публиковаться
-     * без одобрения. Дополнено возможностью правки текста прямо перед одобрением/отклонением. */
+    /** Согласование автопостов канала администратором — тизер отрядов, лента крупных выводов, итоги
+     * турниров (добавлено 2026-09-14). Введено 2026-09-02 по явному запросу: ничего из этого не должно
+     * публиковаться без одобрения. Дополнено возможностью правки текста прямо перед одобрением/отклонением. */
     private void handleAdminFeedAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
         if (action.equals("squad:approve")) {
             String text = pendingSquadTeaserText;
@@ -8418,6 +8426,41 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (action.equals("squad:reject")) {
             pendingSquadTeaserText = null;
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "❌ Отклонено");
+            return;
+        }
+        if (action.equals("tournament:approve")) {
+            String text = pendingTournamentFeedText;
+            if (text != null) {
+                try {
+                    SendMessage msg = new SendMessage();
+                    msg.setChatId(requiredChannelChatId());
+                    msg.setText(text);
+                    msg.setParseMode("HTML");
+                    execute(msg);
+                } catch (Exception e) {
+                    log.error("Failed to post approved tournament results to channel", e);
+                }
+            }
+            pendingTournamentFeedText = null;
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "✅ Опубликовано");
+            return;
+        }
+        if (action.equals("tournament:edit")) {
+            session.reset();
+            session.setState(SessionState.ADMINFEED_EDIT);
+            session.getData().put("editTarget", "tournament");
+            answerSilently(callbackQuery.getId());
+            sendText(user.getTelegramId(),
+                    "✏️ Текущий текст:\n\n" + (pendingTournamentFeedText != null ? pendingTournamentFeedText : "—")
+                            + "\n\nПришлите новый текст поста:",
+                    cancelKeyboard());
+            return;
+        }
+        if (action.equals("tournament:reject")) {
+            pendingTournamentFeedText = null;
             clearInlineKeyboard(callbackQuery);
             answer(callbackQuery.getId(), "❌ Отклонено");
             return;
@@ -10068,15 +10111,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         sb.append("\nПоздравляем победителей! 🎮\nСледите за новыми турнирами → @").append(getBotUsername());
 
-        try {
-            org.telegram.telegrambots.meta.api.methods.send.SendMessage msg = new org.telegram.telegrambots.meta.api.methods.send.SendMessage();
-            msg.setChatId(requiredChannelChatId());
-            msg.setText(sb.toString());
-            msg.setParseMode("HTML");
-            execute(msg);
-        } catch (Exception e) {
-            log.error("Failed to publish tournament results for tournament {}", t.getId(), e);
-        }
+        // Публикация в канал — только после одобрения администратора (см. handleAdminFeedAction).
+        // Личные уведомления победителям ниже уходят сразу и от этого не зависят.
+        pendingTournamentFeedText = sb.toString();
+        sendTournamentFeedCard();
 
         boolean isBrawl = t.getScoringType() == ru.gamebot.platform.domain.model.Tournament.ScoringType.BRAWL_TROPHIES;
 
@@ -11894,6 +11932,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(adminId, preview, markup);
             } catch (Exception e) {
                 log.warn("Failed to send squad teaser candidate to admin {}", adminId, e);
+            }
+        }
+    }
+
+    private void sendTournamentFeedCard() {
+        String text = pendingTournamentFeedText;
+        if (text == null) return;
+        String preview = "🧾 <b>Итоги турнира — на согласование</b>\n\n" + text;
+        InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
+                keyboardFactory.callback("✅ Опубликовать", "adminfeed:tournament:approve"),
+                keyboardFactory.callback("✏️ Изменить", "adminfeed:tournament:edit"),
+                keyboardFactory.callback("❌ Отклонить", "adminfeed:tournament:reject")));
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, preview, markup);
+            } catch (Exception e) {
+                log.warn("Failed to send tournament results candidate to admin {}", adminId, e);
             }
         }
     }
