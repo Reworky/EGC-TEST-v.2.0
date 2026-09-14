@@ -5445,6 +5445,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("👑 Рамка аватара «EGC» — " + AVATAR_FRAME_STARS_PRICE + " ⭐", "sink:frame_stars")));
         }
         rows.add(List.of(keyboardFactory.callback("🔁 Улучшенный сундук дня — " + CHEST_REROLL_STARS_PRICE + " ⭐", "menu:chestreroll")));
+        if (user.getOwnedTitlesCsv() != null && Arrays.asList(user.getOwnedTitlesCsv().split(",")).contains("patron")) {
+            rows.add(List.of(keyboardFactory.callback("💎 Титул «Покровитель EGC» уже куплен ✅", "sink:noop")));
+        } else {
+            rows.add(List.of(keyboardFactory.callback("💎 Титул «Покровитель EGC» — " + PATRON_TITLE_STARS_PRICE + " ⭐", "sink:patron_title")));
+        }
 
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
 
@@ -5588,6 +5593,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     backMenuKeyboard("menu:sink"));
             case "titles" -> sendSinkTitles(user);
             case "frame_stars" -> sendAvatarFrameStarsInvoice(user);
+            case "patron_title" -> sendPatronTitleStarsInvoice(user);
             default -> {
                 if (action.startsWith("buy_title:")) {
                     handleTitlePurchase(callbackQuery, user, action.substring("buy_title:".length()));
@@ -5649,6 +5655,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * отказе от идеи со слот-стикером). */
     private static final int CHEST_REROLL_STARS_PRICE = 15;
 
+    /** Цена эксклюзивного титула «Покровитель EGC» — третий Stars-товар (2026-09-15), первый чисто
+     * статусный (не графика). Верхняя EXC-планка титулов — «Элита клуба» за 7 500 EXC (≈75₽ при
+     * HR=100%); этот титул нельзя купить за EXC вообще, поэтому взята надбавка за эксклюзивность —
+     * ≈115₽ по тому же ориентировочному курсу ~1,4₽/⭐, что и у рамки (см. AVATAR_FRAME_STARS_PRICE). */
+    private static final int PATRON_TITLE_STARS_PRICE = 60;
+
     private record StarsItemSpec(String title, String description, String priceLabel, int priceStars) {}
 
     /** Единый каталог Stars-товаров — источник правды и для инвойса в чате бота (sendInvoice), и
@@ -5663,7 +5675,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             "starsitem:CHEST_REROLL", new StarsItemSpec(
                     "Сундук дня — ещё раз",
                     "Открыть улучшенный сундук — призы заметно щедрее бесплатного (больше джекпот, 2 билета колеса, выше диапазоны EXC). Полная таблица призов — «📋 Призы».",
-                    "Сундук дня — реролл", CHEST_REROLL_STARS_PRICE)
+                    "Сундук дня — реролл", CHEST_REROLL_STARS_PRICE),
+            "starsitem:PATRON_TITLE", new StarsItemSpec(
+                    "Титул «Покровитель EGC»",
+                    "Эксклюзивный титул профиля, который нельзя получить за EXC — видно всем в клубе, что вы поддержали проект.",
+                    "Титул «Покровитель EGC»", PATRON_TITLE_STARS_PRICE)
     );
 
     private void sendAvatarFrameStarsInvoice(AppUser user) {
@@ -5672,6 +5688,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendChestRerollStarsInvoice(AppUser user) {
         sendStarsInvoice(user, "starsitem:CHEST_REROLL");
+    }
+
+    private void sendPatronTitleStarsInvoice(AppUser user) {
+        sendStarsInvoice(user, "starsitem:PATRON_TITLE");
     }
 
     /** Отправка sendInvoice напрямую через HTTP, в обход библиотеки telegrambots. Актуальная версия
@@ -5797,6 +5817,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else if ("starsitem:CHEST_REROLL".equals(payload)) {
             ru.gamebot.platform.service.UserService.ChestResult result = userService.openChestPaidReroll(user);
             sendText(telegramId, buildChestResultMessage(result, user.getCoins()), chestResultKeyboard());
+        } else if ("starsitem:PATRON_TITLE".equals(payload)) {
+            userService.grantPatronTitle(user);
+            sendText(telegramId,
+                    "✅ <b>Титул «💎 Покровитель EGC» куплен и надет!</b>\n\nОн виден всем в клубе — спасибо, что поддержали проект.",
+                    backMenuKeyboard("menu:profile"));
         } else {
             log.warn("Successful payment with unknown payload '{}' from user {}", payload, telegramId);
         }

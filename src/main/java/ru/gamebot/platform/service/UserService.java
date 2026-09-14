@@ -193,6 +193,23 @@ public class UserService {
         appUserRepository.save(user);
     }
 
+    /** Выдаёт эксклюзивный титул «Покровитель EGC» — второй Stars-товар после рамки (2026-09-15),
+     * тот же принцип: чистая косметика/статус, без влияния на EXC-экономику. В отличие от обычных
+     * EXC-титулов (SinkShopService.purchaseTitle — их можно перекупать сколько угодно раз, деньги
+     * просто списываются заново), владение фиксируется в ownedTitlesCsv, чтобы нельзя было оплатить
+     * второй раз то, что уже куплено — так же, как с рамками. Сразу надевается поверх текущего титула. */
+    @Transactional
+    public void grantPatronTitle(AppUser user) {
+        user.setProfileTitle("💎 Покровитель EGC");
+        String csv = user.getOwnedTitlesCsv();
+        if (csv == null || csv.isBlank()) {
+            user.setOwnedTitlesCsv("patron");
+        } else if (!Arrays.asList(csv.split(",")).contains("patron")) {
+            user.setOwnedTitlesCsv(csv + ",patron");
+        }
+        appUserRepository.save(user);
+    }
+
     public Optional<AppUser> findByTelegramId(Long telegramId) {
         return appUserRepository.findByTelegramId(telegramId);
     }

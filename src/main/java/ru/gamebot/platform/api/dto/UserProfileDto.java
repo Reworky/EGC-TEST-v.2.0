@@ -13,6 +13,10 @@ public class UserProfileDto {
     private String platformsCsv;
     private String interestsCsv;
     private String profileTitle;
+    /** Куплен ли эксклюзивный Stars-титул «Покровитель EGC» (ownedTitlesCsv содержит "patron") —
+     * чтобы мини-апп мог скрыть карточку покупки после оплаты, не дожидаясь смены profileTitle
+     * (владелец может позже переключиться на обычный EXC-титул, не потеряв статус покупки). */
+    private boolean hasPatronTitle;
     private long xp;
     private long coins;
     private int level;

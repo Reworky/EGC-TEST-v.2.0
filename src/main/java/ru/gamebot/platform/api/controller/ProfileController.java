@@ -48,6 +48,8 @@ public class ProfileController {
                             .platformsCsv(user.getPlatformsCsv())
                             .interestsCsv(user.getInterestsCsv())
                             .profileTitle(user.getProfileTitle())
+                            .hasPatronTitle(user.getOwnedTitlesCsv() != null
+                                    && Arrays.asList(user.getOwnedTitlesCsv().split(",")).contains("patron"))
                             .xp(user.getXp())
                             .coins(user.getCoins())
                             .level(userService.getLevelNumber(user.getXp()))

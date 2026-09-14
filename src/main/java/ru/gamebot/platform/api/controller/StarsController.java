@@ -42,6 +42,10 @@ public class StarsController {
                 && Arrays.asList(user.getOwnedFramesCsv().split(",")).contains("egc")) {
             return ResponseEntity.ok(error("Рамка уже куплена."));
         }
+        if ("PATRON_TITLE".equals(itemType) && user.getOwnedTitlesCsv() != null
+                && Arrays.asList(user.getOwnedTitlesCsv().split(",")).contains("patron")) {
+            return ResponseEntity.ok(error("Титул уже куплен."));
+        }
         String url = gamePlatformBot.createStarsInvoiceLink("starsitem:" + itemType);
         if (url == null) {
             return ResponseEntity.ok(error("Не удалось создать счёт. Попробуйте ещё раз позже."));

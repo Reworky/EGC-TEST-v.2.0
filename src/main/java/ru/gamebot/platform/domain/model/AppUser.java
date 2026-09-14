@@ -92,6 +92,10 @@ public class AppUser {
     // Sink items
     private LocalDateTime excBoostActiveUntil;
     private String profileTitle;
+    /** CSV-список ключей эксклюзивных Stars-титулов, которыми владеет пользователь (например
+     * "patron") — в отличие от обычных EXC-титулов (см. profileTitle), их нельзя просто перекупить
+     * заново, поэтому владение фиксируется отдельно (как ownedFramesCsv у рамок). */
+    private String ownedTitlesCsv;
 
     @Column(columnDefinition = "boolean default false")
     private boolean retryInsuranceActive;
