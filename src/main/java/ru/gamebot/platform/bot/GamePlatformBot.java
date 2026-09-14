@@ -2391,6 +2391,70 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendAdminTournamentView(user, tid);
                 }, () -> sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("admin:tournaments")));
             }
+            case TOURNAMENT_EDIT_FEE -> {
+                long tid = parseLong(session.getData().get("tournamentEditId"));
+                long fee;
+                try { fee = Long.parseLong(text.trim()); } catch (NumberFormatException e) {
+                    sendText(user.getTelegramId(), "❌ Введите число.", cancelKeyboard()); return;
+                }
+                if (fee <= 0) { sendText(user.getTelegramId(), "❌ Взнос должен быть > 0.", cancelKeyboard()); return; }
+                session.reset();
+                tournamentService.findById(tid).ifPresentOrElse(t -> {
+                    if (tournamentService.entryCount(t) > 0) {
+                        sendText(user.getTelegramId(),
+                                "⚠️ Пока вы вводили взнос, на турнир уже кто-то зарегистрировался — цену больше менять нельзя.",
+                                backMenuKeyboard("admin:tournaments:view:" + tid));
+                        return;
+                    }
+                    t.setEntryFeeExc(fee);
+                    tournamentService.save(t);
+                    sendAdminTournamentView(user, tid);
+                }, () -> sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("admin:tournaments")));
+            }
+            case TOURNAMENT_EDIT_START -> {
+                long tid = parseLong(session.getData().get("tournamentEditId"));
+                java.time.LocalDateTime newStart;
+                try {
+                    newStart = java.time.LocalDateTime.parse(text.trim(),
+                            java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                } catch (Exception e) {
+                    sendText(user.getTelegramId(), "❌ Неверный формат. Используйте ДД.ММ.ГГГГ ЧЧ:ММ", cancelKeyboard()); return;
+                }
+                session.reset();
+                tournamentService.findById(tid).ifPresentOrElse(t -> {
+                    if (t.getEndDate() != null && !newStart.isBefore(t.getEndDate())) {
+                        sendText(user.getTelegramId(),
+                                "❌ Дата закрытия регистрации должна быть раньше даты финиша (" + t.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + " UTC).",
+                                backMenuKeyboard("admin:tournaments:view:" + tid));
+                        return;
+                    }
+                    t.setStartDate(newStart);
+                    tournamentService.save(t);
+                    sendAdminTournamentView(user, tid);
+                }, () -> sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("admin:tournaments")));
+            }
+            case TOURNAMENT_EDIT_END -> {
+                long tid = parseLong(session.getData().get("tournamentEditId"));
+                java.time.LocalDateTime newEnd;
+                try {
+                    newEnd = java.time.LocalDateTime.parse(text.trim(),
+                            java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+                } catch (Exception e) {
+                    sendText(user.getTelegramId(), "❌ Неверный формат. Используйте ДД.ММ.ГГГГ ЧЧ:ММ", cancelKeyboard()); return;
+                }
+                session.reset();
+                tournamentService.findById(tid).ifPresentOrElse(t -> {
+                    if (t.getStartDate() != null && !newEnd.isAfter(t.getStartDate())) {
+                        sendText(user.getTelegramId(),
+                                "❌ Дата финиша должна быть позже даты закрытия регистрации (" + t.getStartDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + " UTC).",
+                                backMenuKeyboard("admin:tournaments:view:" + tid));
+                        return;
+                    }
+                    t.setEndDate(newEnd);
+                    tournamentService.save(t);
+                    sendAdminTournamentView(user, tid);
+                }, () -> sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("admin:tournaments")));
+            }
             case QUEST_CREATE_TITLE -> {
                 session.getData().put("title", text.trim());
                 session.setState(SessionState.QUEST_CREATE_DESCRIPTION);
@@ -7344,6 +7408,56 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     }, () -> sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("admin:tournaments")));
                     answerSilently(callbackQuery.getId());
                     return;
+                } else if (action.startsWith("tournaments:edit-fee:")) {
+                    long tid = parseLong(action.substring("tournaments:edit-fee:".length()));
+                    tournamentService.findById(tid).ifPresentOrElse(t -> {
+                        long already = tournamentService.entryCount(t);
+                        if (already > 0) {
+                            sendText(user.getTelegramId(),
+                                    "⚠️ Взнос нельзя менять — на турнир уже зарегистрировано " + already
+                                            + " участник(ов), они заплатили по старой цене. Меняйте взнос, пока участников 0.",
+                                    backMenuKeyboard("admin:tournaments:view:" + tid));
+                        } else {
+                            session.reset();
+                            session.getData().put("tournamentEditId", String.valueOf(tid));
+                            session.setState(SessionState.TOURNAMENT_EDIT_FEE);
+                            sendText(user.getTelegramId(),
+                                    "💰 <b>Изменить взнос</b>\n\nСейчас: <b>" + t.getEntryFeeExc() + " EXC</b>\n\nВведите новый взнос за участие в EXC:",
+                                    cancelKeyboard());
+                        }
+                    }, () -> sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("admin:tournaments")));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("tournaments:edit-start:")) {
+                    long tid = parseLong(action.substring("tournaments:edit-start:".length()));
+                    tournamentService.findById(tid).ifPresentOrElse(t -> {
+                        session.reset();
+                        session.getData().put("tournamentEditId", String.valueOf(tid));
+                        session.setState(SessionState.TOURNAMENT_EDIT_START);
+                        String current = t.getStartDate() != null
+                                ? t.getStartDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) : "—";
+                        sendText(user.getTelegramId(),
+                                "🔒 <b>Изменить дату закрытия регистрации</b>\n\nСейчас: <b>" + current + " UTC</b>\n\n"
+                                        + "Введите новую дату и время (формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>, время сервера — UTC):",
+                                cancelKeyboard());
+                    }, () -> sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("admin:tournaments")));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("tournaments:edit-end:")) {
+                    long tid = parseLong(action.substring("tournaments:edit-end:".length()));
+                    tournamentService.findById(tid).ifPresentOrElse(t -> {
+                        session.reset();
+                        session.getData().put("tournamentEditId", String.valueOf(tid));
+                        session.setState(SessionState.TOURNAMENT_EDIT_END);
+                        String current = t.getEndDate() != null
+                                ? t.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) : "—";
+                        sendText(user.getTelegramId(),
+                                "⏰ <b>Изменить дату финиша</b>\n\nСейчас: <b>" + current + " UTC</b>\n\n"
+                                        + "Введите новую дату и время (формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>, время сервера — UTC):",
+                                cancelKeyboard());
+                    }, () -> sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("admin:tournaments")));
+                    answerSilently(callbackQuery.getId());
+                    return;
                 } else if (action.startsWith("tournaments:brawlparticipants:")) {
                     sendAdminBrawlParticipants(user, parseLong(action.substring("tournaments:brawlparticipants:".length())));
                     answerSilently(callbackQuery.getId());
@@ -10078,6 +10192,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         keyboardFactory.callback("📝 Описание", "admin:tournaments:edit-description:" + tid)
                 ));
                 rows.add(List.of(keyboardFactory.callback("🖼️ Баннер", "admin:tournaments:edit-photo:" + tid)));
+                // Взнос — только пока никто не зарегистрировался (проверяется ещё раз при вводе, здесь
+                // просто не смущаем кнопкой, если уже поздно). Дата финиша можно двигать и у активного
+                // турнира (просто расширяет/сужает окно подсчёта квестов), дату закрытия регистрации —
+                // только пока она ещё не наступила.
+                List<InlineKeyboardButton> dateRow = new ArrayList<>();
+                if (entries == 0) {
+                    dateRow.add(keyboardFactory.callback("💰 Взнос", "admin:tournaments:edit-fee:" + tid));
+                }
+                if (t.getStatus() == ru.gamebot.platform.domain.model.Tournament.Status.REGISTRATION) {
+                    dateRow.add(keyboardFactory.callback("🔒 Дата регистрации", "admin:tournaments:edit-start:" + tid));
+                }
+                dateRow.add(keyboardFactory.callback("⏰ Дата финиша", "admin:tournaments:edit-end:" + tid));
+                rows.add(dateRow);
             }
             rows.add(List.of(keyboardFactory.callback("🗑️ Удалить турнир", "admin:tournaments:delete_confirm:" + tid)));
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:tournaments")));
