@@ -147,6 +147,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.AdsgramBotAdService adsgramBotAdService;
     private final ru.gamebot.platform.domain.repository.TournamentEntryRepository tournamentEntryRepository;
     private final ru.gamebot.platform.domain.repository.BotReviewRepository botReviewRepository;
+    private final ru.gamebot.platform.domain.repository.NudgeFeedbackRepository nudgeFeedbackRepository;
 
     private final Queue<String[]> pendingNewsQueue = new ConcurrentLinkedQueue<>();
     private final ScheduledExecutorService albumScheduler = Executors.newSingleThreadScheduledExecutor();
@@ -909,6 +910,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (suggestedId != null) {
                 sendQuestCard(user, suggestedId, "menu:main", "⬅️ Назад", "🎯 Похожий квест — специально для тебя!");
             }
+            return;
+        }
+        if (data.startsWith("nudgefb:")) {
+            handleNudgeFeedback(callbackQuery, user, data.substring("nudgefb:".length()));
             return;
         }
         if ("quest:recommend".equals(data)) {
@@ -3805,11 +3810,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     @org.springframework.context.event.EventListener
     public void onSecondQuestNudge(ru.gamebot.platform.event.SecondQuestNudgeEvent event) {
         try {
+            List<List<InlineKeyboardButton>> rows = List.of(
+                    List.of(
+                            keyboardFactory.callback("🤷 Не понял как", "nudgefb:notclear"),
+                            keyboardFactory.callback("🎮 Не мои игры", "nudgefb:wronggames"),
+                            keyboardFactory.callback("💰 Мало наград", "nudgefb:lowreward")
+                    ),
+                    List.of(keyboardFactory.callback("🗺️ К квестам", "menu:quests"))
+            );
             notifyUser(event.getTelegramId(),
                     "👋 <b>Первый квест был отличным началом!</b>\n\n"
                             + "Второй пока не взял — а зря, там всё только начинается. Держи <b>+"
-                            + event.getExcGranted() + " EXC</b>, чтобы было проще решиться. 🎁",
-                    keyboardFactory.callback("🗺️ К квестам", "menu:quests"));
+                            + event.getExcGranted() + " EXC</b>, чтобы было проще решиться. 🎁\n\n"
+                            + "Если не секрет — что помешало? Один тап, без опроса:",
+                    rows);
         } catch (Exception e) {
             log.warn("Failed to send second-quest nudge to {}", event.getTelegramId(), e);
         }
@@ -4131,6 +4145,32 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         sendQuestList(user, gameName, category);
         answerSilently(callbackQuery.getId());
+    }
+
+    private static final Map<String, String> NUDGE_FEEDBACK_REASONS = Map.of(
+            "notclear", "Не понял, что делать",
+            "wronggames", "Квесты не по моим играм",
+            "lowreward", "Наградил маловато"
+    );
+
+    /** Кнопки-опрос "почему не вернулся" прямо в напоминании про второй квест (см. onSecondQuestNudge)
+     *  — без отдельного полноценного опроса/рассылки, минимальное усилие для игрока (один тап).
+     *  Ответ можно оставить повторно — не критично, это лёгкая качественная обратная связь, не метрика,
+     *  требующая строгой уникальности. */
+    private void handleNudgeFeedback(CallbackQuery callbackQuery, AppUser user, String reasonCode) {
+        String reasonLabel = NUDGE_FEEDBACK_REASONS.get(reasonCode);
+        if (reasonLabel == null) {
+            answer(callbackQuery.getId(), "Не удалось сохранить отзыв");
+            return;
+        }
+        ru.gamebot.platform.domain.model.NudgeFeedback feedback = new ru.gamebot.platform.domain.model.NudgeFeedback();
+        feedback.setTelegramId(user.getTelegramId());
+        feedback.setNickname(user.getNickname());
+        feedback.setReasonCode(reasonCode);
+        feedback.setReasonLabel(reasonLabel);
+        feedback.setCreatedAt(LocalDateTime.now());
+        nudgeFeedbackRepository.save(feedback);
+        answer(callbackQuery.getId(), "Спасибо, учли! 🙏");
     }
 
     private void handleQuestView(CallbackQuery callbackQuery, AppUser user, UserSession session, String payload) {
@@ -6969,6 +7009,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "stats:referral" -> sendAdminReferralEconomics(user);
             case "stats:funnel" -> sendAdminNewCohortFunnel(user);
             case "stats:engagement" -> sendAdminEngagementStats(user);
+            case "stats:nudgefeedback" -> sendAdminNudgeFeedbackStats(user);
             case "stats:history" -> sendAdminStatsHistory(user);
             case "stats:snapshot" -> {
                 platformSnapshotService.takeSnapshot();
@@ -9326,8 +9367,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         List.of(keyboardFactory.callback("🤝 Экономика рефералки", "admin:stats:referral")),
                         List.of(keyboardFactory.callback("📉 Воронка новичков", "admin:stats:funnel")),
                         List.of(keyboardFactory.callback("📈 Вовлечённость", "admin:stats:engagement")),
+                        List.of(keyboardFactory.callback("📋 Фидбек «не вернулся»", "admin:stats:nudgefeedback")),
                         List.of(keyboardFactory.callback("🔄 Сбросить недельный XP", "admin:stats:reset_weekly")),
                         List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
+                )));
+    }
+
+    /** Опрос "почему не вернулся" прямо в напоминании про второй квест (см. handleNudgeFeedback,
+     *  onSecondQuestNudge) — агрегированные счётчики по причинам + последние ответы. */
+    private void sendAdminNudgeFeedbackStats(AppUser user) {
+        StringBuilder sb = new StringBuilder("📋 <b>Фидбек «не вернулся за вторым квестом»</b>\n\n");
+        long total = 0;
+        for (Map.Entry<String, String> entry : NUDGE_FEEDBACK_REASONS.entrySet()) {
+            long count = nudgeFeedbackRepository.countByReasonCode(entry.getKey());
+            total += count;
+            sb.append("• ").append(escape(entry.getValue())).append(": <b>").append(count).append("</b>\n");
+        }
+        sb.append("\nВсего ответов: <b>").append(total).append("</b>");
+        List<ru.gamebot.platform.domain.model.NudgeFeedback> recent = nudgeFeedbackRepository.findTop20ByOrderByCreatedAtDesc();
+        if (!recent.isEmpty()) {
+            sb.append("\n\n<b>Последние:</b>\n");
+            for (ru.gamebot.platform.domain.model.NudgeFeedback fb : recent) {
+                sb.append("· ").append(escape(fb.getNickname() != null ? fb.getNickname() : String.valueOf(fb.getTelegramId())))
+                        .append(" — ").append(escape(fb.getReasonLabel())).append("\n");
+            }
+        }
+        sendText(user.getTelegramId(), sb.toString(),
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("🔄 Обновить", "admin:stats:nudgefeedback")),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "admin:stats"))
                 )));
     }
 
@@ -13494,6 +13562,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(button));
             }
         }
+        InlineKeyboardMarkup base = mainMenuKeyboard(user);
+        if (base != null && base.getKeyboard() != null) {
+            rows.addAll(base.getKeyboard());
+        }
+        sendText(telegramId, text, keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Как notifyUser, но принимает готовые ряды кнопок напрямую — для случаев, когда несколько
+     *  кнопок должны стоять в один ряд (например, компактный набор кнопок-опроса), а не каждая
+     *  на своей строке, как делает вариант с varargs. */
+    private void notifyUser(Long telegramId, String text, List<List<InlineKeyboardButton>> extraRows) {
+        AppUser user = userService.findByTelegramId(telegramId).orElse(null);
+        if (user == null) {
+            sendText(telegramId, text, null);
+            return;
+        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>(extraRows);
         InlineKeyboardMarkup base = mainMenuKeyboard(user);
         if (base != null && base.getKeyboard() != null) {
             rows.addAll(base.getKeyboard());
