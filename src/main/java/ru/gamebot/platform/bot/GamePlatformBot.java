@@ -5663,7 +5663,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         java.util.Optional<ru.gamebot.platform.domain.model.Tournament> opt = tournamentService.findCurrentForUser();
         if (opt.isEmpty()) {
             sendText(user.getTelegramId(),
-                    "🏆 <b>Еженедельный турнир</b>\n\n⏳ Активных турниров нет. Следите за новостями клуба!",
+                    "🏆 <b>Турнир</b>\n\n⏳ Активных турниров нет. Следите за новостями клуба!",
                     backMenuKeyboard("menu:main"));
             return;
         }
@@ -5672,7 +5672,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long entries = tournamentService.entryCount(t);
         long pool = t.getPrizePoolExc();
 
-        StringBuilder sb = new StringBuilder("🏆 <b>Еженедельный турнир</b>\n\n");
+        StringBuilder sb = new StringBuilder();
         sb.append("📌 <b>").append(escape(t.getName())).append("</b>\n");
         if (t.getDescription() != null && !t.getDescription().isBlank()) {
             sb.append(escape(t.getDescription())).append("\n");
