@@ -178,6 +178,21 @@ public class UserService {
         return appUserRepository.save(user);
     }
 
+    /** Выдаёт фиолетовую рамку аватара «EGC» — та же логика, что и приз колеса фортуны
+     * (WheelService.spin, тип AVATAR_FRAME), переиспользуется для прямой покупки за Telegram Stars. */
+    @Transactional
+    public void grantEgcAvatarFrame(AppUser user) {
+        user.setAvatarFrameColor("#7C3AED");
+        user.setAvatarFrameImage("egc");
+        String csv = user.getOwnedFramesCsv();
+        if (csv == null || csv.isBlank()) {
+            user.setOwnedFramesCsv("egc");
+        } else if (!Arrays.asList(csv.split(",")).contains("egc")) {
+            user.setOwnedFramesCsv(csv + ",egc");
+        }
+        appUserRepository.save(user);
+    }
+
     public Optional<AppUser> findByTelegramId(Long telegramId) {
         return appUserRepository.findByTelegramId(telegramId);
     }

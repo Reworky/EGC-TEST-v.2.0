@@ -148,6 +148,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.domain.repository.TournamentEntryRepository tournamentEntryRepository;
     private final ru.gamebot.platform.domain.repository.BotReviewRepository botReviewRepository;
     private final ru.gamebot.platform.domain.repository.NudgeFeedbackRepository nudgeFeedbackRepository;
+    private final ru.gamebot.platform.domain.repository.StarsPurchaseRepository starsPurchaseRepository;
 
     private final Queue<String[]> pendingNewsQueue = new ConcurrentLinkedQueue<>();
     private final ScheduledExecutorService albumScheduler = Executors.newSingleThreadScheduledExecutor();
@@ -260,6 +261,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             if (update.hasCallbackQuery()) {
                 handleCallback(update.getCallbackQuery());
+            } else if (update.hasPreCheckoutQuery()) {
+                handlePreCheckoutQuery(update.getPreCheckoutQuery());
             } else if (update.hasMessage()) {
                 handleMessage(update.getMessage());
             }
@@ -277,6 +280,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleMessage(Message message) {
         if (message.getFrom() == null) {
+            return;
+        }
+
+        if (message.getSuccessfulPayment() != null) {
+            handleSuccessfulPayment(message);
             return;
         }
 
@@ -5430,6 +5438,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("⚔️ 🔒 Дуэль — Скоро", "sink:soon")));
         rows.add(List.of(keyboardFactory.callback("📢 🔒 Место в ТОП-посте — Скоро", "sink:soon")));
 
+        rows.add(List.of(keyboardFactory.callback("— За Telegram Stars —", "sink:noop")));
+        if (user.getOwnedFramesCsv() != null && Arrays.asList(user.getOwnedFramesCsv().split(",")).contains("egc")) {
+            rows.add(List.of(keyboardFactory.callback("👑 Рамка «EGC» уже куплена ✅", "sink:noop")));
+        } else {
+            rows.add(List.of(keyboardFactory.callback("👑 Рамка аватара «EGC» — " + AVATAR_FRAME_STARS_PRICE + " ⭐", "sink:frame_stars")));
+        }
+
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
 
         sendText(user.getTelegramId(), info.toString(), keyboardFactory.rowsLayout(rows));
@@ -5571,6 +5586,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "🛡️ Страховка активна. Она сработает при следующем отклонённом отчёте.",
                     backMenuKeyboard("menu:sink"));
             case "titles" -> sendSinkTitles(user);
+            case "frame_stars" -> sendAvatarFrameStarsInvoice(user);
             default -> {
                 if (action.startsWith("buy_title:")) {
                     handleTitlePurchase(callbackQuery, user, action.substring("buy_title:".length()));
@@ -5611,6 +5627,74 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         }
         answerSilently(callbackQuery.getId());
+    }
+
+    /** Цена рамки «EGC» за Telegram Stars — первый платный товар за Stars в проекте (2026-09-14),
+     * выбран как самый безопасный тест: разовая покупка, чистая косметика, не трогает EXC-экономику
+     * вообще. Логика выдачи переиспользована из приза колеса (UserService.grantEgcAvatarFrame). */
+    private static final int AVATAR_FRAME_STARS_PRICE = 50;
+
+    private void sendAvatarFrameStarsInvoice(AppUser user) {
+        org.telegram.telegrambots.meta.api.methods.invoices.SendInvoice invoice =
+                new org.telegram.telegrambots.meta.api.methods.invoices.SendInvoice();
+        invoice.setChatId(user.getTelegramId().toString());
+        invoice.setTitle("Рамка аватара «EGC»");
+        invoice.setDescription("Эксклюзивная фиолетовая рамка аватара клуба — украшает профиль.");
+        invoice.setPayload("starsitem:AVATAR_FRAME");
+        invoice.setProviderToken(""); // пусто — обязательное требование Telegram для оплаты Stars (XTR)
+        invoice.setCurrency("XTR");
+        invoice.setPrices(List.of(new org.telegram.telegrambots.meta.api.objects.payments.LabeledPrice(
+                "Рамка аватара «EGC»", AVATAR_FRAME_STARS_PRICE)));
+        try {
+            execute(invoice);
+        } catch (Exception e) {
+            log.error("Failed to send Stars invoice (avatar frame) to {}", user.getTelegramId(), e);
+        }
+    }
+
+    /** Подтверждение до реального списания — обязательный ответ в течение 10 секунд (требование
+     * Telegram). Всегда одобряем: цена/наличие товара фиксированы на нашей стороне, отклонять нечего. */
+    private void handlePreCheckoutQuery(org.telegram.telegrambots.meta.api.objects.payments.PreCheckoutQuery query) {
+        org.telegram.telegrambots.meta.api.methods.AnswerPreCheckoutQuery answer =
+                new org.telegram.telegrambots.meta.api.methods.AnswerPreCheckoutQuery();
+        answer.setPreCheckoutQueryId(query.getId());
+        answer.setOk(true);
+        try {
+            execute(answer);
+        } catch (Exception e) {
+            log.error("Failed to answer pre-checkout query {}", query.getId(), e);
+        }
+    }
+
+    /** Деньги уже списаны у игрока Telegram-ом на этот момент — только выдаём товар и логируем.
+     * Пополнение payout pool от Stars-выручки — вручную администратором по факту реальной выплаты
+     * от Telegram (см. StarsPurchase), курс Stars->₽ здесь намеренно не пересчитывается автоматически. */
+    private void handleSuccessfulPayment(Message message) {
+        org.telegram.telegrambots.meta.api.objects.payments.SuccessfulPayment payment = message.getSuccessfulPayment();
+        Long telegramId = message.getFrom().getId();
+        AppUser user = userService.findByTelegramId(telegramId).orElse(null);
+        if (user == null) {
+            log.warn("Successful payment from unknown user {}", telegramId);
+            return;
+        }
+        String payload = payment.getInvoicePayload();
+
+        ru.gamebot.platform.domain.model.StarsPurchase purchase = new ru.gamebot.platform.domain.model.StarsPurchase();
+        purchase.setTelegramId(telegramId);
+        purchase.setItemType(payload);
+        purchase.setStarsAmount(payment.getTotalAmount());
+        purchase.setTelegramPaymentChargeId(payment.getTelegramPaymentChargeId());
+        purchase.setCreatedAt(LocalDateTime.now());
+        starsPurchaseRepository.save(purchase);
+
+        if ("starsitem:AVATAR_FRAME".equals(payload)) {
+            userService.grantEgcAvatarFrame(user);
+            sendText(telegramId,
+                    "✅ <b>Рамка аватара «EGC» куплена!</b>\n\nПрименить её можно в Профиле.",
+                    backMenuKeyboard("menu:profile"));
+        } else {
+            log.warn("Successful payment with unknown payload '{}' from user {}", payload, telegramId);
+        }
     }
 
     private String fmt(java.time.LocalDateTime dt) {
