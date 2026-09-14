@@ -6053,7 +6053,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "spin" -> {
                 try {
                     ru.gamebot.platform.service.WheelService.SpinResult result = wheelService.spin(user);
-                    String msg = "🎰 <b>Колесо остановилось на...</b>\n\n"
+                    String msg = "🎡 <b>Колесо остановилось на...</b>\n\n"
                             + "<b>" + result.label() + "</b>!\n\n";
                     if ("EXC".equals(result.type())) {
                         msg += "💰 EXC зачислены на ваш счёт.";
@@ -6067,7 +6067,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     InlineKeyboardMarkup kb;
                     if (remaining > 0) {
                         kb = keyboardFactory.rowsLayout(List.of(
-                                List.of(keyboardFactory.callback("🎰 Крутить ещё", "wheel:spin")),
+                                List.of(keyboardFactory.callback("🎡 Крутить ещё", "wheel:spin")),
                                 List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
                         ));
                     } else {
@@ -6088,7 +6088,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendWheelMenu(AppUser user) {
         int tickets = (int) user.getTickets();
-        String text = "🎰 <b>Колесо фортуны</b>\n\n"
+        String text = "🎡 <b>Колесо фортуны</b>\n\n"
                 + "У вас: 🎟 <b>" + tickets + " билет(ов)</b>\n\n"
                 + "Призы:\n"
                 + "🥉 50 EXC — 30%\n"
@@ -6104,7 +6104,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (tickets > 0) {
-            rows.add(List.of(keyboardFactory.callback("🎰 Крутить (−1 🎟)", "wheel:spin")));
+            rows.add(List.of(keyboardFactory.callback("🎡 Крутить (−1 🎟)", "wheel:spin")));
         } else {
             rows.add(List.of(keyboardFactory.callback("🎟 Нет билетов", "wheel:menu")));
         }
@@ -12456,9 +12456,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(winner.getTelegramId(),
                         "🎟 <b>Тебе повезло!</b>\n\n"
                                 + "Сегодняшний розыгрыш билетов колеса фортуны — просто за то, что зашёл сегодня.\n"
-                                + "Начислен <b>+1 билет</b> 🎰",
+                                + "Начислен <b>+1 билет</b> 🎡",
                         keyboardFactory.rowsLayout(List.of(
-                                List.of(keyboardFactory.callback("🎰 Крутить колесо", "wheel:menu"))
+                                List.of(keyboardFactory.callback("🎡 Крутить колесо", "wheel:menu"))
                         )));
             } catch (Exception e) {
                 log.warn("Failed to notify ticket raffle winner {}", winner.getTelegramId(), e);
@@ -12469,7 +12469,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("Сегодня повезло ").append(event.getWinners().size()).append(" игрокам:\n\n");
         for (AppUser winner : event.getWinners()) {
             String nick = winner.getNickname() != null ? winner.getNickname() : "Игрок";
-            sb.append("🎉 ").append(escape(nick)).append(" — +1 билет 🎰\n");
+            sb.append("🎉 ").append(escape(nick)).append(" — +1 билет 🎡\n");
         }
         sb.append("\nЗаходи каждый день — следующий розыгрыш уже завтра!");
         pendingTicketRaffleFeedText = sb.toString();
@@ -13633,16 +13633,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         boolean hasTournament = tournamentService.findCurrentForUser().isPresent();
-        String questsLabel = hasTournament ? "🎯 Квесты и рейтинг 🔥" : "🎯 Квесты и рейтинг";
+        String questsLabel = hasTournament ? "📋 Все квесты и рейтинг 🔥" : "📋 Все квесты и рейтинг";
+        rows.add(List.of(keyboardFactory.callback("🎯 Твой квест сейчас", "quest:recommend")));
         rows.add(List.of(keyboardFactory.callback(questsLabel, "menu:cat:quests")));
-        rows.add(List.of(keyboardFactory.callback("🎯 Квест для тебя", "quest:recommend")));
 
         rows.add(List.of(keyboardFactory.callback("🤝 Рефералы", "menu:referrals")));
 
         String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошелёк 🔔" : "💰 Кошелёк";
         String wheelLabel = user.getTickets() > 0
-                ? "🎰 Колесо фортуны 🎟 " + user.getTickets()
-                : "🎰 Колесо фортуны";
+                ? "🎡 Колесо фортуны 🎟 " + user.getTickets()
+                : "🎡 Колесо фортуны";
         long activePolls = pollService.findActive().size();
         String clubLabel = activePolls > 0 ? "👥 Клуб (" + activePolls + ")" : "👥 Клуб";
 
@@ -13748,15 +13748,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
 
+    /** Короткая версия — при любом возврате в главное меню (кнопка "Назад", /menu, menu:main и т.д.):
+     * никнейм + баланс/ранг, без абзаца-описания возможностей бота. Полная версия с абзацем — только
+     * при самом первом /start, см. fullUserWelcomeText/roleWelcomeText (ТЗ "Донастройка главного экрана",
+     * 2026-09-14: абзац при каждом возврате воспринимался как избыточный шум). */
+    private String userBalanceLine(AppUser user) {
+        return "💰 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>"
+                + "   ⭐ Ур. " + userService.getLevelNumber(user.getXp()) + " — " + escape(userService.getLevelName(user.getXp()));
+    }
+
+    private String fullUserWelcomeText(AppUser user) {
+        return "Никнейм: " + escape(user.getNickname()) + "\n\n"
+                + userBalanceLine(user) + "\n\n"
+                + "Здесь вы можете брать задания, накапливать XP, подниматься в рейтинге, приглашать друзей и обменивать монеты на награды.\n\n"
+                + "Выберите нужный раздел ниже и продолжайте прогресс.";
+    }
+
     private String mainMenuText(AppUser user) {
         String role = resolveMenuRole(user, sessionService.get(user.getTelegramId()));
         if (ROLE_USER.equals(role)) {
-            String balanceLine = "💰 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>"
-                    + "   ⭐ Ур. " + userService.getLevelNumber(user.getXp()) + " — " + escape(userService.getLevelName(user.getXp()));
-            return "Никнейм: " + escape(user.getNickname()) + "\n\n"
-                    + balanceLine + "\n\n"
-                    + "Здесь вы можете брать задания, накапливать XP, подниматься в рейтинге, приглашать друзей и обменивать монеты на награды.\n\n"
-                    + "Выберите нужный раздел ниже и продолжайте прогресс.";
+            return "Никнейм: " + escape(user.getNickname()) + "\n\n" + userBalanceLine(user);
         }
         String title = switch (role) {
             case ROLE_ADMIN -> "🛠️ <b>Административный контур активен</b>";
@@ -14139,6 +14150,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private String roleWelcomeText(AppUser user, String streakMessage) {
         if (ROLE_USER.equals(resolveMenuRole(user, sessionService.get(user.getTelegramId())))) {
+            if (!user.isWelcomeShown()) {
+                user.setWelcomeShown(true);
+                userService.save(user);
+                return fullUserWelcomeText(user);
+            }
             return mainMenuText(user);
         }
         String title = switch (resolveMenuRole(user, sessionService.get(user.getTelegramId()))) {

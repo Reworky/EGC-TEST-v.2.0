@@ -145,6 +145,13 @@ public class AppUser {
     // Сундук дня — отдельная от ежедневного бонуса механика со случайным призом (2026-09-14)
     private LocalDate lastChestOpenedDate;
 
+    /** Показан ли полный текст приветствия с абзацем-описанием (см. GamePlatformBot.roleWelcomeText) —
+     * только при самом первом /start, дальше используется короткая версия. Default true в БД — чтобы
+     * при миграции на непустой таблице СУЩЕСТВУЮЩИЕ игроки не увидели полный текст ещё раз (они его
+     * уже видели); для новых пользователей явно ставится false в UserService.getOrCreate. */
+    @Column(columnDefinition = "boolean default true")
+    private boolean welcomeShown;
+
     // Phone verification (withdrawal anti-fraud)
     private String phoneNumber;
 

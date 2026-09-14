@@ -162,6 +162,7 @@ public class UserService {
         user.setStreakDays(0);
         user.setProfileCompleted(false);
         user.setRegistrationCompleted(false);
+        user.setWelcomeShown(false);
         user.setStaffRole("USER");
         user.setCreatedAt(LocalDateTime.now());
         java.time.YearMonth now = java.time.YearMonth.now();
@@ -1154,6 +1155,7 @@ public class UserService {
         // blocked/blockReason/blockedAt, fraudSuspect — это не про "анкету", а про права доступа и
         // модерацию, сбрасывать их тут было бы неожиданно и рискованно.
         user.setCreatedAt(java.time.LocalDateTime.now());
+        user.setWelcomeShown(false);
         user.setWelcomeBonusPaid(false);
         user.setRulesAccepted(false);
         user.setReferralActive(true);
