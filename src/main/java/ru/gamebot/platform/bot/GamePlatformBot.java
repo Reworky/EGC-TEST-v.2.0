@@ -5044,6 +5044,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 byCategory.computeIfAbsent(cat, k -> new ArrayList<>()).add(reward);
             }
             for (Map.Entry<String, List<RewardItem>> entry : byCategory.entrySet()) {
+                // Кастомизация (рамка аватара, титулы) перенесена в ⚙️ Предметы клуба (2026-09-15) —
+                // здесь остаётся только игровая валюта, см. addCustomizationSection/sendSinkShop.
+                if ("Кастомизация".equals(entry.getKey())) continue;
                 rows.add(List.of(keyboardFactory.callback("── " + entry.getKey() + " ──", "noop")));
                 // Group items by purchaseGroup; groups with >1 item shown as single entry
                 java.util.LinkedHashMap<String, List<RewardItem>> byGroup = new java.util.LinkedHashMap<>();
@@ -5078,13 +5081,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 "shop:view:" + reward.getId())));
                     }
                 }
-                if ("Кастомизация".equals(entry.getKey())) {
-                    rows.add(List.of(keyboardFactory.callback("🎭 Титулы профиля", "sink:titles")));
-                }
             }
-        } else {
-            rows.add(List.of(keyboardFactory.callback("── Кастомизация ──", "noop")));
-            rows.add(List.of(keyboardFactory.callback("🎭 Титулы профиля", "sink:titles")));
         }
 
         rows.add(List.of(keyboardFactory.callback("📋 Мои заявки", "menu:my-rewards")));
@@ -5379,6 +5376,52 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Секция "Кастомизация" (рамка аватара + титулы профиля) — раньше показывалась в «Магазине
+     * наград» вперемешку с игровой валютой (PUBG/Clash/Brawl Stars и т.д.), перенесена сюда, в
+     * ⚙️ Предметы клуба (2026-09-15) — смысловое место рядом с остальными предметами клуба, а не
+     * среди подарочных карт для игр. Логика группировки/иконок-блокировок скопирована из sendShop,
+     * чтобы поведение (номиналы рамки, статусы 🔒/⏳/🚫) осталось идентичным. */
+    private void addCustomizationSection(List<List<InlineKeyboardButton>> rows, AppUser user) {
+        List<RewardItem> customization = rewardService.findAvailableRewards().stream()
+                .filter(r -> "Кастомизация".equals(r.getCategory()))
+                .toList();
+        rows.add(List.of(keyboardFactory.callback("— Кастомизация —", "sink:noop")));
+        if (!customization.isEmpty()) {
+            java.util.LinkedHashMap<String, List<RewardItem>> byGroup = new java.util.LinkedHashMap<>();
+            for (RewardItem reward : customization) {
+                String group = reward.getPurchaseGroup() != null ? reward.getPurchaseGroup() : reward.getId().toString();
+                byGroup.computeIfAbsent(group, k -> new ArrayList<>()).add(reward);
+            }
+            for (Map.Entry<String, List<RewardItem>> groupEntry : byGroup.entrySet()) {
+                List<RewardItem> groupItems = groupEntry.getValue();
+                if (groupItems.size() > 1) {
+                    RewardItem first = groupItems.get(0);
+                    String groupLabel = "avatar_frame".equals(groupEntry.getKey())
+                            ? "Рамка аватара"
+                            : groupItemLabel(first.getTitle());
+                    boolean anyAvailable = groupItems.stream().anyMatch(r ->
+                            !shopLimitService.getItemStatus(user, r).startsWith("🔒"));
+                    String icon = anyAvailable ? "🎁" : "🔒";
+                    rows.add(List.of(keyboardFactory.callback(
+                            icon + " " + groupLabel + " — выбор номинала",
+                            "shop:group:" + groupEntry.getKey())));
+                } else {
+                    RewardItem reward = groupItems.get(0);
+                    long price = rewardService.effectivePrice(reward);
+                    String status = shopLimitService.getItemStatus(user, reward);
+                    String icon = status.startsWith("🔒") ? "🔒"
+                            : status.startsWith("⏳") ? "⏳"
+                            : status.startsWith("🚫") ? "🚫"
+                            : "🎁";
+                    rows.add(List.of(keyboardFactory.callback(
+                            icon + " " + trim(reward.getTitle(), 22) + " — " + price + " EXC",
+                            "shop:view:" + reward.getId())));
+                }
+            }
+        }
+        rows.add(List.of(keyboardFactory.callback("🎭 Титулы профиля", "sink:titles")));
+    }
+
     private void sendSinkShop(AppUser user) {
         boolean xpBoostActive = sinkShopService.isXpBoostActive(user);
         boolean excBoostActive = sinkShopService.isExcBoostActive(user);
@@ -5395,6 +5438,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (excBoostActive) info.append("⚡ EXC-буст активен до: <b>").append(user.getExcBoostActiveUntil().format(dtFmt)).append("</b>\n");
         if (slotActive) info.append("📂 Доп. слот активен до: <b>").append(user.getQuestSlotExtraUntil().format(dtFmt)).append("</b>\n");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+
+        addCustomizationSection(rows, user);
 
         rows.add(List.of(keyboardFactory.callback("— Бусты —", "sink:noop")));
         if (xpBoostActive) {
