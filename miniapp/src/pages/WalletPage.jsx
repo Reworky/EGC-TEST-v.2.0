@@ -21,6 +21,38 @@ const STATUS_LABELS = {
   CANCELLED: <><i className="ti ti-circle-x"></i> Отменено</>,
 };
 
+const CHEST_PRIZES = [
+  { label: '🎉 500 EXC (джекпот)', chance: '2%' },
+  { label: '🎟️ Билет колеса фортуны', chance: '8%' },
+  { label: '✨ 150-250 EXC', chance: '25%' },
+  { label: '🪙 50-100 EXC', chance: '65%' },
+];
+
+function ChestPrizesModal({ onClose }) {
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prevOverflow; };
+  }, []);
+
+  return (
+    <div className="fund-modal-overlay" onClick={onClose} style={{ backdropFilter: 'none', background: 'rgba(8,8,14,0.88)', overscrollBehavior: 'contain' }}>
+      <div
+        className="fund-modal"
+        onClick={e => e.stopPropagation()}
+        style={{ maxWidth: 340, maxHeight: '80vh', overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+      >
+        <div className="fund-modal-title">📋 Призы сундука дня</div>
+        {CHEST_PRIZES.map(p => (
+          <p key={p.label} className="fund-modal-text">{p.label} — {p.chance}</p>
+        ))}
+        <p className="fund-modal-text" style={{ opacity: 0.6 }}>Открывается раз в сутки, бесплатно.</p>
+        <button className="fund-modal-close" onClick={onClose}>Понятно</button>
+      </div>
+    </div>
+  );
+}
+
 function RanksModal({ currentXp, onClose }) {
   const currentLevel = getLevelFromXp(currentXp);
 
@@ -60,6 +92,7 @@ function BalanceView({ wallet, onChanged }) {
   const [chestBusy, setChestBusy] = useState(false);
   const [chestMessage, setChestMessage] = useState(null);
   const [showRanks, setShowRanks] = useState(false);
+  const [showChestPrizes, setShowChestPrizes] = useState(false);
   const playParticles = useParticles();
 
   async function handleClaim() {
@@ -201,6 +234,9 @@ function BalanceView({ wallet, onChanged }) {
           <p className="shop-desc"><i className="ti ti-circle-check"></i> Сундук на сегодня открыт. Возвращайся завтра за новым призом.</p>
         )}
         {chestMessage && <div className="quest-message">{chestMessage}</div>}
+        <p className="ref-progress-label" style={{ color: 'rgba(167,139,250,0.85)', cursor: 'pointer', marginTop: 8 }} onClick={() => setShowChestPrizes(true)}>
+          📋 Все призы →
+        </p>
       </div>
 
       <div className="category-section" style={{ marginTop: 12 }}>
@@ -217,6 +253,7 @@ function BalanceView({ wallet, onChanged }) {
       </div>
 
       {showRanks && <RanksModal currentXp={wallet.xp} onClose={() => setShowRanks(false)} />}
+      {showChestPrizes && <ChestPrizesModal onClose={() => setShowChestPrizes(false)} />}
     </>
   );
 }

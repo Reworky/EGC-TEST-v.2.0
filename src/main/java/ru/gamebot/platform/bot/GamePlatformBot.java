@@ -2977,10 +2977,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
                 List.of(keyboardFactory.callback(dailyLabel, "menu:daily")),
-                List.of(
-                        keyboardFactory.callback(chestLabel, "menu:chest"),
-                        keyboardFactory.callback("📋 Призы", "menu:chestprizes")
-                ),
+                List.of(keyboardFactory.callback(chestLabel, "menu:chest")),
                 List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads")),
                 List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
@@ -3700,14 +3697,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "Сундук уже открыт сегодня");
             sendText(user.getTelegramId(),
                     "✅ <b>Сундук дня уже открыт</b>\n\nВозвращайся завтра за новым призом.",
-                    backMenuKeyboard("menu:main"));
+                    chestResultKeyboard());
             return;
         }
         answer(callbackQuery.getId(), "Открываем сундук...");
         sendText(user.getTelegramId(), "🎁 <b>Открываем сундук дня...</b>", null);
         ru.gamebot.platform.service.UserService.ChestResult result = userService.openChest(user);
         if (result == null) {
-            sendText(user.getTelegramId(), "✅ Сундук уже открыт сегодня.", backMenuKeyboard("menu:main"));
+            sendText(user.getTelegramId(), "✅ Сундук уже открыт сегодня.", chestResultKeyboard());
             return;
         }
         StringBuilder msg = new StringBuilder();
@@ -3720,7 +3717,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         msg.append("\n💰 Баланс: <b>").append(user.getCoins()).append(" EXC</b>");
         msg.append("\n\nВозвращайся завтра за новым призом.");
-        sendText(user.getTelegramId(), msg.toString(), backMenuKeyboard("menu:main"));
+        sendText(user.getTelegramId(), msg.toString(), chestResultKeyboard());
+    }
+
+    private InlineKeyboardMarkup chestResultKeyboard() {
+        return keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("📋 Призы", "menu:chestprizes")),
+                List.of(
+                        keyboardFactory.callback("⬅️ Назад", "menu:main"),
+                        keyboardFactory.callback("🏠 Меню", "menu:main")
+                )
+        ));
     }
 
     /** Таблица призов сундука дня по запросу игрока — те же вероятности, что в UserService.openChest,
