@@ -45,7 +45,9 @@ export async function getProfile() {
 }
 
 export async function getAvatarUrl() {
-  const { data } = await api.get('/api/profile/avatar', { responseType: 'blob' });
+  // Параметр t только чтобы обойти браузерный HTTP-кэш (сервер отдаёт max-age=1ч на статичный
+  // URL) — после смены аватара в боте мини-апп иначе до часа показывал бы старую картинку.
+  const { data } = await api.get('/api/profile/avatar', { params: { t: Date.now() }, responseType: 'blob' });
   return URL.createObjectURL(data);
 }
 
