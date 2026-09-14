@@ -529,6 +529,39 @@ public class WeeklyResetScheduler {
         }
     }
 
+    private static final int SECOND_QUEST_NUDGE_MIN_DAYS = 2;
+    private static final long SECOND_QUEST_NUDGE_EXC = 150;
+
+    /** Точечный пуш через 2-3 дня после первого квеста (аудит вовлечённости, 2026-09-14) — отдельная
+     * от checkQuestGapNudge ниша: тот пункт про игроков, которые уже проходили квесты и внезапно
+     * остановились, этот — конкретно про самый первый разрыв "первый квест был, второго нет",
+     * не привязан к активности в боте/мини-аппе (в отличие от checkQuestGapNudge) — если игрок вообще
+     * не заходил после первого квеста, его тем более стоит подтолкнуть бонусом. Разовое напоминание
+     * (secondQuestNudgeSentAt) — не троттлинг с повтором, как у checkQuestGapNudge. */
+    @Scheduled(cron = "0 0 11 * * *")
+    public void checkSecondQuestNudge() {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime approvedBefore = now.minusDays(SECOND_QUEST_NUDGE_MIN_DAYS);
+        for (AppUser user : userService.allRegisteredUsers()) {
+            if (user.isBlocked()) continue;
+            try {
+                if (user.getCompletedQuests() != 1 || user.getSecondQuestNudgeSentAt() != null) continue;
+                var firstApproved = questSubmissionRepository.findFirstByUserAndStatusOrderByUpdatedAtAsc(
+                        user, SubmissionStatus.APPROVED);
+                if (firstApproved.isEmpty() || firstApproved.get().getUpdatedAt().isAfter(approvedBefore)) continue;
+
+                user.setSecondQuestNudgeSentAt(now);
+                userService.addReward(user, 0, SECOND_QUEST_NUDGE_EXC);
+                excTx.log(user, SECOND_QUEST_NUDGE_EXC, ExcTransactionService.SECOND_QUEST_NUDGE,
+                        "Напоминание про второй квест");
+                eventPublisher.publishEvent(new ru.gamebot.platform.event.SecondQuestNudgeEvent(
+                        this, user.getTelegramId(), SECOND_QUEST_NUDGE_EXC));
+            } catch (Exception e) {
+                log.warn("Failed to process second-quest nudge for user {}", user.getTelegramId(), e);
+            }
+        }
+    }
+
     private static final int REFERRAL_INACTIVITY_DAYS = 14;
 
     // Друг молчит 14+ дней без одобренного квеста — приостанавливаем комиссию рефереру, уведомляем один раз

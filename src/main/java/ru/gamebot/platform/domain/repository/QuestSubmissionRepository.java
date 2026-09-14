@@ -26,6 +26,8 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @EntityGraph(attributePaths = {"user", "quest"})
     Optional<QuestSubmission> findWithUserAndQuestById(Long id);
 
+    Optional<QuestSubmission> findFirstByUserAndStatusOrderByUpdatedAtAsc(AppUser user, SubmissionStatus status);
+
     long countByStatus(SubmissionStatus status);
 
     long countByQuest(Quest quest);

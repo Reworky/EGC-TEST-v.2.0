@@ -3803,6 +3803,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     @org.springframework.context.event.EventListener
+    public void onSecondQuestNudge(ru.gamebot.platform.event.SecondQuestNudgeEvent event) {
+        try {
+            notifyUser(event.getTelegramId(),
+                    "👋 <b>Первый квест был отличным началом!</b>\n\n"
+                            + "Второй пока не взял — а зря, там всё только начинается. Держи <b>+"
+                            + event.getExcGranted() + " EXC</b>, чтобы было проще решиться. 🎁",
+                    keyboardFactory.callback("🗺️ К квестам", "menu:quests"));
+        } catch (Exception e) {
+            log.warn("Failed to send second-quest nudge to {}", event.getTelegramId(), e);
+        }
+    }
+
+    @org.springframework.context.event.EventListener
     public void onReferralSecondQuestSignal(ru.gamebot.platform.event.ReferralSecondQuestSignalEvent event) {
         try {
             notifyUser(event.getReferrerTelegramId(),

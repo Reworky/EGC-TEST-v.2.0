@@ -23,6 +23,7 @@ public class ExcTransactionService {
     public static final String REFERRAL   = "REFERRAL";
     public static final String DAILY      = "DAILY";
     public static final String CHEST      = "CHEST";
+    public static final String SECOND_QUEST_NUDGE = "SECOND_QUEST_NUDGE";
     public static final String SHOP_BUY   = "SHOP_BUY";
     public static final String SHOP_REFUND= "SHOP_REFUND";
     public static final String SINK       = "SINK";

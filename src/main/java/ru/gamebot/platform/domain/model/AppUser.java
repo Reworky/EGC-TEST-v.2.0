@@ -187,6 +187,11 @@ public class AppUser {
      * checkQuestGapNudge) — троттлинг, чтобы не слать это каждый день подряд одному и тому же игроку. */
     private java.time.LocalDateTime lastQuestNudgeAt;
 
+    /** Когда отправили точечное напоминание "сделай второй квест" через 2-3 дня после первого
+     * одобренного (см. WeeklyResetScheduler.checkSecondQuestNudge) — разовая метка, не троттлинг:
+     * второй раз это же напоминание не шлём (в отличие от lastQuestNudgeAt, который повторяется). */
+    private java.time.LocalDateTime secondQuestNudgeSentAt;
+
     @Column(columnDefinition = "boolean default false")
     private boolean rulesAccepted;
 
