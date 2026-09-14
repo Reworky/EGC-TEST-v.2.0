@@ -20,10 +20,14 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     long countByLastMiniAppOpenAtAfter(LocalDateTime since);
 
-    /** Уникальные активные игроки за период — активность в боте ИЛИ в мини-аппе, без двойного счёта
-     *  тех, кто пользуется обеими поверхностями. Основа для DAU/MAU (см. UserService.getEngagementReport). */
-    @Query("SELECT COUNT(DISTINCT u) FROM AppUser u WHERE u.lastBotActivityAt >= :since OR u.lastMiniAppOpenAt >= :since")
-    long countDistinctActiveSince(@Param("since") LocalDateTime since);
+    /** Уникальные активные игроки за период. Намеренно смотрит на 3 поля, не только на lastBotActivityAt/
+     *  lastMiniAppOpenAt: те завели только 2026-09-08 ("замер активности бот vs мини-апп"), поэтому для
+     *  30-дневного окна их одних не хватает — первые ~24 дня этого окна для них попросту NULL, что молча
+     *  занижает счётчик (реальный инцидент: MAU по этим двум полям 160 vs 911 по lastActivityDate на ту же
+     *  дату). lastActivityDate ведётся с самого начала проекта — добавляем его как OR, чтобы не терять
+     *  историю, накопленную до 09-08. Основа для DAU/MAU (см. UserService.getEngagementReport). */
+    @Query("SELECT COUNT(DISTINCT u) FROM AppUser u WHERE u.lastActivityDate >= :sinceDate OR u.lastBotActivityAt >= :sinceDateTime OR u.lastMiniAppOpenAt >= :sinceDateTime")
+    long countDistinctActiveSince(@Param("sinceDate") java.time.LocalDate sinceDate, @Param("sinceDateTime") LocalDateTime sinceDateTime);
 
     /**
      * Блокирует строку пользователя на время транзакции (SELECT ... FOR UPDATE).

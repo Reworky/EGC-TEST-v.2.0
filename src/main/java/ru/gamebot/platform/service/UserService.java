@@ -422,8 +422,8 @@ public class UserService {
         LocalDateTime since7d = LocalDateTime.now().minusDays(7);
         LocalDateTime since30d = LocalDateTime.now().minusDays(30);
 
-        long dau = appUserRepository.countDistinctActiveSince(since1d);
-        long mau = appUserRepository.countDistinctActiveSince(since30d);
+        long dau = appUserRepository.countDistinctActiveSince(since1d.toLocalDate(), since1d);
+        long mau = appUserRepository.countDistinctActiveSince(since30d.toLocalDate(), since30d);
         double dauMauPercent = mau > 0 ? dau * 100.0 / mau : 0;
 
         long weeklyQuestTakers = questSubmissionRepository.countDistinctUsersWithApprovedSince(since7d);
