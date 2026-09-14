@@ -46,6 +46,9 @@ public class StarsController {
                 && Arrays.asList(user.getOwnedTitlesCsv().split(",")).contains("patron")) {
             return ResponseEntity.ok(error("Титул уже куплен."));
         }
+        if ("PERMANENT_SLOT".equals(itemType) && user.isPermanentExtraSlot()) {
+            return ResponseEntity.ok(error("Доп. слот навсегда уже куплен."));
+        }
         String url = gamePlatformBot.createStarsInvoiceLink("starsitem:" + itemType);
         if (url == null) {
             return ResponseEntity.ok(error("Не удалось создать счёт. Попробуйте ещё раз позже."));

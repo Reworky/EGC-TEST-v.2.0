@@ -129,6 +129,9 @@ public class SinkShopService {
 
     @Transactional
     public void purchaseExtraSlot(AppUser user) {
+        if (user.isPermanentExtraSlot()) {
+            throw new IllegalArgumentException("У вас уже есть доп. слот квеста навсегда — покупать временный не нужно.");
+        }
         if (hasExtraSlot(user)) {
             throw new IllegalArgumentException("Доп. слот уже активен до: " + user.getQuestSlotExtraUntil().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm")) + ".");
         }
@@ -225,6 +228,9 @@ public class SinkShopService {
     }
 
     public long getMaxQuestSlots(AppUser user) {
+        if (user.isPermanentExtraSlot()) {
+            return 3;
+        }
         boolean boostActive = user.getQuestSlotExtraUntil() != null
                 && LocalDateTime.now().isBefore(user.getQuestSlotExtraUntil());
         if (boostActive) {

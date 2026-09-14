@@ -5424,7 +5424,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("🛡️ Страховка провала — 1 500 EXC", "sink:insurance")));
         }
 
-        if (slotActive) {
+        if (user.isPermanentExtraSlot()) {
+            rows.add(List.of(keyboardFactory.callback("📂 Доп. слот навсегда уже куплен ✅", "sink:noop")));
+        } else if (slotActive) {
             rows.add(List.of(keyboardFactory.callback("📂 Доп. слот активен ✅", "sink:slot_info")));
         } else {
             rows.add(List.of(keyboardFactory.callback("📂 Доп. слот квеста 48ч — 3 500 EXC", "sink:extraslot")));
@@ -5449,6 +5451,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("💎 Титул «Покровитель EGC» уже куплен ✅", "sink:noop")));
         } else {
             rows.add(List.of(keyboardFactory.callback("💎 Титул «Покровитель EGC» — " + PATRON_TITLE_STARS_PRICE + " ⭐", "sink:patron_title")));
+        }
+        if (user.isPermanentExtraSlot()) {
+            rows.add(List.of(keyboardFactory.callback("📂 Доп. слот навсегда уже куплен ✅", "sink:noop")));
+        } else {
+            rows.add(List.of(keyboardFactory.callback("📂 Доп. слот квеста навсегда — " + PERMANENT_SLOT_STARS_PRICE + " ⭐", "sink:permanent_slot")));
         }
 
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
@@ -5594,6 +5601,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "titles" -> sendSinkTitles(user);
             case "frame_stars" -> sendAvatarFrameStarsInvoice(user);
             case "patron_title" -> sendPatronTitleStarsInvoice(user);
+            case "permanent_slot" -> sendPermanentSlotStarsInvoice(user);
             default -> {
                 if (action.startsWith("buy_title:")) {
                     handleTitlePurchase(callbackQuery, user, action.substring("buy_title:".length()));
@@ -5661,6 +5669,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * ≈115₽ по тому же ориентировочному курсу ~1,4₽/⭐, что и у рамки (см. AVATAR_FRAME_STARS_PRICE). */
     private static final int PATRON_TITLE_STARS_PRICE = 60;
 
+    /** Цена доп. слота квеста навсегда — четвёртый Stars-товар (2026-09-15), первый сервисный
+     * (удобство/скорость, не косметика). Временный буст — 3 500 EXC (≈35₽) за 48ч; если бы игрок
+     * продлевал его бесконечно, это стоило бы неадекватно дорого — здесь цена не "аренда навечно",
+     * а разовая премия сверх верхней EXC-планки (как у титула), ≈105₽ по тому же курсу ~1,4₽/⭐. */
+    private static final int PERMANENT_SLOT_STARS_PRICE = 75;
+
     private record StarsItemSpec(String title, String description, String priceLabel, int priceStars) {}
 
     /** Единый каталог Stars-товаров — источник правды и для инвойса в чате бота (sendInvoice), и
@@ -5679,7 +5693,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             "starsitem:PATRON_TITLE", new StarsItemSpec(
                     "Титул «Покровитель EGC»",
                     "Эксклюзивный титул профиля, который нельзя получить за EXC — видно всем в клубе, что вы поддержали проект.",
-                    "Титул «Покровитель EGC»", PATRON_TITLE_STARS_PRICE)
+                    "Титул «Покровитель EGC»", PATRON_TITLE_STARS_PRICE),
+            "starsitem:PERMANENT_SLOT", new StarsItemSpec(
+                    "Доп. слот квеста — навсегда",
+                    "Постоянно на 1 активный квест больше (обычно доступен только на 48ч за EXC) — не нужно ждать сдачи одного квеста, чтобы взять следующий.",
+                    "Доп. слот квеста — навсегда", PERMANENT_SLOT_STARS_PRICE)
     );
 
     private void sendAvatarFrameStarsInvoice(AppUser user) {
@@ -5692,6 +5710,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendPatronTitleStarsInvoice(AppUser user) {
         sendStarsInvoice(user, "starsitem:PATRON_TITLE");
+    }
+
+    private void sendPermanentSlotStarsInvoice(AppUser user) {
+        sendStarsInvoice(user, "starsitem:PERMANENT_SLOT");
     }
 
     /** Отправка sendInvoice напрямую через HTTP, в обход библиотеки telegrambots. Актуальная версия
@@ -5822,6 +5844,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(telegramId,
                     "✅ <b>Титул «💎 Покровитель EGC» куплен и надет!</b>\n\nОн виден всем в клубе — спасибо, что поддержали проект.",
                     backMenuKeyboard("menu:profile"));
+        } else if ("starsitem:PERMANENT_SLOT".equals(payload)) {
+            userService.grantPermanentExtraSlot(user);
+            sendText(telegramId,
+                    "✅ <b>Доп. слот квеста навсегда куплен!</b>\n\nТеперь можно вести на 1 активный квест больше — постоянно, без ограничения по времени.",
+                    backMenuKeyboard("menu:quests"));
         } else {
             log.warn("Successful payment with unknown payload '{}' from user {}", payload, telegramId);
         }

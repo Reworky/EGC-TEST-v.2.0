@@ -50,6 +50,7 @@ public class ProfileController {
                             .profileTitle(user.getProfileTitle())
                             .hasPatronTitle(user.getOwnedTitlesCsv() != null
                                     && Arrays.asList(user.getOwnedTitlesCsv().split(",")).contains("patron"))
+                            .hasPermanentExtraSlot(user.isPermanentExtraSlot())
                             .xp(user.getXp())
                             .coins(user.getCoins())
                             .level(userService.getLevelNumber(user.getXp()))

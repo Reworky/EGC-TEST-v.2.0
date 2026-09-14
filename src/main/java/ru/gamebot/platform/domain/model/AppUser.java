@@ -100,6 +100,13 @@ public class AppUser {
     @Column(columnDefinition = "boolean default false")
     private boolean retryInsuranceActive;
 
+    /** Доп. слот квеста навсегда, куплен за Telegram Stars (2026-09-15) — в отличие от временного
+     * буста за EXC (48ч, см. questSlotExtraUntil), не истекает. Примитивное boolean-поле на
+     * непустой таблице — обязательно с columnDefinition, иначе ddl-auto тихо не добавит колонку
+     * (см. память feedback_ddl_auto_primitive_fields). */
+    @Column(columnDefinition = "boolean default false")
+    private boolean permanentExtraSlot;
+
     // New boosts
     private LocalDateTime xpBoostActiveUntil;
     private LocalDateTime questSlotExtraUntil;

@@ -210,6 +210,16 @@ public class UserService {
         appUserRepository.save(user);
     }
 
+    /** Выдаёт доп. слот квеста навсегда — четвёртый Stars-товар (2026-09-15), первый сервисный
+     * (не косметика/статус): постоянная версия существующего временного буста за EXC (48ч,
+     * SinkShopService.purchaseExtraSlot). Продаёт "удобство/скорость", не влияет на размер наград —
+     * тот же принцип "не pay-to-win", что и у остальных Stars-товаров. */
+    @Transactional
+    public void grantPermanentExtraSlot(AppUser user) {
+        user.setPermanentExtraSlot(true);
+        appUserRepository.save(user);
+    }
+
     public Optional<AppUser> findByTelegramId(Long telegramId) {
         return appUserRepository.findByTelegramId(telegramId);
     }

@@ -17,6 +17,9 @@ public class UserProfileDto {
      * чтобы мини-апп мог скрыть карточку покупки после оплаты, не дожидаясь смены profileTitle
      * (владелец может позже переключиться на обычный EXC-титул, не потеряв статус покупки). */
     private boolean hasPatronTitle;
+    /** Куплен ли доп. слот квеста навсегда за Stars (permanentExtraSlot) — чтобы мини-апп мог
+     * скрыть карточку покупки после оплаты. */
+    private boolean hasPermanentExtraSlot;
     private long xp;
     private long coins;
     private int level;

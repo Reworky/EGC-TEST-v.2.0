@@ -427,6 +427,60 @@ function PatronTitleShopCard({ onPurchased }) {
   );
 }
 
+const PERMANENT_SLOT_STARS_PRICE = 75;
+
+/** Покупка доп. слота квеста навсегда за Telegram Stars — четвёртый Stars-товар (2026-09-15),
+ * первый сервисный (удобство/скорость, не косметика/статус): постоянная версия временного буста
+ * за EXC (48ч, доступен в боте — ⚙️ Предметы клуба → Квесты). */
+function PermanentSlotShopCard({ onPurchased }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  async function handleBuy() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const invoice = await getStarsInvoiceLink('PERMANENT_SLOT');
+      if (!invoice.success) {
+        setMessage(invoice.message);
+        return;
+      }
+      const status = await openStarsInvoice(invoice.url);
+      if (status === 'paid') {
+        setMessage('✅ Слот куплен навсегда!');
+        await new Promise(r => setTimeout(r, 800));
+        await onPurchased();
+      } else if (status === 'failed') {
+        setMessage('Платёж не прошёл. Попробуйте ещё раз.');
+      }
+    } catch (e) {
+      setMessage(e.message || 'Не удалось открыть оплату.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{
+      margin: '12px 16px 20px', background: 'rgba(124,58,237,0.07)', border: '1px solid rgba(124,58,237,0.28)',
+      borderRadius: 16, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14,
+    }}>
+      <div style={{
+        width: 56, height: 56, borderRadius: 14, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 26, background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.3)',
+      }}>📂</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#e9d5ff' }}>Доп. слот квеста — навсегда</div>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>На 1 активный квест больше постоянно — обычно доступно только на 48ч за EXC</div>
+        {message && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>{message}</div>}
+      </div>
+      <button className="quest-btn" disabled={busy} onClick={handleBuy} style={{ flexShrink: 0, width: 'auto', marginTop: 0, padding: '8px 14px', fontSize: 13 }}>
+        {busy ? '...' : `${PERMANENT_SLOT_STARS_PRICE} ⭐`}
+      </button>
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const [profile, setProfile] = useState(null);
   const [wallet, setWallet] = useState(null);
@@ -571,6 +625,13 @@ export default function ProfilePage() {
       )}
       {!profile.hasPatronTitle && (
         <PatronTitleShopCard onPurchased={async () => {
+          invalidateCache('profile');
+          const updated = await getProfile();
+          setProfile(updated);
+        }} />
+      )}
+      {!profile.hasPermanentExtraSlot && (
+        <PermanentSlotShopCard onPurchased={async () => {
           invalidateCache('profile');
           const updated = await getProfile();
           setProfile(updated);
