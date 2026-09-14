@@ -1,5 +1,6 @@
 package ru.gamebot.platform.bot;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -149,6 +150,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.domain.repository.BotReviewRepository botReviewRepository;
     private final ru.gamebot.platform.domain.repository.NudgeFeedbackRepository nudgeFeedbackRepository;
     private final ru.gamebot.platform.domain.repository.StarsPurchaseRepository starsPurchaseRepository;
+    private final ObjectMapper objectMapper;
+    private final java.net.http.HttpClient starsHttpClient = java.net.http.HttpClient.newHttpClient();
 
     private final Queue<String[]> pendingNewsQueue = new ConcurrentLinkedQueue<>();
     private final ScheduledExecutorService albumScheduler = Executors.newSingleThreadScheduledExecutor();
@@ -5634,19 +5637,34 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * вообще. Логика выдачи переиспользована из приза колеса (UserService.grantEgcAvatarFrame). */
     private static final int AVATAR_FRAME_STARS_PRICE = 50;
 
+    /** Отправка sendInvoice напрямую через HTTP, в обход библиотеки telegrambots. Актуальная версия
+     * библиотеки на Maven Central — 6.9.7.1 (отслеживает Bot API 7.1, до появления Stars в 7.4) —
+     * её SendInvoice.validate() жёстко требует непустой providerToken, а Stars-инвойсы (валюта XTR)
+     * Telegram обязывает отправлять с ПУСТЫМ providerToken — библиотека бросает исключение раньше,
+     * чем запрос вообще уйдёт. Модульная замена (telegrambots-client/-longpolling 9.0.0) — другая
+     * архитектура, полноценная миграция ради одной кнопки того не стоит. pre_checkout_query и
+     * successful_payment этот баг не задевает — там нет providerToken, обрабатываются штатно библиотекой. */
     private void sendAvatarFrameStarsInvoice(AppUser user) {
-        org.telegram.telegrambots.meta.api.methods.invoices.SendInvoice invoice =
-                new org.telegram.telegrambots.meta.api.methods.invoices.SendInvoice();
-        invoice.setChatId(user.getTelegramId().toString());
-        invoice.setTitle("Рамка аватара «EGC»");
-        invoice.setDescription("Эксклюзивная фиолетовая рамка аватара клуба — украшает профиль.");
-        invoice.setPayload("starsitem:AVATAR_FRAME");
-        invoice.setProviderToken(""); // пусто — обязательное требование Telegram для оплаты Stars (XTR)
-        invoice.setCurrency("XTR");
-        invoice.setPrices(List.of(new org.telegram.telegrambots.meta.api.objects.payments.LabeledPrice(
-                "Рамка аватара «EGC»", AVATAR_FRAME_STARS_PRICE)));
         try {
-            execute(invoice);
+            Map<String, Object> price = Map.of("label", "Рамка аватара «EGC»", "amount", AVATAR_FRAME_STARS_PRICE);
+            Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("chat_id", user.getTelegramId());
+            body.put("title", "Рамка аватара «EGC»");
+            body.put("description", "Эксклюзивная фиолетовая рамка аватара клуба — украшает профиль.");
+            body.put("payload", "starsitem:AVATAR_FRAME");
+            body.put("provider_token", "");
+            body.put("currency", "XTR");
+            body.put("prices", List.of(price));
+            String json = objectMapper.writeValueAsString(body);
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create("https://api.telegram.org/bot" + appProperties.getBotToken() + "/sendInvoice"))
+                    .header("Content-Type", "application/json")
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(json))
+                    .build();
+            java.net.http.HttpResponse<String> response = starsHttpClient.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                log.error("Failed to send Stars invoice to {}: HTTP {} — {}", user.getTelegramId(), response.statusCode(), response.body());
+            }
         } catch (Exception e) {
             log.error("Failed to send Stars invoice (avatar frame) to {}", user.getTelegramId(), e);
         }
