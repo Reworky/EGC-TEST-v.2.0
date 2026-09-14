@@ -31,8 +31,8 @@ public class TournamentService {
     /** Окно регистрации для авто-продолженного турнира (см. autoCreateNextTournament). Без него новый
      * турнир активировался бы на следующем тике планировщика (~60 сек после создания) — у игроков
      * физически не было бы времени зарегистрироваться (инцидент 2026-09-14: обнаружено на живом
-     * Brawl Stars турнире). */
-    private static final Duration AUTO_CONTINUATION_REGISTRATION_WINDOW = Duration.ofHours(24);
+     * Brawl Stars турнире). 72 часа — явное решение пользователя 2026-09-14 (было 24ч). */
+    private static final Duration AUTO_CONTINUATION_REGISTRATION_WINDOW = Duration.ofHours(72);
 
     private final TournamentRepository tournamentRepository;
     private final TournamentEntryRepository tournamentEntryRepository;
