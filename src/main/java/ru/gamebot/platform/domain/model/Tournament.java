@@ -20,6 +20,12 @@ public class Tournament {
     private Long id;
 
     private String name;
+
+    /** Свободный текст для карточки турнира (правила/контекст сверх стандартных полей) — необязательное
+     * поле, редактируется админом отдельно от остальных (см. GamePlatformBot admin:tournaments:edit-*). */
+    @Column(length = 2000)
+    private String description;
+
     private String gameName;
 
     @Column(nullable = false)

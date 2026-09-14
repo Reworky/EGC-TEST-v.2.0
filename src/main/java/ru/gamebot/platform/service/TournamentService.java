@@ -64,6 +64,14 @@ public class TournamentService {
         return tournamentRepository.findById(id);
     }
 
+    /** Точечное редактирование name/description/photoFileId уже созданного турнира (баннер, описание,
+     * название) — отдельно от wizard'а create(), не трогает даты/взнос/статус. Нужно в первую очередь
+     * для авто-продолженных турниров: они клонируются раз за разом (см. autoCreateNextTournament), и
+     * админу нужно поправить оформление один раз, не пересоздавая турнир вручную. */
+    public Tournament save(Tournament tournament) {
+        return tournamentRepository.save(tournament);
+    }
+
     @Transactional
     public void delete(Long id) {
         tournamentRepository.findById(id).ifPresent(t -> {
@@ -115,14 +123,21 @@ public class TournamentService {
 
     @Transactional
     public Tournament create(String name, String gameName, long entryFeeExc, LocalDateTime startDate, LocalDateTime endDate) {
-        return create(name, gameName, entryFeeExc, startDate, endDate, null, null);
+        return create(name, null, gameName, entryFeeExc, startDate, endDate, null, null);
     }
 
     @Transactional
     public Tournament create(String name, String gameName, long entryFeeExc, LocalDateTime startDate, LocalDateTime endDate,
                               Integer minParticipants, String photoFileId) {
+        return create(name, null, gameName, entryFeeExc, startDate, endDate, minParticipants, photoFileId);
+    }
+
+    @Transactional
+    public Tournament create(String name, String description, String gameName, long entryFeeExc, LocalDateTime startDate, LocalDateTime endDate,
+                              Integer minParticipants, String photoFileId) {
         Tournament t = new Tournament();
         t.setName(name);
+        t.setDescription(description);
         t.setGameName(gameName);
         t.setEntryFeeExc(entryFeeExc);
         t.setStartDate(startDate);
@@ -290,7 +305,7 @@ public class TournamentService {
                 return;
             }
             LocalDateTime newStart = LocalDateTime.now().plus(AUTO_CONTINUATION_REGISTRATION_WINDOW);
-            Tournament next = create(finished.getName(), finished.getGameName(), finished.getEntryFeeExc(),
+            Tournament next = create(finished.getName(), finished.getDescription(), finished.getGameName(), finished.getEntryFeeExc(),
                     newStart, newStart.plus(duration), finished.getMinParticipants(), finished.getPhotoFileId());
             log.info("Auto-created continuation tournament {} (from finished {}), registration open until {}",
                     next.getId(), finished.getId(), newStart);
