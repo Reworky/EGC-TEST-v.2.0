@@ -5390,7 +5390,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<RewardItem> customization = rewardService.findAvailableRewards().stream()
                 .filter(r -> "Кастомизация".equals(r.getCategory()))
                 .toList();
-        rows.add(List.of(keyboardFactory.callback("— Кастомизация —", "sink:noop")));
         if (!customization.isEmpty()) {
             java.util.LinkedHashMap<String, List<RewardItem>> byGroup = new java.util.LinkedHashMap<>();
             for (RewardItem reward : customization) {
@@ -5427,26 +5426,58 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🎭 Титулы профиля", "sink:titles")));
     }
 
+    /** Верхний уровень ⚙️ Предметы клуба — раньше был один длинный список с некликабельными
+     * заголовками-разделителями между секциями (2026-09-15: пользователь указал, что это выглядит
+     * как мёртвые кнопки). Теперь сами разделители стали кликабельными пунктами меню, ведущими
+     * в подменю секции (см. sendSinkCustomization/Boosts/Quests/Social/Stars) — тот же паттерн,
+     * что уже применили в «Магазине наград» для "выбор номинала". */
     private void sendSinkShop(AppUser user) {
-        boolean xpBoostActive = sinkShopService.isXpBoostActive(user);
-        boolean excBoostActive = sinkShopService.isExcBoostActive(user);
-        boolean insuranceActive = user.isRetryInsuranceActive();
-        boolean slotActive = sinkShopService.hasExtraSlot(user);
         String titleLine = user.getProfileTitle() != null ? "🏅 Текущий титул: <b>" + escape(user.getProfileTitle()) + "</b>\n" : "";
-
-        java.time.format.DateTimeFormatter dtFmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm");
         StringBuilder info = new StringBuilder();
         info.append("⚡ <b>Предметы клуба</b>\n\n");
         info.append("🪙 Баланс: <b>").append(user.getCoins()).append(" EXC</b>\n");
         if (!titleLine.isEmpty()) info.append(titleLine);
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("🎭 Кастомизация", "sink:cat:customization")));
+        rows.add(List.of(keyboardFactory.callback("⚡ Бусты", "sink:cat:boosts")));
+        rows.add(List.of(keyboardFactory.callback("🎯 Квесты", "sink:cat:quests")));
+        rows.add(List.of(keyboardFactory.callback("🤝 Социальные", "sink:cat:social")));
+        rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
+
+        sendText(user.getTelegramId(), info.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendSinkCustomization(AppUser user) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        addCustomizationSection(rows, user);
+        if (user.getOwnedFramesCsv() != null && Arrays.asList(user.getOwnedFramesCsv().split(",")).contains("egc")) {
+            rows.add(List.of(keyboardFactory.callback("👑 Рамка «EGC» уже куплена ✅", "sink:noop")));
+        } else {
+            rows.add(List.of(keyboardFactory.callback("👑 Рамка аватара «EGC» — " + AVATAR_FRAME_STARS_PRICE + " ⭐", "sink:frame_stars")));
+        }
+        if (user.getOwnedTitlesCsv() != null && Arrays.asList(user.getOwnedTitlesCsv().split(",")).contains("patron")) {
+            rows.add(List.of(keyboardFactory.callback("💎 Титул «Покровитель EGC» уже куплен ✅", "sink:noop")));
+        } else {
+            rows.add(List.of(keyboardFactory.callback("💎 Титул «Покровитель EGC» — " + PATRON_TITLE_STARS_PRICE + " ⭐", "sink:patron_title")));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:sink")));
+        sendText(user.getTelegramId(),
+                "🎭 <b>Кастомизация</b>\n\n🪙 Баланс: <b>" + user.getCoins() + " EXC</b>",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendSinkBoosts(AppUser user) {
+        boolean xpBoostActive = sinkShopService.isXpBoostActive(user);
+        boolean excBoostActive = sinkShopService.isExcBoostActive(user);
+        java.time.format.DateTimeFormatter dtFmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm");
+        StringBuilder info = new StringBuilder();
+        info.append("⚡ <b>Бусты</b>\n\n");
+        info.append("🪙 Баланс: <b>").append(user.getCoins()).append(" EXC</b>\n");
         if (xpBoostActive) info.append("⚡ XP-буст активен до: <b>").append(user.getXpBoostActiveUntil().format(dtFmt)).append("</b>\n");
         if (excBoostActive) info.append("⚡ EXC-буст активен до: <b>").append(user.getExcBoostActiveUntil().format(dtFmt)).append("</b>\n");
-        if (slotActive) info.append("📂 Доп. слот активен до: <b>").append(user.getQuestSlotExtraUntil().format(dtFmt)).append("</b>\n");
+
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-
-        addCustomizationSection(rows, user);
-
-        rows.add(List.of(keyboardFactory.callback("— Бусты —", "sink:noop")));
         if (xpBoostActive) {
             rows.add(List.of(keyboardFactory.callback("⚡ XP-буст активен ✅", "sink:xpboost_info")));
         } else {
@@ -5465,7 +5496,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("⚡⚡ Двойной буст • 24ч — 5 000 EXC", "sink:doubleboost:24")));
         }
 
-        rows.add(List.of(keyboardFactory.callback("— Квесты —", "sink:noop")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:sink")));
+        sendText(user.getTelegramId(), info.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendSinkQuests(AppUser user) {
+        boolean insuranceActive = user.isRetryInsuranceActive();
+        boolean slotActive = sinkShopService.hasExtraSlot(user);
+        java.time.format.DateTimeFormatter dtFmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm");
+        StringBuilder info = new StringBuilder();
+        info.append("🎯 <b>Квесты</b>\n\n");
+        info.append("🪙 Баланс: <b>").append(user.getCoins()).append(" EXC</b>\n");
+        if (slotActive) info.append("📂 Доп. слот активен до: <b>").append(user.getQuestSlotExtraUntil().format(dtFmt)).append("</b>\n");
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("🔀 Реролл квеста — 2 000 EXC", "sink:reroll")));
 
         if (insuranceActive) {
@@ -5476,45 +5520,39 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (user.isPermanentExtraSlot()) {
             rows.add(List.of(keyboardFactory.callback("📂 Доп. слот навсегда уже куплен ✅", "sink:noop")));
-        } else if (slotActive) {
-            rows.add(List.of(keyboardFactory.callback("📂 Доп. слот активен ✅", "sink:slot_info")));
         } else {
-            rows.add(List.of(keyboardFactory.callback("📂 Доп. слот квеста 48ч — 3 500 EXC", "sink:extraslot")));
+            if (slotActive) {
+                rows.add(List.of(keyboardFactory.callback("📂 Доп. слот активен ✅", "sink:slot_info")));
+            } else {
+                rows.add(List.of(keyboardFactory.callback("📂 Доп. слот квеста 48ч — 3 500 EXC", "sink:extraslot")));
+            }
+            rows.add(List.of(keyboardFactory.callback("📂 Доп. слот квеста навсегда — " + PERMANENT_SLOT_STARS_PRICE + " ⭐", "sink:permanent_slot")));
         }
 
         rows.add(List.of(keyboardFactory.callback("⏱️ Снятие кулдауна — 3 000 EXC", "sink:cooldown_info")));
+        rows.add(List.of(keyboardFactory.callback("🔁 Улучшенный сундук дня — " + CHEST_REROLL_STARS_PRICE + " ⭐", "menu:chestreroll")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:sink")));
+        sendText(user.getTelegramId(), info.toString(), keyboardFactory.rowsLayout(rows));
+    }
 
-        rows.add(List.of(keyboardFactory.callback("— Социальные —", "sink:noop")));
+    private void sendSinkSocial(AppUser user) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("🎁 Подарок другу (буст) — 4 500 EXC", "sink:gift")));
         rows.add(List.of(keyboardFactory.callback("🔄 🔒 Перевод EXC — Скоро", "sink:soon")));
         rows.add(List.of(keyboardFactory.callback("⚔️ 🔒 Дуэль — Скоро", "sink:soon")));
         rows.add(List.of(keyboardFactory.callback("📢 🔒 Место в ТОП-посте — Скоро", "sink:soon")));
-
-        rows.add(List.of(keyboardFactory.callback("— За Telegram Stars —", "sink:noop")));
-        if (user.getOwnedFramesCsv() != null && Arrays.asList(user.getOwnedFramesCsv().split(",")).contains("egc")) {
-            rows.add(List.of(keyboardFactory.callback("👑 Рамка «EGC» уже куплена ✅", "sink:noop")));
-        } else {
-            rows.add(List.of(keyboardFactory.callback("👑 Рамка аватара «EGC» — " + AVATAR_FRAME_STARS_PRICE + " ⭐", "sink:frame_stars")));
-        }
-        rows.add(List.of(keyboardFactory.callback("🔁 Улучшенный сундук дня — " + CHEST_REROLL_STARS_PRICE + " ⭐", "menu:chestreroll")));
-        if (user.getOwnedTitlesCsv() != null && Arrays.asList(user.getOwnedTitlesCsv().split(",")).contains("patron")) {
-            rows.add(List.of(keyboardFactory.callback("💎 Титул «Покровитель EGC» уже куплен ✅", "sink:noop")));
-        } else {
-            rows.add(List.of(keyboardFactory.callback("💎 Титул «Покровитель EGC» — " + PATRON_TITLE_STARS_PRICE + " ⭐", "sink:patron_title")));
-        }
-        if (user.isPermanentExtraSlot()) {
-            rows.add(List.of(keyboardFactory.callback("📂 Доп. слот навсегда уже куплен ✅", "sink:noop")));
-        } else {
-            rows.add(List.of(keyboardFactory.callback("📂 Доп. слот квеста навсегда — " + PERMANENT_SLOT_STARS_PRICE + " ⭐", "sink:permanent_slot")));
-        }
-
-        rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
-
-        sendText(user.getTelegramId(), info.toString(), keyboardFactory.rowsLayout(rows));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:sink")));
+        sendText(user.getTelegramId(),
+                "🤝 <b>Социальные</b>\n\n🪙 Баланс: <b>" + user.getCoins() + " EXC</b>",
+                keyboardFactory.rowsLayout(rows));
     }
 
     private void handleSinkAction(CallbackQuery callbackQuery, AppUser user, String action) {
         switch (action) {
+            case "cat:customization" -> sendSinkCustomization(user);
+            case "cat:boosts" -> sendSinkBoosts(user);
+            case "cat:quests" -> sendSinkQuests(user);
+            case "cat:social" -> sendSinkSocial(user);
             case "reroll" -> {
                 try {
                     sinkShopService.purchaseReroll(user);
