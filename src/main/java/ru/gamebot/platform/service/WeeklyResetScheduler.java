@@ -19,7 +19,6 @@ import ru.gamebot.platform.event.PollClosedEvent;
 import ru.gamebot.platform.event.QuestDeadlineWarningEvent;
 import ru.gamebot.platform.event.QuestExpiredEvent;
 import ru.gamebot.platform.event.ReviewRepostCandidateEvent;
-import ru.gamebot.platform.event.ScheduledPollCandidateEvent;
 import ru.gamebot.platform.event.SquadMidweekTeaserEvent;
 import ru.gamebot.platform.event.WeeklyDigestActiveEvent;
 import ru.gamebot.platform.event.WeeklyDigestInactiveEvent;
@@ -32,7 +31,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 
 @Slf4j
@@ -123,37 +121,6 @@ public class WeeklyResetScheduler {
             eventPublisher.publishEvent(new ReviewRepostCandidateEvent(this, candidates.get(0).getId()));
         } catch (Exception e) {
             log.error("Review repost candidate selection failed", e);
-        }
-    }
-
-    private record PollTemplate(String question, List<String> options) {}
-
-    private static final List<PollTemplate> POLL_TEMPLATES = List.of(
-            new PollTemplate("Какая игра тебе заходит больше всего?", List.of("PUBG Mobile", "Brawl Stars", "Clash of Clans", "Clash Royale", "CS2")),
-            new PollTemplate("Сколько времени в день проводишь в EGC?", List.of("<15 мин", "15-30 мин", "30-60 мин", "больше часа")),
-            new PollTemplate("На что копишь EXC?", List.of("Вывод в рубли", "Вывод в GRAM", "Косметику в магазине", "Ещё не решил")),
-            new PollTemplate("Какой формат турниров интереснее?", List.of("Соло", "Командные", "Отрядные", "Всё равно")),
-            new PollTemplate("Что хочешь видеть в EGC в первую очередь?", List.of("Больше квестов", "Больше игр", "Больше турниров", "Улучшение вывода")),
-            new PollTemplate("Как ты нашёл наш клуб?", List.of("Реклама", "Друг позвал", "Поиск в Telegram", "Другое")),
-            new PollTemplate("Какой режим Brawl Stars любимый?", List.of("Захват кристаллов", "Нокаут", "Осада", "Дуэль")),
-            new PollTemplate("Сколько бойцов в Brawl Stars у тебя прокачано?", List.of("1-5", "6-15", "16-30", "30+")),
-            new PollTemplate("Что важнее в квестах?", List.of("Награда побольше", "Задание попроще", "Разнообразие игр", "Скорость проверки")),
-            new PollTemplate("Готов пригласить друга в EGC?", List.of("Уже пригласил", "Планирую", "Пока не думал", "Не хочу")),
-            new PollTemplate("Какая механика нравится больше?", List.of("Квесты", "Турниры", "Отряды", "Колесо фортуны")),
-            new PollTemplate("Как быстро проверяют твои квесты?", List.of("Очень быстро", "Нормально", "Долго", "Ещё не отправлял"))
-    );
-
-    // Бесплатный (priceExc=0) авто-опрос каждые ~3 дня — держит канал живым между крупными
-    // событиями. Случайный выбор шаблона вместо очереди — не нужно хранить индекс/состояние.
-    @Scheduled(fixedDelay = 3L * 24 * 60 * 60 * 1000)
-    public void postScheduledPoll() {
-        try {
-            // Poll не создаётся здесь — только предлагается администратору на согласование
-            // (см. GamePlatformBot.onScheduledPollCandidate). Создание — только после одобрения.
-            PollTemplate t = POLL_TEMPLATES.get(new Random().nextInt(POLL_TEMPLATES.size()));
-            eventPublisher.publishEvent(new ScheduledPollCandidateEvent(this, t.question(), t.options()));
-        } catch (Exception e) {
-            log.error("Scheduled poll candidate generation failed", e);
         }
     }
 

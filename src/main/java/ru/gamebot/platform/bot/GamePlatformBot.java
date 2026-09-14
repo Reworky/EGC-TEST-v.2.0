@@ -155,11 +155,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ConcurrentHashMap<Long, Long> subscriptionCheckCache = new ConcurrentHashMap<>();
     private static final long SUBSCRIPTION_CHECK_TTL_MS = 3_600_000L;
 
-    /** Кандидат авто-опроса, ждущий одобрения администратора — только один одновременно
-     * (следующий, через ~3 дня, просто перезапишет, если этот не обработали). */
-    private record PendingPollCandidate(String question, List<String> options) {}
-    private volatile PendingPollCandidate pendingPollCandidate;
-
     /** Тело тизера отрядов, ждущее одобрения/правки администратора — фиксируется один раз при
      * генерации, чтобы после ✏️ Изменить публиковалось именно то, что видел админ, а не заново
      * запрошенный рейтинг. */
@@ -1745,19 +1740,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     long reqId = parseLong(target.substring("withdrawal:".length()));
                     pendingWithdrawalTexts.put(reqId, text.trim());
                     sendWithdrawalFeedCard(reqId);
-                } else if (target.equals("poll")) {
-                    String[] lines = text.trim().split("\\n");
-                    if (lines.length < 3) {
-                        sendText(user.getTelegramId(),
-                                "❌ Нужна строка вопроса и минимум 2 варианта ответа, каждый с новой строки.",
-                                cancelKeyboard());
-                        return;
-                    }
-                    String question = lines[0].trim();
-                    List<String> options = java.util.Arrays.stream(lines, 1, Math.min(lines.length, 9))
-                            .map(String::trim).toList();
-                    pendingPollCandidate = new PendingPollCandidate(question, options);
-                    sendPollFeedCard();
                 }
             }
             case POLL_CREATE_QUESTION -> {
@@ -8527,41 +8509,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "❌ Отклонено");
             return;
         }
-        if (action.equals("poll:approve")) {
-            PendingPollCandidate candidate = pendingPollCandidate;
-            if (candidate == null) {
-                clearInlineKeyboard(callbackQuery);
-                answer(callbackQuery.getId(), "Уже обработано");
-                return;
-            }
-            pendingPollCandidate = null;
-            ru.gamebot.platform.domain.model.Poll poll = pollService.create(
-                    candidate.question(), candidate.options(), 0L, LocalDateTime.now().plusDays(2));
-            onAutoPollCreated(new ru.gamebot.platform.event.AutoPollCreatedEvent(this, poll));
-            clearInlineKeyboard(callbackQuery);
-            answer(callbackQuery.getId(), "✅ Опубликовано");
-            return;
-        }
-        if (action.equals("poll:edit")) {
-            PendingPollCandidate candidate = pendingPollCandidate;
-            session.reset();
-            session.setState(SessionState.ADMINFEED_EDIT);
-            session.getData().put("editTarget", "poll");
-            answerSilently(callbackQuery.getId());
-            String current = candidate != null
-                    ? candidate.question() + "\n" + String.join("\n", candidate.options())
-                    : "—";
-            sendText(user.getTelegramId(),
-                    "✏️ Текущий текст:\n\n" + current
-                            + "\n\nПришлите новый текст: первая строка — вопрос, каждая следующая — вариант ответа (2-8 штук).",
-                    cancelKeyboard());
-            return;
-        }
-        if (action.equals("poll:reject")) {
-            pendingPollCandidate = null;
-            clearInlineKeyboard(callbackQuery);
-            answer(callbackQuery.getId(), "❌ Отклонено");
-        }
     }
 
     private void publishReviewToChannel(BotReview review) {
@@ -10381,59 +10328,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     @org.springframework.context.event.EventListener
     public void onPollClosed(ru.gamebot.platform.event.PollClosedEvent event) {
         publishPollResults(event.getPoll());
-    }
-
-    @org.springframework.context.event.EventListener
-    public void onAutoPollCreated(ru.gamebot.platform.event.AutoPollCreatedEvent event) {
-        ru.gamebot.platform.domain.model.Poll poll = event.getPoll();
-        List<String> options = pollService.getOptions(poll);
-        StringBuilder sb = new StringBuilder("🗳 <b>Новый опрос!</b>\n\n");
-        sb.append("❓ <b>").append(escape(poll.getQuestion())).append("</b>\n\n");
-        for (int i = 0; i < options.size(); i++) {
-            sb.append(i + 1).append(". ").append(escape(options.get(i))).append("\n");
-        }
-        sb.append("\nГолосование бесплатное — выбери вариант в боте 👇");
-        try {
-            SendMessage msg = new SendMessage();
-            msg.setChatId(requiredChannelChatId());
-            msg.setText(sb.toString());
-            msg.setParseMode("HTML");
-            msg.setReplyMarkup(keyboardFactory.rowsLayout(List.of(
-                    List.of(keyboardFactory.url("🗳 Проголосовать", "https://t.me/" + appProperties.getBotUsername())))));
-            execute(msg);
-        } catch (Exception e) {
-            log.error("Failed to publish auto-poll announcement for poll {}", poll.getId(), e);
-        }
-    }
-
-    /** Кандидат авто-опроса на согласование — сам Poll создаётся только после одобрения
-     * (см. {@link #handleAdminFeedAction}), чтобы неодобренный вопрос не был "живым" в разделе бота. */
-    @org.springframework.context.event.EventListener
-    public void onScheduledPollCandidate(ru.gamebot.platform.event.ScheduledPollCandidateEvent event) {
-        pendingPollCandidate = new PendingPollCandidate(event.getQuestion(), event.getOptions());
-        sendPollFeedCard();
-    }
-
-    private void sendPollFeedCard() {
-        PendingPollCandidate candidate = pendingPollCandidate;
-        if (candidate == null) return;
-        StringBuilder sb = new StringBuilder("🧾 <b>Авто-опрос — на согласование</b>\n\n");
-        sb.append("❓ <b>").append(escape(candidate.question())).append("</b>\n\n");
-        List<String> options = candidate.options();
-        for (int i = 0; i < options.size(); i++) {
-            sb.append(i + 1).append(". ").append(escape(options.get(i))).append("\n");
-        }
-        InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
-                keyboardFactory.callback("✅ Опубликовать", "adminfeed:poll:approve"),
-                keyboardFactory.callback("✏️ Изменить", "adminfeed:poll:edit"),
-                keyboardFactory.callback("❌ Отклонить", "adminfeed:poll:reject")));
-        for (Long adminId : adminService.resolvedAdminIds()) {
-            try {
-                sendText(adminId, sb.toString(), markup);
-            } catch (Exception e) {
-                log.warn("Failed to send scheduled poll candidate to admin {}", adminId, e);
-            }
-        }
     }
 
     private void sendAdminUsersPage(AppUser admin, Integer requestedPage) {
