@@ -5634,8 +5634,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Цена рамки «EGC» за Telegram Stars — первый платный товар за Stars в проекте (2026-09-14),
      * выбран как самый безопасный тест: разовая покупка, чистая косметика, не трогает EXC-экономику
-     * вообще. Логика выдачи переиспользована из приза колеса (UserService.grantEgcAvatarFrame). */
-    private static final int AVATAR_FRAME_STARS_PRICE = 50;
+     * вообще. Логика выдачи переиспользована из приза колеса (UserService.grantEgcAvatarFrame).
+     * Цена 35⭐ (снижена с 50⭐) — привязана к шкале существующих EXC-товаров магазина: рамка разовая
+     * и навсегда (в отличие от бустов на 24-72ч), поэтому взят верхний край шкалы titles/boosts
+     * (~5 000 EXC ≈ 50₽ при HR=100%), переведено в Stars по ориентировочному курсу ~1,4₽/⭐ — не
+     * официальный курс Telegram (они его не публикуют), пересчитать точнее после первого реального
+     * вывода Stars в рубли. */
+    private static final int AVATAR_FRAME_STARS_PRICE = 35;
 
     /** Отправка sendInvoice напрямую через HTTP, в обход библиотеки telegrambots. Актуальная версия
      * библиотеки на Maven Central — 6.9.7.1 (отслеживает Bot API 7.1, до появления Stars в 7.4) —
