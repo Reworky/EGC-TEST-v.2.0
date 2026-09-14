@@ -20,6 +20,7 @@ import ru.gamebot.platform.event.QuestDeadlineWarningEvent;
 import ru.gamebot.platform.event.QuestExpiredEvent;
 import ru.gamebot.platform.event.ReviewRepostCandidateEvent;
 import ru.gamebot.platform.event.SquadMidweekTeaserEvent;
+import ru.gamebot.platform.event.StreakAtRiskEvent;
 import ru.gamebot.platform.event.WeeklyDigestActiveEvent;
 import ru.gamebot.platform.event.WeeklyDigestInactiveEvent;
 import ru.gamebot.platform.service.TournamentService;
@@ -407,6 +408,27 @@ public class WeeklyResetScheduler {
                         this, user.getTelegramId(), highestEligibleTier, daysSince, grant));
             } catch (Exception e) {
                 log.warn("Failed to process dormancy tier for user {}", user.getTelegramId(), e);
+            }
+        }
+    }
+
+    /** Предупреждение "серия входов под угрозой" — раз в день вечером, тем, кто заходил (отправлял
+     * /start) ровно вчера и ещё не сегодня: если не зайти до полуночи, streakDays сбросится в 1
+     * (см. UserService.registerActivity). Проверяется именно "вчера", а не "давно" — иначе задел бы
+     * и тех, кто вообще забросил бота месяц назад со старым большим streakDays в базе (запрошено
+     * 2026-09-14, конкретный сценарий из аудита вовлечённости). */
+    @Scheduled(cron = "0 0 20 * * *")
+    public void checkStreaksAtRisk() {
+        LocalDate today = LocalDate.now();
+        LocalDate yesterday = today.minusDays(1);
+        for (AppUser user : userService.allRegisteredUsers()) {
+            if (user.isBlocked()) continue;
+            try {
+                if (user.getStreakDays() < 2) continue;
+                if (!yesterday.equals(user.getLastActivityDate())) continue;
+                eventPublisher.publishEvent(new StreakAtRiskEvent(this, user.getTelegramId(), user.getStreakDays()));
+            } catch (Exception e) {
+                log.warn("Failed to process streak-at-risk check for user {}", user.getTelegramId(), e);
             }
         }
     }

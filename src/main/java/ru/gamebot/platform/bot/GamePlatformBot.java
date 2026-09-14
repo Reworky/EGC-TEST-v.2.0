@@ -11779,6 +11779,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Предупреждение о риске потерять серию входов — см. WeeklyResetScheduler.checkStreaksAtRisk.
+     * Кнопка ведёт на /start (обычная ссылка на диалог с ботом) — именно он продлевает streakDays
+     * (см. UserService.registerActivity), заход через любой другой раздел серию не засчитывает. */
+    @org.springframework.context.event.EventListener
+    public void onStreakAtRisk(ru.gamebot.platform.event.StreakAtRiskEvent event) {
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.url("🔥 Сохранить серию", "https://t.me/" + getBotUsername() + "?start=streak"))
+        ));
+        String msg = "🔥 <b>Серия из " + event.getStreakDays() + " дней под угрозой!</b>\n\n"
+                + "Ты не заходил сегодня — если не зайти до полуночи, серия сгорит и завтра придётся начинать заново.\n\n"
+                + "Нажми кнопку ниже, чтобы сохранить прогресс.";
+        try {
+            sendText(event.getTelegramId(), msg, keyboard);
+        } catch (Exception e) {
+            log.warn("Failed to send streak-at-risk warning to {}", event.getTelegramId(), e);
+        }
+    }
+
     @org.springframework.context.event.EventListener
     public void onReferralLeaderboardReward(ru.gamebot.platform.event.ReferralLeaderboardRewardEvent event) {
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
