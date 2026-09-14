@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getShopItems, getShopStats, purchaseItem, getMyRewards, getProfile, getPerksState, purchasePerk, sendGiftBoost, sendExcTransfer, cancelReward, equipFrame } from '../api/client';
+import { getShopItems, getShopStats, purchaseItem, getMyRewards, getProfile, getPerksState, purchasePerk, sendGiftBoost, sendExcTransfer, cancelReward, equipFrame, getStarsInvoiceLink } from '../api/client';
+import { openStarsInvoice } from '../utils/stars';
 import BackButton from '../components/BackButton';
 import AdBanner from '../components/AdBanner';
 import './QuestsPage.css';
@@ -397,6 +398,62 @@ function GiftCard({ expanded, onToggle }) {
   );
 }
 
+const PATRON_TITLE_STARS_PRICE = 60;
+const PERMANENT_SLOT_STARS_PRICE = 75;
+
+/** Общая карточка покупки за Telegram Stars (Telegram.WebApp.openInvoice) — переиспользуется для
+ * товаров, у которых нет собственного EXC-аналога в PERK_CATEGORIES (титул, доп. слот навсегда).
+ * Раньше жили на главной странице профиля — перенесены сюда по просьбе (2026-09-15): это покупка,
+ * ей место в магазине, а не на главной. */
+function StarsShopCard({ itemType, icon, title, description, price, onPurchased, successMessage }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  async function handleBuy() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const invoice = await getStarsInvoiceLink(itemType);
+      if (!invoice.success) {
+        setMessage(invoice.message);
+        return;
+      }
+      const status = await openStarsInvoice(invoice.url);
+      if (status === 'paid') {
+        setMessage(successMessage);
+        await new Promise(r => setTimeout(r, 800));
+        await onPurchased();
+      } else if (status === 'failed') {
+        setMessage('Платёж не прошёл. Попробуйте ещё раз.');
+      }
+    } catch (e) {
+      setMessage(e.message || 'Не удалось открыть оплату.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{
+      margin: '0 16px 12px', background: 'rgba(124,58,237,0.07)', border: '1px solid rgba(124,58,237,0.28)',
+      borderRadius: 16, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14,
+    }}>
+      <div style={{
+        width: 56, height: 56, borderRadius: 14, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 26, background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.3)',
+      }}>{icon}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: '#e9d5ff' }}>{title}</div>
+        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{description}</div>
+        {message && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>{message}</div>}
+      </div>
+      <button className="quest-btn" disabled={busy} onClick={handleBuy} style={{ flexShrink: 0, width: 'auto', marginTop: 0, padding: '8px 14px', fontSize: 13 }}>
+        {busy ? '...' : `${price} ⭐`}
+      </button>
+    </div>
+  );
+}
+
 function PerksView({ expanded, onToggle }) {
   const [state, setState] = useState(null);
   const [frames, setFrames] = useState(null);
@@ -453,6 +510,34 @@ function PerksView({ expanded, onToggle }) {
           </div>
         );
       })}
+
+      {(!profile?.hasPatronTitle || !profile?.hasPermanentExtraSlot) && (
+        <div className="category-section">
+          <div className="category-header">За Telegram Stars</div>
+          {!profile?.hasPatronTitle && (
+            <StarsShopCard
+              itemType="PATRON_TITLE"
+              icon="💎"
+              title="Титул «Покровитель EGC»"
+              description="Эксклюзивный статус, недоступен за EXC — виден всем в клубе"
+              price={PATRON_TITLE_STARS_PRICE}
+              successMessage="✅ Титул куплен и надет!"
+              onPurchased={reload}
+            />
+          )}
+          {!profile?.hasPermanentExtraSlot && (
+            <StarsShopCard
+              itemType="PERMANENT_SLOT"
+              icon="📂"
+              title="Доп. слот квеста — навсегда"
+              description="На 1 активный квест больше постоянно — обычно доступно только на 48ч за EXC"
+              price={PERMANENT_SLOT_STARS_PRICE}
+              successMessage="✅ Слот куплен навсегда!"
+              onPurchased={reload}
+            />
+          )}
+        </div>
+      )}
 
       <div className="category-section">
         <div className="category-header">Социальные</div>
