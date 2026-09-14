@@ -48,6 +48,7 @@ public class WeeklyResetScheduler {
     private final QuestRepository questRepository;
     private final WheelSpinLogRepository wheelSpinLogRepository;
     private final WheelService wheelService;
+    private final QuestRewardBoostService questRewardBoostService;
     private final ru.gamebot.platform.domain.repository.BotReviewRepository botReviewRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final PlatformSnapshotService platformSnapshotService;
@@ -431,6 +432,25 @@ public class WeeklyResetScheduler {
             } catch (Exception e) {
                 log.warn("Failed to process streak-at-risk check for user {}", user.getTelegramId(), e);
             }
+        }
+    }
+
+    private static final int WEEKEND_BOOST_PERCENT = 100; // +100% = ×2
+
+    /** Буст выходных — с вечера пятницы (запуск задачи) до полуночи понедельника, EXC-награда за
+     * одобренный квест удваивается для ВСЕХ игроков (см. QuestRewardBoostEvent / QuestService.computeReward,
+     * складывается аддитивно с личным купленным бустом). Анонс в канал — только после одобрения
+     * администратора (см. GamePlatformBot.onWeekendBoostStarted), сам буст уже активен сразу, ждать
+     * согласования для его работы не нужно. Запрошено 2026-09-14 (аудит вовлечённости). */
+    @Scheduled(cron = "0 0 18 * * FRI")
+    public void startWeekendBoost() {
+        try {
+            LocalDateTime start = LocalDateTime.now();
+            LocalDateTime end = LocalDate.now().plusDays(3).atStartOfDay(); // пятница + 3 = понедельник 00:00
+            questRewardBoostService.create(start, end, WEEKEND_BOOST_PERCENT);
+            eventPublisher.publishEvent(new ru.gamebot.platform.event.WeekendBoostStartedEvent(this, WEEKEND_BOOST_PERCENT, end));
+        } catch (Exception e) {
+            log.error("Failed to start weekend EXC boost", e);
         }
     }
 

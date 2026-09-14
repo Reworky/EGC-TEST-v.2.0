@@ -84,6 +84,7 @@ public class QuestService {
     private final UserService userService;
     private final HealthRatioService healthRatioService;
     private final SinkShopService sinkShopService;
+    private final QuestRewardBoostService questRewardBoostService;
     private final ExcTransactionService excTx;
     private final SeasonService seasonService;
     private final SponsorService sponsorService;
@@ -757,8 +758,9 @@ public class QuestService {
             adjustedCoins = adjustedCoins / 2;
         }
 
-        // Apply EXC boost
-        int excBoostPct = sinkShopService.getBoostPercent(user);
+        // Apply EXC boost — личный купленный (SinkShop) складывается с глобальным временным
+        // (см. QuestRewardBoostEvent, например буст выходных) аддитивно, не заменяет один другой.
+        int excBoostPct = sinkShopService.getBoostPercent(user) + questRewardBoostService.currentBoostPercent();
         adjustedCoins = adjustedCoins + (adjustedCoins * excBoostPct / 100);
 
         // Apply XP boost

@@ -170,6 +170,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * начислены и личные уведомления уже ушли, согласование нужно только для поста в канал. */
     private volatile String pendingTicketRaffleFeedText;
 
+    /** Анонс буста выходных, ждущий одобрения/правки администратора перед публикацией в канал
+     * (2026-09-14, см. WeeklyResetScheduler.startWeekendBoost) — сам буст уже активен и работает
+     * сразу для всех, согласование нужно только для текста поста в канал. */
+    private volatile String pendingWeekendBoostFeedText;
+
     /** Тела постов ленты активности (выводы), ждущие одобрения — ключ req.getId(), т.к. одновременно
      * может быть несколько заявок на согласовании (в отличие от тизера/опроса — там один "слот"). */
     private final ConcurrentHashMap<Long, String> pendingWithdrawalTexts = new ConcurrentHashMap<>();
@@ -1781,6 +1786,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 } else if (target.equals("ticketraffle")) {
                     pendingTicketRaffleFeedText = text.trim();
                     sendTicketRaffleFeedCard();
+                } else if (target.equals("weekendboost")) {
+                    pendingWeekendBoostFeedText = text.trim();
+                    sendWeekendBoostFeedCard();
                 } else if (target.startsWith("withdrawal:")) {
                     long reqId = parseLong(target.substring("withdrawal:".length()));
                     pendingWithdrawalTexts.put(reqId, text.trim());
@@ -8605,9 +8613,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Согласование автопостов канала администратором — тизер отрядов, лента крупных выводов, итоги
-     * турниров и розыгрыши билетов (оба добавлены 2026-09-14). Введено 2026-09-02 по явному запросу:
-     * ничего из этого не должно публиковаться без одобрения. Дополнено возможностью правки текста
-     * прямо перед одобрением/отклонением. */
+     * турниров, розыгрыши билетов и анонсы буста выходных (все три добавлены 2026-09-14). Введено
+     * 2026-09-02 по явному запросу: ничего из этого не должно публиковаться без одобрения. Дополнено
+     * возможностью правки текста прямо перед одобрением/отклонением. */
     private void handleAdminFeedAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
         if (action.equals("squad:approve")) {
             String text = pendingSquadTeaserText;
@@ -8710,6 +8718,41 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (action.equals("ticketraffle:reject")) {
             pendingTicketRaffleFeedText = null;
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "❌ Отклонено");
+            return;
+        }
+        if (action.equals("weekendboost:approve")) {
+            String text = pendingWeekendBoostFeedText;
+            if (text != null) {
+                try {
+                    SendMessage msg = new SendMessage();
+                    msg.setChatId(requiredChannelChatId());
+                    msg.setText(text);
+                    msg.setParseMode("HTML");
+                    execute(msg);
+                } catch (Exception e) {
+                    log.error("Failed to post approved weekend boost announcement to channel", e);
+                }
+            }
+            pendingWeekendBoostFeedText = null;
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "✅ Опубликовано");
+            return;
+        }
+        if (action.equals("weekendboost:edit")) {
+            session.reset();
+            session.setState(SessionState.ADMINFEED_EDIT);
+            session.getData().put("editTarget", "weekendboost");
+            answerSilently(callbackQuery.getId());
+            sendText(user.getTelegramId(),
+                    "✏️ Текущий текст:\n\n" + (pendingWeekendBoostFeedText != null ? pendingWeekendBoostFeedText : "—")
+                            + "\n\nПришлите новый текст поста:",
+                    cancelKeyboard());
+            return;
+        }
+        if (action.equals("weekendboost:reject")) {
+            pendingWeekendBoostFeedText = null;
             clearInlineKeyboard(callbackQuery);
             answer(callbackQuery.getId(), "❌ Отклонено");
             return;
@@ -12307,6 +12350,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(adminId, preview, markup);
             } catch (Exception e) {
                 log.warn("Failed to send ticket raffle results candidate to admin {}", adminId, e);
+            }
+        }
+    }
+
+    /** Буст выходных запущен — см. WeeklyResetScheduler.startWeekendBoost. Буст уже активен и работает
+     * для всех сразу; событие только готовит анонс в канал на согласование администратора. */
+    @org.springframework.context.event.EventListener
+    public void onWeekendBoostStarted(ru.gamebot.platform.event.WeekendBoostStartedEvent event) {
+        int multiplier = 1 + event.getBoostPercent() / 100;
+        String endText = event.getEndAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm"));
+        pendingWeekendBoostFeedText = "🔥 <b>Буст выходных: EXC за квесты ×" + multiplier + "!</b>\n\n"
+                + "До " + endText + " (UTC) каждый одобренный квест приносит в " + multiplier + " раза больше EXC.\n\n"
+                + "Успей взять как можно больше — награда не будет такой щедрой всю неделю! 🎮";
+        sendWeekendBoostFeedCard();
+    }
+
+    private void sendWeekendBoostFeedCard() {
+        String text = pendingWeekendBoostFeedText;
+        if (text == null) return;
+        String preview = "🧾 <b>Анонс буста выходных — на согласование</b>\n\n" + text;
+        InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
+                keyboardFactory.callback("✅ Опубликовать", "adminfeed:weekendboost:approve"),
+                keyboardFactory.callback("✏️ Изменить", "adminfeed:weekendboost:edit"),
+                keyboardFactory.callback("❌ Отклонить", "adminfeed:weekendboost:reject")));
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, preview, markup);
+            } catch (Exception e) {
+                log.warn("Failed to send weekend boost announcement candidate to admin {}", adminId, e);
             }
         }
     }
