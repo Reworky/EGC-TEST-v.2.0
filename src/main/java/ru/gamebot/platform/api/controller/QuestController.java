@@ -82,11 +82,14 @@ public class QuestController {
             @RequestParam(required = false) String game,
             @RequestParam(required = false) String category,
             @AuthenticationPrincipal Long telegramId) {
-        var quests = (game != null && !game.isBlank())
+        var quests = new java.util.ArrayList<>((game != null && !game.isBlank())
                 ? (category != null ? questService.findActiveByGameNameAndCategory(game, category)
                                     : questService.findActiveByGameName(game))
                 : (category != null ? questService.findByCategory(category)
-                                    : questService.findActiveQuests());
+                                    : questService.findActiveQuests()));
+        // Новые квесты сверху — та же логика, что и в sendQuestList в боте (см. Quest.isEffectivelyNew).
+        quests.sort(java.util.Comparator.comparing(Quest::isEffectivelyNew, java.util.Comparator.reverseOrder())
+                .thenComparing(Quest::getTitle, String.CASE_INSENSITIVE_ORDER));
 
         Map<Long, String> statusByQuestId = new HashMap<>();
         if (telegramId != null) {
@@ -112,7 +115,7 @@ public class QuestController {
                 .sponsored(q.isSponsored())
                 .externalAutoApprove(q.isExternalAutoApprove())
                 .brawlAutoVerify(q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null || q.getDotaVerifyType() != null || q.getCs2VerifyType() != null)
-                .highlightNew(q.isHighlightNew())
+                .highlightNew(q.isEffectivelyNew())
                 .submissionStatus(statusByQuestId.get(q.getId()))
                 .build()).toList();
     }
@@ -142,7 +145,7 @@ public class QuestController {
                 .councilOnly(q.isCouncilOnly()).sponsored(true)
                 .externalAutoApprove(q.isExternalAutoApprove())
                 .brawlAutoVerify(q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null || q.getDotaVerifyType() != null || q.getCs2VerifyType() != null)
-                .highlightNew(q.isHighlightNew())
+                .highlightNew(q.isEffectivelyNew())
                 .submissionStatus(statusByQuestId.get(q.getId()))
                 .build()).toList();
     }

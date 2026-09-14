@@ -3834,7 +3834,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        quests.sort((a, b) -> a.getTitle().compareToIgnoreCase(b.getTitle()));
+        // Новые квесты (highlightNew или созданные в последние 7 дней, см. Quest.isEffectivelyNew) —
+        // сверху списка, остальные — по алфавиту, как раньше.
+        quests.sort(java.util.Comparator.comparing(Quest::isEffectivelyNew, java.util.Comparator.reverseOrder())
+                .thenComparing(Quest::getTitle, String.CASE_INSENSITIVE_ORDER));
 
         boolean useLabels = quests.stream().allMatch(q -> q.getShortLabel() != null && !q.getShortLabel().isBlank());
 
@@ -3844,11 +3847,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (int i = 0; i < quests.size(); i++) {
             Quest quest = quests.get(i);
             String callback = "quest:view:" + encodeGameToken(gameName) + ":" + categoryToken(category) + ":" + quest.getId();
+            String newTag = quest.isEffectivelyNew() ? "🆕 " : "";
             if (useLabels) {
-                String prefix = quest.isHighlightNew() ? "🆕 🎯 " : "🎯 ";
-                openButtons.add(keyboardFactory.callback(prefix + quest.getShortLabel(), callback));
+                openButtons.add(keyboardFactory.callback(newTag + "🎯 " + quest.getShortLabel(), callback));
             } else {
-                listBuilder.append(i + 1).append(". ").append(escape(quest.getTitle())).append("\n");
+                listBuilder.append(i + 1).append(". ").append(newTag).append(escape(quest.getTitle())).append("\n");
                 openButtons.add(keyboardFactory.callback(String.valueOf(i + 1), callback));
             }
         }

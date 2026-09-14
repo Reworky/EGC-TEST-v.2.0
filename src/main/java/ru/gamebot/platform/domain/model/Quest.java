@@ -37,10 +37,20 @@ public class Quest {
      * порядкового номера (см. sendQuestList в GamePlatformBot). Null — прежнее поведение (номер). */
     private String shortLabel;
 
-    /** true — кнопка получает пометку 🆕 перед стандартным 🎯 (см. sendQuestList). Для недавно
-     * добавленных квестов, снимается вручную когда квест перестаёт быть "новым". */
+    /** true — принудительно включает пометку 🆕, даже если квест был создан давно (редакторский выбор,
+     * см. QuestSeeder.setQuestHighlightNew — например, чтобы привлечь внимание к квесту под новую
+     * игровую механику). Для обычных недавно добавленных квестов включать вручную не нужно —
+     * см. {@link #isEffectivelyNew()}, который сам считает первые 7 дней с createdAt "новыми". */
     @Column(columnDefinition = "boolean default false")
     private boolean highlightNew;
+
+    /** Показывать ли пометку 🆕 в списке квестов (см. sendQuestList в GamePlatformBot, QuestController
+     * в мини-аппе) — редакторский флаг highlightNew ИЛИ квест реально создан в последние 7 дней.
+     * Введено 2026-09-14, чтобы подсветка новых квестов не требовала ручного управления в коде на
+     * каждый деплой. */
+    public boolean isEffectivelyNew() {
+        return highlightNew || (createdAt != null && createdAt.isAfter(LocalDateTime.now().minusDays(7)));
+    }
 
     private String gameName;
     private String category;
