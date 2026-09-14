@@ -142,6 +142,9 @@ public class AppUser {
     // Daily bonus
     private LocalDate lastBonusDate;
 
+    // Сундук дня — отдельная от ежедневного бонуса механика со случайным призом (2026-09-14)
+    private LocalDate lastChestOpenedDate;
+
     // Phone verification (withdrawal anti-fraud)
     private String phoneNumber;
 

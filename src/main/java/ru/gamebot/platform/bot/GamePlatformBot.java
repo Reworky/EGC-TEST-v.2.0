@@ -1485,6 +1485,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "admin" -> sendAdminPanel(user);
             case "moderation" -> sendModerationHub(user);
             case "daily" -> { sendDailyBonus(callbackQuery, user); return; }
+            case "chest" -> { sendChest(callbackQuery, user); return; }
             case "watchad" -> { sendWatchAdOffer(callbackQuery, user); return; }
             case "cat:quests" -> sendQuestsCategory(user);
             case "cat:wallet" -> sendWalletCategory(user);
@@ -2960,9 +2961,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String dailyLabel = userService.isDailyBonusAvailable(user)
                 ? "🎁 Забрать ежедневный бонус 🔔"
                 : "✅ Бонус за вход получен";
+        String chestLabel = userService.isChestAvailable(user)
+                ? "🎁 Сундук дня 🔔"
+                : "✅ Сундук сегодня открыт";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
                 List.of(keyboardFactory.callback(dailyLabel, "menu:daily")),
+                List.of(keyboardFactory.callback(chestLabel, "menu:chest")),
                 List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads")),
                 List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
@@ -3670,6 +3675,38 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         msg.append("\n\n💰 Баланс: <b>").append(user.getCoins() + result.totalExc()).append(" EXC</b>");
         msg.append("\n\nВозвращайся завтра — тебя ждёт <b>+").append(nextBonus).append(" EXC</b>.");
         answer(callbackQuery.getId(), "+" + result.totalExc() + " EXC получено!");
+        sendText(user.getTelegramId(), msg.toString(), backMenuKeyboard("menu:main"));
+    }
+
+    /** Сундук дня — отдельная от ежедневного бонуса механика (аудит вовлечённости, 2026-09-14):
+     *  случайный приз вместо гарантированной суммы, элемент предвкушения. Упрощение относительно
+     *  исходного предложения: без снятия кулдауна квеста в пуле призов — это завязано бы на антифрод-
+     *  логику кулдаунов ([[known_issue_race_conditions]]), риск того не стоит; пул — EXC/билет колеса. */
+    private void sendChest(CallbackQuery callbackQuery, AppUser user) {
+        if (!userService.isChestAvailable(user)) {
+            answer(callbackQuery.getId(), "Сундук уже открыт сегодня");
+            sendText(user.getTelegramId(),
+                    "✅ <b>Сундук дня уже открыт</b>\n\nВозвращайся завтра за новым призом.",
+                    backMenuKeyboard("menu:main"));
+            return;
+        }
+        answer(callbackQuery.getId(), "Открываем сундук...");
+        sendText(user.getTelegramId(), "🎁 <b>Открываем сундук дня...</b>", null);
+        ru.gamebot.platform.service.UserService.ChestResult result = userService.openChest(user);
+        if (result == null) {
+            sendText(user.getTelegramId(), "✅ Сундук уже открыт сегодня.", backMenuKeyboard("menu:main"));
+            return;
+        }
+        StringBuilder msg = new StringBuilder();
+        msg.append(result.prizeLabel()).append("\n\n");
+        if (result.exc() > 0) {
+            msg.append("🪙 Начислено: <b>+").append(result.exc()).append(" EXC</b>\n");
+        }
+        if (result.tickets() > 0) {
+            msg.append("🎟️ Билетов колеса фортуны: <b>+").append(result.tickets()).append("</b>\n");
+        }
+        msg.append("\n💰 Баланс: <b>").append(user.getCoins()).append(" EXC</b>");
+        msg.append("\n\nВозвращайся завтра за новым призом.");
         sendText(user.getTelegramId(), msg.toString(), backMenuKeyboard("menu:main"));
     }
 

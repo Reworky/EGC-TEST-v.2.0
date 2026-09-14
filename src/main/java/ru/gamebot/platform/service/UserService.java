@@ -576,6 +576,49 @@ public class UserService {
             long xpBonus, int streakDays, String milestoneText
     ) {}
 
+    /** Сундук дня — отдельная от ежедневного бонуса механика (аудит вовлечённости, 2026-09-14):
+     *  элемент случайности/предвкушения, а не гарантированная сумма. Раз в сутки, независимый от
+     *  streak и isDailyBonusAvailable лимит — оба бонуса можно забрать в один день. */
+    public boolean isChestAvailable(AppUser user) {
+        return user.getLastChestOpenedDate() == null || !user.getLastChestOpenedDate().equals(LocalDate.now());
+    }
+
+    @Transactional
+    public ChestResult openChest(AppUser user) {
+        if (!isChestAvailable(user)) {
+            return null;
+        }
+        int roll = ThreadLocalRandom.current().nextInt(100);
+        long exc = 0;
+        int tickets = 0;
+        String label;
+        if (roll < 2) {
+            exc = 500;
+            label = "🎉 Джекпот!";
+        } else if (roll < 10) {
+            tickets = 1;
+            label = "🎟️ Билет колеса фортуны!";
+        } else if (roll < 35) {
+            exc = ThreadLocalRandom.current().nextInt(150, 251);
+            label = "✨ Хороший улов!";
+        } else {
+            exc = ThreadLocalRandom.current().nextInt(50, 101);
+            label = "🪙 Немного EXC";
+        }
+        if (exc > 0) {
+            user.setCoins(user.getCoins() + exc);
+            excTx.log(user, exc, ExcTransactionService.CHEST, "Сундук дня");
+        }
+        if (tickets > 0) {
+            wheelService.addTickets(user, tickets, "Сундук дня");
+        }
+        user.setLastChestOpenedDate(LocalDate.now());
+        appUserRepository.save(user);
+        return new ChestResult(label, exc, tickets);
+    }
+
+    public record ChestResult(String prizeLabel, long exc, int tickets) {}
+
     /** У каждой рекламной сети свой дневной лимит показов на игрока — antifraud-риски и реальная
      * монетизация повторных показов различаются по сети, единый лимит на всех не годится. */
     public enum AdRewardSource {
