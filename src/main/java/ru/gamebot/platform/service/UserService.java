@@ -610,14 +610,15 @@ public class UserService {
         return result;
     }
 
-    /** Платный реролл за Telegram Stars (запрошено 2026-09-14) — тот же пул призов и вероятности,
-     * что и обычный бесплатный сундук, но без проверки дневного лимита: "не понравился приз — заплати
-     * и попробуй ещё раз". Намеренно НЕ трогает lastChestOpenedDate — платный реролл не засчитывается
-     * за бесплатный сундук дня и не блокирует его: можно и получить бесплатный, и докупить реролл(ы)
-     * поверх, независимо от порядка. */
+    /** Платный реролл за Telegram Stars (запрошено 2026-09-14) — ОТДЕЛЬНЫЙ, заметно более щедрый пул
+     * призов (см. rollAndApplyPremiumChestPrize), не тот же самый, что у бесплатного сундука. Причина:
+     * делить один и тот же скромный "подарок за заход" пул между бесплатным и платным вариантом —
+     * нечестно по отношению к игроку (15⭐ ≈ 21₽ за шанс на 50-100 EXC ≈ <1₽ читается как обман).
+     * Намеренно НЕ трогает lastChestOpenedDate — платный реролл не засчитывается за бесплатный сундук
+     * дня и не блокирует его: можно получить и бесплатный, и докупить реролл(ы) поверх, в любом порядке. */
     @Transactional
     public ChestResult openChestPaidReroll(AppUser user) {
-        ChestResult result = rollAndApplyChestPrize(user);
+        ChestResult result = rollAndApplyPremiumChestPrize(user);
         appUserRepository.save(user);
         return result;
     }
@@ -637,7 +638,7 @@ public class UserService {
             exc = ThreadLocalRandom.current().nextInt(150, 251);
             label = "✨ Хороший улов!";
         } else {
-            exc = ThreadLocalRandom.current().nextInt(50, 101);
+            exc = ThreadLocalRandom.current().nextInt(75, 126);
             label = "🪙 Немного EXC";
         }
         if (exc > 0) {
@@ -646,6 +647,38 @@ public class UserService {
         }
         if (tickets > 0) {
             wheelService.addTickets(user, tickets, "Сундук дня");
+        }
+        return new ChestResult(label, exc, tickets);
+    }
+
+    /** Пул призов платного реролла (2026-09-14) — заметно щедрее бесплатного (см. rollAndApplyChestPrize):
+     * больший джекпот, 2 билета вместо 1, выше и нижняя, и верхняя планка EXC-диапазонов. Матожидание
+     * ~500 EXC (≈5₽ при HR=100%) — около 24% от цены реролла (15⭐≈21₽), заметно щедрее бесплатного
+     * (~149 EXC), но всё ещё явно меньше уплаченного — не превращается в ставку с плюсовым ожиданием. */
+    private ChestResult rollAndApplyPremiumChestPrize(AppUser user) {
+        int roll = ThreadLocalRandom.current().nextInt(100);
+        long exc = 0;
+        int tickets = 0;
+        String label;
+        if (roll < 5) {
+            exc = 2000;
+            label = "🎉 Джекпот!";
+        } else if (roll < 20) {
+            tickets = 2;
+            label = "🎟️ 2 билета колеса фортуны!";
+        } else if (roll < 60) {
+            exc = ThreadLocalRandom.current().nextInt(400, 601);
+            label = "✨ Отличный улов!";
+        } else {
+            exc = ThreadLocalRandom.current().nextInt(200, 351);
+            label = "🪙 Хороший улов";
+        }
+        if (exc > 0) {
+            user.setCoins(user.getCoins() + exc);
+            excTx.log(user, exc, ExcTransactionService.CHEST, "Сундук дня (реролл за Stars)");
+        }
+        if (tickets > 0) {
+            wheelService.addTickets(user, tickets, "Сундук дня (реролл за Stars)");
         }
         return new ChestResult(label, exc, tickets);
     }
