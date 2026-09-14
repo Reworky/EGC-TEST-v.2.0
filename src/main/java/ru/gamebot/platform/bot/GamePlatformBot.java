@@ -5047,12 +5047,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 // Кастомизация (рамка аватара, титулы) перенесена в ⚙️ Предметы клуба (2026-09-15) —
                 // здесь остаётся только игровая валюта, см. addCustomizationSection/sendSinkShop.
                 if ("Кастомизация".equals(entry.getKey())) continue;
-                rows.add(List.of(keyboardFactory.callback("── " + entry.getKey() + " ──", "noop")));
                 // Group items by purchaseGroup; groups with >1 item shown as single entry
                 java.util.LinkedHashMap<String, List<RewardItem>> byGroup = new java.util.LinkedHashMap<>();
                 for (RewardItem reward : entry.getValue()) {
                     String group = reward.getPurchaseGroup() != null ? reward.getPurchaseGroup() : reward.getId().toString();
                     byGroup.computeIfAbsent(group, k -> new ArrayList<>()).add(reward);
+                }
+                // Заголовок-разделитель некликабелен (noop) — показываем его только когда под ним
+                // реально несколько пунктов, иначе это просто мёртвая полоса над единственной кнопкой,
+                // название которой и так содержит имя игры (см. groupItemLabel/reward.getTitle()).
+                if (byGroup.size() > 1) {
+                    rows.add(List.of(keyboardFactory.callback("── " + entry.getKey() + " ──", "noop")));
                 }
                 for (Map.Entry<String, List<RewardItem>> groupEntry : byGroup.entrySet()) {
                     List<RewardItem> groupItems = groupEntry.getValue();
