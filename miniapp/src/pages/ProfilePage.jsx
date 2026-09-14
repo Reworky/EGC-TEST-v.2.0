@@ -24,7 +24,9 @@ const DEFAULT_RANK = { primary: '#9CA3AF', icon: '🥚' };
 
 const TIER_THRESHOLDS = [0, 1000, 5000, 15000, 35000, 75000, 150000, 300000];
 const FRAME_IMAGES = { fire: fireFrame, ice: iceFrame, purple: purpleFrame, gold: goldFrame, egc: egcFrame };
-const FRAME_SIZES = { fire: 130, ice: 128, purple: 126, gold: 134, egc: 130 };
+// Все рамки нормализованы к одному холсту (642×642, кольцо ~585×572 по центру) по образцу
+// fire.png — единый размер теперь корректен для всех, без индивидуальных компенсаций (2026-09-14).
+const FRAME_SIZES = { fire: 130, ice: 130, purple: 130, gold: 130, egc: 130 };
 
 // ── SVG illustrations ────────────────────────────────────────
 const SVG_EXC = (
