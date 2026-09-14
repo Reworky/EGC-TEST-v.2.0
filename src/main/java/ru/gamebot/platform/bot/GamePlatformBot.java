@@ -3802,6 +3802,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    @org.springframework.context.event.EventListener
+    public void onReferralSecondQuestSignal(ru.gamebot.platform.event.ReferralSecondQuestSignalEvent event) {
+        try {
+            notifyUser(event.getReferrerTelegramId(),
+                    "🤝 Твой друг <b>" + escape(event.getFriendNickname()) + "</b> втянулся — выполнил уже 2-й квест!\n\n"
+                            + "10% с его наград продолжают идти тебе.");
+        } catch (Exception e) {
+            log.error("[Referral] Failed to notify referrer {} about second-quest signal", event.getReferrerTelegramId(), e);
+        }
+    }
+
     private static String dayWord(int days) {
         if (days % 100 >= 11 && days % 100 <= 19) return "дней";
         return switch (days % 10) {

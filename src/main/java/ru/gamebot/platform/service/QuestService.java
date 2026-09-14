@@ -867,8 +867,24 @@ public class QuestService {
 
         // 3.5 Referral bonus: 10% of EXC earned by referred in first 30 days
         grantReferralBonus(user, adjustedCoins);
+        notifyReferrerSecondQuestSignal(user);
 
         return submission;
+    }
+
+    /** Чисто информационный сигнал рефереру на ВТОРОМ одобренном квесте приглашённого — без начисления,
+     *  разовый бонус уже выплачен на первом (grantFirstQuestReferralBonus). См.
+     *  ReferralSecondQuestSignalEvent — усиливает видимость уже существующей механики отчислений. */
+    private void notifyReferrerSecondQuestSignal(AppUser invitedUser) {
+        if (invitedUser.getCompletedQuests() != 2) {
+            return;
+        }
+        Long referrerTelegramId = invitedUser.getReferredByTelegramId();
+        if (referrerTelegramId == null || referrerTelegramId.equals(invitedUser.getTelegramId())) {
+            return;
+        }
+        eventPublisher.publishEvent(new ru.gamebot.platform.event.ReferralSecondQuestSignalEvent(
+                this, referrerTelegramId, invitedUser.getNickname()));
     }
 
     private void grantReferralBonus(AppUser invitedUser, long earnedCoins) {
