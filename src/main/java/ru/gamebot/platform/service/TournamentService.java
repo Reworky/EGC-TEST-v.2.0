@@ -92,6 +92,13 @@ public class TournamentService {
         return tournamentEntryRepository.findAllWithUserByTournament(tournament);
     }
 
+    /** Число одобренных квестов участника в окне турнира — та же метрика, что settle() использует
+     * для ранжирования QUEST_COUNT-турниров, но не сохраняется на TournamentEntry, поэтому для показа
+     * в итоговом сообщении (см. GamePlatformBot.onTournamentFinished) считается заново по запросу. */
+    public long questScoreDuring(Tournament tournament, AppUser user) {
+        return questSubmissionRepository.countApprovedByUserBetween(user, tournament.getStartDate(), tournament.getEndDate());
+    }
+
     public record JoinResult(boolean success, String error) {}
 
     @Transactional

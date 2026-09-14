@@ -10554,6 +10554,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ru.gamebot.platform.domain.model.Tournament t = event.getTournament();
         List<ru.gamebot.platform.domain.model.TournamentEntry> entries = tournamentService.getLeaderboard(t);
 
+        boolean isBrawl = t.getScoringType() == ru.gamebot.platform.domain.model.Tournament.ScoringType.BRAWL_TROPHIES;
+
         StringBuilder sb = new StringBuilder("🏆 <b>Итоги турнира — " + escape(t.getName()) + "</b>\n\n");
         long pool = t.getPrizePoolExc();
         sb.append("🏅 Призовой фонд: <b>" + pool + " EXC</b>\n");
@@ -10567,6 +10569,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String username = e.getUser().getTelegramUsername();
             sb.append(medal).append(" <b>").append(escape(nick)).append("</b>");
             if (username != null) sb.append(" (@").append(username).append(")");
+            // Показатель по которому реально ранжировали — трофеи (Brawl) или квесты, а не только
+            // призовые места без цифр (запрошено 2026-09-14: "не указывается, сколько кубков набрал").
+            if (isBrawl) {
+                boolean scored = e.getSnapshotStatus() == ru.gamebot.platform.domain.model.TournamentEntry.SnapshotStatus.OK
+                        && !e.isDisqualified() && e.getTrophiesStart() != null && e.getTrophiesEnd() != null;
+                if (scored) {
+                    int delta = e.getTrophiesEnd() - e.getTrophiesStart();
+                    sb.append(" — 🏆 ").append(delta >= 0 ? "+" : "").append(delta).append(" трофеев");
+                }
+            } else {
+                long questScore = tournamentService.questScoreDuring(t, e.getUser());
+                sb.append(" — 🎯 ").append(questScore).append(" ").append(pluralQuests(questScore));
+            }
             if (e.getPrizeExc() > 0) sb.append(" — <b>+").append(e.getPrizeExc()).append(" EXC</b>");
             sb.append("\n");
         }
@@ -10576,8 +10591,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Личные уведомления победителям ниже уходят сразу и от этого не зависят.
         pendingTournamentFeedText = sb.toString();
         sendTournamentFeedCard();
-
-        boolean isBrawl = t.getScoringType() == ru.gamebot.platform.domain.model.Tournament.ScoringType.BRAWL_TROPHIES;
 
         // Notify each prize winner in private (Brawl tournaments also notify non-winners with their result)
         for (ru.gamebot.platform.domain.model.TournamentEntry e : entries) {
