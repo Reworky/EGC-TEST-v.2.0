@@ -3672,7 +3672,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             msg.append("\n⭐ XP: <b>+").append(result.xpBonus()).append(" XP</b>");
         }
         long nextBonus = Math.min(150L + (long) result.streakDays() * 50, 500L);
-        msg.append("\n\n💰 Баланс: <b>").append(user.getCoins() + result.totalExc()).append(" EXC</b>");
+        msg.append("\n\n💰 Баланс: <b>").append(user.getCoins()).append(" EXC</b>");
         msg.append("\n\nВозвращайся завтра — тебя ждёт <b>+").append(nextBonus).append(" EXC</b>.");
         answer(callbackQuery.getId(), "+" + result.totalExc() + " EXC получено!");
         sendText(user.getTelegramId(), msg.toString(), backMenuKeyboard("menu:main"));
