@@ -393,11 +393,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(),
                     "🎉 Добро пожаловать в <b>" + escape(appProperties.getClubName()) + "</b>!\n\n"
                             + socialProofLine()
-                            + "⭐ Сомневаетесь — жмите кнопку ниже и почитайте отзывы игроков.\n\n"
-                            + "Готовы начать? Чтобы открыть квесты, рейтинг и награды, давайте быстро оформим профиль.\n"
-                            + "👉 Напишите ваш игровой никнейм текстом прямо сюда, в чат.\n\n"
-                            + "<b>ВАЖНО! Ник в боте должен совпадать с ником в игре</b>",
-                    reviewsLinkKeyboard());
+                            + "✍️ Напишите ваш игровой никнейм, чтобы начать.\n"
+                            + "<b>Ник должен совпадать с ником в игре.</b>\n\n"
+                            + "⭐ <a href=\"https://t.me/egc_payouts\">Почитать отзывы игроков</a>",
+                    null);
             return;
         }
 
@@ -676,11 +675,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(),
                     "🎮 Добро пожаловать в <b>" + escape(appProperties.getClubName()) + "</b>!\n\n"
                             + socialProofLine()
-                            + "⭐ Сомневаетесь — жмите кнопку ниже и почитайте отзывы игроков.\n\n"
-                            + "Готовы начать? Здесь вас ждут квесты, XP, рейтинг, награды и реферальная программа.\n"
-                            + "👉 Начнём с профиля — напишите ваш игровой никнейм текстом прямо сюда, в чат.\n\n"
-                            + "<b>ВАЖНО! Ник в боте должен совпадать с ником в игре</b>",
-                    reviewsLinkKeyboard());
+                            + "✍️ Напишите ваш игровой никнейм, чтобы начать.\n"
+                            + "<b>Ник должен совпадать с ником в игре.</b>\n\n"
+                            + "⭐ <a href=\"https://t.me/egc_payouts\">Почитать отзывы игроков</a>",
+                    null);
             return;
         }
 
@@ -14765,15 +14763,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long registered = userService.totalRegisteredUsers();
         long roundedBase = (registered / 50) * 50;
         return roundedBase >= 50 ? "👥 Уже <b>" + roundedBase + "+</b> игроков в клубе\n\n" : "";
-    }
-
-    /** Ссылка на канал отзывов рядом с socialProofLine — в самом первом сообщении новичку, до анкеты,
-     * пока он ещё решает, довериться ли платформе (запрошено 2026-09-14: сейчас отзывы были зарыты
-     * в Помощи, новичок сам туда не забредёт). */
-    private InlineKeyboardMarkup reviewsLinkKeyboard() {
-        return keyboardFactory.rowsLayout(List.of(
-                List.of(keyboardFactory.url("⭐ Отзывы игроков", "https://t.me/egc_payouts"))
-        ));
     }
 
     // ── Sponsor quest creation ───────────────────────────────────────────────
