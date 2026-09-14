@@ -1504,6 +1504,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "daily" -> { sendDailyBonus(callbackQuery, user); return; }
             case "chest" -> { sendChest(callbackQuery, user); return; }
             case "chestprizes" -> sendChestPrizeList(user);
+            case "chestreroll" -> { answerSilently(callbackQuery.getId()); sendChestRerollStarsInvoice(user); return; }
             case "watchad" -> { sendWatchAdOffer(callbackQuery, user); return; }
             case "cat:quests" -> sendQuestsCategory(user);
             case "cat:wallet" -> sendWalletCategory(user);
@@ -3718,6 +3719,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), "✅ Сундук уже открыт сегодня.", chestResultKeyboard());
             return;
         }
+        sendText(user.getTelegramId(), buildChestResultMessage(result, user.getCoins()), chestResultKeyboard());
+    }
+
+    private String buildChestResultMessage(ru.gamebot.platform.service.UserService.ChestResult result, long newBalance) {
         StringBuilder msg = new StringBuilder();
         msg.append(result.prizeLabel()).append("\n\n");
         if (result.exc() > 0) {
@@ -3726,13 +3731,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (result.tickets() > 0) {
             msg.append("🎟️ Билетов колеса фортуны: <b>+").append(result.tickets()).append("</b>\n");
         }
-        msg.append("\n💰 Баланс: <b>").append(user.getCoins()).append(" EXC</b>");
+        msg.append("\n💰 Баланс: <b>").append(newBalance).append(" EXC</b>");
         msg.append("\n\nВозвращайся завтра за новым призом.");
-        sendText(user.getTelegramId(), msg.toString(), chestResultKeyboard());
+        return msg.toString();
     }
 
     private InlineKeyboardMarkup chestResultKeyboard() {
         return keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("🔁 Ещё один сундук — " + CHEST_REROLL_STARS_PRICE + " ⭐", "menu:chestreroll")),
                 List.of(keyboardFactory.callback("📋 Призы", "menu:chestprizes")),
                 List.of(
                         keyboardFactory.callback("⬅️ Назад", "menu:main"),
@@ -5642,21 +5648,42 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * вывода Stars в рубли. */
     private static final int AVATAR_FRAME_STARS_PRICE = 35;
 
+    /** Цена реролла сундука дня за Telegram Stars (второй платный товар, 2026-09-14) — платный "ещё раз",
+     * если не понравился приз, без проверки дневного лимита (см. UserService.openChestPaidReroll).
+     * Матожидание бесплатного сундука ~133 EXC (≈1,3₽ при HR=100%) — цена реролла намеренно поставлена
+     * заметно выше этого матожидания, чтобы это явно читалось как "заплати за ещё одну попытку", а не
+     * как ставка с шансом отбить свои деньги (та же осторожность, что при отказе от идеи со слот-стикером). */
+    private static final int CHEST_REROLL_STARS_PRICE = 15;
+
+    private void sendAvatarFrameStarsInvoice(AppUser user) {
+        sendStarsInvoice(user, "Рамка аватара «EGC»",
+                "Эксклюзивная фиолетовая рамка аватара клуба — украшает профиль.",
+                "starsitem:AVATAR_FRAME", "Рамка аватара «EGC»", AVATAR_FRAME_STARS_PRICE);
+    }
+
+    private void sendChestRerollStarsInvoice(AppUser user) {
+        sendStarsInvoice(user, "Сундук дня — ещё раз",
+                "Открыть сундук ещё раз сегодня, не дожидаясь завтра. Тот же пул призов, что и у бесплатного.",
+                "starsitem:CHEST_REROLL", "Сундук дня — реролл", CHEST_REROLL_STARS_PRICE);
+    }
+
     /** Отправка sendInvoice напрямую через HTTP, в обход библиотеки telegrambots. Актуальная версия
      * библиотеки на Maven Central — 6.9.7.1 (отслеживает Bot API 7.1, до появления Stars в 7.4) —
      * её SendInvoice.validate() жёстко требует непустой providerToken, а Stars-инвойсы (валюта XTR)
      * Telegram обязывает отправлять с ПУСТЫМ providerToken — библиотека бросает исключение раньше,
      * чем запрос вообще уйдёт. Модульная замена (telegrambots-client/-longpolling 9.0.0) — другая
-     * архитектура, полноценная миграция ради одной кнопки того не стоит. pre_checkout_query и
-     * successful_payment этот баг не задевает — там нет providerToken, обрабатываются штатно библиотекой. */
-    private void sendAvatarFrameStarsInvoice(AppUser user) {
+     * архитектура, полноценная миграция ради нескольких кнопок того не стоит. pre_checkout_query и
+     * successful_payment этот баг не задевает — там нет providerToken, обрабатываются штатно библиотекой.
+     * Общий метод для ЛЮБОГО платного товара за Stars — каждый новый товар просто вызывает этот метод
+     * со своим payload, без повторения HTTP-обвязки (см. sendAvatarFrameStarsInvoice, sendChestRerollStarsInvoice). */
+    private void sendStarsInvoice(AppUser user, String title, String description, String payload, String priceLabel, int priceStars) {
         try {
-            Map<String, Object> price = Map.of("label", "Рамка аватара «EGC»", "amount", AVATAR_FRAME_STARS_PRICE);
+            Map<String, Object> price = Map.of("label", priceLabel, "amount", priceStars);
             Map<String, Object> body = new java.util.LinkedHashMap<>();
             body.put("chat_id", user.getTelegramId());
-            body.put("title", "Рамка аватара «EGC»");
-            body.put("description", "Эксклюзивная фиолетовая рамка аватара клуба — украшает профиль.");
-            body.put("payload", "starsitem:AVATAR_FRAME");
+            body.put("title", title);
+            body.put("description", description);
+            body.put("payload", payload);
             body.put("provider_token", "");
             body.put("currency", "XTR");
             body.put("prices", List.of(price));
@@ -5668,10 +5695,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     .build();
             java.net.http.HttpResponse<String> response = starsHttpClient.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() != 200) {
-                log.error("Failed to send Stars invoice to {}: HTTP {} — {}", user.getTelegramId(), response.statusCode(), response.body());
+                log.error("Failed to send Stars invoice ({}) to {}: HTTP {} — {}", payload, user.getTelegramId(), response.statusCode(), response.body());
             }
         } catch (Exception e) {
-            log.error("Failed to send Stars invoice (avatar frame) to {}", user.getTelegramId(), e);
+            log.error("Failed to send Stars invoice ({}) to {}", payload, user.getTelegramId(), e);
         }
     }
 
@@ -5715,6 +5742,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(telegramId,
                     "✅ <b>Рамка аватара «EGC» куплена!</b>\n\nПрименить её можно в Профиле.",
                     backMenuKeyboard("menu:profile"));
+        } else if ("starsitem:CHEST_REROLL".equals(payload)) {
+            ru.gamebot.platform.service.UserService.ChestResult result = userService.openChestPaidReroll(user);
+            sendText(telegramId, buildChestResultMessage(result, user.getCoins()), chestResultKeyboard());
         } else {
             log.warn("Successful payment with unknown payload '{}' from user {}", payload, telegramId);
         }

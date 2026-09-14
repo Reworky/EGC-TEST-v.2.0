@@ -604,6 +604,25 @@ public class UserService {
         if (!isChestAvailable(user)) {
             return null;
         }
+        ChestResult result = rollAndApplyChestPrize(user);
+        user.setLastChestOpenedDate(LocalDate.now());
+        appUserRepository.save(user);
+        return result;
+    }
+
+    /** Платный реролл за Telegram Stars (запрошено 2026-09-14) — тот же пул призов и вероятности,
+     * что и обычный бесплатный сундук, но без проверки дневного лимита: "не понравился приз — заплати
+     * и попробуй ещё раз". Намеренно НЕ трогает lastChestOpenedDate — платный реролл не засчитывается
+     * за бесплатный сундук дня и не блокирует его: можно и получить бесплатный, и докупить реролл(ы)
+     * поверх, независимо от порядка. */
+    @Transactional
+    public ChestResult openChestPaidReroll(AppUser user) {
+        ChestResult result = rollAndApplyChestPrize(user);
+        appUserRepository.save(user);
+        return result;
+    }
+
+    private ChestResult rollAndApplyChestPrize(AppUser user) {
         int roll = ThreadLocalRandom.current().nextInt(100);
         long exc = 0;
         int tickets = 0;
@@ -628,8 +647,6 @@ public class UserService {
         if (tickets > 0) {
             wheelService.addTickets(user, tickets, "Сундук дня");
         }
-        user.setLastChestOpenedDate(LocalDate.now());
-        appUserRepository.save(user);
         return new ChestResult(label, exc, tickets);
     }
 
