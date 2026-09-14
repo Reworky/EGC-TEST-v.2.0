@@ -262,45 +262,6 @@ function RanksModal({ currentLevel, onClose }) {
 const FRAME_LABELS = { fire: '🔥 Огонь', ice: '❄️ Лёд', purple: '💜 Фиолет', gold: '👑 Золото', egc: '👑 EGC' };
 const FRAME_COLORS = { fire: '#ef4444', ice: '#38bdf8', purple: '#a855f7', gold: '#fbbf24', egc: '#7C3AED' };
 
-/** Герб достижений — 4 карточки-сектора. Компактная версия (compact=true) занимает свободное
- *  место рядом с аватаром в хиро-блоке; полноширинная — отдельная секция ниже по странице.
- *  Незакрытая карточка — серая, с подписью "(не открыт)", стимул закрыть все 4. */
-function CrestShield({ level, friendBadgeName, inSquad, streakDays, compact }) {
-  const rankColor = level >= 7 ? '#fbbf24' : level >= 5 ? '#c0c0c0' : level >= 3 ? '#cd7f32' : '#9ca3af';
-  const sectors = [
-    { icon: 'ti-crown', active: true, color: rankColor, label: 'Ранг' },
-    { icon: 'ti-users', active: !!friendBadgeName, color: '#fbbf24', label: 'Рефералы' },
-    { icon: 'ti-swords', active: !!inSquad, color: '#a855f7', label: 'Отряд' },
-    { icon: 'ti-flame', active: streakDays >= 7, color: '#f97316', label: 'Стрик' },
-  ];
-  return (
-    <div style={compact ? { flex: 1, minWidth: 0 } : { margin: '12px 16px 20px' }}>
-      {!compact && (
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 12 }}>
-          Герб достижений
-        </div>
-      )}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: compact ? 4 : 10 }}>
-        {sectors.map((s, i) => (
-          <div key={i} title={s.label} style={{
-            display: 'flex', flexDirection: compact ? 'row' : 'column', alignItems: 'center', justifyContent: 'center', gap: compact ? 0 : 8,
-            padding: compact ? '5px 2px' : '18px 8px', borderRadius: compact ? 8 : 14,
-            background: s.active ? `${s.color}14` : 'rgba(255,255,255,0.03)',
-            border: `1px solid ${s.active ? s.color + '33' : 'rgba(255,255,255,0.07)'}`,
-          }}>
-            <i className={`ti ${s.icon}`} style={{ fontSize: compact ? 15 : 26, color: s.active ? s.color : 'rgba(255,255,255,0.25)' }} aria-label={compact ? s.label : undefined} aria-hidden={compact ? undefined : true} />
-            {!compact && (
-              <span style={{ fontSize: 13, textAlign: 'center', lineHeight: 1.2, color: s.active ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.35)' }}>
-                {s.label}{!s.active && ' (не открыт)'}
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function FrameCollection({ ownedFrames, activeFrame, onEquip }) {
   const [busy, setBusy] = useState(null);
 
@@ -520,25 +481,16 @@ export default function ProfilePage() {
         <div className="p-hero-glow2" />
         <div className="p-hero-content">
           {/* Avatar */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
-            <div style={{ position: 'relative', display: 'inline-block' }}>
-              <div className="p-avatar" style={{ borderColor: frameImage ? 'transparent' : ringColor, color: ringColor, background: avatarUrl ? 'transparent' : `${ringColor}22` }}>
-                {avatarUrl
-                  ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-                  : (profile.nickname?.[0]?.toUpperCase() || '?')}
-              </div>
-              {!frameImage && <div className="p-avatar-ring" style={{ borderColor: `${ringColor}44` }} />}
-              {frameImage && (
-                <img src={frameImage} alt="" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: frameSize, height: 'auto', pointerEvents: 'none' }} />
-              )}
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <div className="p-avatar" style={{ borderColor: frameImage ? 'transparent' : ringColor, color: ringColor, background: avatarUrl ? 'transparent' : `${ringColor}22` }}>
+              {avatarUrl
+                ? <img src={avatarUrl} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+                : (profile.nickname?.[0]?.toUpperCase() || '?')}
             </div>
-            <CrestShield
-              compact
-              level={profile.level}
-              friendBadgeName={profile.friendBadgeName}
-              inSquad={profile.inSquad}
-              streakDays={profile.streakDays}
-            />
+            {!frameImage && <div className="p-avatar-ring" style={{ borderColor: `${ringColor}44` }} />}
+            {frameImage && (
+              <img src={frameImage} alt="" style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: frameSize, height: 'auto', pointerEvents: 'none' }} />
+            )}
           </div>
 
           <div style={{
