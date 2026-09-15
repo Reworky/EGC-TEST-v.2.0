@@ -132,6 +132,9 @@ public class SinkShopService {
         if (user.isPermanentExtraSlot()) {
             throw new IllegalArgumentException("У вас уже есть доп. слот квеста навсегда — покупать временный не нужно.");
         }
+        if (isEgcPassActive(user)) {
+            throw new IllegalArgumentException("Доп. слот уже включён в вашу подписку EGC Pass — покупать временный не нужно.");
+        }
         if (hasExtraSlot(user)) {
             throw new IllegalArgumentException("Доп. слот уже активен до: " + user.getQuestSlotExtraUntil().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm")) + ".");
         }
@@ -214,6 +217,10 @@ public class SinkShopService {
                 && LocalDateTime.now().isBefore(user.getQuestSlotExtraUntil());
     }
 
+    public boolean isEgcPassActive(AppUser user) {
+        return user.getEgcPassActiveUntil() != null && LocalDateTime.now().isBefore(user.getEgcPassActiveUntil());
+    }
+
     public boolean hasCooldownBypass(AppUser user, String gameName) {
         // Fix 7: bypass must match the game it was purchased for (or "ANY" for universal)
         String bypass = user.getCooldownBypassGame();
@@ -228,7 +235,7 @@ public class SinkShopService {
     }
 
     public long getMaxQuestSlots(AppUser user) {
-        if (user.isPermanentExtraSlot()) {
+        if (user.isPermanentExtraSlot() || isEgcPassActive(user)) {
             return 3;
         }
         boolean boostActive = user.getQuestSlotExtraUntil() != null

@@ -51,6 +51,10 @@ public class ProfileController {
                             .hasPatronTitle(user.getOwnedTitlesCsv() != null
                                     && Arrays.asList(user.getOwnedTitlesCsv().split(",")).contains("patron"))
                             .hasPermanentExtraSlot(user.isPermanentExtraSlot())
+                            .hasEgcPass(userService.isEgcPassActive(user))
+                            .egcPassActiveUntil(userService.isEgcPassActive(user)
+                                    ? user.getEgcPassActiveUntil().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+                                    : null)
                             .xp(user.getXp())
                             .coins(user.getCoins())
                             .level(userService.getLevelNumber(user.getXp()))

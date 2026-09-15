@@ -107,6 +107,13 @@ public class AppUser {
     @Column(columnDefinition = "boolean default false")
     private boolean permanentExtraSlot;
 
+    /** До какого момента активна подписка «EGC Pass» (Telegram Stars subscription, 30 дней,
+     * автопродление на стороне Telegram — 2026-09-15). На каждый successful_payment с этим payload
+     * (первая оплата или автопродление — Telegram шлёт их одинаково) продлевается на 30 дней вперёд
+     * от максимума(сейчас, текущий срок) — см. UserService.renewEgcPass. Если подписку отменили в
+     * Telegram, новых платежей просто не будет, и поле само "истечёт" — отдельно ловить отмену не нужно. */
+    private LocalDateTime egcPassActiveUntil;
+
     // New boosts
     private LocalDateTime xpBoostActiveUntil;
     private LocalDateTime questSlotExtraUntil;

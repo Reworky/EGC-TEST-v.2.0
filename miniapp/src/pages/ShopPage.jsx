@@ -455,6 +455,77 @@ function StarsShopCard({ itemType, icon, title, description, price, onPurchased,
   );
 }
 
+const EGC_PASS_STARS_PRICE = 150;
+const EGC_PASS_PERKS = [
+  '📂 Доп. слот квеста (как «навсегда», пока активна)',
+  '🎁 Бесплатный улучшенный сундук каждый день',
+  '⚡ Приоритет в очереди на вывод EXC',
+  '💎 Статус-бейдж в профиле',
+];
+
+/** Флагманский Stars-товар — подписка (Telegram Star subscription, 30 дней, автопродление на
+ * стороне Telegram, 2026-09-15). В отличие от StarsShopCard это не разовая покупка: карточка
+ * показывает статус подписки, а не скрывается после оплаты. */
+function EgcPassCard({ profile, onPurchased }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  async function handleBuy() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const invoice = await getStarsInvoiceLink('EGC_PASS');
+      if (!invoice.success) {
+        setMessage(invoice.message);
+        return;
+      }
+      const status = await openStarsInvoice(invoice.url);
+      if (status === 'paid') {
+        setMessage('✅ EGC Pass активирован!');
+        await new Promise(r => setTimeout(r, 800));
+        await onPurchased();
+      } else if (status === 'failed') {
+        setMessage('Платёж не прошёл. Попробуйте ещё раз.');
+      }
+    } catch (e) {
+      setMessage(e.message || 'Не удалось открыть оплату.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const active = profile?.hasEgcPass;
+
+  return (
+    <div style={{
+      margin: '0 16px 16px', background: 'linear-gradient(135deg, rgba(124,58,237,0.16), rgba(124,58,237,0.05))',
+      border: '1px solid rgba(167,139,250,0.4)', borderRadius: 18, padding: '16px 18px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+        <span style={{ fontSize: 22 }}>⭐</span>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#e9d5ff' }}>EGC Pass</div>
+        {active && <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: '#4ade80', background: 'rgba(74,222,128,0.12)', padding: '3px 8px', borderRadius: 8 }}>АКТИВНА</span>}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12 }}>
+        {EGC_PASS_PERKS.map(p => (
+          <div key={p} style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.7)' }}>{p}</div>
+        ))}
+      </div>
+      {message && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.85)', marginBottom: 10 }}>{message}</div>}
+      {active ? (
+        <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.55)' }}>
+          Активна до <b style={{ color: '#e9d5ff' }}>{profile.egcPassActiveUntil}</b>, дальше продлится автоматически.
+          Отменить можно в настройках платежей Telegram.
+        </div>
+      ) : (
+        <button className="quest-btn" disabled={busy} onClick={handleBuy} style={{ width: '100%' }}>
+          {busy ? '...' : `Оформить — ${EGC_PASS_STARS_PRICE} ⭐ / 30 дней`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function PerksView({ expanded, onToggle }) {
   const [state, setState] = useState(null);
   const [frames, setFrames] = useState(null);
@@ -479,6 +550,8 @@ function PerksView({ expanded, onToggle }) {
         <div className="shop-balance"><i className="ti ti-coin"></i> {state.coins.toLocaleString()} EXC</div>
         {state.profileTitle && <div className="shop-ratio">🏅 {state.profileTitle}</div>}
       </div>
+
+      <EgcPassCard profile={profile} onPurchased={reload} />
 
       {PERK_CATEGORIES.map(cat => {
         const visible = cat.items.filter(item => !item.hideIf || !item.hideIf(state));

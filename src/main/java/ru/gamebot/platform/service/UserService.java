@@ -220,6 +220,23 @@ public class UserService {
         appUserRepository.save(user);
     }
 
+    /** «EGC Pass» — первая recurring-подписка проекта (Telegram Stars subscription, 30 дней,
+     * 2026-09-15): единственный Stars-товар, который сам собой приносит доход каждый месяц, а не
+     * разово. Telegram шлёт successful_payment одинаково и на первую оплату, и на каждое
+     * автопродление — поэтому продлеваем от максимума(сейчас, текущий срок действия), а не просто
+     * "+30 дней от текущего момента": если игрок продлил чуть раньше срока (или Telegram прислал
+     * платёж с небольшой задержкō после истечения), дни не должны теряться/задваиваться. */
+    @Transactional
+    public void renewEgcPass(AppUser user) {
+        LocalDateTime base = isEgcPassActive(user) ? user.getEgcPassActiveUntil() : LocalDateTime.now();
+        user.setEgcPassActiveUntil(base.plusDays(30));
+        appUserRepository.save(user);
+    }
+
+    public boolean isEgcPassActive(AppUser user) {
+        return user.getEgcPassActiveUntil() != null && LocalDateTime.now().isBefore(user.getEgcPassActiveUntil());
+    }
+
     public Optional<AppUser> findByTelegramId(Long telegramId) {
         return appUserRepository.findByTelegramId(telegramId);
     }
@@ -631,7 +648,9 @@ public class UserService {
         if (!isChestAvailable(user)) {
             return null;
         }
-        ChestResult result = rollAndApplyChestPrize(user);
+        // Подписчикам EGC Pass бесплатный сундук дня сразу крутится по улучшенному пулу (2026-09-15) —
+        // один из перков пакета: не нужно отдельно платить 15⭐ за реролл каждый день.
+        ChestResult result = isEgcPassActive(user) ? rollAndApplyPremiumChestPrize(user) : rollAndApplyChestPrize(user);
         user.setLastChestOpenedDate(LocalDate.now());
         appUserRepository.save(user);
         return result;

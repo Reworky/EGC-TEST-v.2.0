@@ -20,6 +20,10 @@ public class UserProfileDto {
     /** Куплен ли доп. слот квеста навсегда за Stars (permanentExtraSlot) — чтобы мини-апп мог
      * скрыть карточку покупки после оплаты. */
     private boolean hasPermanentExtraSlot;
+    /** Активна ли подписка EGC Pass прямо сейчас (egcPassActiveUntil в будущем). */
+    private boolean hasEgcPass;
+    /** Дата, до которой действует EGC Pass (dd.MM.yyyy), null если подписки нет/истекла. */
+    private String egcPassActiveUntil;
     private long xp;
     private long coins;
     private int level;

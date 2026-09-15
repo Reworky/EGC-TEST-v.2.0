@@ -5435,12 +5435,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * что уже применили в «Магазине наград» для "выбор номинала". */
     private void sendSinkShop(AppUser user) {
         String titleLine = user.getProfileTitle() != null ? "🏅 Текущий титул: <b>" + escape(user.getProfileTitle()) + "</b>\n" : "";
+        boolean passActive = sinkShopService.isEgcPassActive(user);
         StringBuilder info = new StringBuilder();
         info.append("⚡ <b>Предметы клуба</b>\n\n");
         info.append("🪙 Баланс: <b>").append(user.getCoins()).append(" EXC</b>\n");
         if (!titleLine.isEmpty()) info.append(titleLine);
+        if (passActive) {
+            info.append("⭐ EGC Pass активен до: <b>")
+                    .append(user.getEgcPassActiveUntil().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")))
+                    .append("</b>\n");
+        }
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback(
+                passActive ? "⭐ EGC Pass активен ✅" : "⭐ EGC Pass — " + EGC_PASS_STARS_PRICE + " ⭐/мес",
+                passActive ? "sink:noop" : "sink:egc_pass")));
         rows.add(List.of(keyboardFactory.callback("🎭 Кастомизация", "sink:cat:customization")));
         rows.add(List.of(keyboardFactory.callback("⚡ Бусты", "sink:cat:boosts")));
         rows.add(List.of(keyboardFactory.callback("🎯 Квесты", "sink:cat:quests")));
@@ -5555,6 +5564,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "cat:boosts" -> sendSinkBoosts(user);
             case "cat:quests" -> sendSinkQuests(user);
             case "cat:social" -> sendSinkSocial(user);
+            case "egc_pass" -> sendEgcPassOffer(user);
             case "reroll" -> {
                 try {
                     sinkShopService.purchaseReroll(user);
@@ -5765,7 +5775,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * а разовая премия сверх верхней EXC-планки (как у титула), ≈105₽ по тому же курсу ~1,4₽/⭐. */
     private static final int PERMANENT_SLOT_STARS_PRICE = 75;
 
-    private record StarsItemSpec(String title, String description, String priceLabel, int priceStars) {}
+    /** Цена подписки «EGC Pass» — первый recurring Stars-товар проекта (2026-09-15), Telegram Star
+     * subscription (см. createStarsInvoiceLink — subscription_period, поддерживается только у
+     * createInvoiceLink, НЕ у sendInvoice, поэтому в боте это ссылка-кнопка, а не нативный инвойс
+     * в чате). Пакует несколько уже проданных разово перков в helper на время подписки: доп. слот,
+     * бесплатный улучшенный сундук каждый день (без реролла за 15⭐), приоритет вывода, статус-бейдж.
+     * 150⭐/мес ≈ 210₽ по ориентировочному курсу ~1,4₽/⭐ — дешевле, чем купить разово всё входящее
+     * (рамка+слот+реролл на 30 дней ≈ 35+75+450 ⭐), но не бесплатно, чтобы не обесценивать разовые
+     * покупки тех, кто уже их сделал. Лимит Telegram — не больше 10 000⭐ за подписку, с запасом. */
+    private static final int EGC_PASS_STARS_PRICE = 150;
+    private static final int EGC_PASS_SUBSCRIPTION_PERIOD_SECONDS = 2_592_000; // 30 дней — фиксировано Telegram, другое значение API отклонит
+
+    private record StarsItemSpec(String title, String description, String priceLabel, int priceStars, Integer subscriptionPeriodSeconds) {
+        StarsItemSpec(String title, String description, String priceLabel, int priceStars) {
+            this(title, description, priceLabel, priceStars, null);
+        }
+    }
 
     /** Единый каталог Stars-товаров — источник правды и для инвойса в чате бота (sendInvoice), и
      * для ссылки на инвойс в мини-аппе (createInvoiceLink, см. createStarsInvoiceLink). Раньше цена/
@@ -5787,7 +5812,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             "starsitem:PERMANENT_SLOT", new StarsItemSpec(
                     "Доп. слот квеста — навсегда",
                     "Постоянно на 1 активный квест больше (обычно доступен только на 48ч за EXC) — не нужно ждать сдачи одного квеста, чтобы взять следующий.",
-                    "Доп. слот квеста — навсегда", PERMANENT_SLOT_STARS_PRICE)
+                    "Доп. слот квеста — навсегда", PERMANENT_SLOT_STARS_PRICE),
+            "starsitem:EGC_PASS", new StarsItemSpec(
+                    "EGC Pass — подписка на 30 дней",
+                    "Доп. слот квеста + бесплатный улучшенный сундук каждый день + приоритет в очереди на вывод + статус-бейдж в профиле. Автопродление каждые 30 дней, отменить можно в любой момент через настройки платежей Telegram.",
+                    "EGC Pass (30 дней)", EGC_PASS_STARS_PRICE, EGC_PASS_SUBSCRIPTION_PERIOD_SECONDS)
     );
 
     private void sendAvatarFrameStarsInvoice(AppUser user) {
@@ -5806,6 +5835,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendStarsInvoice(user, "starsitem:PERMANENT_SLOT");
     }
 
+    /** EGC Pass — подписка, не разовый платёж, поэтому идёт не через sendStarsInvoice (нативный
+     * инвойс в чате), а через ссылку (createStarsInvoiceLink) кнопкой — Telegram поддерживает
+     * subscription_period только у createInvoiceLink. Ссылка открывает тот же нативный экран оплаты
+     * Telegram, просто по тапу на кнопку, а не автоматическим сообщением-инвойсом. */
+    private void sendEgcPassOffer(AppUser user) {
+        String url = createStarsInvoiceLink("starsitem:EGC_PASS");
+        if (url == null) {
+            sendText(user.getTelegramId(), "⚠️ Не удалось создать счёт. Попробуйте ещё раз позже.", backMenuKeyboard("menu:sink"));
+            return;
+        }
+        sendText(user.getTelegramId(),
+                "⭐ <b>EGC Pass — 30 дней</b>\n\n"
+                        + "📂 Доп. слот квеста (как «навсегда», пока подписка активна)\n"
+                        + "🎁 Бесплатный улучшенный сундук каждый день — без реролла за 15⭐\n"
+                        + "⚡ Приоритет в очереди на вывод EXC\n"
+                        + "💎 Статус-бейдж в профиле\n\n"
+                        + "🪙 " + EGC_PASS_STARS_PRICE + " ⭐ / 30 дней, автопродление. Отменить можно в любой момент через настройки платежей Telegram.",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.url("💳 Оформить за " + EGC_PASS_STARS_PRICE + " ⭐", url)),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "menu:sink"))
+                )));
+    }
+
     /** Отправка sendInvoice напрямую через HTTP, в обход библиотеки telegrambots. Актуальная версия
      * библиотеки на Maven Central — 6.9.7.1 (отслеживает Bot API 7.1, до появления Stars в 7.4) —
      * её SendInvoice.validate() жёстко требует непустой providerToken, а Stars-инвойсы (валюта XTR)
@@ -5819,6 +5871,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         StarsItemSpec spec = STARS_ITEMS.get(payload);
         if (spec == null) {
             log.error("Unknown Stars item payload '{}'", payload);
+            return;
+        }
+        if (spec.subscriptionPeriodSeconds() != null) {
+            // subscription_period официально поддерживается только у createInvoiceLink, не у sendInvoice
+            // (проверено по исходнику core.telegram.org/bots/api) — для подписок вызывающая сторона
+            // должна использовать createStarsInvoiceLink + отправить ссылку кнопкой, см. sendEgcPassOffer.
+            log.error("Subscription item '{}' cannot be sent via sendInvoice — use createStarsInvoiceLink instead", payload);
             return;
         }
         try {
@@ -5867,6 +5926,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             body.put("provider_token", "");
             body.put("currency", "XTR");
             body.put("prices", List.of(price));
+            if (spec.subscriptionPeriodSeconds() != null) {
+                body.put("subscription_period", spec.subscriptionPeriodSeconds());
+            }
             String json = objectMapper.writeValueAsString(body);
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
                     .uri(java.net.URI.create("https://api.telegram.org/bot" + appProperties.getBotToken() + "/createInvoiceLink"))
@@ -5939,6 +6001,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(telegramId,
                     "✅ <b>Доп. слот квеста навсегда куплен!</b>\n\nТеперь можно вести на 1 активный квест больше — постоянно, без ограничения по времени.",
                     backMenuKeyboard("menu:quests"));
+        } else if ("starsitem:EGC_PASS".equals(payload)) {
+            userService.renewEgcPass(user);
+            String until = user.getEgcPassActiveUntil().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"));
+            sendText(telegramId,
+                    "✅ <b>EGC Pass активирован!</b>\n\nДействует до <b>" + until + "</b>, дальше продлится автоматически.\n\n"
+                            + "Доп. слот квеста, бесплатный улучшенный сундук каждый день и приоритет на вывод уже включены — спасибо, что поддержали проект.",
+                    backMenuKeyboard("menu:main"));
         } else {
             log.warn("Successful payment with unknown payload '{}' from user {}", payload, telegramId);
         }
@@ -8766,8 +8835,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "admin:withdrawal:multiblock:" + req.getId() + ":" + multiblockTarget.get().getTelegramId())));
         }
         adminWdRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:withdrawals")));
+        String passBadge = sinkShopService.isEgcPassActive(requester) ? " ⭐️<b>EGC Pass — приоритет</b>" : "";
         sendText(user.getTelegramId(),
-                "💸 <b>Заявка на вывод В-" + reqDisplayId(req) + "</b>\n\n"
+                "💸 <b>Заявка на вывод В-" + reqDisplayId(req) + "</b>" + passBadge + "\n\n"
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
                         + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
                         + "🌍 Страна: <b>" + escape(requester.getCountry() != null ? requester.getCountry() : "Не указана") + "</b>\n"
@@ -13849,8 +13919,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "mod:withdrawal:multiblock:" + req.getId() + ":" + multiblockTargetMod.get().getTelegramId())));
         }
         modWdRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "mod:withdrawals")));
+        String passBadgeMod = sinkShopService.isEgcPassActive(requester) ? " ⭐️<b>EGC Pass — приоритет</b>" : "";
         sendText(user.getTelegramId(),
-                "💸 <b>Заявка на вывод В-" + reqDisplayId(req) + "</b>\n\n"
+                "💸 <b>Заявка на вывод В-" + reqDisplayId(req) + "</b>" + passBadgeMod + "\n\n"
                         + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
                         + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
                         + "🌍 Страна: <b>" + escape(requester.getCountry() != null ? requester.getCountry() : "Не указана") + "</b>\n"
