@@ -398,6 +398,7 @@ function GiftCard({ expanded, onToggle }) {
   );
 }
 
+const AVATAR_FRAME_STARS_PRICE = 35;
 const PATRON_TITLE_STARS_PRICE = 60;
 const PERMANENT_SLOT_STARS_PRICE = 75;
 
@@ -507,6 +508,17 @@ function PerksView({ expanded, onToggle }) {
                 activeFrame={profile?.avatarFrameImage}
               />
             ))}
+            {isCustomization && !(profile?.ownedFrames || []).includes('egc') && (
+              <StarsShopCard
+                itemType="AVATAR_FRAME"
+                icon="👑"
+                title="Рамка «EGC»"
+                description="Эксклюзивная рамка клуба, навсегда"
+                price={AVATAR_FRAME_STARS_PRICE}
+                successMessage="✅ Рамка куплена!"
+                onPurchased={reload}
+              />
+            )}
           </div>
         );
       })}
