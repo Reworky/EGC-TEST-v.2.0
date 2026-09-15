@@ -16,6 +16,7 @@ import ru.gamebot.platform.domain.enums.ClashRoyaleVerifyType;
 import ru.gamebot.platform.domain.enums.ClashVerifyType;
 import ru.gamebot.platform.domain.enums.Cs2VerifyType;
 import ru.gamebot.platform.domain.enums.DotaVerifyType;
+import ru.gamebot.platform.domain.enums.RewardDecayWindow;
 
 @Getter
 @Setter
@@ -86,6 +87,25 @@ public class Quest {
 
     @Column(columnDefinition = "boolean default false")
     private boolean externalAutoApprove;
+
+    /** Квест без кулдауна на повтор и без общего часового кулдауна на взятие (см. QuestService.takeQuestChecked —
+     *  освобождается тем же путём, что sponsored/externalAutoApprove) и без лимита участников — цена за
+     *  прохождение вместо этого считается кривой убывания (см. targetPeriodCeiling/rewardDecayWindow
+     *  в QuestService.computeReward), а не фиксированным множителем. */
+    @Column(columnDefinition = "boolean default false")
+    private boolean repeatableNoCooldownEligible;
+
+    /** Потолок суммарной награды за окно (EXC), из которого выводится основание убывания
+     *  (decay_base = 1 − rewardCoins / targetPeriodCeiling). null = кривая не применяется. */
+    private Long targetPeriodCeiling;
+
+    /** Окно, в котором считается порядковый номер прохождения для кривой убывания. */
+    @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(20)")
+    private RewardDecayWindow rewardDecayWindow;
+
+    /** Награда за прохождение до включения кривой убывания — только для истории/сравнения. */
+    private Long baseRewardBeforeChange;
 
     /** Квест проверяется по ТЕКУЩЕМУ состоянию аккаунта (баланс, ранг, лига), а не по свежему действию —
      *  без этого флага такой квест фармится повторно каждый кулдаун без усилий. Блокирует повторное

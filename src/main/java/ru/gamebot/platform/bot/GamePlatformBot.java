@@ -4275,6 +4275,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String oneTimeBadge = quest.isOneTimePerAccount() ? "🔂 <b>Разовый квест</b> — доступен один раз за аккаунт\n" : "";
         boolean questFlat = gameCatalogService.isFlat(quest.getGameName());
         String personalizedInstruction = questService.personalizeInstruction(quest.getInstruction(), user.getTelegramId());
+        String rewardNote = quest.isRepeatableNoCooldownEligible() ? " (за 1-е сегодня, дальше меньше)" : "";
         sendText(user.getTelegramId(),
                 (notice == null ? "" : notice + "\n\n")
                         + sponsorBadge
@@ -4286,7 +4287,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📌 Статус: <b>" + escape(displayStatus) + "</b>\n\n"
                         + "🏆 <b>Награда:</b>\n"
                         + "✨ +" + quest.getRewardXp() + " XP\n"
-                        + "🪙 +" + quest.getRewardCoins() + (quest.isSponsored() ? " EXC" : " монет") + "\n"
+                        + "🪙 +" + displayRewardCoins(user, quest) + (quest.isSponsored() ? " EXC" : " монет") + rewardNote + "\n"
                         + (!quest.isSponsored() && !"UGC".equalsIgnoreCase(quest.getGameName()) && quest.getTicketReward() > 0 ? "🎟 +" + quest.getTicketReward() + " билет(а) для Колеса фортуны\n" : "")
                         + "\n"
                         + "📝 <b>Суть задания:</b>\n" + escape(quest.getDescription()) + "\n\n"
@@ -4296,6 +4297,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             : (quest.isSponsored() ? "" : "📎 <b>Что нужно сделать:</b>\n" + escape(personalizedInstruction)
                                 + (quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null ? "\n\nℹ️ " : "\n\n✅ <b>Что примет модерация:</b>\n") + escape(quest.getRequirements()))),
                 verticalWithBackMenu(buttons, backText, backData));
+    }
+
+    /** Награда для показа игроку ДО взятия/сдачи квеста. Для обычных квестов — статичная quest.getRewardCoins()
+     *  (как и раньше). Для repeatableNoCooldownEligible-квестов (пилот "квесты без стен") — реально посчитанная
+     *  кривой убывания сумма за СЛЕДУЮЩЕЕ прохождение этого игрока, а не фиксированная цифра, которая на практике
+     *  может уже не совпадать с тем, что реально начислится после нескольких прохождений за окно. */
+    private long displayRewardCoins(AppUser user, Quest quest) {
+        return quest.isRepeatableNoCooldownEligible()
+                ? questService.computeReward(user, quest).coins()
+                : quest.getRewardCoins();
     }
 
     /** Гейт перед взятием квеста: проверяет подписку НЕ по разовому флагу isRegistrationCompleted()
@@ -4503,7 +4514,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📌 Статус: <b>В процессе</b>\n\n"
                         + "🏆 <b>Награда</b>\n"
                         + "✨ +" + freshQuest.getRewardXp() + " XP\n"
-                        + "🪙 +" + freshQuest.getRewardCoins() + " монет"
+                        + "🪙 +" + displayRewardCoins(user, freshQuest) + " монет"
+                        + (freshQuest.isRepeatableNoCooldownEligible() ? " (за 1-е сегодня, дальше меньше)" : "")
                         + (!freshQuest.isSponsored() && !"UGC".equalsIgnoreCase(freshQuest.getGameName()) && freshQuest.getTicketReward() > 0 ? "\n🎟 +" + freshQuest.getTicketReward() + " билет(а) для Колеса фортуны" : "")
                         + (freshQuest.isExternalAutoApprove()
                             ? "\n\n📎 <b>Что нужно сделать:</b>\n" + escape(questService.personalizeInstruction(freshQuest.getInstruction(), user.getTelegramId()))
@@ -4802,7 +4814,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📌 Статус: <b>" + escape(humanStatus(submission.getStatus())) + "</b>\n"
                         + "🕒 Обновлено: <b>" + escape(submission.getUpdatedAt().format(DATE_TIME_FORMATTER)) + "</b>\n"
                         + "✨ XP: <b>+" + quest.getRewardXp() + "</b>\n"
-                        + "🪙 Монеты: <b>+" + quest.getRewardCoins() + "</b>\n"
+                        + "🪙 Монеты: <b>+" + displayRewardCoins(user, quest) + "</b>\n"
                         + (quest.getTicketReward() > 0 ? "🎟 Билеты: <b>+" + quest.getTicketReward() + "</b>\n" : "")
                         + "\n📝 <b>Суть задания</b>\n" + escape(quest.getDescription()) + moderatorComment,
                 verticalWithBackMenu(buttons, "⬅️ Назад", "menu:myquests"));

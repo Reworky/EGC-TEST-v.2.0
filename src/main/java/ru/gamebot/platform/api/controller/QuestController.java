@@ -45,6 +45,17 @@ public class QuestController {
     private final GamePlatformBot gamePlatformBot;
     private final ru.gamebot.platform.service.QuestRewardBoostService questRewardBoostService;
 
+    /** Награда для показа игроку ДО взятия/сдачи квеста — та же логика, что и displayRewardCoins в боте.
+     *  Для обычных квестов статичная quest.getRewardCoins() (как раньше); для repeatableNoCooldownEligible
+     *  (пилот "квесты без стен") — реально посчитанная кривой убывания сумма за следующее прохождение,
+     *  иначе игрок в мини-аппе видел бы фиксированную цифру, которая после пары прохождений за окно
+     *  уже не совпадает с тем, что реально начислится. user == null (гость) — просто базовая цена. */
+    private long displayRewardCoins(AppUser user, Quest quest) {
+        return user != null && quest.isRepeatableNoCooldownEligible()
+                ? questService.computeReward(user, quest).coins()
+                : quest.getRewardCoins();
+    }
+
     /** Числовой прогресс для авто-верифицируемого квеста — тот же расчёт, что и в GamePlatformBot.autoVerifyProgressLabel,
      *  но без готового текста: фронтенд Mini App рисует прогресс сам (бар/проценты), не текстовой строкой. */
     private record AutoVerifyProgress(Integer progress, Integer target) {
@@ -93,12 +104,11 @@ public class QuestController {
                 .thenComparing(Quest::getTitle, String.CASE_INSENSITIVE_ORDER));
 
         Map<Long, String> statusByQuestId = new HashMap<>();
-        if (telegramId != null) {
-            appUserRepository.findByTelegramId(telegramId).ifPresent(user -> {
-                for (QuestSubmission s : questService.getUserSubmissions(user)) {
-                    statusByQuestId.putIfAbsent(s.getQuest().getId(), s.getStatus().name());
-                }
-            });
+        AppUser currentUser = telegramId != null ? appUserRepository.findByTelegramId(telegramId).orElse(null) : null;
+        if (currentUser != null) {
+            for (QuestSubmission s : questService.getUserSubmissions(currentUser)) {
+                statusByQuestId.putIfAbsent(s.getQuest().getId(), s.getStatus().name());
+            }
         }
 
         return quests.stream().map(q -> QuestDto.builder()
@@ -110,7 +120,7 @@ public class QuestController {
                 .platform(q.getPlatform())
                 .durationDays(q.getDurationDays())
                 .rewardXp(q.getRewardXp())
-                .rewardCoins(q.getRewardCoins())
+                .rewardCoins(displayRewardCoins(currentUser, q))
                 .ticketReward(q.getTicketReward())
                 .councilOnly(q.isCouncilOnly())
                 .sponsored(q.isSponsored())
@@ -154,7 +164,7 @@ public class QuestController {
                         .platform(q.getPlatform())
                         .durationDays(q.getDurationDays())
                         .rewardXp(q.getRewardXp())
-                        .rewardCoins(q.getRewardCoins())
+                        .rewardCoins(displayRewardCoins(user, q))
                         .ticketReward(q.getTicketReward())
                         .councilOnly(q.isCouncilOnly())
                         .sponsored(q.isSponsored())
@@ -182,18 +192,17 @@ public class QuestController {
     public List<QuestDto> sponsored(@AuthenticationPrincipal Long telegramId) {
         var quests = questService.findActiveSponsored();
         Map<Long, String> statusByQuestId = new java.util.HashMap<>();
-        if (telegramId != null) {
-            appUserRepository.findByTelegramId(telegramId).ifPresent(user -> {
-                for (var q : quests) {
-                    java.util.Optional.ofNullable(questService.getLatestSubmission(user, q))
-                            .ifPresent(s -> statusByQuestId.put(q.getId(), s.getStatus().name()));
-                }
-            });
+        AppUser currentUser = telegramId != null ? appUserRepository.findByTelegramId(telegramId).orElse(null) : null;
+        if (currentUser != null) {
+            for (var q : quests) {
+                java.util.Optional.ofNullable(questService.getLatestSubmission(currentUser, q))
+                        .ifPresent(s -> statusByQuestId.put(q.getId(), s.getStatus().name()));
+            }
         }
         return quests.stream().map(q -> QuestDto.builder()
                 .id(q.getId()).title(q.getTitle()).description(q.getDescription())
                 .gameName(q.getGameName()).category(q.getCategory()).platform(q.getPlatform())
-                .durationDays(q.getDurationDays()).rewardXp(q.getRewardXp()).rewardCoins(q.getRewardCoins())
+                .durationDays(q.getDurationDays()).rewardXp(q.getRewardXp()).rewardCoins(displayRewardCoins(currentUser, q))
                 .ticketReward(q.getTicketReward())
                 .councilOnly(q.isCouncilOnly()).sponsored(true)
                 .externalAutoApprove(q.isExternalAutoApprove())
@@ -235,6 +244,7 @@ public class QuestController {
 
         if (telegramId != null) {
             appUserRepository.findByTelegramId(telegramId).ifPresent(user -> {
+                builder.rewardCoins(displayRewardCoins(user, quest));
                 QuestSubmission latest = questService.getLatestSubmission(user, quest);
                 if (latest != null && latest.getStatus() != ru.gamebot.platform.domain.enums.SubmissionStatus.CANCELLED) {
                     builder.submissionStatus(latest.getStatus().name());
@@ -366,7 +376,7 @@ public class QuestController {
                         .expiresAt(s.getExpiresAt() != null ? s.getExpiresAt().format(ISO_FMT) : null)
                         .moderatorComment(s.getModeratorComment())
                         .rewardXp(s.getQuest().getRewardXp())
-                        .rewardCoins(s.getQuest().getRewardCoins())
+                        .rewardCoins(displayRewardCoins(user, s.getQuest()))
                         .build();
                 })
                 .toList();

@@ -15,6 +15,7 @@ import ru.gamebot.platform.domain.enums.ClashRoyaleVerifyType;
 import ru.gamebot.platform.domain.enums.ClashVerifyType;
 import ru.gamebot.platform.domain.enums.Cs2VerifyType;
 import ru.gamebot.platform.domain.enums.DotaVerifyType;
+import ru.gamebot.platform.domain.enums.RewardDecayWindow;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.repository.QuestRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
@@ -2090,6 +2091,12 @@ public class QuestSeeder implements CommandLineRunner {
         markOneTimePerAccount("Достигни дивизиона Gold в Division Rivals", "EA FC 26");
         markOneTimePerAccount("Достигни дивизиона Elite в Division Rivals", "EA FC 26");
         markOneTimePerAccount("Заработай 1 000 000 $ в GTA Online", "GTA V");
+
+        // Пилот "квесты без стен" (2026-09-15) — ровно один квест, без кулдауна и лимита участников,
+        // цену сдерживает кривая убывания в QuestService.computeReward. targetPeriodCeiling=2500 EXC/сутки —
+        // стартовая гипотеза для теста, не догма, корректируется по факту метрик эмиссии.
+        markRepeatableNoCooldown("Выиграй бой 5 раз в режиме «Захват кристаллов» или «Любое столкновение»", "Brawl Stars",
+                2500L, RewardDecayWindow.DAILY);
     }
 
     /**
@@ -2116,6 +2123,25 @@ public class QuestSeeder implements CommandLineRunner {
                     questRepository.save(q);
                     log.info("[QuestSeeder] Cleared one-time-per-account (superseded by API verification): '{}' ({})", title, gameName);
                 });
+    }
+
+    /**
+     * Пилот "квесты без стен" (2026-09-15): снимает кулдаун (оба вида) и лимит участников с уже существующего
+     * квеста, взамен включает кривую убывания награды внутри окна (см. QuestService.computeReward). Идемпотентен —
+     * вызывается на каждом деплое; baseRewardBeforeChange фиксируется один раз при первом включении флага.
+     */
+    private void markRepeatableNoCooldown(String title, String gameName, long targetPeriodCeiling, RewardDecayWindow window) {
+        questRepository.findFirstByTitleAndGameName(title, gameName).ifPresent(q -> {
+            q.setRepeatableNoCooldownEligible(true);
+            q.setParticipantLimit(null);
+            q.setTargetPeriodCeiling(targetPeriodCeiling);
+            q.setRewardDecayWindow(window);
+            if (q.getBaseRewardBeforeChange() == null) {
+                q.setBaseRewardBeforeChange(q.getRewardCoins());
+            }
+            questRepository.save(q);
+            log.info("[QuestSeeder] Marked repeatable-no-cooldown: '{}' ({}), ceiling={}, window={}", title, gameName, targetPeriodCeiling, window);
+        });
     }
 
     /**

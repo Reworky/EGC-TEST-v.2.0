@@ -551,8 +551,10 @@ public class QuestService {
             }
         }
 
-        // Спонсорские и внешние (auto-approve через постбек) квесты: никаких кулдаунов и ограничений по слотам
-        if (!quest.isSponsored() && !quest.isExternalAutoApprove()) {
+        // Спонсорские, внешние (auto-approve через постбек) и repeatableNoCooldownEligible-квесты
+        // (пилот "квесты без стен" — вместо кулдауна цену сдерживает кривая убывания в computeReward):
+        // никаких кулдаунов и ограничений по слотам
+        if (!quest.isSponsored() && !quest.isExternalAutoApprove() && !quest.isRepeatableNoCooldownEligible()) {
             long activeSlots = countActiveDrafts(lockedUser);
             long maxSlots = sinkShopService.getMaxQuestSlots(lockedUser);
             if (activeSlots >= maxSlots) {
@@ -796,14 +798,28 @@ public class QuestService {
         long baseCoins = quest.getRewardCoins();
         long adjustedCoins = baseCoins;
 
-        // 3.4 Antifaud: diminishing returns after 3 completions of same type per week
-        // (для новичка порог мягче — 5 вместо 3, см. isOnboarding)
-        LocalDateTime weekAgo = LocalDateTime.now().minusWeeks(1);
-        long weeklyCount = questSubmissionRepository.countApprovedByUserAndGameAndCategorySince(
-                user, quest.getGameName(), quest.getCategory(), weekAgo);
-        boolean diminished = weeklyCount >= weeklyQuestTypeLimit(user);
-        if (diminished) {
-            adjustedCoins = adjustedCoins / 2;
+        // repeatableNoCooldownEligible-квесты (пилот "квесты без стен"): кулдауна нет, цену вместо
+        // недельного деления пополам сдерживает кривая геометрического убывания внутри скользящего
+        // окна — первое прохождение в окне почти полной ценой, сумма всех прохождений асимптотически
+        // стремится к targetPeriodCeiling и практически никогда его не превышает.
+        boolean diminished;
+        if (quest.isRepeatableNoCooldownEligible() && quest.getTargetPeriodCeiling() != null) {
+            LocalDateTime windowStart = quest.getRewardDecayWindow() == ru.gamebot.platform.domain.enums.RewardDecayWindow.WEEKLY
+                    ? LocalDateTime.now().minusWeeks(1) : LocalDateTime.now().minusHours(24);
+            long completionsInWindow = questSubmissionRepository.countApprovedByUserAndQuestSince(user, quest, windowStart);
+            double decayBase = 1.0 - (double) baseCoins / quest.getTargetPeriodCeiling();
+            adjustedCoins = Math.max(1, Math.round(baseCoins * Math.pow(decayBase, completionsInWindow)));
+            diminished = completionsInWindow > 0;
+        } else {
+            // 3.4 Antifaud: diminishing returns after 3 completions of same type per week
+            // (для новичка порог мягче — 5 вместо 3, см. isOnboarding)
+            LocalDateTime weekAgo = LocalDateTime.now().minusWeeks(1);
+            long weeklyCount = questSubmissionRepository.countApprovedByUserAndGameAndCategorySince(
+                    user, quest.getGameName(), quest.getCategory(), weekAgo);
+            diminished = weeklyCount >= weeklyQuestTypeLimit(user);
+            if (diminished) {
+                adjustedCoins = adjustedCoins / 2;
+            }
         }
 
         // Apply EXC boost — личный купленный (SinkShop) складывается с глобальным временным
