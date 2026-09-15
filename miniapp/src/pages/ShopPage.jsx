@@ -556,7 +556,11 @@ function PerksView({ expanded, onToggle }) {
       {PERK_CATEGORIES.map(cat => {
         const visible = cat.items.filter(item => !item.hideIf || !item.hideIf(state));
         const isCustomization = cat.title === 'Кастомизация';
-        if (visible.length === 0 && !(isCustomization && frames?.length)) return null;
+        const isQuests = cat.title === 'Квесты';
+        if (visible.length === 0
+            && !(isCustomization && frames?.length)
+            && !(isCustomization && !profile?.hasPatronTitle)
+            && !(isQuests && !profile?.hasPermanentExtraSlot)) return null;
         return (
           <div key={cat.title} className="category-section">
             <div className="category-header">{cat.title}</div>
@@ -592,37 +596,31 @@ function PerksView({ expanded, onToggle }) {
                 onPurchased={reload}
               />
             )}
+            {isCustomization && !profile?.hasPatronTitle && (
+              <StarsShopCard
+                itemType="PATRON_TITLE"
+                icon="💎"
+                title="Титул «Покровитель EGC»"
+                description="Эксклюзивный статус, недоступен за EXC — виден всем в клубе"
+                price={PATRON_TITLE_STARS_PRICE}
+                successMessage="✅ Титул куплен и надет!"
+                onPurchased={reload}
+              />
+            )}
+            {isQuests && !profile?.hasPermanentExtraSlot && (
+              <StarsShopCard
+                itemType="PERMANENT_SLOT"
+                icon="📂"
+                title="Доп. слот квеста — навсегда"
+                description="На 1 активный квест больше постоянно — обычно доступно только на 48ч за EXC"
+                price={PERMANENT_SLOT_STARS_PRICE}
+                successMessage="✅ Слот куплен навсегда!"
+                onPurchased={reload}
+              />
+            )}
           </div>
         );
       })}
-
-      {(!profile?.hasPatronTitle || !profile?.hasPermanentExtraSlot) && (
-        <div className="category-section">
-          <div className="category-header">За Telegram Stars</div>
-          {!profile?.hasPatronTitle && (
-            <StarsShopCard
-              itemType="PATRON_TITLE"
-              icon="💎"
-              title="Титул «Покровитель EGC»"
-              description="Эксклюзивный статус, недоступен за EXC — виден всем в клубе"
-              price={PATRON_TITLE_STARS_PRICE}
-              successMessage="✅ Титул куплен и надет!"
-              onPurchased={reload}
-            />
-          )}
-          {!profile?.hasPermanentExtraSlot && (
-            <StarsShopCard
-              itemType="PERMANENT_SLOT"
-              icon="📂"
-              title="Доп. слот квеста — навсегда"
-              description="На 1 активный квест больше постоянно — обычно доступно только на 48ч за EXC"
-              price={PERMANENT_SLOT_STARS_PRICE}
-              successMessage="✅ Слот куплен навсегда!"
-              onPurchased={reload}
-            />
-          )}
-        </div>
-      )}
 
       <div className="category-section">
         <div className="category-header">Социальные</div>
