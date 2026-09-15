@@ -4536,6 +4536,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + ".\n\n💡 Можно снять кулдаун за 3 000 EXC в разделе Предметы клуба.";
             // Без фиксированного "раз в час" в тексте — порог для новичка короче (15 мин), не всегда час.
             case TAKE_COOLDOWN -> "⏳ Новый квест можно будет взять чуть позже. Подождите ещё <b>" + result.minutesLeft() + " мин.</b>";
+            case PARTICIPANT_LIMIT_REACHED ->
+                    "🔒 Квест закрыт — набор участников завершён (" + quest.getParticipantLimit() + "/" + quest.getParticipantLimit() + "). Попробуйте другой квест.";
             default -> "⚠️ Не удалось взять квест.";
         };
     }

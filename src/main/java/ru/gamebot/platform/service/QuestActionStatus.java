@@ -23,6 +23,10 @@ public enum QuestActionStatus {
     NEEDS_CS2_LINK,
     AUTO_VERIFIED_NO_REPORT,
     NEEDS_BRAWL_PARTNER,
+    /** Квест с лимитом участников (participantLimit) уже набрал максимум одобренных заявок —
+     * раньше это было IllegalArgumentException из createDraftSubmission, которое нигде не ловилось
+     * в takeQuestChecked и улетало до глобального обработчика ("Что-то пошло не так", 2026-09-15). */
+    PARTICIPANT_LIMIT_REACHED,
     /** Подписка на канал теперь проверяется точечно при взятии квеста (2026-09-14), а не сразу
      *  после анкеты — см. GamePlatformBot.handleTakeQuest. Мини-апп должен запретить взятие квеста
      *  тем же образом, иначе через API можно обойти проверку, которая есть в боте. */

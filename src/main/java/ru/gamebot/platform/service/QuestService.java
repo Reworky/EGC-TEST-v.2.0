@@ -496,6 +496,15 @@ public class QuestService {
         if (!quest.isActive()) {
             return QuestActionResult.of(QuestActionStatus.QUEST_INACTIVE, 0);
         }
+        // Проверяем лимит участников здесь, а не только внутри createDraftSubmission (которая на
+        // переполнении бросает IllegalArgumentException) — иначе исключение улетает необработанным
+        // до глобального обработчика бота ("Что-то пошло не так"), а часовой кулдаун на взятие уже
+        // успевает списаться ниже до самого создания заявки, так что игрок ещё и терял час впустую
+        // на каждую попытку (реальный кейс: тикет поддержки #176, 2026-09-15).
+        if (quest.getParticipantLimit() != null && quest.getParticipantLimit() > 0
+                && questSubmissionRepository.countApprovedByQuest(quest) >= quest.getParticipantLimit()) {
+            return QuestActionResult.of(QuestActionStatus.PARTICIPANT_LIMIT_REACHED, 0);
+        }
         if (quest.getBrawlVerifyType() != null && user.getBrawlStarsTag() == null) {
             return QuestActionResult.of(QuestActionStatus.NEEDS_BRAWL_TAG, 0);
         }
