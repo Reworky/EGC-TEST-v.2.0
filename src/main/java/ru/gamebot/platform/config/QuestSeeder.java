@@ -2093,10 +2093,11 @@ public class QuestSeeder implements CommandLineRunner {
         markOneTimePerAccount("Заработай 1 000 000 $ в GTA Online", "GTA V");
 
         // Пилот "квесты без стен" (2026-09-15) — ровно один квест, без кулдауна и лимита участников,
-        // цену сдерживает кривая убывания в QuestService.computeReward. targetPeriodCeiling=2500 EXC/сутки —
-        // стартовая гипотеза для теста, не догма, корректируется по факту метрик эмиссии.
+        // цену сдерживает кривая убывания в QuestService.computeReward. targetPeriodCeiling=4500 EXC/сутки
+        // (поднято с 2500 — мягче шаг между прохождениями: 1800→1080→648..., ~3.5× старый недельный потолок
+        // в худшем случае) — калибровка для теста, не догма, корректируется по факту метрик эмиссии.
         markRepeatableNoCooldown("Выиграй бой 5 раз в режиме «Захват кристаллов» или «Любое столкновение»", "Brawl Stars",
-                2500L, RewardDecayWindow.DAILY);
+                4500L, RewardDecayWindow.DAILY);
     }
 
     /**
