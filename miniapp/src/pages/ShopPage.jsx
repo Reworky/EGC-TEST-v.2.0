@@ -405,8 +405,10 @@ const PERMANENT_SLOT_STARS_PRICE = 75;
 /** Общая карточка покупки за Telegram Stars (Telegram.WebApp.openInvoice) — переиспользуется для
  * товаров, у которых нет собственного EXC-аналога в PERK_CATEGORIES (титул, доп. слот навсегда).
  * Раньше жили на главной странице профиля — перенесены сюда по просьбе (2026-09-15): это покупка,
- * ей место в магазине, а не на главной. */
-function StarsShopCard({ itemType, icon, title, description, price, onPurchased, successMessage }) {
+ * ей место в магазине, а не на главной. Стилизована как обычная shop-card (2026-09-15) — раньше
+ * была отдельным фиолетовым блоком и визуально "выделялась" на фоне остальных EXC-товаров того же
+ * раздела, хотя это просто ещё один товар с другим способом оплаты. */
+function StarsShopCard({ itemType, icon, title, description, price, onPurchased, successMessage, expanded, onToggle }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -435,22 +437,20 @@ function StarsShopCard({ itemType, icon, title, description, price, onPurchased,
   }
 
   return (
-    <div style={{
-      margin: '0 16px 12px', background: 'rgba(124,58,237,0.07)', border: '1px solid rgba(124,58,237,0.28)',
-      borderRadius: 16, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14,
-    }}>
-      <div style={{
-        width: 56, height: 56, borderRadius: 14, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 26, background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.3)',
-      }}>{icon}</div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: '#e9d5ff' }}>{title}</div>
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{description}</div>
-        {message && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>{message}</div>}
+    <div className="shop-card" onClick={() => onToggle(`stars-${itemType}`)}>
+      <div className="shop-top">
+        <div className="shop-title">{icon} {title}</div>
+        <div className="shop-price">{price} ⭐</div>
       </div>
-      <button className="quest-btn" disabled={busy} onClick={handleBuy} style={{ flexShrink: 0, width: 'auto', marginTop: 0, padding: '8px 14px', fontSize: 13 }}>
-        {busy ? '...' : `${price} ⭐`}
-      </button>
+      {expanded && (
+        <div className="shop-detail" onClick={e => e.stopPropagation()}>
+          <p className="shop-desc">{description}</p>
+          <button className="quest-btn" disabled={busy} onClick={handleBuy}>
+            {busy ? 'Секунду...' : 'Купить'}
+          </button>
+          {message && <div className="quest-message">{message}</div>}
+        </div>
+      )}
     </div>
   );
 }
@@ -594,6 +594,8 @@ function PerksView({ expanded, onToggle }) {
                 price={AVATAR_FRAME_STARS_PRICE}
                 successMessage="✅ Рамка куплена!"
                 onPurchased={reload}
+                expanded={expanded === 'stars-AVATAR_FRAME'}
+                onToggle={onToggle}
               />
             )}
             {isCustomization && !profile?.hasPatronTitle && (
@@ -605,6 +607,8 @@ function PerksView({ expanded, onToggle }) {
                 price={PATRON_TITLE_STARS_PRICE}
                 successMessage="✅ Титул куплен и надет!"
                 onPurchased={reload}
+                expanded={expanded === 'stars-PATRON_TITLE'}
+                onToggle={onToggle}
               />
             )}
             {isQuests && !profile?.hasPermanentExtraSlot && (
@@ -616,6 +620,8 @@ function PerksView({ expanded, onToggle }) {
                 price={PERMANENT_SLOT_STARS_PRICE}
                 successMessage="✅ Слот куплен навсегда!"
                 onPurchased={reload}
+                expanded={expanded === 'stars-PERMANENT_SLOT'}
+                onToggle={onToggle}
               />
             )}
           </div>
