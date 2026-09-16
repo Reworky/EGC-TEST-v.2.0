@@ -211,6 +211,13 @@ public class AppUser {
     private Long cs2SteamId64;
     private LocalDateTime cs2LinkedAt;
 
+    /** Подтверждённый PUBG account_id (формат "account.xxxxxxxx", строка — НЕ числовой ID) для
+     *  авто-верификации квестов PUBG PC через официальный API (developer.pubg.com, platform=steam).
+     *  Привязка идёт по нику при поиске, но сохраняется именно устойчивый accountId, а не сам ник —
+     *  смена ника в будущем не ломает привязку. */
+    private String pubgAccountId;
+    private LocalDateTime pubgLinkedAt;
+
     // Season Pass
     private java.time.LocalDateTime seasonPassActiveUntil;
 

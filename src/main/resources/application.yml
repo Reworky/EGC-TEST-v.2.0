@@ -65,5 +65,8 @@ clashroyale:
 steam:
   api-key: ${STEAM_API_KEY:}
 
+pubg:
+  api-key: ${PUBG_API_KEY:}
+
 achievement:
   exc-milestones: ${ACHIEVEMENT_EXC_MILESTONES:10000,50000,100000,500000,1000000}

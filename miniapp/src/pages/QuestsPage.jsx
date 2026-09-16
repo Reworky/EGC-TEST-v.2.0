@@ -116,6 +116,7 @@ function QuestActions({ quest, detail, onChanged }) {
     NEEDS_CLASH_ROYALE_TAG: { startParam: 'crtag', label: '🏷️ Открыть бота и привязать тег' },
     NEEDS_DOTA_LINK: { startParam: 'dotalink', label: '🏷️ Открыть бота и привязать тег' },
     NEEDS_CS2_LINK: { startParam: 'cs2link', label: '🏷️ Открыть бота и привязать тег' },
+    NEEDS_PUBG_LINK: { startParam: 'pubglink', label: '🏷️ Открыть бота и привязать тег' },
     // Подписка на канал теперь проверяется при взятии квеста, а не сразу после анкеты (2026-09-14) —
     // тот же принцип, что и с привязкой тега: показать сообщение и увести в бота для завершения шага.
     NEEDS_CHANNEL_SUBSCRIPTION: { startParam: 'subscribe', label: '📢 Открыть бота и подписаться' },

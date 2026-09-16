@@ -61,6 +61,7 @@ public class WeeklyResetScheduler {
     private final ClashRoyaleQuestVerificationService clashRoyaleQuestVerificationService;
     private final Dota2QuestVerificationService dota2QuestVerificationService;
     private final Cs2QuestVerificationService cs2QuestVerificationService;
+    private final PubgQuestVerificationService pubgQuestVerificationService;
     private final ScheduledBroadcastService scheduledBroadcastService;
     private final AchievementCheckService achievementCheckService;
 
@@ -231,6 +232,16 @@ public class WeeklyResetScheduler {
             cs2QuestVerificationService.checkInProgressSubmissions();
         } catch (Exception e) {
             log.error("CS2 auto-verify check failed", e);
+        }
+    }
+
+    // Проверка прогресса авто-верификации квестов PUBG PC (официальный API developer.pubg.com) — каждые 10 минут
+    @Scheduled(fixedDelay = 600_000)
+    public void checkPubgAutoVerifyProgress() {
+        try {
+            pubgQuestVerificationService.checkInProgressSubmissions();
+        } catch (Exception e) {
+            log.error("PUBG auto-verify check failed", e);
         }
     }
 

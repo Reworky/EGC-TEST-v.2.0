@@ -170,4 +170,14 @@ public class QuestSubmission {
 
     @Column(columnDefinition = "integer default 0")
     private int cs2ProgressCount;
+
+    /** Курсор дедупликации по ВРЕМЕНИ матча, не по ID — в отличие от Dota, PUBG match ID не монотонны
+     *  (UUID), поэтому дедупликация по ID ненадёжна. null = ещё не опрашивался ни разу — при первом опросе
+     *  учитываются все матчи с createdAt позже submission.getCreatedAt() (момента взятия квеста). */
+    private LocalDateTime pubgLastProcessedMatchTime;
+
+    /** Число уже засчитанных подходящих матчей (побед или сыгранных, по pubgVerifyType) — в отличие
+     *  от dotaBestValue, ЗДЕСЬ именно накопление участвует в логике завершения (см. PubgQuestVerificationService). */
+    @Column(columnDefinition = "integer default 0")
+    private int pubgProgressCount;
 }

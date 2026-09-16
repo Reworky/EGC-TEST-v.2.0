@@ -144,6 +144,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ClashRoyaleQuestVerificationService clashRoyaleQuestVerificationService;
     private final ru.gamebot.platform.service.Dota2QuestVerificationService dota2QuestVerificationService;
     private final ru.gamebot.platform.service.Cs2QuestVerificationService cs2QuestVerificationService;
+    private final ru.gamebot.platform.service.PubgQuestVerificationService pubgQuestVerificationService;
     private final ru.gamebot.platform.service.ScheduledBroadcastService scheduledBroadcastService;
     private final ru.gamebot.platform.service.AdsgramBotAdService adsgramBotAdService;
     private final ru.gamebot.platform.domain.repository.TournamentEntryRepository tournamentEntryRepository;
@@ -767,6 +768,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     cancelKeyboard());
             return;
         }
+        // Deep link из мини-аппа для PUBG PC — игровой ник (см. pubg:confirm ниже).
+        if (startPayload.equals("pubglink") && user.isRegistrationCompleted()) {
+            session.reset();
+            session.getData().put("pubgLinkPurpose", "profile");
+            session.setState(SessionState.PUBG_NICKNAME_INPUT);
+            sendText(user.getTelegramId(),
+                    "🎮 Введите ваш игровой ник PUBG (PC, платформа Steam):",
+                    cancelKeyboard());
+            return;
+        }
 
         // Возобновить незавершённый онбординг
         if (!user.isOnboardingCompleted()) {
@@ -1333,6 +1344,30 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if ("pubg:confirm".equals(data)) {
+            String accountId = session.getData().get("pubgAccountId");
+            if (accountId == null) {
+                answer(callbackQuery.getId(), "❌ Сессия истекла, начните заново.");
+                session.reset();
+                return;
+            }
+            pubgQuestVerificationService.linkAccount(user, accountId);
+            String pendingQuestIdStr = session.getData().get("pubgPendingQuestId");
+            session.reset();
+            answer(callbackQuery.getId(), "✅ Аккаунт привязан!");
+            if (pendingQuestIdStr != null) {
+                handleTakeQuest(callbackQuery, user, session, Long.parseLong(pendingQuestIdStr));
+            } else {
+                sendText(user.getTelegramId(), "✅ Аккаунт PUBG привязан.", backMenuKeyboard("menu:profile"));
+            }
+            return;
+        }
+        if ("pubg:retry".equals(data)) {
+            session.setState(SessionState.PUBG_NICKNAME_INPUT);
+            sendText(user.getTelegramId(), "🎮 Введите ник ещё раз:", cancelKeyboard());
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if ("brawl:anomalies".equals(data) && isEffectiveModerator(user)) {
             sendBrawlAnomalies(user.getTelegramId());
             answerSilently(callbackQuery.getId());
@@ -1591,6 +1626,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(user.getTelegramId(),
                         "🎮 Введите ваш SteamID64 или ссылку на профиль Steam (steamcommunity.com/profiles/…).\n\n"
                                 + "⚠️ В настройках приватности Steam «Игровая статистика» должна быть выставлена на «Все» (Public) — без неё статистика не видна боту.",
+                        cancelKeyboard());
+            }
+            case "pubg_link" -> {
+                session.reset();
+                session.getData().put("pubgLinkPurpose", "profile");
+                session.setState(SessionState.PUBG_NICKNAME_INPUT);
+                sendText(user.getTelegramId(),
+                        "🎮 Введите ваш игровой ник PUBG (PC, платформа Steam):",
                         cancelKeyboard());
             }
             case "edit_age" -> {
@@ -2344,6 +2387,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         keyboardFactory.rowsLayout(List.of(
                                 List.of(keyboardFactory.callback("✅ Да, это я", "cs2:confirm")),
                                 List.of(keyboardFactory.callback("✏️ Ввести другой SteamID64", "cs2:retry")),
+                                List.of(keyboardFactory.callback("❌ Отмена", "menu:quests"))
+                        )));
+            }
+            case PUBG_NICKNAME_INPUT -> {
+                ru.gamebot.platform.service.PubgQuestVerificationService.AccountLookupResult res =
+                        pubgQuestVerificationService.lookupAccount(text.trim());
+                if (!res.success()) {
+                    sendText(user.getTelegramId(), "❌ " + res.error() + "\n\nПопробуйте ещё раз:", cancelKeyboard());
+                    return;
+                }
+                session.getData().put("pubgAccountId", res.accountId());
+                session.setState(SessionState.PUBG_NICKNAME_CONFIRM);
+                sendText(user.getTelegramId(),
+                        "🎮 Найден аккаунт, матчей видно: <b>" + res.matchesFound() + "</b>. Это ваш аккаунт?",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("✅ Да, это я", "pubg:confirm")),
+                                List.of(keyboardFactory.callback("✏️ Ввести другой ник", "pubg:retry")),
                                 List.of(keyboardFactory.callback("❌ Отмена", "menu:quests"))
                         )));
             }
@@ -3593,6 +3653,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         List.of(keyboardFactory.callback("🏷️ " + (user.getClashRoyaleTag() != null ? "Изменить тег Clash Royale" : "Привязать тег Clash Royale"), "profile:cr_tag")),
                         List.of(keyboardFactory.callback("🎮 " + (user.getDotaAccountId() != null ? "Изменить аккаунт Dota 2" : "Привязать аккаунт Dota 2"), "profile:dota_link")),
                         List.of(keyboardFactory.callback("🎮 " + (user.getCs2SteamId64() != null ? "Изменить аккаунт CS2" : "Привязать аккаунт CS2"), "profile:cs2_link")),
+                        List.of(keyboardFactory.callback("🎮 " + (user.getPubgAccountId() != null ? "Изменить аккаунт PUBG" : "Привязать аккаунт PUBG"), "profile:pubg_link")),
                         List.of(keyboardFactory.callback("⬅️ Назад", "menu:profile"))
                 )));
     }
@@ -4260,7 +4321,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (hasActiveSubmission) {
             buttons.add(quest.isExternalAutoApprove()
                     ? keyboardFactory.callback("⏳ Ждём подтверждения от партнёра", "noop")
-                    : (quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null)
+                    : (quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null || quest.getPubgVerifyType() != null)
                         ? keyboardFactory.callback(autoVerifyProgressLabel(quest, latest), "noop")
                         : keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
         }
@@ -4293,9 +4354,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📝 <b>Суть задания:</b>\n" + escape(quest.getDescription()) + "\n\n"
                         + (personalizedInstruction != null && !personalizedInstruction.isBlank()
                             ? (quest.isSponsored() ? "📎 <b>Ссылки:</b>\n" : "📎 <b>Что нужно сделать:</b>\n") + escape(personalizedInstruction)
-                                + (quest.isSponsored() ? "" : (quest.isExternalAutoApprove() || quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null ? "\n\nℹ️ " : "\n\n✅ <b>Что примет модерация:</b>\n") + escape(quest.getRequirements()))
+                                + (quest.isSponsored() ? "" : (quest.isExternalAutoApprove() || quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null || quest.getPubgVerifyType() != null ? "\n\nℹ️ " : "\n\n✅ <b>Что примет модерация:</b>\n") + escape(quest.getRequirements()))
                             : (quest.isSponsored() ? "" : "📎 <b>Что нужно сделать:</b>\n" + escape(personalizedInstruction)
-                                + (quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null ? "\n\nℹ️ " : "\n\n✅ <b>Что примет модерация:</b>\n") + escape(quest.getRequirements()))),
+                                + (quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null || quest.getPubgVerifyType() != null ? "\n\nℹ️ " : "\n\n✅ <b>Что примет модерация:</b>\n") + escape(quest.getRequirements()))),
                 verticalWithBackMenu(buttons, backText, backData));
     }
 
@@ -4401,6 +4462,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     cancelKeyboard());
             return;
         }
+        if (quest.getPubgVerifyType() != null && user.getPubgAccountId() == null) {
+            answerSilently(callbackQuery.getId());
+            session.reset();
+            session.getData().put("pubgPendingQuestId", String.valueOf(questId));
+            session.setState(SessionState.PUBG_NICKNAME_INPUT);
+            sendText(user.getTelegramId(),
+                    "🎮 Для этого квеста нужен привязанный аккаунт PUBG PC — прогресс отслеживается автоматически.\n\n"
+                            + "Введите ваш игровой ник PUBG (платформа Steam):",
+                    cancelKeyboard());
+            return;
+        }
         QuestService.QuestActionResult result = questService.takeQuestChecked(user, quest);
         answerSilently(callbackQuery.getId());
         renderTakeQuestResult(user, questId, quest, result);
@@ -4490,7 +4562,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         Quest freshQuest = questService.getQuest(questId);
         QuestSubmission submission = result.submission();
         List<InlineKeyboardButton> buttons = new ArrayList<>();
-        boolean freshQuestAutoVerified = freshQuest.getBrawlVerifyType() != null || freshQuest.getClashVerifyType() != null || freshQuest.getClashRoyaleVerifyType() != null || freshQuest.getDotaVerifyType() != null || freshQuest.getCs2VerifyType() != null;
+        boolean freshQuestAutoVerified = freshQuest.getBrawlVerifyType() != null || freshQuest.getClashVerifyType() != null || freshQuest.getClashRoyaleVerifyType() != null || freshQuest.getDotaVerifyType() != null || freshQuest.getCs2VerifyType() != null || freshQuest.getPubgVerifyType() != null;
         buttons.add(freshQuest.isExternalAutoApprove() || freshQuestAutoVerified
                 ? keyboardFactory.callback(freshQuestAutoVerified ? autoVerifyProgressLabel(freshQuest, submission) : "⏳ Ждём подтверждения от партнёра", "noop")
                 : keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
@@ -4565,7 +4637,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Серверная проверка, не только скрытие кнопки в UI — иначе кнопка "Отчёт" из другого экрана
         // (или просто старое сообщение с ней) даёт вручную отправить отчёт по квесту, который должен
         // подтверждаться только через API (инцидент 2026-08-31, см. sendMyQuestCard).
-        if (quest.isExternalAutoApprove() || quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null) {
+        if (quest.isExternalAutoApprove() || quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null || quest.getPubgVerifyType() != null) {
             answerSilently(callbackQuery.getId());
             sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
                     "ℹ️ Этот квест подтверждается автоматически — отправлять отчёт не нужно и нельзя.");
@@ -4798,7 +4870,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Тот же гейт, что и в sendQuestCard/handleTakeQuest — без него игрок мог вручную отправить
         // отчёт по квесту, который должен подтверждаться только через API (лазейка, инцидент 2026-08-31,
         // поймана на живой заявке К-1333 "Сразись в бою 6 раз" — квест с BrawlVerifyType).
-        boolean autoVerified = quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null;
+        boolean autoVerified = quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null || quest.getPubgVerifyType() != null;
         buttons.add(quest.isExternalAutoApprove()
                 ? keyboardFactory.callback("⏳ Ждём подтверждения от партнёра", "noop")
                 : autoVerified
@@ -12517,6 +12589,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     @org.springframework.context.event.EventListener
+    public void onPubgQuestAutoVerified(ru.gamebot.platform.event.PubgQuestAutoVerifiedEvent event) {
+        try {
+            QuestSubmission approved = questService.getSubmission(event.getSubmissionId());
+            notifyUser(approved.getUser().getTelegramId(),
+                    "✅ <b>Квест выполнен автоматически!</b>\n\n"
+                    + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в PUBG засчитан.\n\n"
+                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>\n"
+                    + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()));
+            notifyModeratorsAboutAutoApproval(approved, "проверка через официальный PUBG API");
+        } catch (Exception e) {
+            log.error("[PubgAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
+        }
+    }
+
+    @org.springframework.context.event.EventListener
     public void onExternalQuestApproved(ru.gamebot.platform.event.ExternalQuestApprovedEvent event) {
         try {
             QuestSubmission approved = questService.getSubmission(event.getSubmissionId());
@@ -14801,6 +14888,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 return "⏳ Идёт первый замер…";
             }
             return "⏳ Прогресс: " + submission.getCs2ProgressCount() + "/" + quest.getCs2TargetCount();
+        }
+        if (quest.getPubgVerifyType() != null) {
+            return "⏳ Прогресс: " + submission.getPubgProgressCount() + "/" + quest.getPubgTargetCount();
         }
         return "⏳ Прогресс отслеживается автоматически";
     }

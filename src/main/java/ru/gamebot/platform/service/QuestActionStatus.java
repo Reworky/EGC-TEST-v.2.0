@@ -21,6 +21,7 @@ public enum QuestActionStatus {
     NEEDS_CLASH_ROYALE_TAG,
     NEEDS_DOTA_LINK,
     NEEDS_CS2_LINK,
+    NEEDS_PUBG_LINK,
     AUTO_VERIFIED_NO_REPORT,
     NEEDS_BRAWL_PARTNER,
     /** Квест с лимитом участников (participantLimit) уже набрал максимум одобренных заявок —

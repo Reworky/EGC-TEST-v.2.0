@@ -16,6 +16,7 @@ import ru.gamebot.platform.domain.enums.ClashRoyaleVerifyType;
 import ru.gamebot.platform.domain.enums.ClashVerifyType;
 import ru.gamebot.platform.domain.enums.Cs2VerifyType;
 import ru.gamebot.platform.domain.enums.DotaVerifyType;
+import ru.gamebot.platform.domain.enums.PubgVerifyType;
 import ru.gamebot.platform.domain.enums.RewardDecayWindow;
 
 @Getter
@@ -202,6 +203,20 @@ public class Quest {
 
     /** Целевая дельта с момента взятия квеста — для всех типов CS2 верификации. */
     private Integer cs2TargetCount;
+
+    /** null = обычный квест — включает авто-верификацию PUBG PC через официальный API (developer.pubg.com,
+     *  platform=steam). В отличие от CS2 (кумулятивные career-счётчики) и как у Dota — список последних
+     *  матчей игрока + разбор каждого нового по отдельности (у PUBG нет стабильного career-counter'а
+     *  в открытом API). WINS считает матчи с winPlace==1, MATCHES_PLAYED — любые новые матчи, до
+     *  pubgTargetCount совпадений (не "первый подходящий", как у Dota — здесь именно накопление).
+     *  varchar(20) — самое длинное значение своего enum'а "MATCHES_PLAYED" (14 симв.) с запасом,
+     *  не скопировано с чужого поля (см. инцидент с cs2VerifyType выше). */
+    @Enumerated(EnumType.STRING)
+    @Column(columnDefinition = "varchar(20)")
+    private PubgVerifyType pubgVerifyType;
+
+    /** Целевое число подходящих матчей (побед или сыгранных) с момента взятия квеста. */
+    private Integer pubgTargetCount;
 
     /** Краткое условие (до ~150 символов) для подстановки в шаблон быстрого отклонения «Недостаточно данных». */
     @Column(length = 200)

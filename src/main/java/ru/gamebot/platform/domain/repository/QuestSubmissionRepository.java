@@ -233,4 +233,10 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT s FROM QuestSubmission s WHERE s.status = 'DRAFT' AND s.quest.cs2VerifyType IS NOT NULL " +
            "AND s.user.cs2SteamId64 IS NOT NULL AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP)")
     List<QuestSubmission> findInProgressCs2AutoVerify();
+
+    /** Незавершённые заявки на квесты с включённой авто-верификацией через официальный PUBG API (PC), у пользователя привязан accountId, срок не истёк. */
+    @EntityGraph(attributePaths = {"user", "quest"})
+    @Query("SELECT s FROM QuestSubmission s WHERE s.status = 'DRAFT' AND s.quest.pubgVerifyType IS NOT NULL " +
+           "AND s.user.pubgAccountId IS NOT NULL AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP)")
+    List<QuestSubmission> findInProgressPubgAutoVerify();
 }

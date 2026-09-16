@@ -15,6 +15,7 @@ import ru.gamebot.platform.domain.enums.ClashRoyaleVerifyType;
 import ru.gamebot.platform.domain.enums.ClashVerifyType;
 import ru.gamebot.platform.domain.enums.Cs2VerifyType;
 import ru.gamebot.platform.domain.enums.DotaVerifyType;
+import ru.gamebot.platform.domain.enums.PubgVerifyType;
 import ru.gamebot.platform.domain.enums.RewardDecayWindow;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.repository.QuestRepository;
@@ -582,6 +583,21 @@ public class QuestSeeder implements CommandLineRunner {
                 "Финишируй в Топ-10 трижды за неделю", "15 убийств в одном матче"}) {
             setQuestReward(title, "PUBG PC", 3000);
         }
+
+        // ── PUBG PC: перевод на авто-верификацию через официальный API (developer.pubg.com, 2026-09-16) —
+        // только два квеста, сводимых к WINS/MATCHES_PLAYED на старте. Остальные (убийства/урон/топ-10 за
+        // матч) остаются ручными скриншот-квестами — для них нужен более широкий PubgVerifyType, вне
+        // объёма этого пилота.
+        String pubgAutoReq = "Ничего отправлять не нужно — прогресс проверяется автоматически через официальный "
+                + "PUBG API, награда зачислится сама после выполнения условия.";
+        setPubgVerify("Сыграй 3 матча подряд", PubgVerifyType.MATCHES_PLAYED, 3,
+                "Сыграй 3 и более завершённых матча Battle Royale в PUBG PC с момента взятия квеста — прогресс считается автоматически.",
+                "Играй матчи Battle Royale в любом режиме до конца. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
+                pubgAutoReq);
+        setPubgVerify("Победи в матче — Chicken Dinner", PubgVerifyType.WINS, 1,
+                "Выиграй любой матч Battle Royale в PUBG PC с момента взятия квеста — прогресс считается автоматически.",
+                "Играй матчи в любом режиме и побеждай. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
+                pubgAutoReq);
 
         // ── PUBG Mobile: FLAT-режим — единый список без выбора категории, по образцу Brawl Stars/Clash of Clans/Clash Royale ──
         gameCatalogService.setDifficultyMode("PUBG Mobile", "FLAT", 2000L, 50);
@@ -2402,6 +2418,23 @@ public class QuestSeeder implements CommandLineRunner {
             q.setActive(true);
             questRepository.save(q);
         }, () -> log.warn("[QuestSeeder] setCs2Verify: quest not found (seed must run first): '{}'", title));
+    }
+
+    /** Retrofit: переводит существующий РУЧНОЙ квест PUBG PC на авто-верификацию через официальный
+     *  PUBG API — переписывает описание/инструкцию/требования, убирая инструкции по скриншоту, по
+     *  образцу setCs2Verify. Только для квестов, сводимых к WINS/MATCHES_PLAYED (старт с двух типов) —
+     *  квесты про убийства/урон/топ-10 за матч остаются ручными, для них нужен более широкий PubgVerifyType. */
+    private void setPubgVerify(String title, PubgVerifyType type, int targetCount,
+                                String description, String instruction, String requirements) {
+        questRepository.findFirstByTitleAndGameName(title, "PUBG PC").ifPresentOrElse(q -> {
+            q.setPubgVerifyType(type);
+            q.setPubgTargetCount(targetCount);
+            q.setDescription(description);
+            q.setInstruction(instruction);
+            q.setRequirements(requirements);
+            q.setActive(true);
+            questRepository.save(q);
+        }, () -> log.warn("[QuestSeeder] setPubgVerify: quest not found (seed must run first): '{}'", title));
     }
 
     /**

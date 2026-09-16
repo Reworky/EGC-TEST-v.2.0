@@ -86,6 +86,9 @@ public class QuestController {
             boolean measured = submission.getCs2BaselineValue() != null;
             return new AutoVerifyProgress(measured ? submission.getCs2ProgressCount() : null, quest.getCs2TargetCount());
         }
+        if (quest.getPubgVerifyType() != null) {
+            return new AutoVerifyProgress(submission.getPubgProgressCount(), quest.getPubgTargetCount());
+        }
         return AutoVerifyProgress.NONE;
     }
 
@@ -125,7 +128,7 @@ public class QuestController {
                 .councilOnly(q.isCouncilOnly())
                 .sponsored(q.isSponsored())
                 .externalAutoApprove(q.isExternalAutoApprove())
-                .brawlAutoVerify(q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null || q.getDotaVerifyType() != null || q.getCs2VerifyType() != null)
+                .brawlAutoVerify(q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null || q.getDotaVerifyType() != null || q.getCs2VerifyType() != null || q.getPubgVerifyType() != null)
                 .highlightNew(q.isEffectivelyNew())
                 .submissionStatus(statusByQuestId.get(q.getId()))
                 .build()).toList();
@@ -169,7 +172,7 @@ public class QuestController {
                         .councilOnly(q.isCouncilOnly())
                         .sponsored(q.isSponsored())
                         .externalAutoApprove(q.isExternalAutoApprove())
-                        .brawlAutoVerify(q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null || q.getDotaVerifyType() != null || q.getCs2VerifyType() != null)
+                        .brawlAutoVerify(q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null || q.getDotaVerifyType() != null || q.getCs2VerifyType() != null || q.getPubgVerifyType() != null)
                         .highlightNew(q.isEffectivelyNew())
                         .build()))
                 .orElse(ResponseEntity.noContent().build());
@@ -206,7 +209,7 @@ public class QuestController {
                 .ticketReward(q.getTicketReward())
                 .councilOnly(q.isCouncilOnly()).sponsored(true)
                 .externalAutoApprove(q.isExternalAutoApprove())
-                .brawlAutoVerify(q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null || q.getDotaVerifyType() != null || q.getCs2VerifyType() != null)
+                .brawlAutoVerify(q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null || q.getDotaVerifyType() != null || q.getCs2VerifyType() != null || q.getPubgVerifyType() != null)
                 .highlightNew(q.isEffectivelyNew())
                 .submissionStatus(statusByQuestId.get(q.getId()))
                 .build()).toList();
@@ -241,7 +244,7 @@ public class QuestController {
                 .councilOnly(quest.isCouncilOnly())
                 .externalAutoApprove(quest.isExternalAutoApprove())
                 .repeatableNoCooldownEligible(quest.isRepeatableNoCooldownEligible())
-                .brawlAutoVerify(quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null);
+                .brawlAutoVerify(quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null || quest.getPubgVerifyType() != null);
 
         if (telegramId != null) {
             appUserRepository.findByTelegramId(telegramId).ifPresent(user -> {
@@ -369,7 +372,7 @@ public class QuestController {
                         .gameName(s.getQuest().getGameName())
                         .category(s.getQuest().getCategory())
                         .externalAutoApprove(s.getQuest().isExternalAutoApprove())
-                        .brawlAutoVerify(s.getQuest().getBrawlVerifyType() != null || s.getQuest().getClashVerifyType() != null || s.getQuest().getClashRoyaleVerifyType() != null || s.getQuest().getDotaVerifyType() != null || s.getQuest().getCs2VerifyType() != null)
+                        .brawlAutoVerify(s.getQuest().getBrawlVerifyType() != null || s.getQuest().getClashVerifyType() != null || s.getQuest().getClashRoyaleVerifyType() != null || s.getQuest().getDotaVerifyType() != null || s.getQuest().getCs2VerifyType() != null || s.getQuest().getPubgVerifyType() != null)
                         .autoVerifyProgress(progress.progress())
                         .autoVerifyTarget(progress.target())
                         .status(s.getStatus().name())
@@ -439,6 +442,7 @@ public class QuestController {
             case NEEDS_CLASH_ROYALE_TAG -> "🏷️ Для этого квеста нужно сначала привязать тег Clash Royale — откройте бота и возьмите этот квест там, бот попросит ввести тег.";
             case NEEDS_DOTA_LINK -> "🏷️ Для этого квеста нужно сначала привязать аккаунт Dota 2 — откройте бота и возьмите этот квест там, бот попросит ввести account_id.";
             case NEEDS_CS2_LINK -> "🏷️ Для этого квеста нужно сначала привязать аккаунт Steam (CS2) — откройте бота и возьмите этот квест там, бот попросит ввести SteamID64.";
+            case NEEDS_PUBG_LINK -> "🏷️ Для этого квеста нужно сначала привязать аккаунт PUBG PC — откройте бота и возьмите этот квест там, бот попросит ввести игровой ник.";
             case AUTO_VERIFIED_NO_REPORT -> "ℹ️ Этот квест подтверждается автоматически — отправлять отчёт не нужно и нельзя.";
             case NEEDS_BRAWL_PARTNER -> "🤝 Для этого квеста нужно выбрать партнёра (реферала или отрядника) — откройте бота и возьмите этот квест там.";
             case NEEDS_CHANNEL_SUBSCRIPTION -> "📢 Чтобы брать квесты, нужно подписаться на канал — откройте бота, там будет кнопка проверки подписки.";
