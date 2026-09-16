@@ -584,10 +584,8 @@ public class QuestSeeder implements CommandLineRunner {
             setQuestReward(title, "PUBG PC", 3000);
         }
 
-        // ── PUBG PC: перевод на авто-верификацию через официальный API (developer.pubg.com, 2026-09-16) —
-        // только два квеста, сводимых к WINS/MATCHES_PLAYED на старте. Остальные (убийства/урон/топ-10 за
-        // матч) остаются ручными скриншот-квестами — для них нужен более широкий PubgVerifyType, вне
-        // объёма этого пилота.
+        // ── PUBG PC: перевод на авто-верификацию через официальный API (developer.pubg.com, 2026-09-16,
+        // все 7 квестов — TOP_N/KILLS/DAMAGE добавлены 2026-09-16 поверх WINS/MATCHES_PLAYED) ──
         String pubgAutoReq = "Ничего отправлять не нужно — прогресс проверяется автоматически через официальный "
                 + "PUBG API, награда зачислится сама после выполнения условия.";
         setPubgVerify("Сыграй 3 матча подряд", PubgVerifyType.MATCHES_PLAYED, 3,
@@ -597,6 +595,26 @@ public class QuestSeeder implements CommandLineRunner {
         setPubgVerify("Победи в матче — Chicken Dinner", PubgVerifyType.WINS, 1,
                 "Выиграй любой матч Battle Royale в PUBG PC с момента взятия квеста — прогресс считается автоматически.",
                 "Играй матчи в любом режиме и побеждай. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
+                pubgAutoReq);
+        setPubgVerify("Выживи до Топ-50", PubgVerifyType.TOP_N, 1, 50,
+                "Доживи до момента, когда в матче останется 50 или меньше игроков — прогресс считается автоматически.",
+                "Играй в любом режиме Battle Royale. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
+                pubgAutoReq);
+        setPubgVerify("Сделай 3 убийства за один матч", PubgVerifyType.KILLS, 1, 3,
+                "Набери 3 и более убийств в одном матче Battle Royale — прогресс считается автоматически.",
+                "Играй агрессивно, атакуй противников в зоне. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
+                pubgAutoReq);
+        setPubgVerify("Нанеси 1 000 урона за один матч", PubgVerifyType.DAMAGE, 1, 1000,
+                "Суммарно нанеси 1 000 и более единиц урона противникам за один матч — прогресс считается автоматически.",
+                "Атакуй как можно больше противников — каждое попадание суммируется. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
+                pubgAutoReq);
+        setPubgVerify("Финишируй в Топ-10 трижды за неделю", PubgVerifyType.TOP_N, 3, 10,
+                "Войди в Топ-10 оставшихся игроков в трёх разных матчах — прогресс считается автоматически.",
+                "Играй осторожно и дотягивай до финальных кругов. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
+                pubgAutoReq);
+        setPubgVerify("15 убийств в одном матче", PubgVerifyType.KILLS, 1, 15,
+                "Набери 15 и более убийств в одном матче Battle Royale — прогресс считается автоматически.",
+                "Высаживайся в горячих точках — Pochinki, School, Military Base. Прогресс отслеживается автоматически, ничего сообщать не нужно.",
                 pubgAutoReq);
 
         // ── PUBG Mobile: FLAT-режим — единый список без выбора категории, по образцу Brawl Stars/Clash of Clans/Clash Royale ──
@@ -2422,13 +2440,20 @@ public class QuestSeeder implements CommandLineRunner {
 
     /** Retrofit: переводит существующий РУЧНОЙ квест PUBG PC на авто-верификацию через официальный
      *  PUBG API — переписывает описание/инструкцию/требования, убирая инструкции по скриншоту, по
-     *  образцу setCs2Verify. Только для квестов, сводимых к WINS/MATCHES_PLAYED (старт с двух типов) —
-     *  квесты про убийства/урон/топ-10 за матч остаются ручными, для них нужен более широкий PubgVerifyType. */
+     *  образцу setCs2Verify. Для WINS/MATCHES_PLAYED (без порога одного матча). */
     private void setPubgVerify(String title, PubgVerifyType type, int targetCount,
+                                String description, String instruction, String requirements) {
+        setPubgVerify(title, type, targetCount, null, description, instruction, requirements);
+    }
+
+    /** Перегрузка с порогом одного матча — для TOP_N (winPlace<=threshold)/KILLS (kills>=threshold)/
+     *  DAMAGE (damageDealt>=threshold). threshold=null для WINS/MATCHES_PLAYED (не используется). */
+    private void setPubgVerify(String title, PubgVerifyType type, int targetCount, Integer threshold,
                                 String description, String instruction, String requirements) {
         questRepository.findFirstByTitleAndGameName(title, "PUBG PC").ifPresentOrElse(q -> {
             q.setPubgVerifyType(type);
             q.setPubgTargetCount(targetCount);
+            q.setPubgThreshold(threshold);
             q.setDescription(description);
             q.setInstruction(instruction);
             q.setRequirements(requirements);

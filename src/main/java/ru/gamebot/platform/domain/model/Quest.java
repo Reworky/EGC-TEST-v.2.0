@@ -209,14 +209,19 @@ public class Quest {
      *  матчей игрока + разбор каждого нового по отдельности (у PUBG нет стабильного career-counter'а
      *  в открытом API). WINS считает матчи с winPlace==1, MATCHES_PLAYED — любые новые матчи, до
      *  pubgTargetCount совпадений (не "первый подходящий", как у Dota — здесь именно накопление).
+     *  TOP_N/KILLS/DAMAGE дополнительно используют pubgThreshold как условие одного матча.
      *  varchar(20) — самое длинное значение своего enum'а "MATCHES_PLAYED" (14 симв.) с запасом,
      *  не скопировано с чужого поля (см. инцидент с cs2VerifyType выше). */
     @Enumerated(EnumType.STRING)
     @Column(columnDefinition = "varchar(20)")
     private PubgVerifyType pubgVerifyType;
 
-    /** Целевое число подходящих матчей (побед или сыгранных) с момента взятия квеста. */
+    /** Целевое число подходящих матчей (побед/сыгранных/матчей, прошедших pubgThreshold) с момента взятия квеста. */
     private Integer pubgTargetCount;
+
+    /** Порог ОДНОГО матча для TOP_N (winPlace<=threshold)/KILLS (kills>=threshold)/DAMAGE (damageDealt>=threshold).
+     *  Не используется для WINS/MATCHES_PLAYED. */
+    private Integer pubgThreshold;
 
     /** Краткое условие (до ~150 символов) для подстановки в шаблон быстрого отклонения «Недостаточно данных». */
     @Column(length = 200)

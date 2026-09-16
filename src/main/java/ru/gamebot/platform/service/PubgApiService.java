@@ -58,7 +58,7 @@ public class PubgApiService {
 
     public record PlayerLookupResult(String accountId, List<String> matchIds) {}
 
-    public record MatchResult(String matchId, int winPlace, java.time.LocalDateTime createdAt) {}
+    public record MatchResult(String matchId, int winPlace, int kills, double damageDealt, java.time.LocalDateTime createdAt) {}
 
     /** Поиск игрока по нику — используется только один раз, на шаге привязки аккаунта. Дальше опрос идёт
      *  по устойчивому accountId (см. fetchRecentMatchIds), не по нику, т.к. ник можно сменить. */
@@ -92,8 +92,9 @@ public class PubgApiService {
     }
 
     /** Разбор одного матча (не лимитировано) — ищет participant-объект нужного игрока в "included"
-     *  и возвращает его winPlace (1 = победа). Optional.empty() — телеметрия матча ещё не готова
-     *  (очень редко) либо игрок не найден в составе (не должно случаться при корректном accountId). */
+     *  и возвращает его winPlace (1 = победа), kills и damageDealt за этот матч. Optional.empty() —
+     *  телеметрия матча ещё не готова (очень редко) либо игрок не найден в составе (не должно
+     *  случаться при корректном accountId). */
     public Optional<MatchResult> fetchMatch(String matchId, String accountId) throws PubgTransientException {
         String url = BASE_URL + "/matches/" + matchId;
         JsonNode root = fetchJson(url);
@@ -107,7 +108,9 @@ public class PubgApiService {
             JsonNode stats = included.path("attributes").path("stats");
             if (accountId.equals(stats.path("playerId").asText(null))) {
                 int winPlace = stats.path("winPlace").asInt(Integer.MAX_VALUE);
-                return Optional.of(new MatchResult(matchId, winPlace, createdAt));
+                int kills = stats.path("kills").asInt(0);
+                double damageDealt = stats.path("damageDealt").asDouble(0);
+                return Optional.of(new MatchResult(matchId, winPlace, kills, damageDealt, createdAt));
             }
         }
         return Optional.empty();

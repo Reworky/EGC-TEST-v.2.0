@@ -8,7 +8,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ru.gamebot.platform.domain.enums.PubgVerifyType;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.model.QuestSubmission;
@@ -120,9 +119,7 @@ public class PubgQuestVerificationService {
             if (details.get().createdAt().isAfter(newCursor)) {
                 newCursor = details.get().createdAt();
             }
-            boolean qualifies = quest.getPubgVerifyType() == PubgVerifyType.WINS
-                    ? details.get().winPlace() == 1
-                    : true; // MATCHES_PLAYED — любой новый матч засчитывается
+            boolean qualifies = matchQualifies(quest, details.get());
             if (qualifies) {
                 progress++;
             }
@@ -138,6 +135,19 @@ public class PubgQuestVerificationService {
         if (completed) {
             completeSubmission(submission);
         }
+    }
+
+    /** WINS/MATCHES_PLAYED — без порога (см. вызов). TOP_N/KILLS/DAMAGE проверяют Quest.pubgThreshold
+     *  против статистики ОДНОГО этого матча — набор подходящих матчей всё равно накапливается до
+     *  pubgTargetCount в checkOne (1 — "за один матч", 3 — "трижды за неделю"). */
+    private boolean matchQualifies(Quest quest, PubgApiService.MatchResult m) {
+        return switch (quest.getPubgVerifyType()) {
+            case WINS -> m.winPlace() == 1;
+            case MATCHES_PLAYED -> true;
+            case TOP_N -> m.winPlace() <= quest.getPubgThreshold();
+            case KILLS -> m.kills() >= quest.getPubgThreshold();
+            case DAMAGE -> m.damageDealt() >= quest.getPubgThreshold();
+        };
     }
 
     private void completeSubmission(QuestSubmission submission) {
