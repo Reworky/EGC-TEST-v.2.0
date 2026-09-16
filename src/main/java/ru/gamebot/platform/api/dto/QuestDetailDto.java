@@ -20,6 +20,11 @@ public class QuestDetailDto {
     private int ticketReward;
     private boolean councilOnly;
 
+    /** Квест без кулдауна и лимита участников (пилот "квесты без стен") — после APPROVED фронтенд должен
+     *  сразу предлагать взять квест снова, а не показывать тупиковое "выполнен и оплачен" как для обычных
+     *  квестов, где нужно ждать кулдаун. */
+    private boolean repeatableNoCooldownEligible;
+
     /** Внешний авто-квест (партнёрская сеть): вместо отчёта нужно просто перейти по ссылке из instruction. */
     private boolean externalAutoApprove;
 

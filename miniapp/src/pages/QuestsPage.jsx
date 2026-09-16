@@ -164,8 +164,25 @@ function QuestActions({ quest, detail, onChanged }) {
     }
   }
 
-  if (status === 'APPROVED') {
+  if (status === 'APPROVED' && !detail.repeatableNoCooldownEligible) {
     return <div className="quest-status quest-status-approved"><i className="ti ti-circle-check"></i> Квест выполнен и оплачен</div>;
+  }
+
+  // Квест без кулдауна (пилот "квесты без стен"): после APPROVED сразу можно брать снова —
+  // без этого блока кнопка "Взять квест" ниже никогда не показывалась бы повторно (см. quest-status-approved
+  // выше — тупиковое сообщение, рассчитанное на квесты с кулдауном, где действительно нужно ждать).
+  if (status === 'APPROVED' && detail.repeatableNoCooldownEligible) {
+    return (
+      <div>
+        <div className="quest-status quest-status-approved" style={{ marginBottom: 8 }}>
+          <i className="ti ti-circle-check"></i> Засчитано! Награда за следующее прохождение сегодня — меньше, завтра снова полная.
+        </div>
+        <button className="quest-btn" disabled={busy} onClick={handleTake}>
+          {busy ? 'Секунду...' : 'Пройти ещё раз'}
+        </button>
+        {message && <div className="quest-message">{message}</div>}
+      </div>
+    );
   }
 
   if (status === 'PENDING') {
