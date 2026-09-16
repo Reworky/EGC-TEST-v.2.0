@@ -477,19 +477,21 @@ public class UserService {
             long retentionCohort, long retentionReturned, double retentionPercent
     ) {}
 
-    public EngagementReport getEngagementReport() {
+    /** sourceFilter: null = вся аудитория, "ORGANIC" = только органика/реферал (trafficSourceCode IS NULL),
+     *  иначе — код конкретной рекламной закупки (см. TrafficSource.code). */
+    public EngagementReport getEngagementReport(String sourceFilter) {
         LocalDateTime since1d = LocalDateTime.now().minusDays(1);
         LocalDateTime since7d = LocalDateTime.now().minusDays(7);
         LocalDateTime since30d = LocalDateTime.now().minusDays(30);
 
-        long dau = appUserRepository.countDistinctActiveSince(since1d.toLocalDate(), since1d);
-        long mau = appUserRepository.countDistinctActiveSince(since30d.toLocalDate(), since30d);
+        long dau = appUserRepository.countDistinctActiveSince(since1d.toLocalDate(), since1d, sourceFilter);
+        long mau = appUserRepository.countDistinctActiveSince(since30d.toLocalDate(), since30d, sourceFilter);
         double dauMauPercent = mau > 0 ? dau * 100.0 / mau : 0;
 
-        long weeklyQuestTakers = questSubmissionRepository.countDistinctUsersWithApprovedSince(since7d);
+        long weeklyQuestTakers = questSubmissionRepository.countDistinctUsersWithApprovedSince(since7d, sourceFilter);
         double weeklyQuestPercent = mau > 0 ? weeklyQuestTakers * 100.0 / mau : 0;
 
-        SecondQuestRetention retention = secondQuestRetention();
+        SecondQuestRetention retention = secondQuestRetention(sourceFilter);
 
         return new EngagementReport(dau, mau, dauMauPercent,
                 weeklyQuestTakers, weeklyQuestPercent,
@@ -503,9 +505,9 @@ public class UserService {
      *  после первого. Считается в Java, а не в JPQL: оконные функции по группам ("второе значение в
      *  отсортированной группе") плохо переносятся между H2 (тесты) и Postgres (прод), а объём данных
      *  (одобренные квесты по всем игрокам) на текущем масштабе проекта не проблема для in-memory группировки. */
-    private SecondQuestRetention secondQuestRetention() {
+    private SecondQuestRetention secondQuestRetention(String sourceFilter) {
         LocalDateTime cutoff = LocalDateTime.now().minusDays(7);
-        List<Object[]> rows = questSubmissionRepository.findApprovedUserIdAndDateForRetention();
+        List<Object[]> rows = questSubmissionRepository.findApprovedUserIdAndDateForRetention(sourceFilter);
         java.util.Map<Long, List<LocalDateTime>> byUser = new java.util.HashMap<>();
         for (Object[] row : rows) {
             Long telegramId = (Long) row[0];

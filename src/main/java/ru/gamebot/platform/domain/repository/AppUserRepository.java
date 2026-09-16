@@ -29,6 +29,13 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     @Query("SELECT COUNT(DISTINCT u) FROM AppUser u WHERE u.lastActivityDate >= :sinceDate OR u.lastBotActivityAt >= :sinceDateTime OR u.lastMiniAppOpenAt >= :sinceDateTime")
     long countDistinctActiveSince(@Param("sinceDate") java.time.LocalDate sinceDate, @Param("sinceDateTime") LocalDateTime sinceDateTime);
 
+    /** То же самое, с фильтром по источнику трафика (см. UserService.getEngagementReport) — sourceFilter:
+     *  null = вся аудитория, "ORGANIC" = только trafficSourceCode IS NULL (органика/реферал), иначе —
+     *  точное совпадение с кодом конкретной рекламной закупки. */
+    @Query("SELECT COUNT(DISTINCT u) FROM AppUser u WHERE (u.lastActivityDate >= :sinceDate OR u.lastBotActivityAt >= :sinceDateTime OR u.lastMiniAppOpenAt >= :sinceDateTime) "
+            + "AND (:sourceFilter IS NULL OR (:sourceFilter = 'ORGANIC' AND u.trafficSourceCode IS NULL) OR u.trafficSourceCode = :sourceFilter)")
+    long countDistinctActiveSince(@Param("sinceDate") java.time.LocalDate sinceDate, @Param("sinceDateTime") LocalDateTime sinceDateTime, @Param("sourceFilter") String sourceFilter);
+
     /**
      * Блокирует строку пользователя на время транзакции (SELECT ... FOR UPDATE).
      * Нужно везде, где идёт схема "проверить лимит → записать" (взятие квеста и т.п.),

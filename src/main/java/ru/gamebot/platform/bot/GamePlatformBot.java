@@ -7411,7 +7411,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "stats:topquests" -> sendAdminStatsTopQuests(user);
             case "stats:referral" -> sendAdminReferralEconomics(user);
             case "stats:funnel" -> sendAdminNewCohortFunnel(user);
-            case "stats:engagement" -> sendAdminEngagementStats(user);
+            case "stats:engagement" -> sendAdminEngagementStats(user, null);
+            case "stats:engagement:all" -> sendAdminEngagementStats(user, "all");
+            case "stats:engagement:organic" -> sendAdminEngagementStats(user, "organic");
             case "stats:nudgefeedback" -> sendAdminNudgeFeedbackStats(user);
             case "stats:history" -> sendAdminStatsHistory(user);
             case "stats:snapshot" -> {
@@ -7743,6 +7745,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     gameCatalogService.removePhoto(gameName);
                     answer(callbackQuery.getId(), "Фото удалено");
                     sendAdminQuestCategories(user, gameName);
+                    return;
+                } else if (action.startsWith("stats:engagement:src:")) {
+                    sendAdminEngagementStats(user, action.substring("stats:engagement:src:".length()));
+                    answerSilently(callbackQuery.getId());
                     return;
                 } else if (action.startsWith("traffic:view:")) {
                     sendAdminTrafficView(user, parseLong(action.substring("traffic:view:".length())));
@@ -9835,11 +9841,34 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Три метрики вовлечённости для бота — аналог ER канала (обсуждение 2026-09-14), но с нормами под
      *  продукт, где "вовлечение" требует реального действия (сыграть + отправить отчёт), а не просто
-     *  увидеть пост. Нормы — общие ориентиры из гейм-индустрии, не измеренный бенчмарк именно EGC. */
-    private void sendAdminEngagementStats(AppUser user) {
-        UserService.EngagementReport r = userService.getEngagementReport();
+     *  увидеть пост. Нормы — общие ориентиры из гейм-индустрии, не измеренный бенчмарк именно EGC.
+     *  sourceFilter (2026-09-16) — null/"all" = вся аудитория, "organic" = без рекламных закупок
+     *  (trafficSourceCode IS NULL — органика + реферал), иначе код конкретной закупки из TrafficSource —
+     *  чтобы рекламные подписчики не размывали метрики вовлечённости обычной аудитории. */
+    private void sendAdminEngagementStats(AppUser user, String sourceFilter) {
+        String queryFilter = "organic".equals(sourceFilter) ? "ORGANIC"
+                : (sourceFilter == null || "all".equals(sourceFilter)) ? null : sourceFilter;
+        UserService.EngagementReport r = userService.getEngagementReport(queryFilter);
+        String segmentLabel = queryFilter == null ? "вся аудитория"
+                : "ORGANIC".equals(queryFilter) ? "органика/реферал (без рекламы)"
+                : "закупка «" + queryFilter + "»";
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(
+                keyboardFactory.callback((queryFilter == null ? "✅ " : "") + "🌍 Все", "admin:stats:engagement:all"),
+                keyboardFactory.callback(("ORGANIC".equals(queryFilter) ? "✅ " : "") + "🌱 Органика", "admin:stats:engagement:organic")
+        ));
+        List<ru.gamebot.platform.domain.model.TrafficSource> sources = trafficSourceService.findAll();
+        List<InlineKeyboardButton> srcRow = new ArrayList<>();
+        for (ru.gamebot.platform.domain.model.TrafficSource ts : sources) {
+            srcRow.add(keyboardFactory.callback((ts.getCode().equals(queryFilter) ? "✅ " : "") + ts.getCode(), "admin:stats:engagement:src:" + ts.getCode()));
+            if (srcRow.size() == 2) { rows.add(new ArrayList<>(srcRow)); srcRow.clear(); }
+        }
+        if (!srcRow.isEmpty()) rows.add(srcRow);
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:stats")));
+
         sendText(user.getTelegramId(),
-                "📈 <b>Вовлечённость</b>\n\n"
+                "📈 <b>Вовлечённость</b> — " + escape(segmentLabel) + "\n\n"
                         + "<b>1. DAU/MAU</b> — доля дневных активных от месячных\n"
                         + "Активны за 24ч (DAU): <b>" + r.dau() + "</b>\n"
                         + "Активны за 30д (MAU): <b>" + r.mau() + "</b>\n"
@@ -9855,7 +9884,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "Доля: <b>" + String.format("%.1f", r.retentionPercent()) + "%</b>\n"
                         + "Единого стандарта нет — смотри в динамике месяц к месяцу, рост важнее абсолютного числа\n\n"
                         + "ℹ️ MAU/DAU считаются по трём полям активности сразу (дата последнего /start + последняя активность в боте/мини-аппе) — два последних поля пишутся только с 08.09.2026, поэтому окно в 30 дней станет полностью надёжным ближе к началу октября.",
-                backMenuKeyboard("admin:stats"));
+                keyboardFactory.rowsLayout(rows));
     }
 
     /** Снапшот экономики рефералки — для решения "разовый бонус рефереру vs текущие 10%
