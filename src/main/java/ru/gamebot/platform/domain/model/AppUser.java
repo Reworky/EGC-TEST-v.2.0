@@ -114,6 +114,19 @@ public class AppUser {
      * Telegram, новых платежей просто не будет, и поле само "истечёт" — отдельно ловить отмену не нужно. */
     private LocalDateTime egcPassActiveUntil;
 
+    /** Сколько EXC уже начислено сверх нормы за счёт +10% буста EGC Pass в текущем календарном месяце —
+     *  см. UserService.applyEgcPassBoostCap. Сбрасывается в 0 при смене месяца (тот же паттерн, что и
+     *  monthlyWithdrawnExc/withdrawalMonth/withdrawalYear ниже). Без потолка % от награды даёт активному
+     *  фармеру в разы больше EXC, чем редкому игроку, за ту же подписку — тот же риск, что и с decay-квестами. */
+    @Column(columnDefinition = "bigint default 0")
+    private long egcPassBoostMonthlyExc;
+
+    @Column(columnDefinition = "integer default 0")
+    private int egcPassBoostMonth;
+
+    @Column(columnDefinition = "integer default 0")
+    private int egcPassBoostYear;
+
     // New boosts
     private LocalDateTime xpBoostActiveUntil;
     private LocalDateTime questSlotExtraUntil;

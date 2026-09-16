@@ -791,7 +791,7 @@ public class QuestService {
                 .toList();
     }
 
-    public record RewardPreview(long xp, long coins, boolean diminished, boolean xpBoosted) {
+    public record RewardPreview(long xp, long coins, boolean diminished, boolean xpBoosted, long egcPassBonusCoins) {
     }
 
     public RewardPreview computeReward(AppUser user, Quest quest) {
@@ -827,6 +827,17 @@ public class QuestService {
         int excBoostPct = sinkShopService.getBoostPercent(user) + questRewardBoostService.currentBoostPercent();
         adjustedCoins = adjustedCoins + (adjustedCoins * excBoostPct / 100);
 
+        // EGC Pass: +10% к награде отдельно от прочих бустов, с помесячным потолком (см. UserService.
+        // egcPassBoostRemainingThisMonth) — иначе активный фармер получает от процента в разы больше
+        // EXC, чем редкий игрок, за одну и ту же подписку (обсуждение 2026-09-16).
+        long egcPassBonusCoins = 0;
+        if (userService.isEgcPassActive(user)) {
+            long proposedBonus = Math.round(adjustedCoins * UserService.EGC_PASS_BOOST_PCT / 100.0);
+            long remaining = userService.egcPassBoostRemainingThisMonth(user);
+            egcPassBonusCoins = Math.min(proposedBonus, Math.max(0, remaining));
+            adjustedCoins += egcPassBonusCoins;
+        }
+
         // Apply XP boost
         long baseXp = quest.getRewardXp();
         int xpBoostPct = sinkShopService.getXpBoostPercent(user);
@@ -838,7 +849,7 @@ public class QuestService {
         }
         long adjustedXp = baseXp + (baseXp * xpBoostPct / 100);
 
-        return new RewardPreview(adjustedXp, adjustedCoins, diminished, xpBoostPct > 0);
+        return new RewardPreview(adjustedXp, adjustedCoins, diminished, xpBoostPct > 0, egcPassBonusCoins);
     }
 
     /**
@@ -890,6 +901,10 @@ public class QuestService {
         RewardPreview reward = computeReward(user, quest);
         long adjustedCoins = reward.coins();
         long adjustedXp = reward.xp();
+        // Фиксируем против месячного потолка ровно здесь — в момент фактического начисления,
+        // не в превью (computeReward вызывается и для модераторского превью, и для уведомлений,
+        // это бы задвоило счётчик).
+        userService.recordEgcPassBoost(user, reward.egcPassBonusCoins());
 
         submission.setStatus(SubmissionStatus.APPROVED);
         submission.setModeratorComment("Принято. Отличная работа!");

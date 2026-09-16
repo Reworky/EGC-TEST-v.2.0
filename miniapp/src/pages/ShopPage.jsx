@@ -457,6 +457,7 @@ function StarsShopCard({ itemType, icon, title, description, price, onPurchased,
 
 const EGC_PASS_STARS_PRICE = 150;
 const EGC_PASS_PERKS = [
+  '✨ +10% к EXC за все квесты (до 10 000 EXC бонуса в месяц)',
   '📂 Доп. слот квеста (как «навсегда», пока активна)',
   '🎁 Бесплатный улучшенный сундук каждый день',
   '⚡ Приоритет в очереди на вывод EXC',

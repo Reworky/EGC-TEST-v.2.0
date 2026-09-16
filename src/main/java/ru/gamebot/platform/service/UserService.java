@@ -237,6 +237,38 @@ public class UserService {
         return user.getEgcPassActiveUntil() != null && LocalDateTime.now().isBefore(user.getEgcPassActiveUntil());
     }
 
+    /** +10% к EXC-награде за квесты, пока активна подписка EGC Pass — с помесячным потолком, иначе
+     *  активный фармер получает от процента в разы больше EXC, чем редкий игрок, за одну и ту же
+     *  подписку (тот же риск, что решали кривой убывания на decay-квестах). Потолок посчитан от цены
+     *  подписки (150⭐ ≈ 236₽ ≈ 23 600 EXC-эквивалента) за вычетом уже занятого улучшенным сундуком
+     *  бюджета (~8 550 EXC/мес), с запасом ниже расчётного предела (обсуждение 2026-09-16). */
+    public static final int EGC_PASS_BOOST_PCT = 10;
+    public static final long EGC_PASS_BOOST_MONTHLY_CAP_EXC = 10_000L;
+
+    /** Сколько ещё EXC можно начислить бонусом EGC Pass в текущем календарном месяце — сбрасывает
+     *  счётчик при смене месяца (тот же паттерн, что и SinkShopService.refreshWithdrawalMonthIfNeeded).
+     *  Безопасно вызывать многократно для превью — сам не инкрементирует счётчик, только читает остаток. */
+    @Transactional
+    public long egcPassBoostRemainingThisMonth(AppUser user) {
+        java.time.YearMonth now = java.time.YearMonth.now();
+        if (user.getEgcPassBoostMonth() != now.getMonthValue() || user.getEgcPassBoostYear() != now.getYear()) {
+            user.setEgcPassBoostMonthlyExc(0);
+            user.setEgcPassBoostMonth(now.getMonthValue());
+            user.setEgcPassBoostYear(now.getYear());
+            appUserRepository.save(user);
+        }
+        return Math.max(0, EGC_PASS_BOOST_MONTHLY_CAP_EXC - user.getEgcPassBoostMonthlyExc());
+    }
+
+    /** Фиксирует реально начисленный бонус EGC Pass против месячного потолка — вызывать РОВНО ОДИН РАЗ,
+     *  в момент фактического начисления награды (QuestService.approveSubmission), не в превью. */
+    @Transactional
+    public void recordEgcPassBoost(AppUser user, long bonusExc) {
+        if (bonusExc <= 0) return;
+        user.setEgcPassBoostMonthlyExc(user.getEgcPassBoostMonthlyExc() + bonusExc);
+        appUserRepository.save(user);
+    }
+
     public Optional<AppUser> findByTelegramId(Long telegramId) {
         return appUserRepository.findByTelegramId(telegramId);
     }

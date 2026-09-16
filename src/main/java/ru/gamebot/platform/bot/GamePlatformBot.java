@@ -5827,7 +5827,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "Доп. слот квеста — навсегда", PERMANENT_SLOT_STARS_PRICE),
             "starsitem:EGC_PASS", new StarsItemSpec(
                     "EGC Pass — подписка на 30 дней",
-                    "Доп. слот квеста + бесплатный улучшенный сундук каждый день + приоритет в очереди на вывод + статус-бейдж в профиле. Автопродление каждые 30 дней, отменить можно в любой момент через настройки платежей Telegram.",
+                    "+10% к EXC за все квесты (до 10 000 EXC бонуса в месяц) + доп. слот квеста + бесплатный улучшенный сундук каждый день + приоритет в очереди на вывод + статус-бейдж в профиле. Автопродление каждые 30 дней, отменить можно в любой момент через настройки платежей Telegram.",
                     "EGC Pass (30 дней)", EGC_PASS_STARS_PRICE, EGC_PASS_SUBSCRIPTION_PERIOD_SECONDS)
     );
 
@@ -5859,6 +5859,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         sendText(user.getTelegramId(),
                 "⭐ <b>EGC Pass — 30 дней</b>\n\n"
+                        + "✨ +10% к EXC за все квесты (до 10 000 EXC бонуса в месяц)\n"
                         + "📂 Доп. слот квеста (как «навсегда», пока подписка активна)\n"
                         + "🎁 Бесплатный улучшенный сундук каждый день — без реролла за 15⭐\n"
                         + "⚡ Приоритет в очереди на вывод EXC\n"
@@ -6018,7 +6019,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String until = user.getEgcPassActiveUntil().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"));
             sendText(telegramId,
                     "✅ <b>EGC Pass активирован!</b>\n\nДействует до <b>" + until + "</b>, дальше продлится автоматически.\n\n"
-                            + "Доп. слот квеста, бесплатный улучшенный сундук каждый день и приоритет на вывод уже включены — спасибо, что поддержали проект.",
+                            + "+10% к EXC за квесты, доп. слот, бесплатный улучшенный сундук каждый день и приоритет на вывод уже включены — спасибо, что поддержали проект.",
                     backMenuKeyboard("menu:main"));
         } else {
             log.warn("Successful payment with unknown payload '{}' from user {}", payload, telegramId);
