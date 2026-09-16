@@ -12,6 +12,11 @@ window.Telegram?.WebApp?.setHeaderColor('#0f1020');
 // свайп по шапке всё равно закрывает приложение, это Telegram не даёт отключить. На старых клиентах
 // метод просто отсутствует в объекте WebApp — optional chaining делает вызов безопасным.
 window.Telegram?.WebApp?.disableVerticalSwipes?.();
+// Вторая линия защиты именно для свайпа по шапке, который нельзя отключить выше (Bot API 6.2+,
+// поддержка шире, чем у disableVerticalSwipes) — перед любым закрытием (свайп по шапке, системная
+// кнопка назад) Telegram сам покажет нативное подтверждение "Закрыть приложение?" вместо мгновенного
+// закрытия — случайный свайп больше не потеряет прогресс молча.
+window.Telegram?.WebApp?.enableClosingConfirmation?.();
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
