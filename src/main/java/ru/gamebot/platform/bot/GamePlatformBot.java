@@ -9843,20 +9843,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  продукт, где "вовлечение" требует реального действия (сыграть + отправить отчёт), а не просто
      *  увидеть пост. Нормы — общие ориентиры из гейм-индустрии, не измеренный бенчмарк именно EGC.
      *  sourceFilter (2026-09-16) — null/"all" = вся аудитория, "organic" = без рекламных закупок
-     *  (trafficSourceCode IS NULL — органика + реферал), иначе код конкретной закупки из TrafficSource —
-     *  чтобы рекламные подписчики не размывали метрики вовлечённости обычной аудитории. */
+     *  (trafficSourceCode IS NULL — сюда попадают реферальные приглашения, лендинг, TikTok и настоящая
+     *  органика; ключевое свойство — сюда НЕ попадают платные закупы, т.к. под каждую заводится отдельная
+     *  помеченная ссылка), иначе код конкретной закупки из TrafficSource — чтобы рекламные подписчики
+     *  не размывали метрики вовлечённости обычной аудитории (запрошено 2026-09-16, см. чат с пользователем:
+     *  цель — исключить именно раздутие от закупов, не разбить трафик по каждому каналу отдельно). */
     private void sendAdminEngagementStats(AppUser user, String sourceFilter) {
         String queryFilter = "organic".equals(sourceFilter) ? "ORGANIC"
                 : (sourceFilter == null || "all".equals(sourceFilter)) ? null : sourceFilter;
         UserService.EngagementReport r = userService.getEngagementReport(queryFilter);
         String segmentLabel = queryFilter == null ? "вся аудитория"
-                : "ORGANIC".equals(queryFilter) ? "органика/реферал (без рекламы)"
+                : "ORGANIC".equals(queryFilter) ? "без рекламных закупок"
                 : "закупка «" + queryFilter + "»";
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(
                 keyboardFactory.callback((queryFilter == null ? "✅ " : "") + "🌍 Все", "admin:stats:engagement:all"),
-                keyboardFactory.callback(("ORGANIC".equals(queryFilter) ? "✅ " : "") + "🌱 Органика", "admin:stats:engagement:organic")
+                keyboardFactory.callback(("ORGANIC".equals(queryFilter) ? "✅ " : "") + "🌱 Без рекламы", "admin:stats:engagement:organic")
         ));
         List<ru.gamebot.platform.domain.model.TrafficSource> sources = trafficSourceService.findAll();
         List<InlineKeyboardButton> srcRow = new ArrayList<>();
