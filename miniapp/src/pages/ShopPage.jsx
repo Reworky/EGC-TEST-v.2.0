@@ -507,9 +507,9 @@ function EgcPassCard({ profile, onPurchased }) {
         <div style={{ fontSize: 16, fontWeight: 700, color: '#e9d5ff' }}>EGC Pass</div>
         {active && <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: '#4ade80', background: 'rgba(74,222,128,0.12)', padding: '3px 8px', borderRadius: 8 }}>АКТИВНА</span>}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 12 }}>
         {EGC_PASS_PERKS.map(p => (
-          <div key={p} style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.7)' }}>{p}</div>
+          <div key={p} style={{ fontSize: 12.5, lineHeight: 1.45, color: 'rgba(255,255,255,0.7)' }}>{p}</div>
         ))}
       </div>
       {message && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.85)', marginBottom: 10 }}>{message}</div>}
