@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { authMiniApp } from './api/client';
 import { useTelegram } from './hooks/useTelegram';
 import BottomNav from './components/BottomNav';
@@ -43,6 +43,17 @@ function OpenInTelegramScreen() {
       </a>
     </div>
   );
+}
+
+/** React Router не сбрасывает скролл окна при переходе между страницами (SPA — тот же document,
+ *  не полная перезагрузка) — без этого компонента новая страница открывалась с той же прокруткой,
+ *  что была на предыдущей (например, Кошелёк открывался "с середины", если до этого проскроллили
+ *  вниз на Профиле). Сброс к чест-карточке в WalletPage (?section=chest) выполняется отдельным
+ *  эффектом ПОСЛЕ этого и всё равно срабатывает корректно. */
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  return null;
 }
 
 function MaintenanceScreen({ onRetry }) {
@@ -126,6 +137,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <LottieProvider>
       <ParticlesProvider>
       <div className="app">
