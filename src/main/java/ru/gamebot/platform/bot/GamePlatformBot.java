@@ -5581,7 +5581,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 try {
                     sinkShopService.purchaseReroll(user);
                     sendText(user.getTelegramId(),
-                            "🔀 <b>Реролл активирован</b>\n\nСписано 50 EXC. Перейдите в раздел квестов — там уже другой набор заданий.",
+                            "🔀 <b>Реролл активирован</b>\n\nСписано " + SinkShopService.PRICE_REROLL + " EXC. Перейдите в раздел квестов — там уже другой набор заданий.",
                             backMenuKeyboard("menu:sink"));
                 } catch (IllegalArgumentException e) {
                     sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
@@ -5701,7 +5701,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 try {
                     sinkShopService.purchaseInsurance(user);
                     sendText(user.getTelegramId(),
-                            "🛡️ <b>Страховка активирована!</b>\n\nЕсли ваш следующий отчёт по квесту будет отклонён — вы сможете отправить его повторно без штрафа.\nСписано 75 EXC.",
+                            "🛡️ <b>Страховка активирована!</b>\n\nЕсли ваш следующий отчёт по квесту будет отклонён — вы сможете отправить его повторно без штрафа.\nСписано " + SinkShopService.PRICE_INSURANCE + " EXC.",
                             backMenuKeyboard("menu:sink"));
                 } catch (IllegalArgumentException | IllegalStateException e) {
                     sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
@@ -5743,7 +5743,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     try {
                         sinkShopService.purchaseDoubleBoost(user, 24);
                         sendText(user.getTelegramId(),
-                            "⚡⚡ <b>Двойной буст активирован!</b>\n\n+20% к XP и +20% к EXC за все квесты в течение 24 часов.\nСписано 350 EXC.",
+                            "⚡⚡ <b>Двойной буст активирован!</b>\n\n+20% к XP и +20% к EXC за все квесты в течение 24 часов.\nСписано " + SinkShopService.PRICE_DOUBLE_BOOST_24H + " EXC.",
                             backMenuKeyboard("menu:sink"));
                     } catch (IllegalArgumentException e) {
                         sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));

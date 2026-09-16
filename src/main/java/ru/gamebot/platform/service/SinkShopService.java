@@ -47,7 +47,14 @@ public class SinkShopService {
 
     @Transactional
     public void purchaseReroll(AppUser user) {
+        int dailyRerolls = getDailyCount(user.getDailyRerollCount(), user.getDailyRerollDate());
+        if (dailyRerolls >= MAX_DAILY_REROLLS) {
+            throw new IllegalArgumentException("Достигнут дневной лимит реролла квеста (" + MAX_DAILY_REROLLS + " в сутки).");
+        }
         deductCoins(user, PRICE_REROLL, "Реролл квеста");
+        user.setDailyRerollCount(dailyRerolls + 1);
+        user.setDailyRerollDate(LocalDate.now());
+        appUserRepository.save(user);
     }
 
     @Transactional
