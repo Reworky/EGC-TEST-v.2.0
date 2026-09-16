@@ -477,21 +477,30 @@ public class UserService {
             long retentionCohort, long retentionReturned, double retentionPercent
     ) {}
 
-    /** sourceFilter: null = вся аудитория, "ORGANIC" = только органика/реферал (trafficSourceCode IS NULL),
-     *  иначе — код конкретной рекламной закупки (см. TrafficSource.code). */
+    /** Сколько дней аккаунт должен существовать, чтобы попасть в сегмент "Без рекламы" — без этого сразу
+     *  после закупа в DAU/MAU попадает партия только что зарегистрированных, которые технически "активны"
+     *  просто потому что недавно зашли, ещё не успели ни прижиться, ни отвалиться, и раздувают цифру
+     *  (запрошено 2026-09-16). Не влияет на "Все" и на отдельные закупки — только на "Без рекламы". */
+    private static final int ORGANIC_MIN_ACCOUNT_AGE_DAYS = 14;
+
+    /** sourceFilter: null = вся аудитория, "ORGANIC" = только органика/реферал (trafficSourceCode IS NULL)
+     *  и аккаунту не меньше ORGANIC_MIN_ACCOUNT_AGE_DAYS дней, иначе — код конкретной рекламной закупки
+     *  (см. TrafficSource.code), без ограничения по возрасту. */
     public EngagementReport getEngagementReport(String sourceFilter) {
         LocalDateTime since1d = LocalDateTime.now().minusDays(1);
         LocalDateTime since7d = LocalDateTime.now().minusDays(7);
         LocalDateTime since30d = LocalDateTime.now().minusDays(30);
+        LocalDateTime maxCreatedAt = "ORGANIC".equals(sourceFilter)
+                ? LocalDateTime.now().minusDays(ORGANIC_MIN_ACCOUNT_AGE_DAYS) : null;
 
-        long dau = appUserRepository.countDistinctActiveSince(since1d.toLocalDate(), since1d, sourceFilter);
-        long mau = appUserRepository.countDistinctActiveSince(since30d.toLocalDate(), since30d, sourceFilter);
+        long dau = appUserRepository.countDistinctActiveSince(since1d.toLocalDate(), since1d, sourceFilter, maxCreatedAt);
+        long mau = appUserRepository.countDistinctActiveSince(since30d.toLocalDate(), since30d, sourceFilter, maxCreatedAt);
         double dauMauPercent = mau > 0 ? dau * 100.0 / mau : 0;
 
-        long weeklyQuestTakers = questSubmissionRepository.countDistinctUsersWithApprovedSince(since7d, sourceFilter);
+        long weeklyQuestTakers = questSubmissionRepository.countDistinctUsersWithApprovedSince(since7d, sourceFilter, maxCreatedAt);
         double weeklyQuestPercent = mau > 0 ? weeklyQuestTakers * 100.0 / mau : 0;
 
-        SecondQuestRetention retention = secondQuestRetention(sourceFilter);
+        SecondQuestRetention retention = secondQuestRetention(sourceFilter, maxCreatedAt);
 
         return new EngagementReport(dau, mau, dauMauPercent,
                 weeklyQuestTakers, weeklyQuestPercent,
@@ -505,9 +514,9 @@ public class UserService {
      *  после первого. Считается в Java, а не в JPQL: оконные функции по группам ("второе значение в
      *  отсортированной группе") плохо переносятся между H2 (тесты) и Postgres (прод), а объём данных
      *  (одобренные квесты по всем игрокам) на текущем масштабе проекта не проблема для in-memory группировки. */
-    private SecondQuestRetention secondQuestRetention(String sourceFilter) {
+    private SecondQuestRetention secondQuestRetention(String sourceFilter, LocalDateTime maxCreatedAt) {
         LocalDateTime cutoff = LocalDateTime.now().minusDays(7);
-        List<Object[]> rows = questSubmissionRepository.findApprovedUserIdAndDateForRetention(sourceFilter);
+        List<Object[]> rows = questSubmissionRepository.findApprovedUserIdAndDateForRetention(sourceFilter, maxCreatedAt);
         java.util.Map<Long, List<LocalDateTime>> byUser = new java.util.HashMap<>();
         for (Object[] row : rows) {
             Long telegramId = (Long) row[0];

@@ -64,11 +64,12 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT COUNT(DISTINCT s.user) FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :since")
     long countDistinctUsersWithApprovedSince(@Param("since") LocalDateTime since);
 
-    /** То же самое, с фильтром по источнику трафика — см. AppUserRepository.countDistinctActiveSince
-     *  для семантики sourceFilter (null/"ORGANIC"/код закупки). */
+    /** То же самое, с фильтром по источнику трафика и минимальному возрасту аккаунта — см.
+     *  AppUserRepository.countDistinctActiveSince для семантики sourceFilter/maxCreatedAt. */
     @Query("SELECT COUNT(DISTINCT s.user) FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :since "
-            + "AND (:sourceFilter IS NULL OR (:sourceFilter = 'ORGANIC' AND s.user.trafficSourceCode IS NULL) OR s.user.trafficSourceCode = :sourceFilter)")
-    long countDistinctUsersWithApprovedSince(@Param("since") LocalDateTime since, @Param("sourceFilter") String sourceFilter);
+            + "AND (:sourceFilter IS NULL OR (:sourceFilter = 'ORGANIC' AND s.user.trafficSourceCode IS NULL) OR s.user.trafficSourceCode = :sourceFilter) "
+            + "AND (:maxCreatedAt IS NULL OR s.user.createdAt <= :maxCreatedAt)")
+    long countDistinctUsersWithApprovedSince(@Param("since") LocalDateTime since, @Param("sourceFilter") String sourceFilter, @Param("maxCreatedAt") LocalDateTime maxCreatedAt);
 
     /** Telegram ID игрока + дата одобрения для каждого одобренного квеста — сырьё для расчёта
      *  ретеншена "вернулся ли за вторым квестом в течение недели после первого" в Java, а не в JPQL
@@ -76,11 +77,12 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT s.user.telegramId, s.updatedAt FROM QuestSubmission s WHERE s.status = 'APPROVED'")
     List<Object[]> findApprovedUserIdAndDateForRetention();
 
-    /** То же самое, с фильтром по источнику трафика — см. AppUserRepository.countDistinctActiveSince
-     *  для семантики sourceFilter (null/"ORGANIC"/код закупки). */
+    /** То же самое, с фильтром по источнику трафика и минимальному возрасту аккаунта — см.
+     *  AppUserRepository.countDistinctActiveSince для семантики sourceFilter/maxCreatedAt. */
     @Query("SELECT s.user.telegramId, s.updatedAt FROM QuestSubmission s WHERE s.status = 'APPROVED' "
-            + "AND (:sourceFilter IS NULL OR (:sourceFilter = 'ORGANIC' AND s.user.trafficSourceCode IS NULL) OR s.user.trafficSourceCode = :sourceFilter)")
-    List<Object[]> findApprovedUserIdAndDateForRetention(@Param("sourceFilter") String sourceFilter);
+            + "AND (:sourceFilter IS NULL OR (:sourceFilter = 'ORGANIC' AND s.user.trafficSourceCode IS NULL) OR s.user.trafficSourceCode = :sourceFilter) "
+            + "AND (:maxCreatedAt IS NULL OR s.user.createdAt <= :maxCreatedAt)")
+    List<Object[]> findApprovedUserIdAndDateForRetention(@Param("sourceFilter") String sourceFilter, @Param("maxCreatedAt") LocalDateTime maxCreatedAt);
 
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.user = :user AND s.status IN ('APPROVED', 'REJECTED', 'NEEDS_INFO')")
     long countReviewedByUser(@Param("user") AppUser user);

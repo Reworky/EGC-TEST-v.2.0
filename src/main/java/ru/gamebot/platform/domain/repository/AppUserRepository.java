@@ -31,10 +31,16 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     /** То же самое, с фильтром по источнику трафика (см. UserService.getEngagementReport) — sourceFilter:
      *  null = вся аудитория, "ORGANIC" = только trafficSourceCode IS NULL (органика/реферал), иначе —
-     *  точное совпадение с кодом конкретной рекламной закупки. */
+     *  точное совпадение с кодом конкретной рекламной закупки. maxCreatedAt (не null только для
+     *  "Без рекламы") — дополнительно отсекает свежие регистрации: сразу после закупа в MAU/DAU
+     *  попадает партия только что зарегистрированных, которые технически "активны" просто потому что
+     *  недавно зашли, ещё не успели ни прижиться, ни отвалиться — это раздувает цифру до того, как
+     *  станет ясно, реальные это игроки или нет. null = без этого ограничения. */
     @Query("SELECT COUNT(DISTINCT u) FROM AppUser u WHERE (u.lastActivityDate >= :sinceDate OR u.lastBotActivityAt >= :sinceDateTime OR u.lastMiniAppOpenAt >= :sinceDateTime) "
-            + "AND (:sourceFilter IS NULL OR (:sourceFilter = 'ORGANIC' AND u.trafficSourceCode IS NULL) OR u.trafficSourceCode = :sourceFilter)")
-    long countDistinctActiveSince(@Param("sinceDate") java.time.LocalDate sinceDate, @Param("sinceDateTime") LocalDateTime sinceDateTime, @Param("sourceFilter") String sourceFilter);
+            + "AND (:sourceFilter IS NULL OR (:sourceFilter = 'ORGANIC' AND u.trafficSourceCode IS NULL) OR u.trafficSourceCode = :sourceFilter) "
+            + "AND (:maxCreatedAt IS NULL OR u.createdAt <= :maxCreatedAt)")
+    long countDistinctActiveSince(@Param("sinceDate") java.time.LocalDate sinceDate, @Param("sinceDateTime") LocalDateTime sinceDateTime,
+                                   @Param("sourceFilter") String sourceFilter, @Param("maxCreatedAt") LocalDateTime maxCreatedAt);
 
     /**
      * Блокирует строку пользователя на время транзакции (SELECT ... FOR UPDATE).

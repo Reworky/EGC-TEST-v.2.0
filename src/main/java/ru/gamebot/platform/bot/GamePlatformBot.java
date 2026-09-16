@@ -9845,15 +9845,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  sourceFilter (2026-09-16) — null/"all" = вся аудитория, "organic" = без рекламных закупок
      *  (trafficSourceCode IS NULL — сюда попадают реферальные приглашения, лендинг, TikTok и настоящая
      *  органика; ключевое свойство — сюда НЕ попадают платные закупы, т.к. под каждую заводится отдельная
-     *  помеченная ссылка), иначе код конкретной закупки из TrafficSource — чтобы рекламные подписчики
-     *  не размывали метрики вовлечённости обычной аудитории (запрошено 2026-09-16, см. чат с пользователем:
-     *  цель — исключить именно раздутие от закупов, не разбить трафик по каждому каналу отдельно). */
+     *  помеченная ссылка) И аккаунту не меньше UserService.ORGANIC_MIN_ACCOUNT_AGE_DAYS — свежерегистрации
+     *  технически "активны" просто потому что только зашли, это раздувает цифру, пока не станет ясно,
+     *  прижились они или нет; иначе код конкретной закупки из TrafficSource, без возрастного ограничения —
+     *  чтобы рекламные подписчики не размывали метрики вовлечённости обычной аудитории. */
     private void sendAdminEngagementStats(AppUser user, String sourceFilter) {
         String queryFilter = "organic".equals(sourceFilter) ? "ORGANIC"
                 : (sourceFilter == null || "all".equals(sourceFilter)) ? null : sourceFilter;
         UserService.EngagementReport r = userService.getEngagementReport(queryFilter);
         String segmentLabel = queryFilter == null ? "вся аудитория"
-                : "ORGANIC".equals(queryFilter) ? "без рекламных закупок"
+                : "ORGANIC".equals(queryFilter) ? "без рекламных закупок, аккаунту 14+ дней"
                 : "закупка «" + queryFilter + "»";
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
