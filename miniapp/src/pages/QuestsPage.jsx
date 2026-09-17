@@ -171,18 +171,23 @@ function QuestActions({ quest, detail, onChanged }) {
     }
   }
 
-  if (status === 'APPROVED' && !detail.repeatableNoCooldownEligible) {
+  // Квест-веха (oneTimePerAccount) и внешние партнёрские авто-квесты — единственные случаи, где
+  // повтор в принципе невозможен, поэтому только для них тупиковое сообщение навсегда. Для всех
+  // остальных APPROVED-квестов (обычных с суточным кулдауном и decay-пилота без кулдауна вовсе)
+  // показываем кнопку "Пройти ещё раз" — если кулдаун ещё не истёк, об этом скажет ответ сервера
+  // при нажатии ("Этот квест можно выполнять не чаще 1 раза в ..."), а не молчаливый дед-энд.
+  if (status === 'APPROVED' && (detail.externalAutoApprove || detail.oneTimePerAccount)) {
     return <div className="quest-status quest-status-approved"><i className="ti ti-circle-check"></i> Квест выполнен и оплачен</div>;
   }
 
-  // Квест без кулдауна (пилот "квесты без стен"): после APPROVED сразу можно брать снова —
-  // без этого блока кнопка "Взять квест" ниже никогда не показывалась бы повторно (см. quest-status-approved
-  // выше — тупиковое сообщение, рассчитанное на квесты с кулдауном, где действительно нужно ждать).
-  if (status === 'APPROVED' && detail.repeatableNoCooldownEligible) {
+  if (status === 'APPROVED') {
+    const note = detail.repeatableNoCooldownEligible
+      ? 'Засчитано! Награда за следующее прохождение сегодня — меньше, завтра снова полная.'
+      : 'Выполнен и оплачен. Когда закончится кулдаун на повтор — можно пройти ещё раз.';
     return (
       <div>
         <div className="quest-status quest-status-approved" style={{ marginBottom: 8 }}>
-          <i className="ti ti-circle-check"></i> Засчитано! Награда за следующее прохождение сегодня — меньше, завтра снова полная.
+          <i className="ti ti-circle-check"></i> {note}
         </div>
         <button className="quest-btn" disabled={busy} onClick={handleTake}>
           {busy ? 'Секунду...' : 'Пройти ещё раз'}

@@ -429,28 +429,25 @@
   padding-top: 4px;
 }
 
-/* ── Quest section tabs (Игровые/Спонсорские/UGC/Реклама) ── */
+/* ── Quest section tabs (Игровые/Спонсорские/UGC/Реклама) ──
+   Перенос строк вместо горизонтального скролла — раньше 4-я вкладка "Реклама"
+   уезжала за край экрана и терялась, пользователь не понимал, что можно скроллить. */
 .quest-section-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  padding: 12px 16px;
-  overflow-x: auto;
-  scrollbar-width: none;
+  padding: 4px 16px 12px;
   border-bottom: 0.5px solid rgba(255,255,255,0.06);
-  position: sticky;
-  top: 0;
   background: #0d0d1a;
-  z-index: 10;
 }
 
 .quest-section-tab {
-  flex-shrink: 0;
-  padding: 8px 16px;
-  border-radius: 20px;
-  border: 0.5px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.04);
-  color: rgba(255,255,255,0.55);
-  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 16px;
+  border: 0.5px solid rgba(255,255,255,0.1);
+  background: transparent;
+  color: rgba(255,255,255,0.45);
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;

@@ -279,6 +279,7 @@ public class QuestController {
                 .ticketReward(quest.getTicketReward())
                 .councilOnly(quest.isCouncilOnly())
                 .externalAutoApprove(quest.isExternalAutoApprove())
+                .oneTimePerAccount(quest.isOneTimePerAccount())
                 .repeatableNoCooldownEligible(quest.isRepeatableNoCooldownEligible())
                 .brawlAutoVerify(quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null || quest.getPubgVerifyType() != null);
 
