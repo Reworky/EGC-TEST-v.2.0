@@ -29,7 +29,6 @@ public class QuestService {
 
     private static final int WEEKLY_QUEST_TYPE_LIMIT = 3;
     private static final int COOLDOWN_HOURS = 24;
-    private static final int HARD_COOLDOWN_HOURS = 336; // 14 дней для Сложных
 
     // Новичковый темп (2026-09-09): жёсткие антифрод-лимиты рассчитаны против опытных
     // фермеров/мультиаккаунтов, но на практике сильнее всего бьют по новичку на 2-3-м квесте —
@@ -64,7 +63,13 @@ public class QuestService {
         if ("UGC".equalsIgnoreCase(quest.getGameName())) {
             return UGC_SAME_QUEST_COOLDOWN_HOURS;
         }
-        return "Сложные".equals(quest.getCategory()) ? HARD_COOLDOWN_HOURS : COOLDOWN_HOURS;
+        // Раньше "Сложные" квесты держали отдельный 336ч (14 дней) кулдаун — но категории
+        // Лёгкие/Средние/Сложные нигде не отображаются игроку уже ни у одной игры (все переведены
+        // на FLAT), так что это поле осталось только в БД как неотображаемый остаток. 336ч молча
+        // всплывал у ~23 квестов по всем играм без единой видимой причины (жалоба игрока
+        // 2026-09-17: "308 часов? Кулдаун корректный?"). Единый кулдаун для всех — как и для
+        // остальных 90%+ квестов, которые давно на этой логике.
+        return COOLDOWN_HOURS;
     }
     private static final int REFERRAL_BONUS_PERCENT = 10;
 
