@@ -419,6 +419,41 @@ public class QuestService {
         return 0;
     }
 
+    /** Статус квеста для списка (см. sendQuestList в GamePlatformBot) — read-only, не выполняет никаких
+     *  действий (в отличие от takeQuestChecked). До этого игрок мог узнать, что квест сейчас нельзя
+     *  взять (и почему), только открыв карточку каждого квеста по одному — жалоба игрока 2026-09-17:
+     *  после перехода игры на FLAT-режим все квесты в куче, непонятно, какие сейчас недоступны и от
+     *  чего это зависит (раньше категории Лёгкие/Средние/Сложные визуально это показывали). */
+    public enum QuestListState { AVAILABLE, IN_PROGRESS, BLOCKED }
+
+    public QuestListState previewListState(AppUser user, Quest quest, long activeSlots, long maxSlots) {
+        QuestSubmission latest = getLatestSubmission(user, quest);
+        boolean latestExpired = latest != null && isExpired(latest);
+        boolean hasActiveSubmission = latest != null
+                && latest.getStatus() != SubmissionStatus.CANCELLED
+                && latest.getStatus() != SubmissionStatus.APPROVED
+                && !latestExpired;
+        if (hasActiveSubmission) {
+            return QuestListState.IN_PROGRESS;
+        }
+        // Спонсорские/внешние авто-квесты/repeatableNoCooldownEligible не участвуют в слотах и
+        // кулдаунах (см. takeQuestChecked) — для них статус всегда "доступен".
+        if (quest.isSponsored() || quest.isExternalAutoApprove() || quest.isRepeatableNoCooldownEligible()) {
+            return QuestListState.AVAILABLE;
+        }
+        if (activeSlots >= maxSlots || getCooldownHoursLeft(user, quest) > 0) {
+            return QuestListState.BLOCKED;
+        }
+        if (user.getLastQuestTakenAt() != null) {
+            int takeCooldownMinutes = isOnboarding(user) ? ONBOARDING_TAKE_COOLDOWN_MINUTES : 60;
+            long minutesSince = java.time.temporal.ChronoUnit.MINUTES.between(user.getLastQuestTakenAt(), LocalDateTime.now());
+            if (minutesSince < takeCooldownMinutes) {
+                return QuestListState.BLOCKED;
+            }
+        }
+        return QuestListState.AVAILABLE;
+    }
+
     public long getWeeklyCompletionsOfType(AppUser user, Quest quest) {
         return questSubmissionRepository.countApprovedByUserAndGameAndCategorySince(
                 user, quest.getGameName(), quest.getCategory(), LocalDateTime.now().minusWeeks(1));

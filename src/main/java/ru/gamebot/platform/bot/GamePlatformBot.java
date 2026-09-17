@@ -4159,20 +4159,39 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         boolean useLabels = quests.stream().allMatch(q -> q.getShortLabel() != null && !q.getShortLabel().isBlank());
 
+        // Отметки 🔒/📝 в списке — читаются один раз для всего списка, не на каждый квест (activeSlots/
+        // maxSlots не зависят от конкретного квеста). Добавлено 2026-09-17: после перехода игр на FLAT-режим
+        // пропала визуальная группировка Лёгкие/Средние/Сложные, которая раньше явно показывала, что взятие
+        // одного квеста блокирует другие того же уровня — игрок пожаловался, что теперь "всё в куче и
+        // запутанно". Экономику (общий кулдаун на всю игру после сдачи любого FLAT-квеста) не меняем —
+        // только делаем видимым, что сейчас доступно, а что нет, и почему.
+        long activeSlots = questService.countActiveDrafts(user);
+        long maxSlots = sinkShopService.getMaxQuestSlots(user);
+        boolean anyBlocked = false;
+        boolean anyInProgress = false;
+
         String title = category == null ? gameName : gameName + " • " + category;
         StringBuilder listBuilder = new StringBuilder();
         List<InlineKeyboardButton> openButtons = new ArrayList<>();
         for (int i = 0; i < quests.size(); i++) {
             Quest quest = quests.get(i);
             String callback = "quest:view:" + encodeGameToken(gameName) + ":" + categoryToken(category) + ":" + quest.getId();
-            String newTag = quest.isEffectivelyNew() ? "🆕 " : "";
+            QuestService.QuestListState state = questService.previewListState(user, quest, activeSlots, maxSlots);
+            String statusTag;
+            switch (state) {
+                case IN_PROGRESS -> { statusTag = "📝 "; anyInProgress = true; }
+                case BLOCKED -> { statusTag = "🔒 "; anyBlocked = true; }
+                default -> statusTag = quest.isEffectivelyNew() ? "🆕 " : "";
+            }
             if (useLabels) {
-                openButtons.add(keyboardFactory.callback(newTag + "🎯 " + quest.getShortLabel(), callback));
+                openButtons.add(keyboardFactory.callback(statusTag + "🎯 " + quest.getShortLabel(), callback));
             } else {
-                listBuilder.append(i + 1).append(". ").append(newTag).append(escape(quest.getTitle())).append("\n");
+                listBuilder.append(i + 1).append(". ").append(statusTag).append(escape(quest.getTitle())).append("\n");
                 openButtons.add(keyboardFactory.callback(String.valueOf(i + 1), callback));
             }
         }
+        String legend = (anyInProgress ? "\n📝 — уже взят, откройте карточку для отчёта" : "")
+                + (anyBlocked ? "\n🔒 — сейчас нельзя взять (кулдаун по этой игре или квесту — детали в карточке)" : "");
         // С короткими подписями кнопки самодостаточны (видно суть квеста сразу) — раскладываем
         // по одной в ряд для читаемости вместо тесной цифровой сетки.
         InlineKeyboardMarkup keyboard = useLabels
@@ -4187,14 +4206,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (photoFileId.isPresent()) {
             sendPhotoCaption(user.getTelegramId(), photoFileId.get(), "<b>" + escape(title) + "</b>", null);
             listText = useLabels
-                    ? "Нажмите на квест, чтобы увидеть награду и условия прохождения."
-                    : "Откройте карточку по номеру, чтобы увидеть награду и условия прохождения.\n\n" + listBuilder;
+                    ? "Нажмите на квест, чтобы увидеть награду и условия прохождения." + legend
+                    : "Откройте карточку по номеру, чтобы увидеть награду и условия прохождения.\n\n" + listBuilder + legend;
         } else {
             listText = useLabels
-                    ? "<b>" + escape(title) + "</b>\n\nНажмите на квест, чтобы увидеть награду и условия прохождения."
+                    ? "<b>" + escape(title) + "</b>\n\nНажмите на квест, чтобы увидеть награду и условия прохождения." + legend
                     : "<b>" + escape(title) + "</b>\n\n"
                         + "Откройте карточку по номеру, чтобы увидеть награду и условия прохождения.\n\n"
-                        + listBuilder;
+                        + listBuilder + legend;
         }
         sendText(user.getTelegramId(), listText, keyboard);
     }
