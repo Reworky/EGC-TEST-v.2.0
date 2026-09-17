@@ -167,7 +167,7 @@ public class QuestController {
                         return org.springframework.http.ResponseEntity.<byte[]>notFound().build();
                     }
                 })
-                .orElse(org.springframework.http.ResponseEntity.notFound().build());
+                .orElse(org.springframework.http.ResponseEntity.<byte[]>notFound().build());
     }
 
     /** Персонализированный показ 1-2 квестов при заходе (аудит вовлечённости, 2026-09-14) — тот же
