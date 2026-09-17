@@ -41,11 +41,11 @@ const wheelIcon = (
 );
 
 const tabs = [
-  { to: '/profile', icon: icons.profile, label: 'Профиль' },
   { to: '/quests', icon: icons.quests, label: 'Квесты' },
   { to: '/wheel', icon: wheelIcon, label: 'Колесо' },
   { to: '/shop', icon: icons.shop, label: 'Магазин' },
   { to: '/top', icon: icons.top, label: 'Топ' },
+  { to: '/profile', icon: icons.profile, label: 'Профиль' },
 ];
 
 export default function BottomNav() {

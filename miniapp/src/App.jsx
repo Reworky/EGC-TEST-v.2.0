@@ -143,7 +143,7 @@ export default function App() {
       <div className="app">
         <Suspense fallback={null}>
         <Routes>
-          <Route path="/" element={<Navigate to="/profile" replace />} />
+          <Route path="/" element={<Navigate to="/quests" replace />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/quests" element={<QuestsPage />} />
           <Route path="/shop" element={<ShopPage />} />
