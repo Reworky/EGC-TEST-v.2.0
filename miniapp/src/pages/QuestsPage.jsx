@@ -13,7 +13,7 @@ const CATEGORY_CLASS = { 'Лёгкие': 'q-easy', 'Средние': 'q-medium',
 const CATEGORY_TICKETS = { 'Лёгкие': 1, 'Средние': 2, 'Сложные': 3 };
 const QUEST_SECTIONS = [
   { key: 'gaming', label: '🎮 Игровые' },
-  { key: 'sponsored', label: '💼 Спонсорские' },
+  { key: 'sponsored', label: '💼 Спонсоры' },
   { key: 'ugc', label: '📹 UGC' },
   { key: 'ads', label: '🎬 Реклама' },
 ];
