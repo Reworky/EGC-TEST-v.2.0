@@ -2502,11 +2502,22 @@ public class QuestSeeder implements CommandLineRunner {
         }, () -> log.warn("[QuestSeeder] setShortLabel: quest not found (seedFlat must run first): '{}'", title));
     }
 
-    /** Помечает (или снимает, highlight=false) кнопку квеста меткой 🆕 (см. Quest.highlightNew / sendQuestList). */
+    /** Помечает (или снимает, highlight=false) квест меткой 🆕 сверх обычной логики "создан недавно"
+     *  (см. Quest.highlightNewUntil / isEffectivelyNew). Простановка выдаёт ровно 7 дней с МОМЕНТА ПЕРВОГО
+     *  включения — этот метод вызывается на каждом старте бэкенда, поэтому если окно уже выставлено
+     *  (highlightNewUntil != null), повторный highlight=true его не продлевает: иначе метка могла бы
+     *  висеть бессрочно при каждом рестарте, что и было проблемой у старого bool-флага. */
     private void setQuestHighlightNew(String title, String gameName, boolean highlight) {
         questRepository.findFirstByTitleAndGameName(title, gameName).ifPresentOrElse(q -> {
-            q.setHighlightNew(highlight);
-            questRepository.save(q);
+            if (highlight) {
+                if (q.getHighlightNewUntil() == null) {
+                    q.setHighlightNewUntil(LocalDateTime.now().plusDays(7));
+                    questRepository.save(q);
+                }
+            } else if (q.getHighlightNewUntil() != null) {
+                q.setHighlightNewUntil(null);
+                questRepository.save(q);
+            }
         }, () -> log.warn("[QuestSeeder] setQuestHighlightNew: quest not found (seedFlat must run first): '{}'", title));
     }
 }

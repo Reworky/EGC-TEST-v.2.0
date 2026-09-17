@@ -19,8 +19,8 @@ public class QuestDto {
     private boolean councilOnly;
     private boolean sponsored;
 
-    /** См. Quest.isEffectivelyNew — карточка получает пометку 🆕 в Mini App (парность с sendQuestList
-     * в боте): редакторский флаг highlightNew ИЛИ квест создан в последние 7 дней. */
+    /** См. Quest.isEffectivelyNew — карточка подсвечивается как новая в Mini App (парность с sendQuestList
+     * в боте): квест создан в последние 7 дней ИЛИ ещё не истёк редакторский буст highlightNewUntil. */
     private boolean highlightNew;
 
     /** Внешний авто-квест (партнёрская сеть): вместо отчёта нужно просто перейти по ссылке. */

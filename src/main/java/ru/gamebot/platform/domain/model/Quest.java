@@ -39,19 +39,20 @@ public class Quest {
      * порядкового номера (см. sendQuestList в GamePlatformBot). Null — прежнее поведение (номер). */
     private String shortLabel;
 
-    /** true — принудительно включает пометку 🆕, даже если квест был создан давно (редакторский выбор,
-     * см. QuestSeeder.setQuestHighlightNew — например, чтобы привлечь внимание к квесту под новую
-     * игровую механику). Для обычных недавно добавленных квестов включать вручную не нужно —
-     * см. {@link #isEffectivelyNew()}, который сам считает первые 7 дней с createdAt "новыми". */
-    @Column(columnDefinition = "boolean default false")
-    private boolean highlightNew;
+    /** Редакторский "буст": если задано (см. QuestSeeder.setQuestHighlightNew), квест считается новым
+     * до этого момента, даже если он был создан давно (например, чтобы привлечь внимание к квесту под
+     * новую игровую механику) — НО, в отличие от старого bool-флага, всегда с истечением срока: помечать
+     * квест новым навсегда, забыв снять флаг вручную, теперь невозможно (см. isEffectivelyNew). */
+    private LocalDateTime highlightNewUntil;
 
     /** Показывать ли пометку 🆕 в списке квестов (см. sendQuestList в GamePlatformBot, QuestController
-     * в мини-аппе) — редакторский флаг highlightNew ИЛИ квест реально создан в последние 7 дней.
-     * Введено 2026-09-14, чтобы подсветка новых квестов не требовала ручного управления в коде на
-     * каждый деплой. */
+     * в мини-аппе) — квест создан в последние 7 дней ИЛИ ещё не истёк редакторский буст highlightNewUntil.
+     * Оба пути гаснут сами по себе автоматически — введено 2026-09-14, обновлено 2026-09-17 (раньше
+     * редакторский флаг был обычным bool без срока и мог провисеть бессрочно). */
     public boolean isEffectivelyNew() {
-        return highlightNew || (createdAt != null && createdAt.isAfter(LocalDateTime.now().minusDays(7)));
+        LocalDateTime now = LocalDateTime.now();
+        return (createdAt != null && createdAt.isAfter(now.minusDays(7)))
+                || (highlightNewUntil != null && highlightNewUntil.isAfter(now));
     }
 
     private String gameName;

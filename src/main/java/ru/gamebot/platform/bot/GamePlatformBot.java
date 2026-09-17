@@ -4144,8 +4144,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        // Новые квесты (highlightNew или созданные в последние 7 дней, см. Quest.isEffectivelyNew) —
-        // сверху списка, остальные — по алфавиту, как раньше.
+        // Новые квесты (созданы в последние 7 дней ИЛИ ещё не истёк редакторский буст highlightNewUntil,
+        // см. Quest.isEffectivelyNew) — сверху списка, остальные — по алфавиту, как раньше.
         quests.sort(java.util.Comparator.comparing(Quest::isEffectivelyNew, java.util.Comparator.reverseOrder())
                 .thenComparing(Quest::getTitle, String.CASE_INSENSITIVE_ORDER));
 
