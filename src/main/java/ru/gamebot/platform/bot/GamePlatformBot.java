@@ -4124,6 +4124,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         );
     }
 
+    /** Единый порядок показа квестов в списке игры: новые (см. Quest.isEffectivelyNew) сверху, дальше по
+     *  алфавиту. Используется и в sendQuestList (нумерация кнопок), и в handleQuestView для кнопки
+     *  "Следующий квест" — раньше "Следующий квест" считал по-другому (сортировка по createdAt), из-за
+     *  чего листал не в том порядке, что видел игрок в списке. */
+    private static final java.util.Comparator<Quest> QUEST_DISPLAY_ORDER = java.util.Comparator
+            .comparing(Quest::isEffectivelyNew, java.util.Comparator.reverseOrder())
+            .thenComparing(Quest::getTitle, String.CASE_INSENSITIVE_ORDER);
+
     private void sendQuestList(AppUser user, String gameName, String category) {
         sendQuestList(user, gameName, category, "quests:game:" + encodeGameToken(gameName));
     }
@@ -4146,8 +4154,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         // Новые квесты (созданы в последние 7 дней ИЛИ ещё не истёк редакторский буст highlightNewUntil,
         // см. Quest.isEffectivelyNew) — сверху списка, остальные — по алфавиту, как раньше.
-        quests.sort(java.util.Comparator.comparing(Quest::isEffectivelyNew, java.util.Comparator.reverseOrder())
-                .thenComparing(Quest::getTitle, String.CASE_INSENSITIVE_ORDER));
+        // Тот же порядок переиспользуется в handleQuestView для кнопки "Следующий квест" (QUEST_DISPLAY_ORDER).
+        quests.sort(QUEST_DISPLAY_ORDER);
 
         boolean useLabels = quests.stream().allMatch(q -> q.getShortLabel() != null && !q.getShortLabel().isBlank());
 
@@ -4250,9 +4258,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String gameName = decodeGameToken(parts[0]);
             String category = categoryFromToken(parts[1]);
             if (gameName != null) {
-                List<Quest> quests = category == null
+                List<Quest> quests = new ArrayList<>(category == null
                         ? questService.findActiveByGameName(gameName)
-                        : questService.findActiveByGameNameAndCategory(gameName, category);
+                        : questService.findActiveByGameNameAndCategory(gameName, category));
+                // Та же сортировка, что и в sendQuestList (иначе "Следующий квест" листает в порядке,
+                // не совпадающем с тем, что игрок видел пронумерованным в списке — баг, на который
+                // пожаловался игрок 2026-09-17: "показывает не по порядку").
+                quests.sort(QUEST_DISPLAY_ORDER);
                 for (int i = 0; i < quests.size() - 1; i++) {
                     if (quests.get(i).getId().equals(questId)) {
                         Long nextId = quests.get(i + 1).getId();
