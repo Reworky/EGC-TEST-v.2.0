@@ -6,7 +6,7 @@
 .view-toggle {
   display: flex;
   gap: 6px;
-  padding: 12px 16px 0;
+  padding: 12px 16px 12px;
   background: #0d0d1a;
 }
 

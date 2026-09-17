@@ -655,7 +655,7 @@ export default function WalletPage() {
 
   return (
     <div className="quests-page shop-page">
-      <div style={{ padding: '16px 16px 0' }}><BackButton to="/profile" label="Профиль" /></div>
+      <div style={{ padding: '16px 16px 16px' }}><BackButton to="/profile" label="Профиль" /></div>
 
       <div className="view-toggle">
         <button className={`view-tab ${view === 'balance' ? 'active' : ''}`} onClick={() => switchTab('balance')}>Баланс</button>
