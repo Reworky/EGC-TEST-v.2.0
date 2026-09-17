@@ -281,9 +281,17 @@ function QuestActions({ quest, detail, onChanged }) {
 }
 
 function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
+  // Статус берём из уже подгруженного детейла квеста, если он есть (details обновляется сразу после
+  // взятия/сдачи отчёта), иначе — из общего списка квестов игры (details ещё не запрашивался). Без этого
+  // бейдж в свёрнутой карточке "Все квесты" оставался бы старым до перезагрузки всего списка игры.
+  const detail = details[q.id];
+  const submissionStatus = detail?.submissionStatus ?? q.submissionStatus;
+  const brawlAutoVerify = detail?.brawlAutoVerify ?? q.brawlAutoVerify;
+  const externalAutoApprove = detail?.externalAutoApprove ?? q.externalAutoApprove;
+
   return (
     <div
-      className={`quest-card ${q.gameName === 'UGC' ? 'q-ugc' : (CATEGORY_CLASS[q.category] || 'q-flat')} ${q.submissionStatus ? 'quest-card-taken' : ''}`}
+      className={`quest-card ${q.gameName === 'UGC' ? 'q-ugc' : (CATEGORY_CLASS[q.category] || 'q-flat')} ${submissionStatus ? 'quest-card-taken' : ''}`}
       onClick={() => onToggle(q.id)}
     >
       {/* Шапка: категория + статус */}
@@ -300,11 +308,11 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
           ) : null}
           {q.highlightNew && <span className="quest-cat-badge new">🆕 Новое</span>}
         </div>
-        {q.submissionStatus && (
-          <span className="quest-taken-badge" style={{ color: STATUS_COLORS[q.submissionStatus] }}>
-            ● {q.submissionStatus === 'DRAFT' && (q.brawlAutoVerify || q.externalAutoApprove)
+        {submissionStatus && (
+          <span className="quest-taken-badge" style={{ color: STATUS_COLORS[submissionStatus] }}>
+            ● {submissionStatus === 'DRAFT' && (brawlAutoVerify || externalAutoApprove)
                 ? 'Авто-отслеживание'
-                : (STATUS_LABELS[q.submissionStatus] || q.submissionStatus)}
+                : (STATUS_LABELS[submissionStatus] || submissionStatus)}
           </span>
         )}
       </div>
