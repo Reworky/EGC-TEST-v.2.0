@@ -153,16 +153,13 @@ public class WeeklyResetScheduler {
         tournamentService.settleFinishedTournaments();
     }
 
-    // Проверяем каждые 5 минут, у кого истёк кулдаун (24ч обычный / 336ч сложный)
+    // Проверяем каждые 5 минут, у кого истёк 24ч кулдаун (единый для всех неспонсорских квестов,
+    // см. QuestService.cooldownHours — отдельная 336ч-ветка для «Сложные» убрана 2026-09-17)
     @Scheduled(fixedDelay = 300_000)
     public void notifyCooldownExpired() {
         LocalDateTime now = LocalDateTime.now();
-        // 24ч — обычные квесты (все кроме «Сложные»)
         notifyExpired(questSubmissionRepository.findUsersWhoseNormalQuestCooldownExpiredBetween(
                 now.minusHours(24).minusMinutes(5), now.minusHours(24)));
-        // 336ч — только «Сложные»
-        notifyExpired(questSubmissionRepository.findUsersWhoseHardQuestCooldownExpiredBetween(
-                now.minusHours(336).minusMinutes(5), now.minusHours(336)));
     }
 
     // Автоотмена просроченных заявок — каждый час
@@ -185,8 +182,15 @@ public class WeeklyResetScheduler {
         }
     }
 
-    // Проверка прогресса авто-верификации квестов Brawl Stars — каждые 10 минут
-    @Scheduled(fixedDelay = 600_000)
+    // Проверка прогресса авто-верификации квестов Brawl Stars — каждые 2 минуты (было 10, см. ниже).
+    // Официальный battlelog-эндпоинт отдаёт только ПОСЛЕДНИЕ ~25 боёв без пагинации (см. javadoc
+    // BrawlStarsApiService.fetchBattleLog) — это общий лог аккаунта, туда попадают ВСЕ бои игрока,
+    // не только подходящие под квест. Активный игрок легко успевает сыграть 25+ боёв между опросами
+    // раз в 10 минут — тогда старые бои вытесняются из лога раньше, чем курсор успевает их увидеть,
+    // и прогресс квеста молча теряется без следа (жалоба игрока 2026-09-17: "нужно 5 матчей, играю
+    // 20 — не засчитывается"). Более частый опрос не убирает проблему полностью (риск есть при любом
+    // интервале > 0), но резко сокращает окно, в которое это может произойти.
+    @Scheduled(fixedDelay = 120_000)
     public void checkBrawlAutoVerifyProgress() {
         try {
             brawlQuestVerificationService.checkInProgressSubmissions();

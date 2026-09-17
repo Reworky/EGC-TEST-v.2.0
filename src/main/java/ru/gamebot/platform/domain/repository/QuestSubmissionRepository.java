@@ -171,26 +171,18 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT s FROM QuestSubmission s WHERE s.status IN ('DRAFT','PENDING') AND s.expiresAt IS NOT NULL AND s.expiresAt > CURRENT_TIMESTAMP AND s.expiresAt <= :upperBound AND s.deadlineWarningSent = false")
     List<QuestSubmission> findExpiringBefore(@Param("upperBound") LocalDateTime upperBound);
 
-    // 24ч кулдаун — обычные квесты (все кроме «Сложные» и спонсорских). Категория «Сложные» != NULL
-    // сравнивается через IS NULL OR <> — иначе FLAT-квесты (category IS NULL, все автоматизированные
-    // Brawl Stars/Clash of Clans/Clash Royale) молча выпадали из выборки: NULL <> 'Сложные' в SQL/JPQL
-    // всегда UNKNOWN, а не TRUE. Баг обнаружен 2026-09-01 — авто-квесты никогда не получали это уведомление.
+    // 24ч кулдаун — единый для всех неспонсорских квестов (см. QuestService.cooldownHours, старая
+    // отдельная 336ч-ветка для category="Сложные" убрана 2026-09-17 — категории нигде не видны
+    // игроку, было молчаливое зависание кулдауна там, где игрок не мог понять причину). Раньше
+    // здесь ещё был отдельный findUsersWhoseHardQuestCooldownExpiredBetween-запрос на 336ч для «Сложные» —
+    // убран вместе с этой веткой, иначе игрок стал бы фактически доступен для повтора через 24ч
+    // (по актуальному cooldownHours), но уведомление об этом пришло бы только через 14 дней.
     @Query("SELECT s.user.telegramId, s.quest.gameName, s.quest.title " +
            "FROM QuestSubmission s " +
-           "WHERE s.status = 'APPROVED' AND (s.quest.category IS NULL OR s.quest.category <> 'Сложные') AND s.quest.sponsored = false " +
+           "WHERE s.status = 'APPROVED' AND s.quest.sponsored = false " +
            "GROUP BY s.user.telegramId, s.quest.id, s.quest.gameName, s.quest.title " +
            "HAVING MAX(s.updatedAt) BETWEEN :from AND :to")
     List<Object[]> findUsersWhoseNormalQuestCooldownExpiredBetween(
-            @Param("from") java.time.LocalDateTime from,
-            @Param("to") java.time.LocalDateTime to);
-
-    // 336ч кулдаун — только «Сложные» квесты (спонсорские исключены)
-    @Query("SELECT s.user.telegramId, s.quest.gameName, s.quest.title " +
-           "FROM QuestSubmission s " +
-           "WHERE s.status = 'APPROVED' AND s.quest.category = 'Сложные' AND s.quest.sponsored = false " +
-           "GROUP BY s.user.telegramId, s.quest.id, s.quest.gameName, s.quest.title " +
-           "HAVING MAX(s.updatedAt) BETWEEN :from AND :to")
-    List<Object[]> findUsersWhoseHardQuestCooldownExpiredBetween(
             @Param("from") java.time.LocalDateTime from,
             @Param("to") java.time.LocalDateTime to);
 
