@@ -73,11 +73,6 @@ export function getGamePhotoUrl(gameName) {
   return `${BASE_URL}/api/quests/games/${encodeURIComponent(gameName)}/photo`;
 }
 
-export async function getRecommendedQuest() {
-  const { data } = await api.get('/api/quests/recommended');
-  return data || null;
-}
-
 export async function getQuestBoost() {
   return cached('questBoost', async () => { const { data } = await api.get('/api/quests/boost'); return data; });
 }

@@ -115,12 +115,17 @@ public class QuestController {
             }
         }
 
+        // У квестов игр, переведённых на FLAT-режим (CS2/Dota 2/PUBG и т.п.), поле category в БД
+        // часто остаётся заполнено ещё со времён деления на Лёгкие/Средние/Сложные — сама награда
+        // уже единая (см. аудит наградной политики), но без этой правки мини-апп всё равно рисовал бы
+        // устаревшие заголовки категорий. Обнуляем category в DTO для таких игр, не трогая базу.
+        Map<String, Boolean> flatByGame = new HashMap<>();
         return quests.stream().map(q -> QuestDto.builder()
                 .id(q.getId())
                 .title(q.getTitle())
                 .description(q.getDescription())
                 .gameName(q.getGameName())
-                .category(q.getCategory())
+                .category(flatByGame.computeIfAbsent(q.getGameName(), gameCatalogService::isFlat) ? null : q.getCategory())
                 .platform(q.getPlatform())
                 .durationDays(q.getDurationDays())
                 .rewardXp(q.getRewardXp())
@@ -230,9 +235,12 @@ public class QuestController {
                         .ifPresent(s -> statusByQuestId.put(q.getId(), s.getStatus().name()));
             }
         }
+        Map<String, Boolean> flatByGame = new HashMap<>();
         return quests.stream().map(q -> QuestDto.builder()
                 .id(q.getId()).title(q.getTitle()).description(q.getDescription())
-                .gameName(q.getGameName()).category(q.getCategory()).platform(q.getPlatform())
+                .gameName(q.getGameName())
+                .category(flatByGame.computeIfAbsent(q.getGameName(), gameCatalogService::isFlat) ? null : q.getCategory())
+                .platform(q.getPlatform())
                 .durationDays(q.getDurationDays()).rewardXp(q.getRewardXp()).rewardCoins(displayRewardCoins(currentUser, q))
                 .ticketReward(q.getTicketReward())
                 .councilOnly(q.isCouncilOnly()).sponsored(true)
@@ -263,7 +271,7 @@ public class QuestController {
                 .instruction(instruction)
                 .requirements(quest.getRequirements())
                 .gameName(quest.getGameName())
-                .category(quest.getCategory())
+                .category(gameCatalogService.isFlat(quest.getGameName()) ? null : quest.getCategory())
                 .platform(quest.getPlatform())
                 .durationDays(quest.getDurationDays())
                 .rewardXp(quest.getRewardXp())
@@ -390,6 +398,7 @@ public class QuestController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
 
+        Map<String, Boolean> flatByGame = new HashMap<>();
         List<MyQuestDto> result = questService.getUserSubmissions(user).stream()
                 .map(s -> {
                     AutoVerifyProgress progress = computeAutoVerifyProgress(s.getQuest(), s);
@@ -398,7 +407,7 @@ public class QuestController {
                         .questId(s.getQuest().getId())
                         .title(s.getQuest().getTitle())
                         .gameName(s.getQuest().getGameName())
-                        .category(s.getQuest().getCategory())
+                        .category(flatByGame.computeIfAbsent(s.getQuest().getGameName(), gameCatalogService::isFlat) ? null : s.getQuest().getCategory())
                         .externalAutoApprove(s.getQuest().isExternalAutoApprove())
                         .brawlAutoVerify(s.getQuest().getBrawlVerifyType() != null || s.getQuest().getClashVerifyType() != null || s.getQuest().getClashRoyaleVerifyType() != null || s.getQuest().getDotaVerifyType() != null || s.getQuest().getCs2VerifyType() != null || s.getQuest().getPubgVerifyType() != null)
                         .autoVerifyProgress(progress.progress())

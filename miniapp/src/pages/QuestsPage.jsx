@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getQuests, getSponsoredQuests, getGames, getGamePhotoUrl, getRecommendedQuest, getQuestBoost, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard } from '../api/client';
+import { getQuests, getSponsoredQuests, getGames, getGamePhotoUrl, getQuestBoost, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard } from '../api/client';
 import { useLottie } from '../components/LottieContext';
 import { useParticles } from '../components/ParticlesContext';
 import AdRewardCard from '../components/AdRewardCard';
@@ -380,23 +380,6 @@ function QuestBoostBanner() {
   );
 }
 
-function RecommendedQuestSection({ expanded, details, onToggle, onDetailChanged }) {
-  const [quest, setQuest] = useState(undefined);
-
-  useEffect(() => {
-    getRecommendedQuest().then(setQuest).catch(() => setQuest(null));
-  }, []);
-
-  if (!quest) return null;
-
-  return (
-    <div className="quest-recommended-card">
-      <div className="quest-recommended-label">🎯 Квест для тебя</div>
-      <QuestCard q={quest} expanded={expanded} onToggle={onToggle} details={details} onDetailChanged={onDetailChanged} />
-    </div>
-  );
-}
-
 function GameCard({ name, active, onClick }) {
   const [imgFailed, setImgFailed] = useState(false);
 
@@ -470,7 +453,6 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
   return (
     <>
       <QuestBoostBanner />
-      <RecommendedQuestSection expanded={expanded} details={details} onToggle={onToggle} onDetailChanged={onDetailChanged} />
 
       <div className="quest-section-tabs">
         {QUEST_SECTIONS.map(s => (
