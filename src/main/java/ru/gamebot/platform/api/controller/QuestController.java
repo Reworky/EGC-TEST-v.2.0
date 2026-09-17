@@ -151,23 +151,26 @@ public class QuestController {
      *  фронтенд на этот случай показывает градиентную заглушку. */
     @GetMapping("/games/{name}/photo")
     public org.springframework.http.ResponseEntity<byte[]> gamePhoto(@PathVariable String name) {
-        return gameCatalogService.getPhotoFileId(name)
-                .map(fileId -> {
-                    try {
-                        byte[] image = telegramFileService.downloadFile(fileId);
-                        return org.springframework.http.ResponseEntity.ok()
-                                .contentType(org.springframework.http.MediaType.IMAGE_JPEG)
-                                .cacheControl(org.springframework.http.CacheControl.maxAge(java.time.Duration.ofHours(24)))
-                                .body(image);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        return org.springframework.http.ResponseEntity.<byte[]>notFound().build();
-                    } catch (IOException e) {
-                        log.warn("Failed to fetch game photo for '{}'", name, e);
-                        return org.springframework.http.ResponseEntity.<byte[]>notFound().build();
-                    }
-                })
-                .orElse(org.springframework.http.ResponseEntity.<byte[]>notFound().build());
+        // Прямые return из тела метода (не лямбда в Optional.map) — return-выражение получает
+        // целевой тип из объявленного ResponseEntity<byte[]> метода, а внутри лямбды Java не может
+        // так же вывести тип для ResponseEntity.notFound().build() (wildcard-захват, не компилируется).
+        java.util.Optional<String> fileId = gameCatalogService.getPhotoFileId(name);
+        if (fileId.isEmpty()) {
+            return org.springframework.http.ResponseEntity.notFound().build();
+        }
+        try {
+            byte[] image = telegramFileService.downloadFile(fileId.get());
+            return org.springframework.http.ResponseEntity.ok()
+                    .contentType(org.springframework.http.MediaType.IMAGE_JPEG)
+                    .cacheControl(org.springframework.http.CacheControl.maxAge(java.time.Duration.ofHours(24)))
+                    .body(image);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return org.springframework.http.ResponseEntity.notFound().build();
+        } catch (IOException e) {
+            log.warn("Failed to fetch game photo for '{}'", name, e);
+            return org.springframework.http.ResponseEntity.notFound().build();
+        }
     }
 
     /** Персонализированный показ 1-2 квестов при заходе (аудит вовлечённости, 2026-09-14) — тот же
