@@ -459,11 +459,11 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
     <>
       <QuestBoostBanner />
 
-      <div className="quest-section-tabs">
+      <div className="view-toggle quest-section-tabs">
         {QUEST_SECTIONS.map(s => (
           <button
             key={s.key}
-            className={`quest-section-tab ${activeSection === s.key ? 'active' : ''}`}
+            className={`view-tab ${activeSection === s.key ? 'active' : ''}`}
             onClick={() => setActiveSection(s.key)}
           >
             {s.label}

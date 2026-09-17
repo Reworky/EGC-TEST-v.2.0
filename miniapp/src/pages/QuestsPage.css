@@ -429,35 +429,14 @@
   padding-top: 4px;
 }
 
-/* ── Quest section tabs (Игровые/Спонсорские/UGC/Реклама) ──
-   Перенос строк вместо горизонтального скролла — раньше 4-я вкладка "Реклама"
-   уезжала за край экрана и терялась, пользователь не понимал, что можно скроллить. */
+/* ── Quest section tabs (Игровые/Спонсорские/UGC/Реклама) — по просьбе пользователя те же
+   .view-tab кнопки, что и "Все квесты/Мои квесты/Турнир" (одинаковый размер и стиль), эта
+   доп. обёртка добавляет только перенос строк (4 вкладки не помещаются в один ряд без него,
+   иначе "Реклама" обрезалась бы за краем экрана) и отступ/разделитель снизу. ── */
 .quest-section-tabs {
-  display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 4px 16px 12px;
+  padding-bottom: 12px;
   border-bottom: 0.5px solid rgba(255,255,255,0.06);
-  background: #0d0d1a;
-}
-
-.quest-section-tab {
-  padding: 6px 14px;
-  border-radius: 16px;
-  border: 0.5px solid rgba(255,255,255,0.1);
-  background: transparent;
-  color: rgba(255,255,255,0.45);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.quest-section-tab.active {
-  background: rgba(108,99,255,0.22);
-  border-color: rgba(108,99,255,0.5);
-  color: #a5b4fc;
-  font-weight: 700;
 }
 
 .quest-empty-section {
