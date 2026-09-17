@@ -507,7 +507,10 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
             </div>
           )}
 
-          <div ref={questListRef}>
+          <div ref={questListRef} className="game-section">
+            <div className="game-section-title">
+              🎯 Доступные квесты{selectedGame ? ` — ${selectedGame}` : ''}
+            </div>
             {loading && (
               <div className="category-section">
                 {[1,2,3].map(i => <QuestSkeleton key={i} />)}
