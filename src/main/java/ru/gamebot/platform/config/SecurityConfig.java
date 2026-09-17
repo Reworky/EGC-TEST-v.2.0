@@ -34,6 +34,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/squads/leaderboard").permitAll()
                         .requestMatchers("/api/squads/**").authenticated()
                         .requestMatchers("/api/quests/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/tournament/*/photo").permitAll()
                         .requestMatchers("/api/shop/**").permitAll()
                         .requestMatchers("/api/stats").permitAll()
                         .requestMatchers("/api/postback/**").permitAll()

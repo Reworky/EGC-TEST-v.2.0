@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getQuests, getSponsoredQuests, getGames, getGamePhotoUrl, getQuestBoost, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard } from '../api/client';
+import { getQuests, getSponsoredQuests, getGames, getGamePhotoUrl, getQuestBoost, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard, getTournamentPhotoUrl } from '../api/client';
 import { useLottie } from '../components/LottieContext';
 import { useParticles } from '../components/ParticlesContext';
 import AdRewardCard from '../components/AdRewardCard';
@@ -668,12 +668,14 @@ function TournamentView() {
   const [tournament, setTournament] = useState(undefined);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
+  const [bannerFailed, setBannerFailed] = useState(false);
 
   function reload() {
     getTournament().then(setTournament).catch(() => setTournament(null));
   }
 
   useEffect(() => { reload(); }, []);
+  useEffect(() => { setBannerFailed(false); }, [tournament?.id]);
 
   async function handleJoin() {
     setBusy(true);
@@ -698,6 +700,15 @@ function TournamentView() {
   return (
     <div className="category-section" style={{ marginTop: 12 }}>
       <div className="quest-card" style={{ cursor: 'default' }}>
+        {!bannerFailed && (
+          <img
+            className="tournament-banner"
+            src={getTournamentPhotoUrl(tournament.id)}
+            alt={tournament.name}
+            loading="lazy"
+            onError={() => setBannerFailed(true)}
+          />
+        )}
         <div className="quest-top">
           <div className="quest-title">📌 {tournament.name}</div>
         </div>

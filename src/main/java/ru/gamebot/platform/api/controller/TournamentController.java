@@ -18,6 +18,7 @@ import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Tournament;
 import ru.gamebot.platform.domain.model.TournamentEntry;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
+import ru.gamebot.platform.service.TelegramFileService;
 import ru.gamebot.platform.service.TournamentService;
 
 @RestController
@@ -29,6 +30,7 @@ public class TournamentController {
 
     private final TournamentService tournamentService;
     private final AppUserRepository appUserRepository;
+    private final TelegramFileService telegramFileService;
 
     @GetMapping
     public ResponseEntity<TournamentDto> current(@AuthenticationPrincipal Long telegramId) {
@@ -56,6 +58,26 @@ public class TournamentController {
                 .success(res.success())
                 .message(res.success() ? "Вы зарегистрированы! Взнос списан." : res.error())
                 .build());
+    }
+
+    @GetMapping("/{id}/photo")
+    public ResponseEntity<byte[]> photo(@PathVariable Long id) {
+        Tournament tournament = tournamentService.findById(id).orElse(null);
+        if (tournament == null || tournament.getPhotoFileId() == null) {
+            return ResponseEntity.notFound().build();
+        }
+        try {
+            byte[] image = telegramFileService.downloadFile(tournament.getPhotoFileId());
+            return ResponseEntity.ok()
+                    .contentType(org.springframework.http.MediaType.IMAGE_JPEG)
+                    .cacheControl(org.springframework.http.CacheControl.maxAge(java.time.Duration.ofHours(24)))
+                    .body(image);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return ResponseEntity.notFound().build();
+        } catch (java.io.IOException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 
     @GetMapping("/{id}/leaderboard")

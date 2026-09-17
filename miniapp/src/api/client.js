@@ -178,6 +178,11 @@ export async function getTournament() {
   return data;
 }
 
+// Прямой URL картинки (не blob) — эндпоинт публичный (permitAll в SecurityConfig), токен не нужен.
+export function getTournamentPhotoUrl(tournamentId) {
+  return `${BASE_URL}/api/tournament/${tournamentId}/photo`;
+}
+
 export async function joinTournament(id) {
   const { data } = await api.post(`/api/tournament/${id}/join`);
   return data;
