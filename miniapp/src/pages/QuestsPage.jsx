@@ -289,9 +289,15 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
   const brawlAutoVerify = detail?.brawlAutoVerify ?? q.brawlAutoVerify;
   const externalAutoApprove = detail?.externalAutoApprove ?? q.externalAutoApprove;
 
+  // Бейдж "🆕 Новое" на каждой карточке был избыточен, когда сразу много квестов одной игры
+  // становятся "новыми" одновременно (например, все квесты игры добавлены одним деплоем) —
+  // вместо флажка подсвечиваем фон карточки, и только пока квест ещё не взят (после взятия
+  // важнее статус прохождения, чем то, что квест недавно добавили).
+  const isNew = q.highlightNew && !submissionStatus;
+
   return (
     <div
-      className={`quest-card ${q.gameName === 'UGC' ? 'q-ugc' : (CATEGORY_CLASS[q.category] || 'q-flat')} ${submissionStatus ? 'quest-card-taken' : ''}`}
+      className={`quest-card ${q.gameName === 'UGC' ? 'q-ugc' : (CATEGORY_CLASS[q.category] || 'q-flat')} ${submissionStatus ? 'quest-card-taken' : ''} ${isNew ? 'quest-card-new' : ''}`}
       onClick={() => onToggle(q.id)}
     >
       {/* Шапка: категория + статус */}
@@ -306,7 +312,6 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
               {q.category}
             </span>
           ) : null}
-          {q.highlightNew && <span className="quest-cat-badge new">🆕 Новое</span>}
         </div>
         {submissionStatus && (
           <span className="quest-taken-badge" style={{ color: STATUS_COLORS[submissionStatus] }}>
