@@ -11,6 +11,12 @@ const CATEGORY_COLORS = { 'Лёгкие': '#66bb6a', 'Средние': '#ffa726'
 const CATEGORY_BADGE = { 'Лёгкие': 'easy', 'Средние': 'medium', 'Сложные': 'hard' };
 const CATEGORY_CLASS = { 'Лёгкие': 'q-easy', 'Средние': 'q-medium', 'Сложные': 'q-hard' };
 const CATEGORY_TICKETS = { 'Лёгкие': 1, 'Средние': 2, 'Сложные': 3 };
+const QUEST_SECTIONS = [
+  { key: 'gaming', label: '🎮 Игровые' },
+  { key: 'sponsored', label: '💼 Спонсорские' },
+  { key: 'ugc', label: '📹 UGC' },
+  { key: 'ads', label: '🎬 Реклама' },
+];
 
 function LinkPill({ url }) {
   const [copied, setCopied] = useState(false);
@@ -420,9 +426,7 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
   const [ugcLoading, setUgcLoading] = useState(false);
   const [sponsoredQuests, setSponsoredQuests] = useState([]);
   const [sponsoredLoading, setSponsoredLoading] = useState(false);
-  const [openSections, setOpenSections] = useState({
-    gaming: false, sponsored: false, ugc: false, ads: initialSection === 'ads',
-  });
+  const [activeSection, setActiveSection] = useState(initialSection === 'ads' ? 'ads' : 'gaming');
   const questListRef = useRef(null);
 
   useEffect(() => {
@@ -443,11 +447,9 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
     getQuests(selectedGame).then(setQuests).finally(() => setLoading(false));
   }, [selectedGame]);
 
-  // Клик по карточке игры — не просто выделяет её, а сразу открывает список квестов ниже
-  // (разворачивает секцию, если она была свёрнута, и прокручивает к результату).
+  // Клик по карточке игры сразу прокручивает к списку квестов этой игры ниже.
   function handleSelectGame(g) {
     setSelectedGame(g);
-    setOpenSections(prev => ({ ...prev, gaming: true }));
     requestAnimationFrame(() => {
       questListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
@@ -465,43 +467,46 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
   const topGames = games.slice(0, 3);
   const restGames = games.slice(3);
 
-  function toggleSection(key) {
-    setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
-  }
-
   return (
     <>
       <QuestBoostBanner />
       <RecommendedQuestSection expanded={expanded} details={details} onToggle={onToggle} onDetailChanged={onDetailChanged} />
 
-      <div className="quest-section-group">
-        <button className="quest-section-header" onClick={() => toggleSection('gaming')}>
-          <span>🎮 Игровые квесты</span>
-          <span className={`quest-section-chevron ${openSections.gaming ? 'open' : ''}`}>›</span>
-        </button>
+      <div className="quest-section-tabs">
+        {QUEST_SECTIONS.map(s => (
+          <button
+            key={s.key}
+            className={`quest-section-tab ${activeSection === s.key ? 'active' : ''}`}
+            onClick={() => setActiveSection(s.key)}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
 
-        {topGames.length > 0 && (
-          <div className="game-section">
-            <div className="game-section-title">🔥 Лучшие игры</div>
-            <div className="game-grid">
-              {topGames.map(g => (
-                <GameCard key={g} name={g} active={selectedGame === g} onClick={() => handleSelectGame(g)} />
-              ))}
+      {activeSection === 'gaming' && (
+        <>
+          {topGames.length > 0 && (
+            <div className="game-section">
+              <div className="game-section-title">🔥 Лучшие игры</div>
+              <div className="game-grid">
+                {topGames.map(g => (
+                  <GameCard key={g} name={g} active={selectedGame === g} onClick={() => handleSelectGame(g)} />
+                ))}
+              </div>
             </div>
-          </div>
-        )}
-        {restGames.length > 0 && (
-          <div className="game-section">
-            <div className="game-section-title">Все игры</div>
-            <div className="game-grid">
-              {restGames.map(g => (
-                <GameCard key={g} name={g} active={selectedGame === g} onClick={() => handleSelectGame(g)} />
-              ))}
+          )}
+          {restGames.length > 0 && (
+            <div className="game-section">
+              <div className="game-section-title">Все игры</div>
+              <div className="game-grid">
+                {restGames.map(g => (
+                  <GameCard key={g} name={g} active={selectedGame === g} onClick={() => handleSelectGame(g)} />
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {openSections.gaming && (
           <div ref={questListRef}>
             {loading && (
               <div className="category-section">
@@ -524,64 +529,46 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
-      <div className="quest-section-group">
-        <button className="quest-section-header" onClick={() => toggleSection('sponsored')}>
-          <span>💼 Спонсорские квесты</span>
-          <span className={`quest-section-chevron ${openSections.sponsored ? 'open' : ''}`}>›</span>
-        </button>
-        {openSections.sponsored && (
-          <>
-            {sponsoredLoading && <div className="page-center">Загрузка...</div>}
-            {!sponsoredLoading && sponsoredQuests.length === 0 && (
-              <div className="quest-empty-section">👀 Спонсорские квесты появятся скоро</div>
-            )}
-            {!sponsoredLoading && sponsoredQuests.length > 0 && (
-              <div className="category-section">
-                {sponsoredQuests.map(q => (
-                  <QuestCard key={q.id} q={q} expanded={expanded} onToggle={onToggle} details={details} onDetailChanged={onDetailChanged} />
-                ))}
-              </div>
-            )}
-          </>
-        )}
-      </div>
+      {activeSection === 'sponsored' && (
+        <>
+          {sponsoredLoading && <div className="page-center">Загрузка...</div>}
+          {!sponsoredLoading && sponsoredQuests.length === 0 && (
+            <div className="quest-empty-section">👀 Спонсорские квесты появятся скоро</div>
+          )}
+          {!sponsoredLoading && sponsoredQuests.length > 0 && (
+            <div className="category-section">
+              {sponsoredQuests.map(q => (
+                <QuestCard key={q.id} q={q} expanded={expanded} onToggle={onToggle} details={details} onDetailChanged={onDetailChanged} />
+              ))}
+            </div>
+          )}
+        </>
+      )}
 
-      <div className="quest-section-group">
-        <button className="quest-section-header" onClick={() => toggleSection('ugc')}>
-          <span>📹 Контент-квесты</span>
-          <span className={`quest-section-chevron ${openSections.ugc ? 'open' : ''}`}>›</span>
-        </button>
-        {openSections.ugc && (
-          <>
-            {ugcLoading && <div className="page-center">Загрузка...</div>}
-            {!ugcLoading && ugcQuests.length === 0 && (
-              <div className="quest-empty-section">Нет активных контент-квестов</div>
-            )}
-            {!ugcLoading && ugcQuests.length > 0 && (
-              <div className="category-section">
-                {ugcQuests.map(q => (
-                  <QuestCard key={q.id} q={q} expanded={expanded} onToggle={onToggle} details={details} onDetailChanged={onDetailChanged} />
-                ))}
-              </div>
-            )}
-          </>
-        )}
-      </div>
+      {activeSection === 'ugc' && (
+        <>
+          {ugcLoading && <div className="page-center">Загрузка...</div>}
+          {!ugcLoading && ugcQuests.length === 0 && (
+            <div className="quest-empty-section">Нет активных контент-квестов</div>
+          )}
+          {!ugcLoading && ugcQuests.length > 0 && (
+            <div className="category-section">
+              {ugcQuests.map(q => (
+                <QuestCard key={q.id} q={q} expanded={expanded} onToggle={onToggle} details={details} onDetailChanged={onDetailChanged} />
+              ))}
+            </div>
+          )}
+        </>
+      )}
 
-      <div className="quest-section-group">
-        <button className="quest-section-header" onClick={() => toggleSection('ads')}>
-          <span>🎬 Забери халявные EXC</span>
-          <span className={`quest-section-chevron ${openSections.ads ? 'open' : ''}`}>›</span>
-        </button>
-        {openSections.ads && (
-          <div className="category-section">
-            <AdRewardCard />
-          </div>
-        )}
-      </div>
+      {activeSection === 'ads' && (
+        <div className="category-section">
+          <AdRewardCard />
+        </div>
+      )}
     </>
   );
 }
