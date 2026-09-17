@@ -44,6 +44,7 @@ public class QuestController {
     private final TelegramFileService telegramFileService;
     private final GamePlatformBot gamePlatformBot;
     private final ru.gamebot.platform.service.QuestRewardBoostService questRewardBoostService;
+    private final ru.gamebot.platform.service.GameCatalogService gameCatalogService;
 
     /** Награда для показа игроку ДО взятия/сдачи квеста — та же логика, что и displayRewardCoins в боте.
      *  Для обычных квестов статичная quest.getRewardCoins() (как раньше); для repeatableNoCooldownEligible
@@ -143,6 +144,30 @@ public class QuestController {
         return appUserRepository.findByTelegramId(telegramId)
                 .map(user -> questService.sortGamesByInterest(user, games))
                 .orElse(games);
+    }
+
+    /** Обложка игры для карточек в разделе квестов — тот же паттерн проксирования Telegram file_id,
+     *  что и ProfileController.getAvatar. 404, если у игры не загружено фото через админку —
+     *  фронтенд на этот случай показывает градиентную заглушку. */
+    @GetMapping("/games/{name}/photo")
+    public org.springframework.http.ResponseEntity<byte[]> gamePhoto(@PathVariable String name) {
+        return gameCatalogService.getPhotoFileId(name)
+                .map(fileId -> {
+                    try {
+                        byte[] image = telegramFileService.downloadFile(fileId);
+                        return org.springframework.http.ResponseEntity.ok()
+                                .contentType(org.springframework.http.MediaType.IMAGE_JPEG)
+                                .cacheControl(org.springframework.http.CacheControl.maxAge(java.time.Duration.ofHours(24)))
+                                .body(image);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return org.springframework.http.ResponseEntity.<byte[]>notFound().build();
+                    } catch (IOException e) {
+                        log.warn("Failed to fetch game photo for '{}'", name, e);
+                        return org.springframework.http.ResponseEntity.<byte[]>notFound().build();
+                    }
+                })
+                .orElse(org.springframework.http.ResponseEntity.notFound().build());
     }
 
     /** Персонализированный показ 1-2 квестов при заходе (аудит вовлечённости, 2026-09-14) — тот же

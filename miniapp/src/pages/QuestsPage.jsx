@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getQuests, getSponsoredQuests, getGames, getRecommendedQuest, getQuestBoost, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard } from '../api/client';
+import { getQuests, getSponsoredQuests, getGames, getGamePhotoUrl, getRecommendedQuest, getQuestBoost, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard } from '../api/client';
 import { useLottie } from '../components/LottieContext';
 import { useParticles } from '../components/ParticlesContext';
 import AdRewardCard from '../components/AdRewardCard';
@@ -391,6 +391,26 @@ function RecommendedQuestSection({ expanded, details, onToggle, onDetailChanged 
   );
 }
 
+function GameCard({ name, active, onClick }) {
+  const [imgFailed, setImgFailed] = useState(false);
+
+  return (
+    <button className={`game-card ${active ? 'active' : ''}`} onClick={onClick}>
+      {!imgFailed && (
+        <img
+          className="game-card-img"
+          src={getGamePhotoUrl(name)}
+          alt={name}
+          loading="lazy"
+          onError={() => setImgFailed(true)}
+        />
+      )}
+      <div className="game-card-scrim" />
+      <span className="game-card-name">{name}</span>
+    </button>
+  );
+}
+
 function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSection }) {
   const [games, setGames] = useState([]);
   const [selectedGame, setSelectedGame] = useState(null);
@@ -403,6 +423,7 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
   const [openSections, setOpenSections] = useState({
     gaming: false, sponsored: false, ugc: false, ads: initialSection === 'ads',
   });
+  const questListRef = useRef(null);
 
   useEffect(() => {
     getGames().then(g => {
@@ -422,12 +443,27 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
     getQuests(selectedGame).then(setQuests).finally(() => setLoading(false));
   }, [selectedGame]);
 
+  // Клик по карточке игры — не просто выделяет её, а сразу открывает список квестов ниже
+  // (разворачивает секцию, если она была свёрнута, и прокручивает к результату).
+  function handleSelectGame(g) {
+    setSelectedGame(g);
+    setOpenSections(prev => ({ ...prev, gaming: true }));
+    requestAnimationFrame(() => {
+      questListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
   const flatQuests = quests.filter(q => !q.category);
   const grouped = CATEGORY_ORDER.reduce((acc, cat) => {
     const list = quests.filter(q => q.category === cat);
     if (list.length) acc[cat] = list;
     return acc;
   }, {});
+
+  // games уже отсортирован бэкендом по интересу пользователя (sortGamesByInterest) — верхние N
+  // считаем "лучшими" без доп. логики на фронте.
+  const topGames = games.slice(0, 3);
+  const restGames = games.slice(3);
 
   function toggleSection(key) {
     setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
@@ -443,19 +479,30 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
           <span>🎮 Игровые квесты</span>
           <span className={`quest-section-chevron ${openSections.gaming ? 'open' : ''}`}>›</span>
         </button>
-        {openSections.gaming && (
-          <>
-            <div className="game-tabs">
-              {games.map(g => (
-                <button
-                  key={g}
-                  className={`game-tab ${selectedGame === g ? 'active' : ''}`}
-                  onClick={() => setSelectedGame(g)}
-                >
-                  {g}
-                </button>
+
+        {topGames.length > 0 && (
+          <div className="game-section">
+            <div className="game-section-title">🔥 Лучшие игры</div>
+            <div className="game-grid">
+              {topGames.map(g => (
+                <GameCard key={g} name={g} active={selectedGame === g} onClick={() => handleSelectGame(g)} />
               ))}
             </div>
+          </div>
+        )}
+        {restGames.length > 0 && (
+          <div className="game-section">
+            <div className="game-section-title">Все игры</div>
+            <div className="game-grid">
+              {restGames.map(g => (
+                <GameCard key={g} name={g} active={selectedGame === g} onClick={() => handleSelectGame(g)} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {openSections.gaming && (
+          <div ref={questListRef}>
             {loading && (
               <div className="category-section">
                 {[1,2,3].map(i => <QuestSkeleton key={i} />)}
@@ -476,7 +523,7 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
                 ))}
               </div>
             ))}
-          </>
+          </div>
         )}
       </div>
 

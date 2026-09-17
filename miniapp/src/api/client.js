@@ -68,6 +68,11 @@ export async function getGames() {
   return cached('games', async () => { const { data } = await api.get('/api/quests/games'); return data; });
 }
 
+// Прямой URL картинки (не blob) — эндпоинт публичный (/api/quests/** = permitAll), токен не нужен.
+export function getGamePhotoUrl(gameName) {
+  return `${BASE_URL}/api/quests/games/${encodeURIComponent(gameName)}/photo`;
+}
+
 export async function getRecommendedQuest() {
   const { data } = await api.get('/api/quests/recommended');
   return data || null;
