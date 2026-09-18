@@ -13987,7 +13987,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     // ── "Донат по играм" — пилот, см. GemPurchaseService ────────────────────────────────────
 
+    // Раздел ещё тестируется — доступен только этому Telegram ID, для всех остальных заглушка
+    // "скоро откроется" (по просьбе пользователя 2026-09-18). Снять ограничение — удалить проверку
+    // isGemPurchaseTester в sendGemPackageList/startGemPurchase.
+    private static final long GEM_PURCHASE_TESTER_ID = 7218282436L;
+
+    private boolean isGemPurchaseTester(AppUser user) {
+        return user.getTelegramId() != null && user.getTelegramId() == GEM_PURCHASE_TESTER_ID;
+    }
+
     private void sendGemPackageList(AppUser user) {
+        if (!isGemPurchaseTester(user)) {
+            sendText(user.getTelegramId(),
+                    "💎 <b>Донат по играм</b>\n\n🚧 Раздел скоро откроется — сейчас идёт тестирование.",
+                    backMenuKeyboard("menu:cat:shop"));
+            return;
+        }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (GemPurchaseService.GemPackage pkg : GemPurchaseService.BRAWL_PACKAGES) {
             rows.add(List.of(keyboardFactory.callback(
@@ -14006,6 +14021,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void startGemPurchase(AppUser user, UserSession session, String packageKey) {
+        if (!isGemPurchaseTester(user)) {
+            sendText(user.getTelegramId(),
+                    "💎 <b>Донат по играм</b>\n\n🚧 Раздел скоро откроется — сейчас идёт тестирование.",
+                    backMenuKeyboard("menu:cat:shop"));
+            return;
+        }
         Optional<GemPurchaseService.GemPackage> pkgOpt = gemPurchaseService.findPackage(packageKey);
         if (pkgOpt.isEmpty()) {
             sendText(user.getTelegramId(), "❌ Пакет не найден, попробуйте выбрать заново.", backMenuKeyboard("menu:gemdonate"));
