@@ -12,6 +12,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -53,11 +54,13 @@ import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 import ru.gamebot.platform.config.AppProperties;
+import ru.gamebot.platform.domain.enums.GemPurchaseStatus;
 import ru.gamebot.platform.domain.enums.RejectionReasonCode;
 import ru.gamebot.platform.domain.enums.RewardRequestStatus;
 import ru.gamebot.platform.domain.enums.SubmissionStatus;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.BotReview;
+import ru.gamebot.platform.domain.model.GemPurchaseRequest;
 import ru.gamebot.platform.domain.model.NewsPost;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.model.QuestSubmission;
@@ -69,6 +72,7 @@ import ru.gamebot.platform.event.LeagueRewardEvent;
 import ru.gamebot.platform.event.NewsPublishedEvent;
 import ru.gamebot.platform.service.AdminService;
 import ru.gamebot.platform.service.GameCatalogService;
+import ru.gamebot.platform.service.GemPurchaseService;
 import ru.gamebot.platform.service.NewsService;
 import ru.gamebot.platform.service.QuestActionStatus;
 import ru.gamebot.platform.service.QuestService;
@@ -147,6 +151,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.PubgQuestVerificationService pubgQuestVerificationService;
     private final ru.gamebot.platform.service.ScheduledBroadcastService scheduledBroadcastService;
     private final ru.gamebot.platform.service.AdsgramBotAdService adsgramBotAdService;
+    private final GemPurchaseService gemPurchaseService;
     private final ru.gamebot.platform.domain.repository.TournamentEntryRepository tournamentEntryRepository;
     private final ru.gamebot.platform.domain.repository.BotReviewRepository botReviewRepository;
     private final ru.gamebot.platform.domain.repository.NudgeFeedbackRepository nudgeFeedbackRepository;
@@ -428,6 +433,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (session.getState() == SessionState.AVATAR_UPLOAD) {
             handleAvatarUpload(user, session, message);
+            return;
+        }
+
+        if (session.getState() == SessionState.GEM_PURCHASE_PROOF) {
+            handleGemPurchaseProof(user, session, message);
             return;
         }
 
@@ -1186,7 +1196,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.startsWith("brawl:confirm:")) {
             String confirmSuffix = data.substring("brawl:confirm:".length());
-            if ("quest".equals(confirmSuffix) || "profile".equals(confirmSuffix)) {
+            if ("quest".equals(confirmSuffix) || "profile".equals(confirmSuffix) || "gempurchase".equals(confirmSuffix)) {
                 String tag = session.getData().get("brawlTag");
                 String name = session.getData().get("brawlName");
                 String trophiesStr = session.getData().get("brawlTrophies");
@@ -1198,10 +1208,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 var playerInfo = new ru.gamebot.platform.service.BrawlStarsApiService.PlayerInfo(tag, name, Integer.parseInt(trophiesStr));
                 brawlQuestVerificationService.linkTag(user, playerInfo);
                 String pendingQuestIdStr = session.getData().get("brawlPendingQuestId");
+                String pendingGemPackageKey = session.getData().get("gemPendingPackageKey");
                 session.reset();
                 answer(callbackQuery.getId(), "✅ Тег привязан!");
                 if ("quest".equals(confirmSuffix) && pendingQuestIdStr != null) {
                     handleTakeQuest(callbackQuery, user, session, Long.parseLong(pendingQuestIdStr));
+                } else if ("gempurchase".equals(confirmSuffix) && pendingGemPackageKey != null) {
+                    startGemPurchase(user, session, pendingGemPackageKey);
                 } else {
                     sendText(user.getTelegramId(), "✅ Тег Brawl Stars привязан: " + escape(tag), backMenuKeyboard("menu:profile"));
                 }
@@ -1426,6 +1439,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleWheelAction(callbackQuery, user, data.substring("wheel:".length()));
             return;
         }
+        if (data.startsWith("gemdonate:pkg:")) {
+            answerSilently(callbackQuery.getId());
+            startGemPurchase(user, session, data.substring("gemdonate:pkg:".length()));
+            return;
+        }
         if (data.startsWith("review:")) {
             handleReviewAction(callbackQuery, user, session, data.substring("review:".length()));
             return;
@@ -1543,6 +1561,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "cat:quests" -> sendQuestsCategory(user);
             case "cat:wallet" -> sendWalletCategory(user);
             case "cat:shop" -> sendShopCategory(user);
+            case "gemdonate" -> sendGemPackageList(user);
             case "cat:club" -> sendClubCategory(user);
             case "cat:help" -> sendHelpCategory(user);
             case "squads" -> sendSquadMenu(user);
@@ -2317,6 +2336,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                     List.of(keyboardFactory.callback("❌ Отмена", "menu:quests"))
                             )));
                 }
+            }
+            case GEM_PURCHASE_REJECT_COMMENT -> {
+                Long reqId = session.getQuestId();
+                session.reset();
+                if (reqId == null) {
+                    sendText(user.getTelegramId(), "❌ Сессия истекла.", backMenuKeyboard("admin:gempurchase"));
+                    return;
+                }
+                GemPurchaseRequest req = gemPurchaseService.reject(reqId, text.trim());
+                notifyUserGemPurchaseRejected(req);
+                sendText(user.getTelegramId(), "❌ Заявка №" + reqId + " отклонена, игрок уведомлён.", backMenuKeyboard("admin:gempurchase"));
             }
             case CLASH_TAG_INPUT -> {
                 ru.gamebot.platform.service.ClashQuestVerificationService.TagLookupResult res =
@@ -3093,6 +3123,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("🛍️ Магазин наград", "menu:shop")),
                 List.of(keyboardFactory.callback("⚡ Предметы", "menu:sink")),
                 List.of(keyboardFactory.callback(passLabel, "menu:battlepass")),
+                List.of(keyboardFactory.callback("💎 Донат по играм", "menu:gemdonate")),
                 List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
@@ -7542,6 +7573,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "template" -> sendQuestTemplateGamePicker(user);
             case "rewards" -> sendAdminRewardList(user);
             case "withdrawals" -> { sendAdminWithdrawals(user); answerSilently(callbackQuery.getId()); return; }
+            case "gempurchase" -> { sendAdminGemPurchaseRequests(user); answerSilently(callbackQuery.getId()); return; }
             case "traffic" -> { sendAdminTrafficList(user); answerSilently(callbackQuery.getId()); return; }
             case "polls" -> { sendAdminPollList(user); answerSilently(callbackQuery.getId()); return; }
             case "sponsors" -> { sendAdminSponsorList(user); answerSilently(callbackQuery.getId()); return; }
@@ -8219,6 +8251,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     return;
                 } else if (action.startsWith("withdrawal:")) {
                     handleAdminWithdrawalAction(callbackQuery, user, session, action.substring("withdrawal:".length()));
+                    return;
+                } else if (action.startsWith("gempurchase:")) {
+                    handleAdminGemPurchaseAction(callbackQuery, user, session, action.substring("gempurchase:".length()));
                     return;
                 } else if (action.startsWith("reward:")) {
                     handleAdminRewardAction(callbackQuery, user, session, action.substring("reward:".length()));
@@ -13950,6 +13985,186 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    // ── "Донат по играм" — пилот, см. GemPurchaseService ────────────────────────────────────
+
+    private void sendGemPackageList(AppUser user) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (GemPurchaseService.GemPackage pkg : GemPurchaseService.BRAWL_PACKAGES) {
+            rows.add(List.of(keyboardFactory.callback(
+                    pkg.gems() + " гемов — " + pkg.priceRub() + "₽ (+" + pkg.xpBonus() + " XP)",
+                    "gemdonate:pkg:" + pkg.key())));
+        }
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", "menu:cat:shop"),
+                keyboardFactory.callback("🏠 Меню", "menu:main")
+        ));
+        sendText(user.getTelegramId(),
+                "💎 <b>Донат Brawl Stars</b>\n\n"
+                        + "Выберите пакет гемов. К каждой покупке — бонус XP (выше 75 000 XP лимит вывода уже не растёт — это чисто статус, безопасно).\n\n"
+                        + "⚠️ Пока пилотный режим: заявка обрабатывается вручную, зачисление может занять время.",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private void startGemPurchase(AppUser user, UserSession session, String packageKey) {
+        Optional<GemPurchaseService.GemPackage> pkgOpt = gemPurchaseService.findPackage(packageKey);
+        if (pkgOpt.isEmpty()) {
+            sendText(user.getTelegramId(), "❌ Пакет не найден, попробуйте выбрать заново.", backMenuKeyboard("menu:gemdonate"));
+            return;
+        }
+        GemPurchaseService.GemPackage pkg = pkgOpt.get();
+        String tag = user.getBrawlStarsTag();
+        if (tag == null || tag.isBlank()) {
+            session.reset();
+            session.getData().put("brawlLinkPurpose", "gempurchase");
+            session.getData().put("gemPendingPackageKey", packageKey);
+            session.setState(SessionState.BRAWL_TAG_INPUT);
+            sendText(user.getTelegramId(),
+                    "🏷️ Сначала привяжите тег Brawl Stars — введите его (например: <code>#ABC123</code>):",
+                    cancelKeyboard());
+            return;
+        }
+        GemPurchaseRequest req = gemPurchaseService.createRequest(user, pkg, tag);
+        session.reset();
+        session.setQuestId(req.getId());
+        session.setState(SessionState.GEM_PURCHASE_PROOF);
+        sendText(user.getTelegramId(),
+                "💎 <b>Заявка №" + req.getId() + "</b>\n\n"
+                        + "Пакет: <b>" + pkg.gems() + " гемов</b>\n"
+                        + "К оплате: <b>" + pkg.priceRub() + "₽</b>\n"
+                        + "Тег: <code>" + escape(tag) + "</code>\n\n"
+                        + escape(appProperties.getGemPurchasePaymentDetails()) + "\n\n"
+                        + "⚠️ ОБЯЗАТЕЛЬНО укажите в комментарии к переводу код: <code>" + req.getPaymentCode() + "</code>\n\n"
+                        + "После оплаты пришлите сюда скриншот перевода — это последний шаг оформления заявки.",
+                cancelKeyboard());
+    }
+
+    private void handleGemPurchaseProof(AppUser user, UserSession session, Message message) {
+        if (!message.hasPhoto()) {
+            sendText(user.getTelegramId(), "⚠️ Пришлите именно скриншот оплаты (фото).", cancelKeyboard());
+            return;
+        }
+        Long reqId = session.getQuestId();
+        if (reqId == null) {
+            session.reset();
+            sendText(user.getTelegramId(), "❌ Сессия истекла, оформите заявку заново.", backMenuKeyboard("menu:gemdonate"));
+            return;
+        }
+        List<PhotoSize> photos = message.getPhoto();
+        String fileId = photos.get(photos.size() - 1).getFileId();
+        gemPurchaseService.attachProof(reqId, fileId);
+        session.reset();
+        gemPurchaseService.findById(reqId).ifPresent(this::notifyAdminsAboutGemPurchase);
+        sendText(user.getTelegramId(),
+                "✅ Скриншот получен! Заявка №" + reqId + " на проверке — как только гемы зачислят, придёт уведомление.",
+                backMenuKeyboard("menu:cat:shop"));
+    }
+
+    private void notifyAdminsAboutGemPurchase(GemPurchaseRequest req) {
+        AppUser player = req.getUser();
+        String username = player.getTelegramUsername();
+        String userLink = (username != null && !username.isBlank())
+                ? "\n✉️ Написать: <a href=\"https://t.me/" + username + "\">@" + username + "</a>"
+                : "\n✉️ Telegram ID: <code>" + player.getTelegramId() + "</code>";
+        String text = "💎 <b>Новая заявка на донат</b>\n\n"
+                + "👤 Игрок: <b>" + escape(player.getNickname()) + "</b>" + userLink + "\n"
+                + "🎮 Игра: <b>" + escape(req.getGameName()) + "</b>\n"
+                + "🏷️ Тег: <code>" + escape(req.getGameTag()) + "</code>\n"
+                + "📦 Пакет: <b>" + req.getGems() + " гемов</b>\n"
+                + "💰 Оплачено: <b>" + req.getPriceRub() + "₽</b>\n"
+                + "🔑 Код платежа: <code>" + escape(req.getPaymentCode()) + "</code>\n"
+                + "🎁 XP-бонус при выполнении: <b>" + req.getXpBonus() + "</b>";
+        InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("👀 Открыть заявку", "admin:gempurchase:view:" + req.getId()))
+        ));
+        for (Long adminId : adminService.allAdminIds()) {
+            if (req.getPaymentProofFileId() != null) {
+                sendPhotoCaption(adminId, req.getPaymentProofFileId(), text, markup);
+            } else {
+                sendText(adminId, text, markup);
+            }
+        }
+    }
+
+    private void sendAdminGemPurchaseRequests(AppUser user) {
+        List<GemPurchaseRequest> pending = gemPurchaseService.findPending();
+        if (pending.isEmpty()) {
+            sendText(user.getTelegramId(), "📭 Нет заявок на донат в ожидании.", backMenuKeyboard("menu:main"));
+            return;
+        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (GemPurchaseRequest req : pending) {
+            rows.add(List.of(keyboardFactory.callback(
+                    "№" + req.getId() + " — " + escape(req.getUser().getNickname()) + " — " + req.getGems() + " гемов",
+                    "admin:gempurchase:view:" + req.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), "💎 <b>Заявки на донат (" + pending.size() + ")</b>", keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendAdminGemPurchaseCard(AppUser user, Long id) {
+        gemPurchaseService.findById(id).ifPresentOrElse(req -> {
+            String text = "💎 <b>Заявка №" + req.getId() + "</b>\n\n"
+                    + "👤 Игрок: <b>" + escape(req.getUser().getNickname()) + "</b>\n"
+                    + "🆔 Telegram ID: <code>" + req.getUser().getTelegramId() + "</code>\n"
+                    + "🏷️ Тег: <code>" + escape(req.getGameTag()) + "</code>\n"
+                    + "📦 Пакет: <b>" + req.getGems() + " гемов</b>\n"
+                    + "💰 Оплачено: <b>" + req.getPriceRub() + "₽</b>\n"
+                    + "🔑 Код платежа: <code>" + escape(req.getPaymentCode()) + "</code>\n"
+                    + "🎁 XP-бонус: <b>" + req.getXpBonus() + "</b>\n"
+                    + "📌 Статус: <b>" + req.getStatus() + "</b>"
+                    + (req.getRejectReason() != null ? "\n💬 Причина отклонения: " + escape(req.getRejectReason()) : "");
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            if (req.getStatus() == GemPurchaseStatus.PENDING) {
+                rows.add(List.of(
+                        keyboardFactory.callback("✅ Выполнено (закупил вручную)", "admin:gempurchase:approve:" + id),
+                        keyboardFactory.callback("❌ Отклонить", "admin:gempurchase:reject:" + id)
+                ));
+            }
+            rows.add(List.of(keyboardFactory.callback("⬅️ К списку", "admin:gempurchase")));
+            InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(rows);
+            if (req.getPaymentProofFileId() != null) {
+                sendPhotoCaption(user.getTelegramId(), req.getPaymentProofFileId(), text, markup);
+            } else {
+                sendText(user.getTelegramId(), text, markup);
+            }
+        }, () -> sendText(user.getTelegramId(), "❌ Заявка не найдена.", backMenuKeyboard("admin:gempurchase")));
+    }
+
+    private void handleAdminGemPurchaseAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
+        answerSilently(callbackQuery.getId());
+        if (action.startsWith("view:")) {
+            sendAdminGemPurchaseCard(user, parseLong(action.substring("view:".length())));
+        } else if (action.startsWith("approve:")) {
+            long id = Long.parseLong(action.substring("approve:".length()));
+            GemPurchaseRequest req = gemPurchaseService.approve(id);
+            notifyUserGemPurchaseApproved(req);
+            sendText(user.getTelegramId(), "✅ Заявка №" + id + " отмечена выполненной, игроку начислен XP-бонус.", null);
+            sendAdminGemPurchaseRequests(user);
+        } else if (action.startsWith("reject:")) {
+            long id = Long.parseLong(action.substring("reject:".length()));
+            session.reset();
+            session.setQuestId(id);
+            session.setState(SessionState.GEM_PURCHASE_REJECT_COMMENT);
+            sendText(user.getTelegramId(), "✏️ Введите причину отклонения заявки №" + id + ":", cancelKeyboard());
+        }
+    }
+
+    private void notifyUserGemPurchaseApproved(GemPurchaseRequest req) {
+        sendText(req.getUser().getTelegramId(),
+                "✅ <b>Гемы зачислены!</b>\n\n"
+                        + req.getGems() + " гемов Brawl Stars на тег " + escape(req.getGameTag()) + "\n"
+                        + "🎁 Бонус: +" + req.getXpBonus() + " XP",
+                backMenuKeyboard("menu:main"));
+    }
+
+    private void notifyUserGemPurchaseRejected(GemPurchaseRequest req) {
+        sendText(req.getUser().getTelegramId(),
+                "❌ Заявка на донат №" + req.getId() + " отклонена.\n\n"
+                        + "Причина: " + escape(req.getRejectReason() != null ? req.getRejectReason() : "не указана") + "\n\n"
+                        + "Если считаете это ошибкой — напишите в поддержку.",
+                backMenuKeyboard("menu:main"));
+    }
+
     private void handleModWithdrawalAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String data) {
         answerSilently(callbackQuery.getId());
         if (data.equals("mod:withdrawals")) {
@@ -14245,6 +14460,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     ? "💸 Заявки на вывод (" + pendingWithdrawals + ")"
                     : "💸 Заявки на вывод";
             rows.add(List.of(keyboardFactory.callback(wLabel, "admin:withdrawals")));
+            long pendingGemPurchases = gemPurchaseService.findPending().size();
+            String gLabel = pendingGemPurchases > 0
+                    ? "💎 Заявки на донат (" + pendingGemPurchases + ")"
+                    : "💎 Заявки на донат";
+            rows.add(List.of(keyboardFactory.callback(gLabel, "admin:gempurchase")));
             rows.add(List.of(keyboardFactory.callback("📈 Трафик", "admin:traffic")));
             rows.add(List.of(keyboardFactory.callback("🗳 Голосования", "admin:polls")));
             rows.add(List.of(keyboardFactory.callback("🏆 Турниры", "admin:tournaments")));
