@@ -14717,7 +14717,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private InlineKeyboardButton sinkShopSuggestionButton(AppUser user) {
         return user.getCoins() >= SINK_SHOP_SUGGESTION_MIN_COINS
-                ? keyboardFactory.callback("⚡ Потратить EXC на предметы", "menu:sink")
+                ? keyboardFactory.callback("🛍️ Забери усиление за EXC", "menu:sink")
                 : null;
     }
 
