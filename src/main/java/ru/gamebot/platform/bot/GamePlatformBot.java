@@ -1461,6 +1461,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             return;
         }
+        if (data.startsWith("gemdonate:confirmton:")) {
+            answerSilently(callbackQuery.getId());
+            if (!isGemPurchaseTester(user)) {
+                sendText(user.getTelegramId(),
+                        "💎 <b>Донат по играм</b>\n\n🚧 Раздел скоро откроется — сейчас идёт тестирование.",
+                        backMenuKeyboard("menu:cat:shop"));
+                return;
+            }
+            gemPurchaseService.findPackage(data.substring("gemdonate:confirmton:".length()))
+                    .ifPresentOrElse(
+                            pkg -> requestGemPurchaseTon(user, pkg),
+                            () -> sendText(user.getTelegramId(), "❌ Пакет не найден, попробуйте выбрать заново.", backMenuKeyboard("menu:gemdonate")));
+            return;
+        }
         if (data.startsWith("review:")) {
             handleReviewAction(callbackQuery, user, session, data.substring("review:".length()));
             return;
@@ -14439,18 +14453,36 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         GemPurchaseService.GemPackage pkg = pkgOpt.get();
         switch (method) {
             case "STARS" -> sendGemStarsInvoice(user, pkg);
-            case "TON" -> requestGemPurchaseTon(user, pkg);
+            case "TON" -> sendGemPurchaseTonConfirm(user, pkg);
             default -> sendGemPaymentMethodChoice(user, pkg);
         }
     }
 
-    /** GRAM (TON) — заявка создаётся сразу, БЕЗ показа кошелька клуба игроку (решение 2026-09-20:
-     *  адрес не публикуется всем подряд в боте). Модератор сам пишет игроку в личные сообщения,
-     *  уточняет нюансы (с какой биржи/кошелька переводит, сеть и т.п.) и только после этого лично
-     *  сообщает реквизиты — код платежа и скрин/чек через бота тут больше не нужны, потому что
-     *  модератор ведёт сделку лично и проверяет оплату сам (в т.ч. по блокчейну — переводы TON
-     *  публичны). Тот же паттерн, что уже был у Stars (заявка сразу, без промежуточного шага) —
-     *  разница только в том, что оплата ещё не прошла на этом шаге. */
+    /** Промежуточное подтверждение перед созданием заявки на GRAM (TON) (2026-09-20, по запросу
+     *  пользователя) — раньше нажатие на способ оплаты сразу создавало заявку и уведомляло модератора;
+     *  случайное/импульсивное нажатие плодило бы заявки, которые ещё нужно вручную отклонять. */
+    private void sendGemPurchaseTonConfirm(AppUser user, GemPurchaseService.GemPackage pkg) {
+        String tag = user.getBrawlStarsTag();
+        java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(pkg.priceRub()));
+        sendText(user.getTelegramId(),
+                "💎 <b>Подтверждение заявки</b>\n\n"
+                        + pkg.gems() + " гемов — ~" + tonAmount + " GRAM (TON) (" + pkg.priceRub() + "₽ по текущему курсу)\n\n"
+                        + "Тег: <code>" + escape(tag) + "</code>\n\n"
+                        + "После подтверждения модератор свяжется с вами в личных сообщениях, чтобы уточнить детали и прислать реквизиты для оплаты.\n\n"
+                        + "Создать заявку?",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("✅ Создать заявку", "gemdonate:confirmton:" + pkg.key())),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "gemdonate:pkg:" + pkg.key())),
+                        List.of(keyboardFactory.callback("❌ Отмена", "menu:gemdonate"))
+                )));
+    }
+
+    /** GRAM (TON) — заявка создаётся ПОСЛЕ подтверждения (см. sendGemPurchaseTonConfirm), БЕЗ показа
+     *  кошелька клуба игроку (решение 2026-09-20: адрес не публикуется всем подряд в боте). Модератор
+     *  сам пишет игроку в личные сообщения, уточняет нюансы (с какой биржи/кошелька переводит, сеть
+     *  и т.п.) и только после этого лично сообщает реквизиты — код платежа и скрин/чек через бота тут
+     *  больше не нужны, потому что модератор ведёт сделку лично и проверяет оплату сам (в т.ч. по
+     *  блокчейну — переводы TON публичны). */
     private void requestGemPurchaseTon(AppUser user, GemPurchaseService.GemPackage pkg) {
         String tag = user.getBrawlStarsTag();
         GemPurchaseRequest req = gemPurchaseService.createManualRequest(user, pkg, tag, "TON");
