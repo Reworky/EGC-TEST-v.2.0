@@ -1577,6 +1577,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "gemdonate" -> sendGemPackageList(user);
             case "cat:club" -> sendClubCategory(user);
             case "cat:help" -> sendHelpCategory(user);
+            case "cat:fortune" -> sendFortuneCategory(user);
             case "squads" -> sendSquadMenu(user);
             default -> sendMainMenu(user, mainMenuText(user));
         }
@@ -3085,13 +3086,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String dailyLabel = userService.isDailyBonusAvailable(user)
                 ? "🎁 Забрать ежедневный бонус 🔔"
                 : "✅ Бонус за вход получен";
-        String chestLabel = userService.isChestAvailable(user)
-                ? "🎁 Сундук дня 🔔"
-                : "✅ Сундук сегодня открыт";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
                 List.of(keyboardFactory.callback(dailyLabel, "menu:daily")),
-                List.of(keyboardFactory.webApp(chestLabel, "https://experience-gaming-club.pages.dev/wallet?section=chest")),
                 List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads")),
                 List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
@@ -3120,7 +3117,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendMenuCategory(user, "💰 <b>Кошелёк</b>", List.of(
                     List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
                     List.of(keyboardFactory.callback(dailyLabel, "menu:daily")),
-                    List.of(keyboardFactory.webApp(chestLabel, "https://experience-gaming-club.pages.dev/wallet?section=chest")),
                     List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads"))
             ));
         }
@@ -3307,6 +3303,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("📋 Правила клуба", "menu:rules")),
                 List.of(keyboardFactory.callback("🆘 Поддержка", "menu:support")),
                 List.of(keyboardFactory.url("⭐ Отзывы игроков", "https://t.me/egc_payouts"))
+        ));
+    }
+
+    private void sendFortuneCategory(AppUser user) {
+        String wheelLabel = user.getTickets() > 0
+                ? "🎡 Колесо фортуны 🎟 " + user.getTickets()
+                : "🎡 Колесо фортуны";
+        String chestLabel = userService.isChestAvailable(user)
+                ? "🎁 Сундук дня 🔔"
+                : "✅ Сундук сегодня открыт";
+        sendMenuCategory(user, "🍀 <b>Фортуна</b>", List.of(
+                List.of(keyboardFactory.callback(wheelLabel, "wheel:menu")),
+                List.of(keyboardFactory.webApp(chestLabel, "https://experience-gaming-club.pages.dev/wallet?section=chest"))
         ));
     }
 
@@ -6829,17 +6838,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     if (remaining > 0) {
                         kb = keyboardFactory.rowsLayout(List.of(
                                 List.of(keyboardFactory.callback("🎡 Крутить ещё", "wheel:spin")),
-                                List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
+                                List.of(keyboardFactory.callback("⬅️ Назад", "menu:cat:fortune"))
                         ));
                     } else {
                         kb = keyboardFactory.rowsLayout(List.of(
-                                List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
+                                List.of(keyboardFactory.callback("⬅️ Назад", "menu:cat:fortune"))
                         ));
                     }
                     sendText(user.getTelegramId(), msg, kb);
                 } catch (IllegalArgumentException e) {
                     sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), keyboardFactory.rowsLayout(List.of(
-                            List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
+                            List.of(keyboardFactory.callback("⬅️ Назад", "menu:cat:fortune"))
                     )));
                 }
             }
@@ -6869,7 +6878,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else {
             rows.add(List.of(keyboardFactory.callback("🎟 Нет билетов", "wheel:menu")));
         }
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:cat:fortune")));
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
 
@@ -14770,9 +14779,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🤝 Рефералы", "menu:referrals")));
 
         String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошелёк 🔔" : "💰 Кошелёк";
-        String wheelLabel = user.getTickets() > 0
-                ? "🎡 Колесо фортуны 🎟 " + user.getTickets()
-                : "🎡 Колесо фортуны";
+        String fortuneLabel;
+        if (user.getTickets() > 0) {
+            fortuneLabel = "🍀 Фортуна 🎟 " + user.getTickets();
+        } else if (userService.isChestAvailable(user)) {
+            fortuneLabel = "🍀 Фортуна 🔔";
+        } else {
+            fortuneLabel = "🍀 Фортуна";
+        }
         long activePolls = pollService.findActive().size();
         String clubLabel = activePolls > 0 ? "👥 Клуб (" + activePolls + ")" : "👥 Клуб";
 
@@ -14785,7 +14799,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("🛍️ Магазин", "menu:cat:shop")
         ));
         rows.add(List.of(
-                keyboardFactory.callback(wheelLabel, "wheel:menu"),
+                keyboardFactory.callback(fortuneLabel, "menu:cat:fortune"),
                 keyboardFactory.callback(clubLabel, "menu:cat:club")
         ));
 
