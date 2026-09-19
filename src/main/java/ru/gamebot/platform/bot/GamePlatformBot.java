@@ -2346,7 +2346,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
                 GemPurchaseRequest req = gemPurchaseService.reject(reqId, text.trim());
                 notifyUserGemPurchaseRejected(req);
-                sendText(user.getTelegramId(), "❌ Заявка №" + reqId + " отклонена, игрок уведомлён.", backMenuKeyboard("admin:gempurchase"));
+                sendText(user.getTelegramId(), "❌ Заявка Д-" + req.getDisplayId() + " отклонена, игрок уведомлён.", backMenuKeyboard("admin:gempurchase"));
             }
             case CLASH_TAG_INPUT -> {
                 ru.gamebot.platform.service.ClashQuestVerificationService.TagLookupResult res =
@@ -6096,17 +6096,50 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Подтверждение до реального списания — обязательный ответ в течение 10 секунд (требование
-     * Telegram). Всегда одобряем: цена/наличие товара фиксированы на нашей стороне, отклонять нечего. */
+     * Telegram). Для одноразовых товаров (рамка/титул/доп. слот) проверяем владение и отклоняем повтор
+     * ЗДЕСЬ — это единственная точка всего платёжного флоу, где ещё не списаны деньги, значит единственное
+     * место, где повторную покупку можно остановить без возни с возвратом. Раньше эта проверка была
+     * только в StarsController (мини-апп) — в самом боте (sendInvoice в чате) её не было вообще, поэтому
+     * рамку можно было купить второй раз (баг, обнаружен 2026-09-19 по жалобе игрока). */
     private void handlePreCheckoutQuery(org.telegram.telegrambots.meta.api.objects.payments.PreCheckoutQuery query) {
         org.telegram.telegrambots.meta.api.methods.AnswerPreCheckoutQuery answer =
                 new org.telegram.telegrambots.meta.api.methods.AnswerPreCheckoutQuery();
         answer.setPreCheckoutQueryId(query.getId());
-        answer.setOk(true);
+        String rejectReason = alreadyOwnedRejectReason(query);
+        if (rejectReason != null) {
+            answer.setOk(false);
+            answer.setErrorMessage(rejectReason);
+        } else {
+            answer.setOk(true);
+        }
         try {
             execute(answer);
         } catch (Exception e) {
             log.error("Failed to answer pre-checkout query {}", query.getId(), e);
         }
+    }
+
+    private String alreadyOwnedRejectReason(org.telegram.telegrambots.meta.api.objects.payments.PreCheckoutQuery query) {
+        if (query.getFrom() == null) {
+            return null;
+        }
+        AppUser user = userService.findByTelegramId(query.getFrom().getId()).orElse(null);
+        if (user == null) {
+            return null;
+        }
+        String payload = query.getInvoicePayload();
+        if ("starsitem:AVATAR_FRAME".equals(payload) && user.getOwnedFramesCsv() != null
+                && Arrays.asList(user.getOwnedFramesCsv().split(",")).contains("egc")) {
+            return "Рамка «EGC» уже куплена ранее — повторная покупка не нужна.";
+        }
+        if ("starsitem:PATRON_TITLE".equals(payload) && user.getOwnedTitlesCsv() != null
+                && Arrays.asList(user.getOwnedTitlesCsv().split(",")).contains("patron")) {
+            return "Титул «Покровитель EGC» уже куплен ранее — повторная покупка не нужна.";
+        }
+        if ("starsitem:PERMANENT_SLOT".equals(payload) && user.isPermanentExtraSlot()) {
+            return "Доп. слот квеста навсегда уже куплен ранее — повторная покупка не нужна.";
+        }
+        return null;
     }
 
     /** Деньги уже списаны у игрока Telegram-ом на этот момент — только выдаём товар и логируем.
@@ -6130,6 +6163,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         purchase.setCreatedAt(LocalDateTime.now());
         starsPurchaseRepository.save(purchase);
 
+        // Деньги уже не вернуть отсюда без возни с Telegram-возвратом — поэтому любая ошибка выдачи
+        // товара НЕ должна попадать в общий catch-all onUpdateReceived (там игрок увидит бесполезное
+        // "попробуйте ещё раз", что для уже списанной оплаты и звучит неверно, и рискует повторной
+        // попыткой оплатить второй раз за то же). Вместо этого — честное сообщение "оплата прошла,
+        // разберёмся вручную" + мгновенный алерт админам с деталями платежа для ручного разбора.
+        // Баг обнаружен 2026-09-19: два игрока заплатили Stars, получили общий "Что-то пошло не так"
+        // и ничего не получили, а админ узнал об этом только из жалобы в поддержке.
+        try {
+            grantStarsPurchase(user, telegramId, payload);
+        } catch (Exception e) {
+            log.error("Failed to grant Stars purchase (payload={}, telegramId={}, chargeId={})",
+                    payload, telegramId, payment.getTelegramPaymentChargeId(), e);
+            sendText(telegramId,
+                    "✅ Оплата прошла успешно, но при начислении произошла техническая ошибка.\n\n"
+                            + "Мы уже видим это и начислим товар вручную в ближайшее время — дополнительно ничего делать не нужно, повторно оплачивать не нужно.",
+                    backMenuKeyboard("menu:main"));
+            notifyAdminsAboutFailedStarsGrant(user, payload, payment);
+        }
+    }
+
+    private void grantStarsPurchase(AppUser user, Long telegramId, String payload) {
         if ("starsitem:AVATAR_FRAME".equals(payload)) {
             userService.grantEgcAvatarFrame(user);
             sendText(telegramId,
@@ -6157,6 +6211,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     backMenuKeyboard("menu:main"));
         } else {
             log.warn("Successful payment with unknown payload '{}' from user {}", payload, telegramId);
+        }
+    }
+
+    private void notifyAdminsAboutFailedStarsGrant(AppUser user, String payload,
+            org.telegram.telegrambots.meta.api.objects.payments.SuccessfulPayment payment) {
+        String text = "🚨 <b>Ошибка выдачи Stars-товара</b>\n\n"
+                + "👤 Игрок: <b>" + escape(user.getNickname()) + "</b>\n"
+                + "🆔 Telegram ID: <code>" + user.getTelegramId() + "</code>\n"
+                + "📦 Товар: <code>" + escape(payload) + "</code>\n"
+                + "⭐ Сумма: <b>" + payment.getTotalAmount() + "</b>\n"
+                + "🔑 Charge ID: <code>" + escape(payment.getTelegramPaymentChargeId()) + "</code>\n\n"
+                + "Оплата у Telegram прошла, товар не выдан (см. лог сервера на этот момент). Нужно выдать вручную (админ-бонус/панель) и, при необходимости, разобраться с причиной.";
+        for (Long adminId : adminService.allAdminIds()) {
+            sendText(adminId, text, null);
         }
     }
 
@@ -14044,17 +14112,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     cancelKeyboard());
             return;
         }
-        GemPurchaseRequest req = gemPurchaseService.createRequest(user, pkg, tag);
+        // Заявка ЕЩЁ НЕ создаётся здесь — только после реального скрина оплаты (handleGemPurchaseProof).
+        // Раньше создавалась сразу на этом шаге, из-за чего любое нажатие на пакет (даже без оплаты)
+        // плодило запись и раздувало "Заявка №N" брошенными попытками (жалоба игрока 2026-09-19).
+        String paymentCode = gemPurchaseService.generatePaymentCode(user);
         session.reset();
-        session.setQuestId(req.getId());
+        session.getData().put("gemPendingPackageKey", packageKey);
+        session.getData().put("gemPendingTag", tag);
+        session.getData().put("gemPendingPaymentCode", paymentCode);
         session.setState(SessionState.GEM_PURCHASE_PROOF);
         sendText(user.getTelegramId(),
-                "💎 <b>Заявка №" + req.getId() + "</b>\n\n"
-                        + "Пакет: <b>" + pkg.gems() + " гемов</b>\n"
-                        + "К оплате: <b>" + pkg.priceRub() + "₽</b>\n"
+                "💎 <b>" + pkg.gems() + " гемов — " + pkg.priceRub() + "₽</b>\n\n"
                         + "Тег: <code>" + escape(tag) + "</code>\n\n"
                         + escape(appProperties.getGemPurchasePaymentDetails()) + "\n\n"
-                        + "⚠️ ОБЯЗАТЕЛЬНО укажите в комментарии к переводу код: <code>" + req.getPaymentCode() + "</code>\n\n"
+                        + "⚠️ ОБЯЗАТЕЛЬНО укажите в комментарии к переводу код: <code>" + paymentCode + "</code>\n\n"
                         + "После оплаты пришлите сюда скриншот перевода — это последний шаг оформления заявки.",
                 cancelKeyboard());
     }
@@ -14064,19 +14135,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), "⚠️ Пришлите именно скриншот оплаты (фото).", cancelKeyboard());
             return;
         }
-        Long reqId = session.getQuestId();
-        if (reqId == null) {
+        String packageKey = session.getData().get("gemPendingPackageKey");
+        String tag = session.getData().get("gemPendingTag");
+        String paymentCode = session.getData().get("gemPendingPaymentCode");
+        Optional<GemPurchaseService.GemPackage> pkgOpt = packageKey != null ? gemPurchaseService.findPackage(packageKey) : Optional.empty();
+        if (pkgOpt.isEmpty() || tag == null || paymentCode == null) {
             session.reset();
             sendText(user.getTelegramId(), "❌ Сессия истекла, оформите заявку заново.", backMenuKeyboard("menu:gemdonate"));
             return;
         }
         List<PhotoSize> photos = message.getPhoto();
         String fileId = photos.get(photos.size() - 1).getFileId();
-        gemPurchaseService.attachProof(reqId, fileId);
+        GemPurchaseRequest req = gemPurchaseService.createRequest(user, pkgOpt.get(), tag, paymentCode, fileId);
         session.reset();
-        gemPurchaseService.findById(reqId).ifPresent(this::notifyAdminsAboutGemPurchase);
+        notifyAdminsAboutGemPurchase(req);
         sendText(user.getTelegramId(),
-                "✅ Скриншот получен! Заявка №" + reqId + " на проверке — как только гемы зачислят, придёт уведомление.",
+                "✅ Скриншот получен! Заявка Д-" + req.getDisplayId() + " на проверке — как только гемы зачислят, придёт уведомление.",
                 backMenuKeyboard("menu:cat:shop"));
     }
 
@@ -14115,7 +14189,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (GemPurchaseRequest req : pending) {
             rows.add(List.of(keyboardFactory.callback(
-                    "№" + req.getId() + " — " + escape(req.getUser().getNickname()) + " — " + req.getGems() + " гемов",
+                    "Д-" + req.getDisplayId() + " — " + escape(req.getUser().getNickname()) + " — " + req.getGems() + " гемов",
                     "admin:gempurchase:view:" + req.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
@@ -14124,7 +14198,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendAdminGemPurchaseCard(AppUser user, Long id) {
         gemPurchaseService.findById(id).ifPresentOrElse(req -> {
-            String text = "💎 <b>Заявка №" + req.getId() + "</b>\n\n"
+            String text = "💎 <b>Заявка Д-" + req.getDisplayId() + "</b>\n\n"
                     + "👤 Игрок: <b>" + escape(req.getUser().getNickname()) + "</b>\n"
                     + "🆔 Telegram ID: <code>" + req.getUser().getTelegramId() + "</code>\n"
                     + "🏷️ Тег: <code>" + escape(req.getGameTag()) + "</code>\n"
@@ -14159,14 +14233,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             long id = Long.parseLong(action.substring("approve:".length()));
             GemPurchaseRequest req = gemPurchaseService.approve(id);
             notifyUserGemPurchaseApproved(req);
-            sendText(user.getTelegramId(), "✅ Заявка №" + id + " отмечена выполненной, игроку начислен XP-бонус.", null);
+            sendText(user.getTelegramId(), "✅ Заявка Д-" + req.getDisplayId() + " отмечена выполненной, игроку начислен XP-бонус.", null);
             sendAdminGemPurchaseRequests(user);
         } else if (action.startsWith("reject:")) {
             long id = Long.parseLong(action.substring("reject:".length()));
             session.reset();
             session.setQuestId(id);
             session.setState(SessionState.GEM_PURCHASE_REJECT_COMMENT);
-            sendText(user.getTelegramId(), "✏️ Введите причину отклонения заявки №" + id + ":", cancelKeyboard());
+            Long displayId = gemPurchaseService.findById(id).map(GemPurchaseRequest::getDisplayId).orElse(id);
+            sendText(user.getTelegramId(), "✏️ Введите причину отклонения заявки Д-" + displayId + ":", cancelKeyboard());
         }
     }
 
@@ -14180,7 +14255,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void notifyUserGemPurchaseRejected(GemPurchaseRequest req) {
         sendText(req.getUser().getTelegramId(),
-                "❌ Заявка на донат №" + req.getId() + " отклонена.\n\n"
+                "❌ Заявка на донат Д-" + req.getDisplayId() + " отклонена.\n\n"
                         + "Причина: " + escape(req.getRejectReason() != null ? req.getRejectReason() : "не указана") + "\n\n"
                         + "Если считаете это ошибкой — напишите в поддержку.",
                 backMenuKeyboard("menu:main"));

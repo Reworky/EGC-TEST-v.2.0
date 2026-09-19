@@ -45,9 +45,19 @@ public class GemPurchaseService {
         return BRAWL_PACKAGES.stream().filter(p -> p.key().equals(key)).findFirst();
     }
 
+    /** Код генерируется ДО создания заявки (см. GamePlatformBot.startGemPurchase) — сама заявка
+     *  теперь создаётся только в момент присылки скрина оплаты (createRequest), а не сразу при выборе
+     *  пакета. Раньше заявка создавалась сразу — значит каждое нажатие на пакет (даже без оплаты и без
+     *  отправки скрина) плодило запись в базе, из-за чего номер "Заявка №N" рос от брошенных попыток
+     *  (жалоба пользователя 2026-09-19). */
+    public String generatePaymentCode(AppUser user) {
+        return "EGC-" + user.getTelegramId() % 100000 + "-" + (System.currentTimeMillis() % 100000);
+    }
+
     @Transactional
-    public GemPurchaseRequest createRequest(AppUser user, GemPackage pkg, String gameTag) {
+    public GemPurchaseRequest createRequest(AppUser user, GemPackage pkg, String gameTag, String paymentCode, String photoFileId) {
         GemPurchaseRequest req = new GemPurchaseRequest();
+        req.setDisplayId(repository.findMaxDisplayId() + 1);
         req.setUser(user);
         req.setGameName(BRAWL_STARS);
         req.setPackageKey(pkg.key());
@@ -55,20 +65,12 @@ public class GemPurchaseService {
         req.setPriceRub(pkg.priceRub());
         req.setXpBonus(pkg.xpBonus());
         req.setGameTag(gameTag);
-        req.setPaymentCode(generatePaymentCode(user));
+        req.setPaymentCode(paymentCode);
+        req.setPaymentProofFileId(photoFileId);
         req.setStatus(GemPurchaseStatus.PENDING);
         req.setCreatedAt(LocalDateTime.now());
         req.setUpdatedAt(LocalDateTime.now());
         return repository.save(req);
-    }
-
-    @Transactional
-    public void attachProof(Long requestId, String photoFileId) {
-        repository.findById(requestId).ifPresent(req -> {
-            req.setPaymentProofFileId(photoFileId);
-            req.setUpdatedAt(LocalDateTime.now());
-            repository.save(req);
-        });
     }
 
     public Optional<GemPurchaseRequest> findById(Long id) {

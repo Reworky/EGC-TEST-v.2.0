@@ -28,6 +28,10 @@ public class GemPurchaseRequest {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Порядковый номер для показа игроку/админу ("Д-{displayId}") — отдельный счётчик, не связан
+     *  с {@link #id} (общий PK на всю таблицу), тот же паттерн, что у RewardRequest.displayId. */
+    private Long displayId;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id")
     private AppUser user;
