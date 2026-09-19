@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getShopItems, getShopStats, purchaseItem, getMyRewards, getProfile, getPerksState, purchasePerk, sendGiftBoost, sendExcTransfer, cancelReward, equipFrame, getStarsInvoiceLink } from '../api/client';
+import { getShopItems, getShopStats, purchaseItem, getMyRewards, getProfile, getPerksState, purchasePerk, sendGiftBoost, sendExcTransfer, cancelReward, equipFrame, getStarsInvoiceLink, getStarsPrices } from '../api/client';
 import { openStarsInvoice } from '../utils/stars';
 import BackButton from '../components/BackButton';
 import AdBanner from '../components/AdBanner';
@@ -398,9 +398,6 @@ function GiftCard({ expanded, onToggle }) {
   );
 }
 
-const AVATAR_FRAME_STARS_PRICE = 35;
-const PATRON_TITLE_STARS_PRICE = 60;
-const PERMANENT_SLOT_STARS_PRICE = 75;
 
 /** Общая карточка покупки за Telegram Stars (Telegram.WebApp.openInvoice) — переиспользуется для
  * товаров, у которых нет собственного EXC-аналога в PERK_CATEGORIES (титул, доп. слот навсегда).
@@ -455,7 +452,6 @@ function StarsShopCard({ itemType, icon, title, description, price, onPurchased,
   );
 }
 
-const EGC_PASS_STARS_PRICE = 150;
 const EGC_PASS_PERKS = [
   '✨ +10% к EXC за все квесты (до 10 000 EXC бонуса в месяц)',
   '📂 Доп. слот квеста (как «навсегда», пока активна)',
@@ -467,7 +463,7 @@ const EGC_PASS_PERKS = [
 /** Флагманский Stars-товар — подписка (Telegram Star subscription, 30 дней, автопродление на
  * стороне Telegram, 2026-09-15). В отличие от StarsShopCard это не разовая покупка: карточка
  * показывает статус подписки, а не скрывается после оплаты. */
-function EgcPassCard({ profile, onPurchased }) {
+function EgcPassCard({ profile, price, onPurchased }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -520,24 +516,31 @@ function EgcPassCard({ profile, onPurchased }) {
         </div>
       ) : (
         <button className="quest-btn" disabled={busy} onClick={handleBuy} style={{ width: '100%' }}>
-          {busy ? '...' : `Оформить — ${EGC_PASS_STARS_PRICE} ⭐ / 30 дней`}
+          {busy ? '...' : `Оформить — ${price} ⭐ / 30 дней`}
         </button>
       )}
     </div>
   );
 }
 
+// Дефолты на случай, если /api/stars/prices ещё не успел загрузиться (или недоступен) — совпадают с
+// ценами на момент написания, но являются только запасным вариантом: реальный источник правды —
+// бэкенд (см. getStarsPrices), чтобы не разъезжаться с каталогом STARS_ITEMS при изменении цены там.
+const STARS_PRICE_FALLBACK = { AVATAR_FRAME: 35, PATRON_TITLE: 60, PERMANENT_SLOT: 75, EGC_PASS: 150, CHEST_REROLL: 15 };
+
 function PerksView({ expanded, onToggle }) {
   const [state, setState] = useState(null);
   const [frames, setFrames] = useState(null);
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState(null);
+  const [prices, setPrices] = useState(STARS_PRICE_FALLBACK);
 
   function reload() {
     setError(null);
     getPerksState().then(setState).catch(() => setError('Не удалось загрузить предметы. Попробуйте ещё раз.'));
     getShopItems().then(items => setFrames(items.filter(i => i.category === 'Кастомизация'))).catch(() => setFrames([]));
     getProfile().then(setProfile).catch(() => {});
+    getStarsPrices().then(p => setPrices({ ...STARS_PRICE_FALLBACK, ...p })).catch(() => {});
   }
 
   useEffect(() => { reload(); }, []);
@@ -552,7 +555,7 @@ function PerksView({ expanded, onToggle }) {
         {state.profileTitle && <div className="shop-ratio">🏅 {state.profileTitle}</div>}
       </div>
 
-      <EgcPassCard profile={profile} onPurchased={reload} />
+      <EgcPassCard profile={profile} price={prices.EGC_PASS} onPurchased={reload} />
 
       {PERK_CATEGORIES.map(cat => {
         const visible = cat.items.filter(item => !item.hideIf || !item.hideIf(state));
@@ -592,7 +595,7 @@ function PerksView({ expanded, onToggle }) {
                 icon="👑"
                 title="Рамка «EGC»"
                 description="Эксклюзивная рамка клуба, навсегда"
-                price={AVATAR_FRAME_STARS_PRICE}
+                price={prices.AVATAR_FRAME}
                 successMessage="✅ Рамка куплена!"
                 onPurchased={reload}
                 expanded={expanded === 'stars-AVATAR_FRAME'}
@@ -605,7 +608,7 @@ function PerksView({ expanded, onToggle }) {
                 icon="💎"
                 title="Титул «Покровитель EGC»"
                 description="Эксклюзивный статус, недоступен за EXC — виден всем в клубе"
-                price={PATRON_TITLE_STARS_PRICE}
+                price={prices.PATRON_TITLE}
                 successMessage="✅ Титул куплен и надет!"
                 onPurchased={reload}
                 expanded={expanded === 'stars-PATRON_TITLE'}
@@ -618,7 +621,7 @@ function PerksView({ expanded, onToggle }) {
                 icon="📂"
                 title="Доп. слот квеста — навсегда"
                 description="На 1 активный квест больше постоянно — обычно доступно только на 48ч за EXC"
-                price={PERMANENT_SLOT_STARS_PRICE}
+                price={prices.PERMANENT_SLOT}
                 successMessage="✅ Слот куплен навсегда!"
                 onPurchased={reload}
                 expanded={expanded === 'stars-PERMANENT_SLOT'}

@@ -6031,6 +6031,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "Восстановление серии", STREAK_RESTORE_STARS_PRICE_MIN) // реальная цена всегда считается через streakRestorePriceStars и передаётся как override
     );
 
+    /** Единый источник правды по ценам для мини-аппа (см. StarsController "/api/stars/prices") — раньше
+     *  мини-апп хранил цены отдельными захардкоженными JS-константами в 3 файлах (ShopPage/WalletPage),
+     *  независимо от этого каталога. Совпадали случайно (никто их не рассинхронизировал), но при
+     *  любом изменении цены в одном месте и забытом в другом мини-апп показывал бы игроку один ценник,
+     *  а списывал бы другой реальный (обнаружено 2026-09-19 при сверке всех Stars-покупок на баги).
+     *  STREAK_RESTORE намеренно не включён — у него нет единой цены (см. streakRestorePriceStars),
+     *  каталожное значение там лишь нижняя граница-заглушка и показывать его как "цену" было бы неверно. */
+    public Map<String, Integer> getStarsItemPrices() {
+        Map<String, Integer> prices = new java.util.LinkedHashMap<>();
+        STARS_ITEMS.forEach((payload, spec) -> {
+            if (!"starsitem:STREAK_RESTORE".equals(payload)) {
+                prices.put(payload.substring("starsitem:".length()), spec.priceStars());
+            }
+        });
+        return prices;
+    }
+
     private void sendAvatarFrameStarsInvoice(AppUser user) {
         sendStarsInvoice(user, "starsitem:AVATAR_FRAME");
     }

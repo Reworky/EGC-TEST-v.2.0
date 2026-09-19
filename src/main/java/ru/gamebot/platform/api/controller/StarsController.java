@@ -1,11 +1,13 @@
 package ru.gamebot.platform.api.controller;
 
 import java.util.Arrays;
+import java.util.Map;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,6 +32,15 @@ public class StarsController {
         private boolean success;
         private String message;
         private String url;
+    }
+
+    /** Единый источник правды по ценам (2026-09-19) — мини-апп раньше хранил цены захардкоженными
+     * JS-константами (ShopPage/WalletPage), отдельно от каталога STARS_ITEMS в GamePlatformBot,
+     * без ничего, что держало бы их в синхроне. Как и остальной /api/stars/**, требует авторизации —
+     * не проблема, мини-апп логинится (authMiniApp) раньше, чем успевает отрисовать магазин. */
+    @GetMapping("/prices")
+    public ResponseEntity<Map<String, Integer>> prices() {
+        return ResponseEntity.ok(gamePlatformBot.getStarsItemPrices());
     }
 
     @PostMapping("/invoice/{itemType}")

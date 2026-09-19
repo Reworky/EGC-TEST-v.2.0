@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getWallet, claimDailyBonus, openChest, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone, invalidateCache, getStarsWithdrawItems, purchaseItem, getStarsInvoiceLink } from '../api/client';
+import { getWallet, claimDailyBonus, openChest, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone, invalidateCache, getStarsWithdrawItems, purchaseItem, getStarsInvoiceLink, getStarsPrices } from '../api/client';
 import { openStarsInvoice } from '../utils/stars';
 import chestRegularImg from '../assets/chests/regular.png';
 import chestPremiumImg from '../assets/chests/premium.png';
@@ -25,6 +25,8 @@ const STATUS_LABELS = {
   CANCELLED: <><i className="ti ti-circle-x"></i> Отменено</>,
 };
 
+// Запасной вариант на случай недоступности /api/stars/prices — реальная цена подтягивается через
+// getStarsPrices() в BalanceView (см. chestRerollPrice), не отсюда.
 const CHEST_REROLL_STARS_PRICE = 15;
 
 const CHEST_PRIZES = [
@@ -41,7 +43,7 @@ const CHEST_REROLL_PRIZES = [
   { label: '🪙 200-350 EXC', chance: '40%' },
 ];
 
-function ChestPrizesModal({ onClose }) {
+function ChestPrizesModal({ price, onClose }) {
   useEffect(() => {
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -60,7 +62,7 @@ function ChestPrizesModal({ onClose }) {
         {CHEST_PRIZES.map(p => (
           <p key={p.label} className="fund-modal-text">{p.label} — {p.chance}</p>
         ))}
-        <p className="fund-modal-text" style={{ opacity: 0.6, marginTop: 12 }}>Реролл за {CHEST_REROLL_STARS_PRICE}⭐ (можно сколько угодно раз):</p>
+        <p className="fund-modal-text" style={{ opacity: 0.6, marginTop: 12 }}>Реролл за {price}⭐ (можно сколько угодно раз):</p>
         {CHEST_REROLL_PRIZES.map(p => (
           <p key={p.label} className="fund-modal-text">{p.label} — {p.chance}</p>
         ))}
@@ -112,6 +114,7 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
   const [showRanks, setShowRanks] = useState(false);
   const [showChestPrizes, setShowChestPrizes] = useState(false);
   const [chestPulse, setChestPulse] = useState(false);
+  const [chestRerollPrice, setChestRerollPrice] = useState(CHEST_REROLL_STARS_PRICE);
   const chestRef = useRef(null);
   const playParticles = useParticles();
 
@@ -124,6 +127,14 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
     const t = setTimeout(() => setChestPulse(false), 2200);
     return () => clearTimeout(t);
   }, [highlightChest]);
+
+  // Реальная цена — из каталога STARS_ITEMS на бэкенде (см. StarsController "/api/stars/prices"),
+  // CHEST_REROLL_STARS_PRICE ниже — только запасной вариант на случай недоступности запроса, чтобы
+  // цена в мини-аппе не могла молча разъехаться с тем, что реально спишет инвойс (найдено при аудите
+  // Stars-покупок, 2026-09-19).
+  useEffect(() => {
+    getStarsPrices().then(p => { if (p.CHEST_REROLL) setChestRerollPrice(p.CHEST_REROLL); }).catch(() => {});
+  }, []);
 
   async function handleClaim() {
     setBusy(true);
@@ -317,7 +328,7 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
           </div>
         </div>
         <ShimmerButton disabled={rerollBusy} onClick={handleBuyReroll} style={{ marginTop: 10 }}>
-          {rerollBusy ? 'Секунду...' : <><i className="ti ti-sparkles" style={{ marginRight: 6 }} /> Купить — {CHEST_REROLL_STARS_PRICE} ⭐</>}
+          {rerollBusy ? 'Секунду...' : <><i className="ti ti-sparkles" style={{ marginRight: 6 }} /> Купить — {chestRerollPrice} ⭐</>}
         </ShimmerButton>
         <p className="ref-progress-label" style={{ color: 'rgba(167,139,250,0.85)', cursor: 'pointer', marginTop: 8 }} onClick={() => setShowChestPrizes(true)}>
           📋 Все призы →
@@ -338,7 +349,7 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
       </div>
 
       {showRanks && <RanksModal currentXp={wallet.xp} onClose={() => setShowRanks(false)} />}
-      {showChestPrizes && <ChestPrizesModal onClose={() => setShowChestPrizes(false)} />}
+      {showChestPrizes && <ChestPrizesModal price={chestRerollPrice} onClose={() => setShowChestPrizes(false)} />}
     </>
   );
 }

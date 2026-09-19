@@ -339,3 +339,10 @@ export async function getStarsInvoiceLink(itemType) {
   const { data } = await api.post(`/api/stars/invoice/${itemType}`);
   return data;
 }
+
+// Единый источник правды по ценам Stars-товаров (каталог STARS_ITEMS в GamePlatformBot) — раньше
+// ShopPage/WalletPage хранили те же цены отдельными захардкоженными константами, ничего не держало
+// их в синхроне с реальной ценой инвойса (найдено при аудите Stars-покупок, 2026-09-19).
+export async function getStarsPrices() {
+  return cached('starsPrices', async () => { const { data } = await api.get('/api/stars/prices'); return data; });
+}
