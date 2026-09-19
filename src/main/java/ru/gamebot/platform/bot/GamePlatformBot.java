@@ -2813,7 +2813,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 String query = text.trim();
                 AppUser other = resolveUserBySearch(query);
                 if (other == null) {
-                    sendText(user.getTelegramId(), "❌ Пользователь «" + escape(query) + "» не найден (ни по TG ID, ни по нику). Введите ещё раз:", cancelKeyboard());
+                    sendText(user.getTelegramId(), "❌ Пользователь «" + escape(query) + "» не найден (ни по TG ID, ни по нику, ни по @username). Введите ещё раз:", cancelKeyboard());
                     return;
                 }
                 if (other.getTelegramId().equals(targetId)) {
@@ -2934,7 +2934,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 String query = text.trim();
                 AppUser found = resolveUserBySearch(query);
                 if (found == null) {
-                    sendText(user.getTelegramId(), "❌ Пользователь «" + escape(query) + "» не найден (ни по TG ID, ни по нику).", backMenuKeyboard("admin:users:0"));
+                    sendText(user.getTelegramId(), "❌ Пользователь «" + escape(query) + "» не найден (ни по TG ID, ни по нику, ни по @username).", backMenuKeyboard("admin:users:0"));
                 } else {
                     sendAdminUserCard(user, found.getTelegramId(), 0, null);
                 }
@@ -2944,7 +2944,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 String query = text.trim();
                 AppUser found = resolveUserBySearch(query);
                 if (found == null) {
-                    sendText(user.getTelegramId(), "❌ Пользователь «" + escape(query) + "» не найден (ни по TG ID, ни по нику).", backMenuKeyboard("menu:main"));
+                    sendText(user.getTelegramId(), "❌ Пользователь «" + escape(query) + "» не найден (ни по TG ID, ни по нику, ни по @username).", backMenuKeyboard("menu:main"));
                 } else {
                     sendModUserCard(user, found.getTelegramId(), null);
                 }
@@ -2955,7 +2955,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 if (found == null) {
                     session.setState(SessionState.BONUS_SEARCH);
                     sendText(user.getTelegramId(),
-                            "❌ Пользователь «" + escape(query) + "» не найден (ни по TG ID, ни по нику). Введите ещё раз:",
+                            "❌ Пользователь «" + escape(query) + "» не найден (ни по TG ID, ни по нику, ни по @username). Введите ещё раз:",
                             cancelKeyboard());
                 } else {
                     session.setState(SessionState.BONUS_INPUT);
@@ -15723,13 +15723,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Ищет игрока по вводу: если строка — число, ищет по TG ID, иначе по никнейму (без учёта регистра). */
+    /** Ищем по числовому TG ID → игровому нику в боте → Telegram @username (с "@" или без) —
+     *  саппорт часто видит у игрока только его Telegram-имя/юзернейм из внешнего чата поддержки,
+     *  а не игровой ник или TG ID (реальный кейс 2026-09-19: "Рассветов" в саппорте — не ник и не
+     *  ID, нашёлся только по @username). */
     private AppUser resolveUserBySearch(String input) {
         String trimmed = input.trim();
         try {
             long id = Long.parseLong(trimmed);
             return userService.findByTelegramId(id).orElse(null);
         } catch (NumberFormatException e) {
-            return userService.findByNickname(trimmed).orElse(null);
+            AppUser byNickname = userService.findByNickname(trimmed).orElse(null);
+            if (byNickname != null) {
+                return byNickname;
+            }
+            String username = trimmed.startsWith("@") ? trimmed.substring(1) : trimmed;
+            return userService.findByTelegramUsername(username).orElse(null);
         }
     }
 

@@ -16,6 +16,8 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     Optional<AppUser> findByNicknameIgnoreCase(String nickname);
 
+    Optional<AppUser> findByTelegramUsernameIgnoreCase(String telegramUsername);
+
     long countByLastBotActivityAtAfter(LocalDateTime since);
 
     long countByLastMiniAppOpenAtAfter(LocalDateTime since);

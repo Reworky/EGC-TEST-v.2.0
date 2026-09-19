@@ -286,6 +286,10 @@ public class UserService {
         return appUserRepository.findByNicknameIgnoreCase(nickname);
     }
 
+    public Optional<AppUser> findByTelegramUsername(String telegramUsername) {
+        return appUserRepository.findByTelegramUsernameIgnoreCase(telegramUsername);
+    }
+
     /**
      * Освобождает никнейм у аккаунта (для повторной регистрации другим человеком под тем же ником).
      * Аккаунт не блокируется и не удаляется, только теряет ник — уникальность поля допускает
