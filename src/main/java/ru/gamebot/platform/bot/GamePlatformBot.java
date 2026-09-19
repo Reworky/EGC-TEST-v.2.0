@@ -6369,7 +6369,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🌱 Новый игрок — 1 500 EXC", "sink:buy_title:Новый игрок:1500")));
         rows.add(List.of(keyboardFactory.callback("🔥 Квест-хантер — 4 500 EXC", "sink:buy_title:Квест-хантер:4500")));
         rows.add(List.of(keyboardFactory.callback("👑 Элита клуба — 7 500 EXC", "sink:buy_title:Элита клуба:7500")));
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:sink")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "sink:cat:customization")));
         sendText(user.getTelegramId(),
                 "🎭 <b>Титулы профиля</b>\n\nТитул отображается в вашем профиле и виден другим игрокам.\nПокупка заменяет текущий титул.",
                 keyboardFactory.rowsLayout(rows));
@@ -6391,9 +6391,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sinkShopService.purchaseTitle(user, title, price);
             sendText(user.getTelegramId(),
                     "🏅 <b>Титул «" + escape(title) + "» получен!</b>\n\nСписано " + price + " EXC. Титул отображается в вашем профиле.",
-                    backMenuKeyboard("menu:sink"));
+                    backMenuKeyboard("sink:cat:customization"));
         } catch (IllegalArgumentException e) {
-            sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
+            sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("sink:cat:customization"));
         }
     }
 
@@ -6441,10 +6441,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "📝 " + escape(reward.getDescription()) + "\n\n"
                 + "🪙 Стоимость: <b>" + effectivePrice + " EXC</b>" + priceNote + "\n"
                 + limitStatus;
+        // Рамка аватара открывается только через пикер номиналов Кастомизации (см. sendGroupPicker),
+        // не напрямую из Магазина наград — "Назад" должен вести обратно в пикер (2026-09-20).
+        String backTarget = "Кастомизация".equals(reward.getCategory()) && reward.getPurchaseGroup() != null
+                ? "shop:group:" + reward.getPurchaseGroup()
+                : "menu:shop";
         InlineKeyboardMarkup keyboard = verticalWithBackMenu(
                 List.of(keyboardFactory.callback("🛒 Обменять", "shop:buy:" + rewardId)),
                 "⬅️ Назад",
-                "menu:shop"
+                backTarget
         );
         if (reward.getPhotoFileId() != null && !reward.getPhotoFileId().isBlank()) {
             sendPhotoCaption(user.getTelegramId(), reward.getPhotoFileId(), text, keyboard);
@@ -6557,7 +6562,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "🎁 " + escape(reward.getTitle()) + "\n"
                             + "🪙 Списано: <b>" + effectivePrice + " EXC</b>\n\n"
                             + "Открой мини-апп → Профиль, чтобы увидеть новую рамку вокруг аватара.",
-                    backMenuKeyboard("menu:shop"));
+                    backMenuKeyboard("sink:cat:customization"));
             if (callbackQuery != null) answerSilently(callbackQuery.getId());
             return;
         }
