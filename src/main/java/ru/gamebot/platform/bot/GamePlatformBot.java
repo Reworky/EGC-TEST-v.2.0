@@ -6335,25 +6335,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         String payload = payment.getInvoicePayload();
 
-        ru.gamebot.platform.domain.model.StarsPurchase purchase = new ru.gamebot.platform.domain.model.StarsPurchase();
-        purchase.setTelegramId(telegramId);
-        purchase.setItemType(payload);
-        purchase.setStarsAmount(payment.getTotalAmount());
-        purchase.setTelegramPaymentChargeId(payment.getTelegramPaymentChargeId());
-        purchase.setCreatedAt(LocalDateTime.now());
-        starsPurchaseRepository.save(purchase);
-
-        // Деньги уже не вернуть отсюда без возни с Telegram-возвратом — поэтому любая ошибка выдачи
-        // товара НЕ должна попадать в общий catch-all onUpdateReceived (там игрок увидит бесполезное
-        // "попробуйте ещё раз", что для уже списанной оплаты и звучит неверно, и рискует повторной
-        // попыткой оплатить второй раз за то же). Вместо этого — честное сообщение "оплата прошла,
-        // разберёмся вручную" + мгновенный алерт админам с деталями платежа для ручного разбора.
+        // Деньги уже не вернуть отсюда без возни с Telegram-возвратом — поэтому любая ошибка ПОСЛЕ
+        // списания (и запись платежа в журнал, и выдача товара) НЕ должна попадать в общий catch-all
+        // onUpdateReceived (там игрок увидит бесполезное "попробуйте ещё раз", что для уже списанной
+        // оплаты звучит неверно и рискует повторной попыткой оплатить второй раз за то же). Вместо
+        // этого — честное сообщение "оплата прошла, разберёмся вручную" + мгновенный алерт админам.
         // Баг обнаружен 2026-09-19: два игрока заплатили Stars, получили общий "Что-то пошло не так"
-        // и ничего не получили, а админ узнал об этом только из жалобы в поддержке.
+        // и ничего не получили. Изначальный фикс оборачивал только grantStarsPurchase — 2026-09-20
+        // тот же общий "Что-то пошло не так" повторился на покупке сундука за Stars: сохранение
+        // StarsPurchase (repository.save, до этого try) тоже может бросить исключение и обойти
+        // "безопасный" catch — расширил try на весь метод, включая запись в журнал.
         try {
+            ru.gamebot.platform.domain.model.StarsPurchase purchase = new ru.gamebot.platform.domain.model.StarsPurchase();
+            purchase.setTelegramId(telegramId);
+            purchase.setItemType(payload);
+            purchase.setStarsAmount(payment.getTotalAmount());
+            purchase.setTelegramPaymentChargeId(payment.getTelegramPaymentChargeId());
+            purchase.setCreatedAt(LocalDateTime.now());
+            starsPurchaseRepository.save(purchase);
+
             grantStarsPurchase(user, telegramId, payload, payment);
         } catch (Exception e) {
-            log.error("Failed to grant Stars purchase (payload={}, telegramId={}, chargeId={})",
+            log.error("Failed to process Stars purchase (payload={}, telegramId={}, chargeId={})",
                     payload, telegramId, payment.getTelegramPaymentChargeId(), e);
             sendText(telegramId,
                     "✅ Оплата прошла успешно, но при начислении произошла техническая ошибка.\n\n"
