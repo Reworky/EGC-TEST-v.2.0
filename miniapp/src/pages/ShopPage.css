@@ -182,14 +182,9 @@
   margin: 0;
 }
 
-/* ── Boost cards (2026-09-19) — крупная цветная сетка вместо тонких строк ── */
-.boost-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
+/* ── Разделы-кнопки (2026-09-19) — используют базовые .boost-* стили ниже, разработанные изначально
+   для крупных карточек товаров (эксперимент отменён по просьбе — карточки остались только как
+   стиль для кнопок-разделов на главном экране "Предметы", см. SectionButton). ── */
 .boost-card {
   position: relative;
   border-radius: 18px;
@@ -221,11 +216,6 @@
 
 .boost-card-wide .boost-icon {
   margin-bottom: 0;
-}
-
-.boost-card-wide .boost-buy,
-.boost-card-wide .boost-status {
-  margin-left: auto;
 }
 
 .boost-gold {
@@ -293,48 +283,6 @@
   font-weight: 600;
   color: rgba(255,255,255,0.55);
   margin: 2px 0 10px;
-}
-
-.boost-buy {
-  align-self: flex-start;
-  margin-top: auto;
-  border: none;
-  border-radius: 10px;
-  padding: 7px 12px;
-  font-size: 12px;
-  font-weight: 700;
-  background: rgba(255,255,255,0.16);
-  color: #fff;
-  cursor: pointer;
-}
-
-.boost-buy:active {
-  transform: scale(0.95);
-}
-
-.boost-buy:disabled {
-  opacity: 0.6;
-}
-
-.boost-card-locked {
-  opacity: 0.6;
-}
-
-.boost-status {
-  font-size: 11px;
-  font-weight: 600;
-  color: rgba(255,255,255,0.65);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: auto;
-}
-
-.boost-message {
-  font-size: 11.5px;
-  color: rgba(255,255,255,0.85);
-  margin-top: 8px;
-  line-height: 1.4;
 }
 
 .shop-meta {

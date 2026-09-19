@@ -10,16 +10,11 @@ const PERK_CATEGORIES = [
   {
     title: 'Бусты',
     items: [
-      { key: 'xpboost24', title: '⚡ XP +20% • 24ч', price: 3000, blockedBy: 'xpBoostActive', activeUntilField: 'xpBoostUntil',
-        icon: '⚡', shortTitle: 'XP +20%', duration: '24ч', gradient: 'gold' },
-      { key: 'xpboost72', title: '⚡ XP +20% • 72ч', price: 7500, blockedBy: 'xpBoostActive', activeUntilField: 'xpBoostUntil',
-        icon: '⚡', shortTitle: 'XP +20%', duration: '72ч', gradient: 'gold' },
-      { key: 'excboost24', title: '⚡ EXC +20% • 24ч', price: 3000, blockedBy: 'excBoostActive', activeUntilField: 'excBoostUntil',
-        icon: '🪙', shortTitle: 'EXC +20%', duration: '24ч', gradient: 'purple' },
-      { key: 'excboost72', title: '⚡ EXC +20% • 72ч', price: 7500, blockedBy: 'excBoostActive', activeUntilField: 'excBoostUntil',
-        icon: '🪙', shortTitle: 'EXC +20%', duration: '72ч', gradient: 'purple' },
-      { key: 'doubleboost24', title: '⚡⚡ Двойной буст • 24ч', price: 5000, hideIf: s => s.xpBoostActive || s.excBoostActive,
-        icon: '🔥', shortTitle: 'Двойной буст', duration: 'XP + EXC • 24ч', gradient: 'fire', wide: true },
+      { key: 'xpboost24', title: '⚡ XP +20% • 24ч', price: 3000, blockedBy: 'xpBoostActive', activeUntilField: 'xpBoostUntil' },
+      { key: 'xpboost72', title: '⚡ XP +20% • 72ч', price: 7500, blockedBy: 'xpBoostActive', activeUntilField: 'xpBoostUntil' },
+      { key: 'excboost24', title: '⚡ EXC +20% • 24ч', price: 3000, blockedBy: 'excBoostActive', activeUntilField: 'excBoostUntil' },
+      { key: 'excboost72', title: '⚡ EXC +20% • 72ч', price: 7500, blockedBy: 'excBoostActive', activeUntilField: 'excBoostUntil' },
+      { key: 'doubleboost24', title: '⚡⚡ Двойной буст • 24ч', price: 5000, hideIf: s => s.xpBoostActive || s.excBoostActive },
     ],
   },
   {
@@ -268,46 +263,6 @@ function PerkCard({ item, state, expanded, onToggle, onPurchased }) {
           {message && <div className="quest-message">{message}</div>}
         </div>
       )}
-    </div>
-  );
-}
-
-/** Крупная цветная карточка буста (2026-09-19, по референсу игрока) — отдельный стиль от общего
- * .shop-card: без раскрытия (у бустов нет описания, покупка сразу по тапу на цену), с градиентом
- * по типу буста и увеличенной иконкой, вместо тонкой строки списка. */
-function BoostCard({ item, state, onPurchased }) {
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState(null);
-  const active = item.blockedBy && state[item.blockedBy];
-  const untilText = active && item.activeUntilField ? state[item.activeUntilField] : null;
-
-  async function handleBuy(e) {
-    e.stopPropagation();
-    if (active || busy) return;
-    setBusy(true);
-    setMessage(null);
-    try {
-      const res = await purchasePerk(item.key);
-      setMessage(res.message);
-      if (res.success) onPurchased();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className={`boost-card boost-${item.gradient} ${item.wide ? 'boost-card-wide' : ''} ${active ? 'boost-card-locked' : ''}`}>
-      <div className="boost-icon">{item.icon}</div>
-      <div className="boost-title">{item.shortTitle}</div>
-      <div className="boost-duration">{item.duration}</div>
-      {active ? (
-        <div className="boost-status"><i className="ti ti-circle-check"></i> {item.activeLabel || ('Активен' + (untilText ? ` до ${untilText}` : ''))}</div>
-      ) : (
-        <button className="boost-buy" disabled={busy} onClick={handleBuy}>
-          {busy ? '...' : `${item.price.toLocaleString()} EXC`}
-        </button>
-      )}
-      {message && <div className="boost-message">{message}</div>}
     </div>
   );
 }
@@ -655,7 +610,6 @@ function PerksView({ expanded, onToggle }) {
   const visible = cat ? cat.items.filter(item => !item.hideIf || !item.hideIf(state)) : [];
   const isCustomization = activeSection === 'Кастомизация';
   const isQuests = activeSection === 'Квесты';
-  const isBoosts = activeSection === 'Бусты';
   const isSocial = activeSection === 'Социальные';
 
   return (
@@ -670,13 +624,7 @@ function PerksView({ expanded, onToggle }) {
           <GiftCard expanded={expanded === 'gift'} onToggle={onToggle} />
         ) : (
           <>
-            {isBoosts ? (
-              <div className="boost-grid">
-                {visible.map(item => (
-                  <BoostCard key={item.key} item={item} state={state} onPurchased={reload} />
-                ))}
-              </div>
-            ) : visible.map(item => (
+            {visible.map(item => (
               <PerkCard
                 key={item.key}
                 item={item}
