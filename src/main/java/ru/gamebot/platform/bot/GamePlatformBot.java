@@ -3644,14 +3644,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         String avatarBtn = user.getAvatarFileId() != null ? "📷 Сменить аватар" : "📷 Загрузить аватар";
         InlineKeyboardMarkup profileKeyboard = keyboardFactory.rowsLayout(List.of(
-                List.of(
-                        keyboardFactory.callback("🗺️ Квесты", "menu:quests"),
-                        keyboardFactory.callback("💰 Баланс", "profile:balance")
-                ),
-                List.of(
-                        keyboardFactory.callback("🏆 Рейтинг", "menu:rating"),
-                        keyboardFactory.callback("🤝 Рефералы", "menu:referrals")
-                ),
                 List.of(keyboardFactory.callback("📊 Все ранги", "profile:ranks")),
                 List.of(keyboardFactory.callback(avatarBtn, "profile:avatar")),
                 List.of(keyboardFactory.callback("✏️ Редактировать профиль", "profile:edit")),
