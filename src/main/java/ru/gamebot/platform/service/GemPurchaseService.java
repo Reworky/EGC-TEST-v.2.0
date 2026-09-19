@@ -59,7 +59,6 @@ public class GemPurchaseService {
         req.setPriceRub(pkg.priceRub());
         req.setXpBonus(pkg.xpBonus());
         req.setGameTag(gameTag);
-        req.setSupercellIdEmail(user.getSupercellIdEmail());
         req.setPaymentMethod(paymentMethod);
         req.setStatus(GemPurchaseStatus.PENDING);
         req.setCreatedAt(LocalDateTime.now());
@@ -83,7 +82,6 @@ public class GemPurchaseService {
         req.setPriceRub(pkg.priceRub());
         req.setXpBonus(pkg.xpBonus());
         req.setGameTag(gameTag);
-        req.setSupercellIdEmail(user.getSupercellIdEmail());
         req.setPaymentMethod("STARS");
         req.setStarsAmount(starsAmount);
         req.setTelegramPaymentChargeId(telegramPaymentChargeId);
