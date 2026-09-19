@@ -1177,7 +1177,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(user.getTelegramId(), "⚠️ Предложение уже неактуально.", backMenuKeyboard("menu:main"));
                 return;
             }
-            sendStarsInvoice(user, "starsitem:STREAK_RESTORE");
+            sendStarsInvoice(user, "starsitem:STREAK_RESTORE", streakRestorePriceStars(userService.restorableStreakDays(user)));
             return;
         }
         if ("streak:reset".equals(data)) {
@@ -3786,14 +3786,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         userService.captureStreakBreakIfNeeded(user);
         if (userService.hasRestorableStreak(user)) {
             int lost = userService.restorableStreakDays(user);
+            int price = streakRestorePriceStars(lost);
             answer(callbackQuery.getId(), "Серия прервалась");
             sendText(user.getTelegramId(),
                     "💔 <b>Серия входов прервалась</b>\n\n"
                             + "Была серия из <b>" + lost + " " + dayWord(lost) + " подряд</b> — пропущен день.\n\n"
-                            + "Можно восстановить за " + STREAK_RESTORE_STARS_PRICE + " ⭐ и продолжить с "
+                            + "Можно восстановить за " + price + " ⭐ и продолжить с "
                             + (lost + 1) + "-го дня как ни в чём не бывало (плюс бонус за сегодня), либо начать заново.",
                     keyboardFactory.rowsLayout(List.of(
-                            List.of(keyboardFactory.callback("💫 Восстановить за " + STREAK_RESTORE_STARS_PRICE + " ⭐", "streak:restore")),
+                            List.of(keyboardFactory.callback("💫 Восстановить за " + price + " ⭐", "streak:restore")),
                             List.of(keyboardFactory.callback("🔄 Начать заново", "streak:reset"))
                     )));
             return;
@@ -5973,12 +5974,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private static final int EGC_PASS_STARS_PRICE = 150;
     private static final int EGC_PASS_SUBSCRIPTION_PERIOD_SECONDS = 2_592_000; // 30 дней — фиксировано Telegram, другое значение API отклонит
 
-    /** Цена восстановления прерванной серии входов (2026-09-19) — цена как у реролла сундука
-     *  (CHEST_REROLL_STARS_PRICE): такая же "импульсивная" по частоте покупка (несколько раз в месяц
-     *  у активного игрока), а не разовая премиум-вещь вроде рамки/титула. См. UserService.snapshotBrokenStreak/
-     *  hasRestorableStreak/restoreStreak — снимок серии делается в момент обнуления, окно на покупку
-     *  STREAK_RESTORE_GRACE_DAYS (2) дня. */
-    private static final int STREAK_RESTORE_STARS_PRICE = CHEST_REROLL_STARS_PRICE;
+    /** Цена восстановления серии зависит от того, сколько дней потеряно (2026-09-19) — плоский
+     *  ценник экономически некорректен: обрыв 2-дневной серии и обрыв 89-дневной несопоставимы по
+     *  ценности (см. дневной бонус min(150+(день-1)*50, 500) — растёт до потолка на 8-й день, плюс
+     *  разовые вехи на днях 7/14/30/90: +1000/+1500/+5000/+15000 EXC). Тариф считает, сколько EXC
+     *  "разгона" (потолок 500 - фактический бонус за первые 7 дней = ~1400 EXC гарантированно) и
+     *  насколько близко была отложенная веха — грубая оценка по диапазону длины потерянной серии,
+     *  не точная формула. Ступени встроены в уже существующую линейку цен других Stars-товаров
+     *  (реролл 15⭐ / рамка 35⭐ / титул 60⭐ / слот 75⭐ / пасс 150⭐).
+     *  См. UserService.snapshotBrokenStreak/hasRestorableStreak/restoreStreak — снимок серии делается
+     *  в момент обнуления, окно на покупку STREAK_RESTORE_GRACE_DAYS (2) дня. */
+    private static final int STREAK_RESTORE_STARS_PRICE_MIN = 10; // каталожный дефолт/нижняя граница — реальная цена всегда считается через streakRestorePriceStars
+
+    private int streakRestorePriceStars(int lostStreakDays) {
+        if (lostStreakDays >= 90) return 100;
+        if (lostStreakDays >= 30) return 60;
+        if (lostStreakDays >= 14) return 35;
+        if (lostStreakDays >= 7) return 20;
+        return STREAK_RESTORE_STARS_PRICE_MIN;
+    }
 
     private record StarsItemSpec(String title, String description, String priceLabel, int priceStars, Integer subscriptionPeriodSeconds) {
         StarsItemSpec(String title, String description, String priceLabel, int priceStars) {
@@ -6014,7 +6028,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             "starsitem:STREAK_RESTORE", new StarsItemSpec(
                     "Восстановление серии входов",
                     "Продолжить прерванную серию ежедневных входов вместо начала с первого дня — плюс бонус за сегодня.",
-                    "Восстановление серии", STREAK_RESTORE_STARS_PRICE)
+                    "Восстановление серии", STREAK_RESTORE_STARS_PRICE_MIN) // реальная цена всегда считается через streakRestorePriceStars и передаётся как override
     );
 
     private void sendAvatarFrameStarsInvoice(AppUser user) {
@@ -6072,6 +6086,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             log.error("Unknown Stars item payload '{}'", payload);
             return;
         }
+        sendStarsInvoice(user, payload, spec.priceStars());
+    }
+
+    /** Вариант с ценой, переопределённой на вызове — для товаров без фиксированной цены в каталоге
+     *  (сейчас только "starsitem:STREAK_RESTORE" — цена зависит от длины потерянной серии, см.
+     *  streakRestorePriceStars). Остальные поля (title/description/priceLabel) всё равно берутся из
+     *  каталога STARS_ITEMS. */
+    private void sendStarsInvoice(AppUser user, String payload, int priceStarsOverride) {
+        StarsItemSpec spec = STARS_ITEMS.get(payload);
+        if (spec == null) {
+            log.error("Unknown Stars item payload '{}'", payload);
+            return;
+        }
         if (spec.subscriptionPeriodSeconds() != null) {
             // subscription_period официально поддерживается только у createInvoiceLink, не у sendInvoice
             // (проверено по исходнику core.telegram.org/bots/api) — для подписок вызывающая сторона
@@ -6080,7 +6107,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         try {
-            Map<String, Object> price = Map.of("label", spec.priceLabel(), "amount", spec.priceStars());
+            Map<String, Object> price = Map.of("label", spec.priceLabel(), "amount", priceStarsOverride);
             Map<String, Object> body = new java.util.LinkedHashMap<>();
             body.put("chat_id", user.getTelegramId());
             body.put("title", spec.title());
