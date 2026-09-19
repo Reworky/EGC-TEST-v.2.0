@@ -204,6 +204,11 @@ public class AppUser {
     private String brawlStarsTag;
     private LocalDateTime brawlTagConfirmedAt;
 
+    /** Email от Supercell ID (2026-09-20) — нужен ТОЛЬКО для "Донат по играм" (GemPurchaseService):
+     *  топап-сервисы (donatov.net и т.п.) зачисляют гемы по этому email, а не по игровому тегу.
+     *  Спрашивается один раз (как и brawlStarsTag), переиспользуется для всех будущих покупок гемов. */
+    private String supercellIdEmail;
+
     /** Подтверждённый игровой тег Clash of Clans (например "#ABC123"), для авто-верификации квестов через официальный API. */
     private String clashOfClansTag;
     private LocalDateTime clashTagConfirmedAt;

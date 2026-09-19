@@ -2374,6 +2374,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 notifyUserGemPurchaseRejected(req, refundNote);
                 sendText(user.getTelegramId(), "❌ Заявка Д-" + req.getDisplayId() + " отклонена, игрок уведомлён." + refundNote, backMenuKeyboard("admin:gempurchase"));
             }
+            case GEM_PURCHASE_EMAIL_INPUT -> {
+                String email = text.trim();
+                if (!email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+                    sendText(user.getTelegramId(),
+                            "⚠️ Похоже, это не email. Введи email, через который входишь в Supercell ID (например: name@gmail.com):",
+                            cancelKeyboard());
+                    return;
+                }
+                user.setSupercellIdEmail(email);
+                userService.save(user);
+                String packageKey = session.getData().get("gemPendingPackageKey");
+                session.reset();
+                Optional<GemPurchaseService.GemPackage> pkgOpt = packageKey != null ? gemPurchaseService.findPackage(packageKey) : Optional.empty();
+                if (pkgOpt.isEmpty()) {
+                    sendText(user.getTelegramId(), "✅ Email сохранён.", backMenuKeyboard("menu:gemdonate"));
+                    return;
+                }
+                sendGemPaymentMethodChoice(user, pkgOpt.get());
+            }
             case CLASH_TAG_INPUT -> {
                 ru.gamebot.platform.service.ClashQuestVerificationService.TagLookupResult res =
                         clashQuestVerificationService.lookupTag(text.trim());
@@ -14389,7 +14408,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     cancelKeyboard());
             return;
         }
+        if (user.getSupercellIdEmail() == null || user.getSupercellIdEmail().isBlank()) {
+            session.reset();
+            session.getData().put("gemPendingPackageKey", packageKey);
+            session.setState(SessionState.GEM_PURCHASE_EMAIL_INPUT);
+            sendText(user.getTelegramId(), gemPurchaseEmailPrompt(), cancelKeyboard());
+            return;
+        }
         sendGemPaymentMethodChoice(user, pkg);
+    }
+
+    /** Топап-сервис зачисляет гемы по email от Supercell ID, а не по игровому тегу (2026-09-20, по
+     *  запросу пользователя — иначе админу нечем оформить заказ на стороннем сервисе). Спрашивается
+     *  один раз, как и brawlStarsTag, — см. AppUser.supercellIdEmail. */
+    private String gemPurchaseEmailPrompt() {
+        return "📧 <b>Нужен email от Supercell ID</b>\n\n"
+                + "Топап-сервис зачисляет гемы именно по этому email, не по игровому тегу.\n\n"
+                + "Как найти:\n"
+                + "1. Открой Brawl Stars\n"
+                + "2. Нажми на значок Supercell ID (правый верхний угол главного экрана)\n"
+                + "3. Открой настройки ⚙️\n"
+                + "4. В строке «Вы вошли с помощью» — это и есть нужный email\n\n"
+                + "Введи его сюда:";
     }
 
     /** Курс перевода цены пакета гемов (в рублях) в Stars — тот же ориентировочный курс, что и у
@@ -14510,6 +14550,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "👤 Игрок: <b>" + escape(player.getNickname()) + "</b>" + userLink + "\n"
                 + "🎮 Игра: <b>" + escape(req.getGameName()) + "</b>\n"
                 + "🏷️ Тег: <code>" + escape(req.getGameTag()) + "</code>\n"
+                + "📧 Supercell ID: <code>" + escape(req.getSupercellIdEmail()) + "</code>\n"
                 + "📦 Пакет: <b>" + req.getGems() + " гемов</b>\n"
                 + "💰 Цена: <b>" + req.getPriceRub() + "₽</b>\n"
                 + gemPurchasePaymentLine(req) + gemPurchaseCodeLine(req) + "\n"
@@ -14553,6 +14594,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "👤 Игрок: <b>" + escape(req.getUser().getNickname()) + "</b>\n"
                     + "🆔 Telegram ID: <code>" + req.getUser().getTelegramId() + "</code>\n"
                     + "🏷️ Тег: <code>" + escape(req.getGameTag()) + "</code>\n"
+                    + "📧 Supercell ID: <code>" + escape(req.getSupercellIdEmail()) + "</code>\n"
                     + "📦 Пакет: <b>" + req.getGems() + " гемов</b>\n"
                     + "💰 Цена: <b>" + req.getPriceRub() + "₽</b>\n"
                     + gemPurchasePaymentLine(req) + gemPurchaseCodeLine(req) + "\n"

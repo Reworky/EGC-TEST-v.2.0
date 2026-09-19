@@ -48,6 +48,11 @@ public class GemPurchaseRequest {
     /** Игровой тег на момент заявки (Brawl Stars tag) — куда админ вручную зачисляет валюту. */
     private String gameTag;
 
+    /** Email Supercell ID на момент заявки (снимок AppUser.supercellIdEmail) — топап-сервис зачисляет
+     *  гемы именно по этому email, не по тегу. Снимок, а не live-чтение с AppUser, по той же причине,
+     *  что и gameTag — если игрок позже сменит email, старые заявки не должны "поехать". */
+    private String supercellIdEmail;
+
     /** Короткий код в комментарии к переводу, чтобы сверить платёж с заявкой вручную. */
     private String paymentCode;
 
