@@ -10983,14 +10983,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sb.append("🌟 Доступны эксклюзивные сезонные квесты\n");
                 sb.append("👑 Значок Battle Pass в профиле и рейтинге\n");
             });
-            sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:main"));
+            sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:cat:shop"));
             return;
         }
 
         if (seasonOpt.isEmpty()) {
             sendText(user.getTelegramId(),
                     "🎫 <b>Battle Pass</b>\n\n⏳ Активного сезона сейчас нет. Следите за анонсами!",
-                    backMenuKeyboard("menu:main"));
+                    backMenuKeyboard("menu:cat:shop"));
             return;
         }
 
@@ -11009,7 +11009,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else {
             rows.add(List.of(keyboardFactory.callback("❌ Недостаточно EXC", "noop")));
         }
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:cat:shop")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
