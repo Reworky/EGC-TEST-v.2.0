@@ -580,6 +580,13 @@ function MyQuestsView({ expanded, details, onToggle, onDetailChanged }) {
   const [myQuests, setMyQuests] = useState(null);
   const [error, setError] = useState(null);
   const [cancelBusy, setCancelBusy] = useState(null);
+  // onDetailChanged (=loadDetail в родителе) не обёрнут в useCallback — новая ссылка на каждый
+  // рендер. Держим текущие expanded/onDetailChanged в ref, чтобы не пересоздавать интервал ниже
+  // на каждый чих родителя (эффект с пустыми зависимостями настраивается один раз при монтировании).
+  const expandedRef = useRef(expanded);
+  const onDetailChangedRef = useRef(onDetailChanged);
+  expandedRef.current = expanded;
+  onDetailChangedRef.current = onDetailChanged;
 
   function reload() {
     setError(null);
@@ -587,13 +594,20 @@ function MyQuestsView({ expanded, details, onToggle, onDetailChanged }) {
   }
 
   useEffect(() => {
-    reload();
     // Авто-верификация (Brawl Stars/Clash/Dota/CS2/PUBG) засчитывает квест в фоне на сервере —
     // без опроса игрок видел бы старый статус ("Авто-отслеживание", 0/N), пока не выйдет и не
     // зайдёт заново на этот экран. Обновление в чате бота приходит всегда, но если игрок сидит
-    // именно тут в ожидании — экран должен обновляться сам.
-    const interval = setInterval(reload, 15000);
-    function onVisible() { if (document.visibilityState === 'visible') reload(); }
+    // именно тут в ожидании — экран должен обновляться сам. reload() обновляет сам список (бейджи
+    // статуса свёрнутых карточек), а onDetailChanged(expanded) — прогресс-бар РАЗВЁРНУТОЙ карточки
+    // (он читается из отдельного details[id], а не из списка) — без второго вызова прогресс-бар
+    // у открытой карточки не двигался бы, пока список рядом уже обновился.
+    function tick() {
+      reload();
+      if (expandedRef.current != null) onDetailChangedRef.current(expandedRef.current);
+    }
+    tick();
+    const interval = setInterval(tick, 15000);
+    function onVisible() { if (document.visibilityState === 'visible') tick(); }
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       clearInterval(interval);
