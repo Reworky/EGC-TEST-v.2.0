@@ -14424,8 +14424,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "💎 <b>" + pkg.gems() + " гемов — " + pkg.priceRub() + "₽</b>\n\n"
                         + "Выберите способ оплаты:\n\n"
-                        + "⭐ Stars списываются сразу автоматически — быстрее всего.\n"
-                        + "💸 Рубли / 💎 TON — перевод вручную + скриншот, проверка займёт время.",
+                        + "⭐ Stars списываются сразу автоматически\n"
+                        + "💸 Рубли / TON — перевод вручную + чек, проверка займёт время.",
                 keyboardFactory.rowsLayout(rows));
     }
 
@@ -14482,7 +14482,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "Тег: <code>" + escape(tag) + "</code>\n\n"
                         + detailsLine + "\n\n"
                         + "⚠️ ОБЯЗАТЕЛЬНО укажите в комментарии к переводу код: <code>" + paymentCode + "</code>\n\n"
-                        + "После оплаты пришлите сюда скриншот перевода — это последний шаг оформления заявки.",
+                        + "После оплаты пришлите сюда чек перевода — это последний шаг оформления заявки.",
                 cancelKeyboard());
     }
 
@@ -14503,7 +14503,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleGemPurchaseProof(AppUser user, UserSession session, Message message) {
         if (!message.hasPhoto()) {
-            sendText(user.getTelegramId(), "⚠️ Пришлите именно скриншот оплаты (фото).", cancelKeyboard());
+            sendText(user.getTelegramId(), "⚠️ Пришлите именно чек оплаты (фото).", cancelKeyboard());
             return;
         }
         String packageKey = session.getData().get("gemPendingPackageKey");
@@ -14533,8 +14533,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String method = req.getPaymentMethod() != null ? req.getPaymentMethod() : "RUB";
         return switch (method) {
             case "STARS" -> "💳 Способ оплаты: <b>⭐ Stars (" + req.getStarsAmount() + " ⭐, оплата подтверждена автоматически)</b>";
-            case "TON" -> "💳 Способ оплаты: <b>💎 TON</b> (перевод, требует проверки скриншота)";
-            default -> "💳 Способ оплаты: <b>💸 Рубли</b> (перевод, требует проверки скриншота)";
+            case "TON" -> "💳 Способ оплаты: <b>💎 TON</b> (перевод, требует проверки чека)";
+            default -> "💳 Способ оплаты: <b>💸 Рубли</b> (перевод, требует проверки чека)";
         };
     }
 
