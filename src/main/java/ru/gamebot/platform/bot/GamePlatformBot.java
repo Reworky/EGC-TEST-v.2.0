@@ -4599,6 +4599,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад", takeQuestErrorMessage(user, quest, result));
             return;
         }
+        if (quest.getBrawlVerifyType() != null) {
+            brawlQuestVerificationService.primeBaseline(result.submission().getId(), quest.getBrawlVerifyType(), user.getBrawlStarsTag());
+        }
 
         long weeklyCount = questService.getWeeklyCompletionsOfType(user, quest);
         String notice = quest.isExternalAutoApprove()

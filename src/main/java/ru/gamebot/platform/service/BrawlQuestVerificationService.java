@@ -62,6 +62,50 @@ public class BrawlQuestVerificationService {
         appUserRepository.save(user);
     }
 
+    /** Вызывается сразу после успешного взятия квеста NEW_BRAWLER/TROPHIES (бот и Mini App) — фиксирует
+     *  базу для сравнения СРАЗУ, а не на первой отложенной проверке шедулера (окно ~2 мин, см.
+     *  checkInProgressSubmissions/@Scheduled в WeeklyResetScheduler). Без этого, если игрок открывает
+     *  нового бойца или поднимает трофеи внутри этого окна ДО первого опроса, они попадают в базу как
+     *  "уже были" и квест никогда не засчитывается (инцидент 2026-09-19: игрок получил Гаса сразу после
+     *  взятия квеста "Получи любого нового бойца", прогресс не засчитался). Не @Transactional — сетевой
+     *  вызов, тот же паттерн, что и checkInProgressSubmissions; ошибка тут не страшна, первая отложенная
+     *  проверка всё равно зафиксирует базу как раньше — просто окно гонки для этой попытки не закроется. */
+    public void primeBaseline(Long submissionId, BrawlVerifyType verifyType, String tag) {
+        if (tag == null || (verifyType != BrawlVerifyType.NEW_BRAWLER && verifyType != BrawlVerifyType.TROPHIES)) {
+            return;
+        }
+        try {
+            if (verifyType == BrawlVerifyType.NEW_BRAWLER) {
+                java.util.Set<String> current = brawlStarsApiService.fetchOwnedBrawlerNames(tag);
+                if (!current.isEmpty()) {
+                    setBaselineBrawlers(submissionId, String.join(",", current));
+                }
+            } else {
+                brawlStarsApiService.fetchPlayer(tag).ifPresent(info -> setBaselineTrophies(submissionId, info.trophies()));
+            }
+        } catch (BrawlStarsApiService.BrawlStarsTransientException e) {
+            log.warn("Baseline priming failed for submission {}", submissionId, e);
+        }
+    }
+
+    private void setBaselineBrawlers(Long submissionId, String csv) {
+        questSubmissionRepository.findById(submissionId).ifPresent(s -> {
+            if (s.getBrawlBaselineBrawlers() == null) {
+                s.setBrawlBaselineBrawlers(csv);
+                questSubmissionRepository.save(s);
+            }
+        });
+    }
+
+    private void setBaselineTrophies(Long submissionId, int trophies) {
+        questSubmissionRepository.findById(submissionId).ifPresent(s -> {
+            if (s.getBrawlBaselineTrophies() == null) {
+                s.setBrawlBaselineTrophies(trophies);
+                questSubmissionRepository.save(s);
+            }
+        });
+    }
+
     /** Точка входа шедулера. Не @Transactional — последовательные сетевые вызовы, как в BrawlStarsTournamentService.runBatch. */
     public void checkInProgressSubmissions() {
         List<QuestSubmission> pending = questSubmissionRepository.findInProgressBrawlAutoVerify();

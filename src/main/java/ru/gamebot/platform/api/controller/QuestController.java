@@ -27,6 +27,7 @@ import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.model.QuestSubmission;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
+import ru.gamebot.platform.service.BrawlQuestVerificationService;
 import ru.gamebot.platform.service.QuestActionStatus;
 import ru.gamebot.platform.service.QuestService;
 import ru.gamebot.platform.service.TelegramFileService;
@@ -43,6 +44,7 @@ public class QuestController {
     private final AppUserRepository appUserRepository;
     private final TelegramFileService telegramFileService;
     private final GamePlatformBot gamePlatformBot;
+    private final BrawlQuestVerificationService brawlQuestVerificationService;
     private final ru.gamebot.platform.service.QuestRewardBoostService questRewardBoostService;
     private final ru.gamebot.platform.service.GameCatalogService gameCatalogService;
 
@@ -328,6 +330,9 @@ public class QuestController {
         }
 
         QuestService.QuestActionResult result = questService.takeQuestChecked(user, quest);
+        if (result.status() == QuestActionStatus.OK && quest.getBrawlVerifyType() != null) {
+            brawlQuestVerificationService.primeBaseline(result.submission().getId(), quest.getBrawlVerifyType(), user.getBrawlStarsTag());
+        }
         return ResponseEntity.ok(toResponse(result));
     }
 
