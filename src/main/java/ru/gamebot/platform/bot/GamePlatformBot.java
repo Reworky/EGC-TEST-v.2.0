@@ -14499,9 +14499,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + pkg.gems() + " гемов на тег <code>" + escape(tag) + "</code>\n\n"
                         + "Модератор свяжется с вами в личных сообщениях, чтобы уточнить детали и прислать реквизиты для оплаты.",
                 keyboardFactory.rowsLayout(List.of(
-                        List.of(keyboardFactory.url("✍️ Написать менеджеру", "https://t.me/" + appProperties.getSupportUsername())),
+                        List.of(keyboardFactory.url("✍️ Написать менеджеру", managerDmLink(req, pkg))),
                         List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
                 )));
+    }
+
+    /** Ссылка на менеджера с заранее заполненным текстом сообщения (t.me/<user>?text=...) — менеджер
+     *  открывает диалог и сразу видит номер заявки/пакет/тег, не нужно искать уведомление, чтобы
+     *  понять, по какой заявке написал игрок (2026-09-20, по запросу пользователя). Текст только
+     *  подставляется в поле ввода — Telegram не отправляет его сам, игрок жмёт "Отправить" вручную.
+     *  URLEncoder кодирует пробел как '+', Telegram его не разворачивает обратно (та же проблема,
+     *  что и в UserService.encodeUrlComponent для t.me/share/url) — докручиваем на %20 вручную. */
+    private String managerDmLink(GemPurchaseRequest req, GemPurchaseService.GemPackage pkg) {
+        String text = "Здравствуйте! Хочу оплатить заявку Д-" + req.getDisplayId()
+                + " (" + pkg.gems() + " гемов, тег " + req.getGameTag() + ")";
+        String encoded = java.net.URLEncoder.encode(text, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
+        return "https://t.me/" + appProperties.getSupportUsername() + "?text=" + encoded;
     }
 
     /** Оплата Stars — нативный инвойс Telegram (та же HTTP-инфраструктура, что у остальных Stars-
