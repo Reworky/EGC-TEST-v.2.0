@@ -586,7 +586,20 @@ function MyQuestsView({ expanded, details, onToggle, onDetailChanged }) {
     getMyQuests().then(setMyQuests).catch(() => setError('Не удалось загрузить квесты. Попробуйте ещё раз.'));
   }
 
-  useEffect(() => { reload(); }, []);
+  useEffect(() => {
+    reload();
+    // Авто-верификация (Brawl Stars/Clash/Dota/CS2/PUBG) засчитывает квест в фоне на сервере —
+    // без опроса игрок видел бы старый статус ("Авто-отслеживание", 0/N), пока не выйдет и не
+    // зайдёт заново на этот экран. Обновление в чате бота приходит всегда, но если игрок сидит
+    // именно тут в ожидании — экран должен обновляться сам.
+    const interval = setInterval(reload, 15000);
+    function onVisible() { if (document.visibilityState === 'visible') reload(); }
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
 
   async function handleCancel(submissionId, e) {
     e.stopPropagation();
