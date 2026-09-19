@@ -7216,11 +7216,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String wLabelMod = pendingWithdrawalsMod > 0
                 ? "💸 Заявки на вывод (" + pendingWithdrawalsMod + ")"
                 : "💸 Заявки на вывод";
+        long pendingGemPurchasesMod = gemPurchaseService.findPending().size();
+        String gLabelMod = pendingGemPurchasesMod > 0
+                ? "💎 Заявки на донат (" + pendingGemPurchasesMod + ")"
+                : "💎 Заявки на донат";
         sendText(user.getTelegramId(),
                 "🛡️ <b>Центр модерации</b>\n\n"
                         + "📂 Отчёты по квестам: <b>" + questService.pendingCount() + "</b>\n"
                         + "🆘 Открытые заявки поддержки: <b>" + supportService.activeTicketCount() + "</b>\n"
-                        + "💸 Заявки на вывод: <b>" + pendingWithdrawalsMod + "</b>\n\n"
+                        + "💸 Заявки на вывод: <b>" + pendingWithdrawalsMod + "</b>\n"
+                        + "💎 Заявки на донат: <b>" + pendingGemPurchasesMod + "</b>\n\n"
                         + "Здесь собрана вся оперативная работа по платформе.",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(
@@ -7228,6 +7233,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 keyboardFactory.callback("🆘 Поддержка", "mod:support:list")
                         ),
                         List.of(keyboardFactory.callback(wLabelMod, "mod:withdrawals")),
+                        List.of(keyboardFactory.callback(gLabelMod, "admin:gempurchase")),
                         List.of(keyboardFactory.callback("🔍 Поиск игрока", "mod:usersearch")),
                         List.of(keyboardFactory.callback("🏠 Главное меню", "menu:main"))
                 )));
