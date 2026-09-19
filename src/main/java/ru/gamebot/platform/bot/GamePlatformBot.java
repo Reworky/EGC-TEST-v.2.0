@@ -14483,7 +14483,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + detailsLine + "\n\n"
                         + "⚠️ ОБЯЗАТЕЛЬНО укажите в комментарии к переводу код: <code>" + paymentCode + "</code>\n\n"
                         + "После оплаты пришлите сюда чек перевода — это последний шаг оформления заявки.",
-                cancelKeyboard());
+                backOrCancelKeyboard("gemdonate:pkg:" + pkg.key()));
     }
 
     /** Оплата Stars — нативный инвойс Telegram (та же HTTP-инфраструктура, что у остальных Stars-
