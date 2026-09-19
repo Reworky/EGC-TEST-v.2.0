@@ -74,7 +74,7 @@ public class GemPurchaseService {
     }
 
     public Optional<GemPurchaseRequest> findById(Long id) {
-        return repository.findById(id);
+        return repository.findWithUserById(id);
     }
 
     public List<GemPurchaseRequest> findPending() {
@@ -89,7 +89,7 @@ public class GemPurchaseService {
      *  зачислил гемы на тег игрока), поэтому именно тут начисляется XP-бонус, не при создании заявки. */
     @Transactional
     public GemPurchaseRequest approve(Long requestId) {
-        GemPurchaseRequest req = repository.findById(requestId)
+        GemPurchaseRequest req = repository.findWithUserById(requestId)
                 .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена."));
         if (req.getStatus() != GemPurchaseStatus.PENDING) {
             return req;
@@ -103,7 +103,7 @@ public class GemPurchaseService {
 
     @Transactional
     public GemPurchaseRequest reject(Long requestId, String reason) {
-        GemPurchaseRequest req = repository.findById(requestId)
+        GemPurchaseRequest req = repository.findWithUserById(requestId)
                 .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена."));
         req.setStatus(GemPurchaseStatus.REJECTED);
         req.setRejectReason(reason);
