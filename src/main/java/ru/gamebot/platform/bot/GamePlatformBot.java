@@ -11898,7 +11898,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(admin.getTelegramId(), "⚠️ Пользователь не найден.", backMenuKeyboard("admin:users:0"));
                 return;
             }
-            String payload = switch (parts[3]) {
+            String starsItemPayload = switch (parts[3]) {
                 case "frame" -> "starsitem:AVATAR_FRAME";
                 case "chest" -> "starsitem:CHEST_REROLL";
                 case "patron" -> "starsitem:PATRON_TITLE";
@@ -11906,17 +11906,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 case "pass" -> "starsitem:EGC_PASS";
                 default -> null;
             };
-            if (payload == null) {
+            if (starsItemPayload == null) {
                 sendText(admin.getTelegramId(), "⚠️ Неизвестный товар.", backMenuKeyboard("admin:user:view:" + telegramId + ":" + p));
                 return;
             }
             try {
-                grantStarsPurchase(target, telegramId, payload);
+                grantStarsPurchase(target, telegramId, starsItemPayload);
                 sendText(admin.getTelegramId(),
                         "✅ Товар выдан игроку <b>" + escape(displayUserName(target)) + "</b>, уведомление отправлено.",
                         backMenuKeyboard("admin:user:view:" + telegramId + ":" + p));
             } catch (Exception e) {
-                log.error("Manual Stars grant failed (payload={}, telegramId={})", payload, telegramId, e);
+                log.error("Manual Stars grant failed (payload={}, telegramId={})", starsItemPayload, telegramId, e);
                 sendText(admin.getTelegramId(), "❌ Не удалось выдать: " + e.getMessage(), backMenuKeyboard("admin:user:view:" + telegramId + ":" + p));
             }
             return;
