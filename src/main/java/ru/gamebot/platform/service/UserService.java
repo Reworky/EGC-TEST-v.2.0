@@ -586,6 +586,7 @@ public class UserService {
         if (lastDate != null && lastDate.plusDays(1).equals(today)) {
             user.setStreakDays(user.getStreakDays() + 1);
         } else {
+            snapshotBrokenStreak(user);
             user.setStreakDays(1);
         }
         user.setLastActivityDate(today);
@@ -625,6 +626,7 @@ public class UserService {
             if (lastActivity != null && lastActivity.plusDays(1).equals(today)) {
                 user.setStreakDays(user.getStreakDays() + 1);
             } else {
+                snapshotBrokenStreak(user);
                 user.setStreakDays(1);
             }
             user.setLastActivityDate(today);
@@ -673,6 +675,13 @@ public class UserService {
             user.setWeeklyXp(user.getWeeklyXp() + xpBonus);
         }
         user.setLastBonusDate(today);
+        // Бонус за сегодня так или иначе получен (продолжение серии, свежий сброс "начать заново" или
+        // только что восстановленная через restoreStreak() серия) — любой оставшийся снимок разрыва
+        // больше не актуален для СЕГОДНЯ, не должен предлагаться повторно. restoreStreak() уже очищает
+        // его сам перед вызовом этого метода — здесь просто гарантия на случай прямого claimDailyBonus
+        // без восстановления (иначе "Начать заново" оставлял бы висеть предложение купить старую серию).
+        user.setLastBrokenStreakDays(null);
+        user.setLastBrokenStreakUntil(null);
         appUserRepository.save(user);
 
         return new DailyBonusResult(totalExc, dailyExc, milestoneExc, xpBonus, streak, milestoneText);
@@ -682,6 +691,70 @@ public class UserService {
             long totalExc, long dailyExc, long milestoneExc,
             long xpBonus, int streakDays, String milestoneText
     ) {}
+
+    private static final int STREAK_RESTORE_GRACE_DAYS = 2;
+
+    /** Снимок серии ПЕРЕД сбросом на 1 — вызывается и из registerActivity(), и из claimDailyBonus()
+     *  (какой из двух сработает первым после пропуска дня), см. поля на AppUser. Не перезаписывает уже
+     *  существующий снимок повторно в тот же день — иначе повторный вызов (например claimDailyBonus
+     *  сразу после registerActivity в одном заходе) затёр бы валидный снимок нулём/старой датой. */
+    private void snapshotBrokenStreak(AppUser user) {
+        if (user.getStreakDays() < 2) {
+            return; // серию из 0-1 дня восстанавливать нечего и не за что платить
+        }
+        LocalDate today = LocalDate.now();
+        if (user.getLastBrokenStreakUntil() != null && !today.isAfter(user.getLastBrokenStreakUntil())) {
+            return; // снимок уже сделан в этом же окне (двойной вызов за один заход)
+        }
+        user.setLastBrokenStreakDays(user.getStreakDays());
+        user.setLastBrokenStreakUntil(today.plusDays(STREAK_RESTORE_GRACE_DAYS));
+    }
+
+    /** Публичная, вызываемая ПРОАКТИВНО из sendDailyBonus ДО claimDailyBonus — сама проверяет разрыв
+     *  (в отличие от private snapshotBrokenStreak, которая только сохраняет, вызывающий уже знает про
+     *  разрыв). Без этого метода первый заход на экран бонуса после пропуска дня (если до этого не
+     *  было /start → registerActivity) сразу проваливался бы в claimDailyBonus и обнулял серию, даже
+     *  не успев показать предложение восстановить — снимок создавался бы ПОСЛЕ решения сбросить, в
+     *  одной и той же транзакции. Идемпотентна и не трогает streakDays/lastActivityDate — безопасно
+     *  вызывать всегда, даже когда серия на самом деле цела (тогда просто ничего не делает). */
+    @Transactional
+    public void captureStreakBreakIfNeeded(AppUser user) {
+        LocalDate today = LocalDate.now();
+        LocalDate lastActivity = user.getLastActivityDate();
+        boolean broken = lastActivity != null && !lastActivity.equals(today) && !lastActivity.plusDays(1).equals(today);
+        if (broken) {
+            snapshotBrokenStreak(user);
+            appUserRepository.save(user);
+        }
+    }
+
+    /** Есть ли сейчас актуальное предложение "восстановить серию за Stars" — снимок существует и окно
+     *  (см. STREAK_RESTORE_GRACE_DAYS) ещё не истекло. Проверяется в момент открытия экрана ежедневного
+     *  бонуса, ДО обычного claimDailyBonus (иначе он бы уже сбросил серию заново, затерев смысл предложения). */
+    public boolean hasRestorableStreak(AppUser user) {
+        return user.getLastBrokenStreakDays() != null && user.getLastBrokenStreakDays() >= 2
+                && user.getLastBrokenStreakUntil() != null && !LocalDate.now().isAfter(user.getLastBrokenStreakUntil());
+    }
+
+    /** Возвращает снятое число дней серии для текста предложения — вызывать только после
+     *  hasRestorableStreak() == true. */
+    public int restorableStreakDays(AppUser user) {
+        return user.getLastBrokenStreakDays() != null ? user.getLastBrokenStreakDays() : 0;
+    }
+
+    /** Восстанавливает сохранённую серию и сразу же засчитывает вчерашний день как пройденный, чтобы
+     *  последующий claimDailyBonus() продолжил её с сегодняшнего дня (+1), а не начал с 1 — сам
+     *  claimDailyBonus не трогаем, чтобы не дублировать расчёт награды/XP-майлстоунов, вызывающая
+     *  сторона (GamePlatformBot, покупка "starsitem:STREAK_RESTORE") должна вызвать его следующим шагом. */
+    @Transactional
+    public void restoreStreak(AppUser user) {
+        int savedStreak = restorableStreakDays(user);
+        user.setStreakDays(savedStreak);
+        user.setLastActivityDate(LocalDate.now().minusDays(1));
+        user.setLastBrokenStreakDays(null);
+        user.setLastBrokenStreakUntil(null);
+        appUserRepository.save(user);
+    }
 
     /** Сундук дня — отдельная от ежедневного бонуса механика (аудит вовлечённости, 2026-09-14):
      *  элемент случайности/предвкушения, а не гарантированная сумма. Раз в сутки, независимый от

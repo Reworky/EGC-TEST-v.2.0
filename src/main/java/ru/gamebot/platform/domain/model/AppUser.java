@@ -70,6 +70,17 @@ public class AppUser {
     private boolean referralActive = true;
     private LocalDate lastActivityDate;
 
+    /** Снимок серии входов В МОМЕНТ, когда она прерывается (>1 дня без захода) — делается ДО сброса
+     *  streakDays на 1, и в registerActivity(), и в claimDailyBonus() (какой из двух сработает первым
+     *  после пропуска дня). Позволяет продать восстановление серии за Stars (см. GamePlatformBot,
+     *  "starsitem:STREAK_RESTORE") даже если реальный сброс произошёл раньше, чем игрок успел заплатить —
+     *  без снимка пришлось бы восстанавливать от уже обнулённого значения. null = нечего восстанавливать. */
+    private Integer lastBrokenStreakDays;
+
+    /** До какой даты включительно ещё можно купить восстановление снятой выше серии — после этой даты
+     *  предложение считается неактуальным (поле не обнуляется автоматически, проверяется на чтении). */
+    private LocalDate lastBrokenStreakUntil;
+
     /** Какой уровень дормант-реэнгейджмента уже отправлен (0 = ни один); сбрасывается при возврате в registerActivity(). */
     @Column(columnDefinition = "int default 0")
     private int lastDormancyTierNotified;

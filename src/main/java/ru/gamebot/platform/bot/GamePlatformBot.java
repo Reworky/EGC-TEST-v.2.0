@@ -1171,6 +1171,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }, () -> answer(callbackQuery.getId(), "❌ Сезон не найден."));
             return;
         }
+        if ("streak:restore".equals(data)) {
+            answerSilently(callbackQuery.getId());
+            if (!userService.hasRestorableStreak(user)) {
+                sendText(user.getTelegramId(), "⚠️ Предложение уже неактуально.", backMenuKeyboard("menu:main"));
+                return;
+            }
+            sendStarsInvoice(user, "starsitem:STREAK_RESTORE");
+            return;
+        }
+        if ("streak:reset".equals(data)) {
+            claimAndRenderDailyBonus(callbackQuery, user);
+            return;
+        }
         if (data.startsWith("tournament:join:")) {
             long tid = parseLong(data.substring("tournament:join:".length()));
             tournamentService.findById(tid).ifPresentOrElse(t -> {
@@ -3766,6 +3779,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     backMenuKeyboard("menu:main"));
             return;
         }
+        // Серия уже прервалась (пропущен день) — предлагаем восстановить за Stars ДО обычного
+        // claimDailyBonus (тот сбросил бы её на 1 безвозвратно). captureStreakBreakIfNeeded снимает
+        // число дней ПРЕВЕНТИВНО, ничего не сбрасывая — без него первый же вызов claimDailyBonus ниже
+        // сам обнулил бы серию и создал снимок в той же транзакции, не оставив шанса на выбор.
+        userService.captureStreakBreakIfNeeded(user);
+        if (userService.hasRestorableStreak(user)) {
+            int lost = userService.restorableStreakDays(user);
+            answer(callbackQuery.getId(), "Серия прервалась");
+            sendText(user.getTelegramId(),
+                    "💔 <b>Серия входов прервалась</b>\n\n"
+                            + "Была серия из <b>" + lost + " " + dayWord(lost) + " подряд</b> — пропущен день.\n\n"
+                            + "Можно восстановить за " + STREAK_RESTORE_STARS_PRICE + " ⭐ и продолжить с "
+                            + (lost + 1) + "-го дня как ни в чём не бывало (плюс бонус за сегодня), либо начать заново.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("💫 Восстановить за " + STREAK_RESTORE_STARS_PRICE + " ⭐", "streak:restore")),
+                            List.of(keyboardFactory.callback("🔄 Начать заново", "streak:reset"))
+                    )));
+            return;
+        }
+        claimAndRenderDailyBonus(callbackQuery, user);
+    }
+
+    /** Собственно начисление ежедневного бонуса и рендер результата — общий хвост и для обычного
+     *  захода на экран, и для кнопки "🔄 Начать заново" после предложения восстановить серию. */
+    private void claimAndRenderDailyBonus(CallbackQuery callbackQuery, AppUser user) {
         ru.gamebot.platform.service.UserService.DailyBonusResult result = userService.claimDailyBonus(user);
         if (result == null) {
             answer(callbackQuery.getId(), "Бонус уже получен");
@@ -5935,6 +5973,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private static final int EGC_PASS_STARS_PRICE = 150;
     private static final int EGC_PASS_SUBSCRIPTION_PERIOD_SECONDS = 2_592_000; // 30 дней — фиксировано Telegram, другое значение API отклонит
 
+    /** Цена восстановления прерванной серии входов (2026-09-19) — цена как у реролла сундука
+     *  (CHEST_REROLL_STARS_PRICE): такая же "импульсивная" по частоте покупка (несколько раз в месяц
+     *  у активного игрока), а не разовая премиум-вещь вроде рамки/титула. См. UserService.snapshotBrokenStreak/
+     *  hasRestorableStreak/restoreStreak — снимок серии делается в момент обнуления, окно на покупку
+     *  STREAK_RESTORE_GRACE_DAYS (2) дня. */
+    private static final int STREAK_RESTORE_STARS_PRICE = CHEST_REROLL_STARS_PRICE;
+
     private record StarsItemSpec(String title, String description, String priceLabel, int priceStars, Integer subscriptionPeriodSeconds) {
         StarsItemSpec(String title, String description, String priceLabel, int priceStars) {
             this(title, description, priceLabel, priceStars, null);
@@ -5965,7 +6010,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             "starsitem:EGC_PASS", new StarsItemSpec(
                     "EGC Pass — подписка на 30 дней",
                     "+10% к EXC за все квесты (до 10 000 EXC бонуса в месяц) + доп. слот квеста + бесплатный улучшенный сундук каждый день + приоритет в очереди на вывод + статус-бейдж в профиле. Автопродление каждые 30 дней, отменить можно в любой момент через настройки платежей Telegram.",
-                    "EGC Pass (30 дней)", EGC_PASS_STARS_PRICE, EGC_PASS_SUBSCRIPTION_PERIOD_SECONDS)
+                    "EGC Pass (30 дней)", EGC_PASS_STARS_PRICE, EGC_PASS_SUBSCRIPTION_PERIOD_SECONDS),
+            "starsitem:STREAK_RESTORE", new StarsItemSpec(
+                    "Восстановление серии входов",
+                    "Продолжить прерванную серию ежедневных входов вместо начала с первого дня — плюс бонус за сегодня.",
+                    "Восстановление серии", STREAK_RESTORE_STARS_PRICE)
     );
 
     private void sendAvatarFrameStarsInvoice(AppUser user) {
@@ -6142,6 +6191,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if ("starsitem:PERMANENT_SLOT".equals(payload) && user.isPermanentExtraSlot()) {
             return "Доп. слот квеста навсегда уже куплен ранее — повторная покупка не нужна.";
         }
+        if ("starsitem:STREAK_RESTORE".equals(payload) && !userService.hasRestorableStreak(user)) {
+            return "Восстанавливать нечего — предложение уже неактуально (истекло или бонус за сегодня уже получен).";
+        }
         return null;
     }
 
@@ -6211,6 +6263,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(telegramId,
                     "✅ <b>EGC Pass активирован!</b>\n\nДействует до <b>" + until + "</b>, дальше продлится автоматически.\n\n"
                             + "+10% к EXC за квесты, доп. слот, бесплатный улучшенный сундук каждый день и приоритет на вывод уже включены — спасибо, что поддержали проект.",
+                    backMenuKeyboard("menu:main"));
+        } else if ("starsitem:STREAK_RESTORE".equals(payload)) {
+            // hasRestorableStreak уже проверен в pre-checkout (alreadyOwnedRejectReason) — деньги ещё
+            // не списаны, там и должен был отсеяться обычный случай "предложение устарело". Если всё
+            // же не осталось что восстанавливать (гонка между pre-checkout и successful_payment) —
+            // не тихо теряем деньги игрока молча: кидаем исключение, чтобы сработал общий catch в
+            // handleSuccessfulPayment (честное сообщение игроку + алерт админам на ручной разбор),
+            // тот же паттерн, что и для остальных Stars-товаров (инцидент 2026-09-19).
+            if (!userService.hasRestorableStreak(user)) {
+                throw new IllegalStateException("STREAK_RESTORE: nothing to restore for user " + telegramId);
+            }
+            userService.restoreStreak(user);
+            ru.gamebot.platform.service.UserService.DailyBonusResult result = userService.claimDailyBonus(user);
+            if (result == null) {
+                throw new IllegalStateException("STREAK_RESTORE: claimDailyBonus returned null for user " + telegramId);
+            }
+            sendText(telegramId,
+                    "✅ <b>Серия восстановлена!</b>\n\n"
+                            + "🔥 Серия: <b>" + result.streakDays() + " " + dayWord(result.streakDays()) + " подряд</b>\n\n"
+                            + "🪙 Начислено: <b>+" + result.totalExc() + " EXC</b>"
+                            + (result.xpBonus() > 0 ? "\n⭐ XP: <b>+" + result.xpBonus() + " XP</b>" : ""),
                     backMenuKeyboard("menu:main"));
         } else {
             log.warn("Successful payment with unknown payload '{}' from user {}", payload, telegramId);
@@ -11883,6 +11956,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     List.of(keyboardFactory.callback("💎 Титул «Покровитель EGC»", "admin:user:starsgrantdo:" + telegramId + ":" + p + ":patron")),
                     List.of(keyboardFactory.callback("➕ Доп. слот навсегда", "admin:user:starsgrantdo:" + telegramId + ":" + p + ":slot")),
                     List.of(keyboardFactory.callback("🎫 EGC Pass (30 дней)", "admin:user:starsgrantdo:" + telegramId + ":" + p + ":pass")),
+                    List.of(keyboardFactory.callback("🔥 Восстановление серии", "admin:user:starsgrantdo:" + telegramId + ":" + p + ":streak")),
                     List.of(keyboardFactory.callback("⬅️ Назад", "admin:user:view:" + telegramId + ":" + p))
             ));
             sendText(admin.getTelegramId(),
@@ -11907,6 +11981,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 case "patron" -> "starsitem:PATRON_TITLE";
                 case "slot" -> "starsitem:PERMANENT_SLOT";
                 case "pass" -> "starsitem:EGC_PASS";
+                case "streak" -> "starsitem:STREAK_RESTORE";
                 default -> null;
             };
             if (starsItemPayload == null) {
