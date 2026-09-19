@@ -436,11 +436,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        if (session.getState() == SessionState.GEM_PURCHASE_PROOF) {
-            handleGemPurchaseProof(user, session, message);
-            return;
-        }
-
         if (session.getState() == SessionState.QUEST_CREATE_PHOTO) {
             if (message.hasPhoto()) {
                 List<PhotoSize> photos = message.getPhoto();
@@ -14444,41 +14439,30 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         GemPurchaseService.GemPackage pkg = pkgOpt.get();
         switch (method) {
             case "STARS" -> sendGemStarsInvoice(user, pkg);
-            case "TON" -> startGemPurchaseTon(user, session, pkg);
+            case "TON" -> requestGemPurchaseTon(user, pkg);
             default -> sendGemPaymentMethodChoice(user, pkg);
         }
     }
 
-    /** Ручной поток GRAM (TON) — заявка ЕЩЁ НЕ создаётся здесь, только после реального чека оплаты
-     *  (handleGemPurchaseProof). Раньше создавалась сразу на шаге выбора пакета, из-за чего любое
-     *  нажатие (даже без оплаты) плодило запись и раздувало "Заявка №N" брошенными попытками (жалоба
-     *  игрока 2026-09-19). Для STARS этот метод не используется — см. sendGemStarsInvoice. Рубли как
-     *  способ оплаты убраны 2026-09-20 (пользователь не принимает переводы на личную карту), поэтому
-     *  метод здесь всегда "TON" — ветвление по методу больше не нужно. */
-    private void startGemPurchaseTon(AppUser user, UserSession session, GemPurchaseService.GemPackage pkg) {
+    /** GRAM (TON) — заявка создаётся сразу, БЕЗ показа кошелька клуба игроку (решение 2026-09-20:
+     *  адрес не публикуется всем подряд в боте). Модератор сам пишет игроку в личные сообщения,
+     *  уточняет нюансы (с какой биржи/кошелька переводит, сеть и т.п.) и только после этого лично
+     *  сообщает реквизиты — код платежа и скрин/чек через бота тут больше не нужны, потому что
+     *  модератор ведёт сделку лично и проверяет оплату сам (в т.ч. по блокчейну — переводы TON
+     *  публичны). Тот же паттерн, что уже был у Stars (заявка сразу, без промежуточного шага) —
+     *  разница только в том, что оплата ещё не прошла на этом шаге. */
+    private void requestGemPurchaseTon(AppUser user, GemPurchaseService.GemPackage pkg) {
         String tag = user.getBrawlStarsTag();
-        String paymentCode = gemPurchaseService.generatePaymentCode(user);
-        session.reset();
-        session.getData().put("gemPendingPackageKey", pkg.key());
-        session.getData().put("gemPendingTag", tag);
-        session.getData().put("gemPendingPaymentCode", paymentCode);
-        session.getData().put("gemPendingMethod", "TON");
-        session.setState(SessionState.GEM_PURCHASE_PROOF);
-
-        java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(pkg.priceRub()));
-        String amountLine = pkg.gems() + " гемов — ~" + tonAmount + " GRAM (TON) (" + pkg.priceRub() + "₽ по текущему курсу)";
-        String wallet = appProperties.getGemPurchaseTonWallet();
-        String detailsLine = (wallet == null || wallet.isBlank())
-                ? "⚠️ Кошелёк GRAM (TON) клуба ещё не настроен — обратитесь к администратору клуба."
-                : "💎 Переведите на кошелёк GRAM (TON) клуба: <code>" + escape(wallet) + "</code>";
-
+        GemPurchaseRequest req = gemPurchaseService.createManualRequest(user, pkg, tag, "TON");
+        notifyAdminsAboutGemPurchase(req);
         sendText(user.getTelegramId(),
-                "💎 <b>" + amountLine + "</b>\n\n"
-                        + "Тег: <code>" + escape(tag) + "</code>\n\n"
-                        + detailsLine + "\n\n"
-                        + "⚠️ ОБЯЗАТЕЛЬНО укажите в комментарии к переводу код: <code>" + paymentCode + "</code>\n\n"
-                        + "После оплаты пришлите сюда чек перевода — это последний шаг оформления заявки.",
-                backOrCancelKeyboard("gemdonate:pkg:" + pkg.key()));
+                "✅ <b>Заявка Д-" + req.getDisplayId() + " создана!</b>\n\n"
+                        + pkg.gems() + " гемов на тег <code>" + escape(tag) + "</code>\n\n"
+                        + "Модератор свяжется с вами в личных сообщениях, чтобы уточнить детали (с какой биржи/кошелька переводите и т.п.) и прислать реквизиты для оплаты.",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("🆘 Написать в поддержку", "menu:support")),
+                        List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
+                )));
     }
 
     /** Оплата Stars — нативный инвойс Telegram (та же HTTP-инфраструктура, что у остальных Stars-
@@ -14496,39 +14480,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendStarsInvoice(user, "starsitem:GEM:" + pkg.key(), spec, starsPrice);
     }
 
-    private void handleGemPurchaseProof(AppUser user, UserSession session, Message message) {
-        if (!message.hasPhoto()) {
-            sendText(user.getTelegramId(), "⚠️ Пришлите именно чек оплаты (фото).", cancelKeyboard());
-            return;
-        }
-        String packageKey = session.getData().get("gemPendingPackageKey");
-        String tag = session.getData().get("gemPendingTag");
-        String paymentCode = session.getData().get("gemPendingPaymentCode");
-        String method = session.getData().getOrDefault("gemPendingMethod", "RUB");
-        Optional<GemPurchaseService.GemPackage> pkgOpt = packageKey != null ? gemPurchaseService.findPackage(packageKey) : Optional.empty();
-        if (pkgOpt.isEmpty() || tag == null || paymentCode == null) {
-            session.reset();
-            sendText(user.getTelegramId(), "❌ Сессия истекла, оформите заявку заново.", backMenuKeyboard("menu:gemdonate"));
-            return;
-        }
-        List<PhotoSize> photos = message.getPhoto();
-        String fileId = photos.get(photos.size() - 1).getFileId();
-        GemPurchaseRequest req = gemPurchaseService.createRequest(user, pkgOpt.get(), tag, paymentCode, fileId, method);
-        session.reset();
-        notifyAdminsAboutGemPurchase(req);
-        sendText(user.getTelegramId(),
-                "✅ Скриншот получен! Заявка Д-" + req.getDisplayId() + " на проверке — как только гемы зачислят, придёт уведомление.",
-                backMenuKeyboard("menu:cat:shop"));
-    }
-
-    /** Способ оплаты заявки на донат гемов — RUB/TON требуют проверки скриншота админом, STARS уже
-     *  подтверждён самим Telegram в момент списания (см. grantStarsPurchase). Заявки до 2026-09-20
-     *  (появление TON/Stars) имеют null в paymentMethod — трактуются как RUB. */
+    /** Способ оплаты заявки на донат гемов — STARS подтверждён самим Telegram в момент списания (см.
+     *  grantStarsPurchase); TON требует, чтобы модератор лично списался с игроком, дал реквизиты и
+     *  проверил оплату (см. requestGemPurchaseTon — 2026-09-20, адрес кошелька клуба не публикуется
+     *  в боте всем подряд). Заявки до 2026-09-20 (появление TON/Stars) имеют null в paymentMethod —
+     *  тогда был только один способ (рубли переводом на карту) — трактуются как RUB. */
     private String gemPurchasePaymentLine(GemPurchaseRequest req) {
         String method = req.getPaymentMethod() != null ? req.getPaymentMethod() : "RUB";
         return switch (method) {
             case "STARS" -> "💳 Способ оплаты: <b>⭐ Stars (" + req.getStarsAmount() + " ⭐, оплата подтверждена автоматически)</b>";
-            case "TON" -> "💳 Способ оплаты: <b>💎 GRAM (TON)</b> (перевод, требует проверки чека)";
+            case "TON" -> "💳 Способ оплаты: <b>💎 GRAM (TON)</b> — свяжитесь с игроком, уточните детали и пришлите реквизиты лично";
             default -> "💳 Способ оплаты: <b>💸 Рубли</b> (перевод, требует проверки чека)";
         };
     }

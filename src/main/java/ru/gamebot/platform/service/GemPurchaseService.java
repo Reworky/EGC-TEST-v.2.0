@@ -45,17 +45,11 @@ public class GemPurchaseService {
         return BRAWL_PACKAGES.stream().filter(p -> p.key().equals(key)).findFirst();
     }
 
-    /** Код генерируется ДО создания заявки (см. GamePlatformBot.startGemPurchase) — сама заявка
-     *  теперь создаётся только в момент присылки скрина оплаты (createRequest), а не сразу при выборе
-     *  пакета. Раньше заявка создавалась сразу — значит каждое нажатие на пакет (даже без оплаты и без
-     *  отправки скрина) плодило запись в базе, из-за чего номер "Заявка №N" рос от брошенных попыток
-     *  (жалоба пользователя 2026-09-19). */
-    public String generatePaymentCode(AppUser user) {
-        return "EGC-" + user.getTelegramId() % 100000 + "-" + (System.currentTimeMillis() % 100000);
-    }
-
+    /** GRAM (TON) — заявка создаётся сразу при выборе способа оплаты, БЕЗ кода платежа и скриншота:
+     *  адрес кошелька клуба не публикуется в боте всем подряд (решение 2026-09-20) — модератор лично
+     *  связывается с игроком, уточняет детали и сам проверяет оплату. См. GamePlatformBot.requestGemPurchaseTon. */
     @Transactional
-    public GemPurchaseRequest createRequest(AppUser user, GemPackage pkg, String gameTag, String paymentCode, String photoFileId, String paymentMethod) {
+    public GemPurchaseRequest createManualRequest(AppUser user, GemPackage pkg, String gameTag, String paymentMethod) {
         GemPurchaseRequest req = new GemPurchaseRequest();
         req.setDisplayId(repository.findMaxDisplayId() + 1);
         req.setUser(user);
@@ -65,8 +59,6 @@ public class GemPurchaseService {
         req.setPriceRub(pkg.priceRub());
         req.setXpBonus(pkg.xpBonus());
         req.setGameTag(gameTag);
-        req.setPaymentCode(paymentCode);
-        req.setPaymentProofFileId(photoFileId);
         req.setPaymentMethod(paymentMethod);
         req.setStatus(GemPurchaseStatus.PENDING);
         req.setCreatedAt(LocalDateTime.now());
@@ -74,10 +66,11 @@ public class GemPurchaseService {
         return repository.save(req);
     }
 
-    /** Донат гемов, оплаченный Telegram Stars (2026-09-20) — в отличие от createRequest (RUB/TON),
-     *  заявка создаётся СРАЗУ после реального списания (см. GamePlatformBot.grantStarsPurchase), без
-     *  скриншота и кода платежа — сама оплата уже подтверждена Telegram. Гемы всё равно закупаются
-     *  администратором вручную на топап-сервисе (см. approve), автоматизирована только оплата. */
+    /** Донат гемов, оплаченный Telegram Stars (2026-09-20) — заявка создаётся СРАЗУ после реального
+     *  списания (см. GamePlatformBot.grantStarsPurchase) — сама оплата уже подтверждена Telegram, в
+     *  отличие от createManualRequest (GRAM/TON), где оплаты ещё не было и её лично проверяет модератор.
+     *  Гемы всё равно закупаются администратором вручную на топап-сервисе (см. approve), автоматизирована
+     *  только оплата. */
     @Transactional
     public GemPurchaseRequest createStarsRequest(AppUser user, GemPackage pkg, String gameTag, int starsAmount, String telegramPaymentChargeId) {
         GemPurchaseRequest req = new GemPurchaseRequest();
