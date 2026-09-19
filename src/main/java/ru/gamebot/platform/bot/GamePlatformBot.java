@@ -14417,7 +14417,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         int starsPrice = gemPurchaseStarsPrice(pkg.priceRub());
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("💸 Рубли — " + pkg.priceRub() + "₽", "gemdonate:method:RUB:" + pkg.key())),
-                List.of(keyboardFactory.callback("💎 TON — ~" + tonAmount + " TON", "gemdonate:method:TON:" + pkg.key())),
+                List.of(keyboardFactory.callback("💎 GRAM (TON) — ~" + tonAmount + " GRAM (TON)", "gemdonate:method:TON:" + pkg.key())),
                 List.of(keyboardFactory.callback("⭐ Telegram Stars — " + starsPrice + " ⭐", "gemdonate:method:STARS:" + pkg.key())),
                 List.of(keyboardFactory.callback("❌ Отмена", "menu:gemdonate"))
         ));
@@ -14425,7 +14425,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "💎 <b>" + pkg.gems() + " гемов — " + pkg.priceRub() + "₽</b>\n\n"
                         + "Выберите способ оплаты:\n\n"
                         + "⭐ Stars списываются сразу автоматически\n"
-                        + "💸 Рубли / TON — перевод вручную + чек, проверка займёт время.",
+                        + "💸 Рубли / GRAM (TON) — перевод вручную + чек, проверка займёт время.",
                 keyboardFactory.rowsLayout(rows));
     }
 
@@ -14467,11 +14467,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String detailsLine;
         if ("TON".equals(method)) {
             java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(pkg.priceRub()));
-            amountLine = pkg.gems() + " гемов — ~" + tonAmount + " TON (" + pkg.priceRub() + "₽ по текущему курсу)";
+            amountLine = pkg.gems() + " гемов — ~" + tonAmount + " GRAM (TON) (" + pkg.priceRub() + "₽ по текущему курсу)";
             String wallet = appProperties.getGemPurchaseTonWallet();
             detailsLine = (wallet == null || wallet.isBlank())
-                    ? "⚠️ TON-кошелёк клуба ещё не настроен — обратитесь к администратору клуба."
-                    : "💎 Переведите на TON-кошелёк клуба: <code>" + escape(wallet) + "</code>";
+                    ? "⚠️ Кошелёк GRAM (TON) клуба ещё не настроен — обратитесь к администратору клуба."
+                    : "💎 Переведите на кошелёк GRAM (TON) клуба: <code>" + escape(wallet) + "</code>";
         } else {
             amountLine = pkg.gems() + " гемов — " + pkg.priceRub() + "₽";
             detailsLine = escape(appProperties.getGemPurchasePaymentDetails());
@@ -14533,7 +14533,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String method = req.getPaymentMethod() != null ? req.getPaymentMethod() : "RUB";
         return switch (method) {
             case "STARS" -> "💳 Способ оплаты: <b>⭐ Stars (" + req.getStarsAmount() + " ⭐, оплата подтверждена автоматически)</b>";
-            case "TON" -> "💳 Способ оплаты: <b>💎 TON</b> (перевод, требует проверки чека)";
+            case "TON" -> "💳 Способ оплаты: <b>💎 GRAM (TON)</b> (перевод, требует проверки чека)";
             default -> "💳 Способ оплаты: <b>💸 Рубли</b> (перевод, требует проверки чека)";
         };
     }
