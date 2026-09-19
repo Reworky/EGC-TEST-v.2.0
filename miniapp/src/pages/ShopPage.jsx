@@ -10,11 +10,16 @@ const PERK_CATEGORIES = [
   {
     title: 'Бусты',
     items: [
-      { key: 'xpboost24', title: '⚡ XP +20% • 24ч', price: 3000, blockedBy: 'xpBoostActive', activeUntilField: 'xpBoostUntil' },
-      { key: 'xpboost72', title: '⚡ XP +20% • 72ч', price: 7500, blockedBy: 'xpBoostActive', activeUntilField: 'xpBoostUntil' },
-      { key: 'excboost24', title: '⚡ EXC +20% • 24ч', price: 3000, blockedBy: 'excBoostActive', activeUntilField: 'excBoostUntil' },
-      { key: 'excboost72', title: '⚡ EXC +20% • 72ч', price: 7500, blockedBy: 'excBoostActive', activeUntilField: 'excBoostUntil' },
-      { key: 'doubleboost24', title: '⚡⚡ Двойной буст • 24ч', price: 5000, hideIf: s => s.xpBoostActive || s.excBoostActive },
+      { key: 'xpboost24', title: '⚡ XP +20% • 24ч', price: 3000, blockedBy: 'xpBoostActive', activeUntilField: 'xpBoostUntil',
+        icon: '⚡', shortTitle: 'XP +20%', duration: '24ч', gradient: 'gold' },
+      { key: 'xpboost72', title: '⚡ XP +20% • 72ч', price: 7500, blockedBy: 'xpBoostActive', activeUntilField: 'xpBoostUntil',
+        icon: '⚡', shortTitle: 'XP +20%', duration: '72ч', gradient: 'gold' },
+      { key: 'excboost24', title: '⚡ EXC +20% • 24ч', price: 3000, blockedBy: 'excBoostActive', activeUntilField: 'excBoostUntil',
+        icon: '🪙', shortTitle: 'EXC +20%', duration: '24ч', gradient: 'purple' },
+      { key: 'excboost72', title: '⚡ EXC +20% • 72ч', price: 7500, blockedBy: 'excBoostActive', activeUntilField: 'excBoostUntil',
+        icon: '🪙', shortTitle: 'EXC +20%', duration: '72ч', gradient: 'purple' },
+      { key: 'doubleboost24', title: '⚡⚡ Двойной буст • 24ч', price: 5000, hideIf: s => s.xpBoostActive || s.excBoostActive,
+        icon: '🔥', shortTitle: 'Двойной буст', duration: 'XP + EXC • 24ч', gradient: 'fire', wide: true },
     ],
   },
   {
@@ -263,6 +268,46 @@ function PerkCard({ item, state, expanded, onToggle, onPurchased }) {
           {message && <div className="quest-message">{message}</div>}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Крупная цветная карточка буста (2026-09-19, по референсу игрока) — отдельный стиль от общего
+ * .shop-card: без раскрытия (у бустов нет описания, покупка сразу по тапу на цену), с градиентом
+ * по типу буста и увеличенной иконкой, вместо тонкой строки списка. */
+function BoostCard({ item, state, onPurchased }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState(null);
+  const active = item.blockedBy && state[item.blockedBy];
+  const untilText = active && item.activeUntilField ? state[item.activeUntilField] : null;
+
+  async function handleBuy(e) {
+    e.stopPropagation();
+    if (active || busy) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await purchasePerk(item.key);
+      setMessage(res.message);
+      if (res.success) onPurchased();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={`boost-card boost-${item.gradient} ${item.wide ? 'boost-card-wide' : ''} ${active ? 'boost-card-locked' : ''}`}>
+      <div className="boost-icon">{item.icon}</div>
+      <div className="boost-title">{item.shortTitle}</div>
+      <div className="boost-duration">{item.duration}</div>
+      {active ? (
+        <div className="boost-status"><i className="ti ti-circle-check"></i> {item.activeLabel || ('Активен' + (untilText ? ` до ${untilText}` : ''))}</div>
+      ) : (
+        <button className="boost-buy" disabled={busy} onClick={handleBuy}>
+          {busy ? '...' : `${item.price.toLocaleString()} EXC`}
+        </button>
+      )}
+      {message && <div className="boost-message">{message}</div>}
     </div>
   );
 }
@@ -528,12 +573,37 @@ function EgcPassCard({ profile, price, onPurchased }) {
 // бэкенд (см. getStarsPrices), чтобы не разъезжаться с каталогом STARS_ITEMS при изменении цены там.
 const STARS_PRICE_FALLBACK = { AVATAR_FRAME: 35, PATRON_TITLE: 60, PERMANENT_SLOT: 75, EGC_PASS: 150, CHEST_REROLL: 15 };
 
+// Метаданные для больших кнопок-разделов на главном экране "Предметы" (2026-09-19, по референсу
+// игрока) — иконка/градиент/подпись для каждого раздела. Сами товары внутри разделов не изменились,
+// просто раньше все показывались одним длинным списком, теперь сначала выбор раздела, затем список.
+const SECTION_META = {
+  'Бусты': { icon: '⚡', gradient: 'gold', subtitle: 'Временные ускорители XP и EXC' },
+  'Квесты': { icon: '🎯', gradient: 'purple', subtitle: 'Реролл, страховка, доп. слот' },
+  'Кастомизация': { icon: '🎭', gradient: 'fire', subtitle: 'Рамки и титулы профиля' },
+  'Социальные': { icon: '🤝', gradient: 'teal', subtitle: 'Подарки друзьям' },
+};
+
+function SectionButton({ title, onClick }) {
+  const meta = SECTION_META[title];
+  return (
+    <div className={`boost-card boost-card-wide section-button boost-${meta.gradient}`} onClick={onClick}>
+      <div className="boost-icon">{meta.icon}</div>
+      <div>
+        <div className="boost-title">{title}</div>
+        <div className="boost-duration">{meta.subtitle}</div>
+      </div>
+      <i className="ti ti-chevron-right section-button-arrow"></i>
+    </div>
+  );
+}
+
 function PerksView({ expanded, onToggle }) {
   const [state, setState] = useState(null);
   const [frames, setFrames] = useState(null);
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState(null);
   const [prices, setPrices] = useState(STARS_PRICE_FALLBACK);
+  const [activeSection, setActiveSection] = useState(null);
 
   function reload() {
     setError(null);
@@ -548,27 +618,65 @@ function PerksView({ expanded, onToggle }) {
   if (error) return <div className="page-center error-msg">{error}</div>;
   if (state === null) return <div className="page-center">Загрузка...</div>;
 
+  // Раздел скрывается из списка кнопок целиком, если внутри реально нечего показать — та же логика,
+  // что раньше решала, рисовать ли весь блок category-section.
+  const sectionHasContent = title => {
+    if (title === 'Социальные') return true;
+    const cat = PERK_CATEGORIES.find(c => c.title === title);
+    const visible = cat.items.filter(item => !item.hideIf || !item.hideIf(state));
+    const isCustomization = title === 'Кастомизация';
+    const isQuests = title === 'Квесты';
+    return visible.length > 0
+      || (isCustomization && frames?.length)
+      || (isCustomization && !profile?.hasPatronTitle)
+      || (isQuests && !profile?.hasPermanentExtraSlot);
+  };
+
+  if (activeSection === null) {
+    return (
+      <>
+        <div className="shop-header">
+          <div className="shop-balance"><i className="ti ti-coin"></i> {state.coins.toLocaleString()} EXC</div>
+          {state.profileTitle && <div className="shop-ratio">🏅 {state.profileTitle}</div>}
+        </div>
+
+        <EgcPassCard profile={profile} price={prices.EGC_PASS} onPurchased={reload} />
+
+        <div className="category-section">
+          {Object.keys(SECTION_META).filter(sectionHasContent).map(title => (
+            <SectionButton key={title} title={title} onClick={() => setActiveSection(title)} />
+          ))}
+        </div>
+      </>
+    );
+  }
+
+  const cat = PERK_CATEGORIES.find(c => c.title === activeSection);
+  const visible = cat ? cat.items.filter(item => !item.hideIf || !item.hideIf(state)) : [];
+  const isCustomization = activeSection === 'Кастомизация';
+  const isQuests = activeSection === 'Квесты';
+  const isBoosts = activeSection === 'Бусты';
+  const isSocial = activeSection === 'Социальные';
+
   return (
     <>
-      <div className="shop-header">
-        <div className="shop-balance"><i className="ti ti-coin"></i> {state.coins.toLocaleString()} EXC</div>
-        {state.profileTitle && <div className="shop-ratio">🏅 {state.profileTitle}</div>}
-      </div>
+      <div className="category-section">
+        <button className="section-back" onClick={() => setActiveSection(null)}>
+          <i className="ti ti-chevron-left"></i> Все разделы
+        </button>
+        <div className="category-header">{SECTION_META[activeSection].icon} {activeSection}</div>
 
-      <EgcPassCard profile={profile} price={prices.EGC_PASS} onPurchased={reload} />
-
-      {PERK_CATEGORIES.map(cat => {
-        const visible = cat.items.filter(item => !item.hideIf || !item.hideIf(state));
-        const isCustomization = cat.title === 'Кастомизация';
-        const isQuests = cat.title === 'Квесты';
-        if (visible.length === 0
-            && !(isCustomization && frames?.length)
-            && !(isCustomization && !profile?.hasPatronTitle)
-            && !(isQuests && !profile?.hasPermanentExtraSlot)) return null;
-        return (
-          <div key={cat.title} className="category-section">
-            <div className="category-header">{cat.title}</div>
-            {visible.map(item => (
+        {isSocial ? (
+          <GiftCard expanded={expanded === 'gift'} onToggle={onToggle} />
+        ) : (
+          <>
+            {isBoosts ? (
+              <div className="boost-grid">
+                {visible.map(item => (
+                  <BoostCard key={item.key} item={item} state={state} onPurchased={reload} />
+                ))}
+              </div>
+            ) : visible.map(item => (
               <PerkCard
                 key={item.key}
                 item={item}
@@ -628,13 +736,8 @@ function PerksView({ expanded, onToggle }) {
                 onToggle={onToggle}
               />
             )}
-          </div>
-        );
-      })}
-
-      <div className="category-section">
-        <div className="category-header">Социальные</div>
-        <GiftCard expanded={expanded === 'gift'} onToggle={onToggle} />
+          </>
+        )}
       </div>
     </>
   );

@@ -182,6 +182,161 @@
   margin: 0;
 }
 
+/* ── Boost cards (2026-09-19) — крупная цветная сетка вместо тонких строк ── */
+.boost-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.boost-card {
+  position: relative;
+  border-radius: 18px;
+  padding: 14px;
+  min-height: 104px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 0.5px solid rgba(255,255,255,0.09);
+  transition: transform 0.1s;
+}
+
+.boost-card:active {
+  transform: scale(0.98);
+}
+
+.boost-card-wide {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  min-height: 76px;
+}
+
+.boost-card-wide .boost-title,
+.boost-card-wide .boost-duration {
+  margin: 0;
+}
+
+.boost-card-wide .boost-icon {
+  margin-bottom: 0;
+}
+
+.boost-card-wide .boost-buy,
+.boost-card-wide .boost-status {
+  margin-left: auto;
+}
+
+.boost-gold {
+  background: linear-gradient(135deg, rgba(245,166,35,0.30), rgba(245,166,35,0.05) 70%);
+}
+
+.boost-purple {
+  background: linear-gradient(135deg, rgba(108,99,255,0.34), rgba(108,99,255,0.06) 70%);
+}
+
+.boost-fire {
+  background: linear-gradient(120deg, rgba(255,94,77,0.30), rgba(245,166,35,0.14) 60%, rgba(108,99,255,0.10));
+}
+
+.boost-teal {
+  background: linear-gradient(135deg, rgba(45,212,191,0.30), rgba(45,212,191,0.05) 70%);
+}
+
+/* ── Раздел как кнопка (2026-09-19) — большая карточка-навигация на главном экране "Предметы",
+   открывает список товаров внутри; "Назад" возвращает к списку разделов. ── */
+.section-button {
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+.section-button-arrow {
+  margin-left: auto;
+  font-size: 18px;
+  color: rgba(255,255,255,0.45);
+}
+
+.section-back {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.6);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 4px 0 12px;
+  cursor: pointer;
+}
+
+.section-back:active {
+  opacity: 0.6;
+}
+
+.boost-icon {
+  font-size: 26px;
+  line-height: 1;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.35));
+}
+
+.boost-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.25;
+}
+
+.boost-duration {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.55);
+  margin: 2px 0 10px;
+}
+
+.boost-buy {
+  align-self: flex-start;
+  margin-top: auto;
+  border: none;
+  border-radius: 10px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(255,255,255,0.16);
+  color: #fff;
+  cursor: pointer;
+}
+
+.boost-buy:active {
+  transform: scale(0.95);
+}
+
+.boost-buy:disabled {
+  opacity: 0.6;
+}
+
+.boost-card-locked {
+  opacity: 0.6;
+}
+
+.boost-status {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.65);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: auto;
+}
+
+.boost-message {
+  font-size: 11.5px;
+  color: rgba(255,255,255,0.85);
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
 .shop-meta {
   display: flex;
   justify-content: space-between;
