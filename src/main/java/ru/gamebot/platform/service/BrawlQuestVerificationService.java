@@ -109,6 +109,14 @@ public class BrawlQuestVerificationService {
     /** Точка входа шедулера. Не @Transactional — последовательные сетевые вызовы, как в BrawlStarsTournamentService.runBatch. */
     public void checkInProgressSubmissions() {
         List<QuestSubmission> pending = questSubmissionRepository.findInProgressBrawlAutoVerify();
+        // TEMP DEBUG 2026-09-19 — печатает весь список заявок, которые шедулер взял в работу на
+        // этом цикле, чтобы проверить, попадает ли туда вообще заявка по тегу #28RJPURY0
+        // (квест "Космо или Винс") — убрать после диагностики.
+        log.info("[TEMP-DEBUG] checkInProgressSubmissions: {} заявок в работе", pending.size());
+        for (QuestSubmission s : pending) {
+            log.info("[TEMP-DEBUG]   submissionId={} status={} quest='{}' tag={} expiresAt={}",
+                    s.getId(), s.getStatus(), s.getQuest().getTitle(), s.getUser().getBrawlStarsTag(), s.getExpiresAt());
+        }
         for (QuestSubmission submission : pending) {
             try {
                 checkOne(submission);
