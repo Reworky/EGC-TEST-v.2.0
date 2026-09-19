@@ -10,11 +10,11 @@ const PERK_CATEGORIES = [
   {
     title: 'Бусты',
     items: [
-      { key: 'xpboost24', title: '⚡ XP +20% • 24ч', price: 3000, blockedBy: 'xpBoostActive', activeUntilField: 'xpBoostUntil' },
-      { key: 'xpboost72', title: '⚡ XP +20% • 72ч', price: 7500, blockedBy: 'xpBoostActive', activeUntilField: 'xpBoostUntil' },
-      { key: 'excboost24', title: '⚡ EXC +20% • 24ч', price: 3000, blockedBy: 'excBoostActive', activeUntilField: 'excBoostUntil' },
-      { key: 'excboost72', title: '⚡ EXC +20% • 72ч', price: 7500, blockedBy: 'excBoostActive', activeUntilField: 'excBoostUntil' },
-      { key: 'doubleboost24', title: '⚡⚡ Двойной буст • 24ч', price: 5000, hideIf: s => s.xpBoostActive || s.excBoostActive },
+      { key: 'xpboost24', title: '⚡ XP +20% • 24ч', price: 4000, blockedBy: 'xpBoostActive', activeUntilField: 'xpBoostUntil' },
+      { key: 'xpboost72', title: '⚡ XP +20% • 72ч', price: 10000, blockedBy: 'xpBoostActive', activeUntilField: 'xpBoostUntil' },
+      { key: 'excboost24', title: '⚡ EXC +20% • 24ч', price: 4000, blockedBy: 'excBoostActive', activeUntilField: 'excBoostUntil' },
+      { key: 'excboost72', title: '⚡ EXC +20% • 72ч', price: 10000, blockedBy: 'excBoostActive', activeUntilField: 'excBoostUntil' },
+      { key: 'doubleboost24', title: '⚡⚡ Двойной буст • 24ч', price: 6500, hideIf: s => s.xpBoostActive || s.excBoostActive },
     ],
   },
   {
