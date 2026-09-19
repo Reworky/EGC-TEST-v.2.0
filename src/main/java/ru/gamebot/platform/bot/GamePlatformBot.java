@@ -14408,15 +14408,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .intValue();
     }
 
-    /** Выбор способа оплаты пакета гемов (2026-09-20) — раньше был только один способ (рубли переводом
-     *  + скриншот). TON пересчитывается по живому курсу (ExchangeRateService, тот же, что у вывода в
-     *  TON) — цена в TON осознанно "плавающая", а не фиксированная в момент покупки. Stars — нативный
-     *  инвойс Telegram, оплата подтверждается автоматически, без скриншота (см. sendGemStarsInvoice). */
+    /** Выбор способа оплаты пакета гемов (2026-09-20, рубли убраны — пользователь не принимает переводы
+     *  на личную карту, см. решение того же дня) — GRAM (TON) пересчитывается по живому курсу
+     *  (ExchangeRateService, тот же, что у вывода в TON) — цена осознанно "плавающая", а не фиксированная
+     *  в момент покупки. Stars — нативный инвойс Telegram, оплата подтверждается автоматически, без
+     *  чека (см. sendGemStarsInvoice). */
     private void sendGemPaymentMethodChoice(AppUser user, GemPurchaseService.GemPackage pkg) {
         java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(pkg.priceRub()));
         int starsPrice = gemPurchaseStarsPrice(pkg.priceRub());
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
-                List.of(keyboardFactory.callback("💸 Рубли — " + pkg.priceRub() + "₽", "gemdonate:method:RUB:" + pkg.key())),
                 List.of(keyboardFactory.callback("💎 GRAM (TON) — ~" + tonAmount + " GRAM (TON)", "gemdonate:method:TON:" + pkg.key())),
                 List.of(keyboardFactory.callback("⭐ Telegram Stars — " + starsPrice + " ⭐", "gemdonate:method:STARS:" + pkg.key())),
                 List.of(keyboardFactory.callback("❌ Отмена", "menu:gemdonate"))
@@ -14425,7 +14425,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "💎 <b>" + pkg.gems() + " гемов — " + pkg.priceRub() + "₽</b>\n\n"
                         + "Выберите способ оплаты:\n\n"
                         + "⭐ Stars списываются сразу автоматически\n"
-                        + "💸 Рубли / GRAM (TON) — перевод вручную + чек, проверка займёт время.",
+                        + "💎 GRAM (TON) — перевод вручную + чек, проверка займёт время.",
                 keyboardFactory.rowsLayout(rows));
     }
 
@@ -14444,38 +14444,33 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         GemPurchaseService.GemPackage pkg = pkgOpt.get();
         switch (method) {
             case "STARS" -> sendGemStarsInvoice(user, pkg);
-            case "TON" -> startGemPurchaseManual(user, session, pkg, "TON");
-            default -> startGemPurchaseManual(user, session, pkg, "RUB");
+            case "TON" -> startGemPurchaseTon(user, session, pkg);
+            default -> sendGemPaymentMethodChoice(user, pkg);
         }
     }
 
-    /** Ручной поток (RUB/TON) — заявка ЕЩЁ НЕ создаётся здесь, только после реального скрина оплаты
+    /** Ручной поток GRAM (TON) — заявка ЕЩЁ НЕ создаётся здесь, только после реального чека оплаты
      *  (handleGemPurchaseProof). Раньше создавалась сразу на шаге выбора пакета, из-за чего любое
      *  нажатие (даже без оплаты) плодило запись и раздувало "Заявка №N" брошенными попытками (жалоба
-     *  игрока 2026-09-19). Для STARS этот метод не используется — см. sendGemStarsInvoice. */
-    private void startGemPurchaseManual(AppUser user, UserSession session, GemPurchaseService.GemPackage pkg, String method) {
+     *  игрока 2026-09-19). Для STARS этот метод не используется — см. sendGemStarsInvoice. Рубли как
+     *  способ оплаты убраны 2026-09-20 (пользователь не принимает переводы на личную карту), поэтому
+     *  метод здесь всегда "TON" — ветвление по методу больше не нужно. */
+    private void startGemPurchaseTon(AppUser user, UserSession session, GemPurchaseService.GemPackage pkg) {
         String tag = user.getBrawlStarsTag();
         String paymentCode = gemPurchaseService.generatePaymentCode(user);
         session.reset();
         session.getData().put("gemPendingPackageKey", pkg.key());
         session.getData().put("gemPendingTag", tag);
         session.getData().put("gemPendingPaymentCode", paymentCode);
-        session.getData().put("gemPendingMethod", method);
+        session.getData().put("gemPendingMethod", "TON");
         session.setState(SessionState.GEM_PURCHASE_PROOF);
 
-        String amountLine;
-        String detailsLine;
-        if ("TON".equals(method)) {
-            java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(pkg.priceRub()));
-            amountLine = pkg.gems() + " гемов — ~" + tonAmount + " GRAM (TON) (" + pkg.priceRub() + "₽ по текущему курсу)";
-            String wallet = appProperties.getGemPurchaseTonWallet();
-            detailsLine = (wallet == null || wallet.isBlank())
-                    ? "⚠️ Кошелёк GRAM (TON) клуба ещё не настроен — обратитесь к администратору клуба."
-                    : "💎 Переведите на кошелёк GRAM (TON) клуба: <code>" + escape(wallet) + "</code>";
-        } else {
-            amountLine = pkg.gems() + " гемов — " + pkg.priceRub() + "₽";
-            detailsLine = escape(appProperties.getGemPurchasePaymentDetails());
-        }
+        java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(pkg.priceRub()));
+        String amountLine = pkg.gems() + " гемов — ~" + tonAmount + " GRAM (TON) (" + pkg.priceRub() + "₽ по текущему курсу)";
+        String wallet = appProperties.getGemPurchaseTonWallet();
+        String detailsLine = (wallet == null || wallet.isBlank())
+                ? "⚠️ Кошелёк GRAM (TON) клуба ещё не настроен — обратитесь к администратору клуба."
+                : "💎 Переведите на кошелёк GRAM (TON) клуба: <code>" + escape(wallet) + "</code>";
 
         sendText(user.getTelegramId(),
                 "💎 <b>" + amountLine + "</b>\n\n"
