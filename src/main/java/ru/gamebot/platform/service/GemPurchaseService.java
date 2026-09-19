@@ -110,9 +110,4 @@ public class GemPurchaseService {
         req.setUpdatedAt(LocalDateTime.now());
         return repository.save(req);
     }
-
-    /** Короткий код для комментария к переводу — чтобы вручную сверить платёж с конкретной заявкой. */
-    private String generatePaymentCode(AppUser user) {
-        return "EGC-" + user.getTelegramId() % 100000 + "-" + (System.currentTimeMillis() % 100000);
-    }
 }
