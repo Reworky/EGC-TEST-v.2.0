@@ -55,7 +55,7 @@ public class GemPurchaseService {
     }
 
     @Transactional
-    public GemPurchaseRequest createRequest(AppUser user, GemPackage pkg, String gameTag, String paymentCode, String photoFileId) {
+    public GemPurchaseRequest createRequest(AppUser user, GemPackage pkg, String gameTag, String paymentCode, String photoFileId, String paymentMethod) {
         GemPurchaseRequest req = new GemPurchaseRequest();
         req.setDisplayId(repository.findMaxDisplayId() + 1);
         req.setUser(user);
@@ -67,6 +67,31 @@ public class GemPurchaseService {
         req.setGameTag(gameTag);
         req.setPaymentCode(paymentCode);
         req.setPaymentProofFileId(photoFileId);
+        req.setPaymentMethod(paymentMethod);
+        req.setStatus(GemPurchaseStatus.PENDING);
+        req.setCreatedAt(LocalDateTime.now());
+        req.setUpdatedAt(LocalDateTime.now());
+        return repository.save(req);
+    }
+
+    /** Донат гемов, оплаченный Telegram Stars (2026-09-20) — в отличие от createRequest (RUB/TON),
+     *  заявка создаётся СРАЗУ после реального списания (см. GamePlatformBot.grantStarsPurchase), без
+     *  скриншота и кода платежа — сама оплата уже подтверждена Telegram. Гемы всё равно закупаются
+     *  администратором вручную на топап-сервисе (см. approve), автоматизирована только оплата. */
+    @Transactional
+    public GemPurchaseRequest createStarsRequest(AppUser user, GemPackage pkg, String gameTag, int starsAmount, String telegramPaymentChargeId) {
+        GemPurchaseRequest req = new GemPurchaseRequest();
+        req.setDisplayId(repository.findMaxDisplayId() + 1);
+        req.setUser(user);
+        req.setGameName(BRAWL_STARS);
+        req.setPackageKey(pkg.key());
+        req.setGems(pkg.gems());
+        req.setPriceRub(pkg.priceRub());
+        req.setXpBonus(pkg.xpBonus());
+        req.setGameTag(gameTag);
+        req.setPaymentMethod("STARS");
+        req.setStarsAmount(starsAmount);
+        req.setTelegramPaymentChargeId(telegramPaymentChargeId);
         req.setStatus(GemPurchaseStatus.PENDING);
         req.setCreatedAt(LocalDateTime.now());
         req.setUpdatedAt(LocalDateTime.now());

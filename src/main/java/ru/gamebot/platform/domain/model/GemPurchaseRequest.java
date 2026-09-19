@@ -51,8 +51,20 @@ public class GemPurchaseRequest {
     /** Короткий код в комментарии к переводу, чтобы сверить платёж с заявкой вручную. */
     private String paymentCode;
 
-    /** file_id скриншота подтверждения оплаты. */
+    /** file_id скриншота подтверждения оплаты — только для RUB/TON, у STARS его нет (оплата
+     *  подтверждается самим Telegram, скриншот не нужен). */
     private String paymentProofFileId;
+
+    /** "RUB" / "TON" / "STARS" (2026-09-20) — способ оплаты. Заявки до этой даты имеют null здесь —
+     *  единственный способ тогда был RUB, трактовать null как RUB. */
+    private String paymentMethod;
+
+    /** Только для paymentMethod="STARS" — сколько ⭐ реально списал Telegram (для сверки/возврата). */
+    private Integer starsAmount;
+
+    /** Только для paymentMethod="STARS" — telegram_payment_charge_id, нужен для refundStarPayment
+     *  при отклонении уже оплаченной Stars-заявки (см. GamePlatformBot.refundStarsPayment). */
+    private String telegramPaymentChargeId;
 
     @Enumerated(EnumType.STRING)
     private GemPurchaseStatus status;

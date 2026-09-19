@@ -1457,6 +1457,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             startGemPurchase(user, session, data.substring("gemdonate:pkg:".length()));
             return;
         }
+        if (data.startsWith("gemdonate:method:")) {
+            answerSilently(callbackQuery.getId());
+            String rest = data.substring("gemdonate:method:".length());
+            int sep = rest.indexOf(':');
+            if (sep > 0) {
+                handleGemPurchaseMethodChoice(user, session, rest.substring(0, sep), rest.substring(sep + 1));
+            }
+            return;
+        }
         if (data.startsWith("review:")) {
             handleReviewAction(callbackQuery, user, session, data.substring("review:".length()));
             return;
@@ -2360,8 +2369,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     return;
                 }
                 GemPurchaseRequest req = gemPurchaseService.reject(reqId, text.trim());
-                notifyUserGemPurchaseRejected(req);
-                sendText(user.getTelegramId(), "❌ Заявка Д-" + req.getDisplayId() + " отклонена, игрок уведомлён.", backMenuKeyboard("admin:gempurchase"));
+                String refundNote = "";
+                if ("STARS".equals(req.getPaymentMethod())) {
+                    boolean refunded = refundStarsPayment(req.getUser().getTelegramId(), req.getTelegramPaymentChargeId());
+                    refundNote = refunded
+                            ? "\n\n💫 Stars возвращены игроку автоматически."
+                            : "\n\n⚠️ Не удалось автоматически вернуть Stars — верните вручную, см. лог сервера.";
+                }
+                notifyUserGemPurchaseRejected(req, refundNote);
+                sendText(user.getTelegramId(), "❌ Заявка Д-" + req.getDisplayId() + " отклонена, игрок уведомлён." + refundNote, backMenuKeyboard("admin:gempurchase"));
             }
             case CLASH_TAG_INPUT -> {
                 ru.gamebot.platform.service.ClashQuestVerificationService.TagLookupResult res =
@@ -6115,7 +6131,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             log.error("Unknown Stars item payload '{}'", payload);
             return;
         }
-        sendStarsInvoice(user, payload, spec.priceStars());
+        sendStarsInvoice(user, payload, spec, spec.priceStars());
     }
 
     /** Вариант с ценой, переопределённой на вызове — для товаров без фиксированной цены в каталоге
@@ -6128,6 +6144,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             log.error("Unknown Stars item payload '{}'", payload);
             return;
         }
+        sendStarsInvoice(user, payload, spec, priceStarsOverride);
+    }
+
+    /** Вариант с полностью произвольным spec, в обход статичного каталога STARS_ITEMS — для товаров,
+     *  которых в принципе не может быть в фиксированной Map (сейчас только донат гемов: 8 пакетов ×
+     *  динамические title/description/цена, см. sendGemStarsInvoice). */
+    private void sendStarsInvoice(AppUser user, String payload, StarsItemSpec spec, int priceStarsOverride) {
         if (spec.subscriptionPeriodSeconds() != null) {
             // subscription_period официально поддерживается только у createInvoiceLink, не у sendInvoice
             // (проверено по исходнику core.telegram.org/bots/api) — для подписок вызывающая сторона
@@ -6200,6 +6223,37 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } catch (Exception e) {
             log.error("Failed to create Stars invoice link ({})", payload, e);
             return null;
+        }
+    }
+
+    /** Возврат Stars-платежа (refundStarPayment) — используется при отклонении Stars-оплаченной заявки
+     *  на донат гемов (см. GEM_PURCHASE_REJECT_COMMENT): деньги уже списаны, но клуб физически не может
+     *  выполнить заявку (неверный тег и т.п.) — значит их нужно вернуть, а не просто извиниться. Тот же
+     *  урок, что и в handleSuccessfulPayment (инцидент 2026-09-19: списанные Stars нельзя терять молча). */
+    private boolean refundStarsPayment(Long telegramId, String telegramPaymentChargeId) {
+        if (telegramPaymentChargeId == null || telegramPaymentChargeId.isBlank()) {
+            return false;
+        }
+        try {
+            Map<String, Object> body = Map.of(
+                    "user_id", telegramId,
+                    "telegram_payment_charge_id", telegramPaymentChargeId
+            );
+            String json = objectMapper.writeValueAsString(body);
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create("https://api.telegram.org/bot" + appProperties.getBotToken() + "/refundStarPayment"))
+                    .header("Content-Type", "application/json")
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(json))
+                    .build();
+            java.net.http.HttpResponse<String> response = starsHttpClient.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                log.error("Failed to refund Stars payment ({}) for {}: HTTP {} — {}", telegramPaymentChargeId, telegramId, response.statusCode(), response.body());
+                return false;
+            }
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to refund Stars payment ({}) for {}", telegramPaymentChargeId, telegramId, e);
+            return false;
         }
     }
 
@@ -6282,7 +6336,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Баг обнаружен 2026-09-19: два игрока заплатили Stars, получили общий "Что-то пошло не так"
         // и ничего не получили, а админ узнал об этом только из жалобы в поддержке.
         try {
-            grantStarsPurchase(user, telegramId, payload);
+            grantStarsPurchase(user, telegramId, payload, payment);
         } catch (Exception e) {
             log.error("Failed to grant Stars purchase (payload={}, telegramId={}, chargeId={})",
                     payload, telegramId, payment.getTelegramPaymentChargeId(), e);
@@ -6294,7 +6348,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    private void grantStarsPurchase(AppUser user, Long telegramId, String payload) {
+    private void grantStarsPurchase(AppUser user, Long telegramId, String payload,
+            org.telegram.telegrambots.meta.api.objects.payments.SuccessfulPayment payment) {
+        if (payload.startsWith("starsitem:GEM:")) {
+            String packageKey = payload.substring("starsitem:GEM:".length());
+            GemPurchaseService.GemPackage pkg = gemPurchaseService.findPackage(packageKey)
+                    .orElseThrow(() -> new IllegalStateException("Unknown gem package in Stars payload: " + packageKey));
+            String tag = user.getBrawlStarsTag();
+            if (tag == null || tag.isBlank()) {
+                // Не должно случиться — тег проверяется до показа инвойса (startGemPurchase), но если
+                // всё же гонка/сброс тега между инвойсом и оплатой — не зачисляем гемы "в никуда",
+                // кидаем исключение, чтобы сработал общий catch (алерт админам на ручной разбор).
+                throw new IllegalStateException("GEM purchase without linked Brawl Stars tag for user " + telegramId);
+            }
+            GemPurchaseRequest req = gemPurchaseService.createStarsRequest(user, pkg, tag, payment.getTotalAmount(), payment.getTelegramPaymentChargeId());
+            notifyAdminsAboutGemPurchase(req);
+            sendText(telegramId,
+                    "✅ <b>Оплата прошла!</b>\n\n"
+                            + "Заявка Д-" + req.getDisplayId() + " на <b>" + pkg.gems() + " гемов</b> создана — оплата уже подтверждена, гемы зачислят на тег " + escape(tag) + " в ближайшее время.",
+                    backMenuKeyboard("menu:cat:shop"));
+            return;
+        }
         if ("starsitem:AVATAR_FRAME".equals(payload)) {
             userService.grantEgcAvatarFrame(user);
             sendText(telegramId,
@@ -12053,7 +12127,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 return;
             }
             try {
-                grantStarsPurchase(target, telegramId, starsItemPayload);
+                // payment=null безопасно: "gem" намеренно нет в списке выше (starsItemPayload не может
+                // начинаться с "starsitem:GEM:") — единственная ветка grantStarsPurchase, которая читает
+                // payment, сюда недостижима.
+                grantStarsPurchase(target, telegramId, starsItemPayload, null);
                 sendText(admin.getTelegramId(),
                         "✅ Товар выдан игроку <b>" + escape(displayUserName(target)) + "</b>, уведомление отправлено.",
                         backMenuKeyboard("admin:user:view:" + telegramId + ":" + p));
@@ -14317,22 +14394,111 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     cancelKeyboard());
             return;
         }
-        // Заявка ЕЩЁ НЕ создаётся здесь — только после реального скрина оплаты (handleGemPurchaseProof).
-        // Раньше создавалась сразу на этом шаге, из-за чего любое нажатие на пакет (даже без оплаты)
-        // плодило запись и раздувало "Заявка №N" брошенными попытками (жалоба игрока 2026-09-19).
-        String paymentCode = gemPurchaseService.generatePaymentCode(user);
-        session.reset();
-        session.getData().put("gemPendingPackageKey", packageKey);
-        session.getData().put("gemPendingTag", tag);
-        session.getData().put("gemPendingPaymentCode", paymentCode);
-        session.setState(SessionState.GEM_PURCHASE_PROOF);
+        sendGemPaymentMethodChoice(user, pkg);
+    }
+
+    /** Курс перевода цены пакета гемов (в рублях) в Stars — тот же ориентировочный курс, что и у
+     *  остальных Stars-товаров проекта (~1,4₽/⭐, см. AVATAR_FRAME_STARS_PRICE и соседние комментарии),
+     *  для единообразия цен по всему боту. */
+    private static final java.math.BigDecimal GEM_PURCHASE_STARS_RUB_RATE = java.math.BigDecimal.valueOf(1.4);
+
+    private int gemPurchaseStarsPrice(long priceRub) {
+        return java.math.BigDecimal.valueOf(priceRub)
+                .divide(GEM_PURCHASE_STARS_RUB_RATE, 0, java.math.RoundingMode.HALF_UP)
+                .intValue();
+    }
+
+    /** Выбор способа оплаты пакета гемов (2026-09-20) — раньше был только один способ (рубли переводом
+     *  + скриншот). TON пересчитывается по живому курсу (ExchangeRateService, тот же, что у вывода в
+     *  TON) — цена в TON осознанно "плавающая", а не фиксированная в момент покупки. Stars — нативный
+     *  инвойс Telegram, оплата подтверждается автоматически, без скриншота (см. sendGemStarsInvoice). */
+    private void sendGemPaymentMethodChoice(AppUser user, GemPurchaseService.GemPackage pkg) {
+        java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(pkg.priceRub()));
+        int starsPrice = gemPurchaseStarsPrice(pkg.priceRub());
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
+                List.of(keyboardFactory.callback("💸 Рубли — " + pkg.priceRub() + "₽", "gemdonate:method:RUB:" + pkg.key())),
+                List.of(keyboardFactory.callback("💎 TON — ~" + tonAmount + " TON", "gemdonate:method:TON:" + pkg.key())),
+                List.of(keyboardFactory.callback("⭐ Telegram Stars — " + starsPrice + " ⭐", "gemdonate:method:STARS:" + pkg.key())),
+                List.of(keyboardFactory.callback("❌ Отмена", "menu:gemdonate"))
+        ));
         sendText(user.getTelegramId(),
                 "💎 <b>" + pkg.gems() + " гемов — " + pkg.priceRub() + "₽</b>\n\n"
+                        + "Выберите способ оплаты:\n\n"
+                        + "⭐ Stars списываются сразу автоматически — быстрее всего.\n"
+                        + "💸 Рубли / 💎 TON — перевод вручную + скриншот, проверка займёт время.",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleGemPurchaseMethodChoice(AppUser user, UserSession session, String method, String packageKey) {
+        if (!isGemPurchaseTester(user)) {
+            sendText(user.getTelegramId(),
+                    "💎 <b>Донат по играм</b>\n\n🚧 Раздел скоро откроется — сейчас идёт тестирование.",
+                    backMenuKeyboard("menu:cat:shop"));
+            return;
+        }
+        Optional<GemPurchaseService.GemPackage> pkgOpt = gemPurchaseService.findPackage(packageKey);
+        if (pkgOpt.isEmpty()) {
+            sendText(user.getTelegramId(), "❌ Пакет не найден, попробуйте выбрать заново.", backMenuKeyboard("menu:gemdonate"));
+            return;
+        }
+        GemPurchaseService.GemPackage pkg = pkgOpt.get();
+        switch (method) {
+            case "STARS" -> sendGemStarsInvoice(user, pkg);
+            case "TON" -> startGemPurchaseManual(user, session, pkg, "TON");
+            default -> startGemPurchaseManual(user, session, pkg, "RUB");
+        }
+    }
+
+    /** Ручной поток (RUB/TON) — заявка ЕЩЁ НЕ создаётся здесь, только после реального скрина оплаты
+     *  (handleGemPurchaseProof). Раньше создавалась сразу на шаге выбора пакета, из-за чего любое
+     *  нажатие (даже без оплаты) плодило запись и раздувало "Заявка №N" брошенными попытками (жалоба
+     *  игрока 2026-09-19). Для STARS этот метод не используется — см. sendGemStarsInvoice. */
+    private void startGemPurchaseManual(AppUser user, UserSession session, GemPurchaseService.GemPackage pkg, String method) {
+        String tag = user.getBrawlStarsTag();
+        String paymentCode = gemPurchaseService.generatePaymentCode(user);
+        session.reset();
+        session.getData().put("gemPendingPackageKey", pkg.key());
+        session.getData().put("gemPendingTag", tag);
+        session.getData().put("gemPendingPaymentCode", paymentCode);
+        session.getData().put("gemPendingMethod", method);
+        session.setState(SessionState.GEM_PURCHASE_PROOF);
+
+        String amountLine;
+        String detailsLine;
+        if ("TON".equals(method)) {
+            java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(pkg.priceRub()));
+            amountLine = pkg.gems() + " гемов — ~" + tonAmount + " TON (" + pkg.priceRub() + "₽ по текущему курсу)";
+            String wallet = appProperties.getGemPurchaseTonWallet();
+            detailsLine = (wallet == null || wallet.isBlank())
+                    ? "⚠️ TON-кошелёк клуба ещё не настроен — обратитесь к администратору клуба."
+                    : "💎 Переведите на TON-кошелёк клуба: <code>" + escape(wallet) + "</code>";
+        } else {
+            amountLine = pkg.gems() + " гемов — " + pkg.priceRub() + "₽";
+            detailsLine = escape(appProperties.getGemPurchasePaymentDetails());
+        }
+
+        sendText(user.getTelegramId(),
+                "💎 <b>" + amountLine + "</b>\n\n"
                         + "Тег: <code>" + escape(tag) + "</code>\n\n"
-                        + escape(appProperties.getGemPurchasePaymentDetails()) + "\n\n"
+                        + detailsLine + "\n\n"
                         + "⚠️ ОБЯЗАТЕЛЬНО укажите в комментарии к переводу код: <code>" + paymentCode + "</code>\n\n"
                         + "После оплаты пришлите сюда скриншот перевода — это последний шаг оформления заявки.",
                 cancelKeyboard());
+    }
+
+    /** Оплата Stars — нативный инвойс Telegram (та же HTTP-инфраструктура, что у остальных Stars-
+     *  товаров), но payload и цена динамические (пакет гемов ×8 вариантов), поэтому не через статичный
+     *  каталог STARS_ITEMS, а через overload sendStarsInvoice с готовым spec. Выдача — в grantStarsPurchase
+     *  (payload "starsitem:GEM:<key>") после реального списания. */
+    private void sendGemStarsInvoice(AppUser user, GemPurchaseService.GemPackage pkg) {
+        String tag = user.getBrawlStarsTag();
+        int starsPrice = gemPurchaseStarsPrice(pkg.priceRub());
+        StarsItemSpec spec = new StarsItemSpec(
+                "💎 " + pkg.gems() + " гемов Brawl Stars",
+                "Зачисление на тег " + tag + ". Гемы закупает администратор вручную после оплаты — обычно в течение некоторого времени.",
+                pkg.gems() + " гемов Brawl Stars",
+                starsPrice);
+        sendStarsInvoice(user, "starsitem:GEM:" + pkg.key(), spec, starsPrice);
     }
 
     private void handleGemPurchaseProof(AppUser user, UserSession session, Message message) {
@@ -14343,6 +14509,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String packageKey = session.getData().get("gemPendingPackageKey");
         String tag = session.getData().get("gemPendingTag");
         String paymentCode = session.getData().get("gemPendingPaymentCode");
+        String method = session.getData().getOrDefault("gemPendingMethod", "RUB");
         Optional<GemPurchaseService.GemPackage> pkgOpt = packageKey != null ? gemPurchaseService.findPackage(packageKey) : Optional.empty();
         if (pkgOpt.isEmpty() || tag == null || paymentCode == null) {
             session.reset();
@@ -14351,12 +14518,30 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         List<PhotoSize> photos = message.getPhoto();
         String fileId = photos.get(photos.size() - 1).getFileId();
-        GemPurchaseRequest req = gemPurchaseService.createRequest(user, pkgOpt.get(), tag, paymentCode, fileId);
+        GemPurchaseRequest req = gemPurchaseService.createRequest(user, pkgOpt.get(), tag, paymentCode, fileId, method);
         session.reset();
         notifyAdminsAboutGemPurchase(req);
         sendText(user.getTelegramId(),
                 "✅ Скриншот получен! Заявка Д-" + req.getDisplayId() + " на проверке — как только гемы зачислят, придёт уведомление.",
                 backMenuKeyboard("menu:cat:shop"));
+    }
+
+    /** Способ оплаты заявки на донат гемов — RUB/TON требуют проверки скриншота админом, STARS уже
+     *  подтверждён самим Telegram в момент списания (см. grantStarsPurchase). Заявки до 2026-09-20
+     *  (появление TON/Stars) имеют null в paymentMethod — трактуются как RUB. */
+    private String gemPurchasePaymentLine(GemPurchaseRequest req) {
+        String method = req.getPaymentMethod() != null ? req.getPaymentMethod() : "RUB";
+        return switch (method) {
+            case "STARS" -> "💳 Способ оплаты: <b>⭐ Stars (" + req.getStarsAmount() + " ⭐, оплата подтверждена автоматически)</b>";
+            case "TON" -> "💳 Способ оплаты: <b>💎 TON</b> (перевод, требует проверки скриншота)";
+            default -> "💳 Способ оплаты: <b>💸 Рубли</b> (перевод, требует проверки скриншота)";
+        };
+    }
+
+    private String gemPurchaseCodeLine(GemPurchaseRequest req) {
+        return req.getPaymentCode() != null
+                ? "\n🔑 Код платежа: <code>" + escape(req.getPaymentCode()) + "</code>"
+                : "";
     }
 
     private void notifyAdminsAboutGemPurchase(GemPurchaseRequest req) {
@@ -14370,8 +14555,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🎮 Игра: <b>" + escape(req.getGameName()) + "</b>\n"
                 + "🏷️ Тег: <code>" + escape(req.getGameTag()) + "</code>\n"
                 + "📦 Пакет: <b>" + req.getGems() + " гемов</b>\n"
-                + "💰 Оплачено: <b>" + req.getPriceRub() + "₽</b>\n"
-                + "🔑 Код платежа: <code>" + escape(req.getPaymentCode()) + "</code>\n"
+                + "💰 Цена: <b>" + req.getPriceRub() + "₽</b>\n"
+                + gemPurchasePaymentLine(req) + gemPurchaseCodeLine(req) + "\n"
                 + "🎁 XP-бонус при выполнении: <b>" + req.getXpBonus() + "</b>";
         InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("👀 Открыть заявку", "admin:gempurchase:view:" + req.getId()))
@@ -14393,8 +14578,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (GemPurchaseRequest req : pending) {
+            String methodIcon = switch (req.getPaymentMethod() != null ? req.getPaymentMethod() : "RUB") {
+                case "STARS" -> "⭐";
+                case "TON" -> "💎";
+                default -> "💸";
+            };
             rows.add(List.of(keyboardFactory.callback(
-                    "Д-" + req.getDisplayId() + " — " + escape(req.getUser().getNickname()) + " — " + req.getGems() + " гемов",
+                    methodIcon + " Д-" + req.getDisplayId() + " — " + escape(req.getUser().getNickname()) + " — " + req.getGems() + " гемов",
                     "admin:gempurchase:view:" + req.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
@@ -14408,8 +14598,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "🆔 Telegram ID: <code>" + req.getUser().getTelegramId() + "</code>\n"
                     + "🏷️ Тег: <code>" + escape(req.getGameTag()) + "</code>\n"
                     + "📦 Пакет: <b>" + req.getGems() + " гемов</b>\n"
-                    + "💰 Оплачено: <b>" + req.getPriceRub() + "₽</b>\n"
-                    + "🔑 Код платежа: <code>" + escape(req.getPaymentCode()) + "</code>\n"
+                    + "💰 Цена: <b>" + req.getPriceRub() + "₽</b>\n"
+                    + gemPurchasePaymentLine(req) + gemPurchaseCodeLine(req) + "\n"
                     + "🎁 XP-бонус: <b>" + req.getXpBonus() + "</b>\n"
                     + "📌 Статус: <b>" + req.getStatus() + "</b>"
                     + (req.getRejectReason() != null ? "\n💬 Причина отклонения: " + escape(req.getRejectReason()) : "");
@@ -14458,11 +14648,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 backMenuKeyboard("menu:main"));
     }
 
-    private void notifyUserGemPurchaseRejected(GemPurchaseRequest req) {
+    private void notifyUserGemPurchaseRejected(GemPurchaseRequest req, String refundNote) {
         sendText(req.getUser().getTelegramId(),
                 "❌ Заявка на донат Д-" + req.getDisplayId() + " отклонена.\n\n"
-                        + "Причина: " + escape(req.getRejectReason() != null ? req.getRejectReason() : "не указана") + "\n\n"
-                        + "Если считаете это ошибкой — напишите в поддержку.",
+                        + "Причина: " + escape(req.getRejectReason() != null ? req.getRejectReason() : "не указана")
+                        + refundNote
+                        + "\n\nЕсли считаете это ошибкой — напишите в поддержку.",
                 backMenuKeyboard("menu:main"));
     }
 
