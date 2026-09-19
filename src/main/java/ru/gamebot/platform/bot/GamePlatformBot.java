@@ -3092,7 +3092,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
                 List.of(keyboardFactory.callback(dailyLabel, "menu:daily")),
                 List.of(keyboardFactory.webApp(chestLabel, "https://experience-gaming-club.pages.dev/wallet?section=chest")),
-                List.of(keyboardFactory.webApp("🔁 Улучшенный сундук — " + CHEST_REROLL_STARS_PRICE + " ⭐", "https://experience-gaming-club.pages.dev/wallet?section=chest")),
                 List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads")),
                 List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
@@ -3122,7 +3121,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
                     List.of(keyboardFactory.callback(dailyLabel, "menu:daily")),
                     List.of(keyboardFactory.webApp(chestLabel, "https://experience-gaming-club.pages.dev/wallet?section=chest")),
-                    List.of(keyboardFactory.webApp("🔁 Улучшенный сундук — " + CHEST_REROLL_STARS_PRICE + " ⭐", "https://experience-gaming-club.pages.dev/wallet?section=chest")),
                     List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads"))
             ));
         }
