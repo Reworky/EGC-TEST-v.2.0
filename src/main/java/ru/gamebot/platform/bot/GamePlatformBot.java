@@ -5679,6 +5679,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback(
                 passActive ? "⭐ EGC Pass активен ✅" : "⭐ EGC Pass — " + EGC_PASS_STARS_PRICE + " ⭐/мес",
                 passActive ? "sink:noop" : "sink:egc_pass")));
+        rows.add(List.of(keyboardFactory.callback("🎒 Мои предметы", "sink:myitems")));
         rows.add(List.of(keyboardFactory.callback("🎭 Кастомизация", "sink:cat:customization")));
         rows.add(List.of(keyboardFactory.callback("⚡ Бусты", "sink:cat:boosts")));
         rows.add(List.of(keyboardFactory.callback("🎯 Квесты", "sink:cat:quests")));
@@ -5689,6 +5690,67 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ));
 
         sendText(user.getTelegramId(), info.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Сводка "Мои предметы" (2026-09-20, по запросу пользователя) — раньше статус каждого предмета
+     *  был раскидан по разным подменю "Предметы клуба" (Кастомизация/Бусты/Квесты), нужно было заходить
+     *  в каждое отдельно, чтобы понять, чем уже владеешь. Собирает всё в один экран. */
+    private void sendMyItems(AppUser user) {
+        LocalDateTime now = LocalDateTime.now();
+        StringBuilder sb = new StringBuilder("🎒 <b>Мои предметы</b>\n\n");
+
+        String framesCsv = user.getOwnedFramesCsv();
+        sb.append("🖼️ <b>Рамки аватара:</b> ");
+        if (framesCsv == null || framesCsv.isBlank()) {
+            sb.append("нет\n");
+        } else {
+            sb.append(Arrays.stream(framesCsv.split(","))
+                    .map(this::frameDisplayName)
+                    .collect(java.util.stream.Collectors.joining(", ")))
+                    .append("\n");
+            if (user.getAvatarFrameImage() != null && !user.getAvatarFrameImage().isBlank()) {
+                sb.append("Надета сейчас: ").append(frameDisplayName(user.getAvatarFrameImage())).append("\n");
+            }
+        }
+        sb.append("\n");
+
+        sb.append("🏅 <b>Титул:</b> ").append(user.getProfileTitle() != null ? escape(user.getProfileTitle()) : "нет").append("\n");
+        boolean hasPatron = user.getOwnedTitlesCsv() != null && Arrays.asList(user.getOwnedTitlesCsv().split(",")).contains("patron");
+        if (hasPatron) {
+            sb.append("💎 Разблокирован эксклюзивный титул «Покровитель EGC»\n");
+        }
+        sb.append("\n");
+
+        boolean xpActive = user.getXpBoostActiveUntil() != null && user.getXpBoostActiveUntil().isAfter(now);
+        boolean excActive = user.getExcBoostActiveUntil() != null && user.getExcBoostActiveUntil().isAfter(now);
+        sb.append("⚡ <b>XP-буст:</b> ").append(xpActive ? "активен до " + fmt(user.getXpBoostActiveUntil()) : "нет").append("\n");
+        sb.append("⚡ <b>EXC-буст:</b> ").append(excActive ? "активен до " + fmt(user.getExcBoostActiveUntil()) : "нет").append("\n\n");
+
+        if (user.isPermanentExtraSlot()) {
+            sb.append("📂 <b>Доп. слот квеста:</b> навсегда ✅\n");
+        } else {
+            boolean slotActive = user.getQuestSlotExtraUntil() != null && user.getQuestSlotExtraUntil().isAfter(now);
+            sb.append("📂 <b>Доп. слот квеста:</b> ").append(slotActive ? "активен до " + fmt(user.getQuestSlotExtraUntil()) : "нет").append("\n");
+        }
+        sb.append("🛡️ <b>Страховка провала:</b> ").append(user.isRetryInsuranceActive() ? "активна" : "нет").append("\n\n");
+
+        boolean passActive = user.getEgcPassActiveUntil() != null && user.getEgcPassActiveUntil().isAfter(now);
+        sb.append("⭐ <b>EGC Pass:</b> ").append(passActive ? "активен до " + fmt(user.getEgcPassActiveUntil()) : "нет").append("\n\n");
+
+        sb.append("🎟️ <b>Билеты колеса фортуны:</b> ").append(user.getTickets());
+
+        sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:sink"));
+    }
+
+    private String frameDisplayName(String key) {
+        return switch (key) {
+            case "fire" -> "🔥 Огненная";
+            case "ice" -> "❄️ Ледяная";
+            case "purple" -> "💜 Фиолетовая";
+            case "gold" -> "👑 Золотая";
+            case "egc" -> "💜 «EGC» (эксклюзивная)";
+            default -> key;
+        };
     }
 
     private void sendSinkCustomization(AppUser user) {
@@ -5796,6 +5858,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "cat:quests" -> sendSinkQuests(user);
             case "cat:social" -> sendSinkSocial(user);
             case "egc_pass" -> sendEgcPassOffer(user);
+            case "myitems" -> sendMyItems(user);
             case "reroll" -> {
                 try {
                     sinkShopService.purchaseReroll(user);
