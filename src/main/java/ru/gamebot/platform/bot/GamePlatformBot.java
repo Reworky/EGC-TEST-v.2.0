@@ -14490,9 +14490,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "✅ <b>Заявка Д-" + req.getDisplayId() + " создана!</b>\n\n"
                         + pkg.gems() + " гемов на тег <code>" + escape(tag) + "</code>\n\n"
-                        + "Модератор свяжется с вами в личных сообщениях, чтобы уточнить детали (с какой биржи/кошелька переводите и т.п.) и прислать реквизиты для оплаты.",
+                        + "Модератор свяжется с вами в личных сообщениях, чтобы уточнить детали и прислать реквизиты для оплаты.",
                 keyboardFactory.rowsLayout(List.of(
-                        List.of(keyboardFactory.callback("🆘 Написать в поддержку", "menu:support")),
+                        List.of(keyboardFactory.url("✍️ Написать менеджеру", "https://t.me/" + appProperties.getSupportUsername())),
                         List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
                 )));
     }
