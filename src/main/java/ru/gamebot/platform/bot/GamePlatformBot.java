@@ -1569,6 +1569,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "moderation" -> sendModerationHub(user);
             case "daily" -> { sendDailyBonus(callbackQuery, user); return; }
             case "chestprizes" -> sendChestPrizeList(user);
+            case "chestopen" -> { sendChestOpenResult(callbackQuery, user); return; }
             case "chestreroll" -> { answerSilently(callbackQuery.getId()); sendChestRerollStarsInvoice(user); return; }
             case "watchad" -> { sendWatchAdOffer(callbackQuery, user); return; }
             case "cat:quests" -> sendQuestsCategory(user);
@@ -3315,7 +3316,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "✅ Сундук сегодня открыт";
         sendMenuCategory(user, "🍀 <b>Фортуна</b>", List.of(
                 List.of(keyboardFactory.callback(wheelLabel, "wheel:menu")),
-                List.of(keyboardFactory.webApp(chestLabel, "https://experience-gaming-club.pages.dev/wallet?section=chest")),
+                List.of(keyboardFactory.callback(chestLabel, "menu:chestopen")),
                 List.of(keyboardFactory.callback("🔁 Улучшенный сундук дня — " + CHEST_REROLL_STARS_PRICE + " ⭐", "menu:chestreroll"))
         ));
     }
@@ -3833,11 +3834,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), msg.toString(), backMenuKeyboard("menu:main"));
     }
 
-    /** Бесплатный сундук дня открывается ТОЛЬКО в мини-аппе (кнопка в Кошельке — ссылка на
-     * /wallet?section=chest, см. sendWalletCategory), не в самом боте — так нагляднее и оставляет
-     * место для анимации открытия (запрошено 2026-09-15). Платный реролл за Stars (см.
-     * sendChestRerollStarsInvoice/handleSuccessfulPayment) остаётся в боте — это Telegram-инвойс,
-     * ему бот и нужен. buildChestResultMessage/chestResultKeyboard переиспользуются для результата реролла. */
+    /** Бесплатный сундук дня открывается и в мини-аппе (см. WalletController/WalletPage), и прямо в
+     * боте (кнопка "menu:chestopen" в разделе "Фортуна", запрошено 2026-09-20 — раньше было только
+     * в мини-аппе). buildChestResultMessage/chestResultKeyboard переиспользуются для результата
+     * и бесплатного открытия, и платного реролла за Stars (см. sendChestRerollStarsInvoice). */
+    private void sendChestOpenResult(CallbackQuery callbackQuery, AppUser user) {
+        if (!userService.isChestAvailable(user)) {
+            answer(callbackQuery.getId(), "Сундук сегодня уже открыт — приходи завтра!");
+            return;
+        }
+        UserService.ChestResult result = userService.openChest(user);
+        answer(callbackQuery.getId(), result.prizeLabel());
+        sendText(user.getTelegramId(), buildChestResultMessage(result, user.getCoins()), chestResultKeyboard());
+    }
+
     private String buildChestResultMessage(ru.gamebot.platform.service.UserService.ChestResult result, long newBalance) {
         StringBuilder msg = new StringBuilder();
         msg.append(result.prizeLabel()).append("\n\n");
@@ -5642,7 +5652,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("⚡ Бусты", "sink:cat:boosts")));
         rows.add(List.of(keyboardFactory.callback("🎯 Квесты", "sink:cat:quests")));
         rows.add(List.of(keyboardFactory.callback("🤝 Социальные", "sink:cat:social")));
-        rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", "menu:cat:shop"),
+                keyboardFactory.callback("🏠 Меню", "menu:main")
+        ));
 
         sendText(user.getTelegramId(), info.toString(), keyboardFactory.rowsLayout(rows));
     }
