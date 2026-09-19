@@ -1552,11 +1552,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleModUserAction(user, data.substring("mod:user:".length()));
             return;
         }
-        // "Донат по играм" уведомляет модераторов, не админов (тот же канал, что и вывод EXC) —
-        // без этого исключения модератор без роли админа получил бы "Неизвестное действие" на
-        // кнопку "Открыть заявку" из notifyAdminsAboutGemPurchase.
-        if (data.startsWith("admin:gempurchase") && (isEffectiveAdmin(user) || isEffectiveModerator(user))) {
-            handleAdminAction(callbackQuery, user, session, data.substring("admin:".length()));
+        // "Донат по играм" — исключительно модераторы, админы намеренно убраны из получателей и
+        // обработки этих заявок (по запросу пользователя, 2026-09-20). Отдельный блок ДО общего
+        // "admin:" + isEffectiveAdmin ниже — иначе админ (без роли модератора) всё равно прошёл бы
+        // через общую проверку, т.к. "admin:gempurchase..." формально начинается с "admin:".
+        if (data.startsWith("admin:gempurchase")) {
+            if (isEffectiveModerator(user)) {
+                handleAdminAction(callbackQuery, user, session, data.substring("admin:".length()));
+            } else {
+                answer(callbackQuery.getId(), "Неизвестное действие");
+            }
             return;
         }
         if (data.startsWith("admin:") && isEffectiveAdmin(user)) {
@@ -14972,11 +14977,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     ? "💸 Заявки на вывод (" + pendingWithdrawals + ")"
                     : "💸 Заявки на вывод";
             rows.add(List.of(keyboardFactory.callback(wLabel, "admin:withdrawals")));
-            long pendingGemPurchases = gemPurchaseService.findPending().size();
-            String gLabel = pendingGemPurchases > 0
-                    ? "💎 Заявки на донат (" + pendingGemPurchases + ")"
-                    : "💎 Заявки на донат";
-            rows.add(List.of(keyboardFactory.callback(gLabel, "admin:gempurchase")));
             rows.add(List.of(keyboardFactory.callback("📈 Трафик", "admin:traffic")));
             rows.add(List.of(keyboardFactory.callback("🗳 Голосования", "admin:polls")));
             rows.add(List.of(keyboardFactory.callback("🏆 Турниры", "admin:tournaments")));
