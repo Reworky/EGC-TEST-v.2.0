@@ -20,11 +20,15 @@ public class SinkShopService {
     public static final long PRICE_TITLE_EPIC = 7_500;
     public static final long PRICE_INSURANCE = 1_500;
 
-    public static final long PRICE_XP_BOOST_24H = 3_000;
-    public static final long PRICE_EXC_BOOST_24H = 3_000;
-    public static final long PRICE_DOUBLE_BOOST_24H = 5_000;
-    public static final long PRICE_XP_BOOST_72H = 7_500;
-    public static final long PRICE_EXC_BOOST_72H = 7_500;
+    // Подняты 2026-09-20: при реальном диапазоне наград (1400-4500 EXC) и лимите "1 квест/час"
+    // старые цены (3000/7500/5000) окупались всего за ~1 квест — недостаточно "кусались" как сток,
+    // особенно после того как в карточку одобрения квеста добавили прямую кнопку в этот магазин
+    // (см. sinkShopSuggestionButton) — стало проще случайно/импульсивно купить буст сразу же.
+    public static final long PRICE_XP_BOOST_24H = 4_000;
+    public static final long PRICE_EXC_BOOST_24H = 4_000;
+    public static final long PRICE_DOUBLE_BOOST_24H = 6_500;
+    public static final long PRICE_XP_BOOST_72H = 10_000;
+    public static final long PRICE_EXC_BOOST_72H = 10_000;
     // Цены пересчитаны 2026-09-12 от реального текущего диапазона наград квестов (1400-4500 EXC,
     // категории "Сложные"/10000 EXC в проде больше нет — все игры с такой наградой деактивированы).
     // Раньше 2000 EXC почти всегда были выгоднее награды, которую разблокировали — перекрывали

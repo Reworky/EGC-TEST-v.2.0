@@ -5693,19 +5693,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (xpBoostActive) {
             rows.add(List.of(keyboardFactory.callback("⚡ XP-буст активен ✅", "sink:xpboost_info")));
         } else {
-            rows.add(List.of(keyboardFactory.callback("⚡ XP +20% • 24ч — 3 000 EXC", "sink:xpboost:24")));
-            rows.add(List.of(keyboardFactory.callback("⚡ XP +20% • 72ч — 7 500 EXC", "sink:xpboost:72")));
+            rows.add(List.of(keyboardFactory.callback("⚡ XP +20% • 24ч — " + SinkShopService.PRICE_XP_BOOST_24H + " EXC", "sink:xpboost:24")));
+            rows.add(List.of(keyboardFactory.callback("⚡ XP +20% • 72ч — " + SinkShopService.PRICE_XP_BOOST_72H + " EXC", "sink:xpboost:72")));
         }
 
         if (excBoostActive) {
             rows.add(List.of(keyboardFactory.callback("⚡ EXC-буст активен ✅", "sink:excboost_info")));
         } else {
-            rows.add(List.of(keyboardFactory.callback("⚡ EXC +20% • 24ч — 3 000 EXC", "sink:excboost:24")));
-            rows.add(List.of(keyboardFactory.callback("⚡ EXC +20% • 72ч — 7 500 EXC", "sink:excboost:72")));
+            rows.add(List.of(keyboardFactory.callback("⚡ EXC +20% • 24ч — " + SinkShopService.PRICE_EXC_BOOST_24H + " EXC", "sink:excboost:24")));
+            rows.add(List.of(keyboardFactory.callback("⚡ EXC +20% • 72ч — " + SinkShopService.PRICE_EXC_BOOST_72H + " EXC", "sink:excboost:72")));
         }
 
         if (!xpBoostActive && !excBoostActive) {
-            rows.add(List.of(keyboardFactory.callback("⚡⚡ Двойной буст • 24ч — 5 000 EXC", "sink:doubleboost:24")));
+            rows.add(List.of(keyboardFactory.callback("⚡⚡ Двойной буст • 24ч — " + SinkShopService.PRICE_DOUBLE_BOOST_24H + " EXC", "sink:doubleboost:24")));
         }
 
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:sink")));
