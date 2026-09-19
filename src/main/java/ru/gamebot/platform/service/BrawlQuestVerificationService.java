@@ -169,21 +169,6 @@ public class BrawlQuestVerificationService {
                 ? submission.getBrawlBattleCursor()
                 : formatBrawlTime(submission.getCreatedAt());
         List<BrawlStarsApiService.BattleLogEntry> entries = brawlStarsApiService.fetchBattleLog(tag);
-        // TEMP DEBUG 2026-09-19 (раунд 2) — привязка по submissionId, а не по строке тега (в прошлый
-        // раз строковое сравнение само содержало опечатку и ни разу не сработало). Печатает КАЖДЫЙ
-        // символ тега как codepoint (исключает любую 0/O путаницу) и весь боевой лог. Убрать после диагностики.
-        if (submission.getId() != null && submission.getId() == 3259L) {
-            StringBuilder codepoints = new StringBuilder();
-            for (int i = 0; i < tag.length(); i++) codepoints.append((int) tag.charAt(i)).append(' ');
-            log.info("[TEMP-DEBUG2] submissionId={} tag='{}' tagCodepoints=[{}] oldCursor={} progress={}/{} entriesFromApi={}",
-                    submission.getId(), tag, codepoints.toString().trim(), oldCursor,
-                    submission.getBrawlProgressCount(), quest.getBrawlTargetCount(), entries.size());
-            for (BrawlStarsApiService.BattleLogEntry e : entries) {
-                log.info("[TEMP-DEBUG2]   battleTime={} newerThanCursor={} mode={} type={} victory={} isTeamMode={} playerBrawlerName={} matches={}",
-                        e.battleTime(), e.battleTime().compareTo(oldCursor) > 0, e.mode(), e.type(), e.victory(), e.isTeamMode(), e.playerBrawlerName(),
-                        matchesFilters(e, quest, submission));
-            }
-        }
         if (entries.isEmpty()) return;
 
         String newCursor = oldCursor;
