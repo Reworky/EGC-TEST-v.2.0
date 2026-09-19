@@ -1552,6 +1552,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleModUserAction(user, data.substring("mod:user:".length()));
             return;
         }
+        // "Донат по играм" уведомляет модераторов, не админов (тот же канал, что и вывод EXC) —
+        // без этого исключения модератор без роли админа получил бы "Неизвестное действие" на
+        // кнопку "Открыть заявку" из notifyAdminsAboutGemPurchase.
+        if (data.startsWith("admin:gempurchase") && (isEffectiveAdmin(user) || isEffectiveModerator(user))) {
+            handleAdminAction(callbackQuery, user, session, data.substring("admin:".length()));
+            return;
+        }
         if (data.startsWith("admin:") && isEffectiveAdmin(user)) {
             handleAdminAction(callbackQuery, user, session, data.substring("admin:".length()));
             return;
@@ -14549,7 +14556,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("👀 Открыть заявку", "admin:gempurchase:view:" + req.getId()))
         ));
-        for (Long adminId : adminService.allAdminIds()) {
+        for (Long adminId : adminService.allModeratorIds()) {
             if (req.getPaymentProofFileId() != null) {
                 sendPhotoCaption(adminId, req.getPaymentProofFileId(), text, markup);
             } else {
@@ -14975,6 +14982,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     ? "💸 Заявки на вывод (" + pendingWithdrawalsMod + ")"
                     : "💸 Заявки на вывод";
             rows.add(List.of(keyboardFactory.callback(wLabelMod, "mod:withdrawals")));
+            long pendingGemPurchasesMod = gemPurchaseService.findPending().size();
+            String gLabelMod = pendingGemPurchasesMod > 0
+                    ? "💎 Заявки на донат (" + pendingGemPurchasesMod + ")"
+                    : "💎 Заявки на донат";
+            rows.add(List.of(keyboardFactory.callback(gLabelMod, "admin:gempurchase")));
             rows.add(List.of(keyboardFactory.callback("🔍 Поиск игрока", "mod:usersearch")));
             return keyboardFactory.rowsLayout(rows);
         }
