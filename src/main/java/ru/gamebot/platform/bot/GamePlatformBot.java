@@ -6410,7 +6410,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String denom = item.getTitle().replaceAll(".*- ", "");
             rows.add(List.of(keyboardFactory.callback(icon + " " + denom + " — " + price + " EXC", "shop:view:" + item.getId())));
         }
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:shop"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        // Кастомизация (рамка аватара) открывает этот же пикер номиналов из "⚙️ Предметы клуба",
+        // а не из "Магазина наград" — "Назад" должен вести туда, откуда реально пришли (2026-09-20).
+        String backTarget = "Кастомизация".equals(items.get(0).getCategory()) ? "sink:cat:customization" : "menu:shop";
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", backTarget), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(),
                 "🎁 <b>" + escape(groupLabel) + "</b>\n\nВыберите номинал:",
                 keyboardFactory.rowsLayout(rows));
