@@ -3315,7 +3315,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "✅ Сундук сегодня открыт";
         sendMenuCategory(user, "🍀 <b>Фортуна</b>", List.of(
                 List.of(keyboardFactory.callback(wheelLabel, "wheel:menu")),
-                List.of(keyboardFactory.webApp(chestLabel, "https://experience-gaming-club.pages.dev/wallet?section=chest"))
+                List.of(keyboardFactory.webApp(chestLabel, "https://experience-gaming-club.pages.dev/wallet?section=chest")),
+                List.of(keyboardFactory.callback("🔁 Улучшенный сундук дня — " + CHEST_REROLL_STARS_PRICE + " ⭐", "menu:chestreroll"))
         ));
     }
 
@@ -5736,7 +5737,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         rows.add(List.of(keyboardFactory.callback("⏱️ Снятие кулдауна — 3 000 EXC", "sink:cooldown_info")));
-        rows.add(List.of(keyboardFactory.callback("🔁 Улучшенный сундук дня — " + CHEST_REROLL_STARS_PRICE + " ⭐", "menu:chestreroll")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:sink")));
         sendText(user.getTelegramId(), info.toString(), keyboardFactory.rowsLayout(rows));
     }
