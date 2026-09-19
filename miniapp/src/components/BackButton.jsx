@@ -1,11 +1,15 @@
 import { useNavigate } from 'react-router-dom';
 import './BackButton.css';
 
-export default function BackButton({ to, label = 'Назад' }) {
+// onClick — переопределяет переход по роуту произвольным действием (например, ShopPage использует
+// эту же кнопку для возврата из открытого раздела к списку разделов внутри одной страницы,
+// а не для навигации между страницами мини-аппа).
+export default function BackButton({ to, label = 'Назад', onClick }) {
   const navigate = useNavigate();
 
   function handleClick() {
-    if (to) navigate(to);
+    if (onClick) onClick();
+    else if (to) navigate(to);
     else navigate(-1);
   }
 

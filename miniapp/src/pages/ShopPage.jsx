@@ -615,9 +615,7 @@ function PerksView({ expanded, onToggle }) {
   return (
     <>
       <div className="category-section">
-        <button className="section-back" onClick={() => setActiveSection(null)}>
-          <i className="ti ti-arrow-left"></i> Назад
-        </button>
+        <div style={{ marginBottom: 14 }}><BackButton label="Назад" onClick={() => setActiveSection(null)} /></div>
         <div className="category-header">{SECTION_META[activeSection].icon} {activeSection}</div>
 
         {isSocial ? (
