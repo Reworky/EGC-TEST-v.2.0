@@ -109,14 +109,6 @@ public class BrawlQuestVerificationService {
     /** Точка входа шедулера. Не @Transactional — последовательные сетевые вызовы, как в BrawlStarsTournamentService.runBatch. */
     public void checkInProgressSubmissions() {
         List<QuestSubmission> pending = questSubmissionRepository.findInProgressBrawlAutoVerify();
-        // TEMP DEBUG 2026-09-19 — печатает весь список заявок, которые шедулер взял в работу на
-        // этом цикле, чтобы проверить, попадает ли туда вообще заявка по тегу #28RJPURY0
-        // (квест "Космо или Винс") — убрать после диагностики.
-        log.info("[TEMP-DEBUG] checkInProgressSubmissions: {} заявок в работе", pending.size());
-        for (QuestSubmission s : pending) {
-            log.info("[TEMP-DEBUG]   submissionId={} status={} quest='{}' tag={} expiresAt={}",
-                    s.getId(), s.getStatus(), s.getQuest().getTitle(), s.getUser().getBrawlStarsTag(), s.getExpiresAt());
-        }
         for (QuestSubmission submission : pending) {
             try {
                 checkOne(submission);
@@ -177,18 +169,6 @@ public class BrawlQuestVerificationService {
                 ? submission.getBrawlBattleCursor()
                 : formatBrawlTime(submission.getCreatedAt());
         List<BrawlStarsApiService.BattleLogEntry> entries = brawlStarsApiService.fetchBattleLog(tag);
-        // TEMP DEBUG 2026-09-19 — диагностика зависшей заявки #28RJPURY0 (квест "Космо или Винс"),
-        // убрать после диагностики. Печатает КАЖДУЮ запись боевого лога, полученную от API для этого
-        // тега, чтобы увидеть, что реально приходит (playerBrawlerName/victory/type) и почему не матчится.
-        if ("#28RJPURY0".equalsIgnoreCase(tag)) {
-            log.info("[TEMP-DEBUG] checkBattles tag={} oldCursor={} submissionId={} progress={}/{} entries={}",
-                    tag, oldCursor, submission.getId(), submission.getBrawlProgressCount(), quest.getBrawlTargetCount(), entries.size());
-            for (BrawlStarsApiService.BattleLogEntry e : entries) {
-                log.info("[TEMP-DEBUG]   battleTime={} newerThanCursor={} mode={} type={} victory={} isTeamMode={} playerBrawlerName={} matches={}",
-                        e.battleTime(), e.battleTime().compareTo(oldCursor) > 0, e.mode(), e.type(), e.victory(), e.isTeamMode(), e.playerBrawlerName(),
-                        matchesFilters(e, quest, submission));
-            }
-        }
         if (entries.isEmpty()) return;
 
         String newCursor = oldCursor;
