@@ -14282,9 +14282,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("⬅️ Назад", "menu:cat:shop"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
+        String accountLine = user.getBrawlStarsTag() != null && !user.getBrawlStarsTag().isBlank()
+                ? " который хотите получить на свой аккаунт " + escape(user.getBrawlStarsTag())
+                : " который хотите получить";
         sendText(user.getTelegramId(),
                 "💎 <b>Донат Brawl Stars</b>\n\n"
-                        + "Выберите пакет гемов. К каждой покупке — бонус XP\n\n"
+                        + "Выберите пакет гемов" + accountLine + "\n\n"
+                        + "К каждой покупке — бонус XP\n\n"
                         + "⚠️ Заявка обрабатывается вручную, зачисление может занять время.",
                 keyboardFactory.rowsLayout(rows));
     }
