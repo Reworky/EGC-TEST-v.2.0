@@ -128,11 +128,13 @@ public class BrawlStarsApiService {
 
     /**
      * Returns the player's last ~25 battles (empty list on 404/400 — tag not found, not retried).
-     * PARSING NOTE — verified against a live response before this is trusted for anything beyond
-     * best-effort: exact mode/type string casing, whether "result" is top-level for every non-Showdown
-     * mode, and how Showdown/Duels (no top-level result) express a win via player rank. See the
-     * verification step in the implementation plan before relying on brawlModeKeys/brawlBrawlerNames
-     * matching in QuestSeeder.
+     * PARSING NOTE — "type" for ranked battles is "teamRanked" or "soloRanked" (camelCase), NEVER a
+     * bare "ranked" — confirmed 2026-09-19 after discovering BrawlQuestVerificationService.matchesFilters
+     * compared against the literal "ranked" and so requireRanked had NEVER matched a single battle for
+     * any player since the filter was introduced. Still best-effort beyond that: exact mode string
+     * casing, whether "result" is top-level for every non-Showdown mode, and how Showdown/Duels (no
+     * top-level result) express a win via player rank — verify against a live response before relying
+     * on brawlModeKeys/brawlBrawlerNames matching in QuestSeeder for anything new.
      */
     public List<BattleLogEntry> fetchBattleLog(String rawTag) throws BrawlStarsTransientException {
         if (!enabled) {

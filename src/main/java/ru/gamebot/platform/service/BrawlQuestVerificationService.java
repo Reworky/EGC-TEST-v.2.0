@@ -191,7 +191,12 @@ public class BrawlQuestVerificationService {
 
     private boolean matchesFilters(BrawlStarsApiService.BattleLogEntry e, Quest quest, QuestSubmission submission) {
         if (quest.isBrawlRequireVictory() && !e.victory()) return false;
-        if (quest.isBrawlRequireRanked() && !"ranked".equalsIgnoreCase(e.type())) return false;
+        // Официальный API отдаёт "teamRanked" (командный формат) или "soloRanked" (сольный) для
+        // рангового режима — литерала "ranked" не существует вообще (проверено через официальные
+        // данные/источники после инцидента 2026-09-19: requireRanked не срабатывал НИ РАЗУ ни у
+        // одного игрока с момента создания этого фильтра, квест "Выиграй бой 5 раз в ранговом режиме"
+        // был сломан полностью). requireTeam — отдельный флаг, ограничивающий именно командный формат.
+        if (quest.isBrawlRequireRanked() && !("teamRanked".equalsIgnoreCase(e.type()) || "soloRanked".equalsIgnoreCase(e.type()))) return false;
         if (quest.isBrawlRequireTeam() && !e.isTeamMode()) return false;
         if (quest.getBrawlModeKeys() != null && !csvContains(quest.getBrawlModeKeys(), e.mode())) return false;
         if (quest.getBrawlBrawlerNames() != null && !csvContains(quest.getBrawlBrawlerNames(), e.playerBrawlerName())) return false;
