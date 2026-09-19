@@ -11864,6 +11864,64 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        // Ручная выдача Stars-товара — на случай, если оплата у Telegram прошла, а выдача упала с
+        // ошибкой (см. handleSuccessfulPayment/notifyAdminsAboutFailedStarsGrant, инцидент 2026-09-19).
+        // Переиспользует ту же логику и тот же текст подтверждения игроку, что и обычная покупка.
+        if ("starsgrant".equals(action)) {
+            AppUser target = userService.findByTelegramId(telegramId).orElse(null);
+            if (target == null) {
+                sendText(admin.getTelegramId(), "⚠️ Пользователь не найден.", backMenuKeyboard("admin:users:0"));
+                return;
+            }
+            int p = page == null ? 0 : page;
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
+                    List.of(keyboardFactory.callback("🖼 Рамка «EGC»", "admin:user:starsgrantdo:" + telegramId + ":" + p + ":frame")),
+                    List.of(keyboardFactory.callback("🎁 Улучшенный сундук (реролл)", "admin:user:starsgrantdo:" + telegramId + ":" + p + ":chest")),
+                    List.of(keyboardFactory.callback("💎 Титул «Покровитель EGC»", "admin:user:starsgrantdo:" + telegramId + ":" + p + ":patron")),
+                    List.of(keyboardFactory.callback("➕ Доп. слот навсегда", "admin:user:starsgrantdo:" + telegramId + ":" + p + ":slot")),
+                    List.of(keyboardFactory.callback("🎫 EGC Pass (30 дней)", "admin:user:starsgrantdo:" + telegramId + ":" + p + ":pass")),
+                    List.of(keyboardFactory.callback("⬅️ Назад", "admin:user:view:" + telegramId + ":" + p))
+            ));
+            sendText(admin.getTelegramId(),
+                    "🌟 <b>Выдать Stars-товар вручную</b>\n\n"
+                            + "👤 Игрок: <b>" + escape(displayUserName(target)) + "</b> (ID: " + telegramId + ")\n\n"
+                            + "Используйте, если игрок реально оплатил Stars, но товар не выдался из-за технической ошибки. "
+                            + "Игрок сразу получит то же уведомление, что и при обычной покупке.",
+                    keyboardFactory.rowsLayout(rows));
+            return;
+        }
+
+        if ("starsgrantdo".equals(action) && parts.length >= 4) {
+            AppUser target = userService.findByTelegramId(telegramId).orElse(null);
+            int p = page == null ? 0 : page;
+            if (target == null) {
+                sendText(admin.getTelegramId(), "⚠️ Пользователь не найден.", backMenuKeyboard("admin:users:0"));
+                return;
+            }
+            String payload = switch (parts[3]) {
+                case "frame" -> "starsitem:AVATAR_FRAME";
+                case "chest" -> "starsitem:CHEST_REROLL";
+                case "patron" -> "starsitem:PATRON_TITLE";
+                case "slot" -> "starsitem:PERMANENT_SLOT";
+                case "pass" -> "starsitem:EGC_PASS";
+                default -> null;
+            };
+            if (payload == null) {
+                sendText(admin.getTelegramId(), "⚠️ Неизвестный товар.", backMenuKeyboard("admin:user:view:" + telegramId + ":" + p));
+                return;
+            }
+            try {
+                grantStarsPurchase(target, telegramId, payload);
+                sendText(admin.getTelegramId(),
+                        "✅ Товар выдан игроку <b>" + escape(displayUserName(target)) + "</b>, уведомление отправлено.",
+                        backMenuKeyboard("admin:user:view:" + telegramId + ":" + p));
+            } catch (Exception e) {
+                log.error("Manual Stars grant failed (payload={}, telegramId={})", payload, telegramId, e);
+                sendText(admin.getTelegramId(), "❌ Не удалось выдать: " + e.getMessage(), backMenuKeyboard("admin:user:view:" + telegramId + ":" + p));
+            }
+            return;
+        }
+
         sendText(admin.getTelegramId(), "⚠️ Действие с пользователем не распознано.", backMenuKeyboard("menu:admin"));
     }
 
@@ -12290,6 +12348,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         keyboardFactory.callback("🎁 Бонус", "admin:user:bonus:" + telegramId + ":" + page),
                         keyboardFactory.callback("➖ Списание", "admin:user:debit:" + telegramId + ":" + page)
                 ),
+                List.of(keyboardFactory.callback("🌟 Выдать Stars-товар вручную", "admin:user:starsgrant:" + telegramId + ":" + page)),
                 List.of(
                         keyboardFactory.callback("⬅️ К списку", "admin:users:" + page),
                         keyboardFactory.callback("🏠 Меню", "menu:main")
