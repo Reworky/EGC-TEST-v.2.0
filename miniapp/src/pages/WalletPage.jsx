@@ -108,8 +108,10 @@ function RanksModal({ currentXp, onClose }) {
 function BalanceView({ wallet, onChanged, highlightChest }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
+  const [messageOk, setMessageOk] = useState(false);
   const [chestBusy, setChestBusy] = useState(false);
   const [chestMessage, setChestMessage] = useState(null);
+  const [chestMessageOk, setChestMessageOk] = useState(false);
   const [rerollBusy, setRerollBusy] = useState(false);
   const [showRanks, setShowRanks] = useState(false);
   const [showChestPrizes, setShowChestPrizes] = useState(false);
@@ -139,12 +141,14 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
   async function handleClaim() {
     setBusy(true);
     setMessage(null);
+    setMessageOk(false);
     try {
       const res = await claimDailyBonus();
       if (res.success) {
         let msg = `+${res.totalExc} EXC · Серия: ${res.streakDays} дн.`;
         if (res.milestoneText) msg = `${res.milestoneText} ${msg}`;
         setMessage(msg);
+        setMessageOk(true);
         playParticles?.('streakBonus', 3000);
         onChanged();
       } else {
@@ -158,6 +162,7 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
   async function handleOpenChest() {
     setChestBusy(true);
     setChestMessage(null);
+    setChestMessageOk(false);
     try {
       const res = await openChest();
       if (res.success) {
@@ -165,6 +170,7 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
         if (res.exc > 0) msg += ` · +${res.exc} EXC`;
         if (res.tickets > 0) msg += ` · +${res.tickets} 🎟️`;
         setChestMessage(msg);
+        setChestMessageOk(true);
         playParticles?.('streakBonus', 3000);
         onChanged();
       } else {
@@ -178,6 +184,7 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
   async function handleBuyReroll() {
     setRerollBusy(true);
     setChestMessage(null);
+    setChestMessageOk(false);
     try {
       const invoice = await getStarsInvoiceLink('CHEST_REROLL');
       if (!invoice.success) {
@@ -201,6 +208,7 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
       if (dCoins > 0) msg += ` · +${dCoins} EXC`;
       if (dTickets > 0) msg += ` · +${dTickets} 🎟️`;
       setChestMessage(msg);
+      setChestMessageOk(true);
       playParticles?.('streakBonus', 3000);
       onChanged();
     } catch (e) {
@@ -294,7 +302,11 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
         ) : (
           <p className="shop-desc"><i className="ti ti-circle-check"></i> Бонус за сегодня уже получен. Серия: {wallet.streakDays} дн. Возвращайся завтра за +{wallet.nextDailyBonusExc} EXC.</p>
         )}
-        {message && <div className="quest-message">{message}</div>}
+        {message && (
+          <div className={messageOk ? 'reward-pop' : 'quest-message'}>
+            {messageOk && '🎉 '}{message}
+          </div>
+        )}
       </div>
 
       <div
@@ -318,7 +330,6 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
             {chestBusy ? 'Открываем...' : <><i className="ti ti-gift" style={{ marginRight: 6 }} /> Открыть сундук</>}
           </ShimmerButton>
         )}
-        {chestMessage && <div className="quest-message">{chestMessage}</div>}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
           <img src={chestPremiumImg} alt="" style={{ width: 72, height: 72, objectFit: 'contain', flexShrink: 0 }} />
@@ -333,6 +344,12 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
         <p className="ref-progress-label" style={{ color: 'rgba(167,139,250,0.85)', cursor: 'pointer', marginTop: 8 }} onClick={() => setShowChestPrizes(true)}>
           📋 Все призы →
         </p>
+
+        {chestMessage && (
+          <div className={chestMessageOk ? 'reward-pop' : 'quest-message'} style={{ marginTop: 10 }}>
+            {chestMessageOk && '🎉 '}{chestMessage}
+          </div>
+        )}
       </div>
 
       <div className="category-section" style={{ marginTop: 12 }}>
