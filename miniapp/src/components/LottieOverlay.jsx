@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import lottie from 'lottie-web';
 
 export default function LottieOverlay({ playing, onDone }) {
   const containerRef = useRef(null);
@@ -7,19 +6,27 @@ export default function LottieOverlay({ playing, onDone }) {
 
   useEffect(() => {
     if (!playing) return;
-    animRef.current = lottie.loadAnimation({
-      container: containerRef.current,
-      renderer: 'svg',
-      loop: false,
-      autoplay: true,
-      path: '/static/animations/confetti.json',
-    });
-    animRef.current.addEventListener('complete', () => {
-      onDone?.();
-      animRef.current?.destroy();
-      animRef.current = null;
+    let cancelled = false;
+    // lottie-web (~250 КБ) — динамический импорт, а не статический сверху файла: этот компонент
+    // смонтирован в корне приложения (LottieProvider), библиотека тянулась в главный бандл на КАЖДОЙ
+    // странице, даже когда анимация никогда не проигрывается (2026-09-20, разбор размера бандлов).
+    import('lottie-web').then(({ default: lottie }) => {
+      if (cancelled || !containerRef.current) return;
+      animRef.current = lottie.loadAnimation({
+        container: containerRef.current,
+        renderer: 'svg',
+        loop: false,
+        autoplay: true,
+        path: '/static/animations/confetti.json',
+      });
+      animRef.current.addEventListener('complete', () => {
+        onDone?.();
+        animRef.current?.destroy();
+        animRef.current = null;
+      });
     });
     return () => {
+      cancelled = true;
       animRef.current?.destroy();
       animRef.current = null;
     };

@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import * as THREE from 'three';
 
 export default function VantaBackground({ effect = 'NET', config = {}, style = {} }) {
   const containerRef = useRef(null);
@@ -17,6 +16,10 @@ export default function VantaBackground({ effect = 'NET', config = {}, style = {
       const isLowEnd = navigator.hardwareConcurrency <= 4;
 
       try {
+        // three — динамический импорт, а не статический сверху файла: без этого библиотека (~500+ КБ)
+        // попадала в бандл страницы Лидерборда независимо от того, включился ли вообще Vanta-эффект
+        // (2026-09-20, найдено при разборе размера бандлов — страница весила 728 КБ).
+        const THREE = await import('three');
         let VantaEffect;
         if (effect === 'NET') {
           const mod = await import('vanta/dist/vanta.net.min');
