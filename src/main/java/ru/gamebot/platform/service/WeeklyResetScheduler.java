@@ -173,14 +173,23 @@ public class WeeklyResetScheduler {
     public void notifyCooldownReminderIfIgnored() {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime cutoff = now.minusHours(24 + COOLDOWN_REMINDER_DELAY_HOURS);
+        // ИНЦИДЕНТ 2026-09-20: первый прогон после деплоя этой фичи нашёл ВЕСЬ исторический бэклог
+        // (все просроченные квесты у всех игроков сразу, т.к. cooldownReminderSentAt у старых записей
+        // ещё null) и разослал каждому пользователю по сообщению НА КАЖДЫЙ такой квест одним залпом —
+        // выглядело как спам. Фикс: не больше ОДНОГО напоминания на пользователя за один прогон;
+        // остальные его просроченные квесты получат напоминание в следующих прогонах (раз в 30 минут),
+        // а не все разом. Множество uniqueUsersNotifiedThisRun — не БД-состояние, только на этот прогон.
+        java.util.Set<Long> notifiedThisRun = new java.util.HashSet<>();
         for (QuestSubmission s : questSubmissionRepository.findApprovedNeedingCooldownReminder(cutoff)) {
+            Long telegramId = s.getUser().getTelegramId();
+            if (!notifiedThisRun.add(telegramId)) continue;
             try {
                 s.setCooldownReminderSentAt(now);
                 questSubmissionRepository.save(s);
                 eventPublisher.publishEvent(new ru.gamebot.platform.event.CooldownReminderEvent(
-                        this, s.getUser().getTelegramId(), s.getQuest().getGameName(), s.getQuest().getTitle()));
+                        this, telegramId, s.getQuest().getGameName(), s.getQuest().getTitle()));
             } catch (Exception e) {
-                log.warn("Failed to send cooldown reminder to user {}", s.getUser().getTelegramId(), e);
+                log.warn("Failed to send cooldown reminder to user {}", telegramId, e);
             }
         }
     }
