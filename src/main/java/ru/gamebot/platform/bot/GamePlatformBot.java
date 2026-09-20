@@ -5700,44 +5700,51 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         StringBuilder sb = new StringBuilder("🎒 <b>Мои предметы</b>\n\n");
 
         String framesCsv = user.getOwnedFramesCsv();
-        sb.append("🖼️ <b>Рамки аватара:</b> ");
+        sb.append("🖼️ <b>Рамки аватара</b>\n");
         if (framesCsv == null || framesCsv.isBlank()) {
-            sb.append("нет\n");
+            sb.append("Пока нет ни одной — загляните в Магазин 🛍️\n");
         } else {
+            String equipped = user.getAvatarFrameImage();
             sb.append(Arrays.stream(framesCsv.split(","))
-                    .map(this::frameDisplayName)
-                    .collect(java.util.stream.Collectors.joining(", ")))
+                    .map(key -> key.equals(equipped) ? frameDisplayName(key) + " (надета)" : frameDisplayName(key))
+                    .collect(java.util.stream.Collectors.joining(" · ")))
                     .append("\n");
-            if (user.getAvatarFrameImage() != null && !user.getAvatarFrameImage().isBlank()) {
-                sb.append("Надета сейчас: ").append(frameDisplayName(user.getAvatarFrameImage())).append("\n");
-            }
         }
         sb.append("\n");
 
-        sb.append("🏅 <b>Титул:</b> ").append(user.getProfileTitle() != null ? escape(user.getProfileTitle()) : "нет").append("\n");
+        sb.append("🏅 <b>Титул:</b> ").append(user.getProfileTitle() != null ? escape(user.getProfileTitle()) : "не выбран");
         boolean hasPatron = user.getOwnedTitlesCsv() != null && Arrays.asList(user.getOwnedTitlesCsv().split(",")).contains("patron");
         if (hasPatron) {
-            sb.append("💎 Разблокирован эксклюзивный титул «Покровитель EGC»\n");
+            sb.append(" <i>(доступен эксклюзивный «Покровитель EGC»)</i>");
         }
-        sb.append("\n");
+        sb.append("\n\n");
 
+        sb.append("🎟️ <b>Билеты колеса фортуны:</b> ").append(user.getTickets()).append("\n\n");
+
+        List<String> active = new ArrayList<>();
         boolean xpActive = user.getXpBoostActiveUntil() != null && user.getXpBoostActiveUntil().isAfter(now);
         boolean excActive = user.getExcBoostActiveUntil() != null && user.getExcBoostActiveUntil().isAfter(now);
-        sb.append("⚡ <b>XP-буст:</b> ").append(xpActive ? "активен до " + fmt(user.getXpBoostActiveUntil()) : "нет").append("\n");
-        sb.append("⚡ <b>EXC-буст:</b> ").append(excActive ? "активен до " + fmt(user.getExcBoostActiveUntil()) : "нет").append("\n\n");
-
+        if (xpActive) active.add("⚡ XP-буст — до " + fmt(user.getXpBoostActiveUntil()));
+        if (excActive) active.add("⚡ EXC-буст — до " + fmt(user.getExcBoostActiveUntil()));
         if (user.isPermanentExtraSlot()) {
-            sb.append("📂 <b>Доп. слот квеста:</b> навсегда ✅\n");
-        } else {
-            boolean slotActive = user.getQuestSlotExtraUntil() != null && user.getQuestSlotExtraUntil().isAfter(now);
-            sb.append("📂 <b>Доп. слот квеста:</b> ").append(slotActive ? "активен до " + fmt(user.getQuestSlotExtraUntil()) : "нет").append("\n");
+            active.add("📂 Доп. слот квеста — навсегда");
+        } else if (user.getQuestSlotExtraUntil() != null && user.getQuestSlotExtraUntil().isAfter(now)) {
+            active.add("📂 Доп. слот квеста — до " + fmt(user.getQuestSlotExtraUntil()));
         }
-        sb.append("🛡️ <b>Страховка провала:</b> ").append(user.isRetryInsuranceActive() ? "активна" : "нет").append("\n\n");
-
+        if (user.isRetryInsuranceActive()) {
+            active.add("🛡️ Страховка провала — активна");
+        }
         boolean passActive = user.getEgcPassActiveUntil() != null && user.getEgcPassActiveUntil().isAfter(now);
-        sb.append("⭐ <b>EGC Pass:</b> ").append(passActive ? "активен до " + fmt(user.getEgcPassActiveUntil()) : "нет").append("\n\n");
+        if (passActive) {
+            active.add("⭐ EGC Pass — до " + fmt(user.getEgcPassActiveUntil()));
+        }
 
-        sb.append("🎟️ <b>Билеты колеса фортуны:</b> ").append(user.getTickets());
+        sb.append("<b>Активные усиления</b>\n");
+        if (active.isEmpty()) {
+            sb.append("Сейчас ничего не активно — загляните в Магазин 🛍️");
+        } else {
+            sb.append(String.join("\n", active));
+        }
 
         sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:sink"));
     }
