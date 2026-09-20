@@ -14,6 +14,7 @@ import ru.gamebot.platform.domain.model.RewardItem;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.RewardItemRepository;
 import ru.gamebot.platform.domain.repository.RewardRequestRepository;
+import ru.gamebot.platform.service.GemPurchaseService;
 
 @Slf4j
 @Component
@@ -25,6 +26,16 @@ public class RewardSeeder implements CommandLineRunner {
     private final RewardRequestRepository rewardRequestRepository;
     private final AppUserRepository appUserRepository;
     private final GamePlatformBot gamePlatformBot;
+    private final GemPurchaseService gemPurchaseService;
+
+    // EXC-цена игровой валюты (магазин наград) не должна быть дешевле доната (GRAM/Stars) за тот же
+    // объём — иначе выгоднее выводить EXC в рубли и покупать донатом напрямую, что бьёт по Payout
+    // Pool без всякой пользы. Целевой запас — 1.15x (принцип зафиксирован 2026-09-20, см.
+    // project_economic_model). Сравнение по БАЗОВОЙ цене (100 EXC = 1₽) — эффект Health Ratio на
+    // цену EXC-товара и на курс вывода взаимно сокращается, поэтому базовая цена — уже ₽-эквивалент,
+    // не зависящий от текущего состояния фонда.
+    private static final java.math.BigDecimal GEM_PRICING_TARGET_MARGIN = java.math.BigDecimal.valueOf(1.15);
+    private static final java.math.BigDecimal EXC_TO_RUB_BASE_RATE = java.math.BigDecimal.valueOf(0.01);
 
     @Override
     @Transactional
@@ -313,6 +324,39 @@ public class RewardSeeder implements CommandLineRunner {
         backfillAvatarFrameImage("#38bdf8", "ice");
         backfillAvatarFrameImage("#a855f7", "purple");
         backfillAvatarFrameImage("#fbbf24", "gold");
+
+        checkGemPricingMargin();
+    }
+
+    /** См. комментарий у GEM_PRICING_TARGET_MARGIN. Сравнивает каждый активный товар "brawl_stars"
+     *  в магазине наград с донат-пакетом того же объёма гемов (GemPurchaseService.BRAWL_PACKAGES,
+     *  ключ пакета = число гемов, см. RewardSeeder.seed("Brawl Stars - Gems N", ...)). Если запас
+     *  ниже 1.0x (EXC-товар ДЕШЕВЛЕ доната) — это уже нарушение принципа, не только "тоньше целевого". */
+    private void checkGemPricingMargin() {
+        List<RewardItem> brawlItems = rewardItemRepository.findAllByActiveTrueAndPurchaseGroupOrderByPriceCoinsAsc("brawl_stars");
+        for (RewardItem item : brawlItems) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)$").matcher(item.getTitle());
+            if (!m.find()) continue;
+            String packageKey = m.group(1);
+            gemPurchaseService.findPackage(packageKey).ifPresent(pkg -> {
+                java.math.BigDecimal impliedRub = java.math.BigDecimal.valueOf(item.getPriceCoins()).multiply(EXC_TO_RUB_BASE_RATE);
+                java.math.BigDecimal donateRub = java.math.BigDecimal.valueOf(pkg.priceRub());
+                if (impliedRub.compareTo(donateRub) < 0) {
+                    String warning = "🚨 <b>Ценовой перекос в магазине наград</b>\n\n"
+                            + "«" + item.getTitle() + "» стоит " + item.getPriceCoins() + " EXC (≈"
+                            + impliedRub.setScale(0, java.math.RoundingMode.HALF_UP) + "₽ по базовому курсу 100 EXC=1₽), "
+                            + "а донат (GRAM/Stars) за " + pkg.gems() + " гемов стоит всего " + pkg.priceRub() + "₽.\n\n"
+                            + "EXC-товар ДЕШЕВЛЕ доната — выгоднее выводить EXC в рубли и покупать напрямую. "
+                            + "Нужно поднять цену минимум до " + donateRub.multiply(GEM_PRICING_TARGET_MARGIN)
+                                    .setScale(0, java.math.RoundingMode.HALF_UP) + "₽-эквивалента.";
+                    log.warn("[RewardSeeder] {}", warning.replaceAll("<[^>]+>", ""));
+                    gamePlatformBot.notifyAdminsPricingImbalance(warning);
+                } else if (impliedRub.compareTo(donateRub.multiply(GEM_PRICING_TARGET_MARGIN)) < 0) {
+                    log.info("[RewardSeeder] Ценовой запас у '{}' ниже целевого 1.15x (сейчас {}₽ vs донат {}₽) — не критично, но стоит пересмотреть при следующей ревизии цен.",
+                            item.getTitle(), impliedRub.setScale(0, java.math.RoundingMode.HALF_UP), donateRub);
+                }
+            });
+        }
     }
 
     private void backfillAvatarFrameImage(String frameColor, String frameImage) {

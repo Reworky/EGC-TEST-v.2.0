@@ -5609,6 +5609,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Вызывается из RewardSeeder.checkGemPricingMargin() при старте сервера — если EXC-цена
+     *  игровой валюты (магазин наград) опустится ниже доната (GRAM/Stars) за тот же объём, это
+     *  значит выгоднее выводить EXC в рубли и покупать донатом, чем тратить EXC внутри магазина —
+     *  прямой убыток для Payout Pool. Принцип зафиксирован 2026-09-20, см. project_economic_model. */
+    public void notifyAdminsPricingImbalance(String text) {
+        for (Long adminId : adminService.allAdminIds()) {
+            sendText(adminId, text, null);
+        }
+    }
+
     private void notifyAdminsRewardCancelled(AppUser user, RewardRequest req) {
         String usernameStr = user.getTelegramUsername() != null
                 ? "@" + user.getTelegramUsername() : "#" + user.getTelegramId();
