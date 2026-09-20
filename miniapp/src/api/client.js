@@ -225,6 +225,7 @@ export async function getWallet() {
 
 export async function claimDailyBonus() {
   const { data } = await api.post('/api/wallet/daily-bonus');
+  invalidateCache('wallet');
   return data;
 }
 
