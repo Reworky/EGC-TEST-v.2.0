@@ -710,7 +710,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "";
         // Deep link из мини-аппа: попытка взять квест без подписки (см. QuestController.takeQuest) —
         // сразу показываем экран подписки, а не главное меню, чтобы не заставлять искать её самому.
-        if (startPayload.equals("subscribe") && !user.isRegistrationCompleted()) {
+        // БАГ (найден 2026-09-20 по жалобе игрока): условие "&& !user.isRegistrationCompleted()" делало
+        // эту ветку недостижимой для реальных пользователей мини-аппа — чтобы вообще дойти до квеста и
+        // получить статус NEEDS_CHANNEL_SUBSCRIPTION, регистрация уже 100% завершена. В итоге кнопка
+        // "Открыть бота и подписаться" у уже зарегистрированных игроков проваливалась мимо этого блока
+        // и падала на общий /start → sendMainMenu(), который просто открывает обычное главное меню без
+        // прямого экрана подписки/кнопки "Я подписался" — с точки зрения игрока кнопка "не работала".
+        if (startPayload.equals("subscribe")) {
             sendCommunityActivationPrompt(user, null);
             return;
         }
