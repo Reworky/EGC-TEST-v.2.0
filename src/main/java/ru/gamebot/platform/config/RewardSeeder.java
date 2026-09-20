@@ -178,17 +178,22 @@ public class RewardSeeder implements CommandLineRunner {
                 + "Не забудь проверить папку «Спам»\n\n"
                 + "Введите email:";
 
+        // Цены подняты 2026-09-20 (смена поставщика доната donatov.net -> Купикод, см.
+        // GemPurchaseService javadoc) — розничные цены Купикод заметно выше снимка donatov.net от
+        // 18.09, из-за чего старые EXC-цены оказались бы ДЕШЕВЛЕ доната за те же гемы (нарушение
+        // принципа минимум 1.15x запаса, см. RewardSeeder.checkGemPricingMargin/project_economic_model).
+        // Новые цены держат запас ~1.2x против актуального доната.
         seed("Brawl Stars - Gems 30",
                 "Пополнение 30 гемов на аккаунт Brawl Stars. Доставка на email. Срок доставки — до 24 ч.",
-                "Brawl Stars", 25_500, brawlPrompt, 1_000, "brawl_stars");
+                "Brawl Stars", 35_900, brawlPrompt, 1_000, "brawl_stars");
 
         seed("Brawl Stars - Gems 60",
                 "Пополнение 60 гемов на аккаунт Brawl Stars. Доставка на email. Срок доставки — до 24 ч.",
-                "Brawl Stars", 48_200, brawlPrompt, 5_000, "brawl_stars");
+                "Brawl Stars", 67_800, brawlPrompt, 5_000, "brawl_stars");
 
         seed("Brawl Stars - Gems 110",
                 "Пополнение 110 гемов на аккаунт Brawl Stars. Доставка на email. Срок доставки — до 24 ч.",
-                "Brawl Stars", 80_800, brawlPrompt, 15_000, "brawl_stars");
+                "Brawl Stars", 114_200, brawlPrompt, 15_000, "brawl_stars");
 
         rewardItemRepository.findByTitle("Clash of Clans — 80 Gems").ifPresent(old -> {
             if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
