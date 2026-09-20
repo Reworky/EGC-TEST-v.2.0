@@ -186,6 +186,19 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
             @Param("from") java.time.LocalDateTime from,
             @Param("to") java.time.LocalDateTime to);
 
+    /** Повторное напоминание (2026-09-20, запрошено пользователем) — игрок получил первое "кулдаун
+     *  снят" уведомление, но так и не взял квест заново. Берём последнюю (MAX updatedAt) одобренную
+     *  заявку на пару (пользователь, квест) через коррелированный подзапрос — если бы игрок уже взял
+     *  квест снова, появилась бы более новая APPROVED-заявка и она стала бы MAX, эта строка перестала
+     *  бы сюда попадать (то же свойство, что уже использует findUsersWhoseNormalQuestCooldownExpiredBetween
+     *  выше, просто нужны сами сущности, а не только имена — чтобы проставить cooldownReminderSentAt). */
+    @EntityGraph(attributePaths = {"user", "quest"})
+    @Query("SELECT s FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.quest.sponsored = false " +
+           "AND s.cooldownReminderSentAt IS NULL AND s.updatedAt <= :cutoff " +
+           "AND s.updatedAt = (SELECT MAX(s2.updatedAt) FROM QuestSubmission s2 " +
+           "WHERE s2.user = s.user AND s2.quest = s.quest AND s2.status = 'APPROVED')")
+    List<QuestSubmission> findApprovedNeedingCooldownReminder(@Param("cutoff") java.time.LocalDateTime cutoff);
+
     /** Для отчёта "Активность автоквестов" — сколько разных игроков получили одобрение по игре с указанной даты. */
     @Query("SELECT COUNT(DISTINCT s.user.id) FROM QuestSubmission s " +
            "WHERE s.quest.gameName = :gameName AND s.status = 'APPROVED' AND s.updatedAt >= :since")

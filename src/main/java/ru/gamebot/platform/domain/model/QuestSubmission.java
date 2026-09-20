@@ -77,6 +77,13 @@ public class QuestSubmission {
     @Column(nullable = true)
     private Long fixedRubValue;
 
+    /** Момент отправки повторного напоминания "кулдаун снят, а ты так и не вернулся" (2026-09-20) —
+     *  null, пока не отправлено. Ставится один раз, вторая попытка не отправляется (см.
+     *  WeeklyResetScheduler.notifyCooldownReminderIfIgnored). Не путать с моментом снятия самого
+     *  кулдауна — то первое, одноразовое уведомление определяется скользящим окном по updatedAt, у
+     *  него отдельного флага нет (не нужен, окно само не повторяется). */
+    private LocalDateTime cooldownReminderSentAt;
+
     /** Фактически начисленные EXC/XP на момент одобрения (с учётом diminishing returns и бустов) — null = старые записи. */
     @Column(nullable = true)
     private Long awardedCoins;

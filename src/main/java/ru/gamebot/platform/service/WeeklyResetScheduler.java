@@ -162,6 +162,29 @@ public class WeeklyResetScheduler {
                 now.minusHours(24).minusMinutes(5), now.minusHours(24)));
     }
 
+    // Первое "Кулдаун снят!" (см. notifyCooldownExpired выше) одноразовое по конструкции — скользящее
+    // окно само не повторяется. Игрок мог его пропустить/проигнорировать, поэтому спустя
+    // COOLDOWN_REMINDER_DELAY_HOURS после снятия кулдауна, если квест так и не взят заново, шлём
+    // мягкое повторное напоминание — но не более одного раза (см. cooldownReminderSentAt), не
+    // регулярный спам. Реже основной проверки (30 минут, не 5) — не time-critical, не нужна точность.
+    private static final int COOLDOWN_REMINDER_DELAY_HOURS = 12;
+
+    @Scheduled(fixedDelay = 1_800_000)
+    public void notifyCooldownReminderIfIgnored() {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime cutoff = now.minusHours(24 + COOLDOWN_REMINDER_DELAY_HOURS);
+        for (QuestSubmission s : questSubmissionRepository.findApprovedNeedingCooldownReminder(cutoff)) {
+            try {
+                s.setCooldownReminderSentAt(now);
+                questSubmissionRepository.save(s);
+                eventPublisher.publishEvent(new ru.gamebot.platform.event.CooldownReminderEvent(
+                        this, s.getUser().getTelegramId(), s.getQuest().getGameName(), s.getQuest().getTitle()));
+            } catch (Exception e) {
+                log.warn("Failed to send cooldown reminder to user {}", s.getUser().getTelegramId(), e);
+            }
+        }
+    }
+
     // Автоотмена просроченных заявок — каждый час
     @Scheduled(fixedDelay = 3_600_000)
     public void cancelExpiredSubmissions() {

@@ -13420,6 +13420,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Повторное напоминание (2026-09-20, запрошено пользователем) — присылается один раз, только
+     *  если игрок проигнорировал onCooldownExpired выше и не взял квест заново (см.
+     *  WeeklyResetScheduler.notifyCooldownReminderIfIgnored). Текст намеренно другой, не копия
+     *  первого — чтобы не выглядело багом/дублем в переписке с ботом. */
+    @org.springframework.context.event.EventListener
+    public void onCooldownReminder(ru.gamebot.platform.event.CooldownReminderEvent event) {
+        String msg = "⏰ <b>Напоминание</b>\n\n"
+                + "Квест <b>«" + escape(event.getQuestTitle()) + "»</b> в игре <b>"
+                + escape(event.getGameName()) + "</b> всё ещё ждёт — кулдаун давно снят.\n\n"
+                + "Награда никуда не денется, но почему бы не забрать её сейчас? 👇";
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("🗺️ Перейти к квестам", "menu:quests"))
+        ));
+        try {
+            sendText(event.getTelegramId(), msg, keyboard);
+        } catch (Exception e) {
+            log.warn("Failed to send cooldown reminder to {}", event.getTelegramId(), e);
+        }
+    }
+
     @org.springframework.context.event.EventListener
     public void onQuestExpired(ru.gamebot.platform.event.QuestExpiredEvent event) {
         String msg = "⏰ <b>Время вышло</b>\n\n"
