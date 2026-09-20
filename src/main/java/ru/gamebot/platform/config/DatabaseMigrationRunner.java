@@ -40,6 +40,32 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         deleteGamesAndQuests();
         fixNullDurationText();
         backfillOwnedFrames();
+        backfillCooldownReminderBaseline();
+    }
+
+    /** Инцидент 2026-09-20: при включении повторного напоминания о снятом кулдауне (см.
+     *  WeeklyResetScheduler.notifyCooldownReminderIfIgnored) первый прогон нашёл ВЕСЬ исторический
+     *  бэклог (у всех игроков разом) и разослал по сообщению на каждый просроченный квест —
+     *  выглядело как спам-залп. По просьбе пользователя фича должна применяться только "с текущего
+     *  момента", не ко всем прошлым квестам — эта миграция один раз молча помечает весь СУЩЕСТВУЮЩИЙ
+     *  на момент деплоя бэклог как "уже напомнили" (без реальной отправки), чтобы дальше шедулер
+     *  видел только квесты, чей кулдаун истёк ПОСЛЕ этого деплоя. При повторных перезапусках сервера
+     *  здесь уже нечего помечать (WHERE находит только ещё не помеченные старые записи) — безопасно
+     *  оставить в постоянных миграциях, а не удалять после одного раза. */
+    private void backfillCooldownReminderBaseline() {
+        try {
+            java.time.LocalDateTime now = java.time.LocalDateTime.now();
+            java.time.LocalDateTime cutoff = now.minusHours(36); // 24ч кулдаун + 12ч задержка напоминания
+            int updated = jdbcTemplate.update(
+                "UPDATE quest_submissions SET cooldown_reminder_sent_at = ? " +
+                "WHERE cooldown_reminder_sent_at IS NULL AND status = 'APPROVED' AND updated_at <= ?",
+                now, cutoff);
+            if (updated > 0) {
+                log.info("[DBMigration] backfillCooldownReminderBaseline: silently marked {} already-overdue quest_submissions as reminded (incident 2026-09-20 fix)", updated);
+            }
+        } catch (Exception e) {
+            log.error("[DBMigration] backfillCooldownReminderBaseline failed: {}", e.getMessage());
+        }
     }
 
     private void deduplicateNicknames() {
