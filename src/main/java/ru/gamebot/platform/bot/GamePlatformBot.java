@@ -1093,6 +1093,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if (data.startsWith("shop:excgroup:")) {
+            sendExcDenominationPicker(user, data.substring("shop:excgroup:".length()));
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if (data.startsWith("shop:soon:")) {
             RewardItem item = rewardService.getRewardItem(parseLong(data.substring("shop:soon:".length())));
             sendText(user.getTelegramId(),
@@ -6579,6 +6584,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendGroupPicker(AppUser user, String purchaseGroup) {
+        // "Донат по играм" (покупка гемов за реальные деньги — GRAM/Stars) объединён с обычным
+        // магазином наград (покупка за EXC) в одной "папке" по игре (2026-09-20). Сначала показываем
+        // выбор способа оплаты (EXC-токены / реальные деньги) и только потом — сами номиналы, а не
+        // мешаем денежный и токен-пикер в одном списке — пользователь запутывался (2026-09-20, второй
+        // раунд правки). Пока донат поддерживает только Brawl Stars (GemPurchaseService.BRAWL_PACKAGES).
+        if ("brawl_stars".equals(purchaseGroup)) {
+            List<RewardItem> items = rewardService.findByPurchaseGroup(purchaseGroup);
+            if (items.isEmpty()) { sendShop(user); return; }
+            String groupLabel = groupItemLabel(items.get(0).getTitle());
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            rows.add(List.of(keyboardFactory.callback("🪙 Купить за токены EXC — выбор номинала", "shop:excgroup:" + purchaseGroup)));
+            rows.add(List.of(keyboardFactory.callback("💰 Купить за реальные деньги (GRAM/Stars)", "menu:gemdonate")));
+            rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:shop"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+            sendText(user.getTelegramId(),
+                    "🎁 <b>" + escape(groupLabel) + "</b>\n\nВыберите способ оплаты:",
+                    keyboardFactory.rowsLayout(rows));
+            return;
+        }
+        sendExcDenominationPicker(user, purchaseGroup);
+    }
+
+    private void sendExcDenominationPicker(AppUser user, String purchaseGroup) {
         List<RewardItem> items = rewardService.findByPurchaseGroup(purchaseGroup);
         if (items.isEmpty()) { sendShop(user); return; }
         String groupLabel = groupItemLabel(items.get(0).getTitle());
@@ -6591,16 +6618,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String denom = item.getTitle().replaceAll(".*- ", "");
             rows.add(List.of(keyboardFactory.callback(icon + " " + denom + " — " + price + " EXC", "shop:view:" + item.getId())));
         }
-        // "Донат по играм" (покупка гемов за реальные деньги — GRAM/Stars) объединён с обычным
-        // магазином наград (покупка за EXC) в одной "папке" по игре, вместо отдельного пункта
-        // верхнего уровня — пользователь так и не понимал, что это одна и та же игровая валюта
-        // (2026-09-20). Пока донат поддерживает только Brawl Stars (GemPurchaseService.BRAWL_PACKAGES).
-        if ("brawl_stars".equals(purchaseGroup)) {
-            rows.add(List.of(keyboardFactory.callback("💰 Купить за реальные деньги (GRAM/Stars)", "menu:gemdonate")));
-        }
-        // Кастомизация (рамка аватара) открывает этот же пикер номиналов из "⚙️ Предметы клуба",
-        // а не из "Магазина наград" — "Назад" должен вести туда, откуда реально пришли (2026-09-20).
-        String backTarget = "Кастомизация".equals(items.get(0).getCategory()) ? "sink:cat:customization" : "menu:shop";
+        // Brawl Stars теперь открывает этот пикер номиналов ИЗ экрана выбора способа оплаты (см.
+        // sendGroupPicker) — "Назад" должен вернуть туда, а не сразу в общий Магазин наград.
+        // Кастомизация (рамка аватара) открывает этот же пикер из "⚙️ Предметы клуба" — тоже своя цель.
+        String backTarget = "brawl_stars".equals(purchaseGroup) ? "shop:group:" + purchaseGroup
+                : "Кастомизация".equals(items.get(0).getCategory()) ? "sink:cat:customization" : "menu:shop";
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", backTarget), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(),
                 "🎁 <b>" + escape(groupLabel) + "</b>\n\nВыберите номинал:",
