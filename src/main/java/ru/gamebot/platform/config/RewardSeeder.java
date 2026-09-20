@@ -205,9 +205,11 @@ public class RewardSeeder implements CommandLineRunner {
         String cocPrompt = "Укажите email вашего Supercell ID для зачисления гемов.\n\n"
                 + "Введите email:";
 
+        // Цены подняты 2026-09-20 (тот же повод, что у Brawl Stars/Clash Royale выше — смена
+        // поставщика доната donatov.net -> Купикод). Новые цены держат запас ~1.2x против доната.
         seed("Clash of Clans - Gems 80",
                 "Пополнение 80 гемов на аккаунт Clash of Clans. Доставка через Supercell ID. Срок доставки — до 24 ч.",
-                "Clash of Clans", 13_400, cocPrompt, 1_000, "clash_of_clans");
+                "Clash of Clans", 18_800, cocPrompt, 1_000, "clash_of_clans");
 
         // Количество пачки уменьшено 260 -> 160 гемов (2026-09-12) — старый тайтл деактивируем,
         // чтобы не остался дублирующим активным товаром по старой цене/объёму.
@@ -217,11 +219,11 @@ public class RewardSeeder implements CommandLineRunner {
 
         seed("Clash of Clans - Gems 160",
                 "Пополнение 160 гемов на аккаунт Clash of Clans. Доставка через Supercell ID. Срок доставки — до 24 ч.",
-                "Clash of Clans", 24_400, cocPrompt, 5_000, "clash_of_clans");
+                "Clash of Clans", 34_500, cocPrompt, 5_000, "clash_of_clans");
 
         seed("Clash of Clans - Gems 500",
                 "Пополнение 500 гемов на аккаунт Clash of Clans. Доставка через Supercell ID. Срок доставки — до 24 ч.",
-                "Clash of Clans", 57_600, cocPrompt, 15_000, "clash_of_clans");
+                "Clash of Clans", 81_400, cocPrompt, 15_000, "clash_of_clans");
 
         rewardItemRepository.findByTitle("Mobile Legends — 86 Diamonds").ifPresent(old -> {
             if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }

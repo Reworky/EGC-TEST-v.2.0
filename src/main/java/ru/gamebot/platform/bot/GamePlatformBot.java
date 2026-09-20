@@ -1289,10 +1289,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             var playerInfo = new ru.gamebot.platform.service.ClashOfClansApiService.PlayerInfo(tag, name, Integer.parseInt(townHallStr), 0, 0, 0, 0, 0, 0, 0, 0, 0);
             clashQuestVerificationService.linkTag(user, playerInfo);
             String pendingQuestIdStr = session.getData().get("clashPendingQuestId");
+            String pendingGemPackageKey = session.getData().get("clashPendingGemPackageKey");
             session.reset();
             answer(callbackQuery.getId(), "✅ Тег привязан!");
             if (pendingQuestIdStr != null) {
                 handleTakeQuest(callbackQuery, user, session, Long.parseLong(pendingQuestIdStr));
+            } else if (pendingGemPackageKey != null) {
+                startGemPurchase(user, session, "clash_of_clans", pendingGemPackageKey);
             } else {
                 sendText(user.getTelegramId(), "✅ Тег Clash of Clans привязан: " + escape(tag), backMenuKeyboard("menu:profile"));
             }
@@ -14598,6 +14601,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private String gemPurchaseGameTag(AppUser user, String gameKey) {
         return switch (gameKey) {
             case "clash_royale" -> user.getClashRoyaleTag();
+            case "clash_of_clans" -> user.getClashOfClansTag();
             default -> user.getBrawlStarsTag();
         };
     }
@@ -14638,12 +14642,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String tag = gemPurchaseGameTag(user, gameKey);
         if (tag == null || tag.isBlank()) {
             session.reset();
-            // Тег Clash Royale подхватывает существующий флоу CR_TAG_INPUT/cr:confirm (тот же паттерн
-            // "crPendingQuestId", что уже был для квестов — см. cr:confirm) — не заводим отдельную
-            // систему "purpose", как у Brawl Stars, она там уже нужна была для турниров/квестов/профиля.
+            // Тег Clash Royale/Clash of Clans подхватывает уже существующий флоу привязки тега для
+            // квестов (тот же паттерн "...PendingQuestId", что уже был — см. cr:confirm/clash:confirm)
+            // — не заводим отдельную систему "purpose", как у Brawl Stars, она там уже нужна была для
+            // турниров/квестов/профиля.
             if ("clash_royale".equals(gameKey)) {
                 session.getData().put("crPendingGemPackageKey", packageKey);
                 session.setState(SessionState.CR_TAG_INPUT);
+            } else if ("clash_of_clans".equals(gameKey)) {
+                session.getData().put("clashPendingGemPackageKey", packageKey);
+                session.setState(SessionState.CLASH_TAG_INPUT);
             } else {
                 session.getData().put("brawlLinkPurpose", "gempurchase");
                 session.getData().put("gemPendingPackageKey", packageKey);

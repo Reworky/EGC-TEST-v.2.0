@@ -45,6 +45,7 @@ public class GemPurchaseService {
 
     public static final String BRAWL_STARS = "Brawl Stars";
     public static final String CLASH_ROYALE = "Clash Royale";
+    public static final String CLASH_OF_CLANS = "Clash of Clans";
 
     // Цены — розница Купикод на 2026-09-20 + 18% наценка (та же формула, что раньше с donatov.net,
     // см. класс-javadoc). XP-бонус — по калибровке ~0.68 XP/₽ (см. javadoc).
@@ -96,6 +97,32 @@ public class GemPurchaseService {
             new GemPackage("crdiamondpass", 0, 1_483, 1_008, "Diamond Pass")
     );
 
+    // Цены — розница Купикод на 2026-09-20 + 18% наценка, тот же принцип (добавлено в тот же вечер
+    // по запросу пользователя — "тоже самое для Clash of Clans").
+    public static final List<GemPackage> CLASH_OF_CLANS_PACKAGES = List.of(
+            new GemPackage("80", 80, 156, 106),
+            new GemPackage("160", 160, 287, 195),
+            new GemPackage("500", 500, 678, 461),
+            new GemPackage("580", 580, 761, 517),
+            new GemPackage("1200", 1_200, 1_339, 911),
+            new GemPackage("1280", 1_280, 1_369, 931),
+            new GemPackage("1700", 1_700, 1_876, 1_276),
+            new GemPackage("2500", 2_500, 2_722, 1_851),
+            new GemPackage("2580", 2_580, 2_618, 1_780),
+            new GemPackage("3000", 3_000, 3_132, 2_130),
+            new GemPackage("6500", 6_500, 6_554, 4_457),
+            new GemPackage("7700", 7_700, 7_452, 5_067),
+            new GemPackage("9000", 9_000, 8_579, 5_834),
+            new GemPackage("14000", 14_000, 12_897, 8_770),
+            new GemPackage("20500", 20_500, 18_494, 12_576),
+            new GemPackage("28000", 28_000, 24_168, 16_434),
+            new GemPackage("42000", 42_000, 36_490, 24_813),
+            new GemPackage("70000", 70_000, 60_495, 41_137),
+            new GemPackage("140000", 140_000, 121_213, 82_425),
+            // Единственный пропуск Clash of Clans у Kupikod называется "Gold Pass".
+            new GemPackage("cocgoldpass", 0, 929, 632, "Gold Pass")
+    );
+
     /** gameKey (purchaseGroup, например "brawl_stars"/"clash_royale") -> (отображаемое имя игры,
      *  каталог пакетов). Единая точка для добавления новой игры в донат — остальной код (GamePlatformBot)
      *  работает через packagesFor/gameName/findPackage, не зная конкретных игр напрямую. */
@@ -106,6 +133,8 @@ public class GemPurchaseService {
         CATALOG.put("brawl_stars", BRAWL_PACKAGES);
         GAME_NAMES.put("clash_royale", CLASH_ROYALE);
         CATALOG.put("clash_royale", CLASH_ROYALE_PACKAGES);
+        GAME_NAMES.put("clash_of_clans", CLASH_OF_CLANS);
+        CATALOG.put("clash_of_clans", CLASH_OF_CLANS_PACKAGES);
     }
 
     /** Отображаемое имя игры для gameName заявки/текстов — если ключ не найден (донат для этой игры
