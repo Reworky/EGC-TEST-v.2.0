@@ -1237,7 +1237,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 if ("quest".equals(confirmSuffix) && pendingQuestIdStr != null) {
                     handleTakeQuest(callbackQuery, user, session, Long.parseLong(pendingQuestIdStr));
                 } else if ("gempurchase".equals(confirmSuffix) && pendingGemPackageKey != null) {
-                    startGemPurchase(user, session, pendingGemPackageKey);
+                    startGemPurchase(user, session, "brawl_stars", pendingGemPackageKey);
                 } else {
                     sendText(user.getTelegramId(), "✅ Тег Brawl Stars привязан: " + escape(tag), backMenuKeyboard("menu:profile"));
                 }
@@ -1317,10 +1317,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             var playerInfo = new ru.gamebot.platform.service.ClashRoyaleApiService.PlayerInfo(tag, name, Integer.parseInt(trophiesStr), 0, 0, 0, 0, 0);
             clashRoyaleQuestVerificationService.linkTag(user, playerInfo);
             String pendingQuestIdStr = session.getData().get("crPendingQuestId");
+            String pendingGemPackageKey = session.getData().get("crPendingGemPackageKey");
             session.reset();
             answer(callbackQuery.getId(), "✅ Тег привязан!");
             if (pendingQuestIdStr != null) {
                 handleTakeQuest(callbackQuery, user, session, Long.parseLong(pendingQuestIdStr));
+            } else if (pendingGemPackageKey != null) {
+                startGemPurchase(user, session, "clash_royale", pendingGemPackageKey);
             } else {
                 sendText(user.getTelegramId(), "✅ Тег Clash Royale привязан: " + escape(tag), backMenuKeyboard("menu:profile"));
             }
@@ -1462,26 +1465,50 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleWheelAction(callbackQuery, user, data.substring("wheel:".length()));
             return;
         }
+        if (data.startsWith("shop:donate:")) {
+            answerSilently(callbackQuery.getId());
+            sendGemPackageList(user, data.substring("shop:donate:".length()));
+            return;
+        }
         if (data.startsWith("gemdonate:pkg:")) {
             answerSilently(callbackQuery.getId());
-            startGemPurchase(user, session, data.substring("gemdonate:pkg:".length()));
+            // Формат: "gemdonate:pkg:<gameKey>:<packageKey>" — gameKey без двоеточий, поэтому первое
+            // вхождение однозначно разделяет.
+            String rest = data.substring("gemdonate:pkg:".length());
+            int sep = rest.indexOf(':');
+            if (sep > 0) {
+                startGemPurchase(user, session, rest.substring(0, sep), rest.substring(sep + 1));
+            }
             return;
         }
         if (data.startsWith("gemdonate:method:")) {
             answerSilently(callbackQuery.getId());
+            // Формат: "gemdonate:method:<TON|STARS>:<gameKey>:<packageKey>".
             String rest = data.substring("gemdonate:method:".length());
             int sep = rest.indexOf(':');
             if (sep > 0) {
-                handleGemPurchaseMethodChoice(user, session, rest.substring(0, sep), rest.substring(sep + 1));
+                String method = rest.substring(0, sep);
+                String rest2 = rest.substring(sep + 1);
+                int sep2 = rest2.indexOf(':');
+                if (sep2 > 0) {
+                    handleGemPurchaseMethodChoice(user, session, method, rest2.substring(0, sep2), rest2.substring(sep2 + 1));
+                }
             }
             return;
         }
         if (data.startsWith("gemdonate:confirmton:")) {
             answerSilently(callbackQuery.getId());
-            gemPurchaseService.findPackage(data.substring("gemdonate:confirmton:".length()))
-                    .ifPresentOrElse(
-                            pkg -> requestGemPurchaseTon(user, pkg),
-                            () -> sendText(user.getTelegramId(), "❌ Пакет не найден, попробуйте выбрать заново.", backMenuKeyboard("menu:gemdonate")));
+            // Формат: "gemdonate:confirmton:<gameKey>:<packageKey>".
+            String rest = data.substring("gemdonate:confirmton:".length());
+            int sep = rest.indexOf(':');
+            if (sep > 0) {
+                String gameKey = rest.substring(0, sep);
+                String packageKey = rest.substring(sep + 1);
+                gemPurchaseService.findPackage(gameKey, packageKey)
+                        .ifPresentOrElse(
+                                pkg -> requestGemPurchaseTon(user, gameKey, pkg),
+                                () -> sendText(user.getTelegramId(), "❌ Пакет не найден, попробуйте выбрать заново.", backMenuKeyboard("shop:donate:" + gameKey)));
+            }
             return;
         }
         if (data.startsWith("review:")) {
@@ -1614,7 +1641,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "cat:quests" -> sendQuestsCategory(user);
             case "cat:wallet" -> sendWalletCategory(user);
             case "cat:shop" -> sendShopCategory(user);
-            case "gemdonate" -> sendGemPackageList(user);
+            case "gemdonate" -> sendGemPackageList(user, "brawl_stars"); // обратная совместимость со старыми сообщениями (см. "shop:donate:" — актуальный путь)
             case "cat:club" -> sendClubCategory(user);
             case "cat:help" -> sendHelpCategory(user);
             case "cat:fortune" -> sendFortuneCategory(user);
@@ -5326,12 +5353,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 !shopLimitService.getItemStatus(user, r).startsWith("🔒"));
                         String icon = anyAvailable ? "🎁" : "🔒";
                         // Игры с несколькими ТИПАМИ товара (не номиналами одной валюты, а разными
-                        // видами покупки — например, у Brawl Stars гемы И пропуски Brawl Pass) сначала
-                        // ведут в выбор типа (sendGameCategoryPicker), а не сразу в номиналы одной
-                        // валюты — иначе второй тип товара просто негде показать (2026-09-20, запрошено
-                        // пользователем, "и для остальных игр тоже" — расширить на другие игры, когда у
-                        // них появится больше одного типа товара; сейчас это только Brawl Stars).
-                        boolean hasMultipleProductTypes = "brawl_stars".equals(groupEntry.getKey());
+                        // видами покупки — например, гемы И сезонные пропуски) сначала ведут в выбор
+                        // типа (sendGameCategoryPicker), а не сразу в номиналы одной валюты — иначе
+                        // второй тип товара просто негде показать (2026-09-20, генерализовано под любую
+                        // игру, см. hasMultipleDonationProductTypes — было хардкожено только под Brawl
+                        // Stars, расширено на Clash Royale тем же вечером).
+                        boolean hasMultipleProductTypes = hasMultipleDonationProductTypes(groupEntry.getKey());
                         String label = hasMultipleProductTypes ? " — выбор товара" : " — выбор номинала";
                         String callback = (hasMultipleProductTypes ? "shop:gamecat:" : "shop:group:") + groupEntry.getKey();
                         rows.add(List.of(keyboardFactory.callback(icon + " " + groupLabel + label, callback)));
@@ -6480,17 +6507,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void grantStarsPurchase(AppUser user, Long telegramId, String payload,
             org.telegram.telegrambots.meta.api.objects.payments.SuccessfulPayment payment) {
         if (payload.startsWith("starsitem:GEM:")) {
-            String packageKey = payload.substring("starsitem:GEM:".length());
-            GemPurchaseService.GemPackage pkg = gemPurchaseService.findPackage(packageKey)
-                    .orElseThrow(() -> new IllegalStateException("Unknown gem package in Stars payload: " + packageKey));
-            String tag = user.getBrawlStarsTag();
+            // Формат: "starsitem:GEM:<gameKey>:<packageKey>" (до 2026-09-20 был только Brawl Stars,
+            // "starsitem:GEM:<packageKey>" — gameKey не содержит двоеточий, поэтому первое вхождение
+            // однозначно разделяет игру и пакет).
+            String rest = payload.substring("starsitem:GEM:".length());
+            int sep = rest.indexOf(':');
+            if (sep <= 0) {
+                throw new IllegalStateException("Malformed GEM payload (missing gameKey): " + payload);
+            }
+            String gameKey = rest.substring(0, sep);
+            String packageKey = rest.substring(sep + 1);
+            GemPurchaseService.GemPackage pkg = gemPurchaseService.findPackage(gameKey, packageKey)
+                    .orElseThrow(() -> new IllegalStateException("Unknown gem package in Stars payload: " + payload));
+            String tag = gemPurchaseGameTag(user, gameKey);
             if (tag == null || tag.isBlank()) {
                 // Не должно случиться — тег проверяется до показа инвойса (startGemPurchase), но если
                 // всё же гонка/сброс тега между инвойсом и оплатой — не зачисляем гемы "в никуда",
                 // кидаем исключение, чтобы сработал общий catch (алерт админам на ручной разбор).
-                throw new IllegalStateException("GEM purchase without linked Brawl Stars tag for user " + telegramId);
+                throw new IllegalStateException("GEM purchase without linked " + gameKey + " tag for user " + telegramId);
             }
-            GemPurchaseRequest req = gemPurchaseService.createStarsRequest(user, pkg, tag, payment.getTotalAmount(), payment.getTelegramPaymentChargeId());
+            GemPurchaseRequest req = gemPurchaseService.createStarsRequest(user, gameKey, pkg, tag, payment.getTotalAmount(), payment.getTelegramPaymentChargeId());
             notifyAdminsAboutGemPurchase(req);
             sendText(telegramId,
                     "✅ <b>Оплата прошла!</b>\n\n"
@@ -6607,14 +6643,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  когда у них появится больше одного типа). Для игр с одним типом (сейчас все остальные) верхний
      *  уровень магазина по-прежнему ведёт сразу в sendGroupPicker, минуя этот экран.
      *  gameKey — тот же purchaseGroup, что и у RewardItem-группы валюты этой игры. */
+    /** У игры несколько ТИПОВ товара (не номиналов одной валюты, а разных видов покупки), когда для
+     *  неё в донат-каталоге есть и валюта (gems>0), и не-валютные позиции (label!=null, например
+     *  Brawl Pass/Pass Royale) — тогда сначала спрашиваем тип, а не ведём сразу в номиналы одной
+     *  валюты, иначе второй тип товара просто негде показать (2026-09-20, генерализовано под любую
+     *  игру — было хардкожено только под Brawl Stars, добавлен Clash Royale тем же вечером). */
+    private boolean hasMultipleDonationProductTypes(String gameKey) {
+        List<GemPurchaseService.GemPackage> packages = GemPurchaseService.packagesFor(gameKey);
+        boolean hasCurrency = packages.stream().anyMatch(p -> p.gems() > 0);
+        boolean hasLabelItems = packages.stream().anyMatch(p -> p.label() != null);
+        return hasCurrency && hasLabelItems;
+    }
+
     private void sendGameCategoryPicker(AppUser user, String gameKey) {
-        if (!"brawl_stars".equals(gameKey)) { sendGroupPicker(user, gameKey); return; }
+        if (!hasMultipleDonationProductTypes(gameKey)) { sendGroupPicker(user, gameKey); return; }
         List<List<InlineKeyboardButton>> rows = List.of(
                 List.of(keyboardFactory.callback("🪙 Гемы", "shop:group:" + gameKey)),
-                List.of(keyboardFactory.callback("🎫 Пропуски (Brawl Pass)", "shop:passgroup:" + gameKey)),
+                List.of(keyboardFactory.callback("🎫 Пропуски", "shop:passgroup:" + gameKey)),
                 List.of(keyboardFactory.callback("⬅️ Назад", "menu:shop"), keyboardFactory.callback("🏠 Меню", "menu:main"))
         );
-        sendText(user.getTelegramId(), "🎮 <b>Brawl Stars</b>\n\nЧто хотите купить?", keyboardFactory.rowsLayout(rows));
+        sendText(user.getTelegramId(), "🎮 <b>" + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\nЧто хотите купить?", keyboardFactory.rowsLayout(rows));
     }
 
     private void sendGroupPicker(AppUser user, String purchaseGroup) {
@@ -6622,17 +6670,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // магазином наград (покупка за EXC) в одной "папке" по игре (2026-09-20). Сначала показываем
         // выбор способа оплаты (EXC-токены / реальные деньги) и только потом — сами номиналы, а не
         // мешаем денежный и токен-пикер в одном списке — пользователь запутывался (2026-09-20, второй
-        // раунд правки). Пока донат поддерживает только Brawl Stars (GemPurchaseService.BRAWL_PACKAGES).
-        if ("brawl_stars".equals(purchaseGroup)) {
+        // раунд правки). Генерализовано под любую игру с донат-каталогом (GemPurchaseService.packagesFor),
+        // не только Brawl Stars (был хардкод, снят при добавлении Clash Royale тем же вечером).
+        if (!GemPurchaseService.packagesFor(purchaseGroup).isEmpty()) {
             List<RewardItem> items = rewardService.findByPurchaseGroup(purchaseGroup);
             if (items.isEmpty()) { sendShop(user); return; }
             String groupLabel = groupItemLabel(items.get(0).getTitle());
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
             rows.add(List.of(keyboardFactory.callback("🪙 Купить за токены EXC — выбор номинала", "shop:excgroup:" + purchaseGroup)));
-            rows.add(List.of(keyboardFactory.callback("💰 Купить за реальные деньги (GRAM/Stars)", "menu:gemdonate")));
-            // "Назад" ведёт в выбор ТИПА товара (Гемы/Пропуски), а не сразу в общий Магазин наград —
-            // у Brawl Stars теперь есть промежуточный уровень (см. sendGameCategoryPicker, 2026-09-20).
-            rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:gamecat:" + purchaseGroup), keyboardFactory.callback("🏠 Меню", "menu:main")));
+            rows.add(List.of(keyboardFactory.callback("💰 Купить за реальные деньги (GRAM/Stars)", "shop:donate:" + purchaseGroup)));
+            // "Назад" ведёт в выбор ТИПА товара (Гемы/Пропуски), если он есть у этой игры — иначе сразу
+            // в общий Магазин наград (см. sendGameCategoryPicker/hasMultipleDonationProductTypes).
+            String backTarget = hasMultipleDonationProductTypes(purchaseGroup) ? "shop:gamecat:" + purchaseGroup : "menu:shop";
+            rows.add(List.of(keyboardFactory.callback("⬅️ Назад", backTarget), keyboardFactory.callback("🏠 Меню", "menu:main")));
             sendText(user.getTelegramId(),
                     "🎁 <b>" + escape(groupLabel) + "</b>\n\nВыберите способ оплаты:",
                     keyboardFactory.rowsLayout(rows));
@@ -6641,28 +6691,30 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendExcDenominationPicker(user, purchaseGroup);
     }
 
-    /** Список пропусков (Brawl Pass) — только донат за реальные деньги, EXC-варианта нет (это не
-     *  валюта). Переиспользует тот же callback "gemdonate:pkg:" и весь дальнейший флоу (метод оплаты,
-     *  подтверждение, модератор), что и гемы — startGemPurchase работает по ключу пакета вне
-     *  зависимости от того, gems>0 или это label-товар (2026-09-20). */
+    /** Список не-валютных донат-позиций (например, Brawl Pass/Pass Royale) — только донат за реальные
+     *  деньги, EXC-варианта нет. Переиспользует тот же callback "gemdonate:pkg:" и весь дальнейший
+     *  флоу (метод оплаты, подтверждение, модератор), что и валюта — startGemPurchase работает по
+     *  ключу пакета вне зависимости от того, gems>0 или это label-товар (2026-09-20, генерализовано). */
     private void sendPassDonateList(AppUser user, String gameKey) {
-        if (!"brawl_stars".equals(gameKey)) { sendShop(user); return; }
+        List<GemPurchaseService.GemPackage> passes = GemPurchaseService.packagesFor(gameKey).stream()
+                .filter(p -> p.gems() <= 0).toList();
+        if (passes.isEmpty()) { sendShop(user); return; }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        for (GemPurchaseService.GemPackage pkg : GemPurchaseService.BRAWL_PACKAGES) {
-            if (pkg.gems() > 0) continue;
+        for (GemPurchaseService.GemPackage pkg : passes) {
             rows.add(List.of(keyboardFactory.callback(
                     pkg.displayLabel() + " — " + pkg.priceRub() + "₽ (+" + pkg.xpBonus() + " XP)",
-                    "gemdonate:pkg:" + pkg.key())));
+                    "gemdonate:pkg:" + gameKey + ":" + pkg.key())));
         }
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", "shop:gamecat:" + gameKey),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
-        String accountLine = user.getBrawlStarsTag() != null && !user.getBrawlStarsTag().isBlank()
-                ? " который хотите получить на свой аккаунт " + escape(user.getBrawlStarsTag())
+        String tag = gemPurchaseGameTag(user, gameKey);
+        String accountLine = tag != null && !tag.isBlank()
+                ? " который хотите получить на свой аккаунт " + escape(tag)
                 : " который хотите получить";
         sendText(user.getTelegramId(),
-                "🎫 <b>Пропуски Brawl Stars</b>\n\n"
+                "🎫 <b>Пропуски " + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\n"
                         + "Выберите товар" + accountLine + "\n\n"
                         + "К каждой покупке — бонус XP\n\n"
                         + "⚠️ Заявка обрабатывается вручную, зачисление может занять время.",
@@ -6682,10 +6734,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String denom = item.getTitle().replaceAll(".*- ", "");
             rows.add(List.of(keyboardFactory.callback(icon + " " + denom + " — " + price + " EXC", "shop:view:" + item.getId())));
         }
-        // Brawl Stars теперь открывает этот пикер номиналов ИЗ экрана выбора способа оплаты (см.
+        // Игры с донат-каталогом открывают этот пикер номиналов ИЗ экрана выбора способа оплаты (см.
         // sendGroupPicker) — "Назад" должен вернуть туда, а не сразу в общий Магазин наград.
         // Кастомизация (рамка аватара) открывает этот же пикер из "⚙️ Предметы клуба" — тоже своя цель.
-        String backTarget = "brawl_stars".equals(purchaseGroup) ? "shop:group:" + purchaseGroup
+        String backTarget = !GemPurchaseService.packagesFor(purchaseGroup).isEmpty() ? "shop:group:" + purchaseGroup
                 : "Кастомизация".equals(items.get(0).getCategory()) ? "sink:cat:customization" : "menu:shop";
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", backTarget), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(),
@@ -14537,54 +14589,72 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    // ── "Донат по играм" — пилот, см. GemPurchaseService ────────────────────────────────────
+    // ── "Донат по играм" — см. GemPurchaseService ────────────────────────────────────
     // Открыт для всех пользователей 2026-09-20 (был закрыт заглушкой, доступен только тестовому
-    // Telegram ID, см. историю коммитов).
+    // Telegram ID, см. историю коммитов). Мультиигровой (2026-09-20, было — только Brawl Stars).
 
-    private void sendGemPackageList(AppUser user) {
+    /** Тег игрового аккаунта для доната — по игре (gameKey = purchaseGroup). Добавить новую игру в
+     *  донат — расширить этот switch и GemPurchaseService.CATALOG/GAME_NAMES. */
+    private String gemPurchaseGameTag(AppUser user, String gameKey) {
+        return switch (gameKey) {
+            case "clash_royale" -> user.getClashRoyaleTag();
+            default -> user.getBrawlStarsTag();
+        };
+    }
+
+    private void sendGemPackageList(AppUser user, String gameKey) {
+        List<GemPurchaseService.GemPackage> currency = GemPurchaseService.packagesFor(gameKey).stream()
+                .filter(p -> p.gems() > 0).toList();
+        if (currency.isEmpty()) { sendShop(user); return; }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        for (GemPurchaseService.GemPackage pkg : GemPurchaseService.BRAWL_PACKAGES) {
-            // Пропуски (Brawl Pass, gems=0) показываются в отдельном списке типа товара, см.
-            // sendPassDonateList — здесь только валюта (2026-09-20).
-            if (pkg.gems() <= 0) continue;
+        for (GemPurchaseService.GemPackage pkg : currency) {
             rows.add(List.of(keyboardFactory.callback(
                     pkg.displayLabel() + " — " + pkg.priceRub() + "₽ (+" + pkg.xpBonus() + " XP)",
-                    "gemdonate:pkg:" + pkg.key())));
+                    "gemdonate:pkg:" + gameKey + ":" + pkg.key())));
         }
         rows.add(List.of(
-                keyboardFactory.callback("⬅️ Назад", "shop:group:brawl_stars"),
+                keyboardFactory.callback("⬅️ Назад", "shop:group:" + gameKey),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
-        String accountLine = user.getBrawlStarsTag() != null && !user.getBrawlStarsTag().isBlank()
-                ? " который хотите получить на свой аккаунт " + escape(user.getBrawlStarsTag())
+        String tag = gemPurchaseGameTag(user, gameKey);
+        String accountLine = tag != null && !tag.isBlank()
+                ? " который хотите получить на свой аккаунт " + escape(tag)
                 : " который хотите получить";
         sendText(user.getTelegramId(),
-                "💎 <b>Донат Brawl Stars</b>\n\n"
+                "💎 <b>Донат " + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\n"
                         + "Выберите пакет гемов" + accountLine + "\n\n"
                         + "К каждой покупке — бонус XP\n\n"
                         + "⚠️ Заявка обрабатывается вручную, зачисление может занять время.",
                 keyboardFactory.rowsLayout(rows));
     }
 
-    private void startGemPurchase(AppUser user, UserSession session, String packageKey) {
-        Optional<GemPurchaseService.GemPackage> pkgOpt = gemPurchaseService.findPackage(packageKey);
+    private void startGemPurchase(AppUser user, UserSession session, String gameKey, String packageKey) {
+        Optional<GemPurchaseService.GemPackage> pkgOpt = gemPurchaseService.findPackage(gameKey, packageKey);
         if (pkgOpt.isEmpty()) {
-            sendText(user.getTelegramId(), "❌ Пакет не найден, попробуйте выбрать заново.", backMenuKeyboard("menu:gemdonate"));
+            sendText(user.getTelegramId(), "❌ Пакет не найден, попробуйте выбрать заново.", backMenuKeyboard("shop:donate:" + gameKey));
             return;
         }
         GemPurchaseService.GemPackage pkg = pkgOpt.get();
-        String tag = user.getBrawlStarsTag();
+        String tag = gemPurchaseGameTag(user, gameKey);
         if (tag == null || tag.isBlank()) {
             session.reset();
-            session.getData().put("brawlLinkPurpose", "gempurchase");
-            session.getData().put("gemPendingPackageKey", packageKey);
-            session.setState(SessionState.BRAWL_TAG_INPUT);
+            // Тег Clash Royale подхватывает существующий флоу CR_TAG_INPUT/cr:confirm (тот же паттерн
+            // "crPendingQuestId", что уже был для квестов — см. cr:confirm) — не заводим отдельную
+            // систему "purpose", как у Brawl Stars, она там уже нужна была для турниров/квестов/профиля.
+            if ("clash_royale".equals(gameKey)) {
+                session.getData().put("crPendingGemPackageKey", packageKey);
+                session.setState(SessionState.CR_TAG_INPUT);
+            } else {
+                session.getData().put("brawlLinkPurpose", "gempurchase");
+                session.getData().put("gemPendingPackageKey", packageKey);
+                session.setState(SessionState.BRAWL_TAG_INPUT);
+            }
             sendText(user.getTelegramId(),
-                    "🏷️ Сначала привяжите тег Brawl Stars — введите его (например: <code>#ABC123</code>):",
+                    "🏷️ Сначала привяжите тег " + escape(GemPurchaseService.gameName(gameKey)) + " — введите его (например: <code>#ABC123</code>):",
                     cancelKeyboard());
             return;
         }
-        sendGemPaymentMethodChoice(user, pkg);
+        sendGemPaymentMethodChoice(user, gameKey, pkg);
     }
 
     /** Курс перевода цены пакета гемов (в рублях) в Stars — тот же ориентировочный курс, что и у
@@ -14593,10 +14663,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private static final java.math.BigDecimal GEM_PURCHASE_STARS_RUB_RATE = java.math.BigDecimal.valueOf(1.4);
 
     /** "Отмена" на экранах выбора способа оплаты/подтверждения донат-пакета должна вернуть к списку,
-     *  откуда реально пришли — гемы и пропуски теперь разные экраны (см. sendGemPackageList/
-     *  sendPassDonateList, 2026-09-20), просто "menu:gemdonate" уже не универсален. */
-    private String gemDonateBackTarget(GemPurchaseService.GemPackage pkg) {
-        return pkg.label() != null ? "shop:passgroup:brawl_stars" : "menu:gemdonate";
+     *  откуда реально пришли — гемы и пропуски разные экраны (см. sendGemPackageList/sendPassDonateList). */
+    private String gemDonateBackTarget(String gameKey, GemPurchaseService.GemPackage pkg) {
+        return pkg.label() != null ? "shop:passgroup:" + gameKey : "shop:donate:" + gameKey;
     }
 
     private int gemPurchaseStarsPrice(long priceRub) {
@@ -14610,13 +14679,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  (ExchangeRateService, тот же, что у вывода в TON) — цена осознанно "плавающая", а не фиксированная
      *  в момент покупки. Stars — нативный инвойс Telegram, оплата подтверждается автоматически, без
      *  чека (см. sendGemStarsInvoice). */
-    private void sendGemPaymentMethodChoice(AppUser user, GemPurchaseService.GemPackage pkg) {
+    private void sendGemPaymentMethodChoice(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg) {
         java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(pkg.priceRub()));
         int starsPrice = gemPurchaseStarsPrice(pkg.priceRub());
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
-                List.of(keyboardFactory.callback("💎 GRAM (TON) — ~" + tonAmount + " GRAM (TON)", "gemdonate:method:TON:" + pkg.key())),
-                List.of(keyboardFactory.callback("⭐ Telegram Stars — " + starsPrice + " ⭐", "gemdonate:method:STARS:" + pkg.key())),
-                List.of(keyboardFactory.callback("❌ Отмена", gemDonateBackTarget(pkg)))
+                List.of(keyboardFactory.callback("💎 GRAM (TON) — ~" + tonAmount + " GRAM (TON)", "gemdonate:method:TON:" + gameKey + ":" + pkg.key())),
+                List.of(keyboardFactory.callback("⭐ Telegram Stars — " + starsPrice + " ⭐", "gemdonate:method:STARS:" + gameKey + ":" + pkg.key())),
+                List.of(keyboardFactory.callback("❌ Отмена", gemDonateBackTarget(gameKey, pkg)))
         ));
         sendText(user.getTelegramId(),
                 "💎 <b>" + pkg.displayLabel() + " — " + pkg.priceRub() + "₽</b>\n\n"
@@ -14626,25 +14695,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.rowsLayout(rows));
     }
 
-    private void handleGemPurchaseMethodChoice(AppUser user, UserSession session, String method, String packageKey) {
-        Optional<GemPurchaseService.GemPackage> pkgOpt = gemPurchaseService.findPackage(packageKey);
+    private void handleGemPurchaseMethodChoice(AppUser user, UserSession session, String method, String gameKey, String packageKey) {
+        Optional<GemPurchaseService.GemPackage> pkgOpt = gemPurchaseService.findPackage(gameKey, packageKey);
         if (pkgOpt.isEmpty()) {
-            sendText(user.getTelegramId(), "❌ Пакет не найден, попробуйте выбрать заново.", backMenuKeyboard("menu:gemdonate"));
+            sendText(user.getTelegramId(), "❌ Пакет не найден, попробуйте выбрать заново.", backMenuKeyboard("shop:donate:" + gameKey));
             return;
         }
         GemPurchaseService.GemPackage pkg = pkgOpt.get();
         switch (method) {
-            case "STARS" -> sendGemStarsInvoice(user, pkg);
-            case "TON" -> sendGemPurchaseTonConfirm(user, pkg);
-            default -> sendGemPaymentMethodChoice(user, pkg);
+            case "STARS" -> sendGemStarsInvoice(user, gameKey, pkg);
+            case "TON" -> sendGemPurchaseTonConfirm(user, gameKey, pkg);
+            default -> sendGemPaymentMethodChoice(user, gameKey, pkg);
         }
     }
 
     /** Промежуточное подтверждение перед созданием заявки на GRAM (TON) (2026-09-20, по запросу
      *  пользователя) — раньше нажатие на способ оплаты сразу создавало заявку и уведомляло модератора;
      *  случайное/импульсивное нажатие плодило бы заявки, которые ещё нужно вручную отклонять. */
-    private void sendGemPurchaseTonConfirm(AppUser user, GemPurchaseService.GemPackage pkg) {
-        String tag = user.getBrawlStarsTag();
+    private void sendGemPurchaseTonConfirm(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg) {
+        String tag = gemPurchaseGameTag(user, gameKey);
         java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(pkg.priceRub()));
         sendText(user.getTelegramId(),
                 "💎 <b>Подтверждение заявки</b>\n\n"
@@ -14653,9 +14722,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "После подтверждения модератор свяжется с вами в личных сообщениях, чтобы уточнить детали и прислать реквизиты для оплаты.\n\n"
                         + "Создать заявку?",
                 keyboardFactory.rowsLayout(List.of(
-                        List.of(keyboardFactory.callback("✅ Создать заявку", "gemdonate:confirmton:" + pkg.key())),
-                        List.of(keyboardFactory.callback("⬅️ Назад", "gemdonate:pkg:" + pkg.key())),
-                        List.of(keyboardFactory.callback("❌ Отмена", gemDonateBackTarget(pkg)))
+                        List.of(keyboardFactory.callback("✅ Создать заявку", "gemdonate:confirmton:" + gameKey + ":" + pkg.key())),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "gemdonate:pkg:" + gameKey + ":" + pkg.key())),
+                        List.of(keyboardFactory.callback("❌ Отмена", gemDonateBackTarget(gameKey, pkg)))
                 )));
     }
 
@@ -14665,9 +14734,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  и т.п.) и только после этого лично сообщает реквизиты — код платежа и скрин/чек через бота тут
      *  больше не нужны, потому что модератор ведёт сделку лично и проверяет оплату сам (в т.ч. по
      *  блокчейну — переводы TON публичны). */
-    private void requestGemPurchaseTon(AppUser user, GemPurchaseService.GemPackage pkg) {
-        String tag = user.getBrawlStarsTag();
-        GemPurchaseRequest req = gemPurchaseService.createManualRequest(user, pkg, tag, "TON");
+    private void requestGemPurchaseTon(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg) {
+        String tag = gemPurchaseGameTag(user, gameKey);
+        GemPurchaseRequest req = gemPurchaseService.createManualRequest(user, gameKey, pkg, tag, "TON");
         notifyAdminsAboutGemPurchase(req);
         sendText(user.getTelegramId(),
                 "✅ <b>Заявка Д-" + req.getDisplayId() + " создана!</b>\n\n"
@@ -14680,34 +14749,34 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Ссылка на менеджера с заранее заполненным текстом сообщения (t.me/<user>?text=...) — менеджер
-     *  открывает диалог и сразу видит номер заявки/пакет/тег, не нужно искать уведомление, чтобы
+     *  открывает диалог и сразу видит номер заявки/пакет/игру/тег, не нужно искать уведомление, чтобы
      *  понять, по какой заявке написал игрок (2026-09-20, по запросу пользователя). Текст только
      *  подставляется в поле ввода — Telegram не отправляет его сам, игрок жмёт "Отправить" вручную.
      *  URLEncoder кодирует пробел как '+', Telegram его не разворачивает обратно (та же проблема,
      *  что и в UserService.encodeUrlComponent для t.me/share/url) — докручиваем на %20 вручную. */
     private String managerDmLink(GemPurchaseRequest req, GemPurchaseService.GemPackage pkg) {
         String text = "Здравствуйте! Хочу оплатить заявку Д-" + req.getDisplayId()
-                + " (" + pkg.displayLabel() + ", тег " + req.getGameTag() + ")";
+                + " (" + req.getGameName() + ", " + pkg.displayLabel() + ", тег " + req.getGameTag() + ")";
         String encoded = java.net.URLEncoder.encode(text, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
         return "https://t.me/" + appProperties.getSupportUsername() + "?text=" + encoded;
     }
 
     /** Оплата Stars — нативный инвойс Telegram (та же HTTP-инфраструктура, что у остальных Stars-
-     *  товаров), но payload и цена динамические (пакет гемов ×8 вариантов), поэтому не через статичный
-     *  каталог STARS_ITEMS, а через overload sendStarsInvoice с готовым spec. Выдача — в grantStarsPurchase
-     *  (payload "starsitem:GEM:<key>") после реального списания. */
-    private void sendGemStarsInvoice(AppUser user, GemPurchaseService.GemPackage pkg) {
-        String tag = user.getBrawlStarsTag();
+     *  товаров), но payload и цена динамические (много пакетов на несколько игр), поэтому не через
+     *  статичный каталог STARS_ITEMS, а через overload sendStarsInvoice с готовым spec. Выдача — в
+     *  grantStarsPurchase (payload "starsitem:GEM:<gameKey>:<packageKey>") после реального списания. */
+    private void sendGemStarsInvoice(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg) {
+        String tag = gemPurchaseGameTag(user, gameKey);
         int starsPrice = gemPurchaseStarsPrice(pkg.priceRub());
         // Валютные пакеты ("30 гемов") дополняем именем игры для ясности; у label-товаров (например,
         // "Brawl Pass") имя игры дублировало бы название — не добавляем (2026-09-20).
-        String itemTitle = pkg.label() != null ? pkg.displayLabel() : pkg.displayLabel() + " Brawl Stars";
+        String itemTitle = pkg.label() != null ? pkg.displayLabel() : pkg.displayLabel() + " " + GemPurchaseService.gameName(gameKey);
         StarsItemSpec spec = new StarsItemSpec(
                 "💎 " + itemTitle,
                 "Зачисление на тег " + tag + ". Покупку оформляет администратор вручную после оплаты — обычно в течение некоторого времени.",
                 itemTitle,
                 starsPrice);
-        sendStarsInvoice(user, "starsitem:GEM:" + pkg.key(), spec, starsPrice);
+        sendStarsInvoice(user, "starsitem:GEM:" + gameKey + ":" + pkg.key(), spec, starsPrice);
     }
 
     /** Способ оплаты заявки на донат гемов — STARS подтверждён самим Telegram в момент списания (см.

@@ -1,7 +1,9 @@
 package ru.gamebot.platform.service;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -11,17 +13,18 @@ import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.GemPurchaseRequest;
 import ru.gamebot.platform.domain.repository.GemPurchaseRequestRepository;
 
-/** Донат по играм — покупка внутриигровой валюты за реальные деньги, вручную (см. заметки сессии
- *  2026-09-18): игрок платит переводом вне бота, админ вручную закупает на топап-сервисе и отмечает
- *  заявку выполненной. Поставщик — Купикод (kupikod, смена с donatov.net 2026-09-20: donatov.net
- *  перешёл на закупку ТОЛЬКО с входом в аккаунт игрока — неприемлемо на старте проекта, доверия ещё
- *  нет; Купикод доставляет без входа, только по тегу/ID, как и было у нас реализовано изначально).
- *  Цены и XP-бонус — снимок реальных цен Купикод на 2026-09-20 + 18% наценка (тот же принцип, что и
- *  раньше с donatov.net); бонус XP откалиброван так, чтобы дойти до 75 000 XP (потолок лимита вывода —
- *  дальше ранги чисто косметические, см. SinkShopService.getMonthlyLimit) стоило ~110 000₽ независимо
- *  от того, каким пакетом набирать — иначе дешёвые пакеты выглядели бы бесполезными, а самый крупный
- *  никто не покупает.
- *  Только Brawl Stars на старте — gameName в заявке уже общее поле под другие игры позже. */
+/** Донат по играм — покупка внутриигровой валюты (и не только — см. label в GemPackage) за реальные
+ *  деньги, вручную (см. заметки сессии 2026-09-18): игрок платит переводом вне бота, админ вручную
+ *  закупает на топап-сервисе и отмечает заявку выполненной. Поставщик — Купикод (kupikod, смена с
+ *  donatov.net 2026-09-20: donatov.net перешёл на закупку ТОЛЬКО с входом в аккаунт игрока —
+ *  неприемлемо на старте проекта, доверия ещё нет; Купикод доставляет без входа, только по тегу/ID,
+ *  как и было у нас реализовано изначально). Цены и XP-бонус — снимок реальных цен Купикод на дату
+ *  указанную в комментарии у каждого каталога + 18% наценка; бонус XP откалиброван так, чтобы дойти
+ *  до 75 000 XP (потолок лимита вывода — дальше ранги чисто косметические, см.
+ *  SinkShopService.getMonthlyLimit) стоило ~110 000₽ независимо от того, каким пакетом набирать —
+ *  иначе дешёвые пакеты выглядели бы бесполезными, а самый крупный никто не покупает.
+ *  Мультиигровой каталог (2026-09-20, было — только Brawl Stars) — ключи игр совпадают с
+ *  purchaseGroup соответствующей RewardItem-группы в «Магазине наград» (см. RewardSeeder). */
 @Service
 @RequiredArgsConstructor
 public class GemPurchaseService {
@@ -41,10 +44,10 @@ public class GemPurchaseService {
     }
 
     public static final String BRAWL_STARS = "Brawl Stars";
+    public static final String CLASH_ROYALE = "Clash Royale";
 
     // Цены — розница Купикод на 2026-09-20 + 18% наценка (та же формула, что раньше с donatov.net,
-    // см. класс-javadoc). XP-бонус — по калибровке ~0.68 XP/₽ (см. javadoc). Каталог расширен с 8 до
-    // 15 номиналов — у Купикод их заметно больше, чем было у donatov.net (запрошено пользователем).
+    // см. класс-javadoc). XP-бонус — по калибровке ~0.68 XP/₽ (см. javadoc).
     public static final List<GemPackage> BRAWL_PACKAGES = List.of(
             new GemPackage("30", 30, 299, 203),
             new GemPackage("60", 60, 565, 384),
@@ -61,29 +64,84 @@ public class GemPurchaseService {
             new GemPackage("2000", 2_000, 12_254, 8_333),
             new GemPackage("4000", 4_000, 25_620, 17_422),
             new GemPackage("6000", 6_000, 38_413, 26_121),
-            // Сезонные пропуски (не валюта, gems=0) — та же формула (розница Купикод + 18%, XP по
-            // ~0.68 XP/₽), см. project_economic_model. Цена у Купикод плавает (например, есть скидки
-            // на некоторые номиналы) — снимок на 2026-09-20, сверять периодически.
+            // Сезонные пропуски (не валюта, gems=0), та же формула. Цена у Купикод плавает (скидки на
+            // некоторые номиналы) — снимок на 2026-09-20, сверять периодически.
             new GemPackage("brawlpass", 0, 1_169, 795, "Brawl Pass"),
             new GemPackage("brawlpassplus", 0, 1_564, 1_064, "Brawl Pass +Plus")
     );
 
+    // Цены — розница Купикод на 2026-09-20 + 18% наценка, тот же принцип, что у Brawl Stars выше
+    // (добавлено в тот же день по запросу пользователя — "такая же история для Clash Royale").
+    public static final List<GemPackage> CLASH_ROYALE_PACKAGES = List.of(
+            new GemPackage("160", 160, 280, 190),
+            new GemPackage("500", 500, 647, 440),
+            new GemPackage("580", 580, 758, 515),
+            new GemPackage("1200", 1_200, 1_263, 859),
+            new GemPackage("1280", 1_280, 1_363, 927),
+            new GemPackage("1700", 1_700, 1_869, 1_271),
+            new GemPackage("2500", 2_500, 2_516, 1_711),
+            new GemPackage("2580", 2_580, 2_604, 1_771),
+            new GemPackage("3000", 3_000, 3_118, 2_120),
+            new GemPackage("6500", 6_500, 6_293, 4_279),
+            new GemPackage("7700", 7_700, 7_422, 5_047),
+            new GemPackage("9000", 9_000, 8_553, 5_816),
+            new GemPackage("14000", 14_000, 12_569, 8_547),
+            new GemPackage("20500", 20_500, 18_482, 12_568),
+            new GemPackage("28000", 28_000, 24_454, 16_629),
+            new GemPackage("42000", 42_000, 36_470, 24_800),
+            new GemPackage("70000", 70_000, 60_455, 41_109),
+            new GemPackage("140000", 140_000, 119_943, 81_561),
+            // Сезонные пропуски Clash Royale (у Kupikod называются "Mini Pass"/"Diamond Pass").
+            new GemPackage("crminipass", 0, 506, 344, "Mini Pass"),
+            new GemPackage("crdiamondpass", 0, 1_483, 1_008, "Diamond Pass")
+    );
+
+    /** gameKey (purchaseGroup, например "brawl_stars"/"clash_royale") -> (отображаемое имя игры,
+     *  каталог пакетов). Единая точка для добавления новой игры в донат — остальной код (GamePlatformBot)
+     *  работает через packagesFor/gameName/findPackage, не зная конкретных игр напрямую. */
+    private static final Map<String, String> GAME_NAMES = new LinkedHashMap<>();
+    private static final Map<String, List<GemPackage>> CATALOG = new LinkedHashMap<>();
+    static {
+        GAME_NAMES.put("brawl_stars", BRAWL_STARS);
+        CATALOG.put("brawl_stars", BRAWL_PACKAGES);
+        GAME_NAMES.put("clash_royale", CLASH_ROYALE);
+        CATALOG.put("clash_royale", CLASH_ROYALE_PACKAGES);
+    }
+
+    /** Отображаемое имя игры для gameName заявки/текстов — если ключ не найден (донат для этой игры
+     *  не настроен), возвращает сам ключ как запасной вариант. */
+    public static String gameName(String gameKey) {
+        return GAME_NAMES.getOrDefault(gameKey, gameKey);
+    }
+
+    /** Каталог доната для игры — пустой список, если для этой игры донат не настроен (используется
+     *  вызывающим кодом, чтобы решить, показывать ли вообще донат-опцию для этой игры/группы). */
+    public static List<GemPackage> packagesFor(String gameKey) {
+        return CATALOG.getOrDefault(gameKey, List.of());
+    }
+
+    /** Все игры, для которых настроен донат — используется RewardSeeder.checkGemPricingMargin(),
+     *  чтобы сверять EXC-цены со всеми донат-каталогами, не хардкодя список игр в другом классе. */
+    public static java.util.Set<String> donationGameKeys() {
+        return CATALOG.keySet();
+    }
+
     private final GemPurchaseRequestRepository repository;
     private final UserService userService;
 
-    public Optional<GemPackage> findPackage(String key) {
-        return BRAWL_PACKAGES.stream().filter(p -> p.key().equals(key)).findFirst();
+    public Optional<GemPackage> findPackage(String gameKey, String packageKey) {
+        return packagesFor(gameKey).stream().filter(p -> p.key().equals(packageKey)).findFirst();
     }
 
     /** GRAM (TON) — заявка создаётся сразу при выборе способа оплаты, БЕЗ кода платежа и скриншота:
      *  адрес кошелька клуба не публикуется в боте всем подряд (решение 2026-09-20) — модератор лично
      *  связывается с игроком, уточняет детали и сам проверяет оплату. См. GamePlatformBot.requestGemPurchaseTon. */
     @Transactional
-    public GemPurchaseRequest createManualRequest(AppUser user, GemPackage pkg, String gameTag, String paymentMethod) {
+    public GemPurchaseRequest createManualRequest(AppUser user, String gameKey, GemPackage pkg, String gameTag, String paymentMethod) {
         GemPurchaseRequest req = new GemPurchaseRequest();
         req.setDisplayId(repository.findMaxDisplayId() + 1);
         req.setUser(user);
-        req.setGameName(BRAWL_STARS);
+        req.setGameName(gameName(gameKey));
         req.setPackageKey(pkg.key());
         req.setGems(pkg.gems());
         req.setPriceRub(pkg.priceRub());
@@ -103,11 +161,11 @@ public class GemPurchaseService {
      *  Гемы всё равно закупаются администратором вручную на топап-сервисе (см. approve), автоматизирована
      *  только оплата. */
     @Transactional
-    public GemPurchaseRequest createStarsRequest(AppUser user, GemPackage pkg, String gameTag, int starsAmount, String telegramPaymentChargeId) {
+    public GemPurchaseRequest createStarsRequest(AppUser user, String gameKey, GemPackage pkg, String gameTag, int starsAmount, String telegramPaymentChargeId) {
         GemPurchaseRequest req = new GemPurchaseRequest();
         req.setDisplayId(repository.findMaxDisplayId() + 1);
         req.setUser(user);
-        req.setGameName(BRAWL_STARS);
+        req.setGameName(gameName(gameKey));
         req.setPackageKey(pkg.key());
         req.setGems(pkg.gems());
         req.setPriceRub(pkg.priceRub());

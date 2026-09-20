@@ -157,17 +157,20 @@ public class RewardSeeder implements CommandLineRunner {
                 + "Не забудь проверить папку «Спам»\n\n"
                 + "Введите email:";
 
+        // Цены подняты 2026-09-20 (тот же повод, что у Brawl Stars выше — смена поставщика доната
+        // donatov.net -> Купикод, розничные цены заметно выросли, старые EXC-цены оказались бы дешевле
+        // доната). Новые цены держат запас ~1.2x против актуального доната Купикод.
         seed("Clash Royale - Gems 160",
                 "Пополнение 160 гемов на аккаунт Clash Royale. Доставка на email. Срок доставки — до 24 ч.",
-                "Clash Royale", 23_700, crPrompt, 1_000, "clash_royale");
+                "Clash Royale", 33_600, crPrompt, 1_000, "clash_royale");
 
         seed("Clash Royale - Gems 500",
                 "Пополнение 500 гемов на аккаунт Clash Royale. Доставка на email. Срок доставки — до 24 ч.",
-                "Clash Royale", 54_900, crPrompt, 5_000, "clash_royale");
+                "Clash Royale", 77_700, crPrompt, 5_000, "clash_royale");
 
         seed("Clash Royale - Gems 1200",
                 "Пополнение 1200 гемов на аккаунт Clash Royale. Доставка на email. Срок доставки — до 24 ч.",
-                "Clash Royale", 107_200, crPrompt, 15_000, "clash_royale");
+                "Clash Royale", 151_600, crPrompt, 15_000, "clash_royale");
 
         rewardItemRepository.findByTitle("Brawl Stars — 80 Gems").ifPresent(old -> {
             if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
@@ -333,34 +336,37 @@ public class RewardSeeder implements CommandLineRunner {
         checkGemPricingMargin();
     }
 
-    /** См. комментарий у GEM_PRICING_TARGET_MARGIN. Сравнивает каждый активный товар "brawl_stars"
-     *  в магазине наград с донат-пакетом того же объёма гемов (GemPurchaseService.BRAWL_PACKAGES,
-     *  ключ пакета = число гемов, см. RewardSeeder.seed("Brawl Stars - Gems N", ...)). Если запас
-     *  ниже 1.0x (EXC-товар ДЕШЕВЛЕ доната) — это уже нарушение принципа, не только "тоньше целевого". */
+    /** См. комментарий у GEM_PRICING_TARGET_MARGIN. Сравнивает каждый активный EXC-товар в магазине
+     *  наград (для ВСЕХ игр, где настроен донат — см. GemPurchaseService.donationGameKeys(), не только
+     *  Brawl Stars) с донат-пакетом того же объёма гемов, сопоставление по числу гемов в конце title
+     *  (см. RewardSeeder.seed("<Игра> - Gems N", ...)). Если запас ниже 1.0x (EXC-товар ДЕШЕВЛЕ доната)
+     *  — это уже нарушение принципа, не только "тоньше целевого". */
     private void checkGemPricingMargin() {
-        List<RewardItem> brawlItems = rewardItemRepository.findAllByActiveTrueAndPurchaseGroupOrderByPriceCoinsAsc("brawl_stars");
-        for (RewardItem item : brawlItems) {
-            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)$").matcher(item.getTitle());
-            if (!m.find()) continue;
-            String packageKey = m.group(1);
-            gemPurchaseService.findPackage(packageKey).ifPresent(pkg -> {
-                java.math.BigDecimal impliedRub = java.math.BigDecimal.valueOf(item.getPriceCoins()).multiply(EXC_TO_RUB_BASE_RATE);
-                java.math.BigDecimal donateRub = java.math.BigDecimal.valueOf(pkg.priceRub());
-                if (impliedRub.compareTo(donateRub) < 0) {
-                    String warning = "🚨 <b>Ценовой перекос в магазине наград</b>\n\n"
-                            + "«" + item.getTitle() + "» стоит " + item.getPriceCoins() + " EXC (≈"
-                            + impliedRub.setScale(0, java.math.RoundingMode.HALF_UP) + "₽ по базовому курсу 100 EXC=1₽), "
-                            + "а донат (GRAM/Stars) за " + pkg.gems() + " гемов стоит всего " + pkg.priceRub() + "₽.\n\n"
-                            + "EXC-товар ДЕШЕВЛЕ доната — выгоднее выводить EXC в рубли и покупать напрямую. "
-                            + "Нужно поднять цену минимум до " + donateRub.multiply(GEM_PRICING_TARGET_MARGIN)
-                                    .setScale(0, java.math.RoundingMode.HALF_UP) + "₽-эквивалента.";
-                    log.warn("[RewardSeeder] {}", warning.replaceAll("<[^>]+>", ""));
-                    gamePlatformBot.notifyAdminsPricingImbalance(warning);
-                } else if (impliedRub.compareTo(donateRub.multiply(GEM_PRICING_TARGET_MARGIN)) < 0) {
-                    log.info("[RewardSeeder] Ценовой запас у '{}' ниже целевого 1.15x (сейчас {}₽ vs донат {}₽) — не критично, но стоит пересмотреть при следующей ревизии цен.",
-                            item.getTitle(), impliedRub.setScale(0, java.math.RoundingMode.HALF_UP), donateRub);
-                }
-            });
+        for (String gameKey : GemPurchaseService.donationGameKeys()) {
+            List<RewardItem> items = rewardItemRepository.findAllByActiveTrueAndPurchaseGroupOrderByPriceCoinsAsc(gameKey);
+            for (RewardItem item : items) {
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)$").matcher(item.getTitle());
+                if (!m.find()) continue;
+                String packageKey = m.group(1);
+                gemPurchaseService.findPackage(gameKey, packageKey).ifPresent(pkg -> {
+                    java.math.BigDecimal impliedRub = java.math.BigDecimal.valueOf(item.getPriceCoins()).multiply(EXC_TO_RUB_BASE_RATE);
+                    java.math.BigDecimal donateRub = java.math.BigDecimal.valueOf(pkg.priceRub());
+                    if (impliedRub.compareTo(donateRub) < 0) {
+                        String warning = "🚨 <b>Ценовой перекос в магазине наград</b>\n\n"
+                                + "«" + item.getTitle() + "» стоит " + item.getPriceCoins() + " EXC (≈"
+                                + impliedRub.setScale(0, java.math.RoundingMode.HALF_UP) + "₽ по базовому курсу 100 EXC=1₽), "
+                                + "а донат (GRAM/Stars) за " + pkg.gems() + " гемов стоит всего " + pkg.priceRub() + "₽.\n\n"
+                                + "EXC-товар ДЕШЕВЛЕ доната — выгоднее выводить EXC в рубли и покупать напрямую. "
+                                + "Нужно поднять цену минимум до " + donateRub.multiply(GEM_PRICING_TARGET_MARGIN)
+                                        .setScale(0, java.math.RoundingMode.HALF_UP) + "₽-эквивалента.";
+                        log.warn("[RewardSeeder] {}", warning.replaceAll("<[^>]+>", ""));
+                        gamePlatformBot.notifyAdminsPricingImbalance(warning);
+                    } else if (impliedRub.compareTo(donateRub.multiply(GEM_PRICING_TARGET_MARGIN)) < 0) {
+                        log.info("[RewardSeeder] Ценовой запас у '{}' ниже целевого 1.15x (сейчас {}₽ vs донат {}₽) — не критично, но стоит пересмотреть при следующей ревизии цен.",
+                                item.getTitle(), impliedRub.setScale(0, java.math.RoundingMode.HALF_UP), donateRub);
+                    }
+                });
+            }
         }
     }
 
