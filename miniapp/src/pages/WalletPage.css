@@ -99,5 +99,7 @@
   font-weight: 700;
   color: #ffd685;
   text-align: center;
+  white-space: pre-line;
+  line-height: 1.5;
   animation: reward-pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }

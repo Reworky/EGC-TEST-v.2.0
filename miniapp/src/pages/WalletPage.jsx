@@ -145,8 +145,8 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
     try {
       const res = await claimDailyBonus();
       if (res.success) {
-        let msg = `+${res.totalExc} EXC · Серия: ${res.streakDays} дн.`;
-        if (res.milestoneText) msg = `${res.milestoneText} ${msg}`;
+        let msg = `+${res.totalExc} EXC\nСерия: ${res.streakDays} дн.`;
+        if (res.milestoneText) msg = `${res.milestoneText}\n${msg}`;
         setMessage(msg);
         setMessageOk(true);
         playParticles?.('streakBonus', 3000);
@@ -167,8 +167,8 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
       const res = await openChest();
       if (res.success) {
         let msg = res.prizeLabel;
-        if (res.exc > 0) msg += ` · +${res.exc} EXC`;
-        if (res.tickets > 0) msg += ` · +${res.tickets} 🎟️`;
+        if (res.exc > 0) msg += `\n+${res.exc} EXC`;
+        if (res.tickets > 0) msg += `\n+${res.tickets} 🎟️`;
         setChestMessage(msg);
         setChestMessageOk(true);
         playParticles?.('streakBonus', 3000);
@@ -205,8 +205,8 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
       let msg = '✅ Сундук открыт!';
       const dCoins = fresh.coins - wallet.coins;
       const dTickets = fresh.tickets - wallet.tickets;
-      if (dCoins > 0) msg += ` · +${dCoins} EXC`;
-      if (dTickets > 0) msg += ` · +${dTickets} 🎟️`;
+      if (dCoins > 0) msg += `\n+${dCoins} EXC`;
+      if (dTickets > 0) msg += `\n+${dTickets} 🎟️`;
       setChestMessage(msg);
       setChestMessageOk(true);
       playParticles?.('streakBonus', 3000);
