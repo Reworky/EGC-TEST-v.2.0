@@ -5323,6 +5323,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 String cat = reward.getCategory() != null ? reward.getCategory() : "Другое";
                 byCategory.computeIfAbsent(cat, k -> new ArrayList<>()).add(reward);
             }
+            // Порядок игр в списке иначе определялся ценой самого дешёвого товара в категории (сортировка
+            // findAvailableRewards() по priceCoins) — непредсказуемо для пользователя. Brawl
+            // Stars/Clash Royale/Clash of Clans (донат-игры) закреплены наверху списка в этом порядке
+            // (запрошено 2026-09-20), остальные категории идут следом в прежнем порядке.
+            List<String> priorityCategories = List.of("Brawl Stars", "Clash Royale", "Clash of Clans");
+            java.util.LinkedHashMap<String, List<RewardItem>> orderedByCategory = new java.util.LinkedHashMap<>();
+            for (String cat : priorityCategories) {
+                List<RewardItem> items = byCategory.remove(cat);
+                if (items != null) orderedByCategory.put(cat, items);
+            }
+            orderedByCategory.putAll(byCategory);
+            byCategory = orderedByCategory;
             for (Map.Entry<String, List<RewardItem>> entry : byCategory.entrySet()) {
                 // Кастомизация (рамка аватара, титулы) перенесена в ⚙️ Предметы клуба (2026-09-15) —
                 // здесь остаётся только игровая валюта, см. addCustomizationSection/sendSinkShop.
