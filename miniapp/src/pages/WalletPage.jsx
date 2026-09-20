@@ -113,6 +113,8 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
   const [chestMessage, setChestMessage] = useState(null);
   const [chestMessageOk, setChestMessageOk] = useState(false);
   const [rerollBusy, setRerollBusy] = useState(false);
+  const [rerollMessage, setRerollMessage] = useState(null);
+  const [rerollMessageOk, setRerollMessageOk] = useState(false);
   const [showRanks, setShowRanks] = useState(false);
   const [showChestPrizes, setShowChestPrizes] = useState(false);
   const [chestPulse, setChestPulse] = useState(false);
@@ -183,17 +185,17 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
 
   async function handleBuyReroll() {
     setRerollBusy(true);
-    setChestMessage(null);
-    setChestMessageOk(false);
+    setRerollMessage(null);
+    setRerollMessageOk(false);
     try {
       const invoice = await getStarsInvoiceLink('CHEST_REROLL');
       if (!invoice.success) {
-        setChestMessage(invoice.message);
+        setRerollMessage(invoice.message);
         return;
       }
       const status = await openStarsInvoice(invoice.url);
       if (status === 'failed') {
-        setChestMessage('Платёж не прошёл. Попробуйте ещё раз.');
+        setRerollMessage('Платёж не прошёл. Попробуйте ещё раз.');
         return;
       }
       if (status !== 'paid') return;
@@ -207,12 +209,12 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
       const dTickets = fresh.tickets - wallet.tickets;
       if (dCoins > 0) msg += `\n+${dCoins} EXC`;
       if (dTickets > 0) msg += `\n+${dTickets} 🎟️`;
-      setChestMessage(msg);
-      setChestMessageOk(true);
+      setRerollMessage(msg);
+      setRerollMessageOk(true);
       playParticles?.('streakBonus', 3000);
       onChanged();
     } catch (e) {
-      setChestMessage(e.message || 'Не удалось открыть оплату.');
+      setRerollMessage(e.message || 'Не удалось открыть оплату.');
     } finally {
       setRerollBusy(false);
     }
@@ -330,6 +332,11 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
             {chestBusy ? 'Открываем...' : <><i className="ti ti-gift" style={{ marginRight: 6 }} /> Открыть сундук</>}
           </ShimmerButton>
         )}
+        {chestMessage && (
+          <div className={chestMessageOk ? 'reward-pop' : 'quest-message'} style={{ marginTop: 10 }}>
+            {chestMessageOk && '🎉 '}{chestMessage}
+          </div>
+        )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
           <img src={chestPremiumImg} alt="" style={{ width: 72, height: 72, objectFit: 'contain', flexShrink: 0 }} />
@@ -341,15 +348,14 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
         <ShimmerButton disabled={rerollBusy} onClick={handleBuyReroll} style={{ marginTop: 10 }}>
           {rerollBusy ? 'Секунду...' : <><i className="ti ti-sparkles" style={{ marginRight: 6 }} /> Купить — {chestRerollPrice} ⭐</>}
         </ShimmerButton>
+        {rerollMessage && (
+          <div className={rerollMessageOk ? 'reward-pop' : 'quest-message'} style={{ marginTop: 10 }}>
+            {rerollMessageOk && '🎉 '}{rerollMessage}
+          </div>
+        )}
         <p className="ref-progress-label" style={{ color: 'rgba(167,139,250,0.85)', cursor: 'pointer', marginTop: 8 }} onClick={() => setShowChestPrizes(true)}>
           📋 Все призы →
         </p>
-
-        {chestMessage && (
-          <div className={chestMessageOk ? 'reward-pop' : 'quest-message'} style={{ marginTop: 10 }}>
-            {chestMessageOk && '🎉 '}{chestMessage}
-          </div>
-        )}
       </div>
 
       <div className="category-section" style={{ marginTop: 12 }}>
