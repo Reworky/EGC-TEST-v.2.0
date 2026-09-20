@@ -2133,16 +2133,16 @@ public class QuestSeeder implements CommandLineRunner {
         markRepeatableNoCooldown("Выиграй бой 5 раз в режиме «Захват кристаллов» или «Любое столкновение»", "Brawl Stars",
                 4500L, RewardDecayWindow.DAILY);
 
-        // Вторая волна пилота (2026-09-20) — расширение на 3 квеста из ДРУГИХ игр (не Brawl Stars),
-        // чтобы набрать данные по разным играм, а не только по одной, прежде чем решать про весь
-        // каталог (~145 квестов, из них только ~20 реально "повторяемого" battle/match-count типа —
-        // остальное разовые ачивки/пороги ранга, им кулдаун и так не мешает). Все три — точный структурный
-        // аналог пилота ("сыграй N раз", победа не нужна, чистая авто-верификация через официальный API
-        // игры, не ручная модерация) и случайно все имеют одинаковую базовую награду 1500 EXC — тот же
-        // множитель потолка 2.5x, что и в пилоте (4500/1800): 1500 × 2.5 = 3750 EXC/сутки.
-        markRepeatableNoCooldown("Сыграй 3 матча в любом режиме", "CS2", 3750L, RewardDecayWindow.DAILY);
-        markRepeatableNoCooldown("Сыграй 5 боёв", "Clash Royale", 3750L, RewardDecayWindow.DAILY);
-        markRepeatableNoCooldown("Сыграй 3 матча подряд", "PUBG PC", 3750L, RewardDecayWindow.DAILY);
+        // Вторая волна пилота (2026-09-20, CS2/Clash Royale/PUBG PC) была включена и в тот же день
+        // отключена — пользователь справедливо указал, что расширять эмиссию EXC на обычных
+        // (не спонсорских) квестах без встречной монетизации активности не имеет смысла: рост фарма
+        // там — чистая статья расхода Payout Pool без какой-либо компенсации. Решено применять этот
+        // механизм осознанно, в первую очередь на спонсорских/CPA-квестах с повторяемым действием,
+        // когда такие появятся — см. [[project_no_cooldown_quest_pilot]]. Пилот на Brawl Stars не
+        // трогаем, остаётся как было с 2026-09-15.
+        clearRepeatableNoCooldown("Сыграй 3 матча в любом режиме", "CS2");
+        clearRepeatableNoCooldown("Сыграй 5 боёв", "Clash Royale");
+        clearRepeatableNoCooldown("Сыграй 3 матча подряд", "PUBG PC");
     }
 
     /**
@@ -2188,6 +2188,24 @@ public class QuestSeeder implements CommandLineRunner {
             questRepository.save(q);
             log.info("[QuestSeeder] Marked repeatable-no-cooldown: '{}' ({}), ceiling={}, window={}", title, gameName, targetPeriodCeiling, window);
         });
+    }
+
+    /** Откатывает markRepeatableNoCooldown — возвращает квест к обычному поведению (кулдаун снова
+     *  действует, кривая убывания больше не применяется). Идемпотентен, вызывается на каждом деплое —
+     *  если квест уже не помечен, ничего не делает. Использовано 2026-09-20: вторая волна пилота
+     *  (CS2/Clash Royale/PUBG PC, см. project_no_cooldown_quest_pilot) отключена по решению пользователя
+     *  — увеличивать эмиссию EXC на обычных (не спонсорских) квестах без встречной монетизации активности
+     *  не имеет смысла; пилот на Brawl Stars НЕ трогаем, остаётся как было с 2026-09-15. */
+    private void clearRepeatableNoCooldown(String title, String gameName) {
+        questRepository.findFirstByTitleAndGameName(title, gameName)
+                .filter(Quest::isRepeatableNoCooldownEligible)
+                .ifPresent(q -> {
+                    q.setRepeatableNoCooldownEligible(false);
+                    q.setTargetPeriodCeiling(null);
+                    q.setRewardDecayWindow(null);
+                    questRepository.save(q);
+                    log.info("[QuestSeeder] Cleared repeatable-no-cooldown: '{}' ({})", title, gameName);
+                });
     }
 
     /**
