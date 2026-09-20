@@ -3158,11 +3158,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean hasPass = seasonService.hasActivePass(user);
         boolean hasSeason = seasonService.findCurrentSeason().isPresent();
         String passLabel = hasPass ? "🎫 Battle Pass ✅" : (hasSeason ? "🎫 Battle Pass 🆕" : "🎫 Battle Pass");
+        // "💎 Донат по играм" убран отсюда как отдельный пункт — объединён с "🛍️ Магазин наград"
+        // в один и тот же пикер номиналов Brawl Stars (см. sendGroupPicker), чтобы для игрока это
+        // выглядело одной и той же игровой валютой с выбором способа оплаты, а не двумя разными
+        // разделами (2026-09-20, запрошено пользователем).
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("🛍️ Магазин наград", "menu:shop")),
                 List.of(keyboardFactory.callback("⚡ Предметы", "menu:sink")),
                 List.of(keyboardFactory.callback(passLabel, "menu:battlepass")),
-                List.of(keyboardFactory.callback("💎 Донат по играм", "menu:gemdonate")),
                 List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
@@ -3189,6 +3192,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     List.of(keyboardFactory.callback("⚡ Предметы", "menu:sink")),
                     List.of(keyboardFactory.callback(passLabel, "menu:battlepass"))
             ));
+            // "Донат по играм" сюда намеренно не добавлен — см. комментарий в основной ветке выше.
         }
     }
 
@@ -6576,6 +6580,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // Extract denomination part: everything after last space-dash-space
             String denom = item.getTitle().replaceAll(".*- ", "");
             rows.add(List.of(keyboardFactory.callback(icon + " " + denom + " — " + price + " EXC", "shop:view:" + item.getId())));
+        }
+        // "Донат по играм" (покупка гемов за реальные деньги — GRAM/Stars) объединён с обычным
+        // магазином наград (покупка за EXC) в одной "папке" по игре, вместо отдельного пункта
+        // верхнего уровня — пользователь так и не понимал, что это одна и та же игровая валюта
+        // (2026-09-20). Пока донат поддерживает только Brawl Stars (GemPurchaseService.BRAWL_PACKAGES).
+        if ("brawl_stars".equals(purchaseGroup)) {
+            rows.add(List.of(keyboardFactory.callback("💰 Купить за реальные деньги (GRAM/Stars)", "menu:gemdonate")));
         }
         // Кастомизация (рамка аватара) открывает этот же пикер номиналов из "⚙️ Предметы клуба",
         // а не из "Магазина наград" — "Назад" должен вести туда, откуда реально пришли (2026-09-20).
@@ -14442,7 +14453,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "gemdonate:pkg:" + pkg.key())));
         }
         rows.add(List.of(
-                keyboardFactory.callback("⬅️ Назад", "menu:cat:shop"),
+                keyboardFactory.callback("⬅️ Назад", "shop:group:brawl_stars"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
         String accountLine = user.getBrawlStarsTag() != null && !user.getBrawlStarsTag().isBlank()
