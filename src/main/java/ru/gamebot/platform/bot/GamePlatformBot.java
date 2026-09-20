@@ -6282,7 +6282,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📂 Доп. слот квеста (как «навсегда», пока подписка активна)\n"
                         + "🎁 Бесплатный улучшенный сундук каждый день — без реролла за 15⭐\n"
                         + "⚡ Приоритет в очереди на вывод EXC\n"
-                        + "💎 Статус-бейдж в профиле\n\n"
+                        + "💎 Статус-бейдж в профиле\n"
+                        + "💸 Донат по играм (гемы Brawl Stars/Clash Royale/Clash of Clans) — по закупочной цене, без наценки клуба, XP-бонус как за полную цену\n\n"
                         + "🪙 " + EGC_PASS_STARS_PRICE + " ⭐ / 30 дней, автопродление. Отменить можно в любой момент через настройки платежей Telegram.",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.url("💳 Оформить за " + EGC_PASS_STARS_PRICE + " ⭐", url)),
@@ -6547,7 +6548,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 // кидаем исключение, чтобы сработал общий catch (алерт админам на ручной разбор).
                 throw new IllegalStateException("GEM purchase without linked " + gameKey + " tag for user " + telegramId);
             }
-            GemPurchaseRequest req = gemPurchaseService.createStarsRequest(user, gameKey, pkg, tag, payment.getTotalAmount(), payment.getTelegramPaymentChargeId());
+            // priceRub — для отображения/учёта (реально списанная сумма в Stars уже зафиксирована
+            // Telegram в payment.getTotalAmount(), это поле её не меняет) — пересчитываем по текущему
+            // статусу EGC Pass, тот же принцип, что и при выставлении инвойса (см. gemPurchasePriceFor).
+            long priceRub = gemPurchasePriceFor(user, pkg);
+            GemPurchaseRequest req = gemPurchaseService.createStarsRequest(user, gameKey, pkg, priceRub, tag, payment.getTotalAmount(), payment.getTelegramPaymentChargeId());
             notifyAdminsAboutGemPurchase(req);
             sendText(telegramId,
                     "✅ <b>Оплата прошла!</b>\n\n"
@@ -6720,10 +6725,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<GemPurchaseService.GemPackage> passes = GemPurchaseService.packagesFor(gameKey).stream()
                 .filter(p -> p.gems() <= 0).toList();
         if (passes.isEmpty()) { sendShop(user); return; }
+        boolean passActive = sinkShopService.isEgcPassActive(user);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (GemPurchaseService.GemPackage pkg : passes) {
+            long price = gemPurchasePriceFor(user, pkg);
+            String priceLabel = passActive ? price + "₽ (закупка, EGC Pass)" : price + "₽";
             rows.add(List.of(keyboardFactory.callback(
-                    pkg.displayLabel() + " — " + pkg.priceRub() + "₽ (+" + pkg.xpBonus() + " XP)",
+                    pkg.displayLabel() + " — " + priceLabel + " (+" + pkg.xpBonus() + " XP)",
                     "gemdonate:pkg:" + gameKey + ":" + pkg.key())));
         }
         rows.add(List.of(
@@ -6734,9 +6742,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String accountLine = tag != null && !tag.isBlank()
                 ? " который хотите получить на свой аккаунт " + escape(tag)
                 : " который хотите получить";
+        String passNote = passActive
+                ? "\n⭐ Вы EGC Pass — цены ниже, без наценки клуба.\n"
+                : "";
         sendText(user.getTelegramId(),
                 "🎫 <b>Пропуски " + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\n"
-                        + "Выберите товар" + accountLine + "\n\n"
+                        + "Выберите товар" + accountLine + passNote + "\n\n"
                         + "К каждой покупке — бонус XP\n\n"
                         + "⚠️ Заявка обрабатывается вручную, зачисление может занять время.",
                 keyboardFactory.rowsLayout(rows));
@@ -14624,14 +14635,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         };
     }
 
+    /** EGC Pass — донат по закупочной цене (без наценки клуба), привилегия подписки (2026-09-20,
+     *  запрошено пользователем — "гемы по закупке для EGC Pass"). Подписка уже приносит клубу recurring-
+     *  доход (150⭐/мес), поэтому отказ от наценки для подписчиков — не прямой убыток (цена всё равно
+     *  покрывает реальную закупку у Купикод), а осознанный отказ от части маржи ради ценности подписки.
+     *  XP-бонус НЕ уменьшается вместе с ценой — pkg.xpBonus() всегда считается от полной цены, это тоже
+     *  часть привилегии (см. GemPurchaseService.GemPackage.costRub). */
+    private long gemPurchasePriceFor(AppUser user, GemPurchaseService.GemPackage pkg) {
+        return sinkShopService.isEgcPassActive(user) ? pkg.costRub() : pkg.priceRub();
+    }
+
     private void sendGemPackageList(AppUser user, String gameKey) {
         List<GemPurchaseService.GemPackage> currency = GemPurchaseService.packagesFor(gameKey).stream()
                 .filter(p -> p.gems() > 0).toList();
         if (currency.isEmpty()) { sendShop(user); return; }
+        boolean passActive = sinkShopService.isEgcPassActive(user);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (GemPurchaseService.GemPackage pkg : currency) {
+            long price = gemPurchasePriceFor(user, pkg);
+            String priceLabel = passActive ? price + "₽ (закупка, EGC Pass)" : price + "₽";
             rows.add(List.of(keyboardFactory.callback(
-                    pkg.displayLabel() + " — " + pkg.priceRub() + "₽ (+" + pkg.xpBonus() + " XP)",
+                    pkg.displayLabel() + " — " + priceLabel + " (+" + pkg.xpBonus() + " XP)",
                     "gemdonate:pkg:" + gameKey + ":" + pkg.key())));
         }
         rows.add(List.of(
@@ -14642,9 +14666,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String accountLine = tag != null && !tag.isBlank()
                 ? " который хотите получить на свой аккаунт " + escape(tag)
                 : " который хотите получить";
+        String passNote = passActive
+                ? "\n⭐ Вы EGC Pass — цены ниже, без наценки клуба.\n"
+                : "";
         sendText(user.getTelegramId(),
                 "💎 <b>Донат " + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\n"
-                        + "Выберите пакет гемов" + accountLine + "\n\n"
+                        + "Выберите пакет гемов" + accountLine + passNote + "\n\n"
                         + "К каждой покупке — бонус XP\n\n"
                         + "⚠️ Заявка обрабатывается вручную, зачисление может занять время.",
                 keyboardFactory.rowsLayout(rows));
@@ -14706,15 +14733,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  в момент покупки. Stars — нативный инвойс Telegram, оплата подтверждается автоматически, без
      *  чека (см. sendGemStarsInvoice). */
     private void sendGemPaymentMethodChoice(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg) {
-        java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(pkg.priceRub()));
-        int starsPrice = gemPurchaseStarsPrice(pkg.priceRub());
+        long price = gemPurchasePriceFor(user, pkg);
+        java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(price));
+        int starsPrice = gemPurchaseStarsPrice(price);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("💎 GRAM (TON) — ~" + tonAmount + " GRAM (TON)", "gemdonate:method:TON:" + gameKey + ":" + pkg.key())),
                 List.of(keyboardFactory.callback("⭐ Telegram Stars — " + starsPrice + " ⭐", "gemdonate:method:STARS:" + gameKey + ":" + pkg.key())),
                 List.of(keyboardFactory.callback("❌ Отмена", gemDonateBackTarget(gameKey, pkg)))
         ));
+        String passNote = price < pkg.priceRub() ? " <i>(закупочная цена, EGC Pass)</i>" : "";
         sendText(user.getTelegramId(),
-                "💎 <b>" + pkg.displayLabel() + " — " + pkg.priceRub() + "₽</b>\n\n"
+                "💎 <b>" + pkg.displayLabel() + " — " + price + "₽</b>" + passNote + "\n\n"
                         + "Выберите способ оплаты:\n\n"
                         + "⭐ Stars списываются сразу автоматически\n"
                         + "💎 GRAM (TON) — перевод вручную + чек, проверка займёт время.",
@@ -14740,10 +14769,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  случайное/импульсивное нажатие плодило бы заявки, которые ещё нужно вручную отклонять. */
     private void sendGemPurchaseTonConfirm(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg) {
         String tag = gemPurchaseGameTag(user, gameKey);
-        java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(pkg.priceRub()));
+        long price = gemPurchasePriceFor(user, pkg);
+        java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(price));
         sendText(user.getTelegramId(),
                 "💎 <b>Подтверждение заявки</b>\n\n"
-                        + pkg.displayLabel() + " — ~" + tonAmount + " GRAM (TON) (" + pkg.priceRub() + "₽ по текущему курсу)\n\n"
+                        + pkg.displayLabel() + " — ~" + tonAmount + " GRAM (TON) (" + price + "₽ по текущему курсу)\n\n"
                         + "Тег: <code>" + escape(tag) + "</code>\n\n"
                         + "После подтверждения модератор свяжется с вами в личных сообщениях, чтобы уточнить детали и прислать реквизиты для оплаты.\n\n"
                         + "Создать заявку?",
@@ -14762,7 +14792,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  блокчейну — переводы TON публичны). */
     private void requestGemPurchaseTon(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg) {
         String tag = gemPurchaseGameTag(user, gameKey);
-        GemPurchaseRequest req = gemPurchaseService.createManualRequest(user, gameKey, pkg, tag, "TON");
+        long price = gemPurchasePriceFor(user, pkg);
+        GemPurchaseRequest req = gemPurchaseService.createManualRequest(user, gameKey, pkg, price, tag, "TON");
         notifyAdminsAboutGemPurchase(req);
         sendText(user.getTelegramId(),
                 "✅ <b>Заявка Д-" + req.getDisplayId() + " создана!</b>\n\n"
@@ -14793,7 +14824,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  grantStarsPurchase (payload "starsitem:GEM:<gameKey>:<packageKey>") после реального списания. */
     private void sendGemStarsInvoice(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg) {
         String tag = gemPurchaseGameTag(user, gameKey);
-        int starsPrice = gemPurchaseStarsPrice(pkg.priceRub());
+        int starsPrice = gemPurchaseStarsPrice(gemPurchasePriceFor(user, pkg));
         // Валютные пакеты ("30 гемов") дополняем именем игры для ясности; у label-товаров (например,
         // "Brawl Pass") имя игры дублировало бы название — не добавляем (2026-09-20).
         String itemTitle = pkg.label() != null ? pkg.displayLabel() : pkg.displayLabel() + " " + GemPurchaseService.gameName(gameKey);

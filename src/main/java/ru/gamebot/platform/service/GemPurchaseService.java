@@ -29,6 +29,12 @@ import ru.gamebot.platform.domain.repository.GemPurchaseRequestRepository;
 @RequiredArgsConstructor
 public class GemPurchaseService {
 
+    /** Наценка клуба над закупочной ценой Купикод — та же 1.18, что использовалась при заведении
+     *  каждого priceRub в каталогах ниже (см. project_economic_model). Вынесена в константу, чтобы
+     *  GemPackage.costRub() мог восстановить закупочную цену БЕЗ хранения второго числа на пакет —
+     *  см. costRub(). */
+    public static final double MARKUP_MULTIPLIER = 1.18;
+
     /** label — необязательное явное название товара для НЕ-валютных позиций (например, "Brawl Pass",
      *  сезонный пропуск) — если задано, используется во всех текстах вместо "N гемов" (см. displayLabel(),
      *  добавлено 2026-09-20 при расширении доната за пределы просто гемов). У валютных пакетов gems>0,
@@ -40,6 +46,15 @@ public class GemPurchaseService {
 
         public String displayLabel() {
             return label != null ? label : gems + " гемов";
+        }
+
+        /** Закупочная цена (розница Купикод, БЕЗ наценки клуба) — используется для EGC Pass (донат
+         *  по закупке, привилегия подписки, 2026-09-20). Производная от priceRub, а не отдельное
+         *  хранимое поле: priceRub изначально считался как round(закупка × 1.18), поэтому обратное
+         *  деление восстанавливает исходную закупочную цену с точностью до ±1₽ — не нужно хранить и
+         *  синхронизировать второе число на каждый из 57 пакетов вручную. */
+        public long costRub() {
+            return Math.round(priceRub / MARKUP_MULTIPLIER);
         }
     }
 
@@ -164,16 +179,18 @@ public class GemPurchaseService {
 
     /** GRAM (TON) — заявка создаётся сразу при выборе способа оплаты, БЕЗ кода платежа и скриншота:
      *  адрес кошелька клуба не публикуется в боте всем подряд (решение 2026-09-20) — модератор лично
-     *  связывается с игроком, уточняет детали и сам проверяет оплату. См. GamePlatformBot.requestGemPurchaseTon. */
+     *  связывается с игроком, уточняет детали и сам проверяет оплату. См. GamePlatformBot.requestGemPurchaseTon.
+     *  priceRub передаётся явно (а не берётся из pkg.priceRub() внутри) — вызывающий код (GamePlatformBot)
+     *  решает, обычная это цена или закупочная для EGC Pass (см. gemPurchasePriceFor, 2026-09-20). */
     @Transactional
-    public GemPurchaseRequest createManualRequest(AppUser user, String gameKey, GemPackage pkg, String gameTag, String paymentMethod) {
+    public GemPurchaseRequest createManualRequest(AppUser user, String gameKey, GemPackage pkg, long priceRub, String gameTag, String paymentMethod) {
         GemPurchaseRequest req = new GemPurchaseRequest();
         req.setDisplayId(repository.findMaxDisplayId() + 1);
         req.setUser(user);
         req.setGameName(gameName(gameKey));
         req.setPackageKey(pkg.key());
         req.setGems(pkg.gems());
-        req.setPriceRub(pkg.priceRub());
+        req.setPriceRub(priceRub);
         req.setXpBonus(pkg.xpBonus());
         req.setItemLabel(pkg.label());
         req.setGameTag(gameTag);
@@ -188,16 +205,17 @@ public class GemPurchaseService {
      *  списания (см. GamePlatformBot.grantStarsPurchase) — сама оплата уже подтверждена Telegram, в
      *  отличие от createManualRequest (GRAM/TON), где оплаты ещё не было и её лично проверяет модератор.
      *  Гемы всё равно закупаются администратором вручную на топап-сервисе (см. approve), автоматизирована
-     *  только оплата. */
+     *  только оплата. priceRub — см. комментарий у createManualRequest выше (₽-эквивалент того, что
+     *  реально было выставлено к оплате в Stars, для админ-текстов/учёта, не влияет на сам платёж). */
     @Transactional
-    public GemPurchaseRequest createStarsRequest(AppUser user, String gameKey, GemPackage pkg, String gameTag, int starsAmount, String telegramPaymentChargeId) {
+    public GemPurchaseRequest createStarsRequest(AppUser user, String gameKey, GemPackage pkg, long priceRub, String gameTag, int starsAmount, String telegramPaymentChargeId) {
         GemPurchaseRequest req = new GemPurchaseRequest();
         req.setDisplayId(repository.findMaxDisplayId() + 1);
         req.setUser(user);
         req.setGameName(gameName(gameKey));
         req.setPackageKey(pkg.key());
         req.setGems(pkg.gems());
-        req.setPriceRub(pkg.priceRub());
+        req.setPriceRub(priceRub);
         req.setXpBonus(pkg.xpBonus());
         req.setItemLabel(pkg.label());
         req.setGameTag(gameTag);
