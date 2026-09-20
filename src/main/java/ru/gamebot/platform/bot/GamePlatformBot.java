@@ -5293,11 +5293,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 for (Map.Entry<String, List<RewardItem>> groupEntry : byGroup.entrySet()) {
                     List<RewardItem> groupItems = groupEntry.getValue();
                     if (groupItems.size() > 1) {
-                        // Show as single entry leading to denomination picker
+                        // Show as single entry leading to denomination picker — если в категории
+                        // (игре) всего одна группа валюты, на верхнем уровне показываем просто
+                        // название игры (entry.getKey(), = category), а название валюты/номинал —
+                        // уже внутри, на экране пикера (см. sendGroupPicker). Если групп несколько
+                        // (несколько разных валют под одной игрой) — оставляем полную метку с
+                        // названием валюты, иначе кнопки было бы не различить (запрошено 2026-09-20).
                         RewardItem first = groupItems.get(0);
                         String groupLabel = "avatar_frame".equals(groupEntry.getKey())
                                 ? "Рамка аватара"
-                                : groupItemLabel(first.getTitle());
+                                : byGroup.size() == 1 ? entry.getKey() : groupItemLabel(first.getTitle());
                         boolean anyAvailable = groupItems.stream().anyMatch(r ->
                                 !shopLimitService.getItemStatus(user, r).startsWith("🔒"));
                         String icon = anyAvailable ? "🎁" : "🔒";
