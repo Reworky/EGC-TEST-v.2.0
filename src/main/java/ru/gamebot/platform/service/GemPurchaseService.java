@@ -23,7 +23,19 @@ import ru.gamebot.platform.domain.repository.GemPurchaseRequestRepository;
 @RequiredArgsConstructor
 public class GemPurchaseService {
 
-    public record GemPackage(String key, int gems, long priceRub, long xpBonus) {}
+    /** label — необязательное явное название товара для НЕ-валютных позиций (например, "Brawl Pass",
+     *  сезонный пропуск) — если задано, используется во всех текстах вместо "N гемов" (см. displayLabel(),
+     *  добавлено 2026-09-20 при расширении доната за пределы просто гемов). У валютных пакетов gems>0,
+     *  label=null. У не-валютных — gems=0, label задан. */
+    public record GemPackage(String key, int gems, long priceRub, long xpBonus, String label) {
+        public GemPackage(String key, int gems, long priceRub, long xpBonus) {
+            this(key, gems, priceRub, xpBonus, null);
+        }
+
+        public String displayLabel() {
+            return label != null ? label : gems + " гемов";
+        }
+    }
 
     public static final String BRAWL_STARS = "Brawl Stars";
 
@@ -35,7 +47,11 @@ public class GemPurchaseService {
             new GemPackage("950", 950, 5_300, 3_600),
             new GemPackage("2000", 2_000, 10_500, 7_150),
             new GemPackage("4000", 4_000, 21_000, 14_300),
-            new GemPackage("6000", 6_000, 31_500, 21_500)
+            new GemPackage("6000", 6_000, 31_500, 21_500),
+            // Сезонные пропуски (не валюта, gems=0) — XP-бонус по той же пропорции ~0.68 XP/₽, что и
+            // у гемов, для единообразия экономики (2026-09-20, см. project_economic_model).
+            new GemPackage("brawlpass", 0, 909, 618, "Brawl Pass"),
+            new GemPackage("brawlpassplus", 0, 1_299, 883, "Brawl Pass +Plus")
     );
 
     private final GemPurchaseRequestRepository repository;
@@ -58,6 +74,7 @@ public class GemPurchaseService {
         req.setGems(pkg.gems());
         req.setPriceRub(pkg.priceRub());
         req.setXpBonus(pkg.xpBonus());
+        req.setItemLabel(pkg.label());
         req.setGameTag(gameTag);
         req.setPaymentMethod(paymentMethod);
         req.setStatus(GemPurchaseStatus.PENDING);
@@ -81,6 +98,7 @@ public class GemPurchaseService {
         req.setGems(pkg.gems());
         req.setPriceRub(pkg.priceRub());
         req.setXpBonus(pkg.xpBonus());
+        req.setItemLabel(pkg.label());
         req.setGameTag(gameTag);
         req.setPaymentMethod("STARS");
         req.setStarsAmount(starsAmount);

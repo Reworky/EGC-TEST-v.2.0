@@ -45,6 +45,15 @@ public class GemPurchaseRequest {
     private long priceRub;
     private long xpBonus;
 
+    /** Название товара для НЕ-валютных заявок (например, "Brawl Pass") — снимок GemPackage.label на
+     *  момент создания заявки. Null у обычных гем-заявок (тогда gems > 0 и используется "N гемов"),
+     *  добавлено 2026-09-20 при расширении доната за пределы просто гемов. */
+    private String itemLabel;
+
+    public String displayLabel() {
+        return itemLabel != null ? itemLabel : gems + " гемов";
+    }
+
     /** Игровой тег на момент заявки (Brawl Stars tag) — куда админ вручную зачисляет валюту. */
     private String gameTag;
 
