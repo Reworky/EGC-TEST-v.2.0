@@ -56,6 +56,13 @@ export async function getSponsoredQuests() {
   return data;
 }
 
+// «🎯 Твой квест сейчас» — тот же подбор, что и кнопка в боте (QuestService.recommendQuest).
+// Бэкенд отдаёт 204, если подобрать нечего (всё взято или на кулдауне) — тогда null.
+export async function getRecommendedQuest() {
+  const res = await api.get('/api/quests/recommended');
+  return res.status === 204 ? null : res.data;
+}
+
 export async function getQuests(game, category) {
   const params = {};
   if (game) params.game = game;
@@ -223,8 +230,9 @@ export async function getWallet() {
   return cached('wallet', async () => { const { data } = await api.get('/api/wallet'); return data; });
 }
 
-export async function claimDailyBonus() {
-  const { data } = await api.post('/api/wallet/daily-bonus');
+// reset=true — «Начать заново» после предложения восстановить прерванную серию (как streak:reset в боте).
+export async function claimDailyBonus(reset = false) {
+  const { data } = await api.post('/api/wallet/daily-bonus', null, { params: reset ? { reset: true } : undefined });
   invalidateCache('wallet');
   return data;
 }
@@ -346,4 +354,16 @@ export async function getStarsInvoiceLink(itemType) {
 // их в синхроне с реальной ценой инвойса (найдено при аудите Stars-покупок, 2026-09-19).
 export async function getStarsPrices() {
   return cached('starsPrices', async () => { const { data } = await api.get('/api/stars/prices'); return data; });
+}
+
+// Донат по играм (Купикод) — каталог с ценами игрока (у EGC Pass — закупочные) и оформление заказа:
+// method 'STARS' -> invoiceUrl для openStarsInvoice, 'TON' -> заявка + ссылка на менеджера.
+export async function getDonateCatalog() {
+  const { data } = await api.get('/api/donate/catalog');
+  return data;
+}
+
+export async function donatePurchase({ gameKey, packageKey, method }) {
+  const { data } = await api.post('/api/donate/purchase', { gameKey, packageKey, method });
+  return data;
 }

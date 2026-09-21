@@ -15,4 +15,9 @@ public class DailyBonusResponseDto {
     private int streakDays;
     private String milestoneText;
     private long newBalance;
+    /** Серия прервалась и её можно восстановить за Stars — бонус НЕ начислен, пока игрок не выберет
+     *  «восстановить» или «начать заново» (как в боте, GamePlatformBot.sendDailyBonus). */
+    private boolean restoreOffered;
+    private int lostStreakDays;
+    private int restorePriceStars;
 }

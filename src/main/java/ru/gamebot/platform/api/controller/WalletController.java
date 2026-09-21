@@ -71,6 +71,18 @@ public class WalletController {
         }
         int ratioPercent = (int) Math.round(healthRatioService.getCurrentRatio() * 100);
         long nextDailyBonus = Math.min(150L + (long) user.getStreakDays() * 50, 500L);
+        boolean bonusAvailable = userService.isDailyBonusAvailable(user);
+        // Как в боте (sendDailyBonus): снимок прерванной серии делаем ДО показа бонуса, иначе первый же
+        // claimDailyBonus обнулит серию, не оставив шанса её восстановить.
+        int restorableDays = 0;
+        int restorePrice = 0;
+        if (bonusAvailable) {
+            userService.captureStreakBreakIfNeeded(user);
+            if (userService.hasRestorableStreak(user)) {
+                restorableDays = userService.restorableStreakDays(user);
+                restorePrice = gamePlatformBot.streakRestorePriceStars(restorableDays);
+            }
+        }
         return ResponseEntity.ok(WalletDto.builder()
                 .coins(user.getCoins())
                 .excBonusPercent(userService.getExcBonusPercent(user.getXp()))
@@ -80,20 +92,39 @@ public class WalletController {
                 .healthRatioPercent(ratioPercent)
                 .monthlyWithdrawalLimit(sinkShopService.getMonthlyLimit(user.getXp()))
                 .remainingWithdrawalLimit(sinkShopService.getRemainingWithdrawalLimit(user))
-                .dailyBonusAvailable(userService.isDailyBonusAvailable(user))
+                .dailyBonusAvailable(bonusAvailable)
                 .streakDays(user.getStreakDays())
                 .nextDailyBonusExc(nextDailyBonus)
                 .chestAvailable(userService.isChestAvailable(user))
                 .fixedRubBalance(user.getFixedRubBalance())
                 .phoneConfirmed(user.getPhoneNumber() != null)
+                .restorableStreakDays(restorableDays)
+                .streakRestorePriceStars(restorePrice)
                 .build());
     }
 
+    /** reset=true — «Начать заново» после предложения восстановить серию (бот: "streak:reset"). */
     @PostMapping("/daily-bonus")
-    public ResponseEntity<DailyBonusResponseDto> claimDailyBonus(@AuthenticationPrincipal Long telegramId) {
+    public ResponseEntity<DailyBonusResponseDto> claimDailyBonus(
+            @AuthenticationPrincipal Long telegramId,
+            @RequestParam(defaultValue = "false") boolean reset) {
         AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        if (!reset && userService.isDailyBonusAvailable(user)) {
+            userService.captureStreakBreakIfNeeded(user);
+            if (userService.hasRestorableStreak(user)) {
+                int lost = userService.restorableStreakDays(user);
+                return ResponseEntity.ok(DailyBonusResponseDto.builder()
+                        .success(false)
+                        .restoreOffered(true)
+                        .lostStreakDays(lost)
+                        .restorePriceStars(gamePlatformBot.streakRestorePriceStars(lost))
+                        .message("Серия входов прервалась. Можно восстановить её за Stars или начать заново.")
+                        .newBalance(user.getCoins())
+                        .build());
+            }
         }
         UserService.DailyBonusResult result = userService.claimDailyBonus(user);
         if (result == null) {

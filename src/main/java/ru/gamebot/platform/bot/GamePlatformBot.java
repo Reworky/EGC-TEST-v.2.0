@@ -6198,7 +6198,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  в момент обнуления, окно на покупку STREAK_RESTORE_GRACE_DAYS (2) дня. */
     private static final int STREAK_RESTORE_STARS_PRICE_MIN = 10; // каталожный дефолт/нижняя граница — реальная цена всегда считается через streakRestorePriceStars
 
-    private int streakRestorePriceStars(int lostStreakDays) {
+    public int streakRestorePriceStars(int lostStreakDays) {
         if (lostStreakDays >= 90) return 100;
         if (lostStreakDays >= 30) return 60;
         if (lostStreakDays >= 14) return 35;
@@ -6380,8 +6380,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             log.error("Unknown Stars item payload '{}'", payload);
             return null;
         }
+        return createStarsInvoiceLink(payload, spec, spec.priceStars());
+    }
+
+    /** Ссылка на инвойс для товаров с динамической ценой/описанием, которых нет в статичном
+     *  STARS_ITEMS (донат гемов, восстановление серии) — для мини-аппа, зеркало
+     *  sendStarsInvoice(user, payload, spec, price) для чата бота. */
+    private String createStarsInvoiceLink(String payload, StarsItemSpec spec, int priceStars) {
         try {
-            Map<String, Object> price = Map.of("label", spec.priceLabel(), "amount", spec.priceStars());
+            Map<String, Object> price = Map.of("label", spec.priceLabel(), "amount", priceStars);
             Map<String, Object> body = new java.util.LinkedHashMap<>();
             body.put("title", spec.title());
             body.put("description", spec.description());
@@ -14683,7 +14690,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Тег игрового аккаунта для доната — по игре (gameKey = purchaseGroup). Добавить новую игру в
      *  донат — расширить этот switch и GemPurchaseService.CATALOG/GAME_NAMES. */
-    private String gemPurchaseGameTag(AppUser user, String gameKey) {
+    public String gemPurchaseGameTag(AppUser user, String gameKey) {
         return switch (gameKey) {
             case "clash_royale" -> user.getClashRoyaleTag();
             case "clash_of_clans" -> user.getClashOfClansTag();
@@ -14697,7 +14704,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  покрывает реальную закупку у Купикод), а осознанный отказ от части маржи ради ценности подписки.
      *  XP-бонус НЕ уменьшается вместе с ценой — pkg.xpBonus() всегда считается от полной цены, это тоже
      *  часть привилегии (см. GemPurchaseService.GemPackage.costRub). */
-    private long gemPurchasePriceFor(AppUser user, GemPurchaseService.GemPackage pkg) {
+    public long gemPurchasePriceFor(AppUser user, GemPurchaseService.GemPackage pkg) {
         return sinkShopService.isEgcPassActive(user) ? pkg.costRub() : pkg.priceRub();
     }
 
@@ -14790,7 +14797,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return pkg.label() != null ? "shop:passgroup:" + gameKey : "shop:donate:" + gameKey;
     }
 
-    private int gemPurchaseStarsPrice(long priceRub) {
+    public int gemPurchaseStarsPrice(long priceRub) {
         return java.math.BigDecimal.valueOf(priceRub)
                 .divide(GEM_PURCHASE_STARS_RUB_RATE, 0, java.math.RoundingMode.HALF_UP)
                 .intValue();
@@ -14894,17 +14901,73 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  статичный каталог STARS_ITEMS, а через overload sendStarsInvoice с готовым spec. Выдача — в
      *  grantStarsPurchase (payload "starsitem:GEM:<gameKey>:<packageKey>") после реального списания. */
     private void sendGemStarsInvoice(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg) {
-        String tag = gemPurchaseGameTag(user, gameKey);
         int starsPrice = gemPurchaseStarsPrice(gemPurchasePriceFor(user, pkg));
+        sendStarsInvoice(user, "starsitem:GEM:" + gameKey + ":" + pkg.key(), gemStarsSpec(user, gameKey, pkg, starsPrice), starsPrice);
+    }
+
+    /** Описание Stars-инвойса доната — общее для чата бота (sendGemStarsInvoice) и мини-аппа
+     *  (createGemStarsInvoiceLink), чтобы игрок видел один и тот же товар в обоих местах. */
+    private StarsItemSpec gemStarsSpec(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg, int starsPrice) {
+        String tag = gemPurchaseGameTag(user, gameKey);
         // Валютные пакеты ("30 гемов") дополняем именем игры для ясности; у label-товаров (например,
         // "Brawl Pass") имя игры дублировало бы название — не добавляем (2026-09-20).
         String itemTitle = pkg.label() != null ? pkg.displayLabel() : pkg.displayLabel() + " " + GemPurchaseService.gameName(gameKey);
-        StarsItemSpec spec = new StarsItemSpec(
+        return new StarsItemSpec(
                 "💎 " + itemTitle,
                 "Зачисление на тег " + tag + ". Покупку оформляет администратор вручную после оплаты — обычно в течение некоторого времени.",
                 itemTitle,
                 starsPrice);
-        sendStarsInvoice(user, "starsitem:GEM:" + gameKey + ":" + pkg.key(), spec, starsPrice);
+    }
+
+    // ── API для мини-аппа (DonateController / WalletController) ─────────────────────────────
+    // Мини-апп делает то же, что бот в чате (sendGemStarsInvoice / requestGemPurchaseTon /
+    // "streak:restore"), но вместо отправки сообщений возвращает ссылку на инвойс или данные заявки.
+    // Выдача после оплаты Stars идёт тем же путём, что и из чата: successful_payment → grantStarsPurchase.
+
+    /** Ссылка на Stars-инвойс доната для Telegram.WebApp.openInvoice(). null — не удалось создать. */
+    public String createGemStarsInvoiceLink(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg) {
+        int starsPrice = gemPurchaseStarsPrice(gemPurchasePriceFor(user, pkg));
+        return createStarsInvoiceLink("starsitem:GEM:" + gameKey + ":" + pkg.key(), gemStarsSpec(user, gameKey, pkg, starsPrice), starsPrice);
+    }
+
+    /** Ссылка на Stars-инвойс восстановления серии входов — цена зависит от длины потерянной серии,
+     *  поэтому не через каталог STARS_ITEMS (см. StarsController, там этот товар намеренно закрыт).
+     *  null — серии для восстановления нет или не удалось создать счёт. */
+    public String createStreakRestoreInvoiceLink(AppUser user) {
+        if (!userService.hasRestorableStreak(user)) {
+            return null;
+        }
+        StarsItemSpec spec = STARS_ITEMS.get("starsitem:STREAK_RESTORE");
+        int price = streakRestorePriceStars(userService.restorableStreakDays(user));
+        return createStarsInvoiceLink("starsitem:STREAK_RESTORE", spec, price);
+    }
+
+    /** Заявка на донат GRAM (TON) из мини-аппа — то же, что requestGemPurchaseTon в чате: заявка +
+     *  уведомление модераторам, без реквизитов (модератор сам пишет игроку). Платёжный код: любая
+     *  ошибка → алерт админам, а не тихий провал (правило проекта). null — заявка не создана. */
+    public GemPurchaseRequest createGemTonRequestForMiniApp(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg) {
+        try {
+            String tag = gemPurchaseGameTag(user, gameKey);
+            long price = gemPurchasePriceFor(user, pkg);
+            GemPurchaseRequest req = gemPurchaseService.createManualRequest(user, gameKey, pkg, price, tag, "TON");
+            notifyAdminsAboutGemPurchase(req);
+            return req;
+        } catch (Exception e) {
+            log.error("Failed to create GEM TON request from mini app for user {} ({}:{})", user.getTelegramId(), gameKey, pkg.key(), e);
+            String text = "🚨 <b>Ошибка заявки на донат из мини-аппа</b>\n\n"
+                    + "👤 Игрок: <b>" + escape(user.getNickname()) + "</b> (<code>" + user.getTelegramId() + "</code>)\n"
+                    + "📦 Пакет: <code>" + escape(gameKey + ":" + pkg.key()) + "</code>, способ: GRAM (TON)\n\n"
+                    + "Заявка не создана — игрок увидел ошибку. Деньги не списывались (TON — ручной перевод).";
+            for (Long adminId : adminService.allAdminIds()) {
+                sendText(adminId, text, null);
+            }
+            return null;
+        }
+    }
+
+    /** Ссылка «Написать менеджеру» с предзаполненным текстом — для экрана результата в мини-аппе. */
+    public String gemManagerDmLinkFor(GemPurchaseRequest req, GemPurchaseService.GemPackage pkg) {
+        return managerDmLink(req, pkg);
     }
 
     /** Способ оплаты заявки на донат гемов — STARS подтверждён самим Telegram в момент списания (см.

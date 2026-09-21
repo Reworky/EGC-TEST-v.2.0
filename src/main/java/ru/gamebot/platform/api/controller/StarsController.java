@@ -60,13 +60,19 @@ public class StarsController {
         if ("PERMANENT_SLOT".equals(itemType) && user.isPermanentExtraSlot()) {
             return ResponseEntity.ok(error("Доп. слот навсегда уже куплен."));
         }
-        // Цена зависит от длины потерянной серии (см. GamePlatformBot.streakRestorePriceStars) и
-        // считается только в самом боте — каталожная цена STARS_ITEMS для этого товара лишь заглушка
-        // (нижняя граница тарифа). Через этот эндпоинт (статичная цена по itemType) продавать нельзя —
-        // иначе любой мог бы восстановить даже 90-дневную серию по цене 2-6-дневной. Экран
-        // восстановления есть только в боте (GamePlatformBot.sendDailyBonus), не в мини-аппе.
+        // Цена зависит от длины потерянной серии (GamePlatformBot.streakRestorePriceStars) и считается
+        // на сервере при создании счёта (createStreakRestoreInvoiceLink) — каталожная цена STARS_ITEMS
+        // для этого товара лишь заглушка, поэтому общий путь ниже (статичная цена по itemType) для него
+        // закрыт: иначе любой мог бы восстановить даже 90-дневную серию по цене 2-6-дневной.
         if ("STREAK_RESTORE".equals(itemType)) {
-            return ResponseEntity.ok(error("Восстановление серии пока доступно только в боте — откройте «Ежедневный бонус» в чате с ботом."));
+            String restoreUrl = gamePlatformBot.createStreakRestoreInvoiceLink(user);
+            if (restoreUrl == null) {
+                return ResponseEntity.ok(error("Восстанавливать нечего — предложение уже неактуально."));
+            }
+            InvoiceLinkResponse res = new InvoiceLinkResponse();
+            res.setSuccess(true);
+            res.setUrl(restoreUrl);
+            return ResponseEntity.ok(res);
         }
         String url = gamePlatformBot.createStarsInvoiceLink("starsitem:" + itemType);
         if (url == null) {

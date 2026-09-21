@@ -20,4 +20,7 @@ public class WalletDto {
     private boolean chestAvailable;
     private long fixedRubBalance;
     private boolean phoneConfirmed;
+    /** >0 — серия входов прервалась и есть предложение восстановить её за Stars. */
+    private int restorableStreakDays;
+    private int streakRestorePriceStars;
 }

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { getShopItems, getShopStats, purchaseItem, getMyRewards, getProfile, getPerksState, purchasePerk, sendGiftBoost, sendExcTransfer, cancelReward, equipFrame, getStarsInvoiceLink, getStarsPrices } from '../api/client';
+import { getWallet, getShopItems, getShopStats, purchaseItem, getMyRewards, getProfile, getPerksState, purchasePerk, sendGiftBoost, sendExcTransfer, cancelReward, equipFrame, getStarsInvoiceLink, getStarsPrices } from '../api/client';
 import { openStarsInvoice } from '../utils/stars';
 import BackButton from '../components/BackButton';
 import AdBanner from '../components/AdBanner';
+import DonateView from './DonateView';
 import './QuestsPage.css';
 import './ShopPage.css';
 
@@ -35,6 +36,15 @@ const PERK_CATEGORIES = [
     ],
   },
 ];
+
+// Игры с донатом за реальные деньги (Купикод) — как в боте: они закреплены наверху Магазина в этом
+// порядке (Brawl Stars → Clash Royale → Clash of Clans), остальные категории идут следом. Ключ —
+// название категории товара, значение — gameKey каталога доната (GemPurchaseService).
+const DONATE_GAMES = {
+  'Brawl Stars': 'brawl_stars',
+  'Clash Royale': 'clash_royale',
+  'Clash of Clans': 'clash_of_clans',
+};
 
 const STATUS_LABELS = {
   PENDING: <><i className="ti ti-clock"></i> На проверке</>,
@@ -142,6 +152,7 @@ function ShopItemsView({ expanded, onToggle }) {
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState(null);
   const [showFundInfo, setShowFundInfo] = useState(false);
+  const [donateGame, setDonateGame] = useState(null);
 
   function reload() {
     setError(null);
@@ -159,12 +170,20 @@ function ShopItemsView({ expanded, onToggle }) {
     return <div className="page-center">Загрузка...</div>;
   }
 
+  if (donateGame) {
+    return <DonateView gameKey={donateGame} onBack={() => setDonateGame(null)} />;
+  }
+
   // Кастомизация (рамки аватара) объединена с титулами в разделе «Предметы» — здесь не дублируем.
-  const grouped = items.filter(item => item.category !== 'Кастомизация').reduce((acc, item) => {
+  const groupedRaw = items.filter(item => item.category !== 'Кастомизация').reduce((acc, item) => {
     const cat = item.category || 'Другое';
     (acc[cat] = acc[cat] || []).push(item);
     return acc;
   }, {});
+  // Донат-игры закреплены наверху в фиксированном порядке (как в боте), остальные — как раньше.
+  const grouped = {};
+  Object.keys(DONATE_GAMES).forEach(cat => { if (groupedRaw[cat]) grouped[cat] = groupedRaw[cat]; });
+  Object.keys(groupedRaw).forEach(cat => { if (!grouped[cat]) grouped[cat] = groupedRaw[cat]; });
 
   return (
     <>
@@ -212,6 +231,11 @@ function ShopItemsView({ expanded, onToggle }) {
       {Object.entries(grouped).map(([cat, list]) => (
         <div key={cat} className="category-section">
           <div className="category-header">{cat}</div>
+          {DONATE_GAMES[cat] && (
+            <button className="quest-btn" style={{ marginBottom: 12 }} onClick={() => setDonateGame(DONATE_GAMES[cat])}>
+              💰 Купить за реальные деньги (Stars / GRAM)
+            </button>
+          )}
           {list.map(item => (
             <ShopItemCard
               key={item.id}
@@ -456,6 +480,7 @@ const EGC_PASS_PERKS = [
   '✨ +10% к EXC за все квесты (до 10 000 EXC бонуса в месяц)',
   '📂 Доп. слот квеста (как «навсегда», пока активна)',
   '🎁 Бесплатный улучшенный сундук каждый день',
+  '💰 Донат по играм — гемы и пропуски по закупочной цене, без наценки клуба',
   '⚡ Приоритет в очереди на вывод EXC',
   '💎 Статус-бейдж в профиле',
 ];
@@ -532,6 +557,7 @@ const STARS_PRICE_FALLBACK = { AVATAR_FRAME: 35, PATRON_TITLE: 60, PERMANENT_SLO
 // игрока) — иконка/градиент/подпись для каждого раздела. Сами товары внутри разделов не изменились,
 // просто раньше все показывались одним длинным списком, теперь сначала выбор раздела, затем список.
 const SECTION_META = {
+  'Мои предметы': { icon: '🎒', gradient: 'teal', subtitle: 'Всё, что у вас есть: рамки, титулы, бусты, билеты' },
   'Бусты': { icon: '⚡', gradient: 'gold', subtitle: 'Временные ускорители XP и EXC' },
   'Квесты': { icon: '🎯', gradient: 'purple', subtitle: 'Реролл, страховка, доп. слот' },
   'Кастомизация': { icon: '🎭', gradient: 'fire', subtitle: 'Рамки и титулы профиля' },
@@ -552,12 +578,63 @@ function SectionButton({ title, onClick }) {
   );
 }
 
+const FRAME_NAMES = {
+  fire: '🔥 Огненная',
+  ice: '❄️ Ледяная',
+  purple: '💜 Фиолетовая',
+  gold: '👑 Золотая',
+  egc: '💜 «EGC» (эксклюзивная)',
+};
+
+/** «🎒 Мои предметы» — то же, что экран в боте (GamePlatformBot.sendMyItems): рамки, титул, билеты
+ *  колеса и активные усиления одним списком, без «нет/нет/нет» по каждому предмету отдельно. */
+function MyItemsView({ state, profile, tickets }) {
+  const frames = profile?.ownedFrames || [];
+  const active = [];
+  if (state.xpBoostActive) active.push(`⚡ XP-буст — до ${state.xpBoostUntil}`);
+  if (state.excBoostActive) active.push(`⚡ EXC-буст — до ${state.excBoostUntil}`);
+  if (profile?.hasPermanentExtraSlot) active.push('📂 Доп. слот квеста — навсегда');
+  else if (state.extraSlotActive) active.push(`📂 Доп. слот квеста — до ${state.extraSlotUntil}`);
+  if (state.insuranceActive) active.push('🛡️ Страховка провала — активна');
+  if (profile?.hasEgcPass) active.push(`⭐ EGC Pass — до ${profile.egcPassActiveUntil}`);
+
+  return (
+    <>
+      <div className="shop-card">
+        <div className="shop-title">🖼️ Рамки аватара</div>
+        <p className="shop-desc">
+          {frames.length === 0
+            ? 'Пока нет ни одной — загляните в «Кастомизацию».'
+            : frames.map(k => (FRAME_NAMES[k] || k) + (k === profile?.avatarFrameImage ? ' (надета)' : '')).join(' · ')}
+        </p>
+      </div>
+      <div className="shop-card">
+        <div className="shop-title">🏅 Титул</div>
+        <p className="shop-desc">
+          {profile?.profileTitle || 'не выбран'}
+          {profile?.hasPatronTitle ? ' (доступен эксклюзивный «Покровитель EGC»)' : ''}
+        </p>
+      </div>
+      <div className="shop-card">
+        <div className="shop-title">🎟️ Билеты колеса фортуны: {tickets ?? 0}</div>
+      </div>
+      <div className="shop-card">
+        <div className="shop-title">Активные усиления</div>
+        {active.length === 0
+          ? <p className="shop-desc">Сейчас ничего не активно — загляните в разделы «Бусты» и «Квесты».</p>
+          : active.map(line => <p key={line} className="shop-desc">{line}</p>)}
+      </div>
+    </>
+  );
+}
+
 function PerksView({ expanded, onToggle }) {
   const [state, setState] = useState(null);
   const [frames, setFrames] = useState(null);
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState(null);
   const [prices, setPrices] = useState(STARS_PRICE_FALLBACK);
+  const [tickets, setTickets] = useState(0);
   const [activeSection, setActiveSection] = useState(null);
 
   function reload() {
@@ -566,6 +643,7 @@ function PerksView({ expanded, onToggle }) {
     getShopItems().then(items => setFrames(items.filter(i => i.category === 'Кастомизация'))).catch(() => setFrames([]));
     getProfile().then(setProfile).catch(() => {});
     getStarsPrices().then(p => setPrices({ ...STARS_PRICE_FALLBACK, ...p })).catch(() => {});
+    getWallet().then(w => setTickets(w.tickets)).catch(() => {});
   }
 
   useEffect(() => { reload(); }, []);
@@ -576,7 +654,7 @@ function PerksView({ expanded, onToggle }) {
   // Раздел скрывается из списка кнопок целиком, если внутри реально нечего показать — та же логика,
   // что раньше решала, рисовать ли весь блок category-section.
   const sectionHasContent = title => {
-    if (title === 'Социальные') return true;
+    if (title === 'Социальные' || title === 'Мои предметы') return true;
     const cat = PERK_CATEGORIES.find(c => c.title === title);
     const visible = cat.items.filter(item => !item.hideIf || !item.hideIf(state));
     const isCustomization = title === 'Кастомизация';
@@ -611,6 +689,7 @@ function PerksView({ expanded, onToggle }) {
   const isCustomization = activeSection === 'Кастомизация';
   const isQuests = activeSection === 'Квесты';
   const isSocial = activeSection === 'Социальные';
+  const isMyItems = activeSection === 'Мои предметы';
 
   return (
     <>
@@ -618,7 +697,9 @@ function PerksView({ expanded, onToggle }) {
         <div style={{ marginBottom: 14 }}><BackButton label="Назад" onClick={() => setActiveSection(null)} /></div>
         <div className="category-header">{SECTION_META[activeSection].icon} {activeSection}</div>
 
-        {isSocial ? (
+        {isMyItems ? (
+          <MyItemsView state={state} profile={profile} tickets={tickets} />
+        ) : isSocial ? (
           <GiftCard expanded={expanded === 'gift'} onToggle={onToggle} />
         ) : (
           <>

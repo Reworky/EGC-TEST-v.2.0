@@ -146,6 +146,12 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
     setMessageOk(false);
     try {
       const res = await claimDailyBonus();
+      if (res.restoreOffered) {
+        // Серия прервалась — бонус ещё не начислен, показываем выбор «восстановить / начать заново».
+        invalidateCache('wallet');
+        onChanged();
+        return;
+      }
       if (res.success) {
         let msg = `+${res.totalExc} EXC\nСерия: ${res.streakDays} дн.`;
         if (res.milestoneText) msg = `${res.milestoneText}\n${msg}`;
@@ -156,6 +162,62 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
       } else {
         setMessage(res.message);
       }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Восстановление прерванной серии за Stars (как «streak:restore» в боте): после оплаты сервер
+  // сам восстанавливает серию и начисляет бонус за сегодня (successful_payment), мы лишь ждём
+  // и подтягиваем свежий кошелёк.
+  async function handleRestoreStreak() {
+    setBusy(true);
+    setMessage(null);
+    setMessageOk(false);
+    try {
+      const invoice = await getStarsInvoiceLink('STREAK_RESTORE');
+      if (!invoice.success) {
+        setMessage(invoice.message);
+        invalidateCache('wallet');
+        onChanged();
+        return;
+      }
+      const status = await openStarsInvoice(invoice.url);
+      if (status === 'failed') {
+        setMessage('Платёж не прошёл. Попробуйте ещё раз.');
+        return;
+      }
+      if (status !== 'paid') return;
+      await new Promise(r => setTimeout(r, 1200));
+      invalidateCache('wallet');
+      const fresh = await getWallet();
+      setMessage(`Серия восстановлена!\nСерия: ${fresh.streakDays} дн.`);
+      setMessageOk(true);
+      playParticles?.('streakBonus', 3000);
+      onChanged();
+    } catch (e) {
+      setMessage(e.message || 'Не удалось открыть оплату.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleResetStreak() {
+    setBusy(true);
+    setMessage(null);
+    setMessageOk(false);
+    try {
+      const res = await claimDailyBonus(true);
+      if (res.success) {
+        let msg = `+${res.totalExc} EXC\nСерия: ${res.streakDays} дн.`;
+        if (res.milestoneText) msg = `${res.milestoneText}\n${msg}`;
+        setMessage(msg);
+        setMessageOk(true);
+        playParticles?.('streakBonus', 3000);
+      } else {
+        setMessage(res.message);
+      }
+      onChanged();
     } finally {
       setBusy(false);
     }
@@ -294,7 +356,20 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
 
       <div className="ref-link-card">
         <div className="ref-link-label">Ежедневный бонус</div>
-        {wallet.dailyBonusAvailable ? (
+        {wallet.dailyBonusAvailable && wallet.restorableStreakDays > 0 ? (
+          <>
+            <p className="shop-desc">
+              <i className="ti ti-heart-broken"></i> Серия входов прервалась. Была серия из {wallet.restorableStreakDays} дн. — пропущен день.
+              Можно восстановить и продолжить с {wallet.restorableStreakDays + 1}-го дня (плюс бонус за сегодня), либо начать заново.
+            </p>
+            <ShimmerButton disabled={busy} onClick={handleRestoreStreak}>
+              {busy ? 'Секунду...' : <><i className="ti ti-sparkles" style={{ marginRight: 6 }} /> Восстановить за {wallet.streakRestorePriceStars} ⭐</>}
+            </ShimmerButton>
+            <button className="quest-btn quest-btn-secondary" style={{ marginTop: 8 }} disabled={busy} onClick={handleResetStreak}>
+              Начать заново
+            </button>
+          </>
+        ) : wallet.dailyBonusAvailable ? (
           <>
             <p className="shop-desc"><i className="ti ti-flame"></i> Серия: {wallet.streakDays} дн. · Следующий бонус: +{wallet.nextDailyBonusExc} EXC</p>
             <ShimmerButton disabled={busy} onClick={handleClaim}>
