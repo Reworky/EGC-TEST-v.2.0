@@ -1553,6 +1553,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "Заявка открыта");
             return;
         }
+        if (data.startsWith("mod:files:") && isEffectiveModerator(user)) {
+            // "mod:files:<submissionId>:<prefix>:<telegramId>:<page>" — читает файл(ы) любой прошлой
+            // заявки игрока (не только текущую в очереди), кнопка "Назад" ведёт обратно в его историю.
+            String[] parts = data.substring("mod:files:".length()).split(":", 4);
+            Long submissionId = parseLong(parts[0]);
+            String backRoute = parts.length == 4 ? (parts[1] + ":user:quests:" + parts[2] + ":" + parts[3]) : "mod:support:quests";
+            sendSubmissionCard(user.getTelegramId(), submissionId, true, backRoute);
+            answer(callbackQuery.getId(), "Файл открыт");
+            return;
+        }
         if (data.startsWith("mod:ok:") && isEffectiveModerator(user)) {
             handleModerationApprove(callbackQuery, parseLong(data.substring("mod:ok:".length())));
             return;
@@ -7938,6 +7948,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendSubmissionCard(Long chatId, Long submissionId) {
+        sendSubmissionCard(chatId, submissionId, false, null);
+    }
+
+    /** readOnly=true — карточка без кнопок модерации (Одобрить/Отклонить/Уточнить), только просмотр
+     *  файла(ов) прошлой заявки (например при разборе фрода по истории игрока). backRoute переопределяет
+     *  кнопку "Назад" для этого случая — иначе используется обычный переход в очередь модерации. */
+    private void sendSubmissionCard(Long chatId, Long submissionId, boolean readOnly, String backRoute) {
         QuestSubmission submission = questService.getSubmission(submissionId);
         AppUser submitter = submission.getUser();
         String submitterLink = submitter.getTelegramUsername() != null
@@ -7946,22 +7963,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String dupWarning = submission.isDuplicatePhotoDetected()
                 ? "\n🚨 <b>ДУБЛЬ СКРИНШОТА!</b> Этот файл уже использовался в другой заявке (своей или чужой).\n"
                 : "";
+        String statusLine = readOnly
+                ? "📌 Статус: <b>" + escape(humanSubmissionStatus(submission.getStatus())) + "</b>\n"
+                : "";
         String caption = "🧾 <b>Заявка К-" + (submission.getDisplayId() != null ? submission.getDisplayId() : submission.getId()) + " на проверку</b>\n\n"
                 + "👤 Игрок: <b>" + escape(submitter.getNickname()) + "</b> (" + submitterLink + ")\n"
                 + "🆔 ID: <b>" + submitter.getTelegramId() + "</b>\n"
                 + "🎯 Квест: <b>" + escape(submission.getQuest().getTitle()) + "</b>\n"
                 + "🎮 Игра: <b>" + escape(submission.getQuest().getGameName()) + "</b>\n"
+                + statusLine
                 + rewardPreviewLine(submission) + "\n"
                 + "📅 Отправлено: <b>" + escape(submission.getUpdatedAt().format(DATE_TIME_FORMATTER)) + "</b>\n"
                 + "💬 Комментарий: " + escape(submission.getUserComment()) + "\n"
                 + (submission.getExternalLink() == null ? "" : "🔗 Ссылка: " + escape(submission.getExternalLink()) + "\n")
                 + dupWarning;
 
-        InlineKeyboardMarkup markup = verticalWithBackMenu(List.of(
-                keyboardFactory.callback("✅ Одобрить", "mod:ok:" + submissionId),
-                keyboardFactory.callback("❌ Отклонить", "mod:no:" + submissionId),
-                keyboardFactory.callback("❓ Уточнить", "mod:more:" + submissionId)
-        ), "⬅️ Назад", "mod:support:quests");
+        InlineKeyboardMarkup markup = readOnly
+                ? backOnlyKeyboard(backRoute != null ? backRoute : "mod:support:quests")
+                : verticalWithBackMenu(List.of(
+                        keyboardFactory.callback("✅ Одобрить", "mod:ok:" + submissionId),
+                        keyboardFactory.callback("❌ Отклонить", "mod:no:" + submissionId),
+                        keyboardFactory.callback("❓ Уточнить", "mod:more:" + submissionId)
+                ), "⬅️ Назад", "mod:support:quests");
 
         String mediaFileId = submission.getMediaFileId();
         String mediaType = submission.getMediaType();
@@ -12477,6 +12500,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yy HH:mm");
         int startNum = safePage * pageSize + 1;
         List<InlineKeyboardButton> cancelButtons = new ArrayList<>();
+        List<InlineKeyboardButton> fileButtons = new ArrayList<>();
         for (int i = 0; i < pageItems.size(); i++) {
             ru.gamebot.platform.domain.model.QuestSubmission s = pageItems.get(i);
             String dateStr = s.getUpdatedAt() != null ? s.getUpdatedAt().format(fmt) : "—";
@@ -12500,6 +12524,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 cancelButtons.add(keyboardFactory.callback("❌ Отменить №" + num,
                         prefix + ":user:cancelsub:" + telegramId + ":" + page + ":" + s.getId()));
             }
+            if (s.getMediaFileId() != null) {
+                String dupTag = s.isDuplicatePhotoDetected() ? " 🚨" : "";
+                fileButtons.add(keyboardFactory.callback("🖼 Файл №" + num + dupTag,
+                        "mod:files:" + s.getId() + ":" + prefix + ":" + telegramId + ":" + page));
+            }
         }
         if (totalPages > 1) {
             sb.append("📄 Страница ").append(safePage + 1).append(" из ").append(totalPages);
@@ -12514,6 +12543,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        // По 2 в ряд — иначе список из 10 заявок с файлами превращается в длиннющую колонку
+        for (int i = 0; i < fileButtons.size(); i += 2) {
+            rows.add(i + 1 < fileButtons.size()
+                    ? List.of(fileButtons.get(i), fileButtons.get(i + 1))
+                    : List.of(fileButtons.get(i)));
+        }
         for (InlineKeyboardButton b : cancelButtons) {
             rows.add(List.of(b));
         }
@@ -15898,6 +15933,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case ROLE_USER -> "Игрок";
             case ROLE_MODER -> "Модератор";
             default -> "Администратор";
+        };
+    }
+
+    private String humanSubmissionStatus(ru.gamebot.platform.domain.enums.SubmissionStatus status) {
+        return switch (status) {
+            case APPROVED -> "✅ одобрено";
+            case REJECTED -> "❌ отклонено";
+            case NEEDS_INFO -> "❓ запрошено уточнение";
+            case PENDING -> "⏳ на проверке";
+            case DRAFT -> "📌 черновик";
+            case CANCELLED -> "🚫 отменено";
         };
     }
 
