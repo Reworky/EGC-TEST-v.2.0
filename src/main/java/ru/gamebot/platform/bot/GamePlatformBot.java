@@ -12471,10 +12471,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        List<ru.gamebot.platform.domain.model.QuestSubmission> all =
-                questService.findAllByUser(target).stream()
-                        .filter(s -> s.getStatus() != ru.gamebot.platform.domain.enums.SubmissionStatus.CANCELLED)
-                        .toList();
+        // CANCELLED больше не исключаем — для разбора фрода важно видеть и отменённые попытки
+        // (например при подозрении на фарм одним и тем же скриншотом через цикл "сдал -> отменил -> сдал снова").
+        List<ru.gamebot.platform.domain.model.QuestSubmission> all = questService.findAllByUser(target);
 
         long approvedCount = all.stream()
                 .filter(s -> s.getStatus() == ru.gamebot.platform.domain.enums.SubmissionStatus.APPROVED)
@@ -12509,6 +12508,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 case REJECTED -> "❌";
                 case NEEDS_INFO -> "❓";
                 case PENDING -> "⏳";
+                case CANCELLED -> "🚫";
                 default -> "📌";
             };
             String completionTag = s.getCompletionDisplayId() != null ? " (З-" + s.getCompletionDisplayId() + ")" : "";
