@@ -741,10 +741,19 @@ public class QuestService {
 
         boolean dupFound = false;
         if (photoUniqueIds != null && !photoUniqueIds.isBlank()) {
+            Long submissionId = submission.getId() != null ? submission.getId() : -1L;
             for (String uid : photoUniqueIds.split("\\|\\|")) {
-                if (!uid.isBlank() && questSubmissionRepository.existsByPhotoUniqueIdFromOtherUser(uid, submission.getUser().getId())) {
+                if (uid.isBlank()) {
+                    continue;
+                }
+                if (questSubmissionRepository.existsByPhotoUniqueIdFromOtherUser(uid, submission.getUser().getId())) {
                     dupFound = true;
                     log.warn("[AntiDupe] Photo {} already used in another user's submission. Reporter: {}", uid, submission.getUser().getTelegramId());
+                    break;
+                }
+                if (questSubmissionRepository.existsByPhotoUniqueIdFromSameUser(uid, submission.getUser().getId(), submissionId)) {
+                    dupFound = true;
+                    log.warn("[AntiDupe] Photo {} reused by the same user across submissions. Reporter: {}", uid, submission.getUser().getTelegramId());
                     break;
                 }
             }

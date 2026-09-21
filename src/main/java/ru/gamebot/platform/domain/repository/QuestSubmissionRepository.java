@@ -153,6 +153,13 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
            "AND s.photoUniqueIds <> '' AND s.photoUniqueIds LIKE CONCAT('%', :uid, '%')")
     boolean existsByPhotoUniqueIdFromOtherUser(@Param("uid") String uid, @Param("userId") Long userId);
 
+    /** Тот же скриншот, повторно поданный ТЕМ ЖЕ игроком в другой заявке (фарм одного отчёта) —
+     *  existsByPhotoUniqueIdFromOtherUser этот случай намеренно не ловит, он только про чужие заявки. */
+    @Query("SELECT CASE WHEN COUNT(s) > 0 THEN true ELSE false END FROM QuestSubmission s " +
+           "WHERE s.user.id = :userId AND s.id <> :submissionId AND s.photoUniqueIds IS NOT NULL " +
+           "AND s.photoUniqueIds <> '' AND s.photoUniqueIds LIKE CONCAT('%', :uid, '%')")
+    boolean existsByPhotoUniqueIdFromSameUser(@Param("uid") String uid, @Param("userId") Long userId, @Param("submissionId") Long submissionId);
+
     /** Сумма EXC (rewardCoins) по одобренным заявкам пользователя за период — для дайджеста. */
     @Query("SELECT COALESCE(SUM(s.quest.rewardCoins), 0) FROM QuestSubmission s WHERE s.user = :user AND s.status = 'APPROVED' AND s.updatedAt >= :from AND s.updatedAt < :to")
     long sumApprovedCoinsByUserBetween(@Param("user") AppUser user, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);

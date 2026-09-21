@@ -7944,7 +7944,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? "<a href=\"https://t.me/" + submitter.getTelegramUsername() + "\">@" + submitter.getTelegramUsername() + "</a>"
                 : "<a href=\"tg://user?id=" + submitter.getTelegramId() + "\">" + escape(submitter.getNickname()) + "</a>";
         String dupWarning = submission.isDuplicatePhotoDetected()
-                ? "\n🚨 <b>ДУБЛЬ СКРИНШОТА!</b> Этот файл уже использовался в отчёте другого игрока.\n"
+                ? "\n🚨 <b>ДУБЛЬ СКРИНШОТА!</b> Этот файл уже использовался в другой заявке (своей или чужой).\n"
                 : "";
         String caption = "🧾 <b>Заявка К-" + (submission.getDisplayId() != null ? submission.getDisplayId() : submission.getId()) + " на проверку</b>\n\n"
                 + "👤 Игрок: <b>" + escape(submitter.getNickname()) + "</b> (" + submitterLink + ")\n"
