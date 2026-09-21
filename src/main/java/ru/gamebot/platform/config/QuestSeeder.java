@@ -55,7 +55,12 @@ public class QuestSeeder implements CommandLineRunner {
         }
 
         // Удаляем устаревшие названия игр
-        for (String obsolete : List.of("PUBG", "PUBG mobile", "PUBG MOBILE", "EA FC 25")) {
+        // ВАЖНО: "PUBG mobile"/"PUBG MOBILE" убраны из списка (были здесь) — equalsIgnoreCase не различает
+        // регистр вообще, поэтому они совпадали и с актуальным "PUBG Mobile" тоже. Из-за этого КАЖДЫЙ
+        // деплой сносил все текущие квесты PUBG Mobile и (через deleteAllByQuest) ВСЮ историю заявок по
+        // ним у всех игроков — квесты потом пересоздавались через seed() ниже, а история терялась
+        // безвозвратно. Баг всплыл 2026-09-21 при разборе подозрения на фарм (см. implementation_log).
+        for (String obsolete : List.of("PUBG", "EA FC 25")) {
             questRepository.findAll().stream()
                     .filter(q -> q.getGameName() != null && q.getGameName().equalsIgnoreCase(obsolete))
                     .forEach(questSubmissionRepository::deleteAllByQuest);
