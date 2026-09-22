@@ -9,6 +9,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -30,6 +31,17 @@ public class PubgApiService {
     private static final String BASE_URL = "https://api.pubg.com/shards/steam";
     private static final int MAX_ATTEMPTS = 3;
     private static final long BASE_BACKOFF_MS = 500;
+    /** Без явного таймаута HttpClient.newHttpClient() может зависнуть на TCP-уровне навсегда (нет ни
+     *  connect-, ни request-таймаута по умолчанию) — а *QuestVerificationService.checkInProgressSubmissions
+     *  идёт ПОСЛЕДОВАТЕЛЬНО по всем заявкам в одном потоке шедулера: один такой запрос блокирует весь
+     *  батч навсегда, без единой ошибки в логе (следующий запуск @Scheduled(fixedDelay=...) не стартует,
+     *  пока текущий не завершится). Подтверждено на проде дважды: BrawlStarsApiService (коммит 9950579,
+     *  прогресс не считался сутки у одного игрока) и ClashOfClansApiService (коммит 7d060ad, тикет
+     *  поддержки #213 — ни одна из 13 заявок на один и тот же квест не получала прогресс). Явные
+     *  таймауты гарантируют, что зависшая попытка сама себя оборвёт (IOException, уже обрабатывается
+     *  существующим retry/catch), а батч продолжит идти дальше. */
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -39,7 +51,7 @@ public class PubgApiService {
     public PubgApiService(@Value("${pubg.api-key:}") String apiKey, ObjectMapper objectMapper) {
         this.apiKey = apiKey;
         this.objectMapper = objectMapper;
-        this.httpClient = HttpClient.newHttpClient();
+        this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
         this.enabled = apiKey != null && !apiKey.isBlank();
         if (!enabled) {
             log.warn("PubgApiService disabled: PUBG_API_KEY not set");
@@ -127,6 +139,7 @@ public class PubgApiService {
                         .uri(URI.create(url))
                         .header("Authorization", "Bearer " + apiKey)
                         .header("Accept", "application/vnd.api+json")
+                        .timeout(REQUEST_TIMEOUT)
                         .GET()
                         .build();
                 HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());

@@ -9,6 +9,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,6 +23,12 @@ public class AdsgramBotAdService {
     private static final String ADVBOT_URL = "https://api.adsgram.ai/advbot?tgid=%s&blockid=%s&language=ru&token=%s";
     private static final int MAX_ATTEMPTS = 2;
     private static final long BASE_BACKOFF_MS = 400;
+    /** Тот же фикс, см. BrawlStarsApiService/ClashOfClansApiService (коммиты 9950579, 7d060ad) —
+     *  HttpClient.newHttpClient() без таймаута может зависнуть на TCP-уровне навсегда. Здесь это не
+     *  батч-шедулер, а вызов из обработки живого Telegram-апдейта — зависший запрос так же блокирует
+     *  обработку обновлений бота, только не для очереди заявок, а для пользователей вообще. */
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -36,7 +43,7 @@ public class AdsgramBotAdService {
         // AdsGram: "Use only the numeric part of the blockid, without the bot- prefix"
         this.blockId = blockId != null ? blockId.replaceFirst("^bot-", "") : blockId;
         this.objectMapper = objectMapper;
-        this.httpClient = HttpClient.newHttpClient();
+        this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
         this.enabled = apiToken != null && !apiToken.isBlank() && blockId != null && !blockId.isBlank();
         if (!enabled) {
             log.warn("AdsgramBotAdService disabled: ADSGRAM_API_TOKEN/ADSGRAM_BOT_BLOCK_ID not set");
@@ -61,7 +68,7 @@ public class AdsgramBotAdService {
 
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
-                HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
+                HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(REQUEST_TIMEOUT).GET().build();
                 HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
                 if (resp.statusCode() == 200) {
                     return parseAd(resp.body());

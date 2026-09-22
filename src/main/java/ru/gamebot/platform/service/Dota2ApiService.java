@@ -7,6 +7,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -37,6 +38,11 @@ public class Dota2ApiService {
     private static final int MAX_ATTEMPTS = 3;
     private static final long BASE_BACKOFF_MS = 500;
     private static final long STEAM_ID_64_BASE = 76561197960265728L;
+    /** Тот же фикс, см. BrawlStarsApiService/ClashOfClansApiService (коммиты 9950579, 7d060ad) —
+     *  HttpClient.newHttpClient() без таймаута может зависнуть на TCP-уровне навсегда и заблокировать
+     *  весь последовательный батч *QuestVerificationService.checkInProgressSubmissions. */
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -46,7 +52,7 @@ public class Dota2ApiService {
     public Dota2ApiService(@Value("${steam.api-key:}") String apiKey, ObjectMapper objectMapper) {
         this.apiKey = apiKey;
         this.objectMapper = objectMapper;
-        this.httpClient = HttpClient.newHttpClient();
+        this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
         this.enabled = apiKey != null && !apiKey.isBlank();
         if (!enabled) {
             log.warn("Dota2ApiService disabled: STEAM_API_KEY not set");
@@ -133,7 +139,7 @@ public class Dota2ApiService {
         Dota2TransientException lastError = null;
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
-                HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
+                HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(REQUEST_TIMEOUT).GET().build();
                 HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
 
                 if (resp.statusCode() == 200) {
@@ -159,7 +165,7 @@ public class Dota2ApiService {
         Dota2TransientException lastError = null;
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
-                HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
+                HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url)).timeout(REQUEST_TIMEOUT).GET().build();
                 HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
 
                 if (resp.statusCode() == 200) {

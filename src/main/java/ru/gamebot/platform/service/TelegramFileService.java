@@ -9,6 +9,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,9 +19,17 @@ import ru.gamebot.platform.config.AppProperties;
 @RequiredArgsConstructor
 public class TelegramFileService {
 
+    /** Тот же фикс, см. BrawlStarsApiService/ClashOfClansApiService (коммиты 9950579, 7d060ad) —
+     *  HttpClient.newHttpClient() без таймаута может зависнуть на TCP-уровне навсегда. Таймаут запроса
+     *  заметно выше базовых 15с — тут передаются не JSON-ответы, а сами файлы скриншотов/видео квестов
+     *  (лимит spring.servlet.multipart.max-file-size — 50 МБ, application.yml), на медленном канале
+     *  передача такого объёма может занять заметно дольше короткого API-запроса. */
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(45);
+
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
 
     /**
      * Отправляет фото в чат пользователя через Bot API (sendPhoto) и возвращает file_id.
@@ -44,6 +53,7 @@ public class TelegramFileService {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("https://api.telegram.org/bot" + token + "/sendPhoto"))
                 .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .timeout(REQUEST_TIMEOUT)
                 .POST(HttpRequest.BodyPublishers.ofByteArray(body.toByteArray()))
                 .build();
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -76,6 +86,7 @@ public class TelegramFileService {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("https://api.telegram.org/bot" + token + "/sendPhoto"))
                 .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .timeout(REQUEST_TIMEOUT)
                 .POST(HttpRequest.BodyPublishers.ofByteArray(body.toByteArray()))
                 .build();
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -109,6 +120,7 @@ public class TelegramFileService {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("https://api.telegram.org/bot" + token + "/sendVideo"))
                 .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .timeout(REQUEST_TIMEOUT)
                 .POST(HttpRequest.BodyPublishers.ofByteArray(body.toByteArray()))
                 .build();
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -131,6 +143,7 @@ public class TelegramFileService {
 
         HttpRequest getFileRequest = HttpRequest.newBuilder()
                 .uri(URI.create("https://api.telegram.org/bot" + token + "/getFile?file_id=" + fileId))
+                .timeout(REQUEST_TIMEOUT)
                 .GET()
                 .build();
         HttpResponse<String> getFileResponse = httpClient.send(getFileRequest, HttpResponse.BodyHandlers.ofString());
@@ -143,6 +156,7 @@ public class TelegramFileService {
 
         HttpRequest downloadRequest = HttpRequest.newBuilder()
                 .uri(URI.create("https://api.telegram.org/file/bot" + token + "/" + filePath))
+                .timeout(REQUEST_TIMEOUT)
                 .GET()
                 .build();
         HttpResponse<byte[]> downloadResponse = httpClient.send(downloadRequest, HttpResponse.BodyHandlers.ofByteArray());

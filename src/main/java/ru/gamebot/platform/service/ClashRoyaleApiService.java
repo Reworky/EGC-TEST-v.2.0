@@ -9,6 +9,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,6 +26,11 @@ public class ClashRoyaleApiService {
     private static final String PLAYER_URL = "https://api.clashroyale.com/v1/players/%s";
     private static final int MAX_ATTEMPTS = 3;
     private static final long BASE_BACKOFF_MS = 500;
+    /** Тот же фикс, см. BrawlStarsApiService/ClashOfClansApiService (коммиты 9950579, 7d060ad) —
+     *  HttpClient.newHttpClient() без таймаута может зависнуть на TCP-уровне навсегда и заблокировать
+     *  весь последовательный батч ClashRoyaleQuestVerificationService.checkInProgressSubmissions. */
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -34,7 +40,7 @@ public class ClashRoyaleApiService {
     public ClashRoyaleApiService(@Value("${clashroyale.api-token:}") String apiToken, ObjectMapper objectMapper) {
         this.apiToken = apiToken;
         this.objectMapper = objectMapper;
-        this.httpClient = HttpClient.newHttpClient();
+        this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
         this.enabled = apiToken != null && !apiToken.isBlank();
         if (!enabled) {
             log.warn("ClashRoyaleApiService disabled: CLASH_ROYALE_API_TOKEN not set");
@@ -79,6 +85,7 @@ public class ClashRoyaleApiService {
                 HttpRequest req = HttpRequest.newBuilder()
                         .uri(URI.create(url))
                         .header("Authorization", "Bearer " + apiToken)
+                        .timeout(REQUEST_TIMEOUT)
                         .GET().build();
                 HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
 

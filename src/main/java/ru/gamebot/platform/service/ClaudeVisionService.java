@@ -15,6 +15,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,13 @@ public class ClaudeVisionService {
 
     private static final String TELEGRAM_FILE_API = "https://api.telegram.org/bot%s/getFile?file_id=%s";
     private static final String TELEGRAM_DOWNLOAD  = "https://api.telegram.org/file/bot%s/%s";
+    /** Тот же фикс, см. BrawlStarsApiService/ClashOfClansApiService (коммиты 9950579, 7d060ad) —
+     *  HttpClient.newHttpClient() без таймаута может зависнуть на TCP-уровне навсегда. Этот httpClient
+     *  используется только для двух вызовов Telegram (getFile + скачивание самого скриншота) — вызов
+     *  Claude API идёт через отдельный AnthropicOkHttpClient, не этот клиент, таймаут ему не нужен.
+     *  Чуть выше базовых 15с — вторым запросом скачивается сам файл изображения, не просто JSON. */
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(20);
 
     private final AnthropicClient client;
     private final HttpClient httpClient;
@@ -45,7 +53,7 @@ public class ClaudeVisionService {
         this.confidenceThreshold = confidenceThreshold;
         this.botToken = botToken;
         this.objectMapper = objectMapper;
-        this.httpClient = HttpClient.newHttpClient();
+        this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
         this.enabled = apiKey != null && !apiKey.isBlank();
 
         if (this.enabled) {
@@ -88,7 +96,7 @@ public class ClaudeVisionService {
         // Step 1: resolve file_path from Telegram
         String getFileUrl = String.format(TELEGRAM_FILE_API, botToken, fileId);
         HttpResponse<String> metaResp = httpClient.send(
-                HttpRequest.newBuilder().uri(URI.create(getFileUrl)).GET().build(),
+                HttpRequest.newBuilder().uri(URI.create(getFileUrl)).timeout(REQUEST_TIMEOUT).GET().build(),
                 HttpResponse.BodyHandlers.ofString());
 
         JsonNode meta = objectMapper.readTree(metaResp.body());
@@ -101,7 +109,7 @@ public class ClaudeVisionService {
         // Step 2: download the actual file
         String downloadUrl = String.format(TELEGRAM_DOWNLOAD, botToken, filePath);
         HttpResponse<byte[]> fileResp = httpClient.send(
-                HttpRequest.newBuilder().uri(URI.create(downloadUrl)).GET().build(),
+                HttpRequest.newBuilder().uri(URI.create(downloadUrl)).timeout(REQUEST_TIMEOUT).GET().build(),
                 HttpResponse.BodyHandlers.ofByteArray());
 
         return fileResp.body();
