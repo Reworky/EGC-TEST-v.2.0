@@ -251,8 +251,18 @@ public class BrawlStarsApiService {
         }
     }
 
+    /** Алфавит тегов Supercell — "0289PYLQGRJCUV", буквы 'O' в нём НЕТ (визуально неотличима от
+     *  цифры '0', намеренно исключена). Подтверждённый живой случай (2026-09-22, жалоба игрока —
+     *  квесты по боям никогда не засчитывались): /players/{tag} лояльно резолвит тег и с буквой 'O'
+     *  вместо '0', но ЭХОМ возвращает тег ровно как его запросили (с буквой), а внутри battlelog у
+     *  игрока в составе команды тег всегда приходит в канонической форме (с цифрой '0'). Из-за этого
+     *  сравнение self-тега в parseBattleLog никогда не совпадало ("#ROJ..." с буквой ≠ "#R0J..." с
+     *  цифрой из battlelog) — КАЖДЫЙ бой тихо пропускался (ownEntry == null -> continue), прогресс
+     *  BATTLES/PARTNER_BATTLES квестов не считался никогда, без единой ошибки в логе. Заменяем 'O' на
+     *  '0' здесь — единая точка нормализации для URL И для self-тега при разборе battlelog. */
     private String normalizeTag(String tag) {
         String t = tag.trim().toUpperCase();
-        return t.startsWith("#") ? t.substring(1) : t;
+        if (t.startsWith("#")) t = t.substring(1);
+        return t.replace('O', '0');
     }
 }
