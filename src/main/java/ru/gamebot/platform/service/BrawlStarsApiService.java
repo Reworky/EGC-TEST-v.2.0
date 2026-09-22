@@ -207,7 +207,7 @@ public class BrawlStarsApiService {
                     for (JsonNode team : battle.path("teams")) {
                         boolean selfInThisTeam = false;
                         for (JsonNode player : team) {
-                            if (selfTag.equalsIgnoreCase(player.path("tag").asText(""))) {
+                            if (tagsLikelyEqual(selfTag, player.path("tag").asText(""))) {
                                 ownEntry = player;
                                 selfInThisTeam = true;
                             }
@@ -215,13 +215,13 @@ public class BrawlStarsApiService {
                         if (selfInThisTeam) {
                             for (JsonNode player : team) {
                                 String t = player.path("tag").asText("");
-                                if (!selfTag.equalsIgnoreCase(t)) teammateTags.add(t);
+                                if (!tagsLikelyEqual(selfTag, t)) teammateTags.add(t);
                             }
                         }
                     }
                 } else {
                     for (JsonNode player : battle.path("players")) {
-                        if (selfTag.equalsIgnoreCase(player.path("tag").asText(""))) ownEntry = player;
+                        if (tagsLikelyEqual(selfTag, player.path("tag").asText(""))) ownEntry = player;
                     }
                 }
                 if (ownEntry == null) continue; // could not locate self in this entry — skip defensively
@@ -254,5 +254,23 @@ public class BrawlStarsApiService {
     private String normalizeTag(String tag) {
         String t = tag.trim().toUpperCase();
         return t.startsWith("#") ? t.substring(1) : t;
+    }
+
+    /** Сравнение тега игрока (сохранённого при привязке) с тегом из battlelog — не всегда буквальное
+     *  равенство. Подтверждено живым API-ответом (2026-09-22, жалоба игрока Kwish, byte-exact сверка
+     *  через дамп JSON, а не на глаз): /players/{tag} резолвит аккаунт даже если в теге буква 'O' стоит
+     *  там, где в АВТОРИТЕТНЫХ данных battlelog у того же игрока цифра '0' (и эхом отдаёт тег как
+     *  запросили, не как он на самом деле выглядит) — сравнение selfTag.equalsIgnoreCase(...) в этом
+     *  случае никогда не совпадало, КАЖДЫЙ бой тихо пропускался, прогресс BATTLES-квестов не считался
+     *  вовсе, без единой ошибки в логе. Буква 'O' при этом НЕ всегда опечатка — есть подтверждённые
+     *  реальные теги, где 'O' и '0' встречаются в одном теге одновременно (см. память проекта
+     *  feedback_tag_confirm_screen, тег #P0Y2GORGV) — поэтому МЕНЯТЬ сохранённый тег или тег в URL-
+     *  запросе нельзя, это сломало бы других игроков. Точное сравнение — приоритет; O/0-эквивалентность
+     *  — только запасной вариант, когда точное не совпало, и только для решения "это я в этом бою?",
+     *  не для чего-либо ещё. */
+    private boolean tagsLikelyEqual(String a, String b) {
+        if (a == null || b == null) return false;
+        if (a.equalsIgnoreCase(b)) return true;
+        return a.replace('O', '0').equalsIgnoreCase(b.replace('O', '0'));
     }
 }
