@@ -9,6 +9,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,6 +26,14 @@ public class ClashOfClansApiService {
     private static final String PLAYER_URL = "https://api.clashofclans.com/v1/players/%s";
     private static final int MAX_ATTEMPTS = 3;
     private static final long BASE_BACKOFF_MS = 500;
+    /** См. тот же фикс и его обоснование в BrawlStarsApiService (коммит 9950579) — без явного таймаута
+     *  HttpClient.newHttpClient() может зависнуть на TCP-уровне навсегда, а ClashQuestVerificationService.
+     *  checkInProgressSubmissions идёт последовательно по всем заявкам в одном потоке: один зависший
+     *  запрос блокирует ВЕСЬ батч. Подтверждено на проде (2026-09-22, жалоба игрока BOXING) — у ВСЕХ
+     *  13 ожидающих заявок на квест "Выиграй 3 атаки в мультиплеере" (разные игроки) clash_progress_count
+     *  оставался 0 без единой ошибки в логе за сутки — тот же класс симптомов, что был у Brawl. */
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -34,7 +43,7 @@ public class ClashOfClansApiService {
     public ClashOfClansApiService(@Value("${clashofclans.api-token:}") String apiToken, ObjectMapper objectMapper) {
         this.apiToken = apiToken;
         this.objectMapper = objectMapper;
-        this.httpClient = HttpClient.newHttpClient();
+        this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
         this.enabled = apiToken != null && !apiToken.isBlank();
         if (!enabled) {
             log.warn("ClashOfClansApiService disabled: CLASH_OF_CLANS_API_TOKEN not set");
@@ -82,6 +91,7 @@ public class ClashOfClansApiService {
                 HttpRequest req = HttpRequest.newBuilder()
                         .uri(URI.create(url))
                         .header("Authorization", "Bearer " + apiToken)
+                        .timeout(REQUEST_TIMEOUT)
                         .GET().build();
                 HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
 
