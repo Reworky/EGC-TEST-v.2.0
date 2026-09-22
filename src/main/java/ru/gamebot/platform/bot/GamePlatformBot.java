@@ -12531,6 +12531,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 cancelButtons.add(keyboardFactory.callback("❌ Отменить №" + num,
                         prefix + ":user:cancelsub:" + telegramId + ":" + page + ":" + s.getId()));
             }
+            // Ручное одобрение заявки на авто-верификации (DRAFT, без скриншота — обычная карточка
+            // модерации sendSubmissionCard для таких недостижима из этого экрана) — на случай, когда
+            // сама игровая API-проверка временно не работала/не может подтвердить прогресс (см.
+            // инцидент 2026-09-22, авто-верификация Brawl Stars). Одобряет ТЕМ ЖЕ questService.
+            // approveSubmission(), что и completeSubmission() в *QuestVerificationService — полная
+            // бизнес-логика начисления (EXC/XP/реферальный бонус/фиксация курса), не прямая правка БД.
+            // Только для квестов с реально включённой авто-верификацией — не для обычных DRAFT без
+            // подтверждения вообще (те решаются штатной модерацией по скриншоту).
+            boolean isAutoVerifyDraft = "admin".equals(prefix)
+                    && s.getStatus() == ru.gamebot.platform.domain.enums.SubmissionStatus.DRAFT
+                    && (s.getQuest().getBrawlVerifyType() != null
+                        || s.getQuest().getClashVerifyType() != null
+                        || s.getQuest().getClashRoyaleVerifyType() != null
+                        || s.getQuest().getDotaVerifyType() != null
+                        || s.getQuest().getCs2VerifyType() != null
+                        || s.getQuest().getPubgVerifyType() != null);
+            if (isAutoVerifyDraft) {
+                cancelButtons.add(keyboardFactory.callback("✅ Одобрить №" + num, "mod:ok:" + s.getId()));
+            }
             if (s.getMediaFileId() != null) {
                 String dupTag = s.isDuplicatePhotoDetected() ? " 🚨" : "";
                 fileButtons.add(keyboardFactory.callback("🖼 Файл №" + num + dupTag,
