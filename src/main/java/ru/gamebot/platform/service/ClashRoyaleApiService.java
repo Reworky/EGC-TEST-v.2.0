@@ -47,9 +47,11 @@ public class ClashRoyaleApiService {
 
     /**
      * trophies/wins/threeCrownWins/warDayWins/totalDonations/battleCount — top-level поля ответа
-     * /players/{tag}. НЕ ПРОВЕРЕНО на живом ответе API (нет токена на момент написания) — при первом
-     * реальном запуске обязательно сверить точные имена, та же оговорка, что была для Clash of Clans
-     * до подтверждения токена и для battlelog Brawl Stars до его сверки.
+     * /players/{tag}. Подтверждено дважды (2026-09-22, аудит после тикета поддержки #213): и живым
+     * ответом API (все поля на верхнем уровне, ровно с этими именами), и историей одобрений в БД
+     * (240+ APPROVED суммарно по всем 6 типам верификации). totalDonations выбран намеренно вместо
+     * "donations" — тот сбрасывается посезонно (та же ловушка, что сломала attackWins/defenseWins
+     * у Clash of Clans), totalDonations — накопительный за всю историю аккаунта.
      */
     public record PlayerInfo(String tag, String name, int trophies, int wins, int threeCrownWins,
                               int warDayWins, int totalDonations, int battleCount) {}
