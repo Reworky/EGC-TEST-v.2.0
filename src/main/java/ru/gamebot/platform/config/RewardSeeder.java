@@ -136,17 +136,16 @@ public class RewardSeeder implements CommandLineRunner {
             if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
         });
 
-        String grimSoulPrompt = "Укажите ваш ID аккаунта Grim Soul.\n\n"
-                + "Где найти: откройте профиль в игре → ваш ID указан под именем.\n\n"
-                + "Введите ID аккаунта:";
-
-        seed("Grim Soul - Талеры 35",
-                "Пополнение 35 Талеров на аккаунт Grim Soul. Зачисляется по ID аккаунта без входа. Срок доставки — до 24 ч.",
-                "Grim Soul", 20_000, grimSoulPrompt, 1_000, "grim_soul");
-
-        seed("Grim Soul - Талеры 150",
-                "Пополнение 150 Талеров на аккаунт Grim Soul. Зачисляется по ID аккаунта без входа. Срок доставки — до 24 ч.",
-                "Grim Soul", 81_500, grimSoulPrompt, 75_000, "grim_soul");
+        // Grim Soul убран из магазина целиком по запросу пользователя (2026-09-22) — не удаляем
+        // строки (сломало бы историю уже одобренных заявок на эти товары), только деактивируем,
+        // тот же паттерн, что у EA FC 26/Clash Royale 80 Gems выше. seed() ниже не трогает active
+        // у существующей записи, так что оставлять эти вызовы закомментированными безопасно —
+        // они не переактивируют товар обратно.
+        for (String title : List.of("Grim Soul - Талеры 35", "Grim Soul - Талеры 150")) {
+            rewardItemRepository.findByTitle(title).ifPresent(item -> {
+                if (item.isActive()) { item.setActive(false); rewardItemRepository.save(item); }
+            });
+        }
 
         rewardItemRepository.findByTitle("Clash Royale — 80 Gems").ifPresent(old -> {
             if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
