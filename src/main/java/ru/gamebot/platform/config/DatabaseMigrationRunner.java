@@ -41,6 +41,35 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         fixNullDurationText();
         backfillOwnedFrames();
         backfillCooldownReminderBaseline();
+        resetStaleAttackWinsBaseline();
+    }
+
+    /** Инцидент 2026-09-22 (тикет поддержки #213): ClashQuestVerificationService для ATTACK_WINS
+     *  считал прогресс от top-level поля attackWins — оказалось, оно обнуляется по сезону/новому
+     *  режиму "Рейтинговое сражение" (см. javadoc ClashOfClansApiService.PlayerInfo.multiplayerWins).
+     *  Источник переключён на ачивку "Conqueror" (монотонная, никогда не сбрасывается) — но заявки,
+     *  УЖЕ взятые ДО этого деплоя, хранят базу (clash_baseline_value), зафиксированную по-старому
+     *  (у большинства 0, т.к. attackWins был обнулён у всех разом). Без сброса первый же опрос по
+     *  новому коду прочитает multiplayerWins (тысячи побед за карьеру) как "текущее" и вычтет из
+     *  старой базы (0) — получится многотысячная фиктивная дельта, квест одобрится всем мгновенно
+     *  и незаслуженно. Сбрасываем базу ТОЛЬКО у заявок, взятых до деплоя этого фикса (created_at
+     *  раньше даты деплоя) — новые заявки, взятые после, получают верную базу от multiplayerWins
+     *  сразу и этим условием не затрагиваются, так что миграция безопасно бездействует на будущих
+     *  перезапусках (created_at < cutoff никогда не станет истинным для новых записей). */
+    private void resetStaleAttackWinsBaseline() {
+        try {
+            java.time.LocalDateTime cutoff = java.time.LocalDateTime.of(2026, 9, 23, 0, 0);
+            int updated = jdbcTemplate.update(
+                "UPDATE quest_submissions SET clash_baseline_value = NULL, clash_progress_count = 0 " +
+                "WHERE status = 'DRAFT' AND clash_baseline_value IS NOT NULL AND created_at < ? " +
+                "AND quest_id IN (SELECT id FROM quests WHERE clash_verify_type = 'ATTACK_WINS')",
+                cutoff);
+            if (updated > 0) {
+                log.info("[DBMigration] resetStaleAttackWinsBaseline: reset stale attackWins-based baseline for {} in-progress submissions (incident 2026-09-22 fix, switch to Conqueror achievement)", updated);
+            }
+        } catch (Exception e) {
+            log.error("[DBMigration] resetStaleAttackWinsBaseline failed: {}", e.getMessage());
+        }
     }
 
     /** Инцидент 2026-09-20: при включении повторного напоминания о снятом кулдауне (см.

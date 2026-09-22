@@ -55,17 +55,23 @@ public class ClashOfClansApiService {
     }
 
     /**
-     * goldLooted/elixirLooted — накопленные за ВСЮ историю аккаунта значения из achievements "Gold Grab"/
-     * "Elixir Escapade" (0, если ачивка не нашлась в ответе — не должно происходить в норме, но не валим на этом).
-     * townHallLevel/attackWins/trophies/warStars/donations/defenseWins/expLevel/builderBaseTrophies —
-     * top-level поля ответа /players/{tag}.
-     * ЕЩЁ НЕ СВЕРЕНО на живом ответе API — токен уже настроен и задеплоен, но реальный первый прогон
-     * (взять квест, привязать тег, дождаться опроса) ещё не подтверждён. Сверить точные названия ачивок
-     * и что все перечисленные поля действительно лежат на верхнем уровне, а не вложенно, прежде чем
-     * доверять фиче полностью (та же оговорка, что была для battlelog Brawl Stars до его сверки).
-     * builderBaseTrophies — в некоторых версиях API называлось versusTrophies, стоит перепроверить.
+     * goldLooted/elixirLooted/multiplayerWins — накопленные за ВСЮ историю аккаунта значения из
+     * achievements "Gold Grab"/"Elixir Escapade"/"Conqueror" (0, если ачивка не нашлась в ответе —
+     * не должно происходить в норме, но не валим на этом). townHallLevel/trophies/warStars/donations/
+     * defenseWins/expLevel/builderBaseTrophies — top-level поля ответа /players/{tag}, подтверждены
+     * живым API (2026-09-22, тикет поддержки #213, игрок BOXING).
+     *
+     * multiplayerWins (ачивка "Conqueror", "Win 5000 Multiplayer battles") — источник для ATTACK_WINS
+     * ВМЕСТО top-level поля attackWins: тот же аудит показал, что attackWins — счётчик за ТЕКУЩИЙ
+     * сезон/режим (обнуляется), у активного игрока с ~4600 побед за карьеру он читался 0 при трофеях
+     * 110 против bestTrophies 5100 (похоже на сброс, связанный с новым режимом "Рейтинговое сражение" —
+     * точный механизм за пределами данных обучения, не угадывается). Ачивка растёт монотонно, того же
+     * паттерна, что уже применён для RESOURCES (Gold Grab/Elixir Escapade) по той же причине раньше.
+     * defenseWins/trophies — та же семья "текущий период" полей, что и attackWins, потенциально
+     * подвержены тому же сбросу, но НЕ переключены здесь — нет живого подтверждения (в отличие от
+     * attackWins, где инцидент был подтверждён явно), см. клубную память по инциденту 2026-09-22.
      */
-    public record PlayerInfo(String tag, String name, int townHallLevel, int attackWins, int goldLooted, int elixirLooted,
+    public record PlayerInfo(String tag, String name, int townHallLevel, int multiplayerWins, int goldLooted, int elixirLooted,
                               int trophies, int warStars, int donations, int defenseWins, int expLevel, int builderBaseTrophies) {}
 
     public static class ClashApiTransientException extends Exception {
@@ -122,19 +128,22 @@ public class ClashOfClansApiService {
             JsonNode node = objectMapper.readTree(body);
             int goldLooted = 0;
             int elixirLooted = 0;
+            int multiplayerWins = 0;
             for (JsonNode achievement : node.path("achievements")) {
                 String name = achievement.path("name").asText("");
                 if ("Gold Grab".equalsIgnoreCase(name)) {
                     goldLooted = achievement.path("value").asInt(0);
                 } else if ("Elixir Escapade".equalsIgnoreCase(name)) {
                     elixirLooted = achievement.path("value").asInt(0);
+                } else if ("Conqueror".equalsIgnoreCase(name)) {
+                    multiplayerWins = achievement.path("value").asInt(0);
                 }
             }
             return new PlayerInfo(
                     node.path("tag").asText(selfTag),
                     node.path("name").asText(""),
                     node.path("townHallLevel").asInt(0),
-                    node.path("attackWins").asInt(0),
+                    multiplayerWins,
                     goldLooted,
                     elixirLooted,
                     node.path("trophies").asInt(0),

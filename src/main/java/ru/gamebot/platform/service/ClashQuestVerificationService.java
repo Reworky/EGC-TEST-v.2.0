@@ -90,7 +90,9 @@ public class ClashQuestVerificationService {
             case DEFENSE_WINS -> info.defenseWins();
             case EXP_LEVEL -> info.expLevel();
             case BUILDER_TROPHIES -> info.builderBaseTrophies();
-            default -> info.attackWins(); // ATTACK_WINS
+            // ATTACK_WINS: НЕ top-level attackWins — тот обнуляется по сезону/новому режиму (2026-09-22,
+            // тикет #213, см. javadoc PlayerInfo.multiplayerWins). Ачивка "Conqueror" не сбрасывается.
+            default -> info.multiplayerWins();
         };
         checkSingleValue(submission, quest, current);
     }
