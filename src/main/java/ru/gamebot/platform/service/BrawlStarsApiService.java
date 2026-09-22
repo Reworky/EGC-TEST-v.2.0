@@ -9,6 +9,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -23,6 +24,18 @@ public class BrawlStarsApiService {
     private static final String PLAYER_URL = "https://api.brawlstars.com/v1/players/%s";
     private static final int MAX_ATTEMPTS = 3;
     private static final long BASE_BACKOFF_MS = 500;
+    /** Без явного таймаута HttpClient.newHttpClient() может зависнуть на TCP-уровне на неопределённое
+     *  время (нет ни connect-, ни request-таймаута по умолчанию) — а checkInProgressSubmissions идёт
+     *  ПОСЛЕДОВАТЕЛЬНО по всем заявкам в одном потоке шедулера. Один "зависший" запрос без таймаута
+     *  блокирует весь батч навсегда: остальные заявки (в т.ч. других игроков) просто никогда не
+     *  доходят до проверки, а следующий запуск @Scheduled(fixedDelay=...) не стартует, пока текущий
+     *  не завершится — итог неотличим от "сервис молча перестал работать" (инцидент 2026-09-22:
+     *  у игрока brawl_battle_cursor оставался NULL сутки — ни одной успешной, ни одной залогированной
+     *  ошибочной попытки после единственного всплеска сетевых ошибок). Явные таймауты гарантируют,
+     *  что зависшая попытка сама себя оборвёт (IOException -> уже обрабатывается retry/catch ниже),
+     *  а батч продолжит идти дальше. */
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -32,7 +45,7 @@ public class BrawlStarsApiService {
     public BrawlStarsApiService(@Value("${brawlstars.api-token:}") String apiToken, ObjectMapper objectMapper) {
         this.apiToken = apiToken;
         this.objectMapper = objectMapper;
-        this.httpClient = HttpClient.newHttpClient();
+        this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
         this.enabled = apiToken != null && !apiToken.isBlank();
         if (!enabled) {
             log.warn("BrawlStarsApiService disabled: BRAWL_STARS_API_TOKEN not set");
@@ -89,6 +102,7 @@ public class BrawlStarsApiService {
                 HttpRequest req = HttpRequest.newBuilder()
                         .uri(URI.create(url))
                         .header("Authorization", "Bearer " + apiToken)
+                        .timeout(REQUEST_TIMEOUT)
                         .GET().build();
                 HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
 
@@ -149,6 +163,7 @@ public class BrawlStarsApiService {
                 HttpRequest req = HttpRequest.newBuilder()
                         .uri(URI.create(url))
                         .header("Authorization", "Bearer " + apiToken)
+                        .timeout(REQUEST_TIMEOUT)
                         .GET().build();
                 HttpResponse<String> resp = httpClient.send(req, HttpResponse.BodyHandlers.ofString());
 
