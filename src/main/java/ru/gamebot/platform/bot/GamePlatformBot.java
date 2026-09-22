@@ -12321,6 +12321,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if ("tags".equals(action)) {
+            sendAdminUserTagsMenu(admin, telegramId, page == null ? 0 : page, null);
+            return;
+        }
+
+        if ("tagreset".equals(action) && parts.length >= 4) {
+            AppUser target = userService.findByTelegramId(telegramId).orElse(null);
+            if (target == null) {
+                sendText(admin.getTelegramId(), "⚠️ Пользователь не найден.", backMenuKeyboard("admin:users:0"));
+                return;
+            }
+            ru.gamebot.platform.service.UserService.GameTagKey key = GAME_TAG_KEYS_BY_CODE.get(parts[3]);
+            if (key == null) {
+                sendAdminUserTagsMenu(admin, telegramId, page == null ? 0 : page, "⚠️ Неизвестный тег.");
+                return;
+            }
+            userService.resetGameTag(target, key);
+            sendAdminUserTagsMenu(admin, telegramId, page == null ? 0 : page,
+                    "✅ Тег " + GAME_TAG_LABELS.get(key) + " сброшен.");
+            return;
+        }
+
         if ("block".equals(action)) {
             AppUser target = userService.findByTelegramId(telegramId).orElse(null);
             if (target == null) {
@@ -12942,6 +12964,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("💳 История EXC", "admin:user:exc:" + telegramId + ":0")),
                 List.of(keyboardFactory.callback("💸 История выводов", "admin:user:withdrawals:" + telegramId + ":0")),
                 List.of(keyboardFactory.callback("🗑 Сбросить активные квесты", "admin:user:resetquests:" + telegramId + ":" + page)),
+                List.of(keyboardFactory.callback("🏷️ Сбросить теги", "admin:user:tags:" + telegramId + ":" + page)),
                 List.of(keyboardFactory.callback("👤 Сделать игроком", "admin:user:role:" + telegramId + ":" + page + ":" + ROLE_USER)),
                 List.of(keyboardFactory.callback("🛡️ Сделать модератором", "admin:user:role:" + telegramId + ":" + page + ":" + ROLE_MODER)),
                 List.of(keyboardFactory.callback("🛠️ Сделать админом", "admin:user:role:" + telegramId + ":" + page + ":" + ROLE_ADMIN)),
@@ -16125,7 +16148,61 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     : "❌ Clash Royale: не привязан\n")
                 + (user.getDotaAccountId() != null
                     ? "✅ Dota 2: <code>" + user.getDotaAccountId() + "</code>\n"
-                    : "❌ Dota 2: не привязан\n");
+                    : "❌ Dota 2: не привязан\n")
+                + (user.getCs2SteamId64() != null
+                    ? "✅ CS2: <code>" + user.getCs2SteamId64() + "</code>\n"
+                    : "❌ CS2: не привязан\n")
+                + (user.getPubgAccountId() != null
+                    ? "✅ PUBG PC: <code>" + escape(user.getPubgAccountId()) + "</code>\n"
+                    : "❌ PUBG PC: не привязан\n");
+    }
+
+    private static final Map<String, ru.gamebot.platform.service.UserService.GameTagKey> GAME_TAG_KEYS_BY_CODE = Map.of(
+            "brawl", ru.gamebot.platform.service.UserService.GameTagKey.BRAWL_STARS,
+            "coc", ru.gamebot.platform.service.UserService.GameTagKey.CLASH_OF_CLANS,
+            "cr", ru.gamebot.platform.service.UserService.GameTagKey.CLASH_ROYALE,
+            "dota", ru.gamebot.platform.service.UserService.GameTagKey.DOTA2,
+            "cs2", ru.gamebot.platform.service.UserService.GameTagKey.CS2,
+            "pubg", ru.gamebot.platform.service.UserService.GameTagKey.PUBG
+    );
+
+    private static final Map<ru.gamebot.platform.service.UserService.GameTagKey, String> GAME_TAG_LABELS = Map.of(
+            ru.gamebot.platform.service.UserService.GameTagKey.BRAWL_STARS, "Brawl Stars",
+            ru.gamebot.platform.service.UserService.GameTagKey.CLASH_OF_CLANS, "Clash of Clans",
+            ru.gamebot.platform.service.UserService.GameTagKey.CLASH_ROYALE, "Clash Royale",
+            ru.gamebot.platform.service.UserService.GameTagKey.DOTA2, "Dota 2",
+            ru.gamebot.platform.service.UserService.GameTagKey.CS2, "CS2",
+            ru.gamebot.platform.service.UserService.GameTagKey.PUBG, "PUBG PC"
+    );
+
+    /** Экран сброса игровых тегов — на случай неверно привязанного тега (опечатка, чужой аккаунт) или
+     *  по просьбе игрока привязать заново. Кнопка "Сбросить" показывается только для реально привязанных
+     *  тегов — нечего сбрасывать у тех, что и так пустые. Сам сброс — только tag/ID, прогресс уже
+     *  существующих заявок на авто-верификацию не трогается (см. UserService.resetGameTag). */
+    private void sendAdminUserTagsMenu(AppUser admin, Long telegramId, int page, String notice) {
+        AppUser target = userService.findByTelegramId(telegramId).orElse(null);
+        if (target == null) {
+            sendText(admin.getTelegramId(), "⚠️ Пользователь не найден.", backMenuKeyboard("admin:users:0"));
+            return;
+        }
+        String text = (notice == null ? "" : notice + "\n\n")
+                + "🏷️ <b>Сброс игровых тегов</b>\n"
+                + "👤 " + escape(displayUserName(target)) + " (ID " + telegramId + ")\n\n"
+                + buildGameTagsBlock(target);
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (Map.Entry<String, ru.gamebot.platform.service.UserService.GameTagKey> entry : GAME_TAG_KEYS_BY_CODE.entrySet()) {
+            if (userService.getGameTagValue(target, entry.getValue()) != null) {
+                rows.add(List.of(keyboardFactory.callback(
+                        "🗑 Сбросить " + GAME_TAG_LABELS.get(entry.getValue()),
+                        "admin:user:tagreset:" + telegramId + ":" + page + ":" + entry.getKey())));
+            }
+        }
+        if (rows.isEmpty()) {
+            rows.add(List.of(keyboardFactory.callback("ℹ️ Тегов нет", "noop")));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:user:view:" + telegramId + ":" + page)));
+        sendText(admin.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
 
     /** Текст для кнопки авто-верифицируемого квеста — с текущим прогрессом, если он уже известен

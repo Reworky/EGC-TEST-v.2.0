@@ -1294,6 +1294,56 @@ public class UserService {
         return appUserRepository.countByTrafficSourceCodeAndRegistrationCompletedTrue(code);
     }
 
+    /** Игровые теги, которые можно сбросить админу (карточка пользователя → "🏷️ Сбросить теги") —
+     *  на случай неверно привязанного тега (опечатка, чужой аккаунт) или по просьбе игрока привязать
+     *  заново. Не трогает прогресс уже существующих заявок на авто-верификацию (baseline/progress
+     *  в QuestSubmission остаются как есть) — если игрок привяжет тег заново, дальнейший опрос пойдёт
+     *  уже по новому тегу, старый прогресс не пересчитывается задним числом. */
+    public enum GameTagKey { BRAWL_STARS, CLASH_OF_CLANS, CLASH_ROYALE, DOTA2, CS2, PUBG }
+
+    /** Текущее значение тега/ID для отображения в админке — null, если не привязан. */
+    public String getGameTagValue(AppUser user, GameTagKey key) {
+        return switch (key) {
+            case BRAWL_STARS -> user.getBrawlStarsTag();
+            case CLASH_OF_CLANS -> user.getClashOfClansTag();
+            case CLASH_ROYALE -> user.getClashRoyaleTag();
+            case DOTA2 -> user.getDotaAccountId() != null ? String.valueOf(user.getDotaAccountId()) : null;
+            case CS2 -> user.getCs2SteamId64() != null ? String.valueOf(user.getCs2SteamId64()) : null;
+            case PUBG -> user.getPubgAccountId();
+        };
+    }
+
+    @Transactional
+    public void resetGameTag(AppUser user, GameTagKey key) {
+        switch (key) {
+            case BRAWL_STARS -> {
+                user.setBrawlStarsTag(null);
+                user.setBrawlTagConfirmedAt(null);
+            }
+            case CLASH_OF_CLANS -> {
+                user.setClashOfClansTag(null);
+                user.setClashTagConfirmedAt(null);
+            }
+            case CLASH_ROYALE -> {
+                user.setClashRoyaleTag(null);
+                user.setClashRoyaleTagConfirmedAt(null);
+            }
+            case DOTA2 -> {
+                user.setDotaAccountId(null);
+                user.setDotaLinkedAt(null);
+            }
+            case CS2 -> {
+                user.setCs2SteamId64(null);
+                user.setCs2LinkedAt(null);
+            }
+            case PUBG -> {
+                user.setPubgAccountId(null);
+                user.setPubgLinkedAt(null);
+            }
+        }
+        appUserRepository.save(user);
+    }
+
     public List<AppUser> allUsersSorted() {
         return appUserRepository.findAll().stream()
                 .sorted(Comparator.comparing(AppUser::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder()))
