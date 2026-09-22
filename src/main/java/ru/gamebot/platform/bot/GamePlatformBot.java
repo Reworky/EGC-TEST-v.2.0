@@ -2459,8 +2459,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             ? "\n\n💫 Stars возвращены игроку автоматически."
                             : "\n\n⚠️ Не удалось автоматически вернуть Stars — верните вручную, см. лог сервера.";
                 }
-                notifyUserGemPurchaseRejected(req, refundNote);
-                sendText(user.getTelegramId(), "❌ Заявка Д-" + req.getDisplayId() + " отклонена, игрок уведомлён." + refundNote, backMenuKeyboard("admin:gempurchase"));
+                // Игрок мог заблокировать бота — сама заявка уже отклонена (DB-запись выше),
+                // уведомление лишь best-effort. Без try/catch необработанное [403] Forbidden всплывало
+                // как "Что-то пошло не так" у АДМИНА, хотя отклонение реально прошло успешно —
+                // инцидент 2026-09-22, жалоба "нельзя отменить заявку" (заявка Д-5, BekaAuraTTM).
+                boolean notified = true;
+                try {
+                    notifyUserGemPurchaseRejected(req, refundNote);
+                } catch (Exception e) {
+                    notified = false;
+                    log.warn("Failed to notify user {} about gem purchase rejection", req.getUser().getTelegramId(), e);
+                }
+                String notifyNote = notified ? ", игрок уведомлён." : " (игрок недоступен — уведомление не доставлено, бот заблокирован).";
+                sendText(user.getTelegramId(), "❌ Заявка Д-" + req.getDisplayId() + " отклонена" + notifyNote + refundNote, backMenuKeyboard("admin:gempurchase"));
             }
             case CLASH_TAG_INPUT -> {
                 ru.gamebot.platform.service.ClashQuestVerificationService.TagLookupResult res =
@@ -15194,7 +15205,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else if (action.startsWith("approve:")) {
             long id = Long.parseLong(action.substring("approve:".length()));
             GemPurchaseRequest req = gemPurchaseService.approve(id);
-            notifyUserGemPurchaseApproved(req);
+            // Игрок мог заблокировать бота — сама заявка при этом уже одобрена (DB-запись выше),
+            // уведомление лишь best-effort. Без try/catch необработанное [403] Forbidden всплывало
+            // как "Что-то пошло не так" у АДМИНА, хотя действие реально прошло успешно — инцидент
+            // 2026-09-22, жалоба "нельзя отменить заявку" (симметричный баг был и в reject-ветке ниже).
+            try {
+                notifyUserGemPurchaseApproved(req);
+            } catch (Exception e) {
+                log.warn("Failed to notify user {} about gem purchase approval", req.getUser().getTelegramId(), e);
+            }
             sendText(user.getTelegramId(), "✅ Заявка Д-" + req.getDisplayId() + " отмечена выполненной, игроку начислен XP-бонус.", null);
             sendAdminGemPurchaseRequests(user);
         } else if (action.startsWith("reject:")) {
