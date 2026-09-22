@@ -8489,13 +8489,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendAdminEngagementStats(user, action.substring("stats:engagement:src:".length()));
                     answerSilently(callbackQuery.getId());
                     return;
-                } else if (action.startsWith("traffic:view:")) {
-                    sendAdminTrafficView(user, parseLong(action.substring("traffic:view:".length())));
+                } else if (action.startsWith("traffic:page:")) {
+                    sendAdminTrafficList(user, parseInteger(action.substring("traffic:page:".length())));
                     answerSilently(callbackQuery.getId());
                     return;
                 } else if (action.startsWith("traffic:view:page:")) {
+                    // ДО "traffic:view:" ниже — та же строка "traffic:view:page:5:0" начинается и с
+                    // короткого префикса "traffic:view:" тоже, более специфичную ветку иначе никогда
+                    // не достичь (найдено 2026-09-22 в связке с фиксом пагинации sendAdminTrafficList).
                     String[] parts = action.substring("traffic:view:page:".length()).split(":");
                     sendAdminTrafficUsersPage(user, parseLong(parts[0]), parseInteger(parts[1]));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("traffic:view:")) {
+                    sendAdminTrafficView(user, parseLong(action.substring("traffic:view:".length())));
                     answerSilently(callbackQuery.getId());
                     return;
                 } else if (action.startsWith("traffic:delete:")) {
@@ -11122,16 +11129,44 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendAdminTrafficList(AppUser user) {
+        sendAdminTrafficList(user, 0);
+    }
+
+    /** Без пагинации список рос неограниченно (массовая генерация "📦 Пачка ссылок") — при 97
+     *  источниках Telegram стал отклонять весь экран целиком ("[400] reply markup is too long",
+     *  инцидент 2026-09-22, жалоба "раздел не открывается") — раздел был полностью недоступен ЛЮБОМУ
+     *  админу, не только тому, кто создал много источников. Тот же паттерн постраничности, что уже
+     *  в sendUserQuestHistory. */
+    private static final int TRAFFIC_PAGE_SIZE = 15;
+
+    private void sendAdminTrafficList(AppUser user, int page) {
         List<ru.gamebot.platform.domain.model.TrafficSource> sources = trafficSourceService.findAll();
-        String text = "📈 <b>Источники трафика</b>" + (sources.isEmpty() ? "\n\nИсточников пока нет." : "");
+        int totalPages = Math.max(1, (sources.size() + TRAFFIC_PAGE_SIZE - 1) / TRAFFIC_PAGE_SIZE);
+        int safePage = Math.max(0, Math.min(page, totalPages - 1));
+        List<ru.gamebot.platform.domain.model.TrafficSource> pageItems = sources.isEmpty()
+                ? sources
+                : sources.subList(safePage * TRAFFIC_PAGE_SIZE, Math.min((safePage + 1) * TRAFFIC_PAGE_SIZE, sources.size()));
+
+        String text = "📈 <b>Источники трафика</b>" + (sources.isEmpty() ? "\n\nИсточников пока нет."
+                : "\n\nВсего: " + sources.size() + " · Страница " + (safePage + 1) + " из " + totalPages);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        for (ru.gamebot.platform.domain.model.TrafficSource ts : sources) {
+        for (ru.gamebot.platform.domain.model.TrafficSource ts : pageItems) {
             long clicks = ts.getClicks();
             long started = userService.countByTrafficSource(ts.getCode());
             long activated = userService.countActivatedByTrafficSource(ts.getCode());
             String conv = clicks > 0 ? String.format("%.0f%%", activated * 100.0 / clicks) : "—";
             String label = ts.getCode() + " · " + clicks + " кл · " + started + " зш · " + activated + " акт · " + conv;
             rows.add(List.of(keyboardFactory.callback(label, "admin:traffic:view:" + ts.getId())));
+        }
+        List<InlineKeyboardButton> navRow = new ArrayList<>();
+        if (safePage > 0) {
+            navRow.add(keyboardFactory.callback("⬅️", "admin:traffic:page:" + (safePage - 1)));
+        }
+        if (safePage < totalPages - 1) {
+            navRow.add(keyboardFactory.callback("➡️", "admin:traffic:page:" + (safePage + 1)));
+        }
+        if (!navRow.isEmpty()) {
+            rows.add(navRow);
         }
         rows.add(List.of(keyboardFactory.callback("➕ Создать источник", "admin:traffic:create")));
         rows.add(List.of(keyboardFactory.callback("📦 Пачка ссылок", "admin:traffic:batch")));
