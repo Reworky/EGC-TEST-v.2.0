@@ -720,6 +720,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendCommunityActivationPrompt(user, null);
             return;
         }
+        // Ссылка "оставить отзыв" для поста в канале/рассылки — не только тем, кто уже вывел EXC
+        // (см. promptGeneralReview). Требует завершённой регистрации — иначе некому засчитать отзыв
+        // как реального игрока, тот же паттерн, что и у остальных deep-link'ов ниже.
+        if (startPayload.equals("review") && user.isRegistrationCompleted()) {
+            promptGeneralReview(user);
+            return;
+        }
         if (startPayload.startsWith("squad_") && user.isRegistrationCompleted()) {
             String code = startPayload.substring("squad_".length());
             try {
@@ -9782,6 +9789,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     // ── Отзывы после вывода EXC ─────────────────────────────────────────────
 
+    /** Вход в тот же флоу отзыва БЕЗ привязки к выводу — по прямой ссылке "t.me/<bot>?start=review"
+     *  (см. handleStart), для поста в канале/рассылки: "оставь отзыв о клубе", не только тем, кто уже
+     *  выводил EXC. Та же клавиатура 1-5 звёзд, только callback "review:gstars:N" вместо
+     *  "review:stars:reqId:N" — reqId просто нет, отзыв не привязан ни к какой заявке на вывод. */
+    private void promptGeneralReview(AppUser user) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(
+                keyboardFactory.callback("⭐️⭐️⭐️⭐️⭐️", "review:gstars:5"),
+                keyboardFactory.callback("⭐️⭐️⭐️⭐️", "review:gstars:4")));
+        rows.add(List.of(
+                keyboardFactory.callback("⭐️⭐️⭐️", "review:gstars:3"),
+                keyboardFactory.callback("⭐️⭐️", "review:gstars:2"),
+                keyboardFactory.callback("⭐️", "review:gstars:1")));
+        sendText(user.getTelegramId(),
+                "🙏 Оцени свой опыт в EGC — это очень помогает клубу.",
+                keyboardFactory.rowsLayout(rows));
+    }
+
     /** По желанию игрока — просит оценить качество вывода 1-5 звёзд после его закрытия.
      * Собранный отзыв уходит на модерацию ({@link #sendReviewModerationCard}), затем публикуется
      * в канал отзывов ({@link #publishReviewToChannel}). */
@@ -9824,6 +9849,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("✅ Готово", "review:finish")))));
             return;
         }
+        // Отзыв без привязки к выводу — вход по ссылке "?start=review" (см. handleStart), для поста
+        // в канале, а не только для тех, кто уже вывел EXC (см. promptGeneralReview). Тот же флоу
+        // дальше (текст/фото/"Готово"), reqId просто не заполняется в session.
+        if (action.startsWith("gstars:")) {
+            int stars = Integer.parseInt(action.substring("gstars:".length()));
+            session.reset();
+            session.getData().put("reviewStars", String.valueOf(stars));
+            session.setState(SessionState.WITHDRAWAL_REVIEW_TEXT);
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "Спасибо!");
+            sendText(user.getTelegramId(),
+                    "Спасибо за оценку! Хочешь добавить пару слов и/или скриншот? Отправь текст и/или фото, а затем нажми «Готово» — можно нажать сразу, без текста.",
+                    keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("✅ Готово", "review:finish")))));
+            return;
+        }
         if (action.startsWith("skip:")) {
             clearInlineKeyboard(callbackQuery);
             answer(callbackQuery.getId(), "Хорошо, спасибо!");
@@ -9834,22 +9874,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 answerSilently(callbackQuery.getId());
                 return;
             }
-            finalizeWithdrawalReview(user, session);
+            finalizeReview(user, session);
             clearInlineKeyboard(callbackQuery);
             answerSilently(callbackQuery.getId());
         }
     }
 
-    private void finalizeWithdrawalReview(AppUser user, UserSession session) {
+    /** Общий сборщик отзыва — reqIdStr отсутствует у отзывов без привязки к выводу (вход по ссылке
+     *  "?start=review", см. promptGeneralReview/handleReviewAction "gstars:"), у них
+     *  rewardRequestId остаётся null. Публикация (publishReviewToChannel) reqId не использует —
+     *  ничего не ломается для отзывов без вывода. */
+    private void finalizeReview(AppUser user, UserSession session) {
         String reqIdStr = session.getData().get("reviewReqId");
         String starsStr = session.getData().get("reviewStars");
-        if (reqIdStr == null || starsStr == null) {
+        if (starsStr == null) {
             session.reset();
             return;
         }
         BotReview review = new BotReview();
         review.setUser(user);
-        review.setRewardRequestId(Long.parseLong(reqIdStr));
+        review.setRewardRequestId(reqIdStr != null ? Long.parseLong(reqIdStr) : null);
         review.setStars(Integer.parseInt(starsStr));
         review.setText(session.getData().get("reviewText"));
         review.setPhotoFileId(session.getData().get("reviewPhotoFileId"));
