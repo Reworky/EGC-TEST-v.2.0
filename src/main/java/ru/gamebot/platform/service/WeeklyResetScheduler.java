@@ -231,8 +231,10 @@ public class WeeklyResetScheduler {
         }
     }
 
-    // Проверка прогресса авто-верификации квестов Clash of Clans — каждые 10 минут
-    @Scheduled(fixedDelay = 600_000)
+    // Проверка прогресса авто-верификации квестов Clash of Clans — каждые 2 минуты (выровнено с Brawl
+    // Stars 2026-09-22 по прямому запросу: единый темп проверки для всех игр с авто-верификацией,
+    // чтобы задержка первого зачёта не отличалась от игры к игре).
+    @Scheduled(fixedDelay = 120_000)
     public void checkClashAutoVerifyProgress() {
         try {
             clashQuestVerificationService.checkInProgressSubmissions();
@@ -241,8 +243,8 @@ public class WeeklyResetScheduler {
         }
     }
 
-    // Проверка прогресса авто-верификации квестов Clash Royale — каждые 10 минут
-    @Scheduled(fixedDelay = 600_000)
+    // Проверка прогресса авто-верификации квестов Clash Royale — каждые 2 минуты (см. комментарий у checkClashAutoVerifyProgress).
+    @Scheduled(fixedDelay = 120_000)
     public void checkClashRoyaleAutoVerifyProgress() {
         try {
             clashRoyaleQuestVerificationService.checkInProgressSubmissions();
@@ -251,8 +253,8 @@ public class WeeklyResetScheduler {
         }
     }
 
-    // Проверка прогресса авто-верификации квестов Dota 2 (Steam Web API) — каждые 10 минут
-    @Scheduled(fixedDelay = 600_000)
+    // Проверка прогресса авто-верификации квестов Dota 2 (Steam Web API) — каждые 2 минуты (см. комментарий у checkClashAutoVerifyProgress).
+    @Scheduled(fixedDelay = 120_000)
     public void checkDotaAutoVerifyProgress() {
         try {
             dota2QuestVerificationService.checkInProgressSubmissions();
@@ -261,8 +263,8 @@ public class WeeklyResetScheduler {
         }
     }
 
-    // Проверка прогресса авто-верификации квестов CS2 (Steam Web API) — каждые 10 минут
-    @Scheduled(fixedDelay = 600_000)
+    // Проверка прогресса авто-верификации квестов CS2 (Steam Web API) — каждые 2 минуты (см. комментарий у checkClashAutoVerifyProgress).
+    @Scheduled(fixedDelay = 120_000)
     public void checkCs2AutoVerifyProgress() {
         try {
             cs2QuestVerificationService.checkInProgressSubmissions();
@@ -271,8 +273,8 @@ public class WeeklyResetScheduler {
         }
     }
 
-    // Проверка прогресса авто-верификации квестов PUBG PC (официальный API developer.pubg.com) — каждые 10 минут
-    @Scheduled(fixedDelay = 600_000)
+    // Проверка прогресса авто-верификации квестов PUBG PC (официальный API developer.pubg.com) — каждые 2 минуты (см. комментарий у checkClashAutoVerifyProgress).
+    @Scheduled(fixedDelay = 120_000)
     public void checkPubgAutoVerifyProgress() {
         try {
             pubgQuestVerificationService.checkInProgressSubmissions();
