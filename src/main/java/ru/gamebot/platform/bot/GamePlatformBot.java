@@ -8255,6 +8255,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "brawlstats" -> sendGameQuestStats(user, "Brawl Stars");
             case "clashstats" -> sendGameQuestStats(user, "Clash of Clans");
             case "clashroyalestats" -> sendGameQuestStats(user, "Clash Royale");
+            case "cs2stats" -> sendGameQuestStats(user, "CS2");
+            case "pubgpcstats" -> sendGameQuestStats(user, "PUBG PC");
+            case "pubgmobilestats" -> sendGameQuestStats(user, "PUBG Mobile");
+            case "dotastats" -> sendGameQuestStats(user, "Dota 2");
             case "onetimeabuse" -> sendAdminOneTimeQuestAbuse(user);
             case "clashtags" -> sendAdminClashTagsList(user);
             case "autoquest-activity" -> sendAdminAutoQuestActivity(user);
@@ -15714,6 +15718,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(
                     keyboardFactory.callback("📊 Статистика CoC", "admin:clashstats"),
                     keyboardFactory.callback("📊 Статистика Clash Royale", "admin:clashroyalestats")
+            ));
+            rows.add(List.of(
+                    keyboardFactory.callback("📊 Статистика CS2", "admin:cs2stats"),
+                    keyboardFactory.callback("📊 Статистика PUBG PC", "admin:pubgpcstats")
+            ));
+            rows.add(List.of(
+                    keyboardFactory.callback("📊 Статистика PUBG Mobile", "admin:pubgmobilestats"),
+                    keyboardFactory.callback("📊 Статистика Dota 2", "admin:dotastats")
             ));
             rows.add(List.of(keyboardFactory.callback("🏷️ Теги CoC/Clash Royale", "admin:clashtags")));
             rows.add(List.of(keyboardFactory.callback("🔁 Активность автоквестов", "admin:autoquest-activity")));
