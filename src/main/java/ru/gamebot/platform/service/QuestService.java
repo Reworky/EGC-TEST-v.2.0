@@ -857,12 +857,19 @@ public class QuestService {
         // окна — первое прохождение в окне почти полной ценой, сумма всех прохождений асимптотически
         // стремится к targetPeriodCeiling и практически никогда его не превышает.
         boolean diminished;
+        // Множитель убывания XP за это прохождение — 1.0, если кривая не применяется (обычный квест,
+        // либо repeatableNoCooldown без диминишинга на первом прохождении в окне). Прежде здесь всегда
+        // стояла 1.0 даже для монет — из-за этого игрок с repeatableNoCooldown-квестом фармил XP
+        // (и уровень) без ограничений, пока монеты уже сходились к потолку окна (замечание
+        // пользователя 2026-09-23 разбирая жалобу на игрока FEQAN).
+        double xpDecayFactor = 1.0;
         if (quest.isRepeatableNoCooldownEligible() && quest.getTargetPeriodCeiling() != null) {
             LocalDateTime windowStart = quest.getRewardDecayWindow() == ru.gamebot.platform.domain.enums.RewardDecayWindow.WEEKLY
                     ? LocalDateTime.now().minusWeeks(1) : LocalDateTime.now().minusHours(24);
             long completionsInWindow = questSubmissionRepository.countApprovedByUserAndQuestSince(user, quest, windowStart);
             double decayBase = 1.0 - (double) baseCoins / quest.getTargetPeriodCeiling();
-            adjustedCoins = Math.max(1, Math.round(baseCoins * Math.pow(decayBase, completionsInWindow)));
+            xpDecayFactor = Math.pow(decayBase, completionsInWindow);
+            adjustedCoins = Math.max(1, Math.round(baseCoins * xpDecayFactor));
             diminished = completionsInWindow > 0;
         } else {
             // 3.4 Antifaud: diminishing returns after 3 completions of same type per week
@@ -901,7 +908,10 @@ public class QuestService {
                     .map(Season -> Season.getXpBoostPercent()).orElse(0);
             xpBoostPct += seasonBoost;
         }
-        long adjustedXp = baseXp + (baseXp * xpBoostPct / 100);
+        // Порядок как у монет выше: сначала кривая убывания (repeatableNoCooldown-квесты), потом
+        // проценты буста уже от осевшего значения — не от номинала.
+        long decayedXp = Math.max(1, Math.round(baseXp * xpDecayFactor));
+        long adjustedXp = decayedXp + (decayedXp * xpBoostPct / 100);
 
         return new RewardPreview(adjustedXp, adjustedCoins, diminished, xpBoostPct > 0, egcPassBonusCoins);
     }
