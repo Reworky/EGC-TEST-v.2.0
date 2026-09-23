@@ -3102,7 +3102,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 if (found == null) {
                     sendText(user.getTelegramId(), "❌ Отряд «" + escape(query) + "» не найден (или под запрос подходит больше одного — уточните название).", backMenuKeyboard("menu:admin"));
                 } else {
-                    sendAdminSquadCard(user, found);
+                    sendAdminSquadCard(user, found, 0);
                 }
             }
             default -> sendText(user.getTelegramId(), "🧭 Я не жду текст на этом шаге. Вернитесь в меню.", mainMenuKeyboard(user));
@@ -7505,13 +7505,30 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Отрядам не задано верхнего лимита в 15 (MAX_MEMBERS = 500 в SquadService) — без пагинации
+     *  список кнопок-участников мог бы повторить вчерашний инцидент "reply markup is too long"
+     *  (см. sendAdminTrafficList, коммит f26d9f1). Тот же паттерн постраничности. */
+    private static final int ADMIN_SQUAD_MEMBERS_PAGE_SIZE = 15;
+
     /** Состав отряда для админки — список участников с ролью капитана и XP, найден по названию
      *  (см. squadService.findByNameForAdmin). Отдельно от игровой карточки отряда (sendSquadCard),
-     *  та рассчитана на самого игрока и его собственный отряд, не на произвольный поиск. */
-    private void sendAdminSquadCard(AppUser admin, ru.gamebot.platform.domain.model.Squad squad) {
+     *  та рассчитана на самого игрока и его собственный отряд, не на произвольный поиск. Ник каждого
+     *  участника — кнопка, открывающая его обычную админ-карточку игрока (sendAdminUserCard), а не
+     *  внешняя ссылка на Telegram-профиль. */
+    private void sendAdminSquadCard(AppUser admin, ru.gamebot.platform.domain.model.Squad squad, int requestedPage) {
         List<AppUser> members = squadService.getMembers(squad);
         long weeklyXp = squadService.squadWeeklyXp(squad);
         long totalXp = squadService.squadTotalXp(squad);
+
+        List<AppUser> sorted = members.stream()
+                .sorted(java.util.Comparator.comparingLong(AppUser::getWeeklyXp).reversed())
+                .toList();
+
+        int totalPages = Math.max(1, (int) Math.ceil(sorted.size() / (double) ADMIN_SQUAD_MEMBERS_PAGE_SIZE));
+        int page = Math.max(0, Math.min(requestedPage, totalPages - 1));
+        int from = page * ADMIN_SQUAD_MEMBERS_PAGE_SIZE;
+        int to = Math.min(sorted.size(), from + ADMIN_SQUAD_MEMBERS_PAGE_SIZE);
+        List<AppUser> pageItems = sorted.isEmpty() ? sorted : sorted.subList(from, to);
 
         StringBuilder sb = new StringBuilder();
         sb.append("⚔️ <b>Отряд «").append(escape(squad.getName())).append("»</b>\n\n")
@@ -7519,23 +7536,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .append("📈 XP за неделю: <b>").append(String.format("%,d", weeklyXp).replace(',', ' ')).append("</b>\n")
                 .append("♾️ XP всего: <b>").append(String.format("%,d", totalXp).replace(',', ' ')).append("</b>\n")
                 .append("🔑 Код приглашения: <code>").append(escape(squad.getInviteCode())).append("</code>\n\n")
-                .append("<b>Состав:</b>\n");
-
-        List<AppUser> sorted = members.stream()
-                .sorted(java.util.Comparator.comparingLong(AppUser::getWeeklyXp).reversed())
-                .toList();
-        for (AppUser member : sorted) {
-            boolean isCaptain = member.getTelegramId().equals(squad.getCaptainTelegramId());
-            String memberLink = member.getTelegramUsername() != null
-                    ? "<a href=\"https://t.me/" + member.getTelegramUsername() + "\">" + escape(displayUserName(member)) + "</a>"
-                    : "<a href=\"tg://user?id=" + member.getTelegramId() + "\">" + escape(displayUserName(member)) + "</a>";
-            sb.append(isCaptain ? "👑 " : "▫️ ")
-                    .append(memberLink)
-                    .append(" (<code>").append(member.getTelegramId()).append("</code>) — ")
-                    .append(String.format("%,d", member.getWeeklyXp()).replace(',', ' ')).append(" XP за неделю\n");
+                .append("Состав ниже — жмите на игрока, чтобы открыть его карточку.");
+        if (totalPages > 1) {
+            sb.append("\nСтраница <b>").append(page + 1).append(" / ").append(totalPages).append("</b>");
         }
 
-        sendText(admin.getTelegramId(), sb.toString(), backMenuKeyboard("menu:admin"));
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (AppUser member : pageItems) {
+            boolean isCaptain = member.getTelegramId().equals(squad.getCaptainTelegramId());
+            String label = (isCaptain ? "👑 " : "▫️ ") + trim(displayUserName(member), 20)
+                    + " — " + String.format("%,d", member.getWeeklyXp()).replace(',', ' ') + " XP";
+            rows.add(List.of(keyboardFactory.callback(label, "admin:user:view:" + member.getTelegramId() + ":0")));
+        }
+        List<InlineKeyboardButton> navRow = new ArrayList<>();
+        if (page > 0) {
+            navRow.add(keyboardFactory.callback("⬅️", "admin:squadview:" + squad.getId() + ":" + (page - 1)));
+        }
+        if (page < totalPages - 1) {
+            navRow.add(keyboardFactory.callback("➡️", "admin:squadview:" + squad.getId() + ":" + (page + 1)));
+        }
+        if (!navRow.isEmpty()) {
+            rows.add(navRow);
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
+
+        sendText(admin.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     // ─── Support ──────────────────────────────────────────────────────────────
@@ -8400,6 +8425,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 } else if (action.startsWith("debitpage:")) {
                     session.setState(SessionState.DEBIT_INPUT);
                     sendAdminDebitUsersPage(user, session, parseInteger(action.substring("debitpage:".length())), null);
+                } else if (action.startsWith("squadview:")) {
+                    String[] parts = action.substring("squadview:".length()).split(":");
+                    Long squadId = parseLong(parts[0]);
+                    int page = parts.length > 1 ? parseInteger(parts[1]) : 0;
+                    ru.gamebot.platform.domain.model.Squad squad = squadId == null ? null : squadService.findById(squadId).orElse(null);
+                    if (squad == null) {
+                        sendText(user.getTelegramId(), "❌ Отряд не найден.", backMenuKeyboard("menu:admin"));
+                    } else {
+                        sendAdminSquadCard(user, squad, page);
+                    }
+                    answerSilently(callbackQuery.getId());
+                    return;
                 } else if (action.startsWith("user:")) {
                     handleAdminUserAction(user, session, action.substring("user:".length()));
                 } else if (action.startsWith("resetuser:confirm:")) {
