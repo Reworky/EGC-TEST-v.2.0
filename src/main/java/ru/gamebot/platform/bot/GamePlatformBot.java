@@ -8314,6 +8314,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 answerSilently(callbackQuery.getId());
                 return;
             }
+            case "xpoverpay:audit" -> { sendAdminXpOverpayAudit(user); answerSilently(callbackQuery.getId()); return; }
+            case "xpoverpay:apply" -> { doAdminXpOverpayApply(user); answerSilently(callbackQuery.getId()); return; }
             case "tournaments" -> { sendAdminTournamentList(user); answerSilently(callbackQuery.getId()); return; }
             case "tournaments:create" -> {
                 session.reset();
@@ -10833,6 +10835,69 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("⬅️ Назад", "admin:stats"))
                 )));
+    }
+
+    /** Название квеста-пилота "квесты без стен" — то же, что в QuestSeeder.markRepeatableNoCooldown.
+     *  Хардкод оправдан: это разовый корректирующий инструмент под конкретный инцидент 2026-09-23
+     *  (см. implementation_log), а не постоянная фича — при появлении второго такого квеста
+     *  придётся расширять на список, но пока лишняя абстракция не нужна. */
+    private static final String XP_OVERPAY_QUEST_TITLE = "Выиграй бой 5 раз в режиме «Захват кристаллов» или «Любое столкновение»";
+    private static final String XP_OVERPAY_QUEST_GAME = "Brawl Stars";
+
+    private void sendAdminXpOverpayAudit(AppUser user) {
+        ru.gamebot.platform.domain.model.Quest quest = questService
+                .findByTitleAndGameName(XP_OVERPAY_QUEST_TITLE, XP_OVERPAY_QUEST_GAME).orElse(null);
+        if (quest == null) {
+            sendText(user.getTelegramId(), "❌ Квест-пилот не найден.", backMenuKeyboard("menu:admin"));
+            return;
+        }
+        List<QuestService.XpOverpayEntry> entries = questService.auditNoCooldownXpOverpay(quest, false);
+        if (entries.isEmpty()) {
+            sendText(user.getTelegramId(),
+                    "✅ <b>Переплаты XP не найдено</b>\n\nВсе заявки по «" + escape(quest.getTitle()) + "» уже соответствуют верной кривой убывания.",
+                    backMenuKeyboard("menu:admin"));
+            return;
+        }
+        long totalOverpay = entries.stream().mapToLong(QuestService.XpOverpayEntry::overpayXp).sum();
+        StringBuilder sb = new StringBuilder();
+        sb.append("🩹 <b>Аудит переплаты XP</b>\n")
+                .append("Квест: «").append(escape(quest.getTitle())).append("» (").append(escape(quest.getGameName())).append(")\n\n")
+                .append("До фикса 2026-09-23 XP на этом квесте не убывал вместе с EXC — ниже пересчёт того, что реально должно было начислиться.\n\n")
+                .append("👥 Затронуто игроков: <b>").append(entries.size()).append("</b>\n")
+                .append("♾️ Суммарная переплата: <b>").append(String.format("%,d", totalOverpay).replace(',', ' ')).append(" XP</b>\n\n")
+                .append("<b>Топ-15 по переплате:</b>\n");
+        int shown = 0;
+        for (QuestService.XpOverpayEntry e : entries) {
+            if (shown >= 15) break;
+            sb.append("▫️ ").append(escape(displayUserName(e.user()))).append(" (<code>").append(e.user().getTelegramId()).append("</code>) — ")
+                    .append(String.format("%,d", e.overpayXp()).replace(',', ' ')).append(" XP (").append(e.affectedSubmissions()).append(" заявок)\n");
+            shown++;
+        }
+        if (entries.size() > 15) {
+            sb.append("… и ещё ").append(entries.size() - 15).append(" игроков в отчёте.\n");
+        }
+        sb.append("\n⚠️ Применение спишет переплату с текущего XP каждого игрока (не ниже 0). weeklyXp не трогается — сбросится штатно по расписанию.");
+
+        sendText(user.getTelegramId(), sb.toString(),
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("✅ Применить откат", "admin:xpoverpay:apply"),
+                                keyboardFactory.callback("❌ Отмена", "menu:admin"))
+                )));
+    }
+
+    private void doAdminXpOverpayApply(AppUser user) {
+        ru.gamebot.platform.domain.model.Quest quest = questService
+                .findByTitleAndGameName(XP_OVERPAY_QUEST_TITLE, XP_OVERPAY_QUEST_GAME).orElse(null);
+        if (quest == null) {
+            sendText(user.getTelegramId(), "❌ Квест-пилот не найден.", backMenuKeyboard("menu:admin"));
+            return;
+        }
+        List<QuestService.XpOverpayEntry> entries = questService.auditNoCooldownXpOverpay(quest, true);
+        long totalOverpay = entries.stream().mapToLong(QuestService.XpOverpayEntry::overpayXp).sum();
+        sendText(user.getTelegramId(),
+                "✅ <b>Откат применён</b>\n\n👥 Игроков скорректировано: <b>" + entries.size() + "</b>\n"
+                        + "♾️ Всего списано: <b>" + String.format("%,d", totalOverpay).replace(',', ' ') + " XP</b>",
+                backMenuKeyboard("menu:admin"));
     }
 
     private void sendAdminStatsPlatform(AppUser user) {
@@ -15644,6 +15709,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("🎫 Battle Pass", "admin:seasons")));
             rows.add(List.of(keyboardFactory.callback("🚀 Буст рефералки", "admin:refboost")));
             rows.add(List.of(keyboardFactory.callback("⚔️ Состав отряда", "admin:squads:search")));
+            rows.add(List.of(keyboardFactory.callback("🩹 Откат переплаты XP (Brawl)", "admin:xpoverpay:audit")));
             return keyboardFactory.rowsLayout(rows);
         }
 

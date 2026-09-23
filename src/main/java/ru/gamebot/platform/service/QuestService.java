@@ -224,6 +224,10 @@ public class QuestService {
      * вовлечённости, "персонализированный показ квестов при заходе"). interestsCsv не используется —
      * там жанры (FPS/RPG/...), а не названия игр, без отдельного маппинга сопоставить их с Quest.gameName
      * нельзя. */
+    public Optional<Quest> findByTitleAndGameName(String title, String gameName) {
+        return questRepository.findFirstByTitleAndGameName(title, gameName);
+    }
+
     public Optional<Quest> recommendQuest(AppUser user) {
         List<QuestSubmission> history = questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user);
         String preferredGame = history.isEmpty() ? null : history.get(0).getQuest().getGameName();
@@ -914,6 +918,79 @@ public class QuestService {
         long adjustedXp = decayedXp + (decayedXp * xpBoostPct / 100);
 
         return new RewardPreview(adjustedXp, adjustedCoins, diminished, xpBoostPct > 0, egcPassBonusCoins);
+    }
+
+    public record XpOverpayEntry(AppUser user, long overpayXp, int affectedSubmissions) {}
+
+    /** Аудит/коррекция переплаты XP на repeatableNoCooldownEligible-квесте за период ДО фикса
+     *  2026-09-23 (см. implementation_log), когда кривая убывания сдерживала только EXC, а XP
+     *  всегда начислялся полным номиналом. Восстанавливает историческую позицию n каждой заявки
+     *  внутри её собственного скользящего окна ПО ВРЕМЕНИ (updatedAt = момент одобрения, тот же
+     *  якорь, что использовал живой countApprovedByUserAndQuestSince на момент расчёта) — то есть
+     *  какой decayFactor реально должен был применяться к XP этой заявки, если бы фикс уже
+     *  действовал тогда. EXC не трогается — та часть считалась верно всегда.
+     *
+     *  Ключевой трюк: не нужно знать, какой буст (SinkShop/Battle Pass) действовал в момент
+     *  одобрения — сохранённый awardedXp УЖЕ включает его (awardedXp = baseXp × (1+boost%), т.к.
+     *  decayFactor тогда ошибочно был 1.0). Верная величина = awardedXp × decayFactor(n) — буст
+     *  сокращается, коррекция становится чисто пропорциональной, без реконструкции истории бустов.
+     *
+     *  apply=false — только считает и возвращает отчёт, ничего не пишет в БД (для предпросмотра
+     *  перед реальным применением, см. admin:squads-стиль confirm-флоу в GamePlatformBot).
+     *  apply=true — @Transactional, списывает переплату с AppUser.xp (не трогает weeklyXp — тот
+     *  сбрасывается штатно по расписанию, отдельно корректировать не стали, см. implementation_log). */
+    @Transactional
+    public List<XpOverpayEntry> auditNoCooldownXpOverpay(Quest quest, boolean apply) {
+        if (quest.getTargetPeriodCeiling() == null || quest.getTargetPeriodCeiling() <= 0) {
+            return List.of();
+        }
+        double decayBase = 1.0 - (double) quest.getRewardCoins() / quest.getTargetPeriodCeiling();
+        boolean weekly = quest.getRewardDecayWindow() == ru.gamebot.platform.domain.enums.RewardDecayWindow.WEEKLY;
+
+        List<QuestSubmission> approved = questSubmissionRepository
+                .findAllByQuestAndStatusOrderByUpdatedAtAsc(quest, SubmissionStatus.APPROVED);
+
+        java.util.Map<Long, List<QuestSubmission>> byUserId = new java.util.LinkedHashMap<>();
+        for (QuestSubmission s : approved) {
+            byUserId.computeIfAbsent(s.getUser().getTelegramId(), k -> new java.util.ArrayList<>()).add(s);
+        }
+
+        List<XpOverpayEntry> result = new java.util.ArrayList<>();
+        for (List<QuestSubmission> subs : byUserId.values()) {
+            long totalOverpay = 0;
+            int affected = 0;
+            for (int i = 0; i < subs.size(); i++) {
+                QuestSubmission s = subs.get(i);
+                LocalDateTime windowStart = weekly ? s.getUpdatedAt().minusWeeks(1) : s.getUpdatedAt().minusHours(24);
+                long n = 0;
+                for (int j = 0; j < i; j++) {
+                    if (!subs.get(j).getUpdatedAt().isBefore(windowStart)) n++;
+                }
+                double decayFactor = Math.pow(decayBase, n);
+                long storedXp = s.getAwardedXp() != null ? s.getAwardedXp() : quest.getRewardXp();
+                long correctXp = Math.max(1, Math.round(storedXp * decayFactor));
+                long overpay = storedXp - correctXp;
+                if (overpay > 0) {
+                    totalOverpay += overpay;
+                    affected++;
+                    if (apply) {
+                        s.setAwardedXp(correctXp);
+                        questSubmissionRepository.save(s);
+                    }
+                }
+            }
+            if (totalOverpay > 0) {
+                AppUser user = subs.get(0).getUser();
+                if (apply) {
+                    AppUser locked = appUserRepository.findByIdForUpdate(user.getId()).orElse(user);
+                    locked.setXp(Math.max(0, locked.getXp() - totalOverpay));
+                    appUserRepository.save(locked);
+                }
+                result.add(new XpOverpayEntry(user, totalOverpay, affected));
+            }
+        }
+        result.sort((a, b) -> Long.compare(b.overpayXp(), a.overpayXp()));
+        return result;
     }
 
     /**
