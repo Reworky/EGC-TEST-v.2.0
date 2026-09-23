@@ -7526,8 +7526,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .toList();
         for (AppUser member : sorted) {
             boolean isCaptain = member.getTelegramId().equals(squad.getCaptainTelegramId());
+            String memberLink = member.getTelegramUsername() != null
+                    ? "<a href=\"https://t.me/" + member.getTelegramUsername() + "\">" + escape(displayUserName(member)) + "</a>"
+                    : "<a href=\"tg://user?id=" + member.getTelegramId() + "\">" + escape(displayUserName(member)) + "</a>";
             sb.append(isCaptain ? "👑 " : "▫️ ")
-                    .append(escape(displayUserName(member)))
+                    .append(memberLink)
                     .append(" (<code>").append(member.getTelegramId()).append("</code>) — ")
                     .append(String.format("%,d", member.getWeeklyXp()).replace(',', ' ')).append(" XP за неделю\n");
         }
