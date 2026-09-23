@@ -12722,7 +12722,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append(num).append(". ").append(statusIcon)
               .append(" <b>").append(escape(s.getQuest().getTitle())).append("</b>").append(completionTag).append("\n")
               .append("   🎮 ").append(escape(s.getQuest().getGameName()))
-              .append(" · 💰 ").append(s.getQuest().getRewardCoins()).append(" EXC\n")
+              .append(" · 💰 ").append(awardedCoinsOf(s)).append(" EXC\n")
               .append("   📅 ").append(dateStr).append("\n\n");
             boolean cancelable = s.getStatus() != ru.gamebot.platform.domain.enums.SubmissionStatus.APPROVED
                     && s.getStatus() != ru.gamebot.platform.domain.enums.SubmissionStatus.CANCELLED;
