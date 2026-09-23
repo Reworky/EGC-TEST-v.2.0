@@ -50,6 +50,16 @@ public class SquadService {
                 .filter(s -> "ACTIVE".equals(s.getStatus()));
     }
 
+    /** Поиск для админки: сначала точное совпадение по названию, иначе — если частичный ввод
+     *  однозначно указывает на один отряд — берём его. Несколько совпадений или ни одного — пусто. */
+    public Optional<Squad> findByNameForAdmin(String query) {
+        String trimmed = query.trim();
+        Optional<Squad> exact = squadRepository.findByNameIgnoreCase(trimmed);
+        if (exact.isPresent()) return exact;
+        List<Squad> matches = squadRepository.findAllByNameContainingIgnoreCase(trimmed);
+        return matches.size() == 1 ? Optional.of(matches.get(0)) : Optional.empty();
+    }
+
     public List<AppUser> getMembers(Squad squad) {
         return appUserRepository.findAllBySquadId(squad.getId());
     }

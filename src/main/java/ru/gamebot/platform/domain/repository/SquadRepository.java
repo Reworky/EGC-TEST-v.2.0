@@ -9,6 +9,10 @@ public interface SquadRepository extends JpaRepository<Squad, Long> {
 
     Optional<Squad> findByInviteCode(String inviteCode);
 
+    Optional<Squad> findByNameIgnoreCase(String name);
+
+    List<Squad> findAllByNameContainingIgnoreCase(String namePart);
+
     boolean existsByNameIgnoreCase(String name);
 
     List<Squad> findAllByStatus(String status);

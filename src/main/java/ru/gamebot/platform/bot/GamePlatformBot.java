@@ -3095,6 +3095,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case SQUAD_CREATE_NAME -> handleSquadCreateNameInput(user, session, text);
             case SQUAD_JOIN_CODE -> handleSquadJoinCodeInput(user, session, text);
+            case ADMIN_SQUAD_SEARCH -> {
+                session.reset();
+                String query = text.trim();
+                ru.gamebot.platform.domain.model.Squad found = squadService.findByNameForAdmin(query).orElse(null);
+                if (found == null) {
+                    sendText(user.getTelegramId(), "❌ Отряд «" + escape(query) + "» не найден (или под запрос подходит больше одного — уточните название).", backMenuKeyboard("menu:admin"));
+                } else {
+                    sendAdminSquadCard(user, found);
+                }
+            }
             default -> sendText(user.getTelegramId(), "🧭 Я не жду текст на этом шаге. Вернитесь в меню.", mainMenuKeyboard(user));
         }
     }
@@ -7495,6 +7505,36 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Состав отряда для админки — список участников с ролью капитана и XP, найден по названию
+     *  (см. squadService.findByNameForAdmin). Отдельно от игровой карточки отряда (sendSquadCard),
+     *  та рассчитана на самого игрока и его собственный отряд, не на произвольный поиск. */
+    private void sendAdminSquadCard(AppUser admin, ru.gamebot.platform.domain.model.Squad squad) {
+        List<AppUser> members = squadService.getMembers(squad);
+        long weeklyXp = squadService.squadWeeklyXp(squad);
+        long totalXp = squadService.squadTotalXp(squad);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("⚔️ <b>Отряд «").append(escape(squad.getName())).append("»</b>\n\n")
+                .append("👥 Участников: <b>").append(members.size()).append("</b>\n")
+                .append("📈 XP за неделю: <b>").append(String.format("%,d", weeklyXp).replace(',', ' ')).append("</b>\n")
+                .append("♾️ XP всего: <b>").append(String.format("%,d", totalXp).replace(',', ' ')).append("</b>\n")
+                .append("🔑 Код приглашения: <code>").append(escape(squad.getInviteCode())).append("</code>\n\n")
+                .append("<b>Состав:</b>\n");
+
+        List<AppUser> sorted = members.stream()
+                .sorted(java.util.Comparator.comparingLong(AppUser::getWeeklyXp).reversed())
+                .toList();
+        for (AppUser member : sorted) {
+            boolean isCaptain = member.getTelegramId().equals(squad.getCaptainTelegramId());
+            sb.append(isCaptain ? "👑 " : "▫️ ")
+                    .append(escape(displayUserName(member)))
+                    .append(" (<code>").append(member.getTelegramId()).append("</code>) — ")
+                    .append(String.format("%,d", member.getWeeklyXp()).replace(',', ' ')).append(" XP за неделю\n");
+        }
+
+        sendText(admin.getTelegramId(), sb.toString(), backMenuKeyboard("menu:admin"));
+    }
+
     // ─── Support ──────────────────────────────────────────────────────────────
 
     private void sendSupport(AppUser user) {
@@ -8236,6 +8276,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         "🚀 <b>Новый буст-уикенд рефералки</b>\n\nВведите дату и время начала буста "
                         + "(формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>, время сервера — <b>UTC</b>, это на 3 часа меньше московского):",
                         cancelKeyboard());
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            case "squads:search" -> {
+                session.reset();
+                session.setState(SessionState.ADMIN_SQUAD_SEARCH);
+                sendText(user.getTelegramId(), "⚔️ <b>Поиск отряда</b>\n\nВведите название отряда (можно частично):", cancelKeyboard());
                 answerSilently(callbackQuery.getId());
                 return;
             }
@@ -15556,6 +15603,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("🏆 Турниры", "admin:tournaments")));
             rows.add(List.of(keyboardFactory.callback("🎫 Battle Pass", "admin:seasons")));
             rows.add(List.of(keyboardFactory.callback("🚀 Буст рефералки", "admin:refboost")));
+            rows.add(List.of(keyboardFactory.callback("⚔️ Состав отряда", "admin:squads:search")));
             return keyboardFactory.rowsLayout(rows);
         }
 
