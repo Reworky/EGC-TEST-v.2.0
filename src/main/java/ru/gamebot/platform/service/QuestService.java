@@ -993,6 +993,81 @@ public class QuestService {
         return result;
     }
 
+    public record WeeklyXpOverpayEntry(AppUser user, long weeklyOverpayXp, int affectedSubmissions) {}
+
+    /** Догоняющая коррекция weeklyXp ПОСЛЕ того, как auditNoCooldownXpOverpay уже применён (apply=true) —
+     *  тот метод сознательно не трогал weeklyXp (см. его javadoc), но пользователь 2026-09-23 попросил
+     *  откатить и его — влияет на «Зал славы» и недельный рейтинг отрядов (squadWeeklyXp суммирует
+     *  weeklyXp участников живьём, отдельно ничего чинить не нужно).
+     *
+     *  НЕ дублирует логику auditNoCooldownXpOverpay напрямую — после первого apply=true поле
+     *  s.getAwardedXp() уже содержит ИСПРАВЛЕННОЕ значение (correctXp), не исходную переплату.
+     *  Повторный вызов старого метода задвоил бы decay. Вместо этого здесь используется обратный
+     *  пересчёт: originalXp = round(текущий correctXp / decayFactor) — decayFactor восстанавливается
+     *  из тех же временных меток (не зависит от того, что записано в awardedXp), так что переплата
+     *  вычисляется заново без потери точности, даже после того как xp/awardedXp уже поправлены.
+     *
+     *  Затрагивает только заявки, одобренные ПОСЛЕ последнего недельного сброса (понедельник 00:00) —
+     *  более ранние уже давно попали в прошлый сброс, их weeklyXp с тех пор не при делах. */
+    @Transactional
+    public List<WeeklyXpOverpayEntry> auditNoCooldownWeeklyXpOverpay(Quest quest, boolean apply) {
+        if (quest.getTargetPeriodCeiling() == null || quest.getTargetPeriodCeiling() <= 0) {
+            return List.of();
+        }
+        double decayBase = 1.0 - (double) quest.getRewardCoins() / quest.getTargetPeriodCeiling();
+        boolean weekly = quest.getRewardDecayWindow() == ru.gamebot.platform.domain.enums.RewardDecayWindow.WEEKLY;
+        LocalDateTime resetBoundary = LocalDateTime.now().toLocalDate()
+                .with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY))
+                .atStartOfDay();
+
+        List<QuestSubmission> approved = questSubmissionRepository
+                .findAllByQuestAndStatusOrderByUpdatedAtAsc(quest, SubmissionStatus.APPROVED);
+
+        java.util.Map<Long, List<QuestSubmission>> byUserId = new java.util.LinkedHashMap<>();
+        for (QuestSubmission s : approved) {
+            byUserId.computeIfAbsent(s.getUser().getTelegramId(), k -> new java.util.ArrayList<>()).add(s);
+        }
+
+        List<WeeklyXpOverpayEntry> result = new java.util.ArrayList<>();
+        for (List<QuestSubmission> subs : byUserId.values()) {
+            long totalWeeklyOverpay = 0;
+            int affected = 0;
+            for (int i = 0; i < subs.size(); i++) {
+                QuestSubmission s = subs.get(i);
+                if (s.getUpdatedAt().isBefore(resetBoundary)) {
+                    continue; // до последнего сброса — weeklyXp этой заявки уже не в игре
+                }
+                LocalDateTime windowStart = weekly ? s.getUpdatedAt().minusWeeks(1) : s.getUpdatedAt().minusHours(24);
+                long n = 0;
+                for (int j = 0; j < i; j++) {
+                    if (!subs.get(j).getUpdatedAt().isBefore(windowStart)) n++;
+                }
+                double decayFactor = Math.pow(decayBase, n);
+                long currentAwarded = s.getAwardedXp() != null ? s.getAwardedXp() : quest.getRewardXp();
+                if (decayFactor <= 0) {
+                    continue;
+                }
+                long originalXp = Math.round(currentAwarded / decayFactor);
+                long weeklyOverpay = originalXp - currentAwarded;
+                if (weeklyOverpay > 0) {
+                    totalWeeklyOverpay += weeklyOverpay;
+                    affected++;
+                }
+            }
+            if (totalWeeklyOverpay > 0) {
+                AppUser user = subs.get(0).getUser();
+                if (apply) {
+                    AppUser locked = appUserRepository.findByIdForUpdate(user.getId()).orElse(user);
+                    locked.setWeeklyXp(Math.max(0, locked.getWeeklyXp() - totalWeeklyOverpay));
+                    appUserRepository.save(locked);
+                }
+                result.add(new WeeklyXpOverpayEntry(user, totalWeeklyOverpay, affected));
+            }
+        }
+        result.sort((a, b) -> Long.compare(b.weeklyOverpayXp(), a.weeklyOverpayXp()));
+        return result;
+    }
+
     /**
      * Перегрузка для квестов типа PURCHASE (externalTargetType) — например, покупка в магазине ключей/донат-сервисе.
      * Сумма из постбека сверяется с externalMinPaymentRub квеста; если меньше порога — конверсия игнорируется,

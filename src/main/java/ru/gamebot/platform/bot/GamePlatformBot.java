@@ -8318,8 +8318,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 answerSilently(callbackQuery.getId());
                 return;
             }
-            case "xpoverpay:audit" -> { sendAdminXpOverpayAudit(user); answerSilently(callbackQuery.getId()); return; }
-            case "xpoverpay:apply" -> { doAdminXpOverpayApply(user); answerSilently(callbackQuery.getId()); return; }
+            case "xpoverpay:weekly:audit" -> { sendAdminWeeklyXpOverpayAudit(user); answerSilently(callbackQuery.getId()); return; }
+            case "xpoverpay:weekly:apply" -> { doAdminWeeklyXpOverpayApply(user); answerSilently(callbackQuery.getId()); return; }
             case "tournaments" -> { sendAdminTournamentList(user); answerSilently(callbackQuery.getId()); return; }
             case "tournaments:create" -> {
                 session.reset();
@@ -10848,85 +10848,66 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private static final String XP_OVERPAY_QUEST_TITLE = "Выиграй бой 5 раз в режиме «Захват кристаллов» или «Любое столкновение»";
     private static final String XP_OVERPAY_QUEST_GAME = "Brawl Stars";
 
-    private void sendAdminXpOverpayAudit(AppUser user) {
+    // Общий откат XP (auditNoCooldownXpOverpay) уже применён 2026-09-23 — этот шаг сделан один раз,
+    // повторный вызов задвоил бы decay поверх уже исправленных значений (см. javadoc метода в
+    // QuestService). Кнопка/хендлеры намеренно убраны из UI, чтобы не нажать случайно повторно.
+    // Ниже — догоняющая коррекция weeklyXp (auditNoCooldownWeeklyXpOverpay), она безопасна к повторному
+    // запуску (каждый прогон пересчитывает текущую переплату заново от уже верного awardedXp).
+
+    private void sendAdminWeeklyXpOverpayAudit(AppUser user) {
         ru.gamebot.platform.domain.model.Quest quest = questService
                 .findByTitleAndGameName(XP_OVERPAY_QUEST_TITLE, XP_OVERPAY_QUEST_GAME).orElse(null);
         if (quest == null) {
             sendText(user.getTelegramId(), "❌ Квест-пилот не найден.", backMenuKeyboard("menu:admin"));
             return;
         }
-        List<QuestService.XpOverpayEntry> entries = questService.auditNoCooldownXpOverpay(quest, false);
+        List<QuestService.WeeklyXpOverpayEntry> entries = questService.auditNoCooldownWeeklyXpOverpay(quest, false);
         if (entries.isEmpty()) {
             sendText(user.getTelegramId(),
-                    "✅ <b>Переплаты XP не найдено</b>\n\nВсе заявки по «" + escape(quest.getTitle()) + "» уже соответствуют верной кривой убывания.",
+                    "✅ <b>Переплаты недельного XP не найдено</b>\n\nЛибо заявок за текущую неделю нет, либо weeklyXp уже верный.",
                     backMenuKeyboard("menu:admin"));
             return;
         }
-        long totalOverpay = entries.stream().mapToLong(QuestService.XpOverpayEntry::overpayXp).sum();
+        long totalOverpay = entries.stream().mapToLong(QuestService.WeeklyXpOverpayEntry::weeklyOverpayXp).sum();
         StringBuilder sb = new StringBuilder();
-        sb.append("🩹 <b>Аудит переплаты XP</b>\n")
+        sb.append("🩹 <b>Аудит переплаты недельного XP</b>\n")
                 .append("Квест: «").append(escape(quest.getTitle())).append("» (").append(escape(quest.getGameName())).append(")\n\n")
-                .append("До фикса 2026-09-23 XP на этом квесте не убывал вместе с EXC — ниже пересчёт того, что реально должно было начислиться.\n\n")
+                .append("Догоняющая коррекция после отката общего XP — влияет на «Зал славы» и недельный рейтинг отрядов ")
+                .append("(там весь состав считается живьём от weeklyXp участников, отдельно ничего чинить не нужно). Только заявки с текущей недели.\n\n")
                 .append("👥 Затронуто игроков: <b>").append(entries.size()).append("</b>\n")
-                .append("♾️ Суммарная переплата: <b>").append(String.format("%,d", totalOverpay).replace(',', ' ')).append(" XP</b>\n\n")
+                .append("♾️ Суммарная переплата: <b>").append(String.format("%,d", totalOverpay).replace(',', ' ')).append(" недельного XP</b>\n\n")
                 .append("<b>Топ-15 по переплате:</b>\n");
         int shown = 0;
-        for (QuestService.XpOverpayEntry e : entries) {
+        for (QuestService.WeeklyXpOverpayEntry e : entries) {
             if (shown >= 15) break;
             sb.append("▫️ ").append(escape(displayUserName(e.user()))).append(" (<code>").append(e.user().getTelegramId()).append("</code>) — ")
-                    .append(String.format("%,d", e.overpayXp()).replace(',', ' ')).append(" XP (").append(e.affectedSubmissions()).append(" заявок)\n");
+                    .append(String.format("%,d", e.weeklyOverpayXp()).replace(',', ' ')).append(" XP (").append(e.affectedSubmissions()).append(" заявок)\n");
             shown++;
         }
         if (entries.size() > 15) {
             sb.append("… и ещё ").append(entries.size() - 15).append(" игроков в отчёте.\n");
         }
-        sb.append("\n⚠️ Применение спишет переплату с текущего XP каждого игрока (не ниже 0) и пришлёт каждому личное уведомление ")
-                .append("об ошибке начисления — без блокировки аккаунта. weeklyXp не трогается — сбросится штатно по расписанию.");
+        sb.append("\n⚠️ Применение спишет переплату с weeklyXp каждого игрока (не ниже 0). Без уведомлений — недельный рейтинг не так заметен, как общий XP/уровень.");
 
         sendText(user.getTelegramId(), sb.toString(),
                 keyboardFactory.rowsLayout(List.of(
-                        List.of(keyboardFactory.callback("✅ Применить откат", "admin:xpoverpay:apply"),
+                        List.of(keyboardFactory.callback("✅ Применить откат", "admin:xpoverpay:weekly:apply"),
                                 keyboardFactory.callback("❌ Отмена", "menu:admin"))
                 )));
     }
 
-    private void doAdminXpOverpayApply(AppUser user) {
+    private void doAdminWeeklyXpOverpayApply(AppUser user) {
         ru.gamebot.platform.domain.model.Quest quest = questService
                 .findByTitleAndGameName(XP_OVERPAY_QUEST_TITLE, XP_OVERPAY_QUEST_GAME).orElse(null);
         if (quest == null) {
             sendText(user.getTelegramId(), "❌ Квест-пилот не найден.", backMenuKeyboard("menu:admin"));
             return;
         }
-        List<QuestService.XpOverpayEntry> entries = questService.auditNoCooldownXpOverpay(quest, true);
-        long totalOverpay = entries.stream().mapToLong(QuestService.XpOverpayEntry::overpayXp).sum();
-
-        // Персональное уведомление каждому затронутому — согласовано с пользователем 2026-09-23
-        // (см. implementation_log): без бана/санкций, честно объясняем свою ошибку. try/catch на
-        // каждого отдельно — заблокировавший бота игрок не должен обрывать рассылку остальным
-        // (тот же класс бага, что чинили сегодня в одобрении заявок на донат гемов).
-        int notified = 0;
-        for (QuestService.XpOverpayEntry e : entries) {
-            try {
-                sendText(e.user().getTelegramId(),
-                        "⚠️ <b>Важное уведомление</b>\n\n"
-                                + "Мы обнаружили ошибку в начислении опыта на квесте «" + escape(quest.getTitle()) + "» (" + escape(quest.getGameName()) + "): "
-                                + "при повторном прохождении в течение дня опыт должен был уменьшаться вместе с наградой в EXC, "
-                                + "но по нашей ошибке продолжал начисляться в полном размере.\n\n"
-                                + "Это наш баг, не твоя вина — мы его исправили и скорректировали накопленный опыт, начисленный из-за этого сбоя: "
-                                + "<b>−" + String.format("%,d", e.overpayXp()).replace(',', ' ') + " опыта</b>.\n\n"
-                                + "Аккаунт не блокируется и никак не ограничивается — играй дальше как обычно, никаких санкций не будет.\n\n"
-                                + "Если есть вопросы — пиши в поддержку.",
-                        backMenuKeyboard("menu:main"));
-                notified++;
-            } catch (Exception ex) {
-                log.warn("[XpOverpay] Failed to notify user {} about XP correction", e.user().getTelegramId(), ex);
-            }
-        }
-
+        List<QuestService.WeeklyXpOverpayEntry> entries = questService.auditNoCooldownWeeklyXpOverpay(quest, true);
+        long totalOverpay = entries.stream().mapToLong(QuestService.WeeklyXpOverpayEntry::weeklyOverpayXp).sum();
         sendText(user.getTelegramId(),
                 "✅ <b>Откат применён</b>\n\n👥 Игроков скорректировано: <b>" + entries.size() + "</b>\n"
-                        + "♾️ Всего списано: <b>" + String.format("%,d", totalOverpay).replace(',', ' ') + " XP</b>\n"
-                        + "📨 Уведомлено: <b>" + notified + " / " + entries.size() + "</b>",
+                        + "♾️ Всего списано с недельного XP: <b>" + String.format("%,d", totalOverpay).replace(',', ' ') + "</b>",
                 backMenuKeyboard("menu:admin"));
     }
 
@@ -15747,7 +15728,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("🎫 Battle Pass", "admin:seasons")));
             rows.add(List.of(keyboardFactory.callback("🚀 Буст рефералки", "admin:refboost")));
             rows.add(List.of(keyboardFactory.callback("⚔️ Состав отряда", "admin:squads:search")));
-            rows.add(List.of(keyboardFactory.callback("🩹 Откат переплаты XP (Brawl)", "admin:xpoverpay:audit")));
+            rows.add(List.of(keyboardFactory.callback("🩹 Откат недельного XP (Brawl)", "admin:xpoverpay:weekly:audit")));
             return keyboardFactory.rowsLayout(rows);
         }
 
