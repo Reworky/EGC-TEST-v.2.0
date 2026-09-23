@@ -10876,7 +10876,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (entries.size() > 15) {
             sb.append("… и ещё ").append(entries.size() - 15).append(" игроков в отчёте.\n");
         }
-        sb.append("\n⚠️ Применение спишет переплату с текущего XP каждого игрока (не ниже 0). weeklyXp не трогается — сбросится штатно по расписанию.");
+        sb.append("\n⚠️ Применение спишет переплату с текущего XP каждого игрока (не ниже 0) и пришлёт каждому личное уведомление ")
+                .append("об ошибке начисления — без блокировки аккаунта. weeklyXp не трогается — сбросится штатно по расписанию.");
 
         sendText(user.getTelegramId(), sb.toString(),
                 keyboardFactory.rowsLayout(List.of(
@@ -10894,9 +10895,34 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         List<QuestService.XpOverpayEntry> entries = questService.auditNoCooldownXpOverpay(quest, true);
         long totalOverpay = entries.stream().mapToLong(QuestService.XpOverpayEntry::overpayXp).sum();
+
+        // Персональное уведомление каждому затронутому — согласовано с пользователем 2026-09-23
+        // (см. implementation_log): без бана/санкций, честно объясняем свою ошибку. try/catch на
+        // каждого отдельно — заблокировавший бота игрок не должен обрывать рассылку остальным
+        // (тот же класс бага, что чинили сегодня в одобрении заявок на донат гемов).
+        int notified = 0;
+        for (QuestService.XpOverpayEntry e : entries) {
+            try {
+                sendText(e.user().getTelegramId(),
+                        "⚠️ <b>Важное уведомление</b>\n\n"
+                                + "Мы обнаружили ошибку в начислении опыта на квесте «" + escape(quest.getTitle()) + "» (" + escape(quest.getGameName()) + "): "
+                                + "при повторном прохождении в течение дня опыт должен был уменьшаться вместе с наградой в EXC, "
+                                + "но по нашей ошибке продолжал начисляться в полном размере.\n\n"
+                                + "Это наш баг, не твоя вина — мы его исправили и скорректировали накопленный опыт, начисленный из-за этого сбоя: "
+                                + "<b>−" + String.format("%,d", e.overpayXp()).replace(',', ' ') + " опыта</b>.\n\n"
+                                + "Аккаунт не блокируется и никак не ограничивается — играй дальше как обычно, никаких санкций не будет.\n\n"
+                                + "Если есть вопросы — пиши в поддержку.",
+                        backMenuKeyboard("menu:main"));
+                notified++;
+            } catch (Exception ex) {
+                log.warn("[XpOverpay] Failed to notify user {} about XP correction", e.user().getTelegramId(), ex);
+            }
+        }
+
         sendText(user.getTelegramId(),
                 "✅ <b>Откат применён</b>\n\n👥 Игроков скорректировано: <b>" + entries.size() + "</b>\n"
-                        + "♾️ Всего списано: <b>" + String.format("%,d", totalOverpay).replace(',', ' ') + " XP</b>",
+                        + "♾️ Всего списано: <b>" + String.format("%,d", totalOverpay).replace(',', ' ') + " XP</b>\n"
+                        + "📨 Уведомлено: <b>" + notified + " / " + entries.size() + "</b>",
                 backMenuKeyboard("menu:admin"));
     }
 
