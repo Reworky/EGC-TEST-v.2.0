@@ -276,13 +276,15 @@ function PerkCard({ item, state, expanded, onToggle, onPurchased }) {
         <div className="shop-price">{item.price.toLocaleString()} EXC</div>
       </div>
       {active && (
-        <div className="shop-status"><i className="ti ti-circle-check"></i> {item.activeLabel || ('Активен' + (untilText ? ` до ${untilText}` : ''))}</div>
+        <div className="shop-status"><i className="ti ti-circle-check"></i> {item.key === 'extraslot' && state.extraSlotFromEgcPass
+          ? 'Включён в EGC Pass ⭐'
+          : (item.activeLabel || ('Активен' + (untilText ? ` до ${untilText}` : '')))}</div>
       )}
       {expanded && (
         <div className="shop-detail" onClick={e => e.stopPropagation()}>
           {item.description && <p className="shop-desc">{item.description}</p>}
           <button className="quest-btn" disabled={busy || active} onClick={handleBuy}>
-            {busy ? 'Секунду...' : active ? (item.activeLabel || 'Уже активен') : 'Купить'}
+            {busy ? 'Секунду...' : active ? (item.key === 'extraslot' && state.extraSlotFromEgcPass ? 'Включён в EGC Pass' : (item.activeLabel || 'Уже активен')) : 'Купить'}
           </button>
           {message && <div className="quest-message">{message}</div>}
         </div>

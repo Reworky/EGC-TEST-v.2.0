@@ -15,5 +15,7 @@ public class PerkStateDto {
     private boolean insuranceActive;
     private boolean extraSlotActive;
     private String extraSlotUntil;
+    /** Третий слот квеста даёт подписка EGC Pass (SinkShopService.getMaxQuestSlots) — покупать временный не нужно. */
+    private boolean extraSlotFromEgcPass;
     private boolean cooldownBypassActive;
 }

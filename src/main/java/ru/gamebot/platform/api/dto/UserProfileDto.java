@@ -24,6 +24,10 @@ public class UserProfileDto {
     private boolean hasEgcPass;
     /** Дата, до которой действует EGC Pass (dd.MM.yyyy), null если подписки нет/истекла. */
     private String egcPassActiveUntil;
+    /** Сколько EXC бонуса подписки (+10% за квесты) уже начислено в текущем месяце и месячный потолок —
+     *  для строки статуса подписки в профиле. Для не-подписчика оба 0. */
+    private long egcPassBoostUsedThisMonth;
+    private long egcPassBoostMonthlyCap;
     private long xp;
     private long coins;
     private int level;

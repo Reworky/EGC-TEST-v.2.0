@@ -144,9 +144,25 @@ public class RewardService {
                 .toList();
     }
 
+    /** Очередь заявок на вывод. Приоритет EGC Pass (одна из привилегий подписки) реализован именно здесь —
+     *  подписчики (на момент просмотра очереди) идут первыми, внутри каждой группы порядок по времени
+     *  создания. Раньше «приоритет» был лишь бейджем внутри карточки заявки, а сама очередь сортировалась
+     *  только по дате — обещание подписки ничего не значило на практике. sorted() у упорядоченного потока
+     *  стабилен, поэтому порядок по createdAt внутри групп сохраняется. */
     public List<RewardRequest> findPendingWithdrawals() {
         return rewardRequestRepository.findAllByStatusAndRewardItemCategoryOrderByCreatedAtAsc(
-                RewardRequestStatus.PENDING, "Вывод");
+                        RewardRequestStatus.PENDING, "Вывод")
+                .stream()
+                .sorted(java.util.Comparator.comparing((RewardRequest r) -> !userService.isEgcPassActive(r.getUser())))
+                .toList();
+    }
+
+    /** Фраза для подтверждения заявки на вывод — только у подписчиков EGC Pass (и только пока подписка
+     *  активна). Пустая строка для остальных, чтобы можно было просто дописывать к сообщению. */
+    public String withdrawalPriorityNote(AppUser user) {
+        return userService.isEgcPassActive(user)
+                ? " ⭐ Приоритет EGC Pass: ваша заявка рассматривается в первую очередь."
+                : "";
     }
 
     public org.springframework.data.domain.Page<RewardRequest> findWithdrawalHistory(int page) {

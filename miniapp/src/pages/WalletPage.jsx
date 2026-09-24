@@ -392,11 +392,13 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
         style={{ marginTop: 12 }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <img src={chestRegularImg} alt="" style={{ width: 72, height: 72, objectFit: 'contain', flexShrink: 0, opacity: wallet.chestAvailable ? 1 : 0.4, transition: 'opacity 0.2s' }} />
+          <img src={wallet.egcPass ? chestPremiumImg : chestRegularImg} alt="" style={{ width: 72, height: 72, objectFit: 'contain', flexShrink: 0, opacity: wallet.chestAvailable ? 1 : 0.4, transition: 'opacity 0.2s' }} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="ref-link-label">Сундук дня</div>
+            <div className="ref-link-label">{wallet.egcPass ? '⭐ Улучшенный сундук дня' : 'Сундук дня'}</div>
             {wallet.chestAvailable ? (
-              <p className="shop-desc"><i className="ti ti-sparkles"></i> Раз в сутки — случайный приз: EXC, билет колеса фортуны или джекпот.</p>
+              <p className="shop-desc"><i className="ti ti-sparkles"></i> {wallet.egcPass
+                ? 'Бесплатно каждый день по подписке EGC Pass — призы заметно щедрее обычного сундука.'
+                : 'Раз в сутки — случайный приз: EXC, билет колеса фортуны или джекпот.'}</p>
             ) : (
               <p className="shop-desc"><i className="ti ti-circle-check"></i> Сундук на сегодня открыт. Возвращайся завтра за новым призом.</p>
             )}
@@ -416,8 +418,10 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
           <img src={chestPremiumImg} alt="" style={{ width: 72, height: 72, objectFit: 'contain', flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="ref-link-label">Улучшенный сундук</div>
-            <p className="shop-desc"><i className="ti ti-sparkles"></i> Призы заметно щедрее бесплатного — за Stars, можно сколько угодно раз.</p>
+            <div className="ref-link-label">{wallet.egcPass ? 'Ещё один улучшенный сундук' : 'Улучшенный сундук'}</div>
+            <p className="shop-desc"><i className="ti ti-sparkles"></i> {wallet.egcPass
+              ? 'Дополнительный улучшенный сундук за Stars — можно сколько угодно раз, поверх ежедневного.'
+              : 'Призы заметно щедрее бесплатного — за Stars, можно сколько угодно раз.'}</p>
           </div>
         </div>
         <ShimmerButton disabled={rerollBusy} onClick={handleBuyReroll} style={{ marginTop: 10 }}>

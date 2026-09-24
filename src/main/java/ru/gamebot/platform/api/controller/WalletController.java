@@ -96,6 +96,7 @@ public class WalletController {
                 .streakDays(user.getStreakDays())
                 .nextDailyBonusExc(nextDailyBonus)
                 .chestAvailable(userService.isChestAvailable(user))
+                .egcPass(userService.isEgcPassActive(user))
                 .fixedRubBalance(user.getFixedRubBalance())
                 .phoneConfirmed(user.getPhoneNumber() != null)
                 .restorableStreakDays(restorableDays)
@@ -216,7 +217,8 @@ public class WalletController {
             return ResponseEntity.ok(ShopActionResponseDto.builder()
                     .success(true)
                     .message("Заявка на вывод В-" + (req.getDisplayId() != null ? req.getDisplayId() : req.getId())
-                            + " принята! " + body.getAmount() + " EXC → ~" + rubles + " ₽. Администратор обработает в течение 24 часов.")
+                            + " принята! " + body.getAmount() + " EXC → ~" + rubles + " ₽. Администратор обработает в течение 24 часов."
+                            + rewardService.withdrawalPriorityNote(user))
                     .build());
         } catch (IllegalArgumentException e) {
             return errorResponse(e.getMessage());
@@ -251,7 +253,8 @@ public class WalletController {
             return ResponseEntity.ok(ShopActionResponseDto.builder()
                     .success(true)
                     .message("Заявка на вывод В-" + (req.getDisplayId() != null ? req.getDisplayId() : req.getId())
-                            + " принята! " + body.getAmount() + " EXC → ~" + rubles + " ₽ → ~" + tonAmount + " GRAM. Администратор обработает в течение 24 часов.")
+                            + " принята! " + body.getAmount() + " EXC → ~" + rubles + " ₽ → ~" + tonAmount + " GRAM. Администратор обработает в течение 24 часов."
+                            + rewardService.withdrawalPriorityNote(user))
                     .build());
         } catch (IllegalArgumentException e) {
             return errorResponse(e.getMessage());

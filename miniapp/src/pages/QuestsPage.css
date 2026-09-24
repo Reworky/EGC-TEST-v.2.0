@@ -222,6 +222,17 @@
   color: #ffa726;
 }
 
+.quest-egc-note {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  background: rgba(124,58,237,0.12);
+  border: 0.5px solid rgba(167,139,250,0.35);
+  color: #e9d5ff;
+}
+
 .quest-limit-note {
   margin: 8px 0;
   padding: 8px 12px;

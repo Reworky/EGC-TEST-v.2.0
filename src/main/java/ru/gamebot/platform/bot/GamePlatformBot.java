@@ -3437,13 +3437,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String wheelLabel = user.getTickets() > 0
                 ? "🎡 Колесо фортуны 🎟 " + user.getTickets()
                 : "🎡 Колесо фортуны";
+        // Подписчикам EGC Pass бесплатный сундук дня — сразу улучшенный (UserService.openChest), и в меню
+        // это должно быть видно; платный реролл для них — ещё один улучшенный сверху, а не «первый улучшенный».
+        boolean egcPass = userService.isEgcPassActive(user);
         String chestLabel = userService.isChestAvailable(user)
-                ? "🎁 Сундук дня 🔔"
+                ? (egcPass ? "🎁 Улучшенный сундук дня ⭐ 🔔" : "🎁 Сундук дня 🔔")
                 : "✅ Сундук сегодня открыт";
+        String rerollLabel = egcPass
+                ? "🔁 Ещё один улучшенный сундук — " + CHEST_REROLL_STARS_PRICE + " ⭐"
+                : "🔁 Улучшенный сундук дня — " + CHEST_REROLL_STARS_PRICE + " ⭐";
         sendMenuCategory(user, "🍀 <b>Фортуна</b>", List.of(
                 List.of(keyboardFactory.callback(wheelLabel, "wheel:menu")),
                 List.of(keyboardFactory.callback(chestLabel, "menu:chestopen")),
-                List.of(keyboardFactory.callback("🔁 Улучшенный сундук дня — " + CHEST_REROLL_STARS_PRICE + " ⭐", "menu:chestreroll"))
+                List.of(keyboardFactory.callback(rerollLabel, "menu:chestreroll"))
         ));
     }
 
@@ -3716,6 +3722,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Бейджи одной строкой
         String badges = "";
         if (councilService.isCouncilMember(user)) badges += "🛡️ EGC Council  ";
+        boolean egcPassActive = userService.isEgcPassActive(user);
+        if (egcPassActive) badges += "⭐ EGC Pass  ";
         if (seasonService.hasActivePass(user)) badges += "🎫 Battle Pass  ";
         java.util.Optional<String> friendBadge = userService.currentInvitedFriendsBadge(user.getInvitedFriends());
         if (friendBadge.isPresent()) badges += friendBadge.get() + "  ";
@@ -3726,6 +3734,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         String titleLine = user.getProfileTitle() != null ? "🏅 " + escape(user.getProfileTitle()) + "\n" : "";
         String boostNote = sinkShopService.isBoostActive(user) ? " +20% буст" : "";
+        // Статус подписки — только у подписчиков (без подписки строки нет вообще): срок и сколько из месячного
+        // потолка бонуса +10% уже использовано, чтобы игрок видел, что привилегия действительно работает.
+        String egcPassLine = "";
+        if (egcPassActive) {
+            long usedBonus = UserService.EGC_PASS_BOOST_MONTHLY_CAP_EXC - userService.egcPassBoostRemainingThisMonth(user);
+            egcPassLine = "⭐ EGC Pass до <b>"
+                    + user.getEgcPassActiveUntil().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+                    + "</b> · бонус +10% за квесты в этом месяце: <b>"
+                    + String.format("%,d", usedBonus).replace(',', ' ') + " / "
+                    + String.format("%,d", UserService.EGC_PASS_BOOST_MONTHLY_CAP_EXC).replace(',', ' ') + " EXC</b>\n";
+        }
 
         // Недельный ранг
         String leagueLine;
@@ -3751,6 +3770,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + onboardingLine
                 + badgeLine
                 + titleLine
+                + egcPassLine
                 + "\nУровень " + levelNum + ": <b>" + levelName + "</b>\n"
                 + levelProgressBar(user) + "\n\n"
                 + "💰 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>"
@@ -3969,9 +3989,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "Сундук сегодня уже открыт — приходи завтра!");
             return;
         }
+        boolean egcPass = userService.isEgcPassActive(user);
         UserService.ChestResult result = userService.openChest(user);
         answer(callbackQuery.getId(), result.prizeLabel());
-        sendText(user.getTelegramId(), buildChestResultMessage(result, user.getCoins()), chestResultKeyboard());
+        sendText(user.getTelegramId(),
+                (egcPass ? "⭐ <i>Улучшенный сундук — бесплатно по подписке EGC Pass</i>\n\n" : "")
+                        + buildChestResultMessage(result, user.getCoins()),
+                chestResultKeyboard());
     }
 
     private String buildChestResultMessage(ru.gamebot.platform.service.UserService.ChestResult result, long newBalance) {
@@ -4587,7 +4611,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📌 Статус: <b>" + escape(displayStatus) + "</b>\n\n"
                         + "🏆 <b>Награда:</b>\n"
                         + "✨ +" + quest.getRewardXp() + " XP\n"
-                        + "🪙 +" + displayRewardCoins(user, quest) + (quest.isSponsored() ? " EXC" : " монет") + rewardNote + "\n"
+                        + "🪙 +" + displayRewardCoins(user, quest) + (quest.isSponsored() ? " EXC" : " монет") + rewardNote + egcPassRewardNote(user, quest) + "\n"
                         + (!quest.isSponsored() && !"UGC".equalsIgnoreCase(quest.getGameName()) && quest.getTicketReward() > 0 ? "🎟 +" + quest.getTicketReward() + " билет(а) для Колеса фортуны\n" : "")
                         + "\n"
                         + "📝 <b>Суть задания:</b>\n" + escape(quest.getDescription()) + "\n\n"
@@ -4621,6 +4645,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return quest.isRepeatableNoCooldownEligible()
                 ? questService.computeReward(user, quest).coins()
                 : quest.getRewardCoins();
+    }
+
+    /** Пометка под наградой для подписчика EGC Pass: сколько EXC добавит бонус +10% именно за этот квест
+     *  (считается тем же computeReward, что и реальное начисление — с учётом месячного потолка), либо что
+     *  потолок этого месяца исчерпан. Без подписки — пустая строка. */
+    private String egcPassRewardNote(AppUser user, Quest quest) {
+        if (!userService.isEgcPassActive(user)) {
+            return "";
+        }
+        long bonus = questService.computeReward(user, quest).egcPassBonusCoins();
+        if (bonus > 0) {
+            return "\n⭐ <i>EGC Pass: +" + bonus + " EXC сверху к награде (бонус +10%)</i>";
+        }
+        if (userService.egcPassBoostRemainingThisMonth(user) <= 0) {
+            return "\n⭐ <i>EGC Pass: бонус +10% за этот месяц исчерпан — вернётся 1-го числа</i>";
+        }
+        return "";
     }
 
     /** Пометка под строкой награды, если недельный лимит (правило 3.4) уже исчерпан и EXC режется вдвое.
@@ -4851,6 +4892,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "✨ +" + freshQuest.getRewardXp() + " XP\n"
                         + "🪙 +" + displayRewardCoins(user, freshQuest) + " монет"
                         + (freshQuest.isRepeatableNoCooldownEligible() ? " (за 1-е сегодня, дальше меньше)" : weeklyLimitNote(questService.weeklyLimitStatus(user, freshQuest)))
+                        + egcPassRewardNote(user, freshQuest)
                         + (!freshQuest.isSponsored() && !"UGC".equalsIgnoreCase(freshQuest.getGameName()) && freshQuest.getTicketReward() > 0 ? "\n🎟 +" + freshQuest.getTicketReward() + " билет(а) для Колеса фортуны" : "")
                         + (freshQuest.isExternalAutoApprove()
                             ? "\n\n📎 <b>Что нужно сделать:</b>\n" + escape(questService.personalizeInstruction(freshQuest.getInstruction(), user.getTelegramId()))
@@ -5151,6 +5193,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long shownCoins = activeSubmission ? displayRewardCoins(user, quest) : historyRewardCoins(user, quest);
         String weeklyNote = activeSubmission && !quest.isRepeatableNoCooldownEligible()
                 ? weeklyLimitNote(questService.weeklyLimitStatus(user, quest)) : "";
+        if (activeSubmission) {
+            weeklyNote += egcPassRewardNote(user, quest);
+        }
         sendText(user.getTelegramId(),
                 "📂 <b>Мой квест</b>\n\n"
                         + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n"
@@ -5968,11 +6013,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendSinkQuests(AppUser user) {
         boolean insuranceActive = user.isRetryInsuranceActive();
         boolean slotActive = sinkShopService.hasExtraSlot(user);
+        // Подписчикам EGC Pass третий слот и так даётся (SinkShopService.getMaxQuestSlots) — не предлагаем им
+        // покупать временный за EXC (покупка всё равно была бы отклонена сообщением «уже включён в подписку»).
+        boolean slotFromPass = sinkShopService.isEgcPassActive(user);
         java.time.format.DateTimeFormatter dtFmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm");
         StringBuilder info = new StringBuilder();
         info.append("🎯 <b>Квесты</b>\n\n");
         info.append("🪙 Баланс: <b>").append(user.getCoins()).append(" EXC</b>\n");
-        if (slotActive) info.append("📂 Доп. слот активен до: <b>").append(user.getQuestSlotExtraUntil().format(dtFmt)).append("</b>\n");
+        if (slotFromPass) info.append("📂 Доп. слот квеста: <b>включён в EGC Pass</b>\n");
+        else if (slotActive) info.append("📂 Доп. слот активен до: <b>").append(user.getQuestSlotExtraUntil().format(dtFmt)).append("</b>\n");
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("🔀 Реролл квеста — 2 000 EXC", "sink:reroll")));
@@ -5986,7 +6035,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (user.isPermanentExtraSlot()) {
             rows.add(List.of(keyboardFactory.callback("📂 Доп. слот навсегда уже куплен ✅", "sink:noop")));
         } else {
-            if (slotActive) {
+            if (slotFromPass) {
+                rows.add(List.of(keyboardFactory.callback("📂 Доп. слот включён в EGC Pass ✅", "sink:noop")));
+            } else if (slotActive) {
                 rows.add(List.of(keyboardFactory.callback("📂 Доп. слот активен ✅", "sink:slot_info")));
             } else {
                 rows.add(List.of(keyboardFactory.callback("📂 Доп. слот квеста 48ч — 3 500 EXC", "sink:extraslot")));
@@ -7008,7 +7059,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "✅ <b>Заявка на награду отправлена</b>\n\n"
                         + "🎁 Награда: <b>" + escape(reward.getTitle()) + "</b>\n"
                         + "🪙 Списано: <b>" + effectivePrice + " EXC</b>\n\n"
-                        + "Как только выдача будет подтверждена, вы получите отдельное уведомление.",
+                        + "Как только выдача будет подтверждена, вы получите отдельное уведомление."
+                        + ("Вывод".equals(reward.getCategory()) && !rewardService.withdrawalPriorityNote(user).isEmpty()
+                                ? "\n\n" + rewardService.withdrawalPriorityNote(user).trim() : ""),
                 backMenuKeyboard("menu:shop"));
         if (callbackQuery != null) answerSilently(callbackQuery.getId());
     }
@@ -8174,6 +8227,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "✨ XP: <b>+" + rewardGrant.xp() + "</b>\n"
                             + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>\n"
                             + formatExcBonusLine(rewardGrant)
+                            + egcPassBonusLine(submission)
                             + firstQuestBonus, watchAdForBonusButton(), nextQuestSuggestionButton(submission.getUser()), sinkShopSuggestionButton(submission.getUser()));
         } catch (Exception e) {
             log.warn("Could not notify user {} about quest approval: {}", submission.getUser().getTelegramId(), e.getMessage());
@@ -9552,8 +9606,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     ? "@" + req.getUser().getTelegramUsername()
                     : "#" + req.getUser().getTelegramId();
             String type = isStarsWithdrawal(req) ? "⭐ Stars" : isCryptoWithdrawal(req) ? "💎 TON" : "💸 ₽";
+            String passMark = sinkShopService.isEgcPassActive(req.getUser()) ? "⭐ " : "";
             rows.add(List.of(keyboardFactory.callback(
-                    "В-" + reqDisplayId(req) + " " + uname + " — " + type + " " + rewardService.actualPaidPrice(req) + " EXC",
+                    passMark + "В-" + reqDisplayId(req) + " " + uname + " — " + type + " " + rewardService.actualPaidPrice(req) + " EXC",
                     "admin:withdrawal:req:" + req.getId())));
         }
         rows.add(List.of(
@@ -9562,7 +9617,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
         String header = pending.isEmpty()
                 ? "💸 <b>Заявки на вывод EXC</b>\n\nНет новых заявок."
-                : "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>";
+                : "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>\n⭐ — подписчики EGC Pass, их заявки идут первыми.";
         sendText(user.getTelegramId(), header, keyboardFactory.rowsLayout(rows));
     }
 
@@ -13613,6 +13668,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>Квест выполнен автоматически!</b>\n\n"
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в Brawl Stars засчитан.\n\n"
                     + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>\n"
+                    + egcPassBonusLine(approved)
                     + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Brawl Stars API");
         } catch (Exception e) {
@@ -13628,6 +13684,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>Квест выполнен автоматически!</b>\n\n"
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в Clash of Clans засчитан.\n\n"
                     + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>\n"
+                    + egcPassBonusLine(approved)
                     + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Clash of Clans API");
         } catch (Exception e) {
@@ -13643,6 +13700,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>Квест выполнен автоматически!</b>\n\n"
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в Clash Royale засчитан.\n\n"
                     + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>\n"
+                    + egcPassBonusLine(approved)
                     + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Clash Royale API");
         } catch (Exception e) {
@@ -13658,6 +13716,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>Квест выполнен автоматически!</b>\n\n"
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в Dota 2 засчитан.\n\n"
                     + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>\n"
+                    + egcPassBonusLine(approved)
                     + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Steam Web API (Dota 2)");
         } catch (Exception e) {
@@ -13673,6 +13732,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>Квест выполнен автоматически!</b>\n\n"
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в CS2 засчитан.\n\n"
                     + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>\n"
+                    + egcPassBonusLine(approved)
                     + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Steam Web API (CS2)");
         } catch (Exception e) {
@@ -13688,6 +13748,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>Квест выполнен автоматически!</b>\n\n"
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в PUBG засчитан.\n\n"
                     + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>\n"
+                    + egcPassBonusLine(approved)
                     + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через официальный PUBG API");
         } catch (Exception e) {
@@ -13702,7 +13763,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyUser(approved.getUser().getTelegramId(),
                     "✅ <b>Партнёр подтвердил выполнение!</b>\n\n"
                     + "Квест <b>" + escape(approved.getQuest().getTitle()) + "</b> засчитан.\n\n"
-                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>", watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
+                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>"
+                    + (egcPassBonusLine(approved).isEmpty() ? "" : "\n" + egcPassBonusLine(approved).trim()), watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "подтверждено партнёрской сетью");
         } catch (Exception e) {
             log.error("[ActionPay] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
@@ -13713,6 +13775,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private long awardedCoinsOf(QuestSubmission submission) {
         Long awarded = submission.getAwardedCoins();
         return awarded != null ? awarded : submission.getQuest().getRewardCoins();
+    }
+
+    /** Строка про подписку EGC Pass в уведомлении об одобрении квеста: сколько EXC добавил бонус +10%
+     *  (он уже включён в общую сумму выше) — либо что месячный потолок бонуса исчерпан. Пустая строка,
+     *  если подписки нет. Раньше бонус молча растворялся в общей сумме, и игрок не мог увидеть, что
+     *  подписка вообще сработала. */
+    private String egcPassBonusLine(QuestSubmission approved) {
+        long bonus = approved.getAwardedEgcPassBonusCoins() != null ? approved.getAwardedEgcPassBonusCoins() : 0;
+        if (bonus > 0) {
+            return "⭐ Бонус EGC Pass: <b>+" + bonus + " EXC</b> (уже включён в сумму)\n";
+        }
+        AppUser player = approved.getUser();
+        if (userService.isEgcPassActive(player) && userService.egcPassBoostRemainingThisMonth(player) <= 0) {
+            return "⭐ Бонус EGC Pass за этот месяц исчерпан ("
+                    + String.format("%,d", UserService.EGC_PASS_BOOST_MONTHLY_CAP_EXC).replace(',', ' ')
+                    + " EXC) — вернётся 1-го числа.\n";
+        }
+        return "";
     }
 
     private long awardedXpOf(QuestSubmission submission) {
@@ -14472,7 +14552,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "🔢 Номер заявки: <b>В-" + withdrawalReq.getId() + "</b>\n"
                     + "💸 Сумма: <b>" + amount + " EXC</b>\n"
                     + "💵 К выплате: <b>~" + rubles + " ₽</b>\n\n"
-                    + "Ожидайте, в течение 24 часов администратор выполнит перевод!",
+                    + "Ожидайте, в течение 24 часов администратор выполнит перевод!"
+                    + (rewardService.withdrawalPriorityNote(user).isEmpty() ? "" : "\n\n" + rewardService.withdrawalPriorityNote(user).trim()),
                 backMenuKeyboard("menu:main"));
             notifyAdminsAboutWithdrawal(user, withdrawalReq);
         } catch (IllegalArgumentException e) {
@@ -14964,6 +15045,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "✨ XP: <b>+" + rewardGrant.xp() + "</b>\n"
                         + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>\n"
                         + formatExcBonusLine(rewardGrant)
+                        + egcPassBonusLine(approved)
                         + firstQuestBonus, watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             } catch (Exception e) {
                 log.warn("Could not notify user {} about AI approval: {}", approved.getUser().getTelegramId(), e.getMessage());
@@ -15534,13 +15616,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     ? "@" + req.getUser().getTelegramUsername()
                     : "#" + req.getUser().getTelegramId();
             String type = isCryptoWithdrawal(req) ? "💎 TON" : "💸 ₽";
+            String passMark = sinkShopService.isEgcPassActive(req.getUser()) ? "⭐ " : "";
             rows.add(List.of(keyboardFactory.callback(
-                    "В-" + reqDisplayId(req) + " " + uname + " — " + type + " " + rewardService.actualPaidPrice(req) + " EXC",
+                    passMark + "В-" + reqDisplayId(req) + " " + uname + " — " + type + " " + rewardService.actualPaidPrice(req) + " EXC",
                     "mod:withdrawal:req:" + req.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:moderation")));
         sendText(user.getTelegramId(),
-                "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>",
+                "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>\n⭐ — подписчики EGC Pass, их заявки идут первыми.",
                 keyboardFactory.rowsLayout(rows));
     }
 

@@ -1154,6 +1154,7 @@ public class QuestService {
         submission.setFixedRubValue(fixedRub);
         submission.setAwardedCoins(adjustedCoins);
         submission.setAwardedXp(adjustedXp);
+        submission.setAwardedEgcPassBonusCoins(reward.egcPassBonusCoins());
 
         // 3.5 3000 EXC bonus on first quest (before completedQuests increment)
         userService.grantFirstQuestReferralBonus(user);

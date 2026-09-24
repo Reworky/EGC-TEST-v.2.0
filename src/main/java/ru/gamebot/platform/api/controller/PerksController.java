@@ -59,7 +59,8 @@ public class PerksController {
                 .excBoostActive(sinkShopService.isExcBoostActive(user))
                 .excBoostUntil(user.getExcBoostActiveUntil() != null ? user.getExcBoostActiveUntil().format(FMT) : null)
                 .insuranceActive(user.isRetryInsuranceActive())
-                .extraSlotActive(sinkShopService.hasExtraSlot(user))
+                .extraSlotActive(sinkShopService.hasExtraSlot(user) || sinkShopService.isEgcPassActive(user))
+                .extraSlotFromEgcPass(sinkShopService.isEgcPassActive(user))
                 .extraSlotUntil(user.getQuestSlotExtraUntil() != null ? user.getQuestSlotExtraUntil().format(FMT) : null)
                 .cooldownBypassActive(user.getCooldownBypassGame() != null)
                 .build());

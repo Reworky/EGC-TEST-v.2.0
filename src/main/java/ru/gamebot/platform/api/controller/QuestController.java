@@ -47,6 +47,7 @@ public class QuestController {
     private final BrawlQuestVerificationService brawlQuestVerificationService;
     private final ru.gamebot.platform.service.QuestRewardBoostService questRewardBoostService;
     private final ru.gamebot.platform.service.GameCatalogService gameCatalogService;
+    private final ru.gamebot.platform.service.UserService userService;
 
     /** Награда для списка «Мои квесты» — там вперемешку активные и уже закрытые заявки, поэтому недельное
      *  снижение (правило 3.4) сюда НЕ подмешиваем: для уже одобренного квеста цифра «как если бы брали
@@ -328,6 +329,11 @@ public class QuestController {
                 builder.rewardDiminished(weekly.reached());
                 builder.weeklyLimit(weekly.limit());
                 builder.weeklyCompleted(weekly.completed());
+                if (userService.isEgcPassActive(user)) {
+                    long egcBonus = questService.computeReward(user, quest).egcPassBonusCoins();
+                    builder.egcPassBonusCoins(egcBonus);
+                    builder.egcPassBoostExhausted(egcBonus <= 0 && userService.egcPassBoostRemainingThisMonth(user) <= 0);
+                }
                 QuestSubmission latest = questService.getLatestSubmission(user, quest);
                 if (latest != null && latest.getStatus() != ru.gamebot.platform.domain.enums.SubmissionStatus.CANCELLED) {
                     builder.submissionStatus(latest.getStatus().name());

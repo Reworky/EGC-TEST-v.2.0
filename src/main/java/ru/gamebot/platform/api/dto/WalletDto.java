@@ -18,6 +18,8 @@ public class WalletDto {
     private int streakDays;
     private long nextDailyBonusExc;
     private boolean chestAvailable;
+    /** Активна подписка EGC Pass — бесплатный сундук дня у неё сразу улучшенный (UserService.openChest). */
+    private boolean egcPass;
     private long fixedRubBalance;
     private boolean phoneConfirmed;
     /** >0 — серия входов прервалась и есть предложение восстановить её за Stars. */

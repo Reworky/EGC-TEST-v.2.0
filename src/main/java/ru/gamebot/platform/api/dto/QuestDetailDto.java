@@ -24,6 +24,11 @@ public class QuestDetailDto {
     private int weeklyLimit;
     private long weeklyCompleted;
 
+    /** Для подписчика EGC Pass: сколько EXC добавит бонус +10% за этот квест (0 — не подписчик либо месячный
+     *  потолок бонуса исчерпан; egcPassBoostExhausted различает эти случаи). */
+    private long egcPassBonusCoins;
+    private boolean egcPassBoostExhausted;
+
     private int ticketReward;
     private boolean councilOnly;
 

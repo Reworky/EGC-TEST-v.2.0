@@ -411,6 +411,12 @@ export default function ProfilePage() {
                   <span>{profile.profileTitle}</span>
                 </div>
               )}
+              {profile.hasEgcPass && (
+                <div className="p-rank-badge" style={{ display: 'inline-flex', borderColor: 'rgba(167,139,250,0.45)', color: '#e9d5ff', background: 'rgba(124,58,237,0.2)' }}>
+                  <span>⭐</span>
+                  <span>EGC Pass</span>
+                </div>
+              )}
               {profile.friendBadgeName && (
                 <div className="p-rank-badge" style={{ display: 'inline-flex', borderColor: 'rgba(251,191,36,0.35)', color: '#fbbf24', background: 'rgba(251,191,36,0.12)' }}>
                   <span>{profile.friendBadgeName}</span>
@@ -425,6 +431,24 @@ export default function ProfilePage() {
       <XpBar xp={profile.xp} level={profile.level} levelName={profile.levelName} />
       <div className="p-ranks-link" onClick={() => setShowRanks(true)}>📊 Посмотреть все ранги и лимиты →</div>
       {showRanks && <RanksModal currentLevel={profile.level} onClose={() => setShowRanks(false)} />}
+
+      {/* ── Подписка EGC Pass: срок и сколько из месячного потолка бонуса +10% уже использовано.
+          Только у подписчиков — без подписки блока нет вообще. ───── */}
+      {profile.hasEgcPass && (
+        <div style={{
+          margin: '0 16px 12px', padding: '10px 14px', borderRadius: 12,
+          background: 'linear-gradient(135deg, rgba(124,58,237,0.16), rgba(124,58,237,0.05))',
+          border: '1px solid rgba(167,139,250,0.4)', display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <span style={{ fontSize: 20 }}>⭐</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#e9d5ff' }}>EGC Pass активен до {profile.egcPassActiveUntil}</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
+              Бонус +10% за квесты в этом месяце: {(profile.egcPassBoostUsedThisMonth ?? 0).toLocaleString()} / {(profile.egcPassBoostMonthlyCap ?? 0).toLocaleString()} EXC
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Новичковый темп: короче кулдауны, пока не наберётся 5 квестов ───── */}
       {profile.onboardingQuestsLeft > 0 && (
