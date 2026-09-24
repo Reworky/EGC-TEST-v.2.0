@@ -15457,9 +15457,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String method = req.getPaymentMethod() != null ? req.getPaymentMethod() : "RUB";
         return switch (method) {
             case "STARS" -> "💳 Способ оплаты: <b>⭐ Stars (" + req.getStarsAmount() + " ⭐, оплата подтверждена автоматически)</b>";
-            case "TON" -> "💳 Способ оплаты: <b>💎 GRAM (TON)</b> — свяжитесь с игроком, уточните детали и пришлите реквизиты лично";
+            case "TON" -> "💳 Способ оплаты: <b>💎 GRAM (TON)</b> — свяжитесь с игроком, уточните детали и пришлите реквизиты лично"
+                    + gemPurchaseTonAmountLine(req);
             default -> "💳 Способ оплаты: <b>💸 Рубли</b> (перевод, требует проверки чека)";
         };
+    }
+
+    /** Сумма к оплате в TON по ТЕКУЩЕМУ курсу (пересчитывается при каждом открытии карточки) - менеджеру не нужно
+     * считать вручную (2026-09-25, первая реальная заявка на донат). Курс плавающий: перед тем как назвать сумму игроку,
+     * лучше открыть карточку заново. Сбой получения курса не должен ломать карточку - тогда строка просто не показывается. */
+    private String gemPurchaseTonAmountLine(GemPurchaseRequest req) {
+        try {
+            java.math.BigDecimal rate = exchangeRateService.getTonRubRate();
+            java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(req.getPriceRub()));
+            String approx = exchangeRateService.isUsingFallback() ? "≈ " : "";
+            return "\n💱 К оплате: <b>" + tonAmount + " TON</b> (" + req.getPriceRub() + "₽ по курсу 1 TON " + approx
+                    + rate.setScale(2, java.math.RoundingMode.HALF_DOWN) + "₽"
+                    + (exchangeRateService.isUsingFallback() ? ", курс приблизительный" : "") + ")";
+        } catch (Exception e) {
+            log.warn("Failed to compute TON amount for gem purchase request {}", req.getId(), e);
+            return "";
+        }
     }
 
     private String gemPurchaseCodeLine(GemPurchaseRequest req) {
