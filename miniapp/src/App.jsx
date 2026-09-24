@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { authMiniApp } from './api/client';
+import { authMiniApp, getProfile, invalidateCache } from './api/client';
 import { useTelegram } from './hooks/useTelegram';
 import BottomNav from './components/BottomNav';
+import RegistrationRequiredScreen from './components/RegistrationRequiredScreen';
 import { LottieProvider } from './components/LottieContext';
 import { ParticlesProvider } from './components/ParticlesContext';
 import './App.css';
@@ -84,6 +85,8 @@ export default function App() {
   const [error, setError] = useState(null);
   const [offline, setOffline] = useState(false);
   const [noContext, setNoContext] = useState(false);
+  // true = профиль отвечает 404 (игрок не ввёл никнейм в боте) - вместо страниц показываем экран регистрации
+  const [needsRegistration, setNeedsRegistration] = useState(false);
 
   const doAuth = (data) => {
     authMiniApp(data)
@@ -110,6 +113,25 @@ export default function App() {
     doAuth(initData);
   }, [initData]);
 
+  // Проверка регистрации: getProfile кэшируется на минуту (тот же запрос делают страницы), лишней нагрузки нет.
+  // Гейт включаем только на 404 - сетевые и прочие ошибки страницы обработают сами.
+  async function checkRegistration(force = false) {
+    if (force) invalidateCache('profile');
+    try {
+      await getProfile();
+      setNeedsRegistration(false);
+      return true;
+    } catch (e) {
+      if (e?.response?.status === 404) setNeedsRegistration(true);
+      return false;
+    }
+  }
+
+  useEffect(() => {
+    if (ready) checkRegistration();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
+
   useEffect(() => {
     const handler = () => setOffline(true);
     window.addEventListener('egc:offline', handler);
@@ -134,6 +156,10 @@ export default function App() {
   }
 
   if (!ready) return <div className="page-center">Загрузка...</div>;
+
+  if (needsRegistration) {
+    return <RegistrationRequiredScreen onRecheck={() => checkRegistration(true)} />;
+  }
 
   return (
     <BrowserRouter>
