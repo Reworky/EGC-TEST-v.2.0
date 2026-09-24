@@ -10,7 +10,11 @@ import './AdWheelSection.css';
 // Отдельный AdsGram-блок под колесо — чтобы CPM колеса считался отдельно от карточки «Посмотри рекламу — получи EXC».
 // Пока VITE_ADSGRAM_WHEEL_BLOCK_ID не задан, используется общий блок. Reward URL у нового блока в кабинете AdsGram —
 // тот же, что у общего (сервер различает «спин» и «30 EXC» по цели, выставленной в /api/ads/watch, а не по блоку).
-const ADSGRAM_BLOCK_ID = import.meta.env.VITE_ADSGRAM_WHEEL_BLOCK_ID || import.meta.env.VITE_ADSGRAM_BLOCK_ID;
+const ADSGRAM_WHEEL_BLOCK_ID = import.meta.env.VITE_ADSGRAM_WHEEL_BLOCK_ID;
+const ADSGRAM_GENERAL_BLOCK_ID = import.meta.env.VITE_ADSGRAM_BLOCK_ID;
+// Порядок важен: сначала блок колеса (своя статистика CPM), при ошибке/no-fill (в т.ч. пока блок на модерации) useAdsgram
+// пробует следующий - общий блок, чтобы игрок не остался без ролика.
+const ADSGRAM_BLOCK_IDS = [...new Set([ADSGRAM_WHEEL_BLOCK_ID, ADSGRAM_GENERAL_BLOCK_ID].filter(Boolean))];
 const TELEGA_AD_BLOCK_UUID = import.meta.env.VITE_TELEGA_AD_BLOCK_UUID;
 
 // Секторы и шансы должны совпадать с AdWheelService на бэкенде (там веса из 1000). Порядок на колесе —
@@ -208,7 +212,7 @@ export default function AdWheelSection({ onBack }) {
     return () => cancelAnimationFrame(rafRef.current);
   }, [redraw]);
 
-  const adsgramLeft = ADSGRAM_BLOCK_ID && status ? status.remainingAdsgram : 0;
+  const adsgramLeft = ADSGRAM_BLOCK_IDS.length > 0 && status ? status.remainingAdsgram : 0;
   const telegaLeft = TELEGA_AD_BLOCK_UUID && status ? status.remainingTelega : 0;
   const viewsLeft = adsgramLeft + telegaLeft;
   const spins = status ? status.spins : 0;
@@ -238,7 +242,7 @@ export default function AdWheelSection({ onBack }) {
     setWaiting(false);
   }, []);
 
-  const showAdsgram = useAdsgram({ blockIds: [ADSGRAM_BLOCK_ID], onReward: confirmAdCredited, onError: onAdError });
+  const showAdsgram = useAdsgram({ blockIds: ADSGRAM_BLOCK_IDS, onReward: confirmAdCredited, onError: onAdError });
   const showTelega = useTelegaAds({ adBlockUuid: TELEGA_AD_BLOCK_UUID, onReward: confirmAdCredited, onError: onAdError });
 
   async function handleWatch() {

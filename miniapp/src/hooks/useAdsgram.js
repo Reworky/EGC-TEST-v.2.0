@@ -29,7 +29,10 @@ export function useAdsgram({ blockIds, onReward, onError }) {
       controller.show()
         .then(() => { onReward(); })
         .catch((result) => {
-          if (index + 1 < controllers.length) {
+          // Запасной блок пробуем только при реальной ошибке показа (нет рекламы, сбой SDK). Если игрок сам закрыл
+          // ролик (SDK отвечает error:false, done:false), второй ролик подряд показывать не надо.
+          const userClosed = result && result.error === false;
+          if (!userClosed && index + 1 < controllers.length) {
             tryShow(index + 1);
           } else {
             onError?.(result);
