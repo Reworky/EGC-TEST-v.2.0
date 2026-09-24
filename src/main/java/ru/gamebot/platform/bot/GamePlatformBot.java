@@ -1519,6 +1519,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             return;
         }
+        if (data.startsWith("gemfaq:")) {
+            answerSilently(callbackQuery.getId());
+            sendGemFaq(user, data.substring("gemfaq:".length()));
+            return;
+        }
         if (data.startsWith("review:")) {
             handleReviewAction(callbackQuery, user, session, data.substring("review:".length()));
             return;
@@ -6702,8 +6707,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyAdminsAboutGemPurchase(req);
             sendText(telegramId,
                     "✅ <b>Оплата прошла!</b>\n\n"
-                            + "Заявка Д-" + req.getDisplayId() + " на <b>" + pkg.displayLabel() + "</b> создана — оплата уже подтверждена, зачислим на тег " + escape(tag) + " в ближайшее время.",
-                    backMenuKeyboard("menu:cat:shop"));
+                            + "Заявка Д-" + req.getDisplayId() + " на <b>" + pkg.displayLabel() + "</b> создана — оплата уже подтверждена, зачислим на тег " + escape(tag) + " в ближайшее время.\n\n"
+                            + "Менеджер напишет вам в личные сообщения: понадобятся email вашего Supercell ID и одноразовый код из письма. Подготовьте их заранее.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("🔐 Про доступ к аккаунту", "gemfaq:access")),
+                            List.of(keyboardFactory.callback("⬅️ Назад", "menu:cat:shop"), keyboardFactory.callback("🏠 Меню", "menu:main"))
+                    )));
             return;
         }
         if ("starsitem:AVATAR_FRAME".equals(payload)) {
@@ -15290,17 +15299,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long price = gemPurchasePriceFor(user, pkg);
         java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(price));
         int starsPrice = gemPurchaseStarsPrice(price);
+        // Stars первыми (2026-09-25): оплата в один тап, подтверждается автоматически, без переписки с менеджером и
+        // проверки перевода - самый быстрый путь и для игрока, и для менеджера. TON - вторым, через личную переписку.
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
-                List.of(keyboardFactory.callback("💎 GRAM (TON) — ~" + tonAmount + " GRAM (TON)", "gemdonate:method:TON:" + gameKey + ":" + pkg.key())),
-                List.of(keyboardFactory.callback("⭐ Telegram Stars — " + starsPrice + " ⭐", "gemdonate:method:STARS:" + gameKey + ":" + pkg.key())),
+                List.of(keyboardFactory.callback("⭐ Telegram Stars — " + starsPrice + " ⭐ (быстрее всего)", "gemdonate:method:STARS:" + gameKey + ":" + pkg.key())),
+                List.of(keyboardFactory.callback("💎 GRAM (TON) — ~" + tonAmount + " TON (через менеджера)", "gemdonate:method:TON:" + gameKey + ":" + pkg.key())),
                 List.of(keyboardFactory.callback("❌ Отмена", gemDonateBackTarget(gameKey, pkg)))
         ));
         String passNote = price < pkg.priceRub() ? " <i>(закупочная цена, EGC Pass)</i>" : "";
         sendText(user.getTelegramId(),
                 "💎 <b>" + pkg.displayLabel() + " — " + price + "₽</b>" + passNote + "\n\n"
                         + "Выберите способ оплаты:\n\n"
-                        + "⭐ Stars списываются сразу автоматически\n"
-                        + "💎 GRAM (TON) — перевод вручную + чек, проверка займёт время.\n\n"
+                        + "⭐ <b>Telegram Stars</b> — рекомендуем: оплата в один тап, подтверждается автоматически, без переписки и проверки перевода.\n"
+                        + "💎 <b>GRAM (TON)</b> — перевод вручную: менеджер напишет вам в личные сообщения и пришлёт реквизиты, это дольше.\n\n"
                         + GEM_PURCHASE_ACCOUNT_ACCESS_WARNING,
                 keyboardFactory.rowsLayout(rows));
     }
@@ -15351,14 +15362,40 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long price = gemPurchasePriceFor(user, pkg);
         GemPurchaseRequest req = gemPurchaseService.createManualRequest(user, gameKey, pkg, price, tag, "TON");
         notifyAdminsAboutGemPurchase(req);
+        java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(price));
         sendText(user.getTelegramId(),
                 "✅ <b>Заявка Д-" + req.getDisplayId() + " создана!</b>\n\n"
-                        + pkg.displayLabel() + " на тег <code>" + escape(tag) + "</code>\n\n"
-                        + "Модератор свяжется с вами в личных сообщениях, чтобы уточнить детали и прислать реквизиты для оплаты.",
+                        + pkg.displayLabel() + " на тег <code>" + escape(tag) + "</code>\n"
+                        + "💰 " + price + "₽ ≈ " + tonAmount + " TON (точную сумму по курсу на момент оплаты назовёт менеджер)\n\n"
+                        + "Менеджер напишет вам в личные сообщения и пришлёт реквизиты. Чтобы всё прошло быстро, подготовьте заранее:\n"
+                        + "1️⃣ TON на кошельке в нужной сумме\n"
+                        + "2️⃣ email вашего Supercell ID (понадобится для зачисления)\n\n"
+                        + "Не хотите возиться с TON? Оплатить можно Stars: откройте Магазин наград → ваша игра → «Купить за реальные деньги», выберите этот пакет и способ «Telegram Stars».",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.url("✍️ Написать менеджеру", managerDmLink(req, pkg))),
+                        List.of(keyboardFactory.callback("❓ Как купить TON", "gemfaq:ton"),
+                                keyboardFactory.callback("🔐 Про доступ к аккаунту", "gemfaq:access")),
                         List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
                 )));
+    }
+
+    /** Короткие FAQ для игрока после создания заявки на донат (2026-09-25) - закрывают два самых частых вопроса без менеджера. */
+    private void sendGemFaq(AppUser user, String topic) {
+        String text = "ton".equals(topic)
+                ? "❓ <b>Как купить TON</b>\n\n"
+                        + "Проще всего в Telegram: откройте кошелёк @wallet, раздел «Купить» (банковская карта или P2P) и купите TON "
+                        + "на нужную сумму. Подойдёт и любой другой TON-кошелёк или биржа.\n\n"
+                        + "Дальше менеджер пришлёт адрес и точную сумму: нажмите «Отправить», вставьте адрес, выберите сеть TON и "
+                        + "в комментарии укажите номер заявки.\n\n"
+                        + "Не хочется возиться с TON? Оплатите Stars: Магазин наград → ваша игра → «Купить за реальные деньги» → тот же пакет → «Telegram Stars». Это быстрее."
+                : "🔐 <b>Про доступ к аккаунту</b>\n\n"
+                        + "Для зачисления поставщик просит email вашего Supercell ID и одноразовый код из письма. Пароль не нужен. "
+                        + "Это требование поставщика, а не бота.\n\n"
+                        + "Данные вы отправляете только менеджеру в личной переписке, в боте вводить ничего не нужно. "
+                        + "На время зачисления лучше не заходить в игру.\n\n"
+                        + "Если не хотите, заявку можно отменить до оплаты: напишите менеджеру.";
+        sendText(user.getTelegramId(), text,
+                keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
     }
 
     /** Ссылка на менеджера с заранее заполненным текстом сообщения (t.me/<user>?text=...) — менеджер
@@ -15501,7 +15538,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + gemPurchasePaymentLine(req) + gemPurchaseCodeLine(req) + "\n"
                 + "🎁 XP-бонус при выполнении: <b>" + req.getXpBonus() + "</b>";
         InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
-                List.of(keyboardFactory.callback("👀 Открыть заявку", "admin:gempurchase:view:" + req.getId()))
+                List.of(keyboardFactory.callback("👀 Открыть заявку", "admin:gempurchase:view:" + req.getId())),
+                List.of(keyboardFactory.callback("📋 Тексты для игрока", "admin:gempurchase:texts:" + req.getId()))
         ));
         for (Long adminId : adminService.allModeratorIds()) {
             if (req.getPaymentProofFileId() != null) {
@@ -15552,6 +15590,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         keyboardFactory.callback("❌ Отклонить", "admin:gempurchase:reject:" + id)
                 ));
             }
+            rows.add(List.of(keyboardFactory.callback("📋 Тексты для игрока", "admin:gempurchase:texts:" + id)));
             rows.add(List.of(keyboardFactory.callback("⬅️ К списку", "admin:gempurchase")));
             InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(rows);
             if (req.getPaymentProofFileId() != null) {
@@ -15566,6 +15605,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         answerSilently(callbackQuery.getId());
         if (action.startsWith("view:")) {
             sendAdminGemPurchaseCard(user, parseLong(action.substring("view:".length())));
+        } else if (action.startsWith("texts:")) {
+            sendAdminGemReplyMenu(user, parseLong(action.substring("texts:".length())));
+        } else if (action.startsWith("reply:")) {
+            // "reply:<kind>:<id>"
+            String[] parts = action.split(":");
+            if (parts.length == 3) {
+                sendAdminGemReply(user, parts[1], parseLong(parts[2]));
+            }
         } else if (action.startsWith("approve:")) {
             long id = Long.parseLong(action.substring("approve:".length()));
             GemPurchaseRequest req = gemPurchaseService.approve(id);
@@ -15588,6 +15635,89 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             Long displayId = gemPurchaseService.findById(id).map(GemPurchaseRequest::getDisplayId).orElse(id);
             sendText(user.getTelegramId(), "✏️ Введите причину отклонения заявки Д-" + displayId + ":", cancelKeyboard());
         }
+    }
+
+    /** Меню готовых ответов игроку по заявке на донат (2026-09-25): менеджер жмёт нужный - бот присылает текст с уже
+     * подставленными игрой, пакетом, тегом, ценой, суммой в TON и Stars; остаётся вставить [АДРЕС]/[СРОК] и отправить игроку.
+     * Адрес кошелька в бот намеренно не вносится (решение 2026-09-20 - реквизиты только лично у менеджера). */
+    private void sendAdminGemReplyMenu(AppUser user, Long id) {
+        gemPurchaseService.findById(id).ifPresentOrElse(req -> {
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            rows.add(List.of(keyboardFactory.callback("📨 Реквизиты и старт", "admin:gempurchase:reply:req:" + id)));
+            rows.add(List.of(keyboardFactory.callback("❓ Как купить TON", "admin:gempurchase:reply:ton:" + id),
+                    keyboardFactory.callback("⭐ Оплатить Stars", "admin:gempurchase:reply:stars:" + id)));
+            rows.add(List.of(keyboardFactory.callback("🔑 Нужен код", "admin:gempurchase:reply:code:" + id),
+                    keyboardFactory.callback("✅ Готово", "admin:gempurchase:reply:done:" + id)));
+            rows.add(List.of(keyboardFactory.callback("🔐 Про доступ", "admin:gempurchase:reply:access:" + id),
+                    keyboardFactory.callback("💱 Курс / сумма", "admin:gempurchase:reply:rate:" + id)));
+            rows.add(List.of(keyboardFactory.callback("⏳ Сроки", "admin:gempurchase:reply:wait:" + id),
+                    keyboardFactory.callback("📭 Не пришли гемы", "admin:gempurchase:reply:missing:" + id)));
+            rows.add(List.of(keyboardFactory.callback("🚫 Отмена / возврат", "admin:gempurchase:reply:cancel:" + id)));
+            rows.add(List.of(keyboardFactory.callback("⬅️ К заявке", "admin:gempurchase:view:" + id)));
+            sendText(user.getTelegramId(),
+                    "📋 <b>Тексты для игрока по заявке Д-" + req.getDisplayId() + "</b>\n\nВыберите ответ - бот пришлёт готовый текст, "
+                            + "его можно скопировать (нажмите на блок) и отправить игроку.",
+                    keyboardFactory.rowsLayout(rows));
+        }, () -> sendText(user.getTelegramId(), "❌ Заявка не найдена.", backMenuKeyboard("admin:gempurchase")));
+    }
+
+    private void sendAdminGemReply(AppUser user, String kind, Long id) {
+        gemPurchaseService.findById(id).ifPresentOrElse(req -> {
+            String text = buildGemPlayerReply(kind, req);
+            sendText(user.getTelegramId(), "<pre>" + escape(text) + "</pre>",
+                    keyboardFactory.rowsLayout(List.of(List.of(
+                            keyboardFactory.callback("⬅️ Другие тексты", "admin:gempurchase:texts:" + id),
+                            keyboardFactory.callback("👀 К заявке", "admin:gempurchase:view:" + id)))));
+        }, () -> sendText(user.getTelegramId(), "❌ Заявка не найдена.", backMenuKeyboard("admin:gempurchase")));
+    }
+
+    private String buildGemPlayerReply(String kind, GemPurchaseRequest req) {
+        String game = req.getGameName() != null ? req.getGameName() : "";
+        String item = req.getItemLabel() != null ? req.displayLabel() : (req.displayLabel() + " " + game).trim();
+        String tag = java.util.Objects.toString(req.getGameTag(), "");
+        long price = req.getPriceRub();
+        String ton = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(price)).toString();
+        int stars = gemPurchaseStarsPrice(price);
+        String id = "Д-" + req.getDisplayId();
+        boolean paidWithStars = "STARS".equals(req.getPaymentMethod());
+        return switch (kind) {
+            case "req" -> paidWithStars
+                    ? "Здравствуйте! Это менеджер EGC по заявке " + id + ".\n"
+                        + "📦 " + item + " · тег " + tag + " (сверьте с игрой)\n"
+                        + "✅ Оплата Stars получена, спасибо!\n\n"
+                        + "Для зачисления пришлите email вашего Supercell ID. Пароль не нужен, только email и одноразовый код, "
+                        + "который придёт на почту. На время зачисления лучше не заходить в игру. Срок зачисления: [СРОК]."
+                    : "Здравствуйте! Это менеджер EGC по заявке " + id + ".\n"
+                        + "📦 " + item + " · тег " + tag + " (сверьте с игрой)\n"
+                        + "💰 " + price + " ₽ = " + ton + " TON (сумма зафиксирована на 30 минут)\n\n"
+                        + "Оплата:\n"
+                        + "1. Переведите " + ton + " TON на [АДРЕС], сеть TON\n"
+                        + "2. В комментарии укажите: " + id + "\n"
+                        + "3. Напишите мне «оплатил» и пришлите скриншот или хэш перевода\n\n"
+                        + "Пока оплачиваете, пришлите email вашего Supercell ID. Он понадобится для зачисления. Пароль не нужен, "
+                        + "только email и одноразовый код, который придёт на почту. На время зачисления лучше не заходить в игру.\n\n"
+                        + "Быстрее всего платить Stars прямо в боте: " + stars + " ⭐. Если так удобнее, откройте бота: Магазин наград → ваша игра → «Купить за реальные деньги», выберите этот пакет и способ «Telegram Stars».";
+            case "ton" -> "Проще всего через Telegram: откройте @wallet, раздел «Купить» (банковская карта или P2P), купите " + ton
+                    + " TON, затем «Отправить» на [АДРЕС]. Сеть TON, в комментарии напишите " + id
+                    + ". Если удобнее без TON, платите Stars в боте: " + stars + " ⭐.";
+            case "stars" -> "Можно оплатить Stars прямо в боте, это быстрее: Магазин наград → ваша игра → «Купить за реальные деньги», выберите " + item
+                    + " и способ «Telegram Stars» (" + stars + " ⭐). Оплата подтверждается автоматически, переписка не нужна.";
+            case "code" -> "Оплату вижу, спасибо! Отправил запрос на зачисление. Сейчас на [EMAIL] придёт письмо от Supercell ID с кодом. "
+                    + "Пришлите мне его сюда, код действует недолго.";
+            case "done" -> "Готово! " + item + " на аккаунте " + tag + ", проверьте в игре. Бот пришлёт подтверждение и начислит +"
+                    + req.getXpBonus() + " XP. Спасибо за покупку!";
+            case "access" -> "Понимаю. Пароль не нужен и не запрашивается. Нужны только email и одноразовый код из письма Supercell ID, "
+                    + "это условие поставщика, не бота. Данные я запрашиваю только здесь, в личной переписке, никому другому не давайте. "
+                    + "Если не хочется, до оплаты заявку можно отменить без последствий.";
+            case "rate" -> "Сумма была зафиксирована на 30 минут. По текущему курсу это " + ton + " TON. При недоплате попрошу доплатить, "
+                    + "при переплате верну разницу.";
+            case "wait" -> "Зачисляю в течение [СРОК] после подтверждения оплаты. Сейчас [СТАТУС: проверяю перевод / закупаю / жду код]. "
+                    + "Как только будет готово, напишу.";
+            case "missing" -> "Проверяю. Пришлите тег ещё раз и скриншот профиля из игры. Иногда зачисление занимает несколько минут после запроса кода.";
+            case "cancel" -> "Заявку " + id + " отменил. [ПОЛИТИКА ВОЗВРАТА: до оплаты ничего не списывается; после оплаты и до закупки возвращаю "
+                    + "TON за минусом комиссии сети.]";
+            default -> "Здравствуйте! Это менеджер EGC по заявке " + id + ".";
+        };
     }
 
     private void notifyUserGemPurchaseApproved(GemPurchaseRequest req) {
