@@ -23,6 +23,7 @@ public class ShopLimitService {
     private final AppUserRepository appUserRepository;
     private final UserService userService;
     private final SinkShopService sinkShopService;
+    private final HealthRatioService healthRatioService;
 
     /**
      * Проверяет все 4 слоя ограничений. Бросает IllegalArgumentException с текстом для пользователя.
@@ -107,10 +108,14 @@ public class ShopLimitService {
         }
     }
 
-    /** Слой 3: общий месячный лимит трат (через существующий механизм вывода) */
+    /** Слой 3: общий месячный лимит трат (через существующий механизм вывода). Сравнивать нужно с
+     *  effectivePrice (с поправкой на Health Ratio), а не с базовой ценой товара — иначе эта
+     *  пре-проверка (и getItemStatus ниже) молча пропускают то, что реальное списание в
+     *  RewardService.createRewardRequest потом всё равно заблокирует по той же самой причине. */
     public void checkMonthlySpendsLimit(AppUser user, RewardItem item) {
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
-        if (item.getPriceCoins() > remaining) {
+        long price = healthRatioService.effectivePrice(item);
+        if (price > remaining) {
             throw new IllegalArgumentException(
                     "📊 Достигнут месячный лимит трат в магазине. Доступно ещё: " + remaining + " EXC. Сбрасывается 1-го числа каждого месяца.");
         }
@@ -218,9 +223,10 @@ public class ShopLimitService {
             }
         }
 
-        // Слой 3
+        // Слой 3 — сравнивать с effectivePrice (Health Ratio), не с базовой ценой, см. checkMonthlySpendsLimit.
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
-        if (item.getPriceCoins() > remaining) {
+        long effectivePrice = healthRatioService.effectivePrice(item);
+        if (effectivePrice > remaining) {
             return "🚫 Недоступно — достигнут месячный лимит трат (" + remaining + " EXC осталось)";
         }
 

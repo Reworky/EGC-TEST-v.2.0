@@ -94,6 +94,24 @@ public class HealthRatioService {
                 .orElse(MAX_RATIO);
     }
 
+    // 3.2 Level B: effective price adjusted by Health Ratio (worse HR → higher EXC price). Живёт здесь
+    // (не в RewardService), чтобы ShopLimitService мог считать ТОЧНО ТАК ЖЕ при показе статуса товара
+    // и при пре-проверке лимита — без этого общего источника они расходились (см. инцидент 2026-09-24:
+    // "Доступно — использовано 0 из 10000" показывался по базовой цене 7900, а реальное списание при
+    // оформлении заявки уже проверяло эффективную цену 15608 при просевшем Health Ratio, и заявка
+    // блокировалась с виду "необоснованно"). Косметика (avatar_frame) не участвует в экономике фонда —
+    // цена всегда базовая.
+    public long effectivePrice(ru.gamebot.platform.domain.model.RewardItem item) {
+        if ("avatar_frame".equals(item.getPurchaseGroup())) {
+            return item.getPriceCoins();
+        }
+        double ratio = getCurrentRatio();
+        if (ratio >= 1.0) {
+            return item.getPriceCoins();
+        }
+        return Math.round(item.getPriceCoins() / ratio);
+    }
+
     public long getPayoutPoolRub() {
         return payoutPoolEntryRepository.sumAllAmounts();
     }
