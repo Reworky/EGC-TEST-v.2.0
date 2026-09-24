@@ -292,10 +292,6 @@ export async function getBattlePass() {
   return data;
 }
 
-export async function purchaseBattlePass(seasonId) {
-  const { data } = await api.post(`/api/battlepass/${seasonId}/purchase`);
-  return data;
-}
 
 export async function getMySquad() {
   const { data } = await api.get('/api/squads/me');

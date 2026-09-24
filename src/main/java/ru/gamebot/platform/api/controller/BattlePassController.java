@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.RestController;
 import ru.gamebot.platform.api.dto.BattlePassDto;
 import ru.gamebot.platform.api.dto.ShopActionResponseDto;
 import ru.gamebot.platform.domain.model.AppUser;
-import ru.gamebot.platform.domain.model.Season;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.service.SeasonService;
 
@@ -53,20 +52,13 @@ public class BattlePassController {
                 .orElseGet(() -> ResponseEntity.ok(builder.hasSeason(false).build()));
     }
 
+    /** Покупка Battle Pass отключена (перки теперь входят в EGC Pass) — эндпоинт оставлен только затем, чтобы
+     *  устаревший кэшированный клиент мини-аппа получил понятный отказ, а не 404. */
     @PostMapping("/{id}/purchase")
-    public ResponseEntity<ShopActionResponseDto> purchase(@PathVariable Long id, @AuthenticationPrincipal Long telegramId) {
-        AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
-        if (user == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
-        Season season = seasonService.findById(id).orElse(null);
-        if (season == null) {
-            return ResponseEntity.notFound().build();
-        }
-        SeasonService.PurchaseResult res = seasonService.purchase(user, season);
+    public ResponseEntity<ShopActionResponseDto> purchase(@PathVariable Long id) {
         return ResponseEntity.ok(ShopActionResponseDto.builder()
-                .success(res.success())
-                .message(res.success() ? "🎫 Battle Pass активирован!" : res.error())
+                .success(false)
+                .message("Battle Pass больше не продаётся — его перки теперь входят в подписку EGC Pass.")
                 .build());
     }
 }

@@ -15,7 +15,7 @@ const EGC_PASS_PERKS = [
 /** Флагманский Stars-товар — подписка (Telegram Star subscription, 30 дней, автопродление на
  * стороне Telegram, 2026-09-15). В отличие от разовых Stars-покупок это не скрывается после оплаты:
  * без подписки карточка предлагает оформить, с подпиской — показывает, что она оформлена, и срок.
- * Живёт в разделе Battle Pass (перенесена из «Предметы» по решению владельца, 2026-09-24). */
+ * Живёт в собственном разделе «EGC Pass» (Battle Pass объединён с подпиской, 2026-09-24). */
 export default function EgcPassCard({ profile, price, onPurchased }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);

@@ -40,26 +40,10 @@ public class SeasonService {
                 && LocalDateTime.now().isBefore(user.getSeasonPassActiveUntil());
     }
 
-    public record PurchaseResult(boolean success, String error) {}
-
-    @Transactional
-    public PurchaseResult purchase(AppUser user, Season season) {
-        if (!season.isActive()) return new PurchaseResult(false, "Сезон недоступен.");
-        if (hasActivePass(user)) return new PurchaseResult(false, "У вас уже активен Season Pass.");
-        if (user.getCoins() < season.getPriceExc())
-            return new PurchaseResult(false, "Недостаточно EXC. Нужно: " + season.getPriceExc());
-
-        user.setCoins(user.getCoins() - season.getPriceExc());
-
-        LocalDateTime until = season.getEndDate() != null
-                ? season.getEndDate()
-                : LocalDateTime.now().plusDays(30);
-        user.setSeasonPassActiveUntil(until);
-
-        userService.save(user);
-        excTx.log(user, -season.getPriceExc(), ExcTransactionService.SEASON, "Battle Pass: " + season.getName());
-        return new PurchaseResult(true, null);
-    }
+    // Покупка сезонного пасса за EXC отключена (2026-09-24, решение владельца — вариант «один продукт»): перки
+    // Battle Pass теперь входят в подписку EGC Pass. Уже купленные пассы (seasonPassActiveUntil) доживают
+    // свой срок — hasActivePass/findCurrentSeason и XP-буст в QuestService.computeReward для них работают
+    // как раньше, поэтому автопродолжение сезонов (WeeklyResetScheduler) тоже оставлено.
 
     @Transactional
     public Season create(String name, long priceExc, int xpBoostPercent, LocalDateTime startDate, LocalDateTime endDate) {

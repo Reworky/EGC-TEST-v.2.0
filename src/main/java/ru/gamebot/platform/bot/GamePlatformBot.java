@@ -1182,16 +1182,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if (data.startsWith("battlepass:buy:")) {
-            long seasonId = parseLong(data.substring("battlepass:buy:".length()));
-            seasonService.findById(seasonId).ifPresentOrElse(season -> {
-                ru.gamebot.platform.service.SeasonService.PurchaseResult res = seasonService.purchase(user, season);
-                if (res.success()) {
-                    answer(callbackQuery.getId(), "🎫 Battle Pass активирован!");
-                    sendBattlePass(user);
-                } else {
-                    answer(callbackQuery.getId(), "❌ " + res.error());
-                }
-            }, () -> answer(callbackQuery.getId(), "❌ Сезон не найден."));
+            // Продажа Battle Pass за EXC отключена (2026-09-24, решение владельца — «один продукт»): его перки теперь
+            // входят в EGC Pass. Кнопка могла остаться в старых сообщениях — отвечаем понятным отказом и ведём на EGC Pass.
+            answer(callbackQuery.getId(), "Battle Pass больше не продаётся — его перки теперь входят в EGC Pass");
+            sendEgcPassScreen(user);
             return;
         }
         if ("streak:restore".equals(data)) {
@@ -1653,7 +1647,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "tournament" -> sendTournament(user);
             case "news" -> sendNews(user);
             case "polls" -> sendPollList(user);
-            case "battlepass" -> sendBattlePass(user);
+            case "battlepass" -> sendEgcPassScreen(user); // callback-ключ остался прежним ради старых кнопок
             case "support" -> sendSupport(user);
             case "rules" -> sendRulesMessage(user, backMenuKeyboard("menu:cat:help"));
             case "quickstart" -> { answerSilently(callbackQuery.getId()); sendQuickStartGuide(user); }
@@ -3244,11 +3238,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendShopCategory(AppUser user) {
-        boolean hasPass = seasonService.hasActivePass(user);
-        boolean hasSeason = seasonService.findCurrentSeason().isPresent();
-        // EGC Pass живёт внутри этого раздела (перенесён из «Предметы» 2026-09-24) — говорим об этом в названии,
-        // иначе подписку было бы негде искать.
-        String passLabel = hasPass ? "🎫 Battle Pass и EGC Pass ✅" : (hasSeason ? "🎫 Battle Pass и EGC Pass 🆕" : "🎫 Battle Pass и EGC Pass");
+        // Battle Pass и EGC Pass объединены в один продукт (2026-09-24) — в магазине остался один пункт «EGC Pass».
+        String passLabel = sinkShopService.isEgcPassActive(user) ? "⭐ EGC Pass ✅" : "⭐ EGC Pass";
         // "💎 Донат по играм" убран отсюда как отдельный пункт — объединён с "🛍️ Магазин наград"
         // в один и тот же пикер номиналов Brawl Stars (см. sendGroupPicker), чтобы для игрока это
         // выглядело одной и той же игровой валютой с выбором способа оплаты, а не двумя разными
@@ -5880,8 +5871,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         info.append("🪙 Баланс: <b>").append(user.getCoins()).append(" EXC</b>\n");
         if (!titleLine.isEmpty()) info.append(titleLine);
 
-        // EGC Pass отсюда убран (2026-09-24, по решению владельца) — подписка живёт только в разделе
-        // Battle Pass (см. sendBattlePass); в «Мои предметы» её статус по-прежнему виден среди владений.
+        // EGC Pass отсюда убран (2026-09-24, по решению владельца) — подписка живёт в своём разделе магазина
+        // (см. sendEgcPassScreen); в «Мои предметы» её статус по-прежнему виден среди владений.
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("🎒 Мои предметы", "sink:myitems")));
         rows.add(List.of(keyboardFactory.callback("🎭 Кастомизация", "sink:cat:customization")));
@@ -6074,7 +6065,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "cat:boosts" -> sendSinkBoosts(user);
             case "cat:quests" -> sendSinkQuests(user);
             case "cat:social" -> sendSinkSocial(user);
-            case "egc_pass" -> sendEgcPassOffer(user);
+            case "egc_pass" -> sendEgcPassScreen(user);
             case "myitems" -> sendMyItems(user);
             case "reroll" -> {
                 try {
@@ -6391,26 +6382,47 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * инвойс в чате), а через ссылку (createStarsInvoiceLink) кнопкой — Telegram поддерживает
      * subscription_period только у createInvoiceLink. Ссылка открывает тот же нативный экран оплаты
      * Telegram, просто по тапу на кнопку, а не автоматическим сообщением-инвойсом. */
-    private void sendEgcPassOffer(AppUser user) {
-        String url = createStarsInvoiceLink("starsitem:EGC_PASS");
-        if (url == null) {
-            sendText(user.getTelegramId(), "⚠️ Не удалось создать счёт. Попробуйте ещё раз позже.", backMenuKeyboard("menu:battlepass"));
-            return;
+    private void sendEgcPassScreen(AppUser user) {
+        boolean active = sinkShopService.isEgcPassActive(user);
+        java.time.format.DateTimeFormatter dateFmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
+        StringBuilder sb = new StringBuilder("⭐ <b>EGC Pass</b>\n\n");
+        if (active) {
+            sb.append("✅ <b>Подписка оформлена</b> — действует до <b>")
+                    .append(user.getEgcPassActiveUntil().format(dateFmt))
+                    .append("</b>, дальше продлится автоматически. Отменить можно в настройках платежей Telegram.\n\n");
+        } else {
+            sb.append("Подписка ").append(EGC_PASS_STARS_PRICE)
+                    .append(" ⭐ / 30 дней, автопродление. Пока не оформлена.\n\n");
         }
-        sendText(user.getTelegramId(),
-                "⭐ <b>EGC Pass — 30 дней</b>\n\n"
-                        + "✨ +10% к EXC за все квесты (до 10 000 EXC бонуса в месяц)\n"
-                        + "📈 +5% к XP за все квесты\n"
-                        + "📂 Доп. слот квеста (как «навсегда», пока подписка активна)\n"
-                        + "🎁 Бесплатный улучшенный сундук каждый день — без реролла за 15⭐\n"
-                        + "⚡ Приоритет в очереди на вывод EXC\n"
-                        + "💎 Статус-бейдж в профиле\n"
-                        + "💸 Донат по играм (гемы Brawl Stars/Clash Royale/Clash of Clans) — по закупочной цене, без наценки клуба, XP-бонус как за полную цену\n\n"
-                        + "🪙 " + EGC_PASS_STARS_PRICE + " ⭐ / 30 дней, автопродление. Отменить можно в любой момент через настройки платежей Telegram.",
-                keyboardFactory.rowsLayout(List.of(
-                        List.of(keyboardFactory.url("💳 Оформить за " + EGC_PASS_STARS_PRICE + " ⭐", url)),
-                        List.of(keyboardFactory.callback("⬅️ Назад", "menu:battlepass"))
-                )));
+        sb.append("<b>Что входит:</b>\n")
+                .append("✨ +10% к EXC за все квесты (до 10 000 EXC бонуса в месяц)\n")
+                .append("📈 +5% к XP за все квесты\n")
+                .append("📂 Доп. слот квеста (как «навсегда», пока подписка активна)\n")
+                .append("🎁 Бесплатный улучшенный сундук каждый день — без реролла за 15⭐\n")
+                .append("⚡ Приоритет в очереди на вывод EXC\n")
+                .append("💎 Статус-бейдж в профиле\n")
+                .append("💸 Донат по играм (гемы Brawl Stars/Clash Royale/Clash of Clans) — по закупочной цене, без наценки клуба, XP-бонус как за полную цену\n");
+        // Прежний Battle Pass (куплен за EXC до объединения) доживает свой срок — XP-буст сезона и значок сохраняются.
+        if (seasonService.hasActivePass(user)) {
+            sb.append("\n🎫 Ваш прежний Battle Pass (куплен за EXC) действует до <b>")
+                    .append(user.getSeasonPassActiveUntil().format(dateFmt))
+                    .append("</b> — его XP-буст и значок сохраняются до конца срока. Новые Battle Pass не продаются: его перки теперь входят в EGC Pass.\n");
+        }
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (!active) {
+            String url = createStarsInvoiceLink("starsitem:EGC_PASS");
+            if (url != null) {
+                rows.add(List.of(keyboardFactory.url("💳 Оформить за " + EGC_PASS_STARS_PRICE + " ⭐", url)));
+            } else {
+                sb.append("\n⚠️ Не удалось создать счёт. Попробуйте ещё раз позже.");
+            }
+        }
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", "menu:cat:shop"),
+                keyboardFactory.callback("🏠 Меню", "menu:main")
+        ));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     /** Отправка sendInvoice напрямую через HTTP, в обход библиотеки telegrambots. Актуальная версия
@@ -6451,7 +6463,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (spec.subscriptionPeriodSeconds() != null) {
             // subscription_period официально поддерживается только у createInvoiceLink, не у sendInvoice
             // (проверено по исходнику core.telegram.org/bots/api) — для подписок вызывающая сторона
-            // должна использовать createStarsInvoiceLink + отправить ссылку кнопкой, см. sendEgcPassOffer.
+            // должна использовать createStarsInvoiceLink + отправить ссылку кнопкой, см. sendEgcPassScreen.
             log.error("Subscription item '{}' cannot be sent via sendInvoice — use createStarsInvoiceLink instead", payload);
             return;
         }
@@ -11706,69 +11718,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:sponsors:view:" + sponsorId)));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
-    }
-
-    // ─── Battle Pass ──────────────────────────────────────────────────────────
-
-    private void sendBattlePass(AppUser user) {
-        boolean hasPass = seasonService.hasActivePass(user);
-        java.util.Optional<ru.gamebot.platform.domain.model.Season> seasonOpt = seasonService.findCurrentSeason();
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        StringBuilder sb;
-
-        if (hasPass) {
-            java.time.LocalDateTime until = user.getSeasonPassActiveUntil();
-            sb = new StringBuilder("🎫 <b>Battle Pass — активен</b>\n\n");
-            sb.append("✅ Ваш пропуск активен до: <b>")
-              .append(until.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")))
-              .append("</b>\n\n");
-            if (seasonOpt.isPresent()) {
-                sb.append("⚡ Бонус XP за квесты: <b>+" + seasonOpt.get().getXpBoostPercent() + "%</b>\n");
-                sb.append("🌟 Доступны эксклюзивные сезонные квесты\n");
-                sb.append("👑 Значок Battle Pass в профиле и рейтинге\n");
-            }
-        } else if (seasonOpt.isEmpty()) {
-            sb = new StringBuilder("🎫 <b>Battle Pass</b>\n\n⏳ Активного сезона сейчас нет. Следите за анонсами!");
-        } else {
-            ru.gamebot.platform.domain.model.Season s = seasonOpt.get();
-            sb = new StringBuilder("🎫 <b>Battle Pass — " + escape(s.getName()) + "</b>\n\n");
-            sb.append("💰 Стоимость: <b>" + s.getPriceExc() + " EXC</b>\n");
-            sb.append("⚡ XP-буст: <b>+" + s.getXpBoostPercent() + "% к каждому квесту</b>\n");
-            sb.append("🌟 Эксклюзивные сезонные квесты\n");
-            sb.append("👑 Значок в профиле и рейтинге\n");
-            if (s.getEndDate() != null) sb.append("⏰ Действует до: <b>" + s.getEndDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + "</b>\n");
-            sb.append("\n💼 Ваш баланс: <b>" + user.getCoins() + " EXC</b>");
-
-            if (user.getCoins() >= s.getPriceExc()) {
-                rows.add(List.of(keyboardFactory.callback("🎫 Купить Battle Pass", "battlepass:buy:" + s.getId())));
-            } else {
-                rows.add(List.of(keyboardFactory.callback("❌ Недостаточно EXC", "noop")));
-            }
-        }
-
-        // Подписка EGC Pass живёт в этом разделе (перенесена из «Предметы» 2026-09-24, по решению владельца)
-        // и показывается в любом состоянии экрана: без неё — что её можно оформить (кнопка ведёт в
-        // sendEgcPassOffer с перками и ссылкой на оплату), с ней — что она оформлена, и до какого числа.
-        sb.append("\n\n➖➖➖➖➖➖\n\n").append(egcPassBattlePassBlock(user));
-        if (!sinkShopService.isEgcPassActive(user)) {
-            rows.add(List.of(keyboardFactory.callback("⭐ Оформить EGC Pass — " + EGC_PASS_STARS_PRICE + " ⭐/мес", "sink:egc_pass")));
-        }
-        rows.add(List.of(
-                keyboardFactory.callback("⬅️ Назад", "menu:cat:shop"),
-                keyboardFactory.callback("🏠 Меню", "menu:main")
-        ));
-        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
-    }
-
-    private String egcPassBattlePassBlock(AppUser user) {
-        if (sinkShopService.isEgcPassActive(user)) {
-            return "⭐ <b>EGC Pass — подписка оформлена ✅</b>\n"
-                    + "Действует до: <b>" + user.getEgcPassActiveUntil().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + "</b>, "
-                    + "дальше продлится автоматически. Отменить можно в настройках платежей Telegram.";
-        }
-        return "⭐ <b>EGC Pass</b> — подписка " + EGC_PASS_STARS_PRICE + " ⭐ / 30 дней\n"
-                + "+10% EXC и +5% XP за квесты, улучшенный ежедневный сундук, доп. слот квеста, донат по закупочной цене, "
-                + "приоритет в очереди на вывод. Пока не оформлена — оформить можно кнопкой ниже.";
     }
 
     private void sendReferralBoostEditMenu(AppUser user, long boostId) {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getProfile, getWallet, getBattlePass, getAvatarUrl, equipFrame, invalidateCache } from '../api/client';
+import { getProfile, getWallet, getAvatarUrl, equipFrame, invalidateCache } from '../api/client';
 import { RANKS_DATA } from '../data/ranks';
 import AnimatedNumber from '../components/AnimatedNumber';
 import fireFrame from '../assets/frames/fire.png';
@@ -324,7 +324,6 @@ function FrameCollection({ ownedFrames, activeFrame, onEquip }) {
 export default function ProfilePage() {
   const [profile, setProfile] = useState(null);
   const [wallet, setWallet] = useState(null);
-  const [bp, setBp] = useState(null);
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [error, setError] = useState(null);
   const [showRanks, setShowRanks] = useState(false);
@@ -333,11 +332,9 @@ export default function ProfilePage() {
     Promise.all([
       getProfile(),
       getWallet().catch(() => null),
-      getBattlePass().catch(() => null),
-    ]).then(([p, w, b]) => {
+    ]).then(([p, w]) => {
       setProfile(p);
       setWallet(w);
-      setBp(b);
     }).catch(() => setError('Профиль не найден. Зарегистрируйтесь через бота.'));
   }, []);
 
@@ -363,7 +360,6 @@ export default function ProfilePage() {
   const monthly = wallet?.monthlyWithdrawalLimit ?? 1;
   const withdrawPct = Math.min(100, (remaining / monthly) * 100);
 
-  const hasActivePass = bp?.hasActivePass ?? false;
 
   return (
     <div className="p-page">
@@ -531,18 +527,18 @@ export default function ProfilePage() {
       {/* ── Menu ─────────────────────────────────────────────── */}
       <div className="p-menu">
 
-        {/* Battle Pass */}
-        <Link to="/battlepass" className="p-menu-item" style={{ borderColor: 'rgba(139,92,246,0.2)' }}>
+        {/* EGC Pass (Battle Pass объединён с подпиской, 2026-09-24) */}
+        <Link to="/egcpass" className="p-menu-item" style={{ borderColor: 'rgba(139,92,246,0.2)' }}>
           <div className="p-menu-illus" style={{ background: 'linear-gradient(135deg,#1a0d2e,#0f0720)' }}>
             {SVG_MENU_BP}
           </div>
           <div className="p-menu-texts">
-            <div className="p-menu-title">Battle Pass</div>
-            <div className="p-menu-sub">{hasActivePass ? 'Сезонный пропуск активен' : 'Сезонный пропуск и подписка EGC Pass'}</div>
+            <div className="p-menu-title">EGC Pass</div>
+            <div className="p-menu-sub">{profile.hasEgcPass ? `Подписка активна до ${profile.egcPassActiveUntil}` : 'Подписка: бонусы к EXC, XP и выводу'}</div>
           </div>
-          {hasActivePass
+          {profile.hasEgcPass
             ? <span className="p-badge-active">Активен</span>
-            : <span className="p-badge-buy">3 000 EXC</span>}
+            : <span className="p-badge-buy">150 ⭐</span>}
         </Link>
 
         {/* Wallet */}
