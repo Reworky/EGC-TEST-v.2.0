@@ -7,7 +7,10 @@ import { useAdsgram } from '../hooks/useAdsgram';
 import { useTelegaAds } from '../hooks/useTelegaAds';
 import './AdWheelSection.css';
 
-const ADSGRAM_BLOCK_ID = import.meta.env.VITE_ADSGRAM_BLOCK_ID;
+// Отдельный AdsGram-блок под колесо — чтобы CPM колеса считался отдельно от карточки «Посмотри рекламу — получи EXC».
+// Пока VITE_ADSGRAM_WHEEL_BLOCK_ID не задан, используется общий блок. Reward URL у нового блока в кабинете AdsGram —
+// тот же, что у общего (сервер различает «спин» и «30 EXC» по цели, выставленной в /api/ads/watch, а не по блоку).
+const ADSGRAM_BLOCK_ID = import.meta.env.VITE_ADSGRAM_WHEEL_BLOCK_ID || import.meta.env.VITE_ADSGRAM_BLOCK_ID;
 const TELEGA_AD_BLOCK_UUID = import.meta.env.VITE_TELEGA_AD_BLOCK_UUID;
 
 // Секторы и шансы должны совпадать с AdWheelService на бэкенде (там веса из 1000). Порядок на колесе —
