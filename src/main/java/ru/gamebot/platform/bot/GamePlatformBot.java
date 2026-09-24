@@ -143,6 +143,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ClaudeVisionService claudeVisionService;
     private final ru.gamebot.platform.domain.repository.QuestRepository questRepository;
     private final ru.gamebot.platform.service.ErrorMonitorService errorMonitorService;
+    private final ru.gamebot.platform.service.DeployService deployService;
     private final ru.gamebot.platform.service.BrawlStarsTournamentService brawlStarsTournamentService;
     private final ru.gamebot.platform.service.BrawlQuestVerificationService brawlQuestVerificationService;
     private final ru.gamebot.platform.service.ClashQuestVerificationService clashQuestVerificationService;
@@ -8369,6 +8370,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 errorMonitorService.resetCounters();
                 sendAdminHealth(user);
             }
+            case "deploy", "deploy:check", "deploy:confirm", "deploy:go", "deploy:rollback", "deploy:rollback:go", "deploy:log" ->
+                    handleAdminDeploy(user, action);
             case "queststats" -> sendAdminQuestStats(user);
             case "ugcstats" -> sendUgcQuestStats(user);
             case "brawlstats" -> sendGameQuestStats(user, "Brawl Stars");
@@ -11292,6 +11295,161 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case 2, 3, 4 -> "квеста";
             default -> "квестов";
         };
+    }
+
+    // ─────────────── «🚀 Обновить бота» (2026-09-25) ───────────────
+    // Бот НЕ собирает и не перезапускает себя сам и не имеет доступа к Docker: кнопка кладёт файл-заявку, а выкладку делает
+    // агент на сервере (scripts/deploy-agent.sh), принимающий только check / deploy / rollback. См. DeployService.
+
+    /** Только владелец: ID из настроек ADMIN_IDS/INITIAL_ADMIN_ID (не роль из базы и не модераторы) и включённая роль админа. */
+    private boolean isDeployOwner(AppUser user) {
+        return adminService.resolvedAdminIds().contains(user.getTelegramId()) && isEffectiveAdmin(user);
+    }
+
+    private String deployTime(long epochSec) {
+        return java.time.LocalDateTime.ofEpochSecond(epochSec, 0, java.time.ZoneOffset.UTC)
+                .format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm")) + " UTC";
+    }
+
+    private String deployCommitLine(String line) {
+        if (line == null || line.isBlank()) return "неизвестно";
+        int sp = line.indexOf(' ');
+        return sp < 0 ? "<code>" + escape(line) + "</code>"
+                : "<code>" + escape(line.substring(0, sp)) + "</code> " + escape(line.substring(sp + 1));
+    }
+
+    private void handleAdminDeploy(AppUser user, String action) {
+        if (!isDeployOwner(user)) {
+            sendText(user.getTelegramId(), "⛔ Обновление бота доступно только владельцу.", backMenuKeyboard("menu:main"));
+            return;
+        }
+        switch (action) {
+            case "deploy" -> sendAdminDeploy(user);
+            case "deploy:check" -> {
+                if (deployService.request("check", user.getTelegramId())) {
+                    sendText(user.getTelegramId(), "🔄 Проверяю новые коммиты. Через пару секунд нажмите «Обновить экран».",
+                            keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🔄 Обновить экран", "admin:deploy")))));
+                } else {
+                    sendText(user.getTelegramId(), "⚠️ Агент выкладки не найден. Установите его на сервере (scripts/install-deploy-agent.sh).",
+                            backMenuKeyboard("admin:deploy"));
+                }
+            }
+            case "deploy:confirm" -> sendDeployConfirm(user, false);
+            case "deploy:rollback" -> sendDeployConfirm(user, true);
+            case "deploy:go" -> startDeploy(user, "deploy");
+            case "deploy:rollback:go" -> startDeploy(user, "rollback");
+            case "deploy:log" -> {
+                String tail = deployService.logTail(3300);
+                sendText(user.getTelegramId(),
+                        tail.isBlank() ? "📜 Лог последней выкладки пуст." : "📜 <b>Лог последней выкладки</b>\n<pre>" + escape(tail) + "</pre>",
+                        backMenuKeyboard("admin:deploy"));
+            }
+            default -> sendAdminDeploy(user);
+        }
+    }
+
+    private void sendAdminDeploy(AppUser user) {
+        java.util.Optional<ru.gamebot.platform.service.DeployService.Status> st = deployService.readStatus();
+        boolean alive = deployService.agentAlive();
+        boolean running = st.map(x -> "running".equals(x.state())).orElse(false);
+        List<String> pending = deployService.pending();
+
+        StringBuilder sb = new StringBuilder("🚀 <b>Обновление бота</b>\n\n");
+        sb.append("Сейчас работает: ").append(deployCommitLine(deployService.deployedCommit())).append("\n");
+        sb.append("Агент на сервере: ").append(alive ? "🟢 на связи" : "🔴 не отвечает (установите: scripts/install-deploy-agent.sh)").append("\n\n");
+        if (pending.isEmpty()) {
+            sb.append("Новых коммитов нет.\n");
+        } else {
+            sb.append("<b>Ждут выкладки (").append(pending.size()).append("):</b>\n");
+            for (int i = 0; i < Math.min(10, pending.size()); i++) {
+                sb.append("• ").append(deployCommitLine(pending.get(i))).append("\n");
+            }
+            if (pending.size() > 10) sb.append("…и ещё ").append(pending.size() - 10).append("\n");
+        }
+        st.ifPresent(x -> {
+            if ("running".equals(x.state())) {
+                sb.append("\n⏳ <b>Сейчас идёт ").append("rollback".equals(x.action()) ? "откат" : "выкладка")
+                        .append("</b> (с ").append(deployTime(x.startedAt())).append(")\n");
+            } else if (x.finishedAt() > 0 && ("deploy".equals(x.action()) || "rollback".equals(x.action()))) {
+                String icon = "ok".equals(x.state()) ? "✅" : "rolled_back".equals(x.state()) ? "⚠️" : "❌";
+                sb.append("\nПоследний запуск: ").append(icon).append(" ").append("rollback".equals(x.action()) ? "откат" : "выкладка")
+                        .append(", ").append(deployTime(x.finishedAt())).append(" - ").append(escape(x.message())).append("\n");
+            }
+        });
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (running) {
+            rows.add(List.of(keyboardFactory.callback("🔄 Обновить статус", "admin:deploy")));
+        } else {
+            rows.add(List.of(keyboardFactory.callback("🔄 Проверить обновления", "admin:deploy:check")));
+            if (!pending.isEmpty()) {
+                rows.add(List.of(keyboardFactory.callback("🚀 Обновить сейчас (" + pending.size() + ")", "admin:deploy:confirm")));
+            }
+            rows.add(List.of(keyboardFactory.callback("↩️ Откатить на предыдущую", "admin:deploy:rollback")));
+        }
+        rows.add(List.of(keyboardFactory.callback("📜 Лог последней выкладки", "admin:deploy:log")));
+        rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendDeployConfirm(AppUser user, boolean rollback) {
+        StringBuilder sb = new StringBuilder(rollback ? "↩️ <b>Откатить на предыдущую версию?</b>\n\n" : "🚀 <b>Обновить бота?</b>\n\n");
+        if (!rollback) {
+            List<String> pending = deployService.pending();
+            sb.append("Уедет (").append(pending.size()).append("):\n");
+            for (int i = 0; i < Math.min(10, pending.size()); i++) sb.append("• ").append(deployCommitLine(pending.get(i))).append("\n");
+            sb.append("\nСначала соберётся новая версия, старый бот при этом работает. ");
+        } else {
+            sb.append("Вернётся версия, которая работала до последней выкладки. ");
+        }
+        sb.append("Бот будет недоступен 20-60 секунд.");
+        if (!rollback) sb.append(" Если новая версия не запустится, вернётся прежняя автоматически.");
+        sb.append("\n\nЯ напишу сюда, когда всё закончится.");
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("✅ Да", rollback ? "admin:deploy:rollback:go" : "admin:deploy:go"),
+                        keyboardFactory.callback("❌ Отмена", "admin:deploy")))));
+    }
+
+    private void startDeploy(AppUser user, String action) {
+        boolean running = deployService.readStatus().map(x -> "running".equals(x.state())).orElse(false);
+        if (running) {
+            sendText(user.getTelegramId(), "⏳ Уже идёт выкладка, дождитесь её окончания.", backMenuKeyboard("admin:deploy"));
+            return;
+        }
+        if (!deployService.agentAlive()) {
+            sendText(user.getTelegramId(), "🔴 Агент выкладки не отвечает: заявка не отправлена. Проверьте установку на сервере.",
+                    backMenuKeyboard("admin:deploy"));
+            return;
+        }
+        if (deployService.request(action, user.getTelegramId())) {
+            log.info("[Deploy] {} confirmed by admin {}", action, user.getTelegramId());
+            sendText(user.getTelegramId(),
+                    ("rollback".equals(action) ? "↩️ Откат запущен." : "🚀 Выкладка запущена.")
+                            + " Бот может быть недоступен до минуты. Я напишу, когда закончится.",
+                    backMenuKeyboard("admin:deploy"));
+        } else {
+            sendText(user.getTelegramId(), "⚠️ Не удалось передать заявку агенту.", backMenuKeyboard("admin:deploy"));
+        }
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onDeployFinished(ru.gamebot.platform.event.DeployFinishedEvent event) {
+        ru.gamebot.platform.service.DeployService.Status s = event.getStatus();
+        boolean rollback = "rollback".equals(s.action());
+        String text = switch (s.state()) {
+            case "ok" -> (rollback ? "↩️ <b>Откат выполнен</b>" : "✅ <b>Обновление завершено</b>") + "\n\nРаботает: <code>" + escape(s.commit())
+                    + "</code> " + escape(s.subject()) + "\n\nЗагляните в «🩺 Проверка ошибок» через пару минут.";
+            case "rolled_back" -> "⚠️ <b>Новая версия не запустилась, вернул предыдущую</b>\n\nНе запустился: <code>" + escape(s.commit())
+                    + "</code> " + escape(s.subject()) + "\n\nПричину смотрите в логе выкладки.";
+            default -> "❌ <b>" + (rollback ? "Откат не удался" : "Выкладка не удалась") + "</b>\n\n" + escape(s.message());
+        };
+        try {
+            sendText(s.requestedBy(), text, keyboardFactory.rowsLayout(List.of(
+                    List.of(keyboardFactory.callback("📜 Лог выкладки", "admin:deploy:log"),
+                            keyboardFactory.callback("🩺 Проверка ошибок", "admin:health")))));
+        } catch (Exception e) {
+            log.warn("Failed to send deploy result to {}", s.requestedBy(), e);
+        }
     }
 
     /** «🩺 Проверка ошибок» (2026-09-25): одним экраном - есть ли у текущей версии бота ошибки. Источники: WARN/ERROR из
@@ -16100,6 +16258,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             ));
             rows.add(List.of(keyboardFactory.callback("📡 Сейчас на платформе", "admin:live")));
             rows.add(List.of(keyboardFactory.callback("🩺 Проверка ошибок", "admin:health")));
+            if (adminService.resolvedAdminIds().contains(user.getTelegramId())) {
+                rows.add(List.of(keyboardFactory.callback("🚀 Обновить бота", "admin:deploy")));
+            }
             rows.add(List.of(keyboardFactory.callback("📊 Статистика для рекламодателя", "admin:advstats")));
             rows.add(List.of(
                     keyboardFactory.callback("➕ Квест", "admin:create"),
