@@ -142,6 +142,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.PlatformSnapshotService platformSnapshotService;
     private final ru.gamebot.platform.service.ClaudeVisionService claudeVisionService;
     private final ru.gamebot.platform.domain.repository.QuestRepository questRepository;
+    private final ru.gamebot.platform.service.ErrorMonitorService errorMonitorService;
     private final ru.gamebot.platform.service.BrawlStarsTournamentService brawlStarsTournamentService;
     private final ru.gamebot.platform.service.BrawlQuestVerificationService brawlQuestVerificationService;
     private final ru.gamebot.platform.service.ClashQuestVerificationService clashQuestVerificationService;
@@ -8363,6 +8364,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "stats:reset_weekly" -> sendAdminResetWeeklyConfirm(user);
             case "stats:reset_weekly:confirm" -> doAdminResetWeeklyXp(user);
             case "live" -> sendAdminLiveStatus(user);
+            case "health" -> sendAdminHealth(user);
+            case "health:reset" -> {
+                errorMonitorService.resetCounters();
+                sendAdminHealth(user);
+            }
             case "queststats" -> sendAdminQuestStats(user);
             case "ugcstats" -> sendUgcQuestStats(user);
             case "brawlstats" -> sendGameQuestStats(user, "Brawl Stars");
@@ -11286,6 +11292,80 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case 2, 3, 4 -> "квеста";
             default -> "квестов";
         };
+    }
+
+    /** «🩺 Проверка ошибок» (2026-09-25): одним экраном - есть ли у текущей версии бота ошибки. Источники: WARN/ERROR из
+     * логов процесса и ответы 4xx/5xx мини-аппа (ErrorMonitorService), плюс живые проверки БД и Telegram API. Данные
+     * живут до перезапуска бота; известный шум (заблокировали бота, устаревшие кнопки) считается отдельно и статус не портит. */
+    private void sendAdminHealth(AppUser user) {
+        ru.gamebot.platform.service.ErrorMonitorService.Summary sum = errorMonitorService.summarize(24);
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm");
+        java.util.function.LongFunction<String> at = ts -> java.time.LocalDateTime
+                .ofInstant(java.time.Instant.ofEpochMilli(ts), java.time.ZoneId.systemDefault()).format(fmt);
+
+        boolean dbOk = true;
+        try {
+            questRepository.count();
+        } catch (Exception e) {
+            dbOk = false;
+        }
+        boolean tgOk = true;
+        try {
+            execute(new org.telegram.telegrambots.meta.api.methods.GetMe());
+        } catch (Exception e) {
+            tgOk = false;
+        }
+
+        String icon = switch (sum.status()) {
+            case OK -> "🟢";
+            case WARN -> "🟡";
+            case ERROR -> "🔴";
+        };
+        String verdict = switch (sum.status()) {
+            case OK -> "Ошибок нет";
+            case WARN -> "Есть предупреждения";
+            case ERROR -> "Есть ошибки";
+        };
+        if (!dbOk || !tgOk) {
+            icon = "🔴";
+            verdict = "Не проходит проверка связи";
+        }
+        long uptimeMin = Math.max(0, (System.currentTimeMillis() - sum.startedAt()) / 60_000);
+        StringBuilder sb = new StringBuilder("🩺 <b>Проверка ошибок</b>\n\n")
+                .append(icon).append(" <b>").append(verdict).append("</b>\n")
+                .append("<i>Бот запущен ").append(at.apply(sum.startedAt())).append(" (UTC), работает ")
+                .append(uptimeMin / 60).append(" ч ").append(uptimeMin % 60).append(" мин. Считаю с ")
+                .append(at.apply(sum.since())).append(", не дольше 24 ч.</i>\n\n")
+                .append("<b>Проверки связи</b>\n")
+                .append(dbOk ? "🟢" : "🔴").append(" база данных\n")
+                .append(tgOk ? "🟢" : "🔴").append(" Telegram API\n\n")
+                .append("<b>Бот и сервер</b>\n")
+                .append("Ошибок: <b>").append(sum.errors()).append("</b> · предупреждений: <b>").append(sum.warns())
+                .append("</b> · шум (заблокировали бота и т.п.): ").append(sum.benign()).append("\n");
+        if (!sum.topLogs().isEmpty()) {
+            sb.append("\n<b>Что чаще всего:</b>\n");
+            int i = 1;
+            for (ru.gamebot.platform.service.ErrorMonitorService.Group g : sum.topLogs()) {
+                sb.append(i++).append(". ").append("ERROR".equals(g.level()) ? "🔴" : "🟡").append(" ×").append(g.count())
+                        .append(" ").append(escape(g.key())).append(" <i>(последний ").append(at.apply(g.lastTs())).append(")</i>\n");
+            }
+        }
+        sb.append("\n<b>Мини-апп (запросы к API)</b>\n")
+                .append("Сбоев сервера (5xx): <b>").append(sum.http5xx()).append("</b> · отказов (4xx кроме 401/404): <b>")
+                .append(sum.http4xx()).append("</b> · «не найдено» (404): ").append(sum.http404()).append("\n");
+        for (ru.gamebot.platform.service.ErrorMonitorService.HttpGroup g : sum.topHttp()) {
+            sb.append(g.status() >= 500 ? "🔴" : "🟡").append(" ×").append(g.count()).append(" ")
+                    .append(g.status()).append(" ").append(escape(g.route())).append("\n");
+        }
+        for (ru.gamebot.platform.service.ErrorMonitorService.HttpGroup g : sum.top404()) {
+            sb.append("ℹ️ ×").append(g.count()).append(" ").append(g.status()).append(" ").append(escape(g.route())).append("\n");
+        }
+        sb.append("\n<i>Данные копятся с запуска бота: после деплоя счётчики начинаются заново. "
+                + "«Сбросить» обнуляет их сейчас, чтобы увидеть только новое.</i>");
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("🔄 Обновить", "admin:health"),
+                        keyboardFactory.callback("🧹 Сбросить счётчики", "admin:health:reset")),
+                List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
     }
 
     private void sendAdminLiveStatus(AppUser user) {
@@ -16019,6 +16099,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback("📊 Статистика", "admin:stats")
             ));
             rows.add(List.of(keyboardFactory.callback("📡 Сейчас на платформе", "admin:live")));
+            rows.add(List.of(keyboardFactory.callback("🩺 Проверка ошибок", "admin:health")));
             rows.add(List.of(keyboardFactory.callback("📊 Статистика для рекламодателя", "admin:advstats")));
             rows.add(List.of(
                     keyboardFactory.callback("➕ Квест", "admin:create"),
