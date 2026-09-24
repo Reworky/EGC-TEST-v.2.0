@@ -288,7 +288,7 @@ public class UserService {
     }
 
     public Optional<AppUser> findByNickname(String nickname) {
-        return appUserRepository.findByNicknameIgnoreCase(nickname);
+        return appUserRepository.findFirstByNicknameIgnoreCaseOrderByIdAsc(nickname);
     }
 
     public Optional<AppUser> findByTelegramUsername(String telegramUsername) {
@@ -1554,8 +1554,26 @@ public class UserService {
         user.setTelegramLastName(telegramUser.getLastName());
         if (user.getNickname() == null || user.getNickname().isBlank()) {
             String fallback = telegramUser.getUserName();
-            user.setNickname(fallback != null && !fallback.isBlank() ? fallback : telegramUser.getFirstName());
+            user.setNickname(uniquePlaceholderNickname(
+                    fallback != null && !fallback.isBlank() ? fallback : telegramUser.getFirstName(), telegramUser.getId()));
         }
+    }
+
+    /** Временный ник до того, как игрок сам введёт его на шаге регистрации (REG_NAME). Раньше подставлялось
+     * имя из Telegram как есть — а на nickname стоит уникальный индекс, поэтому у нового игрока с частым
+     * именем («Саша», «Влад»), уже занятым кем-то, save() падал и /start отвечал «Что-то пошло не так»:
+     * человек вообще не мог зарегистрироваться (~57 таких падений за сутки, 2026-09-24). Проверка без учёта
+     * регистра — индекс регистрозависимый, но остальной код ищет ники без учёта регистра. */
+    private String uniquePlaceholderNickname(String base, Long telegramId) {
+        String candidate = base == null || base.isBlank() ? "Игрок" : base.trim();
+        if (!appUserRepository.existsByNicknameIgnoreCase(candidate)) {
+            return candidate;
+        }
+        String withSuffix = candidate + "_" + Math.abs(telegramId % 10_000);
+        if (!appUserRepository.existsByNicknameIgnoreCase(withSuffix)) {
+            return withSuffix;
+        }
+        return candidate + "_" + telegramId;
     }
 
     public RewardGrant previewReward(AppUser user, long xp, long coins, long tickets) {

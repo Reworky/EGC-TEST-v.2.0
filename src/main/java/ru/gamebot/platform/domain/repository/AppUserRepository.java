@@ -16,6 +16,12 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     Optional<AppUser> findByNicknameIgnoreCase(String nickname);
 
+    /** Уникальный индекс на nickname регистрозависимый, поэтому «Саша» и «саша» могут жить в базе одновременно —
+     * findByNicknameIgnoreCase на таком нике бросает IncorrectResultSizeDataAccessException («2 results»). */
+    Optional<AppUser> findFirstByNicknameIgnoreCaseOrderByIdAsc(String nickname);
+
+    boolean existsByNicknameIgnoreCase(String nickname);
+
     Optional<AppUser> findByTelegramUsernameIgnoreCase(String telegramUsername);
 
     long countByLastBotActivityAtAfter(LocalDateTime since);
