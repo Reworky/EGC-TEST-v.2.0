@@ -1186,6 +1186,8 @@ public class QuestService {
                     default -> 1;
                 };
         wheelService.addTickets(user, tickets, "Квест: " + quest.getTitle());
+        // Обещанный сообщением «вернись и выполни квест» бонус за возвращение - выдаём здесь, на реальном возврате
+        userService.claimDormancyReturnBonus(user);
         user.setCompletedQuests(user.getCompletedQuests() + 1);
         user.setFixedRubBalance(user.getFixedRubBalance() + fixedRub);
         submission.setUser(user);

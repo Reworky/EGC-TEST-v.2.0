@@ -1576,6 +1576,22 @@ public class UserService {
         return candidate + "_" + telegramId;
     }
 
+    /** Выдаёт обещанный бонус за возвращение (см. WeeklyResetScheduler.checkDormancyTiers) — вызывается при
+     * одобрении квеста, то есть только когда игрок реально вернулся и сделал дело. Возвращает выданную сумму. */
+    @Transactional
+    public long claimDormancyReturnBonus(AppUser user) {
+        long pending = user.getDormancyBonusPendingExc();
+        if (pending <= 0) {
+            return 0;
+        }
+        user.setDormancyBonusPendingExc(0);
+        user.setCoins(user.getCoins() + pending);
+        appUserRepository.save(user);
+        excTx.log(user, pending, ExcTransactionService.BONUS, "Бонус за возвращение (первый квест после паузы)");
+        eventPublisher.publishEvent(new ru.gamebot.platform.event.DormancyBonusClaimedEvent(this, user.getTelegramId(), pending));
+        return pending;
+    }
+
     public RewardGrant previewReward(AppUser user, long xp, long coins, long tickets) {
         long resultingXp = user.getXp() + xp;
         int excBonusPercent = getExcBonusPercent(resultingXp);

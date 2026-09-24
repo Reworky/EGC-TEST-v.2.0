@@ -13929,16 +13929,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     @org.springframework.context.event.EventListener
     public void onDormancyReengagement(ru.gamebot.platform.event.DormancyReengagementEvent event) {
+        // Бонус НЕ начислен: он придёт после возвращения и первого одобренного квеста (UserService.claimDormancyReturnBonus)
         String msg = switch (event.getTier()) {
             case 1 -> "👋 <b>Давно не заходил!</b>\n\n"
-                    + "Прошло уже " + event.getDaysSinceActive() + " дней. Мы соскучились — держи <b>+"
-                    + event.getExcGranted() + " EXC</b>, чтобы было проще вернуться в игру! 🎁";
-            case 2 -> "🔥 <b>Месяц без тебя — это долго!</b>\n\n"
-                    + "За это время появилось много новых квестов и турниров. Специально для тебя: <b>+"
-                    + event.getExcGranted() + " EXC</b> на баланс. Заходи и посмотри, что нового! 🚀";
-            default -> "🎉 <b>С возвращением!</b>\n\n"
-                    + "Тебя не было " + event.getDaysSinceActive() + " дней — этого более чем достаточно, чтобы соскучиться. "
-                    + "Лови <b>+" + event.getExcGranted() + " EXC</b> и заходи глянуть, что изменилось на платформе.";
+                    + "Прошло уже " + event.getDaysSinceActive() + " дней. Мы соскучились. Вернись и выполни любой квест, "
+                    + "и на баланс придёт бонус за возвращение: <b>+" + event.getExcOffered() + " EXC</b> 🎁";
+            case 2 -> "🔥 <b>Месяц без тебя - это долго!</b>\n\n"
+                    + "За это время появилось много новых квестов и турниров. Выполни любой квест, и мы добавим "
+                    + "<b>+" + event.getExcOffered() + " EXC</b> за возвращение. Заходи и посмотри, что нового! 🚀";
+            default -> "🎉 <b>Мы скучаем по тебе!</b>\n\n"
+                    + "Тебя не было " + event.getDaysSinceActive() + " дней. Выполни любой квест, и мы добавим "
+                    + "<b>+" + event.getExcOffered() + " EXC</b> за возвращение. Загляни, что изменилось на платформе.";
         };
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("🗺️ К квестам", "menu:quests"))
@@ -13947,6 +13948,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(event.getTelegramId(), msg, keyboard);
         } catch (Exception e) {
             log.warn("Failed to send dormancy re-engagement message to {}", event.getTelegramId(), e);
+        }
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onDormancyBonusClaimed(ru.gamebot.platform.event.DormancyBonusClaimedEvent event) {
+        try {
+            notifyUser(event.getTelegramId(),
+                    "🎁 <b>Бонус за возвращение: +" + event.getExcGranted() + " EXC</b>\n\n"
+                            + "Рады, что ты снова с нами! Так держать.");
+        } catch (Exception e) {
+            log.warn("Failed to send dormancy bonus notification to {}", event.getTelegramId(), e);
         }
     }
 

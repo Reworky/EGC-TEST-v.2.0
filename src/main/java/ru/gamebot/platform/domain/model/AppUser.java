@@ -85,6 +85,12 @@ public class AppUser {
     @Column(columnDefinition = "int default 0")
     private int lastDormancyTierNotified;
 
+    /** Бонус за возвращение, обещанный сообщением дормант-тира и ещё не выданный (0 = нет). Выдаётся при
+     * одобрении ближайшего квеста (см. UserService.claimDormancyReturnBonus) — раньше EXC начислялись сразу при
+     * рассылке, то есть за сам факт отсутствия, даже тем, кто так и не вернулся. */
+    @Column(columnDefinition = "bigint default 0")
+    private long dormancyBonusPendingExc;
+
     private LocalDateTime createdAt;
 
     // Avatar

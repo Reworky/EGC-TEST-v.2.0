@@ -430,7 +430,9 @@ public class WeeklyResetScheduler {
 
     // Многоуровневые сообщения неактивным (14/30/60 дней без активности) — раз в день.
     // Дополняет, а не заменяет, еженедельный дайджест неактивным (sendWeeklyDigests) — тот лёгкий
-    // и без EXC, этот — редкий, с ощутимым подарком за конкретный порог отсутствия.
+    // и без EXC, этот — редкий, с обещанием бонуса за возвращение (сам бонус выдаётся при одобрении
+    // ближайшего квеста, а не при рассылке — см. ниже). Число сообщений не меняется: та же отметка
+    // lastDormancyTierNotified, так что накопленный бэклог не даст всплеска рассылок после деплоя.
     @Scheduled(cron = "0 30 0 * * *")
     public void checkDormancyTiers() {
         LocalDate today = LocalDate.now();
@@ -452,15 +454,16 @@ public class WeeklyResetScheduler {
                     continue;
                 }
 
-                long grant = DORMANCY_TIER_EXC[highestEligibleTier - 1];
-                userService.addReward(user, 0, grant);
-                excTx.log(user, grant, ExcTransactionService.BONUS,
-                        "Возвращение после " + daysSince + " дн. отсутствия (тир " + highestEligibleTier + ")");
+                // Раньше EXC начислялись здесь же, за сам факт отсутствия (до 2 550 EXC на человека, вернулся он или
+                // нет). Теперь бонус только обещается сообщением и выдаётся при одобрении ближайшего квеста
+                // (UserService.claimDormancyReturnBonus). Предложение не суммируется: остаётся сумма последнего тира.
+                long offer = DORMANCY_TIER_EXC[highestEligibleTier - 1];
+                user.setDormancyBonusPendingExc(offer);
                 user.setLastDormancyTierNotified(highestEligibleTier);
                 appUserRepository.save(user);
 
                 eventPublisher.publishEvent(new DormancyReengagementEvent(
-                        this, user.getTelegramId(), highestEligibleTier, daysSince, grant));
+                        this, user.getTelegramId(), highestEligibleTier, daysSince, offer));
             } catch (Exception e) {
                 log.warn("Failed to process dormancy tier for user {}", user.getTelegramId(), e);
             }
