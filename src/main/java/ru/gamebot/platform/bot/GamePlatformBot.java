@@ -15573,7 +15573,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void notifyUserGemPurchaseApproved(GemPurchaseRequest req) {
-        String itemTitle = req.getItemLabel() != null ? req.displayLabel() : req.displayLabel() + " Brawl Stars";
+        // Гемы: название игры берём из заявки (раньше было захардкожено «Brawl Stars» - у заявок Clash Royale /
+        // Clash of Clans игрок получал сообщение с чужой игрой). Пропуска (itemLabel) уже несут название игры.
+        String gameName = req.getGameName() != null && !req.getGameName().isBlank() ? req.getGameName() : "Brawl Stars";
+        String itemTitle = req.getItemLabel() != null ? req.displayLabel() : req.displayLabel() + " (" + escape(gameName) + ")";
         sendText(req.getUser().getTelegramId(),
                 "✅ <b>Покупка зачислена!</b>\n\n"
                         + itemTitle + " на тег " + escape(req.getGameTag()) + "\n"
