@@ -48,15 +48,41 @@ public class QuestController {
     private final ru.gamebot.platform.service.QuestRewardBoostService questRewardBoostService;
     private final ru.gamebot.platform.service.GameCatalogService gameCatalogService;
 
-    /** Награда для показа игроку ДО взятия/сдачи квеста — та же логика, что и displayRewardCoins в боте.
-     *  Для обычных квестов статичная quest.getRewardCoins() (как раньше); для repeatableNoCooldownEligible
-     *  (пилот "квесты без стен") — реально посчитанная кривой убывания сумма за следующее прохождение,
-     *  иначе игрок в мини-аппе видел бы фиксированную цифру, которая после пары прохождений за окно
-     *  уже не совпадает с тем, что реально начислится. user == null (гость) — просто базовая цена. */
-    private long displayRewardCoins(AppUser user, Quest quest) {
+    /** Награда для списка «Мои квесты» — там вперемешку активные и уже закрытые заявки, поэтому недельное
+     *  снижение (правило 3.4) сюда НЕ подмешиваем: для уже одобренного квеста цифра «как если бы брали
+     *  сейчас» была бы ложью о том, сколько реально начислили. Для обычных квестов — номинал; для
+     *  repeatableNoCooldownEligible (пилот "квесты без стен") — сумма за следующее прохождение по кривой
+     *  убывания. user == null (гость) — просто базовая цена. Показ ДО взятия — displayRewardCoins ниже. */
+    private long historyRewardCoins(AppUser user, Quest quest) {
         return user != null && quest.isRepeatableNoCooldownEligible()
                 ? questService.computeReward(user, quest).coins()
                 : quest.getRewardCoins();
+    }
+
+    private static final QuestService.WeeklyLimitStatus NO_WEEKLY_LIMIT = new QuestService.WeeklyLimitStatus(0, 0, false);
+
+    /** Недельный лимит (правило 3.4) для показа игроку. Считается по игре+категории, а квестов в списке
+     *  десятки — cache живёт один запрос и не даёт делать десятки одинаковых COUNT. Гостю и квестам с
+     *  собственной кривой убывания (repeatableNoCooldown + потолок окна) лимит не показываем и в кэш
+     *  их не кладём — иначе один такой квест "отравил" бы кэш всей игры+категории. */
+    private QuestService.WeeklyLimitStatus weeklyStatus(Map<String, QuestService.WeeklyLimitStatus> cache, AppUser user, Quest quest) {
+        if (user == null || (quest.isRepeatableNoCooldownEligible() && quest.getTargetPeriodCeiling() != null)) {
+            return NO_WEEKLY_LIMIT;
+        }
+        return cache.computeIfAbsent(quest.getGameName() + "|" + quest.getCategory(),
+                key -> questService.weeklyLimitStatus(user, quest));
+    }
+
+    /** Награда для показа ДО взятия квеста: у обычных квестов — номинал, вдвое меньше, если недельный
+     *  лимит уже исчерпан (иначе игрок видел бы 1500, а получал 750 без объяснений). */
+    private long displayRewardCoins(AppUser user, Quest quest, QuestService.WeeklyLimitStatus weekly) {
+        if (user == null) {
+            return quest.getRewardCoins();
+        }
+        if (quest.isRepeatableNoCooldownEligible()) {
+            return questService.computeReward(user, quest).coins();
+        }
+        return weekly.reached() ? QuestService.diminishedCoins(quest.getRewardCoins()) : quest.getRewardCoins();
     }
 
     /** Числовой прогресс для авто-верифицируемого квеста — тот же расчёт, что и в GamePlatformBot.autoVerifyProgressLabel,
@@ -122,6 +148,7 @@ public class QuestController {
         // уже единая (см. аудит наградной политики), но без этой правки мини-апп всё равно рисовал бы
         // устаревшие заголовки категорий. Обнуляем category в DTO для таких игр, не трогая базу.
         Map<String, Boolean> flatByGame = new HashMap<>();
+        Map<String, QuestService.WeeklyLimitStatus> weeklyCache = new HashMap<>();
         return quests.stream().map(q -> QuestDto.builder()
                 .id(q.getId())
                 .title(q.getTitle())
@@ -131,7 +158,9 @@ public class QuestController {
                 .platform(q.getPlatform())
                 .durationDays(q.getDurationDays())
                 .rewardXp(q.getRewardXp())
-                .rewardCoins(displayRewardCoins(currentUser, q))
+                .rewardCoins(displayRewardCoins(currentUser, q, weeklyStatus(weeklyCache, currentUser, q)))
+                .rewardDiminished(weeklyStatus(weeklyCache, currentUser, q).reached())
+                .weeklyLimit(weeklyStatus(weeklyCache, currentUser, q).limit())
                 .ticketReward(q.getTicketReward())
                 .councilOnly(q.isCouncilOnly())
                 .sponsored(q.isSponsored())
@@ -192,6 +221,7 @@ public class QuestController {
         if (user == null) {
             return ResponseEntity.noContent().build();
         }
+        Map<String, QuestService.WeeklyLimitStatus> weeklyCache = new HashMap<>();
         return questService.recommendQuest(user)
                 .map(q -> ResponseEntity.ok(QuestDto.builder()
                         .id(q.getId())
@@ -202,7 +232,9 @@ public class QuestController {
                         .platform(q.getPlatform())
                         .durationDays(q.getDurationDays())
                         .rewardXp(q.getRewardXp())
-                        .rewardCoins(displayRewardCoins(user, q))
+                        .rewardCoins(displayRewardCoins(user, q, weeklyStatus(weeklyCache, user, q)))
+                        .rewardDiminished(weeklyStatus(weeklyCache, user, q).reached())
+                        .weeklyLimit(weeklyStatus(weeklyCache, user, q).limit())
                         .ticketReward(q.getTicketReward())
                         .councilOnly(q.isCouncilOnly())
                         .sponsored(q.isSponsored())
@@ -238,12 +270,16 @@ public class QuestController {
             }
         }
         Map<String, Boolean> flatByGame = new HashMap<>();
+        Map<String, QuestService.WeeklyLimitStatus> weeklyCache = new HashMap<>();
         return quests.stream().map(q -> QuestDto.builder()
                 .id(q.getId()).title(q.getTitle()).description(q.getDescription())
                 .gameName(q.getGameName())
                 .category(flatByGame.computeIfAbsent(q.getGameName(), gameCatalogService::isFlat) ? null : q.getCategory())
                 .platform(q.getPlatform())
-                .durationDays(q.getDurationDays()).rewardXp(q.getRewardXp()).rewardCoins(displayRewardCoins(currentUser, q))
+                .durationDays(q.getDurationDays()).rewardXp(q.getRewardXp())
+                .rewardCoins(displayRewardCoins(currentUser, q, weeklyStatus(weeklyCache, currentUser, q)))
+                .rewardDiminished(weeklyStatus(weeklyCache, currentUser, q).reached())
+                .weeklyLimit(weeklyStatus(weeklyCache, currentUser, q).limit())
                 .ticketReward(q.getTicketReward())
                 .councilOnly(q.isCouncilOnly()).sponsored(true)
                 .externalAutoApprove(q.isExternalAutoApprove())
@@ -287,7 +323,11 @@ public class QuestController {
 
         if (telegramId != null) {
             appUserRepository.findByTelegramId(telegramId).ifPresent(user -> {
-                builder.rewardCoins(displayRewardCoins(user, quest));
+                QuestService.WeeklyLimitStatus weekly = weeklyStatus(new HashMap<>(), user, quest);
+                builder.rewardCoins(displayRewardCoins(user, quest, weekly));
+                builder.rewardDiminished(weekly.reached());
+                builder.weeklyLimit(weekly.limit());
+                builder.weeklyCompleted(weekly.completed());
                 QuestSubmission latest = questService.getLatestSubmission(user, quest);
                 if (latest != null && latest.getStatus() != ru.gamebot.platform.domain.enums.SubmissionStatus.CANCELLED) {
                     builder.submissionStatus(latest.getStatus().name());
@@ -423,7 +463,7 @@ public class QuestController {
                         .expiresAt(s.getExpiresAt() != null ? s.getExpiresAt().format(ISO_FMT) : null)
                         .moderatorComment(s.getModeratorComment())
                         .rewardXp(s.getQuest().getRewardXp())
-                        .rewardCoins(displayRewardCoins(user, s.getQuest()))
+                        .rewardCoins(historyRewardCoins(user, s.getQuest()))
                         .build();
                 })
                 .toList();

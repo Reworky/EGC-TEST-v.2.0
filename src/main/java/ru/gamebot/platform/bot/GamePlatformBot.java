@@ -4571,7 +4571,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String oneTimeBadge = quest.isOneTimePerAccount() ? "🔂 <b>Разовый квест</b> — доступен один раз за аккаунт\n" : "";
         boolean questFlat = gameCatalogService.isFlat(quest.getGameName());
         String personalizedInstruction = questService.personalizeInstruction(quest.getInstruction(), user.getTelegramId());
-        String rewardNote = quest.isRepeatableNoCooldownEligible() ? " (за 1-е сегодня, дальше меньше)" : "";
+        String rewardNote = quest.isRepeatableNoCooldownEligible()
+                ? " (за 1-е сегодня, дальше меньше)"
+                : weeklyLimitNote(questService.weeklyLimitStatus(user, quest));
         sendText(user.getTelegramId(),
                 (notice == null ? "" : notice + "\n\n")
                         + sponsorBadge
@@ -4600,9 +4602,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  кривой убывания сумма за СЛЕДУЮЩЕЕ прохождение этого игрока, а не фиксированная цифра, которая на практике
      *  может уже не совпадать с тем, что реально начислится после нескольких прохождений за окно. */
     private long displayRewardCoins(AppUser user, Quest quest) {
+        if (quest.isRepeatableNoCooldownEligible()) {
+            return questService.computeReward(user, quest).coins();
+        }
+        // Правило 3.4: если недельный лимит по этой игре+категории исчерпан, реально придёт вдвое меньше —
+        // показываем именно эту цифру (а не номинал), иначе игрок видит 1500, а получает 750 без объяснений.
+        return questService.weeklyLimitStatus(user, quest).reached()
+                ? QuestService.diminishedCoins(quest.getRewardCoins())
+                : quest.getRewardCoins();
+    }
+
+    /** Награда для экрана «Мой квест», где вперемешку активные и уже закрытые заявки: недельное снижение
+     *  сюда НЕ подмешиваем — для уже одобренного квеста цифра «как если бы брали сейчас» была бы ложью
+     *  о том, сколько реально начислили. Поведение прежнее: номинал (или кривая убывания для пилота). */
+    private long historyRewardCoins(AppUser user, Quest quest) {
         return quest.isRepeatableNoCooldownEligible()
                 ? questService.computeReward(user, quest).coins()
                 : quest.getRewardCoins();
+    }
+
+    /** Пометка под строкой награды, если недельный лимит (правило 3.4) уже исчерпан и EXC режется вдвое.
+     *  Без слова «категория»: у FLAT-игр (CS2/Dota/PUBG…) игрок категорий не видит, поэтому «такого типа». */
+    private String weeklyLimitNote(QuestService.WeeklyLimitStatus weekly) {
+        if (!weekly.reached()) {
+            return "";
+        }
+        return "\n⚠️ <i>Награда EXC снижена вдвое: за последние 7 дней вы уже выполнили "
+                + weekly.completed() + " " + pluralQuests(weekly.completed())
+                + " такого типа (полная награда — за первые " + weekly.limit()
+                + "). Вернётся к полной, когда самые старые из них выйдут из 7-дневного окна.</i>";
     }
 
     /** Гейт перед взятием квеста: проверяет подписку НЕ по разовому флагу isRegistrationCompleted()
@@ -4776,7 +4804,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             brawlQuestVerificationService.primeBaseline(result.submission().getId(), quest.getBrawlVerifyType(), user.getBrawlStarsTag());
         }
 
-        long weeklyCount = questService.getWeeklyCompletionsOfType(user, quest);
         String notice = quest.isExternalAutoApprove()
                 ? "🚀 Квест активен! Перейди по своей ссылке ниже — отчёт отправлять не нужно, EXC начислится автоматически."
                 : quest.getBrawlVerifyType() != null
@@ -4790,12 +4817,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 : quest.getCs2VerifyType() != null
                                     ? "🚀 Квест активен! ⏳ Прогресс отслеживается автоматически по вашему аккаунту Steam (CS2) — отчёт отправлять не нужно."
                                     : "🚀 Квест активен! Приступайте к игре, когда выполните задание, отправьте отчёт прямо из этой карточки.";
-        int weeklyLimit = QuestService.weeklyQuestTypeLimit(user);
-        if (!quest.isExternalAutoApprove() && quest.getBrawlVerifyType() == null && quest.getClashVerifyType() == null
-                && quest.getClashRoyaleVerifyType() == null && quest.getDotaVerifyType() == null
-                && quest.getCs2VerifyType() == null && weeklyCount >= weeklyLimit) {
-            notice += "\n\n⚠️ Вы уже выполнили " + weeklyLimit + "+ " + pluralQuests(weeklyLimit) + " такого типа за неделю — награда EXC будет снижена на 50%.";
-        }
+        // Предупреждение о недельном снижении награды теперь живёт в самой карточке (строка награды ниже,
+        // см. weeklyLimitNote) — и в списке/карточке ДО взятия квеста тоже, а не одноразово после него.
 
         Quest freshQuest = questService.getQuest(questId);
         QuestSubmission submission = result.submission();
@@ -4825,7 +4848,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🏆 <b>Награда</b>\n"
                         + "✨ +" + freshQuest.getRewardXp() + " XP\n"
                         + "🪙 +" + displayRewardCoins(user, freshQuest) + " монет"
-                        + (freshQuest.isRepeatableNoCooldownEligible() ? " (за 1-е сегодня, дальше меньше)" : "")
+                        + (freshQuest.isRepeatableNoCooldownEligible() ? " (за 1-е сегодня, дальше меньше)" : weeklyLimitNote(questService.weeklyLimitStatus(user, freshQuest)))
                         + (!freshQuest.isSponsored() && !"UGC".equalsIgnoreCase(freshQuest.getGameName()) && freshQuest.getTicketReward() > 0 ? "\n🎟 +" + freshQuest.getTicketReward() + " билет(а) для Колеса фортуны" : "")
                         + (freshQuest.isExternalAutoApprove()
                             ? "\n\n📎 <b>Что нужно сделать:</b>\n" + escape(questService.personalizeInstruction(freshQuest.getInstruction(), user.getTelegramId()))
@@ -5118,13 +5141,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             buttons.add(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + submission.getId()));
         }
 
+        // Активная заявка (ещё не закрыта) — показываем реальную награду с учётом недельного снижения;
+        // закрытые (одобрена/отклонена/отменена) — как раньше, без подмешивания «как если бы брали сейчас».
+        boolean activeSubmission = submission.getStatus() == SubmissionStatus.DRAFT
+                || submission.getStatus() == SubmissionStatus.PENDING
+                || submission.getStatus() == SubmissionStatus.NEEDS_INFO;
+        long shownCoins = activeSubmission ? displayRewardCoins(user, quest) : historyRewardCoins(user, quest);
+        String weeklyNote = activeSubmission && !quest.isRepeatableNoCooldownEligible()
+                ? weeklyLimitNote(questService.weeklyLimitStatus(user, quest)) : "";
         sendText(user.getTelegramId(),
                 "📂 <b>Мой квест</b>\n\n"
                         + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n"
                         + "📌 Статус: <b>" + escape(humanStatus(submission.getStatus())) + "</b>\n"
                         + "🕒 Обновлено: <b>" + escape(submission.getUpdatedAt().format(DATE_TIME_FORMATTER)) + "</b>\n"
                         + "✨ XP: <b>+" + quest.getRewardXp() + "</b>\n"
-                        + "🪙 Монеты: <b>+" + displayRewardCoins(user, quest) + "</b>\n"
+                        + "🪙 Монеты: <b>+" + shownCoins + "</b>" + weeklyNote + "\n"
                         + (quest.getTicketReward() > 0 ? "🎟 Билеты: <b>+" + quest.getTicketReward() + "</b>\n" : "")
                         + "\n📝 <b>Суть задания</b>\n" + escape(quest.getDescription()) + moderatorComment,
                 verticalWithBackMenu(buttons, "⬅️ Назад", "menu:myquests"));

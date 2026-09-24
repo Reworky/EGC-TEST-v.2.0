@@ -216,6 +216,23 @@
   color: #F5A623;
 }
 
+.reward-diminished {
+  font-size: 10px;
+  font-weight: 600;
+  color: #ffa726;
+}
+
+.quest-limit-note {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  background: rgba(255,167,38,0.10);
+  border: 0.5px solid rgba(255,167,38,0.25);
+  color: #ffa726;
+}
+
 .reward-xp {
   font-size: 11px;
   color: rgba(255,255,255,0.4);

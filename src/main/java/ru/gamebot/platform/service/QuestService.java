@@ -852,6 +852,29 @@ public class QuestService {
     public record RewardPreview(long xp, long coins, boolean diminished, boolean xpBoosted, long egcPassBonusCoins) {
     }
 
+    /** Состояние недельного лимита (правило 3.4): сколько квестов этой игры+категории игрок одобрил за
+     *  последние 7 дней, каков порог полной награды и сработало ли уже снижение EXC вдвое. */
+    public record WeeklyLimitStatus(long completed, int limit, boolean reached) {
+    }
+
+    /** Единый источник истины для правила 3.4 — им пользуются и computeReward (реальное начисление),
+     *  и показ награды игроку до взятия квеста (бот/Mini App): цифра на карточке не должна расходиться
+     *  с тем, что реально придёт. Для repeatableNoCooldown-квестов с потолком окна недельное деление
+     *  не применяется вообще — там своя кривая убывания. */
+    public WeeklyLimitStatus weeklyLimitStatus(AppUser user, Quest quest) {
+        int limit = weeklyQuestTypeLimit(user);
+        if (quest.isRepeatableNoCooldownEligible() && quest.getTargetPeriodCeiling() != null) {
+            return new WeeklyLimitStatus(0, limit, false);
+        }
+        long completed = getWeeklyCompletionsOfType(user, quest);
+        return new WeeklyLimitStatus(completed, limit, completed >= limit);
+    }
+
+    /** Награда EXC после недельного снижения (тот же расчёт, что и в computeReward, до бустов). */
+    public static long diminishedCoins(long baseCoins) {
+        return baseCoins / 2;
+    }
+
     public RewardPreview computeReward(AppUser user, Quest quest) {
         long baseCoins = quest.getRewardCoins();
         long adjustedCoins = baseCoins;
@@ -877,13 +900,11 @@ public class QuestService {
             diminished = completionsInWindow > 0;
         } else {
             // 3.4 Antifaud: diminishing returns after 3 completions of same type per week
-            // (для новичка порог мягче — 5 вместо 3, см. isOnboarding)
-            LocalDateTime weekAgo = LocalDateTime.now().minusWeeks(1);
-            long weeklyCount = questSubmissionRepository.countApprovedByUserAndGameAndCategorySince(
-                    user, quest.getGameName(), quest.getCategory(), weekAgo);
-            diminished = weeklyCount >= weeklyQuestTypeLimit(user);
+            // (для новичка порог мягче — 5 вместо 3, см. isOnboarding). Сама проверка — в
+            // weeklyLimitStatus, чтобы показ награды игроку до взятия квеста считал ровно так же.
+            diminished = weeklyLimitStatus(user, quest).reached();
             if (diminished) {
-                adjustedCoins = adjustedCoins / 2;
+                adjustedCoins = diminishedCoins(adjustedCoins);
             }
         }
 

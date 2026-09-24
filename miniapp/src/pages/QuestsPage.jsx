@@ -18,6 +18,25 @@ const QUEST_SECTIONS = [
   { key: 'ads', label: '🎬 Реклама' },
 ];
 
+function pluralQuests(n) {
+  if (n % 100 >= 11 && n % 100 <= 14) return 'квестов';
+  const last = n % 10;
+  if (last === 1) return 'квест';
+  if (last >= 2 && last <= 4) return 'квеста';
+  return 'квестов';
+}
+
+// Правило недельного лимита (3.4): почему награда EXC на карточке вдвое меньше номинала.
+// q — элемент списка (есть weeklyLimit), d — детальная карточка (есть ещё weeklyCompleted, грузится позже).
+function weeklyLimitText(q, d) {
+  const limit = d?.weeklyLimit ?? q.weeklyLimit;
+  const done = d?.weeklyCompleted;
+  const already = done != null
+    ? `${done} ${pluralQuests(done)}`
+    : `${limit}+ ${pluralQuests(limit)}`;
+  return `⚠️ Награда EXC снижена вдвое: за последние 7 дней вы уже выполнили ${already} такого типа (полная награда — за первые ${limit}). Вернётся к полной, когда самые старые из них выйдут из 7-дневного окна.`;
+}
+
 function LinkPill({ url }) {
   const [copied, setCopied] = useState(false);
 
@@ -326,6 +345,9 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
         <div className="quest-title">{q.title}</div>
         <div className="quest-rewards">
           <span className="reward-exc"><i className="ti ti-coin"></i> {q.rewardCoins.toLocaleString()} EXC</span>
+          {(details[q.id]?.rewardDiminished ?? q.rewardDiminished) && (
+            <span className="reward-diminished">×½ лимит недели</span>
+          )}
           <span className="reward-xp"><i className="ti ti-star"></i> {q.rewardXp} XP</span>
           {!q.sponsored && q.gameName !== 'UGC' && (q.ticketReward > 0 || CATEGORY_TICKETS[q.category]) && (
             <span className="reward-ticket">🎟 +{q.ticketReward > 0 ? q.ticketReward : CATEGORY_TICKETS[q.category]}</span>
@@ -352,6 +374,9 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
               </div>
               <p className="quest-requirements">{renderTextWithLinks(details[q.id].requirements)}</p>
             </>
+          )}
+          {(details[q.id]?.rewardDiminished ?? q.rewardDiminished) && (
+            <div className="quest-limit-note">{weeklyLimitText(q, details[q.id])}</div>
           )}
           <QuestActions
             quest={q}
