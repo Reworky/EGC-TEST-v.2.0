@@ -4090,9 +4090,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             AppUser player = userService.findById(event.getUserId()).orElse(null);
             if (player == null) return;
-            String text = "✅ <b>+" + event.getExcGranted() + " EXC</b> начислено за просмотр рекламы!";
-            if (event.getMilestoneBonus() > 0) {
-                text += "\n🎯 Включая бонус за прогресс: +" + event.getMilestoneBonus() + " EXC";
+            String text;
+            if (event.getExcGranted() == event.getMilestoneBonus()) {
+                // Просмотр для рекламного колеса: плоских 30 EXC нет (награда — спин), приходит только бонус за прогресс
+                text = "🎯 <b>+" + event.getExcGranted() + " EXC</b> — бонус за прогресс по рекламе!";
+            } else {
+                text = "✅ <b>+" + event.getExcGranted() + " EXC</b> начислено за просмотр рекламы!";
+                if (event.getMilestoneBonus() > 0) {
+                    text += "\n🎯 Включая бонус за прогресс: +" + event.getMilestoneBonus() + " EXC";
+                }
             }
             notifyUser(player.getTelegramId(), text);
         } catch (Exception e) {

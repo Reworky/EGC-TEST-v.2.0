@@ -166,6 +166,15 @@ public class AppUser {
     /** Момент запроса рекламы AdsGram, ждущей подтверждения просмотра; null = нет активного показа. */
     private LocalDateTime pendingAdRewardAt;
 
+    /** Зачем запрошен показ: "WHEEL" — награда за просмотр = спин рекламного колеса, null — обычные 30 EXC.
+     * Выставляется вместе с pendingAdRewardAt и сбрасывается при начислении (см. UserService.claimPendingAdReward). */
+    @Column(length = 16)
+    private String pendingAdPurpose;
+
+    /** Неиспользованные спины рекламного колеса (копятся за просмотры рекламы, тратятся в AdWheelService). */
+    @Column(columnDefinition = "integer default 0")
+    private int adWheelSpins;
+
     // Withdrawal limits
     @Column(columnDefinition = "bigint default 0")
     private long monthlyWithdrawnExc;

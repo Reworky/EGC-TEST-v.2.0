@@ -889,14 +889,26 @@ public class UserService {
         return Math.max(0, source.getDailyCap() - adRewardCountToday(user, source));
     }
 
+    /** Цель показа для рекламного колеса: награда за просмотр — спин колеса, а не 30 EXC. */
+    public static final String AD_PURPOSE_WHEEL = "WHEEL";
+
     @Transactional
     public void markAdRequested(AppUser user) {
+        markAdRequested(user, null);
+    }
+
+    /** purpose == null — обычный показ (30 EXC); иначе см. AD_PURPOSE_*. Каждый новый запрос перезаписывает
+     * предыдущую цель, чтобы «зависший» показ для колеса не превратил следующий обычный показ в спин. */
+    @Transactional
+    public void markAdRequested(AppUser user, String purpose) {
         user.setPendingAdRewardAt(LocalDateTime.now());
+        user.setPendingAdPurpose(purpose);
         appUserRepository.save(user);
     }
 
-    public record AdRewardResult(boolean granted, long totalExc, long milestoneBonus, int viewsToday, int dailyCap) {
-        public static final AdRewardResult NOT_GRANTED = new AdRewardResult(false, 0, 0, 0, 0);
+    public record AdRewardResult(boolean granted, long totalExc, long milestoneBonus, int viewsToday, int dailyCap,
+                                 boolean wheelSpin) {
+        public static final AdRewardResult NOT_GRANTED = new AdRewardResult(false, 0, 0, 0, 0, false);
     }
 
     /** Бонус за отметки прогресса (2026-09-09) — подталкивает досматривать лимит сети целиком,
@@ -923,7 +935,9 @@ public class UserService {
         if (user.getPendingAdRewardAt().isBefore(LocalDateTime.now().minusHours(1))) {
             return AdRewardResult.NOT_GRANTED;
         }
+        boolean wheelSpin = AD_PURPOSE_WHEEL.equals(user.getPendingAdPurpose());
         user.setPendingAdRewardAt(null);
+        user.setPendingAdPurpose(null);
         LocalDate today = LocalDate.now();
         if (user.getAdRewardDate() == null || !user.getAdRewardDate().equals(today)) {
             user.setAdRewardDate(today);
@@ -939,17 +953,24 @@ public class UserService {
             user.setAdRewardCountTelega(viewsToday);
         }
         long milestoneBonus = adRewardMilestoneBonus(source, viewsToday);
-        long totalExc = AD_REWARD_EXC + milestoneBonus;
+        // Для колеса вместо плоских 30 EXC копится спин (разыгрывается в AdWheelService); бонус за отметки
+        // прогресса (5-й/10-й показ) платится в обоих режимах — иначе игрок, выбравший колесо, терял бы его.
+        long totalExc = (wheelSpin ? 0 : AD_REWARD_EXC) + milestoneBonus;
+        if (wheelSpin) {
+            user.setAdWheelSpins(user.getAdWheelSpins() + 1);
+        }
         user.setCoins(user.getCoins() + totalExc);
         appUserRepository.save(user);
-        String description = "Просмотр рекламы (" + source + ")";
-        if (milestoneBonus > 0) {
-            description += " + бонус за " + viewsToday + "/" + source.getDailyCap() + " просмотров";
+        if (totalExc > 0) {
+            String description = (wheelSpin ? "Просмотр рекламы для колеса (" : "Просмотр рекламы (") + source + ")";
+            if (milestoneBonus > 0) {
+                description += " + бонус за " + viewsToday + "/" + source.getDailyCap() + " просмотров";
+            }
+            excTx.log(user, totalExc, ExcTransactionService.AD_REWARD, description);
+            eventPublisher.publishEvent(new ru.gamebot.platform.event.AdRewardGrantedEvent(
+                    this, user.getId(), totalExc, milestoneBonus));
         }
-        excTx.log(user, totalExc, ExcTransactionService.AD_REWARD, description);
-        eventPublisher.publishEvent(new ru.gamebot.platform.event.AdRewardGrantedEvent(
-                this, user.getId(), totalExc, milestoneBonus));
-        return new AdRewardResult(true, totalExc, milestoneBonus, viewsToday, source.getDailyCap());
+        return new AdRewardResult(true, totalExc, milestoneBonus, viewsToday, source.getDailyCap(), wheelSpin);
     }
 
     public record ReferralActivationResult(

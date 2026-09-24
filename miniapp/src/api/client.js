@@ -282,8 +282,9 @@ export async function getAdStatus(source) {
   return data;
 }
 
-export async function requestAdWatch(source) {
-  const { data } = await api.post('/api/ads/watch', null, { params: { source } });
+// purpose='WHEEL' — награда за показ станет спином рекламного колеса (вместо 30 EXC)
+export async function requestAdWatch(source, purpose) {
+  const { data } = await api.post('/api/ads/watch', null, { params: { source, ...(purpose ? { purpose } : {}) } });
   return data;
 }
 
@@ -337,6 +338,16 @@ export async function getWheelStatus() {
 
 export async function spinWheel() {
   const { data } = await api.post('/api/wheel/spin');
+  return data;
+}
+
+export async function getAdWheelStatus() {
+  const { data } = await api.get('/api/wheel/ad');
+  return data;
+}
+
+export async function spinAdWheel() {
+  const { data } = await api.post('/api/wheel/ad/spin');
   return data;
 }
 

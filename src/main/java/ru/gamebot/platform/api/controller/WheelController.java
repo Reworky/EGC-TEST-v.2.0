@@ -11,6 +11,9 @@ import org.springframework.web.bind.annotation.RestController;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.WheelSpinLogRepository;
+import ru.gamebot.platform.service.AdWheelService;
+import ru.gamebot.platform.service.UserService;
+import ru.gamebot.platform.service.UserService.AdRewardSource;
 import ru.gamebot.platform.service.WheelService;
 
 import java.time.LocalDate;
@@ -23,6 +26,8 @@ public class WheelController {
     private final AppUserRepository appUserRepository;
     private final WheelSpinLogRepository wheelSpinLogRepository;
     private final WheelService wheelService;
+    private final AdWheelService adWheelService;
+    private final UserService userService;
 
     public record WheelStatusDto(int tickets, long spinsToday, int maxSpinsPerDay) {}
 
@@ -63,6 +68,34 @@ public class WheelController {
                     false, e.getMessage(), null, 0, null,
                     (int) user.getTickets(), spinsToday
             ));
+        }
+    }
+
+    /** spins — накопленные спины рекламного колеса; remaining* — сколько показов рекламы ещё доступно сегодня
+     * (лимит показов общий с обычной рекламой за 30 EXC — каждый показ идёт либо туда, либо в спин). */
+    public record AdWheelStatusDto(int spins, int remainingAdsgram, int remainingTelega) {}
+
+    public record AdSpinResponseDto(boolean success, String message, String type, long excAmount, String label, int spinsLeft) {}
+
+    @GetMapping("/ad")
+    public ResponseEntity<AdWheelStatusDto> adStatus(@AuthenticationPrincipal Long telegramId) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (user == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        return ResponseEntity.ok(new AdWheelStatusDto(
+                user.getAdWheelSpins(),
+                userService.getAdRewardsRemainingToday(user, AdRewardSource.ADSGRAM),
+                userService.getAdRewardsRemainingToday(user, AdRewardSource.TELEGA)));
+    }
+
+    @PostMapping("/ad/spin")
+    public ResponseEntity<AdSpinResponseDto> adSpin(@AuthenticationPrincipal Long telegramId) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (user == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        try {
+            AdWheelService.AdSpinResult r = adWheelService.spin(user.getId());
+            return ResponseEntity.ok(new AdSpinResponseDto(true, "Удача!", r.type(), r.excAmount(), r.label(), r.spinsLeft()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.ok(new AdSpinResponseDto(false, e.getMessage(), null, 0, null, user.getAdWheelSpins()));
         }
     }
 }

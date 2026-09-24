@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { getWheelStatus, spinWheel } from '../api/client';
+import { useSearchParams } from 'react-router-dom';
+import { getWheelStatus, spinWheel, getAdWheelStatus } from '../api/client';
 import BorderBeamCard from '../components/BorderBeamCard';
 import BackButton from '../components/BackButton';
+import AdWheelSection from './AdWheelSection';
 import './WheelPage.css';
 
 const SECTORS = [
@@ -87,7 +89,8 @@ const PRIZES = [
   { label: '👑 Рамка аватара', prob: '0.5%'},
 ];
 
-export default function WheelPage() {
+/** Обычное колесо за билеты (раньше это была вся страница /wheel). */
+function ClassicWheel({ onBack }) {
   const canvasRef = useRef(null);
   const rotRef = useRef(0);
   const rafRef = useRef(null);
@@ -203,7 +206,7 @@ export default function WheelPage() {
     <div className="wheel-page">
       {/* Header */}
       <div className="wheel-header">
-        <BackButton label="Назад" />
+        <BackButton label="Назад" onClick={onBack} />
         <h1>🎰 Колесо фортуны</h1>
         <div className="wheel-chips">
           <div className="wheel-chip">
@@ -302,6 +305,68 @@ export default function WheelPage() {
           </table>
         </BorderBeamCard>
         <div className="wheel-note">Лимит: 10 кручений в сутки · 1 билет = 1 кручение</div>
+      </div>
+    </div>
+  );
+}
+
+// Разделы «Колеса»: плитки в том же стиле, что кнопки-разделы «Предметы» в магазине (ShopPage.SectionButton) —
+// цветной градиент, иконка, подпись, шеврон. Выбранный раздел хранится в ?section=, чтобы «Назад» Telegram
+// и обновление страницы возвращали в тот же раздел.
+const WHEEL_SECTIONS = {
+  classic: { icon: '🎰', title: 'Колесо фортуны', gradient: 'purple' },
+  ads:     { icon: '👑', title: 'Колесо за рекламу', gradient: 'gold' },
+};
+
+function HubTile({ meta, subtitle, onClick }) {
+  return (
+    <div className={`wheel-hub-tile wheel-hub-${meta.gradient}`} onClick={onClick}>
+      <div className="wheel-hub-icon">{meta.icon}</div>
+      <div>
+        <div className="wheel-hub-title">{meta.title}</div>
+        <div className="wheel-hub-sub">{subtitle}</div>
+      </div>
+      <i className="ti ti-chevron-right wheel-hub-arrow"></i>
+    </div>
+  );
+}
+
+export default function WheelPage() {
+  const [params, setParams] = useSearchParams();
+  const section = params.get('section');
+  const [tickets, setTickets] = useState(null);
+  const [adSpins, setAdSpins] = useState(null);
+
+  useEffect(() => {
+    if (section) return;
+    getWheelStatus().then(s => setTickets(s.tickets)).catch(() => {});
+    getAdWheelStatus().then(s => setAdSpins(s.spins)).catch(() => {});
+  }, [section]);
+
+  const open = key => setParams({ section: key });
+  const back = () => setParams({}, { replace: true });
+
+  if (section === 'classic') return <ClassicWheel onBack={back} />;
+  if (section === 'ads') return <AdWheelSection onBack={back} />;
+
+  return (
+    <div className="wheel-page">
+      <div className="wheel-header">
+        <h1>🎰 Колесо фортуны</h1>
+      </div>
+      <div className="wheel-hub">
+        <HubTile
+          meta={WHEEL_SECTIONS.classic}
+          subtitle={`Крутите за билеты · до 2 000 EXC${tickets != null ? ` · 🎟 ${tickets}` : ''}`}
+          onClick={() => open('classic')}
+        />
+        <HubTile
+          meta={WHEEL_SECTIONS.ads}
+          subtitle={adSpins > 0
+            ? `Ролик → спин · ждёт спинов: ${adSpins}`
+            : 'Посмотри ролик — крути бесплатно'}
+          onClick={() => open('ads')}
+        />
       </div>
     </div>
   );

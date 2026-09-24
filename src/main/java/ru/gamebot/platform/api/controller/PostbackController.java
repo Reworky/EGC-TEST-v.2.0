@@ -172,6 +172,8 @@ public class PostbackController {
         String message;
         if (!result.granted()) {
             message = "Не удалось начислить награду — попробуйте посмотреть рекламу заново.";
+        } else if (result.wheelSpin()) {
+            message = "✅ Просмотр засчитан! Спин рекламного колеса ждёт вас в мини-приложении.";
         } else if (result.milestoneBonus() > 0) {
             message = "✅ Награда начислена! +" + result.totalExc() + " EXC (включая бонус за "
                     + result.viewsToday() + "/" + result.dailyCap() + " просмотров сегодня)";

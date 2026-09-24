@@ -1,0 +1,269 @@
+/* Премиум-колесо за рекламу: чёрно-золотая палитра, чтобы визуально отличаться от фиолетового обычного колеса */
+.awl-page {
+  padding: 16px 16px 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.awl-header h1 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 12px 0 10px;
+  background: linear-gradient(90deg, #fff3b8, #f5b82e 55%, #ffe08a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.awl-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.awl-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  background: rgba(245, 166, 35, 0.12);
+  border: 1px solid rgba(245, 190, 80, 0.32);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.awl-chip strong {
+  color: #ffe08a;
+}
+
+/* Сцена с колесом */
+.awl-stage {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  padding: 26px 0 18px;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 50% 55%, rgba(245, 166, 35, 0.16), transparent 62%),
+    linear-gradient(180deg, #14101f 0%, #0a0810 100%);
+  border: 1px solid rgba(245, 190, 80, 0.28);
+  box-shadow: 0 0 40px rgba(245, 166, 35, 0.12), inset 0 0 30px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.awl-halo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 340px;
+  height: 340px;
+  margin: -160px 0 0 -170px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 200, 80, 0.22), transparent 65%);
+  animation: awl-pulse 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes awl-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(0.96); }
+  50%      { opacity: 1;    transform: scale(1.04); }
+}
+
+.awl-canvas {
+  position: relative;
+  display: block;
+  width: 300px;
+  max-width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.65));
+}
+
+.awl-canvas--spin {
+  filter: drop-shadow(0 8px 26px rgba(245, 166, 35, 0.45));
+}
+
+/* Золотая стрелка сверху */
+.awl-pointer {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  width: 26px;
+  height: 32px;
+  margin-left: -13px;
+  z-index: 3;
+  background: linear-gradient(180deg, #fff3b8, #e0a91b 55%, #8a5a00);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  filter: drop-shadow(0 2px 6px rgba(255, 200, 60, 0.7));
+}
+
+/* Кнопка */
+.awl-btn {
+  position: relative;
+  width: 100%;
+  padding: 15px;
+  border-radius: 16px;
+  font-size: 16px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: not-allowed;
+  overflow: hidden;
+  transition: transform 0.15s;
+}
+
+.awl-btn--gold {
+  color: #2a1a00;
+  background: linear-gradient(135deg, #fff0b0 0%, #f5b82e 45%, #d98e0b 100%);
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 0 26px rgba(245, 166, 35, 0.45);
+}
+
+.awl-btn--watch {
+  color: #ffe08a;
+  background: linear-gradient(135deg, rgba(245, 166, 35, 0.18), rgba(245, 166, 35, 0.06));
+  border: 1px solid rgba(245, 190, 80, 0.6);
+  cursor: pointer;
+  box-shadow: 0 0 18px rgba(245, 166, 35, 0.2);
+}
+
+.awl-btn--gold::after,
+.awl-btn--watch::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: skewX(-20deg);
+  animation: awl-shine 3.4s ease-in-out infinite;
+}
+
+@keyframes awl-shine {
+  0%, 55% { left: -60%; }
+  100%    { left: 130%; }
+}
+
+.awl-btn--gold:active,
+.awl-btn--watch:active {
+  transform: scale(0.97);
+}
+
+.awl-result {
+  text-align: center;
+  padding: 16px;
+}
+
+.awl-result-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 224, 138, 0.7);
+}
+
+.awl-result-prize {
+  font-size: 24px;
+  font-weight: 800;
+  margin: 4px 0;
+  background: linear-gradient(90deg, #fff3b8, #f5b82e);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.awl-result-sub {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.awl-message {
+  background: rgba(245, 166, 35, 0.1);
+  border: 1px solid rgba(245, 190, 80, 0.3);
+  color: #ffe08a;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.awl-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.awl-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.awl-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.awl-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(245, 166, 35, 0.06);
+  border: 1px solid rgba(245, 190, 80, 0.16);
+}
+
+.awl-step-n {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: #2a1a00;
+  background: linear-gradient(135deg, #fff0b0, #e0a91b);
+}
+
+.awl-prize-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.awl-prize-table tr {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.awl-prize-table tr:last-child {
+  border-bottom: none;
+}
+
+.awl-prize-table td {
+  padding: 8px 12px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.awl-prize-prob {
+  text-align: right;
+  color: rgba(255, 224, 138, 0.55) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.awl-note {
+  font-size: 11px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.35);
+  text-align: center;
+}

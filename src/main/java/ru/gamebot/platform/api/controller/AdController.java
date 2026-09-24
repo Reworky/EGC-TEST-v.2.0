@@ -28,13 +28,15 @@ public class AdController {
     }
 
     @PostMapping("/watch")
-    public ResponseEntity<AdStatusDto> watch(@AuthenticationPrincipal Long telegramId, @RequestParam AdRewardSource source) {
+    public ResponseEntity<AdStatusDto> watch(@AuthenticationPrincipal Long telegramId, @RequestParam AdRewardSource source,
+                                             @RequestParam(required = false) String purpose) {
         AppUser user = appUserRepository.findByTelegramId(telegramId).orElseThrow();
         int remaining = userService.getAdRewardsRemainingToday(user, source);
         if (remaining <= 0) {
             return ResponseEntity.status(409).body(new AdStatusDto(0, userService.getAdRewardDailyCap(source)));
         }
-        userService.markAdRequested(user);
+        // purpose=WHEEL — награда за этот показ будет спином рекламного колеса, любое другое значение = обычные 30 EXC
+        userService.markAdRequested(user, UserService.AD_PURPOSE_WHEEL.equals(purpose) ? purpose : null);
         return ResponseEntity.ok(new AdStatusDto(remaining, userService.getAdRewardDailyCap(source)));
     }
 
