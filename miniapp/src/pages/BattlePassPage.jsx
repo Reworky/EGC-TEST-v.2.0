@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
-import { getBattlePass, purchaseBattlePass } from '../api/client';
+import { getBattlePass, purchaseBattlePass, getProfile, getStarsPrices, invalidateCache } from '../api/client';
 import BackButton from '../components/BackButton';
+import EgcPassCard from '../components/EgcPassCard';
 import './QuestsPage.css';
 import './ShopPage.css';
 import './ReferralsPage.css';
 
 export default function BattlePassPage() {
   const [pass, setPass] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [egcPassPrice, setEgcPassPrice] = useState(150);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
@@ -14,6 +17,15 @@ export default function BattlePassPage() {
   function reload() {
     setError(null);
     getBattlePass().then(setPass).catch(() => setError('Не удалось загрузить Battle Pass. Попробуйте ещё раз.'));
+    getProfile().then(setProfile).catch(() => {});
+    getStarsPrices().then(p => { if (p?.EGC_PASS) setEgcPassPrice(p.EGC_PASS); }).catch(() => {});
+  }
+
+  // После оплаты подписки профиль надо перечитать с сервера, а не из кэша — иначе карточка EGC Pass
+  // продолжила бы предлагать «Оформить», хотя подписка уже активна.
+  async function handleEgcPassPurchased() {
+    invalidateCache('profile');
+    await getProfile().then(setProfile).catch(() => {});
   }
 
   useEffect(() => { reload(); }, []);
@@ -40,7 +52,11 @@ export default function BattlePassPage() {
     <div className="quests-page shop-page">
       <div style={{ padding: '16px 16px 0' }}><BackButton to="/profile" label="Профиль" /></div>
 
-      <div className="category-section" style={{ marginTop: 16 }}>
+      <div style={{ marginTop: 16 }}>
+        <EgcPassCard profile={profile} price={egcPassPrice} onPurchased={handleEgcPassPurchased} />
+      </div>
+
+      <div className="category-section">
         {!pass.hasSeason ? (
           <div className="ref-link-card">
             <div className="ref-link-label">🎫 Battle Pass</div>

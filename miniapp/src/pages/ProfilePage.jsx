@@ -514,7 +514,7 @@ export default function ProfilePage() {
           </div>
           <div className="p-menu-texts">
             <div className="p-menu-title">Battle Pass</div>
-            <div className="p-menu-sub">{hasActivePass ? 'Сезонный пропуск активен' : 'Получи эксклюзивные награды'}</div>
+            <div className="p-menu-sub">{hasActivePass ? 'Сезонный пропуск активен' : 'Сезонный пропуск и подписка EGC Pass'}</div>
           </div>
           {hasActivePass
             ? <span className="p-badge-active">Активен</span>
