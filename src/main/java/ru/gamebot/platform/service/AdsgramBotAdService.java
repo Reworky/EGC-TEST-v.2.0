@@ -73,7 +73,12 @@ public class AdsgramBotAdService {
                 if (resp.statusCode() == 200) {
                     return parseAd(resp.body());
                 }
-                log.warn("AdsGram advbot returned HTTP {} for tgid={}", resp.statusCode(), telegramId);
+                String body = resp.body() == null ? "" : resp.body();
+                log.warn("AdsGram advbot returned HTTP {} for tgid={}, body={}", resp.statusCode(), telegramId,
+                        body.length() > 200 ? body.substring(0, 200) : body);
+                if (resp.statusCode() >= 400 && resp.statusCode() < 500) {
+                    return Optional.empty(); // клиентская ошибка (нет рекламы для этого игрока и т.п.) - повтор ничего не изменит
+                }
             } catch (IOException | InterruptedException e) {
                 if (e instanceof InterruptedException) Thread.currentThread().interrupt();
                 log.warn("AdsGram advbot request failed (attempt {}/{})", attempt, MAX_ATTEMPTS, e);

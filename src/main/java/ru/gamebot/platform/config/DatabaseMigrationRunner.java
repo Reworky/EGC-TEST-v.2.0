@@ -23,7 +23,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             List<Map<String, Object>> all = jdbcTemplate.queryForList(
                     "SELECT CONSTRAINT_NAME, CONSTRAINT_TYPE, TABLE_NAME " +
                     "FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS");
-            log.error("[DBMigration] All TABLE_CONSTRAINTS ({} total): {}", all.size(), all);
+            log.info("[DBMigration] All TABLE_CONSTRAINTS ({} total): {}", all.size(), all);
         } catch (Exception e) {
             log.error("[DBMigration] Cannot query TABLE_CONSTRAINTS: {}", e.getMessage());
         }
@@ -109,14 +109,33 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
                 for (int i = 1; i < rows.size(); i++) {
                     Long id = ((Number) rows.get(i).get("ID")).longValue();
                     String oldNick = (String) rows.get(i).get("NICKNAME");
-                    String newNick = oldNick + "_" + (i + 1);
-                    jdbcTemplate.update("UPDATE app_users SET nickname = ? WHERE id = ?", newNick, id);
-                    log.warn("[DBMigration] Renamed duplicate nickname '{}' -> '{}' for user id={}", oldNick, newNick, id);
+                    // Ошибка на одной строке не должна обрывать остальные дубли (прод 2026-09-24: «Максим_2» уже
+                    // существовал, UPDATE упал по уникальному индексу и миграция бросила ВСЕ оставшиеся дубли)
+                    try {
+                        String newNick = freeRenamedNickname(oldNick);
+                        jdbcTemplate.update("UPDATE app_users SET nickname = ? WHERE id = ?", newNick, id);
+                        log.warn("[DBMigration] Renamed duplicate nickname '{}' -> '{}' for user id={}", oldNick, newNick, id);
+                    } catch (Exception e) {
+                        log.error("[DBMigration] Could not rename duplicate nickname '{}' for user id={}: {}", oldNick, id, e.getMessage());
+                    }
                 }
             }
         } catch (Exception e) {
             log.error("[DBMigration] deduplicateNicknames failed: {}", e.getMessage());
         }
+    }
+
+    /** «Ник_2», «Ник_3», ... — первое имя, которого ещё нет в базе (без учёта регистра). */
+    private String freeRenamedNickname(String oldNick) {
+        for (int n = 2; n < 1000; n++) {
+            String candidate = oldNick + "_" + n;
+            Integer taken = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM app_users WHERE LOWER(nickname) = LOWER(?)", Integer.class, candidate);
+            if (taken == null || taken == 0) {
+                return candidate;
+            }
+        }
+        return oldNick + "_" + System.nanoTime();
     }
 
     private void addNicknameUniqueIndex() {
@@ -260,7 +279,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
                     "SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS " +
                     "WHERE UPPER(TABLE_NAME) = ? AND CONSTRAINT_TYPE = 'CHECK'",
                     String.class, table.toUpperCase());
-            log.error("[DBMigration] CHECK constraints on {}: {}", table, names);
+            log.info("[DBMigration] CHECK constraints on {}: {}", table, names);
             for (String name : names) {
                 jdbcTemplate.execute("ALTER TABLE " + table + " DROP CONSTRAINT \"" + name + "\"");
                 log.error("[DBMigration] Dropped constraint '{}' on {}", name, table);
