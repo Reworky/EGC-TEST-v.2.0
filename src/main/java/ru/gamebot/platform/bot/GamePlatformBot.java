@@ -9575,7 +9575,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case CANCELLED -> "🗑 Отменена";
         };
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        String recipientsLine = "";
         if (b.getStatus() == ru.gamebot.platform.domain.enums.ScheduledBroadcastStatus.PENDING) {
+            // Оценка на текущий момент — фактическое число на момент отправки может отличаться
+            // (регистрируются новые игроки), реальное число фиксируется в SENT.getDeliveredCount().
+            int estimatedRecipients = userService.allRegisteredUsers().size();
+            recipientsLine = "📊 Ожидаемых получателей: <b>" + estimatedRecipients + "</b>\n";
             rows.add(List.of(keyboardFactory.callback("📤 Отправить сейчас", "admin:broadcast:scheduled:sendnow:" + b.getId())));
             rows.add(List.of(keyboardFactory.callback("🗑 Отменить", "admin:broadcast:scheduled:cancel:" + b.getId())));
         }
@@ -9583,7 +9588,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "📅 <b>Запланированная рассылка</b>\n\n"
                         + "🕒 Время: <b>" + b.getScheduledAt().format(fmt) + " (UTC)</b>\n"
-                        + "📌 Статус: " + statusLine + "\n\n"
+                        + "📌 Статус: " + statusLine + "\n"
+                        + recipientsLine + "\n"
                         + content,
                 keyboardFactory.rowsLayout(rows));
     }
@@ -13475,8 +13481,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void handleBroadcast(AppUser user, UserSession session, String text) {
         session.getData().put("bcastText", text);
         session.setState(SessionState.BROADCAST_SCHEDULE_TIME);
+        int recipientCount = userService.allRegisteredUsers().size();
         sendText(user.getTelegramId(),
-                "🕒 Когда отправить рассылку?\n\nВведите дату и время в формате <code>ДД.ММ.ГГГГ ЧЧ:ММ</code> "
+                "📊 Получателей: <b>" + recipientCount + "</b> игроков.\n\n"
+                        + "🕒 Когда отправить рассылку?\n\nВведите дату и время в формате <code>ДД.ММ.ГГГГ ЧЧ:ММ</code> "
                         + "(время сервера — <b>UTC</b>), либо отправьте <b>0</b>, чтобы разослать прямо сейчас.",
                 backOrCancelKeyboard("broadcast:back"));
     }
@@ -13485,8 +13493,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         session.getData().put("bcastPhotoFileId", fileId);
         session.getData().put("bcastCaption", caption);
         session.setState(SessionState.BROADCAST_SCHEDULE_TIME);
+        int recipientCount = userService.allRegisteredUsers().size();
         sendText(user.getTelegramId(),
-                "🕒 Когда отправить рассылку?\n\nВведите дату и время в формате <code>ДД.ММ.ГГГГ ЧЧ:ММ</code> "
+                "📊 Получателей: <b>" + recipientCount + "</b> игроков.\n\n"
+                        + "🕒 Когда отправить рассылку?\n\nВведите дату и время в формате <code>ДД.ММ.ГГГГ ЧЧ:ММ</code> "
                         + "(время сервера — <b>UTC</b>), либо отправьте <b>0</b>, чтобы разослать прямо сейчас.",
                 backOrCancelKeyboard("broadcast:back"));
     }
