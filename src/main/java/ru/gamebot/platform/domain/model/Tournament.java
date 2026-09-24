@@ -51,4 +51,10 @@ public class Tournament {
 
     // null = no minimum enforced, turnir always proceeds to ACTIVE regardless of entry count
     private Integer minParticipants;
+
+    /** Черновик поста с итогами для канала, ждущий одобрения админа (null = ничего не ждёт). Хранится в БД,
+     * а не в памяти бота: иначе перезапуск на деплое терял карточку, а два завершившихся турнира подряд
+     * затирали друг друга. Очищается после публикации/отклонения. */
+    @Column(length = 4096) // лимит длины сообщения Telegram
+    private String resultsFeedText;
 }

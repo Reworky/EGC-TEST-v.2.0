@@ -171,10 +171,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * запрошенный рейтинг. */
     private volatile String pendingSquadTeaserText;
 
-    /** Итоги турнира, ждущие одобрения/правки администратора перед публикацией в канал (2026-09-14) —
-     * личные уведомления победителям при этом уходят сразу, без ожидания: приз уже зачислен, держать
-     * игрока в неведении о собственном результате не нужно, только сам пост в канал требует согласования. */
-    private volatile String pendingTournamentFeedText;
+    // Итоги турнира, ждущие одобрения админа, хранятся в Tournament.resultsFeedText (в БД) — личные уведомления
+    // победителям уходят сразу, без ожидания: приз уже зачислен, только пост в канал требует согласования.
 
     /** Итоги ежедневного розыгрыша билетов, ждущие одобрения/правки администратора перед публикацией
      * в канал (2026-09-14, см. WeeklyResetScheduler.drawDailyTicketRaffle) — билеты победителям уже
@@ -1970,9 +1968,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 if (target.equals("squad")) {
                     pendingSquadTeaserText = text.trim();
                     sendSquadFeedCard();
-                } else if (target.equals("tournament")) {
-                    pendingTournamentFeedText = text.trim();
-                    sendTournamentFeedCard();
+                } else if (target.startsWith("tournament:")) {
+                    long tid = parseLong(target.substring("tournament:".length()));
+                    saveTournamentFeedText(tid, text.trim());
+                    sendTournamentFeedCard(tid);
                 } else if (target.equals("ticketraffle")) {
                     pendingTicketRaffleFeedText = text.trim();
                     sendTicketRaffleFeedCard();
@@ -10220,39 +10219,47 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "❌ Отклонено");
             return;
         }
-        if (action.equals("tournament:approve")) {
-            String text = pendingTournamentFeedText;
-            if (text != null) {
-                try {
-                    SendMessage msg = new SendMessage();
-                    msg.setChatId(requiredChannelChatId());
-                    msg.setText(text);
-                    msg.setParseMode("HTML");
-                    execute(msg);
-                } catch (Exception e) {
-                    log.error("Failed to post approved tournament results to channel", e);
-                }
+        if (action.startsWith("tournament:")) {
+            // tournament:<approve|edit|reject>:<id>; кнопки старых карточек без id (до 2026-09-24) не поддерживаются
+            String[] parts = action.split(":");
+            if (parts.length < 3) {
+                clearInlineKeyboard(callbackQuery);
+                answer(callbackQuery.getId(), "Карточка устарела");
+                return;
             }
-            pendingTournamentFeedText = null;
-            clearInlineKeyboard(callbackQuery);
-            answer(callbackQuery.getId(), "✅ Опубликовано");
-            return;
-        }
-        if (action.equals("tournament:edit")) {
-            session.reset();
-            session.setState(SessionState.ADMINFEED_EDIT);
-            session.getData().put("editTarget", "tournament");
-            answerSilently(callbackQuery.getId());
-            sendText(user.getTelegramId(),
-                    "✏️ Текущий текст:\n\n" + (pendingTournamentFeedText != null ? pendingTournamentFeedText : "—")
-                            + "\n\nПришлите новый текст поста:",
-                    cancelKeyboard());
-            return;
-        }
-        if (action.equals("tournament:reject")) {
-            pendingTournamentFeedText = null;
-            clearInlineKeyboard(callbackQuery);
-            answer(callbackQuery.getId(), "❌ Отклонено");
+            String op = parts[1];
+            long tid = parseLong(parts[2]);
+            java.util.Optional<ru.gamebot.platform.domain.model.Tournament> tOpt = tournamentService.findById(tid);
+            String text = tOpt.map(ru.gamebot.platform.domain.model.Tournament::getResultsFeedText).orElse(null);
+            if (tOpt.isEmpty() || text == null) {
+                clearInlineKeyboard(callbackQuery);
+                answer(callbackQuery.getId(), "Пост уже обработан");
+                return;
+            }
+            if (op.equals("approve")) {
+                try {
+                    sendBannerAndText(requiredChannelChatId(), tOpt.get().getPhotoFileId(), text, null);
+                    saveTournamentFeedText(tid, null);
+                    clearInlineKeyboard(callbackQuery);
+                    answer(callbackQuery.getId(), "✅ Опубликовано");
+                } catch (Exception e) {
+                    // Черновик остаётся в БД — можно нажать ✅ ещё раз после исправления причины (права бота в канале и т.п.)
+                    log.error("Failed to post approved tournament results to channel, tournament {}", tid, e);
+                    answer(callbackQuery.getId(), "⚠️ Не удалось опубликовать, смотрите логи");
+                }
+            } else if (op.equals("edit")) {
+                session.reset();
+                session.setState(SessionState.ADMINFEED_EDIT);
+                session.getData().put("editTarget", "tournament:" + tid);
+                answerSilently(callbackQuery.getId());
+                sendText(user.getTelegramId(),
+                        "✏️ Текущий текст:\n\n" + text + "\n\nПришлите новый текст поста:",
+                        cancelKeyboard());
+            } else if (op.equals("reject")) {
+                saveTournamentFeedText(tid, null);
+                clearInlineKeyboard(callbackQuery);
+                answer(callbackQuery.getId(), "❌ Отклонено");
+            }
             return;
         }
         if (action.equals("ticketraffle:approve")) {
@@ -12086,41 +12093,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         boolean isBrawl = t.getScoringType() == ru.gamebot.platform.domain.model.Tournament.ScoringType.BRAWL_TROPHIES;
 
-        StringBuilder sb = new StringBuilder("🏆 <b>Итоги турнира — " + escape(t.getName()) + "</b>\n\n");
-        long pool = t.getPrizePoolExc();
-        sb.append("🏅 Призовой фонд: <b>" + pool + " EXC</b>\n");
-        sb.append("👥 Участников: <b>" + entries.size() + "</b>\n\n");
-
-        String[] medals = {"🥇", "🥈", "🥉"};
-        for (int i = 0; i < Math.min(10, entries.size()); i++) {
-            ru.gamebot.platform.domain.model.TournamentEntry e = entries.get(i);
-            String medal = i < 3 ? medals[i] : (i + 1) + ".";
-            String nick = e.getUser().getNickname() != null ? e.getUser().getNickname() : "—";
-            String username = e.getUser().getTelegramUsername();
-            sb.append(medal).append(" <b>").append(escape(nick)).append("</b>");
-            if (username != null) sb.append(" (@").append(username).append(")");
-            // Показатель по которому реально ранжировали — трофеи (Brawl) или квесты, а не только
-            // призовые места без цифр (запрошено 2026-09-14: "не указывается, сколько кубков набрал").
-            if (isBrawl) {
-                boolean scored = e.getSnapshotStatus() == ru.gamebot.platform.domain.model.TournamentEntry.SnapshotStatus.OK
-                        && !e.isDisqualified() && e.getTrophiesStart() != null && e.getTrophiesEnd() != null;
-                if (scored) {
-                    int delta = e.getTrophiesEnd() - e.getTrophiesStart();
-                    sb.append(" — 🏆 ").append(delta >= 0 ? "+" : "").append(delta).append(" трофеев");
-                }
-            } else {
-                long questScore = tournamentService.questScoreDuring(t, e.getUser());
-                sb.append(" — 🎯 ").append(questScore).append(" ").append(pluralQuests(questScore));
-            }
-            if (e.getPrizeExc() > 0) sb.append(" — <b>+").append(e.getPrizeExc()).append(" EXC</b>");
-            sb.append("\n");
-        }
-        sb.append("\nПоздравляем победителей! 🎮\nСледите за новыми турнирами → @").append(getBotUsername());
-
         // Публикация в канал — только после одобрения администратора (см. handleAdminFeedAction).
         // Личные уведомления победителям ниже уходят сразу и от этого не зависят.
-        pendingTournamentFeedText = sb.toString();
-        sendTournamentFeedCard();
+        try {
+            saveTournamentFeedText(t.getId(), buildTournamentResultsPost(t, entries));
+            sendTournamentFeedCard(t.getId());
+        } catch (Exception ex) {
+            log.error("Failed to prepare tournament results post for tournament {}", t.getId(), ex);
+        }
 
         // Notify each prize winner in private (Brawl tournaments also notify non-winners with their result)
         for (ru.gamebot.platform.domain.model.TournamentEntry e : entries) {
@@ -14162,21 +14142,111 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    private void sendTournamentFeedCard() {
-        String text = pendingTournamentFeedText;
-        if (text == null) return;
-        String preview = "🧾 <b>Итоги турнира — на согласование</b>\n\n" + text;
+    private void saveTournamentFeedText(long tournamentId, String text) {
+        tournamentService.findById(tournamentId).ifPresent(t -> {
+            t.setResultsFeedText(text);
+            tournamentService.save(t);
+        });
+    }
+
+    /** Карточка «итоги турнира — на согласование»: тот же пост, что уйдёт в канал, вместе с баннером турнира. */
+    private void sendTournamentFeedCard(long tournamentId) {
+        ru.gamebot.platform.domain.model.Tournament t = tournamentService.findById(tournamentId).orElse(null);
+        if (t == null || t.getResultsFeedText() == null) return;
+        String preview = "🧾 <b>Итоги турнира - на согласование</b>\n\n" + t.getResultsFeedText();
         InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
-                keyboardFactory.callback("✅ Опубликовать", "adminfeed:tournament:approve"),
-                keyboardFactory.callback("✏️ Изменить", "adminfeed:tournament:edit"),
-                keyboardFactory.callback("❌ Отклонить", "adminfeed:tournament:reject")));
+                keyboardFactory.callback("✅ Опубликовать", "adminfeed:tournament:approve:" + tournamentId),
+                keyboardFactory.callback("✏️ Изменить", "adminfeed:tournament:edit:" + tournamentId),
+                keyboardFactory.callback("❌ Отклонить", "adminfeed:tournament:reject:" + tournamentId)));
         for (Long adminId : adminService.resolvedAdminIds()) {
             try {
-                sendText(adminId, preview, markup);
+                sendBannerAndText(adminId.toString(), t.getPhotoFileId(), preview, markup);
             } catch (Exception e) {
                 log.warn("Failed to send tournament results candidate to admin {}", adminId, e);
             }
         }
+    }
+
+    /** Лимит подписи к фото в Telegram — 1024 видимых символа (без HTML-тегов). */
+    private static final int PHOTO_CAPTION_LIMIT = 1024;
+
+    /** Отправляет пост с баннером: если текст помещается в подпись — одним сообщением «фото + подпись» (кнопки
+     * на нём же), иначе сначала фото без подписи, затем текст с кнопками. Без баннера или при ошибке фото
+     * (устаревший file_id) уходит просто текст. Ошибку отправки текста пробрасывает вызывающему. */
+    private void sendBannerAndText(String chatId, String photoFileId, String html, InlineKeyboardMarkup keyboard)
+            throws TelegramApiException {
+        if (photoFileId != null && !photoFileId.isBlank()) {
+            String visible = html.replaceAll("<[^>]+>", "").replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&");
+            boolean fits = visible.length() <= PHOTO_CAPTION_LIMIT;
+            try {
+                SendPhoto photo = new SendPhoto();
+                photo.setChatId(chatId);
+                photo.setPhoto(new InputFile(photoFileId));
+                if (fits) {
+                    photo.setCaption(html);
+                    photo.setParseMode("HTML");
+                    photo.setReplyMarkup(keyboard);
+                }
+                execute(photo);
+                if (fits) return;
+            } catch (TelegramApiException e) {
+                log.warn("Failed to send tournament banner to {}, falling back to text only", chatId, e);
+            }
+        }
+        SendMessage msg = new SendMessage();
+        msg.setChatId(chatId);
+        msg.setText(html);
+        msg.setParseMode("HTML");
+        msg.setDisableWebPagePreview(true);
+        msg.setReplyMarkup(keyboard);
+        execute(msg);
+    }
+
+    /** Пост «турнир завершён» для канала в стиле Экси: строчный заголовок, предложения с заглавной, без длинного
+     * тире, концовка чередуется по id турнира (вопрос / реакция / обычная), в конце ссылка на бота. */
+    private String buildTournamentResultsPost(ru.gamebot.platform.domain.model.Tournament t,
+                                              List<ru.gamebot.platform.domain.model.TournamentEntry> entries) {
+        boolean isBrawl = t.getScoringType() == ru.gamebot.platform.domain.model.Tournament.ScoringType.BRAWL_TROPHIES;
+        boolean anyHeld = entries.stream().anyMatch(ru.gamebot.platform.domain.model.TournamentEntry::isPayoutHeld);
+        java.util.function.LongFunction<String> exc = n -> String.format(java.util.Locale.forLanguageTag("ru"), "%,d", n);
+
+        StringBuilder sb = new StringBuilder("🏆 <b>турнир «" + escape(t.getName()) + "» завершён</b>\n\n");
+        sb.append("Подвели итоги. Участников: <b>").append(entries.size())
+          .append("</b>, призовой фонд: <b>").append(exc.apply(t.getPrizePoolExc())).append(" EXC</b>.\n\n");
+
+        String[] medals = {"🥇", "🥈", "🥉"};
+        for (int i = 0; i < Math.min(10, entries.size()); i++) {
+            ru.gamebot.platform.domain.model.TournamentEntry e = entries.get(i);
+            String nick = e.getUser().getNickname() != null ? e.getUser().getNickname() : "Игрок";
+            sb.append(i < 3 ? medals[i] : (i + 1) + ".").append(" <b>").append(escape(nick)).append("</b>");
+            if (e.getUser().getTelegramUsername() != null) sb.append(" (@").append(e.getUser().getTelegramUsername()).append(")");
+            // Показатель, по которому ранжировали: трофеи (Brawl) или квесты (запрошено 2026-09-14)
+            if (isBrawl) {
+                boolean scored = e.getSnapshotStatus() == ru.gamebot.platform.domain.model.TournamentEntry.SnapshotStatus.OK
+                        && !e.isDisqualified() && e.getTrophiesStart() != null && e.getTrophiesEnd() != null;
+                if (scored) {
+                    int delta = e.getTrophiesEnd() - e.getTrophiesStart();
+                    sb.append(" - ").append(delta >= 0 ? "+" : "").append(delta).append(" 🏆");
+                }
+            } else {
+                long questScore = tournamentService.questScoreDuring(t, e.getUser());
+                sb.append(" - 🎯 ").append(questScore).append(" ").append(pluralQuests(questScore));
+            }
+            if (e.getPrizeExc() > 0) sb.append(" - <b>+").append(exc.apply(e.getPrizeExc())).append(" EXC</b>");
+            sb.append("\n");
+        }
+
+        sb.append("\n").append(anyHeld
+                ? "Часть призов проходит проверку и будет зачислена позже. "
+                : "Призы уже на балансах победителей. ");
+        sb.append(switch ((int) (t.getId() % 3)) {
+            case 0 -> "Кто уже готовится к следующему турниру?";
+            case 1 -> "Ставь 🔥, если участвовал.";
+            default -> "Спасибо всем, кто сыграл. Следующий турнир уже скоро.";
+        });
+        sb.append("\n\n🎮 Все турниры - в нашем боте: <a href=\"https://t.me/").append(getBotUsername())
+          .append("\">@").append(getBotUsername()).append("</a>");
+        return sb.toString();
     }
 
     /** Ежедневный розыгрыш билетов колеса фортуны — см. WeeklyResetScheduler.drawDailyTicketRaffle.
