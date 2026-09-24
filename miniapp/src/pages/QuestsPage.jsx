@@ -378,8 +378,13 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
           {(details[q.id]?.rewardDiminished ?? q.rewardDiminished) && (
             <div className="quest-limit-note">{weeklyLimitText(q, details[q.id])}</div>
           )}
-          {details[q.id]?.egcPassBonusCoins > 0 && (
-            <div className="quest-egc-note">⭐ EGC Pass: +{details[q.id].egcPassBonusCoins.toLocaleString()} EXC сверху к награде (бонус +10%)</div>
+          {(details[q.id]?.egcPassBonusCoins > 0 || details[q.id]?.egcPassBonusXp > 0) && (
+            <div className="quest-egc-note">
+              ⭐ EGC Pass сверху к награде:{' '}
+              {details[q.id].egcPassBonusCoins > 0 && `+${details[q.id].egcPassBonusCoins.toLocaleString()} EXC (+10%)`}
+              {details[q.id].egcPassBonusCoins > 0 && details[q.id].egcPassBonusXp > 0 && ', '}
+              {details[q.id].egcPassBonusXp > 0 && `+${details[q.id].egcPassBonusXp.toLocaleString()} XP (+5%)`}
+            </div>
           )}
           {details[q.id]?.egcPassBoostExhausted && (
             <div className="quest-egc-note">⭐ EGC Pass: бонус +10% за этот месяц исчерпан — вернётся 1-го числа</div>

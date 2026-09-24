@@ -849,7 +849,11 @@ public class QuestService {
                 .toList();
     }
 
-    public record RewardPreview(long xp, long coins, boolean diminished, boolean xpBoosted, long egcPassBonusCoins) {
+    /** boostBonusCoins — сколько EXC добавили EXC-бусты (личный + глобальный), egcPassBonusCoins/egcPassXpBonus —
+     *  бонусы подписки EGC Pass. Все три уже включены в coins/xp; нужны отдельно, чтобы показать игроку
+     *  бонус подписки и не списывать со спонсорского бюджета то, что клуб платит из своего кармана. */
+    public record RewardPreview(long xp, long coins, boolean diminished, boolean xpBoosted,
+                                long egcPassBonusCoins, long egcPassXpBonus, long boostBonusCoins) {
     }
 
     /** Состояние недельного лимита (правило 3.4): сколько квестов этой игры+категории игрок одобрил за
@@ -911,7 +915,8 @@ public class QuestService {
         // Apply EXC boost — личный купленный (SinkShop) складывается с глобальным временным
         // (см. QuestRewardBoostEvent, например буст выходных) аддитивно, не заменяет один другой.
         int excBoostPct = sinkShopService.getBoostPercent(user) + questRewardBoostService.currentBoostPercent();
-        adjustedCoins = adjustedCoins + (adjustedCoins * excBoostPct / 100);
+        long boostBonusCoins = adjustedCoins * excBoostPct / 100;
+        adjustedCoins = adjustedCoins + boostBonusCoins;
 
         // EGC Pass: +10% к награде отдельно от прочих бустов, с помесячным потолком (см. UserService.
         // egcPassBoostRemainingThisMonth) — иначе активный фармер получает от процента в разы больше
@@ -933,12 +938,20 @@ public class QuestService {
                     .map(Season -> Season.getXpBoostPercent()).orElse(0);
             xpBoostPct += seasonBoost;
         }
+        // EGC Pass: небольшой XP-буст для подписчиков (аддитивно к остальным), см. UserService.EGC_PASS_XP_BOOST_PCT.
+        int egcXpPct = userService.isEgcPassActive(user) ? UserService.EGC_PASS_XP_BOOST_PCT : 0;
+        xpBoostPct += egcXpPct;
         // Порядок как у монет выше: сначала кривая убывания (repeatableNoCooldown-квесты), потом
         // проценты буста уже от осевшего значения — не от номинала.
         long decayedXp = Math.max(1, Math.round(baseXp * xpDecayFactor));
         long adjustedXp = decayedXp + (decayedXp * xpBoostPct / 100);
+        // Доля именно подписки — разность с расчётом без неё (у обоих целочисленное деление, так что сумма сходится).
+        long egcPassXpBonus = egcXpPct > 0
+                ? (decayedXp * xpBoostPct / 100) - (decayedXp * (xpBoostPct - egcXpPct) / 100)
+                : 0;
 
-        return new RewardPreview(adjustedXp, adjustedCoins, diminished, xpBoostPct > 0, egcPassBonusCoins);
+        return new RewardPreview(adjustedXp, adjustedCoins, diminished, xpBoostPct > 0,
+                egcPassBonusCoins, egcPassXpBonus, boostBonusCoins);
     }
 
     public record XpOverpayEntry(AppUser user, long overpayXp, int affectedSubmissions) {}
@@ -1155,6 +1168,7 @@ public class QuestService {
         submission.setAwardedCoins(adjustedCoins);
         submission.setAwardedXp(adjustedXp);
         submission.setAwardedEgcPassBonusCoins(reward.egcPassBonusCoins());
+        submission.setAwardedEgcPassBonusXp(reward.egcPassXpBonus());
 
         // 3.5 3000 EXC bonus on first quest (before completedQuests increment)
         userService.grantFirstQuestReferralBonus(user);
@@ -1179,7 +1193,11 @@ public class QuestService {
 
         // Track sponsored quest spend
         if (quest.isSponsored() && quest.getSponsorId() != null) {
-            sponsorService.recordSpend(quest.getSponsorId(), adjustedCoins);
+            // Спонсору засчитываем только награду за квест (после недельного снижения): бонус подписки EGC Pass
+            // и EXC-бусты клуб платит из своего кармана (уровневый бонус сюда и раньше не входил) — иначе бюджет
+            // спонсора тратился бы на привилегии, которых он не покупал.
+            sponsorService.recordSpend(quest.getSponsorId(),
+                    Math.max(0, adjustedCoins - reward.egcPassBonusCoins() - reward.boostBonusCoins()));
         }
 
         // 3.5 Referral bonus: 10% of EXC earned by referred in first 30 days

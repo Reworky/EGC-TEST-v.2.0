@@ -4654,12 +4654,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!userService.isEgcPassActive(user)) {
             return "";
         }
-        long bonus = questService.computeReward(user, quest).egcPassBonusCoins();
-        if (bonus > 0) {
-            return "\n⭐ <i>EGC Pass: +" + bonus + " EXC сверху к награде (бонус +10%)</i>";
+        QuestService.RewardPreview preview = questService.computeReward(user, quest);
+        long bonus = preview.egcPassBonusCoins();
+        long bonusXp = preview.egcPassXpBonus();
+        if (bonus > 0 || bonusXp > 0) {
+            return "\n⭐ <i>EGC Pass сверху к награде: "
+                    + (bonus > 0 ? "+" + bonus + " EXC (+10%)" : "")
+                    + (bonus > 0 && bonusXp > 0 ? ", " : "")
+                    + (bonusXp > 0 ? "+" + bonusXp + " XP (+5%)" : "")
+                    + "</i>";
         }
         if (userService.egcPassBoostRemainingThisMonth(user) <= 0) {
-            return "\n⭐ <i>EGC Pass: бонус +10% за этот месяц исчерпан — вернётся 1-го числа</i>";
+            return "\n⭐ <i>EGC Pass: бонус EXC +10% за этот месяц исчерпан — вернётся 1-го числа</i>";
         }
         return "";
     }
@@ -6340,7 +6346,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "Доп. слот квеста — навсегда", PERMANENT_SLOT_STARS_PRICE),
             "starsitem:EGC_PASS", new StarsItemSpec(
                     "EGC Pass — подписка на 30 дней",
-                    "+10% к EXC за все квесты (до 10 000 EXC бонуса в месяц) + доп. слот квеста + бесплатный улучшенный сундук каждый день + приоритет в очереди на вывод + статус-бейдж в профиле. Автопродление каждые 30 дней, отменить можно в любой момент через настройки платежей Telegram.",
+                    "+10% EXC и +5% XP за квесты (бонус EXC до 10 000/мес), доп. слот квеста, бесплатный улучшенный сундук, приоритет на вывод, бейдж в профиле. Автопродление каждые 30 дней, отмена в любой момент в настройках платежей Telegram.",
                     "EGC Pass (30 дней)", EGC_PASS_STARS_PRICE, EGC_PASS_SUBSCRIPTION_PERIOD_SECONDS),
             "starsitem:STREAK_RESTORE", new StarsItemSpec(
                     "Восстановление серии входов",
@@ -6394,6 +6400,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "⭐ <b>EGC Pass — 30 дней</b>\n\n"
                         + "✨ +10% к EXC за все квесты (до 10 000 EXC бонуса в месяц)\n"
+                        + "📈 +5% к XP за все квесты\n"
                         + "📂 Доп. слот квеста (как «навсегда», пока подписка активна)\n"
                         + "🎁 Бесплатный улучшенный сундук каждый день — без реролла за 15⭐\n"
                         + "⚡ Приоритет в очереди на вывод EXC\n"
@@ -6705,7 +6712,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String until = user.getEgcPassActiveUntil().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"));
             sendText(telegramId,
                     "✅ <b>EGC Pass активирован!</b>\n\nДействует до <b>" + until + "</b>, дальше продлится автоматически.\n\n"
-                            + "+10% к EXC за квесты, доп. слот, бесплатный улучшенный сундук каждый день и приоритет на вывод уже включены — спасибо, что поддержали проект.",
+                            + "+10% к EXC и +5% к XP за квесты, доп. слот, бесплатный улучшенный сундук каждый день и приоритет на вывод уже включены — спасибо, что поддержали проект.",
                     backMenuKeyboard("menu:main"));
         } else if ("starsitem:STREAK_RESTORE".equals(payload)) {
             // hasRestorableStreak уже проверен в pre-checkout (alreadyOwnedRejectReason) — деньги ещё
@@ -11760,7 +11767,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "дальше продлится автоматически. Отменить можно в настройках платежей Telegram.";
         }
         return "⭐ <b>EGC Pass</b> — подписка " + EGC_PASS_STARS_PRICE + " ⭐ / 30 дней\n"
-                + "+10% EXC за квесты, улучшенный ежедневный сундук, доп. слот квеста, донат по закупочной цене, "
+                + "+10% EXC и +5% XP за квесты, улучшенный ежедневный сундук, доп. слот квеста, донат по закупочной цене, "
                 + "приоритет в очереди на вывод. Пока не оформлена — оформить можно кнопкой ниже.";
     }
 
@@ -13783,8 +13790,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  подписка вообще сработала. */
     private String egcPassBonusLine(QuestSubmission approved) {
         long bonus = approved.getAwardedEgcPassBonusCoins() != null ? approved.getAwardedEgcPassBonusCoins() : 0;
-        if (bonus > 0) {
-            return "⭐ Бонус EGC Pass: <b>+" + bonus + " EXC</b> (уже включён в сумму)\n";
+        long bonusXp = approved.getAwardedEgcPassBonusXp() != null ? approved.getAwardedEgcPassBonusXp() : 0;
+        if (bonus > 0 || bonusXp > 0) {
+            return "⭐ Бонус EGC Pass: <b>"
+                    + (bonus > 0 ? "+" + bonus + " EXC" : "")
+                    + (bonus > 0 && bonusXp > 0 ? ", " : "")
+                    + (bonusXp > 0 ? "+" + bonusXp + " XP" : "")
+                    + "</b> (уже включён в сумму)\n";
         }
         AppUser player = approved.getUser();
         if (userService.isEgcPassActive(player) && userService.egcPassBoostRemainingThisMonth(player) <= 0) {

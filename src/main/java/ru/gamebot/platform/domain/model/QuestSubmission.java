@@ -96,6 +96,10 @@ public class QuestSubmission {
     @Column(nullable = true)
     private Long awardedEgcPassBonusCoins;
 
+    /** То же для XP: сколько из awardedXp добавил бонус подписки EGC Pass (+5% XP, уже включён в awardedXp). */
+    @Column(nullable = true)
+    private Long awardedEgcPassBonusXp;
+
     /** Флаг: уведомление «2 часа до дедлайна» уже отправлено. */
     @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean deadlineWarningSent;

@@ -330,8 +330,10 @@ public class QuestController {
                 builder.weeklyLimit(weekly.limit());
                 builder.weeklyCompleted(weekly.completed());
                 if (userService.isEgcPassActive(user)) {
-                    long egcBonus = questService.computeReward(user, quest).egcPassBonusCoins();
+                    QuestService.RewardPreview egcPreview = questService.computeReward(user, quest);
+                    long egcBonus = egcPreview.egcPassBonusCoins();
                     builder.egcPassBonusCoins(egcBonus);
+                    builder.egcPassBonusXp(egcPreview.egcPassXpBonus());
                     builder.egcPassBoostExhausted(egcBonus <= 0 && userService.egcPassBoostRemainingThisMonth(user) <= 0);
                 }
                 QuestSubmission latest = questService.getLatestSubmission(user, quest);
