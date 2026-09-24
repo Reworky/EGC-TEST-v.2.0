@@ -268,9 +268,9 @@ export default function WheelPage() {
         <div className="wheel-section-title">Как получить билеты 🎟</div>
         <div className="wheel-tickets-grid">
           {[
-            { icon: '🗺️', title: 'Лёгкий квест', sub: '+1 билет' },
-            { icon: '⚔️', title: 'Средний квест', sub: '+2 билета' },
-            { icon: '🏆', title: 'Сложный квест', sub: '+3 билета' },
+            { icon: '🎯', title: 'Выполнить квест', sub: 'см. на карточке квеста' },
+            { icon: '🎁', title: 'Сундук дня', sub: 'шанс 8% (в боте)' },
+            { icon: '🍀', title: 'Розыгрыш дня', sub: '3–5 активных игроков' },
             { icon: '🔥', title: '3 дня подряд',  sub: '+1 билет' },
             { icon: '💥', title: '7 дней подряд', sub: '+2 билета' },
             { icon: '⭐', title: '14 дней подряд', sub: '+3 билета' },
