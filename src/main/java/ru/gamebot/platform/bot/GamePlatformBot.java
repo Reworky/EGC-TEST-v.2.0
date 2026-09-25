@@ -136,6 +136,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.AnalyticsService analyticsService;
     private final ru.gamebot.platform.service.FinanceService financeService;
     private final ru.gamebot.platform.service.AlertService alertService;
+    private final ru.gamebot.platform.service.AdvertiserService advertiserService;
     private final ru.gamebot.platform.domain.repository.IncidentEntryRepository incidentEntryRepository;
     private final ru.gamebot.platform.service.PollService pollService;
     private final ru.gamebot.platform.service.TournamentService tournamentService;
@@ -1961,6 +1962,53 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 userService.save(user);
                 session.setState(SessionState.NONE);
                 sendProfileEdit(user);
+            }
+            case ADV_INPUT -> {
+                String advKey = session.getData().getOrDefault("adv_key", "");
+                String raw = text.trim();
+                java.time.format.DateTimeFormatter advFmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
+                try {
+                    if (advKey.equals("views")) {
+                        long views = Long.parseLong(raw.replaceAll("[^0-9]", ""));
+                        advertiserService.set(ru.gamebot.platform.service.AdvertiserService.K_AVG_VIEWS, String.valueOf(views));
+                        session.setState(SessionState.NONE);
+                        sendAdvManual(user);
+                    } else if (advKey.equals("geo") || advKey.equals("dev")) {
+                        advertiserService.set(advKey.equals("geo") ? ru.gamebot.platform.service.AdvertiserService.K_GEO
+                                : ru.gamebot.platform.service.AdvertiserService.K_DEVICES, raw.length() > 300 ? raw.substring(0, 300) : raw);
+                        session.setState(SessionState.NONE);
+                        sendAdvManual(user);
+                    } else if (advKey.equals("camp")) {
+                        String[] f = raw.split(";");
+                        if (f.length < 4) throw new IllegalArgumentException("fields");
+                        java.time.LocalDate start = java.time.LocalDate.parse(f[1].trim(), advFmt);
+                        java.time.LocalDate end = java.time.LocalDate.parse(f[2].trim(), advFmt);
+                        long budget = Long.parseLong(f[3].trim().replaceAll("[^0-9]", ""));
+                        String code = f.length > 4 ? f[4].trim() : "";
+                        Long imp = null;
+                        if (f.length > 5 && !f[5].trim().isEmpty() && !f[5].trim().equals("-")) imp = Long.parseLong(f[5].trim().replaceAll("[^0-9]", ""));
+                        if (f[0].trim().isEmpty() || end.isBefore(start)) throw new IllegalArgumentException("values");
+                        advertiserService.addCampaign(f[0].trim(), start, end, code, budget, imp);
+                        session.setState(SessionState.NONE);
+                        sendAdvCampaigns(user);
+                    } else if (advKey.startsWith("imp:")) {
+                        long id = Long.parseLong(advKey.substring("imp:".length()));
+                        advertiserService.setImpressions(id, Long.parseLong(raw.replaceAll("[^0-9]", "")));
+                        session.setState(SessionState.NONE);
+                        sendAdvCampaigns(user);
+                    } else if (advKey.equals("price")) {
+                        String[] f = raw.split(";");
+                        if (f.length < 2 || f[0].trim().isEmpty()) throw new IllegalArgumentException("fields");
+                        advertiserService.addPrice(f[0].trim(), Long.parseLong(f[1].trim().replaceAll("[^0-9]", "")), f.length > 2 ? f[2].trim() : "");
+                        session.setState(SessionState.NONE);
+                        sendAdvPrices(user);
+                    } else {
+                        session.setState(SessionState.NONE);
+                        sendAdvertiserHome(user);
+                    }
+                } catch (Exception e) {
+                    sendText(user.getTelegramId(), "❌ Не удалось разобрать ввод. Проверьте формат по примеру выше и отправьте ещё раз.", cancelKeyboard());
+                }
             }
             case AN_RANGE_INPUT -> {
                 java.util.regex.Matcher rm = java.util.regex.Pattern
@@ -8605,6 +8653,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case "advstats" -> sendAdminAdvertiserStats(user);
             case "an" -> sendAnalyticsHome(user);
+            case "adv" -> sendAdvertiserHome(user);
             case "stats:reset_weekly" -> sendAdminResetWeeklyConfirm(user);
             case "stats:reset_weekly:confirm" -> doAdminResetWeeklyXp(user);
             case "live" -> sendAdminLiveStatus(user);
@@ -8962,6 +9011,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     gameCatalogService.removePhoto(gameName);
                     answer(callbackQuery.getId(), "Фото удалено");
                     sendAdminQuestCategories(user, gameName);
+                    return;
+                } else if (action.startsWith("adv:")) {
+                    handleAdvertiserAction(user, session, action.substring("adv:".length()));
+                    answerSilently(callbackQuery.getId());
                     return;
                 } else if (action.startsWith("an:")) {
                     handleAnalyticsAction(callbackQuery, user, session, action.substring("an:".length()));
@@ -11462,6 +11515,187 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         List.of(keyboardFactory.callback("⬅️ Назад", "admin:stats"),
                                 keyboardFactory.callback("🏠 Меню", "menu:main"))
                 )));
+    }
+
+    // ─── Раздел «Рекламодателям» (ТЗ «EGC - Метрики и медиа-кит для рекламодателей») ───
+
+    /** Подписчики канала из Bot API; при ошибке - последнее запомненное значение (или null). */
+    private Long fetchChannelSubscribers() {
+        try {
+            org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMemberCount req =
+                    new org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMemberCount();
+            req.setChatId(requiredChannelChatId());
+            Integer n = execute(req);
+            if (n != null) {
+                advertiserService.rememberSubscribers(n);
+                return n.longValue();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to read channel subscribers count", e);
+        }
+        return advertiserService.cachedSubscribers();
+    }
+
+    private void sendAdvertiserHome(AppUser user) {
+        sendText(user.getTelegramId(),
+                "📣 <b>Рекламодателям</b>\n\nВитрина метрик, история размещений, прайс-лист и медиа-кит для отправки клиенту. "
+                        + "Отдельно от внутренней «Аналитики»: здесь только то, что показывают рекламодателю.",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("📊 Витрина метрик", "admin:adv:show")),
+                        List.of(keyboardFactory.callback("📢 Кампании", "admin:adv:camp"), keyboardFactory.callback("💵 Прайс-лист", "admin:adv:price")),
+                        List.of(keyboardFactory.callback("📄 Медиа-кит (файл)", "admin:adv:kit")),
+                        List.of(keyboardFactory.callback("🔗 Публичная ссылка", "admin:adv:link")),
+                        List.of(keyboardFactory.callback("✏️ Данные вручную", "admin:adv:manual")),
+                        List.of(keyboardFactory.callback("📊 Краткая сводка (прежняя)", "admin:advstats")),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")))));
+    }
+
+    private void handleAdvertiserAction(AppUser user, UserSession session, String action) {
+        String[] p = action.split(":");
+        switch (p[0]) {
+            case "show" -> {
+                String text = advertiserService.showcaseText(fetchChannelSubscribers());
+                sendText(user.getTelegramId(), text.length() > 3900 ? text.substring(0, 3890) + "…" : text,
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("🔄 Обновить", "admin:adv:show"), keyboardFactory.callback("📄 Медиа-кит", "admin:adv:kit")),
+                                List.of(keyboardFactory.callback("⬅️ Назад", "admin:adv")))));
+            }
+            case "camp" -> {
+                if (p.length > 1 && p[1].equals("add")) {
+                    session.getData().put("adv_key", "camp");
+                    session.setState(SessionState.ADV_INPUT);
+                    sendText(user.getTelegramId(),
+                            "📢 <b>Новая кампания</b>\n\nОтправьте одной строкой, поля через «;»:\n"
+                                    + "<code>Рекламодатель или площадка; ДД.ММ.ГГГГ; ДД.ММ.ГГГГ; бюджет ₽; код источника; просмотры поста</code>\n\n"
+                                    + "Пример:\n<code>Telega.io, канал X; 01.10.2026; 03.10.2026; 5000; b3a1f9; 12000</code>\n\n"
+                                    + "Код источника - из «📈 Трафик» (по нему считается, сколько пришло и дошло до 1-го квеста); если ссылки нет, поставьте «-». "
+                                    + "Просмотры поста нужны для CTR, их можно указать позже.",
+                            cancelKeyboard());
+                } else if (p.length > 2 && p[1].equals("del")) {
+                    Long id = parseLong(p[2]);
+                    if (id != null) advertiserService.deleteCampaign(id);
+                    sendAdvCampaigns(user);
+                } else if (p.length > 2 && p[1].equals("imp")) {
+                    session.getData().put("adv_key", "imp:" + p[2]);
+                    session.setState(SessionState.ADV_INPUT);
+                    sendText(user.getTelegramId(), "👁 Введите число просмотров рекламного поста (для расчёта CTR):", cancelKeyboard());
+                } else {
+                    sendAdvCampaigns(user);
+                }
+            }
+            case "price" -> {
+                if (p.length > 1 && p[1].equals("add")) {
+                    session.getData().put("adv_key", "price");
+                    session.setState(SessionState.ADV_INPUT);
+                    sendText(user.getTelegramId(),
+                            "💵 <b>Новая строка прайс-листа</b>\n\nОтправьте одной строкой: <code>Тип размещения; цена ₽; условия</code>\n\n"
+                                    + "Пример:\n<code>Пост в канале; 3000; 24 часа в ленте, без удаления</code>",
+                            cancelKeyboard());
+                } else if (p.length > 2 && p[1].equals("del")) {
+                    Long id = parseLong(p[2]);
+                    if (id != null) advertiserService.deletePrice(id);
+                    sendAdvPrices(user);
+                } else {
+                    sendAdvPrices(user);
+                }
+            }
+            case "kit" -> {
+                String html = advertiserService.mediaKitHtml(fetchChannelSubscribers(), false);
+                sendCsvDocument(user.getTelegramId(), html, "egc_mediakit_" + java.time.LocalDate.now() + ".html",
+                        "📄 Медиа-кит на " + java.time.LocalDate.now() + ". Откройте файл в браузере; «Печать → Сохранить как PDF» даст готовый PDF для клиента.");
+            }
+            case "link" -> {
+                fetchChannelSubscribers(); // свежее число подписчиков для публичной страницы
+                String url = p.length > 1 && p[1].equals("new") ? null : advertiserService.publicUrl();
+                if (url == null) {
+                    advertiserService.regenerateToken();
+                    url = advertiserService.publicUrl();
+                }
+                sendText(user.getTelegramId(),
+                        "🔗 <b>Публичная ссылка на медиа-кит</b>\n\n<code>" + url + "</code>\n\n"
+                                + "Открывается без входа в админку. В облегчённой версии нет бюджетов кампаний. Число подписчиков обновляется, когда вы "
+                                + "открываете этот экран или витрину. Если ссылка попала не туда, выпустите новую: старая перестанет работать.",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("🔄 Выпустить новую ссылку", "admin:adv:link:new")),
+                                List.of(keyboardFactory.callback("⬅️ Назад", "admin:adv")))));
+            }
+            case "manual" -> sendAdvManual(user);
+            case "set" -> {
+                String key = p.length > 1 ? p[1] : "";
+                String prompt = switch (key) {
+                    case "views" -> "👁 Введите среднее число просмотров поста (по последним 10-20 постам, из Telegram-аналитики канала):";
+                    case "geo" -> "🌍 Введите язык/гео аудитории текстом (например: «русский 92%, украинский 4%; РФ, Казахстан, Беларусь»):";
+                    case "dev" -> "📱 Введите разбивку устройств текстом (например: «Android 68%, iOS 30%, десктоп 2%»):";
+                    default -> null;
+                };
+                if (prompt == null) {
+                    sendAdvManual(user);
+                } else {
+                    session.getData().put("adv_key", key);
+                    session.setState(SessionState.ADV_INPUT);
+                    sendText(user.getTelegramId(), prompt, cancelKeyboard());
+                }
+            }
+            default -> sendAdvertiserHome(user);
+        }
+    }
+
+    private void sendAdvCampaigns(AppUser user) {
+        List<ru.gamebot.platform.service.AdvertiserService.CampaignResult> results = advertiserService.campaignResults();
+        java.time.format.DateTimeFormatter f = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
+        StringBuilder sb = new StringBuilder("📢 <b>Кампании</b> (" + results.size() + ")\n\n");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (results.isEmpty()) sb.append("Кампаний пока нет: добавьте первую, история копится для переговоров о цене.\n");
+        int shown = 0;
+        for (ru.gamebot.platform.service.AdvertiserService.CampaignResult r : results) {
+            if (shown++ >= 12) break;
+            ru.gamebot.platform.domain.model.AdCampaign c = r.campaign();
+            sb.append("• <b>").append(escape(c.getAdvertiser())).append("</b>\n   ")
+              .append(c.getStartDate() != null ? c.getStartDate().format(f) : "").append(" - ").append(c.getEndDate() != null ? c.getEndDate().format(f) : "")
+              .append(" · бюджет ").append(c.getBudgetRub()).append(" ₽\n   пришло: ").append(r.came() == null ? "—" : r.came())
+              .append(" · до 1-го квеста: ").append(r.firstQuest() == null ? "—" : r.firstQuest())
+              .append(" · CTR: ").append(r.ctrPercent() == null ? "—" : String.format(java.util.Locale.forLanguageTag("ru"), "%.1f%%", r.ctrPercent())).append("\n");
+            rows.add(List.of(
+                    keyboardFactory.callback("👁 Просмотры #" + c.getId(), "admin:adv:camp:imp:" + c.getId()),
+                    keyboardFactory.callback("🗑 #" + c.getId(), "admin:adv:camp:del:" + c.getId())));
+        }
+        sb.append("\n<i>«Пришло» и «до 1-го квеста» считаются по коду источника кампании; CTR = клики по ссылке / просмотры поста.</i>");
+        rows.add(List.of(keyboardFactory.callback("➕ Добавить кампанию", "admin:adv:camp:add")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:adv")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendAdvPrices(AppUser user) {
+        List<ru.gamebot.platform.domain.model.AdPriceItem> items = advertiserService.priceItems();
+        StringBuilder sb = new StringBuilder("💵 <b>Прайс-лист</b>\n\n");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (items.isEmpty()) sb.append("Строк пока нет: добавьте расценки на размещения.\n");
+        for (ru.gamebot.platform.domain.model.AdPriceItem it : items) {
+            sb.append("• <b>").append(escape(it.getTitle())).append("</b> - ").append(it.getPriceRub()).append(" ₽");
+            if (it.getConditions() != null) sb.append("\n   <i>").append(escape(it.getConditions())).append("</i>");
+            sb.append("\n");
+            rows.add(List.of(keyboardFactory.callback("🗑 " + trim(it.getTitle(), 30), "admin:adv:price:del:" + it.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("➕ Добавить строку", "admin:adv:price:add")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:adv")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendAdvManual(AppUser user) {
+        String views = advertiserService.get(ru.gamebot.platform.service.AdvertiserService.K_AVG_VIEWS);
+        String geo = advertiserService.get(ru.gamebot.platform.service.AdvertiserService.K_GEO);
+        String dev = advertiserService.get(ru.gamebot.platform.service.AdvertiserService.K_DEVICES);
+        sendText(user.getTelegramId(),
+                "✏️ <b>Данные вручную</b>\n\nЭти показатели Bot API канала не отдаёт: берите из Telegram-аналитики канала и вносите сюда, "
+                        + "они попадут в витрину и медиа-кит.\n\n"
+                        + "👁 Средние просмотры поста: <b>" + (views == null ? "не указаны" : escape(views)) + "</b>\n"
+                        + "🌍 Язык и гео: <b>" + (geo == null || geo.isBlank() ? "не указаны" : escape(geo)) + "</b>\n"
+                        + "📱 Устройства: <b>" + (dev == null || dev.isBlank() ? "не указаны" : escape(dev)) + "</b>",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("👁 Средние просмотры", "admin:adv:set:views")),
+                        List.of(keyboardFactory.callback("🌍 Язык и гео", "admin:adv:set:geo")),
+                        List.of(keyboardFactory.callback("📱 Устройства", "admin:adv:set:dev")),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "admin:adv")))));
     }
 
     // ─── Разделы админ-меню и «Аналитика» (ТЗ «EGC - Метрики для управления проектом») ───
@@ -17219,7 +17453,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // Админ-меню сгруппировано по разделам (2026-09-25, ТЗ «Метрики для управления проектом»): на верхнем уровне только
             // разделы, все прежние кнопки лежат внутри (см. sendAdminGroup) с теми же callback'ами.
             rows.add(List.of(keyboardFactory.callback("📊 Аналитика", "admin:an")));
-            rows.add(List.of(keyboardFactory.callback("📣 Рекламодателям", "admin:advstats")));
+            rows.add(List.of(keyboardFactory.callback("📣 Рекламодателям", "admin:adv")));
             rows.add(List.of(
                     keyboardFactory.callback("👥 Игроки", "admin:grp:players"),
                     keyboardFactory.callback("🎯 Квесты", "admin:grp:quests")

@@ -43,4 +43,10 @@ public interface ExcTransactionRepository extends JpaRepository<ExcTransaction, 
     @Query("SELECT t.createdAt, t.user.telegramId, t.type, t.amount FROM ExcTransaction t "
             + "WHERE t.createdAt >= :from AND t.createdAt < :to ORDER BY t.createdAt ASC")
     List<Object[]> findRowsBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /** Сумма отрицательных операций EXC внутри платформы с момента since (магазин, предметы, взносы и т.п.; результат ≤ 0): выводы,
+     *  списания админом и конфискации не считаются. Для «потрачено» берите модуль. */
+    @Query("SELECT COALESCE(SUM(t.amount), 0) FROM ExcTransaction t WHERE t.amount < 0 AND t.createdAt >= :since "
+            + "AND t.type NOT IN ('WITHDRAWAL', 'DEBIT', 'CONFISCATE')")
+    long sumNegativeSince(@Param("since") LocalDateTime since);
 }
