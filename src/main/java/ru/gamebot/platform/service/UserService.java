@@ -35,6 +35,7 @@ import ru.gamebot.platform.event.LeagueRewardEvent;
 public class UserService {
 
     private final ExcTransactionService excTx;
+    private final NotificationGateService notificationGate;
     private final ReferralBoostService referralBoostService;
 
     private static final List<LevelTier> LEVEL_TIERS = List.of(
@@ -475,6 +476,7 @@ public class UserService {
     public void touchBotActivity(Long telegramId) {
         AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
         if (user == null) return;
+        notificationGate.markReturnIfNeeded(user);
         LocalDateTime now = LocalDateTime.now();
         if (user.getLastBotActivityAt() != null && user.getLastBotActivityAt().toLocalDate().equals(now.toLocalDate())) {
             return;
@@ -487,6 +489,7 @@ public class UserService {
     public void touchMiniAppOpen(Long telegramId) {
         AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
         if (user == null) return;
+        notificationGate.markReturnIfNeeded(user);
         LocalDateTime now = LocalDateTime.now();
         if (user.getLastMiniAppOpenAt() != null && user.getLastMiniAppOpenAt().toLocalDate().equals(now.toLocalDate())) {
             return;

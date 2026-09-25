@@ -64,6 +64,7 @@ public class WeeklyResetScheduler {
     private final PubgQuestVerificationService pubgQuestVerificationService;
     private final ScheduledBroadcastService scheduledBroadcastService;
     private final AchievementCheckService achievementCheckService;
+    private final NotificationGateService notificationGate;
 
     private static final int[] DORMANCY_TIER_DAYS = {14, 30, 60};
     private static final long[] DORMANCY_TIER_EXC = {300, 750, 1500};
@@ -183,6 +184,8 @@ public class WeeklyResetScheduler {
         for (QuestSubmission s : questSubmissionRepository.findApprovedNeedingCooldownReminder(cutoff)) {
             Long telegramId = s.getUser().getTelegramId();
             if (!notifiedThisRun.add(telegramId)) continue;
+            // Лимит частоты ДО отметки cooldownReminderSentAt: отклонённое напоминание не «сгорает», а повторится на следующем тике
+            if (!notificationGate.tryAcquire(s.getUser(), NudgeType.COOLDOWN_REMINDER)) continue;
             try {
                 s.setCooldownReminderSentAt(now);
                 questSubmissionRepository.save(s);
@@ -311,6 +314,7 @@ public class WeeklyResetScheduler {
         for (QuestSubmission s : expiring) {
             try {
                 long minutesLeft = ChronoUnit.MINUTES.between(LocalDateTime.now(), s.getExpiresAt());
+                notificationGate.tryAcquire(s.getUser(), NudgeType.QUEST_DEADLINE); // идёт всегда (bypass), пишется в журнал
                 s.setDeadlineWarningSent(true);
                 questSubmissionRepository.save(s);
                 eventPublisher.publishEvent(new QuestDeadlineWarningEvent(this,
@@ -346,6 +350,11 @@ public class WeeklyResetScheduler {
             if (user.isBlocked()) continue;
             try {
                 long completedQuests = questSubmissionRepository.countApprovedByUserBetween(user, weekStart, weekEnd);
+                boolean inactiveDigest = completedQuests == 0
+                        && user.getCreatedAt() != null && user.getCreatedAt().isBefore(weekStart);
+                if ((completedQuests > 0 || inactiveDigest) && !notificationGate.tryAcquire(user, NudgeType.WEEKLY_DIGEST)) {
+                    continue; // лимит частоты: раз в неделю, если сегодня уже было более важное напоминание - дайджест пропускаем
+                }
 
                 if (completedQuests > 0) {
                     long earnedExc = questSubmissionRepository.sumApprovedCoinsByUserBetween(user, weekStart, weekEnd);
@@ -417,6 +426,7 @@ public class WeeklyResetScheduler {
                 }
 
                 if (shouldSend) {
+                    if (!notificationGate.tryAcquire(user, NudgeType.ONBOARDING)) continue; // до отметки счётчика - повтор на следующем часовом тике
                     user.setOnboardingNotificationsSent(sent + 1);
                     user.setLastOnboardingNotification(now);
                     appUserRepository.save(user);
@@ -457,6 +467,8 @@ public class WeeklyResetScheduler {
                 // Раньше EXC начислялись здесь же, за сам факт отсутствия (до 2 550 EXC на человека, вернулся он или
                 // нет). Теперь бонус только обещается сообщением и выдаётся при одобрении ближайшего квеста
                 // (UserService.claimDormancyReturnBonus). Предложение не суммируется: остаётся сумма последнего тира.
+                // Лимит частоты ДО отметки тира: отклонённое сообщение не сгорает, тир повторно проверится завтра
+                if (!notificationGate.tryAcquire(user, NudgeType.DORMANCY)) continue;
                 long offer = DORMANCY_TIER_EXC[highestEligibleTier - 1];
                 user.setDormancyBonusPendingExc(offer);
                 user.setLastDormancyTierNotified(highestEligibleTier);
@@ -484,6 +496,7 @@ public class WeeklyResetScheduler {
             try {
                 if (user.getStreakDays() < 2) continue;
                 if (!yesterday.equals(user.getLastActivityDate())) continue;
+                if (!notificationGate.tryAcquire(user, NudgeType.STREAK_AT_RISK)) continue;
                 eventPublisher.publishEvent(new StreakAtRiskEvent(this, user.getTelegramId(), user.getStreakDays()));
             } catch (Exception e) {
                 log.warn("Failed to process streak-at-risk check for user {}", user.getTelegramId(), e);
@@ -575,6 +588,7 @@ public class WeeklyResetScheduler {
                 if (!activeRecently) continue;
                 if (user.getLastQuestNudgeAt() != null && user.getLastQuestNudgeAt().isAfter(resendCutoff)) continue;
 
+                if (!notificationGate.tryAcquire(user, NudgeType.QUEST_GAP)) continue; // до отметки lastQuestNudgeAt - повтор завтра
                 long daysSince = ChronoUnit.DAYS.between(lastQuest, now);
                 user.setLastQuestNudgeAt(now);
                 appUserRepository.save(user);
@@ -605,6 +619,7 @@ public class WeeklyResetScheduler {
                 var firstApproved = questSubmissionRepository.findFirstByUserAndStatusOrderByUpdatedAtAsc(
                         user, SubmissionStatus.APPROVED);
                 if (firstApproved.isEmpty() || firstApproved.get().getUpdatedAt().isAfter(approvedBefore)) continue;
+                if (!notificationGate.tryAcquire(user, NudgeType.SECOND_QUEST)) continue; // до флага и выдачи EXC - повтор завтра
 
                 user.setSecondQuestNudgeSentAt(now);
                 userService.addReward(user, 0, SECOND_QUEST_NUDGE_EXC);
@@ -643,6 +658,9 @@ public class WeeklyResetScheduler {
                 Long telegramId = (Long) row[0];
                 String gameName = (String) row[1];
                 String questTitle = (String) row[2];
+                // Лимит частоты: окно проверки скользящее (5 минут), отклонённое «кулдаун снят» не повторяется - устареет
+                AppUser target = appUserRepository.findByTelegramId(telegramId).orElse(null);
+                if (target == null || !notificationGate.tryAcquire(target, NudgeType.COOLDOWN_EXPIRED)) continue;
                 eventPublisher.publishEvent(new CooldownExpiredEvent(this, telegramId, gameName, questTitle));
             } catch (Exception e) {
                 log.warn("Failed to send cooldown notification to user {}", row[0], e);

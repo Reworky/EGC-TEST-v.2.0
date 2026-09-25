@@ -144,6 +144,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.domain.repository.QuestRepository questRepository;
     private final ru.gamebot.platform.service.ErrorMonitorService errorMonitorService;
     private final ru.gamebot.platform.service.DeployService deployService;
+    private final ru.gamebot.platform.service.NotificationGateService notificationGate;
     private final ru.gamebot.platform.service.BrawlStarsTournamentService brawlStarsTournamentService;
     private final ru.gamebot.platform.service.BrawlQuestVerificationService brawlQuestVerificationService;
     private final ru.gamebot.platform.service.ClashQuestVerificationService clashQuestVerificationService;
@@ -8366,6 +8367,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "stats:reset_weekly:confirm" -> doAdminResetWeeklyXp(user);
             case "live" -> sendAdminLiveStatus(user);
             case "health" -> sendAdminHealth(user);
+            case "nudgereport" -> sendAdminNudgeReport(user);
             case "health:reset" -> {
                 errorMonitorService.resetCounters();
                 sendAdminHealth(user);
@@ -11450,6 +11452,42 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } catch (Exception e) {
             log.warn("Failed to send deploy result to {}", s.requestedBy(), e);
         }
+    }
+
+    /** «📨 Рассылки: отчёт» (2026-09-25): что и сколько напоминаний ушло за 30 дней, сколько игроков вернулись в течение 48 ч
+     * и сколько напоминаний отсеял лимит частоты (NotificationGateService). Без этого нельзя судить, какие рассылки работают. */
+    private void sendAdminNudgeReport(AppUser user) {
+        List<ru.gamebot.platform.service.NotificationGateService.ReportRow> rows = notificationGate.report(30);
+        StringBuilder sb = new StringBuilder("📨 <b>Рассылки за 30 дней</b>\n\n");
+        if (rows.isEmpty()) {
+            sb.append("Пока нет данных: журнал ведётся с момента выкладки этой версии.\n");
+        } else {
+            long totalSent = 0;
+            for (ru.gamebot.platform.service.NotificationGateService.ReportRow r : rows) {
+                totalSent += r.sent();
+                sb.append(r.label()).append(": <b>").append(r.sent()).append("</b>");
+                if (r.mature() > 0) {
+                    sb.append(" · вернулись ").append(r.returned()).append(" из ").append(r.mature())
+                            .append(" (").append(Math.round(100.0 * r.returned() / r.mature())).append("%)");
+                } else {
+                    sb.append(" · пока рано оценивать");
+                }
+                sb.append("\n");
+            }
+            sb.append("\nВсего напоминаний: <b>").append(totalSent).append("</b>\n");
+        }
+        java.util.Map<ru.gamebot.platform.service.NudgeType, Long> blocked = notificationGate.blockedSinceStart();
+        long blockedTotal = blocked.values().stream().mapToLong(Long::longValue).sum();
+        sb.append("Отсеяно лимитом с запуска бота: <b>").append(blockedTotal).append("</b>\n");
+        blocked.forEach((t, n) -> sb.append("   ").append(t.getLabel()).append(": ").append(n).append("\n"));
+        sb.append("\n<i>Лимит: не больше 1 напоминания за ").append(ru.gamebot.platform.service.NotificationGateService.WINDOW_HOURS)
+                .append(" ч (более важное может идти следом, но не больше ")
+                .append(ru.gamebot.platform.service.NotificationGateService.MAX_PER_24H)
+                .append(" за сутки); предупреждение о дедлайне квеста идёт без лимита. Ответы на действия игрока (награды, призы, оплата) "
+                        + "лимитом не считаются. «Вернулись» - игрок открыл бота или мини-апп в течение 48 ч после сообщения; "
+                        + "считаются сообщения старше 48 ч.</i>");
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("🔄 Обновить", "admin:nudgereport"), keyboardFactory.callback("🏠 Меню", "menu:main")))));
     }
 
     /** «🩺 Проверка ошибок» (2026-09-25): одним экраном - есть ли у текущей версии бота ошибки. Источники: WARN/ERROR из
@@ -16258,6 +16296,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             ));
             rows.add(List.of(keyboardFactory.callback("📡 Сейчас на платформе", "admin:live")));
             rows.add(List.of(keyboardFactory.callback("🩺 Проверка ошибок", "admin:health")));
+            rows.add(List.of(keyboardFactory.callback("📨 Рассылки: отчёт", "admin:nudgereport")));
             if (adminService.resolvedAdminIds().contains(user.getTelegramId())) {
                 rows.add(List.of(keyboardFactory.callback("🚀 Обновить бота", "admin:deploy")));
             }

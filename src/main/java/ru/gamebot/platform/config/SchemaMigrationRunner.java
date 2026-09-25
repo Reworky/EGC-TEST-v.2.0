@@ -30,6 +30,20 @@ public class SchemaMigrationRunner implements CommandLineRunner {
         addColumnIfMissing("app_users", "ad_wheel_spins", "INTEGER DEFAULT 0");
         addColumnIfMissing("app_users", "dormancy_bonus_pending_exc", "BIGINT DEFAULT 0");
         addColumnIfMissing("tournaments", "results_feed_text", "VARCHAR(4096)");
+        addColumnIfMissing("app_users", "last_nudge_at", "TIMESTAMP");
+        addColumnIfMissing("app_users", "last_nudge_priority", "INTEGER DEFAULT 0");
+        addColumnIfMissing("app_users", "last_nudge_returned", "BOOLEAN DEFAULT FALSE");
+        createIndexIfMissing("idx_notif_user_sent", "notification_log", "user_id, sent_at");
+        createIndexIfMissing("idx_notif_sent", "notification_log", "sent_at");
+    }
+
+    private void createIndexIfMissing(String name, String table, String columns) {
+        try {
+            jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS " + name + " ON " + table + "(" + columns + ")");
+            log.info("Schema check: index {} OK", name);
+        } catch (Exception e) {
+            log.warn("Schema index {} failed: {}", name, e.getMessage());
+        }
     }
 
     private void addColumnIfMissing(String table, String column, String definition) {

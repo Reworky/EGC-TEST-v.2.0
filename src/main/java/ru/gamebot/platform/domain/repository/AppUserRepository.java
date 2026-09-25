@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import ru.gamebot.platform.domain.model.AppUser;
@@ -58,6 +59,15 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT u FROM AppUser u WHERE u.id = :id")
     Optional<AppUser> findByIdForUpdate(@Param("id") Long id);
+
+    /** Отметка отправленного напоминания (NotificationGateService) - точечный UPDATE, чтобы не затирать остальные поля игрока. */
+    @Modifying
+    @Query("UPDATE AppUser u SET u.lastNudgeAt = :at, u.lastNudgePriority = :priority, u.lastNudgeReturned = false WHERE u.id = :id")
+    int markNudge(@Param("id") Long id, @Param("at") LocalDateTime at, @Param("priority") int priority);
+
+    @Modifying
+    @Query("UPDATE AppUser u SET u.lastNudgeReturned = true WHERE u.id = :id")
+    int markNudgeReturned(@Param("id") Long id);
 
     List<AppUser> findAllByRegistrationCompletedTrueOrderByXpDescTelegramIdAsc();
 

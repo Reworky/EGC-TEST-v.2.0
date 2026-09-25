@@ -91,6 +91,16 @@ public class AppUser {
     @Column(columnDefinition = "bigint default 0")
     private long dormancyBonusPendingExc;
 
+    /** Последнее напоминание, ушедшее игроку через шлюз частоты (NotificationGateService): когда, какого приоритета и вернулся ли
+     * игрок после него (для отчёта «Рассылки»). Примитивы - строго с default (ddl-auto). */
+    private LocalDateTime lastNudgeAt;
+
+    @Column(columnDefinition = "integer default 0")
+    private int lastNudgePriority;
+
+    @Column(columnDefinition = "boolean default false")
+    private boolean lastNudgeReturned;
+
     private LocalDateTime createdAt;
 
     // Avatar
