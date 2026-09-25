@@ -261,10 +261,10 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
             + "WHERE s.status = 'APPROVED' AND s.user.trafficSourceCode IS NOT NULL GROUP BY s.user.id")
     List<Object[]> countApprovedPerTrafficUser();
 
-    /** Сколько раз квест БРАЛИ (любая заявка, любой статус) с момента since - отличает «никто не берёт» от «берут, но не
-     *  доходят до одобрения» (QuestPoolHealthService). */
-    @Query("SELECT s.quest.id, COUNT(s) FROM QuestSubmission s WHERE s.createdAt >= :since GROUP BY s.quest.id")
-    List<Object[]> countTakenGroupedByQuestSince(@Param("since") LocalDateTime since);
+    /** Сколько раз квест БРАЛИ с момента since, в разрезе статуса заявки (квест, статус, число) - отличает «никто не берёт»
+     *  от «берут, но не доходят до одобрения» и показывает, где очередь модерации, а где отказы (QuestPoolHealthService). */
+    @Query("SELECT s.quest.id, s.status, COUNT(s) FROM QuestSubmission s WHERE s.createdAt >= :since GROUP BY s.quest.id, s.status")
+    List<Object[]> countTakenByStatusGroupedByQuestSince(@Param("since") LocalDateTime since);
 
     /** Число одобренных выполнений по каждому квесту с момента since (QuestPoolHealthService). */
     @Query("SELECT s.quest.id, COUNT(s) FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :since GROUP BY s.quest.id")

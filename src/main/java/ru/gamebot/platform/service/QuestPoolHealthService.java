@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +16,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.util.HtmlUtils;
+import ru.gamebot.platform.domain.enums.SubmissionStatus;
 import ru.gamebot.platform.domain.model.PlatformSnapshot;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
@@ -94,9 +96,10 @@ public class QuestPoolHealthService {
             perQuest.put(((Number) r[0]).longValue(), ((Number) r[1]).longValue());
         }
 
-        Map<Long, Long> taken = new HashMap<>();
-        for (Object[] r : questSubmissionRepository.countTakenGroupedByQuestSince(now.minusDays(30))) {
-            taken.put(((Number) r[0]).longValue(), ((Number) r[1]).longValue());
+        Map<Long, Map<SubmissionStatus, Long>> takenByStatus = new HashMap<>();
+        for (Object[] r : questSubmissionRepository.countTakenByStatusGroupedByQuestSince(now.minusDays(30))) {
+            takenByStatus.computeIfAbsent(((Number) r[0]).longValue(), k -> new EnumMap<>(SubmissionStatus.class))
+                    .put((SubmissionStatus) r[1], ((Number) r[2]).longValue());
         }
 
         long dead = 0;
@@ -109,11 +112,12 @@ public class QuestPoolHealthService {
             if (done == 0) {
                 dead++;
                 boolean fresh = q.getCreatedAt() != null && q.getCreatedAt().isAfter(now.minusDays(FRESH_QUEST_DAYS));
-                long takes = taken.getOrDefault(q.getId(), 0L);
+                Map<SubmissionStatus, Long> byStatus = takenByStatus.getOrDefault(q.getId(), Map.of());
+                long takes = byStatus.values().stream().mapToLong(Long::longValue).sum();
                 String label = deadLabel(q);
                 if (fresh) freshDead++;
                 else if (takes == 0) neverTaken.add(label);
-                else takenNotDone.add(label + " (брали: " + takes + ")");
+                else takenNotDone.add(label + " (брали: " + takes + statusBreakdown(byStatus) + ")");
             }
             String game = q.getGameName() == null || q.getGameName().isBlank() ? "Без игры" : q.getGameName();
             long[] g = byGame.computeIfAbsent(game, k -> new long[2]);
@@ -138,6 +142,22 @@ public class QuestPoolHealthService {
         int deadPercent = activeCount == 0 ? 0 : (int) Math.round(dead * 100.0 / activeCount);
         return new Report(activeCount, before, daysBefore, players7d, approvals7d, approvals14d - approvals7d,
                 dead, deadPercent, top, deadGames, freshDead, neverTaken, takenNotDone);
+    }
+
+    /** «; на модерации: 3; отклонено: 1» - только ненулевые статусы, чтобы очередь модерации было видно сразу. */
+    private static String statusBreakdown(Map<SubmissionStatus, Long> byStatus) {
+        StringBuilder sb = new StringBuilder();
+        appendStatus(sb, byStatus, SubmissionStatus.PENDING, "на модерации");
+        appendStatus(sb, byStatus, SubmissionStatus.NEEDS_INFO, "нужны уточнения");
+        appendStatus(sb, byStatus, SubmissionStatus.REJECTED, "отклонено");
+        appendStatus(sb, byStatus, SubmissionStatus.DRAFT, "в работе");
+        appendStatus(sb, byStatus, SubmissionStatus.CANCELLED, "отменено");
+        return sb.toString();
+    }
+
+    private static void appendStatus(StringBuilder sb, Map<SubmissionStatus, Long> byStatus, SubmissionStatus status, String label) {
+        long n = byStatus.getOrDefault(status, 0L);
+        if (n > 0) sb.append("; ").append(label).append(": ").append(n);
     }
 
     private static String deadLabel(Quest q) {
