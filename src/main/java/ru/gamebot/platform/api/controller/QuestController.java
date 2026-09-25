@@ -515,7 +515,7 @@ public class QuestController {
 
     private String messageFor(QuestService.QuestActionResult result) {
         return switch (result.status()) {
-            case OK -> "Готово.";
+            case OK -> "Квест взят! Теперь идите в игру и выполняйте задание.";
             case ALREADY_DRAFT -> "Этот квест уже взят в работу.";
             case ALREADY_PENDING -> "Отчёт уже на проверке — дождитесь решения модератора.";
             case ALREADY_APPROVED -> "Этот квест уже одобрен и оплачен.";

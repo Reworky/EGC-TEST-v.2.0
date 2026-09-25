@@ -4869,7 +4869,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 ? "🚀 Квест активен! ⏳ Прогресс отслеживается автоматически по вашему аккаунту Dota 2 — отчёт отправлять не нужно."
                                 : quest.getCs2VerifyType() != null
                                     ? "🚀 Квест активен! ⏳ Прогресс отслеживается автоматически по вашему аккаунту Steam (CS2) — отчёт отправлять не нужно."
-                                    : "🚀 Квест активен! Приступайте к игре, когда выполните задание, отправьте отчёт прямо из этой карточки.";
+                                    : quest.getPubgVerifyType() != null
+                                        ? "🚀 Квест активен! ⏳ Прогресс отслеживается автоматически по вашему аккаунту PUBG PC — отчёт отправлять не нужно."
+                                        : "🚀 Квест активен! Приступайте к игре, когда выполните задание, отправьте отчёт прямо из этой карточки.";
         // Предупреждение о недельном снижении награды теперь живёт в самой карточке (строка награды ниже,
         // см. weeklyLimitNote) — и в списке/карточке ДО взятия квеста тоже, а не одноразово после него.
 
@@ -4891,8 +4893,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             deadlineLine = questService.isExpired(submission) ? "⌛ Дедлайн: <b>истёк</b>\n" : formatDeadlineLine(submission.getExpiresAt());
         }
 
+        // «Что делать дальше» - сразу под подтверждением (2026-09-25, по просьбе владельца: игрок после «Взять» не понимал, что делать).
+        // Для партнёрских квестов блок не нужен: инструкция со ссылкой уже выводится ниже. «Считаются бои после взятия» - только для
+        // Brawl Stars (там прогресс считается от снимка primeBaseline в момент взятия), для остальных игр это не утверждаем.
+        String nextStep = freshQuest.isExternalAutoApprove() ? ""
+                : freshQuestAutoVerified
+                    ? "👉 <b>Теперь идите в игру и выполняйте задание.</b>\n"
+                        + (freshQuest.getBrawlVerifyType() != null ? "Засчитываются бои, сыгранные после взятия квеста. " : "")
+                        + "Мы засчитаем всё сами: прогресс обновляется каждые пару минут (он на кнопке ниже), а когда квест будет выполнен, придёт сообщение.\n\n"
+                    : "👉 <b>Теперь идите в игру и выполняйте задание.</b>\n"
+                        + "Когда закончите, вернитесь сюда и нажмите «📤 Отчёт»: отправьте скриншот, как описано в условиях квеста.\n\n";
+
         sendText(user.getTelegramId(),
                 notice + "\n\n"
+                        + nextStep
                         + "🎯 <b>" + escape(freshQuest.getTitle()) + "</b>\n\n"
                         + (freshQuest.isSponsored() ? "🎮 Название канала: <b>" : "🎮 Игра: <b>") + escape(freshQuest.getGameName()) + "</b>\n"
                         + (freshQuest.isSponsored() || "UGC".equalsIgnoreCase(freshQuest.getGameName()) ? "" : (!gameCatalogService.isFlat(freshQuest.getGameName()) && freshQuest.getCategory() != null ? "📚 Формат: <b>" + escape(freshQuest.getCategory()) + "</b>\n" : "") + "🕹️ Платформа: <b>" + escape(freshQuest.getPlatform()) + "</b>\n")
