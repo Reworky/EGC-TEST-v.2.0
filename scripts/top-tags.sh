@@ -12,7 +12,23 @@ DB_URL="jdbc:h2:file:/data/game-platform-bot;AUTO_SERVER=TRUE"
 
 rm -rf "$WORK" && mkdir -p "$WORK"
 docker cp "$CONTAINER:/app/app.jar" "$WORK/app.jar"
-unzip -o -q -j "$WORK/app.jar" 'BOOT-INF/lib/h2-*.jar' -d "$WORK/lib"
+mkdir -p "$WORK/lib"
+if command -v unzip >/dev/null 2>&1; then
+  unzip -o -q -j "$WORK/app.jar" 'BOOT-INF/lib/h2-*.jar' -d "$WORK/lib"
+elif command -v python3 >/dev/null 2>&1; then
+  python3 - "$WORK/app.jar" "$WORK/lib" <<'PY'
+import sys, zipfile, os
+jar, out = sys.argv[1], sys.argv[2]
+with zipfile.ZipFile(jar) as z:
+    for n in z.namelist():
+        if n.startswith("BOOT-INF/lib/h2-") and n.endswith(".jar"):
+            with open(os.path.join(out, os.path.basename(n)), "wb") as f:
+                f.write(z.read(n))
+PY
+else
+  echo "Нужен unzip или python3 на хосте: apt-get install -y unzip" >&2; exit 1
+fi
+ls "$WORK/lib" | grep -q '^h2-' || { echo "h2-*.jar не найден в app.jar" >&2; exit 1; }
 docker exec "$CONTAINER" rm -rf /tmp/gb-h2
 docker cp "$WORK/lib" "$CONTAINER:/tmp/gb-h2"
 
