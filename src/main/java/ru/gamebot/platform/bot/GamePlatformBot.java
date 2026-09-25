@@ -133,6 +133,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.TrafficSourceService trafficSourceService;
     private final ru.gamebot.platform.service.TrafficFunnelService trafficFunnelService;
     private final ru.gamebot.platform.service.QuestPoolHealthService questPoolHealthService;
+    private final ru.gamebot.platform.service.AnalyticsService analyticsService;
+    private final ru.gamebot.platform.service.FinanceService financeService;
+    private final ru.gamebot.platform.service.AlertService alertService;
+    private final ru.gamebot.platform.domain.repository.IncidentEntryRepository incidentEntryRepository;
     private final ru.gamebot.platform.service.PollService pollService;
     private final ru.gamebot.platform.service.TournamentService tournamentService;
     private final ru.gamebot.platform.service.SeasonService seasonService;
@@ -1957,6 +1961,77 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 userService.save(user);
                 session.setState(SessionState.NONE);
                 sendProfileEdit(user);
+            }
+            case AN_RANGE_INPUT -> {
+                java.util.regex.Matcher rm = java.util.regex.Pattern
+                        .compile("(\\d{2}\\.\\d{2}\\.\\d{4})\\s*[-–—]\\s*(\\d{2}\\.\\d{2}\\.\\d{4})").matcher(text);
+                try {
+                    if (!rm.find()) throw new IllegalArgumentException("format");
+                    java.time.format.DateTimeFormatter f = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
+                    java.time.LocalDate a = java.time.LocalDate.parse(rm.group(1), f);
+                    java.time.LocalDate b = java.time.LocalDate.parse(rm.group(2), f);
+                    if (b.isBefore(a) || java.time.temporal.ChronoUnit.DAYS.between(a, b) > 366) throw new IllegalArgumentException("range");
+                    session.getData().put("an_p", "custom");
+                    session.getData().put("an_from", rm.group(1));
+                    session.getData().put("an_to", rm.group(2));
+                    String tabName = session.getData().get("an_tab");
+                    session.setState(SessionState.NONE);
+                    ru.gamebot.platform.service.AnalyticsService.Tab tb = parseTab(tabName);
+                    if (tb == null) sendAnalyticsHome(user); else sendAnalyticsTab(user, session, tb);
+                } catch (Exception e) {
+                    sendText(user.getTelegramId(), "❌ Нужен период вида <code>01.09.2026-25.09.2026</code> (начало не позже конца, не больше года).", cancelKeyboard());
+                }
+            }
+            case FIN_ENTRY_INPUT -> {
+                String[] tok = text.trim().split("\\s+", 3);
+                long amount;
+                try { amount = Long.parseLong(tok[0]); } catch (Exception e) { amount = -1; }
+                if (amount <= 0) {
+                    sendText(user.getTelegramId(), "❌ Первым должна идти сумма в рублях целым числом без пробелов, например <code>15000</code>.", cancelKeyboard());
+                    return;
+                }
+                java.time.LocalDate entryDate = java.time.LocalDate.now();
+                String note = "";
+                if (tok.length > 1) {
+                    try {
+                        entryDate = java.time.LocalDate.parse(tok[1], java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"));
+                        note = tok.length > 2 ? tok[2] : "";
+                    } catch (Exception e) {
+                        note = text.trim().substring(tok[0].length()).trim(); // второе слово - не дата, значит это уже заметка
+                    }
+                }
+                String kind = session.getData().getOrDefault("fin_kind", ru.gamebot.platform.domain.model.FinanceEntry.OTHER);
+                financeService.add(kind, amount, entryDate, note);
+                session.setState(SessionState.NONE);
+                sendText(user.getTelegramId(), "✅ Записано: " + ru.gamebot.platform.domain.model.FinanceEntry.kindLabel(kind) + ", " + amount + " ₽ ("
+                                + entryDate.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + ")",
+                        backMenuKeyboard("admin:an:tab:PNL"));
+            }
+            case INC_INPUT -> {
+                String title = text.trim();
+                if (title.length() < 3) {
+                    sendText(user.getTelegramId(), "❌ Опишите проблему хотя бы в паре слов:", cancelKeyboard());
+                    return;
+                }
+                ru.gamebot.platform.domain.model.IncidentEntry inc = new ru.gamebot.platform.domain.model.IncidentEntry();
+                inc.setTitle(title.length() > 190 ? title.substring(0, 190) : title);
+                inc.setPriority(session.getData().getOrDefault("inc_prio", "MEDIUM"));
+                incidentEntryRepository.save(inc);
+                session.setState(SessionState.NONE);
+                sendText(user.getTelegramId(), "✅ Инцидент #" + inc.getId() + " добавлен в трекер.", backMenuKeyboard("admin:an:tab:TECH"));
+            }
+            case ALERT_INPUT -> {
+                String[] tok = text.trim().split("\\s+");
+                int pct; int days;
+                try { pct = Integer.parseInt(tok[0]); days = Integer.parseInt(tok[1]); } catch (Exception e) { pct = -1; days = -1; }
+                if (pct < 1 || pct > 500 || days < 1 || days > 90) {
+                    sendText(user.getTelegramId(), "❌ Введите два числа через пробел: порог в процентах (1-500) и окно в днях (1-90), например <code>15 7</code>.", cancelKeyboard());
+                    return;
+                }
+                String key = session.getData().get("alert_key");
+                session.setState(SessionState.NONE);
+                if (key != null) alertService.create(key, pct, days);
+                sendAlertsScreen(user);
             }
             case BONUS_INPUT -> handleBonusInput(user, session, text);
             case DEBIT_INPUT -> handleDebitInput(user, session, text);
@@ -8529,6 +8604,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 return;
             }
             case "advstats" -> sendAdminAdvertiserStats(user);
+            case "an" -> sendAnalyticsHome(user);
             case "stats:reset_weekly" -> sendAdminResetWeeklyConfirm(user);
             case "stats:reset_weekly:confirm" -> doAdminResetWeeklyXp(user);
             case "live" -> sendAdminLiveStatus(user);
@@ -8886,6 +8962,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     gameCatalogService.removePhoto(gameName);
                     answer(callbackQuery.getId(), "Фото удалено");
                     sendAdminQuestCategories(user, gameName);
+                    return;
+                } else if (action.startsWith("an:")) {
+                    handleAnalyticsAction(callbackQuery, user, session, action.substring("an:".length()));
+                    return;
+                } else if (action.startsWith("fin:")) {
+                    handleFinanceAction(user, session, action.substring("fin:".length()));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("inc:")) {
+                    handleIncidentAction(user, session, action.substring("inc:".length()));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("grp:")) {
+                    sendAdminGroup(user, action.substring("grp:".length()));
+                    answerSilently(callbackQuery.getId());
                     return;
                 } else if (action.startsWith("stats:engagement:src:")) {
                     sendAdminEngagementStats(user, action.substring("stats:engagement:src:".length()));
@@ -11373,6 +11464,387 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 )));
     }
 
+    // ─── Разделы админ-меню и «Аналитика» (ТЗ «EGC - Метрики для управления проектом») ───
+
+    private void sendAdminGroup(AppUser user, String group) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        String title = "";
+        switch (group) {
+            case "players" -> {
+                title = "👥 <b>Игроки</b>";
+                rows.add(List.of(keyboardFactory.callback("👥 Пользователи", "admin:users:0")));
+                rows.add(List.of(keyboardFactory.callback("📡 Сейчас на платформе", "admin:live")));
+                rows.add(List.of(keyboardFactory.callback("⚔️ Состав отряда", "admin:squads:search")));
+                rows.add(List.of(keyboardFactory.callback("🏷️ Теги CoC/Clash Royale", "admin:clashtags")));
+                rows.add(List.of(keyboardFactory.callback("🕵️ Повторы разовых квестов", "admin:onetimeabuse")));
+            }
+            case "quests" -> {
+                title = "🎯 <b>Квесты</b>";
+                rows.add(List.of(keyboardFactory.callback("➕ Квест", "admin:create"), keyboardFactory.callback("📋 По шаблону", "admin:template")));
+                rows.add(List.of(keyboardFactory.callback("✏️ Квесты", "admin:edit"), keyboardFactory.callback("📈 Топ квестов", "admin:queststats")));
+                rows.add(List.of(keyboardFactory.callback("🧭 Пул квестов", "admin:stats:questpool")));
+                rows.add(List.of(keyboardFactory.callback("📊 Статистика UGC-квестов", "admin:ugcstats")));
+                rows.add(List.of(keyboardFactory.callback("📊 Brawl Stars", "admin:brawlstats"), keyboardFactory.callback("📊 Clash of Clans", "admin:clashstats")));
+                rows.add(List.of(keyboardFactory.callback("📊 Clash Royale", "admin:clashroyalestats"), keyboardFactory.callback("📊 CS2", "admin:cs2stats")));
+                rows.add(List.of(keyboardFactory.callback("📊 PUBG PC", "admin:pubgpcstats"), keyboardFactory.callback("📊 PUBG Mobile", "admin:pubgmobilestats")));
+                rows.add(List.of(keyboardFactory.callback("📊 Dota 2", "admin:dotastats")));
+                rows.add(List.of(keyboardFactory.callback("🔁 Активность автоквестов", "admin:autoquest-activity")));
+            }
+            case "money" -> {
+                title = "💰 <b>Деньги</b>";
+                long pendingW = rewardService.findPendingWithdrawals().size();
+                rows.add(List.of(keyboardFactory.callback(pendingW > 0 ? "💸 Заявки на вывод (" + pendingW + ")" : "💸 Заявки на вывод", "admin:withdrawals")));
+                rows.add(List.of(keyboardFactory.callback("🎁 Магазин наград", "admin:rewards")));
+                rows.add(List.of(keyboardFactory.callback("💳 Пополнить Payout Pool", "admin:payout")));
+                rows.add(List.of(keyboardFactory.callback("📒 Финансовая сводка (P&L)", "admin:an:tab:PNL")));
+                rows.add(List.of(keyboardFactory.callback("💰 Экономика и выплаты", "admin:an:tab:ECONOMY")));
+                rows.add(List.of(keyboardFactory.callback("🤝 Экономика рефералки", "admin:stats:referral")));
+            }
+            case "comm" -> {
+                title = "📣 <b>Коммуникации</b>";
+                rows.add(List.of(keyboardFactory.callback("📣 Рассылка", "admin:broadcast")));
+                rows.add(List.of(keyboardFactory.callback("📅 Запланированные рассылки", "admin:broadcast:scheduled")));
+                rows.add(List.of(keyboardFactory.callback("📨 Рассылки: отчёт", "admin:nudgereport")));
+                rows.add(List.of(keyboardFactory.callback("🗳 Голосования", "admin:polls")));
+            }
+            case "growth" -> {
+                title = "🏆 <b>События и рост</b>";
+                rows.add(List.of(keyboardFactory.callback("🏆 Турниры", "admin:tournaments")));
+                rows.add(List.of(keyboardFactory.callback("🎫 Battle Pass", "admin:seasons")));
+                rows.add(List.of(keyboardFactory.callback("🚀 Буст рефералки", "admin:refboost")));
+                rows.add(List.of(keyboardFactory.callback("📈 Трафик и закупы", "admin:traffic")));
+                rows.add(List.of(keyboardFactory.callback("📉 Воронка новичков", "admin:stats:funnel")));
+            }
+            case "system" -> {
+                title = "🛠 <b>Система</b>";
+                rows.add(List.of(keyboardFactory.callback("🩺 Проверка ошибок", "admin:health")));
+                rows.add(List.of(keyboardFactory.callback("🛠 Техническое здоровье", "admin:an:tab:TECH")));
+                if (adminService.resolvedAdminIds().contains(user.getTelegramId())) {
+                    rows.add(List.of(keyboardFactory.callback("🚀 Обновить бота", "admin:deploy")));
+                }
+                rows.add(List.of(keyboardFactory.callback("📱 Бот vs Мини-апп", "admin:surface-activity")));
+                rows.add(List.of(keyboardFactory.callback("🩹 Откат недельного XP (Brawl)", "admin:xpoverpay:weekly:audit")));
+            }
+            default -> {
+                sendMainMenu(user, mainMenuText(user));
+                return;
+            }
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
+        sendText(user.getTelegramId(), title, keyboardFactory.rowsLayout(rows));
+    }
+
+    private ru.gamebot.platform.service.AnalyticsService.Tab parseTab(String name) {
+        try {
+            return ru.gamebot.platform.service.AnalyticsService.Tab.valueOf(name);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void sendAnalyticsHome(AppUser user) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        List<InlineKeyboardButton> pair = new ArrayList<>();
+        for (ru.gamebot.platform.service.AnalyticsService.Tab t : ru.gamebot.platform.service.AnalyticsService.Tab.values()) {
+            pair.add(keyboardFactory.callback(t.label(), "admin:an:tab:" + t.name()));
+            if (pair.size() == 2) {
+                rows.add(new ArrayList<>(pair));
+                pair.clear();
+            }
+        }
+        if (!pair.isEmpty()) rows.add(new ArrayList<>(pair));
+        rows.add(List.of(keyboardFactory.callback("🔔 Алерты по метрикам", "admin:an:alerts")));
+        rows.add(List.of(keyboardFactory.callback("🧭 Пул квестов", "admin:stats:questpool"), keyboardFactory.callback("📡 Сейчас", "admin:live")));
+        rows.add(List.of(keyboardFactory.callback("📊 Классическая статистика", "admin:stats")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
+        sendText(user.getTelegramId(),
+                "📊 <b>Аналитика</b>\n\nВыберите вкладку. На каждой: период (сегодня / 7 / 30 дней / свой), сравнение с предыдущим "
+                        + "периодом (▲/▼), тренд за 30 и 90 дней и выгрузка в CSV.\n\n"
+                        + "<i>Тренды строятся по ежедневным снимкам (00:05 UTC); у метрик, добавленных недавно, история начинается с момента добавления.</i>",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private ru.gamebot.platform.service.AnalyticsService.Period analyticsPeriod(UserSession session) {
+        String p = session.getData().getOrDefault("an_p", "7");
+        try {
+            return switch (p) {
+                case "today" -> ru.gamebot.platform.service.AnalyticsService.Period.today();
+                case "30" -> ru.gamebot.platform.service.AnalyticsService.Period.lastDays(30);
+                case "custom" -> {
+                    java.time.format.DateTimeFormatter f = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
+                    yield ru.gamebot.platform.service.AnalyticsService.Period.custom(
+                            java.time.LocalDate.parse(session.getData().get("an_from"), f),
+                            java.time.LocalDate.parse(session.getData().get("an_to"), f));
+                }
+                default -> ru.gamebot.platform.service.AnalyticsService.Period.lastDays(7);
+            };
+        } catch (Exception e) {
+            return ru.gamebot.platform.service.AnalyticsService.Period.lastDays(7);
+        }
+    }
+
+    private void sendAnalyticsTab(AppUser user, UserSession session, ru.gamebot.platform.service.AnalyticsService.Tab tab) {
+        ru.gamebot.platform.service.AnalyticsService.Period period = analyticsPeriod(session);
+        boolean compare = "1".equals(session.getData().get("an_cmp"));
+        String text = analyticsService.format(analyticsService.compute(tab, period), compare);
+        if (text.length() > 3900) text = text.substring(0, 3890) + "…";
+        String cur = session.getData().getOrDefault("an_p", "7");
+        String t = tab.name();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(
+                keyboardFactory.callback((cur.equals("today") ? "✅ " : "") + "Сегодня", "admin:an:p:today:" + t),
+                keyboardFactory.callback((cur.equals("7") ? "✅ " : "") + "7 дн.", "admin:an:p:7:" + t),
+                keyboardFactory.callback((cur.equals("30") ? "✅ " : "") + "30 дн.", "admin:an:p:30:" + t),
+                keyboardFactory.callback((cur.equals("custom") ? "✅ " : "") + "Свой…", "admin:an:p:custom:" + t)));
+        rows.add(List.of(keyboardFactory.callback(compare ? "🔀 Сравнение: вкл" : "🔀 Сравнение: выкл", "admin:an:cmp:" + t)));
+        rows.add(List.of(
+                keyboardFactory.callback("📈 Тренд 30 дн.", "admin:an:trend:" + t + ":30"),
+                keyboardFactory.callback("📈 Тренд 90 дн.", "admin:an:trend:" + t + ":90")));
+        rows.add(List.of(keyboardFactory.callback("📤 Экспорт CSV", "admin:an:csv:" + t)));
+        switch (tab) {
+            case PNL -> {
+                rows.add(List.of(keyboardFactory.callback("➕ Записать доход", "admin:fin:add"), keyboardFactory.callback("🗑 Записи", "admin:fin:list")));
+            }
+            case TECH -> {
+                rows.add(List.of(keyboardFactory.callback("➕ Инцидент", "admin:inc:add"), keyboardFactory.callback("✅ Закрыть инцидент", "admin:inc:list")));
+            }
+            case SOURCES -> rows.add(List.of(keyboardFactory.callback("📊 Сравнение закупов", "admin:traffic:compare")));
+            case QUESTS -> rows.add(List.of(keyboardFactory.callback("🧭 Пул квестов", "admin:stats:questpool")));
+            case FRAUD -> rows.add(List.of(keyboardFactory.callback("🕵️ Повторы разовых квестов", "admin:onetimeabuse")));
+            case TOURNAMENTS -> rows.add(List.of(keyboardFactory.callback("🏆 Управление турнирами", "admin:tournaments")));
+            default -> { }
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Все вкладки", "admin:an"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleAnalyticsAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
+        String[] p = action.split(":");
+        ru.gamebot.platform.service.AnalyticsService.Tab tab = p.length > 1 ? parseTab(p[1]) : null;
+        switch (p[0]) {
+            case "tab" -> {
+                if (tab != null) sendAnalyticsTab(user, session, tab); else sendAnalyticsHome(user);
+            }
+            case "p" -> {
+                // p:<today|7|30|custom>:<TAB>
+                ru.gamebot.platform.service.AnalyticsService.Tab pt = p.length > 2 ? parseTab(p[2]) : null;
+                if (pt == null) {
+                    sendAnalyticsHome(user);
+                } else if ("custom".equals(p[1])) {
+                    session.getData().put("an_tab", pt.name());
+                    session.setState(SessionState.AN_RANGE_INPUT);
+                    sendText(user.getTelegramId(),
+                            "📅 Введите период: <code>ДД.ММ.ГГГГ-ДД.ММ.ГГГГ</code> (например <code>01.09.2026-25.09.2026</code>, даты включительно, UTC):",
+                            cancelKeyboard());
+                } else {
+                    session.getData().put("an_p", p[1]);
+                    sendAnalyticsTab(user, session, pt);
+                }
+            }
+            case "cmp" -> {
+                ru.gamebot.platform.service.AnalyticsService.Tab ct = p.length > 1 ? parseTab(p[1]) : null;
+                session.getData().put("an_cmp", "1".equals(session.getData().get("an_cmp")) ? "0" : "1");
+                if (ct != null) sendAnalyticsTab(user, session, ct); else sendAnalyticsHome(user);
+            }
+            case "trend" -> {
+                ru.gamebot.platform.service.AnalyticsService.Tab tt = p.length > 1 ? parseTab(p[1]) : null;
+                int days = p.length > 2 && "90".equals(p[2]) ? 90 : 30;
+                if (tt == null) {
+                    sendAnalyticsHome(user);
+                } else {
+                    sendText(user.getTelegramId(), analyticsService.trend(tt, days), backMenuKeyboard("admin:an:tab:" + tt.name()));
+                }
+            }
+            case "csv" -> {
+                if (tab != null) exportAnalyticsCsv(user, session, tab); else sendAnalyticsHome(user);
+            }
+            case "alerts" -> sendAlertsScreen(user);
+            case "alert" -> handleAlertAction(user, session, p);
+            default -> sendAnalyticsHome(user);
+        }
+        answerSilently(callbackQuery.getId());
+    }
+
+    private void exportAnalyticsCsv(AppUser user, UserSession session, ru.gamebot.platform.service.AnalyticsService.Tab tab) {
+        ru.gamebot.platform.service.AnalyticsService.Period period = analyticsPeriod(session);
+        ru.gamebot.platform.service.AnalyticsService.TabData data = analyticsService.compute(tab, period);
+        String stamp = java.time.LocalDate.now().toString();
+        String base = "egc_" + tab.name().toLowerCase();
+        sendCsvDocument(user.getTelegramId(), analyticsService.summaryCsv(data), base + "_summary_" + stamp + ".csv",
+                "📤 " + tab.title + ": сводка (" + period.label() + ")");
+        String raw = analyticsService.rawCsv(tab, period);
+        if (raw != null) {
+            sendCsvDocument(user.getTelegramId(), raw, base + "_raw_" + stamp + ".csv", "Сырые данные за период: " + period.label());
+        }
+    }
+
+    private void sendCsvDocument(Long chatId, String content, String filename, String caption) {
+        try {
+            SendDocument doc = new SendDocument();
+            doc.setChatId(chatId.toString());
+            doc.setDocument(new InputFile(new java.io.ByteArrayInputStream(content.getBytes(java.nio.charset.StandardCharsets.UTF_8)), filename));
+            doc.setCaption(caption);
+            execute(doc);
+        } catch (Exception e) {
+            log.warn("Failed to send CSV {} to {}", filename, chatId, e);
+            sendText(chatId, "❌ Не удалось отправить файл выгрузки, подробности в логе.", null);
+        }
+    }
+
+    private void handleFinanceAction(AppUser user, UserSession session, String action) {
+        String[] p = action.split(":");
+        switch (p[0]) {
+            case "add" -> sendText(user.getTelegramId(), "💵 <b>Записать доход</b>\n\nВыберите вид дохода:",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("Прямая реклама (комиссия менеджера)", "admin:fin:kind:" + ru.gamebot.platform.domain.model.FinanceEntry.DIRECT_ADS)),
+                            List.of(keyboardFactory.callback("Yandex РСЯ", "admin:fin:kind:" + ru.gamebot.platform.domain.model.FinanceEntry.YANDEX_RSYA)),
+                            List.of(keyboardFactory.callback("Прочее", "admin:fin:kind:" + ru.gamebot.platform.domain.model.FinanceEntry.OTHER)),
+                            List.of(keyboardFactory.callback("⬅️ Назад", "admin:an:tab:PNL")))));
+            case "kind" -> {
+                String kind = p.length > 1 ? p[1] : ru.gamebot.platform.domain.model.FinanceEntry.OTHER;
+                session.getData().put("fin_kind", kind);
+                session.setState(SessionState.FIN_ENTRY_INPUT);
+                sendText(user.getTelegramId(),
+                        "💵 <b>" + ru.gamebot.platform.domain.model.FinanceEntry.kindLabel(kind) + "</b>\n\n"
+                                + "Введите сумму в рублях (слитно, без пробелов), при желании дату и заметку:\n"
+                                + "<code>15000</code>\n<code>15000 24.09.2026 Telega.io, пост</code>\n<code>15000 Telega.io</code>\n\n"
+                                + "Без даты запись пойдёт сегодняшним числом.",
+                        cancelKeyboard());
+            }
+            case "list" -> {
+                List<ru.gamebot.platform.domain.model.FinanceEntry> latest = financeService.latest();
+                List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+                StringBuilder sb = new StringBuilder("🗑 <b>Последние записи доходов</b>\n\nНажмите на запись, чтобы удалить её.\n");
+                if (latest.isEmpty()) sb.append("\nЗаписей пока нет.");
+                for (ru.gamebot.platform.domain.model.FinanceEntry e : latest) {
+                    rows.add(List.of(keyboardFactory.callback("🗑 " + e.getEntryDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM")) + " · "
+                            + ru.gamebot.platform.domain.model.FinanceEntry.kindLabel(e.getKind()) + " · " + e.getAmountRub() + " ₽", "admin:fin:del:" + e.getId())));
+                }
+                rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:an:tab:PNL")));
+                sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+            }
+            case "del" -> {
+                Long id = p.length > 1 ? parseLong(p[1]) : null;
+                if (id != null) financeService.delete(id);
+                handleFinanceAction(user, session, "list");
+            }
+            default -> sendAnalyticsTabSafe(user, session, "PNL");
+        }
+    }
+
+    private void sendAnalyticsTabSafe(AppUser user, UserSession session, String tabName) {
+        ru.gamebot.platform.service.AnalyticsService.Tab t = parseTab(tabName);
+        if (t != null) sendAnalyticsTab(user, session, t); else sendAnalyticsHome(user);
+    }
+
+    private void handleIncidentAction(AppUser user, UserSession session, String action) {
+        String[] p = action.split(":");
+        switch (p[0]) {
+            case "add" -> sendText(user.getTelegramId(), "🛠 <b>Новый инцидент</b>\n\nВыберите приоритет:",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("🔴 Высокий", "admin:inc:prio:HIGH")),
+                            List.of(keyboardFactory.callback("🟡 Средний", "admin:inc:prio:MEDIUM")),
+                            List.of(keyboardFactory.callback("🟢 Низкий", "admin:inc:prio:LOW")),
+                            List.of(keyboardFactory.callback("⬅️ Назад", "admin:an:tab:TECH")))));
+            case "prio" -> {
+                session.getData().put("inc_prio", p.length > 1 ? p[1] : "MEDIUM");
+                session.setState(SessionState.INC_INPUT);
+                sendText(user.getTelegramId(), "🛠 Опишите баг или инцидент одной-двумя фразами (что сломано, где):", cancelKeyboard());
+            }
+            case "list" -> {
+                List<ru.gamebot.platform.domain.model.IncidentEntry> open =
+                        incidentEntryRepository.findAllByStatusOrderByCreatedAtDesc(ru.gamebot.platform.domain.model.IncidentEntry.OPEN);
+                List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+                StringBuilder sb = new StringBuilder("✅ <b>Закрыть инцидент</b>\n\nНажмите на инцидент, чтобы отметить его решённым.\n");
+                if (open.isEmpty()) sb.append("\nОткрытых инцидентов нет.");
+                for (ru.gamebot.platform.domain.model.IncidentEntry e : open) {
+                    rows.add(List.of(keyboardFactory.callback(ru.gamebot.platform.domain.model.IncidentEntry.priorityIcon(e.getPriority())
+                            + " #" + e.getId() + " " + trim(e.getTitle(), 40), "admin:inc:close:" + e.getId())));
+                }
+                rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:an:tab:TECH")));
+                sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+            }
+            case "close" -> {
+                Long id = p.length > 1 ? parseLong(p[1]) : null;
+                if (id != null) {
+                    incidentEntryRepository.findById(id).ifPresent(e -> {
+                        e.setStatus(ru.gamebot.platform.domain.model.IncidentEntry.CLOSED);
+                        e.setClosedAt(java.time.LocalDateTime.now());
+                        incidentEntryRepository.save(e);
+                    });
+                }
+                handleIncidentAction(user, session, "list");
+            }
+            default -> sendAnalyticsTabSafe(user, session, "TECH");
+        }
+    }
+
+    private void sendAlertsScreen(AppUser user) {
+        List<ru.gamebot.platform.domain.model.AlertRule> rules = alertService.list();
+        StringBuilder sb = new StringBuilder("🔔 <b>Алерты по метрикам</b>\n\n");
+        sb.append("Правило: уведомить в личные сообщения, если метрика изменилась не меньше чем на X% за Y дней. "
+                + "Сравниваются ежедневные снимки, проверка раз в сутки (01:10 UTC), повтор одного правила - не чаще раза в окно Y.\n\n");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (rules.isEmpty()) sb.append("Правил пока нет.\n");
+        int i = 1;
+        for (ru.gamebot.platform.domain.model.AlertRule r : rules) {
+            sb.append(i++).append(". ").append(r.isEnabled() ? "🟢" : "⚪").append(" ")
+              .append(ru.gamebot.platform.service.AlertService.labelOf(r.getMetricKey())).append(": ±").append(r.getThresholdPercent())
+              .append("% за ").append(r.getDays()).append(" дн.\n");
+            rows.add(List.of(
+                    keyboardFactory.callback((r.isEnabled() ? "⏸ Выключить " : "▶️ Включить ") + "#" + r.getId(), "admin:an:alert:tog:" + r.getId()),
+                    keyboardFactory.callback("🗑 Удалить #" + r.getId(), "admin:an:alert:del:" + r.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("➕ Добавить правило", "admin:an:alert:add")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Аналитика", "admin:an")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleAlertAction(AppUser user, UserSession session, String[] p) {
+        // p = ["alert", <act>, <arg>]
+        String act = p.length > 1 ? p[1] : "";
+        switch (act) {
+            case "add" -> {
+                List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+                List<InlineKeyboardButton> pair = new ArrayList<>();
+                for (java.util.Map.Entry<String, String> e : ru.gamebot.platform.service.AlertService.metricLabels().entrySet()) {
+                    pair.add(keyboardFactory.callback(e.getValue(), "admin:an:alert:m:" + e.getKey()));
+                    if (pair.size() == 2) {
+                        rows.add(new ArrayList<>(pair));
+                        pair.clear();
+                    }
+                }
+                if (!pair.isEmpty()) rows.add(new ArrayList<>(pair));
+                rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:an:alerts")));
+                sendText(user.getTelegramId(), "🔔 <b>Новое правило</b>\n\nВыберите метрику:", keyboardFactory.rowsLayout(rows));
+            }
+            case "m" -> {
+                String key = p.length > 2 ? p[2] : null;
+                if (key == null || !ru.gamebot.platform.service.AlertService.metricLabels().containsKey(key)) {
+                    sendAlertsScreen(user);
+                    return;
+                }
+                session.getData().put("alert_key", key);
+                session.setState(SessionState.ALERT_INPUT);
+                sendText(user.getTelegramId(),
+                        "🔔 <b>" + ru.gamebot.platform.service.AlertService.labelOf(key) + "</b>\n\nВведите порог в процентах и окно в днях через пробел, "
+                                + "например <code>15 7</code> - уведомить, если метрика изменилась на 15% и больше за 7 дней:",
+                        cancelKeyboard());
+            }
+            case "tog" -> {
+                Long id = p.length > 2 ? parseLong(p[2]) : null;
+                if (id != null) alertService.toggle(id);
+                sendAlertsScreen(user);
+            }
+            case "del" -> {
+                Long id = p.length > 2 ? parseLong(p[2]) : null;
+                if (id != null) alertService.delete(id);
+                sendAlertsScreen(user);
+            }
+            default -> sendAlertsScreen(user);
+        }
+    }
+
     /** Сводка метрик для презентации потенциальному рекламодателю — отдельная от внутренней
      *  "📊 Статистика", т.к. состав и подача другие (аудитория/вовлечённость/виральность,
      *  а не операционка платформы). Считается вживую по запросу, без снепшотов/истории. */
@@ -12785,6 +13257,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("\n\n🎮 Все турниры - в нашем боте: <a href=\"https://t.me/").append(getBotUsername())
           .append("\">@").append(getBotUsername()).append("</a>");
         return sb.toString();
+    }
+
+    /** Сработал алерт по метрике (AlertService.check) - личное сообщение всем админам. */
+    @org.springframework.context.event.EventListener
+    public void onAnalyticsAlert(ru.gamebot.platform.event.AnalyticsAlertEvent event) {
+        for (Long adminId : adminService.allAdminIds()) {
+            try {
+                sendText(adminId, event.getTextHtml(), backMenuKeyboard("admin:an"));
+            } catch (Exception e) {
+                log.warn("Failed to send analytics alert to admin {}", adminId, e);
+            }
+        }
     }
 
     /** Авто-продолженный турнир Clash Royale попал на возможную границу сезона - предупреждаем админов (TournamentService.autoCreateNextTournament). */
@@ -16732,61 +17216,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
 
         if (ROLE_ADMIN.equals(role)) {
+            // Админ-меню сгруппировано по разделам (2026-09-25, ТЗ «Метрики для управления проектом»): на верхнем уровне только
+            // разделы, все прежние кнопки лежат внутри (см. sendAdminGroup) с теми же callback'ами.
+            rows.add(List.of(keyboardFactory.callback("📊 Аналитика", "admin:an")));
+            rows.add(List.of(keyboardFactory.callback("📣 Рекламодателям", "admin:advstats")));
             rows.add(List.of(
-                    keyboardFactory.callback("👥 Пользователи", "admin:users:0"),
-                    keyboardFactory.callback("📊 Статистика", "admin:stats")
+                    keyboardFactory.callback("👥 Игроки", "admin:grp:players"),
+                    keyboardFactory.callback("🎯 Квесты", "admin:grp:quests")
             ));
-            rows.add(List.of(keyboardFactory.callback("📡 Сейчас на платформе", "admin:live")));
-            rows.add(List.of(keyboardFactory.callback("🩺 Проверка ошибок", "admin:health")));
-            rows.add(List.of(keyboardFactory.callback("📨 Рассылки: отчёт", "admin:nudgereport")));
-            if (adminService.resolvedAdminIds().contains(user.getTelegramId())) {
-                rows.add(List.of(keyboardFactory.callback("🚀 Обновить бота", "admin:deploy")));
-            }
-            rows.add(List.of(keyboardFactory.callback("📊 Статистика для рекламодателя", "admin:advstats")));
+            long pendingW = rewardService.findPendingWithdrawals().size();
             rows.add(List.of(
-                    keyboardFactory.callback("➕ Квест", "admin:create"),
-                    keyboardFactory.callback("📋 По шаблону", "admin:template")
+                    keyboardFactory.callback(pendingW > 0 ? "💰 Деньги (" + pendingW + ")" : "💰 Деньги", "admin:grp:money"),
+                    keyboardFactory.callback("📣 Коммуникации", "admin:grp:comm")
             ));
             rows.add(List.of(
-                    keyboardFactory.callback("✏️ Квесты", "admin:edit"),
-                    keyboardFactory.callback("📈 Топ квестов", "admin:queststats")
+                    keyboardFactory.callback("🏆 События и рост", "admin:grp:growth"),
+                    keyboardFactory.callback("🛠 Система", "admin:grp:system")
             ));
-            rows.add(List.of(keyboardFactory.callback("🕵️ Повторы разовых квестов", "admin:onetimeabuse")));
-            rows.add(List.of(keyboardFactory.callback("📊 Статистика UGC-квестов", "admin:ugcstats")));
-            rows.add(List.of(keyboardFactory.callback("📊 Статистика Brawl Stars", "admin:brawlstats")));
-            rows.add(List.of(
-                    keyboardFactory.callback("📊 Статистика CoC", "admin:clashstats"),
-                    keyboardFactory.callback("📊 Статистика Clash Royale", "admin:clashroyalestats")
-            ));
-            rows.add(List.of(
-                    keyboardFactory.callback("📊 Статистика CS2", "admin:cs2stats"),
-                    keyboardFactory.callback("📊 Статистика PUBG PC", "admin:pubgpcstats")
-            ));
-            rows.add(List.of(
-                    keyboardFactory.callback("📊 Статистика PUBG Mobile", "admin:pubgmobilestats"),
-                    keyboardFactory.callback("📊 Статистика Dota 2", "admin:dotastats")
-            ));
-            rows.add(List.of(keyboardFactory.callback("🏷️ Теги CoC/Clash Royale", "admin:clashtags")));
-            rows.add(List.of(keyboardFactory.callback("🔁 Активность автоквестов", "admin:autoquest-activity")));
-            rows.add(List.of(keyboardFactory.callback("📱 Бот vs Мини-апп", "admin:surface-activity")));
-            rows.add(List.of(
-                    keyboardFactory.callback("🎁 Магазин наград", "admin:rewards"),
-                    keyboardFactory.callback("📣 Рассылка", "admin:broadcast")
-            ));
-            rows.add(List.of(keyboardFactory.callback("📅 Запланированные рассылки", "admin:broadcast:scheduled")));
-            rows.add(List.of(keyboardFactory.callback("💳 Пополнить Payout Pool", "admin:payout")));
-            long pendingWithdrawals = rewardService.findPendingWithdrawals().size();
-            String wLabel = pendingWithdrawals > 0
-                    ? "💸 Заявки на вывод (" + pendingWithdrawals + ")"
-                    : "💸 Заявки на вывод";
-            rows.add(List.of(keyboardFactory.callback(wLabel, "admin:withdrawals")));
-            rows.add(List.of(keyboardFactory.callback("📈 Трафик", "admin:traffic")));
-            rows.add(List.of(keyboardFactory.callback("🗳 Голосования", "admin:polls")));
-            rows.add(List.of(keyboardFactory.callback("🏆 Турниры", "admin:tournaments")));
-            rows.add(List.of(keyboardFactory.callback("🎫 Battle Pass", "admin:seasons")));
-            rows.add(List.of(keyboardFactory.callback("🚀 Буст рефералки", "admin:refboost")));
-            rows.add(List.of(keyboardFactory.callback("⚔️ Состав отряда", "admin:squads:search")));
-            rows.add(List.of(keyboardFactory.callback("🩹 Откат недельного XP (Brawl)", "admin:xpoverpay:weekly:audit")));
             return keyboardFactory.rowsLayout(rows);
         }
 

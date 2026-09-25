@@ -73,6 +73,21 @@ public class PlatformSnapshot {
     @Column(columnDefinition = "bigint default 0")
     private long completionRatePct;
 
+    // Расширение под раздел «Аналитика» (2026-09-25): nullable - у старых снимков значений нет («—», без нулей в трендах).
+    private Long dau;
+    private Long mau;
+    private Long questTakers7d;
+    private Long secondQuestReturnPct;
+    private Long pendingSubmissions;
+    private Long avgReviewMin7d;
+    private Long earnedExc7d;
+    private Long paidOutExc7d;
+    private Long referralsTotal;
+    private Long referralsActivated;
+    private Long blockedUsers;
+    /** Аптайм за 7 дней, промилле (999 = 99,9%). */
+    private Long uptimePermille7d;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 }

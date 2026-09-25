@@ -183,4 +183,15 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     @org.springframework.data.jpa.repository.Query("SELECT u.trafficSourceCode, u.id, u.createdAt, u.profileCompleted, u.registrationCompleted, "
             + "u.lastActivityDate, u.lastBotActivityAt, u.lastMiniAppOpenAt FROM AppUser u WHERE u.trafficSourceCode IS NOT NULL")
     List<Object[]> findTrafficSourceUsersForFunnel();
+
+    long countByBlockedTrue();
+
+    long countByReferredByTelegramIdIsNotNull();
+
+    long countByReferredByTelegramIdIsNotNullAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(LocalDateTime from, LocalDateTime to);
+
+    long countByTrafficSourceCodeIsNotNullAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(LocalDateTime from, LocalDateTime to);
+
+    /** Регистрации за период для выгрузки в CSV (границы: from включительно, to исключительно). */
+    List<AppUser> findAllByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(LocalDateTime from, LocalDateTime to);
 }

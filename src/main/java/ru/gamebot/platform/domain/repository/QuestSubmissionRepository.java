@@ -269,4 +269,31 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     /** Число одобренных выполнений по каждому квесту с момента since (QuestPoolHealthService). */
     @Query("SELECT s.quest.id, COUNT(s) FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :since GROUP BY s.quest.id")
     List<Object[]> countApprovedGroupedByQuestSince(@Param("since") LocalDateTime since);
+
+    /** Время проверки модератором: [создана, проверена] по одобренным и отклонённым заявкам за период (среднее считается в Java). */
+    @Query("SELECT s.createdAt, s.updatedAt FROM QuestSubmission s WHERE s.status IN ('APPROVED', 'REJECTED') "
+            + "AND s.updatedAt >= :from AND s.updatedAt < :to AND s.createdAt IS NOT NULL AND s.updatedAt IS NOT NULL")
+    List<Object[]> findReviewTimesBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query("SELECT s.createdAt FROM QuestSubmission s WHERE s.status = 'PENDING' AND s.createdAt IS NOT NULL")
+    List<LocalDateTime> findPendingCreatedAt();
+
+    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :from AND s.updatedAt < :to")
+    long countApprovedBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.status = 'REJECTED' AND s.updatedAt >= :from AND s.updatedAt < :to")
+    long countRejectedBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.duplicatePhotoDetected = true AND s.createdAt >= :from AND s.createdAt < :to")
+    long countDuplicatePhotosBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /** Одобрения по игрокам за период: [telegramId, никнейм, число] по убыванию - топ и поиск выбросов (фрод-вкладка). */
+    @Query("SELECT s.user.telegramId, s.user.nickname, COUNT(s) FROM QuestSubmission s WHERE s.status = 'APPROVED' "
+            + "AND s.updatedAt >= :from AND s.updatedAt < :to GROUP BY s.user.telegramId, s.user.nickname ORDER BY COUNT(s) DESC")
+    List<Object[]> findApprovalsPerUserBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /** Одобренные выполнения за период для выгрузки в CSV: [id, telegramId, название, игра, дата, EXC]. */
+    @Query("SELECT s.id, s.user.telegramId, s.quest.title, s.quest.gameName, s.updatedAt, s.awardedCoins FROM QuestSubmission s "
+            + "WHERE s.status = 'APPROVED' AND s.updatedAt >= :from AND s.updatedAt < :to ORDER BY s.updatedAt ASC")
+    List<Object[]> findApprovedRowsBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }

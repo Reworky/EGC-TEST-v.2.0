@@ -11,4 +11,8 @@ public interface PlatformSnapshotRepository extends JpaRepository<PlatformSnapsh
     Optional<PlatformSnapshot> findBySnapshotDate(LocalDate date);
 
     List<PlatformSnapshot> findTop30ByOrderBySnapshotDateDesc();
+
+    Optional<PlatformSnapshot> findFirstBySnapshotDateLessThanEqualOrderBySnapshotDateDesc(LocalDate date);
+
+    List<PlatformSnapshot> findAllBySnapshotDateGreaterThanEqualOrderBySnapshotDateAsc(LocalDate from);
 }

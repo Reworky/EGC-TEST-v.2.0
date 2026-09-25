@@ -38,4 +38,9 @@ public interface ExcTransactionRepository extends JpaRepository<ExcTransaction, 
     @Query("SELECT COUNT(DISTINCT t.user.id) FROM ExcTransaction t "
             + "WHERE t.type = 'REFERRAL' AND t.description LIKE '%с квеста реферала%'")
     long countReferrersWithTrickleEarnings();
+
+    /** Операции EXC за период для выгрузки в CSV: [дата, telegramId, тип, сумма]. */
+    @Query("SELECT t.createdAt, t.user.telegramId, t.type, t.amount FROM ExcTransaction t "
+            + "WHERE t.createdAt >= :from AND t.createdAt < :to ORDER BY t.createdAt ASC")
+    List<Object[]> findRowsBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }

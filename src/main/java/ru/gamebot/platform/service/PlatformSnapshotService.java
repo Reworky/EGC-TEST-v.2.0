@@ -26,6 +26,7 @@ public class PlatformSnapshotService {
     private final QuestSubmissionRepository questSubmissionRepository;
     private final RewardRequestRepository rewardRequestRepository;
     private final QuestRepository questRepository;
+    private final AnalyticsService analyticsService;
 
     @Transactional
     public PlatformSnapshot takeSnapshot() {
@@ -65,6 +66,8 @@ public class PlatformSnapshotService {
         snap.setCompletionRatePct(moderated > 0 ? snap.getTotalApprovedQuests() * 100 / moderated : 0);
 
         snap.setCreatedAt(nowDt);
+        // Метрики для трендов раздела «Аналитика» (DAU/MAU, очередь модерации, начислено/выплачено за 7 дн., аптайм и др.)
+        analyticsService.applyExtras(snap);
 
         PlatformSnapshot saved = snapshotRepository.save(snap);
         log.info("Platform snapshot saved: date={}, users={}, approved={}, paidOut={}",
