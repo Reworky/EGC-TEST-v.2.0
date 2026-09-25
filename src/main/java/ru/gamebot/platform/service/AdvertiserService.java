@@ -206,6 +206,7 @@ public class AdvertiserService {
         alive.add(new String[]{"DAU / MAU", v(line(eng, "dau_mau"), "%")});
         alive.add(new String[]{"Возврат за 7 дней (из пришедших 7-14 дней назад)", v(line(act, "ret7"), "%")});
         alive.add(new String[]{"Возврат за 30 дней (из пришедших 30-60 дней назад)", v(line(act, "ret30"), "%")});
+        alive.add(new String[]{"Взяли 2-й квест (из сделавших 1-й квест ≥7 дней назад)", v(line(eng, "second"), "%")});
         alive.add(new String[]{"Активны за 7 дней от базы", v(line(act, "active7pct"), "%")});
         blocks.add(new Block("Живая аудитория", alive));
         // 2.3 Экономическая вовлечённость
