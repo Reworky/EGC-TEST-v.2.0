@@ -4896,6 +4896,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // «Что делать дальше» - сразу под подтверждением (2026-09-25, по просьбе владельца: игрок после «Взять» не понимал, что делать).
         // Для партнёрских квестов блок не нужен: инструкция со ссылкой уже выводится ниже. «Считаются бои после взятия» - только для
         // Brawl Stars (там прогресс считается от снимка primeBaseline в момент взятия), для остальных игр это не утверждаем.
+        // Мини-обучение из трёх шагов - пока у игрока нет ни одного выполненного квеста (2026-09-25). Партнёрским квестам не нужно:
+        // у них своя инструкция со ссылкой ниже.
+        String firstQuestTutorial = "";
+        if (!freshQuest.isExternalAutoApprove() && user.getCompletedQuests() == 0) {
+            firstQuestTutorial = "📖 <b>Как это работает</b>\n"
+                    + (freshQuestAutoVerified
+                        ? "1️⃣ Играйте: бот сам следит за прогрессом\n"
+                            + "2️⃣ Когда условие выполнено, придёт сообщение с наградой\n"
+                        : "1️⃣ Выполните задание в игре\n"
+                            + "2️⃣ Нажмите «📤 Отчёт» и отправьте скриншот\n"
+                            + "3️⃣ Модератор проверит отчёт, награда придёт сообщением\n")
+                    + (freshQuestAutoVerified ? "3️⃣ " : "")
+                    + (freshQuestAutoVerified ? "EXC и XP появятся на балансе: EXC можно потратить в магазине наград или вывести\n" : "")
+                    + "\n";
+        }
         String nextStep = freshQuest.isExternalAutoApprove() ? ""
                 : freshQuestAutoVerified
                     ? "👉 <b>Теперь идите в игру и выполняйте задание.</b>\n"
@@ -4907,6 +4922,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 notice + "\n\n"
                         + nextStep
+                        + firstQuestTutorial
                         + "🎯 <b>" + escape(freshQuest.getTitle()) + "</b>\n\n"
                         + (freshQuest.isSponsored() ? "🎮 Название канала: <b>" : "🎮 Игра: <b>") + escape(freshQuest.getGameName()) + "</b>\n"
                         + (freshQuest.isSponsored() || "UGC".equalsIgnoreCase(freshQuest.getGameName()) ? "" : (!gameCatalogService.isFlat(freshQuest.getGameName()) && freshQuest.getCategory() != null ? "📚 Формат: <b>" + escape(freshQuest.getCategory()) + "</b>\n" : "") + "🕹️ Платформа: <b>" + escape(freshQuest.getPlatform()) + "</b>\n")
@@ -4920,6 +4936,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + (!freshQuest.isSponsored() && !"UGC".equalsIgnoreCase(freshQuest.getGameName()) && freshQuest.getTicketReward() > 0 ? "\n🎟 +" + freshQuest.getTicketReward() + " билет(а) для Колеса фортуны" : "")
                         + (freshQuest.isExternalAutoApprove()
                             ? "\n\n📎 <b>Что нужно сделать:</b>\n" + escape(questService.personalizeInstruction(freshQuest.getInstruction(), user.getTelegramId()))
+                            : "")
+                        // Квесты с отчётом: повторяем, что примет модерация, - на карточке ДО взятия это было, а здесь пропадало
+                        + (!freshQuest.isExternalAutoApprove() && !freshQuestAutoVerified && !freshQuest.isSponsored()
+                                && freshQuest.getRequirements() != null && !freshQuest.getRequirements().isBlank()
+                            ? "\n\n✅ <b>Что примет модерация:</b>\n" + escape(freshQuest.getRequirements())
                             : ""),
                 keyboardFactory.smartLayout(buttons));
     }
@@ -5027,7 +5048,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "Отправьте скриншот(ы), видео, файл или ссылку.\n"
                         + "Можно отправить сразу несколько фото альбомом или по одному — бот их соберёт.\n"
                         + "Когда закончите — нажмите <b>«Отправить отчёт»</b>.\n\n"
-                        + "🎯 Квест: <b>" + escape(quest.getTitle()) + "</b>",
+                        + "🎯 Квест: <b>" + escape(quest.getTitle()) + "</b>"
+                        + (!quest.isSponsored() && quest.getRequirements() != null && !quest.getRequirements().isBlank()
+                            ? "\n\n✅ <b>Что примет модерация:</b>\n" + escape(quest.getRequirements())
+                            : ""),
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("❌ Отмена", "menu:myquests"))
                 )));
