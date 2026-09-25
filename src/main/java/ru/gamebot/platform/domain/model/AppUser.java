@@ -198,6 +198,13 @@ public class AppUser {
     @Column(columnDefinition = "integer default 0")
     private int adWheelSpins;
 
+    /** Подряд спинов рекламного колеса без приза от 100 EXC / билета: на 20-м гарантируется такой приз (AdWheelService). */
+    @Column(columnDefinition = "integer default 0")
+    private int adWheelDrySpins;
+
+    /** Когда игрок в последний раз выиграл джекпот рекламного колеса (не чаще раза в 30 дней на игрока). */
+    private LocalDateTime adWheelJackpotAt;
+
     // Withdrawal limits
     @Column(columnDefinition = "bigint default 0")
     private long monthlyWithdrawnExc;

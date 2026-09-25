@@ -73,9 +73,9 @@ public class WheelController {
 
     /** spins — накопленные спины рекламного колеса; remaining* — сколько показов рекламы ещё доступно сегодня
      * (лимит показов общий с обычной рекламой за 30 EXC — каждый показ идёт либо туда, либо в спин). */
-    public record AdWheelStatusDto(int spins, int remainingAdsgram, int remainingTelega) {}
+    public record AdWheelStatusDto(int spins, int remainingAdsgram, int remainingTelega, int untilGuarantee) {}
 
-    public record AdSpinResponseDto(boolean success, String message, String type, long excAmount, String label, int spinsLeft) {}
+    public record AdSpinResponseDto(boolean success, String message, String type, long excAmount, String label, int spinsLeft, boolean jackpot) {}
 
     @GetMapping("/ad")
     public ResponseEntity<AdWheelStatusDto> adStatus(@AuthenticationPrincipal Long telegramId) {
@@ -84,7 +84,8 @@ public class WheelController {
         return ResponseEntity.ok(new AdWheelStatusDto(
                 user.getAdWheelSpins(),
                 userService.getAdRewardsRemainingToday(user, AdRewardSource.ADSGRAM),
-                userService.getAdRewardsRemainingToday(user, AdRewardSource.TELEGA)));
+                userService.getAdRewardsRemainingToday(user, AdRewardSource.TELEGA),
+                AdWheelService.spinsUntilGuarantee(user)));
     }
 
     @PostMapping("/ad/spin")
@@ -93,9 +94,9 @@ public class WheelController {
         if (user == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         try {
             AdWheelService.AdSpinResult r = adWheelService.spin(user.getId());
-            return ResponseEntity.ok(new AdSpinResponseDto(true, "Удача!", r.type(), r.excAmount(), r.label(), r.spinsLeft()));
+            return ResponseEntity.ok(new AdSpinResponseDto(true, "Удача!", r.type(), r.excAmount(), r.label(), r.spinsLeft(), r.jackpot()));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.ok(new AdSpinResponseDto(false, e.getMessage(), null, 0, null, user.getAdWheelSpins()));
+            return ResponseEntity.ok(new AdSpinResponseDto(false, e.getMessage(), null, 0, null, user.getAdWheelSpins(), false));
         }
     }
 }

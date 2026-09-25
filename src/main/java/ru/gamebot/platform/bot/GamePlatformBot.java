@@ -15428,6 +15428,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Джекпот рекламного колеса - уведомление админам (AdWheelService.spin): крупная выдача EXC, чтобы её было видно сразу. */
+    @org.springframework.context.event.EventListener
+    public void onAdWheelJackpot(ru.gamebot.platform.event.AdWheelJackpotEvent event) {
+        String text = "👑 <b>Джекпот рекламного колеса</b>\n\n"
+                + "Игрок <b>" + escape(event.getNickname()) + "</b> (ID <code>" + event.getTelegramId() + "</code>) выиграл <b>"
+                + event.getExcAmount() + " EXC</b>.";
+        for (Long adminId : adminService.allAdminIds()) {
+            try {
+                sendText(adminId, text, null);
+            } catch (Exception e) {
+                log.warn("Failed to notify admin {} about ad wheel jackpot", adminId, e);
+            }
+        }
+    }
+
     /** Недельный алерт админам «пул квестов не растёт» — см. QuestPoolHealthService.weeklyCheck. */
     @org.springframework.context.event.EventListener
     public void onQuestPoolStale(ru.gamebot.platform.event.QuestPoolStaleEvent event) {
