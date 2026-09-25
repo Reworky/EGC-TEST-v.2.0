@@ -9901,9 +9901,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Строка "остаток месячного лимита" для карточки заявки на вывод (эта заявка уже учтена в счётчике на момент подачи). */
     private String monthlyLimitLine(AppUser requester) {
         long limit = sinkShopService.getMonthlyLimit(requester.getXp());
-        long remaining = sinkShopService.getRemainingWithdrawalLimit(requester);
-        long used = limit - remaining;
-        return "📊 Месячный лимит: <b>" + used + " / " + limit + " EXC</b> использовано (осталось " + remaining + ")\n";
+        // getRemainingWithdrawalLimit заодно обнуляет счётчик при смене месяца - читаем реальный счётчик ПОСЛЕ него.
+        // Раньше used считался как limit - remaining и обрезался до лимита: при превышении (лимит игрока упал после отката
+        // завышенного XP, а заявка была принята при старом уровне) карточка показывала «25000 / 25000» и скрывала превышение.
+        sinkShopService.getRemainingWithdrawalLimit(requester);
+        long used = requester.getMonthlyWithdrawnExc();
+        if (used > limit) {
+            return "📊 Месячный лимит: <b>" + used + " / " + limit + " EXC</b> ⚠️ превышение на <b>" + (used - limit)
+                    + " EXC</b> (лимит по текущему уровню игрока; заявка могла быть принята при более высоком XP)\n";
+        }
+        return "📊 Месячный лимит: <b>" + used + " / " + limit + " EXC</b> использовано (осталось " + (limit - used) + ")\n";
     }
 
     private void sendPayoutConfirmedCard(AppUser admin, RewardRequest req, boolean isModFlow) {
