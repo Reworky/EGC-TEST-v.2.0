@@ -170,6 +170,11 @@ public class Quest {
     /** Целевая дельта с момента взятия квеста: побед в атаках (ATTACK_WINS), золота/эликсира (RESOURCES, берётся максимум из двух) или уровней Ратуши (TOWN_HALL). */
     private Integer clashTargetCount;
 
+    /** Только для ClashVerifyType.ACHIEVEMENT: точное имя ачивки из ответа API players/{tag}.achievements (например
+     *  "Humiliator") — накопительное значение за всю историю аккаунта, прогресс = прирост с момента взятия квеста. */
+    @Column(length = 64)
+    private String clashAchievementName;
+
     /** null = обычный квест — включает авто-верификацию через официальный Clash Royale API. varchar принудительно (см. clashVerifyType). */
     @Enumerated(EnumType.STRING)
     @Column(columnDefinition = "varchar(20)")

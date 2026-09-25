@@ -36,8 +36,24 @@ public class SchemaMigrationRunner implements CommandLineRunner {
         addColumnIfMissing("app_users", "silent_gap_nudge_sent_at", "TIMESTAMP");
         addColumnIfMissing("app_users", "egc_pass_teaser_sent_at", "TIMESTAMP");
         addColumnIfMissing("traffic_sources", "spend_rub", "BIGINT DEFAULT 0");
+        addColumnIfMissing("quests", "clash_achievement_name", "VARCHAR(64)");
+        // Расширение enum'ов авто-проверок (2026-09-26): на случай, если колонка когда-то была создана как нативный H2 ENUM
+        // с фиксированным списком значений (см. feedback_ddl_auto_enum_columns) - принудительно обычный VARCHAR; для уже
+        // VARCHAR(20) - безвредное повторение.
+        alterColumn("quests", "brawl_verify_type", "VARCHAR(20)");
+        alterColumn("quests", "clash_verify_type", "VARCHAR(20)");
+        alterColumn("quests", "clash_royale_verify_type", "VARCHAR(20)");
         createIndexIfMissing("idx_notif_user_sent", "notification_log", "user_id, sent_at");
         createIndexIfMissing("idx_notif_sent", "notification_log", "sent_at");
+    }
+
+    private void alterColumn(String table, String column, String definition) {
+        try {
+            jdbcTemplate.execute("ALTER TABLE " + table + " ALTER COLUMN " + column + " " + definition);
+            log.info("Schema check: {}.{} -> {} OK", table, column, definition);
+        } catch (Exception e) {
+            log.warn("Schema alter failed for {}.{}: {}", table, column, e.getMessage());
+        }
     }
 
     private void createIndexIfMissing(String name, String table, String columns) {

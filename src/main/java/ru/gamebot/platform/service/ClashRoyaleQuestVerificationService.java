@@ -83,6 +83,8 @@ public class ClashRoyaleQuestVerificationService {
             case WAR_DAY_WINS -> info.warDayWins();
             case DONATIONS -> info.totalDonations();
             case BATTLE_COUNT -> info.battleCount();
+            case COLLECTION_LEVEL -> info.collectionLevel();
+            case KING_TOWER -> info.kingTowerLevel();
             default -> info.wins(); // WINS
         };
 

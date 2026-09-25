@@ -72,7 +72,20 @@ public class ClashOfClansApiService {
      * attackWins, где инцидент был подтверждён явно), см. клубную память по инциденту 2026-09-22.
      */
     public record PlayerInfo(String tag, String name, int townHallLevel, int multiplayerWins, int goldLooted, int elixirLooted,
-                              int trophies, int warStars, int donations, int defenseWins, int expLevel, int builderBaseTrophies) {}
+                              int trophies, int warStars, int donations, int defenseWins, int expLevel, int builderBaseTrophies,
+                              int builderHallLevel, int heroLevels, int troopLevels, java.util.Map<String, Integer> achievements) {
+
+        /** Накопительное значение ачивки за всю историю аккаунта (0, если такой ачивки нет в ответе). */
+        public int achievement(String name) {
+            if (name == null) return 0;
+            return achievements.getOrDefault(name.toLowerCase(), 0);
+        }
+    }
+
+    /** Ачивки, на которые переведены донаты и защиты (2026-09-26): top-level donations/defenseWins - счётчики ТЕКУЩЕГО сезона
+     *  и обнуляются (проба 2026-09-25: donations=0 при "Friend in Need"=130, defenseWins=0 при "Unbreakable"=10). */
+    public static final String ACH_DONATIONS = "Friend in Need";
+    public static final String ACH_DEFENSES = "Unbreakable";
 
     public static class ClashApiTransientException extends Exception {
         public ClashApiTransientException(String message) { super(message); }
@@ -129,8 +142,10 @@ public class ClashOfClansApiService {
             int goldLooted = 0;
             int elixirLooted = 0;
             int multiplayerWins = 0;
+            java.util.Map<String, Integer> achievements = new java.util.HashMap<>();
             for (JsonNode achievement : node.path("achievements")) {
                 String name = achievement.path("name").asText("");
+                if (!name.isEmpty()) achievements.merge(name.toLowerCase(), achievement.path("value").asInt(0), Math::max);
                 if ("Gold Grab".equalsIgnoreCase(name)) {
                     goldLooted = achievement.path("value").asInt(0);
                 } else if ("Elixir Escapade".equalsIgnoreCase(name)) {
@@ -151,10 +166,20 @@ public class ClashOfClansApiService {
                     node.path("donations").asInt(0),
                     node.path("defenseWins").asInt(0),
                     node.path("expLevel").asInt(0),
-                    node.path("builderBaseTrophies").asInt(node.path("versusTrophies").asInt(0)));
+                    node.path("builderBaseTrophies").asInt(node.path("versusTrophies").asInt(0)),
+                    node.path("builderHallLevel").asInt(0),
+                    sumLevels(node.path("heroes")),
+                    sumLevels(node.path("troops")) + sumLevels(node.path("spells")),
+                    achievements);
         } catch (Exception e) {
             throw new ClashApiTransientException("Failed to parse Clash of Clans player response", e);
         }
+    }
+
+    private static int sumLevels(JsonNode list) {
+        int sum = 0;
+        for (JsonNode item : list) sum += item.path("level").asInt(0);
+        return sum;
     }
 
     private void sleepBackoff(int attempt) {

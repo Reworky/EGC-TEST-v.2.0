@@ -97,7 +97,7 @@ public class QuestController {
             return AutoVerifyProgress.NONE;
         }
         if (quest.getBrawlVerifyType() != null) {
-            boolean measured = quest.getBrawlVerifyType() != ru.gamebot.platform.domain.enums.BrawlVerifyType.TROPHIES
+            boolean measured = !quest.getBrawlVerifyType().usesProfileBaseline()
                     || submission.getBrawlBaselineTrophies() != null;
             return new AutoVerifyProgress(measured ? submission.getBrawlProgressCount() : null, quest.getBrawlTargetCount());
         }

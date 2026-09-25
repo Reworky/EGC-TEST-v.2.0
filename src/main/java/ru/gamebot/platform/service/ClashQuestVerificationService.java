@@ -86,20 +86,36 @@ public class ClashQuestVerificationService {
             case TOWN_HALL -> info.townHallLevel();
             case TROPHIES -> info.trophies();
             case WAR_STARS -> info.warStars();
-            case DONATIONS -> info.donations();
-            case DEFENSE_WINS -> info.defenseWins();
+            // DONATIONS/DEFENSE_WINS: НЕ top-level donations/defenseWins - это счётчики текущего сезона, они обнуляются, и дельта от
+            // базы, снятой посреди сезона, после сброса уходила в минус (прогресс навсегда 0). Проба 2026-09-25: donations=0 при
+            // ачивке "Friend in Need"=130, defenseWins=0 при "Unbreakable"=10. Ачивки накопительные, как "Conqueror" выше.
+            case DONATIONS -> info.achievement(ClashOfClansApiService.ACH_DONATIONS);
+            case DEFENSE_WINS -> info.achievement(ClashOfClansApiService.ACH_DEFENSES);
             case EXP_LEVEL -> info.expLevel();
             case BUILDER_TROPHIES -> info.builderBaseTrophies();
+            case ACHIEVEMENT -> info.achievement(quest.getClashAchievementName());
+            case HERO_LEVELS -> info.heroLevels();
+            case TROOP_LEVELS -> info.troopLevels();
+            case BUILDER_HALL -> info.builderHallLevel();
             // ATTACK_WINS: НЕ top-level attackWins — тот обнуляется по сезону/новому режиму (2026-09-22,
             // тикет #213, см. javadoc PlayerInfo.multiplayerWins). Ачивка "Conqueror" не сбрасывается.
             default -> info.multiplayerWins();
         };
-        checkSingleValue(submission, quest, current);
+        // Для DONATIONS/DEFENSE_WINS база у заявок, взятых ДО перехода на ачивки, снята по старому (сезонному) счётчику и
+        // несравнима с новым значением - без замены первый опрос дал бы фиктивную дельту в тысячи и мгновенно одобрил квест.
+        // Признак базы «по-новому» - clashBaselineValue2 = 1 (для этих типов оно больше нигде не используется; RESOURCES
+        // держит там базу эликсира, но идёт отдельной веткой выше). Старую базу молча переснимаем: прогресс до деплоя был
+        // нулевым из-за самой ошибки.
+        boolean needsLifetimeMarker = quest.getClashVerifyType() == ClashVerifyType.DONATIONS
+                || quest.getClashVerifyType() == ClashVerifyType.DEFENSE_WINS;
+        checkSingleValue(submission, quest, current, needsLifetimeMarker);
     }
 
-    private void checkSingleValue(QuestSubmission submission, Quest quest, int current) {
-        if (submission.getClashBaselineValue() == null) {
+    private void checkSingleValue(QuestSubmission submission, Quest quest, int current, boolean needsLifetimeMarker) {
+        if (submission.getClashBaselineValue() == null || (needsLifetimeMarker && submission.getClashBaselineValue2() == null)) {
             submission.setClashBaselineValue(current);
+            if (needsLifetimeMarker) submission.setClashBaselineValue2(1);
+            submission.setClashProgressCount(0);
             questSubmissionRepository.save(submission);
             return; // первый опрос только фиксирует базу, ничего не засчитывает
         }

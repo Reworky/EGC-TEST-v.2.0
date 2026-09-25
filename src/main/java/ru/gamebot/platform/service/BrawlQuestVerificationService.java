@@ -71,7 +71,7 @@ public class BrawlQuestVerificationService {
      *  вызов, тот же паттерн, что и checkInProgressSubmissions; ошибка тут не страшна, первая отложенная
      *  проверка всё равно зафиксирует базу как раньше — просто окно гонки для этой попытки не закроется. */
     public void primeBaseline(Long submissionId, BrawlVerifyType verifyType, String tag) {
-        if (tag == null || (verifyType != BrawlVerifyType.NEW_BRAWLER && verifyType != BrawlVerifyType.TROPHIES)) {
+        if (tag == null || (verifyType != BrawlVerifyType.NEW_BRAWLER && !verifyType.usesProfileBaseline())) {
             return;
         }
         try {
@@ -81,7 +81,7 @@ public class BrawlQuestVerificationService {
                     setBaselineBrawlers(submissionId, String.join(",", current));
                 }
             } else {
-                brawlStarsApiService.fetchPlayer(tag).ifPresent(info -> setBaselineTrophies(submissionId, info.trophies()));
+                brawlStarsApiService.fetchPlayer(tag).ifPresent(info -> setBaselineTrophies(submissionId, profileMetric(info, verifyType)));
             }
         } catch (BrawlStarsApiService.BrawlStarsTransientException e) {
             log.warn("Baseline priming failed for submission {}", submissionId, e);
@@ -123,10 +123,21 @@ public class BrawlQuestVerificationService {
         Quest quest = submission.getQuest();
         String tag = submission.getUser().getBrawlStarsTag();
         switch (quest.getBrawlVerifyType()) {
-            case TROPHIES -> checkTrophies(submission, quest, tag);
             case NEW_BRAWLER -> checkNewBrawler(submission, tag);
-            default -> checkBattles(submission, quest, tag);
+            case BATTLES, PARTNER_BATTLES -> checkBattles(submission, quest, tag);
+            default -> checkProfileMetric(submission, quest, tag); // TROPHIES и квесты на прокачку
         }
+    }
+
+    /** Число из профиля, по приросту которого считается квест (все монотонные, кроме трофеев). */
+    private static int profileMetric(BrawlStarsApiService.PlayerInfo info, BrawlVerifyType type) {
+        return switch (type) {
+            case BRAWLER_POWER -> info.powerSum();
+            case BRAWLER_RANK -> info.rankSum();
+            case UNLOCKS -> info.unlocks();
+            case EXP_LEVEL -> info.expLevel();
+            default -> info.trophies(); // TROPHIES
+        };
     }
 
     /** Засчитывается, когда в списке бойцов игрока появляется имя, которого не было на момент первого опроса —
@@ -147,10 +158,10 @@ public class BrawlQuestVerificationService {
         }
     }
 
-    private void checkTrophies(QuestSubmission submission, Quest quest, String tag) throws BrawlStarsApiService.BrawlStarsTransientException {
+    private void checkProfileMetric(QuestSubmission submission, Quest quest, String tag) throws BrawlStarsApiService.BrawlStarsTransientException {
         Optional<BrawlStarsApiService.PlayerInfo> info = brawlStarsApiService.fetchPlayer(tag);
         if (info.isEmpty()) return; // тег стал невалиден/переименован — пропускаем цикл, попробуем в следующий раз
-        int current = info.get().trophies();
+        int current = profileMetric(info.get(), quest.getBrawlVerifyType());
         if (submission.getBrawlBaselineTrophies() == null) {
             submission.setBrawlBaselineTrophies(current);
             questSubmissionRepository.save(submission);

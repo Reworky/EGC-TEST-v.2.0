@@ -60,7 +60,8 @@ public class ClashRoyaleApiService {
      * у Clash of Clans), totalDonations — накопительный за всю историю аккаунта.
      */
     public record PlayerInfo(String tag, String name, int trophies, int wins, int threeCrownWins,
-                              int warDayWins, int totalDonations, int battleCount) {}
+                              int warDayWins, int totalDonations, int battleCount,
+                              int collectionLevel, int kingTowerLevel) {}
 
     public static class ClashRoyaleApiTransientException extends Exception {
         public ClashRoyaleApiTransientException(String message) { super(message); }
@@ -122,7 +123,9 @@ public class ClashRoyaleApiService {
                     node.path("threeCrownWins").asInt(0),
                     node.path("warDayWins").asInt(0),
                     node.path("totalDonations").asInt(0),
-                    node.path("battleCount").asInt(0));
+                    node.path("battleCount").asInt(0),
+                    node.path("collectionLevel").asInt(0),
+                    node.path("kingTowerLevel").asInt(0));
         } catch (Exception e) {
             throw new ClashRoyaleApiTransientException("Failed to parse Clash Royale player response", e);
         }

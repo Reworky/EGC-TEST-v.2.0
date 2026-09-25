@@ -4928,7 +4928,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String nextStep = freshQuest.isExternalAutoApprove() ? ""
                 : freshQuestAutoVerified
                     ? "👉 <b>Теперь идите в игру и выполняйте задание.</b>\n"
-                        + (freshQuest.getBrawlVerifyType() != null ? "Засчитываются бои, сыгранные после взятия квеста. " : "")
+                        + (freshQuest.getBrawlVerifyType() != null
+                            ? (freshQuest.getBrawlVerifyType().isProgression()
+                                ? "Засчитывается прогресс, сделанный после взятия квеста. "
+                                : "Засчитываются бои, сыгранные после взятия квеста. ")
+                            : "")
                         + "Мы засчитаем всё сами: прогресс обновляется каждые пару минут (он на кнопке ниже), а когда квест будет выполнен, придёт сообщение.\n\n"
                     : "👉 <b>Теперь идите в игру и выполняйте задание.</b>\n"
                         + "Когда закончите, вернитесь сюда и нажмите «📤 Отчёт»: отправьте скриншот, как описано в условиях квеста.\n\n";
@@ -17259,7 +17263,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  (после первого опроса API), или общей фразой, пока идёт первый замер (baseline ещё не зафиксирован). */
     private String autoVerifyProgressLabel(Quest quest, QuestSubmission submission) {
         if (quest.getBrawlVerifyType() != null) {
-            if (submission.getBrawlBaselineTrophies() == null && quest.getBrawlVerifyType() == ru.gamebot.platform.domain.enums.BrawlVerifyType.TROPHIES) {
+            if (submission.getBrawlBaselineTrophies() == null && quest.getBrawlVerifyType().usesProfileBaseline()) {
                 return "⏳ Идёт первый замер…";
             }
             return "⏳ Прогресс: " + submission.getBrawlProgressCount() + "/" + quest.getBrawlTargetCount();

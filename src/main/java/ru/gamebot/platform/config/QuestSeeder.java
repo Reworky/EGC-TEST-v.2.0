@@ -111,7 +111,12 @@ public class QuestSeeder implements CommandLineRunner {
                 "Нанеси 100 000 урона в режиме «Ограбление» или «Любое столкновение»",
                 "Выиграй 3 боя с новым бойцом (Космо или Винс)",
                 "Получи любого нового бойца",
-                "Сыграй 3 боя в команде с другом"
+                "Сыграй 3 боя в команде с другом",
+                // квесты на прокачку (2026-09-26), создаются в seedSupercellProgressionQuests()
+                "Прокачай силу бойцов на 3 уровня",
+                "Подними ранг бойцов на 2",
+                "Открой улучшение бойца",
+                "Повысь уровень профиля на 1"
         );
         questRepository.findAll().stream()
                 .filter(q -> "Brawl Stars".equalsIgnoreCase(q.getGameName()) && !keepBsTitles.contains(q.getTitle()))
@@ -874,7 +879,13 @@ public class QuestSeeder implements CommandLineRunner {
                 "Задонать 300 войск клану",
                 "Успешно защитись 3 раза",
                 "Повысь уровень персонажа на 2",
-                "Набери 80 кубков в Строительной Базе"
+                "Набери 80 кубков в Строительной Базе",
+                // квесты на прокачку (2026-09-26), создаются в seedSupercellProgressionQuests()
+                "Прокачай героев на 2 уровня",
+                "Улучши войска и заклинания на 3 уровня",
+                "Улучши Зал строителя",
+                "Разрушь 10 Ратуш в атаках мультиплеера",
+                "Разрушь 100 стен в атаках мультиплеера"
         );
         questRepository.findAll().stream()
                 .filter(q -> "Clash of Clans".equalsIgnoreCase(q.getGameName()) && !keepCocTitles.contains(q.getTitle()))
@@ -1206,7 +1217,10 @@ public class QuestSeeder implements CommandLineRunner {
                 "Достигни лиги Претендент II",
                 "Победи 20 раз в Клановых войнах за сезон",
                 "Сыграй 5 боёв",
-                "Задонать 100 карт клану"
+                "Задонать 100 карт клану",
+                // квесты на прокачку (2026-09-26), создаются в seedSupercellProgressionQuests()
+                "Улучши карты на 3 уровня суммарно",
+                "Улучши Королевскую башню"
         );
         questRepository.findAll().stream()
                 .filter(q -> "Clash Royale".equalsIgnoreCase(q.getGameName()) && !keepCrTitles.contains(q.getTitle()))
@@ -1383,6 +1397,8 @@ public class QuestSeeder implements CommandLineRunner {
         }) {
             flattenQuest(title, "Clash Royale", 1500, 50);
         }
+
+        seedSupercellProgressionQuests();
 
         // ── EA FC 26: FLAT-режим — единый список без выбора категории, по образцу Brawl Stars/Clash of Clans/Clash Royale ──
         // (игра сейчас скрыта от игроков, см. deactivateGame ниже — готовим формат заранее на момент возврата)
@@ -2164,6 +2180,143 @@ public class QuestSeeder implements CommandLineRunner {
         clearRepeatableNoCooldown("Сыграй 3 матча в любом режиме", "CS2");
         clearRepeatableNoCooldown("Сыграй 5 боёв", "Clash Royale");
         clearRepeatableNoCooldown("Сыграй 3 матча подряд", "PUBG PC");
+    }
+
+    /** Квесты на ПРОКАЧКУ для трёх игр Supercell (2026-09-26): прогресс считается по числам профиля из официального API
+     *  (сумма уровней силы/рангов бойцов, открытые улучшения, уровни героев/войск/карт/башни, ачивки CoC), как прирост с
+     *  момента взятия квеста. Все - одноразовые на аккаунт (markOneTimePerAccount): награду ограничивает сам прогресс игрока,
+     *  а не число попыток, поэтому не дают бесконечной эмиссии EXC (в отличие от повторяемых боёв - см. откат «квестов без
+     *  стен» 2026-09-20). Награды - ниже похожих текущих: Ратуша +1 = 3000, уровень +2 = 3000, сбор ресурсов = 1500.
+     *  Имена ачивок CoC - по живой пробе 2026-09-25. Идемпотентен, вызывается на каждом деплое. */
+    private void seedSupercellProgressionQuests() {
+        String bsReq = "Ничего отправлять не нужно — прогресс проверяется автоматически через официальный API "
+                + "Brawl Stars, награда зачислится сама после выполнения условия.";
+        String crReq = "Ничего отправлять не нужно — прогресс проверяется автоматически через официальный API "
+                + "Clash Royale, награда зачислится сама после выполнения условия.";
+        String cocReq = "Ничего отправлять не нужно — прогресс проверяется автоматически через официальный API "
+                + "Clash of Clans, награда зачислится сама после выполнения условия.";
+        String auto = "Прогресс отслеживается автоматически, ничего сообщать не нужно.";
+
+        // ── Brawl Stars ──
+        String bs = "Brawl Stars";
+        String power = "Прокачай силу бойцов на 3 уровня";
+        seedFlat(power, bs, "Mobile", 7, "7 дней", 50, 1500,
+                "Суммарно повысь уровень силы своих бойцов на 3 уровня с момента взятия квеста — прогресс считается автоматически.",
+                "Улучшай бойцов за монеты и очки силы: каждое повышение силы любого бойца даёт +1. Можно прокачать одного бойца на 3 уровня или трёх бойцов на 1. " + auto,
+                bsReq);
+        setBrawlVerify(power, BrawlVerifyType.BRAWLER_POWER, 3, false, false, false, null, null);
+        setShortLabel(power, bs, "Сила бойцов +3");
+
+        String rank = "Подними ранг бойцов на 2";
+        seedFlat(rank, bs, "Mobile", 7, "7 дней", 50, 1500,
+                "Суммарно повысь ранг своих бойцов на 2 с момента взятия квеста — прогресс считается автоматически.",
+                "Играй бойцами и набирай трофеи: ранг растёт, когда боец достигает нового порога трофеев. Считается сумма по всем бойцам. " + auto,
+                bsReq);
+        setBrawlVerify(rank, BrawlVerifyType.BRAWLER_RANK, 2, false, false, false, null, null);
+        setShortLabel(rank, bs, "Ранг бойцов +2");
+
+        String unlock = "Открой улучшение бойца";
+        seedFlat(unlock, bs, "Mobile", 10, "10 дней", 50, 2000,
+                "Открой любое улучшение бойца: гаджет, звёздную силу, снаряжение или гиперзаряд — засчитывается новое, открытое после взятия квеста.",
+                "Прокачивай бойцов до нужного уровня силы и открывай их улучшения в магазине или за награды. " + auto,
+                bsReq);
+        setBrawlVerify(unlock, BrawlVerifyType.UNLOCKS, 1, false, false, false, null, null);
+        setShortLabel(unlock, bs, "Новое улучшение бойца");
+
+        String level = "Повысь уровень профиля на 1";
+        seedFlat(level, bs, "Mobile", 7, "7 дней", 50, 1200,
+                "Повысь уровень своего профиля Brawl Stars на 1 с момента взятия квеста — прогресс считается автоматически.",
+                "Уровень профиля растёт от опыта за бои и выполненные задания в игре. " + auto,
+                bsReq);
+        setBrawlVerify(level, BrawlVerifyType.EXP_LEVEL, 1, false, false, false, null, null);
+        setShortLabel(level, bs, "Уровень профиля +1");
+
+        // ── Clash Royale ──
+        String cr = "Clash Royale";
+        String cards = "Улучши карты на 3 уровня суммарно";
+        seedFlat(cards, cr, "Mobile", 7, "7 дней", 50, 1500,
+                "Суммарно повысь уровни своих карт на 3 с момента взятия квеста (уровень коллекции) — прогресс считается автоматически.",
+                "Улучшай карты за золото и копии карт: каждое улучшение любой карты даёт +1. Можно улучшить одну карту трижды или три карты по одному разу. " + auto,
+                crReq);
+        setClashRoyaleVerify(cards, ClashRoyaleVerifyType.COLLECTION_LEVEL, 3,
+                "Суммарно повысь уровни своих карт на 3 с момента взятия квеста (уровень коллекции) — прогресс считается автоматически.",
+                "Улучшай карты за золото и копии карт: каждое улучшение любой карты даёт +1. Можно улучшить одну карту трижды или три карты по одному разу. " + auto,
+                crReq);
+        setShortLabel(cards, cr, "Карты +3 уровня");
+
+        String king = "Улучши Королевскую башню";
+        seedFlat(king, cr, "Mobile", 10, "10 дней", 50, 2000,
+                "Повысь уровень Королевской башни на 1 с момента взятия квеста — прогресс считается автоматически.",
+                "Копи золото и улучшай Королевскую башню в разделе башен. " + auto,
+                crReq);
+        setClashRoyaleVerify(king, ClashRoyaleVerifyType.KING_TOWER, 1,
+                "Повысь уровень Королевской башни на 1 с момента взятия квеста — прогресс считается автоматически.",
+                "Копи золото и улучшай Королевскую башню в разделе башен. " + auto,
+                crReq);
+        setShortLabel(king, cr, "Королевская башня +1");
+
+        // ── Clash of Clans ──
+        String coc = "Clash of Clans";
+        String heroes = "Прокачай героев на 2 уровня";
+        String heroesDesc = "Суммарно повысь уровни своих героев на 2 с момента взятия квеста — прогресс считается автоматически.";
+        String heroesHow = "Улучшай героев в Алтарях: каждое улучшение любого героя даёт +1. " + auto;
+        seedFlat(heroes, coc, "Mobile", 10, "10 дней", 50, 2000, heroesDesc, heroesHow, cocReq);
+        setClashVerify(heroes, ClashVerifyType.HERO_LEVELS, 2, heroesDesc, heroesHow, cocReq);
+        setShortLabel(heroes, coc, "Герои +2 уровня");
+
+        String troops = "Улучши войска и заклинания на 3 уровня";
+        String troopsDesc = "Суммарно повысь уровни войск и заклинаний на 3 с момента взятия квеста — прогресс считается автоматически.";
+        String troopsHow = "Улучшай войска и заклинания в Лаборатории: каждое улучшение даёт +1. " + auto;
+        seedFlat(troops, coc, "Mobile", 7, "7 дней", 50, 1500, troopsDesc, troopsHow, cocReq);
+        setClashVerify(troops, ClashVerifyType.TROOP_LEVELS, 3, troopsDesc, troopsHow, cocReq);
+        setShortLabel(troops, coc, "Войска +3 уровня");
+
+        String hall = "Улучши Зал строителя";
+        String hallDesc = "Повысь уровень Зала строителя на 1 с момента взятия квеста — прогресс считается автоматически.";
+        String hallHow = "Накопи ресурсы Базы строителя и запусти улучшение Зала строителя. " + auto;
+        seedFlat(hall, coc, "Mobile", 14, "14 дней", 50, 2500, hallDesc, hallHow, cocReq);
+        setClashVerify(hall, ClashVerifyType.BUILDER_HALL, 1, hallDesc, hallHow, cocReq);
+        setShortLabel(hall, coc, "Зал строителя +1");
+
+        String halls = "Разрушь 10 Ратуш в атаках мультиплеера";
+        String hallsDesc = "Разрушь 10 Ратуш противников в атаках мультиплеера с момента взятия квеста — прогресс считается автоматически.";
+        String hallsHow = "Атакуй в обычном мультиплеере и целься в Ратуши — считается число разрушенных Ратуш из разных атак. " + auto;
+        seedFlat(halls, coc, "Mobile", 3, "3 дня", 50, 1500, hallsDesc, hallsHow, cocReq);
+        setClashVerify(halls, ClashVerifyType.ACHIEVEMENT, 10, hallsDesc, hallsHow, cocReq);
+        setClashAchievement(halls, "Humiliator");
+        setShortLabel(halls, coc, "10 Ратуш разрушить");
+
+        String walls = "Разрушь 100 стен в атаках мультиплеера";
+        String wallsDesc = "Разрушь 100 стен противников в атаках мультиплеера с момента взятия квеста — прогресс считается автоматически.";
+        String wallsHow = "Атакуй в обычном мультиплеере: стены ломают гиганты, стенобои и заклинание землетрясения. " + auto;
+        seedFlat(walls, coc, "Mobile", 3, "3 дня", 50, 1200, wallsDesc, wallsHow, cocReq);
+        setClashVerify(walls, ClashVerifyType.ACHIEVEMENT, 100, wallsDesc, wallsHow, cocReq);
+        setClashAchievement(walls, "Wall Buster");
+        setShortLabel(walls, coc, "100 стен разрушить");
+
+        // Одноразовые на аккаунт + метка «новый» на 7 дней (снимается сама, см. setQuestHighlightNew).
+        for (String t : new String[]{power, rank, unlock, level}) {
+            markOneTimePerAccount(t, bs);
+            setQuestHighlightNew(t, bs, true);
+        }
+        for (String t : new String[]{cards, king}) {
+            markOneTimePerAccount(t, cr);
+            setQuestHighlightNew(t, cr, true);
+        }
+        for (String t : new String[]{heroes, troops, hall, halls, walls}) {
+            markOneTimePerAccount(t, coc);
+            setQuestHighlightNew(t, coc, true);
+        }
+    }
+
+    /** Имя ачивки CoC для квеста ClashVerifyType.ACHIEVEMENT (см. Quest.clashAchievementName). Идемпотентен. */
+    private void setClashAchievement(String title, String achievementName) {
+        questRepository.findFirstByTitleAndGameName(title, "Clash of Clans").ifPresent(q -> {
+            if (!achievementName.equals(q.getClashAchievementName())) {
+                q.setClashAchievementName(achievementName);
+                questRepository.save(q);
+            }
+        });
     }
 
     /**

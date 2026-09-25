@@ -56,7 +56,10 @@ public class BrawlStarsApiService {
         return enabled;
     }
 
-    public record PlayerInfo(String tag, String name, int trophies) {}
+    /** Поля из профиля игрока (players/{tag}, подтверждено живым вызовом 2026-09-25): powerSum/rankSum - суммы power/rank
+     *  по всем бойцам, unlocks - число открытых гаджетов+звёздных сил+снаряжения+гиперзарядов; все растут монотонно. */
+    public record PlayerInfo(String tag, String name, int trophies, int expLevel,
+                             int powerSum, int rankSum, int unlocks) {}
 
     /** Transient failure (timeout/429/5xx) after exhausting retries, or a 403 (token/IP misconfigured). */
     public static class BrawlStarsTransientException extends Exception {
@@ -71,10 +74,23 @@ public class BrawlStarsApiService {
      */
     public Optional<PlayerInfo> fetchPlayer(String rawTag) throws BrawlStarsTransientException {
         String normalizedTag = normalizeTag(rawTag);
-        return fetchPlayerNode(rawTag).map(node -> new PlayerInfo(
-                node.path("tag").asText("#" + normalizedTag),
-                node.path("name").asText(""),
-                node.path("trophies").asInt(0)));
+        return fetchPlayerNode(rawTag).map(node -> {
+            int powerSum = 0;
+            int rankSum = 0;
+            int unlocks = 0;
+            for (JsonNode b : node.path("brawlers")) {
+                powerSum += b.path("power").asInt(0);
+                rankSum += b.path("rank").asInt(0);
+                unlocks += b.path("gadgets").size() + b.path("starPowers").size()
+                        + b.path("gears").size() + b.path("hyperCharges").size();
+            }
+            return new PlayerInfo(
+                    node.path("tag").asText("#" + normalizedTag),
+                    node.path("name").asText(""),
+                    node.path("trophies").asInt(0),
+                    node.path("expLevel").asInt(0),
+                    powerSum, rankSum, unlocks);
+        });
     }
 
     /** NEW_BRAWLER: имена всех бойцов, которыми игрок уже владеет (поле "brawlers" в ответе players/{tag}). */
