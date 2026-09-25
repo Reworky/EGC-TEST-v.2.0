@@ -177,4 +177,10 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     @Query("SELECT u FROM AppUser u WHERE u.clashOfClansTag IS NOT NULL OR u.clashRoyaleTag IS NOT NULL ORDER BY u.telegramId")
     List<AppUser> findAllWithClashTags();
+
+    /** Все игроки, пришедшие по метке закупа, — сырьё для сравнения источников (TrafficFunnelService):
+     *  код, id, дата регистрации, флаги профиля/активации и три поля активности (как в MAU/DAU). */
+    @org.springframework.data.jpa.repository.Query("SELECT u.trafficSourceCode, u.id, u.createdAt, u.profileCompleted, u.registrationCompleted, "
+            + "u.lastActivityDate, u.lastBotActivityAt, u.lastMiniAppOpenAt FROM AppUser u WHERE u.trafficSourceCode IS NOT NULL")
+    List<Object[]> findTrafficSourceUsersForFunnel();
 }

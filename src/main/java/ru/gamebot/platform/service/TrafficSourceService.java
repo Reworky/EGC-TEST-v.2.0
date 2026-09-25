@@ -79,6 +79,14 @@ public class TrafficSourceService {
     }
 
     @Transactional
+    public void setSpend(Long id, long spendRub) {
+        trafficSourceRepository.findById(id).ifPresent(ts -> {
+            ts.setSpendRub(Math.max(0, spendRub));
+            trafficSourceRepository.save(ts);
+        });
+    }
+
+    @Transactional
     public void delete(Long id) {
         trafficSourceRepository.deleteById(id);
     }

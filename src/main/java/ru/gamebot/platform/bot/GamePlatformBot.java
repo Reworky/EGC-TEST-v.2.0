@@ -131,6 +131,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ShopLimitService shopLimitService;
     private final GameCatalogService gameCatalogService;
     private final ru.gamebot.platform.service.TrafficSourceService trafficSourceService;
+    private final ru.gamebot.platform.service.TrafficFunnelService trafficFunnelService;
+    private final ru.gamebot.platform.service.QuestPoolHealthService questPoolHealthService;
     private final ru.gamebot.platform.service.PollService pollService;
     private final ru.gamebot.platform.service.TournamentService tournamentService;
     private final ru.gamebot.platform.service.SeasonService seasonService;
@@ -1954,6 +1956,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 } catch (IllegalArgumentException e) {
                     sendText(user.getTelegramId(), "❌ " + e.getMessage(), cancelKeyboard());
                 }
+            }
+            case TRAFFIC_SPEND_INPUT -> {
+                Long sourceId = parseLong(session.getData().get("trafficSpendId"));
+                String digits = text.replaceAll("[^0-9]", "");
+                Long rub = digits.isEmpty() || digits.length() > 9 ? null : parseLong(digits);
+                if (sourceId == null || rub == null) {
+                    sendText(user.getTelegramId(), "❌ Введите сумму в рублях целым числом, например <code>5000</code> (0 — сбросить расход).", cancelKeyboard());
+                    return;
+                }
+                session.reset();
+                trafficSourceService.setSpend(sourceId, rub);
+                sendText(user.getTelegramId(), "✅ Расход записан: <b>" + rub + " ₽</b>.", backMenuKeyboard("admin:traffic:view:" + sourceId));
             }
             case TRAFFIC_BATCH_COUNT -> {
                 Integer count = parseInteger(text.trim());
@@ -8392,6 +8406,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "stats:engagement" -> sendAdminEngagementStats(user, null);
             case "stats:engagement:all" -> sendAdminEngagementStats(user, "all");
             case "stats:engagement:organic" -> sendAdminEngagementStats(user, "organic");
+            case "stats:questpool" -> sendText(user.getTelegramId(),
+                    questPoolHealthService.format(questPoolHealthService.build(), false), backMenuKeyboard("admin:stats"));
             case "stats:nudgefeedback" -> sendAdminNudgeFeedbackStats(user);
             case "stats:history" -> sendAdminStatsHistory(user);
             case "stats:snapshot" -> {
@@ -8430,6 +8446,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "withdrawals" -> { sendAdminWithdrawals(user); answerSilently(callbackQuery.getId()); return; }
             case "gempurchase" -> { sendAdminGemPurchaseRequests(user); answerSilently(callbackQuery.getId()); return; }
             case "traffic" -> { sendAdminTrafficList(user); answerSilently(callbackQuery.getId()); return; }
+            case "traffic:compare" -> { sendAdminTrafficCompare(user); answerSilently(callbackQuery.getId()); return; }
             case "polls" -> { sendAdminPollList(user); answerSilently(callbackQuery.getId()); return; }
             case "sponsors" -> { sendAdminSponsorList(user); answerSilently(callbackQuery.getId()); return; }
             case "sponsors:create" -> {
@@ -8776,6 +8793,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     return;
                 } else if (action.startsWith("traffic:view:")) {
                     sendAdminTrafficView(user, parseLong(action.substring("traffic:view:".length())));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("traffic:spend:")) {
+                    Long spendSourceId = parseLong(action.substring("traffic:spend:".length()));
+                    if (spendSourceId != null) {
+                        session.reset();
+                        session.setState(SessionState.TRAFFIC_SPEND_INPUT);
+                        session.getData().put("trafficSpendId", String.valueOf(spendSourceId));
+                        sendText(user.getTelegramId(),
+                                "💰 <b>Расход на закуп</b>\n\nСколько всего потрачено на этот источник, ₽? Введите число (например <code>5000</code>). "
+                                        + "Введённое значение заменяет прежнее; 0 — сбросить.",
+                                cancelKeyboard());
+                    }
                     answerSilently(callbackQuery.getId());
                     return;
                 } else if (action.startsWith("traffic:delete:")) {
@@ -10857,6 +10887,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         List.of(keyboardFactory.callback("🤝 Экономика рефералки", "admin:stats:referral")),
                         List.of(keyboardFactory.callback("📉 Воронка новичков", "admin:stats:funnel")),
                         List.of(keyboardFactory.callback("📈 Вовлечённость", "admin:stats:engagement")),
+                        List.of(keyboardFactory.callback("🧭 Пул квестов", "admin:stats:questpool")),
                         List.of(keyboardFactory.callback("📋 Фидбек «не вернулся»", "admin:stats:nudgefeedback")),
                         List.of(keyboardFactory.callback("🔄 Сбросить недельный XP", "admin:stats:reset_weekly")),
                         List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
@@ -11835,10 +11866,79 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!navRow.isEmpty()) {
             rows.add(navRow);
         }
+        rows.add(List.of(keyboardFactory.callback("📊 Сравнение закупов", "admin:traffic:compare")));
         rows.add(List.of(keyboardFactory.callback("➕ Создать источник", "admin:traffic:create")));
         rows.add(List.of(keyboardFactory.callback("📦 Пачка ссылок", "admin:traffic:batch")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
+    }
+
+    private static final int TRAFFIC_COMPARE_LIMIT = 10;
+
+    /** Расход и цена за шаг воронки одной строкой; без указанного расхода подсказывает, где его ввести. */
+    private String formatTrafficSpendLine(ru.gamebot.platform.service.TrafficFunnelService.SourceFunnel f) {
+        if (f.source().getSpendRub() <= 0) {
+            return "💰 Расход не указан (кнопка «Указать расход» в карточке источника)";
+        }
+        return "💰 " + f.source().getSpendRub() + " ₽ · " + costText(f.costPer(f.activated()), "акт")
+                + " · " + costText(f.costPer(f.firstQuest()), "1-й кв") + " · " + costText(f.costPer(f.secondQuest()), "2-й кв");
+    }
+
+    private static String costText(Long cost, String label) {
+        return cost == null ? "— ₽/" + label : cost + " ₽/" + label;
+    }
+
+    /** Сравнение источников закупа в одном экране: воронка + удержание на 7-й день + цена шага. Только источники
+     *  с заходами или расходом (десятки пустых ссылок из «Пачки» не засоряют), топ по расходу и заходам. */
+    private void sendAdminTrafficCompare(AppUser user) {
+        List<ru.gamebot.platform.service.TrafficFunnelService.SourceFunnel> all = trafficFunnelService.compute().stream()
+                .filter(f -> f.started() > 0 || f.source().getSpendRub() > 0)
+                .sorted((a, b) -> a.source().getSpendRub() != b.source().getSpendRub()
+                        ? Long.compare(b.source().getSpendRub(), a.source().getSpendRub())
+                        : Long.compare(b.started(), a.started()))
+                .toList();
+        if (all.isEmpty()) {
+            sendText(user.getTelegramId(), "📊 <b>Сравнение закупов</b>\n\nПока ни один источник не привёл игроков.", backMenuKeyboard("admin:traffic"));
+            return;
+        }
+        long tSpend = 0, tStarted = 0, tAct = 0, tFirst = 0, tSecond = 0;
+        for (var f : all) {
+            tSpend += f.source().getSpendRub();
+            tStarted += f.started();
+            tAct += f.activated();
+            tFirst += f.firstQuest();
+            tSecond += f.secondQuest();
+        }
+        StringBuilder sb = new StringBuilder("📊 <b>Сравнение закупов</b>\n");
+        sb.append("Источников с заходами или расходом: ").append(all.size());
+        if (all.size() > TRAFFIC_COMPARE_LIMIT) sb.append(" (показаны ").append(TRAFFIC_COMPARE_LIMIT).append(" крупнейших)");
+        sb.append("\n\n");
+        int shown = 0;
+        for (var f : all) {
+            if (shown++ >= TRAFFIC_COMPARE_LIMIT) break;
+            sb.append("<b>").append(escape(f.source().getName())).append("</b> · <code>").append(f.source().getCode()).append("</code>\n");
+            sb.append("👆 ").append(f.source().getClicks()).append(" → 🚀 ").append(f.started())
+              .append(" → ✅ ").append(f.activated()).append(" → 🎯 ").append(f.firstQuest())
+              .append(" → 🔁 ").append(f.secondQuest()).append("\n");
+            if (f.matured() > 0) {
+                sb.append("🔥 Живы на 7-й день: ").append(f.alive7()).append(" из ").append(f.matured())
+                  .append(" (").append(f.alive7() * 100 / f.matured()).append("%)\n");
+            } else {
+                sb.append("🔥 На 7-й день: рано, нет игроков старше 7 дн.\n");
+            }
+            sb.append(formatTrafficSpendLine(f)).append("\n\n");
+        }
+        sb.append("<b>Итого</b> (по всем показанным): 🚀 ").append(tStarted).append(" → ✅ ").append(tAct)
+          .append(" → 🎯 ").append(tFirst).append(" → 🔁 ").append(tSecond).append("\n");
+        if (tSpend > 0) {
+            sb.append("💰 ").append(tSpend).append(" ₽ · ").append(tFirst > 0 ? Math.round((double) tSpend / tFirst) : "—")
+              .append(" ₽ за игрока с 1-м квестом · ").append(tSecond > 0 ? Math.round((double) tSpend / tSecond) : "—")
+              .append(" ₽ со 2-м\n");
+        }
+        sb.append("\nℹ️ 👆 клики → 🚀 зашли в бот → ✅ активировали → 🎯 1-й одобренный квест → 🔁 2-й. «Живы на 7-й день» — "
+                + "заходили ≥7 дней после регистрации, считается только по тем, кто зарегистрирован 7+ дней назад. "
+                + "Цена в ₽ — только рекламный расход, без EXC, выданных игрокам.");
+        sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("admin:traffic"));
     }
 
     private void sendAdminTrafficView(AppUser user, Long sourceId) {
@@ -11868,7 +11968,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("🚀 Зашли в бот: <b>").append(started).append("</b>\n");
             sb.append("📝 Заполнили профиль: <b>").append(registered).append("</b>\n");
             sb.append("✅ Активировали аккаунт: <b>").append(activated).append("</b>\n");
-            sb.append("📊 Конверсия (клик→акт.): <b>").append(conv).append("</b>\n\n");
+            sb.append("📊 Конверсия (клик→акт.): <b>").append(conv).append("</b>\n");
+            ru.gamebot.platform.service.TrafficFunnelService.SourceFunnel fun = trafficFunnelService.forSource(ts);
+            sb.append("🎯 Сделали 1-й квест: <b>").append(fun.firstQuest()).append("</b> · 2-й: <b>").append(fun.secondQuest()).append("</b>\n");
+            sb.append(formatTrafficSpendLine(fun)).append("\n\n");
             if (users.isEmpty()) {
                 sb.append("Пользователей пока нет.");
             } else {
@@ -11885,6 +11988,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (p > 0) nav.add(keyboardFactory.callback("⬅️", "admin:traffic:view:page:" + sourceId + ":" + (p - 1)));
             if (p < totalPages - 1) nav.add(keyboardFactory.callback("➡️", "admin:traffic:view:page:" + sourceId + ":" + (p + 1)));
             if (!nav.isEmpty()) rows.add(nav);
+            rows.add(List.of(keyboardFactory.callback("💰 Указать расход", "admin:traffic:spend:" + sourceId)));
             rows.add(List.of(keyboardFactory.callback("🗑 Удалить источник", "admin:traffic:delete:" + sourceId)));
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:traffic")));
             sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
@@ -14296,6 +14400,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "Рады, что ты снова с нами! Так держать.");
         } catch (Exception e) {
             log.warn("Failed to send dormancy bonus notification to {}", event.getTelegramId(), e);
+        }
+    }
+
+    /** Недельный алерт админам «пул квестов не растёт» — см. QuestPoolHealthService.weeklyCheck. */
+    @org.springframework.context.event.EventListener
+    public void onQuestPoolStale(ru.gamebot.platform.event.QuestPoolStaleEvent event) {
+        for (Long adminId : adminService.allAdminIds()) {
+            try {
+                sendText(adminId, event.getReportHtml(), backMenuKeyboard("admin:stats"));
+            } catch (Exception e) {
+                log.warn("Failed to send quest pool alert to admin {}", adminId, e);
+            }
         }
     }
 

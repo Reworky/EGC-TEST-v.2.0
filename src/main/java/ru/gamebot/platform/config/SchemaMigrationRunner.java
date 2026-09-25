@@ -35,6 +35,7 @@ public class SchemaMigrationRunner implements CommandLineRunner {
         addColumnIfMissing("app_users", "last_nudge_returned", "BOOLEAN DEFAULT FALSE");
         addColumnIfMissing("app_users", "silent_gap_nudge_sent_at", "TIMESTAMP");
         addColumnIfMissing("app_users", "egc_pass_teaser_sent_at", "TIMESTAMP");
+        addColumnIfMissing("traffic_sources", "spend_rub", "BIGINT DEFAULT 0");
         createIndexIfMissing("idx_notif_user_sent", "notification_log", "user_id, sent_at");
         createIndexIfMissing("idx_notif_sent", "notification_log", "sent_at");
     }

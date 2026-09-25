@@ -254,4 +254,14 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT s FROM QuestSubmission s WHERE s.status = 'DRAFT' AND s.quest.pubgVerifyType IS NOT NULL " +
            "AND s.user.pubgAccountId IS NOT NULL AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP)")
     List<QuestSubmission> findInProgressPubgAutoVerify();
+
+    /** Одобренные квесты и выданные EXC по каждому игроку, пришедшему по метке закупа
+     *  (TrafficFunnelService: доля сделавших 1-й/2-й квест). */
+    @Query("SELECT s.user.id, COUNT(s), COALESCE(SUM(s.awardedCoins), 0) FROM QuestSubmission s "
+            + "WHERE s.status = 'APPROVED' AND s.user.trafficSourceCode IS NOT NULL GROUP BY s.user.id")
+    List<Object[]> countApprovedPerTrafficUser();
+
+    /** Число одобренных выполнений по каждому квесту с момента since (QuestPoolHealthService). */
+    @Query("SELECT s.quest.id, COUNT(s) FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :since GROUP BY s.quest.id")
+    List<Object[]> countApprovedGroupedByQuestSince(@Param("since") LocalDateTime since);
 }

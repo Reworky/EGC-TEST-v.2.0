@@ -24,6 +24,11 @@ public class TrafficSource {
     @Column(columnDefinition = "bigint default 0")
     private long clicks;
 
+    /** Сколько потрачено на закуп этого источника, ₽ — вводится админом вручную (кнопка «Указать расход»
+     *  в карточке источника). Нужен для «₽ за активного игрока / за игрока со 2-м квестом» в сравнении закупов. */
+    @Column(columnDefinition = "bigint default 0")
+    private long spendRub;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 }
