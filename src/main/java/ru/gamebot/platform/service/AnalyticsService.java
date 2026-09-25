@@ -655,6 +655,22 @@ public class AnalyticsService {
         return sb.toString();
     }
 
+    /** Сводка всех вкладок в одном CSV (для передачи в отдел аналитики): Вкладка;Метрика;Единица;Текущий период;Предыдущий период;Изменение. */
+    public String fullSummaryCsv(List<TabData> all) {
+        StringBuilder sb = new StringBuilder("\uFEFF");
+        sb.append("Вкладка;Метрика;Единица;Текущий период;Предыдущий период;Изменение\n");
+        for (TabData d : all) {
+            for (Line l : d.lines()) {
+                String cur = l.value() == null ? "" : String.valueOf(l.value());
+                String prev = l.prev() == null ? "" : String.valueOf(l.prev());
+                String diff = (l.value() == null || l.prev() == null) ? "" : String.valueOf(Math.round((l.value() - l.prev()) * 100) / 100.0);
+                sb.append(csvCell(d.tab().title)).append(';').append(csvCell(l.label().trim())).append(';').append(csvCell(l.unit())).append(';')
+                  .append(cur).append(';').append(prev).append(';').append(diff).append('\n');
+            }
+        }
+        return sb.toString();
+    }
+
     /** Сырые данные за период (для вкладок, где они осмысленны); null - для остальных вкладок выгружается только сводка. */
     public String rawCsv(Tab tab, Period p) {
         DateTimeFormatter f = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");

@@ -11788,6 +11788,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         }
         if (!pair.isEmpty()) rows.add(new ArrayList<>(pair));
+        rows.add(List.of(keyboardFactory.callback("📦 Полный отчёт (все разделы)", "admin:an:full")));
         rows.add(List.of(keyboardFactory.callback("🔔 Алерты по метрикам", "admin:an:alerts")));
         rows.add(List.of(keyboardFactory.callback("🧭 Пул квестов", "admin:stats:questpool"), keyboardFactory.callback("📡 Сейчас", "admin:live")));
         rows.add(List.of(keyboardFactory.callback("📊 Классическая статистика", "admin:stats")));
@@ -11893,11 +11894,87 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "csv" -> {
                 if (tab != null) exportAnalyticsCsv(user, session, tab); else sendAnalyticsHome(user);
             }
+            case "full" -> {
+                if (p.length > 1) {
+                    sendAnalyticsFullReport(user, session, p[1]);
+                } else {
+                    sendText(user.getTelegramId(),
+                            "📦 <b>Полный отчёт</b>\n\nВсе 11 вкладок, пул квестов и состояние «сейчас» одним пакетом: HTML для чтения и CSV для таблиц. "
+                                    + "За какой период собрать?",
+                            keyboardFactory.rowsLayout(List.of(
+                                    List.of(keyboardFactory.callback("Сегодня", "admin:an:full:today"),
+                                            keyboardFactory.callback("7 дней", "admin:an:full:7"),
+                                            keyboardFactory.callback("30 дней", "admin:an:full:30")),
+                                    List.of(keyboardFactory.callback("Как выбрано на вкладках", "admin:an:full:cur")),
+                                    List.of(keyboardFactory.callback("⬅️ Назад", "admin:an")))));
+                }
+            }
             case "alerts" -> sendAlertsScreen(user);
             case "alert" -> handleAlertAction(user, session, p);
             default -> sendAnalyticsHome(user);
         }
         answerSilently(callbackQuery.getId());
+    }
+
+    /** Единый пакет для отдела аналитики: HTML со всеми вкладками (сравнение с прошлым периодом + тренд 30 дн.), пулом квестов и
+     *  состоянием «сейчас», плюс один CSV со всеми метриками. Каждый блок считается отдельно - сбой одного не срывает отчёт. */
+    private void sendAnalyticsFullReport(AppUser user, UserSession session, String periodKey) {
+        ru.gamebot.platform.service.AnalyticsService.Period period = switch (periodKey) {
+            case "today" -> ru.gamebot.platform.service.AnalyticsService.Period.today();
+            case "30" -> ru.gamebot.platform.service.AnalyticsService.Period.lastDays(30);
+            case "cur" -> analyticsPeriod(session);
+            default -> ru.gamebot.platform.service.AnalyticsService.Period.lastDays(7);
+        };
+        sendText(user.getTelegramId(), "⏳ Собираю полный отчёт (" + escape(period.label()) + "), это займёт несколько секунд…", null);
+        String stamp = java.time.LocalDate.now().toString();
+        java.time.format.DateTimeFormatter tf = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+        List<ru.gamebot.platform.service.AnalyticsService.TabData> all = new ArrayList<>();
+        StringBuilder html = new StringBuilder("<!DOCTYPE html><html lang=\"ru\"><head><meta charset=\"utf-8\">"
+                + "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>EGC - полный отчёт аналитики</title><style>"
+                + "body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:820px;margin:24px auto;padding:0 16px;color:#1c1c1e;line-height:1.5}"
+                + "h1{font-size:24px}h2{font-size:19px;margin-top:32px;border-bottom:1px solid #ddd;padding-bottom:4px}"
+                + ".b{white-space:pre-wrap;font-size:15px}.t{white-space:pre-wrap;font-size:14px;color:#444;margin-top:12px}"
+                + "nav a{display:inline-block;margin:2px 8px 2px 0}</style></head><body>");
+        html.append("<h1>EGC - полный отчёт аналитики</h1><p>Период: <b>").append(escape(period.label())).append("</b> (")
+                .append(period.from().format(tf)).append(" - ").append(period.to().format(tf)).append(" UTC). Сформирован ")
+                .append(java.time.LocalDateTime.now().format(tf)).append(" UTC. ▲/▼ - изменение к предыдущему окну такой же длины.</p><nav>");
+        for (ru.gamebot.platform.service.AnalyticsService.Tab t : ru.gamebot.platform.service.AnalyticsService.Tab.values()) {
+            html.append("<a href=\"#").append(t.name()).append("\">").append(t.label()).append("</a>");
+        }
+        html.append("<a href=\"#POOL\">🧭 Пул квестов</a><a href=\"#LIVE\">📡 Сейчас</a></nav>");
+        for (ru.gamebot.platform.service.AnalyticsService.Tab t : ru.gamebot.platform.service.AnalyticsService.Tab.values()) {
+            html.append("<h2 id=\"").append(t.name()).append("\">").append(t.label()).append("</h2>");
+            try {
+                ru.gamebot.platform.service.AnalyticsService.TabData d = analyticsService.compute(t, period);
+                all.add(d);
+                html.append("<div class=\"b\">").append(analyticsService.format(d, true)).append("</div>");
+                html.append("<div class=\"t\">").append(analyticsService.trend(t, 30)).append("</div>");
+            } catch (Exception e) {
+                log.warn("Full analytics report: tab {} failed", t, e);
+                html.append("<p>⚠️ Вкладку не удалось посчитать, подробности в логе.</p>");
+            }
+        }
+        html.append("<h2 id=\"POOL\">🧭 Пул квестов</h2>");
+        try {
+            html.append("<div class=\"b\">").append(questPoolHealthService.format(questPoolHealthService.build(), false)).append("</div>");
+        } catch (Exception e) {
+            log.warn("Full analytics report: quest pool failed", e);
+            html.append("<p>⚠️ Пул квестов не удалось посчитать, подробности в логе.</p>");
+        }
+        html.append("<h2 id=\"LIVE\">📡 Сейчас на платформе</h2>");
+        try {
+            html.append("<div class=\"b\">🎯 Квестов в работе: <b>").append(questService.countActiveInProgress())
+                    .append("</b>\n🟢 Заходило в бота сегодня: <b>").append(userService.countActiveToday()).append("</b></div>");
+        } catch (Exception e) {
+            log.warn("Full analytics report: live block failed", e);
+            html.append("<p>⚠️ Блок «Сейчас» не удалось посчитать, подробности в логе.</p>");
+        }
+        html.append("</body></html>");
+        sendCsvDocument(user.getTelegramId(), html.toString(), "egc_analytics_full_" + stamp + ".html",
+                "📦 Полный отчёт: " + period.label() + ". Откройте в браузере.");
+        sendCsvDocument(user.getTelegramId(), analyticsService.fullSummaryCsv(all), "egc_analytics_full_" + stamp + ".csv",
+                "📊 Все метрики одной таблицей (Excel / Google Sheets).");
+        sendText(user.getTelegramId(), "✅ Готово: два файла выше можно переслать в отдел аналитики.", backMenuKeyboard("admin:an"));
     }
 
     private void exportAnalyticsCsv(AppUser user, UserSession session, ru.gamebot.platform.service.AnalyticsService.Tab tab) {
