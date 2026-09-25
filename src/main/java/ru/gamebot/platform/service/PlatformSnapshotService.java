@@ -27,6 +27,7 @@ public class PlatformSnapshotService {
     private final RewardRequestRepository rewardRequestRepository;
     private final QuestRepository questRepository;
     private final AnalyticsService analyticsService;
+    private final UserService userService;
 
     @Transactional
     public PlatformSnapshot takeSnapshot() {
@@ -50,17 +51,12 @@ public class PlatformSnapshotService {
         snap.setActiveQuestsCount(questRepository.countByActiveTrue());
 
         // Воронка вовлечённости — те же формулы, что и в admin:stats:platform (когорта 7-14 / 30-60 дней назад)
-        long cohort7 = appUserRepository.countRegisteredBetween(nowDt.minusDays(14), nowDt.minusDays(7));
-        long retained7 = cohort7 > 0 ? appUserRepository.countRegisteredBetweenAndActiveSince(
-                nowDt.minusDays(14), nowDt.minusDays(7), today.minusDays(7)) : 0;
-        snap.setRetention7Cohort(cohort7);
-        snap.setRetention7Pct(cohort7 > 0 ? retained7 * 100 / cohort7 : 0);
-
-        long cohort30 = appUserRepository.countRegisteredBetween(nowDt.minusDays(60), nowDt.minusDays(30));
-        long retained30 = cohort30 > 0 ? appUserRepository.countRegisteredBetweenAndActiveSince(
-                nowDt.minusDays(60), nowDt.minusDays(30), today.minusDays(30)) : 0;
-        snap.setRetention30Cohort(cohort30);
-        snap.setRetention30Pct(cohort30 > 0 ? retained30 * 100 / cohort30 : 0);
+        // Единый расчёт возврата с общей статистикой и витриной рекламодателя (UserService.retention).
+        UserService.RetentionReport rr = userService.retention();
+        snap.setRetention7Cohort(rr.cohort7());
+        snap.setRetention7Pct(rr.cohort7() > 0 ? rr.retained7() * 100 / rr.cohort7() : 0);
+        snap.setRetention30Cohort(rr.cohort30());
+        snap.setRetention30Pct(rr.cohort30() > 0 ? rr.retained30() * 100 / rr.cohort30() : 0);
 
         long moderated = questSubmissionRepository.countModerated();
         snap.setCompletionRatePct(moderated > 0 ? snap.getTotalApprovedQuests() * 100 / moderated : 0);

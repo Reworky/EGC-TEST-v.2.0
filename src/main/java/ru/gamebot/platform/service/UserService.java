@@ -1255,7 +1255,37 @@ public class UserService {
 
     /** Топ стран по числу игроков, [страна, количество] — для статистики под рекламодателя. */
     public List<Object[]> countUsersByCountry() {
-        return appUserRepository.countUsersByCountry();
+        // country - свободный текст: «Украина» и «Україна» приходят разными строками, поэтому сливаем по каноническому названию
+        // (CountryNormalizer), иначе одна страна расползается на несколько пунктов и распределение выглядит неаккуратно.
+        java.util.Map<String, Long> merged = new java.util.LinkedHashMap<>();
+        for (Object[] row : appUserRepository.countUsersByCountry()) {
+            String name = CountryNormalizer.canonical((String) row[0]);
+            if (name == null) continue;
+            merged.merge(name, ((Number) row[1]).longValue(), Long::sum);
+        }
+        List<Object[]> result = new java.util.ArrayList<>();
+        merged.entrySet().stream()
+                .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+                .forEach(e -> result.add(new Object[]{e.getKey(), e.getValue()}));
+        return result;
+    }
+
+    /** Единый расчёт «возврата» для ВСЕХ мест, где он показывается (общая статистика, раздел «Аналитика», витрина рекламодателя,
+     *  ежедневный снимок): когорта «пришли 7-14 / 30-60 дней назад», вернувшимися считаются те, у кого дата последней активности не
+     *  раньше границы (сегодня минус 7 / 30 дней). Раньше формула дублировалась в трёх местах. */
+    public record RetentionReport(long cohort7, long retained7, long cohort30, long retained30) {
+        public double percent7() { return cohort7 > 0 ? retained7 * 100.0 / cohort7 : 0; }
+        public double percent30() { return cohort30 > 0 ? retained30 * 100.0 / cohort30 : 0; }
+    }
+
+    public RetentionReport retention() {
+        java.time.LocalDate today = java.time.LocalDate.now();
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        long c7 = appUserRepository.countRegisteredBetween(now.minusDays(14), now.minusDays(7));
+        long r7 = c7 > 0 ? appUserRepository.countRegisteredBetweenAndActiveSince(now.minusDays(14), now.minusDays(7), today.minusDays(7)) : 0;
+        long c30 = appUserRepository.countRegisteredBetween(now.minusDays(60), now.minusDays(30));
+        long r30 = c30 > 0 ? appUserRepository.countRegisteredBetweenAndActiveSince(now.minusDays(60), now.minusDays(30), today.minusDays(30)) : 0;
+        return new RetentionReport(c7, r7, c30, r30);
     }
 
     public long countReferredNewUsersSince(java.time.LocalDateTime since) {

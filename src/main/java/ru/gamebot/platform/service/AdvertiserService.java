@@ -196,7 +196,7 @@ public class AdvertiserService {
             avgViews = Double.parseDouble(get(K_AVG_VIEWS));
         } catch (Exception ignored) {
         }
-        reach.add(new String[]{"Средние просмотры поста (10-20 последних)", avgViews == null ? "не указаны" : dbl(avgViews)});
+        reach.add(new String[]{"Средние просмотры поста (10-20 последних)", avgViews == null ? "не указаны (внесите вручную)" : dbl(avgViews)});
         reach.add(new String[]{"ERR% (просмотры / подписчики)", (avgViews != null && subscribers != null && subscribers > 0) ? dbl(avgViews * 100.0 / subscribers) + "%" : "—"});
         blocks.add(new Block("Охват и размер аудитории", reach));
         // 2.2 Доказательство живой аудитории
@@ -204,8 +204,8 @@ public class AdvertiserService {
         AnalyticsService.TabData act = analytics.compute(AnalyticsService.Tab.ACTIVITY, AnalyticsService.Period.lastDays(7));
         List<String[]> alive = new ArrayList<>();
         alive.add(new String[]{"DAU / MAU", v(line(eng, "dau_mau"), "%")});
-        alive.add(new String[]{"Возврат за 7 дней", v(line(act, "ret7"), "%")});
-        alive.add(new String[]{"Возврат за 30 дней", v(line(act, "ret30"), "%")});
+        alive.add(new String[]{"Возврат за 7 дней (из пришедших 7-14 дней назад)", v(line(act, "ret7"), "%")});
+        alive.add(new String[]{"Возврат за 30 дней (из пришедших 30-60 дней назад)", v(line(act, "ret30"), "%")});
         alive.add(new String[]{"Активны за 7 дней от базы", v(line(act, "active7pct"), "%")});
         blocks.add(new Block("Живая аудитория", alive));
         // 2.3 Экономическая вовлечённость

@@ -235,14 +235,12 @@ public class AnalyticsService {
         out.add(L("active7pct", "  доля от базы", "%", pct(a7, total), null));
         out.add(L("active30", "Активны за 30 дней", "", (double) a30, a30p));
         out.add(L("active30pct", "  доля от базы", "%", pct(a30, total), null));
-        long c7 = userRepo.countRegisteredBetween(nowDt.minusDays(14), nowDt.minusDays(7));
-        long r7 = c7 > 0 ? userRepo.countRegisteredBetweenAndActiveSince(nowDt.minusDays(14), nowDt.minusDays(7), today.minusDays(7)) : 0;
-        long c30 = userRepo.countRegisteredBetween(nowDt.minusDays(60), nowDt.minusDays(30));
-        long r30 = c30 > 0 ? userRepo.countRegisteredBetweenAndActiveSince(nowDt.minusDays(60), nowDt.minusDays(30), today.minusDays(30)) : 0;
-        out.add(L("ret7", "Возврат за 7 дней", "%", pct(r7, c7), snapVal(fromDate, PlatformSnapshot::getRetention7Pct),
-                "из тех, кто пришёл 7-14 дней назад; в когорте " + c7 + " чел.", false));
-        out.add(L("ret30", "Возврат за 30 дней", "%", pct(r30, c30), snapVal(fromDate, PlatformSnapshot::getRetention30Pct),
-                "из тех, кто пришёл 30-60 дней назад; в когорте " + c30 + " чел.", false));
+        UserService.RetentionReport rr = userService.retention();
+        out.add(L("ret7", "Возврат за 7 дней", "%", rr.percent7(), snapVal(fromDate, PlatformSnapshot::getRetention7Pct),
+                "из пришедших 7-14 дней назад активны за последние 7 дней; когорта " + rr.cohort7() + " чел.", false));
+        out.add(L("ret30", "Возврат за 30 дней", "%", rr.percent30(), snapVal(fromDate, PlatformSnapshot::getRetention30Pct),
+                "из пришедших 30-60 дней назад активны за последние 30 дней; когорта " + rr.cohort30() + " чел. "
+                        + "Считает и общая статистика, и витрина рекламодателя. «Возврат за вторым квестом» - другая, более строгая метрика", false));
     }
 
     private void engagementTab(LocalDate fromDate, List<Line> out) {

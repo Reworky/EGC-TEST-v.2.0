@@ -1958,7 +1958,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             backOnlyKeyboard("profile:edit"));
                     return;
                 }
-                user.setCountry(newCountry);
+                // Сводим известные написания к одному названию («Україна» -> «Украина»), чтобы гео-статистика не раздваивалась.
+                user.setCountry(ru.gamebot.platform.service.CountryNormalizer.canonical(newCountry));
                 userService.save(user);
                 session.setState(SessionState.NONE);
                 sendProfileEdit(user);
@@ -11434,13 +11435,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long active30 = userService.countActiveSince(thirtyDaysAgo);
         long newUsersWeek = userService.countNewUsersSince(nowDt.minusDays(7));
 
-        long cohort7 = userService.countRegisteredBetween(nowDt.minusDays(14), nowDt.minusDays(7));
-        long retained7 = cohort7 > 0 ? userService.countRegisteredBetweenAndActiveSince(nowDt.minusDays(14), nowDt.minusDays(7), sevenDaysAgo) : 0;
-        String retention7 = cohort7 > 0 ? (retained7 * 100 / cohort7) + "%" : "—";
-
-        long cohort30 = userService.countRegisteredBetween(nowDt.minusDays(60), nowDt.minusDays(30));
-        long retained30 = cohort30 > 0 ? userService.countRegisteredBetweenAndActiveSince(nowDt.minusDays(60), nowDt.minusDays(30), thirtyDaysAgo) : 0;
-        String retention30 = cohort30 > 0 ? (retained30 * 100 / cohort30) + "%" : "—";
+        // Единый расчёт возврата (UserService.retention) - тот же, что в «Аналитике» и в витрине рекламодателя.
+        ru.gamebot.platform.service.UserService.RetentionReport rr = userService.retention();
+        long cohort7 = rr.cohort7();
+        long cohort30 = rr.cohort30();
+        String retention7 = cohort7 > 0 ? (rr.retained7() * 100 / cohort7) + "%" : "—";
+        String retention30 = cohort30 > 0 ? (rr.retained30() * 100 / cohort30) + "%" : "—";
 
         long totalApproved = questService.countAllApproved();
         long approvedMonth = questService.countApprovedSince(nowDt.minusDays(30));
@@ -11558,6 +11558,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(user.getTelegramId(), text.length() > 3900 ? text.substring(0, 3890) + "…" : text,
                         keyboardFactory.rowsLayout(List.of(
                                 List.of(keyboardFactory.callback("🔄 Обновить", "admin:adv:show"), keyboardFactory.callback("📄 Медиа-кит", "admin:adv:kit")),
+                                List.of(keyboardFactory.callback("✏️ Заполнить просмотры, язык, устройства", "admin:adv:manual")),
                                 List.of(keyboardFactory.callback("⬅️ Назад", "admin:adv")))));
             }
             case "camp" -> {
