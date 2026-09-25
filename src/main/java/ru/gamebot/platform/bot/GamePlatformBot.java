@@ -1238,7 +1238,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     session.reset();
                     return;
                 }
-                var playerInfo = new ru.gamebot.platform.service.BrawlStarsApiService.PlayerInfo(tag, name, Integer.parseInt(trophiesStr));
+                var playerInfo = new ru.gamebot.platform.service.BrawlStarsApiService.PlayerInfo(tag, name, Integer.parseInt(trophiesStr), 0, 0, 0, 0);
                 brawlQuestVerificationService.linkTag(user, playerInfo);
                 String pendingQuestIdStr = session.getData().get("brawlPendingQuestId");
                 String pendingGemPackageKey = session.getData().get("gemPendingPackageKey");
@@ -1263,7 +1263,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     session.reset();
                     return;
                 }
-                var playerInfo = new ru.gamebot.platform.service.BrawlStarsApiService.PlayerInfo(tag, name, Integer.parseInt(trophiesStr));
+                var playerInfo = new ru.gamebot.platform.service.BrawlStarsApiService.PlayerInfo(tag, name, Integer.parseInt(trophiesStr), 0, 0, 0, 0);
                 ru.gamebot.platform.service.TournamentService.JoinResult res = brawlStarsTournamentService.confirmAndJoin(user, t, playerInfo);
                 session.reset();
                 if (res.success()) {
@@ -1296,7 +1296,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             // linkTag использует только playerInfo.tag() — остальные поля (attackWins/золото/эликсир) для
             // привязки не нужны, поэтому их не сохраняем в сессии и восстанавливаем нулями.
-            var playerInfo = new ru.gamebot.platform.service.ClashOfClansApiService.PlayerInfo(tag, name, Integer.parseInt(townHallStr), 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            var playerInfo = new ru.gamebot.platform.service.ClashOfClansApiService.PlayerInfo(tag, name, Integer.parseInt(townHallStr), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, java.util.Map.of());
             clashQuestVerificationService.linkTag(user, playerInfo);
             String pendingQuestIdStr = session.getData().get("clashPendingQuestId");
             String pendingGemPackageKey = session.getData().get("clashPendingGemPackageKey");
@@ -1327,7 +1327,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 return;
             }
             // linkTag использует только playerInfo.tag() — остальные поля для привязки не нужны.
-            var playerInfo = new ru.gamebot.platform.service.ClashRoyaleApiService.PlayerInfo(tag, name, Integer.parseInt(trophiesStr), 0, 0, 0, 0, 0);
+            var playerInfo = new ru.gamebot.platform.service.ClashRoyaleApiService.PlayerInfo(tag, name, Integer.parseInt(trophiesStr), 0, 0, 0, 0, 0, 0, 0);
             clashRoyaleQuestVerificationService.linkTag(user, playerInfo);
             String pendingQuestIdStr = session.getData().get("crPendingQuestId");
             String pendingGemPackageKey = session.getData().get("crPendingGemPackageKey");
@@ -11935,8 +11935,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("<b>Итого</b> (по всем показанным): 🚀 ").append(tStarted).append(" → ✅ ").append(tAct)
           .append(" → 🎯 ").append(tFirst).append(" → 🔁 ").append(tSecond).append("\n");
         if (tSpend > 0) {
-            sb.append("💰 ").append(tSpend).append(" ₽ · ").append(tFirst > 0 ? Math.round((double) tSpend / tFirst) : "—")
-              .append(" ₽ за игрока с 1-м квестом · ").append(tSecond > 0 ? Math.round((double) tSpend / tSecond) : "—")
+            sb.append("💰 ").append(tSpend).append(" ₽ · ").append(tFirst > 0 ? String.valueOf(Math.round((double) tSpend / tFirst)) : "—")
+              .append(" ₽ за игрока с 1-м квестом · ").append(tSecond > 0 ? String.valueOf(Math.round((double) tSpend / tSecond)) : "—")
               .append(" ₽ со 2-м\n");
         }
         sb.append("\nℹ️ 👆 клики → 🚀 зашли в бот → ✅ активировали → 🎯 1-й одобренный квест → 🔁 2-й. «Живы на 7-й день» — "
