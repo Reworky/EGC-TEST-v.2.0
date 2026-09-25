@@ -504,7 +504,7 @@ public class WeeklyResetScheduler {
         }
     }
 
-    private static final int WEEKEND_BOOST_PERCENT = 100; // +100% = ×2
+    private static final int WEEKEND_BOOST_PERCENT = 50; // +50% на первые QuestRewardBoostService.MAX_BOOSTED_QUESTS_PER_USER квеста игрока (решение владельца 2026-09-24; раньше ×2 на все)
 
     /** Буст выходных — с вечера пятницы (запуск задачи) до полуночи понедельника, EXC-награда за
      * одобренный квест удваивается для ВСЕХ игроков (см. QuestRewardBoostEvent / QuestService.computeReward,

@@ -428,7 +428,9 @@ function QuestBoostBanner() {
 
   return (
     <div className="quest-boost-banner">
-      🔥 Буст выходных ×{boost.multiplier}! EXC за квесты умножены
+      {boost.percent != null && boost.percent % 100 !== 0
+        ? `🔥 Буст выходных: +${boost.percent}% EXC за первые ${boost.maxQuests || 3} ${(boost.maxQuests || 3) < 5 ? 'квеста' : 'квестов'}!`
+        : `🔥 Буст выходных ×${boost.multiplier}! EXC за квесты умножены`}
       <div className="quest-boost-banner-timer">Осталось: {countdown}</div>
     </div>
   );

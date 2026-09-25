@@ -14611,11 +14611,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * для всех сразу; событие только готовит анонс в канал на согласование администратора. */
     @org.springframework.context.event.EventListener
     public void onWeekendBoostStarted(ru.gamebot.platform.event.WeekendBoostStartedEvent event) {
-        int multiplier = 1 + event.getBoostPercent() / 100;
         String endText = event.getEndAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm"));
-        pendingWeekendBoostFeedText = "🔥 <b>Буст выходных: EXC за квесты ×" + multiplier + "!</b>\n\n"
-                + "До " + endText + " (UTC) каждый одобренный квест приносит в " + multiplier + " раза больше EXC.\n\n"
-                + "Успей взять как можно больше — награда не будет такой щедрой всю неделю! 🎮";
+        int maxQuests = ru.gamebot.platform.service.QuestRewardBoostService.MAX_BOOSTED_QUESTS_PER_USER;
+        pendingWeekendBoostFeedText = "🔥 <b>Буст выходных: +" + event.getBoostPercent() + "% EXC за квесты!</b>\n\n"
+                + "До " + endText + " (UTC) первые " + maxQuests + " одобренных квеста каждого игрока приносят на "
+                + event.getBoostPercent() + "% больше EXC.\n\n"
+                + "Успей взять их в выходные, дальше награда обычная! 🎮";
         sendWeekendBoostFeedCard();
     }
 

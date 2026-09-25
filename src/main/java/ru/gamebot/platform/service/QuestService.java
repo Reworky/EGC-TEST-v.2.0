@@ -914,7 +914,7 @@ public class QuestService {
 
         // Apply EXC boost — личный купленный (SinkShop) складывается с глобальным временным
         // (см. QuestRewardBoostEvent, например буст выходных) аддитивно, не заменяет один другой.
-        int excBoostPct = sinkShopService.getBoostPercent(user) + questRewardBoostService.currentBoostPercent();
+        int excBoostPct = sinkShopService.getBoostPercent(user) + questRewardBoostService.currentBoostPercentFor(user);
         long boostBonusCoins = adjustedCoins * excBoostPct / 100;
         adjustedCoins = adjustedCoins + boostBonusCoins;
 

@@ -10,5 +10,9 @@ import lombok.Data;
 public class QuestBoostDto {
     private boolean active;
     private Integer multiplier;
+    /** Процент буста и на сколько первых квестов игрока он действует (мини-апп показывает «+50% за первые 3 квеста»);
+     * multiplier оставлен для старых версий мини-аппа. */
+    private Integer percent;
+    private Integer maxQuests;
     private String endsAt;
 }

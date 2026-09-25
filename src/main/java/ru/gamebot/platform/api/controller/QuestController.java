@@ -255,6 +255,8 @@ public class QuestController {
         return ru.gamebot.platform.api.dto.QuestBoostDto.builder()
                 .active(activeBoost.isPresent())
                 .multiplier(activeBoost.map(b -> 1 + b.getBoostPercent() / 100).orElse(null))
+                .percent(activeBoost.map(b -> b.getBoostPercent()).orElse(null))
+                .maxQuests(activeBoost.isPresent() ? ru.gamebot.platform.service.QuestRewardBoostService.MAX_BOOSTED_QUESTS_PER_USER : null)
                 .endsAt(activeBoost.map(b -> b.getEndAt().toString()).orElse(null))
                 .build();
     }
