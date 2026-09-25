@@ -17,7 +17,7 @@ const ADSGRAM_GENERAL_BLOCK_ID = import.meta.env.VITE_ADSGRAM_BLOCK_ID;
 const ADSGRAM_BLOCK_IDS = [...new Set([ADSGRAM_WHEEL_BLOCK_ID, ADSGRAM_GENERAL_BLOCK_ID].filter(Boolean))];
 const TELEGA_AD_BLOCK_UUID = import.meta.env.VITE_TELEGA_AD_BLOCK_UUID;
 
-// Секторы и шансы должны совпадать с AdWheelService на бэкенде (там веса из 1000). Порядок на колесе —
+// Секторы и шансы должны совпадать с AdWheelService на бэкенде (там веса из 100 000). Порядок на колесе —
 // «чередуем дешёвое и дорогое», чтобы соседние сектора не сливались; сервер присылает приз (type + excAmount),
 // клиент только находит сектор для остановки.
 const SECTORS = [
@@ -28,18 +28,20 @@ const SECTORS = [
   { key: 'EXC:30',   top: '30',  sub: 'EXC',   tone: 'a' },
   { key: 'EXC:200',  top: '200', sub: 'EXC',   tone: 'b' },
   { key: 'EXC:50',   top: '50',  sub: 'EXC',   tone: 'a' },
-  { key: 'EXC:500',  top: '500', sub: 'EXC',   tone: 'jackpot' },
+  { key: 'EXC:500',  top: '500', sub: 'EXC',   tone: 'b' },
+  { key: 'EXC:5000', top: '5000', sub: 'Джекпот', tone: 'jackpot' },
 ];
 
 const PRIZES = [
-  { label: '10 EXC',  prob: '33%' },
+  { label: '10 EXC',  prob: '32.98%' },
   { label: '20 EXC',  prob: '28%' },
   { label: '30 EXC',  prob: '18%' },
   { label: '50 EXC',  prob: '10%' },
   { label: '100 EXC', prob: '5.5%' },
   { label: '200 EXC', prob: '2.5%' },
   { label: '🎟 Билет обычного колеса', prob: '2.5%' },
-  { label: '👑 500 EXC — джекпот', prob: '0.5%' },
+  { label: '500 EXC', prob: '0.5%' },
+  { label: '👑 5 000 EXC — джекпот', prob: '0.02% (1 из 5 000)' },
 ];
 
 const N = SECTORS.length;
@@ -108,7 +110,7 @@ function drawAdWheel(canvas, rotation) {
     ctx.fillStyle = tone.text;
     ctx.shadowColor = 'rgba(0,0,0,0.6)';
     ctx.shadowBlur = 4;
-    ctx.font = `800 ${sec.top.length > 2 ? 19 : 22}px sans-serif`;
+    ctx.font = `800 ${sec.top.length > 3 ? 17 : sec.top.length > 2 ? 19 : 22}px sans-serif`;
     ctx.fillText(sec.top, r - 16, -5);
     ctx.font = '700 9px sans-serif';
     ctx.globalAlpha = 0.8;
@@ -188,6 +190,7 @@ export default function AdWheelSection({ onBack }) {
   const rotRef = useRef(0);
   const rafRef = useRef(null);
   const spinsBeforeAdRef = useRef(0);
+  const oddsRef = useRef(null);
   const playParticles = useParticles();
 
   const [status, setStatus] = useState(null);
@@ -216,6 +219,7 @@ export default function AdWheelSection({ onBack }) {
   const telegaLeft = TELEGA_AD_BLOCK_UUID && status ? status.remainingTelega : 0;
   const viewsLeft = adsgramLeft + telegaLeft;
   const spins = status ? status.spins : 0;
+  const untilGuarantee = status && status.untilGuarantee ? status.untilGuarantee : null;
 
   async function confirmAdCredited() {
     setWaiting(true);
@@ -360,13 +364,26 @@ export default function AdWheelSection({ onBack }) {
         <canvas ref={canvasRef} width={LOGICAL} height={LOGICAL} className={`awl-canvas${spinning ? ' awl-canvas--spin' : ''}`} />
       </div>
 
+      <div className="awl-rare">
+        👑 Джекпот 5 000 EXC — очень редкий приз (шанс 1 из 5 000).{' '}
+        <button type="button" className="awl-odds-link" onClick={() => oddsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+          Шансы
+        </button>
+      </div>
+
       <button className={button.cls} onClick={button.onClick || undefined} disabled={!button.onClick}>
         {button.text}
       </button>
 
+      {untilGuarantee && (
+        <div className="awl-guarantee">
+          🛡 Гарантия: приз от 100 EXC (или билет) выпадет не позже чем через {untilGuarantee} {untilGuarantee === 1 ? 'спин' : untilGuarantee < 5 ? 'спина' : 'спинов'}
+        </div>
+      )}
+
       {result && (
         <BorderBeamCard className="awl-result">
-          <div className="awl-result-title">🎊 Ваш приз</div>
+          <div className="awl-result-title">{result.jackpot ? '👑 ДЖЕКПОТ!' : '🎊 Ваш приз'}</div>
           <div className="awl-result-prize">{result.label}</div>
           <div className="awl-result-sub">
             {result.type === 'TICKET' ? 'Билет уже в разделе «Колесо фортуны»' : 'EXC зачислены на баланс'}
@@ -385,8 +402,8 @@ export default function AdWheelSection({ onBack }) {
         </div>
       </div>
 
-      <div className="awl-section">
-        <div className="awl-section-title">Призы</div>
+      <div className="awl-section" ref={oddsRef}>
+        <div className="awl-section-title">Призы и шансы</div>
         <BorderBeamCard>
           <table className="awl-prize-table">
             <tbody>
@@ -399,6 +416,11 @@ export default function AdWheelSection({ onBack }) {
             </tbody>
           </table>
         </BorderBeamCard>
+        <div className="awl-note">
+          Шансы указаны для одного спина. Джекпот выдаётся не чаще раза в 30 дней одному игроку и не более 2 раз в сутки всем игрокам;
+          если лимит исчерпан, выпадает 500 EXC. Если 19 спинов подряд не выпал приз от 100 EXC или билет, следующий спин гарантированно
+          даёт такой приз (не джекпот).
+        </div>
         <div className="awl-note">
           Каждый просмотр идёт в общий дневной лимит рекламы: ролик даёт либо спин здесь, либо 30 EXC в разделе «Квесты».
         </div>

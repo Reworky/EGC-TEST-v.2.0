@@ -267,3 +267,26 @@
   color: rgba(255, 255, 255, 0.35);
   text-align: center;
 }
+
+.awl-rare {
+  margin: 10px 4px 8px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--tg-theme-hint-color, #b9b4cc);
+}
+.awl-odds-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: #f5cc64;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.awl-guarantee {
+  margin: 8px 4px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--tg-theme-hint-color, #b9b4cc);
+}
