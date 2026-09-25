@@ -19,7 +19,7 @@ import ru.gamebot.platform.event.BrawlQuestAutoVerifiedEvent;
 
 /**
  * Автоматическая верификация квестов Brawl Stars через официальный API вместо ручного скриншота.
- * Отдельно от BrawlStarsTournamentService (та же логика разделения, что и с TournamentService) —
+ * Отдельно от TrophyTournamentService (та же логика разделения, что и с TournamentService) —
  * квесты и турниры концептуально не связаны, только используют один и тот же BrawlStarsApiService.
  */
 @Slf4j
@@ -27,7 +27,7 @@ import ru.gamebot.platform.event.BrawlQuestAutoVerifiedEvent;
 @RequiredArgsConstructor
 public class BrawlQuestVerificationService {
 
-    private static final long BATCH_DELAY_MS = 180; // тот же паттерн, что в BrawlStarsTournamentService.runBatch
+    private static final long BATCH_DELAY_MS = 180; // тот же паттерн, что в TrophyTournamentService.runBatch
     private static final DateTimeFormatter BRAWL_TIME_FMT = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss.SSS'Z'");
 
     private final BrawlStarsApiService brawlStarsApiService;
@@ -38,7 +38,7 @@ public class BrawlQuestVerificationService {
 
     public record TagLookupResult(boolean success, String error, BrawlStarsApiService.PlayerInfo playerInfo) {}
 
-    /** В отличие от BrawlStarsTournamentService.lookupTag — без проверки "тег уже занят": тег для квестов переиспользуется свободно. */
+    /** В отличие от TrophyTournamentService.lookupTag — без проверки "тег уже занят": тег для квестов переиспользуется свободно. */
     public TagLookupResult lookupTag(String rawTag) {
         if (!brawlStarsApiService.isEnabled()) {
             return new TagLookupResult(false, "Привязка тега временно недоступна. Попробуйте позже.", null);
@@ -106,7 +106,7 @@ public class BrawlQuestVerificationService {
         });
     }
 
-    /** Точка входа шедулера. Не @Transactional — последовательные сетевые вызовы, как в BrawlStarsTournamentService.runBatch. */
+    /** Точка входа шедулера. Не @Transactional — последовательные сетевые вызовы, как в TrophyTournamentService.runBatch. */
     public void checkInProgressSubmissions() {
         List<QuestSubmission> pending = questSubmissionRepository.findInProgressBrawlAutoVerify();
         for (QuestSubmission submission : pending) {

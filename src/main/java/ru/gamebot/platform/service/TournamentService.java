@@ -13,6 +13,7 @@ import ru.gamebot.platform.domain.repository.TournamentEntryRepository;
 import ru.gamebot.platform.domain.repository.TournamentRepository;
 import ru.gamebot.platform.event.TournamentCancelledEvent;
 import ru.gamebot.platform.event.TournamentFinishedEvent;
+import ru.gamebot.platform.event.TournamentSeasonWarningEvent;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -40,7 +41,7 @@ public class TournamentService {
     private final UserService userService;
     private final ApplicationEventPublisher eventPublisher;
     private final ExcTransactionService excTx;
-    private final BrawlStarsTournamentService brawlStarsTournamentService;
+    private final TrophyTournamentService trophyTournamentService;
 
     public Optional<Tournament> findActive() {
         return tournamentRepository.findFirstByStatusOrderByCreatedAtDesc(Tournament.Status.ACTIVE);
@@ -54,6 +55,15 @@ public class TournamentService {
         Optional<Tournament> reg = findRegistration();
         if (reg.isPresent()) return reg;
         return findActive();
+    }
+
+    /** Все текущие турниры для игрока: сначала с открытой регистрацией, затем идущие (новые выше). Нужен, потому что
+     *  турниры по разным играм (Brawl Stars и Clash Royale) идут параллельно, а findCurrentForUser() отдаёт только один. */
+    public List<Tournament> findAllCurrentForUser() {
+        List<Tournament> result = new ArrayList<>(
+                tournamentRepository.findAllByStatusOrderByCreatedAtDesc(Tournament.Status.REGISTRATION));
+        result.addAll(tournamentRepository.findAllByStatusOrderByCreatedAtDesc(Tournament.Status.ACTIVE));
+        return result;
     }
 
     public List<Tournament> findAll() {
@@ -103,7 +113,7 @@ public class TournamentService {
 
     @Transactional
     public JoinResult join(AppUser user, Tournament tournament) {
-        if (tournament.getScoringType() == Tournament.ScoringType.BRAWL_TROPHIES)
+        if (tournament.getScoringType().isTrophyRace())
             return new JoinResult(false, "Регистрация на этот турнир — только через Telegram-бота (нужен игровой тег).");
         if (tournament.getStatus() != Tournament.Status.REGISTRATION)
             return new JoinResult(false, "Регистрация закрыта.");
@@ -150,7 +160,7 @@ public class TournamentService {
         t.setStartDate(startDate);
         t.setEndDate(endDate);
         t.setStatus(Tournament.Status.REGISTRATION);
-        t.setScoringType("Brawl Stars".equalsIgnoreCase(gameName) ? Tournament.ScoringType.BRAWL_TROPHIES : Tournament.ScoringType.QUEST_COUNT);
+        t.setScoringType(Tournament.ScoringType.forGame(gameName));
         t.setMinParticipants(minParticipants);
         t.setPhotoFileId(photoFileId);
         t.setCreatedAt(LocalDateTime.now());
@@ -181,8 +191,8 @@ public class TournamentService {
             }
         }
         for (Tournament t : justActivated) {
-            if (t.getScoringType() == Tournament.ScoringType.BRAWL_TROPHIES) {
-                brawlStarsTournamentService.takeStartSnapshots(t);
+            if (t.getScoringType().isTrophyRace()) {
+                trophyTournamentService.takeStartSnapshots(t);
             }
         }
     }
@@ -221,9 +231,9 @@ public class TournamentService {
         List<Tournament> active = tournamentRepository.findAllByStatusOrderByCreatedAtDesc(Tournament.Status.ACTIVE);
         for (Tournament t : active) {
             if (t.getEndDate() != null && LocalDateTime.now().isAfter(t.getEndDate())) {
-                if (t.getScoringType() == Tournament.ScoringType.BRAWL_TROPHIES) {
+                if (t.getScoringType().isTrophyRace()) {
                     List<TournamentEntry> entries = tournamentEntryRepository.findAllWithUserByTournament(t);
-                    brawlStarsTournamentService.takeEndSnapshots(t, entries);
+                    trophyTournamentService.takeEndSnapshots(t, entries);
                 }
                 settle(t);
             }
@@ -241,9 +251,9 @@ public class TournamentService {
 
         record EntryScore(TournamentEntry entry, long score) {}
         List<EntryScore> scored = new ArrayList<>();
-        if (tournament.getScoringType() == Tournament.ScoringType.BRAWL_TROPHIES) {
+        if (tournament.getScoringType().isTrophyRace()) {
             for (TournamentEntry e : entries) {
-                Integer score = brawlStarsTournamentService.computeScore(e);
+                Integer score = trophyTournamentService.computeScore(e);
                 if (score != null) scored.add(new EntryScore(e, score));
             }
         } else {
@@ -316,6 +326,12 @@ public class TournamentService {
                     newStart, newStart.plus(duration), finished.getMinParticipants(), finished.getPhotoFileId());
             log.info("Auto-created continuation tournament {} (from finished {}), registration open until {}",
                     next.getId(), finished.getId(), newStart);
+            // Авто-клон Clash Royale может неожиданно попасть на границу сезона - админа при создании вручную предупреждает
+            // мастер, тут человека в цикле нет, поэтому сообщаем постфактум (турнир остаётся, решать админу).
+            if (next.getScoringType() == Tournament.ScoringType.CLASH_ROYALE_TROPHIES) {
+                ClashRoyaleSeasonGuard.check(LocalDateTime.now(), next.getStartDate(), next.getEndDate())
+                        .ifPresent(w -> eventPublisher.publishEvent(new TournamentSeasonWarningEvent(this, next, w)));
+            }
         } catch (Exception e) {
             log.error("Failed to auto-create continuation tournament after {}", finished.getId(), e);
         }

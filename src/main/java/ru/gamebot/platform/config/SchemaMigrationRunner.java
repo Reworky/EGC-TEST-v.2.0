@@ -37,6 +37,9 @@ public class SchemaMigrationRunner implements CommandLineRunner {
         addColumnIfMissing("app_users", "egc_pass_teaser_sent_at", "TIMESTAMP");
         addColumnIfMissing("traffic_sources", "spend_rub", "BIGINT DEFAULT 0");
         addColumnIfMissing("quests", "clash_achievement_name", "VARCHAR(64)");
+        addColumnIfMissing("tournaments", "season_boundary_warning_shown", "BOOLEAN DEFAULT FALSE");
+        // Новое значение ScoringType (CLASH_ROYALE_TROPHIES, 21 символ) на случай нативного H2 ENUM (feedback_ddl_auto_enum_columns).
+        alterColumn("tournaments", "scoring_type", "VARCHAR(32) DEFAULT 'QUEST_COUNT'");
         // Расширение enum'ов авто-проверок (2026-09-26): на случай, если колонка когда-то была создана как нативный H2 ENUM
         // с фиксированным списком значений (см. feedback_ddl_auto_enum_columns) - принудительно обычный VARCHAR; для уже
         // VARCHAR(20) - безвредное повторение.

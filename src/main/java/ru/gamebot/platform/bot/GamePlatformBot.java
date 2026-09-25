@@ -147,7 +147,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ErrorMonitorService errorMonitorService;
     private final ru.gamebot.platform.service.DeployService deployService;
     private final ru.gamebot.platform.service.NotificationGateService notificationGate;
-    private final ru.gamebot.platform.service.BrawlStarsTournamentService brawlStarsTournamentService;
+    private final ru.gamebot.platform.service.TrophyTournamentService trophyTournamentService;
     private final ru.gamebot.platform.service.BrawlQuestVerificationService brawlQuestVerificationService;
     private final ru.gamebot.platform.service.ClashQuestVerificationService clashQuestVerificationService;
     private final ru.gamebot.platform.service.ClashRoyaleQuestVerificationService clashRoyaleQuestVerificationService;
@@ -1172,6 +1172,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if ("tournament_create:photo:skip".equals(data) && session.getState() == SessionState.TOURNAMENT_CREATE_PHOTO) {
                 finalizeTournamentCreation(user, session);
             }
+            // Границу сезона Clash Royale админ либо подтверждает осознанно (создание продолжается), либо возвращается к датам.
+            if ("tournament_create:season:ok".equals(data) && session.getState() == SessionState.TOURNAMENT_CREATE_SEASON_CONFIRM) {
+                session.getData().put("tSeasonAck", "1");
+                askTournamentMinParticipants(user, session);
+            }
+            if ("tournament_create:season:redo".equals(data) && session.getState() == SessionState.TOURNAMENT_CREATE_SEASON_CONFIRM) {
+                session.getData().remove("tSeasonAck");
+                session.setState(SessionState.TOURNAMENT_CREATE_START);
+                sendText(user.getTelegramId(),
+                        "🔒 Введите новую дату и время, когда регистрация ЗАКРОЕТСЯ и турнир станет активным "
+                        + "(формат <code>ДД.ММ.ГГГГ ЧЧ:ММ</code>, время сервера — <b>UTC</b>):",
+                        cancelKeyboard());
+            }
             answerSilently(callbackQuery.getId());
             return;
         }
@@ -1207,12 +1220,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (data.startsWith("tournament:join:")) {
             long tid = parseLong(data.substring("tournament:join:".length()));
             tournamentService.findById(tid).ifPresentOrElse(t -> {
-                if (t.getScoringType() == ru.gamebot.platform.domain.model.Tournament.ScoringType.BRAWL_TROPHIES) {
+                if (t.getScoringType().isTrophyRace()) {
+                    // Состояние/ключи сессии названы по первому турниру (Brawl), но обслуживают любой трофи-марафон:
+                    // игру определяет сам турнир (TrophyTournamentService.providerFor).
                     session.reset();
                     session.getData().put("brawlTournamentId", String.valueOf(tid));
                     session.setState(SessionState.BRAWL_TAG_INPUT);
                     sendText(user.getTelegramId(),
-                            "🏷️ Введите ваш игровой тег Brawl Stars (например: <code>#ABC123</code>):",
+                            "🏷️ Введите ваш игровой тег " + escape(t.getGameName() != null ? t.getGameName() : "игры")
+                                    + " (например: <code>#ABC123</code>):",
                             cancelKeyboard());
                     answerSilently(callbackQuery.getId());
                     return;
@@ -1263,8 +1279,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     session.reset();
                     return;
                 }
-                var playerInfo = new ru.gamebot.platform.service.BrawlStarsApiService.PlayerInfo(tag, name, Integer.parseInt(trophiesStr), 0, 0, 0, 0);
-                ru.gamebot.platform.service.TournamentService.JoinResult res = brawlStarsTournamentService.confirmAndJoin(user, t, playerInfo);
+                var playerInfo = new ru.gamebot.platform.service.TrophyGameProvider.TrophyPlayer(tag, name, Integer.parseInt(trophiesStr));
+                ru.gamebot.platform.service.TournamentService.JoinResult res = trophyTournamentService.confirmAndJoin(user, t, playerInfo);
                 session.reset();
                 if (res.success()) {
                     answer(callbackQuery.getId(), "✅ Вы зарегистрированы! Взнос списан.");
@@ -1431,22 +1447,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.startsWith("brawl:clear_anomaly:") && isEffectiveModerator(user)) {
             long entryId = parseLong(data.substring("brawl:clear_anomaly:".length()));
-            brawlStarsTournamentService.clearAnomaly(entryId);
-            brawlStarsTournamentService.releaseHeldPayout(entryId);
+            trophyTournamentService.clearAnomaly(entryId);
+            trophyTournamentService.releaseHeldPayout(entryId);
             sendText(user.getTelegramId(), "✅ Флаг снят.", backOnlyKeyboard("brawl:anomalies"));
             answerSilently(callbackQuery.getId());
             return;
         }
         if (data.startsWith("brawl:disqualify:") && isEffectiveModerator(user)) {
             long entryId = parseLong(data.substring("brawl:disqualify:".length()));
-            brawlStarsTournamentService.disqualify(entryId);
+            trophyTournamentService.disqualify(entryId);
             sendText(user.getTelegramId(), "🚫 Игрок дисквалифицирован.", backOnlyKeyboard("brawl:anomalies"));
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if (data.startsWith("tournament:view:")) {
+            long viewTid = parseLong(data.substring("tournament:view:".length()));
+            tournamentService.findById(viewTid).ifPresentOrElse(vt -> sendTournamentCard(user, vt),
+                    () -> answer(callbackQuery.getId(), "❌ Турнир не найден."));
             answerSilently(callbackQuery.getId());
             return;
         }
         if (data.startsWith("tournament:rules:")) {
             long tid = parseLong(data.substring("tournament:rules:".length()));
-            sendBrawlTournamentRules(user, tid);
+            sendTrophyTournamentRules(user, tid);
             answerSilently(callbackQuery.getId());
             return;
         }
@@ -2422,8 +2445,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         sendText(user.getTelegramId(), "❌ Турнир не найден.", backMenuKeyboard("menu:tournament"));
                         return;
                     }
-                    ru.gamebot.platform.service.BrawlStarsTournamentService.TagLookupResult res =
-                            brawlStarsTournamentService.lookupTag(t, text.trim());
+                    ru.gamebot.platform.service.TrophyTournamentService.TagLookupResult res =
+                            trophyTournamentService.lookupTag(t, text.trim());
                     if (!res.success()) {
                         sendText(user.getTelegramId(), "❌ " + res.error() + "\n\nПопробуйте ещё раз:", cancelKeyboard());
                         return;
@@ -2581,14 +2604,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.getData().put("tName", text.trim());
                 session.setState(SessionState.TOURNAMENT_CREATE_GAME);
                 sendText(user.getTelegramId(),
-                        "🎮 Введите название игры (например: <code>PUBG Mobile</code>)\nИли <code>0</code> — если турнир по всем играм:",
+                        "🎮 Введите название игры (например: <code>PUBG Mobile</code>)\n"
+                        + "Для турнира по приросту трофеев с автоподсчётом введите <code>Brawl Stars</code> или <code>Clash Royale</code>.\n"
+                        + "Или <code>0</code> — если турнир по всем играм:",
                         cancelKeyboard());
             }
             case TOURNAMENT_CREATE_GAME -> {
                 session.getData().put("tGame", "0".equals(text.trim()) ? null : text.trim());
                 session.setState(SessionState.TOURNAMENT_CREATE_FEE);
                 sendText(user.getTelegramId(),
-                        "💰 Введите взнос за участие в EXC (например: <code>2000</code>):",
+                        "💰 Введите взнос за участие в EXC (например: <code>2000</code>; для трофи-марафона ориентир — <code>4000</code>):",
                         cancelKeyboard());
             }
             case TOURNAMENT_CREATE_FEE -> {
@@ -2634,14 +2659,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendText(user.getTelegramId(), "❌ Дата окончания должна быть позже даты начала.", cancelKeyboard()); return;
                 }
                 session.getData().put("tEnd", text.trim());
-                session.setState(SessionState.TOURNAMENT_CREATE_MIN_PARTICIPANTS);
-                sendText(user.getTelegramId(),
-                        "👥 Минимальное число участников для проведения турнира.\n\n"
-                        + "Если к моменту закрытия регистрации наберётся меньше — турнир автоматически отменится, "
-                        + "а взнос вернётся всем зарегистрированным.\n\n"
-                        + "Введите число, или <code>0</code> — без минимума (турнир пройдёт при любом числе участников):",
-                        cancelKeyboard());
+                session.getData().remove("tSeasonAck");
+                // Clash Royale: трофеи могут частично сбрасываться в начале месяца - предупреждаем о границе сезона (ТЗ п. 4.2).
+                if (ru.gamebot.platform.domain.model.Tournament.ScoringType.forGame(session.getData().get("tGame")) == ru.gamebot.platform.domain.model.Tournament.ScoringType.CLASH_ROYALE_TROPHIES) {
+                    java.util.Optional<String> seasonWarning = ru.gamebot.platform.service.ClashRoyaleSeasonGuard
+                            .check(java.time.LocalDateTime.now(), startDate, endDate);
+                    if (seasonWarning.isPresent()) {
+                        session.setState(SessionState.TOURNAMENT_CREATE_SEASON_CONFIRM);
+                        sendText(user.getTelegramId(), seasonWarning.get(),
+                                keyboardFactory.rowsLayout(List.of(
+                                        List.of(keyboardFactory.callback("✅ Всё равно создать", "tournament_create:season:ok")),
+                                        List.of(keyboardFactory.callback("🔁 Изменить даты", "tournament_create:season:redo")),
+                                        List.of(keyboardFactory.callback("❌ Отмена", "admin:cancel"))
+                                )));
+                        return;
+                    }
+                }
+                askTournamentMinParticipants(user, session);
             }
+            case TOURNAMENT_CREATE_SEASON_CONFIRM -> sendText(user.getTelegramId(),
+                    "Выберите действие кнопками под предупреждением о границе сезона.", cancelKeyboard());
             case TOURNAMENT_CREATE_MIN_PARTICIPANTS -> {
                 Integer minParticipants;
                 try {
@@ -7221,14 +7258,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendTournament(AppUser user) {
-        java.util.Optional<ru.gamebot.platform.domain.model.Tournament> opt = tournamentService.findCurrentForUser();
-        if (opt.isEmpty()) {
+        List<ru.gamebot.platform.domain.model.Tournament> current = tournamentService.findAllCurrentForUser();
+        if (current.isEmpty()) {
             sendText(user.getTelegramId(),
                     "🏆 <b>Турнир</b>\n\n⏳ Активных турниров нет. Следите за новостями клуба!",
                     backMenuKeyboard("menu:main"));
             return;
         }
-        ru.gamebot.platform.domain.model.Tournament t = opt.get();
+        if (current.size() == 1) {
+            sendTournamentCard(user, current.get(0));
+            return;
+        }
+        // Турниры по разным играм идут параллельно (Brawl Stars и Clash Royale) - даём выбрать, а не прячем второй.
+        List<List<InlineKeyboardButton>> pick = new ArrayList<>();
+        for (ru.gamebot.platform.domain.model.Tournament c : current) {
+            String status = c.getStatus() == ru.gamebot.platform.domain.model.Tournament.Status.REGISTRATION ? "📋 регистрация" : "🔥 идёт";
+            pick.add(List.of(keyboardFactory.callback(
+                    "🏆 " + trim(c.getName(), 28) + " · " + status, "tournament:view:" + c.getId())));
+        }
+        pick.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
+        sendText(user.getTelegramId(),
+                "🏆 <b>Турниры</b>\n\nСейчас идёт несколько турниров - выберите нужный:",
+                keyboardFactory.rowsLayout(pick));
+    }
+
+    private void sendTournamentCard(AppUser user, ru.gamebot.platform.domain.model.Tournament t) {
         boolean entered = tournamentService.hasEntered(t, user);
         long entries = tournamentService.entryCount(t);
         long pool = t.getPrizePoolExc();
@@ -7250,7 +7304,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean isActive = t.getStatus() == ru.gamebot.platform.domain.model.Tournament.Status.ACTIVE;
 
         if (isActive) {
-            sb.append("🔥 <b>Турнир идёт!</b> Выполняйте квесты — побеждает тот, кто выполнит больше всего.\n\n");
+            sb.append(t.getScoringType().isTrophyRace()
+                    ? "🔥 <b>Турнир идёт!</b> Побеждает тот, кто нарастит больше трофеев за время турнира.\n\n"
+                    : "🔥 <b>Турнир идёт!</b> Выполняйте квесты — побеждает тот, кто выполнит больше всего.\n\n");
             sb.append("🥇 1 место — 60% призового фонда\n");
             sb.append("🥈-🥉 2–10 места — остаток фонда поровну\n");
         } else if (isReg) {
@@ -7268,7 +7324,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (entered || isActive) {
             rows.add(List.of(keyboardFactory.callback("📊 Список участников", "tournament:leaderboard:" + t.getId())));
         }
-        if (t.getScoringType() == ru.gamebot.platform.domain.model.Tournament.ScoringType.BRAWL_TROPHIES) {
+        if (t.getScoringType().isTrophyRace()) {
             rows.add(List.of(keyboardFactory.callback("📜 Правила турнира", "tournament:rules:" + t.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
@@ -7280,7 +7336,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    private void sendBrawlTournamentRules(AppUser user, long tid) {
+    private void sendTrophyTournamentRules(AppUser user, long tid) {
         tournamentService.findById(tid).ifPresentOrElse(t -> {
             java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm");
             String start = t.getStartDate() != null ? t.getStartDate().format(fmt) + " UTC" : "—";
@@ -7289,9 +7345,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "📌 <b>Суть турнира</b>\n"
                     + "Побеждает не тот, у кого больше трофеев, а тот, кто нарастил их больше всех за время турнира. "
                     + "У новичка с 500 трофеями и профи с 30 000 — равные шансы на победу.\n\n"
+                    + (t.getScoringType() == ru.gamebot.platform.domain.model.Tournament.ScoringType.CLASH_ROYALE_TROPHIES
+                        ? "🏆 <b>Что считается</b>\n"
+                          + "Трофеи основной лестницы Clash Royale (Trophy Road), как их показывает профиль игры. "
+                          + "Рейтинг «Путь легенд» в турнире не учитывается и на результат не влияет.\n\n"
+                          + "📅 <b>Смена сезона</b>\n"
+                          + "В начале месяца игра может частично сбрасывать трофеи. Даты турниров мы стараемся выбирать подальше от смены месяца; "
+                          + "если сброс всё же попадёт в период турнира, такие результаты проверяются вручную.\n\n"
+                        : "")
                     + "🎮 <b>Как участвовать</b>\n"
                     + "1. Нажмите «⚔️ Участвовать» и оплатите взнос\n"
-                    + "2. Привяжите свой игровой тег Brawl Stars (#XXXXXXX)\n"
+                    + "2. Привяжите свой игровой тег " + escape(t.getGameName() != null ? t.getGameName() : "игры") + " (#XXXXXXX)\n"
                     + "3. Дождитесь закрытия регистрации — с этого момента фиксируется ваш стартовый результат\n\n"
                     + "💰 <b>Взнос и призовой фонд</b>\n"
                     + "Взнос за участие: <b>" + t.getEntryFeeExc() + " EXC</b>. Все взносы участников формируют общий призовой фонд — "
@@ -7301,12 +7365,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "• В финальный момент (" + end + ") фиксируются трофеи повторно\n"
                     + "• Место в рейтинге определяется по приросту трофеев: финал минус старт\n"
                     + "• 🥇 1 место — 60% призового фонда\n"
-                    + "• Остальные места — оставшиеся 40% делятся поровну между всеми участниками, кроме первого места\n\n"
+                    + "• Места со 2 по 10 — оставшиеся 40% делятся поровну (если участников меньше десяти — между всеми, кроме первого места)\n\n"
                     + "⚠️ <b>Важно</b>\n"
                     + "• Игровой ник должен совпадать с ником, привязанным в EGC\n"
                     + "• Один участник — один игровой аккаунт\n"
                     + "• Подозрительная активность (резкая потеря трофеев перед стартом с последующим набором) проверяется вручную и может привести к дисквалификации\n"
-                    + "• Взнос не возвращается ни в каком случае, включая дисквалификацию\n\n"
+                    + "• Взнос не возвращается, включая дисквалификацию (кроме отмены турнира из-за недобора участников)\n\n"
                     + (t.getMinParticipants() != null
                         ? "🚫 <b>Минимальное число участников</b>\n"
                           + "Турнир состоится только при " + t.getMinParticipants() + " и более зарегистрированных участниках. "
@@ -9103,7 +9167,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     return;
                 } else if (action.startsWith("tournaments:resnapshot:")) {
                     long entryId = parseLong(action.substring("tournaments:resnapshot:".length()));
-                    boolean ok = brawlStarsTournamentService.reSnapshotEntry(entryId);
+                    boolean ok = trophyTournamentService.reSnapshotEntry(entryId);
                     tournamentEntryRepository.findById(entryId).ifPresent(e -> sendAdminBrawlParticipants(user, e.getTournament().getId()));
                     answer(callbackQuery.getId(), ok ? "✅ Снапшот обновлён" : "❌ Не удалось получить данные");
                     return;
@@ -9362,6 +9426,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), "✅ Награда добавлена в магазин.", backMenuKeyboard("admin:rewards"));
     }
 
+    private void askTournamentMinParticipants(AppUser user, UserSession session) {
+        session.setState(SessionState.TOURNAMENT_CREATE_MIN_PARTICIPANTS);
+        sendText(user.getTelegramId(),
+                "👥 Минимальное число участников для проведения турнира.\n\n"
+                + "Если к моменту закрытия регистрации наберётся меньше — турнир автоматически отменится, "
+                + "а взнос вернётся всем зарегистрированным.\n\n"
+                + "Введите число (для трофи-марафона обычно <code>5</code>), или <code>0</code> — без минимума "
+                + "(турнир пройдёт при любом числе участников):",
+                cancelKeyboard());
+    }
+
     private void finalizeTournamentCreation(AppUser user, UserSession session) {
         Map<String, String> d = session.getData();
         String tName = d.get("tName");
@@ -9374,6 +9449,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         Integer minParticipants = (minStr != null && !minStr.isBlank()) ? Integer.parseInt(minStr) : null;
         ru.gamebot.platform.domain.model.Tournament t = tournamentService.create(
                 tName, tGame, fee, startDate, endDate, minParticipants, d.get("tPhotoFileId"));
+        if ("1".equals(d.get("tSeasonAck"))) {
+            t.setSeasonBoundaryWarningShown(true);
+            tournamentService.save(t);
+        }
         session.reset();
         String minLine = minParticipants != null
                 ? "👥 Минимум участников: <b>" + minParticipants + "</b> (иначе турнир отменится, взносы вернутся)\n"
@@ -12393,8 +12472,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
 
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-            if (t.getScoringType() == ru.gamebot.platform.domain.model.Tournament.ScoringType.BRAWL_TROPHIES) {
-                rows.add(List.of(keyboardFactory.callback("👥 Участники (Brawl Stars)", "admin:tournaments:brawlparticipants:" + tid)));
+            if (t.getScoringType().isTrophyRace()) {
+                rows.add(List.of(keyboardFactory.callback("👥 Участники (" + (t.getGameName() != null ? t.getGameName() : "трофеи") + ")", "admin:tournaments:brawlparticipants:" + tid)));
             } else if (t.getStatus() != ru.gamebot.platform.domain.model.Tournament.Status.FINISHED) {
                 rows.add(List.of(keyboardFactory.callback("📊 Участники", "tournament:leaderboard:" + tid)));
             }
@@ -12437,7 +12516,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         tournamentService.findById(tid).ifPresentOrElse(t -> {
             List<ru.gamebot.platform.domain.model.TournamentEntry> entries =
                     tournamentEntryRepository.findAllWithUserByTournamentUnordered(t);
-            StringBuilder sb = new StringBuilder("👥 <b>Участники (Brawl Stars) — " + escape(t.getName()) + "</b>\n\n");
+            StringBuilder sb = new StringBuilder("👥 <b>Участники (" + escape(t.getGameName() != null ? t.getGameName() : "трофеи") + ") — " + escape(t.getName()) + "</b>\n\n");
             if (entries.isEmpty()) sb.append("Пока никто не зарегистрировался.");
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
             for (ru.gamebot.platform.domain.model.TournamentEntry e : entries) {
@@ -12473,7 +12552,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         buttons.add(keyboardFactory.callback("⬅️ Назад", "admin:tournaments"));
         sendText(chatId,
-                "⚠️ <b>Подозрительные заявки (Brawl Stars)</b>\n\n"
+                "⚠️ <b>Подозрительные заявки (трофи-турниры)</b>\n\n"
                         + "Падение трофеев больше 300 между регистрацией и стартом турнира.\n\n"
                         + "Проверьте вручную: снимите флаг (честно) или дисквалифицируйте.",
                 keyboardFactory.smartLayout(buttons));
@@ -12529,7 +12608,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ru.gamebot.platform.domain.model.Tournament t = event.getTournament();
         List<ru.gamebot.platform.domain.model.TournamentEntry> entries = tournamentService.getLeaderboard(t);
 
-        boolean isBrawl = t.getScoringType() == ru.gamebot.platform.domain.model.Tournament.ScoringType.BRAWL_TROPHIES;
+        boolean isBrawl = t.getScoringType().isTrophyRace(); // любой трофи-марафон (имя переменной историческое)
 
         // Публикация в канал — только после одобрения администратора (см. handleAdminFeedAction).
         // Личные уведомления победителям ниже уходят сразу и от этого не зависят.
@@ -12577,6 +12656,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Авто-продолженный турнир Clash Royale попал на возможную границу сезона - предупреждаем админов (TournamentService.autoCreateNextTournament). */
+    @org.springframework.context.event.EventListener
+    public void onTournamentSeasonWarning(ru.gamebot.platform.event.TournamentSeasonWarningEvent event) {
+        String text = "🔁 Авто-турнир «" + escape(event.getTournament().getName()) + "» создан автоматически.\n\n" + event.getWarningHtml()
+                + "\n\nЕсли даты не подходят - отредактируйте или удалите турнир в админке (пока идёт регистрация).";
+        for (Long adminId : adminService.allAdminIds()) {
+            try {
+                sendText(adminId, text, null);
+            } catch (Exception e) {
+                log.warn("Failed to send tournament season warning to admin {}", adminId, e);
+            }
+        }
+    }
+
     @org.springframework.context.event.EventListener
     public void onTournamentCancelled(ru.gamebot.platform.event.TournamentCancelledEvent event) {
         ru.gamebot.platform.domain.model.Tournament t = event.getTournament();
@@ -12611,7 +12704,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     @org.springframework.context.event.EventListener
     public void onBrawlSnapshotBatchFailed(ru.gamebot.platform.event.BrawlStarsSnapshotBatchFailedEvent event) {
         String phaseLabel = "start".equals(event.getPhase()) ? "стартовый" : "финишный";
-        String text = "🚨 <b>Проблема с турниром Brawl Stars</b>\n\n"
+        String gameLabel = event.getTournament().getGameName() != null ? event.getTournament().getGameName() : "по трофеям";
+        String text = "🚨 <b>Проблема с турниром " + escape(gameLabel) + "</b>\n\n"
                 + "Турнир «" + escape(event.getTournament().getName()) + "»: " + phaseLabel
                 + " снимок трофеев не удалось получить ни для одного участника.\n"
                 + "Проверьте статус API-токена / IP и повторите снимок вручную из карточки турнира.";
@@ -14704,7 +14798,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * тире, концовка чередуется по id турнира (вопрос / реакция / обычная), в конце ссылка на бота. */
     private String buildTournamentResultsPost(ru.gamebot.platform.domain.model.Tournament t,
                                               List<ru.gamebot.platform.domain.model.TournamentEntry> entries) {
-        boolean isBrawl = t.getScoringType() == ru.gamebot.platform.domain.model.Tournament.ScoringType.BRAWL_TROPHIES;
+        boolean isBrawl = t.getScoringType().isTrophyRace(); // любой трофи-марафон (имя переменной историческое)
         boolean anyHeld = entries.stream().anyMatch(ru.gamebot.platform.domain.model.TournamentEntry::isPayoutHeld);
         java.util.function.LongFunction<String> exc = n -> String.format(java.util.Locale.forLanguageTag("ru"), "%,d", n);
 

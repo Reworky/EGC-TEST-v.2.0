@@ -17,45 +17,53 @@ import ru.gamebot.platform.event.BrawlStarsSnapshotBatchFailedEvent;
 import ru.gamebot.platform.event.BrawlStarsSnapshotTakenEvent;
 
 /**
- * Brawl Stars trophy-marathon specific logic: tag registration, trophy snapshots via the
- * official API, anti-cheat anomaly detection, and admin review actions. Kept separate from
- * TournamentService, which stays focused on generic tournament lifecycle.
+ * Турнир-«трофи-марафон» для любой игры с официальным API (Brawl Stars, Clash Royale): регистрация по тегу, снимки
+ * трофеев, обнаружение аномалий, админские действия. Игра-специфична только выдача трофеев (TrophyGameProvider), всё
+ * остальное - общее, поэтому новая игра не дублирует код. Отдельно от TournamentService, который отвечает за общий
+ * жизненный цикл турниров. (Раньше назывался TrophyTournamentService; имена событий BrawlStars*Event сохранены.)
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class BrawlStarsTournamentService {
+public class TrophyTournamentService {
 
     private static final int ANOMALY_TROPHY_DROP_THRESHOLD = 300;
     private static final long BATCH_DELAY_MS = 180;
 
-    private final BrawlStarsApiService brawlStarsApiService;
+    private final List<TrophyGameProvider> providers;
     private final TournamentEntryRepository tournamentEntryRepository;
     private final TournamentRepository tournamentRepository;
     private final UserService userService;
     private final ExcTransactionService excTx;
     private final ApplicationEventPublisher eventPublisher;
 
+    /** Провайдер игры турнира; null для не-трофейных турниров (QUEST_COUNT). */
+    public TrophyGameProvider providerFor(Tournament tournament) {
+        Tournament.ScoringType type = tournament.getScoringType();
+        return providers.stream().filter(p -> p.scoringType() == type).findFirst().orElse(null);
+    }
+
     // ---- Registration-time tag confirmation ----
 
-    public record TagLookupResult(boolean success, String error, BrawlStarsApiService.PlayerInfo playerInfo) {}
+    public record TagLookupResult(boolean success, String error, TrophyGameProvider.TrophyPlayer playerInfo) {}
 
     public TagLookupResult lookupTag(Tournament tournament, String rawTag) {
-        if (!brawlStarsApiService.isEnabled()) {
+        TrophyGameProvider provider = providerFor(tournament);
+        if (provider == null || !provider.isEnabled()) {
             return new TagLookupResult(false, "Регистрация по тегу временно недоступна. Попробуйте позже.", null);
         }
         if (tournamentEntryRepository.existsByTournamentAndGameTag(tournament, normalizeDisplayTag(rawTag))) {
             return new TagLookupResult(false, "Этот тег уже зарегистрирован в этом турнире.", null);
         }
         try {
-            Optional<BrawlStarsApiService.PlayerInfo> info = brawlStarsApiService.fetchPlayer(rawTag);
+            Optional<TrophyGameProvider.TrophyPlayer> info = provider.fetchPlayer(rawTag);
             if (info.isEmpty()) {
                 return new TagLookupResult(false, "Тег не найден. Проверьте правильность (формат #ABC123).", null);
             }
             return new TagLookupResult(true, null, info.get());
-        } catch (BrawlStarsApiService.BrawlStarsTransientException e) {
-            log.warn("Brawl Stars tag lookup transient failure for tag={}", rawTag, e);
-            return new TagLookupResult(false, "Сервис Brawl Stars временно недоступен. Попробуйте ещё раз чуть позже.", null);
+        } catch (TrophyGameProvider.TrophyApiTransientException e) {
+            log.warn("{} tag lookup transient failure for tag={}", provider.gameName(), rawTag, e);
+            return new TagLookupResult(false, "Сервис " + provider.gameName() + " временно недоступен. Попробуйте ещё раз чуть позже.", null);
         }
     }
 
@@ -67,7 +75,7 @@ public class BrawlStarsTournamentService {
     /** Mirrors TournamentService.join()'s body, plus stores the confirmed tag/trophies. */
     @Transactional
     public TournamentService.JoinResult confirmAndJoin(AppUser user, Tournament tournament,
-                                                         BrawlStarsApiService.PlayerInfo playerInfo) {
+                                                         TrophyGameProvider.TrophyPlayer playerInfo) {
         if (tournament.getStatus() != Tournament.Status.REGISTRATION) {
             return new TournamentService.JoinResult(false, "Регистрация закрыта.");
         }
@@ -102,20 +110,21 @@ public class BrawlStarsTournamentService {
     // ---- Batch snapshots (must be called OUTSIDE any open DB transaction — sequential network I/O) ----
 
     public void takeStartSnapshots(Tournament tournament) {
-        if (tournament.getScoringType() != Tournament.ScoringType.BRAWL_TROPHIES) return;
+        if (!tournament.getScoringType().isTrophyRace()) return;
         List<TournamentEntry> entries = tournamentEntryRepository.findAllWithUserByTournamentUnordered(tournament);
         runBatch(tournament, entries, true, "start");
     }
 
     public void takeEndSnapshots(Tournament tournament, List<TournamentEntry> entries) {
-        if (tournament.getScoringType() != Tournament.ScoringType.BRAWL_TROPHIES) return;
+        if (!tournament.getScoringType().isTrophyRace()) return;
         runBatch(tournament, entries, false, "end");
     }
 
     private void runBatch(Tournament tournament, List<TournamentEntry> entries, boolean isStart, String phase) {
+        TrophyGameProvider provider = providerFor(tournament);
         int failures = 0;
         for (TournamentEntry entry : entries) {
-            if (!snapshotOne(entry, isStart)) failures++;
+            if (!snapshotOne(entry, isStart, provider)) failures++;
             sleepBetweenCalls();
         }
         if (!entries.isEmpty() && failures == entries.size()) {
@@ -125,16 +134,21 @@ public class BrawlStarsTournamentService {
         }
     }
 
-    /**
-     * Returns true on success. Checks isEnabled() first so a Brawl tournament degrades gracefully
-     * (all entries end up FAILED, no crash) if the API token isn't configured yet.
-     */
+    /** Ручной пересчёт одного участника (из админки): провайдер берётся по турниру заявки. */
     @Transactional
     public boolean snapshotOne(TournamentEntry entry, boolean isStart) {
-        if (!brawlStarsApiService.isEnabled()) {
+        return snapshotOne(entry, isStart, providerFor(entry.getTournament()));
+    }
+
+    /**
+     * Returns true on success. Checks isEnabled() first so a trophy tournament degrades gracefully
+     * (all entries end up FAILED, no crash) if the API token isn't configured yet.
+     */
+    private boolean snapshotOne(TournamentEntry entry, boolean isStart, TrophyGameProvider provider) {
+        if (provider == null || !provider.isEnabled()) {
             entry.setSnapshotStatus(TournamentEntry.SnapshotStatus.FAILED);
             tournamentEntryRepository.save(entry);
-            log.warn("Skipping Brawl snapshot for entry {}: API disabled (no token configured)", entry.getId());
+            log.warn("Skipping trophy snapshot for entry {}: API disabled (no token configured) or unknown game", entry.getId());
             return false;
         }
         if (entry.getGameTag() == null) {
@@ -143,7 +157,7 @@ public class BrawlStarsTournamentService {
             return false;
         }
         try {
-            Optional<BrawlStarsApiService.PlayerInfo> info = brawlStarsApiService.fetchPlayer(entry.getGameTag());
+            Optional<TrophyGameProvider.TrophyPlayer> info = provider.fetchPlayer(entry.getGameTag());
             if (info.isEmpty()) {
                 entry.setSnapshotStatus(TournamentEntry.SnapshotStatus.FAILED);
                 tournamentEntryRepository.save(entry);
@@ -159,7 +173,7 @@ public class BrawlStarsTournamentService {
             entry.setSnapshotStatus(TournamentEntry.SnapshotStatus.OK);
             tournamentEntryRepository.save(entry);
             return true;
-        } catch (BrawlStarsApiService.BrawlStarsTransientException e) {
+        } catch (TrophyGameProvider.TrophyApiTransientException e) {
             log.warn("Snapshot failed for entry {} (tag={}) after retries", entry.getId(), entry.getGameTag(), e);
             entry.setSnapshotStatus(TournamentEntry.SnapshotStatus.FAILED);
             tournamentEntryRepository.save(entry);
@@ -170,7 +184,8 @@ public class BrawlStarsTournamentService {
     /**
      * Approximation: compares trophies at registration time vs. the official start snapshot
      * (registration close), not a strict rolling 24h window — there is no periodic polling
-     * during registration in v1. Confirmed acceptable for v1.
+     * during registration in v1. Confirmed acceptable for v1. Для Clash Royale сюда же попадёт сброс сезона
+     * между регистрацией и стартом (см. ClashRoyaleSeasonGuard) - именно поэтому админ предупреждается заранее.
      */
     private void checkAnomaly(TournamentEntry entry) {
         if (entry.getTrophiesAtRegistration() == null || entry.getTrophiesStart() == null) return;

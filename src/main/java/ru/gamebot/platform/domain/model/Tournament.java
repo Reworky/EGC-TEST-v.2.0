@@ -13,7 +13,25 @@ import java.time.LocalDateTime;
 public class Tournament {
 
     public enum Status { REGISTRATION, ACTIVE, FINISHED, CANCELLED_LOW_TURNOUT }
-    public enum ScoringType { QUEST_COUNT, BRAWL_TROPHIES }
+    /** QUEST_COUNT - по числу квестов; BRAWL_TROPHIES / CLASH_ROYALE_TROPHIES - «трофи-марафон»: очки = прирост
+     *  трофеев по официальному API игры (стартовый и финальный снимки). Значение колонки scoring_type - varchar(32). */
+    public enum ScoringType {
+        QUEST_COUNT, BRAWL_TROPHIES, CLASH_ROYALE_TROPHIES;
+
+        /** Турнир-марафон по трофеям (любая игра с API): регистрация только через бота по игровому тегу. */
+        public boolean isTrophyRace() {
+            return this == BRAWL_TROPHIES || this == CLASH_ROYALE_TROPHIES;
+        }
+
+        /** Тип подсчёта по названию игры, введённому админом при создании (без учёта регистра). */
+        public static ScoringType forGame(String gameName) {
+            if (gameName == null) return QUEST_COUNT;
+            String g = gameName.trim();
+            if ("Brawl Stars".equalsIgnoreCase(g)) return BRAWL_TROPHIES;
+            if ("Clash Royale".equalsIgnoreCase(g)) return CLASH_ROYALE_TROPHIES;
+            return QUEST_COUNT;
+        }
+    }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -57,4 +75,15 @@ public class Tournament {
      * затирали друг друга. Очищается после публикации/отклонения. */
     @Column(length = 4096) // лимит длины сообщения Telegram
     private String resultsFeedText;
+
+    /** Админу при создании было показано предупреждение о границе сезона Clash Royale (сброс трофеев около 1-го числа
+     *  месяца) и он подтвердил создание осознанно (ТЗ «Турнир Clash Royale», п. 4.2). Только отметка, на подсчёт не влияет. */
+    @Column(columnDefinition = "boolean default false")
+    private boolean seasonBoundaryWarningShown;
+
+    /** Пустое значение у старых записей трактуем как QUEST_COUNT (колонка появилась позже создания части турниров) -
+     *  иначе `getScoringType().isTrophyRace()` упал бы NPE. Явный геттер заменяет сгенерированный Lombok'ом. */
+    public ScoringType getScoringType() {
+        return scoringType != null ? scoringType : ScoringType.QUEST_COUNT;
+    }
 }
