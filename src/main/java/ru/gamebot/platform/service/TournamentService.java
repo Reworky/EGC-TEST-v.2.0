@@ -14,6 +14,7 @@ import ru.gamebot.platform.domain.repository.TournamentRepository;
 import ru.gamebot.platform.event.TournamentCancelledEvent;
 import ru.gamebot.platform.event.TournamentFinishedEvent;
 import ru.gamebot.platform.event.TournamentSeasonWarningEvent;
+import ru.gamebot.platform.event.TournamentStageEvent;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -47,8 +48,10 @@ public class TournamentService {
         return tournamentRepository.findFirstByStatusOrderByCreatedAtDesc(Tournament.Status.ACTIVE);
     }
 
+    /** Только турниры, у которых регистрация уже открыта: запланированные с отложенным открытием игроку не видны. */
     public Optional<Tournament> findRegistration() {
-        return tournamentRepository.findFirstByStatusOrderByCreatedAtDesc(Tournament.Status.REGISTRATION);
+        return tournamentRepository.findAllByStatusOrderByCreatedAtDesc(Tournament.Status.REGISTRATION).stream()
+                .filter(Tournament::isRegistrationOpen).findFirst();
     }
 
     public Optional<Tournament> findCurrentForUser() {
@@ -61,7 +64,8 @@ public class TournamentService {
      *  турниры по разным играм (Brawl Stars и Clash Royale) идут параллельно, а findCurrentForUser() отдаёт только один. */
     public List<Tournament> findAllCurrentForUser() {
         List<Tournament> result = new ArrayList<>(
-                tournamentRepository.findAllByStatusOrderByCreatedAtDesc(Tournament.Status.REGISTRATION));
+                tournamentRepository.findAllByStatusOrderByCreatedAtDesc(Tournament.Status.REGISTRATION).stream()
+                        .filter(Tournament::isRegistrationOpen).toList());
         result.addAll(tournamentRepository.findAllByStatusOrderByCreatedAtDesc(Tournament.Status.ACTIVE));
         return result;
     }
@@ -117,6 +121,8 @@ public class TournamentService {
             return new JoinResult(false, "Регистрация на этот турнир — только через Telegram-бота (нужен игровой тег).");
         if (tournament.getStatus() != Tournament.Status.REGISTRATION)
             return new JoinResult(false, "Регистрация закрыта.");
+        if (!tournament.isRegistrationOpen())
+            return new JoinResult(false, "Регистрация ещё не открыта.");
         if (hasEntered(tournament, user))
             return new JoinResult(false, "Вы уже зарегистрированы.");
         if (user.getCoins() < tournament.getEntryFeeExc())
@@ -193,6 +199,34 @@ public class TournamentService {
         for (Tournament t : justActivated) {
             if (t.getScoringType().isTrophyRace()) {
                 trophyTournamentService.takeStartSnapshots(t);
+            }
+        }
+    }
+
+    /** Пост о «свежем» этапе имеет смысл, только пока он свежий: у турниров, начавшихся давно (созданных до этой функции),
+     *  этап молча помечается как объявленный, без карточки админу - иначе после деплоя пришёл бы залп устаревших постов. */
+    private static final Duration STAGE_ANNOUNCE_MAX_AGE = Duration.ofHours(6);
+
+    /** Готовит посты на одобрение админа: «регистрация открыта» и «турнир стартовал (регистрация закрыта)». Вызывается тем
+     *  же тиком планировщика после activateRegistrationTournaments(), поэтому к «старту» стартовые снимки уже взяты.
+     *  Итоги турнира готовит settle() (TournamentFinishedEvent). No blanket @Transactional - как и соседние методы. */
+    public void announceTournamentStages() {
+        LocalDateTime now = LocalDateTime.now();
+        for (Tournament t : tournamentRepository.findAllByStatusOrderByCreatedAtDesc(Tournament.Status.REGISTRATION)) {
+            if (t.isRegistrationAnnounced() || !t.isRegistrationOpen()) continue;
+            LocalDateTime openedAt = t.getRegistrationOpenDate() != null ? t.getRegistrationOpenDate() : t.getCreatedAt();
+            t.setRegistrationAnnounced(true);
+            tournamentRepository.save(t);
+            if (openedAt == null || Duration.between(openedAt, now).compareTo(STAGE_ANNOUNCE_MAX_AGE) <= 0) {
+                eventPublisher.publishEvent(new TournamentStageEvent(this, t, TournamentStageEvent.Stage.REGISTRATION_OPENED));
+            }
+        }
+        for (Tournament t : tournamentRepository.findAllByStatusOrderByCreatedAtDesc(Tournament.Status.ACTIVE)) {
+            if (t.isStartAnnounced()) continue;
+            t.setStartAnnounced(true);
+            tournamentRepository.save(t);
+            if (t.getStartDate() == null || Duration.between(t.getStartDate(), now).compareTo(STAGE_ANNOUNCE_MAX_AGE) <= 0) {
+                eventPublisher.publishEvent(new TournamentStageEvent(this, t, TournamentStageEvent.Stage.TOURNAMENT_STARTED));
             }
         }
     }

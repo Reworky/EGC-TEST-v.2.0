@@ -79,6 +79,9 @@ public class TrophyTournamentService {
         if (tournament.getStatus() != Tournament.Status.REGISTRATION) {
             return new TournamentService.JoinResult(false, "Регистрация закрыта.");
         }
+        if (!tournament.isRegistrationOpen()) {
+            return new TournamentService.JoinResult(false, "Регистрация ещё не открыта.");
+        }
         if (tournamentEntryRepository.existsByTournamentAndUser(tournament, user)) {
             return new TournamentService.JoinResult(false, "Вы уже зарегистрированы.");
         }

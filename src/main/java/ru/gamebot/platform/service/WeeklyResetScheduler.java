@@ -151,6 +151,7 @@ public class WeeklyResetScheduler {
     @Scheduled(fixedDelay = 60_000)
     public void processTournaments() {
         tournamentService.activateRegistrationTournaments();
+        tournamentService.announceTournamentStages();
         tournamentService.settleFinishedTournaments();
     }
 

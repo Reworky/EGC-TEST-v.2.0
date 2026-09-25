@@ -81,6 +81,27 @@ public class Tournament {
     @Column(columnDefinition = "boolean default false")
     private boolean seasonBoundaryWarningShown;
 
+    /** Когда откроется регистрация; null = сразу после создания (как было раньше). До этого момента турнир скрыт от игроков
+     *  (нет ни в боте, ни в мини-аппе) и записаться нельзя, а в момент открытия админу уходит пост на одобрение. */
+    private LocalDateTime registrationOpenDate;
+
+    /** Пост «регистрация открыта» уже подготовлен (идемпотентность планировщика). */
+    @Column(columnDefinition = "boolean default false")
+    private boolean registrationAnnounced;
+
+    /** Пост «турнир стартовал» уже подготовлен (идемпотентность планировщика). */
+    @Column(columnDefinition = "boolean default false")
+    private boolean startAnnounced;
+
+    /** Какой пост сейчас ждёт одобрения в resultsFeedText: REGISTRATION / START / RESULTS; null = итоги (как раньше). */
+    @Column(length = 16)
+    private String feedStage;
+
+    /** Регистрация уже открыта (или открывалась сразу): у турнира без даты открытия всегда true. */
+    public boolean isRegistrationOpen() {
+        return registrationOpenDate == null || !LocalDateTime.now().isBefore(registrationOpenDate);
+    }
+
     /** Пустое значение у старых записей трактуем как QUEST_COUNT (колонка появилась позже создания части турниров) -
      *  иначе `getScoringType().isTrophyRace()` упал бы NPE. Явный геттер заменяет сгенерированный Lombok'ом. */
     public ScoringType getScoringType() {
