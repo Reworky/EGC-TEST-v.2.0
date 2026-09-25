@@ -38,6 +38,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         fixSponsoredQuestFlag();
         seedGtaVCatalog();
         deleteGamesAndQuests();
+        deactivateSopranosQuest();
         fixNullDurationText();
         backfillOwnedFrames();
         backfillCooldownReminderBaseline();
@@ -219,6 +220,18 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             }
         } catch (Exception e) {
             log.error("[DBMigration] deleteGamesAndQuests failed: {}", e.getMessage());
+        }
+    }
+
+    /** Квест «NFT / THE SOPRANOS» создан вручную в админке и не нужен (решение владельца 2026-09-25).
+     *  Мягкое удаление, как в QuestService.deleteQuest: active=false, заявки игроков не трогаем (ожидающие
+     *  К-3167/К-3433 модератор отклоняет сам). Точное совпадение названия, повторный запуск ничего не меняет. */
+    private void deactivateSopranosQuest() {
+        try {
+            int n = jdbcTemplate.update("UPDATE quests SET active = FALSE WHERE active = TRUE AND title = ?", "NFT / THE SOPRANOS");
+            if (n > 0) log.info("[DBMigration] Deactivated {} quest(s) 'NFT / THE SOPRANOS'", n);
+        } catch (Exception e) {
+            log.error("[DBMigration] deactivateSopranosQuest failed: {}", e.getMessage());
         }
     }
 
