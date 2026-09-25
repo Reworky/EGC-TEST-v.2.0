@@ -14267,6 +14267,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** "Заходишь, а квесты не берёшь" — см. WeeklyResetScheduler.checkQuestGapNudge. Отдельная от
      * спячки (общая неактивность) и онбординга (для тех, кто вообще не начинал) ниша. */
+    /** Затих на 4-13 дней (WeeklyResetScheduler.checkSilentGap): одно сообщение на человека, без EXC. */
+    @org.springframework.context.event.EventListener
+    public void onSilentGapNudge(ru.gamebot.platform.event.SilentGapNudgeEvent event) {
+        String msg = "👀 <b>Есть что-то новое</b>\n\n"
+                + "Пока тебя не было, в клубе появились новые квесты: <b>" + event.getNewQuestsCount() + "</b>.\n\n"
+                + "Загляни, вдруг найдётся что-то по душе 👇";
+        try {
+            sendText(event.getTelegramId(), msg, keyboardFactory.rowsLayout(List.of(
+                    List.of(keyboardFactory.callback("🗺️ К квестам", "menu:quests")))));
+        } catch (Exception e) {
+            log.warn("Failed to send silent-gap nudge to {}", event.getTelegramId(), e);
+        }
+    }
+
     @org.springframework.context.event.EventListener
     public void onQuestGapNudge(ru.gamebot.platform.event.QuestGapNudgeEvent event) {
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(

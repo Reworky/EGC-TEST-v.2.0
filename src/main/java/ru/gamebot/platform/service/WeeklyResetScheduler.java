@@ -599,6 +599,45 @@ public class WeeklyResetScheduler {
         }
     }
 
+    private static final int SILENT_GAP_MIN_DAYS = 4;
+    private static final int SILENT_GAP_MAX_DAYS = 13;
+    /** Не больше стольких сообщений за прогон: при первом запуске накопленная база затихших (сотни игроков) разойдётся по дням,
+     * а не уйдёт залпом; самые «свежие» (недавно ушедшие) получают первыми - у них больше шансов вернуться. */
+    private static final int SILENT_GAP_MAX_PER_RUN = 100;
+
+    /** Затихшим на 4-13 дней (дыра между «квесты не берёшь» и возвращением через 14 дн.): ОДНО сообщение на человека за всё время,
+     * без EXC, и только если за это время реально появились новые квесты. Решение владельца 2026-09-24; идёт через шлюз частоты
+     * (NotificationGateService), поэтому не накладывается на другие напоминания дня. */
+    @Scheduled(cron = "0 0 12 * * *")
+    public void checkSilentGap() {
+        LocalDate today = LocalDate.now();
+        List<AppUser> candidates = new java.util.ArrayList<>();
+        for (AppUser user : userService.allRegisteredUsers()) {
+            if (user.isBlocked() || user.getSilentGapNudgeSentAt() != null || user.getLastActivityDate() == null) continue;
+            long daysSince = ChronoUnit.DAYS.between(user.getLastActivityDate(), today);
+            if (daysSince >= SILENT_GAP_MIN_DAYS && daysSince <= SILENT_GAP_MAX_DAYS) candidates.add(user);
+        }
+        candidates.sort(java.util.Comparator.comparing(AppUser::getLastActivityDate).reversed());
+        int sent = 0;
+        LocalDateTime now = LocalDateTime.now();
+        for (AppUser user : candidates) {
+            if (sent >= SILENT_GAP_MAX_PER_RUN) break;
+            try {
+                long newQuests = questRepository.countActiveCreatedBetween(user.getLastActivityDate().atStartOfDay(), now);
+                if (newQuests <= 0) continue; // нечего сообщить - флаг не тратим, проверим завтра
+                if (!notificationGate.tryAcquire(user, NudgeType.SILENT_GAP)) continue;
+                long daysSince = ChronoUnit.DAYS.between(user.getLastActivityDate(), today);
+                user.setSilentGapNudgeSentAt(now);
+                appUserRepository.save(user);
+                eventPublisher.publishEvent(new ru.gamebot.platform.event.SilentGapNudgeEvent(this, user.getTelegramId(), newQuests, daysSince));
+                sent++;
+            } catch (Exception e) {
+                log.warn("Failed to process silent-gap nudge for user {}", user.getTelegramId(), e);
+            }
+        }
+        if (sent > 0) log.info("Silent-gap nudges sent: {} (candidates: {})", sent, candidates.size());
+    }
+
     private static final int SECOND_QUEST_NUDGE_MIN_DAYS = 2;
     private static final long SECOND_QUEST_NUDGE_EXC = 150;
 

@@ -28,6 +28,10 @@ public interface QuestRepository extends JpaRepository<Quest, Long> {
     @Query("SELECT COUNT(q) FROM Quest q WHERE q.createdAt >= :from AND q.createdAt < :to")
     long countCreatedBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
+    /** Только активные квесты - для честного числа в сообщении игроку (сидер создаёт и деактивирует квесты, обычный счёт их завышает). */
+    @Query("SELECT COUNT(q) FROM Quest q WHERE q.active = true AND q.createdAt >= :from AND q.createdAt < :to")
+    long countActiveCreatedBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
     @Query("SELECT q FROM Quest q WHERE q.active = true AND LOWER(q.gameName) = LOWER(:gameName) AND LOWER(q.category) = 'лёгкие' ORDER BY q.createdAt DESC")
     List<Quest> findActiveEasyQuestsByGameName(@Param("gameName") String gameName);
 

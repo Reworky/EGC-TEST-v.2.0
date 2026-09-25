@@ -101,6 +101,10 @@ public class AppUser {
     @Column(columnDefinition = "boolean default false")
     private boolean lastNudgeReturned;
 
+    /** Когда игроку уходило разовое сообщение «затих на 4-13 дней» (WeeklyResetScheduler.checkSilentGap); null = не отправляли.
+     * Одно сообщение на человека за всё время - не повторяется при следующих паузах. */
+    private LocalDateTime silentGapNudgeSentAt;
+
     private LocalDateTime createdAt;
 
     // Avatar
