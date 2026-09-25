@@ -189,7 +189,8 @@ public class QuestService {
     }
 
     private static boolean isValidGameName(String name) {
-        return !name.contains("://") && !name.contains("t.me") && !name.contains("/");
+        // "/" вплотную к символам - похоже на ссылку (site.com/x); "NFT / THE SOPRANOS" с пробелами вокруг - обычное название
+        return !name.contains("://") && !name.contains("t.me") && !name.matches(".*\\S/\\S.*");
     }
 
     public long countActiveByGameName(String gameName) {
