@@ -35,6 +35,9 @@ public class QuestPoolHealthService {
     private static final int GROWTH_WINDOW_DAYS = 14;
     private static final int TOP_GAMES = 5;
     private static final int DEAD_GAMES_SHOWN = 8;
+    private static final int DEAD_QUESTS_SHOWN = 12;
+    /** Квесту моложе стольких дней рано выносить приговор «мёртвый». */
+    private static final int FRESH_QUEST_DAYS = 30;
 
     private final QuestRepository questRepository;
     private final QuestSubmissionRepository questSubmissionRepository;
@@ -44,7 +47,8 @@ public class QuestPoolHealthService {
 
     public record Report(long activeQuests, Long activeQuestsBefore, Long daysBefore, long players7d,
                          long approvals7d, long approvalsPrev7d, long deadQuests, int deadPercent,
-                         List<String> topGames, List<String> deadGames) {
+                         List<String> topGames, List<String> deadGames,
+                         long freshDeadQuests, List<String> neverTakenQuests, List<String> takenNotDoneQuests) {
 
         /** Чистый рост активных квестов за окно; null — снапшотов за нужный срок ещё нет. */
         public Long netGrowth() {
@@ -90,11 +94,27 @@ public class QuestPoolHealthService {
             perQuest.put(((Number) r[0]).longValue(), ((Number) r[1]).longValue());
         }
 
+        Map<Long, Long> taken = new HashMap<>();
+        for (Object[] r : questSubmissionRepository.countTakenGroupedByQuestSince(now.minusDays(30))) {
+            taken.put(((Number) r[0]).longValue(), ((Number) r[1]).longValue());
+        }
+
         long dead = 0;
+        long freshDead = 0;
+        List<String> neverTaken = new ArrayList<>();
+        List<String> takenNotDone = new ArrayList<>();
         Map<String, long[]> byGame = new TreeMap<>(); // игра -> {квестов, выполнений за 30д}
         for (Quest q : active) {
             long done = perQuest.getOrDefault(q.getId(), 0L);
-            if (done == 0) dead++;
+            if (done == 0) {
+                dead++;
+                boolean fresh = q.getCreatedAt() != null && q.getCreatedAt().isAfter(now.minusDays(FRESH_QUEST_DAYS));
+                long takes = taken.getOrDefault(q.getId(), 0L);
+                String label = deadLabel(q);
+                if (fresh) freshDead++;
+                else if (takes == 0) neverTaken.add(label);
+                else takenNotDone.add(label + " (брали: " + takes + ")");
+            }
             String game = q.getGameName() == null || q.getGameName().isBlank() ? "Без игры" : q.getGameName();
             long[] g = byGame.computeIfAbsent(game, k -> new long[2]);
             g[0]++;
@@ -117,7 +137,25 @@ public class QuestPoolHealthService {
 
         int deadPercent = activeCount == 0 ? 0 : (int) Math.round(dead * 100.0 / activeCount);
         return new Report(activeCount, before, daysBefore, players7d, approvals7d, approvals14d - approvals7d,
-                dead, deadPercent, top, deadGames);
+                dead, deadPercent, top, deadGames, freshDead, neverTaken, takenNotDone);
+    }
+
+    private static String deadLabel(Quest q) {
+        String game = q.getGameName() == null || q.getGameName().isBlank() ? "Без игры" : q.getGameName();
+        String title = q.getTitle() == null ? "" : q.getTitle();
+        if (title.length() > 55) title = title.substring(0, 52) + "...";
+        return HtmlUtils.htmlEscape(game) + ": " + HtmlUtils.htmlEscape(title);
+    }
+
+    private static void appendList(StringBuilder sb, String header, List<String> items) {
+        if (items.isEmpty()) return;
+        sb.append("\n").append(header).append("\n");
+        int shown = 0;
+        for (String item : items) {
+            if (shown++ >= DEAD_QUESTS_SHOWN) break;
+            sb.append("• ").append(item).append("\n");
+        }
+        if (items.size() > DEAD_QUESTS_SHOWN) sb.append("… и ещё ").append(items.size() - DEAD_QUESTS_SHOWN).append("\n");
     }
 
     public String format(Report r, boolean asAlert) {
@@ -149,6 +187,12 @@ public class QuestPoolHealthService {
         }
         if (!r.deadGames().isEmpty()) {
             sb.append("\n🪫 <b>Квесты есть, выполнений за 30 дн. нет:</b> ").append(String.join(", ", r.deadGames())).append("\n");
+        }
+        appendList(sb, "🛠 <b>Берут, но не выполняют</b> (сломана проверка или слишком сложно, смотреть первыми):", r.takenNotDoneQuests());
+        appendList(sb, "💤 <b>Никто не берёт</b> за 30 дн. (кандидаты на замену):", r.neverTakenQuests());
+        if (r.freshDeadQuests() > 0) {
+            sb.append("\n🆕 Ещё ").append(r.freshDeadQuests()).append(" квест(ов) моложе ").append(FRESH_QUEST_DAYS)
+              .append(" дн. без выполнений - пока рано судить.\n");
         }
         if (asAlert) {
             sb.append("\nЗа ").append(r.daysBefore()).append(" дн. новых активных квестов не прибавилось, а игроки продолжают приходить. ")
