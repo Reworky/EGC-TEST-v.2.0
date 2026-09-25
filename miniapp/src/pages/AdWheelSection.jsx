@@ -41,7 +41,7 @@ const PRIZES = [
   { label: '200 EXC', prob: '2.5%' },
   { label: '🎟 Билет обычного колеса', prob: '2.5%' },
   { label: '500 EXC', prob: '0.5%' },
-  { label: '👑 5 000 EXC — джекпот', prob: '0.02% (1 из 5 000)' },
+  { label: '👑 5 000 EXC — джекпот', prob: '0.02% (1 из 5 000)' },
 ];
 
 const N = SECTORS.length;
@@ -365,7 +365,7 @@ export default function AdWheelSection({ onBack }) {
       </div>
 
       <div className="awl-rare">
-        👑 Джекпот 5 000 EXC — очень редкий приз (шанс 1 из 5 000).{' '}
+        👑 Джекпот 5 000 EXC — очень редкий приз (<span className="awl-nowrap">шанс 1 из 5 000</span>).{' '}
         <button type="button" className="awl-odds-link" onClick={() => oddsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
           Шансы
         </button>
