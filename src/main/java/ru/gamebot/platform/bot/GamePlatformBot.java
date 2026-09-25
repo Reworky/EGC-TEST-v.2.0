@@ -1941,6 +1941,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             backOnlyKeyboard("profile:edit"));
                     return;
                 }
+                // Поле country - обычный varchar(255), а Telegram пропускает до 4096 символов: без предела длинный текст
+                // ронял бы сохранение (DataIntegrityViolation), и игрок не получал бы ответа.
+                if (newCountry.length() > 64) {
+                    sendText(user.getTelegramId(),
+                            "⚠️ Слишком длинное название. Напишите страну короче (до 64 символов):",
+                            backOnlyKeyboard("profile:edit"));
+                    return;
+                }
                 user.setCountry(newCountry);
                 userService.save(user);
                 session.setState(SessionState.NONE);
