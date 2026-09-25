@@ -362,9 +362,13 @@ public class WeeklyResetScheduler {
                     String leagueName = UserService.getLeague(lastWeekXp).displayName;
                     int weeklyRank = userRankMap.getOrDefault(user.getId(), 0);
                     long xpToNextLevel = Math.max(0, userService.nextLevelCeiling(user.getXp()) - user.getXp());
+                    // Без пасса: сколько добавил бы EGC Pass за эту неделю (+10% EXC, +5% XP; потолок бонуса в месяц не учитываем -
+                    // строка «примерно»). Если пасс уже есть - 0, строка в дайджест не попадёт.
+                    boolean hasPass = userService.isEgcPassActive(user);
                     eventPublisher.publishEvent(new WeeklyDigestActiveEvent(this,
                             user.getTelegramId(), completedQuests, earnedExc, lastWeekXp,
-                            leagueName, weeklyRank, xpToNextLevel));
+                            leagueName, weeklyRank, xpToNextLevel,
+                            hasPass ? 0 : earnedExc / 10, hasPass ? 0 : lastWeekXp * 5 / 100));
                 } else if (user.getCreatedAt() != null && user.getCreatedAt().isBefore(weekStart)) {
                     eventPublisher.publishEvent(new WeeklyDigestInactiveEvent(this,
                             user.getTelegramId(), newQuestsCount, totalSpins));
@@ -597,6 +601,42 @@ public class WeeklyResetScheduler {
                 log.warn("Failed to process quest-gap nudge for user {}", user.getTelegramId(), e);
             }
         }
+    }
+
+    private static final int EGC_PASS_TEASER_MIN_QUESTS = 10;
+    private static final int EGC_PASS_TEASER_MAX_PER_RUN = 50;
+
+    /** Разовое сообщение про EGC Pass игроку, выполнившему 10+ квестов (решение владельца 2026-09-24): один раз на человека за всё
+     * время, только активным недавно (заходил за последние 3 дня) и без пасса; вечером отдельным слотом, а не сразу после
+     * сообщения о зачёте квеста (два сообщения подряд - спам). Через шлюз частоты (самый низкий приоритет), не больше 50 за прогон:
+     * накопленная база игроков с 10+ квестами разойдётся по дням. */
+    @Scheduled(cron = "0 0 15 * * *")
+    public void checkEgcPassTeaser() {
+        LocalDate today = LocalDate.now();
+        List<AppUser> candidates = new java.util.ArrayList<>();
+        for (AppUser user : userService.allRegisteredUsers()) {
+            if (user.isBlocked() || user.getEgcPassTeaserSentAt() != null) continue;
+            if (user.getCompletedQuests() < EGC_PASS_TEASER_MIN_QUESTS) continue;
+            if (user.getLastActivityDate() == null || ChronoUnit.DAYS.between(user.getLastActivityDate(), today) > 3) continue;
+            if (userService.isEgcPassActive(user)) continue;
+            candidates.add(user);
+        }
+        candidates.sort(java.util.Comparator.comparing(AppUser::getLastActivityDate).reversed());
+        int sent = 0;
+        LocalDateTime now = LocalDateTime.now();
+        for (AppUser user : candidates) {
+            if (sent >= EGC_PASS_TEASER_MAX_PER_RUN) break;
+            try {
+                if (!notificationGate.tryAcquire(user, NudgeType.EGC_PASS_TEASER)) continue;
+                user.setEgcPassTeaserSentAt(now);
+                appUserRepository.save(user);
+                eventPublisher.publishEvent(new ru.gamebot.platform.event.EgcPassTeaserEvent(this, user.getTelegramId(), user.getCompletedQuests()));
+                sent++;
+            } catch (Exception e) {
+                log.warn("Failed to process EGC Pass teaser for user {}", user.getTelegramId(), e);
+            }
+        }
+        if (sent > 0) log.info("EGC Pass teasers sent: {} (candidates: {})", sent, candidates.size());
     }
 
     private static final int SILENT_GAP_MIN_DAYS = 4;

@@ -14184,10 +14184,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🏆 Место в лиге: <b>" + escape(event.getLeagueName()) + " · " + rankLine + "</b>\n"
                 + "⭐ XP за неделю: <b>" + event.getWeeklyXp() + "</b>\n"
                 + "📈 До следующего уровня: <b>" + event.getXpToNextLevel() + " XP</b>\n\n"
+                + (event.getPassBonusExc() >= 100
+                        ? "⭐ С EGC Pass за эту неделю было бы примерно на <b>+" + event.getPassBonusExc() + " EXC</b> и <b>+"
+                                + event.getPassBonusXp() + " XP</b> больше.\n\n"
+                        : "")
                 + "Новые квесты уже ждут! 👇";
-        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
-                List.of(keyboardFactory.callback("🗺️ Перейти к квестам", "menu:quests"))
-        ));
+        List<List<InlineKeyboardButton>> digestRows = new ArrayList<>();
+        digestRows.add(List.of(keyboardFactory.callback("🗺️ Перейти к квестам", "menu:quests")));
+        if (event.getPassBonusExc() >= 100) {
+            digestRows.add(List.of(keyboardFactory.callback("⭐ Про EGC Pass", "sink:egc_pass")));
+        }
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(digestRows);
         try {
             sendText(event.getTelegramId(), msg, keyboard);
         } catch (Exception e) {
@@ -14267,6 +14274,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** "Заходишь, а квесты не берёшь" — см. WeeklyResetScheduler.checkQuestGapNudge. Отдельная от
      * спячки (общая неактивность) и онбординга (для тех, кто вообще не начинал) ниша. */
+    /** Разовое предложение EGC Pass после 10+ квестов (WeeklyResetScheduler.checkEgcPassTeaser). Перки - как на экране пасса. */
+    @org.springframework.context.event.EventListener
+    public void onEgcPassTeaser(ru.gamebot.platform.event.EgcPassTeaserEvent event) {
+        String msg = "⭐ <b>Ты уже выполнил " + event.getCompletedQuests() + " квестов</b>\n\n"
+                + "С EGC Pass награды за квесты растут: <b>+10% EXC</b> и <b>+5% XP</b>, плюс доп. слот квеста, бесплатный улучшенный "
+                + "сундук каждый день и приоритет в очереди на вывод. Подписка " + EGC_PASS_STARS_PRICE + " ⭐ в месяц.\n\n"
+                + "Подробности по кнопке 👇";
+        try {
+            sendText(event.getTelegramId(), msg, keyboardFactory.rowsLayout(List.of(
+                    List.of(keyboardFactory.callback("⭐ Про EGC Pass", "sink:egc_pass")))));
+        } catch (Exception e) {
+            log.warn("Failed to send EGC Pass teaser to {}", event.getTelegramId(), e);
+        }
+    }
+
     /** Затих на 4-13 дней (WeeklyResetScheduler.checkSilentGap): одно сообщение на человека, без EXC. */
     @org.springframework.context.event.EventListener
     public void onSilentGapNudge(ru.gamebot.platform.event.SilentGapNudgeEvent event) {

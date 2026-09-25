@@ -105,6 +105,9 @@ public class AppUser {
      * Одно сообщение на человека за всё время - не повторяется при следующих паузах. */
     private LocalDateTime silentGapNudgeSentAt;
 
+    /** Когда игроку уходило разовое сообщение про EGC Pass после 10+ квестов (WeeklyResetScheduler.checkEgcPassTeaser); null = не отправляли. */
+    private LocalDateTime egcPassTeaserSentAt;
+
     private LocalDateTime createdAt;
 
     // Avatar
