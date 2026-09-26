@@ -22,6 +22,16 @@ public class ErrorMonitorInstaller {
 
     private final ErrorMonitorService monitor;
 
+    /** Тексты всех причин цепочки исключения: «Failed to send message» сам по себе не говорит, что это заблокировавший бота игрок, - это видно только в причине. */
+    private static String causeChain(IThrowableProxy thrown) {
+        StringBuilder sb = new StringBuilder();
+        IThrowableProxy c = thrown == null ? null : thrown.getCause();
+        for (int i = 0; c != null && i < 8; i++, c = c.getCause()) {
+            if (c.getMessage() != null) sb.append(c.getMessage()).append(' ');
+        }
+        return sb.toString();
+    }
+
     @PostConstruct
     public void install() {
         try {
@@ -37,7 +47,7 @@ public class ErrorMonitorInstaller {
                         if (event.getLevel().toInt() < Level.WARN_INT) return;
                         IThrowableProxy thrown = event.getThrowableProxy();
                         monitor.recordLog(event.getLevel().toString(), event.getLoggerName(), event.getFormattedMessage(),
-                                thrown != null ? thrown.getClassName() : null, thrown != null ? thrown.getMessage() : null);
+                                thrown != null ? thrown.getClassName() : null, thrown != null ? thrown.getMessage() : null, causeChain(thrown));
                     } catch (Throwable ignored) {
                         // логирование не должно ломать логирование
                     }

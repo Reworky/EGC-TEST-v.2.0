@@ -57,13 +57,13 @@ public class ErrorMonitorService {
         return startedAt;
     }
 
-    public void recordLog(String level, String logger, String message, String exceptionClass, String exceptionMessage) {
+    public void recordLog(String level, String logger, String message, String exceptionClass, String exceptionMessage, String causes) {
         long now = System.currentTimeMillis();
         boolean isWarn = "WARN".equals(level);
         if (isWarn && now - startedAt < STARTUP_GRACE_MS) {
             return;
         }
-        String full = (message == null ? "" : message) + " " + (exceptionMessage == null ? "" : exceptionMessage);
+        String full = (message == null ? "" : message) + " " + (exceptionMessage == null ? "" : exceptionMessage) + " " + (causes == null ? "" : causes);
         boolean benign = BENIGN_MARKERS.stream().anyMatch(full::contains);
         String shortLogger = logger == null ? "?" : logger.substring(logger.lastIndexOf('.') + 1);
         StringBuilder key = new StringBuilder(shortLogger).append(": ").append(normalize(message, 110));
