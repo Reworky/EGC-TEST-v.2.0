@@ -17577,7 +17577,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void notifyAdminsNewRegistration(AppUser user) {
         long totalUsers = userService.totalRegisteredUsers();
         InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
-                List.of(keyboardFactory.callback("👤 Профиль пользователя", "admin:user:view:" + user.getTelegramId() + ":0"))
+                List.of(keyboardFactory.callback("👤 Профиль пользователя", "admin:user:view:" + user.getTelegramId() + ":0")),
+                List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
         ));
         String text = "🎮 <b>Новая регистрация</b>\n\n"
                 + "👤 Никнейм: <b>" + escape(user.getNickname()) + "</b>\n"
