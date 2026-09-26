@@ -492,12 +492,12 @@ public class WeeklyResetScheduler {
         }
     }
 
-    /** Предупреждение "серия входов под угрозой" — раз в день вечером, тем, кто заходил (отправлял
+    /** Предупреждение "серия входов под угрозой" — раз в день в 16:00 UTC (вечер в РФ/СНГ, за 8 ч до сгорания в 00:00 UTC), тем, кто заходил (отправлял
      * /start) ровно вчера и ещё не сегодня: если не зайти до полуночи, streakDays сбросится в 1
      * (см. UserService.registerActivity). Проверяется именно "вчера", а не "давно" — иначе задел бы
      * и тех, кто вообще забросил бота месяц назад со старым большим streakDays в базе (запрошено
      * 2026-09-14, конкретный сценарий из аудита вовлечённости). */
-    @Scheduled(cron = "0 0 20 * * *")
+    @Scheduled(cron = "0 0 16 * * *")
     public void checkStreaksAtRisk() {
         LocalDate today = LocalDate.now();
         LocalDate yesterday = today.minusDays(1);
@@ -510,6 +510,30 @@ public class WeeklyResetScheduler {
                 eventPublisher.publishEvent(new StreakAtRiskEvent(this, user.getTelegramId(), user.getStreakDays()));
             } catch (Exception e) {
                 log.warn("Failed to process streak-at-risk check for user {}", user.getTelegramId(), e);
+            }
+        }
+    }
+
+    /** Сообщение «не успел»: серия прервалась (заявка поддержки/жалоба 2026-09-26 - предупреждение приходило ночью по местному времени,
+     * игрок жал кнопку утром, уже после 00:00 UTC, и думал, что серия сохранена). Раз в день в 05:00 UTC (утро для РФ/СНГ) - тем, кто
+     * не заходил вчера по UTC, у кого была серия от 2 дней и кто не успел вернуться до 05:00 (вернувшимся раньше бот сообщает сам при
+     * /start). Сообщение однократное по построению: условие lastActivityDate == позавчера верно ровно в один день. Заодно снимается
+     * снимок для восстановления за Stars. Через шлюз частоты как дополнение к предупреждению (bypassLimit), в журнал пишется. */
+    @Scheduled(cron = "0 0 5 * * *")
+    public void checkStreaksBroken() {
+        LocalDate missedDay = LocalDate.now().minusDays(2);
+        for (AppUser user : userService.allRegisteredUsers()) {
+            if (user.isBlocked()) continue;
+            try {
+                if (user.getStreakDays() < 2) continue;
+                if (!missedDay.equals(user.getLastActivityDate())) continue;
+                userService.captureStreakBreakIfNeeded(user);
+                if (!userService.hasRestorableStreak(user)) continue;
+                if (!notificationGate.tryAcquire(user, NudgeType.STREAK_BROKEN)) continue;
+                eventPublisher.publishEvent(new ru.gamebot.platform.event.StreakBrokenEvent(
+                        this, user.getTelegramId(), userService.restorableStreakDays(user)));
+            } catch (Exception e) {
+                log.warn("Failed to process streak-broken check for user {}", user.getTelegramId(), e);
             }
         }
     }

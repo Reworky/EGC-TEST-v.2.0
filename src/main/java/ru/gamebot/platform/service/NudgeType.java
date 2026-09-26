@@ -5,6 +5,7 @@ package ru.gamebot.platform.service;
  * priority: при нескольких кандидатах в одном окне проходит более важный (дедлайн > серия > кулдаун > второй квест > ...). */
 public enum NudgeType {
     QUEST_DEADLINE(100, true, "⏰ Дедлайн квеста"),
+    STREAK_BROKEN(95, true, "💔 Серия прервалась"),
     STREAK_AT_RISK(90, false, "🔥 Серия под угрозой"),
     COOLDOWN_EXPIRED(80, false, "🎮 Кулдаун снят"),
     ONBOARDING(75, false, "👋 Онбординг"),

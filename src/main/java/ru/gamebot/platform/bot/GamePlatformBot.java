@@ -687,7 +687,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         }
 
+        java.time.LocalDate lastActivityBefore = user.getLastActivityDate();
+        int streakBefore = user.getStreakDays();
         String streakMessage = userService.registerActivity(user);
+        sendStreakOutcomeNotice(user, lastActivityBefore, streakBefore, message.getText());
 
         // Сотрудники (модератор/admin) получают доступ к меню без прохождения регистрации
         boolean isStaff = isEffectiveModerator(user);
@@ -15545,12 +15548,59 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.url("🔥 Сохранить серию", "https://t.me/" + getBotUsername() + "?start=streak"))
         ));
         String msg = "🔥 <b>Серия из " + event.getStreakDays() + " дней под угрозой!</b>\n\n"
-                + "Ты не заходил сегодня — если не зайти до полуночи, серия сгорит и завтра придётся начинать заново.\n\n"
-                + "Нажми кнопку ниже, чтобы сохранить прогресс.";
+                + "Ты не заходил сегодня. Дни считаются по UTC: серия сгорит в <b>00:00 UTC</b> (это 03:00 по Москве).\n\n"
+                + "Нажми кнопку ниже до этого времени — я подтвержу, что серия сохранена. Если не успеешь, я тоже напишу.";
         try {
             sendText(event.getTelegramId(), msg, keyboard);
         } catch (Exception e) {
             log.warn("Failed to send streak-at-risk warning to {}", event.getTelegramId(), e);
+        }
+    }
+
+    /** Серия прервалась - сообщение «не успел» с предложением восстановить (WeeklyResetScheduler.checkStreaksBroken). */
+    @org.springframework.context.event.EventListener
+    public void onStreakBroken(ru.gamebot.platform.event.StreakBrokenEvent event) {
+        try {
+            sendStreakBrokenMessage(event.getTelegramId(), event.getLostDays());
+        } catch (Exception e) {
+            log.warn("Failed to send streak-broken message to {}", event.getTelegramId(), e);
+        }
+    }
+
+    /** Текст «серия прервалась» + кнопки восстановления. Снимок серии для восстановления уже должен быть сделан (UserService.captureStreakBreakIfNeeded /
+     *  registerActivity). Кнопка «Начать заново» ведёт в тот же streak:reset, что и на экране ежедневного бонуса. */
+    private void sendStreakBrokenMessage(Long telegramId, int lostDays) {
+        int price = streakRestorePriceStars(lostDays);
+        sendText(telegramId,
+                "💔 <b>Серия из " + lostDays + " " + dayWord(lostDays) + " прервалась</b>\n\n"
+                        + "Ты не зашёл вчера (дни считаются по UTC: серия сгорела в 00:00 UTC, это 03:00 по Москве).\n\n"
+                        + "Можно восстановить за " + price + " ⭐ в течение двух дней и продолжить с " + (lostDays + 1)
+                        + "-го дня как ни в чём не бывало (плюс бонус за сегодня), либо начать заново.",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("💫 Восстановить за " + price + " ⭐", "streak:restore")),
+                        List.of(keyboardFactory.callback("🔄 Начать заново и забрать бонус", "streak:reset"))
+                )));
+    }
+
+    /** Итог захода для игрока, у которого была серия (жалоба 2026-09-26: человек нажал кнопку из предупреждения уже после 00:00 UTC и думал,
+     *  что серия сохранена, а /start молча обнулил её). Если серия только что прервалась - говорим об этом сразу; если игрок пришёл по
+     *  кнопке предупреждения (/start streak) и успел - подтверждаем. Обычный ежедневный заход без потерь остаётся без сообщения. */
+    private void sendStreakOutcomeNotice(AppUser user, java.time.LocalDate lastBefore, int streakBefore, String startText) {
+        try {
+            if (lastBefore == null || streakBefore < 2) return;
+            java.time.LocalDate today = java.time.LocalDate.now();
+            if (lastBefore.equals(today)) return;
+            if (lastBefore.plusDays(1).equals(today)) {
+                if (startText != null && startText.trim().endsWith(" streak")) {
+                    sendText(user.getTelegramId(),
+                            "✅ <b>Успел! Серия сохранена</b>\n\nСерия: <b>" + user.getStreakDays() + " " + dayWord(user.getStreakDays())
+                                    + " подряд</b>. Возвращайся завтра, чтобы продолжить.", null);
+                }
+            } else if (userService.hasRestorableStreak(user)) {
+                sendStreakBrokenMessage(user.getTelegramId(), userService.restorableStreakDays(user));
+            }
+        } catch (Exception e) {
+            log.warn("Failed to send streak outcome notice to {}", user.getTelegramId(), e);
         }
     }
 
