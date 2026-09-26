@@ -15981,6 +15981,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case ru.gamebot.platform.service.ChannelContentService.HALL_OF_FAME -> "Зал славы недели";
             case ru.gamebot.platform.service.ChannelContentService.WEEKLY_RACE -> "Гонка за Зал славы";
             case ru.gamebot.platform.service.ChannelContentService.LEAGUES_WEEK -> "Лиги недели";
+            case ru.gamebot.platform.service.ChannelContentService.SHOP_NEW -> "Новое в магазине";
+            case ru.gamebot.platform.service.ChannelContentService.EGCPASS_PERK -> "EGC Pass: что даёт";
+            case ru.gamebot.platform.service.ChannelContentService.SHOP_POPULAR -> "Популярное в магазине";
+            case ru.gamebot.platform.service.ChannelContentService.SHOP_ITEMS -> "Предметы клуба: на что потратить EXC";
             default -> "Пост для канала";
         };
     }
@@ -16126,6 +16130,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case ru.gamebot.platform.service.ChannelContentService.HALL_OF_FAME -> "HOF";
             case ru.gamebot.platform.service.ChannelContentService.WEEKLY_RACE -> "RACE";
             case ru.gamebot.platform.service.ChannelContentService.LEAGUES_WEEK -> "LGW";
+            case ru.gamebot.platform.service.ChannelContentService.SHOP_NEW -> "SHOPN";
+            case ru.gamebot.platform.service.ChannelContentService.EGCPASS_PERK -> "PASS";
+            case ru.gamebot.platform.service.ChannelContentService.SHOP_POPULAR -> "SHOPP";
+            case ru.gamebot.platform.service.ChannelContentService.SHOP_ITEMS -> "SHOPI";
             default -> "SQSTAT";
         };
     }
@@ -16146,6 +16154,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "HOF" -> ru.gamebot.platform.service.ChannelContentService.HALL_OF_FAME;
             case "RACE" -> ru.gamebot.platform.service.ChannelContentService.WEEKLY_RACE;
             case "LGW" -> ru.gamebot.platform.service.ChannelContentService.LEAGUES_WEEK;
+            case "SHOPN" -> ru.gamebot.platform.service.ChannelContentService.SHOP_NEW;
+            case "PASS" -> ru.gamebot.platform.service.ChannelContentService.EGCPASS_PERK;
+            case "SHOPP" -> ru.gamebot.platform.service.ChannelContentService.SHOP_POPULAR;
+            case "SHOPI" -> ru.gamebot.platform.service.ChannelContentService.SHOP_ITEMS;
             default -> ru.gamebot.platform.service.ChannelContentService.SQUAD_STATS;
         };
     }
@@ -16164,7 +16176,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             ru.gamebot.platform.service.ChannelContentService.TypeSettings st = channelContentService.settings(type);
             String key = ccKey(type);
             boolean event = ru.gamebot.platform.service.ChannelContentService.isEventType(type);
-            boolean daily = ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS.equals(type);
+            boolean daily = ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS.equals(type) || ru.gamebot.platform.service.ChannelContentService.SHOP_NEW.equals(type);
             int every = ru.gamebot.platform.service.ChannelContentService.intervalDays(type);
             String when;
             if (ru.gamebot.platform.service.ChannelContentService.SQUAD_RESULTS.equals(type)) when = "в момент выплаты приза (понедельник, 00:00 UTC)";
@@ -16214,6 +16226,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_SUMMARY -> channelContentService.createWithdrawSummaryDraft(true);
                         case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_HOWTO -> channelContentService.createWithdrawHowToDraft();
                         case ru.gamebot.platform.service.ChannelContentService.WEEKLY_RACE -> channelContentService.createWeeklyRaceDraft(true);
+                        case ru.gamebot.platform.service.ChannelContentService.SHOP_NEW -> channelContentService.createShopNewDraft(true);
+                        case ru.gamebot.platform.service.ChannelContentService.EGCPASS_PERK -> channelContentService.createEgcPassDraft();
+                        case ru.gamebot.platform.service.ChannelContentService.SHOP_POPULAR -> channelContentService.createShopPopularDraft(true);
+                        case ru.gamebot.platform.service.ChannelContentService.SHOP_ITEMS -> channelContentService.createShopItemsDraft();
                         default -> channelContentService.createSquadStatsDraft(true);
                     };
                 } catch (Exception e) {

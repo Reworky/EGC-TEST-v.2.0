@@ -95,4 +95,8 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
     /** Сколько разных игроков получили выплату (для поста «сводка выплат» в канале). */
     @Query("SELECT COUNT(DISTINCT r.user.id) FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED' AND r.createdAt >= :since")
     long countDistinctWithdrawalUsersSince(@Param("since") LocalDateTime since);
+
+    /** Популярное в магазине: число заказов по товарам каталога (без вывода и отменённых) с даты. Строки: [id товара, число заказов], от большего к меньшему. */
+    @Query("SELECT r.rewardItem.id, COUNT(r) FROM RewardRequest r WHERE r.rewardItem.category <> 'Вывод' AND r.status IN ('APPROVED','PENDING','IN_PROGRESS') AND r.createdAt >= :since GROUP BY r.rewardItem.id ORDER BY COUNT(r) DESC")
+    List<Object[]> countShopOrdersByItemSince(@Param("since") LocalDateTime since);
 }

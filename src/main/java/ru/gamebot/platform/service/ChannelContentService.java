@@ -36,6 +36,8 @@ import org.springframework.context.event.EventListener;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.repository.AppSettingRepository;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
+import ru.gamebot.platform.domain.model.RewardItem;
+import ru.gamebot.platform.domain.repository.RewardItemRepository;
 import ru.gamebot.platform.event.HallOfFameEvent;
 import ru.gamebot.platform.event.LeagueWeekEvent;
 import ru.gamebot.platform.domain.repository.ChannelPostDraftRepository;
@@ -72,16 +74,20 @@ public class ChannelContentService {
     public static final String HALL_OF_FAME = "HALL_OF_FAME";
     public static final String WEEKLY_RACE = "WEEKLY_RACE";
     public static final String LEAGUES_WEEK = "LEAGUES_WEEK";
+    public static final String SHOP_NEW = "SHOP_NEW";
+    public static final String EGCPASS_PERK = "EGCPASS_PERK";
+    public static final String SHOP_POPULAR = "SHOP_POPULAR";
+    public static final String SHOP_ITEMS = "SHOP_ITEMS";
     public static final List<String> ALL_TYPES = List.of(NEW_QUESTS, TOP_QUESTS_WEEK, SQUAD_MIDWEEK, SQUAD_RESULTS, SQUAD_STATS,
             TOURNEY_REG_CLOSING, TOURNEY_ACTIVE, TOURNEY_CANCELLED, WITHDRAW_SUMMARY, WITHDRAW_MILESTONE, WITHDRAW_HOWTO, WITHDRAW_PROOF,
-            HALL_OF_FAME, WEEKLY_RACE, LEAGUES_WEEK);
+            HALL_OF_FAME, WEEKLY_RACE, LEAGUES_WEEK, SHOP_NEW, EGCPASS_PERK, SHOP_POPULAR, SHOP_ITEMS);
 
     /** Как часто повторяется расписание типа, в днях: 0 - каждый день, 7 - раз в неделю, 14 и 28 - раз в две и в четыре недели. */
     public static int intervalDays(String type) {
         return switch (type) {
-            case NEW_QUESTS -> 0;
-            case SQUAD_STATS, WITHDRAW_SUMMARY -> 14;
-            case WITHDRAW_HOWTO -> 28;
+            case NEW_QUESTS, SHOP_NEW -> 0;
+            case SQUAD_STATS, WITHDRAW_SUMMARY, SHOP_POPULAR -> 14;
+            case WITHDRAW_HOWTO, EGCPASS_PERK, SHOP_ITEMS -> 28;
             default -> 7;
         };
     }
@@ -100,6 +106,11 @@ public class ChannelContentService {
     private static final long MIN_WEEK_COMPLETIONS = 10;
     /** «Гонка за Зал славы» и «Лиги недели» не публикуем, если за неделю XP набрали меньше игроков (решение владельца 2026-09-26). Ручная кнопка порог игнорирует. */
     private static final int MIN_ACTIVE_FOR_WEEK_POSTS = 10;
+    /** «Популярное в магазине» не формируется, если за 14 дней заказов каталога меньше. */
+    private static final long MIN_SHOP_ORDERS = 10;
+    /** Цена EGC Pass в Stars: держать в синхроне с EGC_PASS_STARS_PRICE в GamePlatformBot. */
+    private static final int EGC_PASS_STARS = 150;
+    private static final int MAX_SHOP_ITEMS_IN_POST = 5;
     private static final int MAX_GAMES_IN_NEW_POST = 5;
     private static final int MAX_QUESTS_PER_GAME = 3;
 
@@ -115,6 +126,7 @@ public class ChannelContentService {
     private final RewardService rewardService;
     private final RewardRequestRepository rewardRequestRepository;
     private final AppUserRepository appUserRepository;
+    private final RewardItemRepository rewardItemRepository;
 
     @Value("${app.bot-username:}")
     private String botUsername;
@@ -150,6 +162,10 @@ public class ChannelContentService {
             case HALL_OF_FAME -> "cc.hof.";
             case WEEKLY_RACE -> "cc.race.";
             case LEAGUES_WEEK -> "cc.lgw.";
+            case SHOP_NEW -> "cc.shopn.";
+            case EGCPASS_PERK -> "cc.pass.";
+            case SHOP_POPULAR -> "cc.shopp.";
+            case SHOP_ITEMS -> "cc.shopi.";
             default -> "cc.sqstat.";
         };
     }
@@ -163,7 +179,7 @@ public class ChannelContentService {
     public TypeSettings settings(String type) {
         String p = prefix(type);
         int defHour = switch (type) { case TOP_QUESTS_WEEK -> 10; default -> 12; };
-        int defDow = switch (type) { case SQUAD_MIDWEEK -> 3; case SQUAD_STATS -> 5; case WITHDRAW_SUMMARY -> 7; case WITHDRAW_HOWTO -> 2; case WEEKLY_RACE -> 4; default -> 1; };
+        int defDow = switch (type) { case SQUAD_MIDWEEK -> 3; case SQUAD_STATS -> 5; case WITHDRAW_SUMMARY -> 7; case WITHDRAW_HOWTO -> 2; case WEEKLY_RACE -> 4; case EGCPASS_PERK -> 3; case SHOP_POPULAR -> 6; case SHOP_ITEMS -> 4; default -> 1; };
         String en = get(p + "enabled");
         int hour = parseInt(get(p + "hour"), defHour);
         int dow = parseInt(get(p + "dow"), defDow);
@@ -261,7 +277,7 @@ public class ChannelContentService {
             try {
                 TypeSettings s = settings(type);
                 if (!s.enabled() || now.getHour() != s.hour()) continue;
-                boolean weekly = !NEW_QUESTS.equals(type);
+                boolean weekly = !NEW_QUESTS.equals(type) && !SHOP_NEW.equals(type);
                 if (weekly && now.getDayOfWeek().getValue() != s.dayOfWeek()) continue;
                 String today = LocalDate.now().toString();
                 if (today.equals(s.lastRun())) continue;
@@ -279,6 +295,10 @@ public class ChannelContentService {
                     case WITHDRAW_SUMMARY -> createWithdrawSummaryDraft(false);
                     case WITHDRAW_HOWTO -> createWithdrawHowToDraft();
                     case WEEKLY_RACE -> createWeeklyRaceDraft(false);
+                    case SHOP_NEW -> createShopNewDraft(false);
+                    case EGCPASS_PERK -> createEgcPassDraft();
+                    case SHOP_POPULAR -> createShopPopularDraft(false);
+                    case SHOP_ITEMS -> createShopItemsDraft();
                     default -> createSquadStatsDraft(false);
                 }
             } catch (Exception e) {
@@ -836,6 +856,134 @@ public class ChannelContentService {
         } catch (Exception ex) {
             log.error("[ChannelContent] Failed to create leagues draft", ex);
         }
+    }
+
+    // ───────────────────────── магазин и EGC Pass ─────────────────────────
+
+    private static String shortDescription(String d) {
+        if (d == null) return "";
+        String t = d.replaceAll("\\s+", " ").trim();
+        if (t.length() <= 120) return t;
+        int cut = t.lastIndexOf(' ', 120);
+        return t.substring(0, cut > 60 ? cut : 120).trim() + "…";
+    }
+
+    private static boolean shopVisible(RewardItem it) {
+        return it.isActive() && !it.isComingSoon() && !"Вывод".equals(it.getCategory()) && it.getTitle() != null;
+    }
+
+    /** «Новое в магазине»: позиции каталога, появившиеся после отметки воды (без повторов из прошлых постов). Первый автозапуск только ставит отметку. Фото позиции подставляется само. */
+    public Optional<ChannelPostDraft> createShopNewDraft(boolean force) {
+        LocalDateTime now = LocalDateTime.now();
+        String wmRaw = get("cc.shopn.wm");
+        LocalDateTime since;
+        if (wmRaw == null) {
+            if (!force) {
+                put("cc.shopn.wm", now.toString());
+                log.info("[ChannelContent] SHOP_NEW watermark initialised, no post on first auto run");
+                return Optional.empty();
+            }
+            since = now.minusDays(3);
+        } else {
+            try { since = LocalDateTime.parse(wmRaw); } catch (Exception e) { since = now.minusDays(3); }
+        }
+        Set<Long> already = new HashSet<>();
+        for (ChannelPostDraft d : draftRepository.findAllByType(SHOP_NEW)) {
+            if (d.getMeta() == null) continue;
+            for (String id : d.getMeta().split(",")) {
+                try { already.add(Long.parseLong(id.trim())); } catch (NumberFormatException ignored) { }
+            }
+        }
+        final LocalDateTime from = since;
+        List<RewardItem> fresh = rewardItemRepository.findAll().stream()
+                .filter(ChannelContentService::shopVisible)
+                .filter(it -> it.getCreatedAt() != null && !it.getCreatedAt().isBefore(from))
+                .filter(it -> !already.contains(it.getId()))
+                .sorted(Comparator.comparingLong(RewardItem::getPriceCoins))
+                .toList();
+        put("cc.shopn.wm", now.toString());
+        if (fresh.isEmpty()) return Optional.empty();
+
+        StringBuilder sb = new StringBuilder("🛍 <b>новое в магазине</b>\n\n");
+        sb.append(fresh.size() == 1 ? "В магазине появилась новая награда:\n\n" : "В магазине появились новые награды:\n\n");
+        int shown = 0;
+        for (RewardItem it : fresh) {
+            if (shown++ >= MAX_SHOP_ITEMS_IN_POST) break;
+            sb.append("• <b>").append(esc(it.getTitle())).append("</b> - ").append(num(it.getPriceCoins())).append(" EXC\n");
+            String desc = shortDescription(it.getDescription());
+            if (!desc.isEmpty()) sb.append("  ").append(esc(desc)).append("\n");
+            sb.append("\n");
+        }
+        if (fresh.size() > MAX_SHOP_ITEMS_IN_POST) sb.append("И ещё позиций: ").append(fresh.size() - MAX_SHOP_ITEMS_IN_POST).append("\n\n");
+        sb.append(ending(fresh.size(), "Что заберёшь первым?", "Ставь 🛍, если присмотрел награду.", "Все позиции уже в магазине бота."));
+        sb.append(botLink());
+        String meta = fresh.stream().map(it -> String.valueOf(it.getId())).collect(Collectors.joining(","));
+        String photo = fresh.stream().map(RewardItem::getPhotoFileId).filter(f -> f != null && !f.isBlank()).findFirst().orElse(null);
+        return Optional.of(saveDraft(SHOP_NEW, sb.toString(), meta, photo));
+    }
+
+    /** «Популярное в магазине»: топ-3 позиции каталога по числу заказов за 14 дней, без имён игроков. Автопост - только при достаточном числе заказов. */
+    public Optional<ChannelPostDraft> createShopPopularDraft(boolean force) {
+        List<Object[]> rows = rewardRequestRepository.countShopOrdersByItemSince(LocalDateTime.now().minusDays(14));
+        long total = 0;
+        for (Object[] r : rows) total += ((Number) r[1]).longValue();
+        if (rows.isEmpty() || (!force && total < MIN_SHOP_ORDERS)) {
+            log.info("[ChannelContent] SHOP_POPULAR skipped: {} orders", total);
+            return Optional.empty();
+        }
+        String[] marks = {"🥇", "🥈", "🥉"};
+        StringBuilder sb = new StringBuilder("🔥 <b>популярное в магазине</b>\n\nЧаще всего за две недели заказывали:\n\n");
+        int n = 0;
+        String photo = null;
+        long topCount = 0;
+        for (Object[] r : rows) {
+            if (n >= 3) break;
+            RewardItem it = rewardItemRepository.findById(((Number) r[0]).longValue()).orElse(null);
+            if (it == null || it.getTitle() == null) continue;
+            long cnt = ((Number) r[1]).longValue();
+            if (n == 0) { photo = it.getPhotoFileId(); topCount = cnt; }
+            sb.append(marks[n]).append(" <b>").append(esc(it.getTitle())).append("</b> - ").append(cnt).append(" ")
+              .append(plural((int) cnt, "заказ", "заказа", "заказов")).append(", ").append(num(it.getPriceCoins())).append(" EXC\n");
+            n++;
+        }
+        if (n == 0) return Optional.empty();
+        sb.append("\n").append(ending(topCount, "А что выберешь ты?", "Ставь 🔥, если уже пробовал.", "Полный каталог - в магазине бота."));
+        sb.append(botLink());
+        return Optional.of(saveDraft(SHOP_POPULAR, sb.toString(), null, photo));
+    }
+
+    /** «EGC Pass: что даёт» (раз в 4 недели): один перк на пост по очереди. Факты сверены с sendEgcPassScreen/кодом; без цифр подписчиков и без обещаний заработка. */
+    public Optional<ChannelPostDraft> createEgcPassDraft() {
+        String[][] perks = {
+                {"✨ <b>EGC Pass: больше EXC за квесты</b>", "С EGC Pass за каждый квест начисляется на 10% больше EXC (бонус до 10 000 EXC в месяц) и на 5% больше XP."},
+                {"🎁 <b>EGC Pass: сундук дня без реролла</b>", "Подписчикам EGC Pass каждый день доступен бесплатный улучшенный сундук: призы в нём щедрее обычного, а докупать реролл за Stars не нужно."},
+                {"⚡ <b>EGC Pass: приоритет на вывод</b>", "Заявки подписчиков EGC Pass на вывод EXC обрабатываются в очереди первыми."},
+                {"📂 <b>EGC Pass: доп. слот квеста</b>", "Пока EGC Pass активен, у тебя есть дополнительный слот квеста: можно вести больше квестов одновременно, не покупая слот за EXC."},
+                {"💸 <b>EGC Pass: донат по закупочной цене</b>", "Гемы для Brawl Stars, Clash Royale и Clash of Clans подписчики EGC Pass покупают по закупочной цене, без наценки клуба, а XP-бонус начисляется как за полную цену."},
+        };
+        int idx = draftRepository.findAllByType(EGCPASS_PERK).size() % perks.length;
+        StringBuilder sb = new StringBuilder(perks[idx][0]).append("\n\n").append(perks[idx][1]).append("\n\n");
+        sb.append("Ещё в EGC Pass: значок в профиле и другие перки - полный список в боте.\n");
+        sb.append("Стоимость: <b>").append(EGC_PASS_STARS).append(" ⭐ на 30 дней</b>, продлевается автоматически, отменить можно в настройках платежей Telegram.");
+        sb.append(botLink());
+        return Optional.of(saveDraft(EGCPASS_PERK, sb.toString(), null));
+    }
+
+    /** «Предметы клуба» (раз в 4 недели): что можно купить за EXC и сколько это стоит; цены берутся из SinkShopService, чтобы не устаревали. */
+    public Optional<ChannelPostDraft> createShopItemsDraft() {
+        StringBuilder sb = new StringBuilder("🧰 <b>на что потратить EXC</b>\n\n");
+        sb.append("Кроме наград в магазине, EXC можно вложить в предметы клуба:\n\n");
+        sb.append("📈 XP-буст +20% на 24 ч - ").append(num(SinkShopService.PRICE_XP_BOOST_24H)).append(" EXC\n");
+        sb.append("✨ EXC-буст +20% на 24 ч - ").append(num(SinkShopService.PRICE_EXC_BOOST_24H)).append(" EXC\n");
+        sb.append("⚡ Двойной буст (XP и EXC) на 24 ч - ").append(num(SinkShopService.PRICE_DOUBLE_BOOST_24H)).append(" EXC\n");
+        sb.append("📂 Доп. слот квеста на 48 ч - ").append(num(SinkShopService.PRICE_EXTRA_SLOT)).append(" EXC\n");
+        sb.append("⏱ Снятие кулдауна квеста - ").append(num(SinkShopService.PRICE_COOLDOWN_REMOVAL)).append(" EXC\n");
+        sb.append("🛡 Страховка повторной попытки - ").append(num(SinkShopService.PRICE_INSURANCE)).append(" EXC\n\n");
+        sb.append("Всё это лежит в разделе магазина в боте.\n\n");
+        long seed = draftRepository.findAllByType(SHOP_ITEMS).size();
+        sb.append(ending(seed, "Что пригодилось бы тебе?", "Ставь ⚡, если пользуешься бустами.", "Бусты действуют сутки, слот - двое."));
+        sb.append(botLink());
+        return Optional.of(saveDraft(SHOP_ITEMS, sb.toString(), null));
     }
 
     // ───────────────────────── вспомогательное ─────────────────────────
