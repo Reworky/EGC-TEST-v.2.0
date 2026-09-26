@@ -24,6 +24,12 @@ import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.model.Squad;
 import ru.gamebot.platform.domain.repository.SquadRepository;
 import ru.gamebot.platform.event.SquadPrizeEvent;
+import ru.gamebot.platform.event.TournamentCancelledEvent;
+import ru.gamebot.platform.domain.model.Tournament;
+import ru.gamebot.platform.domain.model.TournamentEntry;
+import ru.gamebot.platform.domain.repository.TournamentRepository;
+import java.time.Duration;
+import java.time.format.DateTimeFormatter;
 import org.springframework.context.event.EventListener;
 import ru.gamebot.platform.domain.repository.AppSettingRepository;
 import ru.gamebot.platform.domain.repository.ChannelPostDraftRepository;
@@ -50,7 +56,18 @@ public class ChannelContentService {
     public static final String SQUAD_RESULTS = "SQUAD_RESULTS";
     public static final String SQUAD_STATS = "SQUAD_STATS";
     /** Порядок типов в админке. */
-    public static final List<String> ALL_TYPES = List.of(NEW_QUESTS, TOP_QUESTS_WEEK, SQUAD_MIDWEEK, SQUAD_RESULTS, SQUAD_STATS);
+    public static final String TOURNEY_REG_CLOSING = "TOURNEY_REG_CLOSING";
+    public static final String TOURNEY_ACTIVE = "TOURNEY_ACTIVE";
+    public static final String TOURNEY_CANCELLED = "TOURNEY_CANCELLED";
+    public static final List<String> ALL_TYPES = List.of(NEW_QUESTS, TOP_QUESTS_WEEK, SQUAD_MIDWEEK, SQUAD_RESULTS, SQUAD_STATS,
+            TOURNEY_REG_CLOSING, TOURNEY_ACTIVE, TOURNEY_CANCELLED);
+
+    /** Типы без часа в расписании: создаются по событию или по срокам турнира (за 24 ч до старта/финиша), в админке у них только переключатель. */
+    public static boolean isEventType(String type) {
+        return SQUAD_RESULTS.equals(type) || TOURNEY_REG_CLOSING.equals(type) || TOURNEY_ACTIVE.equals(type) || TOURNEY_CANCELLED.equals(type);
+    }
+
+    private static final int TOURNEY_REMIND_HOURS = 24;
     /** Автопост «отряды в цифрах» не формируется, если активных отрядов меньше (решение владельца 2026-09-26). */
     private static final int MIN_SQUADS_FOR_STATS = 10;
 
@@ -66,6 +83,8 @@ public class ChannelContentService {
     private final ApplicationEventPublisher eventPublisher;
     private final SquadService squadService;
     private final SquadRepository squadRepository;
+    private final TournamentRepository tournamentRepository;
+    private final TournamentService tournamentService;
 
     @Value("${app.bot-username:}")
     private String botUsername;
@@ -91,13 +110,16 @@ public class ChannelContentService {
             case TOP_QUESTS_WEEK -> "cc.topw.";
             case SQUAD_MIDWEEK -> "cc.sqmid.";
             case SQUAD_RESULTS -> "cc.sqres.";
+            case TOURNEY_REG_CLOSING -> "cc.trc.";
+            case TOURNEY_ACTIVE -> "cc.tra.";
+            case TOURNEY_CANCELLED -> "cc.trx.";
             default -> "cc.sqstat.";
         };
     }
 
     /** Тизер среды уже работал до переноса на эту систему и «итоги недели» привязаны к выплате приза - включены по умолчанию (всё равно с согласованием). */
     private static boolean defaultEnabled(String type) {
-        return SQUAD_MIDWEEK.equals(type) || SQUAD_RESULTS.equals(type);
+        return SQUAD_MIDWEEK.equals(type) || SQUAD_RESULTS.equals(type) || type.startsWith("TOURNEY_");
     }
 
     public TypeSettings settings(String type) {
@@ -172,7 +194,12 @@ public class ChannelContentService {
     }
 
     private ChannelPostDraft saveDraft(String type, String text, String meta) {
+        return saveDraft(type, text, meta, null);
+    }
+
+    private ChannelPostDraft saveDraft(String type, String text, String meta, String photoFileId) {
         ChannelPostDraft d = new ChannelPostDraft();
+        d.setPhotoFileId(photoFileId);
         d.setType(type);
         d.setPostText(text.length() > 4000 ? text.substring(0, 4000) : text);
         d.setMeta(meta);
@@ -192,7 +219,7 @@ public class ChannelContentService {
     public void tick() {
         LocalDateTime now = LocalDateTime.now();
         for (String type : ALL_TYPES) {
-            if (SQUAD_RESULTS.equals(type)) continue; // событийный: создаётся при выплате приза (onSquadPrize)
+            if (isEventType(type)) continue; // событийные/по срокам турнира: см. onSquadPrize, tournamentTick, onTournamentCancelled
             try {
                 TypeSettings s = settings(type);
                 if (!s.enabled() || now.getHour() != s.hour()) continue;
@@ -426,6 +453,131 @@ public class ChannelContentService {
         sb.append("\n").append(ending(active.size(), "Твой отряд уже в списке?", "Ставь ⚔️, если ищешь команду.", "Собрать свой отряд можно за минуту."));
         sb.append(squadLink());
         return Optional.of(saveDraft(SQUAD_STATS, sb.toString(), null));
+    }
+
+    // ───────────────────────── турниры ─────────────────────────
+
+    private static final DateTimeFormatter TOURNEY_FMT = DateTimeFormatter.ofPattern("dd.MM HH:mm");
+
+    private boolean tourneyDrafted(String type, Long tournamentId) {
+        String key = "T:" + tournamentId;
+        return draftRepository.findAllByType(type).stream().anyMatch(d -> key.equals(d.getMeta()));
+    }
+
+    private String tourneyLink() {
+        if (botUsername == null || botUsername.isBlank()) return "";
+        return "\n\n🎮 Все турниры - в нашем боте: <a href=\"https://t.me/" + botUsername + "\">@" + botUsername + "</a>";
+    }
+
+    private static String prizeRule() {
+        return "1 место забирает 60% фонда, места со 2 по 10 делят остальное.";
+    }
+
+    /** Раз в 10 минут: за 24 ч до старта регистрации - «скоро закроется», за 24 ч до финиша - «финишная прямая». По одному посту на турнир и тип. */
+    @Scheduled(fixedDelay = 600_000, initialDelay = 150_000)
+    public void tournamentTick() {
+        LocalDateTime now = LocalDateTime.now();
+        try {
+            if (settings(TOURNEY_REG_CLOSING).enabled()) {
+                for (Tournament t : tournamentRepository.findAllByStatusOrderByCreatedAtDesc(Tournament.Status.REGISTRATION)) {
+                    LocalDateTime start = t.getStartDate();
+                    if (start == null || !t.isRegistrationOpen()) continue;
+                    if (now.isBefore(start.minusHours(TOURNEY_REMIND_HOURS)) || !now.isBefore(start)) continue;
+                    LocalDateTime opened = t.getRegistrationOpenDate() != null ? t.getRegistrationOpenDate() : t.getCreatedAt();
+                    // регистрация открылась уже внутри последних 24 ч - «скоро закроется» дублировало бы свежий анонс
+                    if (opened != null && opened.isAfter(start.minusHours(TOURNEY_REMIND_HOURS))) continue;
+                    if (tourneyDrafted(TOURNEY_REG_CLOSING, t.getId())) continue;
+                    createRegClosingDraft(t);
+                }
+            }
+            if (settings(TOURNEY_ACTIVE).enabled()) {
+                for (Tournament t : tournamentRepository.findAllByStatusOrderByCreatedAtDesc(Tournament.Status.ACTIVE)) {
+                    LocalDateTime end = t.getEndDate();
+                    if (end == null || t.getStartDate() == null) continue;
+                    if (now.isBefore(end.minusHours(TOURNEY_REMIND_HOURS)) || !now.isBefore(end)) continue;
+                    if (t.getStartDate().isAfter(end.minusHours(TOURNEY_REMIND_HOURS))) continue; // турнир короче суток
+                    if (tourneyDrafted(TOURNEY_ACTIVE, t.getId())) continue;
+                    createActiveDraft(t);
+                }
+            }
+        } catch (Exception e) {
+            log.error("[ChannelContent] tournamentTick failed", e);
+        }
+    }
+
+    private void createRegClosingDraft(Tournament t) {
+        long count = tournamentService.entryCount(t);
+        long hoursLeft = Math.max(1, Duration.between(LocalDateTime.now(), t.getStartDate()).toHours());
+        StringBuilder sb = new StringBuilder("⏰ <b>регистрация на турнир «" + esc(t.getName()) + "» скоро закроется</b>\n\n");
+        sb.append("Старт: <b>").append(t.getStartDate().format(TOURNEY_FMT)).append(" UTC</b>, осталось около ").append(hoursLeft).append(" ч.\n");
+        if (t.getGameName() != null && !t.getGameName().isBlank()) sb.append("Игра: <b>").append(esc(t.getGameName())).append("</b>.\n");
+        sb.append("Взнос: <b>").append(num(t.getEntryFeeExc())).append(" EXC</b>. Записалось: <b>").append(count).append("</b>, призовой фонд сейчас: <b>")
+          .append(num(t.getPrizePoolExc())).append(" EXC</b>.\n");
+        if (t.getMinParticipants() != null) {
+            long need = t.getMinParticipants() - count;
+            if (need > 0) sb.append("Минимум участников — ").append(t.getMinParticipants()).append(". Не хватает <b>").append(need)
+                    .append("</b>: если не наберётся, турнир отменится, а взносы вернутся.\n");
+            else sb.append("Минимум участников уже набран, турнир состоится.\n");
+        }
+        sb.append(prizeRule()).append("\n\n");
+        sb.append(ending(t.getId(), "Успеешь записаться?", "Ставь ⚔️, если уже в деле.", "Записаться можно прямо сейчас."));
+        sb.append(tourneyLink());
+        saveDraft(TOURNEY_REG_CLOSING, sb.toString(), "T:" + t.getId(), t.getPhotoFileId());
+    }
+
+    private void createActiveDraft(Tournament t) {
+        List<TournamentEntry> entries = tournamentService.getLeaderboard(t);
+        long hoursLeft = Math.max(1, Duration.between(LocalDateTime.now(), t.getEndDate()).toHours());
+        StringBuilder sb = new StringBuilder("📊 <b>турнир «" + esc(t.getName()) + "» — финишная прямая</b>\n\n");
+        sb.append("До финиша около ").append(hoursLeft).append(" ч (<b>").append(t.getEndDate().format(TOURNEY_FMT)).append(" UTC</b>). Участников: <b>")
+          .append(entries.size()).append("</b>, призовой фонд: <b>").append(num(t.getPrizePoolExc())).append(" EXC</b>.\n\n");
+        if (t.getScoringType().isTrophyRace()) {
+            sb.append("Побеждает тот, кто нарастил больше трофеев: стартовые значения зафиксированы, итоги подведём сразу после финиша.\n\n");
+        } else {
+            record Row(String nick, long score) {}
+            List<Row> rows = new ArrayList<>();
+            for (TournamentEntry e : entries) {
+                if (e.isDisqualified() || e.getUser() == null) continue;
+                long score = tournamentService.questScoreDuring(t, e.getUser());
+                if (score > 0 && e.getUser().getNickname() != null) rows.add(new Row(e.getUser().getNickname(), score));
+            }
+            rows.sort(Comparator.comparingLong(Row::score).reversed());
+            if (rows.isEmpty()) {
+                sb.append("Пока никто не открыл счёт: самое время начать.\n\n");
+            } else {
+                sb.append("Сейчас впереди:\n");
+                String[] marks = {"🥇", "🥈", "🥉", "4️⃣", "5️⃣"};
+                for (int i = 0; i < Math.min(5, rows.size()); i++) {
+                    sb.append(marks[i]).append(" ").append(esc(rows.get(i).nick())).append(" — <b>").append(rows.get(i).score()).append("</b> ")
+                      .append(plural((int) rows.get(i).score(), "квест", "квеста", "квестов")).append("\n");
+                }
+                sb.append("\n");
+            }
+        }
+        sb.append(prizeRule()).append("\n\n");
+        sb.append(ending(t.getId(), "Кто вырвется вперёд?", "Ставь 🔥, если следишь за таблицей.", "До финиша ещё можно успеть."));
+        sb.append(tourneyLink());
+        saveDraft(TOURNEY_ACTIVE, sb.toString(), "T:" + t.getId(), t.getPhotoFileId());
+    }
+
+    /** Турнир отменён из-за недобора участников: пост про возврат взносов (прозрачность вместо тишины). */
+    @EventListener
+    public void onTournamentCancelled(TournamentCancelledEvent e) {
+        try {
+            if (!settings(TOURNEY_CANCELLED).enabled()) return;
+            Tournament t = e.getTournament();
+            if (tourneyDrafted(TOURNEY_CANCELLED, t.getId())) return;
+            int refunded = e.getRefundedEntries().size();
+            StringBuilder sb = new StringBuilder("🚫 <b>турнир «" + esc(t.getName()) + "» отменён</b>\n\n");
+            sb.append("Не набралось минимальное число участников");
+            if (t.getMinParticipants() != null) sb.append(" (нужно ").append(t.getMinParticipants()).append(", записалось ").append(refunded).append(")");
+            sb.append(".\nВзносы (").append(num(t.getEntryFeeExc())).append(" EXC) вернули всем участникам в полном объёме.\n\n");
+            sb.append("Следующий турнир объявим отдельно.");
+            sb.append(tourneyLink());
+            saveDraft(TOURNEY_CANCELLED, sb.toString(), "T:" + t.getId(), t.getPhotoFileId());
+        } catch (Exception ex) {
+            log.error("[ChannelContent] Failed to create cancelled-tournament draft", ex);
+        }
     }
 
     // ───────────────────────── вспомогательное ─────────────────────────

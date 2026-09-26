@@ -16025,6 +16025,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case ru.gamebot.platform.service.ChannelContentService.SQUAD_MIDWEEK -> "Гонка отрядов - экватор недели";
             case ru.gamebot.platform.service.ChannelContentService.SQUAD_RESULTS -> "Итоги недели у отрядов";
             case ru.gamebot.platform.service.ChannelContentService.SQUAD_STATS -> "Отряды в цифрах";
+            case ru.gamebot.platform.service.ChannelContentService.TOURNEY_REG_CLOSING -> "Турнир: регистрация скоро закроется";
+            case ru.gamebot.platform.service.ChannelContentService.TOURNEY_ACTIVE -> "Турнир: финишная прямая";
+            case ru.gamebot.platform.service.ChannelContentService.TOURNEY_CANCELLED -> "Турнир отменён";
             default -> "Пост для канала";
         };
     }
@@ -16116,6 +16119,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case ru.gamebot.platform.service.ChannelContentService.TOP_QUESTS_WEEK -> "TOPW";
             case ru.gamebot.platform.service.ChannelContentService.SQUAD_MIDWEEK -> "SQMID";
             case ru.gamebot.platform.service.ChannelContentService.SQUAD_RESULTS -> "SQRES";
+            case ru.gamebot.platform.service.ChannelContentService.TOURNEY_REG_CLOSING -> "TRC";
+            case ru.gamebot.platform.service.ChannelContentService.TOURNEY_ACTIVE -> "TRA";
+            case ru.gamebot.platform.service.ChannelContentService.TOURNEY_CANCELLED -> "TRX";
             default -> "SQSTAT";
         };
     }
@@ -16126,6 +16132,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "TOPW" -> ru.gamebot.platform.service.ChannelContentService.TOP_QUESTS_WEEK;
             case "SQMID" -> ru.gamebot.platform.service.ChannelContentService.SQUAD_MIDWEEK;
             case "SQRES" -> ru.gamebot.platform.service.ChannelContentService.SQUAD_RESULTS;
+            case "TRC" -> ru.gamebot.platform.service.ChannelContentService.TOURNEY_REG_CLOSING;
+            case "TRA" -> ru.gamebot.platform.service.ChannelContentService.TOURNEY_ACTIVE;
+            case "TRX" -> ru.gamebot.platform.service.ChannelContentService.TOURNEY_CANCELLED;
             default -> ru.gamebot.platform.service.ChannelContentService.SQUAD_STATS;
         };
     }
@@ -16143,11 +16152,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (String type : ru.gamebot.platform.service.ChannelContentService.ALL_TYPES) {
             ru.gamebot.platform.service.ChannelContentService.TypeSettings st = channelContentService.settings(type);
             String key = ccKey(type);
-            boolean event = ru.gamebot.platform.service.ChannelContentService.SQUAD_RESULTS.equals(type);
+            boolean event = ru.gamebot.platform.service.ChannelContentService.isEventType(type);
             boolean daily = ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS.equals(type);
             boolean biweekly = ru.gamebot.platform.service.ChannelContentService.SQUAD_STATS.equals(type);
             String when;
-            if (event) when = "в момент выплаты приза (понедельник, 00:00 UTC)";
+            if (ru.gamebot.platform.service.ChannelContentService.SQUAD_RESULTS.equals(type)) when = "в момент выплаты приза (понедельник, 00:00 UTC)";
+            else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_REG_CLOSING.equals(type)) when = "за 24 часа до старта турнира";
+            else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_ACTIVE.equals(type)) when = "за 24 часа до финиша турнира";
+            else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_CANCELLED.equals(type)) when = "сразу при отмене турнира";
             else if (daily) when = "ежедневно в " + String.format("%02d:00", st.hour()) + " UTC";
             else when = (biweekly ? "раз в 2 недели, по " : "по ") + weekdayRu(st.dayOfWeek()) + " в " + String.format("%02d:00", st.hour()) + " UTC";
             sb.append("<b>").append(channelPostTitle(type)).append("</b>\n")
