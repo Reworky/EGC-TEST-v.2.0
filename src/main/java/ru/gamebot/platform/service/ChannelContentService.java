@@ -40,6 +40,7 @@ import ru.gamebot.platform.domain.model.RewardItem;
 import ru.gamebot.platform.domain.repository.RewardItemRepository;
 import ru.gamebot.platform.event.HallOfFameEvent;
 import ru.gamebot.platform.event.LeagueWeekEvent;
+import ru.gamebot.platform.event.ReferralLeaderboardRewardEvent;
 import ru.gamebot.platform.domain.repository.ChannelPostDraftRepository;
 import ru.gamebot.platform.domain.repository.QuestRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
@@ -78,16 +79,20 @@ public class ChannelContentService {
     public static final String EGCPASS_PERK = "EGCPASS_PERK";
     public static final String SHOP_POPULAR = "SHOP_POPULAR";
     public static final String SHOP_ITEMS = "SHOP_ITEMS";
+    public static final String REFERRAL_TOP = "REFERRAL_TOP";
+    public static final String REFERRAL_HOWTO = "REFERRAL_HOWTO";
+    public static final String REFERRAL_STATS = "REFERRAL_STATS";
     public static final List<String> ALL_TYPES = List.of(NEW_QUESTS, TOP_QUESTS_WEEK, SQUAD_MIDWEEK, SQUAD_RESULTS, SQUAD_STATS,
             TOURNEY_REG_CLOSING, TOURNEY_ACTIVE, TOURNEY_CANCELLED, WITHDRAW_SUMMARY, WITHDRAW_MILESTONE, WITHDRAW_HOWTO, WITHDRAW_PROOF,
-            HALL_OF_FAME, WEEKLY_RACE, LEAGUES_WEEK, SHOP_NEW, EGCPASS_PERK, SHOP_POPULAR, SHOP_ITEMS);
+            HALL_OF_FAME, WEEKLY_RACE, LEAGUES_WEEK, SHOP_NEW, EGCPASS_PERK, SHOP_POPULAR, SHOP_ITEMS,
+            REFERRAL_TOP, REFERRAL_HOWTO, REFERRAL_STATS);
 
     /** Как часто повторяется расписание типа, в днях: 0 - каждый день, 7 - раз в неделю, 14 и 28 - раз в две и в четыре недели. */
     public static int intervalDays(String type) {
         return switch (type) {
             case NEW_QUESTS, SHOP_NEW -> 0;
-            case SQUAD_STATS, WITHDRAW_SUMMARY, SHOP_POPULAR -> 14;
-            case WITHDRAW_HOWTO, EGCPASS_PERK, SHOP_ITEMS -> 28;
+            case SQUAD_STATS, WITHDRAW_SUMMARY, SHOP_POPULAR, REFERRAL_STATS -> 14;
+            case WITHDRAW_HOWTO, EGCPASS_PERK, SHOP_ITEMS, REFERRAL_HOWTO -> 28;
             default -> 7;
         };
     }
@@ -95,7 +100,7 @@ public class ChannelContentService {
     /** Типы без часа в расписании: создаются по событию или по срокам турнира (за 24 ч до старта/финиша), в админке у них только переключатель. */
     public static boolean isEventType(String type) {
         return SQUAD_RESULTS.equals(type) || TOURNEY_REG_CLOSING.equals(type) || TOURNEY_ACTIVE.equals(type) || TOURNEY_CANCELLED.equals(type)
-                || WITHDRAW_MILESTONE.equals(type) || WITHDRAW_PROOF.equals(type) || HALL_OF_FAME.equals(type) || LEAGUES_WEEK.equals(type);
+                || WITHDRAW_MILESTONE.equals(type) || WITHDRAW_PROOF.equals(type) || HALL_OF_FAME.equals(type) || LEAGUES_WEEK.equals(type) || REFERRAL_TOP.equals(type);
     }
 
     private static final int TOURNEY_REMIND_HOURS = 24;
@@ -111,6 +116,10 @@ public class ChannelContentService {
     /** Цена EGC Pass в Stars: держать в синхроне с EGC_PASS_STARS_PRICE в GamePlatformBot. */
     private static final int EGC_PASS_STARS = 150;
     private static final int MAX_SHOP_ITEMS_IN_POST = 5;
+    /** «Топ рефереров недели» не создаём, если призёров меньше (слабая неделя). */
+    private static final int MIN_REFERRAL_WINNERS = 3;
+    /** «Рефералы в цифрах» не формируется, если за 14 дней по приглашениям пришло меньше игроков. Ручная кнопка порог игнорирует. */
+    private static final long MIN_REFERRED_FOR_STATS = 10;
     private static final int MAX_GAMES_IN_NEW_POST = 5;
     private static final int MAX_QUESTS_PER_GAME = 3;
 
@@ -166,6 +175,9 @@ public class ChannelContentService {
             case EGCPASS_PERK -> "cc.pass.";
             case SHOP_POPULAR -> "cc.shopp.";
             case SHOP_ITEMS -> "cc.shopi.";
+            case REFERRAL_TOP -> "cc.reftop.";
+            case REFERRAL_HOWTO -> "cc.refhow.";
+            case REFERRAL_STATS -> "cc.refstat.";
             default -> "cc.sqstat.";
         };
     }
@@ -173,13 +185,13 @@ public class ChannelContentService {
     /** Тизер среды уже работал до переноса на эту систему и «итоги недели» привязаны к выплате приза - включены по умолчанию (всё равно с согласованием). */
     private static boolean defaultEnabled(String type) {
         return SQUAD_MIDWEEK.equals(type) || SQUAD_RESULTS.equals(type) || type.startsWith("TOURNEY_")
-                || WITHDRAW_MILESTONE.equals(type) || WITHDRAW_PROOF.equals(type) || HALL_OF_FAME.equals(type) || LEAGUES_WEEK.equals(type);
+                || WITHDRAW_MILESTONE.equals(type) || WITHDRAW_PROOF.equals(type) || HALL_OF_FAME.equals(type) || LEAGUES_WEEK.equals(type) || REFERRAL_TOP.equals(type);
     }
 
     public TypeSettings settings(String type) {
         String p = prefix(type);
         int defHour = switch (type) { case TOP_QUESTS_WEEK -> 10; default -> 12; };
-        int defDow = switch (type) { case SQUAD_MIDWEEK -> 3; case SQUAD_STATS -> 5; case WITHDRAW_SUMMARY -> 7; case WITHDRAW_HOWTO -> 2; case WEEKLY_RACE -> 4; case EGCPASS_PERK -> 3; case SHOP_POPULAR -> 6; case SHOP_ITEMS -> 4; default -> 1; };
+        int defDow = switch (type) { case SQUAD_MIDWEEK -> 3; case SQUAD_STATS -> 5; case WITHDRAW_SUMMARY -> 7; case WITHDRAW_HOWTO -> 2; case WEEKLY_RACE -> 4; case EGCPASS_PERK -> 3; case SHOP_POPULAR -> 6; case SHOP_ITEMS -> 4; case REFERRAL_HOWTO -> 5; case REFERRAL_STATS -> 6; default -> 1; };
         String en = get(p + "enabled");
         int hour = parseInt(get(p + "hour"), defHour);
         int dow = parseInt(get(p + "dow"), defDow);
@@ -299,6 +311,8 @@ public class ChannelContentService {
                     case EGCPASS_PERK -> createEgcPassDraft();
                     case SHOP_POPULAR -> createShopPopularDraft(false);
                     case SHOP_ITEMS -> createShopItemsDraft();
+                    case REFERRAL_HOWTO -> createReferralHowToDraft();
+                    case REFERRAL_STATS -> createReferralStatsDraft(false);
                     default -> createSquadStatsDraft(false);
                 }
             } catch (Exception e) {
@@ -984,6 +998,70 @@ public class ChannelContentService {
         sb.append(ending(seed, "Что пригодилось бы тебе?", "Ставь ⚡, если пользуешься бустами.", "Бусты действуют сутки, слот - двое."));
         sb.append(botLink());
         return Optional.of(saveDraft(SHOP_ITEMS, sb.toString(), null));
+    }
+
+    // ───────────────────────── рефералы ─────────────────────────
+
+    /** «Топ рефереров недели»: создаётся в момент выплаты недельного приза (понедельник 00:00 UTC): ники без @ и призы. Пост только при 3+ призёрах. */
+    @EventListener
+    public void onReferralTop(ReferralLeaderboardRewardEvent e) {
+        try {
+            if (!settings(REFERRAL_TOP).enabled() || e.getWinners().size() < MIN_REFERRAL_WINNERS) return;
+            String[] marks = {"🥇", "🥈", "🥉", "4️⃣", "5️⃣"};
+            long pool = 0;
+            StringBuilder sb = new StringBuilder("🤝 <b>топ рефереров недели</b>\n\nЛучше всех на этой неделе приглашали друзей:\n\n");
+            for (UserService.ReferralRankEntry w : e.getWinners()) {
+                if (w.rank() < 1 || w.rank() > marks.length) continue;
+                pool += w.prizeExc();
+                sb.append(marks[w.rank() - 1]).append(" <b>").append(esc(publicNick(w.user().getNickname()))).append("</b> - приз ")
+                  .append(num(w.prizeExc())).append(" EXC\n");
+            }
+            sb.append("\nПризовой фонд недели - <b>").append(num(pool)).append(" EXC</b>, его делят пять лучших по доходу от рефералов.\n\n");
+            sb.append(ending(pool, "Кто в топе на этой неделе?", "Ставь 🤝, если зовёшь друзей.", "Новая неделя уже началась."));
+            sb.append(botLink());
+            saveDraft(REFERRAL_TOP, sb.toString(), null);
+        } catch (Exception ex) {
+            log.error("[ChannelContent] Failed to create referral top draft", ex);
+        }
+    }
+
+    /** «Как работает реферальная система» (раз в 4 недели): две заготовки по очереди. Суммы и правила сверены с FAQ 2026-09-26 и с наградами в боте; при смене условий обновить. */
+    public Optional<ChannelPostDraft> createReferralHowToDraft() {
+        int idx = draftRepository.findAllByType(REFERRAL_HOWTO).size() % 2;
+        StringBuilder sb = new StringBuilder();
+        if (idx == 0) {
+            sb.append("🤝 <b>как пригласить друга в клуб</b>\n\n");
+            sb.append("Личная ссылка лежит в разделе «Рефералы» в боте.\n");
+            sb.append("Друг регистрируется и подписывается на канал: он получает <b>500 EXC</b>, ты - <b>300 EXC</b>.\n");
+            sb.append("Друг выполняет первый квест: ему ещё <b>3 000 EXC</b>, тебе <b>2 500 EXC</b>.\n\n");
+            sb.append("Приглашай тех, кому игры правда интересны: так честнее и полезнее вам обоим.");
+        } else {
+            sb.append("💸 <b>что ещё даёт реферальная ссылка</b>\n\n");
+            sb.append("Кроме стартовых бонусов, ты получаешь <b>10%</b> от наград за квесты друга, пока он остаётся активным. ");
+            sb.append("Если друг 14 дней не выполняет квесты, отчисления ставятся на паузу и сами возобновляются, когда он вернётся.\n\n");
+            sb.append("Каждую неделю пятёрка лучших рефереров делит призовой фонд <b>2 000 EXC</b>.");
+        }
+        sb.append("\n\n").append(ending(idx, "Кого позовёшь первым?", "Ставь 🤝, если уже приглашал друзей.", "Ссылка ждёт в разделе «Рефералы»."));
+        sb.append(botLink());
+        return Optional.of(saveDraft(REFERRAL_HOWTO, sb.toString(), null));
+    }
+
+    /** «Рефералы в цифрах» (раз в 2 недели): сколько игроков пришло по приглашениям, сколько всего и какая доля уже выполнила квест. Только агрегаты; автопост - при 10+ новых за период. */
+    public Optional<ChannelPostDraft> createReferralStatsDraft(boolean force) {
+        long fresh = appUserRepository.countReferredNewUsersSince(LocalDateTime.now().minusDays(14));
+        long total = appUserRepository.countAllReferredUsers();
+        if (total == 0 || (!force && fresh < MIN_REFERRED_FOR_STATS)) {
+            log.info("[ChannelContent] REFERRAL_STATS skipped: {} new referred", fresh);
+            return Optional.empty();
+        }
+        long withQuest = appUserRepository.countReferredUsersWithAtLeastOneQuest();
+        StringBuilder sb = new StringBuilder("📈 <b>рефералы в цифрах</b>\n\n");
+        sb.append("За две недели по приглашениям пришло <b>").append(fresh).append("</b> ").append(plural((int) fresh, "игрок", "игрока", "игроков")).append(".\n");
+        sb.append("Всего в клубе по приглашениям <b>").append(num(total)).append("</b> ").append(plural((int) Math.min(total, Integer.MAX_VALUE), "игрок", "игрока", "игроков"))
+          .append(", из них <b>").append(num(withQuest)).append("</b> уже выполнили хотя бы один квест.\n\n");
+        sb.append(ending(fresh, "Сколько друзей позовёшь ты?", "Ставь 🤝, если ты среди приглашённых.", "Ссылка для друзей - в разделе «Рефералы»."));
+        sb.append(botLink());
+        return Optional.of(saveDraft(REFERRAL_STATS, sb.toString(), null));
     }
 
     // ───────────────────────── вспомогательное ─────────────────────────

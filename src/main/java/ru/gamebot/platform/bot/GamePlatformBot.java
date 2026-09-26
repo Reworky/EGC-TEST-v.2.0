@@ -15985,6 +15985,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case ru.gamebot.platform.service.ChannelContentService.EGCPASS_PERK -> "EGC Pass: что даёт";
             case ru.gamebot.platform.service.ChannelContentService.SHOP_POPULAR -> "Популярное в магазине";
             case ru.gamebot.platform.service.ChannelContentService.SHOP_ITEMS -> "Предметы клуба: на что потратить EXC";
+            case ru.gamebot.platform.service.ChannelContentService.REFERRAL_TOP -> "Топ рефереров недели";
+            case ru.gamebot.platform.service.ChannelContentService.REFERRAL_HOWTO -> "Как пригласить друга";
+            case ru.gamebot.platform.service.ChannelContentService.REFERRAL_STATS -> "Рефералы в цифрах";
             default -> "Пост для канала";
         };
     }
@@ -16134,6 +16137,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case ru.gamebot.platform.service.ChannelContentService.EGCPASS_PERK -> "PASS";
             case ru.gamebot.platform.service.ChannelContentService.SHOP_POPULAR -> "SHOPP";
             case ru.gamebot.platform.service.ChannelContentService.SHOP_ITEMS -> "SHOPI";
+            case ru.gamebot.platform.service.ChannelContentService.REFERRAL_TOP -> "REFTOP";
+            case ru.gamebot.platform.service.ChannelContentService.REFERRAL_HOWTO -> "REFHOW";
+            case ru.gamebot.platform.service.ChannelContentService.REFERRAL_STATS -> "REFSTAT";
             default -> "SQSTAT";
         };
     }
@@ -16158,6 +16164,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "PASS" -> ru.gamebot.platform.service.ChannelContentService.EGCPASS_PERK;
             case "SHOPP" -> ru.gamebot.platform.service.ChannelContentService.SHOP_POPULAR;
             case "SHOPI" -> ru.gamebot.platform.service.ChannelContentService.SHOP_ITEMS;
+            case "REFTOP" -> ru.gamebot.platform.service.ChannelContentService.REFERRAL_TOP;
+            case "REFHOW" -> ru.gamebot.platform.service.ChannelContentService.REFERRAL_HOWTO;
+            case "REFSTAT" -> ru.gamebot.platform.service.ChannelContentService.REFERRAL_STATS;
             default -> ru.gamebot.platform.service.ChannelContentService.SQUAD_STATS;
         };
     }
@@ -16185,6 +16194,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_CANCELLED.equals(type)) when = "сразу при отмене турнира";
             else if (ru.gamebot.platform.service.ChannelContentService.WITHDRAW_MILESTONE.equals(type)) when = "при пересечении круглого порога выплат";
             else if (ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF.equals(type)) when = "после закрытия заявки на вывод (в канал выплат, без ника)";
+            else if (ru.gamebot.platform.service.ChannelContentService.REFERRAL_TOP.equals(type)) when = "в момент выплаты приза рефереров (понедельник, 00:00 UTC), только при 3+ призёрах, ник без @";
             else if (ru.gamebot.platform.service.ChannelContentService.HALL_OF_FAME.equals(type)) when = "в момент сброса недели (понедельник, 00:00 UTC), с баннером, ник без @";
             else if (ru.gamebot.platform.service.ChannelContentService.LEAGUES_WEEK.equals(type)) when = "в момент сброса недели (понедельник, 00:00 UTC), только при 10+ активных игроках";
             else if (daily) when = "ежедневно в " + String.format("%02d:00", st.hour()) + " UTC";
@@ -16230,6 +16240,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         case ru.gamebot.platform.service.ChannelContentService.EGCPASS_PERK -> channelContentService.createEgcPassDraft();
                         case ru.gamebot.platform.service.ChannelContentService.SHOP_POPULAR -> channelContentService.createShopPopularDraft(true);
                         case ru.gamebot.platform.service.ChannelContentService.SHOP_ITEMS -> channelContentService.createShopItemsDraft();
+                        case ru.gamebot.platform.service.ChannelContentService.REFERRAL_HOWTO -> channelContentService.createReferralHowToDraft();
+                        case ru.gamebot.platform.service.ChannelContentService.REFERRAL_STATS -> channelContentService.createReferralStatsDraft(true);
                         default -> channelContentService.createSquadStatsDraft(true);
                     };
                 } catch (Exception e) {
