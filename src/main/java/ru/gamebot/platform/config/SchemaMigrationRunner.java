@@ -29,6 +29,7 @@ public class SchemaMigrationRunner implements CommandLineRunner {
         addColumnIfMissing("app_users", "pending_ad_purpose", "VARCHAR(16)");
         addColumnIfMissing("app_users", "ad_wheel_spins", "INTEGER DEFAULT 0");
         addColumnIfMissing("app_users", "ad_wheel_dry_spins", "INTEGER DEFAULT 0");
+        addColumnIfMissing("reward_requests", "paid_at", "TIMESTAMP");
         addColumnIfMissing("app_users", "ad_wheel_jackpot_at", "TIMESTAMP");
         addColumnIfMissing("app_users", "dormancy_bonus_pending_exc", "BIGINT DEFAULT 0");
         addColumnIfMissing("tournaments", "results_feed_text", "VARCHAR(4096)");

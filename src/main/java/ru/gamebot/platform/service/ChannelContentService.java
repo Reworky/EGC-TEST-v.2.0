@@ -24,6 +24,8 @@ import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.model.Squad;
 import ru.gamebot.platform.domain.repository.SquadRepository;
 import ru.gamebot.platform.event.SquadPrizeEvent;
+import ru.gamebot.platform.domain.model.RewardRequest;
+import ru.gamebot.platform.domain.repository.RewardRequestRepository;
 import ru.gamebot.platform.event.TournamentCancelledEvent;
 import ru.gamebot.platform.domain.model.Tournament;
 import ru.gamebot.platform.domain.model.TournamentEntry;
@@ -59,12 +61,27 @@ public class ChannelContentService {
     public static final String TOURNEY_REG_CLOSING = "TOURNEY_REG_CLOSING";
     public static final String TOURNEY_ACTIVE = "TOURNEY_ACTIVE";
     public static final String TOURNEY_CANCELLED = "TOURNEY_CANCELLED";
+    public static final String WITHDRAW_SUMMARY = "WITHDRAW_SUMMARY";
+    public static final String WITHDRAW_MILESTONE = "WITHDRAW_MILESTONE";
+    public static final String WITHDRAW_HOWTO = "WITHDRAW_HOWTO";
+    public static final String WITHDRAW_PROOF = "WITHDRAW_PROOF";
     public static final List<String> ALL_TYPES = List.of(NEW_QUESTS, TOP_QUESTS_WEEK, SQUAD_MIDWEEK, SQUAD_RESULTS, SQUAD_STATS,
-            TOURNEY_REG_CLOSING, TOURNEY_ACTIVE, TOURNEY_CANCELLED);
+            TOURNEY_REG_CLOSING, TOURNEY_ACTIVE, TOURNEY_CANCELLED, WITHDRAW_SUMMARY, WITHDRAW_MILESTONE, WITHDRAW_HOWTO, WITHDRAW_PROOF);
+
+    /** Как часто повторяется расписание типа, в днях: 0 - каждый день, 7 - раз в неделю, 14 и 28 - раз в две и в четыре недели. */
+    public static int intervalDays(String type) {
+        return switch (type) {
+            case NEW_QUESTS -> 0;
+            case SQUAD_STATS, WITHDRAW_SUMMARY -> 14;
+            case WITHDRAW_HOWTO -> 28;
+            default -> 7;
+        };
+    }
 
     /** Типы без часа в расписании: создаются по событию или по срокам турнира (за 24 ч до старта/финиша), в админке у них только переключатель. */
     public static boolean isEventType(String type) {
-        return SQUAD_RESULTS.equals(type) || TOURNEY_REG_CLOSING.equals(type) || TOURNEY_ACTIVE.equals(type) || TOURNEY_CANCELLED.equals(type);
+        return SQUAD_RESULTS.equals(type) || TOURNEY_REG_CLOSING.equals(type) || TOURNEY_ACTIVE.equals(type) || TOURNEY_CANCELLED.equals(type)
+                || WITHDRAW_MILESTONE.equals(type) || WITHDRAW_PROOF.equals(type);
     }
 
     private static final int TOURNEY_REMIND_HOURS = 24;
@@ -85,6 +102,8 @@ public class ChannelContentService {
     private final SquadRepository squadRepository;
     private final TournamentRepository tournamentRepository;
     private final TournamentService tournamentService;
+    private final RewardService rewardService;
+    private final RewardRequestRepository rewardRequestRepository;
 
     @Value("${app.bot-username:}")
     private String botUsername;
@@ -113,19 +132,24 @@ public class ChannelContentService {
             case TOURNEY_REG_CLOSING -> "cc.trc.";
             case TOURNEY_ACTIVE -> "cc.tra.";
             case TOURNEY_CANCELLED -> "cc.trx.";
+            case WITHDRAW_SUMMARY -> "cc.wsum.";
+            case WITHDRAW_MILESTONE -> "cc.wmil.";
+            case WITHDRAW_HOWTO -> "cc.whow.";
+            case WITHDRAW_PROOF -> "cc.wprf.";
             default -> "cc.sqstat.";
         };
     }
 
     /** Тизер среды уже работал до переноса на эту систему и «итоги недели» привязаны к выплате приза - включены по умолчанию (всё равно с согласованием). */
     private static boolean defaultEnabled(String type) {
-        return SQUAD_MIDWEEK.equals(type) || SQUAD_RESULTS.equals(type) || type.startsWith("TOURNEY_");
+        return SQUAD_MIDWEEK.equals(type) || SQUAD_RESULTS.equals(type) || type.startsWith("TOURNEY_")
+                || WITHDRAW_MILESTONE.equals(type) || WITHDRAW_PROOF.equals(type);
     }
 
     public TypeSettings settings(String type) {
         String p = prefix(type);
         int defHour = switch (type) { case TOP_QUESTS_WEEK -> 10; default -> 12; };
-        int defDow = switch (type) { case SQUAD_MIDWEEK -> 3; case SQUAD_STATS -> 5; default -> 1; };
+        int defDow = switch (type) { case SQUAD_MIDWEEK -> 3; case SQUAD_STATS -> 5; case WITHDRAW_SUMMARY -> 7; case WITHDRAW_HOWTO -> 2; default -> 1; };
         String en = get(p + "enabled");
         int hour = parseInt(get(p + "hour"), defHour);
         int dow = parseInt(get(p + "dow"), defDow);
@@ -227,9 +251,10 @@ public class ChannelContentService {
                 if (weekly && now.getDayOfWeek().getValue() != s.dayOfWeek()) continue;
                 String today = LocalDate.now().toString();
                 if (today.equals(s.lastRun())) continue;
-                if (SQUAD_STATS.equals(type) && s.lastRun() != null) {
+                int every = intervalDays(type);
+                if (every > 7 && s.lastRun() != null) {
                     try {
-                        if (LocalDate.parse(s.lastRun()).isAfter(LocalDate.now().minusDays(14))) continue; // раз в две недели
+                        if (LocalDate.parse(s.lastRun()).isAfter(LocalDate.now().minusDays(every))) continue; // раз в 2 или 4 недели
                     } catch (Exception ignored) { }
                 }
                 put(prefix(type) + "last", today);
@@ -237,6 +262,8 @@ public class ChannelContentService {
                     case NEW_QUESTS -> createNewQuestsDraft(false);
                     case TOP_QUESTS_WEEK -> createTopQuestsDraft(false);
                     case SQUAD_MIDWEEK -> createSquadMidweekDraft(false);
+                    case WITHDRAW_SUMMARY -> createWithdrawSummaryDraft(false);
+                    case WITHDRAW_HOWTO -> createWithdrawHowToDraft();
                     default -> createSquadStatsDraft(false);
                 }
             } catch (Exception e) {
@@ -578,6 +605,133 @@ public class ChannelContentService {
         } catch (Exception ex) {
             log.error("[ChannelContent] Failed to create cancelled-tournament draft", ex);
         }
+    }
+
+    // ───────────────────────── вывод и пруфы ─────────────────────────
+
+    /** Меньше выплат за период - сводку не публикуем (слабые цифры вредят доверию): сначала расширяем период с 14 до 30 дней. */
+    private static final int MIN_PAYOUTS_FOR_SUMMARY = 5;
+    private static final long[] COUNT_MILESTONES = {10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000};
+    private static final long[] RUB_MILESTONES = {10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000, 2_500_000, 5_000_000, 10_000_000};
+
+    private String payoutsLink() {
+        if (botUsername == null || botUsername.isBlank()) return "";
+        return "\n\n💸 Как вывести — в нашем боте: <a href=\"https://t.me/" + botUsername + "\">@" + botUsername + "</a>";
+    }
+
+    /** «Пруф от Экси»: сводка выплат за 2 недели (при малом числе - за месяц), без имён игроков, только цифры; скорость выплаты - если данных достаточно и она честная. */
+    public Optional<ChannelPostDraft> createWithdrawSummaryDraft(boolean force) {
+        LocalDateTime now = LocalDateTime.now();
+        int days = 14;
+        List<RewardRequest> reqs = rewardRequestRepository.findApprovedWithdrawalsSince(now.minusDays(days));
+        if (reqs.size() < MIN_PAYOUTS_FOR_SUMMARY) {
+            days = 30;
+            reqs = rewardRequestRepository.findApprovedWithdrawalsSince(now.minusDays(days));
+        }
+        if (reqs.isEmpty() || (!force && reqs.size() < MIN_PAYOUTS_FOR_SUMMARY)) {
+            log.info("[ChannelContent] WITHDRAW_SUMMARY skipped: {} payouts in {} days", reqs.size(), days);
+            return Optional.empty();
+        }
+        RewardService.WithdrawalPeriodStats st = rewardService.withdrawalStatsSince(now.minusDays(days));
+        long players = rewardRequestRepository.countDistinctWithdrawalUsersSince(now.minusDays(days));
+        String period = days == 14 ? "две недели" : "месяц";
+        StringBuilder sb = new StringBuilder("💸 <b>пруф от Экси — выплаты за " + period + "</b>\n\n");
+        sb.append("Выплатили <b>").append(st.count()).append("</b> ").append(plural((int) st.count(), "заявку", "заявки", "заявок")).append(" на вывод, ")
+          .append("получили <b>").append(players).append("</b> ").append(plural((int) players, "игрок", "игрока", "игроков")).append(".\n");
+        sb.append("Всего выведено: <b>").append(num(st.totalExc())).append(" EXC</b>.\n");
+        if (st.totalRub() > 0) sb.append("Рублями: <b>").append(num(st.totalRub())).append(" ₽</b>\n");
+        if (st.totalTonRub() > 0) sb.append("В GRAM (TON) на сумму около <b>").append(num(st.totalTonRub())).append(" ₽</b>\n");
+        if (st.totalStars() > 0) sb.append("Звёздами Telegram: <b>").append(num(st.totalStars())).append(" ⭐</b>\n");
+        List<Long> minutes = reqs.stream().filter(r -> r.getPaidAt() != null && r.getCreatedAt() != null)
+                .map(r -> Duration.between(r.getCreatedAt(), r.getPaidAt()).toMinutes()).sorted().toList();
+        if (minutes.size() >= 5) {
+            long median = minutes.get(minutes.size() / 2);
+            if (median <= 24 * 60) {
+                sb.append("Время от заявки до выплаты (медиана): <b>").append(median < 60 ? "меньше часа" : "около " + Math.round(median / 60.0) + " ч").append("</b>\n");
+            }
+        }
+        sb.append("\nЧеки публикуем в канале выплат.\n\n");
+        sb.append(ending(st.count(), "Уже подал заявку?", "Ставь 💸, если ждёшь свою.", "Каждая заявка обрабатывается в течение 24 часов."));
+        sb.append(payoutsLink());
+        return Optional.of(saveDraft(WITHDRAW_SUMMARY, sb.toString(), null));
+    }
+
+    /** «Как вывести»: две заготовки по очереди, факты сверены с ботом (минимум 5 000 EXC, одна заявка в сутки, способы, сроки, лимит по уровню). */
+    public Optional<ChannelPostDraft> createWithdrawHowToDraft() {
+        long variant = draftRepository.findAllByType(WITHDRAW_HOWTO).size() % 2;
+        StringBuilder sb = new StringBuilder();
+        if (variant == 0) {
+            sb.append("🧾 <b>как вывести EXC</b>\n\n")
+              .append("1. В боте открой «Кошелёк» и выбери вывод.\n")
+              .append("2. Выбери способ: рубли по реквизитам банка, GRAM (TON) на кошелёк или звёзды Telegram.\n")
+              .append("3. Укажи сумму от <b>5 000 EXC</b>. Одна заявка в сутки.\n")
+              .append("4. Заявку обрабатываем в течение 24 часов, чек придёт в бот.\n\n")
+              .append("Месячный лимит вывода растёт вместе с уровнем: чем выше уровень, тем больше.\n\n")
+              .append(ending(variant, "Уже пробовал?", "Ставь 💸, если пригодится.", "Всё занимает пару минут."));
+        } else {
+            sb.append("🧾 <b>вывод EXC: что подготовить заранее</b>\n\n")
+              .append("Перед первым выводом в профиле нужно указать страну и возраст и один раз подтвердить номер телефона.\n")
+              .append("Минимальная сумма — <b>5 000 EXC</b>, заявка одна в сутки.\n")
+              .append("Рубли уходят по реквизитам банка, GRAM (TON) на кошелёк, звёзды Telegram на юзернейм.\n")
+              .append("Итоговая сумма в рублях зависит от коэффициента клуба, он виден в разделе «Магазин».\n\n")
+              .append("Подписчики EGC Pass идут в очереди на вывод первыми.\n\n")
+              .append(ending(variant, "Что выберешь, рубли или GRAM?", "Ставь 💸, если уже выводил.", "Инструкция всегда в разделе «Помощь»."));
+        }
+        sb.append(payoutsLink());
+        return Optional.of(saveDraft(WITHDRAW_HOWTO, sb.toString(), null));
+    }
+
+    /** Проверка вех раз в 10 минут: при пересечении круглого порога числа выплат или суммы - пост «веха». Первый запуск только запоминает пороги (без залпа по накопленному). */
+    @Scheduled(fixedDelay = 600_000, initialDelay = 180_000)
+    public void milestoneTick() {
+        try {
+            if (!settings(WITHDRAW_MILESTONE).enabled()) return;
+            RewardService.WithdrawalPeriodStats all = rewardService.withdrawalStatsSince(LocalDateTime.of(2020, 1, 1, 0, 0));
+            long count = all.count();
+            long rub = all.totalRub() + all.totalTonRub();
+            long crossedCount = highest(COUNT_MILESTONES, count);
+            long crossedRub = highest(RUB_MILESTONES, rub);
+            String lastCount = get("cc.wmil.count");
+            String lastRub = get("cc.wmil.rub");
+            if (lastCount == null || lastRub == null) {
+                put("cc.wmil.count", String.valueOf(crossedCount));
+                put("cc.wmil.rub", String.valueOf(crossedRub));
+                return;
+            }
+            if (crossedCount > parseLong(lastCount)) {
+                put("cc.wmil.count", String.valueOf(crossedCount));
+                saveDraft(WITHDRAW_MILESTONE, "🏁 <b>" + crossedCount + "-я выплата в клубе</b>\n\nКлуб выплатил уже <b>" + count + "</b> заявок на вывод. "
+                        + "Всего выведено: <b>" + num(all.totalExc()) + " EXC</b>.\n\nСпасибо всем, кто играет и выполняет квесты.\n\n"
+                        + ending(crossedCount, "Кто станет следующим?", "Ставь 🔥, если уже среди них.", "Следующая веха уже впереди.") + payoutsLink(), "M:C" + crossedCount);
+            }
+            if (crossedRub > parseLong(lastRub)) {
+                put("cc.wmil.rub", String.valueOf(crossedRub));
+                saveDraft(WITHDRAW_MILESTONE, "🏁 <b>выплачено больше " + num(crossedRub) + " ₽</b>\n\nИгроки клуба вывели рублями и в GRAM (TON) уже более <b>"
+                        + num(crossedRub) + " ₽</b>. Чеки публикуем в канале выплат.\n\n"
+                        + ending(crossedRub, "Куда потратишь свою награду?", "Ставь 💸, если тоже выводил.", "Каждая заявка обрабатывается в течение 24 часов.") + payoutsLink(), "M:R" + crossedRub);
+            }
+        } catch (Exception e) {
+            log.error("[ChannelContent] milestoneTick failed", e);
+        }
+    }
+
+    private static long highest(long[] steps, long value) {
+        long best = 0;
+        for (long st : steps) if (value >= st) best = st;
+        return best;
+    }
+
+    private static long parseLong(String v) {
+        try { return v == null ? 0 : Long.parseLong(v.trim()); } catch (NumberFormatException e) { return 0; }
+    }
+
+    /** Пруф по одной выплате (текст без ника игрока, чек - как картинка); публикуется в канал выплат после согласования. false - тип выключен или уже создан. */
+    public boolean createProofDraft(Long requestId, String text, String receiptFileId) {
+        if (!settings(WITHDRAW_PROOF).enabled()) return false;
+        String key = "W:" + requestId;
+        if (draftRepository.findAllByType(WITHDRAW_PROOF).stream().anyMatch(d -> key.equals(d.getMeta()))) return false;
+        saveDraft(WITHDRAW_PROOF, text, key, receiptFileId);
+        return true;
     }
 
     // ───────────────────────── вспомогательное ─────────────────────────

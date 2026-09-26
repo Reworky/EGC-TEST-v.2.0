@@ -10602,11 +10602,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * которые менеджер прикладывает при закрытии заявки (см. WITHDRAWAL_RECEIPT). Публикуются одним
      * постом вместе с основным текстом, а не отдельно. */
     private void postWithdrawalToActivityFeed(RewardRequest req, String receiptFileId, String receiptCaption) {
-        pendingWithdrawalTexts.put(req.getId(), buildWithdrawalFeedText(req, receiptCaption));
-        if (receiptFileId != null) {
-            pendingWithdrawalReceiptFileIds.put(req.getId(), receiptFileId);
+        // С 2026-09-26 пруф - черновик в БД (переживает рестарт) и БЕЗ ника игрока: согласие у игроков не запрашиваем (решение владельца),
+        // поэтому публикуем сумму и способ, а имя админ при желании добавляет сам через «Изменить».
+        String method = isStarsWithdrawal(req) ? "звёздами Telegram" : isCryptoWithdrawal(req) ? "в GRAM (TON)" : "рублями";
+        String text = "💸 Ещё одна выплата: игрок вывел <b>" + rewardService.actualPaidPrice(req) + " EXC</b> " + method + ".";
+        if (receiptCaption != null && !receiptCaption.isBlank()) {
+            text += "\n\n" + escape(receiptCaption.trim());
         }
-        sendWithdrawalFeedCard(req.getId());
+        try {
+            channelContentService.createProofDraft(req.getId(), text, receiptFileId);
+        } catch (Exception e) {
+            log.error("Failed to create withdrawal proof draft for request {}", req.getId(), e);
+        }
     }
 
     private void sendWithdrawalFeedCard(long reqId) {
@@ -16028,6 +16035,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case ru.gamebot.platform.service.ChannelContentService.TOURNEY_REG_CLOSING -> "Турнир: регистрация скоро закроется";
             case ru.gamebot.platform.service.ChannelContentService.TOURNEY_ACTIVE -> "Турнир: финишная прямая";
             case ru.gamebot.platform.service.ChannelContentService.TOURNEY_CANCELLED -> "Турнир отменён";
+            case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_SUMMARY -> "Пруф от Экси: сводка выплат";
+            case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_MILESTONE -> "Веха выплат";
+            case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_HOWTO -> "Как вывести EXC";
+            case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF -> "Пруф: выплата";
             default -> "Пост для канала";
         };
     }
@@ -16046,7 +16057,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         java.util.Optional<ru.gamebot.platform.domain.model.ChannelPostDraft> opt = channelContentService.findDraft(draftId);
         if (opt.isEmpty() || !ru.gamebot.platform.domain.model.ChannelPostDraft.PENDING.equals(opt.get().getStatus())) return;
         ru.gamebot.platform.domain.model.ChannelPostDraft d = opt.get();
-        String preview = "🧾 <b>" + channelPostTitle(d.getType()) + " - на согласование</b>\n\n" + d.getPostText();
+        String proofWarning = ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF.equals(d.getType())
+                ? "⚠️ Перед публикацией проверьте, что на чеке закрыты реквизиты (карта, кошелёк, телефон, номер счёта).\n\n" : "";
+        String preview = "🧾 <b>" + channelPostTitle(d.getType()) + " - на согласование</b>\n\n" + proofWarning + d.getPostText();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(
                 keyboardFactory.callback("✅ Опубликовать", "adminfeed:cp:approve:" + draftId),
@@ -16065,6 +16078,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Куда публиковать: пруфы по выплатам - в канал выплат (@egc_payouts), остальное - в основной канал. */
+    private String channelTargetFor(String type) {
+        if (ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF.equals(type)
+                && appProperties.getPayoutChannelUsername() != null && !appProperties.getPayoutChannelUsername().isBlank()) {
+            return appProperties.getPayoutChannelUsername();
+        }
+        return requiredChannelChatId();
+    }
+
     private void handleChannelPostAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
         String[] parts = action.split(":");
         Long draftId = parts.length > 1 ? parseLong(parts[1]) : null;
@@ -16079,7 +16101,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         switch (parts[0]) {
             case "approve" -> {
                 try {
-                    sendBannerAndText(requiredChannelChatId(), d.getPhotoFileId(), d.getPostText(), null);
+                    sendBannerAndText(channelTargetFor(d.getType()), d.getPhotoFileId(), d.getPostText(), null);
                     channelContentService.markPublished(draftId);
                     clearInlineKeyboard(callbackQuery);
                     answer(callbackQuery.getId(), "✅ Опубликовано");
@@ -16122,6 +16144,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case ru.gamebot.platform.service.ChannelContentService.TOURNEY_REG_CLOSING -> "TRC";
             case ru.gamebot.platform.service.ChannelContentService.TOURNEY_ACTIVE -> "TRA";
             case ru.gamebot.platform.service.ChannelContentService.TOURNEY_CANCELLED -> "TRX";
+            case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_SUMMARY -> "WSUM";
+            case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_MILESTONE -> "WMIL";
+            case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_HOWTO -> "WHOW";
+            case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF -> "WPRF";
             default -> "SQSTAT";
         };
     }
@@ -16135,6 +16161,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "TRC" -> ru.gamebot.platform.service.ChannelContentService.TOURNEY_REG_CLOSING;
             case "TRA" -> ru.gamebot.platform.service.ChannelContentService.TOURNEY_ACTIVE;
             case "TRX" -> ru.gamebot.platform.service.ChannelContentService.TOURNEY_CANCELLED;
+            case "WSUM" -> ru.gamebot.platform.service.ChannelContentService.WITHDRAW_SUMMARY;
+            case "WMIL" -> ru.gamebot.platform.service.ChannelContentService.WITHDRAW_MILESTONE;
+            case "WHOW" -> ru.gamebot.platform.service.ChannelContentService.WITHDRAW_HOWTO;
+            case "WPRF" -> ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF;
             default -> ru.gamebot.platform.service.ChannelContentService.SQUAD_STATS;
         };
     }
@@ -16154,14 +16184,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String key = ccKey(type);
             boolean event = ru.gamebot.platform.service.ChannelContentService.isEventType(type);
             boolean daily = ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS.equals(type);
-            boolean biweekly = ru.gamebot.platform.service.ChannelContentService.SQUAD_STATS.equals(type);
+            int every = ru.gamebot.platform.service.ChannelContentService.intervalDays(type);
             String when;
             if (ru.gamebot.platform.service.ChannelContentService.SQUAD_RESULTS.equals(type)) when = "в момент выплаты приза (понедельник, 00:00 UTC)";
             else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_REG_CLOSING.equals(type)) when = "за 24 часа до старта турнира";
             else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_ACTIVE.equals(type)) when = "за 24 часа до финиша турнира";
             else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_CANCELLED.equals(type)) when = "сразу при отмене турнира";
+            else if (ru.gamebot.platform.service.ChannelContentService.WITHDRAW_MILESTONE.equals(type)) when = "при пересечении круглого порога выплат";
+            else if (ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF.equals(type)) when = "после закрытия заявки на вывод (в канал выплат, без ника)";
             else if (daily) when = "ежедневно в " + String.format("%02d:00", st.hour()) + " UTC";
-            else when = (biweekly ? "раз в 2 недели, по " : "по ") + weekdayRu(st.dayOfWeek()) + " в " + String.format("%02d:00", st.hour()) + " UTC";
+            else when = (every > 7 ? "раз в " + (every / 7) + " нед., по " : "по ") + weekdayRu(st.dayOfWeek()) + " в " + String.format("%02d:00", st.hour()) + " UTC";
             sb.append("<b>").append(channelPostTitle(type)).append("</b>\n")
               .append("Авто: <b>").append(st.enabled() ? "🔔 включено" : "🔕 выключено").append("</b>, ").append(when)
               .append(st.lastRun() != null && !event ? ", последний запуск " + st.lastRun() : "").append("\n\n");
@@ -16196,6 +16228,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         case ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS -> channelContentService.createNewQuestsDraft(true);
                         case ru.gamebot.platform.service.ChannelContentService.TOP_QUESTS_WEEK -> channelContentService.createTopQuestsDraft(true);
                         case ru.gamebot.platform.service.ChannelContentService.SQUAD_MIDWEEK -> channelContentService.createSquadMidweekDraft(true);
+                        case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_SUMMARY -> channelContentService.createWithdrawSummaryDraft(true);
+                        case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_HOWTO -> channelContentService.createWithdrawHowToDraft();
                         default -> channelContentService.createSquadStatsDraft(true);
                     };
                 } catch (Exception e) {

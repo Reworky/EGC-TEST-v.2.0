@@ -281,6 +281,7 @@ public class RewardService {
     public RewardRequest approveRequest(Long requestId) {
         RewardRequest req = getRequest(requestId);
         req.setStatus(RewardRequestStatus.APPROVED);
+        req.setPaidAt(java.time.LocalDateTime.now());
         if (WITHDRAWAL_CATEGORY.equals(req.getRewardItem().getCategory())) {
             long rubles = parseRubFromTitle(req.getRewardItem().getTitle(), req.getRewardItem().getPriceCoins());
             healthRatioService.deductFromPayoutPool(rubles);

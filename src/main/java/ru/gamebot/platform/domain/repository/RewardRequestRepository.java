@@ -91,4 +91,8 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
     @EntityGraph(attributePaths = {"rewardItem"})
     @Query("SELECT r FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED' AND r.createdAt >= :since")
     List<RewardRequest> findApprovedWithdrawalsSince(@Param("since") LocalDateTime since);
+
+    /** Сколько разных игроков получили выплату (для поста «сводка выплат» в канале). */
+    @Query("SELECT COUNT(DISTINCT r.user.id) FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED' AND r.createdAt >= :since")
+    long countDistinctWithdrawalUsersSince(@Param("since") LocalDateTime since);
 }

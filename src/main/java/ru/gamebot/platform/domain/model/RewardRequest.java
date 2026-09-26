@@ -60,4 +60,7 @@ public class RewardRequest {
      *  и у старых записей, созданных до появления этого поля — для них допустим тот же фолбэк, что
      *  и раньше (rewardItem.getPriceCoins() для вывода, effectivePrice() для обычных товаров). */
     private Long paidPriceCoins;
+
+    /** Когда заявка закрыта/выплачена (RewardService.approveRequest): нужно для метрики «время выплаты» в постах канала. null - у заявок до 2026-09-26. */
+    private LocalDateTime paidAt;
 }
