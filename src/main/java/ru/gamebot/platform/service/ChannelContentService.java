@@ -21,6 +21,10 @@ import org.springframework.stereotype.Service;
 import ru.gamebot.platform.domain.model.AppSetting;
 import ru.gamebot.platform.domain.model.ChannelPostDraft;
 import ru.gamebot.platform.domain.model.Quest;
+import ru.gamebot.platform.domain.model.Squad;
+import ru.gamebot.platform.domain.repository.SquadRepository;
+import ru.gamebot.platform.event.SquadPrizeEvent;
+import org.springframework.context.event.EventListener;
 import ru.gamebot.platform.domain.repository.AppSettingRepository;
 import ru.gamebot.platform.domain.repository.ChannelPostDraftRepository;
 import ru.gamebot.platform.domain.repository.QuestRepository;
@@ -42,6 +46,13 @@ public class ChannelContentService {
 
     public static final String NEW_QUESTS = "NEW_QUESTS";
     public static final String TOP_QUESTS_WEEK = "TOP_QUESTS_WEEK";
+    public static final String SQUAD_MIDWEEK = "SQUAD_MIDWEEK";
+    public static final String SQUAD_RESULTS = "SQUAD_RESULTS";
+    public static final String SQUAD_STATS = "SQUAD_STATS";
+    /** Порядок типов в админке. */
+    public static final List<String> ALL_TYPES = List.of(NEW_QUESTS, TOP_QUESTS_WEEK, SQUAD_MIDWEEK, SQUAD_RESULTS, SQUAD_STATS);
+    /** Автопост «отряды в цифрах» не формируется, если активных отрядов меньше (решение владельца 2026-09-26). */
+    private static final int MIN_SQUADS_FOR_STATS = 10;
 
     /** Автопост «топ недели» не формируется, если за неделю выполнено меньше (не выдаём слабые цифры за успех). Ручная кнопка порог игнорирует. */
     private static final long MIN_WEEK_COMPLETIONS = 10;
@@ -53,6 +64,8 @@ public class ChannelContentService {
     private final ChannelPostDraftRepository draftRepository;
     private final AppSettingRepository settingRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final SquadService squadService;
+    private final SquadRepository squadRepository;
 
     @Value("${app.bot-username:}")
     private String botUsername;
@@ -73,15 +86,28 @@ public class ChannelContentService {
     }
 
     private static String prefix(String type) {
-        return NEW_QUESTS.equals(type) ? "cc.newq." : "cc.topw.";
+        return switch (type) {
+            case NEW_QUESTS -> "cc.newq.";
+            case TOP_QUESTS_WEEK -> "cc.topw.";
+            case SQUAD_MIDWEEK -> "cc.sqmid.";
+            case SQUAD_RESULTS -> "cc.sqres.";
+            default -> "cc.sqstat.";
+        };
+    }
+
+    /** Тизер среды уже работал до переноса на эту систему и «итоги недели» привязаны к выплате приза - включены по умолчанию (всё равно с согласованием). */
+    private static boolean defaultEnabled(String type) {
+        return SQUAD_MIDWEEK.equals(type) || SQUAD_RESULTS.equals(type);
     }
 
     public TypeSettings settings(String type) {
         String p = prefix(type);
-        int defHour = NEW_QUESTS.equals(type) ? 12 : 10;
+        int defHour = switch (type) { case TOP_QUESTS_WEEK -> 10; default -> 12; };
+        int defDow = switch (type) { case SQUAD_MIDWEEK -> 3; case SQUAD_STATS -> 5; default -> 1; };
+        String en = get(p + "enabled");
         int hour = parseInt(get(p + "hour"), defHour);
-        int dow = parseInt(get(p + "dow"), 1);
-        return new TypeSettings("1".equals(get(p + "enabled")), Math.max(0, Math.min(23, hour)), Math.max(1, Math.min(7, dow)), get(p + "last"));
+        int dow = parseInt(get(p + "dow"), defDow);
+        return new TypeSettings(en == null ? defaultEnabled(type) : "1".equals(en), Math.max(0, Math.min(23, hour)), Math.max(1, Math.min(7, dow)), get(p + "last"));
     }
 
     private static int parseInt(String v, int def) {
@@ -165,15 +191,27 @@ public class ChannelContentService {
     @Scheduled(fixedDelay = 600_000, initialDelay = 120_000)
     public void tick() {
         LocalDateTime now = LocalDateTime.now();
-        for (String type : List.of(NEW_QUESTS, TOP_QUESTS_WEEK)) {
+        for (String type : ALL_TYPES) {
+            if (SQUAD_RESULTS.equals(type)) continue; // событийный: создаётся при выплате приза (onSquadPrize)
             try {
                 TypeSettings s = settings(type);
                 if (!s.enabled() || now.getHour() != s.hour()) continue;
-                if (TOP_QUESTS_WEEK.equals(type) && now.getDayOfWeek().getValue() != s.dayOfWeek()) continue;
+                boolean weekly = !NEW_QUESTS.equals(type);
+                if (weekly && now.getDayOfWeek().getValue() != s.dayOfWeek()) continue;
                 String today = LocalDate.now().toString();
                 if (today.equals(s.lastRun())) continue;
+                if (SQUAD_STATS.equals(type) && s.lastRun() != null) {
+                    try {
+                        if (LocalDate.parse(s.lastRun()).isAfter(LocalDate.now().minusDays(14))) continue; // раз в две недели
+                    } catch (Exception ignored) { }
+                }
                 put(prefix(type) + "last", today);
-                if (NEW_QUESTS.equals(type)) createNewQuestsDraft(false); else createTopQuestsDraft(false);
+                switch (type) {
+                    case NEW_QUESTS -> createNewQuestsDraft(false);
+                    case TOP_QUESTS_WEEK -> createTopQuestsDraft(false);
+                    case SQUAD_MIDWEEK -> createSquadMidweekDraft(false);
+                    default -> createSquadStatsDraft(false);
+                }
             } catch (Exception e) {
                 log.error("[ChannelContent] Scheduled run failed for {}", type, e);
             }
@@ -285,6 +323,109 @@ public class ChannelContentService {
         sb.append(ending(total, "Что возьмёшь ты?", "Ставь 🔥, если уже проходил.", "Новая неделя уже началась."));
         sb.append(botLink());
         return Optional.of(saveDraft(TOP_QUESTS_WEEK, sb.toString(), null));
+    }
+
+    // ───────────────────────── отряды ─────────────────────────
+
+    private static final String[] BAD_WORDS = {"хуй", "хуе", "хуя", "пизд", "ебан", "ебат", "ёбан", "ёбат", "бляд", "блят", "сука", "сучк",
+            "мудак", "мудил", "пидор", "пидар", "гандон", "залуп", "шлюх", "нацист", "fuck", "shit", "nigg"};
+
+    /** Название отряда придумывает игрок: в автопост не берём ссылки, @упоминания и явную брань (админ всё равно смотрит пост перед публикацией). */
+    private static String safeName(String name) {
+        if (name == null || name.isBlank()) return null;
+        String low = name.toLowerCase(Locale.ROOT);
+        if (low.contains("://") || low.contains("t.me") || low.contains("@") || low.contains("www.")
+                || low.matches(".*\\w\\.(ru|com|net|org|io|me|gg|ly|tv|xyz|club|site)\\b.*")) return null;
+        for (String w : BAD_WORDS) if (low.contains(w)) return null;
+        return name.trim();
+    }
+
+    private String squadLink() {
+        if (botUsername == null || botUsername.isBlank()) return "";
+        return "\n\n⚔️ Отряды - в нашем боте: <a href=\"https://t.me/" + botUsername + "\">@" + botUsername + "</a>";
+    }
+
+    /** «Гонка отрядов - экватор недели» (раньше тизер жил в памяти бота): топ-5 недельного рейтинга, отставание второго от лидера, приз. */
+    public Optional<ChannelPostDraft> createSquadMidweekDraft(boolean force) {
+        List<SquadService.SquadRankEntry> top = squadService.getLeaderboard().stream()
+                .filter(e -> e.memberCount() >= 2 && safeName(e.squad().getName()) != null)
+                .limit(5).toList();
+        if (top.isEmpty() || (!force && top.size() < 2)) return Optional.empty();
+        String[] marks = {"🥇", "🥈", "🥉", "4️⃣", "5️⃣"};
+        StringBuilder sb = new StringBuilder("🛡️ <b>гонка отрядов - экватор недели</b>\n\n");
+        for (int i = 0; i < top.size(); i++) {
+            SquadService.SquadRankEntry e = top.get(i);
+            sb.append(marks[i]).append(" <b>").append(esc(safeName(e.squad().getName()))).append("</b>\n")
+              .append("     ").append(num(e.weeklyXp())).append(" XP · ").append(e.memberCount()).append(" ").append(plural((int) e.memberCount(), "чел.", "чел.", "чел.")).append("\n\n");
+        }
+        if (top.size() >= 2) {
+            long gap = top.get(0).weeklyXp() - top.get(1).weeklyXp();
+            sb.append("До лидера второму отряду не хватает <b>").append(num(gap)).append(" XP</b>.\n\n");
+        }
+        sb.append("🏆 Приз победителю - <b>").append(num(SquadService.WEEKLY_PRIZE_POOL)).append(" EXC</b>: их делят лучшие по опыту участники отряда. ")
+          .append("Неделя закончится в понедельник в 00:00 UTC (03:00 по Москве).\n\n");
+        sb.append(ending(top.get(0).weeklyXp(), "Кто успеет подтянуться?", "Ставь ⚔️, если твой отряд в гонке.", "Ещё есть время подняться выше."));
+        sb.append(squadLink());
+        return Optional.of(saveDraft(SQUAD_MIDWEEK, sb.toString(), null));
+    }
+
+    /** «Итоги недели у отрядов»: создаётся в момент выплаты приза (понедельник 00:00 UTC, до сброса недельных очков), публикуется после согласования. */
+    @EventListener
+    public void onSquadPrize(SquadPrizeEvent e) {
+        try {
+            if (!settings(SQUAD_RESULTS).enabled()) return;
+            createSquadResultsDraft(e.getSquad(), e.getTotalWeeklyXp(), e.getMembers().size(), e.getPrizePerMember());
+        } catch (Exception ex) {
+            log.error("[ChannelContent] Failed to create squad results draft", ex);
+        }
+    }
+
+    private Optional<ChannelPostDraft> createSquadResultsDraft(Squad winner, long winnerXp, int winnersCount, long prizePerMember) {
+        String winnerName = safeName(winner.getName());
+        long members = squadService.memberCount(winner);
+        StringBuilder sb = new StringBuilder("🏆 <b>итоги недели у отрядов</b>\n\n");
+        sb.append("Победил отряд <b>").append(winnerName != null ? "«" + esc(winnerName) + "»" : "без публичного названия").append("</b>: ")
+          .append(num(winnerXp)).append(" XP, ").append(members).append(" ").append(plural((int) members, "игрок", "игрока", "игроков")).append(".\n");
+        sb.append("Приз <b>").append(num(SquadService.WEEKLY_PRIZE_POOL)).append(" EXC</b> поделили ").append(winnersCount).append(" ")
+          .append(plural(winnersCount, "лучший участник", "лучших участника", "лучших участников")).append(" - по <b>").append(num(prizePerMember)).append(" EXC</b>.\n\n");
+        List<SquadService.SquadRankEntry> rest = squadService.getLeaderboard().stream()
+                .filter(x -> !x.squad().getId().equals(winner.getId()) && safeName(x.squad().getName()) != null).limit(2).toList();
+        String[] marks = {"🥈", "🥉"};
+        for (int i = 0; i < rest.size(); i++) {
+            sb.append(marks[i]).append(" «").append(esc(safeName(rest.get(i).squad().getName()))).append("» - ").append(num(rest.get(i).weeklyXp())).append(" XP\n");
+        }
+        if (!rest.isEmpty()) sb.append("\n");
+        sb.append(ending(winnerXp, "Кто начнёт гонку заново первым?", "Ставь ⚔️, если готов отбить первое место.", "Новая неделя уже началась."));
+        sb.append(squadLink());
+        return Optional.of(saveDraft(SQUAD_RESULTS, sb.toString(), null));
+    }
+
+    /** «Отряды в цифрах»: сколько отрядов и игроков в них, новые за неделю, самый большой отряд. Автопост - только если отрядов не меньше порога. */
+    public Optional<ChannelPostDraft> createSquadStatsDraft(boolean force) {
+        List<Squad> active = squadRepository.findAllByStatus("ACTIVE");
+        if (active.isEmpty() || (!force && active.size() < MIN_SQUADS_FOR_STATS)) {
+            log.info("[ChannelContent] SQUAD_STATS skipped: {} active squads", active.size());
+            return Optional.empty();
+        }
+        long members = 0;
+        Squad biggest = null;
+        long biggestCount = 0;
+        for (Squad sq : active) {
+            long c = squadService.memberCount(sq);
+            members += c;
+            if (c > biggestCount && safeName(sq.getName()) != null) { biggest = sq; biggestCount = c; }
+        }
+        LocalDateTime weekAgo = LocalDateTime.now().minusDays(7);
+        long fresh = active.stream().filter(sq -> sq.getCreatedAt() != null && sq.getCreatedAt().isAfter(weekAgo)).count();
+        StringBuilder sb = new StringBuilder("📈 <b>отряды в цифрах</b>\n\n");
+        sb.append("В клубе <b>").append(active.size()).append("</b> ").append(plural(active.size(), "отряд", "отряда", "отрядов"))
+          .append(" и <b>").append(members).append("</b> ").append(plural((int) members, "игрок", "игрока", "игроков")).append(" в них.\n");
+        if (fresh > 0) sb.append("За неделю появилось новых отрядов: <b>").append(fresh).append("</b>.\n");
+        if (biggest != null) sb.append("Самый большой - <b>«").append(esc(safeName(biggest.getName()))).append("»</b>, ").append(biggestCount).append(" ")
+                .append(plural((int) biggestCount, "человек", "человека", "человек")).append(".\n");
+        sb.append("\n").append(ending(active.size(), "Твой отряд уже в списке?", "Ставь ⚔️, если ищешь команду.", "Собрать свой отряд можно за минуту."));
+        sb.append(squadLink());
+        return Optional.of(saveDraft(SQUAD_STATS, sb.toString(), null));
     }
 
     // ───────────────────────── вспомогательное ─────────────────────────

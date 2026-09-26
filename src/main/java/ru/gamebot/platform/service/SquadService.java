@@ -28,11 +28,11 @@ public class SquadService {
      *  не увеличивает расходы клуба). */
     private static final int MAX_MEMBERS = 500;
     private static final int MIN_MEMBERS = 2;
-    private static final long WEEKLY_PRIZE_POOL = 10_000L;
+    public static final long WEEKLY_PRIZE_POOL = 10_000L;
     /** Приз получают не "все участники", а топ-N по недельному XP — иначе при большом отряде
      *  целочисленное деление WEEKLY_PRIZE_POOL/members.size() молча схлопывается к 0 на человека.
      *  Для отрядов ≤10 человек (весь текущий состав игроков) поведение идентично старому. */
-    private static final int PRIZE_MAX_RECIPIENTS = 10;
+    public static final int PRIZE_MAX_RECIPIENTS = 10;
     private static final long REFERRAL_SQUAD_BONUS_POINTS = 100;
     private static final int REFERRAL_SQUAD_JOIN_WINDOW_DAYS = 7;
 

@@ -16019,7 +16019,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     // ───────────────────────── контент канала: автопосты «Квесты и игры» ─────────────────────────
 
     private static String channelPostTitle(String type) {
-        return ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS.equals(type) ? "Новые квесты" : "Топ квестов недели";
+        return switch (type) {
+            case ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS -> "Новые квесты";
+            case ru.gamebot.platform.service.ChannelContentService.TOP_QUESTS_WEEK -> "Топ квестов недели";
+            case ru.gamebot.platform.service.ChannelContentService.SQUAD_MIDWEEK -> "Гонка отрядов - экватор недели";
+            case ru.gamebot.platform.service.ChannelContentService.SQUAD_RESULTS -> "Итоги недели у отрядов";
+            case ru.gamebot.platform.service.ChannelContentService.SQUAD_STATS -> "Отряды в цифрах";
+            default -> "Пост для канала";
+        };
     }
 
     @org.springframework.context.event.EventListener
@@ -16102,31 +16109,59 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Ключ типа в callback'ах панели «Контент канала» (короткий, чтобы влезть в 64 байта callback_data). */
+    private static String ccKey(String type) {
+        return switch (type) {
+            case ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS -> "NEWQ";
+            case ru.gamebot.platform.service.ChannelContentService.TOP_QUESTS_WEEK -> "TOPW";
+            case ru.gamebot.platform.service.ChannelContentService.SQUAD_MIDWEEK -> "SQMID";
+            case ru.gamebot.platform.service.ChannelContentService.SQUAD_RESULTS -> "SQRES";
+            default -> "SQSTAT";
+        };
+    }
+
+    private static String ccType(String key) {
+        return switch (key) {
+            case "NEWQ" -> ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS;
+            case "TOPW" -> ru.gamebot.platform.service.ChannelContentService.TOP_QUESTS_WEEK;
+            case "SQMID" -> ru.gamebot.platform.service.ChannelContentService.SQUAD_MIDWEEK;
+            case "SQRES" -> ru.gamebot.platform.service.ChannelContentService.SQUAD_RESULTS;
+            default -> ru.gamebot.platform.service.ChannelContentService.SQUAD_STATS;
+        };
+    }
+
     private static String weekdayRu(int dow) {
         return switch (dow) { case 1 -> "понедельникам"; case 2 -> "вторникам"; case 3 -> "средам"; case 4 -> "четвергам";
             case 5 -> "пятницам"; case 6 -> "субботам"; default -> "воскресеньям"; };
     }
 
-    /** Админка → «Коммуникации» → «Контент канала»: ручная генерация, включение автогенерации и время (UTC). Авто по умолчанию выключено. */
+    /** Админка → «Коммуникации» → «Контент канала»: ручная генерация, включение автогенерации и время (UTC). */
     private void sendChannelContentPanel(AppUser user) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        StringBuilder sb = new StringBuilder("📰 <b>Контент канала</b>\n\nАвтопосты по разделу «Квесты и игры». Каждый пост сначала приходит админам на согласование; "
+        StringBuilder sb = new StringBuilder("📰 <b>Контент канала</b>\n\nАвтопосты по разделам. Каждый пост сначала приходит админам на согласование; "
                 + "картинку добавляйте через «Изменить». Время указано по серверу (UTC).\n\n");
-        for (String type : List.of(ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS, ru.gamebot.platform.service.ChannelContentService.TOP_QUESTS_WEEK)) {
-            boolean weekly = ru.gamebot.platform.service.ChannelContentService.TOP_QUESTS_WEEK.equals(type);
+        for (String type : ru.gamebot.platform.service.ChannelContentService.ALL_TYPES) {
             ru.gamebot.platform.service.ChannelContentService.TypeSettings st = channelContentService.settings(type);
-            String key = weekly ? "TOPW" : "NEWQ";
-            sb.append(weekly ? "🏆 <b>Топ квестов недели</b>" : "🆕 <b>Новые квесты</b>").append("\n")
-              .append("Авто: <b>").append(st.enabled() ? "🔔 включено" : "🔕 выключено").append("</b>, ")
-              .append(weekly ? "по " + weekdayRu(st.dayOfWeek()) + " в " : "ежедневно в ").append(String.format("%02d:00", st.hour())).append(" UTC")
-              .append(st.lastRun() != null ? ", последний запуск " + st.lastRun() : "").append("\n\n");
-            rows.add(List.of(keyboardFactory.callback("▶️ Сформировать сейчас: " + (weekly ? "топ недели" : "новые квесты"), "admin:cc:gen:" + key)));
+            String key = ccKey(type);
+            boolean event = ru.gamebot.platform.service.ChannelContentService.SQUAD_RESULTS.equals(type);
+            boolean daily = ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS.equals(type);
+            boolean biweekly = ru.gamebot.platform.service.ChannelContentService.SQUAD_STATS.equals(type);
+            String when;
+            if (event) when = "в момент выплаты приза (понедельник, 00:00 UTC)";
+            else if (daily) when = "ежедневно в " + String.format("%02d:00", st.hour()) + " UTC";
+            else when = (biweekly ? "раз в 2 недели, по " : "по ") + weekdayRu(st.dayOfWeek()) + " в " + String.format("%02d:00", st.hour()) + " UTC";
+            sb.append("<b>").append(channelPostTitle(type)).append("</b>\n")
+              .append("Авто: <b>").append(st.enabled() ? "🔔 включено" : "🔕 выключено").append("</b>, ").append(when)
+              .append(st.lastRun() != null && !event ? ", последний запуск " + st.lastRun() : "").append("\n\n");
+            if (!event) rows.add(List.of(keyboardFactory.callback("▶️ Сформировать сейчас: " + channelPostTitle(type), "admin:cc:gen:" + key)));
             List<InlineKeyboardButton> ctl = new ArrayList<>();
-            ctl.add(keyboardFactory.callback(st.enabled() ? "🔕 Выключить авто" : "🔔 Включить авто", "admin:cc:tog:" + key));
-            ctl.add(keyboardFactory.callback("🕐 −1 ч", "admin:cc:hour:" + key + ":-1"));
-            ctl.add(keyboardFactory.callback("🕐 +1 ч", "admin:cc:hour:" + key + ":1"));
+            ctl.add(keyboardFactory.callback(st.enabled() ? "🔕 Выключить" : "🔔 Включить", "admin:cc:tog:" + key));
+            if (!event) {
+                ctl.add(keyboardFactory.callback("🕐 −1 ч", "admin:cc:hour:" + key + ":-1"));
+                ctl.add(keyboardFactory.callback("🕐 +1 ч", "admin:cc:hour:" + key + ":1"));
+            }
             rows.add(ctl);
-            if (weekly) rows.add(List.of(keyboardFactory.callback("📅 Следующий день недели", "admin:cc:dow:" + key)));
+            if (!event && !daily) rows.add(List.of(keyboardFactory.callback("📅 День недели: " + weekdayRu(st.dayOfWeek()) + " ▶", "admin:cc:dow:" + key)));
         }
         sb.append("Черновиков на согласовании: <b>").append(channelContentService.pendingCount()).append("</b>");
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:comm"), keyboardFactory.callback("🏠 Меню", "menu:main")));
@@ -16140,14 +16175,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
-        String type = "TOPW".equals(p[2]) ? ru.gamebot.platform.service.ChannelContentService.TOP_QUESTS_WEEK
-                : ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS;
+        String type = ccType(p[2]);
         switch (p[1]) {
             case "gen" -> {
                 java.util.Optional<ru.gamebot.platform.domain.model.ChannelPostDraft> d;
                 try {
-                    d = ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS.equals(type)
-                            ? channelContentService.createNewQuestsDraft(true) : channelContentService.createTopQuestsDraft(true);
+                    d = switch (type) {
+                        case ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS -> channelContentService.createNewQuestsDraft(true);
+                        case ru.gamebot.platform.service.ChannelContentService.TOP_QUESTS_WEEK -> channelContentService.createTopQuestsDraft(true);
+                        case ru.gamebot.platform.service.ChannelContentService.SQUAD_MIDWEEK -> channelContentService.createSquadMidweekDraft(true);
+                        default -> channelContentService.createSquadStatsDraft(true);
+                    };
                 } catch (Exception e) {
                     log.error("Failed to create channel post draft {}", type, e);
                     answer(callbackQuery.getId(), "⚠️ Ошибка, смотрите логи");
@@ -16155,14 +16193,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
                 answer(callbackQuery.getId(), d.isPresent() ? "Черновик создан, карточка отправлена" : "Пока нечего публиковать");
                 if (d.isEmpty()) {
-                    sendText(user.getTelegramId(), ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS.equals(type)
-                            ? "ℹ️ Новых квестов с прошлого поста нет (или все уже были в постах)."
-                            : "ℹ️ За неделю нет подходящих выполнений для рейтинга.", backMenuKeyboard("admin:cc"));
+                    sendText(user.getTelegramId(), "ℹ️ Для этого поста пока нет данных (нет новых квестов, выполнений или отрядов в рейтинге).", backMenuKeyboard("admin:cc"));
                 }
                 return;
             }
             case "tog" -> channelContentService.toggleEnabled(type);
-            case "hour" -> channelContentService.shiftHour(type, p.length > 3 ? (int) (parseLong(p[3]) == null ? 0 : parseLong(p[3])) : 0);
+            case "hour" -> {
+                Long delta = p.length > 3 ? parseLong(p[3]) : null;
+                channelContentService.shiftHour(type, delta == null ? 0 : delta.intValue());
+            }
             case "dow" -> channelContentService.nextDayOfWeek(type);
             default -> { }
         }

@@ -105,7 +105,8 @@ public class WeeklyResetScheduler {
 
     // Тизер рейтинга отрядов в середине недели — держит канал живым между "Залом Славы"
     // по понедельникам и выплатой приза; время 12:00, а не полночь, чтобы попасть в активные часы.
-    @Scheduled(cron = "0 0 12 * * WED")
+    // С 2026-09-26 тизер среды создаёт ChannelContentService (черновик в БД, расписание и включение - в админке «Контент канала»);
+    // этот метод оставлен без @Scheduled, чтобы не дублировать пост.
     public void postSquadMidweekTeaser() {
         try {
             List<SquadService.SquadRankEntry> top = squadService.getLeaderboard().stream().limit(5).toList();
