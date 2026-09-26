@@ -38,14 +38,18 @@ public class AdsgramBotAdService {
 
     public AdsgramBotAdService(@Value("${app.adsgram-api-token:}") String apiToken,
                                 @Value("${app.adsgram-bot-block-id:}") String blockId,
+                                @Value("${app.adsgram-bot-ads-enabled:false}") boolean adsSwitchedOn,
                                 ObjectMapper objectMapper) {
         this.apiToken = apiToken;
         // AdsGram: "Use only the numeric part of the blockid, without the bot- prefix"
         this.blockId = blockId != null ? blockId.replaceFirst("^bot-", "") : blockId;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
-        this.enabled = apiToken != null && !apiToken.isBlank() && blockId != null && !blockId.isBlank();
-        if (!enabled) {
+        // Выключатель ADSGRAM_BOT_ADS_ENABLED: реклама в боте отключена вручную (в выдаче AdsGram попадались казино), даже если ключи заданы
+        this.enabled = adsSwitchedOn && apiToken != null && !apiToken.isBlank() && blockId != null && !blockId.isBlank();
+        if (!adsSwitchedOn) {
+            log.warn("AdsgramBotAdService disabled: ADSGRAM_BOT_ADS_ENABLED is not true");
+        } else if (!enabled) {
             log.warn("AdsgramBotAdService disabled: ADSGRAM_API_TOKEN/ADSGRAM_BOT_BLOCK_ID not set");
         }
     }

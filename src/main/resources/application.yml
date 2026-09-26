@@ -47,6 +47,8 @@ app:
   telega-reward-token: ${TELEGA_REWARD_TOKEN:}
   adsgram-api-token: ${ADSGRAM_API_TOKEN:}
   adsgram-bot-block-id: ${ADSGRAM_BOT_BLOCK_ID:}
+  # Рекламу в боте (блок bot-46455) включает только ADSGRAM_BOT_ADS_ENABLED=true: выключена до решения вопроса с рекламой азартных игр (2026-09-26)
+  adsgram-bot-ads-enabled: ${ADSGRAM_BOT_ADS_ENABLED:false}
   payout-channel-username: ${PAYOUT_CHANNEL_USERNAME:@egc_payouts}
 
 claude:

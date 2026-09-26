@@ -171,6 +171,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private final Queue<String[]> pendingNewsQueue = new ConcurrentLinkedQueue<>();
     private final ScheduledExecutorService albumScheduler = Executors.newSingleThreadScheduledExecutor();
+    /** Кадры анимации открытия сундука (sendChestOpenAnimated): приз уже выдан, задержки только косметика, поэтому не блокируем обработку апдейтов. */
+    private final ScheduledExecutorService chestScheduler = Executors.newSingleThreadScheduledExecutor();
     private final ConcurrentHashMap<String, ScheduledFuture<?>> albumTimers = new ConcurrentHashMap<>();
     // telegramId → timestamp of last successful subscription check (ms); re-check after 1 hour
     private final ConcurrentHashMap<Long, Long> subscriptionCheckCache = new ConcurrentHashMap<>();
@@ -1695,7 +1697,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "moderation" -> sendModerationHub(user);
             case "daily" -> { sendDailyBonus(callbackQuery, user); return; }
             case "chestprizes" -> sendChestPrizeList(user);
-            case "chestopen" -> { sendChestOpenResult(callbackQuery, user); return; }
+            case "chestopen" -> { answerSilently(callbackQuery.getId()); sendChestPreview(user); return; }
+            case "chestgo" -> { sendChestOpenAnimated(callbackQuery, user); return; }
             case "chestreroll" -> { answerSilently(callbackQuery.getId()); sendChestRerollStarsInvoice(user); return; }
             case "watchad" -> { sendWatchAdOffer(callbackQuery, user); return; }
             case "cat:quests" -> sendQuestsCategory(user);
@@ -4197,22 +4200,105 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), msg.toString(), backMenuKeyboard("menu:main"));
     }
 
-    /** Бесплатный сундук дня открывается и в мини-аппе (см. WalletController/WalletPage), и прямо в
-     * боте (кнопка "menu:chestopen" в разделе "Фортуна", запрошено 2026-09-20 — раньше было только
-     * в мини-аппе). buildChestResultMessage/chestResultKeyboard переиспользуются для результата
-     * и бесплатного открытия, и платного реролла за Stars (см. sendChestRerollStarsInvoice). */
-    private void sendChestOpenResult(CallbackQuery callbackQuery, AppUser user) {
+    /** Строки таблицы призов одного из двух пулов сундука дня (те же вероятности, что в UserService.rollAndApply*ChestPrize). */
+    private String chestPoolLines(boolean premium) {
+        return premium
+                ? "🎉 2 000 EXC (джекпот) — 5%\n"
+                        + "🎟️ 2 билета колеса фортуны — 15%\n"
+                        + "✨ 400-600 EXC — 40%\n"
+                        + "🪙 200-350 EXC — 40%"
+                : "🎉 500 EXC (джекпот) — 2%\n"
+                        + "🎟️ Билет колеса фортуны — 8%\n"
+                        + "✨ 150-250 EXC — 25%\n"
+                        + "🪙 75-125 EXC — 65%";
+    }
+
+    /** Экран сундука дня ПЕРЕД открытием (запрошено 2026-09-26): игрок видит, что может выпасть, и сам жмёт «Открыть».
+     * Раньше кнопка в «Фортуне» открывала сундук сразу, а таблица призов была только под результатом. Подписчикам EGC Pass
+     * бесплатный сундук - улучшенный (UserService.openChest), поэтому показываем его пул. */
+    private void sendChestPreview(AppUser user) {
+        boolean egcPass = userService.isEgcPassActive(user);
+        boolean available = userService.isChestAvailable(user);
+        StringBuilder text = new StringBuilder();
+        if (available) {
+            text.append("🎁 <b>Сундук дня</b>\n\n");
+            if (egcPass) text.append("⭐ <i>Улучшенный сундук — бесплатно по подписке EGC Pass</i>\n\n");
+            text.append("<b>Что может выпасть:</b>\n").append(chestPoolLines(egcPass)).append("\n\n");
+            text.append("Один бесплатный сундук в сутки. Нажми «Открыть»!");
+        } else {
+            text.append("✅ <b>Сундук сегодня уже открыт</b>\n\nНовый бесплатный сундук будет завтра.\n\n");
+            text.append("<b>Призы бесплатного сундука:</b>\n").append(chestPoolLines(egcPass));
+        }
+        if (!egcPass) {
+            text.append("\n\n🔁 <b>Улучшенный сундук за ").append(CHEST_REROLL_STARS_PRICE).append(" ⭐</b> щедрее (можно сколько угодно раз):\n")
+                    .append(chestPoolLines(true));
+        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (available) rows.add(List.of(keyboardFactory.callback("🎁 Открыть сундук", "menu:chestgo")));
+        rows.add(List.of(keyboardFactory.callback("🔁 " + (egcPass ? "Ещё один улучшенный сундук — " : "Улучшенный сундук — ")
+                + CHEST_REROLL_STARS_PRICE + " ⭐", "menu:chestreroll")));
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", "menu:cat:fortune"),
+                keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), text.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Редактирует сообщение (HTML); false - если не вышло (сообщение удалено/устарело), тогда вызывающий шлёт новое. */
+    private boolean editHtmlMessage(Long chatId, Integer messageId, String text, InlineKeyboardMarkup keyboard) {
+        EditMessageText edit = new EditMessageText();
+        edit.setChatId(chatId.toString());
+        edit.setMessageId(messageId);
+        edit.setText(text);
+        edit.setParseMode("HTML");
+        edit.setReplyMarkup(keyboard);
+        try {
+            execute(edit);
+            return true;
+        } catch (TelegramApiException e) {
+            log.warn("Failed to edit message {} in chat {}", messageId, chatId, e);
+            return false;
+        }
+    }
+
+    /** Открытие бесплатного сундука дня из бота (кнопка «Открыть» на экране sendChestPreview): приз выдаётся сразу и синхронно,
+     * затем то же сообщение по шагам редактируется («Открываем…» → «Сундук открывается…» → результат). Приз в подсказке не
+     * показываем - иначе он раскроется до анимации. Если редактирование не удалось, результат приходит новым сообщением.
+     * buildChestResultMessage/chestResultKeyboard общие с платным реролом за Stars (sendChestRerollStarsInvoice). */
+    private void sendChestOpenAnimated(CallbackQuery callbackQuery, AppUser user) {
         if (!userService.isChestAvailable(user)) {
             answer(callbackQuery.getId(), "Сундук сегодня уже открыт — приходи завтра!");
             return;
         }
+        answerSilently(callbackQuery.getId());
         boolean egcPass = userService.isEgcPassActive(user);
         UserService.ChestResult result = userService.openChest(user);
-        answer(callbackQuery.getId(), result.prizeLabel());
-        sendText(user.getTelegramId(),
-                (egcPass ? "⭐ <i>Улучшенный сундук — бесплатно по подписке EGC Pass</i>\n\n" : "")
-                        + buildChestResultMessage(result, user.getCoins()),
-                chestResultKeyboard());
+        if (result == null) {
+            return;
+        }
+        Long chatId = user.getTelegramId();
+        String resultText = (egcPass ? "⭐ <i>Улучшенный сундук — бесплатно по подписке EGC Pass</i>\n\n" : "")
+                + buildChestResultMessage(result, user.getCoins());
+        Integer messageId = callbackQuery.getMessage() != null ? callbackQuery.getMessage().getMessageId() : null;
+        if (messageId == null || !editHtmlMessage(chatId, messageId, "🎁 <b>Открываем сундук…</b>\n\n🔒", null)) {
+            sendText(chatId, resultText, chestResultKeyboard());
+            return;
+        }
+        chestScheduler.schedule(() -> {
+            try {
+                editHtmlMessage(chatId, messageId, "✨ <b>Сундук открывается…</b>\n\n🎁 ✨ 🪙 ✨ 🎟️", null);
+            } catch (Exception e) {
+                log.warn("Chest animation frame failed for {}", chatId, e);
+            }
+        }, 800, java.util.concurrent.TimeUnit.MILLISECONDS);
+        chestScheduler.schedule(() -> {
+            try {
+                if (!editHtmlMessage(chatId, messageId, resultText, chestResultKeyboard())) {
+                    sendText(chatId, resultText, chestResultKeyboard());
+                }
+            } catch (Exception e) {
+                log.error("Failed to show chest result to {}", chatId, e);
+            }
+        }, 1700, java.util.concurrent.TimeUnit.MILLISECONDS);
     }
 
     private String buildChestResultMessage(ru.gamebot.platform.service.UserService.ChestResult result, long newBalance) {
@@ -4247,26 +4333,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "📋 <b>Призы сундука дня</b>\n\n"
                         + "<b>Бесплатно (раз в сутки):</b>\n"
-                        + "🎉 500 EXC (джекпот) — 2%\n"
-                        + "🎟️ Билет колеса фортуны — 8%\n"
-                        + "✨ 150-250 EXC — 25%\n"
-                        + "🪙 75-125 EXC — 65%\n\n"
+                        + chestPoolLines(false) + "\n\n"
                         + "<b>Реролл за " + CHEST_REROLL_STARS_PRICE + " ⭐ (можно сколько угодно раз):</b>\n"
-                        + "🎉 2 000 EXC (джекпот) — 5%\n"
-                        + "🎟️ 2 билета колеса фортуны — 15%\n"
-                        + "✨ 400-600 EXC — 40%\n"
-                        + "🪙 200-350 EXC — 40%",
+                        + chestPoolLines(true),
                 backMenuKeyboard("menu:cat:wallet"));
     }
 
     private void sendWatchAdOffer(CallbackQuery callbackQuery, AppUser user) {
+        if (!adsgramBotAdService.isEnabled()) {
+            answer(callbackQuery.getId(), "Реклама в боте временно недоступна. Загляни в «Реклама в приложении».");
+            return;
+        }
         int remaining = userService.getAdRewardsRemainingToday(user, ru.gamebot.platform.service.UserService.AdRewardSource.ADSGRAM);
         if (remaining <= 0) {
             answer(callbackQuery.getId(), "На сегодня показы рекламы закончились — приходи завтра!");
-            return;
-        }
-        if (!adsgramBotAdService.isEnabled()) {
-            answer(callbackQuery.getId(), "Реклама временно недоступна.");
             return;
         }
         java.util.Optional<ru.gamebot.platform.service.AdsgramBotAdService.AdContent> adOpt =
@@ -4510,7 +4590,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * "cannot be determined where exactly in the bot the ad will be placed" в docs.adsgram.ai/bots/moderation). */
     private void sendAdsList(AppUser user, String backTarget) {
         int remaining = userService.getAdRewardsRemainingToday(user, ru.gamebot.platform.service.UserService.AdRewardSource.ADSGRAM);
-        String watchAdLabel = remaining > 0 ? "🎬 Реклама в боте 🔔" : "🎬 Реклама в боте";
+        String watchAdLabel = !adsgramBotAdService.isEnabled() ? "🎬 Реклама в боте (пока недоступна)"
+                : remaining > 0 ? "🎬 Реклама в боте 🔔" : "🎬 Реклама в боте";
         List<InlineKeyboardButton> buttons = new ArrayList<>(List.of(
                 keyboardFactory.callback(watchAdLabel, "menu:watchad"),
                 keyboardFactory.webApp("🎬 Реклама в приложении", "https://experience-gaming-club.pages.dev/quests?section=ads")));
