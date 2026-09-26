@@ -9,4 +9,6 @@ public interface ChannelPostDraftRepository extends JpaRepository<ChannelPostDra
     List<ChannelPostDraft> findAllByType(String type);
 
     long countByStatus(String status);
+
+    List<ChannelPostDraft> findAllByStatusAndCardSentAtIsNull(String status);
 }

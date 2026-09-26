@@ -103,6 +103,11 @@ public class ChannelContentService {
                 || WITHDRAW_MILESTONE.equals(type) || WITHDRAW_PROOF.equals(type) || HALL_OF_FAME.equals(type) || LEAGUES_WEEK.equals(type) || REFERRAL_TOP.equals(type);
     }
 
+    /** Событийные посты недельного итога: данные фиксируются в момент сброса недели (понедельник 00:00 UTC), а карточка админу приходит в назначенный день и час (настраивается в админке). */
+    public static boolean isDelayedEvent(String type) {
+        return HALL_OF_FAME.equals(type) || SQUAD_RESULTS.equals(type) || LEAGUES_WEEK.equals(type) || REFERRAL_TOP.equals(type);
+    }
+
     private static final int TOURNEY_REMIND_HOURS = 24;
     /** Автопост «отряды в цифрах» не формируется, если активных отрядов меньше (решение владельца 2026-09-26). */
     private static final int MIN_SQUADS_FOR_STATS = 10;
@@ -182,16 +187,31 @@ public class ChannelContentService {
         };
     }
 
-    /** Тизер среды уже работал до переноса на эту систему и «итоги недели» привязаны к выплате приза - включены по умолчанию (всё равно с согласованием). */
+    /** Все автопосты включены по умолчанию (2026-09-26, сетка согласована с владельцем): каждый всё равно идёт админу на согласование, а расписание задаёт день и час; отключить любой можно в админке. */
     private static boolean defaultEnabled(String type) {
-        return SQUAD_MIDWEEK.equals(type) || SQUAD_RESULTS.equals(type) || type.startsWith("TOURNEY_")
-                || WITHDRAW_MILESTONE.equals(type) || WITHDRAW_PROOF.equals(type) || HALL_OF_FAME.equals(type) || LEAGUES_WEEK.equals(type) || REFERRAL_TOP.equals(type);
+        return true;
     }
 
     public TypeSettings settings(String type) {
         String p = prefix(type);
-        int defHour = switch (type) { case TOP_QUESTS_WEEK -> 10; default -> 12; };
-        int defDow = switch (type) { case SQUAD_MIDWEEK -> 3; case SQUAD_STATS -> 5; case WITHDRAW_SUMMARY -> 7; case WITHDRAW_HOWTO -> 2; case WEEKLY_RACE -> 4; case EGCPASS_PERK -> 3; case SHOP_POPULAR -> 6; case SHOP_ITEMS -> 4; case REFERRAL_HOWTO -> 5; case REFERRAL_STATS -> 6; default -> 1; };
+        // Сетка (UTC; МСК = UTC+3): дефолты согласованы с владельцем 2026-09-26.
+        int defHour = switch (type) {
+            case TOP_QUESTS_WEEK, SQUAD_MIDWEEK, WEEKLY_RACE, SHOP_POPULAR, REFERRAL_STATS, HALL_OF_FAME, LEAGUES_WEEK -> 9;
+            case SQUAD_STATS, WITHDRAW_SUMMARY, WITHDRAW_HOWTO, EGCPASS_PERK, SHOP_ITEMS, SQUAD_RESULTS, REFERRAL_TOP -> 15;
+            case REFERRAL_HOWTO -> 6;
+            case SHOP_NEW -> 16;
+            default -> 12;
+        };
+        int defDow = switch (type) {
+            case HALL_OF_FAME, SQUAD_RESULTS -> 1;
+            case LEAGUES_WEEK, REFERRAL_TOP -> 2;
+            case SQUAD_MIDWEEK, EGCPASS_PERK -> 3;
+            case WEEKLY_RACE, WITHDRAW_HOWTO -> 4;
+            case TOP_QUESTS_WEEK, SQUAD_STATS -> 5;
+            case SHOP_POPULAR, SHOP_ITEMS -> 6;
+            case WITHDRAW_SUMMARY, REFERRAL_HOWTO, REFERRAL_STATS -> 7;
+            default -> 1;
+        };
         String en = get(p + "enabled");
         int hour = parseInt(get(p + "hour"), defHour);
         int dow = parseInt(get(p + "dow"), defDow);
@@ -269,7 +289,12 @@ public class ChannelContentService {
         d.setType(type);
         d.setPostText(text.length() > 4000 ? text.substring(0, 4000) : text);
         d.setMeta(meta);
+        if (isDelayedEvent(type)) d.setSendAfter(nextSlot(type));
         d = draftRepository.save(d);
+        if (d.getSendAfter() != null && d.getSendAfter().isAfter(LocalDateTime.now())) {
+            log.info("[ChannelContent] Draft {} ({}) created, card will be sent at {} UTC", d.getId(), type, d.getSendAfter());
+            return d; // карточку разошлёт deliverDueCards() в назначенный час
+        }
         try {
             eventPublisher.publishEvent(new ChannelPostDraftEvent(this, d.getId()));
         } catch (Exception e) {
@@ -280,10 +305,55 @@ public class ChannelContentService {
 
     // ───────────────────────── расписание ─────────────────────────
 
+    /** Ближайший день недели и час типа (по настройкам), не раньше текущего момента. */
+    private LocalDateTime nextSlot(String type) {
+        TypeSettings s = settings(type);
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime slot = now.toLocalDate().atTime(s.hour(), 0);
+        int diff = (s.dayOfWeek() - now.getDayOfWeek().getValue() + 7) % 7;
+        slot = slot.plusDays(diff);
+        if (!slot.isAfter(now)) slot = slot.plusDays(7);
+        return slot;
+    }
+
+    /** Рассылает админам карточки событийных постов, у которых наступил назначенный час. */
+    private void deliverDueCards() {
+        LocalDateTime now = LocalDateTime.now();
+        for (ChannelPostDraft d : draftRepository.findAllByStatusAndCardSentAtIsNull(ChannelPostDraft.PENDING)) {
+            if (d.getSendAfter() == null || d.getSendAfter().isAfter(now)) continue;
+            try {
+                d.setCardSentAt(now);
+                draftRepository.save(d);
+                eventPublisher.publishEvent(new ChannelPostDraftEvent(this, d.getId()));
+            } catch (Exception e) {
+                log.error("[ChannelContent] Failed to deliver card for draft {}", d.getId(), e);
+            }
+        }
+    }
+
+    /** Разведение раз-в-2-недели и раз-в-4-недели постов по разным неделям (индекс недели от понедельника): по неделям набор не совпадает. */
+    private static boolean phaseOk(String type) {
+        long week = (LocalDate.now().toEpochDay() - 4) / 7; // 1970-01-05 - понедельник
+        return switch (type) {
+            case SQUAD_STATS, REFERRAL_STATS -> week % 2 == 0;
+            case SHOP_POPULAR, WITHDRAW_SUMMARY -> week % 2 == 1;
+            case EGCPASS_PERK -> week % 4 == 0;
+            case WITHDRAW_HOWTO -> week % 4 == 1;
+            case SHOP_ITEMS -> week % 4 == 2;
+            case REFERRAL_HOWTO -> week % 4 == 3;
+            default -> true;
+        };
+    }
+
     /** Раз в 10 минут: если автопост включён, наступил его час (по времени сервера, UTC) и сегодня ещё не формировался - делаем черновик. */
     @Scheduled(fixedDelay = 600_000, initialDelay = 120_000)
     public void tick() {
         LocalDateTime now = LocalDateTime.now();
+        try {
+            deliverDueCards();
+        } catch (Exception e) {
+            log.error("[ChannelContent] deliverDueCards failed", e);
+        }
         for (String type : ALL_TYPES) {
             if (isEventType(type)) continue; // событийные/по срокам турнира: см. onSquadPrize, tournamentTick, onTournamentCancelled
             try {
@@ -291,6 +361,7 @@ public class ChannelContentService {
                 if (!s.enabled() || now.getHour() != s.hour()) continue;
                 boolean weekly = !NEW_QUESTS.equals(type) && !SHOP_NEW.equals(type);
                 if (weekly && now.getDayOfWeek().getValue() != s.dayOfWeek()) continue;
+                if (!phaseOk(type)) continue;
                 String today = LocalDate.now().toString();
                 if (today.equals(s.lastRun())) continue;
                 int every = intervalDays(type);

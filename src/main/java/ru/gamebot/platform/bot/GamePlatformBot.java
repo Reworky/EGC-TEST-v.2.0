@@ -16184,25 +16184,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (String type : ru.gamebot.platform.service.ChannelContentService.ALL_TYPES) {
             ru.gamebot.platform.service.ChannelContentService.TypeSettings st = channelContentService.settings(type);
             String key = ccKey(type);
-            boolean event = ru.gamebot.platform.service.ChannelContentService.isEventType(type);
+            boolean delayed = ru.gamebot.platform.service.ChannelContentService.isDelayedEvent(type);
+            boolean event = ru.gamebot.platform.service.ChannelContentService.isEventType(type) && !delayed;
             boolean daily = ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS.equals(type) || ru.gamebot.platform.service.ChannelContentService.SHOP_NEW.equals(type);
             int every = ru.gamebot.platform.service.ChannelContentService.intervalDays(type);
             String when;
-            if (ru.gamebot.platform.service.ChannelContentService.SQUAD_RESULTS.equals(type)) when = "в момент выплаты приза (понедельник, 00:00 UTC)";
+            if (delayed) when = "данные - в момент сброса недели (пн, 00:00 UTC), карточка придёт по " + weekdayRu(st.dayOfWeek()) + " в " + String.format("%02d:00", st.hour()) + " UTC";
             else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_REG_CLOSING.equals(type)) when = "за 24 часа до старта турнира";
             else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_ACTIVE.equals(type)) when = "за 24 часа до финиша турнира";
             else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_CANCELLED.equals(type)) when = "сразу при отмене турнира";
             else if (ru.gamebot.platform.service.ChannelContentService.WITHDRAW_MILESTONE.equals(type)) when = "при пересечении круглого порога выплат";
             else if (ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF.equals(type)) when = "после закрытия заявки на вывод (в канал выплат, без ника)";
-            else if (ru.gamebot.platform.service.ChannelContentService.REFERRAL_TOP.equals(type)) when = "в момент выплаты приза рефереров (понедельник, 00:00 UTC), только при 3+ призёрах, ник без @";
-            else if (ru.gamebot.platform.service.ChannelContentService.HALL_OF_FAME.equals(type)) when = "в момент сброса недели (понедельник, 00:00 UTC), с баннером, ник без @";
-            else if (ru.gamebot.platform.service.ChannelContentService.LEAGUES_WEEK.equals(type)) when = "в момент сброса недели (понедельник, 00:00 UTC), только при 10+ активных игроках";
             else if (daily) when = "ежедневно в " + String.format("%02d:00", st.hour()) + " UTC";
             else when = (every > 7 ? "раз в " + (every / 7) + " нед., по " : "по ") + weekdayRu(st.dayOfWeek()) + " в " + String.format("%02d:00", st.hour()) + " UTC";
             sb.append("<b>").append(channelPostTitle(type)).append("</b>\n")
               .append("Авто: <b>").append(st.enabled() ? "🔔 включено" : "🔕 выключено").append("</b>, ").append(when)
               .append(st.lastRun() != null && !event ? ", последний запуск " + st.lastRun() : "").append("\n\n");
-            if (!event) rows.add(List.of(keyboardFactory.callback("▶️ Сформировать сейчас: " + channelPostTitle(type), "admin:cc:gen:" + key)));
+            if (!ru.gamebot.platform.service.ChannelContentService.isEventType(type)) rows.add(List.of(keyboardFactory.callback("▶️ Сформировать сейчас: " + channelPostTitle(type), "admin:cc:gen:" + key)));
             List<InlineKeyboardButton> ctl = new ArrayList<>();
             ctl.add(keyboardFactory.callback(st.enabled() ? "🔕 Выключить" : "🔔 Включить", "admin:cc:tog:" + key));
             if (!event) {

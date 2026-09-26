@@ -49,4 +49,10 @@ public class ChannelPostDraft {
     private LocalDateTime createdAt = LocalDateTime.now();
 
     private LocalDateTime publishedAt;
+
+    /** Событийные посты (зал славы, итоги, лиги, топ рефереров) создаются в момент события (ночью), а карточка админу приходит в назначенное время: null - карточка ушла сразу. */
+    private LocalDateTime sendAfter;
+
+    /** Когда карточка ушла админам (только для постов с sendAfter). */
+    private LocalDateTime cardSentAt;
 }
