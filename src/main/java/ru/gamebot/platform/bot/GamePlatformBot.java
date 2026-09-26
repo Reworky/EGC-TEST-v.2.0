@@ -1674,7 +1674,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void handleMenuAction(CallbackQuery callbackQuery, AppUser user, String action) {
+        if (action.startsWith("faqsec:")) {
+            answerSilently(callbackQuery.getId());
+            Long faqIndex = parseLong(action.substring("faqsec:".length()));
+            sendFaqSection(user, faqIndex == null ? -1 : faqIndex.intValue());
+            return;
+        }
         switch (action) {
+            case "faq" -> sendFaqMenu(user);
+            case "faqfile" -> { answerSilently(callbackQuery.getId()); sendFaqFile(user); return; }
             case "main" -> sendMainMenu(user, mainMenuText(user));
             case "profile" -> sendProfile(user);
             case "quests" -> sendQuestGames(user);
@@ -3648,8 +3656,135 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    // ───────────────────────── FAQ в разделе «Помощь» ─────────────────────────
+    // Текст живёт в ресурсе /faq/faq.txt (формат: «## Раздел», «? Вопрос», дальше строки ответа) и дублируется файлом /faq/FAQ_EGC.docx.
+    // При изменении цен, лимитов и правил обновлять оба файла.
+
+    private record FaqEntry(String question, String answer) {}
+
+    private record FaqSection(String title, List<FaqEntry> entries) {}
+
+    private volatile List<FaqSection> faqSectionsCache;
+
+    private List<FaqSection> faqSections() {
+        List<FaqSection> cached = faqSectionsCache;
+        if (cached != null) return cached;
+        List<FaqSection> sections = new ArrayList<>();
+        try (java.io.InputStream in = getClass().getResourceAsStream("/faq/faq.txt")) {
+            if (in == null) throw new java.io.IOException("faq.txt not found");
+            String title = null;
+            List<FaqEntry> entries = new ArrayList<>();
+            String question = null;
+            StringBuilder answer = new StringBuilder();
+            for (String line : new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).split("\\R")) {
+                if (line.startsWith("## ") || line.startsWith("? ")) {
+                    if (question != null) entries.add(new FaqEntry(question, answer.toString().trim()));
+                    question = null;
+                    answer.setLength(0);
+                    if (line.startsWith("## ")) {
+                        if (title != null) sections.add(new FaqSection(title, entries));
+                        title = line.substring(3).trim();
+                        entries = new ArrayList<>();
+                    } else {
+                        question = line.substring(2).trim();
+                    }
+                } else if (question != null && !line.isBlank()) {
+                    if (answer.length() > 0) answer.append('\n');
+                    answer.append(line.trim());
+                }
+            }
+            if (question != null) entries.add(new FaqEntry(question, answer.toString().trim()));
+            if (title != null) sections.add(new FaqSection(title, entries));
+        } catch (Exception e) {
+            log.error("Failed to load FAQ", e);
+            return List.of();
+        }
+        faqSectionsCache = sections;
+        return sections;
+    }
+
+    private static String faqEmoji(String title) {
+        return switch (title) {
+            case "Общее" -> "📌";
+            case "Квесты" -> "🎯";
+            case "EXC и магазин" -> "💰";
+            case "Рефералы" -> "🤝";
+            case "Отряды" -> "⚔️";
+            case "Турниры" -> "🏆";
+            case "Вывод" -> "💸";
+            case "Безопасность и нарушения" -> "🛡️";
+            default -> "❓";
+        };
+    }
+
+    private void sendFaqMenu(AppUser user) {
+        List<FaqSection> sections = faqSections();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        List<InlineKeyboardButton> pair = new ArrayList<>();
+        for (int i = 0; i < sections.size(); i++) {
+            pair.add(keyboardFactory.callback(faqEmoji(sections.get(i).title()) + " " + sections.get(i).title(), "menu:faqsec:" + i));
+            if (pair.size() == 2) {
+                rows.add(new ArrayList<>(pair));
+                pair.clear();
+            }
+        }
+        if (!pair.isEmpty()) rows.add(new ArrayList<>(pair));
+        rows.add(List.of(keyboardFactory.callback("📄 Скачать FAQ файлом", "menu:faqfile")));
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", "menu:cat:help"),
+                keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(),
+                "❓ <b>FAQ</b>\n\nОтветы на частые вопросы о клубе. Выбери раздел:",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Раздел FAQ одним или несколькими сообщениями (лимит Telegram 4096 знаков - режем по границам вопросов); кнопки - под последним. */
+    private void sendFaqSection(AppUser user, int index) {
+        List<FaqSection> sections = faqSections();
+        if (index < 0 || index >= sections.size()) {
+            sendFaqMenu(user);
+            return;
+        }
+        FaqSection section = sections.get(index);
+        List<String> chunks = new ArrayList<>();
+        StringBuilder cur = new StringBuilder("<b>" + faqEmoji(section.title()) + " " + escape(section.title()) + "</b>\n\n");
+        for (FaqEntry e : section.entries()) {
+            String block = "<b>❓ " + escape(e.question()) + "</b>\n" + escape(e.answer()) + "\n\n";
+            if (cur.length() + block.length() > 3800 && cur.length() > 0) {
+                chunks.add(cur.toString().trim());
+                cur = new StringBuilder();
+            }
+            cur.append(block);
+        }
+        if (cur.length() > 0) chunks.add(cur.toString().trim());
+        InlineKeyboardMarkup nav = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("⬅️ К разделам FAQ", "menu:faq")),
+                List.of(
+                        keyboardFactory.callback("🆘 Помощь", "menu:cat:help"),
+                        keyboardFactory.callback("🏠 Меню", "menu:main"))));
+        for (int i = 0; i < chunks.size(); i++) {
+            sendText(user.getTelegramId(), chunks.get(i), i == chunks.size() - 1 ? nav : null);
+        }
+    }
+
+    private void sendFaqFile(AppUser user) {
+        try (java.io.InputStream in = getClass().getResourceAsStream("/faq/FAQ_EGC.docx")) {
+            if (in == null) throw new java.io.IOException("FAQ_EGC.docx not found");
+            SendDocument doc = new SendDocument();
+            doc.setChatId(user.getTelegramId().toString());
+            doc.setDocument(new InputFile(new java.io.ByteArrayInputStream(in.readAllBytes()), "FAQ_EGC.docx"));
+            doc.setCaption("📄 FAQ клуба EGC");
+            doc.setReplyMarkup(backMenuKeyboard("menu:faq"));
+            execute(doc);
+        } catch (Exception e) {
+            log.warn("Failed to send FAQ file to {}", user.getTelegramId(), e);
+            sendText(user.getTelegramId(), "⚠️ Не получилось отправить файл. Ответы доступны в разделах FAQ.", backMenuKeyboard("menu:faq"));
+        }
+    }
+
     private void sendHelpCategory(AppUser user) {
         sendMenuCategory(user, "🆘 <b>Помощь</b>", List.of(
+                List.of(keyboardFactory.callback("❓ FAQ — частые вопросы", "menu:faq")),
                 List.of(keyboardFactory.callback("📋 Правила клуба", "menu:rules")),
                 List.of(keyboardFactory.callback("🆘 Поддержка", "menu:support")),
                 List.of(keyboardFactory.url("⭐ Отзывы игроков", "https://t.me/egc_payouts"))
