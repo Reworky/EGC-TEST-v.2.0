@@ -399,6 +399,14 @@ public class QuestService {
                 && LocalDateTime.now().isBefore(lastApproved.get().plusHours(cooldownHours(quest, user)));
     }
 
+    /** Свободен ли квест от кулдаунов прямо сейчас: и повтор ТОГО ЖЕ квеста, и общий кулдаун игры (последний одобренный квест этой
+     *  игры, любой). Нужен уведомлениям «кулдаун снят»: они считают срок по одному квесту, а игровой кулдаун от другого квеста той же
+     *  игры мог ещё идти (заявка поддержки #240: пришло «кулдаун давно снят», а в списке «ещё 14 часов»). Не учитывает часовой лимит
+     *  «1 квест в час», занятые слоты и купленное снятие кулдауна. */
+    public boolean isCooldownFree(AppUser user, Quest quest) {
+        return !isSameQuestCooldownActive(user, quest) && !isCooldownActive(user, quest);
+    }
+
     /** Возвращает сколько часов осталось до снятия кулдауна (0 = нет кулдауна) */
     public long getCooldownHoursLeft(AppUser user, Quest quest) {
         Optional<LocalDateTime> lastApproved = questSubmissionRepository

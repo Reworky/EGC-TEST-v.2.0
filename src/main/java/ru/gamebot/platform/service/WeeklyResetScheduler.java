@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import ru.gamebot.platform.domain.enums.SubmissionStatus;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Poll;
+import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.model.QuestSubmission;
 import ru.gamebot.platform.domain.repository.QuestRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
@@ -65,6 +66,7 @@ public class WeeklyResetScheduler {
     private final ScheduledBroadcastService scheduledBroadcastService;
     private final AchievementCheckService achievementCheckService;
     private final NotificationGateService notificationGate;
+    private final QuestService questService;
 
     private static final int[] DORMANCY_TIER_DAYS = {14, 30, 60};
     private static final long[] DORMANCY_TIER_EXC = {300, 750, 1500};
@@ -184,6 +186,9 @@ public class WeeklyResetScheduler {
         java.util.Set<Long> notifiedThisRun = new java.util.HashSet<>();
         for (QuestSubmission s : questSubmissionRepository.findApprovedNeedingCooldownReminder(cutoff)) {
             Long telegramId = s.getUser().getTelegramId();
+            // Общий кулдаун игры от другого квеста мог ещё идти (заявка #240): не пишем «кулдаун снят», пока квест реально не доступен;
+            // отметку не ставим - напоминание придёт на одном из следующих тиков, когда кулдаун закончится
+            if (!questService.isCooldownFree(s.getUser(), s.getQuest())) continue;
             if (!notifiedThisRun.add(telegramId)) continue;
             // Лимит частоты ДО отметки cooldownReminderSentAt: отклонённое напоминание не «сгорает», а повторится на следующем тике
             if (!notificationGate.tryAcquire(s.getUser(), NudgeType.COOLDOWN_REMINDER)) continue;
@@ -740,7 +745,12 @@ public class WeeklyResetScheduler {
                 String questTitle = (String) row[2];
                 // Лимит частоты: окно проверки скользящее (5 минут), отклонённое «кулдаун снят» не повторяется - устареет
                 AppUser target = appUserRepository.findByTelegramId(telegramId).orElse(null);
-                if (target == null || !notificationGate.tryAcquire(target, NudgeType.COOLDOWN_EXPIRED)) continue;
+                if (target == null) continue;
+                // Общий кулдаун игры от другого квеста мог ещё идти (заявка #240): тогда «кулдаун снят» - неправда, пропускаем
+                // (до лимита частоты, чтобы не тратить окно); игрок получит повторное напоминание, когда квест действительно освободится
+                Quest expiredQuest = questRepository.findFirstByTitleAndGameName(questTitle, gameName).orElse(null);
+                if (expiredQuest != null && !questService.isCooldownFree(target, expiredQuest)) continue;
+                if (!notificationGate.tryAcquire(target, NudgeType.COOLDOWN_EXPIRED)) continue;
                 eventPublisher.publishEvent(new CooldownExpiredEvent(this, telegramId, gameName, questTitle));
             } catch (Exception e) {
                 log.warn("Failed to send cooldown notification to user {}", row[0], e);
