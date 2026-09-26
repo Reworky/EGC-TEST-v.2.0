@@ -33,7 +33,11 @@ import ru.gamebot.platform.domain.repository.TournamentRepository;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import org.springframework.context.event.EventListener;
+import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.repository.AppSettingRepository;
+import ru.gamebot.platform.domain.repository.AppUserRepository;
+import ru.gamebot.platform.event.HallOfFameEvent;
+import ru.gamebot.platform.event.LeagueWeekEvent;
 import ru.gamebot.platform.domain.repository.ChannelPostDraftRepository;
 import ru.gamebot.platform.domain.repository.QuestRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
@@ -65,8 +69,12 @@ public class ChannelContentService {
     public static final String WITHDRAW_MILESTONE = "WITHDRAW_MILESTONE";
     public static final String WITHDRAW_HOWTO = "WITHDRAW_HOWTO";
     public static final String WITHDRAW_PROOF = "WITHDRAW_PROOF";
+    public static final String HALL_OF_FAME = "HALL_OF_FAME";
+    public static final String WEEKLY_RACE = "WEEKLY_RACE";
+    public static final String LEAGUES_WEEK = "LEAGUES_WEEK";
     public static final List<String> ALL_TYPES = List.of(NEW_QUESTS, TOP_QUESTS_WEEK, SQUAD_MIDWEEK, SQUAD_RESULTS, SQUAD_STATS,
-            TOURNEY_REG_CLOSING, TOURNEY_ACTIVE, TOURNEY_CANCELLED, WITHDRAW_SUMMARY, WITHDRAW_MILESTONE, WITHDRAW_HOWTO, WITHDRAW_PROOF);
+            TOURNEY_REG_CLOSING, TOURNEY_ACTIVE, TOURNEY_CANCELLED, WITHDRAW_SUMMARY, WITHDRAW_MILESTONE, WITHDRAW_HOWTO, WITHDRAW_PROOF,
+            HALL_OF_FAME, WEEKLY_RACE, LEAGUES_WEEK);
 
     /** Как часто повторяется расписание типа, в днях: 0 - каждый день, 7 - раз в неделю, 14 и 28 - раз в две и в четыре недели. */
     public static int intervalDays(String type) {
@@ -81,7 +89,7 @@ public class ChannelContentService {
     /** Типы без часа в расписании: создаются по событию или по срокам турнира (за 24 ч до старта/финиша), в админке у них только переключатель. */
     public static boolean isEventType(String type) {
         return SQUAD_RESULTS.equals(type) || TOURNEY_REG_CLOSING.equals(type) || TOURNEY_ACTIVE.equals(type) || TOURNEY_CANCELLED.equals(type)
-                || WITHDRAW_MILESTONE.equals(type) || WITHDRAW_PROOF.equals(type);
+                || WITHDRAW_MILESTONE.equals(type) || WITHDRAW_PROOF.equals(type) || HALL_OF_FAME.equals(type) || LEAGUES_WEEK.equals(type);
     }
 
     private static final int TOURNEY_REMIND_HOURS = 24;
@@ -90,6 +98,8 @@ public class ChannelContentService {
 
     /** Автопост «топ недели» не формируется, если за неделю выполнено меньше (не выдаём слабые цифры за успех). Ручная кнопка порог игнорирует. */
     private static final long MIN_WEEK_COMPLETIONS = 10;
+    /** «Гонка за Зал славы» и «Лиги недели» не публикуем, если за неделю XP набрали меньше игроков (решение владельца 2026-09-26). Ручная кнопка порог игнорирует. */
+    private static final int MIN_ACTIVE_FOR_WEEK_POSTS = 10;
     private static final int MAX_GAMES_IN_NEW_POST = 5;
     private static final int MAX_QUESTS_PER_GAME = 3;
 
@@ -104,6 +114,7 @@ public class ChannelContentService {
     private final TournamentService tournamentService;
     private final RewardService rewardService;
     private final RewardRequestRepository rewardRequestRepository;
+    private final AppUserRepository appUserRepository;
 
     @Value("${app.bot-username:}")
     private String botUsername;
@@ -136,6 +147,9 @@ public class ChannelContentService {
             case WITHDRAW_MILESTONE -> "cc.wmil.";
             case WITHDRAW_HOWTO -> "cc.whow.";
             case WITHDRAW_PROOF -> "cc.wprf.";
+            case HALL_OF_FAME -> "cc.hof.";
+            case WEEKLY_RACE -> "cc.race.";
+            case LEAGUES_WEEK -> "cc.lgw.";
             default -> "cc.sqstat.";
         };
     }
@@ -143,13 +157,13 @@ public class ChannelContentService {
     /** Тизер среды уже работал до переноса на эту систему и «итоги недели» привязаны к выплате приза - включены по умолчанию (всё равно с согласованием). */
     private static boolean defaultEnabled(String type) {
         return SQUAD_MIDWEEK.equals(type) || SQUAD_RESULTS.equals(type) || type.startsWith("TOURNEY_")
-                || WITHDRAW_MILESTONE.equals(type) || WITHDRAW_PROOF.equals(type);
+                || WITHDRAW_MILESTONE.equals(type) || WITHDRAW_PROOF.equals(type) || HALL_OF_FAME.equals(type) || LEAGUES_WEEK.equals(type);
     }
 
     public TypeSettings settings(String type) {
         String p = prefix(type);
         int defHour = switch (type) { case TOP_QUESTS_WEEK -> 10; default -> 12; };
-        int defDow = switch (type) { case SQUAD_MIDWEEK -> 3; case SQUAD_STATS -> 5; case WITHDRAW_SUMMARY -> 7; case WITHDRAW_HOWTO -> 2; default -> 1; };
+        int defDow = switch (type) { case SQUAD_MIDWEEK -> 3; case SQUAD_STATS -> 5; case WITHDRAW_SUMMARY -> 7; case WITHDRAW_HOWTO -> 2; case WEEKLY_RACE -> 4; default -> 1; };
         String en = get(p + "enabled");
         int hour = parseInt(get(p + "hour"), defHour);
         int dow = parseInt(get(p + "dow"), defDow);
@@ -264,6 +278,7 @@ public class ChannelContentService {
                     case SQUAD_MIDWEEK -> createSquadMidweekDraft(false);
                     case WITHDRAW_SUMMARY -> createWithdrawSummaryDraft(false);
                     case WITHDRAW_HOWTO -> createWithdrawHowToDraft();
+                    case WEEKLY_RACE -> createWeeklyRaceDraft(false);
                     default -> createSquadStatsDraft(false);
                 }
             } catch (Exception e) {
@@ -732,6 +747,95 @@ public class ChannelContentService {
         if (draftRepository.findAllByType(WITHDRAW_PROOF).stream().anyMatch(d -> key.equals(d.getMeta()))) return false;
         saveDraft(WITHDRAW_PROOF, text, key, receiptFileId);
         return true;
+    }
+
+
+    // ───────────────────────── рейтинг и Зал славы ─────────────────────────
+
+    /** Ник игрока для публичного поста: без @username, ссылок и брани; без публичного ника - нейтральная подпись. */
+    private static String publicNick(String nickname) {
+        String n = safeName(nickname);
+        return n != null ? n : "игрок без публичного ника";
+    }
+
+    /** «Зал славы»: топ-3 недели по XP. Раньше уходил в канал сразу (с @username), теперь - на согласование, ник без @. Баннер подставляет бот. */
+    @EventListener
+    public void onHallOfFame(HallOfFameEvent e) {
+        try {
+            if (!settings(HALL_OF_FAME).enabled() || e.getTop3().isEmpty()) return;
+            StringBuilder sb = new StringBuilder("🏆 <b>зал славы недели</b>\n\n");
+            for (HallOfFameEvent.HallEntry en : e.getTop3()) {
+                String nick = "<b>" + esc(publicNick(en.nickname())) + "</b>";
+                switch (en.rank()) {
+                    case 1 -> sb.append("👑 ").append(nick).append(" - чемпион недели\n     ").append(num(en.weeklyXp())).append(" XP за неделю, всего в клубе ").append(num(en.totalXp())).append(" XP\n\n");
+                    case 2 -> sb.append("🥈 ").append(nick).append("\n     ").append(num(en.weeklyXp())).append(" XP за неделю\n\n");
+                    default -> sb.append("🥉 ").append(nick).append("\n     ").append(num(en.weeklyXp())).append(" XP за неделю\n\n");
+                }
+            }
+            sb.append("Поздравляем! Новая неделя уже началась, и таблица снова пустая.\n\n");
+            sb.append(ending(e.getTop3().get(0).weeklyXp(), "Кто попадёт в зал славы на этой неделе?", "Ставь 🏆, если метишь в тройку.", "Каждый квест приближает к тройке."));
+            sb.append(botLink());
+            saveDraft(HALL_OF_FAME, sb.toString(), null);
+        } catch (Exception ex) {
+            log.error("[ChannelContent] Failed to create hall of fame draft", ex);
+        }
+    }
+
+    /** «Гонка за Зал славы» (середина недели): топ-5 недели по нику, отставание второго от лидера и порог тройки. Автопост - только при достаточной активности. */
+    public Optional<ChannelPostDraft> createWeeklyRaceDraft(boolean force) {
+        long active = appUserRepository.countActiveThisWeek();
+        List<AppUser> top = appUserRepository.findTop20ByRegistrationCompletedTrueAndWeeklyXpGreaterThanOrderByWeeklyXpDescTelegramIdAsc(0)
+                .stream().limit(5).toList();
+        if (top.isEmpty() || (!force && active < MIN_ACTIVE_FOR_WEEK_POSTS)) {
+            log.info("[ChannelContent] WEEKLY_RACE skipped: {} active players", active);
+            return Optional.empty();
+        }
+        String[] marks = {"🥇", "🥈", "🥉", "4️⃣", "5️⃣"};
+        StringBuilder sb = new StringBuilder("🏁 <b>гонка за зал славы</b>\n\n");
+        sb.append("Опыт за неделю набрали <b>").append(active).append("</b> ").append(plural((int) active, "игрок", "игрока", "игроков")).append(". Сейчас впереди:\n\n");
+        for (int i = 0; i < top.size(); i++) {
+            sb.append(marks[i]).append(" <b>").append(esc(publicNick(top.get(i).getNickname()))).append("</b> - ").append(num(top.get(i).getWeeklyXp())).append(" XP\n");
+        }
+        sb.append("\n");
+        if (top.size() >= 2) {
+            long gap = top.get(0).getWeeklyXp() - top.get(1).getWeeklyXp();
+            sb.append("До лидера второму месту не хватает <b>").append(num(gap)).append(" XP</b>.\n");
+        }
+        if (top.size() >= 3) {
+            sb.append("Чтобы попасть в тройку, нужно набрать больше <b>").append(num(top.get(2).getWeeklyXp())).append(" XP</b>.\n");
+        }
+        sb.append("Неделя закончится в понедельник в 00:00 UTC (03:00 по Москве).\n\n");
+        sb.append(ending(top.get(0).getWeeklyXp(), "Кто успеет подняться в тройку?", "Ставь 🏁, если ещё в гонке.", "До конца недели можно многое успеть."));
+        sb.append(botLink());
+        return Optional.of(saveDraft(WEEKLY_RACE, sb.toString(), null));
+    }
+
+    /** «Лиги недели»: создаётся при сбросе недельного XP (понедельник 00:00 UTC): сколько игроков в каждой лиге и сколько выплачено призами. Только цифры, без имён. */
+    @EventListener
+    public void onLeagueWeek(LeagueWeekEvent e) {
+        try {
+            if (!settings(LEAGUES_WEEK).enabled()) return;
+            if (e.getActivePlayers() < MIN_ACTIVE_FOR_WEEK_POSTS) {
+                log.info("[ChannelContent] LEAGUES_WEEK skipped: {} active players", e.getActivePlayers());
+                return;
+            }
+            StringBuilder sb = new StringBuilder("🏅 <b>лиги недели</b>\n\n");
+            sb.append("Неделя закрыта: опыт набрали <b>").append(e.getActivePlayers()).append("</b> ")
+              .append(plural(e.getActivePlayers(), "игрок", "игрока", "игроков")).append(". Расклад по лигам:\n\n");
+            for (LeagueWeekEvent.LeagueRow r : e.getRows()) {
+                if (r.players() <= 0) continue;
+                sb.append(esc(r.displayName())).append(" - <b>").append(r.players()).append("</b>");
+                if (r.excPrize() > 0) sb.append(" (от ").append(num(r.minWeeklyXp())).append(" XP, приз ").append(num(r.excPrize())).append(" EXC)");
+                sb.append("\n");
+            }
+            if (e.getTotalPrize() > 0) sb.append("\nПризов лиг выплатили <b>").append(num(e.getTotalPrize())).append(" EXC</b>.\n");
+            sb.append("Чтобы подняться в лигу выше, нужно больше опыта за неделю: лиги пересчитываются каждый понедельник.\n\n");
+            sb.append(ending(e.getActivePlayers(), "В какой лиге ты закончишь эту неделю?", "Ставь 🏅, если метишь выше.", "Новая неделя уже началась."));
+            sb.append(botLink());
+            saveDraft(LEAGUES_WEEK, sb.toString(), null);
+        } catch (Exception ex) {
+            log.error("[ChannelContent] Failed to create leagues draft", ex);
+        }
     }
 
     // ───────────────────────── вспомогательное ─────────────────────────

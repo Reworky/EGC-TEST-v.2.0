@@ -15874,67 +15874,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    @org.springframework.context.event.EventListener
-    public void onHallOfFame(ru.gamebot.platform.event.HallOfFameEvent event) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("🏆✨ <b>ЗАЛ СЛАВЫ EGC</b> ✨🏆\n\n")
-          .append("<i>Топ игроков недели по опыту</i>\n\n");
-        for (ru.gamebot.platform.event.HallOfFameEvent.HallEntry entry : event.getTop3()) {
-            int rank = entry.rank();
-            String nameLine = "<b>" + escape(entry.nickname()) + "</b>"
-                    + (entry.username() != null ? " (@" + entry.username() + ")" : "");
-            switch (rank) {
-                case 1 -> sb.append("👑 ").append(nameLine).append(" — Чемпион недели!\n")
-                        .append("   ⚡️ <b>").append(entry.weeklyXp()).append(" XP</b> · 🏅 ").append(entry.totalXp()).append(" XP всего\n\n");
-                case 2 -> sb.append("🥈 ").append(nameLine).append("\n")
-                        .append("   ⚡️ <b>").append(entry.weeklyXp()).append(" XP</b> за неделю\n\n");
-                case 3 -> sb.append("🥉 ").append(nameLine).append("\n")
-                        .append("   ⚡️ <b>").append(entry.weeklyXp()).append(" XP</b> за неделю\n\n");
-                default -> sb.append(rank).append(". ").append(nameLine).append(" — ").append(entry.weeklyXp()).append(" XP\n\n");
-            }
-        }
-        sb.append("\n")
-          .append("👏 Поздравляем лучших игроков недели!\n")
-          .append("🎯 Новая неделя уже началась — новые квесты, новые шансы попасть в топ.\n\n")
-          .append("Присоединяйся → @").append(getBotUsername());
-
-        String caption = sb.toString();
-        String chatId = requiredChannelChatId();
-
-        // Пробуем отправить с баннером
-        try {
-            SendPhoto sendPhoto = new SendPhoto();
-            sendPhoto.setChatId(chatId);
-            sendPhoto.setCaption(caption);
-            sendPhoto.setParseMode("HTML");
-
-            if (hallOfFameFileId != null) {
-                sendPhoto.setPhoto(new InputFile(hallOfFameFileId));
-            } else {
-                try (java.io.InputStream is = getClass().getResourceAsStream("/hall_of_fame.png")) {
-                    if (is == null) throw new java.io.IOException("hall_of_fame.png not found");
-                    sendPhoto.setPhoto(new InputFile(new java.io.ByteArrayInputStream(is.readAllBytes()), "hall_of_fame.png"));
-                }
-            }
-
-            org.telegram.telegrambots.meta.api.objects.Message sent = execute(sendPhoto);
-            if (hallOfFameFileId == null && sent.getPhoto() != null && !sent.getPhoto().isEmpty()) {
-                hallOfFameFileId = sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId();
-            }
-        } catch (Exception e) {
-            log.warn("Failed to send hall of fame with banner, falling back to text", e);
-            try {
-                SendMessage msg = new SendMessage();
-                msg.setChatId(chatId);
-                msg.setText(caption);
-                msg.setParseMode("HTML");
-                execute(msg);
-            } catch (TelegramApiException ex) {
-                log.error("Failed to post hall of fame to channel", ex);
-            }
-        }
-    }
-
     private String buildSquadTeaserText(List<ru.gamebot.platform.service.SquadService.SquadRankEntry> topSquads) {
         StringBuilder sb = new StringBuilder("🛡️ <b>Гонка отрядов — экватор недели</b>\n\n");
         int rank = 1;
@@ -16039,6 +15978,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_MILESTONE -> "Веха выплат";
             case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_HOWTO -> "Как вывести EXC";
             case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF -> "Пруф: выплата";
+            case ru.gamebot.platform.service.ChannelContentService.HALL_OF_FAME -> "Зал славы недели";
+            case ru.gamebot.platform.service.ChannelContentService.WEEKLY_RACE -> "Гонка за Зал славы";
+            case ru.gamebot.platform.service.ChannelContentService.LEAGUES_WEEK -> "Лиги недели";
             default -> "Пост для канала";
         };
     }
@@ -16046,9 +15988,42 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     @org.springframework.context.event.EventListener
     public void onChannelPostDraft(ru.gamebot.platform.event.ChannelPostDraftEvent event) {
         try {
+            attachHallBanner(event.getDraftId());
             sendChannelPostCard(event.getDraftId());
         } catch (Exception e) {
             log.error("Failed to send channel post card {}", event.getDraftId(), e);
+        }
+    }
+
+    /** У «Зала славы» баннер подставляется сам (админ может убрать или заменить его через «Изменить»). */
+    private void attachHallBanner(Long draftId) {
+        try {
+            java.util.Optional<ru.gamebot.platform.domain.model.ChannelPostDraft> opt = channelContentService.findDraft(draftId);
+            if (opt.isEmpty() || !ru.gamebot.platform.service.ChannelContentService.HALL_OF_FAME.equals(opt.get().getType())
+                    || opt.get().getPhotoFileId() != null) return;
+            String fileId = hallOfFameFileId;
+            if (fileId == null) {
+                java.util.Set<Long> admins = adminService.resolvedAdminIds();
+                if (admins.isEmpty()) return;
+                String chatId = admins.iterator().next().toString();
+                try (java.io.InputStream is = getClass().getResourceAsStream("/hall_of_fame.png")) {
+                    if (is == null) return;
+                    SendPhoto sp = new SendPhoto();
+                    sp.setChatId(chatId);
+                    sp.setPhoto(new InputFile(new java.io.ByteArrayInputStream(is.readAllBytes()), "hall_of_fame.png"));
+                    org.telegram.telegrambots.meta.api.objects.Message sent = execute(sp);
+                    if (sent.getPhoto() != null && !sent.getPhoto().isEmpty()) {
+                        fileId = sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId();
+                        hallOfFameFileId = fileId;
+                    }
+                    try {
+                        execute(new org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage(chatId, sent.getMessageId()));
+                    } catch (Exception ignored) { }
+                }
+            }
+            if (fileId != null) channelContentService.updatePhoto(draftId, fileId);
+        } catch (Exception e) {
+            log.warn("Failed to attach hall of fame banner to draft {}", draftId, e);
         }
     }
 
@@ -16148,6 +16123,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_MILESTONE -> "WMIL";
             case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_HOWTO -> "WHOW";
             case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF -> "WPRF";
+            case ru.gamebot.platform.service.ChannelContentService.HALL_OF_FAME -> "HOF";
+            case ru.gamebot.platform.service.ChannelContentService.WEEKLY_RACE -> "RACE";
+            case ru.gamebot.platform.service.ChannelContentService.LEAGUES_WEEK -> "LGW";
             default -> "SQSTAT";
         };
     }
@@ -16165,6 +16143,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "WMIL" -> ru.gamebot.platform.service.ChannelContentService.WITHDRAW_MILESTONE;
             case "WHOW" -> ru.gamebot.platform.service.ChannelContentService.WITHDRAW_HOWTO;
             case "WPRF" -> ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF;
+            case "HOF" -> ru.gamebot.platform.service.ChannelContentService.HALL_OF_FAME;
+            case "RACE" -> ru.gamebot.platform.service.ChannelContentService.WEEKLY_RACE;
+            case "LGW" -> ru.gamebot.platform.service.ChannelContentService.LEAGUES_WEEK;
             default -> ru.gamebot.platform.service.ChannelContentService.SQUAD_STATS;
         };
     }
@@ -16192,6 +16173,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_CANCELLED.equals(type)) when = "сразу при отмене турнира";
             else if (ru.gamebot.platform.service.ChannelContentService.WITHDRAW_MILESTONE.equals(type)) when = "при пересечении круглого порога выплат";
             else if (ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF.equals(type)) when = "после закрытия заявки на вывод (в канал выплат, без ника)";
+            else if (ru.gamebot.platform.service.ChannelContentService.HALL_OF_FAME.equals(type)) when = "в момент сброса недели (понедельник, 00:00 UTC), с баннером, ник без @";
+            else if (ru.gamebot.platform.service.ChannelContentService.LEAGUES_WEEK.equals(type)) when = "в момент сброса недели (понедельник, 00:00 UTC), только при 10+ активных игроках";
             else if (daily) when = "ежедневно в " + String.format("%02d:00", st.hour()) + " UTC";
             else when = (every > 7 ? "раз в " + (every / 7) + " нед., по " : "по ") + weekdayRu(st.dayOfWeek()) + " в " + String.format("%02d:00", st.hour()) + " UTC";
             sb.append("<b>").append(channelPostTitle(type)).append("</b>\n")
@@ -16230,6 +16213,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         case ru.gamebot.platform.service.ChannelContentService.SQUAD_MIDWEEK -> channelContentService.createSquadMidweekDraft(true);
                         case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_SUMMARY -> channelContentService.createWithdrawSummaryDraft(true);
                         case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_HOWTO -> channelContentService.createWithdrawHowToDraft();
+                        case ru.gamebot.platform.service.ChannelContentService.WEEKLY_RACE -> channelContentService.createWeeklyRaceDraft(true);
                         default -> channelContentService.createSquadStatsDraft(true);
                     };
                 } catch (Exception e) {

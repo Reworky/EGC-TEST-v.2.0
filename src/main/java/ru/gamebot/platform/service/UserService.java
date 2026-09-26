@@ -1191,9 +1191,17 @@ public class UserService {
             eventPublisher.publishEvent(new ru.gamebot.platform.event.HallOfFameEvent(this, top3));
         }
 
+        int[] leaguePlayers = new int[League.values().length];
+        int activePlayers = 0;
+        long totalPrize = 0;
         for (AppUser user : users) {
             if (!user.isRegistrationCompleted()) continue;
             League league = getLeague(user.getWeeklyXp());
+            if (user.getWeeklyXp() > 0) {
+                leaguePlayers[league.ordinal()]++;
+                activePlayers++;
+            }
+            totalPrize += league.excPrize;
             if (league.excPrize > 0) {
                 user.setCoins(user.getCoins() + league.excPrize);
                 excTx.log(user, league.excPrize, ExcTransactionService.LEAGUE,
@@ -1205,6 +1213,16 @@ public class UserService {
             user.setWeeklyXp(0);
         }
         appUserRepository.saveAll(users);
+        try {
+            java.util.List<ru.gamebot.platform.event.LeagueWeekEvent.LeagueRow> rows = new java.util.ArrayList<>();
+            League[] all = League.values();
+            for (int i = all.length - 1; i >= 0; i--) {
+                rows.add(new ru.gamebot.platform.event.LeagueWeekEvent.LeagueRow(all[i].displayName, all[i].minWeeklyXp, all[i].excPrize, leaguePlayers[i]));
+            }
+            eventPublisher.publishEvent(new ru.gamebot.platform.event.LeagueWeekEvent(this, rows, activePlayers, totalPrize));
+        } catch (Exception e) {
+            log.warn("League week event failed", e);
+        }
     }
 
     public long totalRegisteredUsers() {
