@@ -36,4 +36,19 @@ public final class DurationFormatter {
         long days = hours / 24;
         return days + " " + pluralDays(days);
     }
+
+    /** Точное оставшееся время для отсчёта («3 ч 25 мин», «45 мин», «1 д 4 ч»): игрок видит не округлённые часы, а реальный остаток до снятия кулдауна. */
+    public static String formatExact(long minutes) {
+        long m = Math.max(1, minutes);
+        long days = m / (24 * 60);
+        long hours = (m % (24 * 60)) / 60;
+        long mins = m % 60;
+        if (days > 0) {
+            return days + " д" + (hours > 0 ? " " + hours + " ч" : "");
+        }
+        if (hours > 0) {
+            return hours + " ч" + (mins > 0 ? " " + mins + " мин" : "");
+        }
+        return mins + " мин";
+    }
 }

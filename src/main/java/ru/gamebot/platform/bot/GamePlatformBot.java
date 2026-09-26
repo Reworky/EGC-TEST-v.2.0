@@ -5018,8 +5018,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         long cooldownLeft = questService.getCooldownHoursLeft(user, quest);
+        String cooldownExact = cooldownLeft > 0 ? DurationFormatter.formatExact(questService.getCooldownMinutesLeft(user, quest)) : "";
         String displayStatus = cooldownLeft > 0
-                ? "⏳ Кулдаун (" + cooldownLeft + " ч)"
+                ? "⏳ Кулдаун (" + cooldownExact + ")"
                 : statusText;
 
         List<InlineKeyboardButton> buttons = new ArrayList<>();
@@ -5033,7 +5034,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean slotsFull = activeSlots >= maxSlots && !hasActiveSubmission;
         boolean gameCooldown = !hasActiveSubmission && cooldownLeft == 0 && questService.isCooldownActive(user, quest);
         if (cooldownLeft > 0) {
-            buttons.add(keyboardFactory.callback("⏳ Доступно через " + cooldownLeft + " ч", "noop"));
+            buttons.add(keyboardFactory.callback("⏳ Доступно через " + cooldownExact, "noop"));
         } else if (slotsFull) {
             buttons.add(keyboardFactory.callback("🔒 Сначала сдай активный квест", "noop"));
         } else if (gameCooldown) {
@@ -5428,7 +5429,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case SAME_QUEST_COOLDOWN ->
                     "⏳ Этот квест можно выполнять не чаще 1 раза в " + DurationFormatter.format(result.minutesLeft()) + ".";
             case GAME_COOLDOWN ->
-                    "⏳ Кулдаун активен. Повторный квест в этой игре доступен через " + DurationFormatter.format(result.minutesLeft())
+                    "⏳ Кулдаун активен. Повторный квест в этой игре доступен через " + DurationFormatter.formatExact(result.minutesLeft())
                             + ".\n\n💡 Можно снять кулдаун за 3 000 EXC в разделе Предметы клуба.";
             // Без фиксированного "раз в час" в тексте — порог для новичка короче (15 мин), не всегда час.
             case TAKE_COOLDOWN -> "⏳ Новый квест можно будет взять чуть позже. Подождите ещё <b>" + result.minutesLeft() + " мин.</b>";

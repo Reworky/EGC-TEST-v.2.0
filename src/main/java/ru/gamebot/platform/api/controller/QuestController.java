@@ -523,7 +523,7 @@ public class QuestController {
             case NOT_TAKEN -> "Сначала возьмите квест.";
             case SLOTS_FULL -> "Достигнут лимит активных квестов. Завершите текущий или купите доп. слот.";
             case SAME_QUEST_COOLDOWN -> "Этот квест можно выполнять не чаще 1 раза в " + DurationFormatter.format(result.minutesLeft()) + ".";
-            case GAME_COOLDOWN -> "Кулдаун по этой игре: ещё " + DurationFormatter.format(result.minutesLeft()) + ".";
+            case GAME_COOLDOWN -> "Кулдаун по этой игре: ещё " + DurationFormatter.formatExact(result.minutesLeft()) + ".";
             // Без фиксированного "час" — порог для новичка короче (15 мин), не всегда час.
             case TAKE_COOLDOWN -> "Новый квест можно будет взять чуть позже. Осталось " + result.minutesLeft() + " мин.";
             case REJECT_COOLDOWN -> "После отклонения повторный отчёт можно отправить через " + result.minutesLeft() + " мин.";

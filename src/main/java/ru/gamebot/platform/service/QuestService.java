@@ -407,6 +407,24 @@ public class QuestService {
         return !isSameQuestCooldownActive(user, quest) && !isCooldownActive(user, quest);
     }
 
+    /** Точный остаток кулдауна в минутах, округлённый вверх (0 = нет кулдауна): берётся более поздний из кулдауна ЭТОГО квеста и общего кулдауна игры,
+     *  чтобы игрок увидел время, когда квест реально станет доступен (заявка поддержки #242: «сделайте точное время до снятия кулдауна»). */
+    public long getCooldownMinutesLeft(AppUser user, Quest quest) {
+        int cd = cooldownHours(quest, user);
+        LocalDateTime now = LocalDateTime.now();
+        long best = 0;
+        Optional<LocalDateTime> lastApproved = questSubmissionRepository.findLastApprovedDateByUserAndQuest(user, quest);
+        if (lastApproved.isPresent() && now.isBefore(lastApproved.get().plusHours(cd))) {
+            best = Math.max(best, (java.time.temporal.ChronoUnit.SECONDS.between(now, lastApproved.get().plusHours(cd)) + 59) / 60);
+        }
+        Optional<LocalDateTime> lastGame = questSubmissionRepository
+                .findLastApprovedDateByUserAndGameAndCategory(user, quest.getGameName(), quest.getCategory());
+        if (lastGame.isPresent() && now.isBefore(lastGame.get().plusHours(cd))) {
+            best = Math.max(best, (java.time.temporal.ChronoUnit.SECONDS.between(now, lastGame.get().plusHours(cd)) + 59) / 60);
+        }
+        return best;
+    }
+
     /** Возвращает сколько часов осталось до снятия кулдауна (0 = нет кулдауна) */
     public long getCooldownHoursLeft(AppUser user, Quest quest) {
         Optional<LocalDateTime> lastApproved = questSubmissionRepository
@@ -639,8 +657,8 @@ public class QuestService {
                 if (sinkShopService.hasCooldownBypass(lockedUser, quest.getGameName())) {
                     sinkShopService.consumeCooldownBypass(lockedUser, quest.getGameName());
                 } else {
-                    long hoursLeft = getCooldownHoursLeft(lockedUser, quest);
-                    return QuestActionResult.of(QuestActionStatus.GAME_COOLDOWN, hoursLeft * 60L);
+                    long minutesLeft = Math.max(getCooldownMinutesLeft(lockedUser, quest), getCooldownHoursLeft(lockedUser, quest) > 0 ? 1 : 0);
+                    return QuestActionResult.of(QuestActionStatus.GAME_COOLDOWN, minutesLeft);
                 }
             }
 
