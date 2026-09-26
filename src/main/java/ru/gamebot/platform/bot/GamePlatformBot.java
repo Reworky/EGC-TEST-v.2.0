@@ -134,6 +134,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.TrafficFunnelService trafficFunnelService;
     private final ru.gamebot.platform.service.QuestPoolHealthService questPoolHealthService;
     private final ru.gamebot.platform.service.AnalyticsService analyticsService;
+    private final ru.gamebot.platform.service.ChannelContentService channelContentService;
     private final ru.gamebot.platform.service.FinanceService financeService;
     private final ru.gamebot.platform.service.AlertService alertService;
     private final ru.gamebot.platform.service.AdvertiserService advertiserService;
@@ -596,6 +597,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!user.isProfileCompleted() && isEffectiveModerator(user)) {
             session.reset();
             sendMainMenu(user, roleWelcomeText(user, null));
+            return;
+        }
+
+        if (session.getState() == SessionState.ADMINFEED_EDIT && message.hasPhoto()
+                && String.valueOf(session.getData().get("editTarget")).startsWith("cp:")) {
+            Long draftId = parseLong(session.getData().get("editTarget").substring("cp:".length()));
+            List<PhotoSize> draftPhotos = message.getPhoto();
+            session.reset();
+            if (draftId != null) {
+                channelContentService.updatePhoto(draftId, draftPhotos.get(draftPhotos.size() - 1).getFileId());
+                sendText(user.getTelegramId(), "🖼 Картинка добавлена к посту.", null);
+                sendChannelPostCard(draftId);
+            }
             return;
         }
 
@@ -2180,6 +2194,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     long reqId = parseLong(target.substring("withdrawal:".length()));
                     pendingWithdrawalTexts.put(reqId, text.trim());
                     sendWithdrawalFeedCard(reqId);
+                } else if (target.startsWith("cp:")) {
+                    Long draftId = parseLong(target.substring("cp:".length()));
+                    if (draftId != null) {
+                        channelContentService.updateText(draftId, text.trim());
+                        sendChannelPostCard(draftId);
+                    }
                 }
             }
             case POLL_CREATE_QUESTION -> {
@@ -9236,6 +9256,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     handleAdvertiserAction(user, session, action.substring("adv:".length()));
                     answerSilently(callbackQuery.getId());
                     return;
+                } else if (action.equals("cc") || action.startsWith("cc:")) {
+                    handleChannelContentAction(callbackQuery, user, action);
+                    return;
                 } else if (action.startsWith("an:")) {
                     handleAnalyticsAction(callbackQuery, user, session, action.substring("an:".length()));
                     return;
@@ -10796,6 +10819,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * добавлены/переделаны 2026-09-14). Введено 2026-09-02 по явному запросу: ничего из этого не должно
      * публиковаться без одобрения. Дополнено возможностью правки текста прямо перед одобрением/отклонением. */
     private void handleAdminFeedAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
+        if (action.startsWith("cp:")) {
+            handleChannelPostAction(callbackQuery, user, session, action.substring("cp:".length()));
+            return;
+        }
         if (action.equals("squad:approve")) {
             String text = pendingSquadTeaserText;
             if (text != null) {
@@ -11960,6 +11987,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback("📅 Запланированные рассылки", "admin:broadcast:scheduled")));
                 rows.add(List.of(keyboardFactory.callback("📨 Рассылки: отчёт", "admin:nudgereport")));
                 rows.add(List.of(keyboardFactory.callback("🗳 Голосования", "admin:polls")));
+                rows.add(List.of(keyboardFactory.callback("📰 Контент канала", "admin:cc")));
             }
             case "growth" -> {
                 title = "🏆 <b>События и рост</b>";
@@ -15988,6 +16016,160 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Отправляет пост с баннером: если текст помещается в подпись — одним сообщением «фото + подпись» (кнопки
      * на нём же), иначе сначала фото без подписи, затем текст с кнопками. Без баннера или при ошибке фото
      * (устаревший file_id) уходит просто текст. Ошибку отправки текста пробрасывает вызывающему. */
+    // ───────────────────────── контент канала: автопосты «Квесты и игры» ─────────────────────────
+
+    private static String channelPostTitle(String type) {
+        return ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS.equals(type) ? "Новые квесты" : "Топ квестов недели";
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onChannelPostDraft(ru.gamebot.platform.event.ChannelPostDraftEvent event) {
+        try {
+            sendChannelPostCard(event.getDraftId());
+        } catch (Exception e) {
+            log.error("Failed to send channel post card {}", event.getDraftId(), e);
+        }
+    }
+
+    /** Карточка автопоста «на согласование»: превью + ✅ Опубликовать / ✏️ Изменить (текст или картинка) / ❌ Отклонить. */
+    private void sendChannelPostCard(Long draftId) {
+        java.util.Optional<ru.gamebot.platform.domain.model.ChannelPostDraft> opt = channelContentService.findDraft(draftId);
+        if (opt.isEmpty() || !ru.gamebot.platform.domain.model.ChannelPostDraft.PENDING.equals(opt.get().getStatus())) return;
+        ru.gamebot.platform.domain.model.ChannelPostDraft d = opt.get();
+        String preview = "🧾 <b>" + channelPostTitle(d.getType()) + " - на согласование</b>\n\n" + d.getPostText();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(
+                keyboardFactory.callback("✅ Опубликовать", "adminfeed:cp:approve:" + draftId),
+                keyboardFactory.callback("✏️ Изменить", "adminfeed:cp:edit:" + draftId),
+                keyboardFactory.callback("❌ Отклонить", "adminfeed:cp:reject:" + draftId)));
+        if (d.getPhotoFileId() != null) {
+            rows.add(List.of(keyboardFactory.callback("🗑 Убрать картинку", "adminfeed:cp:nophoto:" + draftId)));
+        }
+        InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(rows);
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendBannerAndText(adminId.toString(), d.getPhotoFileId(), preview, markup);
+            } catch (Exception e) {
+                log.warn("Failed to send channel post card {} to admin {}", draftId, adminId, e);
+            }
+        }
+    }
+
+    private void handleChannelPostAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
+        String[] parts = action.split(":");
+        Long draftId = parts.length > 1 ? parseLong(parts[1]) : null;
+        java.util.Optional<ru.gamebot.platform.domain.model.ChannelPostDraft> opt = draftId == null
+                ? java.util.Optional.empty() : channelContentService.findDraft(draftId);
+        if (opt.isEmpty() || !ru.gamebot.platform.domain.model.ChannelPostDraft.PENDING.equals(opt.get().getStatus())) {
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "Пост уже обработан");
+            return;
+        }
+        ru.gamebot.platform.domain.model.ChannelPostDraft d = opt.get();
+        switch (parts[0]) {
+            case "approve" -> {
+                try {
+                    sendBannerAndText(requiredChannelChatId(), d.getPhotoFileId(), d.getPostText(), null);
+                    channelContentService.markPublished(draftId);
+                    clearInlineKeyboard(callbackQuery);
+                    answer(callbackQuery.getId(), "✅ Опубликовано");
+                } catch (Exception e) {
+                    // Черновик остаётся PENDING - можно нажать ✅ ещё раз после исправления причины (права бота в канале и т.п.)
+                    log.error("Failed to publish channel post {}", draftId, e);
+                    answer(callbackQuery.getId(), "⚠️ Не удалось опубликовать, смотрите логи");
+                }
+            }
+            case "edit" -> {
+                session.reset();
+                session.setState(SessionState.ADMINFEED_EDIT);
+                session.getData().put("editTarget", "cp:" + draftId);
+                answerSilently(callbackQuery.getId());
+                sendText(user.getTelegramId(),
+                        "✏️ Пришлите <b>новый текст</b> поста (HTML: &lt;b&gt;жирный&lt;/b&gt;) или <b>картинку</b> для поста (без подписи: текст останется прежним).\n\nТекущий текст:\n\n" + d.getPostText(),
+                        cancelKeyboard());
+            }
+            case "nophoto" -> {
+                channelContentService.updatePhoto(draftId, null);
+                answer(callbackQuery.getId(), "Картинка убрана");
+                sendChannelPostCard(draftId);
+            }
+            case "reject" -> {
+                channelContentService.markRejected(draftId);
+                clearInlineKeyboard(callbackQuery);
+                answer(callbackQuery.getId(), "❌ Отклонено");
+            }
+            default -> answerSilently(callbackQuery.getId());
+        }
+    }
+
+    private static String weekdayRu(int dow) {
+        return switch (dow) { case 1 -> "понедельникам"; case 2 -> "вторникам"; case 3 -> "средам"; case 4 -> "четвергам";
+            case 5 -> "пятницам"; case 6 -> "субботам"; default -> "воскресеньям"; };
+    }
+
+    /** Админка → «Коммуникации» → «Контент канала»: ручная генерация, включение автогенерации и время (UTC). Авто по умолчанию выключено. */
+    private void sendChannelContentPanel(AppUser user) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        StringBuilder sb = new StringBuilder("📰 <b>Контент канала</b>\n\nАвтопосты по разделу «Квесты и игры». Каждый пост сначала приходит админам на согласование; "
+                + "картинку добавляйте через «Изменить». Время указано по серверу (UTC).\n\n");
+        for (String type : List.of(ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS, ru.gamebot.platform.service.ChannelContentService.TOP_QUESTS_WEEK)) {
+            boolean weekly = ru.gamebot.platform.service.ChannelContentService.TOP_QUESTS_WEEK.equals(type);
+            ru.gamebot.platform.service.ChannelContentService.TypeSettings st = channelContentService.settings(type);
+            String key = weekly ? "TOPW" : "NEWQ";
+            sb.append(weekly ? "🏆 <b>Топ квестов недели</b>" : "🆕 <b>Новые квесты</b>").append("\n")
+              .append("Авто: <b>").append(st.enabled() ? "🔔 включено" : "🔕 выключено").append("</b>, ")
+              .append(weekly ? "по " + weekdayRu(st.dayOfWeek()) + " в " : "ежедневно в ").append(String.format("%02d:00", st.hour())).append(" UTC")
+              .append(st.lastRun() != null ? ", последний запуск " + st.lastRun() : "").append("\n\n");
+            rows.add(List.of(keyboardFactory.callback("▶️ Сформировать сейчас: " + (weekly ? "топ недели" : "новые квесты"), "admin:cc:gen:" + key)));
+            List<InlineKeyboardButton> ctl = new ArrayList<>();
+            ctl.add(keyboardFactory.callback(st.enabled() ? "🔕 Выключить авто" : "🔔 Включить авто", "admin:cc:tog:" + key));
+            ctl.add(keyboardFactory.callback("🕐 −1 ч", "admin:cc:hour:" + key + ":-1"));
+            ctl.add(keyboardFactory.callback("🕐 +1 ч", "admin:cc:hour:" + key + ":1"));
+            rows.add(ctl);
+            if (weekly) rows.add(List.of(keyboardFactory.callback("📅 Следующий день недели", "admin:cc:dow:" + key)));
+        }
+        sb.append("Черновиков на согласовании: <b>").append(channelContentService.pendingCount()).append("</b>");
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:comm"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleChannelContentAction(CallbackQuery callbackQuery, AppUser user, String action) {
+        String[] p = action.split(":");
+        if (p.length < 3) {
+            sendChannelContentPanel(user);
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        String type = "TOPW".equals(p[2]) ? ru.gamebot.platform.service.ChannelContentService.TOP_QUESTS_WEEK
+                : ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS;
+        switch (p[1]) {
+            case "gen" -> {
+                java.util.Optional<ru.gamebot.platform.domain.model.ChannelPostDraft> d;
+                try {
+                    d = ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS.equals(type)
+                            ? channelContentService.createNewQuestsDraft(true) : channelContentService.createTopQuestsDraft(true);
+                } catch (Exception e) {
+                    log.error("Failed to create channel post draft {}", type, e);
+                    answer(callbackQuery.getId(), "⚠️ Ошибка, смотрите логи");
+                    return;
+                }
+                answer(callbackQuery.getId(), d.isPresent() ? "Черновик создан, карточка отправлена" : "Пока нечего публиковать");
+                if (d.isEmpty()) {
+                    sendText(user.getTelegramId(), ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS.equals(type)
+                            ? "ℹ️ Новых квестов с прошлого поста нет (или все уже были в постах)."
+                            : "ℹ️ За неделю нет подходящих выполнений для рейтинга.", backMenuKeyboard("admin:cc"));
+                }
+                return;
+            }
+            case "tog" -> channelContentService.toggleEnabled(type);
+            case "hour" -> channelContentService.shiftHour(type, p.length > 3 ? (int) (parseLong(p[3]) == null ? 0 : parseLong(p[3])) : 0);
+            case "dow" -> channelContentService.nextDayOfWeek(type);
+            default -> { }
+        }
+        answerSilently(callbackQuery.getId());
+        sendChannelContentPanel(user);
+    }
+
     private void sendBannerAndText(String chatId, String photoFileId, String html, InlineKeyboardMarkup keyboard)
             throws TelegramApiException {
         if (photoFileId != null && !photoFileId.isBlank()) {
