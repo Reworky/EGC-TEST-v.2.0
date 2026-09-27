@@ -296,4 +296,10 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT s.id, s.user.telegramId, s.quest.title, s.quest.gameName, s.updatedAt, s.awardedCoins FROM QuestSubmission s "
             + "WHERE s.status = 'APPROVED' AND s.updatedAt >= :from AND s.updatedAt < :to ORDER BY s.updatedAt ASC")
     List<Object[]> findApprovedRowsBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /** Все заявки за период (с игроком и квестом), для анализа "потолка ограничений" (кулдауны/слоты) - см. EngagementCeilingService.
+     *  Явный JPQL вместо производного метода - сортировка по вложенным полям user.id/quest.gameName в имени метода ненадёжна. */
+    @EntityGraph(attributePaths = {"user", "quest"})
+    @Query("SELECT s FROM QuestSubmission s WHERE s.createdAt >= :since ORDER BY s.user.id ASC, s.quest.gameName ASC, s.createdAt ASC")
+    List<QuestSubmission> findAllSince(@Param("since") LocalDateTime since);
 }

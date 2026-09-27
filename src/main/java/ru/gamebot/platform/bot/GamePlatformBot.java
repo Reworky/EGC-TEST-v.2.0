@@ -134,6 +134,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.TrafficFunnelService trafficFunnelService;
     private final ru.gamebot.platform.service.QuestPoolHealthService questPoolHealthService;
     private final ru.gamebot.platform.service.AnalyticsService analyticsService;
+    private final ru.gamebot.platform.service.EngagementCeilingService engagementCeilingService;
     private final ru.gamebot.platform.service.ChannelContentService channelContentService;
     private final ru.gamebot.platform.service.FinanceService financeService;
     private final ru.gamebot.platform.service.AlertService alertService;
@@ -8894,6 +8895,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case "advstats" -> sendAdminAdvertiserStats(user);
             case "an" -> sendAnalyticsHome(user);
+            case "ceiling" -> sendEngagementCeilingReport(user);
             case "adv" -> sendAdvertiserHome(user);
             case "stats:reset_weekly" -> sendAdminResetWeeklyConfirm(user);
             case "stats:reset_weekly:confirm" -> doAdminResetWeeklyXp(user);
@@ -12024,6 +12026,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), title, keyboardFactory.rowsLayout(rows));
     }
 
+    /** «Потолок ограничений» (запрос владельца 2026-09-27): по каждому лимиту - доля активных игроков,
+     *  которые упираются в него регулярно, а не просто иногда. Разведочный расчёт по накопленным данным. */
+    private void sendEngagementCeilingReport(AppUser user) {
+        ru.gamebot.platform.service.EngagementCeilingService.Snapshot snap = engagementCeilingService.compute();
+        sendText(user.getTelegramId(), engagementCeilingService.format(snap), backMenuKeyboard("admin:an"));
+    }
+
     private ru.gamebot.platform.service.AnalyticsService.Tab parseTab(String name) {
         try {
             return ru.gamebot.platform.service.AnalyticsService.Tab.valueOf(name);
@@ -12044,6 +12053,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (!pair.isEmpty()) rows.add(new ArrayList<>(pair));
         rows.add(List.of(keyboardFactory.callback("📦 Полный отчёт (все разделы)", "admin:an:full")));
+        rows.add(List.of(keyboardFactory.callback("🚧 Потолок ограничений", "admin:ceiling")));
         rows.add(List.of(keyboardFactory.callback("🔔 Алерты по метрикам", "admin:an:alerts")));
         rows.add(List.of(keyboardFactory.callback("🧭 Пул квестов", "admin:stats:questpool"), keyboardFactory.callback("📡 Сейчас", "admin:live")));
         rows.add(List.of(keyboardFactory.callback("📊 Классическая статистика", "admin:stats")));
