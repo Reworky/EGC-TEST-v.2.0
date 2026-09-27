@@ -16194,42 +16194,88 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case 5 -> "пятницам"; case 6 -> "субботам"; default -> "воскресеньям"; };
     }
 
-    /** Админка → «Коммуникации» → «Контент канала»: ручная генерация, включение автогенерации и время (UTC). */
+    private static String weekdayNomRu(int dow) {
+        return switch (dow) { case 1 -> "Понедельник"; case 2 -> "Вторник"; case 3 -> "Среда"; case 4 -> "Четверг";
+            case 5 -> "Пятница"; case 6 -> "Суббота"; default -> "Воскресенье"; };
+    }
+
+    /** Ключ сортировки для расписания «Контент канала»: [0] - день (0=ежедневно, 1-7=Пн..Вс, 8=по событию), [1] - час UTC. */
+    private int[] ccSortKey(String type) {
+        ru.gamebot.platform.service.ChannelContentService.TypeSettings st = channelContentService.settings(type);
+        boolean daily = ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS.equals(type) || ru.gamebot.platform.service.ChannelContentService.SHOP_NEW.equals(type);
+        boolean pureEvent = ru.gamebot.platform.service.ChannelContentService.isEventType(type) && !ru.gamebot.platform.service.ChannelContentService.isDelayedEvent(type);
+        if (pureEvent) return new int[]{8, 0};
+        if (daily) return new int[]{0, st.hour()};
+        return new int[]{st.dayOfWeek(), st.hour()};
+    }
+
+    /** Админка → «Коммуникации» → «Контент канала»: хронологическое расписание (день → час), не список из 22 карточек подряд
+     *  (жалоба владельца 2026-09-27: «хочу чётко понимать, в какой день, в какое время, какой пост выходит и где его отредактировать»).
+     *  Каждая строка - кнопка на экран этого типа, где и происходит редактирование. */
     private void sendChannelContentPanel(AppUser user) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        StringBuilder sb = new StringBuilder("📰 <b>Контент канала</b>\n\nАвтопосты по разделам. Каждый пост сначала приходит админам на согласование; "
-                + "картинку добавляйте через «Изменить». Время указано по серверу (UTC).\n\n");
-        for (String type : ru.gamebot.platform.service.ChannelContentService.ALL_TYPES) {
-            ru.gamebot.platform.service.ChannelContentService.TypeSettings st = channelContentService.settings(type);
-            String key = ccKey(type);
-            boolean delayed = ru.gamebot.platform.service.ChannelContentService.isDelayedEvent(type);
-            boolean event = ru.gamebot.platform.service.ChannelContentService.isEventType(type) && !delayed;
-            boolean daily = ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS.equals(type) || ru.gamebot.platform.service.ChannelContentService.SHOP_NEW.equals(type);
-            int every = ru.gamebot.platform.service.ChannelContentService.intervalDays(type);
-            String when;
-            if (delayed) when = "данные - в момент сброса недели (пн, 00:00 UTC), карточка придёт по " + weekdayRu(st.dayOfWeek()) + " в " + String.format("%02d:00", st.hour()) + " UTC";
-            else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_REG_CLOSING.equals(type)) when = "за 24 часа до старта турнира";
-            else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_ACTIVE.equals(type)) when = "за 24 часа до финиша турнира";
-            else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_CANCELLED.equals(type)) when = "сразу при отмене турнира";
-            else if (ru.gamebot.platform.service.ChannelContentService.WITHDRAW_MILESTONE.equals(type)) when = "при пересечении круглого порога выплат";
-            else if (ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF.equals(type)) when = "после закрытия заявки на вывод (в канал выплат, без ника)";
-            else if (daily) when = "ежедневно в " + String.format("%02d:00", st.hour()) + " UTC";
-            else when = (every > 7 ? "раз в " + (every / 7) + " нед., по " : "по ") + weekdayRu(st.dayOfWeek()) + " в " + String.format("%02d:00", st.hour()) + " UTC";
-            sb.append("<b>").append(channelPostTitle(type)).append("</b>\n")
-              .append("Авто: <b>").append(st.enabled() ? "🔔 включено" : "🔕 выключено").append("</b>, ").append(when)
-              .append(st.lastRun() != null && !event ? ", последний запуск " + st.lastRun() : "").append("\n\n");
-            if (!ru.gamebot.platform.service.ChannelContentService.isEventType(type)) rows.add(List.of(keyboardFactory.callback("▶️ Сформировать сейчас: " + channelPostTitle(type), "admin:cc:gen:" + key)));
-            List<InlineKeyboardButton> ctl = new ArrayList<>();
-            ctl.add(keyboardFactory.callback(st.enabled() ? "🔕 Выключить" : "🔔 Включить", "admin:cc:tog:" + key));
-            if (!event) {
-                ctl.add(keyboardFactory.callback("🕐 −1 ч", "admin:cc:hour:" + key + ":-1"));
-                ctl.add(keyboardFactory.callback("🕐 +1 ч", "admin:cc:hour:" + key + ":1"));
+        StringBuilder sb = new StringBuilder("📰 <b>Контент канала</b>\n\n"
+                + "Расписание по дням и часам (время сервера UTC = Москва минус 3 часа). Нажмите на пост, чтобы включить/выключить, "
+                + "сдвинуть время или сформировать вручную - каждый пост всё равно сначала приходит на согласование.\n\n");
+        List<String> sorted = new ArrayList<>(ru.gamebot.platform.service.ChannelContentService.ALL_TYPES);
+        sorted.sort(java.util.Comparator.<String>comparingInt(t -> ccSortKey(t)[0]).thenComparingInt(t -> ccSortKey(t)[1]));
+        int lastGroup = -1;
+        for (String type : sorted) {
+            int[] key = ccSortKey(type);
+            if (key[0] != lastGroup) {
+                lastGroup = key[0];
+                String header = key[0] == 0 ? "🔁 Ежедневно" : key[0] == 8 ? "⚡ По событию" : "📅 " + weekdayNomRu(key[0]);
+                rows.add(List.of(keyboardFactory.callback("▬▬ " + header + " ▬▬", "noop")));
             }
-            rows.add(ctl);
-            if (!event && !daily) rows.add(List.of(keyboardFactory.callback("📅 День недели: " + weekdayRu(st.dayOfWeek()) + " ▶", "admin:cc:dow:" + key)));
+            ru.gamebot.platform.service.ChannelContentService.TypeSettings st = channelContentService.settings(type);
+            String label = (key[0] == 8 ? "" : String.format("%02d:00 · ", key[1])) + channelPostTitle(type);
+            rows.add(List.of(keyboardFactory.callback((st.enabled() ? "🔔 " : "🔕 ") + label, "admin:cc:type:" + ccKey(type))));
         }
         sb.append("Черновиков на согласовании: <b>").append(channelContentService.pendingCount()).append("</b>");
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:comm"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Экран одного типа: полное описание расписания (UTC и Москва) плюс управление - открывается по клику на строку расписания. */
+    private void sendChannelContentTypeDetail(AppUser user, String type) {
+        ru.gamebot.platform.service.ChannelContentService.TypeSettings st = channelContentService.settings(type);
+        boolean delayed = ru.gamebot.platform.service.ChannelContentService.isDelayedEvent(type);
+        boolean event = ru.gamebot.platform.service.ChannelContentService.isEventType(type) && !delayed;
+        boolean daily = ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS.equals(type) || ru.gamebot.platform.service.ChannelContentService.SHOP_NEW.equals(type);
+        int every = ru.gamebot.platform.service.ChannelContentService.intervalDays(type);
+        String when;
+        if (delayed) when = "данные считаются при сбросе недели (пн, 00:00 UTC), карточка на согласование приходит по " + weekdayNomRu(st.dayOfWeek()).toLowerCase() + "м в " + String.format("%02d:00", st.hour()) + " UTC";
+        else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_REG_CLOSING.equals(type)) when = "за 24 часа до старта турнира";
+        else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_ACTIVE.equals(type)) when = "за 24 часа до финиша турнира";
+        else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_CANCELLED.equals(type)) when = "сразу при отмене турнира";
+        else if (ru.gamebot.platform.service.ChannelContentService.WITHDRAW_MILESTONE.equals(type)) when = "при пересечении круглого порога выплат";
+        else if (ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF.equals(type)) when = "после закрытия заявки на вывод (уходит в канал выплат, без ника)";
+        else if (daily) when = "каждый день в " + String.format("%02d:00", st.hour()) + " UTC";
+        else when = (every > 7 ? "раз в " + (every / 7) + " нед., по " : "каждую неделю, по ") + weekdayNomRu(st.dayOfWeek()).toLowerCase() + "м в " + String.format("%02d:00", st.hour()) + " UTC";
+
+        StringBuilder sb = new StringBuilder("<b>").append(channelPostTitle(type)).append("</b>\n\n");
+        sb.append("Статус: <b>").append(st.enabled() ? "🔔 включено" : "🔕 выключено").append("</b>\n");
+        sb.append("Когда: ").append(when);
+        if (!event) {
+            int msk = (st.hour() + 3) % 24;
+            sb.append(" (").append(String.format("%02d:00", msk)).append(" по Москве)");
+        }
+        sb.append("\n");
+        if (st.lastRun() != null && !event) sb.append("Последний запуск: ").append(st.lastRun()).append("\n");
+        sb.append("\nКаждый пост сначала приходит сюда же, в чат, карточкой на согласование (✅ опубликовать / ✏️ изменить текст или картинку / ❌ отклонить) - редактируется прямо там, отдельного экрана для этого нет.");
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        String key = ccKey(type);
+        if (!ru.gamebot.platform.service.ChannelContentService.isEventType(type)) rows.add(List.of(keyboardFactory.callback("▶️ Сформировать сейчас", "admin:cc:gen:" + key)));
+        List<InlineKeyboardButton> ctl = new ArrayList<>();
+        ctl.add(keyboardFactory.callback(st.enabled() ? "🔕 Выключить" : "🔔 Включить", "admin:cc:tog:" + key));
+        if (!event) {
+            ctl.add(keyboardFactory.callback("🕐 −1 ч", "admin:cc:hour:" + key + ":-1"));
+            ctl.add(keyboardFactory.callback("🕐 +1 ч", "admin:cc:hour:" + key + ":1"));
+        }
+        rows.add(ctl);
+        if (!event && !daily) rows.add(List.of(keyboardFactory.callback("📅 День: " + weekdayNomRu(st.dayOfWeek()) + " ▶", "admin:cc:dow:" + key)));
+        rows.add(List.of(keyboardFactory.callback("⬅️ К расписанию", "admin:cc"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
@@ -16241,6 +16287,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         String type = ccType(p[2]);
+        if ("type".equals(p[1])) {
+            answerSilently(callbackQuery.getId());
+            sendChannelContentTypeDetail(user, type);
+            return;
+        }
         switch (p[1]) {
             case "gen" -> {
                 java.util.Optional<ru.gamebot.platform.domain.model.ChannelPostDraft> d;
@@ -16267,8 +16318,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
                 answer(callbackQuery.getId(), d.isPresent() ? "Черновик создан, карточка отправлена" : "Пока нечего публиковать");
                 if (d.isEmpty()) {
-                    sendText(user.getTelegramId(), "ℹ️ Для этого поста пока нет данных (нет новых квестов, выполнений или отрядов в рейтинге).", backMenuKeyboard("admin:cc"));
+                    sendText(user.getTelegramId(), "ℹ️ Для этого поста пока нет данных (нет новых квестов, выполнений или отрядов в рейтинге).", backMenuKeyboard("admin:cc:type:" + p[2]));
+                    return;
                 }
+                answerSilently(callbackQuery.getId());
+                sendChannelContentTypeDetail(user, type);
                 return;
             }
             case "tog" -> channelContentService.toggleEnabled(type);
@@ -16280,7 +16334,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             default -> { }
         }
         answerSilently(callbackQuery.getId());
-        sendChannelContentPanel(user);
+        sendChannelContentTypeDetail(user, type);
     }
 
     private void sendBannerAndText(String chatId, String photoFileId, String html, InlineKeyboardMarkup keyboard)
