@@ -11,4 +11,7 @@ public interface ChannelPostDraftRepository extends JpaRepository<ChannelPostDra
     long countByStatus(String status);
 
     List<ChannelPostDraft> findAllByStatusAndCardSentAtIsNull(String status);
+
+    /** Последний созданный черновик этого типа (любого статуса) - для предпросмотра текста в экране управления типом. */
+    java.util.Optional<ChannelPostDraft> findFirstByTypeOrderByIdDesc(String type);
 }

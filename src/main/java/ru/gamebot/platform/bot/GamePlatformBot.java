@@ -16262,11 +16262,30 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         sb.append("\n");
         if (st.lastRun() != null && !event) sb.append("Последний запуск: ").append(st.lastRun()).append("\n");
-        sb.append("\nКаждый пост сначала приходит сюда же, в чат, карточкой на согласование (✅ опубликовать / ✏️ изменить текст или картинку / ❌ отклонить) - редактируется прямо там, отдельного экрана для этого нет.");
+
+        java.util.Optional<ru.gamebot.platform.domain.model.ChannelPostDraft> latest = channelContentService.latestDraft(type);
+        Long pendingDraftId = null;
+        if (latest.isPresent()) {
+            ru.gamebot.platform.domain.model.ChannelPostDraft d = latest.get();
+            String statusLabel = switch (d.getStatus()) {
+                case ru.gamebot.platform.domain.model.ChannelPostDraft.PENDING -> "ждёт согласования";
+                case ru.gamebot.platform.domain.model.ChannelPostDraft.PUBLISHED -> "опубликован";
+                default -> "отклонён";
+            };
+            if (ru.gamebot.platform.domain.model.ChannelPostDraft.PENDING.equals(d.getStatus())) pendingDraftId = d.getId();
+            sb.append("\n📝 <b>Текст последнего черновика</b> (").append(statusLabel).append("):\n\n");
+            String text = d.getPostText();
+            sb.append(text.length() > 3000 ? text.substring(0, 3000) + "…" : text);
+            if (d.getPhotoFileId() != null) sb.append("\n\n📷 К посту прикреплена картинка (здесь не показана).");
+        } else {
+            sb.append("\nЧерновиков этого типа ещё не было.");
+        }
+        sb.append("\n\nПост редактируется прямо в карточке на согласование (✅ опубликовать / ✏️ изменить текст или картинку / ❌ отклонить), отдельного экрана для этого нет.");
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         String key = ccKey(type);
         if (!ru.gamebot.platform.service.ChannelContentService.isEventType(type)) rows.add(List.of(keyboardFactory.callback("▶️ Сформировать сейчас", "admin:cc:gen:" + key)));
+        if (pendingDraftId != null) rows.add(List.of(keyboardFactory.callback("🔁 Показать карточку заново", "admin:cc:show:" + pendingDraftId)));
         List<InlineKeyboardButton> ctl = new ArrayList<>();
         ctl.add(keyboardFactory.callback(st.enabled() ? "🔕 Выключить" : "🔔 Включить", "admin:cc:tog:" + key));
         if (!event) {
@@ -16284,6 +16303,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (p.length < 3) {
             sendChannelContentPanel(user);
             answerSilently(callbackQuery.getId());
+            return;
+        }
+        if ("show".equals(p[1])) {
+            Long draftId = parseLong(p[2]);
+            answerSilently(callbackQuery.getId());
+            if (draftId != null) sendChannelPostCard(draftId);
             return;
         }
         String type = ccType(p[2]);

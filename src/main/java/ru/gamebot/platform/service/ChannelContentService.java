@@ -250,6 +250,11 @@ public class ChannelContentService {
         return draftRepository.findById(id);
     }
 
+    /** Последний созданный черновик этого типа (любого статуса) - для предпросмотра текста в админке «Контент канала». */
+    public Optional<ChannelPostDraft> latestDraft(String type) {
+        return draftRepository.findFirstByTypeOrderByIdDesc(type);
+    }
+
     public void updateText(Long id, String text) {
         draftRepository.findById(id).ifPresent(d -> {
             d.setPostText(text.length() > 4000 ? text.substring(0, 4000) : text);
