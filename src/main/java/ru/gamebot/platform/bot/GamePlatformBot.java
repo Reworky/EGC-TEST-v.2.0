@@ -12206,7 +12206,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (ru.gamebot.platform.service.AnalyticsService.Tab t : ru.gamebot.platform.service.AnalyticsService.Tab.values()) {
             html.append("<a href=\"#").append(t.name()).append("\">").append(t.label()).append("</a>");
         }
-        html.append("<a href=\"#POOL\">🧭 Пул квестов</a><a href=\"#LIVE\">📡 Сейчас</a></nav>");
+        html.append("<a href=\"#POOL\">🧭 Пул квестов</a><a href=\"#CEILING\">🚧 Потолок ограничений</a><a href=\"#LIVE\">📡 Сейчас</a></nav>");
         for (ru.gamebot.platform.service.AnalyticsService.Tab t : ru.gamebot.platform.service.AnalyticsService.Tab.values()) {
             html.append("<h2 id=\"").append(t.name()).append("\">").append(t.label()).append("</h2>");
             try {
@@ -12225,6 +12225,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } catch (Exception e) {
             log.warn("Full analytics report: quest pool failed", e);
             html.append("<p>⚠️ Пул квестов не удалось посчитать, подробности в логе.</p>");
+        }
+        html.append("<h2 id=\"CEILING\">🚧 Потолок ограничений</h2>");
+        try {
+            html.append("<div class=\"b\">").append(engagementCeilingService.format(engagementCeilingService.compute())).append("</div>");
+        } catch (Exception e) {
+            log.warn("Full analytics report: engagement ceiling failed", e);
+            html.append("<p>⚠️ Потолок ограничений не удалось посчитать, подробности в логе.</p>");
         }
         html.append("<h2 id=\"LIVE\">📡 Сейчас на платформе</h2>");
         try {
