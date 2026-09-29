@@ -9275,6 +9275,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 } else if (action.equals("cc") || action.startsWith("cc:")) {
                     handleChannelContentAction(callbackQuery, user, action);
                     return;
+                } else if (action.equals("joinreq") || action.startsWith("joinreq:")) {
+                    handleJoinRequestAdminAction(callbackQuery, user, action);
+                    return;
                 } else if (action.startsWith("an:")) {
                     handleAnalyticsAction(callbackQuery, user, session, action.substring("an:".length()));
                     return;
@@ -12015,6 +12018,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback("📨 Рассылки: отчёт", "admin:nudgereport")));
                 rows.add(List.of(keyboardFactory.callback("🗳 Голосования", "admin:polls")));
                 rows.add(List.of(keyboardFactory.callback("📰 Контент канала", "admin:cc")));
+                long pendingJoin = channelJoinRequestRepository.countByStatus(ChannelJoinRequest.PENDING);
+                rows.add(List.of(keyboardFactory.callback(
+                        pendingJoin > 0 ? "📥 Заявки на канал (" + pendingJoin + ")" : "📥 Заявки на канал", "admin:joinreq")));
+                rows.add(List.of(keyboardFactory.callback("🔗 Ссылка «Подписаться» (для бота)", "admin:joinreq:link")));
             }
             case "growth" -> {
                 title = "🏆 <b>События и рост</b>";
@@ -18773,6 +18780,47 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             botActivationInviteLink = stored;
         }
         return botActivationInviteLink;
+    }
+
+    /** Раздел «Коммуникации» → «📥 Заявки на канал»: список ожидающих решения заявок (те, что НЕ пришли
+     * через кнопку бота — см. {@link #handleChatJoinRequest}), и отдельно ссылка на кнопку "Подписаться". */
+    private void handleJoinRequestAdminAction(CallbackQuery callbackQuery, AppUser user, String action) {
+        if (action.equals("joinreq")) {
+            sendAdminJoinRequests(user);
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if (action.equals("joinreq:link")) {
+            answerSilently(callbackQuery.getId());
+            sendText(user.getTelegramId(),
+                    "🔗 <b>Ссылка для кнопки «Подписаться на канал»</b>\n\n"
+                            + "Заявки по этой ссылке одобряются ботом автоматически (регистрация/взятие квеста).\n\n"
+                            + activationChannelUrl(),
+                    backMenuKeyboard("admin:grp:comm"));
+            return;
+        }
+        if (action.startsWith("joinreq:show:")) {
+            Long id = parseLong(action.substring("joinreq:show:".length()));
+            sendJoinRequestCard(id);
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        answer(callbackQuery.getId(), "Неизвестное действие");
+    }
+
+    private void sendAdminJoinRequests(AppUser user) {
+        List<ChannelJoinRequest> pending = channelJoinRequestRepository.findAllByStatusOrderByCreatedAtAsc(ChannelJoinRequest.PENDING);
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (ChannelJoinRequest r : pending) {
+            String label = (r.getFirstName() != null ? r.getFirstName() : "Без имени")
+                    + (r.getUsername() != null ? " (@" + r.getUsername() + ")" : "");
+            rows.add(List.of(keyboardFactory.callback("👤 " + label, "admin:joinreq:show:" + r.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:comm")));
+        String header = pending.isEmpty()
+                ? "📥 <b>Заявки на канал</b>\n\nНет заявок, ожидающих решения."
+                : "📥 <b>Заявки на канал</b>\n\nОжидают решения: <b>" + pending.size() + "</b>\nНажми на заявку, чтобы открыть карточку с кнопками ✅/❌.";
+        sendText(user.getTelegramId(), header, keyboardFactory.rowsLayout(rows));
     }
 
     /** Карточка заявки на вступление в канал «на согласование»: имя/юзернейм/био + ✅ Принять / ❌ Отклонить. */
