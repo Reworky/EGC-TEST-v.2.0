@@ -30,6 +30,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
+import org.telegram.telegrambots.meta.api.methods.groupadministration.ApproveChatJoinRequest;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup;
@@ -39,6 +40,8 @@ import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.send.SendVideo;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
+import org.telegram.telegrambots.meta.api.objects.Chat;
+import org.telegram.telegrambots.meta.api.objects.ChatJoinRequest;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.PhotoSize;
 import org.telegram.telegrambots.meta.api.objects.Update;
@@ -286,6 +289,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 handlePreCheckoutQuery(update.getPreCheckoutQuery());
             } else if (update.hasMessage()) {
                 handleMessage(update.getMessage());
+            } else if (update.hasChatJoinRequest()) {
+                handleChatJoinRequest(update.getChatJoinRequest());
             }
         } catch (Exception exception) {
             log.error("Failed to process update", exception);
@@ -18667,6 +18672,42 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             log.warn("Failed to verify channel membership for {}", telegramId, exception);
             return false;
         }
+    }
+
+    /** Автоматически принимает заявки на вступление в закрытый клубный канал (@exgamingclub) — владелец
+     * включил модерацию новых участников и попросил принимать всех подряд, без ручной проверки, 2026-09-29.
+     * Заявки из чужих чатов (если бот когда-нибудь станет админом ещё где-то) игнорируются — сверка по
+     * chat_id/username канала из тех же настроек, что и проверка подписки ({@link #requiredChannelChatId}).
+     * Требует права can_invite_users у бота в канале и включённой модерации вступления в настройках канала. */
+    private void handleChatJoinRequest(ChatJoinRequest request) {
+        if (!isRequiredChannel(request.getChat())) {
+            log.info("Ignoring chat join request for foreign chat {}", request.getChat() != null ? request.getChat().getId() : null);
+            return;
+        }
+        try {
+            ApproveChatJoinRequest approve = new ApproveChatJoinRequest();
+            approve.setChatId(request.getChat().getId());
+            approve.setUserId(request.getUser().getId());
+            execute(approve);
+            log.info("Approved channel join request from {}", request.getUser().getId());
+        } catch (TelegramApiException exception) {
+            log.error("Failed to approve chat join request from {}", request.getUser().getId(), exception);
+        }
+    }
+
+    private boolean isRequiredChannel(Chat chat) {
+        if (chat == null) {
+            return false;
+        }
+        String configuredId = appProperties.getRequiredChannelId();
+        if (configuredId != null && !configuredId.isBlank() && chat.getId() != null) {
+            return configuredId.trim().equals(chat.getId().toString());
+        }
+        String configuredUsername = appProperties.getRequiredChannelUsername();
+        if (configuredUsername != null && !configuredUsername.isBlank() && chat.getUserName() != null) {
+            return configuredUsername.trim().replace("@", "").equalsIgnoreCase(chat.getUserName());
+        }
+        return false;
     }
 
     private String requiredChannelChatId() {
