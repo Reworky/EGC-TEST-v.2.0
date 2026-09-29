@@ -2165,7 +2165,7 @@ public class QuestSeeder implements CommandLineRunner {
             puzzleMoviesQuest.setInstruction("🔗 Перейди по своей персональной ссылке и оформи подписку на любой срок (от 1 месяца):\n"
                     + "https://dhwnh.com/g/ae4zpznc0ie999950e9542f9f2178b/?erid=2bL9aMPo2e49hMef4peznT3Qvi&subid={TG_ID}\n\n"
                     + "Это реальная трата твоих денег — мы возвращаем процент как кэшбэк, а не выдаём бесплатную награду.");
-            puzzleMoviesQuest.setRequirements("Подтверждение приходит от партнёра автоматически, обычно за несколько дней (иногда дольше — среднее время обработки у Admitad ~42 дня). Отчёт отправлять не нужно, EXC начислится сам.");
+            puzzleMoviesQuest.setRequirements("Подтверждение приходит от партнёра автоматически, обычно за несколько дней (~42 дня). Отчёт отправлять не нужно, EXC начислится сам.");
             puzzleMoviesQuest.setParticipantLimit(1000);
             puzzleMoviesQuest.setActive(true);
             puzzleMoviesQuest.setExternalAutoApprove(true);
