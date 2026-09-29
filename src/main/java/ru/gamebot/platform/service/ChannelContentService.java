@@ -521,7 +521,7 @@ public class ChannelContentService {
 
     private String squadLink() {
         if (botUsername == null || botUsername.isBlank()) return "";
-        return "\n\n⚔️ Отряды - в нашем боте: <a href=\"https://t.me/" + botUsername + "\">@" + botUsername + "</a>";
+        return "\n\n⚔️ Отряды в нашем боте: <a href=\"https://t.me/" + botUsername + "\">@" + botUsername + "</a>";
     }
 
     /** «Гонка отрядов - экватор недели» (раньше тизер жил в памяти бота): топ-5 недельного рейтинга, отставание второго от лидера, приз. */
@@ -531,7 +531,7 @@ public class ChannelContentService {
                 .limit(5).toList();
         if (top.isEmpty() || (!force && top.size() < 2)) return Optional.empty();
         String[] marks = {"🥇", "🥈", "🥉", "4️⃣", "5️⃣"};
-        StringBuilder sb = new StringBuilder("🛡️ <b>гонка отрядов - экватор недели</b>\n\n");
+        StringBuilder sb = new StringBuilder("🛡️ <b>Гонка отрядов - экватор недели</b>\n\n");
         for (int i = 0; i < top.size(); i++) {
             SquadService.SquadRankEntry e = top.get(i);
             sb.append(marks[i]).append(" <b>").append(esc(safeName(e.squad().getName()))).append("</b>\n")
@@ -542,9 +542,9 @@ public class ChannelContentService {
             sb.append("До лидера второму отряду не хватает <b>").append(num(gap)).append(" XP</b>.\n\n");
         }
         sb.append("🏆 Приз победителю - <b>").append(num(SquadService.WEEKLY_PRIZE_POOL)).append(" EXC</b>: их делят лучшие по опыту участники отряда. ")
-          .append("Неделя закончится в понедельник в 00:00 UTC (03:00 по Москве).\n\n");
-        sb.append(ending(top.get(0).weeklyXp(), "Кто успеет подтянуться?", "Ставь ⚔️, если твой отряд в гонке.", "Ещё есть время подняться выше."));
+          .append("Неделя закончится в понедельник в 00:00 UTC.\n\n");
         sb.append(squadLink());
+        sb.append("\n\n").append(ending(top.get(0).weeklyXp(), "Кто успеет подтянуться?", "Ставь ⚔️, если твой отряд в гонке.", "Ещё есть время подняться выше."));
         return Optional.of(saveDraft(SQUAD_MIDWEEK, sb.toString(), null));
     }
 
