@@ -31,6 +31,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.ApproveChatJoinRequest;
+import org.telegram.telegrambots.meta.api.methods.groupadministration.DeclineChatJoinRequest;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup;
@@ -63,6 +64,7 @@ import ru.gamebot.platform.domain.enums.RewardRequestStatus;
 import ru.gamebot.platform.domain.enums.SubmissionStatus;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.BotReview;
+import ru.gamebot.platform.domain.model.ChannelJoinRequest;
 import ru.gamebot.platform.domain.model.GemPurchaseRequest;
 import ru.gamebot.platform.domain.model.NewsPost;
 import ru.gamebot.platform.domain.model.Quest;
@@ -167,6 +169,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ScheduledBroadcastService scheduledBroadcastService;
     private final ru.gamebot.platform.service.AdsgramBotAdService adsgramBotAdService;
     private final GemPurchaseService gemPurchaseService;
+    private final ru.gamebot.platform.domain.repository.ChannelJoinRequestRepository channelJoinRequestRepository;
     private final ru.gamebot.platform.domain.repository.TournamentEntryRepository tournamentEntryRepository;
     private final ru.gamebot.platform.domain.repository.BotReviewRepository botReviewRepository;
     private final ru.gamebot.platform.domain.repository.NudgeFeedbackRepository nudgeFeedbackRepository;
@@ -10838,6 +10841,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleChannelPostAction(callbackQuery, user, session, action.substring("cp:".length()));
             return;
         }
+        if (action.startsWith("joinreq:")) {
+            handleJoinRequestAction(callbackQuery, action.substring("joinreq:".length()));
+            return;
+        }
         if (action.equals("squad:approve")) {
             String text = pendingSquadTeaserText;
             if (text != null) {
@@ -18674,24 +18681,101 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    /** Автоматически принимает заявки на вступление в закрытый клубный канал (@exgamingclub) — владелец
-     * включил модерацию новых участников и попросил принимать всех подряд, без ручной проверки, 2026-09-29.
-     * Заявки из чужих чатов (если бот когда-нибудь станет админом ещё где-то) игнорируются — сверка по
-     * chat_id/username канала из тех же настроек, что и проверка подписки ({@link #requiredChannelChatId}).
-     * Требует права can_invite_users у бота в канале и включённой модерации вступления в настройках канала. */
+    /** Заявки на вступление в закрытый клубный канал (@exgamingclub) НЕ принимаются автоматически —
+     * владелец решил 2026-09-29 (после первой версии с автоприёмом), что хочет одобрять каждую сам:
+     * заявка сохраняется в БД "на согласование" и карточкой с кнопками уходит админам, решение —
+     * {@link #handleJoinRequestAction}. Заявки из чужих чатов (если бот когда-нибудь станет админом
+     * ещё где-то) игнорируются — сверка по chat_id/username канала из тех же настроек, что и проверка
+     * подписки ({@link #requiredChannelChatId}). Требует права can_invite_users у бота в канале и
+     * включённой модерации вступления в настройках канала (пока канал открытый — апдейт не приходит). */
     private void handleChatJoinRequest(ChatJoinRequest request) {
         if (!isRequiredChannel(request.getChat())) {
             log.info("Ignoring chat join request for foreign chat {}", request.getChat() != null ? request.getChat().getId() : null);
             return;
         }
+        Long telegramUserId = request.getUser().getId();
+        Long chatId = request.getChat().getId();
+        // Заявка уже ждёт решения (повторный апдейт от Telegram/двойной клик пользователя "Отправить заявку") — не дублировать карточку.
+        if (channelJoinRequestRepository.findFirstByTelegramUserIdAndChatIdAndStatus(
+                telegramUserId, chatId, ChannelJoinRequest.PENDING).isPresent()) {
+            return;
+        }
+        ChannelJoinRequest record = new ChannelJoinRequest();
+        record.setTelegramUserId(telegramUserId);
+        record.setChatId(chatId);
+        record.setUsername(request.getUser().getUserName());
+        record.setFirstName(request.getUser().getFirstName());
+        record.setLastName(request.getUser().getLastName());
+        record.setBio(request.getBio());
+        record = channelJoinRequestRepository.save(record);
+        sendJoinRequestCard(record.getId());
+    }
+
+    /** Карточка заявки на вступление в канал «на согласование»: имя/юзернейм/био + ✅ Принять / ❌ Отклонить. */
+    private void sendJoinRequestCard(Long requestId) {
+        java.util.Optional<ChannelJoinRequest> opt = channelJoinRequestRepository.findById(requestId);
+        if (opt.isEmpty() || !ChannelJoinRequest.PENDING.equals(opt.get().getStatus())) return;
+        ChannelJoinRequest r = opt.get();
+        StringBuilder name = new StringBuilder();
+        if (r.getFirstName() != null) name.append(r.getFirstName());
+        if (r.getLastName() != null) name.append(" ").append(r.getLastName());
+        if (name.length() == 0) name.append("Без имени");
+        String usernameLine = r.getUsername() != null ? "\n@" + r.getUsername() : "";
+        String bioLine = (r.getBio() != null && !r.getBio().isBlank()) ? "\n\n" + escape(r.getBio()) : "";
+        String text = "📥 <b>Заявка на вступление в канал</b>\n\n"
+                + escape(name.toString()) + usernameLine
+                + "\nID: <code>" + r.getTelegramUserId() + "</code>" + bioLine;
+        InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(List.of(
+                keyboardFactory.callback("✅ Принять", "adminfeed:joinreq:approve:" + r.getId()),
+                keyboardFactory.callback("❌ Отклонить", "adminfeed:joinreq:decline:" + r.getId()))));
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, text, markup);
+            } catch (Exception e) {
+                log.warn("Failed to send join request card {} to admin {}", requestId, adminId, e);
+            }
+        }
+    }
+
+    /** Решение админа по заявке на вступление в канал — action уже без префикса "joinreq:", формат "<approve|decline>:<id>". */
+    private void handleJoinRequestAction(CallbackQuery callbackQuery, String action) {
+        String[] parts = action.split(":");
+        if (parts.length < 2) {
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "Карточка устарела");
+            return;
+        }
+        String op = parts[0];
+        Long requestId = parseLong(parts[1]);
+        java.util.Optional<ChannelJoinRequest> opt = channelJoinRequestRepository.findById(requestId);
+        if (opt.isEmpty() || !ChannelJoinRequest.PENDING.equals(opt.get().getStatus())) {
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "Заявка уже обработана");
+            return;
+        }
+        ChannelJoinRequest r = opt.get();
         try {
-            ApproveChatJoinRequest approve = new ApproveChatJoinRequest();
-            approve.setChatId(request.getChat().getId());
-            approve.setUserId(request.getUser().getId());
-            execute(approve);
-            log.info("Approved channel join request from {}", request.getUser().getId());
+            if (op.equals("approve")) {
+                ApproveChatJoinRequest approve = new ApproveChatJoinRequest();
+                approve.setChatId(r.getChatId());
+                approve.setUserId(r.getTelegramUserId());
+                execute(approve);
+                r.setStatus(ChannelJoinRequest.APPROVED);
+            } else {
+                DeclineChatJoinRequest decline = new DeclineChatJoinRequest();
+                decline.setChatId(r.getChatId());
+                decline.setUserId(r.getTelegramUserId());
+                execute(decline);
+                r.setStatus(ChannelJoinRequest.DECLINED);
+            }
+            r.setDecidedAt(java.time.LocalDateTime.now());
+            channelJoinRequestRepository.save(r);
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), op.equals("approve") ? "✅ Принят в канал" : "❌ Отклонено");
         } catch (TelegramApiException exception) {
-            log.error("Failed to approve chat join request from {}", request.getUser().getId(), exception);
+            // Заявка остаётся PENDING в БД — можно нажать кнопку ещё раз после исправления причины (например прав бота в канале).
+            log.error("Failed to {} chat join request {}", op, requestId, exception);
+            answer(callbackQuery.getId(), "⚠️ Не удалось выполнить, смотрите логи");
         }
     }
 
