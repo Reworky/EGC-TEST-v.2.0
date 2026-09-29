@@ -16392,6 +16392,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendChannelContentTypeDetail(user, type);
     }
 
+    /** Префикс photoFileId для картинок, зашитых в ресурсы бота (не Telegram file_id) - см. RESOURCE_BANNER_PREFIX. */
+    private static final String RESOURCE_BANNER_PREFIX = "resource:";
+
     private void sendBannerAndText(String chatId, String photoFileId, String html, InlineKeyboardMarkup keyboard)
             throws TelegramApiException {
         if (photoFileId != null && !photoFileId.isBlank()) {
@@ -16400,7 +16403,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             try {
                 SendPhoto photo = new SendPhoto();
                 photo.setChatId(chatId);
-                photo.setPhoto(new InputFile(photoFileId));
+                if (photoFileId.startsWith(RESOURCE_BANNER_PREFIX)) {
+                    String resourceName = photoFileId.substring(RESOURCE_BANNER_PREFIX.length());
+                    try (java.io.InputStream is = getClass().getResourceAsStream("/" + resourceName)) {
+                        if (is == null) throw new java.io.IOException(resourceName + " not found in resources");
+                        photo.setPhoto(new InputFile(new java.io.ByteArrayInputStream(is.readAllBytes()), resourceName));
+                    }
+                } else {
+                    photo.setPhoto(new InputFile(photoFileId));
+                }
                 if (fits) {
                     photo.setCaption(html);
                     photo.setParseMode("HTML");
@@ -16408,7 +16419,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
                 execute(photo);
                 if (fits) return;
-            } catch (TelegramApiException e) {
+            } catch (TelegramApiException | java.io.IOException e) {
                 log.warn("Failed to send tournament banner to {}, falling back to text only", chatId, e);
             }
         }

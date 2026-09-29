@@ -524,6 +524,10 @@ public class ChannelContentService {
         return "\n\n⚔️ Отряды в нашем боте: <a href=\"https://t.me/" + botUsername + "\">@" + botUsername + "</a>";
     }
 
+    /** Декоративный баннер «Гонка отрядов» - один и тот же на каждый пост, зашит в ресурсы бота (не Telegram file_id),
+     *  см. GamePlatformBot.RESOURCE_BANNER_PREFIX/sendBannerAndText. */
+    private static final String SQUAD_MIDWEEK_BANNER = "resource:squad_race_banner.png";
+
     /** «Гонка отрядов - экватор недели» (раньше тизер жил в памяти бота): топ-5 недельного рейтинга, отставание второго от лидера, приз. */
     public Optional<ChannelPostDraft> createSquadMidweekDraft(boolean force) {
         List<SquadService.SquadRankEntry> top = squadService.getLeaderboard().stream()
@@ -545,7 +549,7 @@ public class ChannelContentService {
           .append("Неделя закончится в понедельник в 00:00 UTC.\n\n");
         sb.append(squadLink());
         sb.append("\n\n").append(ending(top.get(0).weeklyXp(), "Кто успеет подтянуться?", "Ставь ⚔️, если твой отряд в гонке.", "Ещё есть время подняться выше."));
-        return Optional.of(saveDraft(SQUAD_MIDWEEK, sb.toString(), null));
+        return Optional.of(saveDraft(SQUAD_MIDWEEK, sb.toString(), null, SQUAD_MIDWEEK_BANNER));
     }
 
     /** «Итоги недели у отрядов»: создаётся в момент выплаты приза (понедельник 00:00 UTC, до сброса недельных очков), публикуется после согласования. */
