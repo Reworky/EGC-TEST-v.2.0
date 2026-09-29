@@ -10262,11 +10262,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return payoutDetails.startsWith("USDT") ? "USDT · TON" : "GRAM (TON)";
     }
 
-    /** ~ количество монет GRAM (TON) по живому курсу — для карточек заявки на вывод у админа/модератора. */
+    /** ~ количество монет GRAM (TON) по живому курсу — для карточек заявки на вывод у админа/модератора.
+     * Если CoinGecko недоступен (см. ExchangeRateService), явно помечает курс как запасной/приблизительный —
+     * без этой пометки админ мог бы отправить игроку заниженную/завышенную сумму, приняв устаревший
+     * зашитый курс за живой (инцидент 2026-09-29: fallback 300 ₽/GRAM разошёлся с реальным курсом более чем в 2 раза). */
     private String cryptoPayoutSuffix(long rubles) {
         java.math.BigDecimal tonRate = exchangeRateService.getTonRubRate();
         java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(rubles));
-        return " (~<b>" + tonAmount + " GRAM</b>, курс 1 GRAM ≈ " + tonRate.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽)";
+        String warning = exchangeRateService.isUsingFallback()
+                ? " ⚠️ курс запасной/устаревший, сверьте вручную перед отправкой"
+                : "";
+        return " (~<b>" + tonAmount + " GRAM</b>, курс 1 GRAM ≈ " + tonRate.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽" + warning + ")";
     }
 
     private void sendAdminWithdrawals(AppUser user) {

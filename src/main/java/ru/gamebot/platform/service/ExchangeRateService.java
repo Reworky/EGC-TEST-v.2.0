@@ -18,7 +18,11 @@ public class ExchangeRateService {
     private static final String URL =
             "https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=rub";
     // Грубая оценка на случай недоступности API — курс TON гораздо волатильнее USDT, при живом API не используется.
-    private static final BigDecimal FALLBACK_RATE = BigDecimal.valueOf(300);
+    // Обновлено 2026-09-29 (было 300, разошлось с реальным курсом более чем в 2 раза - CoinGecko API
+    // отдавал 403 Request blocked от их CloudFront, инцидент найден по жалобе на заявку В-153).
+    // Это снимок на дату обновления, а не константа "навсегда" - при новой жалобе на курс сверить
+    // https://www.coingecko.com/en/coins/toncoin (тикер сейчас GRAM, ex-Toncoin) и обновить.
+    private static final BigDecimal FALLBACK_RATE = BigDecimal.valueOf(134);
     private static final Duration CACHE_TTL = Duration.ofMinutes(10);
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(5);
 
