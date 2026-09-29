@@ -2140,6 +2140,43 @@ public class QuestSeeder implements CommandLineRunner {
                         questRepository.save(q);
                     });
         }
+
+        // ── Внешний CPA-квест: Puzzle Movies (admitad, PURCHASE) ────────────────────
+        // Мотивированный трафик согласован с рекламодателем через поддержку Admitad (тикет #517760,
+        // 2026-09-29) - без этого использовать оффер под квест с явной наградой нельзя (см. правило
+        // проекта про "Мотивированный трафик: По согласованию"). Комиссия 22.52% с оплаченного заказа
+        // нового клиента; порог 900₽ ниже самого дешёвого тарифа (990₽/1 мес) - защита от промо-скидок,
+        // не даёт постбеку сработать на что-то дешевле минимального реального тарифа. Награда 7800 EXC
+        // калибрована под САМЫЙ ДЕШЁВЫЙ тариф (~223₽ комиссии), а не средний чек - система поддерживает
+        // только фиксированную награду с одним порогом, не проценты от суммы заказа, поэтому расчёт
+        // всегда идёт от худшего случая. offer_id получен не из кабинета Admitad (в интерфейсе не
+        // нашёлся), а из utm_campaign в финальном редиректе партнёрской ссылки на puzzle-movies.com.
+        gameCatalogService.setDifficultyMode("Puzzle Movies", "FLAT", 7800L, 0);
+        if (questRepository.findFirstByTitleAndGameName("Купи подписку Puzzle Movies — получи кэшбэк", "Puzzle Movies").isEmpty()) {
+            Quest puzzleMoviesQuest = new Quest();
+            puzzleMoviesQuest.setTitle("Купи подписку Puzzle Movies — получи кэшбэк");
+            puzzleMoviesQuest.setGameName("Puzzle Movies");
+            puzzleMoviesQuest.setPlatform("Онлайн");
+            puzzleMoviesQuest.setDurationDays(50);
+            puzzleMoviesQuest.setDurationText("50 дней");
+            puzzleMoviesQuest.setRewardXp(0);
+            puzzleMoviesQuest.setRewardCoins(7800);
+            puzzleMoviesQuest.setDescription("Оформи ЛЮБУЮ платную подписку на Puzzle Movies (фильмы и сериалы на английском с двойными субтитрами) по своей персональной ссылке — вернём часть потраченного в EXC.");
+            puzzleMoviesQuest.setInstruction("🔗 Перейди по своей персональной ссылке и оформи подписку на любой срок (от 1 месяца):\n"
+                    + "https://dhwnh.com/g/ae4zpznc0ie999950e9542f9f2178b/?erid=2bL9aMPo2e49hMef4peznT3Qvi&subid={TG_ID}\n\n"
+                    + "Это реальная трата твоих денег — мы возвращаем процент как кэшбэк, а не выдаём бесплатную награду.");
+            puzzleMoviesQuest.setRequirements("Подтверждение приходит от партнёра автоматически, обычно за несколько дней (иногда дольше — среднее время обработки у Admitad ~42 дня). Отчёт отправлять не нужно, EXC начислится сам.");
+            puzzleMoviesQuest.setParticipantLimit(1000);
+            puzzleMoviesQuest.setActive(true);
+            puzzleMoviesQuest.setExternalAutoApprove(true);
+            puzzleMoviesQuest.setExternalOfferId("2571746");
+            puzzleMoviesQuest.setExternalNetwork("admitad");
+            puzzleMoviesQuest.setExternalTargetType("PURCHASE");
+            puzzleMoviesQuest.setExternalMinPaymentRub(900L);
+            puzzleMoviesQuest.setCreatedAt(LocalDateTime.now());
+            questRepository.save(puzzleMoviesQuest);
+            log.info("[QuestSeeder] Created external quest: Puzzle Movies (admitad, PURCHASE)");
+        }
         // ── Антифрод: разовые квесты (проверка текущего состояния аккаунта, а не свежего действия) ──
         // Баланс/ранг/лига не сбрасываются между попытками — без этого флага такие квесты фармились
         // повторно каждый кулдаун без единого нового действия (жалоба игрока, скриншот с 4.25М золота
