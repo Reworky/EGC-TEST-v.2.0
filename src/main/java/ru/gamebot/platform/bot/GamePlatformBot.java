@@ -31,6 +31,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.ApproveChatJoinRequest;
+import org.telegram.telegrambots.meta.api.methods.groupadministration.CreateChatInviteLink;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.DeclineChatJoinRequest;
 import org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMember;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
@@ -42,6 +43,7 @@ import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.send.SendVideo;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Chat;
+import org.telegram.telegrambots.meta.api.objects.ChatInviteLink;
 import org.telegram.telegrambots.meta.api.objects.ChatJoinRequest;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.PhotoSize;
@@ -62,6 +64,7 @@ import ru.gamebot.platform.domain.enums.GemPurchaseStatus;
 import ru.gamebot.platform.domain.enums.RejectionReasonCode;
 import ru.gamebot.platform.domain.enums.RewardRequestStatus;
 import ru.gamebot.platform.domain.enums.SubmissionStatus;
+import ru.gamebot.platform.domain.model.AppSetting;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.BotReview;
 import ru.gamebot.platform.domain.model.ChannelJoinRequest;
@@ -104,6 +107,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private static final Map<String, String> INTEREST_OPTIONS = new LinkedHashMap<>();
     private volatile String shopBannerFileId = null;
     private volatile String hallOfFameFileId = null;
+    private volatile String botActivationInviteLink = null;
 
     static {
         PLATFORM_OPTIONS.put("ANDROID", "Android");
@@ -170,6 +174,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.AdsgramBotAdService adsgramBotAdService;
     private final GemPurchaseService gemPurchaseService;
     private final ru.gamebot.platform.domain.repository.ChannelJoinRequestRepository channelJoinRequestRepository;
+    private final ru.gamebot.platform.domain.repository.AppSettingRepository appSettingRepository;
     private final ru.gamebot.platform.domain.repository.TournamentEntryRepository tournamentEntryRepository;
     private final ru.gamebot.platform.domain.repository.BotReviewRepository botReviewRepository;
     private final ru.gamebot.platform.domain.repository.NudgeFeedbackRepository nudgeFeedbackRepository;
@@ -3885,7 +3890,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendCommunityActivationPrompt(AppUser user, String notice) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.url("📢 Подписаться на канал", requiredChannelUrl())));
+        rows.add(List.of(keyboardFactory.url("📢 Подписаться на канал", activationChannelUrl())));
         rows.add(List.of(keyboardFactory.callback("✅ Я подписался", "activation:check")));
 
         String text = (notice == null || notice.isBlank() ? "" : notice + "\n\n")
@@ -18681,13 +18686,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    private static final String ACTIVATION_INVITE_LINK_SETTING_KEY = "bot.activation.invite_link";
+
     /** Заявки на вступление в закрытый клубный канал (@exgamingclub) НЕ принимаются автоматически —
      * владелец решил 2026-09-29 (после первой версии с автоприёмом), что хочет одобрять каждую сам:
      * заявка сохраняется в БД "на согласование" и карточкой с кнопками уходит админам, решение —
-     * {@link #handleJoinRequestAction}. Заявки из чужих чатов (если бот когда-нибудь станет админом
-     * ещё где-то) игнорируются — сверка по chat_id/username канала из тех же настроек, что и проверка
-     * подписки ({@link #requiredChannelChatId}). Требует права can_invite_users у бота в канале и
-     * включённой модерации вступления в настройках канала (пока канал открытый — апдейт не приходит). */
+     * {@link #handleJoinRequestAction}. ИСКЛЮЧЕНИЕ (тот же день, уточнение владельца): заявки, пришедшие
+     * по отдельной инвайт-ссылке из кнопки "📢 Подписаться на канал" (регистрация/взятие квеста, см.
+     * {@link #sendCommunityActivationPrompt}), одобряются сразу без карточки — иначе взятие квеста и
+     * стартовый бонус +200 EXC зависали бы у КАЖДОГО игрока до ручного одобрения админом, что ломает
+     * обещание "10 секунд" в тексте и убивает воронку регистрации. Заявки из чужих чатов (если бот
+     * когда-нибудь станет админом ещё где-то) игнорируются — сверка по chat_id/username канала из тех
+     * же настроек, что и проверка подписки ({@link #requiredChannelChatId}). Требует права
+     * can_invite_users у бота в канале и включённой модерации вступления в настройках канала (пока
+     * канал открытый — апдейт не приходит вообще, ни этот, ни ручной). */
     private void handleChatJoinRequest(ChatJoinRequest request) {
         if (!isRequiredChannel(request.getChat())) {
             log.info("Ignoring chat join request for foreign chat {}", request.getChat() != null ? request.getChat().getId() : null);
@@ -18695,6 +18707,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         Long telegramUserId = request.getUser().getId();
         Long chatId = request.getChat().getId();
+        String usedInviteLink = request.getInviteLink() != null ? request.getInviteLink().getInviteLink() : null;
+        if (usedInviteLink != null && usedInviteLink.equals(resolvedActivationInviteLink())) {
+            try {
+                ApproveChatJoinRequest approve = new ApproveChatJoinRequest();
+                approve.setChatId(chatId);
+                approve.setUserId(telegramUserId);
+                execute(approve);
+                log.info("Auto-approved bot-driven channel join request from {}", telegramUserId);
+            } catch (TelegramApiException exception) {
+                log.error("Failed to auto-approve bot-driven join request from {}", telegramUserId, exception);
+            }
+            return;
+        }
         // Заявка уже ждёт решения (повторный апдейт от Telegram/двойной клик пользователя "Отправить заявку") — не дублировать карточку.
         if (channelJoinRequestRepository.findFirstByTelegramUserIdAndChatIdAndStatus(
                 telegramUserId, chatId, ChannelJoinRequest.PENDING).isPresent()) {
@@ -18709,6 +18734,45 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         record.setBio(request.getBio());
         record = channelJoinRequestRepository.save(record);
         sendJoinRequestCard(record.getId());
+    }
+
+    /** Ссылка-приглашение на канал ТОЛЬКО для кнопки "📢 Подписаться на канал" в боте — создаётся один
+     * раз через createChatInviteLink и кэшируется в app_settings, чтобы отличать в {@link #handleChatJoinRequest}
+     * заявки от игроков бота (автоодобрение) от прочих заявок на канал (ручное одобрение админом). */
+    private String activationChannelUrl() {
+        String existing = resolvedActivationInviteLink();
+        if (existing != null) {
+            return existing;
+        }
+        try {
+            CreateChatInviteLink create = new CreateChatInviteLink();
+            create.setChatId(requiredChannelChatId());
+            create.setName("Бот EGC (активация/квесты)");
+            ChatInviteLink link = execute(create);
+            String url = link.getInviteLink();
+            AppSetting setting = new AppSetting();
+            setting.setKey(ACTIVATION_INVITE_LINK_SETTING_KEY);
+            setting.setValue(url);
+            appSettingRepository.save(setting);
+            botActivationInviteLink = url;
+            return url;
+        } catch (TelegramApiException exception) {
+            // Заявки по обычной ссылке канала попадут в общую ручную очередь — деградация терпимая,
+            // но взятие квеста/бонус для таких игроков будет ждать одобрения админа.
+            log.warn("Failed to create dedicated activation invite link, falling back to public channel link", exception);
+            return requiredChannelUrl();
+        }
+    }
+
+    private String resolvedActivationInviteLink() {
+        if (botActivationInviteLink != null) {
+            return botActivationInviteLink;
+        }
+        String stored = appSettingRepository.findById(ACTIVATION_INVITE_LINK_SETTING_KEY).map(AppSetting::getValue).orElse(null);
+        if (stored != null && !stored.isBlank()) {
+            botActivationInviteLink = stored;
+        }
+        return botActivationInviteLink;
     }
 
     /** Карточка заявки на вступление в канал «на согласование»: имя/юзернейм/био + ✅ Принять / ❌ Отклонить. */
