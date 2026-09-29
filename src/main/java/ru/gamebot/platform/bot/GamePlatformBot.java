@@ -18805,12 +18805,37 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if (action.equals("joinreq:approveall")) {
+            List<ChannelJoinRequest> pending = channelJoinRequestRepository.findAllByStatusOrderByCreatedAtAsc(ChannelJoinRequest.PENDING);
+            int approved = 0;
+            for (ChannelJoinRequest r : pending) {
+                try {
+                    ApproveChatJoinRequest approve = new ApproveChatJoinRequest();
+                    approve.setChatId(r.getChatId());
+                    approve.setUserId(r.getTelegramUserId());
+                    execute(approve);
+                    r.setStatus(ChannelJoinRequest.APPROVED);
+                    r.setDecidedAt(java.time.LocalDateTime.now());
+                    channelJoinRequestRepository.save(r);
+                    approved++;
+                } catch (TelegramApiException exception) {
+                    // Заявка остаётся PENDING - попадёт в следующий "Принять всех" или в одиночную карточку.
+                    log.error("Failed to bulk-approve join request {}", r.getId(), exception);
+                }
+            }
+            answer(callbackQuery.getId(), "✅ Принято: " + approved + " из " + pending.size());
+            sendAdminJoinRequests(user);
+            return;
+        }
         answer(callbackQuery.getId(), "Неизвестное действие");
     }
 
     private void sendAdminJoinRequests(AppUser user) {
         List<ChannelJoinRequest> pending = channelJoinRequestRepository.findAllByStatusOrderByCreatedAtAsc(ChannelJoinRequest.PENDING);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (!pending.isEmpty()) {
+            rows.add(List.of(keyboardFactory.callback("✅ Принять всех (" + pending.size() + ")", "admin:joinreq:approveall")));
+        }
         for (ChannelJoinRequest r : pending) {
             String label = (r.getFirstName() != null ? r.getFirstName() : "Без имени")
                     + (r.getUsername() != null ? " (@" + r.getUsername() + ")" : "");
@@ -18819,7 +18844,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:comm")));
         String header = pending.isEmpty()
                 ? "📥 <b>Заявки на канал</b>\n\nНет заявок, ожидающих решения."
-                : "📥 <b>Заявки на канал</b>\n\nОжидают решения: <b>" + pending.size() + "</b>\nНажми на заявку, чтобы открыть карточку с кнопками ✅/❌.";
+                : "📥 <b>Заявки на канал</b>\n\nОжидают решения: <b>" + pending.size() + "</b>\nНажми на заявку, чтобы открыть карточку с кнопками ✅/❌, или прими все разом.";
         sendText(user.getTelegramId(), header, keyboardFactory.rowsLayout(rows));
     }
 
