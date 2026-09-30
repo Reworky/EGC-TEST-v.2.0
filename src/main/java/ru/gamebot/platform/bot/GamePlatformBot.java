@@ -3924,6 +3924,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 } catch (NumberFormatException ignored) {}
             }
             answer(callbackQuery.getId(), "Аккаунт активирован");
+            sendMainMenu(user, roleWelcomeText(user, null));
             return;
         }
 
