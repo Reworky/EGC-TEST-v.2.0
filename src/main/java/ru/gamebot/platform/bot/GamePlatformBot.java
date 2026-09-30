@@ -7318,14 +7318,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendSinkTitles(AppUser user) {
+        List<String> owned = user.getOwnedTitlesCsv() != null
+                ? Arrays.asList(user.getOwnedTitlesCsv().split(","))
+                : List.of();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.callback("🌱 Новый игрок — 1 500 EXC", "sink:buy_title:Новый игрок:1500")));
-        rows.add(List.of(keyboardFactory.callback("🔥 Квест-хантер — 4 500 EXC", "sink:buy_title:Квест-хантер:4500")));
-        rows.add(List.of(keyboardFactory.callback("👑 Элита клуба — 7 500 EXC", "sink:buy_title:Элита клуба:7500")));
+        rows.add(List.of(keyboardFactory.callback(titleButtonLabel("🌱 Новый игрок", "1 500 EXC", owned), "sink:buy_title:Новый игрок:1500")));
+        rows.add(List.of(keyboardFactory.callback(titleButtonLabel("🔥 Квест-хантер", "4 500 EXC", owned), "sink:buy_title:Квест-хантер:4500")));
+        rows.add(List.of(keyboardFactory.callback(titleButtonLabel("👑 Элита клуба", "7 500 EXC", owned), "sink:buy_title:Элита клуба:7500")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "sink:cat:customization")));
         sendText(user.getTelegramId(),
-                "🎭 <b>Титулы профиля</b>\n\nТитул отображается в вашем профиле и виден другим игрокам.\nПокупка заменяет текущий титул.",
+                "🎭 <b>Титулы профиля</b>\n\nТитул отображается в вашем профиле и виден другим игрокам.\n"
+                        + "Каждый титул покупается один раз — уже купленные потом надеваются бесплатно.",
                 keyboardFactory.rowsLayout(rows));
+    }
+
+    /** emojiAndName — например "🌱 Новый игрок"; сравнение владения идёт по имени после эмодзи и пробела. */
+    private String titleButtonLabel(String emojiAndName, String priceLabel, List<String> owned) {
+        String name = emojiAndName.substring(emojiAndName.indexOf(' ') + 1);
+        return owned.contains(name) ? emojiAndName + " ✅ куплен" : emojiAndName + " — " + priceLabel;
     }
 
     private void handleTitlePurchase(CallbackQuery callbackQuery, AppUser user, String payload) {
@@ -7340,11 +7350,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        String csv = user.getOwnedTitlesCsv();
+        boolean alreadyOwned = csv != null && Arrays.asList(csv.split(",")).contains(title);
         try {
             sinkShopService.purchaseTitle(user, title, price);
-            sendText(user.getTelegramId(),
-                    "🏅 <b>Титул «" + escape(title) + "» получен!</b>\n\nСписано " + price + " EXC. Титул отображается в вашем профиле.",
-                    backMenuKeyboard("sink:cat:customization"));
+            String text = alreadyOwned
+                    ? "🏅 <b>Титул «" + escape(title) + "» надет!</b>\n\nОн уже куплен ранее — бесплатно."
+                    : "🏅 <b>Титул «" + escape(title) + "» получен!</b>\n\nСписано " + price + " EXC. Титул отображается в вашем профиле.";
+            sendText(user.getTelegramId(), text, backMenuKeyboard("sink:cat:customization"));
         } catch (IllegalArgumentException e) {
             sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("sink:cat:customization"));
         }

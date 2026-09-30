@@ -3,6 +3,7 @@ package ru.gamebot.platform.service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.util.Arrays;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,9 +67,19 @@ public class SinkShopService {
         purchaseExcBoostTimed(user, 24);
     }
 
+    /** Инцидент 2026-09-30 (жалоба игрока): каждое нажатие на кнопку титула списывало EXC заново,
+     *  даже за титул, который у игрока уже есть, - "Покупка заменяет текущий титул" в тексте меню
+     *  подразумевала это как задумку, но с точки зрения игрока это выглядело нечестно (платишь
+     *  повторно за то же самое). Теперь платим только за титулы, которых ещё нет в ownedTitlesCsv -
+     *  уже купленные надеваются бесплатно, как рамки аватара (ownedFramesCsv). */
     @Transactional
     public void purchaseTitle(AppUser user, String title, long price) {
-        deductCoins(user, price, "Титул: " + title);
+        String csv = user.getOwnedTitlesCsv();
+        boolean alreadyOwned = csv != null && Arrays.asList(csv.split(",")).contains(title);
+        if (!alreadyOwned) {
+            deductCoins(user, price, "Титул: " + title);
+            user.setOwnedTitlesCsv(csv == null || csv.isBlank() ? title : csv + "," + title);
+        }
         user.setProfileTitle(title);
         appUserRepository.save(user);
     }

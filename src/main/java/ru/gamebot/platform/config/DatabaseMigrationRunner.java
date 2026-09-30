@@ -44,6 +44,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         backfillCooldownReminderBaseline();
         resetStaleAttackWinsBaseline();
         removeAccidentalParticipantLimits();
+        backfillOwnedTitlesFromHistory();
     }
 
     /** Инцидент 2026-09-22 (тикет поддержки #213): ClashQuestVerificationService для ATTACK_WINS
@@ -268,6 +269,48 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             }
         } catch (Exception e) {
             log.error("[DBMigration] removeAccidentalParticipantLimits failed: {}", e.getMessage());
+        }
+    }
+
+    /** Инцидент 2026-09-30 (жалоба игрока): SinkShopService.purchaseTitle списывал EXC при КАЖДОМ
+     *  нажатии на кнопку титула, даже за титул, который у игрока уже был надет и уже был оплачен
+     *  раньше - ownedTitlesCsv до сегодняшнего фикса вообще не отслеживал обычные EXC-титулы (только
+     *  эксклюзивный Stars-титул "patron"). Код уже поправлен - теперь платим только за титулы, которых
+     *  нет в ownedTitlesCsv. Но игроки, которые ЧЕСТНО заплатили за титул(ы) ДО этого фикса, не должны
+     *  платить за них ещё раз при следующем клике - задним числом возвращаем владение по факту прошлых
+     *  оплат, видных в exc_transactions (type=SINK, description вида "Титул: <название>"). */
+    private void backfillOwnedTitlesFromHistory() {
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "SELECT user_id, description FROM exc_transactions WHERE type = 'SINK' AND description LIKE 'Титул: %'");
+            java.util.Map<Long, java.util.LinkedHashSet<String>> byUser = new java.util.HashMap<>();
+            for (Map<String, Object> row : rows) {
+                Long userId = ((Number) row.get("USER_ID")).longValue();
+                String description = (String) row.get("DESCRIPTION");
+                String title = description.substring("Титул: ".length());
+                byUser.computeIfAbsent(userId, k -> new java.util.LinkedHashSet<>()).add(title);
+            }
+            int updated = 0;
+            for (Map.Entry<Long, java.util.LinkedHashSet<String>> entry : byUser.entrySet()) {
+                String existingCsv = jdbcTemplate.queryForObject(
+                    "SELECT owned_titles_csv FROM app_users WHERE id = ?", String.class, entry.getKey());
+                java.util.LinkedHashSet<String> merged = new java.util.LinkedHashSet<>();
+                if (existingCsv != null && !existingCsv.isBlank()) {
+                    merged.addAll(java.util.Arrays.asList(existingCsv.split(",")));
+                }
+                int before = merged.size();
+                merged.addAll(entry.getValue());
+                if (merged.size() != before) {
+                    jdbcTemplate.update("UPDATE app_users SET owned_titles_csv = ? WHERE id = ?",
+                        String.join(",", merged), entry.getKey());
+                    updated++;
+                }
+            }
+            if (updated > 0) {
+                log.info("[DBMigration] Backfilled owned_titles_csv for {} users from title purchase history", updated);
+            }
+        } catch (Exception e) {
+            log.error("[DBMigration] backfillOwnedTitlesFromHistory failed: {}", e.getMessage());
         }
     }
 
