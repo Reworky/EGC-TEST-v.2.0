@@ -1685,10 +1685,6 @@ public class QuestSeeder implements CommandLineRunner {
                 "Достичь звания Gold Nova I или выше в рейтинговом режиме CS2 (Competitive или Premier). Долгосрочная цель, которая требует стабильной игры на протяжении нескольких сессий.",
                 "1. Играй Competitive или Premier матчи до получения звания Gold Nova I+ (или 5 000+ CS Rating в Premier)\n2. Когда ранг присвоен — перейди в Профиль CS2 → вкладка «Конкурентный» или «Рейтинговый»\n3. Сделай скриншот, на котором одновременно видны: твой Steam-никнейм, значок звания и его название / цифра CS Rating\n4. Загрузи скриншот. Принимается также ссылка на Steam-профиль, если ранг отображается публично",
                 "— Режим: Competitive (классический ранг) или Premier (рейтинг CS Rating)\n— Для Competitive: звание Gold Nova I и выше\n— Для Premier: CS Rating 5 000+\n— Скриншот должен быть сделан после достижения, не «у меня было такое звание раньше»");
-        // Ограничить участников для Сложного квеста на период отладки верификации
-        questRepository.findFirstByTitleAndGameName("Ранговый прорыв — достигни звания Gold Nova I или выше", "CS2")
-                .ifPresent(q -> { if (q.getParticipantLimit() == null || q.getParticipantLimit() == 100) { q.setParticipantLimit(50); questRepository.save(q); } });
-
         // ── CS2: короткие подписи на кнопках списка квестов (см. Quest.shortLabel / sendQuestList) ──
         setShortLabel("Сыграй 3 матча в любом режиме", "CS2", "3 матча");
         setShortLabel("Сделай 10 убийств за один матч", "CS2", "10 убийств/матч");
@@ -2525,7 +2521,6 @@ public class QuestSeeder implements CommandLineRunner {
         quest.setDescription(description);
         quest.setInstruction(instruction);
         quest.setRequirements(requirements);
-        quest.setParticipantLimit(100);
         quest.setActive(true);
         quest.setCouncilOnly(false);
         quest.setCreatedAt(LocalDateTime.now());
@@ -2554,7 +2549,6 @@ public class QuestSeeder implements CommandLineRunner {
         quest.setDescription(description);
         quest.setInstruction(instruction);
         quest.setRequirements(requirements);
-        quest.setParticipantLimit(100);
         quest.setActive(true);
         quest.setCouncilOnly(false);
         quest.setCreatedAt(LocalDateTime.now());

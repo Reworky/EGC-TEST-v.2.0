@@ -43,6 +43,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         backfillOwnedFrames();
         backfillCooldownReminderBaseline();
         resetStaleAttackWinsBaseline();
+        removeAccidentalParticipantLimits();
     }
 
     /** Инцидент 2026-09-22 (тикет поддержки #213): ClashQuestVerificationService для ATTACK_WINS
@@ -244,6 +245,29 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             log.info("[DBMigration] Added GTA V to game catalog");
         } catch (Exception e) {
             log.error("[DBMigration] seedGtaVCatalog failed: {}", e.getMessage());
+        }
+    }
+
+    /** Инцидент 2026-09-30 (жалоба владельца после тикета #255 про закрытый квест "100/100"):
+     *  participant_limit оказался проставлен на 100 по умолчанию во ВСЕХ обычных квестах, созданных
+     *  через QuestSeeder.seed()/seedFlat() и через шаблоны в админ-создании квеста (GamePlatformBot) -
+     *  случайный дефолт, не привязанный ни к какому реальному ограничению, из-за которого игровые
+     *  квесты неожиданно "закрывались" после 100 одобренных заявок. Плюс один квест CS2 "Ранговый
+     *  прорыв" был искусственно ограничен до 50 на период отладки верификации (давно неактуально).
+     *  Убираем лимит у ВСЕХ квестов, КРОМЕ реально привязанных к деньгам третьей стороны:
+     *  sponsored=true (раздел "Рекламодателям", лимит 10000 - бюджет спонсора) и
+     *  external_auto_approve=true (CPA-сети типа actionpay/admitad, лимит 1000 - рекламодатель платит
+     *  только за первые N конверсий). Владелец подтвердил 2026-09-30: лимиты нужны только там. */
+    private void removeAccidentalParticipantLimits() {
+        try {
+            int updated = jdbcTemplate.update(
+                "UPDATE quests SET participant_limit = NULL " +
+                "WHERE participant_limit IS NOT NULL AND sponsored = false AND external_auto_approve = false");
+            if (updated > 0) {
+                log.info("[DBMigration] Removed accidental participant_limit from {} regular quests", updated);
+            }
+        } catch (Exception e) {
+            log.error("[DBMigration] removeAccidentalParticipantLimits failed: {}", e.getMessage());
         }
     }
 

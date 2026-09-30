@@ -3093,7 +3093,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case QUEST_CREATE_REQUIREMENTS -> {
                 session.getData().put("requirements", text.trim());
                 session.setState(SessionState.QUEST_CREATE_LIMIT);
-                sendText(user.getTelegramId(), "👥 Укажите лимит участников числом.", cancelKeyboard());
+                sendText(user.getTelegramId(), "👥 Укажите лимит участников числом или пропустите — без лимита.",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("⏭️ Без лимита", "qc:limit:skip")),
+                                List.of(keyboardFactory.callback("❌ Отмена", "admin:cancel")))));
             }
             case QUEST_CREATE_LIMIT -> {
                 Integer limit = parseInteger(text.trim());
@@ -3888,16 +3891,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "По всем вопросам — @GressToEx";
     }
 
+    /** Трафик из рекламы/партнёрских ссылок (trafficSourceCode заполнен, см. handleStart ->
+     *  trafficSourceService.recordClick) НЕ получает авто-одобряемую ссылку на канал - подписка идёт
+     *  обычной заявкой на вступление, которую владелец одобряет вручную в "Коммуникации -> 📥 Заявки
+     *  на канал" ({@link #handleChatJoinRequest}). Органическая регистрация/рефералы (trafficSourceCode
+     *  == null) по-прежнему вступают мгновенно через {@link #activationChannelUrl()} - решение 2026-09-30
+     *  после жалобы, что весь рекламный трафик автоматически принимался в закрытый канал без проверки. */
     private void sendCommunityActivationPrompt(AppUser user, String notice) {
+        boolean isTrafficSourced = user.getTrafficSourceCode() != null;
+        String channelUrl = isTrafficSourced ? requiredChannelUrl() : activationChannelUrl();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.url("📢 Подписаться на канал", activationChannelUrl())));
+        rows.add(List.of(keyboardFactory.url("📢 Подписаться на канал", channelUrl)));
         rows.add(List.of(keyboardFactory.callback("✅ Я подписался", "activation:check")));
 
+        String bonusLine = isTrafficSourced
+                ? "Заявку на вступление проверит админ, обычно недолго."
+                : "Это займёт 10 секунд — и тебе сразу начислится <b>+200 EXC</b>.";
         String text = (notice == null || notice.isBlank() ? "" : notice + "\n\n")
                 + "🔐 <b>Нужна подписка на канал</b>\n\n"
                 + "Подпишись на канал <b>" + escape(requiredChannelLabel()) + "</b> и прими правила клуба.\n\n"
                 + "Подписавшись, ты автоматически соглашаешься с правилами платформы.\n\n"
-                + "Это займёт 10 секунд — и тебе сразу начислится <b>+200 EXC</b>.";
+                + bonusLine;
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
 
@@ -9845,7 +9859,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.getData().put("coins", String.valueOf(t.coins()));
             session.getData().put("instruction", t.instruction());
             session.getData().put("requirements", t.requirements());
-            session.getData().put("limit", "100");
 
             String gameLine = game.isEmpty() ? "\n\n⚠️ Игру укажите в названии или описании." : "\n\n🎮 Игра: <b>" + escape(game) + "</b>";
             sendText(user.getTelegramId(),
@@ -16905,6 +16918,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if ("limit:skip".equals(action)) {
+            if (session.getState() != SessionState.QUEST_CREATE_LIMIT) {
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            session.getData().remove("limit");
+            session.setState(SessionState.QUEST_CREATE_PHOTO);
+            sendText(user.getTelegramId(),
+                    "🖼️ Прикрепите фото к квесту (обложку) или пропустите этот шаг.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("⏭️ Пропустить фото", "qc:photo:skip")),
+                            List.of(keyboardFactory.callback("❌ Отмена", "admin:cancel")))));
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if ("photo:skip".equals(action)) {
             if (session.getState() != SessionState.QUEST_CREATE_PHOTO) {
                 answerSilently(callbackQuery.getId());
@@ -17063,7 +17091,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         quest.setTicketReward(Integer.parseInt(session.getData().getOrDefault("tickets", "0")));
         quest.setInstruction(session.getData().get("instruction"));
         quest.setRequirements(session.getData().get("requirements"));
-        quest.setParticipantLimit(Integer.parseInt(session.getData().getOrDefault("limit", "100")));
+        // Лимит участников больше НЕ дефолтится на 100 (владелец 2026-09-30: лимиты не нужны обычным
+        // квестам) - ставится только если админ реально ввёл число на шаге QUEST_CREATE_LIMIT.
+        String limitStr = session.getData().get("limit");
+        if (limitStr != null && !limitStr.isBlank()) {
+            quest.setParticipantLimit(Integer.parseInt(limitStr));
+        }
         quest.setCouncilOnly(councilOnly);
         quest.setPhotoFileId(session.getData().get("photoFileId"));
 
