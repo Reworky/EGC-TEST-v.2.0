@@ -3909,7 +3909,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "Это займёт 10 секунд — и тебе сразу начислится <b>+200 EXC</b>.";
         String text = (notice == null || notice.isBlank() ? "" : notice + "\n\n")
                 + "🔐 <b>Нужна подписка на канал</b>\n\n"
-                + "Подпишись на канал <b>" + escape(requiredChannelLabel()) + "</b> и прими правила клуба.\n\n"
+                + "Подпишись по кнопке ниже и прими правила клуба.\n\n"
                 + "Подписавшись, ты автоматически соглашаешься с правилами платформы.\n\n"
                 + bonusLine;
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
@@ -18987,13 +18987,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return appProperties.getRequiredChannelId().trim();
         }
         return appProperties.getRequiredChannelUsername();
-    }
-
-    private String requiredChannelLabel() {
-        if (appProperties.getRequiredChannelUsername() != null && !appProperties.getRequiredChannelUsername().isBlank()) {
-            return appProperties.getRequiredChannelUsername().trim();
-        }
-        return appProperties.getRequiredChannelTitle();
     }
 
     private String requiredChannelUrl() {
