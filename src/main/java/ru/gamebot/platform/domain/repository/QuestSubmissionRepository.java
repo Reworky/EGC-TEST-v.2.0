@@ -303,6 +303,12 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
             + "AND s.updatedAt >= :from AND s.updatedAt < :to GROUP BY s.user.telegramId, s.user.nickname ORDER BY COUNT(s) DESC")
     List<Object[]> findApprovalsPerUserBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
+    /** Одобрения по отрядам за период: [squadId, число] по убыванию - топ-5 активных отрядов для вкладки
+     *  «Отряды» (ТЗ EGC_TZ_otryady, Этап 2) и для рубрики «Топ отрядов» в контент-плане канала. */
+    @Query("SELECT s.user.squadId, COUNT(s) FROM QuestSubmission s WHERE s.status = 'APPROVED' "
+            + "AND s.updatedAt >= :since AND s.user.squadId IS NOT NULL GROUP BY s.user.squadId ORDER BY COUNT(s) DESC")
+    List<Object[]> findApprovedCountBySquadSince(@Param("since") LocalDateTime since);
+
     /** Одобренные выполнения за период для выгрузки в CSV: [id, telegramId, название, игра, дата, EXC]. */
     @Query("SELECT s.id, s.user.telegramId, s.quest.title, s.quest.gameName, s.updatedAt, s.awardedCoins FROM QuestSubmission s "
             + "WHERE s.status = 'APPROVED' AND s.updatedAt >= :from AND s.updatedAt < :to ORDER BY s.updatedAt ASC")

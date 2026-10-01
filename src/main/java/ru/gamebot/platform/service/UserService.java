@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.telegram.telegrambots.meta.api.objects.User;
 import ru.gamebot.platform.config.AppProperties;
 import ru.gamebot.platform.domain.model.AppUser;
+import ru.gamebot.platform.domain.model.Squad;
 import ru.gamebot.platform.domain.model.SupportTicket;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.ExcTransactionRepository;
@@ -597,6 +598,27 @@ public class UserService {
         long squadCount = squadRepository.countByStatus("ACTIVE");
         long members = appUserRepository.countByRegistrationCompletedTrueAndSquadIdIsNotNull();
         return new SquadOverview(squadCount, squadCount > 0 ? (double) members / squadCount : 0);
+    }
+
+    public record SquadLeaderboardEntry(Squad squad, long approvedQuests7d) {}
+
+    /** Топ активных отрядов за 7 дней по одобренным квестам участников - для вкладки «Отряды» в Аналитике
+     *  и рубрики «Топ отрядов» в контент-плане канала (ТЗ EGC_TZ_otryady, Этап 2). Намеренно по количеству
+     *  квестов, а не по squadWeeklyXp (SquadService.getLeaderboard) - ТЗ просит именно "по выполненным
+     *  квестам", эти метрики могут расходиться из-за разной награды за разные квесты. */
+    public List<SquadLeaderboardEntry> topActiveSquadsByQuests7d(int limit) {
+        List<Object[]> rows = questSubmissionRepository.findApprovedCountBySquadSince(LocalDateTime.now().minusDays(7));
+        List<SquadLeaderboardEntry> out = new java.util.ArrayList<>();
+        for (Object[] row : rows) {
+            if (out.size() >= limit) break;
+            Long squadId = (Long) row[0];
+            Long count = (Long) row[1];
+            Squad squad = squadRepository.findById(squadId).orElse(null);
+            if (squad != null && "ACTIVE".equals(squad.getStatus())) {
+                out.add(new SquadLeaderboardEntry(squad, count));
+            }
+        }
+        return out;
     }
 
     private EngagementReport engagementReportBySquad(boolean inSquad) {

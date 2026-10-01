@@ -88,6 +88,16 @@ public class PlatformSnapshot {
     /** Аптайм за 7 дней, промилле (999 = 99,9%). */
     private Long uptimePermille7d;
 
+    // Вкладка «Отряды» (ТЗ EGC_TZ_otryady, 2026-10-01, Этап 2) - nullable по тому же принципу, тренд
+    // только по самым решающим метрикам (заголовочный разрыв DAU/MAU + самая строгая - возврат за 2-й
+    // квест), не по всем линиям вкладки - остальное (возврат 7д/30д) видно текущим значением без графика.
+    private Long playersInSquads;
+    private Long squadsCount;
+    private Long dauMauInSquadPct;
+    private Long dauMauNoSquadPct;
+    private Long secondQuestReturnInSquadPct;
+    private Long secondQuestReturnNoSquadPct;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 }

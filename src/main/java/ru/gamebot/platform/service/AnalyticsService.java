@@ -46,6 +46,7 @@ public class AnalyticsService {
         QUESTS("🎯", "Квесты"),
         ECONOMY("💰", "Экономика и выплаты"),
         REFERRAL("🤝", "Реферальная программа"),
+        SQUADS("👨‍👩‍👧‍👦", "Отряды"),
         SOURCES("📡", "Источники трафика"),
         PNL("📒", "Финансовая сводка"),
         TOURNAMENTS("🏆", "Турниры"),
@@ -142,6 +143,19 @@ public class AnalyticsService {
         } catch (Exception e) {
             log.warn("Snapshot extras: counters failed", e);
         }
+        try {
+            UserService.SquadCohortReport inSquad = userService.getSquadCohortReport(true);
+            UserService.SquadCohortReport noSquad = userService.getSquadCohortReport(false);
+            UserService.SquadOverview overview = userService.squadOverview();
+            snap.setPlayersInSquads(inSquad.segmentSize());
+            snap.setSquadsCount(overview.squadCount());
+            snap.setDauMauInSquadPct(Math.round(inSquad.engagement().dauMauPercent()));
+            snap.setDauMauNoSquadPct(Math.round(noSquad.engagement().dauMauPercent()));
+            snap.setSecondQuestReturnInSquadPct(Math.round(inSquad.engagement().retentionPercent()));
+            snap.setSecondQuestReturnNoSquadPct(Math.round(noSquad.engagement().retentionPercent()));
+        } catch (Exception e) {
+            log.warn("Snapshot extras: squads failed", e);
+        }
     }
 
     // ───────────────────────── общие помощники ─────────────────────────
@@ -191,6 +205,7 @@ public class AnalyticsService {
                 case QUESTS -> questsTab(p, pv, fromDate, lines);
                 case ECONOMY -> economyTab(p, pv, fromDate, lines);
                 case REFERRAL -> referralTab(p, pv, fromDate, lines);
+                case SQUADS -> squadsTab(fromDate, lines, extras);
                 case SOURCES -> sourcesTab(p, pv, lines, extras);
                 case PNL -> pnlTab(p, pv, lines, extras);
                 case TOURNAMENTS -> tournamentsTab(lines, extras);
@@ -256,6 +271,58 @@ public class AnalyticsService {
         out.add(L("takers7pct", "  доля от MAU", "%", er.weeklyQuestPercent(), null, "норма: 5-15% окей, 15%+ сильно", false));
         out.add(L("second", "Возврат за вторым квестом", "%", er.retentionPercent(), snapVal(fromDate, PlatformSnapshot::getSecondQuestReturnPct),
                 "из когорты «1-й квест ≥7 дн. назад»; в когорте " + er.retentionCohort() + " чел.", false));
+    }
+
+    /** ТЗ EGC_TZ_otryady (2026-10-01), Этап 2: заведена после того, как разовая диагностика Этапа 1
+     *  (UserService.getSquadCohortReport, /squadretention) подтвердила разрыв удержания "в отряде" vs
+     *  "без отряда" (DAU/MAU ×18, возврат за 2-й квест ×2,5) и перекрёстная проверка с рефералкой
+     *  исключила, что это тень качества реферального трафика (squadReferralCrossCheck). */
+    private void squadsTab(LocalDate fromDate, List<Line> out, List<String> extras) {
+        UserService.SquadCohortReport inSquad = userService.getSquadCohortReport(true);
+        UserService.SquadCohortReport noSquad = userService.getSquadCohortReport(false);
+        UserService.SquadOverview overview = userService.squadOverview();
+        long total = Math.max(1, userService.totalRegisteredUsers());
+
+        out.add(L("in_squad", "Игроков в отрядах", "", (double) inSquad.segmentSize(), snapVal(fromDate, PlatformSnapshot::getPlayersInSquads)));
+        out.add(L("in_squad_pct", "  доля от базы", "%", pct(inSquad.segmentSize(), total), null));
+        out.add(L("squad_count", "Отрядов (активных)", "", (double) overview.squadCount(), snapVal(fromDate, PlatformSnapshot::getSquadsCount)));
+        out.add(L("squad_avg_size", "Средний размер отряда", "", overview.avgSize(), null,
+                "мал - отряды пока ближе к \"тег на паре игроков\", чем к команде", false));
+
+        Double dauMauInPrev = snapVal(fromDate, PlatformSnapshot::getDauMauInSquadPct);
+        Double dauMauNoPrev = snapVal(fromDate, PlatformSnapshot::getDauMauNoSquadPct);
+        out.add(L("dau_mau_in", "DAU/MAU — в отряде", "%", inSquad.engagement().dauMauPercent(), dauMauInPrev));
+        out.add(L("dau_mau_no", "DAU/MAU — без отряда", "%", noSquad.engagement().dauMauPercent(), dauMauNoPrev));
+
+        out.add(L("ret7_in", "Возврат 7д — в отряде", "%", inSquad.retention().percent7(), null,
+                "когорта " + inSquad.retention().cohort7() + " чел.", false));
+        out.add(L("ret7_no", "Возврат 7д — без отряда", "%", noSquad.retention().percent7(), null,
+                "когорта " + noSquad.retention().cohort7() + " чел.", false));
+        out.add(L("ret30_in", "Возврат 30д — в отряде", "%", inSquad.retention().percent30(), null,
+                "когорта " + inSquad.retention().cohort30() + " чел.", false));
+        out.add(L("ret30_no", "Возврат 30д — без отряда", "%", noSquad.retention().percent30(), null,
+                "когорта " + noSquad.retention().cohort30() + " чел.", false));
+
+        Double secondInPrev = snapVal(fromDate, PlatformSnapshot::getSecondQuestReturnInSquadPct);
+        Double secondNoPrev = snapVal(fromDate, PlatformSnapshot::getSecondQuestReturnNoSquadPct);
+        out.add(L("second_in", "Возврат за 2-й квест — в отряде", "%", inSquad.engagement().retentionPercent(), secondInPrev,
+                "когорта " + inSquad.engagement().retentionCohort() + " чел. — самая строгая метрика", false));
+        out.add(L("second_no", "Возврат за 2-й квест — без отряда", "%", noSquad.engagement().retentionPercent(), secondNoPrev,
+                "когорта " + noSquad.engagement().retentionCohort() + " чел.", false));
+
+        List<UserService.SquadLeaderboardEntry> top = userService.topActiveSquadsByQuests7d(5);
+        if (top.isEmpty()) {
+            extras.add("🏆 <b>Топ-5 отрядов за 7 дней</b>\n\nНикто из отрядов не выполнил квест за последние 7 дней.");
+        } else {
+            StringBuilder sb = new StringBuilder("🏆 <b>Топ-5 отрядов за 7 дней</b> (по одобренным квестам участников)\n\n");
+            String[] medals = {"🥇", "🥈", "🥉"};
+            for (int i = 0; i < top.size(); i++) {
+                UserService.SquadLeaderboardEntry e = top.get(i);
+                sb.append(i < 3 ? medals[i] : (i + 1) + ".").append(" ").append(e.squad().getName())
+                  .append(" — ").append(e.approvedQuests7d()).append(" квест(ов)\n");
+            }
+            extras.add(sb.toString());
+        }
     }
 
     private void questsTab(Period p, Period pv, LocalDate fromDate, List<Line> out) {
@@ -529,6 +596,9 @@ public class AnalyticsService {
             case ECONOMY -> List.of(new TrendMetric("Начислено за 7 дн., EXC", PlatformSnapshot::getEarnedExc7d), new TrendMetric("Выплачено за 7 дн., EXC", PlatformSnapshot::getPaidOutExc7d),
                     new TrendMetric("EXC на счетах", PlatformSnapshot::getTotalCoinsOnAccounts), new TrendMetric("Билетов в обороте", PlatformSnapshot::getTotalTickets));
             case REFERRAL -> List.of(new TrendMetric("Всего рефералов", PlatformSnapshot::getReferralsTotal), new TrendMetric("Активировано", PlatformSnapshot::getReferralsActivated));
+            case SQUADS -> List.of(new TrendMetric("Игроков в отрядах", PlatformSnapshot::getPlayersInSquads), new TrendMetric("Отрядов", PlatformSnapshot::getSquadsCount),
+                    new TrendMetric("DAU/MAU в отряде, %", PlatformSnapshot::getDauMauInSquadPct), new TrendMetric("DAU/MAU без отряда, %", PlatformSnapshot::getDauMauNoSquadPct),
+                    new TrendMetric("Возврат за 2-й квест в отряде, %", PlatformSnapshot::getSecondQuestReturnInSquadPct), new TrendMetric("Возврат за 2-й квест без отряда, %", PlatformSnapshot::getSecondQuestReturnNoSquadPct));
             case TECH -> List.of(new TrendMetric("Аптайм за 7 дн., ‰", PlatformSnapshot::getUptimePermille7d), new TrendMetric("Ср. время проверки, мин", PlatformSnapshot::getAvgReviewMin7d));
             case FRAUD -> List.of(new TrendMetric("Заблокировано", PlatformSnapshot::getBlockedUsers));
             default -> List.of();

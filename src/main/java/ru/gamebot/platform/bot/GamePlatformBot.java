@@ -12065,6 +12065,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "growth" -> {
                 title = "🏆 <b>События и рост</b>";
                 rows.add(List.of(keyboardFactory.callback("🏆 Турниры", "admin:tournaments")));
+                rows.add(List.of(keyboardFactory.callback("👨‍👩‍👧‍👦 Отряды: аналитика", "admin:an:tab:SQUADS")));
                 rows.add(List.of(keyboardFactory.callback("🎫 Battle Pass", "admin:seasons")));
                 rows.add(List.of(keyboardFactory.callback("🚀 Буст рефералки", "admin:refboost")));
                 rows.add(List.of(keyboardFactory.callback("📈 Трафик и закупы", "admin:traffic")));
@@ -12174,7 +12175,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case SOURCES -> rows.add(List.of(keyboardFactory.callback("📊 Сравнение закупов", "admin:traffic:compare")));
             case QUESTS -> rows.add(List.of(keyboardFactory.callback("🧭 Пул квестов", "admin:stats:questpool")));
-            case ENGAGEMENT -> rows.add(List.of(keyboardFactory.callback("🧪 Отряды: диагностика", "admin:squadretention")));
+            case ENGAGEMENT -> rows.add(List.of(keyboardFactory.callback("🧪 Отряды: диагностика (рефералка)", "admin:squadretention")));
+            case SQUADS -> rows.add(List.of(keyboardFactory.callback("⚔️ Состав отряда", "admin:squads:search")));
             case FRAUD -> rows.add(List.of(keyboardFactory.callback("🕵️ Повторы разовых квестов", "admin:onetimeabuse")));
             case TOURNAMENTS -> rows.add(List.of(keyboardFactory.callback("🏆 Управление турнирами", "admin:tournaments")));
             default -> { }
