@@ -11608,6 +11608,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (r.droppedOnDay()[d] > bestCount) { bestCount = r.droppedOnDay()[d]; bestDay = d; }
         }
         StringBuilder sb = new StringBuilder("📉 <b>Момент оттока</b>\n\n");
+
+        try {
+            UserService.RegistrationFunnelReport fr = userService.registrationFunnelReport(r.cap());
+            sb.append("<b>Воронка регистрации</b> (до когорты ниже — она видит только тех, кто прошёл эту воронку целиком):\n");
+            sb.append("Написали боту хоть раз: <b>").append(fr.totalStarted()).append("</b>\n");
+            sb.append("Дошли до ввода ника: <b>").append(fr.enteredNickname()).append("</b>");
+            if (fr.totalStarted() > 0) sb.append(" (").append(String.format(ru, "%.1f", fr.enteredNickname() * 100.0 / fr.totalStarted())).append("%)");
+            sb.append("\n");
+            if (fr.stuckAtSubscription() > 0) {
+                sb.append("⚠️ Застряли на подписке на канал (ник введён, не активированы): <b>").append(fr.stuckAtSubscription()).append("</b>\n");
+            }
+            sb.append("Полностью активированы (это и есть когорта ниже): <b>").append(fr.fullyActivated()).append("</b>");
+            if (fr.totalStarted() > 0) sb.append(" (").append(String.format(ru, "%.1f", fr.fullyActivated() * 100.0 / fr.totalStarted())).append("% от написавших боту)");
+            sb.append("\n\n");
+        } catch (Exception e) {
+            log.warn("Churn day report: registration funnel failed", e);
+        }
+
         sb.append("Когорта: зарегистрированные ").append(r.cap()).append("+ дней назад — <b>").append(r.cohortSize()).append("</b> чел.\n");
         sb.append("На какой день после регистрации человек заходил в последний раз (последняя известная активность).\n\n");
         for (int d : marks) {

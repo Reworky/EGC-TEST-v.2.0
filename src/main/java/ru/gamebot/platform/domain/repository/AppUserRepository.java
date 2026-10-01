@@ -88,6 +88,19 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
      * если бот сам обнаружит, что они уже подписались (не дождавшись возврата в бота). */
     List<AppUser> findAllByProfileCompletedTrueAndRegistrationCompletedFalse();
 
+    /** Воронка ДО того, как игрок попадает в когорту churnDayReport (та смотрит только на
+     *  registrationCompleted=true) - сколько вообще когда-либо написали боту (AppUser создаётся в
+     *  UserService.getOrCreate на первое сообщение), сколько дошли до ввода ника (profileCompleted),
+     *  и сколько застряли именно на обязательной подписке на канал (profileCompleted=true,
+     *  registrationCompleted=false - см. UserService.findPendingChannelActivation,
+     *  GamePlatformBot.checkPendingChannelActivations). Карта роста EGC, п.6 - без этого слоя кризис
+     *  активации дня 0 был виден только частично, учитывая людей, уже прошедших эту подписку. */
+    long countByCreatedAtLessThanEqual(LocalDateTime cutoff);
+
+    long countByProfileCompletedTrueAndCreatedAtLessThanEqual(LocalDateTime cutoff);
+
+    long countByProfileCompletedTrueAndRegistrationCompletedFalseAndCreatedAtLessThanEqual(LocalDateTime cutoff);
+
     List<AppUser> findTop20ByRegistrationCompletedTrueOrderByWeeklyXpDescTelegramIdAsc();
 
     /** Только реально активные на этой неделе игроки — без этого топ-20 добивался нулями (неактивные, но с малым TG ID). */

@@ -612,6 +612,21 @@ public class UserService {
     /** Смотрим только на игроков, зарегистрированных минимум CHURN_ANALYSIS_CAP_DAYS дней назад -
      *  иначе свежая регистрация, которая технически ещё «не успела отвалиться», исказила бы картину
      *  (эффект тот же, что ORGANIC_MIN_ACCOUNT_AGE_DAYS в getEngagementReport, но для другой цели). */
+    /** Воронка регистрации ДО когорты churnDayReport (та видит только registrationCompleted=true) -
+     *  карта роста EGC, п.6, 2026-10-02: totalStarted - все, кто хоть раз написал боту; enteredNickname -
+     *  дошли до ввода ника; stuckAtSubscription - застряли именно на обязательной подписке на канал
+     *  (см. findPendingChannelActivation); fullyActivated = churnDayReport.cohortSize() при том же cutoff. */
+    public record RegistrationFunnelReport(long totalStarted, long enteredNickname, long stuckAtSubscription, long fullyActivated) {}
+
+    public RegistrationFunnelReport registrationFunnelReport(int cutoffDays) {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(cutoffDays);
+        long totalStarted = appUserRepository.countByCreatedAtLessThanEqual(cutoff);
+        long enteredNickname = appUserRepository.countByProfileCompletedTrueAndCreatedAtLessThanEqual(cutoff);
+        long stuck = appUserRepository.countByProfileCompletedTrueAndRegistrationCompletedFalseAndCreatedAtLessThanEqual(cutoff);
+        long activated = appUserRepository.countRegisteredBetween(LocalDateTime.of(2020, 1, 1, 0, 0), cutoff);
+        return new RegistrationFunnelReport(totalStarted, enteredNickname, stuck, activated);
+    }
+
     public ChurnDayReport churnDayReport() {
         LocalDateTime maxCreatedAt = LocalDateTime.now().minusDays(CHURN_ANALYSIS_CAP_DAYS);
         List<Object[]> rows = appUserRepository.findCreatedAtAndLastActivityForChurn(maxCreatedAt);
