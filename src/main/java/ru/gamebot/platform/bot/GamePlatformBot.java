@@ -13796,7 +13796,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Публикация в канал — только после одобрения администратора (см. handleAdminFeedAction).
         // Личные уведомления победителям ниже уходят сразу и от этого не зависят.
         try {
-            saveTournamentFeedDraft(t.getId(), "RESULTS", buildTournamentResultsPost(t, entries));
+            saveTournamentFeedDraft(t.getId(), "RESULTS", buildTournamentResultsPost(t, entries, event.getNextTournament()));
             sendTournamentFeedCard(t.getId());
         } catch (Exception ex) {
             log.error("Failed to prepare tournament results post for tournament {}", t.getId(), ex);
@@ -16462,7 +16462,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Пост «турнир завершён» для канала в стиле Экси: строчный заголовок, предложения с заглавной, без длинного
      * тире, концовка чередуется по id турнира (вопрос / реакция / обычная), в конце ссылка на бота. */
     private String buildTournamentResultsPost(ru.gamebot.platform.domain.model.Tournament t,
-                                              List<ru.gamebot.platform.domain.model.TournamentEntry> entries) {
+                                              List<ru.gamebot.platform.domain.model.TournamentEntry> entries,
+                                              ru.gamebot.platform.domain.model.Tournament next) {
         boolean isBrawl = t.getScoringType().isTrophyRace(); // любой трофи-марафон (имя переменной историческое)
         boolean anyHeld = entries.stream().anyMatch(ru.gamebot.platform.domain.model.TournamentEntry::isPayoutHeld);
         java.util.function.LongFunction<String> exc = n -> String.format(java.util.Locale.forLanguageTag("ru"), "%,d", n);
@@ -16496,11 +16497,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("\n").append(anyHeld
                 ? "Часть призов проходит проверку и будет зачислена позже. "
                 : "Призы уже на балансах победителей. ");
-        sb.append(switch ((int) (t.getId() % 3)) {
-            case 0 -> "Кто уже готовится к следующему турниру?";
-            case 1 -> "Ставь 🔥, если участвовал.";
-            default -> "Спасибо всем, кто сыграл. Следующий турнир уже скоро.";
-        });
+        sb.append(next != null
+                ? "Следующий турнир уже стартовал."
+                : switch ((int) (t.getId() % 3)) {
+                    case 0 -> "Кто уже готовится к следующему турниру?";
+                    case 1 -> "Ставь 🔥, если участвовал.";
+                    default -> "Спасибо всем, кто сыграл. Следующий турнир уже скоро.";
+                });
+        // Продолжение того же типа турниров уже создано (TournamentService.autoCreateNextTournament) -
+        // короткая отсылка в этом же посте вместо отдельной карточки "регистрация открыта" (2026-10-01).
+        if (next != null) {
+            sb.append("\n\n📝 <b>Регистрация на новый турнир уже открыта!</b> Взнос: <b>")
+              .append(exc.apply(next.getEntryFeeExc())).append(" EXC</b>. Подробности и запись - в боте.");
+        }
         sb.append("\n\n🎮 Все турниры - в нашем боте: <a href=\"https://t.me/").append(getBotUsername())
           .append("\">@").append(getBotUsername()).append("</a>");
         return sb.toString();

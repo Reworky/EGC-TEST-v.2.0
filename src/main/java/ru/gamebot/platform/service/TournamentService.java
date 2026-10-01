@@ -325,9 +325,19 @@ public class TournamentService {
         tournament.setStatus(Tournament.Status.FINISHED);
         tournamentRepository.save(tournament);
 
-        eventPublisher.publishEvent(new TournamentFinishedEvent(this, tournament, entries));
+        // Продолжение создаём ДО публикации события, чтобы итоги и анонс новой регистрации ушли
+        // ОДНИМ постом на согласование (запрошено 2026-10-01 - раньше это были 2 отдельные карточки:
+        // "турнир завершён" сразу и "регистрация открыта" следующим тиком announceTournamentStages).
+        Tournament next = autoCreateNextTournament(tournament);
+        if (next != null) {
+            // Эта регистрация уже анонсирована в комбинированном посте ниже - отдельного
+            // REGISTRATION_OPENED для неё announceTournamentStages() больше не создаст.
+            next.setRegistrationAnnounced(true);
+            tournamentRepository.save(next);
+        }
+
+        eventPublisher.publishEvent(new TournamentFinishedEvent(this, tournament, entries, next));
         log.info("Tournament {} settled. Pool={} EXC, participants={}", tournament.getId(), pool, entries.size());
-        autoCreateNextTournament(tournament);
     }
 
     /**
@@ -338,16 +348,16 @@ public class TournamentService {
      * LocalDateTime.now(), и турнир активировался на следующем тике планировщика (~60 сек), фактически
      * без единого шанса зарегистрироваться (найдено 2026-09-14 на живом Brawl Stars турнире).
      */
-    private void autoCreateNextTournament(Tournament finished) {
+    private Tournament autoCreateNextTournament(Tournament finished) {
         try {
             if (finished.getStartDate() == null || finished.getEndDate() == null) {
                 log.warn("Tournament {} has no start/end dates, skipping auto-continuation", finished.getId());
-                return;
+                return null;
             }
             Duration duration = Duration.between(finished.getStartDate(), finished.getEndDate());
             if (duration.isNegative() || duration.isZero()) {
                 log.warn("Tournament {} has invalid duration, skipping auto-continuation", finished.getId());
-                return;
+                return null;
             }
             LocalDateTime newStart = LocalDateTime.now().plus(AUTO_CONTINUATION_REGISTRATION_WINDOW);
             Tournament next = create(finished.getName(), finished.getDescription(), finished.getGameName(), finished.getEntryFeeExc(),
@@ -360,8 +370,10 @@ public class TournamentService {
                 ClashRoyaleSeasonGuard.check(LocalDateTime.now(), next.getStartDate(), next.getEndDate())
                         .ifPresent(w -> eventPublisher.publishEvent(new TournamentSeasonWarningEvent(this, next, w)));
             }
+            return next;
         } catch (Exception e) {
             log.error("Failed to auto-create continuation tournament after {}", finished.getId(), e);
+            return null;
         }
     }
 }
