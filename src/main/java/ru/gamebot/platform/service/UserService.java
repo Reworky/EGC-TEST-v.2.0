@@ -1037,9 +1037,10 @@ public class UserService {
         if (invitedUser.getCompletedQuests() != 0) {
             return false; // only on first quest (completedQuests is incremented before this call)
         }
-        // excType=null - сознательно без лога в exc_transactions, как и было до рефакторинга
-        // (найденный, но не закрытый попутно пробел - см. project_unified_exc_xp_credit_refactor).
-        addReward(invitedUser, 0, 3_000, null, null);
+        // Пробел закрыт 2026-10-01 (владелец подтвердил) - раньше это начисление вообще не
+        // логировалось в exc_transactions, см. project_unified_exc_xp_credit_refactor.
+        addReward(invitedUser, 0, 3_000, ExcTransactionService.REFERRAL_FIRST_QUEST_WELCOME,
+                "Бонус за первый одобренный квест");
 
         // Самореферал не награждаем (та же защита, что и в QuestService.grantReferralBonus);
         // если referrer не найден — бонус приглашённому выше всё равно уже начислен.

@@ -54,6 +54,14 @@ public class ExcTransactionService {
      *  баг с завышенной вдвое метрикой "средний ручеёк на реферала" в отчёте "Экономика рефералки"
      *  (см. UserService.referralEconomicsSnapshot) уже случился именно из-за этого. Не повторять. */
     public static final String REFERRAL_FIRST_QUEST_BONUS = "REFERRAL_FIRST_QUEST_BONUS";
+    /** Разовый бонус ПРИГЛАШЁННОМУ игроку за его же первый одобренный квест (та же механика, что и
+     *  REFERRAL_FIRST_QUEST_BONUS выше, только для другой стороны) - до рефакторинга 2026-10-01
+     *  ("Единая точка начисления EXC и XP") эта выплата вообще не логировалась в exc_transactions,
+     *  найдено при миграции UserService.grantFirstQuestReferralBonus на единую точку. Намеренно
+     *  ОТДЕЛЬНЫЙ тип, не переиспользован REFERRAL_WELCOME (тот - для другого события, инстант-бонуса
+     *  при подписке на канал) - смешивать разные события под одним типом уже приводило к багам
+     *  с задвоенными метриками, см. комментарий REFERRAL_FIRST_QUEST_BONUS выше. */
+    public static final String REFERRAL_FIRST_QUEST_WELCOME = "REFERRAL_FIRST_QUEST_WELCOME";
     /** Еженедельный приз топ-отряда (SquadService.rewardTopSquad) - до рефакторинга 2026-10-01
      *  ("Единая точка начисления EXC и XP") эта выплата вообще не логировалась в exc_transactions,
      *  найдено как раз при миграции на единую точку (фаза 1, SinkShopService). */
