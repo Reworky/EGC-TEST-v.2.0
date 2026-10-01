@@ -8941,6 +8941,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case "advstats" -> sendAdminAdvertiserStats(user);
             case "an" -> sendAnalyticsHome(user);
+            case "squadretention" -> handleSquadRetentionDiagnostic(user);
             case "ceiling" -> sendEngagementCeilingReport(user);
             case "adv" -> sendAdvertiserHome(user);
             case "stats:reset_weekly" -> sendAdminResetWeeklyConfirm(user);
@@ -12173,6 +12174,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case SOURCES -> rows.add(List.of(keyboardFactory.callback("📊 Сравнение закупов", "admin:traffic:compare")));
             case QUESTS -> rows.add(List.of(keyboardFactory.callback("🧭 Пул квестов", "admin:stats:questpool")));
+            case ENGAGEMENT -> rows.add(List.of(keyboardFactory.callback("🧪 Отряды: диагностика", "admin:squadretention")));
             case FRAUD -> rows.add(List.of(keyboardFactory.callback("🕵️ Повторы разовых квестов", "admin:onetimeabuse")));
             case TOURNAMENTS -> rows.add(List.of(keyboardFactory.callback("🏆 Управление турнирами", "admin:tournaments")));
             default -> { }
@@ -19961,7 +19963,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append(squadCohortBlock("В отряде", inSquad, total));
         sb.append(squadCohortBlock("Без отряда", noSquad, total));
 
-        sendText(user.getTelegramId(), sb.toString(), null);
+        sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("admin:an:tab:ENGAGEMENT"));
     }
 
     private String squadCohortBlock(String label, UserService.SquadCohortReport r, long total) {
