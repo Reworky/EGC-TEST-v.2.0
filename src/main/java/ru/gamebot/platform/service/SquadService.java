@@ -14,6 +14,7 @@ import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Squad;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.SquadRepository;
+import ru.gamebot.platform.event.SquadMilestoneReachedEvent;
 import ru.gamebot.platform.event.SquadPrizeEvent;
 import ru.gamebot.platform.event.SquadReferralBonusEvent;
 
@@ -35,6 +36,14 @@ public class SquadService {
     public static final int PRIZE_MAX_RECIPIENTS = 10;
     private static final long REFERRAL_SQUAD_BONUS_POINTS = 100;
     private static final int REFERRAL_SQUAD_JOIN_WINDOW_DAYS = 7;
+
+    /** Разовые бонусы за рост отряда (ТЗ EGC_TZ_otryady, 2026-10-02): диагностика подтвердила, что
+     *  удержание у "в отряде" в разы выше, чем у "без отряда", даже при среднем размере отряда всего
+     *  1,5 человека - большинство "отрядов" сейчас теги на 1-2 людях, не команды. Суммы скромные
+     *  (сопоставимы с REFERRAL_SQUAD_BONUS_POINTS по порядку цены за действие), чтобы не раздувать
+     *  Payout Pool - это подталкивающий нудж, а не основной источник дохода игрока. */
+    private static final long SQUAD_MILESTONE_3_BONUS_PER_MEMBER = 200;
+    private static final long SQUAD_MILESTONE_5_BONUS_PER_MEMBER = 150;
 
     private final SquadRepository squadRepository;
     private final AppUserRepository appUserRepository;
@@ -115,7 +124,35 @@ public class SquadService {
         user.setSquadId(squad.getId());
         appUserRepository.save(user);
         awardReferralSquadBonus(user, squad);
+        awardSizeMilestoneIfReached(squad);
         return squad;
+    }
+
+    /** Разовый бонус всем текущим участникам, когда отряд ВПЕРВЫЕ достигает 3 или 5 человек (ТЗ
+     *  EGC_TZ_otryady, 2026-10-02) - флаги на Squad защищают от повторной выплаты при колебании состава.
+     *  Проверяет оба порога за один вызов (join() увеличивает размер максимум на 1, но так надёжнее,
+     *  если когда-нибудь появится групповое вступление). */
+    private void awardSizeMilestoneIfReached(Squad squad) {
+        long count = memberCount(squad);
+        if (count >= 3 && !squad.isMilestone3Awarded()) {
+            squad.setMilestone3Awarded(true);
+            squadRepository.save(squad);
+            awardSizeMilestone(squad, 3, SQUAD_MILESTONE_3_BONUS_PER_MEMBER);
+        }
+        if (count >= 5 && !squad.isMilestone5Awarded()) {
+            squad.setMilestone5Awarded(true);
+            squadRepository.save(squad);
+            awardSizeMilestone(squad, 5, SQUAD_MILESTONE_5_BONUS_PER_MEMBER);
+        }
+    }
+
+    private void awardSizeMilestone(Squad squad, int size, long bonusPerMember) {
+        List<AppUser> members = getMembers(squad);
+        for (AppUser member : members) {
+            excTx.creditExc(member, bonusPerMember, ExcTransactionService.SQUAD_MILESTONE,
+                    "Отряд «" + squad.getName() + "» достиг " + size + " человек");
+        }
+        eventPublisher.publishEvent(new SquadMilestoneReachedEvent(this, squad, members, size, bonusPerMember));
     }
 
     /** Модуль "Реферал усиливает Отряд" (максимизация рефералки, Модуль 2): если вступивший был приглашён

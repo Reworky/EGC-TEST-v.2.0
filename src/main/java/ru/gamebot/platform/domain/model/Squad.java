@@ -40,4 +40,14 @@ public class Squad {
      *  в WeeklyResetScheduler, чтобы не накапливаться бессрочно. */
     @Column(columnDefinition = "bigint default 0")
     private long weeklyBonusPoints;
+
+    /** Разовые бонусы за рост отряда до 3 / 5 человек (SquadService.awardSizeMilestoneIfReached, ТЗ
+     *  EGC_TZ_otryady, 2026-10-02) - флаги защищают от повторной выплаты, если отряд потом сократится
+     *  и снова дорастёт до того же размера. Не сбрасываются еженедельно (в отличие от weeklyBonusPoints) -
+     *  это разовое событие за всю жизнь отряда, а не недельный рейтинг. */
+    @Column(columnDefinition = "boolean default false")
+    private boolean milestone3Awarded;
+
+    @Column(columnDefinition = "boolean default false")
+    private boolean milestone5Awarded;
 }

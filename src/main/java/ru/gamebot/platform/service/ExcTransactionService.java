@@ -66,6 +66,12 @@ public class ExcTransactionService {
      *  ("Единая точка начисления EXC и XP") эта выплата вообще не логировалась в exc_transactions,
      *  найдено как раз при миграции на единую точку (фаза 1, SinkShopService). */
     public static final String SQUAD_PRIZE = "SQUAD_PRIZE";
+    /** Разовый бонус участникам за рост отряда до 3/5 человек (SquadService.awardSizeMilestoneIfReached,
+     *  ТЗ EGC_TZ_otryady, 2026-10-02) - намеренно ОТДЕЛЬНЫЙ тип от SQUAD_PRIZE: тот - еженедельный приз
+     *  топ-отряда по рейтингу (повторяется каждую неделю, зависит от места в рейтинге), это - одноразовая
+     *  выплата ВСЕМ отрядам, достигшим размера, независимо от рейтинга. Смешивание под одним типом исказило
+     *  бы и "средний приз топ-отряда", и подсчёт того, сколько отрядов реально прошли через milestone. */
+    public static final String SQUAD_MILESTONE = "SQUAD_MILESTONE";
 
     @Transactional(propagation = Propagation.REQUIRED)
     public void log(AppUser user, long amount, String type, String description) {
@@ -133,6 +139,7 @@ public class ExcTransactionService {
             case REFERRAL_WELCOME -> "🤝 Бонус за вступление";
             case REFERRAL_PRIZE   -> "🏆 Приз топ-рефереров";
             case REFERRAL_FIRST_QUEST_BONUS -> "🤝 Бонус за первый квест друга";
+            case SQUAD_MILESTONE -> "👨‍👩‍👧‍👦 Бонус за рост отряда";
             default             -> "📌 Прочее";
         };
     }

@@ -7864,7 +7864,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "⚔️ <b>Отряды</b>\n\n"
                             + "Собирайте отряд — от 2 игроков, чем больше, тем сильнее конкуренция за призовые места.\n"
                             + "Суммарный XP участников — рейтинг вашего отряда.\n"
-                            + "Каждую неделю топ-отряд делит <b>10 000 EXC</b> между лучшими игроками недели.\n\n"
+                            + "Каждую неделю топ-отряд делит <b>10 000 EXC</b> между лучшими игроками недели.\n"
+                            + "🎉 Отряд из 3 человек получает разовый бонус каждому участнику, из 5 — ещё один.\n\n"
                             + "Зовите друзей и играйте вместе 🔥",
                     keyboardFactory.verticalLayout(List.of(
                             keyboardFactory.callback("➕ Создать отряд", "squad:create"),
@@ -7905,7 +7906,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         sb.append("\n📊 Рейтинг отряда за неделю: <b>")
                 .append(String.format("%,d", weeklyXp).replace(',', ' ')).append("</b>\n\n");
-        sb.append("🎁 Топ-отряд каждую неделю получает <b>10 000 EXC</b>");
+        sb.append("🎁 Топ-отряд каждую неделю получает <b>10 000 EXC</b>\n");
+        sb.append(squadMilestoneProgressLine(squad, members.size()));
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (isCaptain) {
@@ -7921,6 +7923,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
 
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Подсказка до ближайшего бонуса за размер отряда (SquadService.awardSizeMilestoneIfReached) —
+     *  видимость цели, чтобы капитан активно звал ещё людей, а не просто имел доступ к ссылке-приглашению. */
+    private String squadMilestoneProgressLine(ru.gamebot.platform.domain.model.Squad squad, int memberCount) {
+        if (!squad.isMilestone3Awarded()) {
+            int left = 3 - memberCount;
+            return left <= 0 ? "" : "👉 Ещё " + left + " " + pluralPeople(left) + " — и каждый участник получит бонус EXC\n";
+        }
+        if (!squad.isMilestone5Awarded()) {
+            int left = 5 - memberCount;
+            return left <= 0 ? "" : "👉 Ещё " + left + " " + pluralPeople(left) + " до отряда из 5 — новый бонус каждому\n";
+        }
+        return "";
+    }
+
+    private String pluralPeople(int n) {
+        int n100 = n % 100, n10 = n % 10;
+        if (n100 >= 11 && n100 <= 14) return "человек";
+        if (n10 == 1) return "человек";
+        if (n10 >= 2 && n10 <= 4) return "человека";
+        return "человек";
     }
 
     private void handleWheelAction(CallbackQuery callbackQuery, AppUser user, String action) {
@@ -8839,7 +8863,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>\n"
                             + formatExcBonusLine(rewardGrant)
                             + egcPassBonusLine(submission)
-                            + firstQuestBonus, watchAdForBonusButton(), nextQuestSuggestionButton(submission.getUser()), sinkShopSuggestionButton(submission.getUser()));
+                            + firstQuestBonus, watchAdForBonusButton(), nextQuestSuggestionButton(submission.getUser()), sinkShopSuggestionButton(submission.getUser()),
+                            squadSuggestionButton(submission.getUser(), isFirstQuest));
         } catch (Exception e) {
             log.warn("Could not notify user {} about quest approval: {}", submission.getUser().getTelegramId(), e.getMessage());
         }
@@ -15619,6 +15644,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     @org.springframework.context.event.EventListener
+    public void onSquadMilestoneReached(ru.gamebot.platform.event.SquadMilestoneReachedEvent event) {
+        String msg = "🎉 <b>Отряд «" + escape(event.getSquad().getName()) + "» дорос до " + event.getSize() + " человек!</b>\n\n"
+                + "Каждому участнику: <b>+" + event.getBonusPerMember() + " EXC</b> 🪙";
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("⚔️ Мой отряд", "menu:squads"))
+        ));
+        for (ru.gamebot.platform.domain.model.AppUser member : event.getMembers()) {
+            try {
+                sendText(member.getTelegramId(), msg, keyboard);
+            } catch (Exception e) {
+                log.warn("Failed to notify squad member {} about size milestone", member.getTelegramId(), e);
+            }
+        }
+    }
+
+    @org.springframework.context.event.EventListener
     public void onCooldownExpired(ru.gamebot.platform.event.CooldownExpiredEvent event) {
         String msg = "🎮 <b>Кулдаун снят!</b>\n\n"
                 + "Квест <b>«" + escape(event.getQuestTitle()) + "»</b> в игре <b>"
@@ -17379,7 +17420,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>\n"
                         + formatExcBonusLine(rewardGrant)
                         + egcPassBonusLine(approved)
-                        + firstQuestBonus, watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
+                        + firstQuestBonus, watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()),
+                        squadSuggestionButton(approved.getUser(), isFirstQuest));
             } catch (Exception e) {
                 log.warn("Could not notify user {} about AI approval: {}", approved.getUser().getTelegramId(), e.getMessage());
             }
@@ -18274,6 +18316,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private InlineKeyboardButton sinkShopSuggestionButton(AppUser user) {
         return user.getCoins() >= SINK_SHOP_SUGGESTION_MIN_COINS
                 ? keyboardFactory.callback("🛍️ Забери усиление за EXC", "menu:sink")
+                : null;
+    }
+
+    /** Предложить отряд на карточке одобрения ПЕРВОГО квеста (момент максимальной вовлечённости, тот же
+     *  принцип, что у nextQuestSuggestionButton) - игроки в отрядах возвращаются на порядок чаще (ТЗ
+     *  EGC_TZ_otryady, 2026-10-02: DAU/MAU в отряде vs без - ×18). Только для тех, кто ещё не в отряде,
+     *  и только на первом квесте - не показывать на каждом одобрении, иначе приедается и игнорируется. */
+    private InlineKeyboardButton squadSuggestionButton(AppUser user, boolean isFirstQuest) {
+        return isFirstQuest && user.getSquadId() == null
+                ? keyboardFactory.callback("⚔️ Играть в отряде — выгоднее одному", "menu:squads")
                 : null;
     }
 
