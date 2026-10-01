@@ -11627,9 +11627,33 @@ public class GamePlatformBot extends TelegramLongPollingBot {
               .append(" · ещё активны на этот день и позже: ").append(surviving)
               .append(" (").append(String.format(ru, "%.1f", surviving * 100.0 / r.cohortSize())).append("%)\n");
         }
-        if (bestDay > 0) {
+        long day0 = r.droppedOnDay()[0];
+        double day0Pct = day0 * 100.0 / r.cohortSize();
+        if (day0Pct >= 30) {
+            sb.append("\n🔴 <b>Главный вывод: ").append(String.format(ru, "%.1f", day0Pct))
+              .append("% вообще не возвращаются после дня регистрации</b> — это на порядок больше любого дня дальше. ")
+              .append("Проблема не в удержании после вовлечения, а в самой активации: человек либо не доходит до первого ")
+              .append("полезного действия, либо делает его и не видит повода вернуться завтра.");
+            if (bestDay > 0) {
+                sb.append("\nСреди тех, кто всё же вернулся хотя бы раз — чаще всего пропадают на <b>день ").append(bestDay)
+                  .append("</b> (").append(bestCount).append(" чел., ").append(String.format(ru, "%.1f", bestCount * 100.0 / r.cohortSize())).append("%).");
+            }
+        } else if (bestDay > 0) {
             sb.append("\n👉 Самый частый день последнего визита (не считая дня регистрации): <b>день ").append(bestDay).append("</b> — ")
               .append(bestCount).append(" чел. (").append(String.format(ru, "%.1f", bestCount * 100.0 / r.cohortSize())).append("%). Здесь нужен крючок.");
+        }
+
+        try {
+            java.time.LocalDateTime epoch = java.time.LocalDateTime.of(2020, 1, 1, 0, 0);
+            java.time.LocalDateTime cutoff = java.time.LocalDateTime.now().minusDays(r.cap());
+            UserService.ZeroQuestBreakdown zb = userService.breakdownZeroQuestUsers(epoch, cutoff);
+            long zeroQuest = userService.countRegisteredBetweenWithCompletedQuestsBetween(epoch, cutoff, 0, 0);
+            sb.append("\n\n<b>Из них (вся когорта), кто не взял ни одного квеста:</b> ").append(zeroQuest)
+              .append(" (").append(String.format(ru, "%.1f", zeroQuest * 100.0 / r.cohortSize())).append("%)\n")
+              .append("   ├ ни разу не открывали бота повторно: <b>").append(zb.neverReturned()).append("</b>\n")
+              .append("   └ открывали, но квест так и не взяли: <b>").append(zb.returnedButNoQuest()).append("</b>");
+        } catch (Exception e) {
+            log.warn("Churn day report: zero-quest breakdown failed", e);
         }
         return sb.toString();
     }
