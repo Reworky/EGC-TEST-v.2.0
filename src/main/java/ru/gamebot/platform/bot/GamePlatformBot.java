@@ -19963,6 +19963,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append(squadCohortBlock("В отряде", inSquad, total));
         sb.append(squadCohortBlock("Без отряда", noSquad, total));
 
+        sb.append("\n<b>Проверка на тень рефералки</b> (разрыв отряд vs без отряда — отдельно для пришедших по рефералке и остальных):\n");
+        for (UserService.SquadReferralCell c : userService.squadReferralCrossCheck()) {
+            java.util.Locale ru = java.util.Locale.forLanguageTag("ru");
+            sb.append(c.inSquad() ? "В отряде" : "Без отряда").append(", ").append(c.referred() ? "по рефералке" : "не по рефералке")
+              .append(": ").append(c.segmentSize()).append(" чел., DAU/MAU <b>")
+              .append(String.format(ru, "%.1f", c.dauMauPercent())).append("%</b> (DAU ").append(c.dau()).append(", MAU ").append(c.mau()).append(")\n");
+        }
+
         sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("admin:an:tab:ENGAGEMENT"));
     }
 

@@ -159,6 +159,21 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     long countByRegistrationCompletedTrueAndSquadIdIsNull();
 
+    /** Перекрёстная проверка "отряды vs рефералка" (ТЗ EGC_TZ_otryady, рекомендация после Этапа 1, 2026-10-01):
+     *  разрыв в удержании у "в отряде" может быть тенью уже известного эффекта "реферальный трафик качественнее
+     *  рекламного" (самоотбор), а не самостоятельным эффектом отрядов. referredByTelegramId - отдельное поле от
+     *  trafficSourceCode (см. UserService.getEngagementReport), это именно приглашение другом, а не источник закупа. */
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true "
+            + "AND ((:inSquad = true AND u.squadId IS NOT NULL) OR (:inSquad = false AND u.squadId IS NULL)) "
+            + "AND ((:referred = true AND u.referredByTelegramId IS NOT NULL) OR (:referred = false AND u.referredByTelegramId IS NULL))")
+    long countBySquadAndReferral(@Param("inSquad") boolean inSquad, @Param("referred") boolean referred);
+
+    @Query("SELECT COUNT(DISTINCT u) FROM AppUser u WHERE (u.lastActivityDate >= :sinceDate OR u.lastBotActivityAt >= :sinceDateTime OR u.lastMiniAppOpenAt >= :sinceDateTime) "
+            + "AND ((:inSquad = true AND u.squadId IS NOT NULL) OR (:inSquad = false AND u.squadId IS NULL)) "
+            + "AND ((:referred = true AND u.referredByTelegramId IS NOT NULL) OR (:referred = false AND u.referredByTelegramId IS NULL))")
+    long countDistinctActiveSinceBySquadAndReferral(@Param("sinceDate") java.time.LocalDate sinceDate, @Param("sinceDateTime") LocalDateTime sinceDateTime,
+                                                     @Param("inSquad") boolean inSquad, @Param("referred") boolean referred);
+
     /** Воронка "сколько квестов реально сделал новый игрок" — для диагностики, отваливаются ли
      *  новички после первого квеста (проблема вовлечения) или ещё раньше (проблема первого опыта). */
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt >= :from AND u.createdAt < :to AND u.completedQuests >= :minQuests AND u.completedQuests <= :maxQuests")

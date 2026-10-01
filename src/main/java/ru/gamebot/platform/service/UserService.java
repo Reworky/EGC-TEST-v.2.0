@@ -570,6 +570,29 @@ public class UserService {
         return new SquadCohortReport(inSquad, segmentSize, active7, active30, engagementReportBySquad(inSquad), retentionBySquad(inSquad));
     }
 
+    /** Одна ячейка перекрёстной проверки "отряды x рефералка" - см. squadReferralCrossCheck. */
+    public record SquadReferralCell(boolean inSquad, boolean referred, long segmentSize, long dau, long mau, double dauMauPercent) {}
+
+    /** Проверка, не является ли эффект отрядов (getSquadCohortReport) тенью уже известного эффекта "реферальный
+     *  трафик качественнее рекламного" - рекомендация после Этапа 1 ТЗ EGC_TZ_otryady (2026-10-01): прежде чем
+     *  вкладываться в постоянную вкладку "Отряды", проверить разрыв отдельно внутри "пришёл по рефералке" и
+     *  "не по рефералке". Если разрыв "в отряде vs без" держится в ОБЕИХ группах - эффект самостоятельный. */
+    public List<SquadReferralCell> squadReferralCrossCheck() {
+        LocalDateTime since1d = LocalDateTime.now().minusDays(1);
+        LocalDateTime since30d = LocalDateTime.now().minusDays(30);
+        List<SquadReferralCell> out = new java.util.ArrayList<>();
+        for (boolean inSquad : new boolean[]{true, false}) {
+            for (boolean referred : new boolean[]{true, false}) {
+                long segmentSize = appUserRepository.countBySquadAndReferral(inSquad, referred);
+                long dau = appUserRepository.countDistinctActiveSinceBySquadAndReferral(since1d.toLocalDate(), since1d, inSquad, referred);
+                long mau = appUserRepository.countDistinctActiveSinceBySquadAndReferral(since30d.toLocalDate(), since30d, inSquad, referred);
+                double pct = mau > 0 ? dau * 100.0 / mau : 0;
+                out.add(new SquadReferralCell(inSquad, referred, segmentSize, dau, mau, pct));
+            }
+        }
+        return out;
+    }
+
     public SquadOverview squadOverview() {
         long squadCount = squadRepository.countByStatus("ACTIVE");
         long members = appUserRepository.countByRegistrationCompletedTrueAndSquadIdIsNotNull();
