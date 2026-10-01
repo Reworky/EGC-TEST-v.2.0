@@ -4032,6 +4032,39 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Заявки трафиковых игроков (sendCommunityActivationPrompt: isTrafficSourced -> общая ссылка
+     * канала, не bot-driven activationChannelUrl) идут в ручную очередь "📥 Заявки на канал" и НЕ
+     * активируются сами по себе, в отличие от checkPendingChannelActivations выше - пока админ не
+     * нажмёт "Принять", человек не может взять квест и получить стартовый бонус. Карточка на заявку
+     * уходит один раз в момент её создания и не повторяется - если админ пропустил/отвлёкся, очередь
+     * растёт молча. Найдено 2026-10-02 при разборе "момента оттока": 182 человека застряли именно на
+     * шаге подписки - часть наверняка ждёт тут. Раз в 2 часа - если есть заявки старше порога, одно
+     * сводное напоминание со ссылкой сразу принять все одной кнопкой. */
+    private static final java.time.Duration JOIN_REQUEST_REMINDER_THRESHOLD = java.time.Duration.ofHours(2);
+
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 2 * 60 * 60 * 1000)
+    public void remindPendingChannelJoinRequests() {
+        List<ChannelJoinRequest> pending = channelJoinRequestRepository.findAllByStatusOrderByCreatedAtAsc(ChannelJoinRequest.PENDING);
+        if (pending.isEmpty()) return;
+        java.time.LocalDateTime oldest = pending.get(0).getCreatedAt();
+        if (oldest.isAfter(java.time.LocalDateTime.now().minus(JOIN_REQUEST_REMINDER_THRESHOLD))) return;
+        long hoursWaiting = java.time.Duration.between(oldest, java.time.LocalDateTime.now()).toHours();
+        String text = "⏰ <b>Заявки на вступление в канал копятся</b>\n\n"
+                + "Ожидают решения: <b>" + pending.size() + "</b>, самая старая — " + hoursWaiting + " ч.\n"
+                + "Пока заявка висит, человек не может взять квест и получить стартовый бонус +200 EXC.";
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("✅ Принять всех (" + pending.size() + ")", "admin:joinreq:approveall")),
+                List.of(keyboardFactory.callback("📥 Посмотреть заявки", "admin:joinreq"))
+        ));
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, text, keyboard);
+            } catch (Exception e) {
+                log.warn("Failed to send join-request backlog reminder to admin {}", adminId, e);
+            }
+        }
+    }
+
     // ─── Onboarding ──────────────────────────────────────────────────────────────
 
     /** Приветствие + гайд — одно и то же сообщение всем сразу после ввода никнейма (см. REG_NAME),
