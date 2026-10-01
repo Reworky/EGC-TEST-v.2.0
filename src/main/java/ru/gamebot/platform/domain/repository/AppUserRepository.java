@@ -51,6 +51,15 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     long countDistinctActiveSince(@Param("sinceDate") java.time.LocalDate sinceDate, @Param("sinceDateTime") LocalDateTime sinceDateTime,
                                    @Param("sourceFilter") String sourceFilter, @Param("maxCreatedAt") LocalDateTime maxCreatedAt);
 
+    /** То же самое, с сегментацией по членству в отряде вместо источника трафика - разовая диагностика
+     *  гипотезы "отряды удерживают активность" (ТЗ EGC_TZ_otryady, 2026-10-01), Этап 1. inSquad=true -
+     *  squadId IS NOT NULL, false - IS NULL. Отдельный метод, а не переиспользование sourceFilter: это
+     *  два разных среза аудитории, смешивать их в одном параметре было бы путаницей осей. */
+    @Query("SELECT COUNT(DISTINCT u) FROM AppUser u WHERE (u.lastActivityDate >= :sinceDate OR u.lastBotActivityAt >= :sinceDateTime OR u.lastMiniAppOpenAt >= :sinceDateTime) "
+            + "AND ((:inSquad = true AND u.squadId IS NOT NULL) OR (:inSquad = false AND u.squadId IS NULL))")
+    long countDistinctActiveSinceBySquad(@Param("sinceDate") java.time.LocalDate sinceDate, @Param("sinceDateTime") LocalDateTime sinceDateTime,
+                                          @Param("inSquad") boolean inSquad);
+
     /**
      * Блокирует строку пользователя на время транзакции (SELECT ... FOR UPDATE).
      * Нужно везде, где идёт схема "проверить лимит → записать" (взятие квеста и т.п.),
@@ -117,6 +126,12 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.lastActivityDate >= :since")
     long countActiveSince(@Param("since") java.time.LocalDate since);
 
+    /** То же самое ("Активны за N дней", вкладка «Активность»), сегментировано по членству в отряде -
+     *  ТЗ EGC_TZ_otryady (2026-10-01), Этап 1. */
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.lastActivityDate >= :since "
+            + "AND ((:inSquad = true AND u.squadId IS NOT NULL) OR (:inSquad = false AND u.squadId IS NULL))")
+    long countActiveSinceBySquad(@Param("since") java.time.LocalDate since, @Param("inSquad") boolean inSquad);
+
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.weeklyXp > :weeklyXp")
     long countWithMoreWeeklyXp(@Param("weeklyXp") long weeklyXp);
 
@@ -128,6 +143,21 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt >= :from AND u.createdAt < :to AND u.lastActivityDate >= :activeSince")
     long countRegisteredBetweenAndActiveSince(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to, @Param("activeSince") java.time.LocalDate activeSince);
+
+    /** Та же когорта "возврата" (UserService.retention), сегментированная по ТЕКУЩЕМУ членству в отряде -
+     *  см. countDistinctActiveSinceBySquad выше про смысл inSquad и почему не переиспользуется sourceFilter. */
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt >= :from AND u.createdAt < :to "
+            + "AND ((:inSquad = true AND u.squadId IS NOT NULL) OR (:inSquad = false AND u.squadId IS NULL))")
+    long countRegisteredBetweenBySquad(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to, @Param("inSquad") boolean inSquad);
+
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt >= :from AND u.createdAt < :to AND u.lastActivityDate >= :activeSince "
+            + "AND ((:inSquad = true AND u.squadId IS NOT NULL) OR (:inSquad = false AND u.squadId IS NULL))")
+    long countRegisteredBetweenAndActiveSinceBySquad(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
+                                                      @Param("activeSince") java.time.LocalDate activeSince, @Param("inSquad") boolean inSquad);
+
+    long countByRegistrationCompletedTrueAndSquadIdIsNotNull();
+
+    long countByRegistrationCompletedTrueAndSquadIdIsNull();
 
     /** Воронка "сколько квестов реально сделал новый игрок" — для диагностики, отваливаются ли
      *  новички после первого квеста (проблема вовлечения) или ещё раньше (проблема первого опыта). */

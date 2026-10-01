@@ -549,6 +549,87 @@ public class UserService {
                 retention.cohortSize(), retention.returned(), retention.ratePercent());
     }
 
+    // ───────────────────────── ТЗ "отряды удерживают активность" (2026-10-01), Этап 1 ─────────────────────────
+    // Разовая диагностика гипотезы: сравнить вовлечённость/возврат сегментов "в отряде" (squadId IS NOT NULL) и
+    // "без отряда" теми же метриками, что в общей Аналитике (getEngagementReport/retention), чтобы результат был
+    // сопоставим с остальными отчётами. См. GamePlatformBot "/squadretention" (admin-команда, не постоянная вкладка -
+    // вкладка "Отряды" в Аналитике заводится только если здесь найдётся заметный разрыв между сегментами).
+
+    public record SquadCohortReport(boolean inSquad, long segmentSize, long active7, long active30,
+                                     EngagementReport engagement, RetentionReport retention) {}
+
+    public record SquadOverview(long squadCount, double avgSize) {}
+
+    public SquadCohortReport getSquadCohortReport(boolean inSquad) {
+        long segmentSize = inSquad
+                ? appUserRepository.countByRegistrationCompletedTrueAndSquadIdIsNotNull()
+                : appUserRepository.countByRegistrationCompletedTrueAndSquadIdIsNull();
+        LocalDate today = LocalDate.now();
+        long active7 = appUserRepository.countActiveSinceBySquad(today.minusDays(7), inSquad);
+        long active30 = appUserRepository.countActiveSinceBySquad(today.minusDays(30), inSquad);
+        return new SquadCohortReport(inSquad, segmentSize, active7, active30, engagementReportBySquad(inSquad), retentionBySquad(inSquad));
+    }
+
+    public SquadOverview squadOverview() {
+        long squadCount = squadRepository.countByStatus("ACTIVE");
+        long members = appUserRepository.countByRegistrationCompletedTrueAndSquadIdIsNotNull();
+        return new SquadOverview(squadCount, squadCount > 0 ? (double) members / squadCount : 0);
+    }
+
+    private EngagementReport engagementReportBySquad(boolean inSquad) {
+        LocalDateTime since1d = LocalDateTime.now().minusDays(1);
+        LocalDateTime since7d = LocalDateTime.now().minusDays(7);
+        LocalDateTime since30d = LocalDateTime.now().minusDays(30);
+
+        long dau = appUserRepository.countDistinctActiveSinceBySquad(since1d.toLocalDate(), since1d, inSquad);
+        long mau = appUserRepository.countDistinctActiveSinceBySquad(since30d.toLocalDate(), since30d, inSquad);
+        double dauMauPercent = mau > 0 ? dau * 100.0 / mau : 0;
+
+        long weeklyQuestTakers = questSubmissionRepository.countDistinctUsersWithApprovedSinceBySquad(since7d, inSquad);
+        double weeklyQuestPercent = mau > 0 ? weeklyQuestTakers * 100.0 / mau : 0;
+
+        SecondQuestRetention retention = secondQuestRetentionBySquad(inSquad);
+
+        return new EngagementReport(dau, mau, dauMauPercent,
+                weeklyQuestTakers, weeklyQuestPercent,
+                retention.cohortSize(), retention.returned(), retention.ratePercent());
+    }
+
+    private SecondQuestRetention secondQuestRetentionBySquad(boolean inSquad) {
+        LocalDateTime cutoff = LocalDateTime.now().minusDays(7);
+        List<Object[]> rows = questSubmissionRepository.findApprovedUserIdAndDateForRetentionBySquad(inSquad);
+        java.util.Map<Long, List<LocalDateTime>> byUser = new java.util.HashMap<>();
+        for (Object[] row : rows) {
+            Long telegramId = (Long) row[0];
+            LocalDateTime approvedAt = (LocalDateTime) row[1];
+            byUser.computeIfAbsent(telegramId, k -> new java.util.ArrayList<>()).add(approvedAt);
+        }
+        long cohort = 0;
+        long returned = 0;
+        for (List<LocalDateTime> dates : byUser.values()) {
+            if (dates.isEmpty()) continue;
+            java.util.Collections.sort(dates);
+            LocalDateTime first = dates.get(0);
+            if (first.isAfter(cutoff)) continue;
+            cohort++;
+            if (dates.size() >= 2 && !dates.get(1).isAfter(first.plusDays(7))) {
+                returned++;
+            }
+        }
+        double rate = cohort > 0 ? returned * 100.0 / cohort : 0;
+        return new SecondQuestRetention(cohort, returned, rate);
+    }
+
+    private RetentionReport retentionBySquad(boolean inSquad) {
+        LocalDate today = LocalDate.now();
+        LocalDateTime now = LocalDateTime.now();
+        long c7 = appUserRepository.countRegisteredBetweenBySquad(now.minusDays(14), now.minusDays(7), inSquad);
+        long r7 = c7 > 0 ? appUserRepository.countRegisteredBetweenAndActiveSinceBySquad(now.minusDays(14), now.minusDays(7), today.minusDays(7), inSquad) : 0;
+        long c30 = appUserRepository.countRegisteredBetweenBySquad(now.minusDays(60), now.minusDays(30), inSquad);
+        long r30 = c30 > 0 ? appUserRepository.countRegisteredBetweenAndActiveSinceBySquad(now.minusDays(60), now.minusDays(30), today.minusDays(30), inSquad) : 0;
+        return new RetentionReport(c7, r7, c30, r30);
+    }
+
     private record SecondQuestRetention(long cohortSize, long returned, double ratePercent) {}
 
     /** Из всех, кто выполнил свой первый одобренный квест не позже чем 7 дней назад (иначе рано судить,

@@ -425,6 +425,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (text != null && text.equals("/squadretention") && isEffectiveAdmin(user)) {
+            handleSquadRetentionDiagnostic(user);
+            return;
+        }
+
         if (shouldContinueSupportMediaGroup(message, session)) {
             handleSupportMessage(user, session, message);
             return;
@@ -19935,5 +19940,46 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("   📅 ").append(period).append(" · ✅ ").append(completions).append(" прохождений\n\n");
         }
         sendText(user.getTelegramId(), sb.toString(), null);
+    }
+
+    /** ТЗ "EGC - проверка гипотезы «отряды удерживают активность»" (EGC_TZ_otryady, 2026-10-01), Этап 1:
+     *  разовая выгрузка (не вкладка, не сохраняется) - сравнение сегментов "в отряде" / "без отряда" теми
+     *  же метриками, что в общей Аналитике, чтобы результат был сопоставим с остальными отчётами. Решение,
+     *  заводить ли постоянную вкладку "Отряды" (Этап 2), принимается по итогам этого вывода вручную. */
+    private void handleSquadRetentionDiagnostic(AppUser user) {
+        UserService.SquadCohortReport inSquad = userService.getSquadCohortReport(true);
+        UserService.SquadCohortReport noSquad = userService.getSquadCohortReport(false);
+        UserService.SquadOverview overview = userService.squadOverview();
+        long total = inSquad.segmentSize() + noSquad.segmentSize();
+
+        StringBuilder sb = new StringBuilder("🧪 <b>Диагностика: отряды и удержание</b>\n");
+        sb.append("Этап 1 ТЗ «отряды удерживают активность» — разовая выгрузка, не сохраняется.\n\n");
+        sb.append("Отрядов (активных): <b>").append(overview.squadCount())
+          .append("</b>, средний размер: <b>").append(String.format(java.util.Locale.forLanguageTag("ru"), "%.1f", overview.avgSize()))
+          .append("</b> чел.\n");
+
+        sb.append(squadCohortBlock("В отряде", inSquad, total));
+        sb.append(squadCohortBlock("Без отряда", noSquad, total));
+
+        sendText(user.getTelegramId(), sb.toString(), null);
+    }
+
+    private String squadCohortBlock(String label, UserService.SquadCohortReport r, long total) {
+        UserService.EngagementReport e = r.engagement();
+        UserService.RetentionReport ret = r.retention();
+        java.util.Locale ru = java.util.Locale.forLanguageTag("ru");
+        long segSize = r.segmentSize();
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n<b>").append(label).append("</b> — ").append(segSize)
+          .append(" чел. (").append(String.format(ru, "%.1f", total > 0 ? segSize * 100.0 / total : 0)).append("% базы)\n");
+        sb.append("DAU: ").append(e.dau()).append(", MAU: ").append(e.mau())
+          .append(", DAU/MAU: <b>").append(String.format(ru, "%.1f", e.dauMauPercent())).append("%</b>\n");
+        sb.append("Активны за 7д: ").append(r.active7()).append(" (").append(String.format(ru, "%.1f", segSize > 0 ? r.active7() * 100.0 / segSize : 0)).append("%)")
+          .append(" · за 30д: ").append(r.active30()).append(" (").append(String.format(ru, "%.1f", segSize > 0 ? r.active30() * 100.0 / segSize : 0)).append("%)\n");
+        sb.append("Взяли ≥1 квест за 7д: ").append(e.weeklyQuestTakers()).append(" (").append(String.format(ru, "%.1f", e.weeklyQuestPercent())).append("% от MAU)\n");
+        sb.append("Возврат за 7д: <b>").append(String.format(ru, "%.1f", ret.percent7())).append("%</b> (когорта ").append(ret.cohort7()).append(")")
+          .append(" · за 30д: <b>").append(String.format(ru, "%.1f", ret.percent30())).append("%</b> (когорта ").append(ret.cohort30()).append(")\n");
+        sb.append("Возврат за 2-й квест: <b>").append(String.format(ru, "%.1f", e.retentionPercent())).append("%</b> (когорта ").append(e.retentionCohort()).append(")\n");
+        return sb.toString();
     }
 }

@@ -74,6 +74,12 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
             + "AND (:maxCreatedAt IS NULL OR s.user.createdAt <= :maxCreatedAt)")
     long countDistinctUsersWithApprovedSince(@Param("since") LocalDateTime since, @Param("sourceFilter") String sourceFilter, @Param("maxCreatedAt") LocalDateTime maxCreatedAt);
 
+    /** То же самое, сегментировано по членству в отряде - ТЗ EGC_TZ_otryady (2026-10-01), Этап 1.
+     *  См. AppUserRepository.countDistinctActiveSinceBySquad про смысл inSquad. */
+    @Query("SELECT COUNT(DISTINCT s.user) FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :since "
+            + "AND ((:inSquad = true AND s.user.squadId IS NOT NULL) OR (:inSquad = false AND s.user.squadId IS NULL))")
+    long countDistinctUsersWithApprovedSinceBySquad(@Param("since") LocalDateTime since, @Param("inSquad") boolean inSquad);
+
     /** Telegram ID игрока + дата одобрения для каждого одобренного квеста — сырьё для расчёта
      *  ретеншена "вернулся ли за вторым квестом в течение недели после первого" в Java, а не в JPQL
      *  (оконные функции по группам неудобно/невозможно выразить переносимо между H2 и Postgres). */
@@ -86,6 +92,11 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
             + "AND (:sourceFilter IS NULL OR (:sourceFilter = 'ORGANIC' AND s.user.trafficSourceCode IS NULL) OR s.user.trafficSourceCode = :sourceFilter) "
             + "AND (:maxCreatedAt IS NULL OR s.user.createdAt <= :maxCreatedAt)")
     List<Object[]> findApprovedUserIdAndDateForRetention(@Param("sourceFilter") String sourceFilter, @Param("maxCreatedAt") LocalDateTime maxCreatedAt);
+
+    /** То же самое, сегментировано по членству в отряде - ТЗ EGC_TZ_otryady (2026-10-01), Этап 1. */
+    @Query("SELECT s.user.telegramId, s.updatedAt FROM QuestSubmission s WHERE s.status = 'APPROVED' "
+            + "AND ((:inSquad = true AND s.user.squadId IS NOT NULL) OR (:inSquad = false AND s.user.squadId IS NULL))")
+    List<Object[]> findApprovedUserIdAndDateForRetentionBySquad(@Param("inSquad") boolean inSquad);
 
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.user = :user AND s.status IN ('APPROVED', 'REJECTED', 'NEEDS_INFO')")
     long countReviewedByUser(@Param("user") AppUser user);

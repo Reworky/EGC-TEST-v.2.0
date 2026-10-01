@@ -16,4 +16,6 @@ public interface SquadRepository extends JpaRepository<Squad, Long> {
     boolean existsByNameIgnoreCase(String name);
 
     List<Squad> findAllByStatus(String status);
+
+    long countByStatus(String status);
 }
