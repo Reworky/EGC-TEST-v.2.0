@@ -12343,7 +12343,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (ru.gamebot.platform.service.AnalyticsService.Tab t : ru.gamebot.platform.service.AnalyticsService.Tab.values()) {
             html.append("<a href=\"#").append(t.name()).append("\">").append(t.label()).append("</a>");
         }
-        html.append("<a href=\"#POOL\">🧭 Пул квестов</a><a href=\"#CEILING\">🚧 Потолок ограничений</a><a href=\"#LIVE\">📡 Сейчас</a></nav>");
+        html.append("<a href=\"#POOL\">🧭 Пул квестов</a><a href=\"#CEILING\">🚧 Потолок ограничений</a><a href=\"#SQUADRET\">🧪 Отряды: рефералка</a>"
+                + "<a href=\"#CHURNDAY\">📉 Момент оттока</a><a href=\"#LIVE\">📡 Сейчас</a></nav>");
         for (ru.gamebot.platform.service.AnalyticsService.Tab t : ru.gamebot.platform.service.AnalyticsService.Tab.values()) {
             html.append("<h2 id=\"").append(t.name()).append("\">").append(t.label()).append("</h2>");
             try {
@@ -12369,6 +12370,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } catch (Exception e) {
             log.warn("Full analytics report: engagement ceiling failed", e);
             html.append("<p>⚠️ Потолок ограничений не удалось посчитать, подробности в логе.</p>");
+        }
+        html.append("<h2 id=\"SQUADRET\">🧪 Отряды: диагностика (рефералка)</h2>");
+        try {
+            html.append("<div class=\"b\">").append(formatSquadRetentionDiagnostic()).append("</div>");
+        } catch (Exception e) {
+            log.warn("Full analytics report: squad retention diagnostic failed", e);
+            html.append("<p>⚠️ Диагностику отрядов не удалось посчитать, подробности в логе.</p>");
+        }
+        html.append("<h2 id=\"CHURNDAY\">📉 Момент оттока</h2>");
+        try {
+            html.append("<div class=\"b\">").append(formatChurnDayReport(userService.churnDayReport())).append("</div>");
+        } catch (Exception e) {
+            log.warn("Full analytics report: churn day failed", e);
+            html.append("<p>⚠️ Момент оттока не удалось посчитать, подробности в логе.</p>");
         }
         html.append("<h2 id=\"LIVE\">📡 Сейчас на платформе</h2>");
         try {
@@ -20049,6 +20064,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  же метриками, что в общей Аналитике, чтобы результат был сопоставим с остальными отчётами. Решение,
      *  заводить ли постоянную вкладку "Отряды" (Этап 2), принимается по итогам этого вывода вручную. */
     private void handleSquadRetentionDiagnostic(AppUser user) {
+        sendText(user.getTelegramId(), formatSquadRetentionDiagnostic(), backMenuKeyboard("admin:an:tab:ENGAGEMENT"));
+    }
+
+    /** Вынесено из handleSquadRetentionDiagnostic, чтобы тот же текст попадал и в «Полный отчёт»
+     *  (sendAnalyticsFullReport) — см. правило "новая метрика/диагностика всегда идёт и в полный отчёт тоже",
+     *  feedback_full_report_auto_include. */
+    private String formatSquadRetentionDiagnostic() {
         UserService.SquadCohortReport inSquad = userService.getSquadCohortReport(true);
         UserService.SquadCohortReport noSquad = userService.getSquadCohortReport(false);
         UserService.SquadOverview overview = userService.squadOverview();
@@ -20070,8 +20092,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
               .append(": ").append(c.segmentSize()).append(" чел., DAU/MAU <b>")
               .append(String.format(ru, "%.1f", c.dauMauPercent())).append("%</b> (DAU ").append(c.dau()).append(", MAU ").append(c.mau()).append(")\n");
         }
-
-        sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("admin:an:tab:ENGAGEMENT"));
+        return sb.toString();
     }
 
     private String squadCohortBlock(String label, UserService.SquadCohortReport r, long total) {
