@@ -441,11 +441,9 @@ public class UserService {
         if (fresh == null || fresh.isWelcomeBonusPaid()) {
             return false;
         }
-        fresh.setCoins(fresh.getCoins() + 200);
         fresh.setWelcomeBonusPaid(true);
         fresh.setLastBonusDate(LocalDate.now());
-        appUserRepository.save(fresh);
-        excTx.log(fresh, 200, ExcTransactionService.WELCOME_BONUS, "Приветственный бонус за регистрацию");
+        excTx.creditExc(fresh, 200, ExcTransactionService.WELCOME_BONUS, "Приветственный бонус за регистрацию");
         return true;
     }
 
@@ -610,8 +608,7 @@ public class UserService {
         }
 
         if (xpBonus > 0) {
-            user.setXp(user.getXp() + xpBonus);
-            user.setWeeklyXp(user.getWeeklyXp() + xpBonus);
+            creditXp(user, xpBonus);
         }
 
         appUserRepository.save(user);
@@ -675,12 +672,10 @@ public class UserService {
         }
 
         long totalExc = dailyExc + milestoneExc;
-        user.setCoins(user.getCoins() + totalExc);
-        excTx.log(user, totalExc, ExcTransactionService.DAILY,
+        excTx.creditExc(user, totalExc, ExcTransactionService.DAILY,
                 "Ежедневный бонус (день " + user.getStreakDays() + ")");
         if (xpBonus > 0) {
-            user.setXp(user.getXp() + xpBonus);
-            user.setWeeklyXp(user.getWeeklyXp() + xpBonus);
+            creditXp(user, xpBonus);
         }
         user.setLastBonusDate(today);
         // Бонус за сегодня так или иначе получен (продолжение серии, свежий сброс "начать заново" или
@@ -816,8 +811,7 @@ public class UserService {
             label = "🪙 Немного EXC";
         }
         if (exc > 0) {
-            user.setCoins(user.getCoins() + exc);
-            excTx.log(user, exc, ExcTransactionService.CHEST, "Сундук дня");
+            excTx.creditExc(user, exc, ExcTransactionService.CHEST, "Сундук дня");
         }
         if (tickets > 0) {
             wheelService.addTickets(user, tickets, "Сундук дня");
@@ -848,8 +842,7 @@ public class UserService {
             label = "🪙 Хороший улов";
         }
         if (exc > 0) {
-            user.setCoins(user.getCoins() + exc);
-            excTx.log(user, exc, ExcTransactionService.CHEST, "Сундук дня (реролл за Stars)");
+            excTx.creditExc(user, exc, ExcTransactionService.CHEST, "Сундук дня (реролл за Stars)");
         }
         if (tickets > 0) {
             wheelService.addTickets(user, tickets, "Сундук дня (реролл за Stars)");
@@ -962,16 +955,16 @@ public class UserService {
         if (wheelSpin) {
             user.setAdWheelSpins(user.getAdWheelSpins() + 1);
         }
-        user.setCoins(user.getCoins() + totalExc);
-        appUserRepository.save(user);
         if (totalExc > 0) {
             String description = (wheelSpin ? "Просмотр рекламы для колеса (" : "Просмотр рекламы (") + source + ")";
             if (milestoneBonus > 0) {
                 description += " + бонус за " + viewsToday + "/" + source.getDailyCap() + " просмотров";
             }
-            excTx.log(user, totalExc, ExcTransactionService.AD_REWARD, description);
+            excTx.creditExc(user, totalExc, ExcTransactionService.AD_REWARD, description);
             eventPublisher.publishEvent(new ru.gamebot.platform.event.AdRewardGrantedEvent(
                     this, user.getId(), totalExc, milestoneBonus));
+        } else {
+            appUserRepository.save(user);
         }
         return new AdRewardResult(true, totalExc, milestoneBonus, viewsToday, source.getDailyCap(), wheelSpin);
     }
@@ -1006,13 +999,11 @@ public class UserService {
 
         // Instant bonus: 500 EXC to invited user
         long invitedBonus = 500L * boostMultiplier;
-        invitedUser.setCoins(invitedUser.getCoins() + invitedBonus);
-        excTx.log(invitedUser, invitedBonus, ExcTransactionService.REFERRAL_WELCOME, "Реферальный бонус (приглашён)" + boostSuffix);
+        excTx.creditExc(invitedUser, invitedBonus, ExcTransactionService.REFERRAL_WELCOME, "Реферальный бонус (приглашён)" + boostSuffix);
 
         // Instant bonus: 300 EXC to referrer
         long referrerBonus = 300L * boostMultiplier;
-        referrer.setCoins(referrer.getCoins() + referrerBonus);
-        excTx.log(referrer, referrerBonus, ExcTransactionService.REFERRAL,
+        excTx.creditExc(referrer, referrerBonus, ExcTransactionService.REFERRAL,
                 "Реферальный бонус за приглашение: " + invitedUser.getNickname() + boostSuffix);
         referrer.setReferralEarnedExc(referrer.getReferralEarnedExc() + referrerBonus);
 
@@ -1068,6 +1059,18 @@ public class UserService {
         return true;
     }
 
+    /** Единая точка изменения XP+weeklyXp (ТЗ "Единая точка начисления EXC и XP", фаза 2, 2026-10-01) -
+     *  применяет дельту к обоим полям одним вызовом вместо двух соседних строк на каждом месте.
+     *  weeklyXp не уходит в минус (Math.max(0, ...)) - так же, как было на единственном существующем
+     *  месте списания (debitManualBalance); для начислений (amount > 0) это не меняет поведение.
+     *  xp НЕ клэмпится - допустимость списания по-прежнему проверяет вызывающий код, как и раньше.
+     *  История операций по XP пока не ведётся нигде в коде (не было её и до этого рефакторинга) -
+     *  решить отдельно, нужна ли таблица, см. project_unified_exc_xp_credit_refactor (открытый вопрос). */
+    public void creditXp(AppUser user, long amount) {
+        user.setXp(user.getXp() + amount);
+        user.setWeeklyXp(Math.max(0, user.getWeeklyXp() + amount));
+    }
+
     @Transactional
     public RewardGrant addReward(AppUser user, long xp, long coins) {
         return addReward(user, xp, coins, 0);
@@ -1076,8 +1079,12 @@ public class UserService {
     @Transactional
     public RewardGrant addReward(AppUser user, long xp, long coins, long tickets) {
         RewardGrant rewardGrant = previewReward(user, xp, coins, tickets);
-        user.setXp(user.getXp() + xp);
-        user.setWeeklyXp(user.getWeeklyXp() + xp);
+        creditXp(user, xp);
+        // Денежная часть (coins) НЕ переведена на creditExc в этой фазе намеренно: addReward вызывается
+        // из 6 разных мест (QuestService, GemPurchaseService, WeeklyResetScheduler, этот же файл) с
+        // разным type/description для exc_transactions, который каждый вызывающий код сейчас пишет
+        // отдельно СНАРУЖИ после вызова - объединение потребует менять сигнатуру и все 6 мест разом,
+        // это отдельная следующая фаза, не делать походя вместе с XP.
         user.setCoins(user.getCoins() + rewardGrant.totalExc());
         user.setTickets(user.getTickets() + tickets);
         appUserRepository.save(user);
@@ -1109,13 +1116,13 @@ public class UserService {
             throw new IllegalArgumentException("Недостаточно билетов для списания.");
         }
 
-        user.setXp(user.getXp() - xp);
-        user.setWeeklyXp(Math.max(0, user.getWeeklyXp() - xp));
-        user.setCoins(user.getCoins() - coins);
+        creditXp(user, -xp);
         user.setTickets(user.getTickets() - tickets);
-        appUserRepository.save(user);
-        if (coins > 0) excTx.log(user, -coins, ExcTransactionService.DEBIT,
-                "Ручное списание администратором");
+        if (coins > 0) {
+            excTx.creditExc(user, -coins, ExcTransactionService.DEBIT, "Ручное списание администратором");
+        } else {
+            appUserRepository.save(user);
+        }
         return new BalanceDebit(xp, coins, tickets);
     }
 
@@ -1159,9 +1166,7 @@ public class UserService {
             if (user == null) continue;
 
             long prize = REFERRAL_WEEKLY_POOL * REFERRAL_SHARE_BPS[i] / 10_000;
-            user.setCoins(user.getCoins() + prize);
-            appUserRepository.save(user);
-            excTx.log(user, prize, ExcTransactionService.REFERRAL_PRIZE,
+            excTx.creditExc(user, prize, ExcTransactionService.REFERRAL_PRIZE,
                     "Топ-" + (i + 1) + " реферер недели (+" + prize + " EXC)");
             winners.add(new ReferralRankEntry(user, i + 1, weeklyReferralExc, prize));
         }
@@ -1203,8 +1208,7 @@ public class UserService {
             }
             totalPrize += league.excPrize;
             if (league.excPrize > 0) {
-                user.setCoins(user.getCoins() + league.excPrize);
-                excTx.log(user, league.excPrize, ExcTransactionService.LEAGUE,
+                excTx.creditExc(user, league.excPrize, ExcTransactionService.LEAGUE,
                         "Еженедельная награда лиги: " + league.displayName);
                 eventPublisher.publishEvent(new LeagueRewardEvent(
                         this, user.getTelegramId(), league.displayName, league.excPrize, (int) user.getWeeklyXp()
@@ -1455,9 +1459,7 @@ public class UserService {
         user.setBlockedAt(java.time.LocalDateTime.now());
         long confiscated = user.getCoins();
         if (confiscated > 0) {
-            user.setCoins(0);
-            appUserRepository.save(user);
-            excTx.log(user, -confiscated, ExcTransactionService.CONFISCATE, "Конфискация при блокировке: " + reason);
+            excTx.creditExc(user, -confiscated, ExcTransactionService.CONFISCATE, "Конфискация при блокировке: " + reason);
         } else {
             appUserRepository.save(user);
         }
@@ -1636,9 +1638,7 @@ public class UserService {
             return 0;
         }
         user.setDormancyBonusPendingExc(0);
-        user.setCoins(user.getCoins() + pending);
-        appUserRepository.save(user);
-        excTx.log(user, pending, ExcTransactionService.BONUS, "Бонус за возвращение (первый квест после паузы)");
+        excTx.creditExc(user, pending, ExcTransactionService.BONUS, "Бонус за возвращение (первый квест после паузы)");
         eventPublisher.publishEvent(new ru.gamebot.platform.event.DormancyBonusClaimedEvent(this, user.getTelegramId(), pending));
         return pending;
     }
