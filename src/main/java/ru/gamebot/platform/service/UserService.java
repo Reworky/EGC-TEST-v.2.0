@@ -594,6 +594,41 @@ public class UserService {
         return out;
     }
 
+    /** «Момент оттока» (карта роста EGC, п.2, 2026-10-02): на какой день после регистрации игрок чаще
+     *  всего заходит в последний раз. droppedOnDay[k] - сколько игроков из когорты, чей последний визит
+     *  (lastActivityDate - createdAt) пришёлся РОВНО на день k; droppedOnDay[CAP] - "ещё активны на
+     *  CAP+ день" (не отвалились в пределах окна наблюдения). cohortSize - сколько всего игроков учтено. */
+    public record ChurnDayReport(int cohortSize, int cap, long[] droppedOnDay) {
+        /** Сколько из когорты ещё были активны НА k-й день или позже (выживаемость). */
+        public long survivingFromDay(int k) {
+            long sum = 0;
+            for (int i = k; i <= cap; i++) sum += droppedOnDay[i];
+            return sum;
+        }
+    }
+
+    private static final int CHURN_ANALYSIS_CAP_DAYS = 30;
+
+    /** Смотрим только на игроков, зарегистрированных минимум CHURN_ANALYSIS_CAP_DAYS дней назад -
+     *  иначе свежая регистрация, которая технически ещё «не успела отвалиться», исказила бы картину
+     *  (эффект тот же, что ORGANIC_MIN_ACCOUNT_AGE_DAYS в getEngagementReport, но для другой цели). */
+    public ChurnDayReport churnDayReport() {
+        LocalDateTime maxCreatedAt = LocalDateTime.now().minusDays(CHURN_ANALYSIS_CAP_DAYS);
+        List<Object[]> rows = appUserRepository.findCreatedAtAndLastActivityForChurn(maxCreatedAt);
+        long[] droppedOnDay = new long[CHURN_ANALYSIS_CAP_DAYS + 1];
+        int cohortSize = 0;
+        for (Object[] row : rows) {
+            LocalDateTime createdAt = (LocalDateTime) row[0];
+            LocalDate lastActivityDate = (LocalDate) row[1];
+            if (createdAt == null || lastActivityDate == null) continue;
+            cohortSize++;
+            long offset = java.time.temporal.ChronoUnit.DAYS.between(createdAt.toLocalDate(), lastActivityDate);
+            int bucket = (int) Math.max(0, Math.min(CHURN_ANALYSIS_CAP_DAYS, offset));
+            droppedOnDay[bucket]++;
+        }
+        return new ChurnDayReport(cohortSize, CHURN_ANALYSIS_CAP_DAYS, droppedOnDay);
+    }
+
     public SquadOverview squadOverview() {
         long squadCount = squadRepository.countByStatus("ACTIVE");
         long members = appUserRepository.countByRegistrationCompletedTrueAndSquadIdIsNotNull();

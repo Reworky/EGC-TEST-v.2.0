@@ -159,6 +159,15 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     long countByRegistrationCompletedTrueAndSquadIdIsNull();
 
+    /** Сырьё для «момента оттока» (карта роста EGC, п.2): [createdAt, lastActivityDate] каждого
+     *  зарегистрированного игрока, чей аккаунт создан не позже maxCreatedAt - чтобы в когорту не попадали
+     *  совсем свежие регистрации, которые технически ещё не успели показать свой реальный день отвала
+     *  (см. UserService.churnDayReport). lastActivityDate обновляется на КАЖДОЕ сообщение боту
+     *  (registerActivity), поэтому разница с createdAt - надёжный прокси "на какой день человек зашёл
+     *  в последний раз", даже без отдельного лога визитов. */
+    @Query("SELECT u.createdAt, u.lastActivityDate FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt <= :maxCreatedAt")
+    List<Object[]> findCreatedAtAndLastActivityForChurn(@Param("maxCreatedAt") LocalDateTime maxCreatedAt);
+
     /** Перекрёстная проверка "отряды vs рефералка" (ТЗ EGC_TZ_otryady, рекомендация после Этапа 1, 2026-10-01):
      *  разрыв в удержании у "в отряде" может быть тенью уже известного эффекта "реферальный трафик качественнее
      *  рекламного" (самоотбор), а не самостоятельным эффектом отрядов. referredByTelegramId - отдельное поле от

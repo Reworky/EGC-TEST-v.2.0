@@ -8951,6 +8951,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "stats:topquests" -> sendAdminStatsTopQuests(user);
             case "stats:referral" -> sendAdminReferralEconomics(user);
             case "stats:funnel" -> sendAdminNewCohortFunnel(user);
+            case "stats:churnday" -> sendAdminChurnDayReport(user);
             case "stats:engagement" -> sendAdminEngagementStats(user, null);
             case "stats:engagement:all" -> sendAdminEngagementStats(user, "all");
             case "stats:engagement:organic" -> sendAdminEngagementStats(user, "organic");
@@ -11589,6 +11590,50 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 backMenuKeyboard("admin:stats"));
     }
 
+    /** «Момент оттока» (карта роста EGC, п.2, 2026-10-02): на какой день после регистрации игрок
+     *  чаще всего заходит в последний раз — см. UserService.churnDayReport. */
+    private void sendAdminChurnDayReport(AppUser user) {
+        sendText(user.getTelegramId(), formatChurnDayReport(userService.churnDayReport()), backMenuKeyboard("admin:stats"));
+    }
+
+    private String formatChurnDayReport(UserService.ChurnDayReport r) {
+        if (r.cohortSize() == 0) {
+            return "📉 <b>Момент оттока</b>\n\nПока недостаточно данных — нужны аккаунты старше " + r.cap() + " дней.";
+        }
+        java.util.Locale ru = java.util.Locale.forLanguageTag("ru");
+        int[] marks = {0, 1, 2, 3, 4, 5, 6, 7, 10, 14, 21, r.cap()};
+        int bestDay = -1;
+        long bestCount = -1;
+        for (int d = 1; d < r.cap(); d++) {
+            if (r.droppedOnDay()[d] > bestCount) { bestCount = r.droppedOnDay()[d]; bestDay = d; }
+        }
+        StringBuilder sb = new StringBuilder("📉 <b>Момент оттока</b>\n\n");
+        sb.append("Когорта: зарегистрированные ").append(r.cap()).append("+ дней назад — <b>").append(r.cohortSize()).append("</b> чел.\n");
+        sb.append("На какой день после регистрации человек заходил в последний раз (последняя известная активность).\n\n");
+        for (int d : marks) {
+            long count = r.droppedOnDay()[d];
+            long surviving = r.survivingFromDay(d);
+            String countLine;
+            if (d == 0) {
+                countLine = "не вернулись НИ РАЗУ после регистрации: <b>" + count + "</b>";
+            } else if (d == r.cap()) {
+                countLine = "всё ещё были активны (не отвалились за " + d + " дней): <b>" + count + "</b>";
+            } else {
+                countLine = "ушли именно тут (последний визит): <b>" + count + "</b>";
+            }
+            String label = d == 0 ? "День регистрации" : d == r.cap() ? "День " + d + "+" : "День " + d;
+            sb.append("<b>").append(label).append("</b> — ").append(countLine)
+              .append(" (").append(String.format(ru, "%.1f", count * 100.0 / r.cohortSize())).append("%)")
+              .append(" · ещё активны на этот день и позже: ").append(surviving)
+              .append(" (").append(String.format(ru, "%.1f", surviving * 100.0 / r.cohortSize())).append("%)\n");
+        }
+        if (bestDay > 0) {
+            sb.append("\n👉 Самый частый день последнего визита (не считая дня регистрации): <b>день ").append(bestDay).append("</b> — ")
+              .append(bestCount).append(" чел. (").append(String.format(ru, "%.1f", bestCount * 100.0 / r.cohortSize())).append("%). Здесь нужен крючок.");
+        }
+        return sb.toString();
+    }
+
     /** Три метрики вовлечённости для бота — аналог ER канала (обсуждение 2026-09-14), но с нормами под
      *  продукт, где "вовлечение" требует реального действия (сыграть + отправить отчёт), а не просто
      *  увидеть пост. Нормы — общие ориентиры из гейм-индустрии, не измеренный бенчмарк именно EGC.
@@ -12095,6 +12140,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback("🚀 Буст рефералки", "admin:refboost")));
                 rows.add(List.of(keyboardFactory.callback("📈 Трафик и закупы", "admin:traffic")));
                 rows.add(List.of(keyboardFactory.callback("📉 Воронка новичков", "admin:stats:funnel")));
+                rows.add(List.of(keyboardFactory.callback("📉 Момент оттока", "admin:stats:churnday")));
             }
             case "system" -> {
                 title = "🛠 <b>Система</b>";
