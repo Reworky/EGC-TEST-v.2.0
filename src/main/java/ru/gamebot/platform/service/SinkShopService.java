@@ -329,13 +329,14 @@ public class SinkShopService {
         deductCoins(user, price, "Покупка в магазине предметов");
     }
 
+    // Мигрировано на единую точку creditExc() (ТЗ "Единая точка начисления EXC и XP", фаза 1,
+    // 2026-10-01) - проверка баланса осталась здесь (бизнес-логика), само изменение coins и запись
+    // в exc_transactions теперь одним вызовом вместо setCoins+save+log по отдельности.
     private void deductCoins(AppUser user, long price, String description) {
         if (user.getCoins() < price) {
             throw new IllegalArgumentException("Недостаточно EXC. Нужно " + price + ", есть " + user.getCoins() + ".");
         }
-        user.setCoins(user.getCoins() - price);
-        appUserRepository.save(user);
-        excTx.log(user, -price, ExcTransactionService.SINK, description);
+        excTx.creditExc(user, -price, ExcTransactionService.SINK, description);
     }
 
     private int getDailyCount(int count, LocalDate date) {

@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.ExcTransaction;
+import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.ExcTransactionRepository;
 
 @Service
@@ -16,6 +17,7 @@ import ru.gamebot.platform.domain.repository.ExcTransactionRepository;
 public class ExcTransactionService {
 
     private final ExcTransactionRepository repo;
+    private final AppUserRepository appUserRepository;
 
     public static final String QUEST      = "QUEST";
     public static final String BONUS      = "BONUS";
@@ -63,6 +65,21 @@ public class ExcTransactionService {
         // Вызывается всегда после того, как вызывающий код уже применил изменение к user.coins
         tx.setBalanceAfter(user.getCoins());
         repo.save(tx);
+    }
+
+    /** Единая точка изменения баланса EXC (ТЗ "Единая точка начисления EXC и XP", 2026-10-01) -
+     *  применяет дельту к coins и логирует операцию одним вызовом вместо двух соседних действий,
+     *  разбросанных сейчас по 30+ мест в коде. На этом этапе НЕ добавляет новых проверок/ограничений -
+     *  воспроизводит ровно тот же паттерн (setCoins -> save -> log), что уже был на каждом месте
+     *  вызова: любая проверка (например "хватает ли EXC") остаётся на стороне вызывающего кода,
+     *  единая точка ей не занимается. Миграция остальных мест (QuestService, UserService и т.д.) -
+     *  следующими фазами, по одному сервису за раз, не одним большим изменением сразу.
+     *  amount может быть отрицательным (списание) или положительным (начисление). */
+    @Transactional(propagation = Propagation.REQUIRED)
+    public void creditExc(AppUser user, long amount, String type, String description) {
+        user.setCoins(user.getCoins() + amount);
+        appUserRepository.save(user);
+        log(user, amount, type, description);
     }
 
     public List<ExcTransaction> getHistory(AppUser user, int page, int pageSize) {
