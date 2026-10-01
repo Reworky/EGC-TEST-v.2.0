@@ -41,6 +41,15 @@ public class AppUser {
 
     private boolean profileCompleted;
     private boolean registrationCompleted;
+    /** true только если игрок САМ ввёл/подтвердил никнейм (REG_NAME, NICKNAME_CHANGE, /clearme-флоу) -
+     *  отличает это от автозаполненного из Telegram при регистрации без явного шага (см.
+     *  UserService.autoCompleteRegistration, карта роста EGC п.6, 2026-10-02: 47,4% отвала на вводе
+     *  ника). Для квестов без авто-верификации через игровые теги модератор полагался на совпадение
+     *  никнейма со скриншотом - этот флаг нужен, чтобы знать, когда стоит попросить подтвердить
+     *  настоящий игровой ник отдельно (перед таким квестом), а не считать автозаполненный плейсхолдер
+     *  достаточным. */
+    @Column(columnDefinition = "boolean default false")
+    private boolean nicknameConfirmedByUser;
     private boolean welcomeBonusPaid;
     private long xp;
     private long weeklyXp;

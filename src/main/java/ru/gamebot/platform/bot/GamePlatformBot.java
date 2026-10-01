@@ -436,14 +436,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         if (!user.isProfileCompleted() && session.getState() == SessionState.NONE) {
-            session.setState(SessionState.REG_NAME);
-            sendText(user.getTelegramId(),
-                    "🎉 Добро пожаловать в <b>" + escape(appProperties.getClubName()) + "</b>!\n\n"
-                            + socialProofLine()
-                            + "✍️ Напишите ваш игровой никнейм, чтобы начать.\n"
-                            + "<b>Ник должен совпадать с ником в игре.</b>\n\n"
-                            + "⭐ <a href=\"https://t.me/egc_payouts\">Почитать отзывы игроков</a>",
-                    null, true);
+            AppUser saved = userService.autoCompleteRegistration(user);
+            finishRegistration(saved);
             return;
         }
 
@@ -734,14 +728,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (!user.isProfileCompleted()) {
             session.reset();
-            session.setState(SessionState.REG_NAME);
-            sendText(user.getTelegramId(),
-                    "🎮 Добро пожаловать в <b>" + escape(appProperties.getClubName()) + "</b>!\n\n"
-                            + socialProofLine()
-                            + "✍️ Напишите ваш игровой никнейм, чтобы начать.\n"
-                            + "<b>Ник должен совпадать с ником в игре.</b>\n\n"
-                            + "⭐ <a href=\"https://t.me/egc_payouts\">Почитать отзывы игроков</a>",
-                    null, true);
+            AppUser saved = userService.autoCompleteRegistration(user);
+            finishRegistration(saved);
             return;
         }
 
@@ -1930,21 +1918,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 try {
                     AppUser saved = userService.completeRegistration(user, regNick);
                     session.reset();
-                    // Стартовый бонус 200 EXC, уведомление админам и приветствие с гайдом — всем сразу
-                    // после ввода никнейма, независимо от подписки на канал (подписка нужна только для
-                    // взятия квеста — см. handleTakeQuest/handleTakeQuestWithPartner).
-                    userService.applyWelcomeBonus(saved);
-                    notifyAdminsNewRegistration(saved);
-                    startOnboarding(saved);
-                    // Если человек уже подписан на канал (например, пришёл из самого канала) — сразу же
-                    // полноценно активируем аккаунт (нужно для взятия квеста и реферальных начислений),
-                    // не дожидаясь фоновой проверки раз в 5 минут (checkPendingChannelActivations).
-                    if (isRequiredChannelMember(saved.getTelegramId())) {
-                        ru.gamebot.platform.service.UserService.ReferralActivationResult referral = activatePlayer(saved);
-                        if (referral != null) {
-                            sendReferralBonusMessage(saved, referral);
-                        }
-                    }
+                    finishRegistration(saved);
                 } catch (org.springframework.dao.DataIntegrityViolationException e) {
                     sendText(user.getTelegramId(),
                             "⚠️ Никнейм <b>" + escape(regNick) + "</b> уже занят.\n\nПридумайте другой и введите его:",
@@ -1967,6 +1941,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     return;
                 }
                 user.setNickname(newNick);
+                user.setNicknameConfirmedByUser(true);
                 userService.save(user);
                 session.setState(SessionState.NONE);
                 sendText(user.getTelegramId(),
@@ -4067,11 +4042,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     // ─── Onboarding ──────────────────────────────────────────────────────────────
 
-    /** Приветствие + гайд — одно и то же сообщение всем сразу после ввода никнейма (см. REG_NAME),
-     * независимо от подписки на канал: стартовый бонус 200 EXC начисляется всем сразу (см. вызов
-     * userService.applyWelcomeBonus() в REG_NAME, до этого метода), поэтому текст не зависит от статуса
-     * подписки. Реферальный бонус (если есть) по-прежнему известен только при подтверждённой подписке —
-     * приходит отдельным сообщением через {@link #sendReferralBonusMessage}. */
+    /** Стартовый бонус 200 EXC, уведомление админам и приветствие с гайдом — всем сразу после
+     * завершения профиля (явного ввода ника или авто-регистрации, см. autoCompleteRegistration),
+     * независимо от подписки на канал (подписка нужна только для взятия квеста — см.
+     * handleTakeQuest/handleTakeQuestWithPartner). Вынесено из REG_NAME, чтобы тот же код отрабатывал
+     * и для авто-регистрации без ввода ника (карта роста EGC, п.6). */
+    private void finishRegistration(AppUser saved) {
+        userService.applyWelcomeBonus(saved);
+        notifyAdminsNewRegistration(saved);
+        startOnboarding(saved);
+        // Если человек уже подписан на канал (например, пришёл из самого канала) — сразу же
+        // полноценно активируем аккаунт (нужно для взятия квеста и реферальных начислений),
+        // не дожидаясь фоновой проверки раз в 5 минут (checkPendingChannelActivations).
+        if (isRequiredChannelMember(saved.getTelegramId())) {
+            ru.gamebot.platform.service.UserService.ReferralActivationResult referral = activatePlayer(saved);
+            if (referral != null) {
+                sendReferralBonusMessage(saved, referral);
+            }
+        }
+    }
+
+    /** Приветствие + гайд — одно и то же сообщение всем сразу после завершения профиля (см.
+     * finishRegistration выше): стартовый бонус 200 EXC начисляется всем сразу, независимо от
+     * подписки на канал, поэтому текст не зависит от статуса подписки. Реферальный бонус (если
+     * есть) по-прежнему известен только при подтверждённой подписке — приходит отдельным
+     * сообщением через {@link #sendReferralBonusMessage}. */
     private void startOnboarding(AppUser user) {
         user.setOnboardingStep(1);
         user.setOnboardingStartedAt(java.time.LocalDateTime.now());

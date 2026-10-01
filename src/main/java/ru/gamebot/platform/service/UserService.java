@@ -426,6 +426,22 @@ public class UserService {
         user.setNickname(nickname);
         user.setProfileCompleted(true);
         user.setRegistrationCompleted(false);
+        user.setNicknameConfirmedByUser(true);
+        return appUserRepository.save(user);
+    }
+
+    /** Карта роста EGC, п.6 (2026-10-02): регистрация без обязательного ввода ника — 47,4% новичков
+     *  отваливались именно на этом шаге (/start -> просьба напечатать точный игровой никнейм, прежде
+     *  чем человек увидел хоть что-то о продукте). Никнейм уже автозаполнен из Telegram-профиля
+     *  уникальным плейсхолдером (см. UserService.updateTelegramProfile/uniquePlaceholderNickname,
+     *  вызывается в getOrCreate для КАЖДОГО нового аккаунта) - здесь просто пропускаем явный шаг
+     *  подтверждения, nicknameConfirmedByUser остаётся false. Игрок может переименоваться в любой
+     *  момент из профиля (NICKNAME_CHANGE) - это не блокирует ничего, кроме квестов без авто-верификации
+     *  через игровые теги, где перед первым таким квестом нужно будет подтвердить настоящий ник. */
+    @Transactional
+    public AppUser autoCompleteRegistration(AppUser user) {
+        user.setProfileCompleted(true);
+        user.setRegistrationCompleted(false);
         return appUserRepository.save(user);
     }
 
