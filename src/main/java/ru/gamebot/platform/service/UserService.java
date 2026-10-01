@@ -1502,14 +1502,19 @@ public class UserService {
     public record ZeroQuestBreakdown(long neverReturned, long returnedButNoQuest) {}
 
     /** Из тех, кто не взял ни одного квеста — сколько вообще ни разу не открывали бота повторно
-     *  (lastBotActivityAt совпадает с днём регистрации), а сколько возвращались, но так и не взяли
-     *  квест (lastBotActivityAt позже дня регистрации). Различает "продукт не зацепил вообще" от
-     *  "человек искал квест и не нашёл/не разобрался". */
+     *  (lastActivityDate совпадает с днём регистрации), а сколько возвращались, но так и не взяли
+     *  квест (lastActivityDate позже дня регистрации). Различает "продукт не зацепил вообще" от
+     *  "человек искал квест и не нашёл/не разобрался".
+     *  ИСПРАВЛЕНО 2026-10-02 (карта роста EGC, п.2): раньше смотрели на lastBotActivityAt, который
+     *  завели только 2026-09-08 (см. AppUserRepository.countDistinctActiveSince) - для когорт старше
+     *  этой даты поле NULL даже у реально вернувшихся игроков, что молча завышало "никогда не
+     *  открывали бота" задним числом. lastActivityDate ведётся с самого начала проекта - тот же
+     *  принцип, что уже применён в countDistinctActiveSince, просто не был перенесён сюда раньше. */
     public ZeroQuestBreakdown breakdownZeroQuestUsers(java.time.LocalDateTime from, java.time.LocalDateTime to) {
         List<AppUser> users = appUserRepository.findRegisteredBetweenWithCompletedQuests(from, to, 0);
         long returnedLater = users.stream()
-                .filter(u -> u.getLastBotActivityAt() != null
-                        && u.getLastBotActivityAt().toLocalDate().isAfter(u.getCreatedAt().toLocalDate()))
+                .filter(u -> u.getLastActivityDate() != null
+                        && u.getLastActivityDate().isAfter(u.getCreatedAt().toLocalDate()))
                 .count();
         return new ZeroQuestBreakdown(users.size() - returnedLater, returnedLater);
     }
