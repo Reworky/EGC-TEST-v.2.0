@@ -99,9 +99,7 @@ public class RewardService {
             }
         }
 
-        lockedUser.setCoins(lockedUser.getCoins() - price);
-        userService.save(lockedUser);
-        excTx.log(lockedUser, -price, ExcTransactionService.SHOP_BUY, "Покупка: " + rewardItem.getTitle());
+        excTx.creditExc(lockedUser, -price, ExcTransactionService.SHOP_BUY, "Покупка: " + rewardItem.getTitle());
         if (!isAvatarFrame) {
             // Рамки не учитываются в месячном лимите трат и не ставят cooldown — по требованию пользователя,
             // они полностью без ограничений и не должны мешать другим покупкам в магазине.
@@ -324,9 +322,7 @@ public class RewardService {
         }
         req.setStatus(RewardRequestStatus.CANCELLED);
         long price = actualPaidPrice(req);
-        requester.setCoins(requester.getCoins() + price);
-        excTx.log(requester, price, ExcTransactionService.SHOP_REFUND, "Отмена заявки: " + req.getRewardItem().getTitle());
-        userService.save(requester);
+        excTx.creditExc(requester, price, ExcTransactionService.SHOP_REFUND, "Отмена заявки: " + req.getRewardItem().getTitle());
         // reverseWithdrawal for ALL items since recordWithdrawal is called for all in createRewardRequest
         sinkShopService.reverseWithdrawal(requester, price);
         return rewardRequestRepository.save(req);
@@ -340,9 +336,7 @@ public class RewardService {
         AppUser user = req.getUser();
         boolean isWithdrawal = "Вывод".equals(req.getRewardItem().getCategory());
         long price = actualPaidPrice(req);
-        user.setCoins(user.getCoins() + price);
-        excTx.log(user, price, ExcTransactionService.SHOP_REFUND, "Возврат (отклонение): " + req.getRewardItem().getTitle());
-        userService.save(user);
+        excTx.creditExc(user, price, ExcTransactionService.SHOP_REFUND, "Возврат (отклонение): " + req.getRewardItem().getTitle());
         sinkShopService.reverseWithdrawal(user, price);
         // Отклонение — не вина игрока, поэтому снимаем cooldown по ценовому диапазону товара (Layer 4)
         if (!isWithdrawal) {
@@ -418,12 +412,10 @@ public class RewardService {
         RewardItem saved = rewardItemRepository.save(withdrawItem);
 
         sinkShopService.recordWithdrawal(lockedUser, excAmount);
-        lockedUser.setCoins(lockedUser.getCoins() - excAmount);
         if (fixedRubUsed > 0) {
             lockedUser.setFixedRubBalance(Math.max(0, lockedUser.getFixedRubBalance() - fixedRubUsed));
         }
-        excTx.log(lockedUser, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод → TON");
-        userService.save(lockedUser);
+        excTx.creditExc(lockedUser, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод → TON");
 
         RewardRequest request = new RewardRequest();
         request.setUser(lockedUser);
@@ -485,12 +477,10 @@ public class RewardService {
         RewardItem saved = rewardItemRepository.save(withdrawItem);
 
         sinkShopService.recordWithdrawal(lockedUser, excAmount);
-        lockedUser.setCoins(lockedUser.getCoins() - excAmount);
         if (fixedRubUsed > 0) {
             lockedUser.setFixedRubBalance(Math.max(0, lockedUser.getFixedRubBalance() - fixedRubUsed));
         }
-        excTx.log(lockedUser, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод → " + rubles + " ₽");
-        userService.save(lockedUser);
+        excTx.creditExc(lockedUser, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод → " + rubles + " ₽");
 
         RewardRequest request = new RewardRequest();
         request.setUser(lockedUser);

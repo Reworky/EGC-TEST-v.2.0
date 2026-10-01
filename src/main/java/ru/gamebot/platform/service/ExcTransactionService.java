@@ -54,6 +54,10 @@ public class ExcTransactionService {
      *  баг с завышенной вдвое метрикой "средний ручеёк на реферала" в отчёте "Экономика рефералки"
      *  (см. UserService.referralEconomicsSnapshot) уже случился именно из-за этого. Не повторять. */
     public static final String REFERRAL_FIRST_QUEST_BONUS = "REFERRAL_FIRST_QUEST_BONUS";
+    /** Еженедельный приз топ-отряда (SquadService.rewardTopSquad) - до рефакторинга 2026-10-01
+     *  ("Единая точка начисления EXC и XP") эта выплата вообще не логировалась в exc_transactions,
+     *  найдено как раз при миграции на единую точку (фаза 1, SinkShopService). */
+    public static final String SQUAD_PRIZE = "SQUAD_PRIZE";
 
     @Transactional(propagation = Propagation.REQUIRED)
     public void log(AppUser user, long amount, String type, String description) {

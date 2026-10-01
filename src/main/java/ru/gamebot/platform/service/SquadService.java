@@ -39,6 +39,7 @@ public class SquadService {
     private final SquadRepository squadRepository;
     private final AppUserRepository appUserRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final ExcTransactionService excTx;
 
     public Optional<Squad> findById(Long id) {
         return squadRepository.findById(id);
@@ -272,10 +273,12 @@ public class SquadService {
         int payoutCount = Math.min(sorted.size(), PRIZE_MAX_RECIPIENTS);
         List<AppUser> winners = sorted.subList(0, payoutCount);
         long prizePerMember = WEEKLY_PRIZE_POOL / payoutCount;
+        // До рефакторинга 2026-10-01 эта выплата не логировалась в exc_transactions вообще (найдено
+        // при миграции на единую точку начисления) - теперь каждому победителю отдельная запись SQUAD_PRIZE.
         for (AppUser member : winners) {
-            member.setCoins(member.getCoins() + prizePerMember);
+            excTx.creditExc(member, prizePerMember, ExcTransactionService.SQUAD_PRIZE,
+                    "Приз топ-отряда недели: " + top.squad().getName());
         }
-        appUserRepository.saveAll(winners);
         log.info("Squad weekly prize: {} EXC each to top {} of {} members of squad '{}' (total XP: {})",
                 prizePerMember, payoutCount, members.size(), top.squad().getName(), top.weeklyXp());
 

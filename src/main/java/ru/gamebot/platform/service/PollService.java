@@ -82,9 +82,7 @@ public class PollService {
         if (optionIndex < 0 || optionIndex >= options.size()) return new VoteResult(false, "Неверный вариант.");
         if (user.getCoins() < poll.getPriceExc()) return new VoteResult(false, "Недостаточно EXC. Нужно: " + poll.getPriceExc());
 
-        user.setCoins(user.getCoins() - poll.getPriceExc());
-        userService.save(user);
-        excTx.log(user, -poll.getPriceExc(), ExcTransactionService.POLL, "Голосование: " + poll.getQuestion());
+        excTx.creditExc(user, -poll.getPriceExc(), ExcTransactionService.POLL, "Голосование: " + poll.getQuestion());
 
         PollVote vote = new PollVote();
         vote.setPoll(poll);

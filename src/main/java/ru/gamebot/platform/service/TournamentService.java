@@ -128,10 +128,8 @@ public class TournamentService {
         if (user.getCoins() < tournament.getEntryFeeExc())
             return new JoinResult(false, "Недостаточно EXC. Нужно: " + tournament.getEntryFeeExc());
 
-        user.setCoins(user.getCoins() - tournament.getEntryFeeExc());
         tournament.setPrizePoolExc(tournament.getPrizePoolExc() + tournament.getEntryFeeExc());
-        userService.save(user);
-        excTx.log(user, -tournament.getEntryFeeExc(), ExcTransactionService.TOURNAMENT, "Взнос за турнир: " + tournament.getName());
+        excTx.creditExc(user, -tournament.getEntryFeeExc(), ExcTransactionService.TOURNAMENT, "Взнос за турнир: " + tournament.getName());
         tournamentRepository.save(tournament);
 
         TournamentEntry entry = new TournamentEntry();
@@ -245,9 +243,7 @@ public class TournamentService {
         for (TournamentEntry e : entries) {
             if (e.isRefunded()) continue;
             AppUser participant = e.getUser();
-            participant.setCoins(participant.getCoins() + e.getEntryFeeExc());
-            userService.save(participant);
-            excTx.log(participant, e.getEntryFeeExc(), ExcTransactionService.TOURNAMENT,
+            excTx.creditExc(participant, e.getEntryFeeExc(), ExcTransactionService.TOURNAMENT,
                     "Возврат взноса (турнир отменён — недобор участников): " + t.getName());
             e.setRefunded(true);
             e.setRefundedAt(LocalDateTime.now());
@@ -321,9 +317,7 @@ public class TournamentService {
                 entry.setPayoutHeld(true);
             } else if (prize > 0) {
                 AppUser user = entry.getUser();
-                user.setCoins(user.getCoins() + prize);
-                userService.save(user);
-                excTx.log(user, prize, ExcTransactionService.TOURNAMENT, "Приз за турнир: " + tournament.getName() + " (#" + (i + 1) + " место)");
+                excTx.creditExc(user, prize, ExcTransactionService.TOURNAMENT, "Приз за турнир: " + tournament.getName() + " (#" + (i + 1) + " место)");
             }
             tournamentEntryRepository.save(entry);
         }

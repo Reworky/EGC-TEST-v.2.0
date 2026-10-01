@@ -127,8 +127,7 @@ public class AdWheelService {
             wheelService.addTickets(user, 1, "Рекламное колесо");
         } else {
             label = excAmount + " EXC";
-            user.setCoins(user.getCoins() + excAmount);
-            excTx.log(user, excAmount, ExcTransactionService.BONUS, descriptionFor(excAmount));
+            excTx.creditExc(user, excAmount, ExcTransactionService.BONUS, descriptionFor(excAmount));
         }
         if (jackpot) {
             user.setAdWheelJackpotAt(LocalDateTime.now());

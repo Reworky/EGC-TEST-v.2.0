@@ -92,10 +92,8 @@ public class TrophyTournamentService {
             return new TournamentService.JoinResult(false, "Недостаточно EXC. Нужно: " + tournament.getEntryFeeExc());
         }
 
-        user.setCoins(user.getCoins() - tournament.getEntryFeeExc());
         tournament.setPrizePoolExc(tournament.getPrizePoolExc() + tournament.getEntryFeeExc());
-        userService.save(user);
-        excTx.log(user, -tournament.getEntryFeeExc(), ExcTransactionService.TOURNAMENT, "Взнос за турнир: " + tournament.getName());
+        excTx.creditExc(user, -tournament.getEntryFeeExc(), ExcTransactionService.TOURNAMENT, "Взнос за турнир: " + tournament.getName());
         tournamentRepository.save(tournament);
 
         TournamentEntry entry = new TournamentEntry();
@@ -258,9 +256,7 @@ public class TrophyTournamentService {
             if (!entry.isPayoutHeld() || entry.isDisqualified()) return false;
             if (entry.getPrizeExc() > 0) {
                 AppUser user = entry.getUser();
-                user.setCoins(user.getCoins() + entry.getPrizeExc());
-                userService.save(user);
-                excTx.log(user, entry.getPrizeExc(), ExcTransactionService.TOURNAMENT,
+                excTx.creditExc(user, entry.getPrizeExc(), ExcTransactionService.TOURNAMENT,
                         "Приз за турнир (флаг снят): " + entry.getTournament().getName());
             }
             entry.setPayoutHeld(false);

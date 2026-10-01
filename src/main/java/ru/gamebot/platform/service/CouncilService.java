@@ -49,9 +49,7 @@ public class CouncilService {
                     "Для вступления нужно " + PRICE_EXC + " EXC. У вас: " + user.getCoins() + " EXC.");
         }
 
-        user.setCoins(user.getCoins() - PRICE_EXC);
-        appUserRepository.save(user);
-        excTx.log(user, -PRICE_EXC, ExcTransactionService.COUNCIL, "Вступление в EGC Council");
+        excTx.creditExc(user, -PRICE_EXC, ExcTransactionService.COUNCIL, "Вступление в EGC Council");
 
         CouncilMember member = new CouncilMember();
         member.setUser(user);

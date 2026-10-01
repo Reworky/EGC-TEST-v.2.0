@@ -74,10 +74,7 @@ public class WheelService {
 
         // Apply reward
         switch (type) {
-            case "EXC" -> {
-                user.setCoins(user.getCoins() + excAmount);
-                excTx.log(user, excAmount, ExcTransactionService.BONUS, "Колесо фортуны: " + label);
-            }
+            case "EXC" -> excTx.creditExc(user, excAmount, ExcTransactionService.BONUS, "Колесо фортуны: " + label);
             case "BOOST_24H" -> {
                 if (!sinkShopService.isXpBoostActive(user)) {
                     user.setXpBoostActiveUntil(LocalDateTime.now().plusHours(24));
