@@ -56,7 +56,6 @@ public class WeeklyResetScheduler {
     private final NewsService newsService;
     private final AppUserRepository appUserRepository;
     private final SeasonService seasonService;
-    private final ExcTransactionService excTx;
     private final BrawlQuestVerificationService brawlQuestVerificationService;
     private final ClashQuestVerificationService clashQuestVerificationService;
     private final ClashRoyaleQuestVerificationService clashRoyaleQuestVerificationService;
@@ -732,8 +731,7 @@ public class WeeklyResetScheduler {
                 if (!notificationGate.tryAcquire(user, NudgeType.SECOND_QUEST)) continue; // до флага и выдачи EXC - повтор завтра
 
                 user.setSecondQuestNudgeSentAt(now);
-                userService.addReward(user, 0, SECOND_QUEST_NUDGE_EXC);
-                excTx.log(user, SECOND_QUEST_NUDGE_EXC, ExcTransactionService.SECOND_QUEST_NUDGE,
+                userService.addReward(user, 0, SECOND_QUEST_NUDGE_EXC, ExcTransactionService.SECOND_QUEST_NUDGE,
                         "Напоминание про второй квест");
                 eventPublisher.publishEvent(new ru.gamebot.platform.event.SecondQuestNudgeEvent(
                         this, user.getTelegramId(), SECOND_QUEST_NUDGE_EXC));

@@ -90,7 +90,6 @@ public class QuestService {
     private final HealthRatioService healthRatioService;
     private final SinkShopService sinkShopService;
     private final QuestRewardBoostService questRewardBoostService;
-    private final ExcTransactionService excTx;
     private final SeasonService seasonService;
     private final SponsorService sponsorService;
     private final ApplicationEventPublisher eventPublisher;
@@ -1200,8 +1199,7 @@ public class QuestService {
         // 3.5 3000 EXC bonus on first quest (before completedQuests increment)
         userService.grantFirstQuestReferralBonus(user);
 
-        userService.addReward(user, adjustedXp, adjustedCoins);
-        excTx.log(user, adjustedCoins, ExcTransactionService.QUEST,
+        userService.addReward(user, adjustedXp, adjustedCoins, ExcTransactionService.QUEST,
                 quest.getTitle() + " (" + quest.getGameName() + ")");
 
         // Колесо фортуны: берём ticketReward из квеста, если задан; иначе по категории
@@ -1272,10 +1270,9 @@ public class QuestService {
             invitedUser.setReferralActive(true);
         }
         long bonus = Math.max(1, earnedCoins * REFERRAL_BONUS_PERCENT / 100);
-        userService.addReward(referrer, 0, bonus);
-        excTx.log(referrer, bonus, ExcTransactionService.REFERRAL,
+        UserService.RewardGrant grant = userService.addReward(referrer, 0, bonus, ExcTransactionService.REFERRAL,
                 REFERRAL_BONUS_PERCENT + "% с квеста реферала " + invitedUser.getNickname());
-        referrer.setReferralEarnedExc(referrer.getReferralEarnedExc() + bonus);
+        referrer.setReferralEarnedExc(referrer.getReferralEarnedExc() + grant.totalExc());
         appUserRepository.save(referrer);
     }
 

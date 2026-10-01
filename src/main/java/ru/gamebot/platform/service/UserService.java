@@ -1037,7 +1037,9 @@ public class UserService {
         if (invitedUser.getCompletedQuests() != 0) {
             return false; // only on first quest (completedQuests is incremented before this call)
         }
-        addReward(invitedUser, 0, 3_000);
+        // excType=null - сознательно без лога в exc_transactions, как и было до рефакторинга
+        // (найденный, но не закрытый попутно пробел - см. project_unified_exc_xp_credit_refactor).
+        addReward(invitedUser, 0, 3_000, null, null);
 
         // Самореферал не награждаем (та же защита, что и в QuestService.grantReferralBonus);
         // если referrer не найден — бонус приглашённому выше всё равно уже начислен.
@@ -1046,10 +1048,10 @@ public class UserService {
                 // addReward применяет %-бонус уровня игрока к сумме (системное поведение) — логируем и
                 // показываем в уведомлении РЕАЛЬНО начисленную сумму (totalExc), а не сырую константу,
                 // иначе у реферера с бонусом уровня баланс разойдётся с тем, что написано в уведомлении.
-                RewardGrant grant = addReward(referrer, 0, REFERRER_FIRST_QUEST_BONUS);
-                long awardedExc = grant.totalExc();
-                excTx.log(referrer, awardedExc, ExcTransactionService.REFERRAL_FIRST_QUEST_BONUS,
+                RewardGrant grant = addReward(referrer, 0, REFERRER_FIRST_QUEST_BONUS,
+                        ExcTransactionService.REFERRAL_FIRST_QUEST_BONUS,
                         "Бонус за первый квест друга: " + invitedUser.getNickname());
+                long awardedExc = grant.totalExc();
                 referrer.setReferralEarnedExc(referrer.getReferralEarnedExc() + awardedExc);
                 appUserRepository.save(referrer);
                 eventPublisher.publishEvent(new ru.gamebot.platform.event.ReferrerFirstQuestBonusEvent(
@@ -1072,22 +1074,30 @@ public class UserService {
     }
 
     @Transactional
-    public RewardGrant addReward(AppUser user, long xp, long coins) {
-        return addReward(user, xp, coins, 0);
+    public RewardGrant addReward(AppUser user, long xp, long coins, String excType, String excDescription) {
+        return addReward(user, xp, coins, 0, excType, excDescription);
     }
 
+    /** Единая точка начисления XP+EXC+билетов за один вызов (ТЗ "Единая точка начисления EXC и XP",
+     *  фаза 3, 2026-10-01) - раньше денежная часть (coins) менялась тут "вслепую" (setCoins без лога),
+     *  а каждое из 7 вызывающих мест (QuestService×2, GemPurchaseService, WeeklyResetScheduler и 3 места
+     *  в этом же файле) отдельно логировало начисление СНАРУЖИ своим type/description - реальный риск
+     *  забыть лог на новом месте, что уже один раз и случилось (см. ниже). Теперь type/description -
+     *  обязательные параметры, логирование происходит здесь же, вызывающий код больше не может его
+     *  забыть. excType == null означает "не логировать эту выдачу" - намеренно оставлено для ОДНОГО
+     *  места (grantFirstQuestReferralBonus, бонус приглашённому за первый квест друга), где лога не
+     *  было и ДО этого рефакторинга - это точное воспроизведение прежнего поведения, не новая дыра. */
     @Transactional
-    public RewardGrant addReward(AppUser user, long xp, long coins, long tickets) {
+    public RewardGrant addReward(AppUser user, long xp, long coins, long tickets, String excType, String excDescription) {
         RewardGrant rewardGrant = previewReward(user, xp, coins, tickets);
         creditXp(user, xp);
-        // Денежная часть (coins) НЕ переведена на creditExc в этой фазе намеренно: addReward вызывается
-        // из 6 разных мест (QuestService, GemPurchaseService, WeeklyResetScheduler, этот же файл) с
-        // разным type/description для exc_transactions, который каждый вызывающий код сейчас пишет
-        // отдельно СНАРУЖИ после вызова - объединение потребует менять сигнатуру и все 6 мест разом,
-        // это отдельная следующая фаза, не делать походя вместе с XP.
-        user.setCoins(user.getCoins() + rewardGrant.totalExc());
         user.setTickets(user.getTickets() + tickets);
-        appUserRepository.save(user);
+        if (rewardGrant.totalExc() != 0 && excType != null) {
+            excTx.creditExc(user, rewardGrant.totalExc(), excType, excDescription);
+        } else {
+            user.setCoins(user.getCoins() + rewardGrant.totalExc());
+            appUserRepository.save(user);
+        }
         return rewardGrant;
     }
 
@@ -1095,10 +1105,7 @@ public class UserService {
     public RewardGrant addManualBonus(Long telegramId, long xp, long coins, long tickets) {
         AppUser user = appUserRepository.findByTelegramId(telegramId)
                 .orElseThrow(() -> new IllegalArgumentException("Игрок с таким Telegram ID не найден."));
-        RewardGrant grant = addReward(user, xp, coins, tickets);
-        if (coins > 0) excTx.log(user, grant.totalExc(), ExcTransactionService.BONUS,
-                "Ручное начисление администратором");
-        return grant;
+        return addReward(user, xp, coins, tickets, ExcTransactionService.BONUS, "Ручное начисление администратором");
     }
 
     @Transactional

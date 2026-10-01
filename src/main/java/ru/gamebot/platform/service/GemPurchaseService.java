@@ -252,7 +252,8 @@ public class GemPurchaseService {
         req.setStatus(GemPurchaseStatus.APPROVED);
         req.setUpdatedAt(LocalDateTime.now());
         repository.save(req);
-        userService.addReward(req.getUser(), req.getXpBonus(), 0);
+        // excType=null: coins всегда 0 здесь (чистый XP-бонус), логировать нечего.
+        userService.addReward(req.getUser(), req.getXpBonus(), 0, null, null);
         return req;
     }
 
