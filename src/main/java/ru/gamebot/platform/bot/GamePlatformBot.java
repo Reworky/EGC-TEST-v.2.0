@@ -19073,6 +19073,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (action.equals("joinreq:approveall")) {
             List<ChannelJoinRequest> pending = channelJoinRequestRepository.findAllByStatusOrderByCreatedAtAsc(ChannelJoinRequest.PENDING);
             int approved = 0;
+            int rejectedByTelegram = 0;
             for (ChannelJoinRequest r : pending) {
                 try {
                     ApproveChatJoinRequest approve = new ApproveChatJoinRequest();
@@ -19083,12 +19084,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     r.setDecidedAt(java.time.LocalDateTime.now());
                     channelJoinRequestRepository.save(r);
                     approved++;
+                } catch (org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException exception) {
+                    // Telegram отклонил саму заявку (400 Bad Request, например USER_CHANNELS_TOO_MUCH -
+                    // у пользователя лимит каналов в Telegram) - повторная попытка даст тот же результат,
+                    // поэтому помечаем решённой, а не оставляем PENDING навсегда (иначе зависает в каждом
+                    // следующем "Принять всех" и в remindPendingChannelJoinRequests). Найдено 2026-10-02.
+                    log.warn("Join request {} rejected by Telegram, marking resolved: {}", r.getId(), exception.getApiResponse());
+                    r.setStatus(ChannelJoinRequest.DECLINED);
+                    r.setDecidedAt(java.time.LocalDateTime.now());
+                    channelJoinRequestRepository.save(r);
+                    rejectedByTelegram++;
                 } catch (TelegramApiException exception) {
-                    // Заявка остаётся PENDING - попадёт в следующий "Принять всех" или в одиночную карточку.
+                    // Прочие ошибки (сеть, временная недоступность) - заявка остаётся PENDING,
+                    // попадёт в следующий "Принять всех" или в одиночную карточку.
                     log.error("Failed to bulk-approve join request {}", r.getId(), exception);
                 }
             }
             answer(callbackQuery.getId(), "✅ Принято: " + approved + " из " + pending.size());
+            if (rejectedByTelegram > 0) {
+                sendText(user.getTelegramId(),
+                        "⚠️ Telegram отклонил " + rejectedByTelegram + " заявок (например, у игрока лимит каналов в Telegram — это ограничение самого Telegram, не бота). Помечены отклонёнными, чтобы не зависали.",
+                        null);
+            }
             sendAdminJoinRequests(user);
             return;
         }
@@ -19174,6 +19191,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             channelJoinRequestRepository.save(r);
             clearInlineKeyboard(callbackQuery);
             answer(callbackQuery.getId(), op.equals("approve") ? "✅ Принят в канал" : "❌ Отклонено");
+        } catch (org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException exception) {
+            // Telegram отклонил саму заявку (400 Bad Request, например USER_CHANNELS_TOO_MUCH - у
+            // пользователя лимит каналов в Telegram) - повторная попытка даст тот же результат, поэтому
+            // помечаем решённой вместо вечного PENDING (иначе зависает в "Принять всех" и в напоминании
+            // remindPendingChannelJoinRequests). Найдено 2026-10-02.
+            log.warn("Join request {} rejected by Telegram, marking resolved: {}", requestId, exception.getApiResponse());
+            r.setStatus(ChannelJoinRequest.DECLINED);
+            r.setDecidedAt(java.time.LocalDateTime.now());
+            channelJoinRequestRepository.save(r);
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), "⚠️ Telegram отклонил: " + exception.getApiResponse());
         } catch (TelegramApiException exception) {
             // Заявка остаётся PENDING в БД — можно нажать кнопку ещё раз после исправления причины (например прав бота в канале).
             log.error("Failed to {} chat join request {}", op, requestId, exception);
