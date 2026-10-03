@@ -97,6 +97,13 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
     @Query("SELECT r FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED'")
     List<RewardRequest> findAllApprovedWithdrawals();
 
+    /** Лёгкая выборка выплаченных выводов для вкладки «Выводы»: игрок, момент (выплата, а у старых заявок без paid_at - создание),
+     *  списанные EXC, рубли из заявки, группа позиции (Stars) и реквизиты (TON). */
+    @Query("SELECT r.user.id, COALESCE(r.paidAt, r.createdAt), COALESCE(r.paidPriceCoins, r.rewardItem.priceCoins), "
+            + "COALESCE(r.fixedRubValue, 0L), r.rewardItem.purchaseGroup, r.payoutDetails "
+            + "FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED'")
+    List<Object[]> findApprovedWithdrawalRows();
+
     /** Та же приближённая фильтрация по createdAt, что и в sumApprovedWithdrawalExcSince — для
      *  недельного/месячного отчёта по выводам (см. RewardService.withdrawalStatsSince). */
     @EntityGraph(attributePaths = {"rewardItem"})

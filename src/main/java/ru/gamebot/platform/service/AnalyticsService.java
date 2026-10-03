@@ -16,6 +16,7 @@ import ru.gamebot.platform.domain.enums.SubmissionStatus;
 import ru.gamebot.platform.domain.model.FinanceEntry;
 import ru.gamebot.platform.domain.model.IncidentEntry;
 import ru.gamebot.platform.domain.model.PlatformSnapshot;
+import ru.gamebot.platform.domain.model.RewardRequest;
 import ru.gamebot.platform.domain.model.Tournament;
 import ru.gamebot.platform.domain.model.TournamentEntry;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
@@ -45,6 +46,7 @@ public class AnalyticsService {
         ENGAGEMENT("🔥", "Вовлечённость"),
         QUESTS("🎯", "Квесты"),
         ECONOMY("💰", "Экономика и выплаты"),
+        WITHDRAWALS("💸", "Выводы игроков"),
         REFERRAL("🤝", "Реферальная программа"),
         SQUADS("👨‍👩‍👧‍👦", "Отряды"),
         SOURCES("📡", "Источники трафика"),
@@ -110,6 +112,7 @@ public class AnalyticsService {
     private final RewardService rewardService;
     private final UserService userService;
     private final QuestPackAnalyticsService packAnalyticsService;
+    private final HealthRatioService healthRatioService;
     private final TrafficFunnelService funnelService;
     private final FinanceService financeService;
     private final IncidentEntryRepository incidentRepo;
@@ -217,6 +220,7 @@ public class AnalyticsService {
                 case ECONOMY -> economyTab(p, pv, fromDate, lines);
                 case REFERRAL -> referralTab(p, pv, fromDate, lines);
                 case SQUADS -> squadsTab(fromDate, lines, extras);
+                case WITHDRAWALS -> withdrawalsTab(p, pv, lines, extras);
                 case PACKS -> packsTab(fromDate, lines, extras);
                 case SOURCES -> sourcesTab(p, pv, lines, extras);
                 case PNL -> pnlTab(p, pv, lines, extras);
@@ -421,6 +425,97 @@ public class AnalyticsService {
         out.add(L("tickets", "Билетов в обороте", "", (double) userService.sumAllTickets(), snapVal(fromDate, PlatformSnapshot::getTotalTickets)));
         out.add(L("queue", "Заявок на награды в очереди", "", (double) rewardService.countPendingRequests(), null, null, true));
         out.add(L("queue_w", "Заявок на вывод в очереди", "", (double) rewardService.findPendingWithdrawals().size(), null, null, true));
+    }
+
+    /** Вкладка «Выводы игроков» (2026-10-04): сколько и как выводят — за период, в среднем за месяц, по месяцам и способам,
+     *  очередь и «на сколько хватит пула». Момент выплаты - paid_at, а у старых заявок (до 26.09.2026) без него - дата создания;
+     *  рубли в заявках записываются только с сентября, поэтому для старых месяцев показываем EXC и ₽-эквивалент по текущему курсу. */
+    private void withdrawalsTab(Period p, Period pv, List<Line> out, List<String> extras) {
+        List<RewardService.WithdrawalRow> rows = rewardService.approvedWithdrawalRows();
+        double ratio = healthRatioService.getCurrentRatio();
+        LocalDateTime now = LocalDateTime.now();
+
+        long cnt = 0, cntPrev = 0, exc = 0, excPrev = 0, rub = 0, rubPrev = 0, stars = 0, starsPrev = 0;
+        java.util.Set<Long> players = new java.util.HashSet<>(), playersPrev = new java.util.HashSet<>();
+        for (RewardService.WithdrawalRow r : rows) {
+            boolean inCur = !r.at().isBefore(p.from()) && r.at().isBefore(p.to());
+            boolean inPrev = !r.at().isBefore(pv.from()) && r.at().isBefore(pv.to());
+            if (inCur) {
+                cnt++; exc += r.exc(); rub += r.rub(); players.add(r.userId());
+                if ("STARS".equals(r.method())) stars += r.exc();
+            } else if (inPrev) {
+                cntPrev++; excPrev += r.exc(); rubPrev += r.rub(); playersPrev.add(r.userId());
+                if ("STARS".equals(r.method())) starsPrev += r.exc();
+            }
+        }
+        out.add(L("w_cnt", "Выплат за период", "", (double) cnt, (double) cntPrev));
+        out.add(L("w_players", "Игроков получили выплату", "", (double) players.size(), (double) playersPrev.size()));
+        out.add(L("w_exc", "Выведено за период", "EXC", (double) exc, (double) excPrev));
+        out.add(L("w_rub", "  рублями и TON (по заявкам)", "₽", (double) rub, (double) rubPrev,
+                "у выводов в Stars и у старых заявок рублей в записи нет", false));
+        out.add(L("w_stars", "  в Stars", "EXC", (double) stars, (double) starsPrev));
+        out.add(L("w_avg", "Средняя выплата", "EXC", cnt == 0 ? 0.0 : (double) exc / cnt, cntPrev == 0 ? null : (double) excPrev / cntPrev));
+
+        // последние 30 дней против предыдущих 30 и среднее за всё время
+        LocalDateTime t30 = now.minusDays(30), t60 = now.minusDays(60);
+        long exc30 = 0, excP30 = 0, cnt30 = 0, total = 0;
+        LocalDateTime first = null;
+        for (RewardService.WithdrawalRow r : rows) {
+            total += r.exc();
+            if (first == null || r.at().isBefore(first)) first = r.at();
+            if (!r.at().isBefore(t30)) { exc30 += r.exc(); cnt30++; }
+            else if (!r.at().isBefore(t60)) { excP30 += r.exc(); }
+        }
+        out.add(L("w_30", "Последние 30 дней", "EXC", (double) exc30, (double) excP30,
+                "в сравнении с предыдущими 30 днями - главный индикатор роста вывода", true));
+        long days = first == null ? 1 : Math.max(1, java.time.temporal.ChronoUnit.DAYS.between(first, now));
+        out.add(L("w_avg_month", "Среднее за 30 дней (за всё время)", "EXC", (double) total * 30.0 / days, null,
+                "с " + (first == null ? "—" : first.toLocalDate()) + ", " + days + " дн.", false));
+
+        // очередь и запас пула
+        List<RewardRequest> pending = rewardService.findPendingWithdrawals();
+        long pendingExc = pending.stream().mapToLong(rewardService::actualPaidPrice).sum();
+        out.add(L("w_queue", "Заявок на вывод в очереди", "", (double) pending.size(), null, null, true));
+        out.add(L("w_queue_exc", "  на сумму", "EXC", (double) pendingExc, null, null, true));
+        long poolRub = healthRatioService.getPayoutPoolRub();
+        out.add(L("w_pool", "Пул выплат", "₽", (double) poolRub, null, "курс сейчас: 1000 EXC = " + String.format("%.1f", ratio * 10) + " ₽", false));
+        double burn30Rub = exc30 * ratio / 100.0;
+        if (burn30Rub > 0) {
+            out.add(L("w_runway", "Хватит пула при темпе последних 30 дн.", "мес.", poolRub / burn30Rub, null,
+                    "пул ÷ (выведено за 30 дн. × текущий курс); без учёта притока в пул", false));
+        }
+
+        // по месяцам (последние 12) и способам за 30 дней
+        java.util.TreeMap<java.time.YearMonth, long[]> byMonth = new java.util.TreeMap<>();
+        java.util.Map<java.time.YearMonth, java.util.Set<Long>> monthPlayers = new java.util.HashMap<>();
+        for (RewardService.WithdrawalRow r : rows) {
+            java.time.YearMonth ym = java.time.YearMonth.from(r.at());
+            long[] a = byMonth.computeIfAbsent(ym, k -> new long[3]);
+            a[0]++; a[1] += r.exc(); a[2] += r.rub();
+            monthPlayers.computeIfAbsent(ym, k -> new java.util.HashSet<>()).add(r.userId());
+        }
+        StringBuilder sb = new StringBuilder("📅 <b>Выводы по месяцам</b> (выплаты / игроков / EXC / ₽ по заявкам)\n\n");
+        java.util.List<java.time.YearMonth> months = new java.util.ArrayList<>(byMonth.keySet());
+        for (int i = Math.max(0, months.size() - 12); i < months.size(); i++) {
+            java.time.YearMonth ym = months.get(i);
+            long[] a = byMonth.get(ym);
+            sb.append(ym).append(": ").append(a[0]).append(" / ").append(monthPlayers.get(ym).size()).append(" / ")
+                    .append(String.format("%,d", a[1]).replace(',', ' ')).append(" EXC");
+            sb.append(a[2] > 0 ? " / " + String.format("%,d", a[2]).replace(',', ' ') + " ₽" : " / — ₽").append("\n");
+        }
+        sb.append("\nНеполный текущий месяц сравнивать с полными нельзя. До 26.09.2026 рубли в заявках не записывались.");
+        extras.add(sb.toString());
+
+        long[] rubM = new long[2], tonM = new long[2], starM = new long[2];
+        for (RewardService.WithdrawalRow r : rows) {
+            if (r.at().isBefore(t30)) continue;
+            long[] a = "STARS".equals(r.method()) ? starM : "TON".equals(r.method()) ? tonM : rubM;
+            a[0]++; a[1] += r.exc();
+        }
+        extras.add("💳 <b>По способам за последние 30 дней</b>\n\n"
+                + "Рубли (СБП/карта): " + rubM[0] + " выплат, " + String.format("%,d", rubM[1]).replace(',', ' ') + " EXC\n"
+                + "GRAM/TON: " + tonM[0] + " выплат, " + String.format("%,d", tonM[1]).replace(',', ' ') + " EXC\n"
+                + "Stars: " + starM[0] + " выплат, " + String.format("%,d", starM[1]).replace(',', ' ') + " EXC");
     }
 
     /** Выплаты в окне [from, to): разность двух накопительных «с момента» - других запросов по окну в сервисе выплат нет. */
@@ -655,6 +750,7 @@ public class AnalyticsService {
                     new TrendMetric("DAU/MAU в отряде, %", PlatformSnapshot::getDauMauInSquadPct), new TrendMetric("DAU/MAU без отряда, %", PlatformSnapshot::getDauMauNoSquadPct),
                     new TrendMetric("Возврат за 2-й квест в отряде, %", PlatformSnapshot::getSecondQuestReturnInSquadPct), new TrendMetric("Возврат за 2-й квест без отряда, %", PlatformSnapshot::getSecondQuestReturnNoSquadPct));
             case PACKS -> List.of(new TrendMetric("DAU/MAU: ротируемые игры, %", PlatformSnapshot::getDauMauRotatingPct), new TrendMetric("DAU/MAU: контроль, %", PlatformSnapshot::getDauMauControlPct));
+            case WITHDRAWALS -> List.of(new TrendMetric("Выплачено за 7 дн., EXC", PlatformSnapshot::getPaidOutExc7d), new TrendMetric("Получателей выплат", PlatformSnapshot::getUniqueWithdrawalRecipients));
             case TECH -> List.of(new TrendMetric("Аптайм за 7 дн., ‰", PlatformSnapshot::getUptimePermille7d), new TrendMetric("Ср. время проверки, мин", PlatformSnapshot::getAvgReviewMin7d));
             case FRAUD -> List.of(new TrendMetric("Заблокировано", PlatformSnapshot::getBlockedUsers));
             default -> List.of();

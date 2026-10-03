@@ -331,6 +331,22 @@ public class RewardService {
         return new long[]{rubTotal, tonRubTotal, starsTotal};
     }
 
+    /** Одна выплаченная заявка на вывод для аналитики. method: RUB, TON или STARS; rub - сумма из заявки (у Stars и старых заявок 0). */
+    public record WithdrawalRow(long userId, LocalDateTime at, long exc, long rub, String method) {}
+
+    public List<WithdrawalRow> approvedWithdrawalRows() {
+        List<WithdrawalRow> rows = new java.util.ArrayList<>();
+        for (Object[] r : rewardRequestRepository.findApprovedWithdrawalRows()) {
+            String group = (String) r[4];
+            String details = (String) r[5];
+            String method = "telegram_stars".equals(group) ? "STARS"
+                    : (details != null && (details.startsWith("TON:") || details.startsWith("USDT"))) ? "TON" : "RUB";
+            rows.add(new WithdrawalRow(((Number) r[0]).longValue(), (LocalDateTime) r[1], ((Number) r[2]).longValue(),
+                    ((Number) r[3]).longValue(), method));
+        }
+        return rows;
+    }
+
     public long countUniqueWithdrawalRecipients() {
         return rewardRequestRepository.countDistinctUsersWithApprovedWithdrawals();
     }
