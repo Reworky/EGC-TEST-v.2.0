@@ -72,6 +72,9 @@ public class ExcTransactionService {
      *  выплата ВСЕМ отрядам, достигшим размера, независимо от рейтинга. Смешивание под одним типом исказило
      *  бы и "средний приз топ-отряда", и подсчёт того, сколько отрядов реально прошли через milestone. */
     public static final String SQUAD_MILESTONE = "SQUAD_MILESTONE";
+    /** Награда участнику за выполненную командную цель недели (SquadService.settleWeeklyGoals, 2026-10-03) —
+     *  отдельный тип: это не приз за место в рейтинге (SQUAD_PRIZE) и не разовый бонус за размер (SQUAD_MILESTONE). */
+    public static final String SQUAD_GOAL = "SQUAD_GOAL";
 
     @Transactional(propagation = Propagation.REQUIRED)
     public void log(AppUser user, long amount, String type, String description) {
@@ -140,6 +143,7 @@ public class ExcTransactionService {
             case REFERRAL_PRIZE   -> "🏆 Приз топ-рефереров";
             case REFERRAL_FIRST_QUEST_BONUS -> "🤝 Бонус за первый квест друга";
             case SQUAD_MILESTONE -> "👨‍👩‍👧‍👦 Бонус за рост отряда";
+            case SQUAD_GOAL -> "🎯 Командная цель отряда";
             default             -> "📌 Прочее";
         };
     }

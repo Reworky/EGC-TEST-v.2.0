@@ -52,6 +52,39 @@ public class SquadController {
         return ResponseEntity.ok(toDto(squad, user, telegramId));
     }
 
+    /** Каталог «Найти отряд»: отряды с открытым набором (по недельной активности). */
+    @GetMapping("/catalog")
+    public ResponseEntity<List<CatalogEntry>> catalog() {
+        List<CatalogEntry> result = squadService.findOpenSquads().stream()
+                .map(e -> new CatalogEntry(e.squad().getId(), e.squad().getName(), e.memberCount(), e.weeklyXp()))
+                .toList();
+        return ResponseEntity.ok(result);
+    }
+
+    /** Вступление через каталог — только в отряд с открытым набором. */
+    @PostMapping("/join-open")
+    public ResponseEntity<?> joinOpen(@AuthenticationPrincipal Long telegramId, @RequestBody JoinOpenRequest body) {
+        AppUser user = getUser(telegramId);
+        try {
+            Squad squad = squadService.joinOpen(user, body.squadId());
+            return ResponseEntity.ok(toDto(squad, user, telegramId));
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("message", e.getMessage()));
+        }
+    }
+
+    /** Капитан открывает/закрывает набор в отряд. */
+    @PostMapping("/recruitment")
+    public ResponseEntity<?> recruitment(@AuthenticationPrincipal Long telegramId, @RequestBody RecruitmentRequest body) {
+        AppUser user = getUser(telegramId);
+        try {
+            Squad squad = squadService.setRecruitment(user, body.open());
+            return ResponseEntity.ok(toDto(squad, user, telegramId));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("message", e.getMessage()));
+        }
+    }
+
     @PostMapping("/leave")
     public ResponseEntity<Void> leave(@AuthenticationPrincipal Long telegramId) {
         AppUser user = getUser(telegramId);
@@ -115,12 +148,20 @@ public class SquadController {
         // Готовая ссылка для "Поделиться" — единая точка построения (buildReferralLink), та же,
         // что использует бот, чтобы мини-апп не собирал свой формат ссылки заново (см. UserService).
         String inviteLink = userService.buildReferralLink(user);
+        SquadService.GoalProgress goal = squadService.goalProgress(squad);
         return new SquadDto(squad.getId(), squad.getName(), squad.getInviteCode(), inviteLink,
-                isCaptain, weeklyXp, squad.getWeeklyBonusPoints(), memberDtos);
+                isCaptain, weeklyXp, squad.getWeeklyBonusPoints(), memberDtos,
+                squad.isOpenRecruitment(), goal.eligible(), goal.done(), goal.target(), goal.reached(),
+                goal.bonusPerMember(), SquadService.GOAL_MIN_MEMBERS, squadService.streakDays(squad));
     }
 
     record SquadDto(Long id, String name, String inviteCode, String inviteLink, boolean isCaptain,
-                    long weeklyXp, long weeklyBonusPoints, List<MemberDto> members) {}
+                    long weeklyXp, long weeklyBonusPoints, List<MemberDto> members,
+                    boolean openRecruitment, boolean goalEligible, long goalDone, long goalTarget, boolean goalReached,
+                    long goalBonus, int goalMinMembers, int streakDays) {}
+    record CatalogEntry(Long id, String name, long memberCount, long weeklyXp) {}
+    record JoinOpenRequest(Long squadId) {}
+    record RecruitmentRequest(boolean open) {}
     record MemberDto(Long telegramId, String nickname, String levelName, long weeklyXp, boolean isCaptain) {}
     /** xp — недельный или общий XP в зависимости от эндпоинта (/leaderboard vs /leaderboard/overall). */
     record LeaderboardEntry(int rank, String name, long xp, long memberCount) {}

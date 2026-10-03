@@ -277,6 +277,18 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT s.quest.id, s.status, COUNT(s) FROM QuestSubmission s WHERE s.createdAt >= :since GROUP BY s.quest.id, s.status")
     List<Object[]> countTakenByStatusGroupedByQuestSince(@Param("since") LocalDateTime since);
 
+    /** Одобренные квесты участников отряда в окне [from, to) — командная цель недели (SquadService). */
+    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :from AND s.updatedAt < :to AND s.user.squadId = :squadId")
+    long countApprovedBySquadBetween(@Param("squadId") Long squadId, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /** Участники отряда, у которых в окне есть хотя бы один одобренный квест (получают награду за цель). */
+    @Query("SELECT DISTINCT s.user.id FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :from AND s.updatedAt < :to AND s.user.squadId = :squadId")
+    List<Long> findApprovedUserIdsBySquadBetween(@Param("squadId") Long squadId, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /** Времена одобрения квестов участников отряда — для серии отряда (дней подряд). */
+    @Query("SELECT s.updatedAt FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :since AND s.user.squadId = :squadId")
+    List<LocalDateTime> findApprovedTimesBySquadSince(@Param("squadId") Long squadId, @Param("since") LocalDateTime since);
+
     /** Одобренные выполнения по парам (игрок, игра) с момента since — «основная игра» игрока для когортной аналитики пачек. */
     @Query("SELECT s.user.id, s.quest.gameName, COUNT(s) FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :since "
             + "AND s.quest.gameName IS NOT NULL GROUP BY s.user.id, s.quest.gameName")

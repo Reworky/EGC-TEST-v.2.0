@@ -50,4 +50,13 @@ public class Squad {
 
     @Column(columnDefinition = "boolean default false")
     private boolean milestone5Awarded;
+
+    /** Открытый набор: отряд виден в каталоге («Найти отряд»), вступить можно без кода. Новые отряды открыты по
+     *  умолчанию, капитан может закрыть; уже существовавшие отряды остаются закрытыми, пока капитан сам не откроет. */
+    @Column(columnDefinition = "boolean default false")
+    private boolean openRecruitment;
+
+    /** Начало (понедельник) недели, за которую уже подведены итоги командной цели — защита от двойной выплаты
+     *  при повторном запуске недельной задачи (SquadService.settleWeeklyGoals). */
+    private java.time.LocalDate lastGoalSettledWeek;
 }

@@ -1,9 +1,13 @@
 package ru.gamebot.platform.service;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +17,9 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Squad;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
+import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
 import ru.gamebot.platform.domain.repository.SquadRepository;
+import ru.gamebot.platform.event.SquadGoalReachedEvent;
 import ru.gamebot.platform.event.SquadMilestoneReachedEvent;
 import ru.gamebot.platform.event.SquadPrizeEvent;
 import ru.gamebot.platform.event.SquadReferralBonusEvent;
@@ -49,6 +55,20 @@ public class SquadService {
     private final AppUserRepository appUserRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final ExcTransactionService excTx;
+    private final QuestSubmissionRepository submissionRepository;
+
+    // ── Командная цель недели (2026-10-03): отряд вместе набирает N одобренных квестов за неделю ──
+    /** Цель = квестов на участника; минимум GOAL_MIN. Считается от размера, чтобы малые отряды тоже могли победить
+     *  (приз топ-отряда доступен только лидерам рейтинга). */
+    public static final int GOAL_PER_MEMBER = 2;
+    public static final int GOAL_MIN = 4;
+    /** Участвуют отряды от 3 человек (так двойник-аккаунты на двоих не фармят награду). */
+    public static final int GOAL_MIN_MEMBERS = 3;
+    /** Награда каждому участнику с хотя бы одним квестом за неделю, когда цель выполнена. Верхняя граница расхода:
+     *  250 EXC x игроков в отрядах (на нынешних ~80 игроков - до 20 000 EXC в неделю). */
+    public static final long GOAL_BONUS_PER_MEMBER = 250;
+
+    public record GoalProgress(boolean eligible, long done, long target, boolean reached, long bonusPerMember) {}
 
     public Optional<Squad> findById(Long id) {
         return squadRepository.findById(id);
@@ -99,6 +119,7 @@ public class SquadService {
         squad.setCaptainTelegramId(captain.getTelegramId());
         squad.setInviteCode(generateInviteCode());
         squad.setStatus("ACTIVE");
+        squad.setOpenRecruitment(true);
         squad.setCreatedAt(LocalDateTime.now());
         squad = squadRepository.save(squad);
 
@@ -320,6 +341,114 @@ public class SquadService {
                 prizePerMember, payoutCount, members.size(), top.squad().getName(), top.weeklyXp());
 
         eventPublisher.publishEvent(new SquadPrizeEvent(this, top.squad(), winners, prizePerMember, top.weeklyXp()));
+    }
+
+    // ── Открытый набор и каталог ────────────────────────────────────────────────
+
+    @Transactional
+    public Squad setRecruitment(AppUser captain, boolean open) {
+        Squad squad = findByUser(captain).orElseThrow(() -> new IllegalStateException("Вы не состоите ни в одном отряде."));
+        if (!captain.getTelegramId().equals(squad.getCaptainTelegramId())) {
+            throw new IllegalStateException("Менять набор может только капитан.");
+        }
+        squad.setOpenRecruitment(open);
+        return squadRepository.save(squad);
+    }
+
+    /** Отряды с открытым набором для каталога «Найти отряд»: активные, не заполненные, по недельной активности. */
+    public List<SquadRankEntry> findOpenSquads() {
+        return squadRepository.findAll().stream()
+                .filter(s -> "ACTIVE".equals(s.getStatus()) && s.isOpenRecruitment())
+                .map(s -> new SquadRankEntry(s, squadWeeklyXp(s), memberCount(s)))
+                .filter(e -> e.memberCount() > 0 && e.memberCount() < MAX_MEMBERS)
+                .sorted(Comparator.comparingLong(SquadRankEntry::weeklyXp).reversed()
+                        .thenComparing(Comparator.comparingLong(SquadRankEntry::memberCount).reversed()))
+                .limit(100)
+                .toList();
+    }
+
+    /** Вступление через каталог — только в отряд с открытым набором. */
+    @Transactional
+    public Squad joinOpen(AppUser user, Long squadId) {
+        Squad squad = squadRepository.findById(squadId).orElseThrow(() -> new IllegalArgumentException("Отряд не найден."));
+        if (!squad.isOpenRecruitment()) {
+            throw new IllegalStateException("В этом отряде набор закрыт — вступить можно только по приглашению.");
+        }
+        return join(user, squadId);
+    }
+
+    // ── Командная цель недели и серия ───────────────────────────────────────────
+
+    private static LocalDateTime currentWeekStart() {
+        return LocalDate.now().with(DayOfWeek.MONDAY).atStartOfDay();
+    }
+
+    public static long goalTarget(long memberCount) {
+        return Math.max(GOAL_MIN, GOAL_PER_MEMBER * memberCount);
+    }
+
+    /** Прогресс цели за текущую неделю (понедельник 00:00 — воскресенье). Для отрядов меньше GOAL_MIN_MEMBERS
+     *  цель не действует (eligible=false) — в карточке подсказываем, сколько человек не хватает. */
+    public GoalProgress goalProgress(Squad squad) {
+        long members = memberCount(squad);
+        LocalDateTime from = currentWeekStart();
+        long done = submissionRepository.countApprovedBySquadBetween(squad.getId(), from, from.plusWeeks(1));
+        long target = goalTarget(members);
+        return new GoalProgress(members >= GOAL_MIN_MEMBERS, done, target, done >= target, GOAL_BONUS_PER_MEMBER);
+    }
+
+    /** Серия отряда: сколько дней подряд (до сегодня включительно, либо до вчера, если сегодня ещё не было)
+     *  хотя бы один участник выполнил квест. */
+    public int streakDays(Squad squad) {
+        Set<LocalDate> days = new HashSet<>();
+        for (LocalDateTime t : submissionRepository.findApprovedTimesBySquadSince(squad.getId(), LocalDateTime.now().minusDays(60))) {
+            days.add(t.toLocalDate());
+        }
+        LocalDate day = LocalDate.now();
+        if (!days.contains(day)) {
+            day = day.minusDays(1);
+        }
+        int streak = 0;
+        while (days.contains(day)) {
+            streak++;
+            day = day.minusDays(1);
+        }
+        return streak;
+    }
+
+    /** Понедельник 00:00 (WeeklyResetScheduler): подводит итоги прошедшей недели — всем участникам с хотя бы одним
+     *  квестом начисляется GOAL_BONUS_PER_MEMBER, если отряд (от GOAL_MIN_MEMBERS человек) выполнил цель.
+     *  lastGoalSettledWeek защищает от двойной выплаты при повторном запуске. */
+    @Transactional
+    public void settleWeeklyGoals() {
+        LocalDateTime weekEnd = currentWeekStart();
+        LocalDateTime weekStart = weekEnd.minusWeeks(1);
+        for (Squad squad : squadRepository.findAll()) {
+            if (!"ACTIVE".equals(squad.getStatus()) || weekStart.toLocalDate().equals(squad.getLastGoalSettledWeek())) {
+                continue;
+            }
+            squad.setLastGoalSettledWeek(weekStart.toLocalDate());
+            squadRepository.save(squad);
+            long members = memberCount(squad);
+            if (members < GOAL_MIN_MEMBERS) {
+                continue;
+            }
+            long done = submissionRepository.countApprovedBySquadBetween(squad.getId(), weekStart, weekEnd);
+            long target = goalTarget(members);
+            if (done < target) {
+                continue;
+            }
+            Set<Long> contributors = new HashSet<>(submissionRepository.findApprovedUserIdsBySquadBetween(squad.getId(), weekStart, weekEnd));
+            List<AppUser> rewarded = getMembers(squad).stream().filter(m -> contributors.contains(m.getId())).toList();
+            for (AppUser member : rewarded) {
+                excTx.creditExc(member, GOAL_BONUS_PER_MEMBER, ExcTransactionService.SQUAD_GOAL,
+                        "Цель недели выполнена: отряд «" + squad.getName() + "»");
+            }
+            if (!rewarded.isEmpty()) {
+                eventPublisher.publishEvent(new SquadGoalReachedEvent(this, squad, rewarded, GOAL_BONUS_PER_MEMBER, done, target));
+            }
+            log.info("Squad goal reached: '{}' {}/{}, {} members rewarded x{} EXC", squad.getName(), done, target, rewarded.size(), GOAL_BONUS_PER_MEMBER);
+        }
     }
 
     @Transactional

@@ -78,6 +78,11 @@ public class WeeklyResetScheduler {
             log.error("Squad weekly reward failed — continuing with XP reset", e);
         }
         try {
+            squadService.settleWeeklyGoals();
+        } catch (Exception e) {
+            log.error("Squad weekly goals settlement failed", e);
+        }
+        try {
             squadService.resetWeeklyBonusPoints();
         } catch (Exception e) {
             log.error("Squad weekly bonus points reset failed", e);
