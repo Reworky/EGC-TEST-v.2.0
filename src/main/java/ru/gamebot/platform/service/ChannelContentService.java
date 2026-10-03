@@ -82,6 +82,9 @@ public class ChannelContentService {
     public static final String REFERRAL_TOP = "REFERRAL_TOP";
     public static final String REFERRAL_HOWTO = "REFERRAL_HOWTO";
     public static final String REFERRAL_STATS = "REFERRAL_STATS";
+    /** Пост о смене пачки квестов (создаётся при смене пачки, см. QuestPackScheduleService); в ALL_TYPES не входит —
+     *  расписания и ручной кнопки у него нет, карточка на согласование уходит сразу после смены. */
+    public static final String QUEST_ROTATION = "QUEST_ROTATION";
     public static final List<String> ALL_TYPES = List.of(NEW_QUESTS, TOP_QUESTS_WEEK, SQUAD_MIDWEEK, SQUAD_RESULTS, SQUAD_STATS,
             TOURNEY_REG_CLOSING, TOURNEY_ACTIVE, TOURNEY_CANCELLED, WITHDRAW_SUMMARY, WITHDRAW_MILESTONE, WITHDRAW_HOWTO, WITHDRAW_PROOF,
             HALL_OF_FAME, WEEKLY_RACE, LEAGUES_WEEK, SHOP_NEW, EGCPASS_PERK, SHOP_POPULAR, SHOP_ITEMS,
@@ -1153,6 +1156,22 @@ public class ChannelContentService {
             case 1 -> reaction;
             default -> plain;
         };
+    }
+
+    /** Пост «новые квесты по игре» после смены пачки: в канал уходит только после ✅ админа в карточке на согласование.
+     *  Показывает до 6 квестов с самой высокой наградой; квесты, которые игрок уже взял, можно доделать. */
+    public Optional<ChannelPostDraft> createQuestRotationDraft(String gameName, String packName, List<Quest> quests) {
+        if (quests == null || quests.isEmpty()) return Optional.empty();
+        List<Quest> sorted = new java.util.ArrayList<>(quests);
+        sorted.sort((a, b) -> Long.compare(b.getRewardCoins(), a.getRewardCoins()));
+        StringBuilder sb = new StringBuilder("🎮 <b>Новые квесты по ").append(esc(gameName)).append("!</b>\n\n");
+        sb.append("В боте обновился набор квестов — теперь их <b>").append(quests.size()).append("</b>. Среди новых:\n\n");
+        for (Quest q : sorted.subList(0, Math.min(6, sorted.size()))) {
+            sb.append("• ").append(esc(q.getTitle())).append(" - ").append(num(q.getRewardCoins())).append(" EXC\n");
+        }
+        sb.append("\nКвесты, которые ты уже взял, можно спокойно доделать.");
+        sb.append(botLink());
+        return Optional.of(saveDraft(QUEST_ROTATION, sb.toString(), gameName + " / " + packName));
     }
 
     private String botLink() {
