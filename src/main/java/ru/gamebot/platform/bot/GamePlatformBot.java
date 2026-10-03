@@ -10873,7 +10873,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     ? "@" + req.getUser().getTelegramUsername()
                     : "#" + req.getUser().getTelegramId();
             String type = isStarsWithdrawal(req) ? "⭐ Stars" : isCryptoWithdrawal(req) ? "💎 TON" : "💸 ₽";
-            String passMark = sinkShopService.isEgcPassActive(req.getUser()) ? "⭐ " : "";
+            String passMark = sinkShopService.isEgcPassActive(req.getUser()) ? "👑 " : "";
             rows.add(List.of(keyboardFactory.callback(
                     passMark + "В-" + reqDisplayId(req) + " " + uname + " — " + type + " " + rewardService.actualPaidPrice(req) + " EXC",
                     "admin:withdrawal:req:" + req.getId())));
@@ -10884,7 +10884,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
         String header = pending.isEmpty()
                 ? "💸 <b>Заявки на вывод EXC</b>\n\nНет новых заявок."
-                : "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>\n⭐ — подписчики EGC Pass, их заявки идут первыми.";
+                : "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>\n👑 — подписчик EGC Pass, его заявка идёт первой.\nСпособ вывода: ⭐ Stars (звёзды Telegram), 💎 TON, 💸 ₽ (рубли).";
         sendText(user.getTelegramId(), header, keyboardFactory.rowsLayout(rows));
     }
 
@@ -19040,14 +19040,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     ? "@" + req.getUser().getTelegramUsername()
                     : "#" + req.getUser().getTelegramId();
             String type = isCryptoWithdrawal(req) ? "💎 TON" : "💸 ₽";
-            String passMark = sinkShopService.isEgcPassActive(req.getUser()) ? "⭐ " : "";
+            String passMark = sinkShopService.isEgcPassActive(req.getUser()) ? "👑 " : "";
             rows.add(List.of(keyboardFactory.callback(
                     passMark + "В-" + reqDisplayId(req) + " " + uname + " — " + type + " " + rewardService.actualPaidPrice(req) + " EXC",
                     "mod:withdrawal:req:" + req.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:moderation")));
         sendText(user.getTelegramId(),
-                "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>\n⭐ — подписчики EGC Pass, их заявки идут первыми.",
+                "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>\n👑 — подписчик EGC Pass, его заявка идёт первой.\nСпособ вывода: ⭐ Stars (звёзды Telegram), 💎 TON, 💸 ₽ (рубли).",
                 keyboardFactory.rowsLayout(rows));
     }
 
