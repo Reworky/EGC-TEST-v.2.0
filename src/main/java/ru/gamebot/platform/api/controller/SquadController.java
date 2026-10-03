@@ -66,6 +66,30 @@ public class SquadController {
         return ResponseEntity.ok(result);
     }
 
+    /** Публичная карточка любого отряда (из рейтинга/каталога): состав-лидеры, активность, можно ли вступить. */
+    @GetMapping("/view/{squadId}")
+    public ResponseEntity<?> view(@AuthenticationPrincipal Long telegramId, @PathVariable Long squadId) {
+        AppUser user = getUser(telegramId);
+        Optional<Squad> found = squadService.findById(squadId);
+        if (found.isEmpty() || !"ACTIVE".equals(found.get().getStatus())) {
+            return ResponseEntity.notFound().build();
+        }
+        Squad squad = found.get();
+        List<AppUser> members = squadService.getMembers(squad);
+        List<TopMemberDto> top = members.stream()
+                .sorted(java.util.Comparator.comparingLong(AppUser::getWeeklyXp).reversed())
+                .limit(5)
+                .map(m -> new TopMemberDto(m.getNickname(), userService.getLevelName(m.getXp()), m.getWeeklyXp(),
+                        m.getTelegramId().equals(squad.getCaptainTelegramId())))
+                .toList();
+        SquadService.GoalProgress goal = squadService.goalProgress(squad);
+        boolean mine = squadId.equals(user.getSquadId());
+        return ResponseEntity.ok(new PublicSquadDto(squad.getId(), squad.getName(), members.size(),
+                squadService.squadWeeklyXp(squad), squad.isOpenRecruitment(),
+                squadService.hasPendingRequest(user, squadId), mine, user.getSquadId() != null,
+                squadService.streakDays(squad), goal.eligible(), goal.done(), goal.target(), top));
+    }
+
     /** Заявка в отряд с закрытым набором. */
     @PostMapping("/request")
     public ResponseEntity<?> requestJoin(@AuthenticationPrincipal Long telegramId, @RequestBody JoinOpenRequest body) {
@@ -167,7 +191,7 @@ public class SquadController {
         List<LeaderboardEntry> result = new java.util.ArrayList<>();
         for (int i = 0; i < entries.size(); i++) {
             SquadService.SquadRankEntry e = entries.get(i);
-            result.add(new LeaderboardEntry(i + 1, e.squad().getName(), e.weeklyXp(), e.memberCount()));
+            result.add(new LeaderboardEntry(i + 1, e.squad().getName(), e.weeklyXp(), e.memberCount(), e.squad().getId()));
         }
         return ResponseEntity.ok(result);
     }
@@ -179,7 +203,7 @@ public class SquadController {
         List<LeaderboardEntry> result = new java.util.ArrayList<>();
         for (int i = 0; i < entries.size(); i++) {
             SquadService.SquadRankEntry e = entries.get(i);
-            result.add(new LeaderboardEntry(i + 1, e.squad().getName(), e.weeklyXp(), e.memberCount()));
+            result.add(new LeaderboardEntry(i + 1, e.squad().getName(), e.weeklyXp(), e.memberCount(), e.squad().getId()));
         }
         return ResponseEntity.ok(result);
     }
@@ -216,11 +240,15 @@ public class SquadController {
                     long goalBonus, int goalMinMembers, int streakDays, long pendingRequests) {}
     record CatalogEntry(Long id, String name, long memberCount, long weeklyXp, boolean open, boolean requested) {}
     record RequestDto(Long id, String nickname, String levelName, long xp) {}
+    record TopMemberDto(String nickname, String levelName, long weeklyXp, boolean isCaptain) {}
+    record PublicSquadDto(Long id, String name, int memberCount, long weeklyXp, boolean open, boolean requested,
+                          boolean mine, boolean viewerHasSquad, int streakDays, boolean goalEligible, long goalDone,
+                          long goalTarget, List<TopMemberDto> topMembers) {}
     record JoinOpenRequest(Long squadId) {}
     record RecruitmentRequest(boolean open) {}
     record MemberDto(Long telegramId, String nickname, String levelName, long weeklyXp, boolean isCaptain) {}
     /** xp — недельный или общий XP в зависимости от эндпоинта (/leaderboard vs /leaderboard/overall). */
-    record LeaderboardEntry(int rank, String name, long xp, long memberCount) {}
+    record LeaderboardEntry(int rank, String name, long xp, long memberCount, Long squadId) {}
     record CreateRequest(String name) {}
     record JoinRequest(String code) {}
 }

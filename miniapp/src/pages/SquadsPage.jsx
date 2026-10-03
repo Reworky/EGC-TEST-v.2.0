@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getMySquad, createSquad, joinSquad, leaveSquad, disbandSquad, kickSquadMember, getSquadLeaderboard, getSquadOverallLeaderboard, getSquadCatalog, joinOpenSquad, setSquadRecruitment, requestJoinSquad, getSquadRequests, decideSquadRequest } from '../api/client';
+import { getMySquad, createSquad, joinSquad, leaveSquad, disbandSquad, kickSquadMember, getSquadLeaderboard, getSquadOverallLeaderboard, getSquadCatalog, joinOpenSquad, setSquadRecruitment, getSquadView, requestJoinSquad, getSquadRequests, decideSquadRequest } from '../api/client';
 import BackButton from '../components/BackButton';
 import './QuestsPage.css';
 import './ShopPage.css';
@@ -318,10 +318,69 @@ function NoSquadView({ onChanged }) {
   );
 }
 
-function LeaderboardView() {
+function SquadPublic({ squadId, onBack, onJoined }) {
+  const [data, setData] = useState(undefined); // undefined=загрузка, null=не найден
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    getSquadView(squadId).then(setData).catch(() => setData(null));
+  }, [squadId]);
+
+  async function handleJoin() {
+    setBusy(true); setError(null);
+    try {
+      if (data.open) { await joinOpenSquad(squadId); onJoined(); return; }
+      await requestJoinSquad(squadId);
+      setData({ ...data, requested: true });
+    } catch (e) {
+      setError(e?.response?.data?.message || 'Не удалось выполнить действие.');
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="ref-link-card" style={{ margin: '12px 16px' }}>
+      <button className="quest-btn quest-btn-secondary" style={{ marginBottom: 8 }} onClick={onBack}>⬅️ К рейтингу</button>
+      {data === undefined ? <p className="shop-desc">Загрузка...</p>
+        : data === null ? <p className="shop-desc">Отряд не найден или уже расформирован.</p>
+        : (
+          <>
+            <div className="ref-link-label">⚔️ {data.name}</div>
+            <p className="shop-desc">
+              {data.open ? '🔓 Набор открыт' : '🔒 Набор закрыт — вступить по заявке'}<br />
+              Участников: <b>{data.memberCount}</b> · XP за неделю: <b>{data.weeklyXp.toLocaleString()}</b>
+              {data.streakDays > 0 && <><br />🔥 Серия: <b>{data.streakDays}</b> {data.streakDays === 1 ? 'день' : data.streakDays < 5 ? 'дня' : 'дней'} подряд</>}
+            </p>
+            <div className="category-section" style={{ marginTop: 8 }}>
+              {data.topMembers.map((m, i) => (
+                <div key={i} className="shop-card" style={{ padding: '8px 14px' }}>
+                  <div className="shop-top">
+                    <div className="shop-title">{m.isCaptain ? '👑 ' : ''}{m.nickname}</div>
+                    <div className="shop-price" style={{ fontSize: 12 }}>+{m.weeklyXp.toLocaleString()} XP</div>
+                  </div>
+                  <div className="shop-meta"><span style={{ opacity: 0.6 }}>{m.levelName}</span></div>
+                </div>
+              ))}
+            </div>
+            {error && <div className="quest-message" style={{ color: '#f87171' }}>{error}</div>}
+            {data.mine ? <p className="shop-desc" style={{ marginTop: 8 }}>Это твой отряд.</p>
+              : !data.viewerHasSquad && (
+                <button className={`quest-btn ${data.open ? '' : 'quest-btn-secondary'}`} style={{ marginTop: 10 }}
+                  disabled={busy || data.requested} onClick={handleJoin}>
+                  {busy ? 'Секунду...' : data.requested ? '⏳ Заявка отправлена' : data.open ? '➡️ Вступить в отряд' : '📨 Подать заявку'}
+                </button>
+              )}
+          </>
+        )}
+    </div>
+  );
+}
+
+function LeaderboardView({ onJoined }) {
   const [period, setPeriod] = useState('week'); // 'week' | 'overall'
   const [entries, setEntries] = useState(null);
   const [error, setError] = useState(null);
+  const [selected, setSelected] = useState(null);
 
   useEffect(() => {
     setEntries(null);
@@ -329,6 +388,10 @@ function LeaderboardView() {
     const fetcher = period === 'week' ? getSquadLeaderboard : getSquadOverallLeaderboard;
     fetcher().then(setEntries).catch(() => setError('Не удалось загрузить рейтинг.'));
   }, [period]);
+
+  if (selected) {
+    return <SquadPublic squadId={selected} onBack={() => setSelected(null)} onJoined={onJoined} />;
+  }
 
   return (
     <div>
@@ -343,14 +406,15 @@ function LeaderboardView() {
         : (
           <div className="category-section" style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
             {entries.map(e => (
-              <div key={e.rank} className="shop-card" style={{ padding: '10px 14px' }}>
+              <div key={e.rank} className="shop-card" style={{ padding: '10px 14px', cursor: e.squadId ? 'pointer' : 'default' }}
+                onClick={() => e.squadId && setSelected(e.squadId)}>
                 <div className="shop-top">
                   <div className="shop-title">
                     {e.rank <= 3 ? MEDALS[e.rank - 1] : `#${e.rank}`} {e.name}
                   </div>
                   <div className="shop-price" style={{ fontSize: 13 }}>{e.xp.toLocaleString()} XP</div>
                 </div>
-                <div className="shop-meta"><span style={{ opacity: 0.6 }}>Участников: {e.memberCount}</span></div>
+                <div className="shop-meta"><span style={{ opacity: 0.6 }}>Участников: {e.memberCount}{e.squadId ? ' · нажми, чтобы открыть' : ''}</span></div>
               </div>
             ))}
           </div>
@@ -393,7 +457,7 @@ export default function SquadsPage() {
         : <NoSquadView onChanged={reload} />
       )}
 
-      {tab === 'lb' && <LeaderboardView />}
+      {tab === 'lb' && <LeaderboardView onJoined={() => { setTab('squad'); reload(); }} />}
     </div>
   );
 }
