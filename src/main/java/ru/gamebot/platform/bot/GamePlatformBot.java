@@ -9478,6 +9478,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case "deploy", "deploy:check", "deploy:confirm", "deploy:go", "deploy:rollback", "deploy:rollback:go", "deploy:log" ->
                     handleAdminDeploy(user, action);
+            case "server", "server:status", "server:logs:40", "server:logs:100", "server:errors", "server:restart", "server:restart:go" ->
+                    handleAdminServer(user, action);
             case "queststats" -> sendAdminQuestStats(user);
             case "ugcstats" -> sendUgcQuestStats(user);
             case "brawlstats" -> sendGameQuestStats(user, "Brawl Stars");
@@ -12993,6 +12995,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback("🛠 Техническое здоровье", "admin:an:tab:TECH")));
                 if (adminService.resolvedAdminIds().contains(user.getTelegramId())) {
                     rows.add(List.of(keyboardFactory.callback("🚀 Обновить бота", "admin:deploy")));
+                    rows.add(List.of(keyboardFactory.callback("🖥 Сервер", "admin:server")));
                 }
                 rows.add(List.of(keyboardFactory.callback("📱 Бот vs Мини-апп", "admin:surface-activity")));
                 rows.add(List.of(keyboardFactory.callback("🩹 Откат недельного XP (Brawl)", "admin:xpoverpay:weekly:audit")));
@@ -13629,6 +13632,94 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         backMenuKeyboard("admin:deploy"));
             }
             default -> sendAdminDeploy(user);
+        }
+    }
+
+    // ─────────────── «🖥 Сервер» (2026-10-03) ───────────────
+    // Статус, логи, ошибки и перезапуск контейнера кнопками из админки (только владелец). Бот ничего не исполняет сам:
+    // кладёт заявку агенту выкладки (DeployService.requestServerCommand), а тот выполняет ФИКСИРОВАННОЕ действие и кладёт
+    // ответ в файл - его бот присылает отдельным сообщением (onServerCommandFinished). Свободного ввода команд нет намеренно.
+
+    private void handleAdminServer(AppUser user, String action) {
+        if (!isDeployOwner(user)) {
+            sendText(user.getTelegramId(), "⛔ Раздел «Сервер» доступен только владельцу.", backMenuKeyboard("menu:main"));
+            return;
+        }
+        switch (action) {
+            case "server" -> sendAdminServerMenu(user);
+            case "server:status" -> requestServerCommand(user, "status", null, "📊 Запросил статус сервера");
+            case "server:logs:40" -> requestServerCommand(user, "logs", 40, "📜 Запросил последние 40 строк лога");
+            case "server:logs:100" -> requestServerCommand(user, "logs", 100, "📜 Запросил последние 100 строк лога");
+            case "server:errors" -> requestServerCommand(user, "errors", null, "🔴 Ищу ошибки за последний час");
+            case "server:restart" -> sendText(user.getTelegramId(),
+                    "🔄 <b>Перезапустить бота?</b>\n\nКонтейнер перезапустится, бот будет недоступен 1-2 минуты. "
+                            + "Новый код при этом НЕ подхватывается - для обновления есть «🚀 Обновить бота». "
+                            + "Я напишу, когда бот поднимется.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("✅ Да, перезапустить", "admin:server:restart:go"),
+                                    keyboardFactory.callback("❌ Отмена", "admin:server")))));
+            case "server:restart:go" -> {
+                boolean running = deployService.readStatus().map(x -> "running".equals(x.state())).orElse(false);
+                if (running) {
+                    sendText(user.getTelegramId(), "⏳ Сейчас идёт выкладка или перезапуск, дождитесь окончания.", backMenuKeyboard("admin:server"));
+                } else {
+                    requestServerCommand(user, "restart", null, "🔄 Перезапуск запущен. Бот будет недоступен 1-2 минуты, напишу, когда поднимется.");
+                }
+            }
+            default -> sendAdminServerMenu(user);
+        }
+    }
+
+    private void sendAdminServerMenu(AppUser user) {
+        boolean alive = deployService.agentAlive();
+        String text = "🖥 <b>Сервер</b>\n\n"
+                + "Агент на сервере: " + (alive ? "🟢 на связи" : "🔴 не отвечает (установите/обновите: scripts/install-deploy-agent.sh)") + "\n"
+                + "Сейчас работает: " + deployCommitLine(deployService.deployedCommit()) + "\n\n"
+                + "Ответ приходит отдельным сообщением через несколько секунд.";
+        sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("📊 Статус", "admin:server:status"),
+                        keyboardFactory.callback("🔴 Ошибки за час", "admin:server:errors")),
+                List.of(keyboardFactory.callback("📜 Лог (40)", "admin:server:logs:40"),
+                        keyboardFactory.callback("📜 Лог (100)", "admin:server:logs:100")),
+                List.of(keyboardFactory.callback("🔄 Перезапустить бота", "admin:server:restart")),
+                List.of(keyboardFactory.callback("🚀 Обновить бота", "admin:deploy")),
+                List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:system"), keyboardFactory.callback("🏠 Меню", "menu:main")))));
+    }
+
+    private void requestServerCommand(AppUser user, String action, Integer arg, String okText) {
+        if (!deployService.agentAlive()) {
+            sendText(user.getTelegramId(), "🔴 Агент на сервере не отвечает: заявка не отправлена. Установите/обновите агента: "
+                    + "<code>cd /root/gamebot && git pull && bash scripts/install-deploy-agent.sh</code>", backMenuKeyboard("admin:server"));
+            return;
+        }
+        if (deployService.requestServerCommand(action, user.getTelegramId(), arg)) {
+            log.info("[Server] {} requested by owner {}", action, user.getTelegramId());
+            sendText(user.getTelegramId(), okText + ". Ответ придёт сообщением.", backMenuKeyboard("admin:server"));
+        } else {
+            sendText(user.getTelegramId(), "⚠️ Не удалось передать заявку агенту.", backMenuKeyboard("admin:server"));
+        }
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onServerCommandFinished(ru.gamebot.platform.event.ServerCommandFinishedEvent event) {
+        String title = switch (event.getAction()) {
+            case "status" -> "📊 <b>Статус сервера</b>";
+            case "logs" -> "📜 <b>" + escape(event.getMessage()) + "</b>";
+            case "errors" -> "🔴 <b>" + escape(event.getMessage()) + "</b>";
+            case "restart" -> event.isOk() ? "✅ <b>Бот перезапущен и работает</b>" : "❌ <b>Перезапуск не удался</b>";
+            default -> "🖥 <b>Ответ сервера</b>";
+        };
+        String out = event.getOutput() == null ? "" : event.getOutput().trim();
+        if (out.length() > 3300) {
+            out = "…" + out.substring(out.length() - 3300);
+        }
+        String text = title + (out.isEmpty() ? "" : "\n<pre>" + escape(out) + "</pre>");
+        try {
+            sendText(event.getRequestedBy(), text, keyboardFactory.rowsLayout(List.of(
+                    List.of(keyboardFactory.callback("🔄 Ещё раз", "admin:server:" + ("restart".equals(event.getAction()) ? "status" : event.getAction().equals("logs") ? "logs:40" : event.getAction())),
+                            keyboardFactory.callback("🖥 Сервер", "admin:server")))));
+        } catch (Exception e) {
+            log.warn("Failed to send server command result to {}", event.getRequestedBy(), e);
         }
     }
 

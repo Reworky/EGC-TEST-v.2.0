@@ -14,6 +14,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import ru.gamebot.platform.event.DeployFinishedEvent;
+import ru.gamebot.platform.event.ServerCommandFinishedEvent;
 
 /**
  * Мост между кнопкой «🚀 Обновить бота» и агентом выкладки на сервере (scripts/deploy-agent.sh). Бот НЕ имеет доступа к
@@ -98,6 +99,49 @@ public class DeployService {
         } catch (IOException e) {
             log.warn("[Deploy] failed to write request", e);
             return false;
+        }
+    }
+
+    /** Справочные действия раздела «🖥 Сервер»: status / logs / errors / restart (arg - число строк для logs). */
+    public boolean requestServerCommand(String action, long telegramId, Integer arg) {
+        if (!List.of("status", "logs", "errors", "restart").contains(action)) return false;
+        try {
+            if (!Files.isDirectory(dir)) return false;
+            String line = action + " " + telegramId + ("logs".equals(action) && arg != null ? " " + arg : "");
+            Files.writeString(dir.resolve("request"), line + "\n", StandardCharsets.UTF_8);
+            log.info("[Deploy] server command action={} by={}", action, telegramId);
+            return true;
+        } catch (IOException e) {
+            log.warn("[Deploy] failed to write server command request", e);
+            return false;
+        }
+    }
+
+    /**
+     * Присылает инициатору ответ справочного действия (status/logs/errors/restart), как announceResult для выкладки.
+     * Метка «уже сообщали» - в файле notified_out (мс завершения), а не в памяти: после restart бот стартует заново
+     * и должен всё равно сообщить итог перезапуска.
+     */
+    @Scheduled(initialDelay = 20_000, fixedDelay = 3_000)
+    public void announceServerCommand() {
+        try {
+            String metaRaw = read("out_meta");
+            if (metaRaw == null || metaRaw.isBlank()) return;
+            Map<String, String> kv = new HashMap<>();
+            for (String line : metaRaw.split("\n")) {
+                int eq = line.indexOf('=');
+                if (eq > 0) kv.put(line.substring(0, eq).trim(), line.substring(eq + 1).trim());
+            }
+            long finishedAt = num(kv.get("finished_at"));
+            long requestedBy = num(kv.get("requested_by"));
+            if (finishedAt <= 0 || requestedBy <= 0 || finishedAt <= num(read("notified_out"))) return;
+            Files.writeString(dir.resolve("notified_out"), String.valueOf(finishedAt), StandardCharsets.UTF_8);
+            String text = read("out.txt");
+            if (text == null) text = "";
+            publisher.publishEvent(new ServerCommandFinishedEvent(this, kv.getOrDefault("action", ""), requestedBy,
+                    "1".equals(kv.get("ok")), kv.getOrDefault("message", ""), text));
+        } catch (Exception e) {
+            log.warn("[Deploy] announceServerCommand failed", e);
         }
     }
 

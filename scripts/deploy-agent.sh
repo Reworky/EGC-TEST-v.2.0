@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Агент выкладки gamebot на СЕРВЕРЕ (root). Его запускает systemd, когда бот кладёт файл-заявку в data/deploy/request
+# Агент выкладки gamebot на СЕРВЕРЕ (root). Принимает ТОЛЬКО слова check, deploy, rollback и справочные status, logs, errors, restart. Его запускает systemd, когда бот кладёт файл-заявку в data/deploy/request
 # (кнопка «🚀 Обновить бота» в админке), и по таймеру раз в 2 минуты для проверки новых коммитов.
 # Бот ничего кроме записи заявки сделать не может: агент принимает ТОЛЬКО слова check / deploy / rollback
 # и запускает фиксированные действия ниже. Сам скрипт после установки живёт в /usr/local/bin (вне репозитория),
@@ -13,6 +13,8 @@
 #   pending.txt      коммиты, которые ещё не выложены ("<хеш> <тема>")
 #   heartbeat        время последней проверки (unix), по нему бот понимает, что агент жив
 #   last.log         лог последней выкладки (токены замаскированы)
+#   out.txt, out_meta  результат справочных действий status / logs / errors / restart (раздел «🖥 Сервер» в админке):
+#                    out.txt - текст ответа (токены замаскированы), out_meta - action, requested_by, finished_at (мс), ok
 set -u
 
 REPO="${GAMEBOT_REPO:-/root/gamebot}"
@@ -30,7 +32,7 @@ write_status() { # state action by started finished commit subject prev message
   } > "$tmp" && mv "$tmp" "$DIR/status"
 }
 
-mask() { sed -E 's/(token|TOKEN)=[^&, "]*/\1=***/g'; }
+mask() { sed -E 's/(token|TOKEN)=[^&, "]*/\1=***/g; s/(^|[^0-9])[0-9]{8,12}:[A-Za-z0-9_-]{30,}/\1***/g'; }
 
 start_container() {
   docker stop gamebot >/dev/null 2>&1 || true
@@ -127,19 +129,87 @@ do_rollback() { # by
   do_check
 }
 
+# ── Справочные действия раздела «🖥 Сервер» (2026-10-03): только чтение, кроме restart. Ответ - в out.txt + out_meta. ──
+write_out() { # action by ok message
+  local tmp="$DIR/out_meta.tmp" ms
+  ms=$(date +%s%3N); case "$ms" in ''|*[!0-9]*) ms=$(( $(date +%s) * 1000 )) ;; esac
+  { echo "action=$1"; echo "requested_by=$2"; echo "finished_at=$ms"; echo "ok=$3"; echo "message=${4//$'\n'/ }"; } > "$tmp" \
+    && mv "$tmp" "$DIR/out_meta"
+}
+
+do_status() { # by
+  local by=$1
+  {
+    echo "Контейнер: $(docker ps -a --filter 'name=^/gamebot$' --format '{{.Status}} · образ {{.Image}}' 2>&1)"
+    echo "Запущен с: $(docker inspect -f '{{.State.StartedAt}}' gamebot 2>/dev/null)"
+    echo "Сейчас работает: $(cat "$DIR/deployed_commit" 2>/dev/null)"
+    echo "Ждут выкладки: $(wc -l < "$DIR/pending.txt" 2>/dev/null || echo 0) коммит(ов)"
+    echo "Сервер: $(uptime | sed 's/^ *//')"
+    echo "--- диск ---"; df -h / | tail -n +1
+    echo "--- память ---"; free -m
+    echo "--- nginx ---"; systemctl is-active nginx 2>&1
+  } 2>&1 | mask | cut -c1-300 > "$DIR/out.txt"
+  write_out status "$by" 1 "Статус сервера"
+}
+
+do_logs() { # by lines
+  local by=$1 n=$2
+  case "$n" in ''|*[!0-9]*) n=40 ;; esac
+  [ "$n" -lt 10 ] && n=10
+  [ "$n" -gt 150 ] && n=150
+  docker logs gamebot --tail "$n" 2>&1 | cut -c1-300 | mask > "$DIR/out.txt"
+  write_out logs "$by" 1 "Последние $n строк лога"
+}
+
+do_errors() { # by
+  local by=$1
+  docker logs gamebot --since 1h 2>&1 | grep -E '\bERROR\b|Exception' | tail -n 40 | cut -c1-300 | mask > "$DIR/out.txt"
+  [ -s "$DIR/out.txt" ] || echo "За последний час ошибок в логе нет." > "$DIR/out.txt"
+  write_out errors "$by" 1 "Ошибки за последний час"
+}
+
+do_restart() { # by
+  local by=$1 since i
+  since=$(now)
+  write_status running restart "$by" "$since" 0 "" "" "" "Перезапуск запущен"
+  if ! docker restart gamebot >/dev/null 2>&1; then
+    echo "Не удалось выполнить docker restart" > "$DIR/out.txt"
+    write_out restart "$by" 0 "Перезапуск не удался"
+    write_status failed restart "$by" "$since" "$(now)" "" "" "" "Перезапуск не удался"
+    return
+  fi
+  for i in $(seq 1 60); do
+    sleep 3
+    if docker logs gamebot --since "$since" 2>&1 | grep -q "Started GamePlatformBotApplication"; then
+      echo "Контейнер перезапущен, бот поднялся." > "$DIR/out.txt"
+      write_out restart "$by" 1 "Перезапуск выполнен"
+      write_status ok restart "$by" "$since" "$(now)" "" "" "" "Перезапуск выполнен"
+      return
+    fi
+    [ "$(docker inspect -f '{{.State.Running}}' gamebot 2>/dev/null)" = "true" ] || break
+  done
+  { echo "Бот не поднялся после перезапуска. Хвост лога:"; docker logs gamebot --tail 30 2>&1 | cut -c1-300; } | mask > "$DIR/out.txt"
+  write_out restart "$by" 0 "После перезапуска бот не поднялся"
+  write_status failed restart "$by" "$since" "$(now)" "" "" "" "После перезапуска бот не поднялся"
+}
+
 run_request() {
   [ -f "$DIR/request" ] || exit 0
-  local act="" by=""
-  read -r act by < "$DIR/request" || true
+  local act="" by="" arg=""
+  read -r act by arg < "$DIR/request" || true
   rm -f "$DIR/request"
   case "$by" in ''|*[!0-9]*) by=0 ;; esac
-  case "$act" in check|deploy|rollback) ;; *) exit 0 ;; esac
+  case "$act" in check|deploy|rollback|status|logs|errors|restart) ;; *) exit 0 ;; esac
   exec 9>"$LOCK"
   if ! flock -n 9; then exit 0; fi   # уже идёт другая выкладка - повторную заявку игнорируем
   case "$act" in
     check) do_check ;;
     deploy) do_deploy "$by" ;;
     rollback) do_rollback "$by" ;;
+    status) do_status "$by" ;;
+    logs) do_logs "$by" "$arg" ;;
+    errors) do_errors "$by" ;;
+    restart) do_restart "$by" ;;
   esac
 }
 
