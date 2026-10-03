@@ -309,8 +309,23 @@ export async function joinSquad(code) {
   return data;
 }
 
-export async function getSquadCatalog() {
-  const { data } = await api.get('/api/squads/catalog');
+export async function getSquadCatalog(q) {
+  const { data } = await api.get('/api/squads/catalog', { params: q ? { q } : {} });
+  return data;
+}
+
+export async function requestJoinSquad(squadId) {
+  const { data } = await api.post('/api/squads/request', { squadId });
+  return data;
+}
+
+export async function getSquadRequests() {
+  const { data } = await api.get('/api/squads/requests');
+  return data;
+}
+
+export async function decideSquadRequest(requestId, accept) {
+  const { data } = await api.post(`/api/squads/requests/${requestId}/${accept ? 'accept' : 'decline'}`);
   return data;
 }
 

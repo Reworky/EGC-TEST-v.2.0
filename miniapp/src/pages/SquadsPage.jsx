@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getMySquad, createSquad, joinSquad, leaveSquad, disbandSquad, kickSquadMember, getSquadLeaderboard, getSquadOverallLeaderboard, getSquadCatalog, joinOpenSquad, setSquadRecruitment } from '../api/client';
+import { getMySquad, createSquad, joinSquad, leaveSquad, disbandSquad, kickSquadMember, getSquadLeaderboard, getSquadOverallLeaderboard, getSquadCatalog, joinOpenSquad, setSquadRecruitment, requestJoinSquad, getSquadRequests, decideSquadRequest } from '../api/client';
 import BackButton from '../components/BackButton';
 import './QuestsPage.css';
 import './ShopPage.css';
@@ -45,42 +45,103 @@ function SquadGoal({ squad }) {
 
 function SquadCatalog({ onChanged }) {
   const [entries, setEntries] = useState(null);
+  const [query, setQuery] = useState('');
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    getSquadCatalog().then(setEntries).catch(() => setEntries([]));
-  }, []);
+  function load(q) {
+    getSquadCatalog(q).then(setEntries).catch(() => setEntries([]));
+  }
 
-  async function handleJoin(id) {
-    setBusyId(id); setError(null);
-    try { await joinOpenSquad(id); onChanged(); }
-    catch (e) { setError(e?.response?.data?.message || 'Не удалось вступить в отряд.'); setBusyId(null); }
+  // Поиск по названию: небольшая задержка, чтобы не слать запрос на каждую букву.
+  useEffect(() => {
+    const t = setTimeout(() => load(query.trim() || undefined), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  async function handleJoin(e) {
+    setBusyId(e.id); setError(null);
+    try {
+      if (e.open !== false) {
+        await joinOpenSquad(e.id);
+        onChanged();
+      } else {
+        await requestJoinSquad(e.id);
+        setEntries(prev => prev.map(x => x.id === e.id ? { ...x, requested: true } : x));
+        setBusyId(null);
+      }
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Не удалось выполнить действие.');
+      setBusyId(null);
+    }
   }
 
   return (
     <div className="ref-link-card" style={{ margin: '12px 16px' }}>
       <div className="ref-link-label">🔎 Найти отряд</div>
+      <input className="quest-text-input" placeholder="Поиск по названию отряда"
+        value={query} onChange={e => setQuery(e.target.value)} maxLength={30} />
       {entries === null ? <p className="shop-desc">Загрузка...</p>
         : entries.length === 0 ? (
-          <p className="shop-desc">Отрядов с открытым набором пока нет — создай свой, и он сразу появится здесь.</p>
+          <p className="shop-desc">{query.trim() ? 'Ничего не найдено — попробуй другое название.' : 'Отрядов пока нет — создай свой, и он сразу появится здесь.'}</p>
         ) : (
           <div className="category-section" style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
             {entries.map(e => (
               <div key={e.id} className="shop-card" style={{ padding: '10px 14px' }}>
                 <div className="shop-top">
-                  <div className="shop-title">⚔️ {e.name}</div>
+                  <div className="shop-title">{e.open !== false ? '🔓' : '🔒'} {e.name}</div>
                   <div className="shop-price" style={{ fontSize: 12 }}>{e.weeklyXp.toLocaleString()} XP</div>
                 </div>
                 <div className="shop-meta"><span style={{ opacity: 0.6 }}>Участников: {e.memberCount}</span></div>
-                <button className="quest-btn" style={{ marginTop: 6 }} disabled={busyId !== null}
-                  onClick={() => handleJoin(e.id)}>
-                  {busyId === e.id ? 'Секунду...' : '➡️ Вступить'}
+                <button className={`quest-btn ${e.open !== false || e.requested ? '' : 'quest-btn-secondary'}`} style={{ marginTop: 6 }}
+                  disabled={busyId !== null || e.requested}
+                  onClick={() => handleJoin(e)}>
+                  {busyId === e.id ? 'Секунду...' : e.requested ? '⏳ Заявка отправлена' : e.open !== false ? '➡️ Вступить' : '📨 Подать заявку'}
                 </button>
               </div>
             ))}
           </div>
         )}
+      {error && <div className="quest-message" style={{ color: '#f87171' }}>{error}</div>}
+    </div>
+  );
+}
+
+function SquadRequests({ onChanged }) {
+  const [requests, setRequests] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => { getSquadRequests().then(setRequests).catch(() => setRequests([])); }, []);
+
+  async function decide(id, accept) {
+    setBusyId(id); setError(null);
+    try {
+      await decideSquadRequest(id, accept);
+      if (accept) { onChanged(); return; }
+      setRequests(prev => prev.filter(r => r.id !== id));
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Не удалось обработать заявку.');
+    } finally { setBusyId(null); }
+  }
+
+  if (!requests || requests.length === 0) return null;
+  return (
+    <div style={{ margin: '8px 0 12px' }}>
+      <p className="shop-desc" style={{ marginBottom: 6 }}>📨 <b>Заявки в отряд ({requests.length})</b></p>
+      {requests.map(r => (
+        <div key={r.id} className="shop-card" style={{ padding: '10px 14px', marginBottom: 8 }}>
+          <div className="shop-top">
+            <div className="shop-title">{r.nickname}</div>
+            <div className="shop-price" style={{ fontSize: 12 }}>{r.xp.toLocaleString()} XP</div>
+          </div>
+          <div className="shop-meta"><span style={{ opacity: 0.6 }}>{r.levelName}</span></div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+            <button className="quest-btn" style={{ flex: 1 }} disabled={busyId !== null} onClick={() => decide(r.id, true)}>✅ Принять</button>
+            <button className="quest-btn quest-btn-secondary" style={{ flex: 1 }} disabled={busyId !== null} onClick={() => decide(r.id, false)}>❌ Отклонить</button>
+          </div>
+        </div>
+      ))}
       {error && <div className="quest-message" style={{ color: '#f87171' }}>{error}</div>}
     </div>
   );
@@ -132,6 +193,7 @@ function SquadCard({ squad, onChanged }) {
         Участников: <b>{squad.members.length}</b> · Рейтинг за неделю: <b>{squad.weeklyXp.toLocaleString()}</b>
       </p>
       <SquadGoal squad={squad} />
+      {squad.isCaptain && squad.pendingRequests > 0 && <SquadRequests onChanged={onChanged} />}
       {squad.weeklyBonusPoints > 0 && (
         <p className="shop-desc" style={{ marginTop: -8 }}>
           🎉 Бонус за рефералов: <b>+{squad.weeklyBonusPoints.toLocaleString()}</b>
