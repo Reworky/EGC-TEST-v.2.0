@@ -4945,7 +4945,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         }
         String legend = (anyInProgress ? "\n📝 — уже взят, откройте карточку для отчёта" : "")
-                + (anyBlocked ? "\n🔒 — сейчас нельзя взять (кулдаун по этой игре или квесту — детали в карточке)" : "");
+                + (anyBlocked ? "\n🔒 — сейчас нельзя взять: занят слот активного квеста, действует лимит «1 квест в час» или кулдаун по игре — причина в карточке" : "");
         // С короткими подписями кнопки самодостаточны (видно суть квеста сразу) — раскладываем
         // по одной в ряд для читаемости вместо тесной цифровой сетки.
         InlineKeyboardMarkup keyboard = useLabels
@@ -5095,10 +5095,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long maxSlots = sinkShopService.getMaxQuestSlots(user);
         boolean slotsFull = activeSlots >= maxSlots && !hasActiveSubmission;
         boolean gameCooldown = !hasActiveSubmission && cooldownLeft == 0 && questService.isCooldownActive(user, quest);
+        // Общий лимит «1 квест в час» (15 мин у новичка) - раньше карточка показывала активную «Взять», а нажатие
+        // отвечало «подождите N мин». Спонсорские/внешние/no-cooldown квесты лимит не касается (см. takeQuestChecked).
+        long takeCooldownLeft = (hasActiveSubmission || quest.isSponsored() || quest.isExternalAutoApprove()
+                || quest.isRepeatableNoCooldownEligible()) ? 0 : questService.getTakeCooldownMinutesLeft(user);
         if (cooldownLeft > 0) {
             buttons.add(keyboardFactory.callback("⏳ Доступно через " + cooldownExact, "noop"));
         } else if (slotsFull) {
-            buttons.add(keyboardFactory.callback("🔒 Сначала сдай активный квест", "noop"));
+            buttons.add(keyboardFactory.callback("🔒 Слот занят — сдай или отмени активный квест", "noop"));
+        } else if (takeCooldownLeft > 0) {
+            buttons.add(keyboardFactory.callback("⏳ Следующий квест — через " + takeCooldownLeft + " мин", "noop"));
         } else if (gameCooldown) {
             buttons.add(keyboardFactory.callback("⏳ Кулдаун по этой игре", "noop"));
         } else if (!hasActiveSubmission) {

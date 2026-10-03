@@ -479,14 +479,23 @@ public class QuestService {
         if (activeSlots >= maxSlots || getCooldownHoursLeft(user, quest) > 0) {
             return QuestListState.BLOCKED;
         }
-        if (user.getLastQuestTakenAt() != null) {
-            int takeCooldownMinutes = isOnboarding(user) ? ONBOARDING_TAKE_COOLDOWN_MINUTES : 60;
-            long minutesSince = java.time.temporal.ChronoUnit.MINUTES.between(user.getLastQuestTakenAt(), LocalDateTime.now());
-            if (minutesSince < takeCooldownMinutes) {
-                return QuestListState.BLOCKED;
-            }
+        if (getTakeCooldownMinutesLeft(user) > 0) {
+            return QuestListState.BLOCKED;
         }
         return QuestListState.AVAILABLE;
+    }
+
+    /** Сколько минут осталось до общего лимита «1 квест в час» (для новичка 15 минут, см. isOnboarding) -
+     *  0, если лимит не действует. Тот же расчёт, что в takeQuestChecked, вынесен, чтобы карточка квеста
+     *  в боте могла показать причину блокировки вместо активной кнопки «Взять» (жалоба игрока 2026-10-03:
+     *  «замочки на других квестах, а кнопка Взять есть, но не берётся»). */
+    public long getTakeCooldownMinutesLeft(AppUser user) {
+        if (user.getLastQuestTakenAt() == null) {
+            return 0;
+        }
+        int takeCooldownMinutes = isOnboarding(user) ? ONBOARDING_TAKE_COOLDOWN_MINUTES : 60;
+        long minutesSince = java.time.temporal.ChronoUnit.MINUTES.between(user.getLastQuestTakenAt(), LocalDateTime.now());
+        return Math.max(0, takeCooldownMinutes - minutesSince);
     }
 
     public long getWeeklyCompletionsOfType(AppUser user, Quest quest) {
