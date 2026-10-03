@@ -8052,6 +8052,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("🚪 Покинуть отряд", "squad:leave_confirm")));
         }
         rows.add(List.of(keyboardFactory.callback("🏆 Рейтинг отрядов", "squad:leaderboard")));
+        rows.add(List.of(keyboardFactory.callback("🔎 Каталог отрядов", "squad:catalog:0"),
+                keyboardFactory.callback("🔍 Поиск", "squad:search_prompt")));
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
 
         sendCardWithPhoto(user.getTelegramId(), squad.getFlagFileId(), sb.toString(), keyboardFactory.rowsLayout(rows));
@@ -8303,10 +8305,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
             }
             case "search_prompt" -> {
-                if (user.getSquadId() != null) {
-                    answer(callbackQuery.getId(), "Вы уже в отряде");
-                    return;
-                }
                 session.setState(SessionState.SQUAD_SEARCH);
                 sendText(user.getTelegramId(),
                         "🔍 <b>Поиск отряда</b>\n\nВведите название отряда или его часть:",
@@ -8521,10 +8519,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Каталог «Найти отряд»: все отряды по недельной активности; открытые — вступление в один клик, закрытые — заявка. */
     private void sendSquadCatalog(AppUser user, int requestedPage) {
-        if (user.getSquadId() != null) {
-            sendSquadMenu(user);
-            return;
-        }
         List<ru.gamebot.platform.service.SquadService.SquadRankEntry> all = squadService.findCatalog(null);
         if (all.isEmpty()) {
             sendText(user.getTelegramId(),
@@ -8540,7 +8534,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<ru.gamebot.platform.service.SquadService.SquadRankEntry> slice =
                 all.subList(page * SQUAD_CATALOG_PAGE_SIZE, Math.min(all.size(), (page + 1) * SQUAD_CATALOG_PAGE_SIZE));
         StringBuilder sb = new StringBuilder("🔎 <b>Найти отряд</b>\n\nВсе отряды по активности за неделю.\n"
-                + "🔓 — вступить сразу, 🔒 — подать заявку капитану.\n\n");
+                + (user.getSquadId() != null
+                        ? "Вы уже в отряде — можно посмотреть другие отряды. Чтобы перейти, сначала покиньте свой.\n\n"
+                        : "🔓 — вступить сразу, 🔒 — подать заявку капитану.\n\n"));
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         appendSquadEntries(user, sb, rows, slice, page * SQUAD_CATALOG_PAGE_SIZE);
         if (pages > 1) {
@@ -8563,7 +8559,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (found.isEmpty()) {
             sb.append("Ничего не найдено. Попробуйте другое название или загляните в каталог.");
         } else {
-            sb.append("🔓 — вступить сразу, 🔒 — подать заявку капитану.\n\n");
+            sb.append(user.getSquadId() != null
+                    ? "Нажмите на отряд, чтобы посмотреть его карточку.\n\n"
+                    : "🔓 — вступить сразу, 🔒 — подать заявку капитану.\n\n");
             appendSquadEntries(user, sb, rows, found.subList(0, Math.min(8, found.size())), 0);
         }
         rows.add(List.of(keyboardFactory.callback("🔍 Искать ещё", "squad:search_prompt")));
@@ -8582,7 +8580,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     .append(e.memberCount()).append(" ").append(pluralPeople((int) e.memberCount())).append(" · ")
                     .append(String.format("%,d", e.weeklyXp()).replace(',', ' ')).append(" XP за неделю\n");
             String name = trim(e.squad().getName(), 22);
-            if (open) {
+            if (user.getSquadId() != null) {
+                // игрок уже в отряде — только просмотр карточки (вступить нельзя, пока не покинет свой)
+                rows.add(List.of(keyboardFactory.callback("👁 Посмотреть: " + name, "squad:view:" + e.squad().getId() + ":c")));
+            } else if (open) {
                 rows.add(List.of(keyboardFactory.callback("➡️ Вступить: " + name, "squad:joinopen:" + e.squad().getId())));
             } else if (squadService.hasPendingRequest(user, e.squad().getId())) {
                 rows.add(List.of(keyboardFactory.callback("⏳ Заявка отправлена: " + name, "squad:catalog:0")));
@@ -8606,7 +8607,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  («w» недельный рейтинг, «o» общий) для кнопки «Назад». */
     private void sendSquadPublicCard(AppUser user, Long squadId, String src) {
         ru.gamebot.platform.domain.model.Squad squad = squadId == null ? null : squadService.findById(squadId).orElse(null);
-        String backData = "o".equals(src) ? "squad:leaderboard_overall" : "squad:leaderboard";
+        String backData = "o".equals(src) ? "squad:leaderboard_overall"
+                : "c".equals(src) ? "squad:catalog:0" : "squad:leaderboard";
         if (squad == null || !"ACTIVE".equals(squad.getStatus())) {
             sendText(user.getTelegramId(), "⚠️ Отряд не найден или уже расформирован.", backMenuKeyboard(backData));
             return;
@@ -8641,7 +8643,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback("📨 Подать заявку", "squad:request:" + squad.getId())));
             }
         }
-        rows.add(List.of(keyboardFactory.callback("⬅️ К рейтингу", backData)));
+        rows.add(List.of(keyboardFactory.callback("c".equals(src) ? "⬅️ К каталогу" : "⬅️ К рейтингу", backData)));
         sendCardWithPhoto(user.getTelegramId(), squad.getFlagFileId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 

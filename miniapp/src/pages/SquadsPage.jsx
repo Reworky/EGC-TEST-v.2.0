@@ -63,7 +63,7 @@ function SquadGoal({ squad }) {
   );
 }
 
-function SquadCatalog({ onChanged }) {
+function SquadCatalog({ onChanged, hasSquad, onOpen }) {
   const [entries, setEntries] = useState(null);
   const [query, setQuery] = useState('');
   const [busyId, setBusyId] = useState(null);
@@ -113,11 +113,17 @@ function SquadCatalog({ onChanged }) {
                   <div className="shop-price" style={{ fontSize: 12 }}>{e.weeklyXp.toLocaleString()} XP</div>
                 </div>
                 <div className="shop-meta"><span style={{ opacity: 0.6 }}>Участников: {e.memberCount}</span></div>
-                <button className={`quest-btn ${e.open !== false || e.requested ? '' : 'quest-btn-secondary'}`} style={{ marginTop: 6 }}
-                  disabled={busyId !== null || e.requested}
-                  onClick={() => handleJoin(e)}>
-                  {busyId === e.id ? 'Секунду...' : e.requested ? '⏳ Заявка отправлена' : e.open !== false ? '➡️ Вступить' : '📨 Подать заявку'}
-                </button>
+                {hasSquad ? (
+                  <button className="quest-btn quest-btn-secondary" style={{ marginTop: 6 }} onClick={() => onOpen(e.id)}>
+                    👁 Посмотреть отряд
+                  </button>
+                ) : (
+                  <button className={`quest-btn ${e.open !== false || e.requested ? '' : 'quest-btn-secondary'}`} style={{ marginTop: 6 }}
+                    disabled={busyId !== null || e.requested}
+                    onClick={() => handleJoin(e)}>
+                    {busyId === e.id ? 'Секунду...' : e.requested ? '⏳ Заявка отправлена' : e.open !== false ? '➡️ Вступить' : '📨 Подать заявку'}
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -398,6 +404,15 @@ function SquadPublic({ squadId, onBack, onJoined }) {
   );
 }
 
+// Вкладка «Найти»: каталог и поиск для всех; игрок в отряде может смотреть карточки других отрядов (вступить нельзя, пока не покинет свой).
+function FindTab({ hasSquad, onChanged, onJoined }) {
+  const [selected, setSelected] = useState(null);
+  if (selected) {
+    return <SquadPublic squadId={selected} onBack={() => setSelected(null)} onJoined={onJoined} />;
+  }
+  return <SquadCatalog onChanged={onChanged} hasSquad={hasSquad} onOpen={setSelected} />;
+}
+
 function LeaderboardView({ onJoined }) {
   const [period, setPeriod] = useState('week'); // 'week' | 'overall'
   const [entries, setEntries] = useState(null);
@@ -469,6 +484,7 @@ export default function SquadsPage() {
 
       <div className="view-toggle">
         <button className={`view-tab ${tab === 'squad' ? 'active' : ''}`} onClick={() => setTab('squad')}>Мой отряд</button>
+        <button className={`view-tab ${tab === 'find' ? 'active' : ''}`} onClick={() => setTab('find')}>🔎 Найти</button>
         <button className={`view-tab ${tab === 'lb' ? 'active' : ''}`} onClick={() => setTab('lb')}>🏆 Рейтинг</button>
       </div>
 
@@ -477,6 +493,11 @@ export default function SquadsPage() {
         : squad === undefined ? <div className="page-center">Загрузка...</div>
         : squad ? <SquadCard squad={squad} onChanged={reload} />
         : <NoSquadView onChanged={reload} />
+      )}
+
+      {tab === 'find' && (
+        <FindTab hasSquad={!!squad} onChanged={() => { setTab('squad'); reload(); }}
+          onJoined={() => { setTab('squad'); reload(); }} />
       )}
 
       {tab === 'lb' && <LeaderboardView onJoined={() => { setTab('squad'); reload(); }} />}
