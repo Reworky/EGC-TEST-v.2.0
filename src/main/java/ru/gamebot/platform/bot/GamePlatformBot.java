@@ -4057,12 +4057,43 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     // ─── Onboarding ──────────────────────────────────────────────────────────────
 
+    /** При создании профиля подтягивает аватар из Telegram (первое фото профиля) в аватар игрока — как раньше
+     *  подтягивался никнейм. Только если своего аватара ещё нет; если у человека скрыто/нет фото профиля или
+     *  запрос не удался — просто остаёмся без аватара (его можно загрузить в профиле), регистрацию это не ломает.
+     *  file_id из getUserProfilePhotos — тот же формат, что у присланного фото, поэтому показывается и в боте,
+     *  и в мини-аппе (ProfileController.getAvatar) без доработок. */
+    private void importTelegramAvatar(AppUser user) {
+        if (user.getAvatarFileId() != null) {
+            return;
+        }
+        try {
+            org.telegram.telegrambots.meta.api.methods.GetUserProfilePhotos request =
+                    new org.telegram.telegrambots.meta.api.methods.GetUserProfilePhotos();
+            request.setUserId(user.getTelegramId());
+            request.setOffset(0);
+            request.setLimit(1);
+            org.telegram.telegrambots.meta.api.objects.UserProfilePhotos result = execute(request);
+            if (result == null || result.getPhotos() == null || result.getPhotos().isEmpty()) {
+                return;
+            }
+            List<PhotoSize> sizes = result.getPhotos().get(0);
+            if (sizes == null || sizes.isEmpty()) {
+                return;
+            }
+            user.setAvatarFileId(sizes.get(sizes.size() - 1).getFileId());
+            userService.save(user);
+        } catch (Exception e) {
+            log.warn("Failed to import Telegram profile photo for user {}", user.getTelegramId(), e);
+        }
+    }
+
     /** Стартовый бонус 200 EXC, уведомление админам и приветствие с гайдом — всем сразу после
      * завершения профиля (явного ввода ника или авто-регистрации, см. autoCompleteRegistration),
      * независимо от подписки на канал (подписка нужна только для взятия квеста — см.
      * handleTakeQuest/handleTakeQuestWithPartner). Вынесено из REG_NAME, чтобы тот же код отрабатывал
      * и для авто-регистрации без ввода ника (карта роста EGC, п.6). */
     private void finishRegistration(AppUser saved) {
+        importTelegramAvatar(saved);
         userService.applyWelcomeBonus(saved);
         notifyAdminsNewRegistration(saved);
         startOnboarding(saved);
