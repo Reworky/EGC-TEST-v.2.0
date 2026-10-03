@@ -52,13 +52,67 @@ public class SquadController {
         return ResponseEntity.ok(toDto(squad, user, telegramId));
     }
 
-    /** Каталог «Найти отряд»: отряды с открытым набором (по недельной активности). */
+    /** Каталог «Найти отряд»: все активные отряды (открытые — вступить сразу, закрытые — по заявке), по недельной
+     *  активности; q — часть названия для поиска. */
     @GetMapping("/catalog")
-    public ResponseEntity<List<CatalogEntry>> catalog() {
-        List<CatalogEntry> result = squadService.findOpenSquads().stream()
-                .map(e -> new CatalogEntry(e.squad().getId(), e.squad().getName(), e.memberCount(), e.weeklyXp()))
+    public ResponseEntity<List<CatalogEntry>> catalog(@AuthenticationPrincipal Long telegramId,
+                                                      @RequestParam(required = false) String q) {
+        AppUser user = getUser(telegramId);
+        List<CatalogEntry> result = squadService.findCatalog(q).stream()
+                .limit(30)
+                .map(e -> new CatalogEntry(e.squad().getId(), e.squad().getName(), e.memberCount(), e.weeklyXp(),
+                        e.squad().isOpenRecruitment(), squadService.hasPendingRequest(user, e.squad().getId())))
                 .toList();
         return ResponseEntity.ok(result);
+    }
+
+    /** Заявка в отряд с закрытым набором. */
+    @PostMapping("/request")
+    public ResponseEntity<?> requestJoin(@AuthenticationPrincipal Long telegramId, @RequestBody JoinOpenRequest body) {
+        AppUser user = getUser(telegramId);
+        try {
+            squadService.requestJoin(user, body.squadId());
+            return ResponseEntity.ok(java.util.Map.of("success", true));
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("message", e.getMessage()));
+        }
+    }
+
+    /** Живые заявки в отряд капитана. */
+    @GetMapping("/requests")
+    public ResponseEntity<List<RequestDto>> requests(@AuthenticationPrincipal Long telegramId) {
+        AppUser user = getUser(telegramId);
+        Optional<Squad> squad = squadService.findByUser(user);
+        if (squad.isEmpty() || !telegramId.equals(squad.get().getCaptainTelegramId())) {
+            return ResponseEntity.ok(List.of());
+        }
+        List<RequestDto> result = squadService.pendingRequests(squad.get()).stream()
+                .map(r -> squadService.findApplicant(r)
+                        .map(a -> new RequestDto(r.getId(), a.getNickname(), userService.getLevelName(a.getXp()), a.getXp()))
+                        .orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/requests/{requestId}/accept")
+    public ResponseEntity<?> acceptRequest(@AuthenticationPrincipal Long telegramId, @PathVariable Long requestId) {
+        return decide(telegramId, requestId, true);
+    }
+
+    @PostMapping("/requests/{requestId}/decline")
+    public ResponseEntity<?> declineRequest(@AuthenticationPrincipal Long telegramId, @PathVariable Long requestId) {
+        return decide(telegramId, requestId, false);
+    }
+
+    private ResponseEntity<?> decide(Long telegramId, Long requestId, boolean approve) {
+        AppUser user = getUser(telegramId);
+        try {
+            squadService.decideRequest(user, requestId, approve);
+            return ResponseEntity.ok(java.util.Map.of("success", true));
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("message", e.getMessage()));
+        }
     }
 
     /** Вступление через каталог — только в отряд с открытым набором. */
@@ -152,14 +206,16 @@ public class SquadController {
         return new SquadDto(squad.getId(), squad.getName(), squad.getInviteCode(), inviteLink,
                 isCaptain, weeklyXp, squad.getWeeklyBonusPoints(), memberDtos,
                 squad.isOpenRecruitment(), goal.eligible(), goal.done(), goal.target(), goal.reached(),
-                goal.bonusPerMember(), SquadService.GOAL_MIN_MEMBERS, squadService.streakDays(squad));
+                goal.bonusPerMember(), SquadService.GOAL_MIN_MEMBERS, squadService.streakDays(squad),
+                isCaptain ? squadService.pendingRequestCount(squad) : 0);
     }
 
     record SquadDto(Long id, String name, String inviteCode, String inviteLink, boolean isCaptain,
                     long weeklyXp, long weeklyBonusPoints, List<MemberDto> members,
                     boolean openRecruitment, boolean goalEligible, long goalDone, long goalTarget, boolean goalReached,
-                    long goalBonus, int goalMinMembers, int streakDays) {}
-    record CatalogEntry(Long id, String name, long memberCount, long weeklyXp) {}
+                    long goalBonus, int goalMinMembers, int streakDays, long pendingRequests) {}
+    record CatalogEntry(Long id, String name, long memberCount, long weeklyXp, boolean open, boolean requested) {}
+    record RequestDto(Long id, String nickname, String levelName, long xp) {}
     record JoinOpenRequest(Long squadId) {}
     record RecruitmentRequest(boolean open) {}
     record MemberDto(Long telegramId, String nickname, String levelName, long weeklyXp, boolean isCaptain) {}

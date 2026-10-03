@@ -17,9 +17,13 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Squad;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
+import ru.gamebot.platform.domain.model.SquadJoinRequest;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
+import ru.gamebot.platform.domain.repository.SquadJoinRequestRepository;
 import ru.gamebot.platform.domain.repository.SquadRepository;
 import ru.gamebot.platform.event.SquadGoalReachedEvent;
+import ru.gamebot.platform.event.SquadJoinDecisionEvent;
+import ru.gamebot.platform.event.SquadJoinRequestEvent;
 import ru.gamebot.platform.event.SquadMilestoneReachedEvent;
 import ru.gamebot.platform.event.SquadPrizeEvent;
 import ru.gamebot.platform.event.SquadReferralBonusEvent;
@@ -56,6 +60,12 @@ public class SquadService {
     private final ApplicationEventPublisher eventPublisher;
     private final ExcTransactionService excTx;
     private final QuestSubmissionRepository submissionRepository;
+    private final SquadJoinRequestRepository joinRequestRepository;
+
+    /** Заявка в отряд висит не дольше стольких дней (старые не показываются капитану и не принимаются). */
+    public static final int JOIN_REQUEST_TTL_DAYS = 14;
+    /** Сколько заявок в разные отряды игрок может держать одновременно. */
+    public static final int MAX_PENDING_REQUESTS_PER_USER = 3;
 
     // ── Командная цель недели (2026-10-03): отряд вместе набирает N одобренных квестов за неделю ──
     /** Цель = квестов на участника; минимум GOAL_MIN. Считается от размера, чтобы малые отряды тоже могли победить
@@ -144,6 +154,7 @@ public class SquadService {
         }
         user.setSquadId(squad.getId());
         appUserRepository.save(user);
+        cancelPendingRequests(user);
         awardReferralSquadBonus(user, squad);
         awardSizeMilestoneIfReached(squad);
         return squad;
@@ -355,16 +366,118 @@ public class SquadService {
         return squadRepository.save(squad);
     }
 
-    /** Отряды с открытым набором для каталога «Найти отряд»: активные, не заполненные, по недельной активности. */
-    public List<SquadRankEntry> findOpenSquads() {
+    /** Каталог «Найти отряд»: ВСЕ активные не заполненные отряды (открытые вступают сразу, закрытые — по заявке),
+     *  по недельной активности. query — часть названия для поиска (пусто — весь каталог). */
+    public List<SquadRankEntry> findCatalog(String query) {
+        String q = query == null ? "" : query.trim().toLowerCase();
         return squadRepository.findAll().stream()
-                .filter(s -> "ACTIVE".equals(s.getStatus()) && s.isOpenRecruitment())
+                .filter(s -> "ACTIVE".equals(s.getStatus()) && (q.isEmpty() || s.getName().toLowerCase().contains(q)))
                 .map(s -> new SquadRankEntry(s, squadWeeklyXp(s), memberCount(s)))
                 .filter(e -> e.memberCount() > 0 && e.memberCount() < MAX_MEMBERS)
                 .sorted(Comparator.comparingLong(SquadRankEntry::weeklyXp).reversed()
                         .thenComparing(Comparator.comparingLong(SquadRankEntry::memberCount).reversed()))
                 .limit(100)
                 .toList();
+    }
+
+    // ── Заявки в отряды с закрытым набором ──────────────────────────────────────
+
+    private static LocalDateTime requestsSince() {
+        return LocalDateTime.now().minusDays(JOIN_REQUEST_TTL_DAYS);
+    }
+
+    /** Есть ли у игрока живая заявка в этот отряд (для подписи кнопки «Заявка отправлена»). */
+    public boolean hasPendingRequest(AppUser user, Long squadId) {
+        return joinRequestRepository.findAllByUserIdAndStatus(user.getId(), SquadJoinRequest.PENDING).stream()
+                .anyMatch(r -> r.getSquadId().equals(squadId) && r.getCreatedAt().isAfter(requestsSince()));
+    }
+
+    @Transactional
+    public SquadJoinRequest requestJoin(AppUser user, Long squadId) {
+        if (user.getSquadId() != null) {
+            throw new IllegalStateException("Вы уже состоите в отряде. Покиньте его перед вступлением.");
+        }
+        Squad squad = squadRepository.findById(squadId).orElseThrow(() -> new IllegalArgumentException("Отряд не найден."));
+        if (!"ACTIVE".equals(squad.getStatus())) {
+            throw new IllegalStateException("Этот отряд расформирован.");
+        }
+        if (squad.isOpenRecruitment()) {
+            throw new IllegalStateException("В этот отряд можно вступить сразу — заявка не нужна.");
+        }
+        if (memberCount(squad) >= MAX_MEMBERS) {
+            throw new IllegalStateException("Отряд уже заполнен.");
+        }
+        List<SquadJoinRequest> mine = joinRequestRepository.findAllByUserIdAndStatus(user.getId(), SquadJoinRequest.PENDING).stream()
+                .filter(r -> r.getCreatedAt().isAfter(requestsSince())).toList();
+        if (mine.stream().anyMatch(r -> r.getSquadId().equals(squadId))) {
+            throw new IllegalStateException("Вы уже подали заявку в этот отряд — ждите решения капитана.");
+        }
+        if (mine.size() >= MAX_PENDING_REQUESTS_PER_USER) {
+            throw new IllegalStateException("Можно держать не больше " + MAX_PENDING_REQUESTS_PER_USER + " заявок одновременно.");
+        }
+        SquadJoinRequest request = new SquadJoinRequest();
+        request.setSquadId(squadId);
+        request.setUserId(user.getId());
+        request = joinRequestRepository.save(request);
+        eventPublisher.publishEvent(new SquadJoinRequestEvent(this, squad, user, request.getId()));
+        return request;
+    }
+
+    /** Живые заявки в отряд капитана (не старше JOIN_REQUEST_TTL_DAYS), старые сначала. */
+    public List<SquadJoinRequest> pendingRequests(Squad squad) {
+        return joinRequestRepository.findAllBySquadIdAndStatusAndCreatedAtAfterOrderByCreatedAtAsc(
+                squad.getId(), SquadJoinRequest.PENDING, requestsSince());
+    }
+
+    public long pendingRequestCount(Squad squad) {
+        return joinRequestRepository.countBySquadIdAndStatusAndCreatedAtAfter(squad.getId(), SquadJoinRequest.PENDING, requestsSince());
+    }
+
+    public Optional<AppUser> findApplicant(SquadJoinRequest request) {
+        return appUserRepository.findById(request.getUserId());
+    }
+
+    /** Капитан решает по заявке. approve=true — игрок вступает в отряд (с теми же проверками и бонусами, что у обычного
+     *  вступления), false — заявка отклоняется. В обоих случаях заявителю уходит уведомление (SquadJoinDecisionEvent). */
+    @Transactional
+    public SquadJoinRequest decideRequest(AppUser captain, Long requestId, boolean approve) {
+        SquadJoinRequest request = joinRequestRepository.findById(requestId)
+                .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена."));
+        Squad squad = squadRepository.findById(request.getSquadId()).orElseThrow(() -> new IllegalArgumentException("Отряд не найден."));
+        if (!captain.getTelegramId().equals(squad.getCaptainTelegramId())) {
+            throw new IllegalStateException("Решать по заявкам может только капитан.");
+        }
+        if (!SquadJoinRequest.PENDING.equals(request.getStatus())) {
+            throw new IllegalStateException("Заявка уже обработана.");
+        }
+        AppUser applicant = appUserRepository.findById(request.getUserId()).orElseThrow(() -> new IllegalArgumentException("Игрок не найден."));
+        if (request.getCreatedAt().isBefore(requestsSince())) {
+            request.setStatus(SquadJoinRequest.CANCELLED);
+            joinRequestRepository.save(request);
+            throw new IllegalStateException("Заявка устарела — попросите игрока подать новую.");
+        }
+        if (approve) {
+            if (applicant.getSquadId() != null) {
+                request.setStatus(SquadJoinRequest.CANCELLED);
+                joinRequestRepository.save(request);
+                throw new IllegalStateException("Игрок уже вступил в другой отряд.");
+            }
+            join(applicant, squad.getId());
+            request.setStatus(SquadJoinRequest.APPROVED);
+        } else {
+            request.setStatus(SquadJoinRequest.DECLINED);
+        }
+        joinRequestRepository.save(request);
+        eventPublisher.publishEvent(new SquadJoinDecisionEvent(this, squad, applicant, approve));
+        return request;
+    }
+
+    /** После вступления в любой отряд остальные заявки игрока снимаются. */
+    private void cancelPendingRequests(AppUser user) {
+        for (SquadJoinRequest r : joinRequestRepository.findAllByUserIdAndStatus(user.getId(), SquadJoinRequest.PENDING)) {
+            r.setStatus(SquadJoinRequest.CANCELLED);
+            joinRequestRepository.save(r);
+        }
     }
 
     /** Вступление через каталог — только в отряд с открытым набором. */
