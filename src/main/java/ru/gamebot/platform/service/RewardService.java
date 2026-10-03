@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.enums.RewardRequestStatus;
@@ -32,6 +33,69 @@ public class RewardService {
     private final EntityManager entityManager;
     private final ExcTransactionService excTx;
     private final AppUserRepository appUserRepository;
+    private final ApplicationEventPublisher eventPublisher;
+
+    // ── Защита вывода от мультиаккаунтов (решение владельца 2026-10-03) ──
+    /** Вывод открывается не раньше, чем через столько дней после регистрации... */
+    public static final int WITHDRAWAL_MIN_ACCOUNT_AGE_DAYS = 3;
+    /** ...и после стольких одобренных квестов. Схема «зарегистрировался по приглашению, взял бонусы и вывел за час» не проходит. */
+    public static final int WITHDRAWAL_MIN_APPROVED_QUESTS = 3;
+
+    /** null — вывод доступен; иначе понятное игроку объяснение, чего не хватает. */
+    public String withdrawalEligibilityBlock(AppUser user) {
+        StringBuilder missing = new StringBuilder();
+        if (user.getCreatedAt() != null && user.getCreatedAt().plusDays(WITHDRAWAL_MIN_ACCOUNT_AGE_DAYS).isAfter(LocalDateTime.now())) {
+            java.time.Duration left = java.time.Duration.between(LocalDateTime.now(), user.getCreatedAt().plusDays(WITHDRAWAL_MIN_ACCOUNT_AGE_DAYS));
+            long hours = Math.max(1, left.toHours() + (left.toMinutesPart() > 0 ? 1 : 0));
+            missing.append("подождать ещё ").append(hours >= 24 ? (hours / 24) + " дн. " + (hours % 24) + " ч." : hours + " ч.");
+        }
+        if (user.getCompletedQuests() < WITHDRAWAL_MIN_APPROVED_QUESTS) {
+            if (missing.length() > 0) missing.append(" и ");
+            missing.append("выполнить ещё ").append(WITHDRAWAL_MIN_APPROVED_QUESTS - user.getCompletedQuests()).append(" кв.");
+        }
+        if (missing.length() == 0) return null;
+        return "Вывод открывается через " + WITHDRAWAL_MIN_ACCOUNT_AGE_DAYS + " дня после регистрации и после "
+                + WITHDRAWAL_MIN_APPROVED_QUESTS + " одобренных квестов — так мы защищаем клуб от накруток. Вам нужно: " + missing + ".";
+    }
+
+    /** Ключ реквизитов для сравнения между аккаунтами: телефон/карта — только цифры (телефон без +7/8), кошелёк — адрес
+     *  в нижнем регистре. Для текста без номера (например, только название банка) ключа нет — такие не сравниваем. */
+    static String destinationKey(String details) {
+        if (details == null || details.isBlank()) return null;
+        String d = details.trim();
+        if (d.regionMatches(true, 0, "TON:", 0, 4) || d.startsWith("USDT")) {
+            String after = d.contains(":") ? d.substring(d.indexOf(':') + 1) : d;
+            String addr = after.split(":rubles=")[0].trim();
+            return addr.length() < 20 ? null : "w:" + addr.toLowerCase();
+        }
+        String digits = d.replaceAll("\\D", "");
+        if (digits.length() < 10) return null;
+        if (digits.length() == 11 && (digits.startsWith("7") || digits.startsWith("8"))) digits = digits.substring(1);
+        return "d:" + digits;
+    }
+
+    /** Бросает исключение (и предупреждает админов), если те же реквизиты уже использует другой аккаунт. */
+    private void checkDestinationNotShared(AppUser lockedUser, String payoutDetails) {
+        String key = destinationKey(payoutDetails);
+        if (key == null) return;
+        List<AppUser> others = rewardRequestRepository.findActiveWithdrawalsWithDetailsOfOtherUsers(lockedUser.getId()).stream()
+                .filter(r -> key.equals(destinationKey(r.getPayoutDetails())))
+                .map(RewardRequest::getUser)
+                .distinct()
+                .toList();
+        if (!others.isEmpty()) {
+            eventPublisher.publishEvent(new ru.gamebot.platform.event.WithdrawalDestinationConflictEvent(this, lockedUser, others, payoutDetails));
+            throw new IllegalArgumentException("Эти реквизиты уже используются другим аккаунтом. Укажите свои реквизиты "
+                    + "(один номер или кошелёк — один игрок). Если это ошибка, напишите в поддержку.");
+        }
+    }
+
+    private void checkWithdrawalAllowed(AppUser lockedUser) {
+        String block = withdrawalEligibilityBlock(lockedUser);
+        if (block != null) {
+            throw new IllegalArgumentException(block);
+        }
+    }
 
     public List<RewardItem> findAvailableRewards() {
         // Категория "Вывод" (сейчас — Telegram Stars) сознательно исключена из общего каталога магазина
@@ -85,6 +149,7 @@ public class RewardService {
             if (!"telegram_stars".equals(rewardItem.getPurchaseGroup())) {
                 throw new IllegalArgumentException("Эта позиция сейчас недоступна.");
             }
+            checkWithdrawalAllowed(lockedUser);
             if (hasWithdrawalTodayOrPending(lockedUser)) {
                 throw new IllegalArgumentException("Лимит: 1 заявка на вывод в сутки. Следующую можно создать через 24 часа после предыдущей.");
             }
@@ -439,12 +504,14 @@ public class RewardService {
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
 
+        checkWithdrawalAllowed(lockedUser);
         if (excAmount < MIN_WITHDRAWAL_EXC) {
             throw new IllegalArgumentException("Минимальная сумма вывода — 5 000 EXC.");
         }
         if (hasWithdrawalTodayOrPending(lockedUser)) {
             throw new IllegalArgumentException("Лимит: 1 заявка на вывод в сутки. Следующую можно создать через 24 часа после предыдущей.");
         }
+        checkDestinationNotShared(lockedUser, "TON:" + tonWallet);
 
         long remaining = sinkShopService.getRemainingWithdrawalLimit(lockedUser);
         if (excAmount > remaining) {
@@ -511,12 +578,14 @@ public class RewardService {
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
 
+        checkWithdrawalAllowed(lockedUser);
         if (excAmount < MIN_WITHDRAWAL_EXC) {
             throw new IllegalArgumentException("Минимальная сумма вывода — 5 000 EXC.");
         }
         if (hasWithdrawalTodayOrPending(lockedUser)) {
             throw new IllegalArgumentException("Лимит: 1 заявка на вывод в сутки. Следующую можно создать через 24 часа после предыдущей.");
         }
+        checkDestinationNotShared(lockedUser, payoutDetails);
 
         long remaining = sinkShopService.getRemainingWithdrawalLimit(lockedUser);
         if (excAmount > remaining) {

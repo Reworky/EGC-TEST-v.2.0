@@ -1102,6 +1102,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.equals("shop:withdraw")) {
             answerSilently(callbackQuery.getId());
+            String withdrawalBlock = rewardService.withdrawalEligibilityBlock(user);
+            if (withdrawalBlock != null) {
+                sendText(user.getTelegramId(), "🔒 <b>Вывод пока недоступен</b>\n\n" + escape(withdrawalBlock), backMenuKeyboard("menu:main"));
+                return;
+            }
             if (rewardService.hasWithdrawalTodayOrPending(user)) {
                 sendText(user.getTelegramId(),
                     "⚠️ <b>Лимит: 1 заявка на вывод в сутки.</b>\n\n"
@@ -8698,6 +8703,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(event.getApplicant().getTelegramId(), msg, keyboard);
         } catch (Exception e) {
             log.warn("Failed to notify applicant {} about squad decision", event.getApplicant().getTelegramId(), e);
+        }
+    }
+
+    /** Игрок пытался вывести на реквизиты, которые уже использует другой аккаунт — заявка не создана, админам сигнал
+     *  (возможный мультиаккаунт; решение — за админом, автоматически никого не блокируем). */
+    @org.springframework.context.event.EventListener
+    public void onWithdrawalDestinationConflict(ru.gamebot.platform.event.WithdrawalDestinationConflictEvent event) {
+        StringBuilder sb = new StringBuilder("🚨 <b>Вывод на чужие реквизиты</b>\n\n");
+        sb.append("Игрок: <b>").append(escape(displayUserName(event.getUser()))).append("</b> (<code>")
+                .append(event.getUser().getTelegramId()).append("</code>)\n");
+        sb.append("Реквизиты: <code>").append(escape(event.getDestination())).append("</code>\n\n");
+        sb.append("Уже используют те же реквизиты:\n");
+        for (AppUser other : event.getOtherUsers()) {
+            sb.append("• ").append(escape(displayUserName(other))).append(" (<code>").append(other.getTelegramId()).append("</code>)\n");
+        }
+        sb.append("\nЗаявка НЕ создана, игроку показано, что реквизиты заняты. Возможен мультиаккаунт — проверьте и решите вручную.");
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, sb.toString(), null);
+            } catch (Exception e) {
+                log.warn("Failed to alert admin {} about shared withdrawal destination", adminId, e);
+            }
         }
     }
 
