@@ -138,6 +138,25 @@ public class QuestService {
                 .toList();
     }
 
+    /** Игра с самым частым выполнением квестов за 7 дней среди тех, где сейчас есть активные квесты (для напоминаний новичку:
+     * «сейчас чаще всего берут»). Пусто, если по активным играм за неделю нет ни одного зачёта. */
+    public Optional<String> mostPopularActiveGame() {
+        List<String> active = findActiveGameNames();
+        if (active.isEmpty()) return Optional.empty();
+        LocalDateTime now = LocalDateTime.now();
+        String best = null;
+        long bestCount = 0;
+        for (Object[] row : questSubmissionRepository.countApprovedByGameBetween(now.minusDays(7), now)) {
+            String game = (String) row[0];
+            long count = ((Number) row[1]).longValue();
+            if (count > bestCount && active.stream().anyMatch(g -> g.equalsIgnoreCase(game))) {
+                best = active.stream().filter(g -> g.equalsIgnoreCase(game)).findFirst().orElse(null);
+                bestCount = count;
+            }
+        }
+        return Optional.ofNullable(best);
+    }
+
     /** Жанр игры — статическая карта: в проекте нет отдельного поля жанра у Quest/игры, а сами жанры
      *  общеизвестны и меняются редко, заводить под это поле в БД избыточно. Используется только для
      *  сортировки списка игр по интересам профиля (см. sortGamesByInterest) — на выдачу квестов и

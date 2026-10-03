@@ -239,8 +239,13 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     Optional<AppUser> findByPhoneNumberAndTelegramIdNot(String phoneNumber, Long excludeTelegramId);
 
-    @Query("SELECT u FROM AppUser u WHERE u.registrationCompleted = true AND u.onboardingCompleted = false AND u.onboardingStartedAt IS NOT NULL AND u.onboardingNotificationsSent < 3 AND u.blocked = false")
-    List<AppUser> findUsersWithIncompleteOnboarding();
+    /** Серия новичку «возьми первый квест»: идёт, пока человек не взял ни одного квеста (а не пока не нажал кнопку онбординга),
+     * только в окне после старта (since) - накопленная до деплоя база не получит залп. Подписку на канал не прошедшие
+     * органические игроки тоже в списке: им уйдёт напоминание про подписку (заявки трафиковых разбирает админ). */
+    @Query("SELECT u FROM AppUser u WHERE u.profileCompleted = true AND u.onboardingStartedAt IS NOT NULL AND u.onboardingStartedAt > :since "
+            + "AND u.onboardingNotificationsSent < 3 AND u.blocked = false AND u.lastQuestTakenAt IS NULL AND u.completedQuests = 0 "
+            + "AND (u.registrationCompleted = true OR u.trafficSourceCode IS NULL)")
+    List<AppUser> findUsersAwaitingFirstQuest(@Param("since") java.time.LocalDateTime since);
 
     List<AppUser> findAllByReferredByTelegramIdIsNotNullAndReferralActiveTrue();
 

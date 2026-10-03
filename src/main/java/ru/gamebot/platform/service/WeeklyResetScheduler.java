@@ -421,11 +421,15 @@ public class WeeklyResetScheduler {
         }
     }
 
-    // Напоминания об онбординге — каждый час
+    /** Серия новичку живёт не дольше этого окна от старта онбординга (3 сообщения укладываются в ~3 дня): без окна
+     * включение нового условия разослало бы напоминания всем, кто когда-то нажал кнопку онбординга и не взял квест. */
+    private static final int ONBOARDING_SERIES_WINDOW_DAYS = 5;
+
+    // Напоминания новичку «возьми первый квест» (+30 мин, ~сутки, ~трое суток) — проверка каждый час
     @Scheduled(fixedDelay = 3_600_000)
     public void sendOnboardingReminders() {
         LocalDateTime now = LocalDateTime.now();
-        for (AppUser user : appUserRepository.findUsersWithIncompleteOnboarding()) {
+        for (AppUser user : appUserRepository.findUsersAwaitingFirstQuest(now.minusDays(ONBOARDING_SERIES_WINDOW_DAYS))) {
             try {
                 if (user.getOnboardingStartedAt() == null) continue;
                 int sent = user.getOnboardingNotificationsSent();

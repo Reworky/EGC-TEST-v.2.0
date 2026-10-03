@@ -3925,7 +3925,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         String bonusLine = isTrafficSourced
                 ? "Заявку на вступление проверит админ, обычно недолго."
-                : "Это займёт 10 секунд — и тебе сразу начислится <b>+200 EXC</b>.";
+                : "Это займёт 10 секунд, и откроются все квесты клуба.";
         String text = (notice == null || notice.isBlank() ? "" : notice + "\n\n")
                 + "🔐 <b>Нужна подписка на канал</b>\n\n"
                 + "Подпишись по кнопке ниже и прими правила клуба.\n\n"
@@ -17063,21 +17063,32 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     @org.springframework.context.event.EventListener
     public void onOnboardingReminder(ru.gamebot.platform.event.OnboardingReminderEvent event) {
-        String msg = switch (event.getNotificationNumber()) {
-            case 1 -> "🎮 <b>Ты почти начал!</b>\n\n"
-                    + "Первый квест занимает буквально 5 минут. Выбери игру и заработай первые EXC! 💰";
-            case 2 -> "⏰ <b>Не забудь о первом квесте!</b>\n\n"
-                    + "Каждый день квесты приносят EXC — которые можно вывести реальными деньгами.\n"
-                    + "Начни прямо сейчас — первый шаг самый важный! 🚀";
-            default -> "🔔 <b>Последнее напоминание</b>\n\n"
-                    + "Выбери игру и возьми первый квест — сообщество EGC уже зарабатывает!\n"
-                    + "Не упусти свои первые EXC 🏆";
-        };
-        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
-                List.of(keyboardFactory.callback("🎮 Выбрать квест", "onboarding:browse_all"))
-        ));
         try {
-            sendText(event.getTelegramId(), msg, keyboard);
+            AppUser user = userService.findByTelegramId(event.getTelegramId()).orElse(null);
+            if (user == null) return;
+            // Не прошёл подписку на канал: квест взять нельзя, зовём подписаться, а не «выбрать квест»
+            if (!user.isRegistrationCompleted()) {
+                sendCommunityActivationPrompt(user, "👋 <b>Остался один шаг до первого квеста</b>");
+                return;
+            }
+            String game = questService.mostPopularActiveGame().orElse(null);
+            String popular = game == null ? ""
+                    : "\n\nСейчас чаще всего выполняют квесты по игре <b>" + escape(game) + "</b>.";
+            String msg = switch (event.getNotificationNumber()) {
+                case 1 -> "🎮 <b>У тебя уже 200 EXC</b>\n\n"
+                        + "Первый квест занимает около 5 минут, а дальше EXC копятся на вывод (минимум 5 000 EXC)." + popular;
+                case 2 -> "💡 <b>Часть квестов не требует скриншотов</b>\n\n"
+                        + "Для игр с привязкой аккаунта (Brawl Stars, Clash Royale, Clash of Clans и другие) прогресс засчитывается сам: "
+                        + "привязал тег, сыграл, получил EXC." + popular;
+                default -> "🔔 <b>Последнее напоминание</b>\n\n"
+                        + "Квесты не пропадут, но новичку проще начать, пока свежи правила. Выбери игру и возьми первый квест." + popular;
+            };
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            if (game != null) {
+                rows.add(List.of(keyboardFactory.callback("🎮 Квесты: " + trim(game, 24), "quests:game:" + encodeGameToken(game))));
+            }
+            rows.add(List.of(keyboardFactory.callback("🗺️ Все игры", "onboarding:browse_all")));
+            sendText(event.getTelegramId(), msg, keyboardFactory.rowsLayout(rows));
         } catch (Exception e) {
             log.warn("Failed to send onboarding reminder to {}", event.getTelegramId(), e);
         }
