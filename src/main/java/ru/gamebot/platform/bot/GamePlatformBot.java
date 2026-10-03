@@ -16869,6 +16869,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Личная строка для сообщений тем, кто пропал (спячка, затих, «квесты не берёшь»): отряд, где ребята играют без него,
+     * или накопленные EXC и расстояние до первого вывода. Пустая строка, если зацепиться не за что. Ничего не обещает сверх фактов. */
+    private String returnHookLine(Long telegramId) {
+        try {
+            AppUser user = userService.findByTelegramId(telegramId).orElse(null);
+            if (user == null) return "";
+            if (user.getSquadId() != null) {
+                var squad = squadService.findById(user.getSquadId()).orElse(null);
+                if (squad != null && squadService.memberCount(squad) >= 2) {
+                    long xp = squadService.squadWeeklyXp(squad);
+                    if (xp > 0) {
+                        return "\n\n🛡️ В твоём отряде <b>" + escape(squad.getName()) + "</b> на этой неделе уже <b>" + xp
+                                + " XP</b>. Ребята играют, а твоего вклада пока нет.";
+                    }
+                }
+            }
+            long coins = user.getCoins();
+            if (coins >= 5_000) {
+                return "\n\n💰 У тебя на балансе <b>" + coins + " EXC</b>. По сумме этого уже хватает на вывод (от 5 000 EXC).";
+            }
+            if (coins >= 2_000) {
+                return "\n\n💰 У тебя накоплено <b>" + coins + " EXC</b>, до первого вывода осталось <b>" + (5_000 - coins) + " EXC</b>.";
+            }
+        } catch (Exception e) {
+            log.warn("Failed to build return hook for {}", telegramId, e);
+        }
+        return "";
+    }
+
     @org.springframework.context.event.EventListener
     public void onDormancyReengagement(ru.gamebot.platform.event.DormancyReengagementEvent event) {
         // Бонус НЕ начислен: он придёт после возвращения и первого одобренного квеста (UserService.claimDormancyReturnBonus)
@@ -16883,6 +16912,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "Тебя не было " + event.getDaysSinceActive() + " дней. Выполни любой квест, и мы добавим "
                     + "<b>+" + event.getExcOffered() + " EXC</b> за возвращение. Загляни, что изменилось на платформе.";
         };
+        msg += returnHookLine(event.getTelegramId());
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("🗺️ К квестам", "menu:quests"))
         ));
@@ -17018,7 +17048,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     public void onSilentGapNudge(ru.gamebot.platform.event.SilentGapNudgeEvent event) {
         String msg = "👀 <b>Есть что-то новое</b>\n\n"
                 + "Пока тебя не было, в клубе появились новые квесты: <b>" + event.getNewQuestsCount() + "</b>.\n\n"
-                + "Загляни, вдруг найдётся что-то по душе 👇";
+                + "Загляни, вдруг найдётся что-то по душе 👇"
+                + returnHookLine(event.getTelegramId());
         try {
             sendText(event.getTelegramId(), msg, keyboardFactory.rowsLayout(List.of(
                     List.of(keyboardFactory.callback("🗺️ К квестам", "menu:quests")))));
@@ -17034,7 +17065,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ));
         String msg = "👀 <b>Ты заходишь, а квесты не берёшь</b>\n\n"
                 + "Последний квест был " + event.getDaysSinceLastQuest() + " дн. назад — а EXC за это время так и не капало.\n\n"
-                + "Загляни в раздел квестов, там наверняка найдётся что-то на 5-10 минут.";
+                + "Загляни в раздел квестов, там наверняка найдётся что-то на 5-10 минут."
+                + returnHookLine(event.getTelegramId());
         try {
             sendText(event.getTelegramId(), msg, keyboard);
         } catch (Exception e) {
