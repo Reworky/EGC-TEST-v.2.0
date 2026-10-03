@@ -35,8 +35,8 @@ public class QuestPackSchedule {
     @Column(columnDefinition = "integer default 1")
     private int dayOfWeek = 1;
 
-    /** Час смены по Москве. */
-    @Column(columnDefinition = "integer default 12")
+    /** Час смены по Москве. Колонка не «hour»: это зарезервированное слово H2 — запросы к таблице падали с синтаксической ошибкой. */
+    @Column(name = "switch_hour", columnDefinition = "integer default 12")
     private int hour = 12;
 
     /** Когда ротацию включили последний раз — точка отсчёта «до/после» для аналитики (вкладка «Пачки»). */
