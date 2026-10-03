@@ -20,6 +20,8 @@ import ru.gamebot.platform.domain.repository.RewardRequestRepository;
 public class RewardService {
 
     private static final String WITHDRAWAL_CATEGORY = "Вывод";
+    /** Минимальная сумма вывода в рубли/TON (то же число проверяют бот и мини-апп; здесь — страховка внутри сервиса). */
+    private static final long MIN_WITHDRAWAL_EXC = 5_000;
 
     private final RewardItemRepository rewardItemRepository;
     private final RewardRequestRepository rewardRequestRepository;
@@ -70,6 +72,23 @@ public class RewardService {
     public RewardRequest createRewardRequest(AppUser user, RewardItem rewardItem) {
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
+
+        // Покупать можно только то, что реально лежит в каталоге: раньше POST /api/shop/items/{id}/purchase принимал ЛЮБОЙ id —
+        // в том числе скрытые «виртуальные» позиции чужих выводов («Вывод N EXC → M ₽», active=false), что обходило проверки
+        // вывода и позволяло взять старый курс (аудит вывода 2026-10-03).
+        if (!rewardItem.isActive() || rewardItem.isComingSoon()) {
+            throw new IllegalArgumentException("Эта позиция сейчас недоступна.");
+        }
+        if (WITHDRAWAL_CATEGORY.equals(rewardItem.getCategory())) {
+            // Вывод через каталог — только Telegram Stars; рубли и TON идут своими методами. «1 заявка в сутки» проверяем
+            // здесь, под блокировкой игрока: раньше она стояла только на входе в меню и обходилась старыми кнопками и параллельными запросами.
+            if (!"telegram_stars".equals(rewardItem.getPurchaseGroup())) {
+                throw new IllegalArgumentException("Эта позиция сейчас недоступна.");
+            }
+            if (hasWithdrawalTodayOrPending(lockedUser)) {
+                throw new IllegalArgumentException("Лимит: 1 заявка на вывод в сутки. Следующую можно создать через 24 часа после предыдущей.");
+            }
+        }
 
         // 4-layer shop limits check (throws IllegalArgumentException on violation)
         shopLimitService.checkAllLimits(lockedUser, rewardItem);
@@ -268,16 +287,39 @@ public class RewardService {
                 .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена."));
     }
 
+    /** Блокирует строку заявки и возвращает её с игроком и позицией. Все изменения статуса идут через этот метод. */
+    private RewardRequest lockAndGet(Long requestId) {
+        rewardRequestRepository.findByIdForUpdate(requestId)
+                .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена."));
+        return getRequest(requestId);
+    }
+
+    /** Понятное объяснение, почему с заявкой в этом статусе уже нельзя ничего делать. */
+    private static String alreadyHandledMessage(RewardRequestStatus status) {
+        return switch (status) {
+            case APPROVED -> "Заявка уже выполнена (одобрена) — повторно ничего делать не нужно.";
+            case REJECTED -> "Заявка уже отклонена, EXC возвращены игроку.";
+            case CANCELLED -> "Заявка отменена игроком, EXC уже возвращены ему. Деньги или награду по ней НЕ выдавайте.";
+            default -> "Заявка уже обработана.";
+        };
+    }
+
     @Transactional
     public RewardRequest takeInProgressRequest(Long requestId) {
-        RewardRequest req = getRequest(requestId);
+        RewardRequest req = lockAndGet(requestId);
+        if (req.getStatus() != RewardRequestStatus.PENDING) {
+            throw new IllegalArgumentException(alreadyHandledMessage(req.getStatus()));
+        }
         req.setStatus(RewardRequestStatus.IN_PROGRESS);
         return rewardRequestRepository.save(req);
     }
 
     @Transactional
     public RewardRequest approveRequest(Long requestId) {
-        RewardRequest req = getRequest(requestId);
+        RewardRequest req = lockAndGet(requestId);
+        if (req.getStatus() != RewardRequestStatus.PENDING && req.getStatus() != RewardRequestStatus.IN_PROGRESS) {
+            throw new IllegalArgumentException(alreadyHandledMessage(req.getStatus()));
+        }
         req.setStatus(RewardRequestStatus.APPROVED);
         req.setPaidAt(java.time.LocalDateTime.now());
         if (WITHDRAWAL_CATEGORY.equals(req.getRewardItem().getCategory())) {
@@ -311,7 +353,7 @@ public class RewardService {
 
     @Transactional
     public RewardRequest cancelRequest(Long requestId, AppUser requester) {
-        RewardRequest req = getRequest(requestId);
+        RewardRequest req = lockAndGet(requestId);
         // Без этой проверки любой пользователь мог отменить ЧУЖУЮ заявку по угаданному/подобранному ID
         // и получить возврат EXC на СВОЙ баланс — реальная уязвимость, найдена при разработке API кошелька.
         if (!req.getUser().getTelegramId().equals(requester.getTelegramId())) {
@@ -330,7 +372,10 @@ public class RewardService {
 
     @Transactional
     public RewardRequest rejectRequest(Long requestId, String comment) {
-        RewardRequest req = getRequest(requestId);
+        RewardRequest req = lockAndGet(requestId);
+        if (req.getStatus() != RewardRequestStatus.PENDING && req.getStatus() != RewardRequestStatus.IN_PROGRESS) {
+            throw new IllegalArgumentException(alreadyHandledMessage(req.getStatus()));
+        }
         req.setStatus(RewardRequestStatus.REJECTED);
         req.setAdminComment(comment);
         AppUser user = req.getUser();
@@ -393,6 +438,13 @@ public class RewardService {
     public RewardRequest createTonWithdrawalRequest(AppUser user, long excAmount, long rubles, long fixedRubUsed, String tonWallet) {
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
+
+        if (excAmount < MIN_WITHDRAWAL_EXC) {
+            throw new IllegalArgumentException("Минимальная сумма вывода — 5 000 EXC.");
+        }
+        if (hasWithdrawalTodayOrPending(lockedUser)) {
+            throw new IllegalArgumentException("Лимит: 1 заявка на вывод в сутки. Следующую можно создать через 24 часа после предыдущей.");
+        }
 
         long remaining = sinkShopService.getRemainingWithdrawalLimit(lockedUser);
         if (excAmount > remaining) {
@@ -458,6 +510,13 @@ public class RewardService {
     public RewardRequest createWithdrawalRequestWithDetails(AppUser user, long excAmount, long rubles, long fixedRubUsed, String payoutDetails) {
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
+
+        if (excAmount < MIN_WITHDRAWAL_EXC) {
+            throw new IllegalArgumentException("Минимальная сумма вывода — 5 000 EXC.");
+        }
+        if (hasWithdrawalTodayOrPending(lockedUser)) {
+            throw new IllegalArgumentException("Лимит: 1 заявка на вывод в сутки. Следующую можно создать через 24 часа после предыдущей.");
+        }
 
         long remaining = sinkShopService.getRemainingWithdrawalLimit(lockedUser);
         if (excAmount > remaining) {

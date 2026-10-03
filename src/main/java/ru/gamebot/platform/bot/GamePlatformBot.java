@@ -532,7 +532,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             Long reqId = session.getQuestId();
             boolean isModReceiptFlow = "mod".equals(session.getData().get("receiptFlow"));
             session.reset();
-            RewardRequest req = rewardService.approveRequest(reqId);
+            RewardRequest req;
+            try {
+                req = rewardService.approveRequest(reqId);
+            } catch (IllegalArgumentException staleRequest) {
+                sendText(user.getTelegramId(), "⚠️ " + staleRequest.getMessage(), backMenuKeyboard("menu:admin"));
+                return;
+            }
             notifyUserWithdrawalApproved(req, fileId, receiptCaption);
             sendPayoutConfirmedCard(user, req, isModReceiptFlow);
             return;
@@ -3162,7 +3168,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(user.getTelegramId(), "✅ Цена обновлена: <b>" + newPrice + " EXC</b>", backMenuKeyboard("admin:rewards"));
             }
             case REWARD_REJECT_COMMENT -> {
-                RewardRequest rejected = rewardService.rejectRequest(session.getQuestId(), text.trim());
+                RewardRequest rejected;
+                try {
+                    rejected = rewardService.rejectRequest(session.getQuestId(), text.trim());
+                } catch (IllegalArgumentException staleRequest) {
+                    session.reset();
+                    sendText(user.getTelegramId(), "⚠️ " + staleRequest.getMessage(), backMenuKeyboard("menu:admin"));
+                    return;
+                }
                 boolean isWithdrawal = "withdrawal".equals(session.getData().get("rejectType"));
                 boolean isModFlow = "mod".equals(session.getData().get("rejectBack"));
                 session.reset();
@@ -6255,6 +6268,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "📈 Курс: 1 TON = " + tonRate.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽";
         session.getData().put("ton_exc_amount", String.valueOf(amount));
         session.getData().put("ton_rubles", String.valueOf(rubles));
+        session.getData().put("ton_quote_at", String.valueOf(System.currentTimeMillis()));
         session.setState(SessionState.WITHDRAWAL_TON_ADDRESS);
         String msg = "💎 <b>Сумма принята</b>\n\n"
                 + "💸 " + amount + " EXC → <b>" + rubles + " ₽</b> → ~<b>" + tonAmount + " TON</b>\n"
@@ -6294,6 +6308,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "⚠️ <b>Лимит: 1 заявка на вывод в сутки.</b>\n\n"
                     + "Следующую заявку можно создать через 24 часа после предыдущей.",
                 backMenuKeyboard("menu:main"));
+            return;
+        }
+        if (withdrawalQuoteExpired(session.getData().get("ton_quote_at"))) {
+            session.reset();
+            sendText(user.getTelegramId(),
+                    "⏳ <b>Курс мог измениться.</b>\n\nС момента ввода суммы прошло больше " + (WITHDRAWAL_QUOTE_TTL_MS / 60000)
+                            + " минут. Начните вывод заново — сумма пересчитается по актуальному курсу.",
+                    backMenuKeyboard("shop:withdraw"));
             return;
         }
         long excAmount = Long.parseLong(session.getData().getOrDefault("ton_exc_amount", "0"));
@@ -10636,7 +10658,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (action.startsWith("inprogress:")) {
             Long reqId = parseLong(action.substring("inprogress:".length()));
-            RewardRequest req = rewardService.takeInProgressRequest(reqId);
+            RewardRequest req;
+            try {
+                req = rewardService.takeInProgressRequest(reqId);
+            } catch (IllegalArgumentException staleRequest) {
+                answer(callbackQuery.getId(), staleRequest.getMessage());
+                return;
+            }
             notifyUserRewardInProgress(req);
             sendAdminRewardRequestCard(user, reqId);
             answer(callbackQuery.getId(), "🔄 Взято в разработку");
@@ -10644,7 +10672,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (action.startsWith("approve:")) {
             Long reqId = parseLong(action.substring("approve:".length()));
-            RewardRequest req = rewardService.approveRequest(reqId);
+            RewardRequest req;
+            try {
+                req = rewardService.approveRequest(reqId);
+            } catch (IllegalArgumentException staleRequest) {
+                answer(callbackQuery.getId(), staleRequest.getMessage());
+                return;
+            }
             notifyUserRewardApproved(req);
             sendAdminRewardRequests(user);
             answer(callbackQuery.getId(), "✅ Выдано");
@@ -10768,7 +10802,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (action.startsWith("approve:skip:")) {
             long reqId = parseLong(action.substring("approve:skip:".length()));
             session.reset();
-            RewardRequest req = rewardService.approveRequest(reqId);
+            RewardRequest req;
+            try {
+                req = rewardService.approveRequest(reqId);
+            } catch (IllegalArgumentException staleRequest) {
+                answer(callbackQuery.getId(), staleRequest.getMessage());
+                sendAdminWithdrawals(user);
+                return;
+            }
             notifyUserWithdrawalApproved(req, null);
             sendAdminWithdrawals(user);
             answer(callbackQuery.getId(), "✅ Выплачено");
@@ -10800,7 +10841,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             long reqId = parseLong(parts[0]);
             long otherTgId = parseLong(parts[1]);
             String blockReason = "Мультиаккаунт — нарушение п. 6 Правил EGC";
-            RewardRequest req = rewardService.rejectRequest(reqId, blockReason);
+            RewardRequest req;
+            try {
+                req = rewardService.rejectRequest(reqId, blockReason);
+            } catch (IllegalArgumentException staleRequest) {
+                sendText(user.getTelegramId(), "⚠️ " + staleRequest.getMessage()
+                        + " Игроков по этой заявке автоматически не блокирую — проверьте вручную.", backMenuKeyboard("menu:admin"));
+                return;
+            }
             AppUser requester = req.getUser();
             AppUser other = userService.findByTelegramId(otherTgId).orElse(null);
             userService.blockAndConfiscate(requester.getTelegramId(), blockReason);
@@ -17869,6 +17917,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long rubles = Math.round(amount * ratio / 100.0);
         session.getData().put("withdrawAmount", String.valueOf(amount));
         session.getData().put("withdrawRubles", String.valueOf(rubles));
+        session.getData().put("withdrawQuoteAt", String.valueOf(System.currentTimeMillis()));
         session.setState(SessionState.WITHDRAWAL_DETAILS);
         sendText(user.getTelegramId(),
                 "💳 <b>Введите реквизиты для перевода</b>\n\n"
@@ -17878,6 +17927,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "Пример:\n<code>Сбербанк, СБП +7 900 123 45 67</code>\n\n"
                         + "<i>*на текущий момент переводы осуществляются только по СБП, учитывайте это при создании заявки!</i>",
                 cancelKeyboard());
+    }
+
+    /** Сколько живёт посчитанная сумма в рублях между вводом суммы и вводом реквизитов. */
+    private static final long WITHDRAWAL_QUOTE_TTL_MS = 10 * 60 * 1000L;
+
+    private static boolean withdrawalQuoteExpired(String quoteAtMillis) {
+        try {
+            return quoteAtMillis == null || System.currentTimeMillis() - Long.parseLong(quoteAtMillis) > WITHDRAWAL_QUOTE_TTL_MS;
+        } catch (NumberFormatException e) {
+            return true;
+        }
     }
 
     private void handleWithdrawalDetails(AppUser user, UserSession session, String text) {
@@ -17892,6 +17952,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "⚠️ <b>Лимит: 1 заявка на вывод в сутки.</b>\n\n"
                     + "Следующую заявку можно создать через 24 часа после предыдущей.",
                 backMenuKeyboard("menu:main"));
+            return;
+        }
+        // Котировка в рублях зафиксирована на шаге ввода суммы; если с тех пор прошло больше WITHDRAWAL_QUOTE_TTL_MS, курс
+        // мог измениться — заново, иначе можно было «заморозить» хороший курс и подтвердить его позже (аудит вывода 2026-10-03).
+        if (withdrawalQuoteExpired(session.getData().get("withdrawQuoteAt"))) {
+            session.reset();
+            sendText(user.getTelegramId(),
+                    "⏳ <b>Курс мог измениться.</b>\n\nС момента ввода суммы прошло больше " + (WITHDRAWAL_QUOTE_TTL_MS / 60000)
+                            + " минут. Начните вывод заново — сумма в рублях пересчитается по актуальному курсу.",
+                    backMenuKeyboard("shop:withdraw"));
             return;
         }
         long amount = Long.parseLong(session.getData().get("withdrawAmount"));
@@ -19066,7 +19136,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else if (data.startsWith("mod:withdrawal:approve:skip:")) {
             long reqId = Long.parseLong(data.substring("mod:withdrawal:approve:skip:".length()));
             session.reset();
-            RewardRequest req = rewardService.approveRequest(reqId);
+            RewardRequest req;
+            try {
+                req = rewardService.approveRequest(reqId);
+            } catch (IllegalArgumentException staleRequest) {
+                sendText(user.getTelegramId(), "⚠️ " + staleRequest.getMessage(), null);
+                return;
+            }
             notifyUserWithdrawalApproved(req, null);
             sendText(user.getTelegramId(), "✅ Заявка В-" + reqId + " одобрена.", null);
             sendModWithdrawals(user);
@@ -19095,7 +19171,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             long reqId = Long.parseLong(parts[0]);
             long otherTgId = Long.parseLong(parts[1]);
             String blockReason = "Мультиаккаунт — нарушение п. 6 Правил EGC";
-            RewardRequest req = rewardService.rejectRequest(reqId, blockReason);
+            RewardRequest req;
+            try {
+                req = rewardService.rejectRequest(reqId, blockReason);
+            } catch (IllegalArgumentException staleRequest) {
+                sendText(user.getTelegramId(), "⚠️ " + staleRequest.getMessage()
+                        + " Игроков по этой заявке автоматически не блокирую — проверьте вручную.", backMenuKeyboard("menu:admin"));
+                return;
+            }
             AppUser requester = req.getUser();
             AppUser other = userService.findByTelegramId(otherTgId).orElse(null);
             userService.blockAndConfiscate(requester.getTelegramId(), blockReason);

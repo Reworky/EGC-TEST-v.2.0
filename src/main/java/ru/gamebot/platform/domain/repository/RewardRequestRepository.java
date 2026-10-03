@@ -29,6 +29,12 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
     @EntityGraph(attributePaths = {"user", "rewardItem"})
     java.util.Optional<RewardRequest> findWithUserAndRewardItemById(Long id);
 
+    /** Блокировка строки заявки на время транзакции (SELECT ... FOR UPDATE): одобрение, отклонение и отмена одной заявки
+     *  идут строго по очереди, иначе отмена игроком во время выплаты давала и деньги, и возврат EXC (аудит вывода 2026-10-03). */
+    @jakarta.persistence.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM RewardRequest r WHERE r.id = :id")
+    java.util.Optional<RewardRequest> findByIdForUpdate(@Param("id") Long id);
+
     long countByStatus(RewardRequestStatus status);
 
     long countByStatusIn(java.util.Collection<RewardRequestStatus> statuses);
