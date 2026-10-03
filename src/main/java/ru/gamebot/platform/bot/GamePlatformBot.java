@@ -66,6 +66,7 @@ import ru.gamebot.platform.domain.enums.RewardRequestStatus;
 import ru.gamebot.platform.domain.enums.SubmissionStatus;
 import ru.gamebot.platform.domain.model.AppSetting;
 import ru.gamebot.platform.domain.model.AppUser;
+import ru.gamebot.platform.domain.model.QuestPack;
 import ru.gamebot.platform.domain.model.BotReview;
 import ru.gamebot.platform.domain.model.ChannelJoinRequest;
 import ru.gamebot.platform.domain.model.GemPurchaseRequest;
@@ -83,6 +84,7 @@ import ru.gamebot.platform.service.GameCatalogService;
 import ru.gamebot.platform.service.GemPurchaseService;
 import ru.gamebot.platform.service.NewsService;
 import ru.gamebot.platform.service.QuestActionStatus;
+import ru.gamebot.platform.service.QuestPackService;
 import ru.gamebot.platform.service.QuestService;
 import ru.gamebot.platform.service.RewardService;
 import ru.gamebot.platform.service.SessionService;
@@ -127,6 +129,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final AppProperties appProperties;
     private final UserService userService;
     private final QuestService questService;
+    private final QuestPackService questPackService;
     private final RewardService rewardService;
     private final NewsService newsService;
     private final AdminService adminService;
@@ -3257,6 +3260,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case QUEST_EDIT_DESCRIPTION -> updateQuestDescription(user, session, text);
             case QUEST_EDIT_CONDITION -> updateQuestCondition(user, session, text);
             case QUEST_EDIT_REWARD -> updateQuestReward(user, session, text);
+            case QUEST_PACK_RENAME -> {
+                String packName = text.trim();
+                if (packName.length() < 2 || packName.length() > 40) {
+                    sendText(user.getTelegramId(), "⚠️ Название пачки — от 2 до 40 символов.", cancelKeyboard());
+                    return;
+                }
+                QuestPack renamed = questPackService.rename(session.getQuestId(), packName);
+                session.reset();
+                sendAdminQuestPacks(user, renamed.getGameName());
+            }
             case QUEST_EDIT_LIMIT -> {
                 Integer limit = parseInteger(text.trim());
                 if (limit == null || limit < 1) {
@@ -9298,6 +9311,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendText(user.getTelegramId(),
                             "👥 <b>Изменить лимит участников</b>\n\nСейчас: <i>" + curLimit + "</i>\n\nУкажите новый лимит числом:",
                             cancelKeyboard());
+                } else if (action.startsWith("packs:")) {
+                    handleAdminPacksAction(callbackQuery, user, session, action.substring("packs:".length()));
+                    return;
+                } else if (action.startsWith("quest-pack:")) {
+                    sendQuestPackPicker(user, parseLong(action.substring("quest-pack:".length())));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("quest-setpack:")) {
+                    String[] parts = action.substring("quest-setpack:".length()).split(":");
+                    Quest packQuest = questService.getQuest(parseLong(parts[0]));
+                    long targetPack = parseLong(parts[1]);
+                    questPackService.assignQuest(packQuest, targetPack == 0 ? null : targetPack);
+                    answer(callbackQuery.getId(), targetPack == 0 ? "Квест выведен из пачек" : "Квест перенесён в пачку");
+                    sendAdminQuestEditor(user, packQuest.getId(), currentAdminQuestBackData(user, packQuest));
+                    return;
                 } else if (action.startsWith("game:top:")) {
                     String gameName = decodeGameToken(action.substring("game:top:".length()));
                     sendAdminGameQuestTop(user, gameName);
@@ -11360,6 +11388,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("📚 Все квесты", "admin:quests:list:" + encodeGameToken(gameName) + ":all")));
         }
         rows.add(List.of(keyboardFactory.callback("🏆 Топ квестов", "admin:game:top:" + encodeGameToken(gameName))));
+        rows.add(List.of(keyboardFactory.callback("📦 Пачки квестов", "admin:packs:list:" + encodeGameToken(gameName))));
         rows.add(List.of(keyboardFactory.callback(
                 flat ? "⚙️ Режим: FLAT (без категорий)" : "⚙️ Режим: TIERED (категории)", "admin:game:mode:" + encodeGameToken(gameName))));
 
@@ -11386,6 +11415,109 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + photoStatus + "\n"
                         + modeStatus + "\n\n"
                         + (flat ? "Квесты без деления на категории сложности." : "Выберите категорию, чтобы открыть нужную группу квестов по этой игре."),
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    // ── Пачки квестов (по играм; в игре включена ровно одна) ──────────────────────
+
+    private void handleAdminPacksAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
+        String cbId = callbackQuery.getId();
+        if (action.startsWith("list:")) {
+            sendAdminQuestPacks(user, decodeGameToken(action.substring("list:".length())));
+            answerSilently(cbId);
+        } else if (action.startsWith("new:")) {
+            String game = decodeGameToken(action.substring("new:".length()));
+            QuestPack pack = questPackService.createPack(game);
+            answer(cbId, "Создана «" + pack.getName() + "»");
+            sendAdminQuestPacks(user, game);
+        } else if (action.startsWith("ask:")) {
+            QuestPack pack = questPackService.get(parseLong(action.substring("ask:".length())));
+            long count = questPackService.questCount(pack);
+            if (count == 0) {
+                answer(cbId, "В пачке нет квестов — игра осталась бы пустой");
+                return;
+            }
+            String game = pack.getGameName();
+            sendText(user.getTelegramId(),
+                    "📦 <b>Включить пачку «" + escape(pack.getName()) + "»?</b>\n\n"
+                            + "🎮 " + escape(game) + " · квестов в пачке: " + count + "\n\n"
+                            + "Текущая пачка будет выключена — новые квесты из неё взять нельзя. "
+                            + "Уже взятые игроками квесты они спокойно довыполнят.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("✅ Включить", "admin:packs:on:" + pack.getId())),
+                            List.of(keyboardFactory.callback("⬅️ Отмена", "admin:packs:list:" + encodeGameToken(game))))));
+            answerSilently(cbId);
+        } else if (action.startsWith("on:")) {
+            QuestPack pack = questPackService.get(parseLong(action.substring("on:".length())));
+            if (questPackService.questCount(pack) == 0) {
+                answer(cbId, "В пачке нет квестов");
+                return;
+            }
+            QuestPackService.SwitchResult result = questPackService.switchTo(pack.getId());
+            clearInlineKeyboard(callbackQuery);
+            answer(cbId, "Пачка включена");
+            sendText(user.getTelegramId(),
+                    "✅ Включена пачка «" + escape(pack.getName()) + "» (" + escape(pack.getGameName()) + ").\n"
+                            + "Возвращено в работу: " + result.activated() + ", скрыто: " + result.hidden() + ".\n\n"
+                            + "💡 Самое время написать пост в канал о новых квестах.",
+                    backMenuKeyboard("admin:packs:list:" + encodeGameToken(pack.getGameName())));
+        } else if (action.startsWith("rename:")) {
+            QuestPack pack = questPackService.get(parseLong(action.substring("rename:".length())));
+            session.reset();
+            session.setQuestId(pack.getId());
+            session.setState(SessionState.QUEST_PACK_RENAME);
+            sendText(user.getTelegramId(),
+                    "✏️ Новое название для пачки «" + escape(pack.getName()) + "» (2–40 символов):",
+                    cancelKeyboard());
+            answerSilently(cbId);
+        }
+    }
+
+    private void sendAdminQuestPacks(AppUser user, String gameName) {
+        if (gameName == null || gameName.isBlank()) {
+            sendAdminGamingQuestList(user);
+            return;
+        }
+        String token = encodeGameToken(gameName);
+        List<QuestPack> packs = questPackService.packsOf(gameName);
+        StringBuilder sb = new StringBuilder("📦 <b>Пачки квестов — " + escape(gameName) + "</b>\n\n");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (packs.isEmpty()) {
+            sb.append("Пачек пока нет. «Создать» заведёт пачку «Основная» из текущих активных квестов игры "
+                    + "и первую новую пачку — её можно наполнять и включать вместо основной.");
+        } else {
+            sb.append("Для игроков включена ровно одна пачка. Взятые квесты довыполняются после смены.\n\n");
+            for (QuestPack pack : packs) {
+                long count = questPackService.questCount(pack);
+                sb.append(pack.isActive() ? "✅ " : "⏸ ").append("<b>").append(escape(pack.getName())).append("</b> — ")
+                        .append(count).append(" кв.").append(pack.isActive() ? " (включена)" : "").append("\n");
+                List<InlineKeyboardButton> line = new ArrayList<>();
+                if (!pack.isActive()) {
+                    line.add(keyboardFactory.callback("▶️ Включить: " + trim(pack.getName(), 22), "admin:packs:ask:" + pack.getId()));
+                }
+                line.add(keyboardFactory.callback("✏️ Название", "admin:packs:rename:" + pack.getId()));
+                rows.add(line);
+            }
+        }
+        rows.add(List.of(keyboardFactory.callback("➕ Создать пачку", "admin:packs:new:" + token)));
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", "admin:quests:game:" + token),
+                keyboardFactory.callback("🏠 Меню", "menu:admin")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendQuestPackPicker(AppUser user, Long questId) {
+        Quest quest = questService.getQuest(questId);
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (QuestPack pack : questPackService.packsOf(quest.getGameName())) {
+            boolean current = pack.getId().equals(quest.getPackId());
+            rows.add(List.of(keyboardFactory.callback((current ? "✅ " : "") + trim(pack.getName(), 30),
+                    "admin:quest-setpack:" + questId + ":" + pack.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("🚫 Вне пачек", "admin:quest-setpack:" + questId + ":0")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:quest:" + questId)));
+        sendText(user.getTelegramId(),
+                "📦 <b>В какую пачку отнести квест?</b>\n\n" + escape(quest.getTitle()),
                 keyboardFactory.rowsLayout(rows));
     }
 
@@ -11486,6 +11618,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback(quest.isActive() ? "⏸️ Скрыть" : "▶️ Включить", "admin:toggle:" + questId),
                 keyboardFactory.callback("🗑️ Удалить", "admin:delete:" + questId)
         ));
+        if (quest.getGameName() != null && questPackService.hasPacks(quest.getGameName())) {
+            rows.add(List.of(keyboardFactory.callback("📦 Пачка квеста", "admin:quest-pack:" + questId)));
+        }
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", backData),
                 keyboardFactory.callback("🏠 Меню", "menu:admin")

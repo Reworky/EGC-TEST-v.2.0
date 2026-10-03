@@ -76,6 +76,13 @@ public class Quest {
     private int ticketReward;
     private boolean active;
 
+    /** Пачка квестов (см. QuestPack); null — квест вне пачек (спонсорские, UGC, игры без пачек). */
+    private Long packId;
+
+    /** Квест был активен, когда его пачку выключили — при обратном включении пачки возвращается в работу. */
+    @Column(columnDefinition = "boolean default false")
+    private boolean packSuspended;
+
     @Column(columnDefinition = "boolean default false")
     private boolean councilOnly;
 
