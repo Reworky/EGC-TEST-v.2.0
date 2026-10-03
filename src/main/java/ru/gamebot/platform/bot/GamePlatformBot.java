@@ -10890,7 +10890,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
                 keyboardFactory.callback("✅ Опубликовать", "revmod:approve:" + review.getId()),
                 keyboardFactory.callback("❌ Отклонить", "revmod:reject:" + review.getId())));
-        for (Long recipient : adminService.allModeratorIds()) {
+        // Карточки отзывов — только модераторам, админам не шлём (решение владельца 2026-10-03).
+        // Если модераторов нет вовсе, шлём всем, чтобы отзыв не потерялся молча.
+        Set<Long> reviewRecipients = adminService.strictModeratorIds();
+        if (reviewRecipients.isEmpty()) {
+            reviewRecipients = adminService.allModeratorIds();
+        }
+        for (Long recipient : reviewRecipients) {
             try {
                 if (review.getPhotoFileId() != null) {
                     SendPhoto sendPhoto = new SendPhoto();
