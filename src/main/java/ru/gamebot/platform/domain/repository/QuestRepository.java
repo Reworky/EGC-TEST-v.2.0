@@ -23,6 +23,8 @@ public interface QuestRepository extends JpaRepository<Quest, Long> {
 
     long countByPackId(Long packId);
 
+    List<Quest> findAllByPackId(Long packId);
+
     long countByGameNameIgnoreCaseAndActiveTrue(String gameName);
 
     void deleteAllByGameNameIgnoreCase(String gameName);

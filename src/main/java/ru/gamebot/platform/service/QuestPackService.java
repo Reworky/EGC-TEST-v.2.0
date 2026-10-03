@@ -40,6 +40,10 @@ public class QuestPackService {
         return questRepository.countByPackId(pack.getId());
     }
 
+    public List<Quest> questsOf(QuestPack pack) {
+        return questRepository.findAllByPackId(pack.getId());
+    }
+
     public QuestPack get(Long packId) {
         return packRepository.findById(packId).orElseThrow(() -> new IllegalArgumentException("Пачка не найдена: " + packId));
     }

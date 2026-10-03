@@ -84,6 +84,7 @@ import ru.gamebot.platform.service.GameCatalogService;
 import ru.gamebot.platform.service.GemPurchaseService;
 import ru.gamebot.platform.service.NewsService;
 import ru.gamebot.platform.service.QuestActionStatus;
+import ru.gamebot.platform.service.QuestPackScheduleService;
 import ru.gamebot.platform.service.QuestPackService;
 import ru.gamebot.platform.service.QuestService;
 import ru.gamebot.platform.service.RewardService;
@@ -130,6 +131,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final UserService userService;
     private final QuestService questService;
     private final QuestPackService questPackService;
+    private final QuestPackScheduleService questPackScheduleService;
     private final RewardService rewardService;
     private final NewsService newsService;
     private final AdminService adminService;
@@ -11324,6 +11326,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             long count = questService.countActiveByGameName(game);
             rows.add(List.of(keyboardFactory.callback(trim(game, 28) + " (" + count + ")", "admin:quests:game:" + encodeGameToken(game))));
         }
+        rows.add(List.of(keyboardFactory.callback("🗓 Календарь смены квестов", "admin:packs:calendar")));
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", "admin:edit"),
                 keyboardFactory.callback("🏠 Меню", "menu:admin")
@@ -11461,6 +11464,30 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "Возвращено в работу: " + result.activated() + ", скрыто: " + result.hidden() + ".\n\n"
                             + "💡 Самое время написать пост в канал о новых квестах.",
                     backMenuKeyboard("admin:packs:list:" + encodeGameToken(pack.getGameName())));
+        } else if (action.startsWith("sch:")) {
+            sendAdminPackSchedule(user, decodeGameToken(action.substring("sch:".length())));
+            answerSilently(cbId);
+        } else if (action.startsWith("schtoggle:")) {
+            String game = decodeGameToken(action.substring("schtoggle:".length()));
+            boolean enable = !questPackScheduleService.get(game).isEnabled();
+            String error = questPackScheduleService.setEnabled(game, enable);
+            answer(cbId, error != null ? error : (enable ? "Ротация включена" : "Ротация выключена"));
+            sendAdminPackSchedule(user, game);
+        } else if (action.startsWith("schday:")) {
+            String[] parts = action.substring("schday:".length()).split(":");
+            String game = decodeGameToken(parts[0]);
+            questPackScheduleService.setDay(game, Integer.parseInt(parts[1]));
+            answerSilently(cbId);
+            sendAdminPackSchedule(user, game);
+        } else if (action.startsWith("schcycle:")) {
+            String[] parts = action.substring("schcycle:".length()).split(":");
+            String game = decodeGameToken(parts[0]);
+            questPackScheduleService.setCycle(game, Integer.parseInt(parts[1]));
+            answerSilently(cbId);
+            sendAdminPackSchedule(user, game);
+        } else if (action.equals("calendar")) {
+            sendAdminPackCalendar(user);
+            answerSilently(cbId);
         } else if (action.startsWith("rename:")) {
             QuestPack pack = questPackService.get(parseLong(action.substring("rename:".length())));
             session.reset();
@@ -11500,6 +11527,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         }
         rows.add(List.of(keyboardFactory.callback("➕ Создать пачку", "admin:packs:new:" + token)));
+        if (packs.size() > 1) {
+            rows.add(List.of(keyboardFactory.callback("🗓 Расписание ротации", "admin:packs:sch:" + token)));
+        }
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", "admin:quests:game:" + token),
                 keyboardFactory.callback("🏠 Меню", "menu:admin")));
@@ -11519,6 +11549,117 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "📦 <b>В какую пачку отнести квест?</b>\n\n" + escape(quest.getTitle()),
                 keyboardFactory.rowsLayout(rows));
+    }
+
+    private static final String[] PACK_DAY_NAMES = {"Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"};
+    private static final java.time.format.DateTimeFormatter PACK_SWITCH_FORMAT =
+            java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm");
+
+    private void sendAdminPackSchedule(AppUser user, String gameName) {
+        if (gameName == null || gameName.isBlank()) {
+            sendAdminGamingQuestList(user);
+            return;
+        }
+        ru.gamebot.platform.domain.model.QuestPackSchedule sch = questPackScheduleService.get(gameName);
+        String token = encodeGameToken(gameName);
+        List<QuestPack> order = questPackScheduleService.rotationOrder(gameName);
+        StringBuilder sb = new StringBuilder("🗓 <b>Ротация пачек — " + escape(gameName) + "</b>\n\n");
+        sb.append(sch.isEnabled() ? "Статус: ✅ включена\n" : "Статус: ⏸ выключена\n");
+        sb.append("Смена: раз в ").append(sch.getCycleDays()).append(" дн., день недели — ")
+                .append(PACK_DAY_NAMES[sch.getDayOfWeek() - 1]).append(", ").append(sch.getHour()).append(":00 МСК\n");
+        if (sch.isEnabled() && sch.getNextSwitchAt() != null) {
+            QuestPack next = questPackScheduleService.nextPack(gameName);
+            sb.append("Ближайшая смена: <b>").append(sch.getNextSwitchAt().format(PACK_SWITCH_FORMAT)).append(" МСК</b>");
+            if (next != null) {
+                sb.append(" → «").append(escape(next.getName())).append("»");
+            }
+            sb.append("\n");
+        }
+        sb.append("\nПорядок по кругу: ");
+        for (int i = 0; i < order.size(); i++) {
+            sb.append(i > 0 ? " → " : "").append(escape(order.get(i).getName()));
+        }
+        sb.append("\n\nПустые пачки в ротации не участвуют. Бот напомнит за сутки до смены и пришлёт черновик поста после неё.");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback(sch.isEnabled() ? "⏸ Выключить ротацию" : "▶️ Включить ротацию", "admin:packs:schtoggle:" + token)));
+        List<InlineKeyboardButton> days = new ArrayList<>();
+        for (int d = 1; d <= 7; d++) {
+            days.add(keyboardFactory.callback((d == sch.getDayOfWeek() ? "• " : "") + PACK_DAY_NAMES[d - 1], "admin:packs:schday:" + token + ":" + d));
+        }
+        rows.add(days);
+        List<InlineKeyboardButton> cycles = new ArrayList<>();
+        for (int c : new int[]{7, 14, 21, 28}) {
+            cycles.add(keyboardFactory.callback((c == sch.getCycleDays() ? "• " : "") + c + " дн.", "admin:packs:schcycle:" + token + ":" + c));
+        }
+        rows.add(cycles);
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", "admin:packs:list:" + token),
+                keyboardFactory.callback("🏠 Меню", "menu:admin")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendAdminPackCalendar(AppUser user) {
+        List<ru.gamebot.platform.domain.model.QuestPackSchedule> list = questPackScheduleService.allEnabled();
+        StringBuilder sb = new StringBuilder("🗓 <b>Календарь смены квестов</b>\n\n");
+        if (list.isEmpty()) {
+            sb.append("Ротация пока не включена ни для одной игры. Включить: Игровые квесты → игра → 📦 Пачки квестов → 🗓 Расписание ротации.");
+        } else {
+            for (ru.gamebot.platform.domain.model.QuestPackSchedule s : list) {
+                QuestPack next = questPackScheduleService.nextPack(s.getGameName());
+                sb.append("• <b>").append(s.getNextSwitchAt() == null ? "—" : s.getNextSwitchAt().format(PACK_SWITCH_FORMAT))
+                        .append("</b> МСК — ").append(escape(s.getGameName()))
+                        .append(next == null ? "" : " → «" + escape(next.getName()) + "»")
+                        .append(" (раз в ").append(s.getCycleDays()).append(" дн.)\n");
+            }
+        }
+        sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("admin:quests:section:gaming"));
+    }
+
+    /** Раз в час (на 5-й минуте, МСК): делает наступившие смены пачек и шлёт напоминания за сутки до следующих.
+     *  Без накопления бэклога — см. QuestPackScheduleService. */
+    @org.springframework.scheduling.annotation.Scheduled(cron = "0 5 * * * *", zone = "Europe/Moscow")
+    public void runQuestPackRotation() {
+        try {
+            for (QuestPackScheduleService.RotationEvent event : questPackScheduleService.runDueRotations()) {
+                notifyAdminsPackRotated(event);
+            }
+            for (QuestPackScheduleService.ReminderEvent reminder : questPackScheduleService.dueReminders()) {
+                String text = "⏰ <b>Завтра меняется пачка квестов — " + escape(reminder.gameName()) + "</b>\n\n"
+                        + "Новая пачка: «" + escape(reminder.nextPackName()) + "», смена "
+                        + reminder.at().format(PACK_SWITCH_FORMAT) + " МСК. Время подготовить пост в канал.";
+                for (Long adminId : adminService.resolvedAdminIds()) {
+                    try {
+                        sendText(adminId, text, null);
+                    } catch (Exception e) {
+                        log.warn("Failed to send pack rotation reminder to admin {}", adminId, e);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Quest pack rotation job failed", e);
+        }
+    }
+
+    private void notifyAdminsPackRotated(QuestPackScheduleService.RotationEvent event) {
+        List<Quest> quests = new ArrayList<>(event.quests());
+        quests.sort((a, b) -> Long.compare(b.getRewardCoins(), a.getRewardCoins()));
+        StringBuilder draft = new StringBuilder("🎮 <b>Новые квесты по " + escape(event.gameName()) + "!</b>\n\n"
+                + "Сегодня в боте обновился набор квестов — теперь их " + quests.size() + ". Среди новых:\n");
+        for (Quest q : quests.subList(0, Math.min(6, quests.size()))) {
+            draft.append("• ").append(escape(q.getTitle())).append(" — ").append(q.getRewardCoins()).append(" EXC\n");
+        }
+        draft.append("\nЗаходи в бота и забирай. Квесты, которые ты уже взял, можно спокойно доделать.");
+        String head = "🔄 <b>Сменилась пачка квестов — " + escape(event.gameName()) + "</b>\n"
+                + "Включена «" + escape(event.pack().getName()) + "»: возвращено в работу " + event.result().activated()
+                + ", скрыто " + event.result().hidden() + ".\n\n"
+                + "📝 <b>Черновик поста</b> (отредактируйте и опубликуйте сами):\n\n";
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, head + draft, null);
+            } catch (Exception e) {
+                log.warn("Failed to send pack rotation notice to admin {}", adminId, e);
+            }
+        }
     }
 
     private void sendAdminGameQuestTop(AppUser user, String gameName) {
