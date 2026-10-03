@@ -1,11 +1,90 @@
 import { useEffect, useState } from 'react';
-import { getMySquad, createSquad, joinSquad, leaveSquad, disbandSquad, kickSquadMember, getSquadLeaderboard, getSquadOverallLeaderboard } from '../api/client';
+import { getMySquad, createSquad, joinSquad, leaveSquad, disbandSquad, kickSquadMember, getSquadLeaderboard, getSquadOverallLeaderboard, getSquadCatalog, joinOpenSquad, setSquadRecruitment } from '../api/client';
 import BackButton from '../components/BackButton';
 import './QuestsPage.css';
 import './ShopPage.css';
 import './ReferralsPage.css';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
+
+function SquadGoal({ squad }) {
+  // Старый бэкенд (до деплоя цели недели) полей цели не присылает — тогда блок не показываем.
+  if (squad.goalTarget === undefined) return null;
+  const pct = squad.goalTarget > 0 ? Math.min(100, Math.round((squad.goalDone / squad.goalTarget) * 100)) : 0;
+  const left = (squad.goalMinMembers || 3) - squad.members.length;
+  const streak = squad.streakDays || 0;
+  return (
+    <div style={{ margin: '4px 0 10px' }}>
+      {squad.goalEligible ? (
+        <>
+          <p className="shop-desc" style={{ marginBottom: 4 }}>
+            🎯 Цель недели: <b>{squad.goalDone} / {squad.goalTarget}</b> квестов
+          </p>
+          <div className="quest-progress-track">
+            <div className="quest-progress-fill" style={{ width: `${pct}%` }} />
+          </div>
+          <p className="shop-desc" style={{ marginTop: 4, opacity: 0.8 }}>
+            {squad.goalReached
+              ? `✅ Цель выполнена! В понедельник каждый участник с квестом получит +${squad.goalBonus} EXC`
+              : `🎁 Выполните цель — каждый участник с квестом получит +${squad.goalBonus} EXC в понедельник`}
+          </p>
+        </>
+      ) : (
+        <p className="shop-desc">
+          🎯 Командная цель недели откроется при {squad.goalMinMembers} участниках — ещё {Math.max(left, 1)}
+        </p>
+      )}
+      {streak > 0 && (
+        <p className="shop-desc" style={{ marginTop: 4 }}>
+          🔥 Серия отряда: <b>{streak}</b> {streak === 1 ? 'день' : streak < 5 ? 'дня' : 'дней'} подряд
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SquadCatalog({ onChanged }) {
+  const [entries, setEntries] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    getSquadCatalog().then(setEntries).catch(() => setEntries([]));
+  }, []);
+
+  async function handleJoin(id) {
+    setBusyId(id); setError(null);
+    try { await joinOpenSquad(id); onChanged(); }
+    catch (e) { setError(e?.response?.data?.message || 'Не удалось вступить в отряд.'); setBusyId(null); }
+  }
+
+  return (
+    <div className="ref-link-card" style={{ margin: '12px 16px' }}>
+      <div className="ref-link-label">🔎 Найти отряд</div>
+      {entries === null ? <p className="shop-desc">Загрузка...</p>
+        : entries.length === 0 ? (
+          <p className="shop-desc">Отрядов с открытым набором пока нет — создай свой, и он сразу появится здесь.</p>
+        ) : (
+          <div className="category-section" style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {entries.map(e => (
+              <div key={e.id} className="shop-card" style={{ padding: '10px 14px' }}>
+                <div className="shop-top">
+                  <div className="shop-title">⚔️ {e.name}</div>
+                  <div className="shop-price" style={{ fontSize: 12 }}>{e.weeklyXp.toLocaleString()} XP</div>
+                </div>
+                <div className="shop-meta"><span style={{ opacity: 0.6 }}>Участников: {e.memberCount}</span></div>
+                <button className="quest-btn" style={{ marginTop: 6 }} disabled={busyId !== null}
+                  onClick={() => handleJoin(e.id)}>
+                  {busyId === e.id ? 'Секунду...' : '➡️ Вступить'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      {error && <div className="quest-message" style={{ color: '#f87171' }}>{error}</div>}
+    </div>
+  );
+}
 
 function SquadCard({ squad, onChanged }) {
   const [busy, setBusy] = useState(false);
@@ -32,6 +111,11 @@ function SquadCard({ squad, onChanged }) {
     }
   }
 
+  async function handleToggleRecruitment() {
+    setBusy(true);
+    try { await setSquadRecruitment(!squad.openRecruitment); onChanged(); } finally { setBusy(false); }
+  }
+
   function copyInvite() {
     navigator.clipboard?.writeText(inviteLink).catch(() => {});
   }
@@ -47,6 +131,7 @@ function SquadCard({ squad, onChanged }) {
       <p className="shop-desc">
         Участников: <b>{squad.members.length}</b> · Рейтинг за неделю: <b>{squad.weeklyXp.toLocaleString()}</b>
       </p>
+      <SquadGoal squad={squad} />
       {squad.weeklyBonusPoints > 0 && (
         <p className="shop-desc" style={{ marginTop: -8 }}>
           🎉 Бонус за рефералов: <b>+{squad.weeklyBonusPoints.toLocaleString()}</b>
@@ -86,6 +171,11 @@ function SquadCard({ squad, onChanged }) {
       </div>
 
       <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {squad.isCaptain && (
+          <button className="quest-btn quest-btn-secondary" disabled={busy} onClick={handleToggleRecruitment}>
+            {squad.openRecruitment ? '🔓 Набор открыт — закрыть' : '🔒 Набор закрыт — открыть для всех'}
+          </button>
+        )}
         <div className="ref-link-box" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <span style={{ flex: 1, fontSize: 12, opacity: 0.7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             Код: {squad.inviteCode}
@@ -131,14 +221,17 @@ function NoSquadView({ onChanged }) {
   }
 
   if (!mode) return (
-    <div className="ref-link-card" style={{ margin: '12px 16px', textAlign: 'center' }}>
-      <div className="ref-link-label">⚔️ Ты не состоишь в отряде</div>
-      <p className="shop-desc">Создай свой отряд или вступи по коду приглашения.</p>
-      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-        <button className="quest-btn" style={{ flex: 1 }} onClick={() => setMode('create')}>➕ Создать</button>
-        <button className="quest-btn quest-btn-secondary" style={{ flex: 1 }} onClick={() => setMode('join')}>🔗 Вступить</button>
+    <>
+      <div className="ref-link-card" style={{ margin: '12px 16px', textAlign: 'center' }}>
+        <div className="ref-link-label">⚔️ Ты не состоишь в отряде</div>
+        <p className="shop-desc">Вступи в открытый отряд из каталога, создай свой или войди по коду приглашения. От 3 участников у отряда появляется командная цель недели с наградой.</p>
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <button className="quest-btn" style={{ flex: 1 }} onClick={() => setMode('create')}>➕ Создать</button>
+          <button className="quest-btn quest-btn-secondary" style={{ flex: 1 }} onClick={() => setMode('join')}>🔗 По коду</button>
+        </div>
       </div>
-    </div>
+      <SquadCatalog onChanged={onChanged} />
+    </>
   );
 
   return (

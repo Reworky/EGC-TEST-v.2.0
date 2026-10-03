@@ -309,6 +309,21 @@ export async function joinSquad(code) {
   return data;
 }
 
+export async function getSquadCatalog() {
+  const { data } = await api.get('/api/squads/catalog');
+  return data;
+}
+
+export async function joinOpenSquad(squadId) {
+  const { data } = await api.post('/api/squads/join-open', { squadId });
+  return data;
+}
+
+export async function setSquadRecruitment(open) {
+  const { data } = await api.post('/api/squads/recruitment', { open });
+  return data;
+}
+
 export async function leaveSquad() {
   await api.post('/api/squads/leave');
 }
