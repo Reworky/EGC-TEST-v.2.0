@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Агент выкладки gamebot на СЕРВЕРЕ (root). Принимает ТОЛЬКО слова check, deploy, rollback и справочные status, logs, errors, restart. Его запускает systemd, когда бот кладёт файл-заявку в data/deploy/request
+# Агент выкладки gamebot на СЕРВЕРЕ (root). Принимает ТОЛЬКО слова check, deploy, rollback и справочные status, logs, errors, restart, cleanup. Его запускает systemd, когда бот кладёт файл-заявку в data/deploy/request
 # (кнопка «🚀 Обновить бота» в админке), и по таймеру раз в 2 минуты для проверки новых коммитов.
 # Бот ничего кроме записи заявки сделать не может: агент принимает ТОЛЬКО слова check / deploy / rollback
 # и запускает фиксированные действия ниже. Сам скрипт после установки живёт в /usr/local/bin (вне репозитория),
@@ -13,6 +13,8 @@
 #   pending.txt      коммиты, которые ещё не выложены ("<хеш> <тема>")
 #   heartbeat        время последней проверки (unix), по нему бот понимает, что агент жив
 #   last.log         лог последней выкладки (токены замаскированы)
+#   disk_pct         занятое место на диске в процентах (обновляется каждую проверку, по нему бот предупреждает админов)
+#   last_cleanup     время (unix) последней автоуборки Docker
 #   out.txt, out_meta  результат справочных действий status / logs / errors / restart (раздел «🖥 Сервер» в админке):
 #                    out.txt - текст ответа (токены замаскированы), out_meta - action, requested_by, finished_at (мс), ok
 set -u
@@ -54,6 +56,39 @@ wait_started() {
 
 head_line() { git -C "$REPO" log -1 --format='%h %s' 2>/dev/null; }
 
+disk_pct() { df -P / 2>/dev/null | awk 'NR==2{gsub("%","",$5); print $5}'; }
+disk_free_mb() { df -Pk / 2>/dev/null | awk 'NR==2{print int($4/1024)}'; }
+
+# Уборка Docker: кэш сборки и «висячие» образы без имени. Образ для отката (gamebot:prev) и работающий образ имеют имена и
+# не удаляются (image prune БЕЗ -a). until - возраст кэша сборки, который можно удалять ("all" - весь неиспользуемый кэш).
+cleanup_docker() { # until
+  if [ "${1:-48h}" = "all" ]; then docker builder prune -af >/dev/null 2>&1 || true
+  else docker builder prune -f --filter "until=${1:-48h}" >/dev/null 2>&1 || true; fi
+  docker image prune -f >/dev/null 2>&1 || true
+  now > "$DIR/last_cleanup"
+}
+
+# Автоуборка: после успешной выкладки (кэш старше 48 ч) и при нехватке места (>=85%, не чаще раза в 6 часов, весь кэш).
+auto_cleanup() { # reason: deploy|lowdisk
+  case "$1" in
+    deploy) cleanup_docker 48h ;;
+    lowdisk)
+      local last pct
+      pct=$(disk_pct); last=$(cat "$DIR/last_cleanup" 2>/dev/null || echo 0)
+      case "$pct" in ''|*[!0-9]*) return ;; esac
+      if [ "$pct" -ge 85 ] && [ $(( $(now) - last )) -gt 21600 ]; then cleanup_docker all; fi ;;
+  esac
+}
+
+do_cleanup() { # by - ручная уборка кнопкой «🧹 Почистить диск»
+  local by=$1 before after
+  before=$(disk_free_mb)
+  cleanup_docker all
+  after=$(disk_free_mb)
+  echo "Освобождено: $(( after - before )) МБ. Свободно: ${after} МБ, диск занят на $(disk_pct)%." > "$DIR/out.txt"
+  write_out cleanup "$by" 1 "Уборка диска"
+}
+
 do_check() {
   git -C "$REPO" fetch origin main -q >/dev/null 2>&1 || true
   local base=""
@@ -62,6 +97,7 @@ do_check() {
   git -C "$REPO" log --format='%h %s' "$base..origin/main" 2>/dev/null | head -20 > "$DIR/pending.tmp"
   mv "$DIR/pending.tmp" "$DIR/pending.txt"
   now > "$DIR/heartbeat"
+  disk_pct > "$DIR/disk_pct" 2>/dev/null || true
 }
 
 do_deploy() { # by
@@ -87,6 +123,7 @@ do_deploy() { # by
   if wait_started; then
     echo "$new_line" > "$DIR/deployed_commit"
     write_status ok deploy "$by" "$started" "$(now)" "$new_hash" "$new_subj" "$old_head" "Готово"
+    auto_cleanup deploy
     do_check
     return
   fi
@@ -199,7 +236,7 @@ run_request() {
   read -r act by arg < "$DIR/request" || true
   rm -f "$DIR/request"
   case "$by" in ''|*[!0-9]*) by=0 ;; esac
-  case "$act" in check|deploy|rollback|status|logs|errors|restart) ;; *) exit 0 ;; esac
+  case "$act" in check|deploy|rollback|status|logs|errors|restart|cleanup) ;; *) exit 0 ;; esac
   exec 9>"$LOCK"
   if ! flock -n 9; then exit 0; fi   # уже идёт другая выкладка - повторную заявку игнорируем
   case "$act" in
@@ -210,12 +247,14 @@ run_request() {
     logs) do_logs "$by" "$arg" ;;
     errors) do_errors "$by" ;;
     restart) do_restart "$by" ;;
+    cleanup) do_cleanup "$by" ;;
   esac
 }
 
 check_locked() {
   exec 9>"$LOCK"
   flock -n 9 || exit 0
+  auto_cleanup lowdisk
   do_check
 }
 

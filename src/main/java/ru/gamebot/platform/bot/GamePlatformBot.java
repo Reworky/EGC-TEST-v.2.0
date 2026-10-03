@@ -9529,7 +9529,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case "deploy", "deploy:check", "deploy:confirm", "deploy:go", "deploy:rollback", "deploy:rollback:go", "deploy:log" ->
                     handleAdminDeploy(user, action);
-            case "server", "server:status", "server:logs:40", "server:logs:100", "server:errors", "server:restart", "server:restart:go" ->
+            case "server", "server:status", "server:logs:40", "server:logs:100", "server:errors", "server:restart", "server:restart:go", "server:cleanup" ->
                     handleAdminServer(user, action);
             case "queststats" -> sendAdminQuestStats(user);
             case "ugcstats" -> sendUgcQuestStats(user);
@@ -13728,6 +13728,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "server:logs:40" -> requestServerCommand(user, "logs", 40, "📜 Запросил последние 40 строк лога");
             case "server:logs:100" -> requestServerCommand(user, "logs", 100, "📜 Запросил последние 100 строк лога");
             case "server:errors" -> requestServerCommand(user, "errors", null, "🔴 Ищу ошибки за последний час");
+            case "server:cleanup" -> requestServerCommand(user, "cleanup", null, "🧹 Чищу кэш сборки и ненужные образы Docker");
             case "server:restart" -> sendText(user.getTelegramId(),
                     "🔄 <b>Перезапустить бота?</b>\n\nКонтейнер перезапустится, бот будет недоступен 1-2 минуты. "
                             + "Новый код при этом НЕ подхватывается - для обновления есть «🚀 Обновить бота». "
@@ -13751,14 +13752,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean alive = deployService.agentAlive();
         String text = "🖥 <b>Сервер</b>\n\n"
                 + "Агент на сервере: " + (alive ? "🟢 на связи" : "🔴 не отвечает (установите/обновите: scripts/install-deploy-agent.sh)") + "\n"
-                + "Сейчас работает: " + deployCommitLine(deployService.deployedCommit()) + "\n\n"
-                + "Ответ приходит отдельным сообщением через несколько секунд.";
+                + "Сейчас работает: " + deployCommitLine(deployService.deployedCommit()) + "\n"
+                + (deployService.diskUsedPercent() >= 0 ? "Диск занят на: <b>" + deployService.diskUsedPercent() + "%</b>\n" : "")
+                + "\nОтвет приходит отдельным сообщением через несколько секунд.";
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("📊 Статус", "admin:server:status"),
                         keyboardFactory.callback("🔴 Ошибки за час", "admin:server:errors")),
                 List.of(keyboardFactory.callback("📜 Лог (40)", "admin:server:logs:40"),
                         keyboardFactory.callback("📜 Лог (100)", "admin:server:logs:100")),
-                List.of(keyboardFactory.callback("🔄 Перезапустить бота", "admin:server:restart")),
+                List.of(keyboardFactory.callback("🔄 Перезапустить бота", "admin:server:restart"),
+                        keyboardFactory.callback("🧹 Почистить диск", "admin:server:cleanup")),
                 List.of(keyboardFactory.callback("🚀 Обновить бота", "admin:deploy")),
                 List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:system"), keyboardFactory.callback("🏠 Меню", "menu:main")))));
     }
@@ -13777,10 +13780,30 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Диск сервера заполнен выше порога (DeployService.checkDisk): агент уже пробовал убрать кэш сам - зовём человека. */
+    @org.springframework.context.event.EventListener
+    public void onDiskSpaceLow(ru.gamebot.platform.event.DiskSpaceLowEvent event) {
+        String text = "⚠️ <b>Диск сервера заполнен на " + event.getPercent() + "%</b>\n\n"
+                + "Когда место кончится, не соберётся новая версия, а база и бэкапы не смогут записываться. "
+                + "Нажмите «🧹 Почистить диск» (убирает кэш сборки и ненужные образы Docker, базу и бэкапы не трогает). "
+                + "Если не поможет, посмотрите «📊 Статус», что занимает место (журналы, бэкапы, n8n).";
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("🧹 Почистить диск", "admin:server:cleanup"),
+                        keyboardFactory.callback("🖥 Сервер", "admin:server"))));
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, text, keyboard);
+            } catch (Exception e) {
+                log.warn("Failed to send disk space alert to admin {}", adminId, e);
+            }
+        }
+    }
+
     @org.springframework.context.event.EventListener
     public void onServerCommandFinished(ru.gamebot.platform.event.ServerCommandFinishedEvent event) {
         String title = switch (event.getAction()) {
             case "status" -> "📊 <b>Статус сервера</b>";
+            case "cleanup" -> "🧹 <b>Уборка диска</b>";
             case "logs" -> "📜 <b>" + escape(event.getMessage()) + "</b>";
             case "errors" -> "🔴 <b>" + escape(event.getMessage()) + "</b>";
             case "restart" -> event.isOk() ? "✅ <b>Бот перезапущен и работает</b>" : "❌ <b>Перезапуск не удался</b>";

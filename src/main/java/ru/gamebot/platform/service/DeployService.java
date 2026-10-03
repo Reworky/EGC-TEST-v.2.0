@@ -14,6 +14,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import ru.gamebot.platform.event.DeployFinishedEvent;
+import ru.gamebot.platform.event.DiskSpaceLowEvent;
 import ru.gamebot.platform.event.ServerCommandFinishedEvent;
 
 /**
@@ -102,9 +103,41 @@ public class DeployService {
         }
     }
 
+    /** Занятое место на диске сервера в процентах по данным агента (файл disk_pct, обновляется раз в 2 минуты); -1 - данных нет. */
+    public int diskUsedPercent() {
+        String raw = read("disk_pct");
+        try {
+            return raw == null ? -1 : Integer.parseInt(raw.trim());
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
+    private static final int DISK_WARN_PERCENT = 85;
+    private static final int DISK_CRITICAL_PERCENT = 95;
+
+    /** Раз в 10 минут: если диск заполнен выше порога, предупреждаем админов (не чаще раза в 12 часов, при критических 95% -
+     *  раз в 3 часа). Время последнего предупреждения лежит в файле disk_alerted (переживает перезапуск бота), чтобы после
+     *  выкладки не слать то же самое снова. Агент сам убирает кэш Docker при 85%, поэтому сигнал приходит, если уборка не помогла. */
+    @Scheduled(initialDelay = 180_000, fixedDelay = 600_000)
+    public void checkDisk() {
+        try {
+            if (!agentAlive()) return;
+            int pct = diskUsedPercent();
+            if (pct < DISK_WARN_PERCENT) return;
+            long gap = (pct >= DISK_CRITICAL_PERCENT ? 3 : 12) * 3600L;
+            long now = System.currentTimeMillis() / 1000;
+            if (now - num(read("disk_alerted")) < gap) return;
+            Files.writeString(dir.resolve("disk_alerted"), String.valueOf(now), StandardCharsets.UTF_8);
+            publisher.publishEvent(new DiskSpaceLowEvent(this, pct));
+        } catch (Exception e) {
+            log.warn("[Deploy] checkDisk failed", e);
+        }
+    }
+
     /** Справочные действия раздела «🖥 Сервер»: status / logs / errors / restart (arg - число строк для logs). */
     public boolean requestServerCommand(String action, long telegramId, Integer arg) {
-        if (!List.of("status", "logs", "errors", "restart").contains(action)) return false;
+        if (!List.of("status", "logs", "errors", "restart", "cleanup").contains(action)) return false;
         try {
             if (!Files.isDirectory(dir)) return false;
             String line = action + " " + telegramId + ("logs".equals(action) && arg != null ? " " + arg : "");
