@@ -39,6 +39,9 @@ public class QuestPackSchedule {
     @Column(columnDefinition = "integer default 12")
     private int hour = 12;
 
+    /** Когда ротацию включили последний раз — точка отсчёта «до/после» для аналитики (вкладка «Пачки»). */
+    private LocalDateTime enabledSince;
+
     private LocalDateTime nextSwitchAt;
     private LocalDateTime lastSwitchAt;
 

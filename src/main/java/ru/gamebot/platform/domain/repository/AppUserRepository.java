@@ -190,6 +190,10 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
             + "AND ((:referred = true AND u.referredByTelegramId IS NOT NULL) OR (:referred = false AND u.referredByTelegramId IS NULL))")
     long countBySquadAndReferral(@Param("inSquad") boolean inSquad, @Param("referred") boolean referred);
 
+    /** id активных с момента (та же трактовка активности, что в DAU/MAU) — для когортной аналитики пачек. */
+    @Query("SELECT u.id FROM AppUser u WHERE u.lastActivityDate >= :sinceDate OR u.lastBotActivityAt >= :sinceDateTime OR u.lastMiniAppOpenAt >= :sinceDateTime")
+    List<Long> findActiveUserIdsSince(@Param("sinceDate") java.time.LocalDate sinceDate, @Param("sinceDateTime") LocalDateTime sinceDateTime);
+
     @Query("SELECT COUNT(DISTINCT u) FROM AppUser u WHERE (u.lastActivityDate >= :sinceDate OR u.lastBotActivityAt >= :sinceDateTime OR u.lastMiniAppOpenAt >= :sinceDateTime) "
             + "AND ((:inSquad = true AND u.squadId IS NOT NULL) OR (:inSquad = false AND u.squadId IS NULL)) "
             + "AND ((:referred = true AND u.referredByTelegramId IS NOT NULL) OR (:referred = false AND u.referredByTelegramId IS NULL))")

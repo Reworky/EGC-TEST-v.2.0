@@ -79,6 +79,10 @@ public class Quest {
     /** Пачка квестов (см. QuestPack); null — квест вне пачек (спонсорские, UGC, игры без пачек). */
     private Long packId;
 
+    /** Когда пачку квеста последний раз включили — «свежесть» квеста для отчёта о здоровье пула считается отсюда
+     *  (квесты пачек создаются при деплое и могут неделями лежать скрытыми). */
+    private java.time.LocalDateTime packActivatedAt;
+
     /** Квест был активен, когда его пачку выключили — при обратном включении пачки возвращается в работу. */
     @Column(columnDefinition = "boolean default false")
     private boolean packSuspended;

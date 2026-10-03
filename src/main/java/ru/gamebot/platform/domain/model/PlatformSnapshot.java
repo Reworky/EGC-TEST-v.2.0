@@ -97,6 +97,9 @@ public class PlatformSnapshot {
     private Long dauMauNoSquadPct;
     private Long secondQuestReturnInSquadPct;
     private Long secondQuestReturnNoSquadPct;
+    // Вкладка «Пачки»: DAU/MAU игроков, чья основная игра ротируется, и контрольной группы (остальные игры)
+    private Long dauMauRotatingPct;
+    private Long dauMauControlPct;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;

@@ -277,6 +277,16 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT s.quest.id, s.status, COUNT(s) FROM QuestSubmission s WHERE s.createdAt >= :since GROUP BY s.quest.id, s.status")
     List<Object[]> countTakenByStatusGroupedByQuestSince(@Param("since") LocalDateTime since);
 
+    /** Одобренные выполнения по парам (игрок, игра) с момента since — «основная игра» игрока для когортной аналитики пачек. */
+    @Query("SELECT s.user.id, s.quest.gameName, COUNT(s) FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :since "
+            + "AND s.quest.gameName IS NOT NULL GROUP BY s.user.id, s.quest.gameName")
+    List<Object[]> countApprovedByUserAndGameSince(@Param("since") LocalDateTime since);
+
+    /** Одобренные выполнения по играм в окне [from, to). */
+    @Query("SELECT s.quest.gameName, COUNT(s) FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :from AND s.updatedAt < :to "
+            + "AND s.quest.gameName IS NOT NULL GROUP BY s.quest.gameName")
+    List<Object[]> countApprovedByGameBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
     /** Число одобренных выполнений по каждому квесту с момента since (QuestPoolHealthService). */
     @Query("SELECT s.quest.id, COUNT(s) FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :since GROUP BY s.quest.id")
     List<Object[]> countApprovedGroupedByQuestSince(@Param("since") LocalDateTime since);

@@ -51,6 +51,7 @@ public class AnalyticsService {
         PNL("📒", "Финансовая сводка"),
         TOURNAMENTS("🏆", "Турниры"),
         TECH("🛠", "Техническое здоровье"),
+        PACKS("📦", "Пачки квестов"),
         FRAUD("🕵️", "Фрод и злоупотребления");
 
         public final String icon;
@@ -108,6 +109,7 @@ public class AnalyticsService {
     private final ExcTransactionService excService;
     private final RewardService rewardService;
     private final UserService userService;
+    private final QuestPackAnalyticsService packAnalyticsService;
     private final TrafficFunnelService funnelService;
     private final FinanceService financeService;
     private final IncidentEntryRepository incidentRepo;
@@ -155,6 +157,15 @@ public class AnalyticsService {
             snap.setSecondQuestReturnNoSquadPct(Math.round(noSquad.engagement().retentionPercent()));
         } catch (Exception e) {
             log.warn("Snapshot extras: squads failed", e);
+        }
+        try {
+            QuestPackAnalyticsService.Report packs = packAnalyticsService.build();
+            if (packs.hasRotation()) {
+                snap.setDauMauRotatingPct(Math.round(packs.rotating().dauMauPercent()));
+                snap.setDauMauControlPct(Math.round(packs.control().dauMauPercent()));
+            }
+        } catch (Exception e) {
+            log.warn("Snapshot extras: quest packs failed", e);
         }
     }
 
@@ -206,6 +217,7 @@ public class AnalyticsService {
                 case ECONOMY -> economyTab(p, pv, fromDate, lines);
                 case REFERRAL -> referralTab(p, pv, fromDate, lines);
                 case SQUADS -> squadsTab(fromDate, lines, extras);
+                case PACKS -> packsTab(fromDate, lines, extras);
                 case SOURCES -> sourcesTab(p, pv, lines, extras);
                 case PNL -> pnlTab(p, pv, lines, extras);
                 case TOURNAMENTS -> tournamentsTab(lines, extras);
@@ -323,6 +335,49 @@ public class AnalyticsService {
             }
             extras.add(sb.toString());
         }
+    }
+
+    /** Вкладка «Пачки квестов» (2026-10-03): честная оценка эффекта ротации — когорта «основная игра ротируется» против
+     *  контрольной (остальные игры), см. QuestPackAnalyticsService. Смотреть РАЗНИЦУ между группами до и после старта. */
+    private void packsTab(LocalDate fromDate, List<Line> out, List<String> extras) {
+        QuestPackAnalyticsService.Report r = packAnalyticsService.build();
+        DateTimeFormatter df = DateTimeFormatter.ofPattern("dd.MM HH:mm");
+        if (!r.hasRotation()) {
+            extras.add("📦 <b>Ротация пачек пока не включена ни для одной игры.</b>\n\nВключить: Игровые квесты → игра → 📦 Пачки квестов → 🗓 Расписание ротации. После включения здесь появится сравнение игроков ротируемых игр с контрольной группой.");
+        } else {
+            extras.add("📦 <b>Как читать</b>\n\nИгроки делятся по основной игре (где больше всего выполненных квестов за 60 дней). Ротируются: <b>"
+                    + String.join(", ", r.rotatingGames()) + "</b>"
+                    + (r.rotationSince() == null ? "" : ", с " + r.rotationSince().format(df))
+                    + ". Контроль — все остальные. Важна разница между группами до и после старта: общий рост DAU/MAU может быть связан с отрядами и другими изменениями. Первые 1–2 цикла завышены эффектом новизны — оценивать по 3–4 циклу.");
+        }
+        out.add(L("rot_size", "Игроков: основная игра ротируется", "", (double) r.rotating().size(), null));
+        out.add(L("ctl_size", "Игроков: контрольная группа", "", (double) r.control().size(), null));
+        out.add(L("rot_dau_mau", "DAU/MAU — ротируемые игры", "%", r.rotating().dauMauPercent(), snapVal(fromDate, PlatformSnapshot::getDauMauRotatingPct)));
+        out.add(L("ctl_dau_mau", "DAU/MAU — контроль", "%", r.control().dauMauPercent(), snapVal(fromDate, PlatformSnapshot::getDauMauControlPct)));
+        out.add(L("rot_a7", "Активны за 7 дн. — ротируемые", "%", r.rotating().active7Percent(), null));
+        out.add(L("ctl_a7", "Активны за 7 дн. — контроль", "%", r.control().active7Percent(), null));
+
+        StringBuilder games = new StringBuilder("🎮 <b>Выполнено квестов по играм</b> (14 дн. → прошлые 14 дн.)\n\n");
+        int shown = 0;
+        for (QuestPackAnalyticsService.GameDelta g : r.games()) {
+            if (shown++ >= 10) break;
+            games.append(g.rotating() ? "🔄 " : "▫️ ").append(g.gameName()).append(" — ").append(g.last14())
+                    .append(" (было ").append(g.prev14()).append(")\n");
+        }
+        games.append("\n🔄 — игра с включённой ротацией.");
+        extras.add(games.toString());
+
+        StringBuilder sw = new StringBuilder("🗓 <b>Журнал смен пачек</b>\n\n");
+        if (r.recentSwitches().isEmpty()) {
+            sw.append("Смен ещё не было.");
+        } else {
+            for (var s : r.recentSwitches()) {
+                sw.append(s.getSwitchedAt() == null ? "—" : s.getSwitchedAt().format(df)).append(" — ").append(s.getGameName())
+                        .append(" → «").append(s.getPackName()).append("» (")
+                        .append(ru.gamebot.platform.domain.model.QuestPackSwitchLog.AUTO.equals(s.getSource()) ? "авто" : "вручную").append(")\n");
+            }
+        }
+        extras.add(sw.toString());
     }
 
     private void questsTab(Period p, Period pv, LocalDate fromDate, List<Line> out) {
@@ -599,6 +654,7 @@ public class AnalyticsService {
             case SQUADS -> List.of(new TrendMetric("Игроков в отрядах", PlatformSnapshot::getPlayersInSquads), new TrendMetric("Отрядов", PlatformSnapshot::getSquadsCount),
                     new TrendMetric("DAU/MAU в отряде, %", PlatformSnapshot::getDauMauInSquadPct), new TrendMetric("DAU/MAU без отряда, %", PlatformSnapshot::getDauMauNoSquadPct),
                     new TrendMetric("Возврат за 2-й квест в отряде, %", PlatformSnapshot::getSecondQuestReturnInSquadPct), new TrendMetric("Возврат за 2-й квест без отряда, %", PlatformSnapshot::getSecondQuestReturnNoSquadPct));
+            case PACKS -> List.of(new TrendMetric("DAU/MAU: ротируемые игры, %", PlatformSnapshot::getDauMauRotatingPct), new TrendMetric("DAU/MAU: контроль, %", PlatformSnapshot::getDauMauControlPct));
             case TECH -> List.of(new TrendMetric("Аптайм за 7 дн., ‰", PlatformSnapshot::getUptimePermille7d), new TrendMetric("Ср. время проверки, мин", PlatformSnapshot::getAvgReviewMin7d));
             case FRAUD -> List.of(new TrendMetric("Заблокировано", PlatformSnapshot::getBlockedUsers));
             default -> List.of();

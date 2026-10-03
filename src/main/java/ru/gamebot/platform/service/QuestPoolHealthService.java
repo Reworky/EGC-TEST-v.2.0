@@ -46,11 +46,13 @@ public class QuestPoolHealthService {
     private final PlatformSnapshotRepository snapshotRepository;
     private final AppUserRepository appUserRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final ru.gamebot.platform.domain.repository.QuestPackSwitchLogRepository packSwitchLogRepository;
 
     public record Report(long activeQuests, Long activeQuestsBefore, Long daysBefore, long players7d,
                          long approvals7d, long approvalsPrev7d, long deadQuests, int deadPercent,
                          List<String> topGames, List<String> deadGames,
-                         long freshDeadQuests, List<String> neverTakenQuests, List<String> takenNotDoneQuests) {
+                         long freshDeadQuests, List<String> neverTakenQuests, List<String> takenNotDoneQuests,
+                         long rotationSwitches14d) {
 
         /** Чистый рост активных квестов за окно; null — снапшотов за нужный срок ещё нет. */
         public Long netGrowth() {
@@ -59,7 +61,8 @@ public class QuestPoolHealthService {
 
         public boolean stale() {
             Long g = netGrowth();
-            return g != null && g <= 0;
+            // смена пачки — это и есть обновление контента: пока ротация идёт, «пул не растёт» не тревога
+            return rotationSwitches14d == 0 && g != null && g <= 0;
         }
     }
 
@@ -111,7 +114,12 @@ public class QuestPoolHealthService {
             long done = perQuest.getOrDefault(q.getId(), 0L);
             if (done == 0) {
                 dead++;
-                boolean fresh = q.getCreatedAt() != null && q.getCreatedAt().isAfter(now.minusDays(FRESH_QUEST_DAYS));
+                // свежесть — от последнего включения пачки, если оно позже создания: квесты пачек создаются при деплое
+                // и могут неделями лежать скрытыми, «мёртвыми» их делать нельзя
+                LocalDateTime freshSince = q.getPackActivatedAt() != null
+                        && (q.getCreatedAt() == null || q.getPackActivatedAt().isAfter(q.getCreatedAt()))
+                        ? q.getPackActivatedAt() : q.getCreatedAt();
+                boolean fresh = freshSince != null && freshSince.isAfter(now.minusDays(FRESH_QUEST_DAYS));
                 Map<SubmissionStatus, Long> byStatus = takenByStatus.getOrDefault(q.getId(), Map.of());
                 long takes = byStatus.values().stream().mapToLong(Long::longValue).sum();
                 String label = deadLabel(q);
@@ -141,7 +149,8 @@ public class QuestPoolHealthService {
 
         int deadPercent = activeCount == 0 ? 0 : (int) Math.round(dead * 100.0 / activeCount);
         return new Report(activeCount, before, daysBefore, players7d, approvals7d, approvals14d - approvals7d,
-                dead, deadPercent, top, deadGames, freshDead, neverTaken, takenNotDone);
+                dead, deadPercent, top, deadGames, freshDead, neverTaken, takenNotDone,
+                packSwitchLogRepository.countBySwitchedAtAfter(now.minusDays(GROWTH_WINDOW_DAYS)));
     }
 
     /** «; на модерации: 3; отклонено: 1» - только ненулевые статусы, чтобы очередь модерации было видно сразу. */
@@ -191,6 +200,10 @@ public class QuestPoolHealthService {
             sb.append(" (снапшотов за 14 дней ещё нет — динамика появится позже)");
         }
         sb.append("\n");
+        if (r.rotationSwitches14d() > 0) {
+            sb.append("🔄 Смен пачек квестов за ").append(GROWTH_WINDOW_DAYS).append(" дн.: <b>").append(r.rotationSwitches14d())
+              .append("</b> — набор обновляется ротацией, число активных квестов может не расти.\n");
+        }
         sb.append("Активных игроков за 7 дн.: <b>").append(r.players7d()).append("</b>");
         if (r.players7d() > 0) {
             sb.append(" → квестов на игрока: <b>").append(String.format("%.2f", (double) r.activeQuests() / r.players7d())).append("</b>");

@@ -8,7 +8,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.model.QuestPack;
+import ru.gamebot.platform.domain.model.QuestPackSwitchLog;
 import ru.gamebot.platform.domain.repository.QuestPackRepository;
+import ru.gamebot.platform.domain.repository.QuestPackSwitchLogRepository;
 import ru.gamebot.platform.domain.repository.QuestRepository;
 
 /**
@@ -25,6 +27,7 @@ public class QuestPackService {
 
     private final QuestPackRepository packRepository;
     private final QuestRepository questRepository;
+    private final QuestPackSwitchLogRepository switchLogRepository;
 
     public record SwitchResult(int activated, int hidden) {}
 
@@ -114,7 +117,13 @@ public class QuestPackService {
      *  чтобы вернуть их при обратном включении), квесты новой — возвращаются в работу. */
     @Transactional
     public SwitchResult switchTo(Long packId) {
+        return switchTo(packId, QuestPackSwitchLog.MANUAL);
+    }
+
+    @Transactional
+    public SwitchResult switchTo(Long packId, String source) {
         QuestPack target = get(packId);
+        LocalDateTime now = LocalDateTime.now();
         String game = target.getGameName();
         QuestPack main = ensureMainPack(game);
         int activated = 0;
@@ -130,6 +139,7 @@ public class QuestPackService {
                 continue; // устаревший выключенный квест — не воскрешаем
             }
             if (q.getPackId().equals(target.getId())) {
+                q.setPackActivatedAt(now);
                 if (!q.isActive() && (q.isPackSuspended() || !target.isSeederManaged())) {
                     q.setActive(true);
                     activated++;
@@ -149,7 +159,15 @@ public class QuestPackService {
                 packRepository.save(p);
             }
         }
-        log.info("[QuestPack] '{}': pack '{}' enabled (+{} / -{})", game, target.getName(), activated, hidden);
+        QuestPackSwitchLog entry = new QuestPackSwitchLog();
+        entry.setGameName(game);
+        entry.setPackName(target.getName());
+        entry.setSwitchedAt(now);
+        entry.setSource(source);
+        entry.setActivated(activated);
+        entry.setHidden(hidden);
+        switchLogRepository.save(entry);
+        log.info("[QuestPack] '{}': pack '{}' enabled (+{} / -{}, {})", game, target.getName(), activated, hidden, source);
         return new SwitchResult(activated, hidden);
     }
 

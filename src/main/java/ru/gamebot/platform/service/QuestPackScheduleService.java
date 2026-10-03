@@ -31,7 +31,7 @@ public class QuestPackScheduleService {
     public static final ZoneId MSK = ZoneId.of("Europe/Moscow");
     private static final long REMINDER_HOURS = 24;
 
-    /** Рекомендованные дни смены по играм (разнос по неделе) и цикл по умолчанию. */
+    /** Рекомендованные дни смены по играм (разнос по неделе); цикл по умолчанию 14 дней (решение владельца 2026-10-03). */
     private static final Map<String, Integer> DEFAULT_DAYS = Map.of(
             "brawl stars", 1, "clash royale", 2, "clash of clans", 3, "cs2", 4,
             "dota 2", 5, "pubg pc", 6, "pubg mobile", 7);
@@ -53,7 +53,7 @@ public class QuestPackScheduleService {
             QuestPackSchedule s = new QuestPackSchedule();
             s.setGameName(gameName);
             s.setDayOfWeek(DEFAULT_DAYS.getOrDefault(gameName.toLowerCase(), 1));
-            s.setCycleDays("brawl stars".equalsIgnoreCase(gameName) ? 7 : 14);
+            s.setCycleDays(14);
             return scheduleRepository.save(s);
         });
     }
@@ -76,6 +76,7 @@ public class QuestPackScheduleService {
                 return "Для ротации нужно минимум две пачки с квестами.";
             }
             s.setEnabled(true);
+            s.setEnabledSince(LocalDateTime.now());
             s.setNextSwitchAt(nextOccurrence(s, nowMsk()));
             s.setReminderSent(false);
         } else {
@@ -140,7 +141,7 @@ public class QuestPackScheduleService {
             try {
                 QuestPack next = nextPack(s.getGameName());
                 if (next != null) {
-                    QuestPackService.SwitchResult result = packService.switchTo(next.getId());
+                    QuestPackService.SwitchResult result = packService.switchTo(next.getId(), ru.gamebot.platform.domain.model.QuestPackSwitchLog.AUTO);
                     events.add(new RotationEvent(s.getGameName(), next, result, packService.questsOf(next)));
                 }
                 advance(s, now);
