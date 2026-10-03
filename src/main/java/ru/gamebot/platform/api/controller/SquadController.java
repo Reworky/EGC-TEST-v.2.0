@@ -20,6 +20,7 @@ public class SquadController {
     private final SquadService squadService;
     private final AppUserRepository appUserRepository;
     private final UserService userService;
+    private final ru.gamebot.platform.service.TelegramFileService telegramFileService;
 
     private AppUser getUser(Long telegramId) {
         return appUserRepository.findByTelegramId(telegramId).orElseThrow();
@@ -50,6 +51,27 @@ public class SquadController {
         AppUser user = getUser(telegramId);
         Squad squad = squadService.joinByInviteCode(user, body.code());
         return ResponseEntity.ok(toDto(squad, user, telegramId));
+    }
+
+    /** Картинка флага отряда (любой активный отряд — флаг показывается в публичных карточках). */
+    @GetMapping("/flag/{squadId}")
+    public ResponseEntity<byte[]> flag(@PathVariable Long squadId) {
+        Optional<Squad> squad = squadService.findById(squadId);
+        if (squad.isEmpty() || squad.get().getFlagFileId() == null) {
+            return ResponseEntity.notFound().build();
+        }
+        try {
+            byte[] image = telegramFileService.downloadFile(squad.get().getFlagFileId());
+            return ResponseEntity.ok()
+                    .contentType(org.springframework.http.MediaType.IMAGE_JPEG)
+                    .cacheControl(org.springframework.http.CacheControl.maxAge(java.time.Duration.ofHours(1)))
+                    .body(image);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return ResponseEntity.notFound().build();
+        } catch (java.io.IOException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 
     /** Каталог «Найти отряд»: все активные отряды (открытые — вступить сразу, закрытые — по заявке), по недельной
@@ -87,7 +109,8 @@ public class SquadController {
         return ResponseEntity.ok(new PublicSquadDto(squad.getId(), squad.getName(), members.size(),
                 squadService.squadWeeklyXp(squad), squad.isOpenRecruitment(),
                 squadService.hasPendingRequest(user, squadId), mine, user.getSquadId() != null,
-                squadService.streakDays(squad), goal.eligible(), goal.done(), goal.target(), top));
+                squadService.streakDays(squad), goal.eligible(), goal.done(), goal.target(), top,
+                squad.getFlagFileId() != null));
     }
 
     /** Заявка в отряд с закрытым набором. */
@@ -231,19 +254,21 @@ public class SquadController {
                 isCaptain, weeklyXp, squad.getWeeklyBonusPoints(), memberDtos,
                 squad.isOpenRecruitment(), goal.eligible(), goal.done(), goal.target(), goal.reached(),
                 goal.bonusPerMember(), SquadService.GOAL_MIN_MEMBERS, squadService.streakDays(squad),
-                isCaptain ? squadService.pendingRequestCount(squad) : 0);
+                isCaptain ? squadService.pendingRequestCount(squad) : 0,
+                squad.getFlagFileId() != null);
     }
 
     record SquadDto(Long id, String name, String inviteCode, String inviteLink, boolean isCaptain,
                     long weeklyXp, long weeklyBonusPoints, List<MemberDto> members,
                     boolean openRecruitment, boolean goalEligible, long goalDone, long goalTarget, boolean goalReached,
-                    long goalBonus, int goalMinMembers, int streakDays, long pendingRequests) {}
+                    long goalBonus, int goalMinMembers, int streakDays, long pendingRequests,
+                    boolean hasFlag) {}
     record CatalogEntry(Long id, String name, long memberCount, long weeklyXp, boolean open, boolean requested) {}
     record RequestDto(Long id, String nickname, String levelName, long xp) {}
     record TopMemberDto(String nickname, String levelName, long weeklyXp, boolean isCaptain) {}
     record PublicSquadDto(Long id, String name, int memberCount, long weeklyXp, boolean open, boolean requested,
                           boolean mine, boolean viewerHasSquad, int streakDays, boolean goalEligible, long goalDone,
-                          long goalTarget, List<TopMemberDto> topMembers) {}
+                          long goalTarget, List<TopMemberDto> topMembers, boolean hasFlag) {}
     record JoinOpenRequest(Long squadId) {}
     record RecruitmentRequest(boolean open) {}
     record MemberDto(Long telegramId, String nickname, String levelName, long weeklyXp, boolean isCaptain) {}

@@ -56,6 +56,11 @@ public class Squad {
     @Column(columnDefinition = "boolean default false")
     private boolean openRecruitment;
 
+    /** Флаг отряда: Telegram file_id картинки, которую прислал капитан (показывается в карточках отряда в боте и
+     *  мини-аппе). Админ может убрать флаг (SquadService.clearFlag). */
+    @Column(length = 1000)
+    private String flagFileId;
+
     /** Начало (понедельник) недели, за которую уже подведены итоги командной цели — защита от двойной выплаты
      *  при повторном запуске недельной задачи (SquadService.settleWeeklyGoals). */
     private java.time.LocalDate lastGoalSettledWeek;

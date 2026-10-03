@@ -354,6 +354,27 @@ public class SquadService {
         eventPublisher.publishEvent(new SquadPrizeEvent(this, top.squad(), winners, prizePerMember, top.weeklyXp()));
     }
 
+    // ── Флаг отряда ─────────────────────────────────────────────────────────────
+
+    /** Капитан ставит (fileId) или убирает (null) флаг своего отряда. */
+    @Transactional
+    public Squad setFlag(AppUser captain, String fileId) {
+        Squad squad = findByUser(captain).orElseThrow(() -> new IllegalStateException("Вы не состоите ни в одном отряде."));
+        if (!captain.getTelegramId().equals(squad.getCaptainTelegramId())) {
+            throw new IllegalStateException("Менять флаг может только капитан.");
+        }
+        squad.setFlagFileId(fileId);
+        return squadRepository.save(squad);
+    }
+
+    /** Модерация: админ убирает флаг любого отряда. */
+    @Transactional
+    public Squad clearFlag(Long squadId) {
+        Squad squad = squadRepository.findById(squadId).orElseThrow(() -> new IllegalArgumentException("Отряд не найден."));
+        squad.setFlagFileId(null);
+        return squadRepository.save(squad);
+    }
+
     // ── Открытый набор и каталог ────────────────────────────────────────────────
 
     @Transactional

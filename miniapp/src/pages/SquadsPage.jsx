@@ -1,11 +1,31 @@
 import { useEffect, useState } from 'react';
-import { getMySquad, createSquad, joinSquad, leaveSquad, disbandSquad, kickSquadMember, getSquadLeaderboard, getSquadOverallLeaderboard, getSquadCatalog, joinOpenSquad, setSquadRecruitment, getSquadView, requestJoinSquad, getSquadRequests, decideSquadRequest } from '../api/client';
+import { getMySquad, createSquad, joinSquad, leaveSquad, disbandSquad, kickSquadMember, getSquadLeaderboard, getSquadOverallLeaderboard, getSquadCatalog, joinOpenSquad, setSquadRecruitment, getSquadFlagUrl, getSquadView, requestJoinSquad, getSquadRequests, decideSquadRequest } from '../api/client';
 import BackButton from '../components/BackButton';
 import './QuestsPage.css';
 import './ShopPage.css';
 import './ReferralsPage.css';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
+
+function SquadFlag({ squadId, hasFlag }) {
+  const [url, setUrl] = useState(null);
+
+  useEffect(() => {
+    if (!hasFlag) { setUrl(null); return undefined; }
+    let alive = true;
+    let objectUrl = null;
+    getSquadFlagUrl(squadId).then(u => {
+      if (alive) { objectUrl = u; setUrl(u); } else { URL.revokeObjectURL(u); }
+    }).catch(() => {});
+    return () => { alive = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [squadId, hasFlag]);
+
+  if (!url) return null;
+  return (
+    <img src={url} alt="Флаг отряда"
+      style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 12, margin: '4px 0 10px' }} />
+  );
+}
 
 function SquadGoal({ squad }) {
   // Старый бэкенд (до деплоя цели недели) полей цели не присылает — тогда блок не показываем.
@@ -188,6 +208,7 @@ function SquadCard({ squad, onChanged }) {
 
   return (
     <div className="ref-link-card" style={{ margin: '12px 16px' }}>
+      <SquadFlag squadId={squad.id} hasFlag={squad.hasFlag} />
       <div className="ref-link-label">⚔️ {squad.name}</div>
       <p className="shop-desc">
         Участников: <b>{squad.members.length}</b> · Рейтинг за неделю: <b>{squad.weeklyXp.toLocaleString()}</b>
@@ -345,6 +366,7 @@ function SquadPublic({ squadId, onBack, onJoined }) {
         : data === null ? <p className="shop-desc">Отряд не найден или уже расформирован.</p>
         : (
           <>
+            <SquadFlag squadId={data.id} hasFlag={data.hasFlag} />
             <div className="ref-link-label">⚔️ {data.name}</div>
             <p className="shop-desc">
               {data.open ? '🔓 Набор открыт' : '🔒 Набор закрыт — вступить по заявке'}<br />

@@ -465,6 +465,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (session.getState() == SessionState.SQUAD_FLAG_UPLOAD) {
+            handleSquadFlagUpload(user, session, message);
+            return;
+        }
+
         if (session.getState() == SessionState.QUEST_CREATE_PHOTO) {
             if (message.hasPhoto()) {
                 List<PhotoSize> photos = message.getPhoto();
@@ -8006,6 +8011,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (pendingRequests > 0) {
                 rows.add(List.of(keyboardFactory.callback("📨 Заявки в отряд (" + pendingRequests + ")", "squad:reqs")));
             }
+            if (squad.getFlagFileId() != null) {
+                rows.add(List.of(keyboardFactory.callback("🚩 Сменить флаг", "squad:flag_prompt"),
+                        keyboardFactory.callback("🗑 Убрать флаг", "squad:flag_remove")));
+            } else {
+                rows.add(List.of(keyboardFactory.callback("🚩 Загрузить флаг отряда", "squad:flag_prompt")));
+            }
             if (members.size() > 1) {
                 rows.add(List.of(keyboardFactory.callback("👢 Исключить участника", "squad:kick_list")));
             }
@@ -8016,7 +8027,53 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🏆 Рейтинг отрядов", "squad:leaderboard")));
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
 
-        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+        sendCardWithPhoto(user.getTelegramId(), squad.getFlagFileId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Карточка с картинкой (флаг отряда): если текст влезает в подпись Telegram (1024 символа) — одним сообщением,
+     *  иначе сначала картинка, затем текст с кнопками. Без картинки — обычное сообщение. */
+    private void sendCardWithPhoto(Long chatId, String photoFileId, String text, InlineKeyboardMarkup keyboard) {
+        if (photoFileId == null) {
+            sendText(chatId, text, keyboard);
+            return;
+        }
+        try {
+            if (text.length() <= 1000) {
+                SendPhoto message = new SendPhoto();
+                message.setChatId(chatId.toString());
+                message.setPhoto(new InputFile(photoFileId));
+                message.setCaption(text);
+                message.setParseMode("HTML");
+                message.setReplyMarkup(keyboard);
+                execute(message);
+            } else {
+                SendPhoto photo = new SendPhoto();
+                photo.setChatId(chatId.toString());
+                photo.setPhoto(new InputFile(photoFileId));
+                execute(photo);
+                sendText(chatId, text, keyboard);
+            }
+        } catch (TelegramApiException e) {
+            log.warn("Failed to send card with photo to {}", chatId, e);
+            sendText(chatId, text, keyboard);
+        }
+    }
+
+    private void handleSquadFlagUpload(AppUser user, UserSession session, Message message) {
+        if (!message.hasPhoto()) {
+            sendText(user.getTelegramId(), "⚠️ Пришлите именно картинку (фото, не файл и не стикер).", backOnlyKeyboard("menu:squads"));
+            return;
+        }
+        List<PhotoSize> photos = message.getPhoto();
+        try {
+            squadService.setFlag(user, photos.get(photos.size() - 1).getFileId());
+            session.setState(SessionState.NONE);
+            sendText(user.getTelegramId(), "🚩 <b>Флаг отряда обновлён!</b> Теперь он виден в карточке отряда.",
+                    keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("⚔️ Мой отряд", "menu:squads")))));
+        } catch (IllegalStateException e) {
+            session.setState(SessionState.NONE);
+            sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:squads"));
+        }
     }
 
     /** Подсказка до ближайшего бонуса за размер отряда (SquadService.awardSizeMilestoneIfReached) —
@@ -8194,6 +8251,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:squads"));
                 }
                 answerSilently(callbackQuery.getId());
+            }
+            case "flag_prompt" -> {
+                ru.gamebot.platform.domain.model.Squad mySquad = squadService.findByUser(user).orElse(null);
+                if (mySquad == null || !user.getTelegramId().equals(mySquad.getCaptainTelegramId())) {
+                    answer(callbackQuery.getId(), "Менять флаг может только капитан");
+                    return;
+                }
+                session.setState(SessionState.SQUAD_FLAG_UPLOAD);
+                sendText(user.getTelegramId(),
+                        "🚩 <b>Флаг отряда</b>\n\nПришлите картинку - она станет флагом вашего отряда и будет видна всем в карточке отряда. "
+                                + "Подойдёт эмблема, логотип или арт. Никаких оскорбительных и запрещённых изображений: "
+                                + "администрация может убрать флаг.",
+                        backOnlyKeyboard("menu:squads"));
+                answerSilently(callbackQuery.getId());
+            }
+            case "flag_remove" -> {
+                try {
+                    squadService.setFlag(user, null);
+                    answer(callbackQuery.getId(), "Флаг убран");
+                    sendSquadMenu(user);
+                } catch (Exception e) {
+                    answer(callbackQuery.getId(), e.getMessage());
+                }
             }
             case "search_prompt" -> {
                 if (user.getSquadId() != null) {
@@ -8535,7 +8615,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ К рейтингу", backData)));
-        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+        sendCardWithPhoto(user.getTelegramId(), squad.getFlagFileId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     /** Заявки в отряд для капитана: список с кнопками «Принять / Отклонить». */
@@ -8661,7 +8741,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .append("👥 Участников: <b>").append(members.size()).append("</b>\n")
                 .append("📈 XP за неделю: <b>").append(String.format("%,d", weeklyXp).replace(',', ' ')).append("</b>\n")
                 .append("♾️ XP всего: <b>").append(String.format("%,d", totalXp).replace(',', ' ')).append("</b>\n")
-                .append("🔑 Код приглашения: <code>").append(escape(squad.getInviteCode())).append("</code>\n\n")
+                .append("🔑 Код приглашения: <code>").append(escape(squad.getInviteCode())).append("</code>\n")
+                .append("🚩 Флаг: ").append(squad.getFlagFileId() != null ? "есть" : "нет").append("\n\n")
                 .append("Состав ниже — жмите на игрока, чтобы открыть его карточку.");
         if (totalPages > 1) {
             sb.append("\nСтраница <b>").append(page + 1).append(" / ").append(totalPages).append("</b>");
@@ -8683,6 +8764,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (!navRow.isEmpty()) {
             rows.add(navRow);
+        }
+        if (squad.getFlagFileId() != null) {
+            rows.add(List.of(keyboardFactory.callback("🖼 Показать флаг", "admin:squadflag:show:" + squad.getId()),
+                    keyboardFactory.callback("🗑 Убрать флаг", "admin:squadflag:del:" + squad.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
 
@@ -9575,6 +9660,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 } else if (action.startsWith("debitpage:")) {
                     session.setState(SessionState.DEBIT_INPUT);
                     sendAdminDebitUsersPage(user, session, parseInteger(action.substring("debitpage:".length())), null);
+                } else if (action.startsWith("squadflag:")) {
+                    String[] parts = action.substring("squadflag:".length()).split(":");
+                    Long squadId = parts.length > 1 ? parseLong(parts[1]) : null;
+                    ru.gamebot.platform.domain.model.Squad flagSquad = squadId == null ? null : squadService.findById(squadId).orElse(null);
+                    if (flagSquad == null) {
+                        answer(callbackQuery.getId(), "Отряд не найден");
+                    } else if ("show".equals(parts[0])) {
+                        sendCardWithPhoto(user.getTelegramId(), flagSquad.getFlagFileId(),
+                                "🚩 Флаг отряда «" + escape(flagSquad.getName()) + "»", null);
+                        answerSilently(callbackQuery.getId());
+                    } else if ("del".equals(parts[0])) {
+                        squadService.clearFlag(squadId);
+                        notifyUser(flagSquad.getCaptainTelegramId(),
+                                "🚩 Флаг вашего отряда «" + escape(flagSquad.getName()) + "» убран администрацией. "
+                                        + "Загрузите другой, без нарушающих правила изображений.");
+                        answer(callbackQuery.getId(), "Флаг убран");
+                        sendAdminSquadCard(user, flagSquad, 0);
+                    }
+                    return;
                 } else if (action.startsWith("squadview:")) {
                     String[] parts = action.substring("squadview:".length()).split(":");
                     Long squadId = parseLong(parts[0]);

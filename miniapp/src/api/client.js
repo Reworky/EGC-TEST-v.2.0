@@ -314,6 +314,12 @@ export async function getSquadCatalog(q) {
   return data;
 }
 
+// Флаг отряда: эндпоинт требует авторизации, поэтому картинка тянется как blob (а не прямым <img src>).
+export async function getSquadFlagUrl(squadId) {
+  const { data } = await api.get(`/api/squads/flag/${squadId}`, { responseType: 'blob' });
+  return URL.createObjectURL(data);
+}
+
 export async function getSquadView(squadId) {
   const { data } = await api.get(`/api/squads/view/${squadId}`);
   return data;
