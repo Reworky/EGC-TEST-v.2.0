@@ -43,7 +43,7 @@ log = logging.getLogger("ops-bot")
 _pending = {}              # nonce -> (action, expires_at)
 _pending_lock = threading.Lock()
 
-TOKEN_RE = re.compile(r"\b\d{8,12}:[A-Za-z0-9_-]{30,}\b")
+TOKEN_RE = re.compile(r"(?<!\d)\d{8,12}:[A-Za-z0-9_-]{30,}")
 SECRET_RE = re.compile(r"(?i)(token|secret|password|api[_-]?key)=[^&\s\"',]+")
 
 
