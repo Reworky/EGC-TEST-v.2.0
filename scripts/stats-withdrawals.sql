@@ -3,7 +3,7 @@
 -- RUB - сумма в рублях, записанная в заявке (у вывода в Stars её нет, там только EXC).
 
 -- 1) По месяцам: сколько выплат, сколько разных игроков, сколько EXC и рублей
-SELECT FORMATDATETIME(rr.paid_at, 'yyyy-MM') AS month,
+SELECT FORMATDATETIME(rr.paid_at, 'yyyy-MM') AS ym,
        COUNT(*) AS payouts,
        COUNT(DISTINCT rr.user_id) AS players,
        SUM(COALESCE(rr.paid_price_coins, ri.price_coins)) AS exc,
@@ -12,10 +12,10 @@ FROM reward_requests rr
 JOIN reward_items ri ON ri.id = rr.reward_id
 WHERE ri.category = 'Вывод' AND rr.status = 'APPROVED' AND rr.paid_at IS NOT NULL
 GROUP BY FORMATDATETIME(rr.paid_at, 'yyyy-MM')
-ORDER BY month;
+ORDER BY ym;
 
 -- 2) По месяцам и способу вывода: рубли (СБП/карта), TON, Stars
-SELECT FORMATDATETIME(rr.paid_at, 'yyyy-MM') AS month,
+SELECT FORMATDATETIME(rr.paid_at, 'yyyy-MM') AS ym,
        CASE WHEN ri.purchase_group = 'telegram_stars' THEN 'Stars'
             WHEN rr.payout_details LIKE 'TON:%' OR rr.payout_details LIKE 'USDT%' THEN 'TON'
             ELSE 'Рубли' END AS method,
@@ -29,7 +29,7 @@ GROUP BY FORMATDATETIME(rr.paid_at, 'yyyy-MM'),
          CASE WHEN ri.purchase_group = 'telegram_stars' THEN 'Stars'
               WHEN rr.payout_details LIKE 'TON:%' OR rr.payout_details LIKE 'USDT%' THEN 'TON'
               ELSE 'Рубли' END
-ORDER BY month, method;
+ORDER BY ym, method;
 
 -- 3) Итог и среднее за 30 дней (от первой выплаты до сегодня)
 SELECT COUNT(*) AS payouts_total,
