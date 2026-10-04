@@ -472,8 +472,9 @@ public class ChannelContentService {
         int hiddenGames = byGame.size() - MAX_GAMES_IN_NEW_POST;
         if (hiddenGames > 0) sb.append("Ещё в других играх тоже есть что забрать: ").append(hiddenGames).append("\n\n");
         if (anyAuto) sb.append("⚡ - тут бот сам считает прогресс. Красота.\n\n");
+        String link = botLink().stripLeading();
+        if (!link.isEmpty()) sb.append(link).append("\n\n");
         sb.append(ending(fresh.size(), "Ну что, какой берёшь первым?", "Ставь 🔥, если уже выбрал", "Всё уже ждёт в боте, залетай"));
-        sb.append(botLink());
         String meta = fresh.stream().map(q -> String.valueOf(q.getId())).collect(Collectors.joining(","));
         return Optional.of(saveDraft(NEW_QUESTS, sb.toString(), meta));
     }
