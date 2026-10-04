@@ -946,22 +946,23 @@ public class ChannelContentService {
             return Optional.empty();
         }
         String[] marks = {"🥇", "🥈", "🥉", "4️⃣", "5️⃣"};
-        StringBuilder sb = new StringBuilder("🏁 <b>гонка за зал славы</b>\n\n");
-        sb.append("Опыт за неделю набрали <b>").append(active).append("</b> ").append(plural((int) active, "игрок", "игрока", "игроков")).append(". Сейчас впереди:\n\n");
+        StringBuilder sb = new StringBuilder("🏁 <b>Гонка за Зал славы!</b>\n\n");
+        sb.append("Опыт за неделю уже набрали <b>").append(active).append("</b> ").append(plural((int) active, "игрок", "игрока", "игроков")).append(", вот кто сейчас впереди 👇\n\n");
         for (int i = 0; i < top.size(); i++) {
-            sb.append(marks[i]).append(" <b>").append(esc(publicNick(top.get(i).getNickname()))).append("</b> - ").append(num(top.get(i).getWeeklyXp())).append(" XP\n");
+            sb.append(marks[i]).append(" <b>").append(esc(publicNick(top.get(i).getNickname()))).append("</b>: ").append(num(top.get(i).getWeeklyXp())).append(" XP\n");
         }
         sb.append("\n");
         if (top.size() >= 2) {
             long gap = top.get(0).getWeeklyXp() - top.get(1).getWeeklyXp();
-            sb.append("До лидера второму месту не хватает <b>").append(num(gap)).append(" XP</b>.\n");
+            sb.append("До лидера второму месту не хватает <b>").append(num(gap)).append(" XP</b>, так что всё ещё может поменяться 🔥\n");
         }
         if (top.size() >= 3) {
             sb.append("Чтобы попасть в тройку, нужно набрать больше <b>").append(num(top.get(2).getWeeklyXp())).append(" XP</b>.\n");
         }
         sb.append("Неделя закончится в понедельник в 00:00 UTC (03:00 по Москве).\n\n");
-        sb.append(ending(top.get(0).getWeeklyXp(), "Кто успеет подняться в тройку?", "Ставь 🏁, если ещё в гонке.", "До конца недели можно многое успеть."));
-        sb.append(botLink());
+        String link = botLink().stripLeading();
+        if (!link.isEmpty()) sb.append(link).append("\n\n");
+        sb.append(ending(top.get(0).getWeeklyXp(), "Кто успеет подняться в тройку?", "Ставь 🏁, если ещё в гонке", "До конца недели можно многое успеть, погнали"));
         return Optional.of(saveDraft(WEEKLY_RACE, sb.toString(), null));
     }
 
