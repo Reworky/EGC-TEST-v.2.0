@@ -43,6 +43,13 @@ public class SinkShopService {
     private static final int MAX_DAILY_BOOSTS = 3;
     private static final int MAX_DAILY_REROLLS = 3;
     private static final int MAX_DAILY_COOLDOWN_REMOVALS = 2;
+    // Потолки подписчика EGC Pass (2026-10-04, «лесенка» магазина: база -> за EXC -> только по подписке).
+    // Ни один из них не печатает EXC: реролл и снятие кулдауна платные, а бусты XP влияют на EXC лишь косвенно.
+    // EXC-буст сознательно не усилен (владелец: пока не увеличивать награду).
+    public static final int PASS_MAX_DAILY_BOOSTS = 5;
+    public static final int PASS_MAX_DAILY_REROLLS = 6;
+    public static final int PASS_MAX_DAILY_COOLDOWN_REMOVALS = 4;
+    public static final int PASS_XP_BOOST_PERCENT = 40;
     private static final int MAX_DAILY_GIFTS_SENT = 2;
     private static final int MAX_DAILY_GIFTS_RECEIVED = 1;
 
@@ -53,8 +60,8 @@ public class SinkShopService {
     @Transactional
     public void purchaseReroll(AppUser user) {
         int dailyRerolls = getDailyCount(user.getDailyRerollCount(), user.getDailyRerollDate());
-        if (dailyRerolls >= MAX_DAILY_REROLLS) {
-            throw new IllegalArgumentException("Достигнут дневной лимит реролла квеста (" + MAX_DAILY_REROLLS + " в сутки).");
+        if (dailyRerolls >= maxDailyRerolls(user)) {
+            throw new IllegalArgumentException("Достигнут дневной лимит реролла квеста (" + maxDailyRerolls(user) + " в сутки)." + passLimitHint(user, PASS_MAX_DAILY_REROLLS));
         }
         deductCoins(user, PRICE_REROLL, "Реролл квеста");
         user.setDailyRerollCount(dailyRerolls + 1);
@@ -100,8 +107,8 @@ public class SinkShopService {
             throw new IllegalArgumentException("XP-буст уже активен.");
         }
         int dailyBoosts = getDailyCount(user.getDailyBoostCount(), user.getDailyBoostDate());
-        if (dailyBoosts >= MAX_DAILY_BOOSTS) {
-            throw new IllegalArgumentException("Достигнут дневной лимит покупки бустов (" + MAX_DAILY_BOOSTS + " в сутки).");
+        if (dailyBoosts >= maxDailyBoosts(user)) {
+            throw new IllegalArgumentException("Достигнут дневной лимит покупки бустов (" + maxDailyBoosts(user) + " в сутки)." + passLimitHint(user, PASS_MAX_DAILY_BOOSTS));
         }
         long price = hours == 72 ? PRICE_XP_BOOST_72H : PRICE_XP_BOOST_24H;
         deductCoins(user, price, "XP-буст ×" + hours + "ч");
@@ -117,8 +124,8 @@ public class SinkShopService {
             throw new IllegalArgumentException("EXC-буст уже активен.");
         }
         int dailyBoosts = getDailyCount(user.getDailyBoostCount(), user.getDailyBoostDate());
-        if (dailyBoosts >= MAX_DAILY_BOOSTS) {
-            throw new IllegalArgumentException("Достигнут дневной лимит покупки бустов (" + MAX_DAILY_BOOSTS + " в сутки).");
+        if (dailyBoosts >= maxDailyBoosts(user)) {
+            throw new IllegalArgumentException("Достигнут дневной лимит покупки бустов (" + maxDailyBoosts(user) + " в сутки)." + passLimitHint(user, PASS_MAX_DAILY_BOOSTS));
         }
         long price = hours == 72 ? PRICE_EXC_BOOST_72H : PRICE_EXC_BOOST_24H;
         deductCoins(user, price, "EXC-буст ×" + hours + "ч");
@@ -137,8 +144,8 @@ public class SinkShopService {
             throw new IllegalArgumentException("EXC-буст уже активен. Сначала дождитесь окончания.");
         }
         int dailyBoosts = getDailyCount(user.getDailyBoostCount(), user.getDailyBoostDate());
-        if (dailyBoosts + 2 > MAX_DAILY_BOOSTS) {
-            throw new IllegalArgumentException("Недостаточно дневного лимита для двойного буста (нужно 2 слота, доступно " + (MAX_DAILY_BOOSTS - dailyBoosts) + ").");
+        if (dailyBoosts + 2 > maxDailyBoosts(user)) {
+            throw new IllegalArgumentException("Недостаточно дневного лимита для двойного буста (нужно 2 слота, доступно " + (maxDailyBoosts(user) - dailyBoosts) + ")." + passLimitHint(user, PASS_MAX_DAILY_BOOSTS));
         }
         deductCoins(user, PRICE_DOUBLE_BOOST_24H, "Двойной буст ×" + hours + "ч");
         LocalDateTime until = LocalDateTime.now().plusHours(hours);
@@ -168,8 +175,8 @@ public class SinkShopService {
     @Transactional
     public void purchaseCooldownRemoval(AppUser user) {
         int dailyRemovals = getDailyCount(user.getDailyCooldownRemovals(), user.getDailyCooldownDate());
-        if (dailyRemovals >= MAX_DAILY_COOLDOWN_REMOVALS) {
-            throw new IllegalArgumentException("Достигнут дневной лимит снятий кулдауна (" + MAX_DAILY_COOLDOWN_REMOVALS + " в сутки).");
+        if (dailyRemovals >= maxDailyCooldownRemovals(user)) {
+            throw new IllegalArgumentException("Достигнут дневной лимит снятий кулдауна (" + maxDailyCooldownRemovals(user) + " в сутки)." + passLimitHint(user, PASS_MAX_DAILY_COOLDOWN_REMOVALS));
         }
         if (user.getCooldownBypassGame() != null) {
             throw new IllegalArgumentException("Снятие кулдауна уже активно. Возьмите квест с кулдауном, чтобы использовать его.");
@@ -230,8 +237,42 @@ public class SinkShopService {
         return isBoostActive(user) ? BOOST_PERCENT : 0;
     }
 
+    /** Купленный/выигранный XP-буст: +20%, у подписчика EGC Pass +40%. */
     public int getXpBoostPercent(AppUser user) {
-        return isXpBoostActive(user) ? BOOST_PERCENT : 0;
+        if (!isXpBoostActive(user)) return 0;
+        return isEgcPassActive(user) ? PASS_XP_BOOST_PERCENT : BOOST_PERCENT;
+    }
+
+    public int maxDailyBoosts(AppUser user) { return isEgcPassActive(user) ? PASS_MAX_DAILY_BOOSTS : MAX_DAILY_BOOSTS; }
+    public int maxDailyRerolls(AppUser user) { return isEgcPassActive(user) ? PASS_MAX_DAILY_REROLLS : MAX_DAILY_REROLLS; }
+    public int maxDailyCooldownRemovals(AppUser user) { return isEgcPassActive(user) ? PASS_MAX_DAILY_COOLDOWN_REMOVALS : MAX_DAILY_COOLDOWN_REMOVALS; }
+
+    /** Подсказка к сообщению о достигнутом лимите: у подписчика EGC Pass лимит выше (только если подписки ещё нет). */
+    private String passLimitHint(AppUser user, int passLimit) {
+        return isEgcPassActive(user) ? "" : " С EGC Pass лимит выше: " + passLimit + " в сутки.";
+    }
+
+    /** Бесплатная страховка раз в календарный месяц для подписчика EGC Pass (вместо покупки за EXC). */
+    @Transactional
+    public void claimPassInsurance(AppUser user) {
+        if (!isEgcPassActive(user)) {
+            throw new IllegalStateException("Бесплатная страховка доступна подписчикам EGC Pass.");
+        }
+        if (user.isRetryInsuranceActive()) {
+            throw new IllegalStateException("Страховка уже активна.");
+        }
+        if (!passInsuranceAvailable(user)) {
+            throw new IllegalStateException("Бесплатная страховка в этом месяце уже использована.");
+        }
+        user.setRetryInsuranceActive(true);
+        user.setEgcPassFreeInsuranceDate(LocalDate.now());
+        appUserRepository.save(user);
+    }
+
+    public boolean passInsuranceAvailable(AppUser user) {
+        if (!isEgcPassActive(user)) return false;
+        LocalDate last = user.getEgcPassFreeInsuranceDate();
+        return last == null || !java.time.YearMonth.from(last).equals(java.time.YearMonth.now());
     }
 
     public boolean hasExtraSlot(AppUser user) {
@@ -260,14 +301,13 @@ public class SinkShopService {
         if (user.isPermanentExtraSlot() || isEgcPassActive(user)) {
             return 3;
         }
-        boolean boostActive = user.getQuestSlotExtraUntil() != null
-                && LocalDateTime.now().isBefore(user.getQuestSlotExtraUntil());
-        if (boostActive) {
-            return 3;
-        }
         // Новичковый темп: пока у игрока меньше ONBOARDING_QUEST_THRESHOLD одобренных квестов,
         // разрешаем вести 2 квеста параллельно, чтобы не простаивать в ожидании модерации первого.
-        return user.getCompletedQuests() < QuestService.ONBOARDING_QUEST_THRESHOLD ? 2 : 1;
+        long base = user.getCompletedQuests() < QuestService.ONBOARDING_QUEST_THRESHOLD ? 2 : 1;
+        // Лесенка слотов (2026-10-04): слот за EXC (48 ч) = на 1 больше базы, третий слот - только EGC Pass или «навсегда» за Stars.
+        boolean boostActive = user.getQuestSlotExtraUntil() != null
+                && LocalDateTime.now().isBefore(user.getQuestSlotExtraUntil());
+        return boostActive ? Math.min(3, base + 1) : base;
     }
 
     @Transactional

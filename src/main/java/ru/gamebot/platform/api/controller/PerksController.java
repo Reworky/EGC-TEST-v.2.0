@@ -63,6 +63,8 @@ public class PerksController {
                 .extraSlotFromEgcPass(sinkShopService.isEgcPassActive(user))
                 .extraSlotUntil(user.getQuestSlotExtraUntil() != null ? user.getQuestSlotExtraUntil().format(FMT) : null)
                 .cooldownBypassActive(user.getCooldownBypassGame() != null)
+                .egcPass(sinkShopService.isEgcPassActive(user))
+                .passInsuranceUsed(!sinkShopService.passInsuranceAvailable(user))
                 .build());
     }
 
@@ -84,9 +86,13 @@ public class PerksController {
                     sinkShopService.purchaseInsurance(user);
                     yield "Страховка активирована. Если следующий отчёт отклонят — сможете отправить его повторно без штрафа.";
                 }
+                case "passinsurance" -> {
+                    sinkShopService.claimPassInsurance(user);
+                    yield "Бесплатная страховка по EGC Pass активирована. Следующий отклонённый отчёт можно отправить повторно без штрафа.";
+                }
                 case "extraslot" -> {
                     sinkShopService.purchaseExtraSlot(user);
-                    yield "Доп. слот активирован! Теперь можно вести 3 квеста одновременно в течение 48 часов.";
+                    yield "Доп. слот активирован! Теперь можно вести на один квест больше в течение 48 часов. Третий слот открывает EGC Pass.";
                 }
                 case "cooldown" -> {
                     sinkShopService.purchaseCooldownRemoval(user);
@@ -94,11 +100,11 @@ public class PerksController {
                 }
                 case "xpboost24" -> {
                     sinkShopService.purchaseXpBoost(user, 24);
-                    yield "XP-буст активирован! +20% к XP за все квесты в течение 24 часов.";
+                    yield "XP-буст активирован! +" + sinkShopService.getXpBoostPercent(user) + "% к XP за все квесты в течение 24 часов.";
                 }
                 case "xpboost72" -> {
                     sinkShopService.purchaseXpBoost(user, 72);
-                    yield "XP-буст активирован! +20% к XP за все квесты в течение 72 часов.";
+                    yield "XP-буст активирован! +" + sinkShopService.getXpBoostPercent(user) + "% к XP за все квесты в течение 72 часов.";
                 }
                 case "excboost24" -> {
                     sinkShopService.purchaseExcBoostTimed(user, 24);

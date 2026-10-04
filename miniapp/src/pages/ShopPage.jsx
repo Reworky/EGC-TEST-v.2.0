@@ -11,8 +11,8 @@ const PERK_CATEGORIES = [
   {
     title: 'Бусты',
     items: [
-      { key: 'xpboost24', title: '⚡ XP +20% • 24ч', price: 4000, blockedBy: 'xpBoostActive', activeUntilField: 'xpBoostUntil' },
-      { key: 'xpboost72', title: '⚡ XP +20% • 72ч', price: 10000, blockedBy: 'xpBoostActive', activeUntilField: 'xpBoostUntil' },
+      { key: 'xpboost24', title: '⚡ XP +20% • 24ч', price: 4000, blockedBy: 'xpBoostActive', activeUntilField: 'xpBoostUntil', description: 'С EGC Pass тот же буст даёт +40% XP. Лимит бустов: 3 в сутки, с EGC Pass — 5.' },
+      { key: 'xpboost72', title: '⚡ XP +20% • 72ч', price: 10000, blockedBy: 'xpBoostActive', activeUntilField: 'xpBoostUntil', description: 'С EGC Pass тот же буст даёт +40% XP. Лимит бустов: 3 в сутки, с EGC Pass — 5.' },
       { key: 'excboost24', title: '⚡ EXC +20% • 24ч', price: 4000, blockedBy: 'excBoostActive', activeUntilField: 'excBoostUntil' },
       { key: 'excboost72', title: '⚡ EXC +20% • 72ч', price: 10000, blockedBy: 'excBoostActive', activeUntilField: 'excBoostUntil' },
       { key: 'doubleboost24', title: '⚡⚡ Двойной буст • 24ч', price: 6500, hideIf: s => s.xpBoostActive || s.excBoostActive },
@@ -21,10 +21,11 @@ const PERK_CATEGORIES = [
   {
     title: 'Квесты',
     items: [
-      { key: 'reroll', title: '🔀 Реролл квеста', price: 2000, description: 'Заменяет ваш текущий набор доступных квестов на новый.' },
+      { key: 'reroll', title: '🔀 Реролл квеста', price: 2000, description: 'Заменяет ваш текущий набор доступных квестов на новый. Лимит: 3 в сутки, с EGC Pass — 6.' },
       { key: 'insurance', title: '🛡️ Страховка провала', price: 1500, blockedBy: 'insuranceActive', description: 'Если следующий отчёт отклонят — сможете отправить его повторно без штрафа.' },
-      { key: 'extraslot', title: '📂 Доп. слот квеста 48ч', price: 3500, blockedBy: 'extraSlotActive', activeUntilField: 'extraSlotUntil', description: 'Позволяет вести до 3 квестов одновременно.' },
-      { key: 'cooldown', title: '⏱️ Снятие кулдауна', price: 3000, blockedBy: 'cooldownBypassActive', activeLabel: 'Ждёт квест с кулдауном', description: 'Снимает кулдаун для следующего квеста в любой игре. Применится автоматически при взятии квеста с кулдауном. Не снимает отдельный лимит «1 квест в час» между любыми квестами. Лимит: 2 раза в сутки.' },
+      { key: 'passinsurance', title: '🛡️ Страховка по EGC Pass', price: 0, blockedBy: 'passInsuranceUsed', activeLabel: 'Уже взята в этом месяце', hideIf: s => !s.egcPass, description: 'Бесплатная страховка провала раз в месяц для подписчиков EGC Pass.' },
+      { key: 'extraslot', title: '📂 Доп. слот квеста 48ч', price: 3500, blockedBy: 'extraSlotActive', activeUntilField: 'extraSlotUntil', description: 'На 48 часов на один одновременный квест больше. Третий слот открывает только EGC Pass.' },
+      { key: 'cooldown', title: '⏱️ Снятие кулдауна', price: 3000, blockedBy: 'cooldownBypassActive', activeLabel: 'Ждёт квест с кулдауном', description: 'Снимает кулдаун для следующего квеста в любой игре. Применится автоматически при взятии квеста с кулдауном. Не снимает отдельный лимит «1 квест в час» между любыми квестами. Лимит: 2 раза в сутки, с EGC Pass — 4.' },
     ],
   },
   {
@@ -273,7 +274,7 @@ function PerkCard({ item, state, expanded, onToggle, onPurchased }) {
     <div className={`shop-card ${active ? 'shop-card-locked' : ''}`} onClick={() => onToggle(item.key)}>
       <div className="shop-top">
         <div className="shop-title">{item.title}</div>
-        <div className="shop-price">{item.price.toLocaleString()} EXC</div>
+        <div className="shop-price">{item.price === 0 ? 'бесплатно' : `${item.price.toLocaleString()} EXC`}</div>
       </div>
       {active && (
         <div className="shop-status"><i className="ti ti-circle-check"></i> {item.key === 'extraslot' && state.extraSlotFromEgcPass

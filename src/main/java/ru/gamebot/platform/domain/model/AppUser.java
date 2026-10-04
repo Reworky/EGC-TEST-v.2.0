@@ -117,6 +117,9 @@ public class AppUser {
     /** Когда игроку уходило разовое сообщение про EGC Pass после 10+ квестов (WeeklyResetScheduler.checkEgcPassTeaser); null = не отправляли. */
     private LocalDateTime egcPassTeaserSentAt;
 
+    /** Когда подписчик EGC Pass в последний раз взял бесплатную страховку (раз в календарный месяц, SinkShopService.claimPassInsurance); null = не брал. */
+    private LocalDate egcPassFreeInsuranceDate;
+
     private LocalDateTime createdAt;
 
     // Avatar

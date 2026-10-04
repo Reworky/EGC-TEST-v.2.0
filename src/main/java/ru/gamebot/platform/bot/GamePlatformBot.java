@@ -6644,13 +6644,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         info.append("🪙 Баланс: <b>").append(user.getCoins()).append(" EXC</b>\n");
         if (xpBoostActive) info.append("⚡ XP-буст активен до: <b>").append(user.getXpBoostActiveUntil().format(dtFmt)).append("</b>\n");
         if (excBoostActive) info.append("⚡ EXC-буст активен до: <b>").append(user.getExcBoostActiveUntil().format(dtFmt)).append("</b>\n");
+        boolean passUser = sinkShopService.isEgcPassActive(user);
+        int xpPct = passUser ? SinkShopService.PASS_XP_BOOST_PERCENT : 20;
+        info.append(passUser
+                ? "⭐ EGC Pass: XP-буст усилен до <b>+40%</b>, лимит бустов <b>" + SinkShopService.PASS_MAX_DAILY_BOOSTS + " в сутки</b>\n"
+                : "🔒 В EGC Pass: XP-буст <b>+40%</b> вместо +20% и <b>" + SinkShopService.PASS_MAX_DAILY_BOOSTS + " бустов в сутки</b> вместо 3\n");
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (xpBoostActive) {
             rows.add(List.of(keyboardFactory.callback("⚡ XP-буст активен ✅", "sink:xpboost_info")));
         } else {
-            rows.add(List.of(keyboardFactory.callback("⚡ XP +20% • 24ч — " + SinkShopService.PRICE_XP_BOOST_24H + " EXC", "sink:xpboost:24")));
-            rows.add(List.of(keyboardFactory.callback("⚡ XP +20% • 72ч — " + SinkShopService.PRICE_XP_BOOST_72H + " EXC", "sink:xpboost:72")));
+            rows.add(List.of(keyboardFactory.callback("⚡ XP +" + xpPct + "% • 24ч — " + SinkShopService.PRICE_XP_BOOST_24H + " EXC", "sink:xpboost:24")));
+            rows.add(List.of(keyboardFactory.callback("⚡ XP +" + xpPct + "% • 72ч — " + SinkShopService.PRICE_XP_BOOST_72H + " EXC", "sink:xpboost:72")));
         }
 
         if (excBoostActive) {
@@ -6680,12 +6685,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         info.append("🪙 Баланс: <b>").append(user.getCoins()).append(" EXC</b>\n");
         if (slotFromPass) info.append("📂 Доп. слот квеста: <b>включён в EGC Pass</b>\n");
         else if (slotActive) info.append("📂 Доп. слот активен до: <b>").append(user.getQuestSlotExtraUntil().format(dtFmt)).append("</b>\n");
+        info.append(slotFromPass
+                ? "⭐ EGC Pass: 3-й слот, реролл до <b>" + SinkShopService.PASS_MAX_DAILY_REROLLS + "</b> в сутки, снятие кулдауна до <b>"
+                        + SinkShopService.PASS_MAX_DAILY_COOLDOWN_REMOVALS + "</b> в сутки, бесплатная страховка раз в месяц\n"
+                : "🔒 В EGC Pass: 3-й слот квеста (за EXC доступен только 2-й), реролл до " + SinkShopService.PASS_MAX_DAILY_REROLLS
+                        + " в сутки, снятие кулдауна до " + SinkShopService.PASS_MAX_DAILY_COOLDOWN_REMOVALS
+                        + " в сутки, бесплатная страховка раз в месяц\n");
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("🔀 Реролл квеста — 2 000 EXC", "sink:reroll")));
 
         if (insuranceActive) {
             rows.add(List.of(keyboardFactory.callback("🛡️ Страховка активна ✅", "sink:insurance_info")));
+        } else if (sinkShopService.passInsuranceAvailable(user)) {
+            rows.add(List.of(keyboardFactory.callback("🛡️ Страховка — бесплатно по EGC Pass", "sink:passinsurance")));
         } else {
             rows.add(List.of(keyboardFactory.callback("🛡️ Страховка провала — 1 500 EXC", "sink:insurance")));
         }
@@ -6698,7 +6711,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             } else if (slotActive) {
                 rows.add(List.of(keyboardFactory.callback("📂 Доп. слот активен ✅", "sink:slot_info")));
             } else {
-                rows.add(List.of(keyboardFactory.callback("📂 Доп. слот квеста 48ч — 3 500 EXC", "sink:extraslot")));
+                rows.add(List.of(keyboardFactory.callback("📂 +1 слот квеста на 48ч — 3 500 EXC", "sink:extraslot")));
             }
             rows.add(List.of(keyboardFactory.callback("📂 Доп. слот квеста навсегда — " + PERMANENT_SLOT_STARS_PRICE + " ⭐", "sink:permanent_slot")));
         }
@@ -6768,7 +6781,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 try {
                     sinkShopService.purchaseExtraSlot(user);
                     sendText(user.getTelegramId(),
-                        "📂 <b>Доп. слот активирован!</b>\n\nТеперь вы можете вести 3 квеста одновременно в течение 48 часов.\nСписано 3 500 EXC.",
+                        "📂 <b>Доп. слот активирован!</b>\n\nТеперь вы можете вести на один квест больше в течение 48 часов (третий слот открывает только EGC Pass).\nСписано 3 500 EXC.",
                         backMenuKeyboard("menu:sink"));
                 } catch (IllegalArgumentException e) {
                     sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
@@ -6858,6 +6871,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
                 }
             }
+            case "passinsurance" -> {
+                try {
+                    sinkShopService.claimPassInsurance(user);
+                    sendText(user.getTelegramId(),
+                            "🛡️ <b>Страховка активирована по EGC Pass!</b>\n\nЕсли ваш следующий отчёт по квесту будет отклонён — вы сможете отправить его повторно без штрафа. Следующая бесплатная — в новом месяце.",
+                            backMenuKeyboard("menu:sink"));
+                } catch (IllegalArgumentException | IllegalStateException e) {
+                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
+                }
+            }
             case "insurance_info" -> sendText(user.getTelegramId(),
                     "🛡️ Страховка активна. Она сработает при следующем отклонённом отчёте.",
                     backMenuKeyboard("menu:sink"));
@@ -6874,7 +6897,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     try {
                         sinkShopService.purchaseXpBoost(user, hours);
                         sendText(user.getTelegramId(),
-                            "⚡ <b>XP-буст активирован!</b>\n\n+20% к XP за все квесты в течение " + hours + " часов.\nСписано " + price + " EXC.",
+                            "⚡ <b>XP-буст активирован!</b>\n\n+" + sinkShopService.getXpBoostPercent(user) + "% к XP за все квесты в течение " + hours + " часов.\nСписано " + price + " EXC.",
                             backMenuKeyboard("menu:sink"));
                     } catch (IllegalArgumentException e) {
                         sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
@@ -6994,11 +7017,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "Титул «Покровитель EGC»", PATRON_TITLE_STARS_PRICE),
             "starsitem:PERMANENT_SLOT", new StarsItemSpec(
                     "Доп. слот квеста — навсегда",
-                    "Постоянно на 1 активный квест больше (обычно доступен только на 48ч за EXC) — не нужно ждать сдачи одного квеста, чтобы взять следующий.",
+                    "Постоянно до 3 активных квестов одновременно (за EXC доступно только +1 слот на 48ч) — не нужно ждать сдачи одного квеста, чтобы взять следующий.",
                     "Доп. слот квеста — навсегда", PERMANENT_SLOT_STARS_PRICE),
             "starsitem:EGC_PASS", new StarsItemSpec(
                     "EGC Pass — подписка на 30 дней",
-                    "+10% EXC и +5% XP за квесты (бонус EXC до 10 000/мес), доп. слот квеста, бесплатный улучшенный сундук, приоритет на вывод, бейдж в профиле. Автопродление каждые 30 дней, отмена в любой момент в настройках платежей Telegram.",
+                    "+10% EXC и +5% XP за квесты (EXC до 10 000/мес), 3-й слот, XP-буст +40%, выше лимиты, улучшенный сундук, приоритет на вывод. Автопродление, отмена в настройках платежей Telegram.",
                     "EGC Pass (30 дней)", EGC_PASS_STARS_PRICE, EGC_PASS_SUBSCRIPTION_PERIOD_SECONDS),
             "starsitem:STREAK_RESTORE", new StarsItemSpec(
                     "Восстановление серии входов",
@@ -7057,8 +7080,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         sb.append("<b>Что входит:</b>\n")
                 .append("✨ +10% к EXC за все квесты (до 10 000 EXC бонуса в месяц)\n")
-                .append("📈 +5% к XP за все квесты\n")
-                .append("📂 Доп. слот квеста (как «навсегда», пока подписка активна)\n")
+                .append("📈 +5% к XP за все квесты, а купленный XP-буст даёт +40% вместо +20%\n")
+                .append("📂 3-й слот квеста (за EXC доступен только 2-й)\n")
+                .append("🔀 Выше дневные лимиты: реролл 6 вместо 3, снятие кулдауна 4 вместо 2, бустов 5 вместо 3\n")
+                .append("🛡️ Бесплатная страховка провала раз в месяц\n")
                 .append("🎁 Бесплатный улучшенный сундук каждый день — без реролла за 15⭐\n")
                 .append("⚡ Приоритет в очереди на вывод EXC\n")
                 .append("💎 Статус-бейдж в профиле\n")
