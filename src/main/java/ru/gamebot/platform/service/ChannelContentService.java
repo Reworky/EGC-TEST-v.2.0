@@ -805,25 +805,34 @@ public class ChannelContentService {
     /** «Как вывести»: две заготовки по очереди, факты сверены с ботом (минимум 5 000 EXC, одна заявка в сутки, способы, сроки, лимит по уровню). */
     public Optional<ChannelPostDraft> createWithdrawHowToDraft() {
         long variant = draftRepository.findAllByType(WITHDRAW_HOWTO).size() % 2;
+        // Условия вывода берём из RewardService, чтобы текст не расходился с правилами
+        int days = RewardService.WITHDRAWAL_MIN_ACCOUNT_AGE_DAYS;
+        int quests = RewardService.WITHDRAWAL_MIN_APPROVED_QUESTS;
         StringBuilder sb = new StringBuilder();
         if (variant == 0) {
-            sb.append("🧾 <b>как вывести EXC</b>\n\n")
+            sb.append("🧾 <b>Как вывести EXC: всё просто!</b>\n\n")
               .append("1. В боте открой «Кошелёк» и выбери вывод.\n")
               .append("2. Выбери способ: рубли по реквизитам банка, GRAM (TON) на кошелёк или звёзды Telegram.\n")
               .append("3. Укажи сумму от <b>5 000 EXC</b>. Одна заявка в сутки.\n")
               .append("4. Заявку обрабатываем в течение 24 часов, чек придёт в бот.\n\n")
-              .append("Месячный лимит вывода растёт вместе с уровнем: чем выше уровень, тем больше.\n\n")
-              .append(ending(variant, "Уже пробовал?", "Ставь 💸, если пригодится.", "Всё занимает пару минут."));
+              .append("Вывод открывается, когда аккаунту не меньше ").append(days).append(" ").append(plural(days, "дня", "дней", "дней"))
+              .append(" и выполнено хотя бы ").append(quests).append(" ").append(plural(quests, "одобренный квест", "одобренных квеста", "одобренных квестов"))
+              .append(". Месячный лимит растёт вместе с уровнем: чем выше уровень, тем больше.\n\n");
+            String link = payoutsLink().stripLeading();
+            if (!link.isEmpty()) sb.append(link).append("\n\n");
+            sb.append(ending(variant, "Уже пробовал?", "Ставь 💸, если пригодится", "Всё занимает пару минут"));
         } else {
-            sb.append("🧾 <b>вывод EXC: что подготовить заранее</b>\n\n")
+            sb.append("🧾 <b>Вывод EXC: что подготовить заранее</b>\n\n")
               .append("Перед первым выводом в профиле нужно указать страну и возраст и один раз подтвердить номер телефона.\n")
-              .append("Минимальная сумма — <b>5 000 EXC</b>, заявка одна в сутки.\n")
+              .append("Минимальная сумма <b>5 000 EXC</b>, заявка одна в сутки.\n")
               .append("Рубли уходят по реквизитам банка, GRAM (TON) на кошелёк, звёзды Telegram на юзернейм.\n")
-              .append("Итоговая сумма в рублях зависит от коэффициента клуба, он виден в разделе «Магазин».\n\n")
-              .append("Подписчики EGC Pass идут в очереди на вывод первыми.\n\n")
-              .append(ending(variant, "Что выберешь, рубли или GRAM?", "Ставь 💸, если уже выводил.", "Инструкция всегда в разделе «Помощь»."));
+              .append("Один реквизит привязан к одному аккаунту, так что мультиаккаунты не пройдут.\n")
+              .append("Итоговая сумма в рублях зависит от коэффициента клуба, он виден в разделе «Магазин».\n")
+              .append("Подписчики EGC Pass идут в очереди на вывод первыми.\n\n");
+            String link = payoutsLink().stripLeading();
+            if (!link.isEmpty()) sb.append(link).append("\n\n");
+            sb.append(ending(variant, "Что выберешь, рубли или GRAM?", "Ставь 💸, если уже выводил", "Инструкция всегда в разделе «Помощь»"));
         }
-        sb.append(payoutsLink());
         return Optional.of(saveDraft(WITHDRAW_HOWTO, sb.toString(), null));
     }
 
