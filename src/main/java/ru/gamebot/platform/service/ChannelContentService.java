@@ -636,7 +636,7 @@ public class ChannelContentService {
 
     private String tourneyLink() {
         if (botUsername == null || botUsername.isBlank()) return "";
-        return "\n\n🎮 Все турниры - в нашем боте: <a href=\"https://t.me/" + botUsername + "\">@" + botUsername + "</a>";
+        return "\n\n🎮 Все турниры в нашем боте: <a href=\"https://t.me/" + botUsername + "\">@" + botUsername + "</a>";
     }
 
     private static String prizeRule() {
@@ -678,20 +678,21 @@ public class ChannelContentService {
     private void createRegClosingDraft(Tournament t) {
         long count = tournamentService.entryCount(t);
         long hoursLeft = Math.max(1, Duration.between(LocalDateTime.now(), t.getStartDate()).toHours());
-        StringBuilder sb = new StringBuilder("⏰ <b>регистрация на турнир «" + esc(t.getName()) + "» скоро закроется</b>\n\n");
+        StringBuilder sb = new StringBuilder("⏰ <b>Регистрация на турнир «" + esc(t.getName()) + "» скоро закроется!</b>\n\n");
         sb.append("Старт: <b>").append(t.getStartDate().format(TOURNEY_FMT)).append(" UTC</b>, осталось около ").append(hoursLeft).append(" ч.\n");
         if (t.getGameName() != null && !t.getGameName().isBlank()) sb.append("Игра: <b>").append(esc(t.getGameName())).append("</b>.\n");
-        sb.append("Взнос: <b>").append(num(t.getEntryFeeExc())).append(" EXC</b>. Записалось: <b>").append(count).append("</b>, призовой фонд сейчас: <b>")
-          .append(num(t.getPrizePoolExc())).append(" EXC</b>.\n");
+        sb.append("Взнос: <b>").append(num(t.getEntryFeeExc())).append(" EXC</b>. Уже записалось <b>").append(count).append("</b>, призовой фонд сейчас <b>")
+          .append(num(t.getPrizePoolExc())).append(" EXC</b> 🔥\n");
         if (t.getMinParticipants() != null) {
             long need = t.getMinParticipants() - count;
-            if (need > 0) sb.append("Минимум участников — ").append(t.getMinParticipants()).append(". Не хватает <b>").append(need)
-                    .append("</b>: если не наберётся, турнир отменится, а взносы вернутся.\n");
+            if (need > 0) sb.append("Минимум участников ").append(t.getMinParticipants()).append(", не хватает <b>").append(need)
+                    .append("</b>. Если не наберётся, турнир отменится, а взносы вернутся.\n");
             else sb.append("Минимум участников уже набран, турнир состоится.\n");
         }
         sb.append(prizeRule()).append("\n\n");
-        sb.append(ending(t.getId(), "Успеешь записаться?", "Ставь ⚔️, если уже в деле.", "Записаться можно прямо сейчас."));
-        sb.append(tourneyLink());
+        String link = tourneyLink().stripLeading();
+        if (!link.isEmpty()) sb.append(link).append("\n\n");
+        sb.append(ending(t.getId(), "Успеешь записаться?", "Ставь ⚔️, если уже в деле", "Записаться можно прямо сейчас, залетай"));
         saveDraft(TOURNEY_REG_CLOSING, sb.toString(), "T:" + t.getId(), t.getPhotoFileId());
     }
 
