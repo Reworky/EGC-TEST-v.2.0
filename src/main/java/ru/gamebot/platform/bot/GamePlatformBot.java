@@ -5515,16 +5515,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + (freshQuestAutoVerified ? "EXC и XP появятся на балансе: EXC можно потратить в магазине наград или вывести\n" : "")
                     + "\n";
         }
+        // Название игры в подсказке (для спонсорских и UGC-квестов «игра» - канал или ролик, поэтому там без названия)
+        String goToGame = freshQuest.isSponsored() || "UGC".equalsIgnoreCase(freshQuest.getGameName()) || freshQuest.getGameName() == null
+                ? "в игру" : "в игру «" + escape(freshQuest.getGameName()) + "»";
         String nextStep = freshQuest.isExternalAutoApprove() ? ""
                 : freshQuestAutoVerified
-                    ? "👉 <b>Теперь идите в игру и выполняйте задание.</b>\n"
+                    ? "🎮 <b>Квест взят! Теперь заходите " + goToGame + " и выполняйте задание.</b>\n"
                         + (freshQuest.getBrawlVerifyType() != null
                             ? (freshQuest.getBrawlVerifyType().isProgression()
                                 ? "Засчитывается прогресс, сделанный после взятия квеста. "
                                 : "Засчитываются бои, сыгранные после взятия квеста. ")
                             : "")
                         + "Мы засчитаем всё сами: прогресс обновляется каждые пару минут (он на кнопке ниже), а когда квест будет выполнен, придёт сообщение.\n\n"
-                    : "👉 <b>Теперь идите в игру и выполняйте задание.</b>\n"
+                    : "🎮 <b>Квест взят! Теперь заходите " + goToGame + " и выполняйте задание.</b>\n"
                         + "Когда закончите, вернитесь сюда и нажмите «📤 Отчёт»: отправьте скриншот, как описано в условиях квеста.\n\n";
 
         sendText(user.getTelegramId(),

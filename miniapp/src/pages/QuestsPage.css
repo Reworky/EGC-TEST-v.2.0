@@ -527,3 +527,22 @@
   color: rgba(255,255,255,0.7);
 }
 
+
+/* Подсказка после взятия квеста: идти в игру */
+.quest-go-hint {
+  margin: 8px 0 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(245, 166, 35, 0.12);
+  border: 1px solid rgba(245, 166, 35, 0.35);
+}
+.quest-go-hint-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #FFD76A;
+}
+.quest-go-hint-text {
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+  margin-top: 3px;
+}

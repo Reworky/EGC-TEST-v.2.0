@@ -79,6 +79,18 @@ function renderTextWithLinks(text) {
   );
 }
 
+/** Подсказка после взятия квеста: человек должен сразу пойти в игру (в карточке она держится, пока квест в работе). */
+function GoPlayHint({ gameName, auto }) {
+  return (
+    <div className="quest-go-hint">
+      <div className="quest-go-hint-title">🎮 Теперь заходите в игру{gameName ? ` «${gameName}»` : ''} и выполняйте задание</div>
+      <div className="quest-go-hint-text">
+        {auto ? 'Прогресс засчитается сам, вернётесь сюда за наградой.' : 'Когда закончите, возвращайтесь сюда и отправьте отчёт.'}
+      </div>
+    </div>
+  );
+}
+
 function QuestSkeleton() {
   return (
     <div className="quest-skeleton-item">
@@ -231,23 +243,30 @@ function QuestActions({ quest, detail, onChanged }) {
     if (target != null && progress != null) {
       const pct = Math.min(100, Math.round((progress / target) * 100));
       return (
+        <>
+        <GoPlayHint gameName={detail.gameName} auto />
         <div className="quest-status quest-status-pending">
           <div><i className="ti ti-clock"></i> Прогресс отслеживается автоматически по вашему аккаунту {detail.gameName}</div>
           <div className="quest-progress-track"><div className="quest-progress-fill" style={{ width: pct + '%' }} /></div>
           <div className="quest-progress-label">{progress} / {target}</div>
         </div>
+        </>
       );
     }
     return (
+      <>
+      <GoPlayHint gameName={detail.gameName} auto />
       <div className="quest-status quest-status-pending">
         <i className="ti ti-clock"></i> Прогресс отслеживается автоматически по вашему аккаунту {detail.gameName} — идёт первый замер…
       </div>
+      </>
     );
   }
 
   if (status === 'DRAFT' || status === 'REJECTED' || status === 'NEEDS_INFO') {
     return (
       <div className="quest-submit-form">
+        {status === 'DRAFT' && <GoPlayHint gameName={detail.gameName} />}
         {(status === 'REJECTED' || status === 'NEEDS_INFO') && detail.moderatorComment && (
           <div className="quest-mod-comment">
             <div className="quest-section-title">Комментарий модератора</div>

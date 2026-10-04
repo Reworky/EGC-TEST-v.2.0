@@ -383,7 +383,13 @@ public class QuestController {
         if (result.status() == QuestActionStatus.OK && quest.getBrawlVerifyType() != null) {
             brawlQuestVerificationService.primeBaseline(result.submission().getId(), quest.getBrawlVerifyType(), user.getBrawlStarsTag());
         }
-        return ResponseEntity.ok(toResponse(result));
+        QuestActionResponseDto response = toResponse(result);
+        if (result.status() == QuestActionStatus.OK && quest.getGameName() != null && !quest.getGameName().isBlank()
+                && !quest.isSponsored() && !"UGC".equalsIgnoreCase(quest.getGameName())) {
+            // Подсказка с названием игры: после «Взять» игрок должен сразу пойти в игру
+            response.setMessage("🎮 Квест взят! Теперь заходите в игру «" + quest.getGameName() + "» и выполняйте задание.");
+        }
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/{id}/report")
