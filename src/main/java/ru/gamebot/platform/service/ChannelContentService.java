@@ -699,9 +699,9 @@ public class ChannelContentService {
     private void createActiveDraft(Tournament t) {
         List<TournamentEntry> entries = tournamentService.getLeaderboard(t);
         long hoursLeft = Math.max(1, Duration.between(LocalDateTime.now(), t.getEndDate()).toHours());
-        StringBuilder sb = new StringBuilder("📊 <b>турнир «" + esc(t.getName()) + "» — финишная прямая</b>\n\n");
-        sb.append("До финиша около ").append(hoursLeft).append(" ч (<b>").append(t.getEndDate().format(TOURNEY_FMT)).append(" UTC</b>). Участников: <b>")
-          .append(entries.size()).append("</b>, призовой фонд: <b>").append(num(t.getPrizePoolExc())).append(" EXC</b>.\n\n");
+        StringBuilder sb = new StringBuilder("📊 <b>Турнир «" + esc(t.getName()) + "»: финишная прямая!</b>\n\n");
+        sb.append("До финиша около ").append(hoursLeft).append(" ч (<b>").append(t.getEndDate().format(TOURNEY_FMT)).append(" UTC</b>). Участников <b>")
+          .append(entries.size()).append("</b>, призовой фонд <b>").append(num(t.getPrizePoolExc())).append(" EXC</b> 🔥\n\n");
         if (t.getScoringType().isTrophyRace()) {
             sb.append("Побеждает тот, кто нарастил больше трофеев: стартовые значения зафиксированы, итоги подведём сразу после финиша.\n\n");
         } else {
@@ -714,20 +714,21 @@ public class ChannelContentService {
             }
             rows.sort(Comparator.comparingLong(Row::score).reversed());
             if (rows.isEmpty()) {
-                sb.append("Пока никто не открыл счёт: самое время начать.\n\n");
+                sb.append("Пока никто не открыл счёт, самое время начать.\n\n");
             } else {
                 sb.append("Сейчас впереди:\n");
                 String[] marks = {"🥇", "🥈", "🥉", "4️⃣", "5️⃣"};
                 for (int i = 0; i < Math.min(5, rows.size()); i++) {
-                    sb.append(marks[i]).append(" ").append(esc(rows.get(i).nick())).append(" — <b>").append(rows.get(i).score()).append("</b> ")
+                    sb.append(marks[i]).append(" ").append(esc(rows.get(i).nick())).append(", <b>").append(rows.get(i).score()).append("</b> ")
                       .append(plural((int) rows.get(i).score(), "квест", "квеста", "квестов")).append("\n");
                 }
                 sb.append("\n");
             }
         }
         sb.append(prizeRule()).append("\n\n");
-        sb.append(ending(t.getId(), "Кто вырвется вперёд?", "Ставь 🔥, если следишь за таблицей.", "До финиша ещё можно успеть."));
-        sb.append(tourneyLink());
+        String link = tourneyLink().stripLeading();
+        if (!link.isEmpty()) sb.append(link).append("\n\n");
+        sb.append(ending(t.getId(), "Кто вырвется вперёд?", "Ставь 🔥, если следишь за таблицей", "До финиша ещё можно успеть, погнали"));
         saveDraft(TOURNEY_ACTIVE, sb.toString(), "T:" + t.getId(), t.getPhotoFileId());
     }
 
