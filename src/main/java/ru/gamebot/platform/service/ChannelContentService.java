@@ -451,8 +451,8 @@ public class ChannelContentService {
                 .sorted((a, b) -> Integer.compare(b.getValue().size(), a.getValue().size()))
                 .forEach(e -> byGame.put(e.getKey(), e.getValue()));
 
-        StringBuilder sb = new StringBuilder("🆕 <b>новые квесты в клубе</b>\n\n");
-        sb.append("Добавили <b>").append(fresh.size()).append("</b> ").append(plural(fresh.size(), "квест", "квеста", "квестов")).append(":\n\n");
+        StringBuilder sb = new StringBuilder("🆕 <b>свежие квесты подъехали</b>\n\n");
+        sb.append("Закинули <b>").append(fresh.size()).append("</b> ").append(plural(fresh.size(), "новый квест", "новых квеста", "новых квестов")).append(", глянь, что там 👀\n\n");
         int shownGames = 0;
         boolean anyAuto = false;
         for (Map.Entry<String, List<Quest>> e : byGame.entrySet()) {
@@ -464,15 +464,15 @@ public class ChannelContentService {
                 if (n++ >= MAX_QUESTS_PER_GAME) break;
                 boolean auto = autoVerified(q);
                 anyAuto |= auto;
-                sb.append("• ").append(esc(q.getTitle())).append(" — <b>").append(num(q.getRewardCoins())).append(" EXC</b>").append(auto ? " ⚡" : "").append("\n");
+                sb.append("• ").append(esc(q.getTitle())).append(" - <b>").append(num(q.getRewardCoins())).append(" EXC</b>").append(auto ? " ⚡" : "").append("\n");
             }
-            if (qs.size() > MAX_QUESTS_PER_GAME) sb.append("и ещё ").append(qs.size() - MAX_QUESTS_PER_GAME).append("\n");
+            if (qs.size() > MAX_QUESTS_PER_GAME) sb.append("и ещё ").append(qs.size() - MAX_QUESTS_PER_GAME).append(" в запасе\n");
             sb.append("\n");
         }
         int hiddenGames = byGame.size() - MAX_GAMES_IN_NEW_POST;
-        if (hiddenGames > 0) sb.append("А ещё квесты в других играх: ").append(hiddenGames).append("\n\n");
-        if (anyAuto) sb.append("⚡ — бот проверяет прогресс сам, отчёт не нужен.\n\n");
-        sb.append(ending(fresh.size(), "Какой возьмёшь первым?", "Ставь 🔥, если уже выбрал.", "Все они уже ждут в боте."));
+        if (hiddenGames > 0) sb.append("Ещё в других играх тоже есть что забрать: ").append(hiddenGames).append("\n\n");
+        if (anyAuto) sb.append("⚡ - тут бот сам считает прогресс. Красота.\n\n");
+        sb.append(ending(fresh.size(), "Ну что, какой берёшь первым?", "Ставь 🔥, если уже выбрал", "Всё уже ждёт в боте, залетай"));
         sb.append(botLink());
         String meta = fresh.stream().map(q -> String.valueOf(q.getId())).collect(Collectors.joining(","));
         return Optional.of(saveDraft(NEW_QUESTS, sb.toString(), meta));
@@ -1176,7 +1176,7 @@ public class ChannelContentService {
 
     private String botLink() {
         if (botUsername == null || botUsername.isBlank()) return "";
-        return "\n\n🎮 Все квесты - в нашем боте: <a href=\"https://t.me/" + botUsername + "\">@" + botUsername + "</a>";
+        return "\n\n🎮 Все квесты ждут в боте: <a href=\"https://t.me/" + botUsername + "\">@" + botUsername + "</a>";
     }
 
     private static String num(long v) {
