@@ -476,7 +476,7 @@ public class ChannelContentService {
         if (!link.isEmpty()) sb.append(link).append("\n\n");
         sb.append(ending(fresh.size(), "Ну что, какой берёшь первым?", "Ставь 🔥, если уже выбрал", "Всё уже ждёт в боте, залетай"));
         String meta = fresh.stream().map(q -> String.valueOf(q.getId())).collect(Collectors.joining(","));
-        return Optional.of(saveDraft(NEW_QUESTS, sb.toString(), meta));
+        return Optional.of(saveDraft(NEW_QUESTS, sb.toString(), meta, NEW_QUESTS_BANNER));
     }
 
     // ───────────────────────── «топ квестов недели» ─────────────────────────
@@ -531,6 +531,9 @@ public class ChannelContentService {
     /** Декоративный баннер «Гонка отрядов» - один и тот же на каждый пост, зашит в ресурсы бота (не Telegram file_id),
      *  см. GamePlatformBot.RESOURCE_BANNER_PREFIX/sendBannerAndText. */
     private static final String SQUAD_MIDWEEK_BANNER = "resource:squad_race_banner.png";
+
+    /** Баннер поста «новые квесты» (клуб в янтарно-фиолетовой палитре, 04.10.2026); лежит в ресурсах бота, как и баннер гонки отрядов. */
+    private static final String NEW_QUESTS_BANNER = "resource:new_quests_banner.png";
 
     /** «Гонка отрядов - экватор недели» (раньше тизер жил в памяти бота): топ-5 недельного рейтинга, отставание второго от лидера, приз. */
     public Optional<ChannelPostDraft> createSquadMidweekDraft(boolean force) {
