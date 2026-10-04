@@ -5219,7 +5219,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📌 Статус: <b>" + escape(displayStatus) + "</b>\n\n"
                         + "🏆 <b>Награда:</b>\n"
                         + "✨ +" + quest.getRewardXp() + " XP\n"
-                        + "🪙 +" + displayRewardCoins(user, quest) + (quest.isSponsored() ? " EXC" : " монет") + starsNote(displayRewardCoins(user, quest)) + rewardNote + egcPassRewardNote(user, quest) + "\n"
+                        + "🪙 +" + displayRewardCoins(user, quest) + " EXC" + starsNote(displayRewardCoins(user, quest)) + rewardNote + egcPassRewardNote(user, quest) + "\n"
                         + (!quest.isSponsored() && !"UGC".equalsIgnoreCase(quest.getGameName()) && quest.getTicketReward() > 0 ? "🎟 +" + quest.getTicketReward() + " билет(а) для Колеса фортуны\n" : "")
                         + "\n"
                         + "📝 <b>Суть задания:</b>\n" + escape(quest.getDescription()) + "\n\n"
@@ -5538,7 +5538,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📌 Статус: <b>В процессе</b>\n\n"
                         + "🏆 <b>Награда</b>\n"
                         + "✨ +" + freshQuest.getRewardXp() + " XP\n"
-                        + "🪙 +" + displayRewardCoins(user, freshQuest) + " монет" + starsNote(displayRewardCoins(user, freshQuest))
+                        + "🪙 +" + displayRewardCoins(user, freshQuest) + " EXC" + starsNote(displayRewardCoins(user, freshQuest))
                         + (freshQuest.isRepeatableNoCooldownEligible() ? " (за 1-е сегодня, дальше меньше)" : weeklyLimitNote(questService.weeklyLimitStatus(user, freshQuest)))
                         + egcPassRewardNote(user, freshQuest)
                         + (!freshQuest.isSponsored() && !"UGC".equalsIgnoreCase(freshQuest.getGameName()) && freshQuest.getTicketReward() > 0 ? "\n🎟 +" + freshQuest.getTicketReward() + " билет(а) для Колеса фортуны" : "")
@@ -5858,7 +5858,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📌 Статус: <b>" + escape(humanStatus(submission.getStatus())) + "</b>\n"
                         + "🕒 Обновлено: <b>" + escape(submission.getUpdatedAt().format(DATE_TIME_FORMATTER)) + "</b>\n"
                         + "✨ XP: <b>+" + quest.getRewardXp() + "</b>\n"
-                        + "🪙 Монеты: <b>+" + shownCoins + "</b>" + starsNote(shownCoins) + weeklyNote + "\n"
+                        + "🪙 EXC: <b>+" + shownCoins + "</b>" + starsNote(shownCoins) + weeklyNote + "\n"
                         + (quest.getTicketReward() > 0 ? "🎟 Билеты: <b>+" + quest.getTicketReward() + "</b>\n" : "")
                         + "\n📝 <b>Суть задания</b>\n" + escape(quest.getDescription()) + moderatorComment,
                 verticalWithBackMenu(buttons, "⬅️ Назад", "menu:myquests"));
