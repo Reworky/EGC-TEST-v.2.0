@@ -451,7 +451,7 @@ public class ChannelContentService {
                 .sorted((a, b) -> Integer.compare(b.getValue().size(), a.getValue().size()))
                 .forEach(e -> byGame.put(e.getKey(), e.getValue()));
 
-        StringBuilder sb = new StringBuilder("🆕 <b>свежие квесты подъехали</b>\n\n");
+        StringBuilder sb = new StringBuilder("🆕 <b>Свежие квесты подъехали!</b>\n\n");
         sb.append("Закинули <b>").append(fresh.size()).append("</b> ").append(plural(fresh.size(), "новый квест", "новых квеста", "новых квестов")).append(", глянь, что там 👀\n\n");
         int shownGames = 0;
         boolean anyAuto = false;
