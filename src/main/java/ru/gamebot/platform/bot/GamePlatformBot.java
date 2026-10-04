@@ -18410,7 +18410,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String header = isSponsored ? "🎯 НОВЫЙ СПОНСОРСКИЙ КВЕСТ" : "🎯 НОВЫЙ КВЕСТ";
         return header + "\n\n"
                 + "📋 Квест: \"" + quest.getTitle() + "\"\n"
-                + "💰 Награда: " + String.format("%,d", quest.getRewardCoins()) + " EXC\n\n"
+                + "💰 Награда: " + String.format("%,d", quest.getRewardCoins()) + " EXC" + starsNote(quest.getRewardCoins()) + "\n\n"
                 + "📅 Период: " + period + "\n\n"
                 + "👉 Выполнить → @" + getBotUsername();
     }
