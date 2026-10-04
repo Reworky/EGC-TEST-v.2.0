@@ -974,19 +974,20 @@ public class ChannelContentService {
                 log.info("[ChannelContent] LEAGUES_WEEK skipped: {} active players", e.getActivePlayers());
                 return;
             }
-            StringBuilder sb = new StringBuilder("🏅 <b>лиги недели</b>\n\n");
+            StringBuilder sb = new StringBuilder("🏅 <b>Лиги недели!</b>\n\n");
             sb.append("Неделя закрыта: опыт набрали <b>").append(e.getActivePlayers()).append("</b> ")
-              .append(plural(e.getActivePlayers(), "игрок", "игрока", "игроков")).append(". Расклад по лигам:\n\n");
+              .append(plural(e.getActivePlayers(), "игрок", "игрока", "игроков")).append(", вот расклад по лигам 👇\n\n");
             for (LeagueWeekEvent.LeagueRow r : e.getRows()) {
                 if (r.players() <= 0) continue;
-                sb.append(esc(r.displayName())).append(" - <b>").append(r.players()).append("</b>");
+                sb.append(esc(r.displayName())).append(": <b>").append(r.players()).append("</b>");
                 if (r.excPrize() > 0) sb.append(" (от ").append(num(r.minWeeklyXp())).append(" XP, приз ").append(num(r.excPrize())).append(" EXC)");
                 sb.append("\n");
             }
-            if (e.getTotalPrize() > 0) sb.append("\nПризов лиг выплатили <b>").append(num(e.getTotalPrize())).append(" EXC</b>.\n");
-            sb.append("Чтобы подняться в лигу выше, нужно больше опыта за неделю: лиги пересчитываются каждый понедельник.\n\n");
-            sb.append(ending(e.getActivePlayers(), "В какой лиге ты закончишь эту неделю?", "Ставь 🏅, если метишь выше.", "Новая неделя уже началась."));
-            sb.append(botLink());
+            if (e.getTotalPrize() > 0) sb.append("\nПризов лиг выплатили <b>").append(num(e.getTotalPrize())).append(" EXC</b> 🔥\n");
+            sb.append("Чтобы подняться в лигу выше, нужно больше опыта за неделю. Лиги пересчитываются каждый понедельник.\n\n");
+            String link = botLink().stripLeading();
+            if (!link.isEmpty()) sb.append(link).append("\n\n");
+            sb.append(ending(e.getActivePlayers(), "В какой лиге ты закончишь эту неделю?", "Ставь 🏅, если метишь выше", "Новая неделя уже началась, погнали"));
             saveDraft(LEAGUES_WEEK, sb.toString(), null);
         } catch (Exception ex) {
             log.error("[ChannelContent] Failed to create leagues draft", ex);
