@@ -4779,6 +4779,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long effectiveQuestReward = healthRatioService.applyRatio(100);
         sendText(user.getTelegramId(),
                 "💰 <b>Баланс</b>\n\n"
+                        + (user.getCoins() > 0 ? "⭐ В звёздах: <b>" + healthRatioService.starsApprox(user.getCoins()) + "</b> (по текущему курсу фонда)\n" : "")
                         + "🪙 Монеты клуба: <b>" + user.getCoins() + " EXC</b>\n"
                         + "💱 Курс вывода: <b>" + rateString(ratioPercent) + "</b>\n"
                         + "💠 Активный бонус к EXC: <b>+" + userService.getExcBonusPercent(user.getXp()) + "%</b>\n"
@@ -4794,6 +4795,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         ),
                         List.of(keyboardFactory.callback("⬅️ Назад", backData))
                 )));
+    }
+
+    /** « (≈ 6,2 ⭐)» для подписи рядом с суммой EXC; пусто, если суммы нет. Только показ, расчёты не затрагивает. */
+    private String starsNote(long exc) {
+        String s = healthRatioService.starsApprox(exc);
+        return s.isEmpty() ? "" : " (" + s + ")";
     }
 
     private String rateString(int ratioPercent) {
@@ -5212,7 +5219,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📌 Статус: <b>" + escape(displayStatus) + "</b>\n\n"
                         + "🏆 <b>Награда:</b>\n"
                         + "✨ +" + quest.getRewardXp() + " XP\n"
-                        + "🪙 +" + displayRewardCoins(user, quest) + (quest.isSponsored() ? " EXC" : " монет") + rewardNote + egcPassRewardNote(user, quest) + "\n"
+                        + "🪙 +" + displayRewardCoins(user, quest) + (quest.isSponsored() ? " EXC" : " монет") + starsNote(displayRewardCoins(user, quest)) + rewardNote + egcPassRewardNote(user, quest) + "\n"
                         + (!quest.isSponsored() && !"UGC".equalsIgnoreCase(quest.getGameName()) && quest.getTicketReward() > 0 ? "🎟 +" + quest.getTicketReward() + " билет(а) для Колеса фортуны\n" : "")
                         + "\n"
                         + "📝 <b>Суть задания:</b>\n" + escape(quest.getDescription()) + "\n\n"
@@ -5531,7 +5538,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📌 Статус: <b>В процессе</b>\n\n"
                         + "🏆 <b>Награда</b>\n"
                         + "✨ +" + freshQuest.getRewardXp() + " XP\n"
-                        + "🪙 +" + displayRewardCoins(user, freshQuest) + " монет"
+                        + "🪙 +" + displayRewardCoins(user, freshQuest) + " монет" + starsNote(displayRewardCoins(user, freshQuest))
                         + (freshQuest.isRepeatableNoCooldownEligible() ? " (за 1-е сегодня, дальше меньше)" : weeklyLimitNote(questService.weeklyLimitStatus(user, freshQuest)))
                         + egcPassRewardNote(user, freshQuest)
                         + (!freshQuest.isSponsored() && !"UGC".equalsIgnoreCase(freshQuest.getGameName()) && freshQuest.getTicketReward() > 0 ? "\n🎟 +" + freshQuest.getTicketReward() + " билет(а) для Колеса фортуны" : "")
@@ -5851,7 +5858,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📌 Статус: <b>" + escape(humanStatus(submission.getStatus())) + "</b>\n"
                         + "🕒 Обновлено: <b>" + escape(submission.getUpdatedAt().format(DATE_TIME_FORMATTER)) + "</b>\n"
                         + "✨ XP: <b>+" + quest.getRewardXp() + "</b>\n"
-                        + "🪙 Монеты: <b>+" + shownCoins + "</b>" + weeklyNote + "\n"
+                        + "🪙 Монеты: <b>+" + shownCoins + "</b>" + starsNote(shownCoins) + weeklyNote + "\n"
                         + (quest.getTicketReward() > 0 ? "🎟 Билеты: <b>+" + quest.getTicketReward() + "</b>\n" : "")
                         + "\n📝 <b>Суть задания</b>\n" + escape(quest.getDescription()) + moderatorComment,
                 verticalWithBackMenu(buttons, "⬅️ Назад", "menu:myquests"));
@@ -9433,7 +9440,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyUser(submission.getUser().getTelegramId(),
                     "🎉 Ваш отчёт по квесту <b>" + escape(submission.getQuest().getTitle()) + "</b> одобрен!\n\n"
                             + "✨ XP: <b>+" + rewardGrant.xp() + "</b>\n"
-                            + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>\n"
+                            + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>" + starsNote(rewardGrant.totalExc()) + "\n"
                             + formatExcBonusLine(rewardGrant)
                             + egcPassBonusLine(submission)
                             + firstQuestBonus, watchAdForBonusButton(), nextQuestSuggestionButton(submission.getUser()), sinkShopSuggestionButton(submission.getUser()),
@@ -16350,7 +16357,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyUser(telegramId,
                     "🎁 Администратор начислил вам бонус.\n\n"
                             + "✨ XP: <b>+" + rewardGrant.xp() + "</b>\n"
-                            + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>\n"
+                            + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>" + starsNote(rewardGrant.totalExc()) + "\n"
                             + formatExcBonusLine(rewardGrant)
                             + "🎟️ Билеты: <b>+" + rewardGrant.tickets() + "</b>\n"
                             + "💬 Основание: <b>" + escape(comment) + "</b>");
@@ -16381,7 +16388,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         notifyUser(telegramId,
                 "🎁 Администратор начислил вам бонус.\n\n"
                         + "✨ XP: <b>+" + rewardGrant.xp() + "</b>\n"
-                        + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>\n"
+                        + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>" + starsNote(rewardGrant.totalExc()) + "\n"
                         + formatExcBonusLine(rewardGrant)
                         + "🎟️ Билеты: <b>+" + rewardGrant.tickets() + "</b>\n"
                         + "💬 Основание: <b>" + escape(comment) + "</b>");
@@ -16553,7 +16560,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyUser(approved.getUser().getTelegramId(),
                     "✅ <b>Квест выполнен автоматически!</b>\n\n"
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в Brawl Stars засчитан.\n\n"
-                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>\n"
+                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>" + starsNote(awardedCoinsOf(approved)) + "\n"
                     + egcPassBonusLine(approved)
                     + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Brawl Stars API");
@@ -16569,7 +16576,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyUser(approved.getUser().getTelegramId(),
                     "✅ <b>Квест выполнен автоматически!</b>\n\n"
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в Clash of Clans засчитан.\n\n"
-                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>\n"
+                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>" + starsNote(awardedCoinsOf(approved)) + "\n"
                     + egcPassBonusLine(approved)
                     + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Clash of Clans API");
@@ -16585,7 +16592,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyUser(approved.getUser().getTelegramId(),
                     "✅ <b>Квест выполнен автоматически!</b>\n\n"
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в Clash Royale засчитан.\n\n"
-                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>\n"
+                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>" + starsNote(awardedCoinsOf(approved)) + "\n"
                     + egcPassBonusLine(approved)
                     + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Clash Royale API");
@@ -16601,7 +16608,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyUser(approved.getUser().getTelegramId(),
                     "✅ <b>Квест выполнен автоматически!</b>\n\n"
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в Dota 2 засчитан.\n\n"
-                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>\n"
+                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>" + starsNote(awardedCoinsOf(approved)) + "\n"
                     + egcPassBonusLine(approved)
                     + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Steam Web API (Dota 2)");
@@ -16617,7 +16624,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyUser(approved.getUser().getTelegramId(),
                     "✅ <b>Квест выполнен автоматически!</b>\n\n"
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в CS2 засчитан.\n\n"
-                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>\n"
+                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>" + starsNote(awardedCoinsOf(approved)) + "\n"
                     + egcPassBonusLine(approved)
                     + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Steam Web API (CS2)");
@@ -16633,7 +16640,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyUser(approved.getUser().getTelegramId(),
                     "✅ <b>Квест выполнен автоматически!</b>\n\n"
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в PUBG засчитан.\n\n"
-                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>\n"
+                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>" + starsNote(awardedCoinsOf(approved)) + "\n"
                     + egcPassBonusLine(approved)
                     + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через официальный PUBG API");
@@ -16649,7 +16656,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyUser(approved.getUser().getTelegramId(),
                     "✅ <b>Партнёр подтвердил выполнение!</b>\n\n"
                     + "Квест <b>" + escape(approved.getQuest().getTitle()) + "</b> засчитан.\n\n"
-                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>"
+                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>" + starsNote(awardedCoinsOf(approved))
                     + (egcPassBonusLine(approved).isEmpty() ? "" : "\n" + egcPassBonusLine(approved).trim()), watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "подтверждено партнёрской сетью");
         } catch (Exception e) {
@@ -16705,7 +16712,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🎯 Квест: <b>" + escape(quest.getTitle()) + "</b>\n"
                 + "🎮 Игра: <b>" + escape(quest.getGameName()) + "</b>\n"
                 + "⚙️ Способ: " + methodLabel + "\n"
-                + "🏆 Награда: +" + awardedXpOf(submission) + " XP, +" + awardedCoinsOf(submission) + " EXC\n"
+                + "🏆 Награда: +" + awardedXpOf(submission) + " XP, +" + awardedCoinsOf(submission) + " EXC" + starsNote(awardedCoinsOf(submission)) + "\n"
                 + "📅 Засчитано: <b>" + submission.getUpdatedAt().format(DATE_TIME_FORMATTER) + "</b>";
         for (Long recipient : adminService.strictModeratorIds()) {
             try {
@@ -18605,7 +18612,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         "🤖 <b>Автопроверка пройдена!</b>\n\n"
                         + "Ваш отчёт по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> одобрен AI-модератором (" + pct + "%).\n\n"
                         + "✨ XP: <b>+" + rewardGrant.xp() + "</b>\n"
-                        + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>\n"
+                        + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>" + starsNote(rewardGrant.totalExc()) + "\n"
                         + formatExcBonusLine(rewardGrant)
                         + egcPassBonusLine(approved)
                         + firstQuestBonus, watchAdForBonusButton(), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()),

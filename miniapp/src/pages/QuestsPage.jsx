@@ -4,6 +4,7 @@ import { getQuests, getSponsoredQuests, getGames, getGamePhotoUrl, getQuestBoost
 import { useLottie } from '../components/LottieContext';
 import { useParticles } from '../components/ParticlesContext';
 import AdRewardCard from '../components/AdRewardCard';
+import { starsApprox, useFundRatio } from '../utils/fundStars';
 import './QuestsPage.css';
 
 const CATEGORY_ORDER = ['Лёгкие', 'Средние', 'Сложные'];
@@ -300,6 +301,7 @@ function QuestActions({ quest, detail, onChanged }) {
 }
 
 function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
+  const fundRatio = useFundRatio();
   // Статус берём из уже подгруженного детейла квеста, если он есть (details обновляется сразу после
   // взятия/сдачи отчёта), иначе — из общего списка квестов игры (details ещё не запрашивался). Без этого
   // бейдж в свёрнутой карточке "Все квесты" оставался бы старым до перезагрузки всего списка игры.
@@ -344,7 +346,7 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
       <div className="quest-top">
         <div className="quest-title">{q.title}</div>
         <div className="quest-rewards">
-          <span className="reward-exc"><i className="ti ti-coin"></i> {q.rewardCoins.toLocaleString()} EXC</span>
+          <span className="reward-exc"><i className="ti ti-coin"></i> {q.rewardCoins.toLocaleString()} EXC{fundRatio != null && <> ({starsApprox(q.rewardCoins, fundRatio)})</>}</span>
           {(details[q.id]?.rewardDiminished ?? q.rewardDiminished) && (
             <span className="reward-diminished">×½ лимит недели</span>
           )}
@@ -625,6 +627,7 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
 }
 
 function MyQuestsView({ expanded, details, onToggle, onDetailChanged }) {
+  const fundRatio = useFundRatio();
   const [myQuests, setMyQuests] = useState(null);
   const [error, setError] = useState(null);
   const [cancelBusy, setCancelBusy] = useState(null);
@@ -693,7 +696,7 @@ function MyQuestsView({ expanded, details, onToggle, onDetailChanged }) {
           <div className="quest-top">
             <div className="quest-title">{m.title}</div>
             <div className="quest-rewards">
-              <span className="reward-exc"><i className="ti ti-coin"></i> {m.rewardCoins.toLocaleString()} EXC</span>
+              <span className="reward-exc"><i className="ti ti-coin"></i> {m.rewardCoins.toLocaleString()} EXC{fundRatio != null && <> ({starsApprox(m.rewardCoins, fundRatio)})</>}</span>
               <span className="reward-xp"><i className="ti ti-star"></i> {m.rewardXp} XP</span>
             </div>
           </div>

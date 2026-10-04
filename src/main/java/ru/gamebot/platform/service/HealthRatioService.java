@@ -112,6 +112,24 @@ public class HealthRatioService {
         return Math.round(item.getPriceCoins() / ratio);
     }
 
+    /** Реальная стоимость одной звезды Telegram у реселлера в рублях (RewardSeeder откалиброван так же: 50 ⭐ = 79 ₽). Только для показа эквивалента игроку. */
+    public static final double STAR_RUB = 1.58;
+
+    /** Приблизительный эквивалент суммы EXC в звёздах по текущему курсу фонда (только подпись для игрока, ничего не начисляет и не списывает).
+     *  До 10 звёзд - один знак после запятой, дальше целое. Пустая строка для нуля. */
+    public String starsApprox(long exc) {
+        return starsApprox(exc, getCurrentRatio());
+    }
+
+    public static String starsApprox(long exc, double ratio) {
+        if (exc <= 0) return "";
+        double stars = exc * ratio / 100.0 / STAR_RUB;
+        java.util.Locale ru = java.util.Locale.forLanguageTag("ru");
+        if (stars < 0.1) return "≈ меньше 0,1 ⭐";
+        if (stars < 10) return "≈ " + String.format(ru, "%.1f", stars) + " ⭐";
+        return "≈ " + String.format(ru, "%,d", Math.round(stars)) + " ⭐";
+    }
+
     public long getPayoutPoolRub() {
         return payoutPoolEntryRepository.sumAllAmounts();
     }

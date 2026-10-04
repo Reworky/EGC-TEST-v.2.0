@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { starsApprox } from '../utils/fundStars';
 import { useSearchParams } from 'react-router-dom';
 import { getWallet, claimDailyBonus, openChest, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone, invalidateCache, getStarsWithdrawItems, purchaseItem, getStarsInvoiceLink, getStarsPrices } from '../api/client';
 import { openStarsInvoice } from '../utils/stars';
@@ -292,8 +293,16 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
           <i className="ti ti-coin" style={{ marginRight: 4 }} />
           <AnimatedNumber value={wallet.coins} flashColor="#F5A623" /> EXC
         </div>
+        {wallet.coins > 0 && (
+          <div style={{ fontSize: 18, fontWeight: 600, color: '#FFD76A', marginTop: 4 }}>
+            {starsApprox(wallet.coins, wallet.healthRatioPercent)}
+          </div>
+        )}
         <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>
           ≈ {+(wallet.coins * wallet.healthRatioPercent / 100 / 100).toFixed(1)} ₽ · фонд {wallet.healthRatioPercent}%
+        </div>
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
+          Звёзды: приблизительный пересчёт по курсу фонда, зачисляется и выводится по нему.
         </div>
       </BorderBeamCard>
 

@@ -226,6 +226,11 @@ export async function createSupportTicket({ text, photo }) {
   return data;
 }
 
+// Состояние фонда клуба (проценты): нужно только для приблизительного пересчёта EXC в звёзды на экране.
+export async function getFundRatioPercent() {
+  return cached('fundRatio', async () => { const { data } = await api.get('/api/stats'); return data.healthRatioPercent; });
+}
+
 export async function getWallet() {
   return cached('wallet', async () => { const { data } = await api.get('/api/wallet'); return data; });
 }
