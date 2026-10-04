@@ -577,11 +577,11 @@ public class ChannelContentService {
     private Optional<ChannelPostDraft> createSquadResultsDraft(Squad winner, long winnerXp, int winnersCount, long prizePerMember) {
         String winnerName = safeName(winner.getName());
         long members = squadService.memberCount(winner);
-        StringBuilder sb = new StringBuilder("🏆 <b>итоги недели у отрядов</b>\n\n");
-        sb.append("Победил отряд <b>").append(winnerName != null ? "«" + esc(winnerName) + "»" : "без публичного названия").append("</b>: ")
-          .append(num(winnerXp)).append(" XP, ").append(members).append(" ").append(plural((int) members, "игрок", "игрока", "игроков")).append(".\n");
+        StringBuilder sb = new StringBuilder("🏆 <b>Итоги недели у отрядов!</b>\n\n");
+        sb.append("Победил отряд <b>").append(winnerName != null ? "«" + esc(winnerName) + "»" : "без публичного названия").append("</b>, поздравляем 🔥 <b>")
+          .append(num(winnerXp)).append(" XP</b>, в отряде ").append(members).append(" ").append(plural((int) members, "игрок", "игрока", "игроков")).append(".\n");
         sb.append("Приз <b>").append(num(SquadService.WEEKLY_PRIZE_POOL)).append(" EXC</b> поделили ").append(winnersCount).append(" ")
-          .append(plural(winnersCount, "лучший участник", "лучших участника", "лучших участников")).append(" - по <b>").append(num(prizePerMember)).append(" EXC</b>.\n\n");
+          .append(plural(winnersCount, "лучший участник", "лучших участника", "лучших участников")).append(", каждому по <b>").append(num(prizePerMember)).append(" EXC</b>.\n\n");
         List<SquadService.SquadRankEntry> rest = squadService.getLeaderboard().stream()
                 .filter(x -> !x.squad().getId().equals(winner.getId()) && safeName(x.squad().getName()) != null).limit(2).toList();
         String[] marks = {"🥈", "🥉"};
@@ -589,8 +589,9 @@ public class ChannelContentService {
             sb.append(marks[i]).append(" «").append(esc(safeName(rest.get(i).squad().getName()))).append("» - ").append(num(rest.get(i).weeklyXp())).append(" XP\n");
         }
         if (!rest.isEmpty()) sb.append("\n");
-        sb.append(ending(winnerXp, "Кто начнёт гонку заново первым?", "Ставь ⚔️, если готов отбить первое место.", "Новая неделя уже началась."));
-        sb.append(squadLink());
+        String link = squadLink().stripLeading();
+        if (!link.isEmpty()) sb.append(link).append("\n\n");
+        sb.append(ending(winnerXp, "Кто начнёт гонку заново первым?", "Ставь ⚔️, если готов отбить первое место", "Новая неделя уже началась, погнали"));
         return Optional.of(saveDraft(SQUAD_RESULTS, sb.toString(), null));
     }
 
