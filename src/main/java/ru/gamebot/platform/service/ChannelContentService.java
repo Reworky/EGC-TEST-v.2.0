@@ -505,7 +505,7 @@ public class ChannelContentService {
         sb.append(String.join("\n\n", lines)).append("\n\n");
         sb.append(ending(total, "Что возьмёшь ты?", "Ставь 🔥, если уже проходил.", "Новая неделя уже началась."));
         sb.append(botLink());
-        return Optional.of(saveDraft(TOP_QUESTS_WEEK, sb.toString(), null));
+        return Optional.of(saveDraft(TOP_QUESTS_WEEK, sb.toString(), null, TOP_QUESTS_BANNER));
     }
 
     // ───────────────────────── отряды ─────────────────────────
@@ -534,6 +534,9 @@ public class ChannelContentService {
 
     /** Баннер поста «новые квесты» (клуб в янтарно-фиолетовой палитре, 04.10.2026); лежит в ресурсах бота, как и баннер гонки отрядов. */
     private static final String NEW_QUESTS_BANNER = "resource:new_quests_banner.png";
+
+    /** Баннер поста «топ квестов недели»: официальные арты Brawl Stars, Clash Royale и Clash of Clans с кубком (04.10.2026). */
+    private static final String TOP_QUESTS_BANNER = "resource:top_quests_banner.png";
 
     /** «Гонка отрядов - экватор недели» (раньше тизер жил в памяти бота): топ-5 недельного рейтинга, отставание второго от лидера, приз. */
     public Optional<ChannelPostDraft> createSquadMidweekDraft(boolean force) {
