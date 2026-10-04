@@ -844,18 +844,32 @@ public class ChannelContentService {
                 put("cc.wmil.rub", String.valueOf(crossedRub));
                 return;
             }
-            if (crossedCount > parseLong(lastCount)) {
-                put("cc.wmil.count", String.valueOf(crossedCount));
-                saveDraft(WITHDRAW_MILESTONE, "🏁 <b>" + crossedCount + "-я выплата в клубе</b>\n\nКлуб выплатил уже <b>" + count + "</b> заявок на вывод. "
-                        + "Всего выведено: <b>" + num(all.totalExc()) + " EXC</b>.\n\nСпасибо всем, кто играет и выполняет квесты.\n\n"
-                        + ending(crossedCount, "Кто станет следующим?", "Ставь 🔥, если уже среди них.", "Следующая веха уже впереди.") + payoutsLink(), "M:C" + crossedCount);
+            boolean countUp = crossedCount > parseLong(lastCount);
+            boolean rubUp = crossedRub > parseLong(lastRub);
+            if (!countUp && !rubUp) return;
+            if (countUp) put("cc.wmil.count", String.valueOf(crossedCount));
+            if (rubUp) put("cc.wmil.rub", String.valueOf(crossedRub));
+            // Один пост на обе вехи (владелец, 04.10): заголовок по числу выплат, если пересечено оно, иначе по сумме; в тексте обе цифры
+            String forms = plural((int) Math.min(count, Integer.MAX_VALUE), "заявку", "заявки", "заявок");
+            StringBuilder sb = new StringBuilder();
+            if (countUp) {
+                sb.append("🏁 <b>").append(crossedCount).append("-я выплата в клубе!</b>\n\n");
+                sb.append("Клуб выплатил уже <b>").append(count).append("</b> ").append(forms).append(" на вывод, всего выведено <b>")
+                  .append(num(all.totalExc())).append(" EXC</b> 🔥\n");
+                if (crossedRub > 0) sb.append("Игроки вывели рублями и в GRAM (TON) более <b>").append(num(crossedRub)).append(" ₽</b>. Чеки публикуем в канале выплат.\n");
+                sb.append("Спасибо всем, кто играет и закрывает квесты, без вас этих цифр бы не было.\n\n");
+            } else {
+                sb.append("🏁 <b>Выплачено больше ").append(num(crossedRub)).append(" ₽!</b>\n\n");
+                sb.append("Игроки клуба вывели рублями и в GRAM (TON) уже более <b>").append(num(crossedRub)).append(" ₽</b> 💸 Это <b>")
+                  .append(count).append("</b> ").append(forms).append(", всего <b>").append(num(all.totalExc())).append(" EXC</b>.\n");
+                sb.append("Чеки публикуем в канале выплат.\n\n");
             }
-            if (crossedRub > parseLong(lastRub)) {
-                put("cc.wmil.rub", String.valueOf(crossedRub));
-                saveDraft(WITHDRAW_MILESTONE, "🏁 <b>выплачено больше " + num(crossedRub) + " ₽</b>\n\nИгроки клуба вывели рублями и в GRAM (TON) уже более <b>"
-                        + num(crossedRub) + " ₽</b>. Чеки публикуем в канале выплат.\n\n"
-                        + ending(crossedRub, "Куда потратишь свою награду?", "Ставь 💸, если тоже выводил.", "Каждая заявка обрабатывается в течение 24 часов.") + payoutsLink(), "M:R" + crossedRub);
-            }
+            String link = payoutsLink().stripLeading();
+            if (!link.isEmpty()) sb.append(link).append("\n\n");
+            sb.append(countUp
+                    ? ending(crossedCount, "Кто станет следующим?", "Ставь 🔥, если уже среди них", "Следующая веха уже впереди, погнали")
+                    : ending(crossedRub, "Куда потратишь свою награду?", "Ставь 💸, если тоже выводил", "Каждая заявка обрабатывается в течение 24 часов"));
+            saveDraft(WITHDRAW_MILESTONE, sb.toString(), (countUp ? "M:C" + crossedCount : "") + (rubUp ? (countUp ? "|" : "") + "M:R" + crossedRub : ""));
         } catch (Exception e) {
             log.error("[ChannelContent] milestoneTick failed", e);
         }
