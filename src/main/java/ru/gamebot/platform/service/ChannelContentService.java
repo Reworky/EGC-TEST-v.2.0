@@ -740,11 +740,11 @@ public class ChannelContentService {
             Tournament t = e.getTournament();
             if (tourneyDrafted(TOURNEY_CANCELLED, t.getId())) return;
             int refunded = e.getRefundedEntries().size();
-            StringBuilder sb = new StringBuilder("🚫 <b>турнир «" + esc(t.getName()) + "» отменён</b>\n\n");
+            StringBuilder sb = new StringBuilder("🚫 <b>Турнир «" + esc(t.getName()) + "» отменён</b>\n\n");
             sb.append("Не набралось минимальное число участников");
             if (t.getMinParticipants() != null) sb.append(" (нужно ").append(t.getMinParticipants()).append(", записалось ").append(refunded).append(")");
-            sb.append(".\nВзносы (").append(num(t.getEntryFeeExc())).append(" EXC) вернули всем участникам в полном объёме.\n\n");
-            sb.append("Следующий турнир объявим отдельно.");
+            sb.append(".\nВзносы по ").append(num(t.getEntryFeeExc())).append(" EXC вернули всем в полном объёме, ничего не потеряли 🤝\n\n");
+            sb.append("Следующий турнир объявим отдельно, следите за каналом.");
             sb.append(tourneyLink());
             saveDraft(TOURNEY_CANCELLED, sb.toString(), "T:" + t.getId(), t.getPhotoFileId());
         } catch (Exception ex) {
