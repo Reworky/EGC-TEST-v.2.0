@@ -500,11 +500,12 @@ public class ChannelContentService {
             lines.add(marks[lines.size()] + " " + esc(q.getTitle()) + "\n     " + esc(q.getGameName()) + " · <b>" + cnt + "</b> " + plural((int) cnt, "выполнение", "выполнения", "выполнений"));
         }
         if (lines.isEmpty()) return Optional.empty();
-        StringBuilder sb = new StringBuilder("🏆 <b>топ квестов недели</b>\n\n");
-        sb.append("За неделю игроки выполнили <b>").append(num(total)).append("</b> ").append(plural((int) Math.min(total, Integer.MAX_VALUE), "квест", "квеста", "квестов")).append(". Чаще всего брали:\n\n");
+        StringBuilder sb = new StringBuilder("🏆 <b>Топ квестов недели!</b>\n\n");
+        sb.append("За неделю вы закрыли <b>").append(num(total)).append("</b> ").append(plural((int) Math.min(total, Integer.MAX_VALUE), "квест", "квеста", "квестов")).append(", красавчики 🔥 Вот что залетало чаще всего:\n\n");
         sb.append(String.join("\n\n", lines)).append("\n\n");
-        sb.append(ending(total, "Что возьмёшь ты?", "Ставь 🔥, если уже проходил.", "Новая неделя уже началась."));
-        sb.append(botLink());
+        String link = botLink().stripLeading();
+        if (!link.isEmpty()) sb.append(link).append("\n\n");
+        sb.append(ending(total, "Ну что, а ты какой уже прошёл?", "Ставь 🔥, если был в этом списке", "Новая неделя уже началась, погнали"));
         return Optional.of(saveDraft(TOP_QUESTS_WEEK, sb.toString(), null, TOP_QUESTS_BANNER));
     }
 
