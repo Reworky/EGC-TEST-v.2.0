@@ -612,14 +612,16 @@ public class ChannelContentService {
         }
         LocalDateTime weekAgo = LocalDateTime.now().minusDays(7);
         long fresh = active.stream().filter(sq -> sq.getCreatedAt() != null && sq.getCreatedAt().isAfter(weekAgo)).count();
-        StringBuilder sb = new StringBuilder("📈 <b>отряды в цифрах</b>\n\n");
-        sb.append("В клубе <b>").append(active.size()).append("</b> ").append(plural(active.size(), "отряд", "отряда", "отрядов"))
-          .append(" и <b>").append(members).append("</b> ").append(plural((int) members, "игрок", "игрока", "игроков")).append(" в них.\n");
-        if (fresh > 0) sb.append("За неделю появилось новых отрядов: <b>").append(fresh).append("</b>.\n");
-        if (biggest != null) sb.append("Самый большой - <b>«").append(esc(safeName(biggest.getName()))).append("»</b>, ").append(biggestCount).append(" ")
+        StringBuilder sb = new StringBuilder("📈 <b>Отряды в цифрах!</b>\n\n");
+        sb.append("В клубе уже <b>").append(active.size()).append("</b> ").append(plural(active.size(), "отряд", "отряда", "отрядов"))
+          .append(", а в них <b>").append(members).append("</b> ").append(plural((int) members, "игрок", "игрока", "игроков")).append(" 💪\n");
+        if (fresh > 0) sb.append("За неделю появилось новых отрядов: <b>").append(fresh).append("</b>, растём.\n");
+        if (biggest != null) sb.append("Самый большой отряд: <b>«").append(esc(safeName(biggest.getName()))).append("»</b>, ").append(biggestCount).append(" ")
                 .append(plural((int) biggestCount, "человек", "человека", "человек")).append(".\n");
-        sb.append("\n").append(ending(active.size(), "Твой отряд уже в списке?", "Ставь ⚔️, если ищешь команду.", "Собрать свой отряд можно за минуту."));
-        sb.append(squadLink());
+        sb.append("\n");
+        String link = squadLink().stripLeading();
+        if (!link.isEmpty()) sb.append(link).append("\n\n");
+        sb.append(ending(active.size(), "Твой отряд уже в списке?", "Ставь ⚔️, если ищешь команду", "Собрать свой отряд можно за минуту, залетай"));
         return Optional.of(saveDraft(SQUAD_STATS, sb.toString(), null));
     }
 
