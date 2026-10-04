@@ -917,18 +917,19 @@ public class ChannelContentService {
     public void onHallOfFame(HallOfFameEvent e) {
         try {
             if (!settings(HALL_OF_FAME).enabled() || e.getTop3().isEmpty()) return;
-            StringBuilder sb = new StringBuilder("🏆 <b>зал славы недели</b>\n\n");
+            StringBuilder sb = new StringBuilder("🏆 <b>Зал славы недели!</b>\n\n");
             for (HallOfFameEvent.HallEntry en : e.getTop3()) {
                 String nick = "<b>" + esc(publicNick(en.nickname())) + "</b>";
                 switch (en.rank()) {
-                    case 1 -> sb.append("👑 ").append(nick).append(" - чемпион недели\n     ").append(num(en.weeklyXp())).append(" XP за неделю, всего в клубе ").append(num(en.totalXp())).append(" XP\n\n");
-                    case 2 -> sb.append("🥈 ").append(nick).append("\n     ").append(num(en.weeklyXp())).append(" XP за неделю\n\n");
-                    default -> sb.append("🥉 ").append(nick).append("\n     ").append(num(en.weeklyXp())).append(" XP за неделю\n\n");
+                    case 1 -> sb.append("👑 ").append(nick).append(", чемпион недели 🔥\n     <b>").append(num(en.weeklyXp())).append(" XP</b> за неделю, всего в клубе ").append(num(en.totalXp())).append(" XP\n\n");
+                    case 2 -> sb.append("🥈 ").append(nick).append("\n     <b>").append(num(en.weeklyXp())).append(" XP</b> за неделю\n\n");
+                    default -> sb.append("🥉 ").append(nick).append("\n     <b>").append(num(en.weeklyXp())).append(" XP</b> за неделю\n\n");
                 }
             }
             sb.append("Поздравляем! Новая неделя уже началась, и таблица снова пустая.\n\n");
-            sb.append(ending(e.getTop3().get(0).weeklyXp(), "Кто попадёт в зал славы на этой неделе?", "Ставь 🏆, если метишь в тройку.", "Каждый квест приближает к тройке."));
-            sb.append(botLink());
+            String link = botLink().stripLeading();
+            if (!link.isEmpty()) sb.append(link).append("\n\n");
+            sb.append(ending(e.getTop3().get(0).weeklyXp(), "Кто попадёт в зал славы на этой неделе?", "Ставь 🏆, если метишь в тройку", "Каждый квест приближает к тройке, погнали"));
             saveDraft(HALL_OF_FAME, sb.toString(), null);
         } catch (Exception ex) {
             log.error("[ChannelContent] Failed to create hall of fame draft", ex);
