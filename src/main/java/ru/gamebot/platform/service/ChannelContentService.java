@@ -1041,8 +1041,8 @@ public class ChannelContentService {
         put("cc.shopn.wm", now.toString());
         if (fresh.isEmpty()) return Optional.empty();
 
-        StringBuilder sb = new StringBuilder("🛍 <b>новое в магазине</b>\n\n");
-        sb.append(fresh.size() == 1 ? "В магазине появилась новая награда:\n\n" : "В магазине появились новые награды:\n\n");
+        StringBuilder sb = new StringBuilder("🛍 <b>Новинки в магазине!</b>\n\n");
+        sb.append(fresh.size() == 1 ? "В магазине появилась новая награда, глянь 👀\n\n" : "В магазине появились новые награды, глянь 👀\n\n");
         int shown = 0;
         for (RewardItem it : fresh) {
             if (shown++ >= MAX_SHOP_ITEMS_IN_POST) break;
@@ -1051,9 +1051,10 @@ public class ChannelContentService {
             if (!desc.isEmpty()) sb.append("  ").append(esc(desc)).append("\n");
             sb.append("\n");
         }
-        if (fresh.size() > MAX_SHOP_ITEMS_IN_POST) sb.append("И ещё позиций: ").append(fresh.size() - MAX_SHOP_ITEMS_IN_POST).append("\n\n");
-        sb.append(ending(fresh.size(), "Что заберёшь первым?", "Ставь 🛍, если присмотрел награду.", "Все позиции уже в магазине бота."));
-        sb.append(botLink());
+        if (fresh.size() > MAX_SHOP_ITEMS_IN_POST) sb.append("И ещё в запасе: ").append(fresh.size() - MAX_SHOP_ITEMS_IN_POST).append("\n\n");
+        String link = botLink().stripLeading();
+        if (!link.isEmpty()) sb.append(link).append("\n\n");
+        sb.append(ending(fresh.size(), "Что заберёшь первым?", "Ставь 🛍, если присмотрел награду", "Все позиции уже в магазине бота, залетай"));
         String meta = fresh.stream().map(it -> String.valueOf(it.getId())).collect(Collectors.joining(","));
         String photo = fresh.stream().map(RewardItem::getPhotoFileId).filter(f -> f != null && !f.isBlank()).findFirst().orElse(null);
         return Optional.of(saveDraft(SHOP_NEW, sb.toString(), meta, photo));
@@ -1069,7 +1070,7 @@ public class ChannelContentService {
             return Optional.empty();
         }
         String[] marks = {"🥇", "🥈", "🥉"};
-        StringBuilder sb = new StringBuilder("🔥 <b>популярное в магазине</b>\n\nЧаще всего за две недели заказывали:\n\n");
+        StringBuilder sb = new StringBuilder("🔥 <b>Популярное в магазине!</b>\n\nВот что чаще всего заказывали за две недели:\n\n");
         int n = 0;
         String photo = null;
         long topCount = 0;
@@ -1084,23 +1085,27 @@ public class ChannelContentService {
             n++;
         }
         if (n == 0) return Optional.empty();
-        sb.append("\n").append(ending(topCount, "А что выберешь ты?", "Ставь 🔥, если уже пробовал.", "Полный каталог - в магазине бота."));
-        sb.append(botLink());
+        sb.append("\n");
+        String link = botLink().stripLeading();
+        if (!link.isEmpty()) sb.append(link).append("\n\n");
+        sb.append(ending(topCount, "А что выберешь ты?", "Ставь 🔥, если уже пробовал", "Полный каталог в магазине бота, залетай"));
         return Optional.of(saveDraft(SHOP_POPULAR, sb.toString(), null, photo));
     }
 
     /** «EGC Pass: что даёт» (раз в 4 недели): один перк на пост по очереди. Факты сверены с sendEgcPassScreen/кодом; без цифр подписчиков и без обещаний заработка. */
     public Optional<ChannelPostDraft> createEgcPassDraft() {
         String[][] perks = {
-                {"✨ <b>EGC Pass: больше EXC за квесты</b>", "С EGC Pass за каждый квест начисляется на 10% больше EXC (бонус до 10 000 EXC в месяц) и на 5% больше XP."},
-                {"🎁 <b>EGC Pass: сундук дня без реролла</b>", "Подписчикам EGC Pass каждый день доступен бесплатный улучшенный сундук: призы в нём щедрее обычного, а докупать реролл за Stars не нужно."},
-                {"⚡ <b>EGC Pass: приоритет на вывод</b>", "Заявки подписчиков EGC Pass на вывод EXC обрабатываются в очереди первыми."},
-                {"📂 <b>EGC Pass: доп. слот квеста</b>", "Пока EGC Pass активен, у тебя есть дополнительный слот квеста: можно вести больше квестов одновременно, не покупая слот за EXC."},
-                {"💸 <b>EGC Pass: донат по закупочной цене</b>", "Гемы для Brawl Stars, Clash Royale и Clash of Clans подписчики EGC Pass покупают по закупочной цене, без наценки клуба, а XP-бонус начисляется как за полную цену."},
+                {"✨ <b>EGC Pass: больше EXC за квесты!</b>", "С EGC Pass за каждый квест начисляется на 10% больше EXC (бонус до 10 000 EXC в месяц) и на 5% больше XP."},
+                {"🎁 <b>EGC Pass: сундук дня без реролла!</b>", "Подписчикам EGC Pass каждый день доступен бесплатный улучшенный сундук: призы в нём щедрее обычного, а докупать реролл за Stars не нужно."},
+                {"⚡ <b>EGC Pass: приоритет на вывод!</b>", "Заявки подписчиков EGC Pass на вывод EXC обрабатываются в очереди первыми."},
+                {"📂 <b>EGC Pass: третий слот квеста!</b>", "За EXC можно докупить второй слот квеста, а третий открывается только с EGC Pass: больше квестов одновременно, пока подписка активна."},
+                {"📈 <b>EGC Pass: бусты и лимиты сильнее!</b>", "Купленный XP-буст у подписчиков даёт +40% XP вместо обычных +20%, а дневные лимиты выше: бустов до 5 в сутки, реролл квеста до 6, снятие кулдауна до 4."},
+                {"🛡 <b>EGC Pass: бесплатная страховка!</b>", "Раз в месяц подписчикам EGC Pass доступна бесплатная страховка провала: если отчёт по квесту отклонят, его можно отправить повторно без штрафа."},
+                {"💸 <b>EGC Pass: донат по закупочной цене!</b>", "Гемы для Brawl Stars, Clash Royale и Clash of Clans подписчики EGC Pass покупают по закупочной цене, без наценки клуба, а XP-бонус начисляется как за полную цену."},
         };
         int idx = draftRepository.findAllByType(EGCPASS_PERK).size() % perks.length;
         StringBuilder sb = new StringBuilder(perks[idx][0]).append("\n\n").append(perks[idx][1]).append("\n\n");
-        sb.append("Ещё в EGC Pass: значок в профиле и другие перки - полный список в боте.\n");
+        sb.append("Ещё в EGC Pass: значок в профиле и другие перки, полный список в боте.\n");
         sb.append("Стоимость: <b>").append(EGC_PASS_STARS).append(" ⭐ на 30 дней</b>, продлевается автоматически, отменить можно в настройках платежей Telegram.");
         sb.append(botLink());
         return Optional.of(saveDraft(EGCPASS_PERK, sb.toString(), null));
@@ -1108,18 +1113,19 @@ public class ChannelContentService {
 
     /** «Предметы клуба» (раз в 4 недели): что можно купить за EXC и сколько это стоит; цены берутся из SinkShopService, чтобы не устаревали. */
     public Optional<ChannelPostDraft> createShopItemsDraft() {
-        StringBuilder sb = new StringBuilder("🧰 <b>на что потратить EXC</b>\n\n");
+        StringBuilder sb = new StringBuilder("🧰 <b>На что потратить EXC!</b>\n\n");
         sb.append("Кроме наград в магазине, EXC можно вложить в предметы клуба:\n\n");
         sb.append("📈 XP-буст +20% на 24 ч - ").append(num(SinkShopService.PRICE_XP_BOOST_24H)).append(" EXC\n");
         sb.append("✨ EXC-буст +20% на 24 ч - ").append(num(SinkShopService.PRICE_EXC_BOOST_24H)).append(" EXC\n");
         sb.append("⚡ Двойной буст (XP и EXC) на 24 ч - ").append(num(SinkShopService.PRICE_DOUBLE_BOOST_24H)).append(" EXC\n");
-        sb.append("📂 Доп. слот квеста на 48 ч - ").append(num(SinkShopService.PRICE_EXTRA_SLOT)).append(" EXC\n");
+        sb.append("📂 +1 слот квеста на 48 ч - ").append(num(SinkShopService.PRICE_EXTRA_SLOT)).append(" EXC (третий слот открывает EGC Pass)\n");
         sb.append("⏱ Снятие кулдауна квеста - ").append(num(SinkShopService.PRICE_COOLDOWN_REMOVAL)).append(" EXC\n");
         sb.append("🛡 Страховка повторной попытки - ").append(num(SinkShopService.PRICE_INSURANCE)).append(" EXC\n\n");
-        sb.append("Всё это лежит в разделе магазина в боте.\n\n");
+        sb.append("Всё это в разделе магазина в боте.\n\n");
         long seed = draftRepository.findAllByType(SHOP_ITEMS).size();
-        sb.append(ending(seed, "Что пригодилось бы тебе?", "Ставь ⚡, если пользуешься бустами.", "Бусты действуют сутки, слот - двое."));
-        sb.append(botLink());
+        String link = botLink().stripLeading();
+        if (!link.isEmpty()) sb.append(link).append("\n\n");
+        sb.append(ending(seed, "Что пригодилось бы тебе?", "Ставь ⚡, если пользуешься бустами", "Бусты действуют сутки, слот двое, залетай"));
         return Optional.of(saveDraft(SHOP_ITEMS, sb.toString(), null));
     }
 
@@ -1132,16 +1138,17 @@ public class ChannelContentService {
             if (!settings(REFERRAL_TOP).enabled() || e.getWinners().size() < MIN_REFERRAL_WINNERS) return;
             String[] marks = {"🥇", "🥈", "🥉", "4️⃣", "5️⃣"};
             long pool = 0;
-            StringBuilder sb = new StringBuilder("🤝 <b>топ рефереров недели</b>\n\nЛучше всех на этой неделе приглашали друзей:\n\n");
+            StringBuilder sb = new StringBuilder("🤝 <b>Топ рефереров недели!</b>\n\nЛучше всех на этой неделе приглашали друзей 🔥\n\n");
             for (UserService.ReferralRankEntry w : e.getWinners()) {
                 if (w.rank() < 1 || w.rank() > marks.length) continue;
                 pool += w.prizeExc();
-                sb.append(marks[w.rank() - 1]).append(" <b>").append(esc(publicNick(w.user().getNickname()))).append("</b> - приз ")
+                sb.append(marks[w.rank() - 1]).append(" <b>").append(esc(publicNick(w.user().getNickname()))).append("</b>: приз ")
                   .append(num(w.prizeExc())).append(" EXC\n");
             }
-            sb.append("\nПризовой фонд недели - <b>").append(num(pool)).append(" EXC</b>, его делят пять лучших по доходу от рефералов.\n\n");
-            sb.append(ending(pool, "Кто в топе на этой неделе?", "Ставь 🤝, если зовёшь друзей.", "Новая неделя уже началась."));
-            sb.append(botLink());
+            sb.append("\nПризовой фонд недели <b>").append(num(pool)).append(" EXC</b>, его делят пять лучших по доходу от рефералов.\n\n");
+            String link = botLink().stripLeading();
+            if (!link.isEmpty()) sb.append(link).append("\n\n");
+            sb.append(ending(pool, "Кто в топе на этой неделе?", "Ставь 🤝, если зовёшь друзей", "Новая неделя уже началась, погнали"));
             saveDraft(REFERRAL_TOP, sb.toString(), null);
         } catch (Exception ex) {
             log.error("[ChannelContent] Failed to create referral top draft", ex);
@@ -1153,19 +1160,21 @@ public class ChannelContentService {
         int idx = draftRepository.findAllByType(REFERRAL_HOWTO).size() % 2;
         StringBuilder sb = new StringBuilder();
         if (idx == 0) {
-            sb.append("🤝 <b>как пригласить друга в клуб</b>\n\n");
+            sb.append("🤝 <b>Как пригласить друга в клуб!</b>\n\n");
             sb.append("Личная ссылка лежит в разделе «Рефералы» в боте.\n");
-            sb.append("Друг регистрируется и подписывается на канал: он получает <b>500 EXC</b>, ты - <b>300 EXC</b>.\n");
+            sb.append("Друг регистрируется и подписывается на канал: он получает <b>500 EXC</b>, ты <b>300 EXC</b>.\n");
             sb.append("Друг выполняет первый квест: ему ещё <b>3 000 EXC</b>, тебе <b>2 500 EXC</b>.\n\n");
             sb.append("Приглашай тех, кому игры правда интересны: так честнее и полезнее вам обоим.");
         } else {
-            sb.append("💸 <b>что ещё даёт реферальная ссылка</b>\n\n");
+            sb.append("💸 <b>Что ещё даёт реферальная ссылка!</b>\n\n");
             sb.append("Кроме стартовых бонусов, ты получаешь <b>10%</b> от наград за квесты друга, пока он остаётся активным. ");
             sb.append("Если друг 14 дней не выполняет квесты, отчисления ставятся на паузу и сами возобновляются, когда он вернётся.\n\n");
             sb.append("Каждую неделю пятёрка лучших рефереров делит призовой фонд <b>2 000 EXC</b>.");
         }
-        sb.append("\n\n").append(ending(idx, "Кого позовёшь первым?", "Ставь 🤝, если уже приглашал друзей.", "Ссылка ждёт в разделе «Рефералы»."));
-        sb.append(botLink());
+        sb.append("\n\n");
+        String link = botLink().stripLeading();
+        if (!link.isEmpty()) sb.append(link).append("\n\n");
+        sb.append(ending(idx, "Кого позовёшь первым?", "Ставь 🤝, если уже приглашал друзей", "Ссылка ждёт в разделе «Рефералы», залетай"));
         return Optional.of(saveDraft(REFERRAL_HOWTO, sb.toString(), null));
     }
 
@@ -1178,12 +1187,13 @@ public class ChannelContentService {
             return Optional.empty();
         }
         long withQuest = appUserRepository.countReferredUsersWithAtLeastOneQuest();
-        StringBuilder sb = new StringBuilder("📈 <b>рефералы в цифрах</b>\n\n");
-        sb.append("За две недели по приглашениям пришло <b>").append(fresh).append("</b> ").append(plural((int) fresh, "игрок", "игрока", "игроков")).append(".\n");
+        StringBuilder sb = new StringBuilder("📈 <b>Рефералы в цифрах!</b>\n\n");
+        sb.append("За две недели по приглашениям пришло <b>").append(fresh).append("</b> ").append(plural((int) fresh, "игрок", "игрока", "игроков")).append(" 🔥\n");
         sb.append("Всего в клубе по приглашениям <b>").append(num(total)).append("</b> ").append(plural((int) Math.min(total, Integer.MAX_VALUE), "игрок", "игрока", "игроков"))
           .append(", из них <b>").append(num(withQuest)).append("</b> уже выполнили хотя бы один квест.\n\n");
-        sb.append(ending(fresh, "Сколько друзей позовёшь ты?", "Ставь 🤝, если ты среди приглашённых.", "Ссылка для друзей - в разделе «Рефералы»."));
-        sb.append(botLink());
+        String link = botLink().stripLeading();
+        if (!link.isEmpty()) sb.append(link).append("\n\n");
+        sb.append(ending(fresh, "Сколько друзей позовёшь ты?", "Ставь 🤝, если ты среди приглашённых", "Ссылка для друзей в разделе «Рефералы», залетай"));
         return Optional.of(saveDraft(REFERRAL_STATS, sb.toString(), null));
     }
 
@@ -1205,12 +1215,14 @@ public class ChannelContentService {
         List<Quest> sorted = new java.util.ArrayList<>(quests);
         sorted.sort((a, b) -> Long.compare(b.getRewardCoins(), a.getRewardCoins()));
         StringBuilder sb = new StringBuilder("🎮 <b>Новые квесты по ").append(esc(gameName)).append("!</b>\n\n");
-        sb.append("В боте обновился набор квестов — теперь их <b>").append(quests.size()).append("</b>. Среди новых:\n\n");
+        sb.append("В боте обновился набор квестов, теперь их <b>").append(quests.size()).append("</b> 🔥 Среди новых:\n\n");
         for (Quest q : sorted.subList(0, Math.min(6, sorted.size()))) {
             sb.append("• ").append(esc(q.getTitle())).append(" - ").append(num(q.getRewardCoins())).append(" EXC\n");
         }
         sb.append("\nКвесты, которые ты уже взял, можно спокойно доделать.");
-        sb.append(botLink());
+        String link = botLink();
+        if (!link.isBlank()) sb.append(link);
+        sb.append("\n\nКакой возьмёшь первым?");
         return Optional.of(saveDraft(QUEST_ROTATION, sb.toString(), gameName + " / " + packName));
     }
 

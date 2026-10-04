@@ -17684,9 +17684,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean anyHeld = entries.stream().anyMatch(ru.gamebot.platform.domain.model.TournamentEntry::isPayoutHeld);
         java.util.function.LongFunction<String> exc = n -> String.format(java.util.Locale.forLanguageTag("ru"), "%,d", n);
 
-        StringBuilder sb = new StringBuilder("🏆 <b>турнир «" + escape(t.getName()) + "» завершён</b>\n\n");
-        sb.append("Подвели итоги. Участников: <b>").append(entries.size())
-          .append("</b>, призовой фонд: <b>").append(exc.apply(t.getPrizePoolExc())).append(" EXC</b>.\n\n");
+        StringBuilder sb = new StringBuilder("🏆 <b>Турнир «" + escape(t.getName()) + "» завершён!</b>\n\n");
+        sb.append("Подвели итоги: участников <b>").append(entries.size())
+          .append("</b>, призовой фонд <b>").append(exc.apply(t.getPrizePoolExc())).append(" EXC</b> 🔥\n\n");
 
         String[] medals = {"🥇", "🥈", "🥉"};
         for (int i = 0; i < Math.min(10, entries.size()); i++) {
@@ -17711,23 +17711,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         sb.append("\n").append(anyHeld
-                ? "Часть призов проходит проверку и будет зачислена позже. "
-                : "Призы уже на балансах победителей. ");
-        sb.append(next != null
-                ? "Следующий турнир уже стартовал."
-                : switch ((int) (t.getId() % 3)) {
-                    case 0 -> "Кто уже готовится к следующему турниру?";
-                    case 1 -> "Ставь 🔥, если участвовал.";
-                    default -> "Спасибо всем, кто сыграл. Следующий турнир уже скоро.";
-                });
+                ? "Часть призов проходит проверку и будет зачислена позже."
+                : "Призы уже на балансах победителей.");
         // Продолжение того же типа турниров уже создано (TournamentService.autoCreateNextTournament) -
         // короткая отсылка в этом же посте вместо отдельной карточки "регистрация открыта" (2026-10-01).
         if (next != null) {
-            sb.append("\n\n📝 <b>Регистрация на новый турнир уже открыта!</b> Взнос: <b>")
-              .append(exc.apply(next.getEntryFeeExc())).append(" EXC</b>. Подробности и запись - в боте.");
+            sb.append("\n\n📝 <b>Регистрация на новый турнир уже открыта!</b> Взнос <b>")
+              .append(exc.apply(next.getEntryFeeExc())).append(" EXC</b>. Подробности и запись в боте.");
         }
-        sb.append("\n\n🎮 Все турниры - в нашем боте: <a href=\"https://t.me/").append(getBotUsername())
+        sb.append("\n\n🎮 Все турниры в нашем боте: <a href=\"https://t.me/").append(getBotUsername())
           .append("\">@").append(getBotUsername()).append("</a>");
+        sb.append("\n\n").append(next != null
+                ? "Следующий турнир уже стартовал, залетай"
+                : switch ((int) (t.getId() % 3)) {
+                    case 0 -> "Кто уже готовится к следующему турниру?";
+                    case 1 -> "Ставь 🔥, если участвовал";
+                    default -> "Спасибо всем, кто сыграл. Следующий турнир уже скоро";
+                });
         return sb.toString();
     }
 
@@ -17858,16 +17858,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private String buildWeeklyReviewSummaryText(List<ru.gamebot.platform.domain.model.BotReview> reviews) {
         int count = reviews.size();
         double avgStars = reviews.stream().mapToInt(ru.gamebot.platform.domain.model.BotReview::getStars).average().orElse(0);
-        StringBuilder sb = new StringBuilder("📊 <b>Итоги недели по отзывам</b>\n\n");
-        sb.append("За неделю — <b>").append(count).append("</b> ").append(reviewWord(count))
-                .append(", средняя оценка <b>").append(String.format("%.1f", avgStars)).append(" ⭐️</b>\n\n");
+        StringBuilder sb = new StringBuilder("📊 <b>Итоги недели по отзывам!</b>\n\n");
+        sb.append("За неделю нам написали <b>").append(count).append("</b> ").append(reviewWord(count))
+                .append(", средняя оценка <b>").append(String.format("%.1f", avgStars)).append(" ⭐️</b> 🔥\n\n");
         List<ru.gamebot.platform.domain.model.BotReview> quoted = reviews.stream()
                 .filter(r -> r.getText() != null && !r.getText().isBlank())
                 .limit(2)
                 .toList();
         for (ru.gamebot.platform.domain.model.BotReview r : quoted) {
             String stars = "⭐️".repeat(Math.max(0, Math.min(5, r.getStars())));
-            sb.append("«").append(escape(r.getText())).append("» — ")
+            sb.append("«").append(escape(r.getText())).append("», ")
                     .append(escape(r.getUser().getNickname())).append(" ").append(stars).append("\n\n");
         }
         sb.append("Спасибо всем, кто делится впечатлениями! 🙌");
