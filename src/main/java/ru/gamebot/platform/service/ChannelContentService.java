@@ -761,7 +761,7 @@ public class ChannelContentService {
 
     private String payoutsLink() {
         if (botUsername == null || botUsername.isBlank()) return "";
-        return "\n\n💸 Как вывести — в нашем боте: <a href=\"https://t.me/" + botUsername + "\">@" + botUsername + "</a>";
+        return "\n\n💸 Как вывести в нашем боте: <a href=\"https://t.me/" + botUsername + "\">@" + botUsername + "</a>";
     }
 
     /** «Пруф от Экси»: сводка выплат за 2 недели (при малом числе - за месяц), без имён игроков, только цифры; скорость выплаты - если данных достаточно и она честная. */
@@ -780,24 +780,25 @@ public class ChannelContentService {
         RewardService.WithdrawalPeriodStats st = rewardService.withdrawalStatsSince(now.minusDays(days));
         long players = rewardRequestRepository.countDistinctWithdrawalUsersSince(now.minusDays(days));
         String period = days == 14 ? "две недели" : "месяц";
-        StringBuilder sb = new StringBuilder("💸 <b>пруф от Экси — выплаты за " + period + "</b>\n\n");
+        StringBuilder sb = new StringBuilder("💸 <b>Пруф от Экси: выплаты за " + period + "!</b>\n\n");
         sb.append("Выплатили <b>").append(st.count()).append("</b> ").append(plural((int) st.count(), "заявку", "заявки", "заявок")).append(" на вывод, ")
-          .append("получили <b>").append(players).append("</b> ").append(plural((int) players, "игрок", "игрока", "игроков")).append(".\n");
-        sb.append("Всего выведено: <b>").append(num(st.totalExc())).append(" EXC</b>.\n");
-        if (st.totalRub() > 0) sb.append("Рублями: <b>").append(num(st.totalRub())).append(" ₽</b>\n");
+          .append("деньги получили <b>").append(players).append("</b> ").append(plural((int) players, "игрок", "игрока", "игроков")).append(" 🔥\n");
+        sb.append("Всего выведено <b>").append(num(st.totalExc())).append(" EXC</b>.\n");
+        if (st.totalRub() > 0) sb.append("Рублями <b>").append(num(st.totalRub())).append(" ₽</b>\n");
         if (st.totalTonRub() > 0) sb.append("В GRAM (TON) на сумму около <b>").append(num(st.totalTonRub())).append(" ₽</b>\n");
-        if (st.totalStars() > 0) sb.append("Звёздами Telegram: <b>").append(num(st.totalStars())).append(" ⭐</b>\n");
+        if (st.totalStars() > 0) sb.append("Звёздами Telegram <b>").append(num(st.totalStars())).append(" ⭐</b>\n");
         List<Long> minutes = reqs.stream().filter(r -> r.getPaidAt() != null && r.getCreatedAt() != null)
                 .map(r -> Duration.between(r.getCreatedAt(), r.getPaidAt()).toMinutes()).sorted().toList();
         if (minutes.size() >= 5) {
             long median = minutes.get(minutes.size() / 2);
             if (median <= 24 * 60) {
-                sb.append("Время от заявки до выплаты (медиана): <b>").append(median < 60 ? "меньше часа" : "около " + Math.round(median / 60.0) + " ч").append("</b>\n");
+                sb.append("От заявки до выплаты в среднем <b>").append(median < 60 ? "меньше часа" : "около " + Math.round(median / 60.0) + " ч").append("</b> (медиана)\n");
             }
         }
         sb.append("\nЧеки публикуем в канале выплат.\n\n");
-        sb.append(ending(st.count(), "Уже подал заявку?", "Ставь 💸, если ждёшь свою.", "Каждая заявка обрабатывается в течение 24 часов."));
-        sb.append(payoutsLink());
+        String link = payoutsLink().stripLeading();
+        if (!link.isEmpty()) sb.append(link).append("\n\n");
+        sb.append(ending(st.count(), "Уже подал заявку?", "Ставь 💸, если ждёшь свою", "Каждая заявка обрабатывается в течение 24 часов"));
         return Optional.of(saveDraft(WITHDRAW_SUMMARY, sb.toString(), null));
     }
 
