@@ -38,6 +38,7 @@ public class UserService {
     private final ExcTransactionService excTx;
     private final NotificationGateService notificationGate;
     private final ReferralBoostService referralBoostService;
+    private final AdPlacementStatService adPlacementStatService;
 
     private static final List<LevelTier> LEVEL_TIERS = List.of(
             new LevelTier(1, "Новичок", 0, 0),
@@ -1108,6 +1109,13 @@ public class UserService {
     public static final String AD_PURPOSE_WHEEL = "WHEEL";
     /** Цель показа: объявление из блока AdsGram в самом боте (награда та же, 30 EXC; метка нужна для отчёта по рекламе в боте). */
     public static final String AD_PURPOSE_BOT = "BOT";
+    /** Цель показа: восстановить прерванную серию входов (вместо EXC за просмотр AdsGram подтверждает «право на восстановление»). */
+    public static final String AD_PURPOSE_STREAK = "STREAK";
+    /** Серию можно вернуть рекламой бесплатно только если потеряно не больше стольких дней (длинные серии остаются за Stars). */
+    public static final int STREAK_AD_RESTORE_MAX_LOST_DAYS = 6;
+    /** И не чаще одного раза в столько дней. */
+    public static final int STREAK_AD_RESTORE_COOLDOWN_DAYS = 14;
+    private static final int STREAK_AD_RESTORE_CLAIM_MINUTES = 30;
 
     @Transactional
     public void markAdRequested(AppUser user) {
@@ -1147,9 +1155,41 @@ public class UserService {
      * предыдущую цель, чтобы «зависший» показ для колеса не превратил следующий обычный показ в спин. */
     @Transactional
     public void markAdRequested(AppUser user, String purpose) {
+        markAdRequested(user, purpose, AD_PURPOSE_BOT.equals(purpose) ? "bot" : null);
+    }
+
+    /** placement - место показа для статистики (quests, wallet, wheel, streak, bot); null допустим. */
+    @Transactional
+    public void markAdRequested(AppUser user, String purpose, String placement) {
         user.setPendingAdRewardAt(LocalDateTime.now());
         user.setPendingAdPurpose(purpose);
+        user.setPendingAdPlacement(placement);
         appUserRepository.save(user);
+        adPlacementStatService.recordRequest(placement);
+    }
+
+    /** Можно ли вернуть прерванную серию просмотром рекламы: серия есть в снимке, потеряно <= STREAK_AD_RESTORE_MAX_LOST_DAYS дней, раз в STREAK_AD_RESTORE_COOLDOWN_DAYS дней. */
+    public boolean canRestoreStreakByAd(AppUser user) {
+        if (!hasRestorableStreak(user) || restorableStreakDays(user) > STREAK_AD_RESTORE_MAX_LOST_DAYS) return false;
+        LocalDate last = user.getStreakAdRestoreDate();
+        return last == null || !last.plusDays(STREAK_AD_RESTORE_COOLDOWN_DAYS).isAfter(LocalDate.now());
+    }
+
+    /** Забирает восстановление серии после подтверждённого просмотра (AdsGram прислал постбек, claimPendingAdReward выставил streakAdRestoreGrantedAt).
+     *  null - просмотр ещё не подтверждён либо восстановление недоступно. Иначе серия возвращена и начислен ежедневный бонус за сегодня (как после оплаты Stars). */
+    @Transactional
+    public DailyBonusResult restoreStreakByAd(AppUser user) {
+        LocalDateTime granted = user.getStreakAdRestoreGrantedAt();
+        if (granted == null || granted.plusMinutes(STREAK_AD_RESTORE_CLAIM_MINUTES).isBefore(LocalDateTime.now())) {
+            return null;
+        }
+        if (!canRestoreStreakByAd(user)) {
+            return null;
+        }
+        user.setStreakAdRestoreGrantedAt(null);
+        user.setStreakAdRestoreDate(LocalDate.now());
+        restoreStreak(user);
+        return claimDailyBonus(user);
     }
 
     public record AdRewardResult(boolean granted, long totalExc, long milestoneBonus, int viewsToday, int dailyCap,
@@ -1188,10 +1228,13 @@ public class UserService {
         }
         boolean wheelSpin = AD_PURPOSE_WHEEL.equals(user.getPendingAdPurpose());
         boolean botAd = AD_PURPOSE_BOT.equals(user.getPendingAdPurpose());
+        boolean streakAd = AD_PURPOSE_STREAK.equals(user.getPendingAdPurpose());
+        String placement = user.getPendingAdPlacement();
         // Показ из блока в боте приходит на тот же URL AdsGram, что и мини-апп; различаем по цели показа, у бота свой дневной лимит.
         AdRewardSource source = botAd ? AdRewardSource.BOT : sourceFromPostback;
         user.setPendingAdRewardAt(null);
         user.setPendingAdPurpose(null);
+        user.setPendingAdPlacement(null);
         LocalDate today = LocalDate.now();
         if (user.getAdRewardDate() == null || !user.getAdRewardDate().equals(today)) {
             user.setAdRewardDate(today);
@@ -1213,7 +1256,11 @@ public class UserService {
         long milestoneBonus = adRewardMilestoneBonus(source, viewsToday);
         // Для колеса вместо плоских 30 EXC копится спин (разыгрывается в AdWheelService); бонус за отметки
         // прогресса (5-й/10-й показ) платится в обоих режимах — иначе игрок, выбравший колесо, терял бы его.
-        long totalExc = (wheelSpin ? 0 : AD_REWARD_EXC) + milestoneBonus;
+        long totalExc = (wheelSpin || streakAd ? 0 : AD_REWARD_EXC) + milestoneBonus;
+        if (streakAd) {
+            // Награда за этот просмотр - право восстановить серию (его забирает restoreStreakByAd), а не EXC
+            user.setStreakAdRestoreGrantedAt(LocalDateTime.now());
+        }
         if (wheelSpin) {
             user.setAdWheelSpins(user.getAdWheelSpins() + 1);
         }
@@ -1228,6 +1275,7 @@ public class UserService {
         } else {
             appUserRepository.save(user);
         }
+        adPlacementStatService.recordReward(placement);
         return new AdRewardResult(true, totalExc, milestoneBonus, viewsToday, source.getDailyCap(), wheelSpin);
     }
 

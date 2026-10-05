@@ -287,9 +287,17 @@ export async function getAdStatus(source) {
   return data;
 }
 
-// purpose='WHEEL' — награда за показ станет спином рекламного колеса (вместо 30 EXC)
-export async function requestAdWatch(source, purpose) {
-  const { data } = await api.post('/api/ads/watch', null, { params: { source, ...(purpose ? { purpose } : {}) } });
+// purpose='WHEEL' — награда за показ станет спином рекламного колеса (вместо 30 EXC); purpose='STREAK' — право восстановить
+// прерванную серию; placement ('quests' | 'wallet') — место показа для статистики
+export async function requestAdWatch(source, purpose, placement) {
+  const { data } = await api.post('/api/ads/watch', null, { params: { source, ...(purpose ? { purpose } : {}), ...(placement ? { placement } : {}) } });
+  return data;
+}
+
+// Забрать восстановление серии после просмотра рекламы: пока AdsGram не подтвердил просмотр, success=false (повторить через пару секунд)
+export async function restoreStreakByAd() {
+  const { data } = await api.post('/api/wallet/streak/restore-ad');
+  invalidateCache('wallet');
   return data;
 }
 

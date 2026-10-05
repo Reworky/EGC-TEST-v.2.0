@@ -25,4 +25,6 @@ public class WalletDto {
     /** >0 — серия входов прервалась и есть предложение восстановить её за Stars. */
     private int restorableStreakDays;
     private int streakRestorePriceStars;
+    /** Прерванную серию можно вернуть бесплатно просмотром рекламы (потеряно немного дней, не чаще раза в 14 дней). */
+    private boolean streakAdRestoreAvailable;
 }

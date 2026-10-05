@@ -217,6 +217,16 @@ public class AppUser {
     @Column(length = 16)
     private String pendingAdPurpose;
 
+    /** Место, откуда запрошен показ (quests, wallet, wheel, streak, bot) - для статистики рекламы по местам. */
+    @Column(length = 24)
+    private String pendingAdPlacement;
+
+    /** Дата последнего бесплатного восстановления серии за просмотр рекламы (не чаще раза в STREAK_AD_RESTORE_COOLDOWN_DAYS дней). */
+    private LocalDate streakAdRestoreDate;
+
+    /** Момент, когда AdsGram подтвердил просмотр рекламы «восстановить серию»; по нему игрок в течение 30 минут может забрать восстановление. */
+    private LocalDateTime streakAdRestoreGrantedAt;
+
     /** Неиспользованные спины рекламного колеса (копятся за просмотры рекламы, тратятся в AdWheelService). */
     @Column(columnDefinition = "integer default 0")
     private int adWheelSpins;

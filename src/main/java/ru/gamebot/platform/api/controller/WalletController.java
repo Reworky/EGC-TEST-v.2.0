@@ -101,6 +101,36 @@ public class WalletController {
                 .phoneConfirmed(user.getPhoneNumber() != null)
                 .restorableStreakDays(restorableDays)
                 .streakRestorePriceStars(restorePrice)
+                .streakAdRestoreAvailable(bonusAvailable && userService.canRestoreStreakByAd(user))
+                .build());
+    }
+
+    /** Восстановление прерванной серии за просмотр рекламы: после того как AdsGram подтвердил просмотр (постбек выставил право),
+     *  возвращает серию и начисляет бонус за сегодня. Пока просмотр не подтверждён - success=false, мини-апп повторяет запрос. */
+    @PostMapping("/streak/restore-ad")
+    public ResponseEntity<DailyBonusResponseDto> restoreStreakByAd(@AuthenticationPrincipal Long telegramId) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        UserService.DailyBonusResult result = userService.restoreStreakByAd(user);
+        if (result == null) {
+            return ResponseEntity.ok(DailyBonusResponseDto.builder()
+                    .success(false)
+                    .message("Просмотр ещё не подтверждён. Если реклама уже закончилась, подождите несколько секунд.")
+                    .newBalance(user.getCoins())
+                    .build());
+        }
+        return ResponseEntity.ok(DailyBonusResponseDto.builder()
+                .success(true)
+                .message("Серия восстановлена!")
+                .totalExc(result.totalExc())
+                .dailyExc(result.dailyExc())
+                .milestoneExc(result.milestoneExc())
+                .xpBonus(result.xpBonus())
+                .streakDays(result.streakDays())
+                .milestoneText(result.milestoneText())
+                .newBalance(user.getCoins())
                 .build());
     }
 

@@ -661,7 +661,7 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
 
       {activeSection === 'ads' && (
         <div className="category-section">
-          <AdRewardCard />
+          <AdRewardCard placement="quests" />
         </div>
       )}
     </>

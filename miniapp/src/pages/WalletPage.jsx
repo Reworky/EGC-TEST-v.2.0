@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { starsApprox } from '../utils/fundStars';
 import { useSearchParams } from 'react-router-dom';
-import { getWallet, claimDailyBonus, openChest, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone, invalidateCache, getStarsWithdrawItems, purchaseItem, getStarsInvoiceLink, getStarsPrices } from '../api/client';
+import { getWallet, claimDailyBonus, openChest, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone, invalidateCache, getStarsWithdrawItems, purchaseItem, getStarsInvoiceLink, getStarsPrices, requestAdWatch, restoreStreakByAd } from '../api/client';
 import { openStarsInvoice } from '../utils/stars';
 import chestRegularImg from '../assets/chests/regular.png';
 import chestPremiumImg from '../assets/chests/premium.png';
@@ -11,6 +11,7 @@ import BorderBeamCard from '../components/BorderBeamCard';
 import ShimmerButton from '../components/ShimmerButton';
 import AnimatedNumber from '../components/AnimatedNumber';
 import AdRewardCard from '../components/AdRewardCard';
+import { useAdsgram } from '../hooks/useAdsgram';
 import AdBanner from '../components/AdBanner';
 import { useParticles } from '../components/ParticlesContext';
 import './QuestsPage.css';
@@ -203,6 +204,50 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
     }
   }
 
+  // Восстановление серии за просмотр рекламы (бесплатно для небольших потерь, раз в 14 дней): AdsGram подтверждает просмотр постбеком
+  // на сервер, мини-апп после показа несколько раз спрашивает «право получено?» и забирает восстановление.
+  const showRestoreAd = useAdsgram({
+    blockIds: [import.meta.env.VITE_ADSGRAM_BLOCK_ID],
+    onReward: async () => {
+      for (let attempt = 0; attempt < 8; attempt++) {
+        await new Promise(r => setTimeout(r, 1500));
+        try {
+          const res = await restoreStreakByAd();
+          if (res.success) {
+            setMessage(`Серия восстановлена!\nСерия: ${res.streakDays} дн. · +${res.totalExc} EXC`);
+            setMessageOk(true);
+            playParticles?.('streakBonus', 3000);
+            onChanged();
+            setBusy(false);
+            return;
+          }
+        } catch {
+          // повторим на следующем круге
+        }
+      }
+      setMessage('Просмотр пока не подтверждён. Обновите экран через минуту: если реклама была досмотрена до конца, серия вернётся.');
+      onChanged();
+      setBusy(false);
+    },
+    onError: () => {
+      setMessage('Не удалось показать рекламу, попробуйте ещё раз позже.');
+      setBusy(false);
+    },
+  });
+
+  async function handleRestoreByAd() {
+    setBusy(true);
+    setMessage(null);
+    setMessageOk(false);
+    try {
+      await requestAdWatch('ADSGRAM', 'STREAK');
+      showRestoreAd();
+    } catch {
+      setMessage('Сейчас нельзя восстановить серию рекламой (лимит показов или условия не выполняются).');
+      setBusy(false);
+    }
+  }
+
   async function handleResetStreak() {
     setBusy(true);
     setMessage(null);
@@ -374,6 +419,11 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
             <ShimmerButton disabled={busy} onClick={handleRestoreStreak}>
               {busy ? 'Секунду...' : <><i className="ti ti-sparkles" style={{ marginRight: 6 }} /> Восстановить за {wallet.streakRestorePriceStars} ⭐</>}
             </ShimmerButton>
+            {wallet.streakAdRestoreAvailable && (
+              <button className="quest-btn quest-btn-secondary" style={{ marginTop: 8 }} disabled={busy} onClick={handleRestoreByAd}>
+                <i className="ti ti-player-play" style={{ marginRight: 6 }} /> Восстановить бесплатно за просмотр рекламы
+              </button>
+            )}
             <button className="quest-btn quest-btn-secondary" style={{ marginTop: 8 }} disabled={busy} onClick={handleResetStreak}>
               Начать заново
             </button>
@@ -448,7 +498,7 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
 
       <div className="category-section" style={{ marginTop: 12 }}>
         <div className="ref-link-label" style={{ marginBottom: 10 }}>🎬 Забери халявные EXC</div>
-        <AdRewardCard />
+        <AdRewardCard placement="wallet" />
         <div style={{ marginTop: 12 }}>
           <AdBanner
             img="https://aflink.ru/b/vzfiwgube7e999950e9542f9f2178b/"

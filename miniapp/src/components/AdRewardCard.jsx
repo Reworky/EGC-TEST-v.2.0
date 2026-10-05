@@ -63,7 +63,7 @@ function useAdSlotStatus(source) {
 
 /** AdsGram-блок 45630. Второй блок (46037) пробовали параллельно для сравнения CPM — разница
  * оказалась статистическим шумом на маленькой выборке, выключили, оставили только этот. */
-function AdsgramSlot({ blockId, label }) {
+function AdsgramSlot({ blockId, label, placement }) {
   const { remaining, dailyCap, reload } = useAdSlotStatus('ADSGRAM');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
@@ -90,7 +90,7 @@ function AdsgramSlot({ blockId, label }) {
     setBusy(true);
     setMessage(null);
     try {
-      await requestAdWatch('ADSGRAM');
+      await requestAdWatch('ADSGRAM', undefined, placement);
       showAd();
     } catch {
       setMessage('Сейчас нет доступных показов, загляните позже.');
@@ -103,7 +103,7 @@ function AdsgramSlot({ blockId, label }) {
 
 /** Рекламный блок Telega.io (отдельная сеть/SDK от AdsGram) — свой дневной лимит и та же
  * серверная защита через pendingAdRewardAt (см. PostbackController.telegaReward). */
-function TelegaSlot({ adBlockUuid, label }) {
+function TelegaSlot({ adBlockUuid, label, placement }) {
   const { remaining, dailyCap, reload } = useAdSlotStatus('TELEGA');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
@@ -130,7 +130,7 @@ function TelegaSlot({ adBlockUuid, label }) {
     setBusy(true);
     setMessage(null);
     try {
-      await requestAdWatch('TELEGA');
+      await requestAdWatch('TELEGA', undefined, placement);
       showAd();
     } catch {
       setMessage('Сейчас нет доступных показов, загляните позже.');
@@ -142,12 +142,12 @@ function TelegaSlot({ adBlockUuid, label }) {
 }
 
 /** Два независимых рекламных блока (AdsGram 45630 + Telega.io), у каждого свой дневной лимит. */
-export default function AdRewardCard() {
+export default function AdRewardCard({ placement }) {
   return (
     <>
-      <AdsgramSlot blockId={ADSGRAM_BLOCK_ID} label="Реклама 1" />
+      <AdsgramSlot blockId={ADSGRAM_BLOCK_ID} label="Реклама 1" placement={placement} />
       {TELEGA_AD_BLOCK_UUID && (
-        <TelegaSlot adBlockUuid={TELEGA_AD_BLOCK_UUID} label="Реклама 2" />
+        <TelegaSlot adBlockUuid={TELEGA_AD_BLOCK_UUID} label="Реклама 2" placement={placement} />
       )}
     </>
   );
