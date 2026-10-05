@@ -72,7 +72,8 @@ public class KeyboardFactory {
 
     public InlineKeyboardMarkup rowsLayout(List<List<InlineKeyboardButton>> rows) {
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
-        markup.setKeyboard(rows);
+        // Пустые ряды (кнопка скрыта условием) Telegram не принимает - отбрасываем.
+        markup.setKeyboard(rows.stream().filter(r -> !r.isEmpty()).collect(java.util.stream.Collectors.toList()));
         return markup;
     }
 

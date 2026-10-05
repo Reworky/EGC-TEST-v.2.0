@@ -1887,11 +1887,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case "edit_country" -> {
                 if (user.getPhoneNumber() != null) {
-                    sendText(user.getTelegramId(),
-                            "🔒 <b>Страна определена по вашему номеру телефона</b>\n\n"
-                                    + "Сейчас: <b>" + escape(displayValue(user.getCountry(), "не определена")) + "</b>. "
-                                    + "Её нельзя изменить вручную: страна берётся из подтверждённого номера.",
-                            backOnlyKeyboard("profile:edit"));
+                    // Откуда берётся страна, игрокам не объясняем (решение владельца): просто тихо возвращаем в редактор.
+                    answerSilently(callbackQuery.getId());
+                    sendProfileEdit(user);
                     return;
                 }
                 session.setState(SessionState.EDIT_COUNTRY);
@@ -4367,6 +4365,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), sb.toString(), backOnlyKeyboard(backCallback));
     }
 
+    /** Кнопка «Изменить страну» - только пока номер не подтверждён; после подтверждения страна задаётся по номеру и в редакторе не показывается. */
+    private List<InlineKeyboardButton> countryEditRow(AppUser user) {
+        if (user.getPhoneNumber() != null) return List.of();
+        return List.of(keyboardFactory.callback("🌍 " + (user.getCountry() != null ? "Изменить страну" : "Указать страну"), "profile:edit_country"));
+    }
+
     private void sendProfileEdit(AppUser user) {
         String nickname = escape(user.getNickname());
         String age = user.getAge() != null ? String.valueOf(user.getAge()) : "не указан";
@@ -4378,14 +4382,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "✏️ <b>Редактировать профиль</b>\n\n"
                         + "👤 Никнейм: <b>" + nickname + "</b>\n"
                         + "🎂 Возраст: <b>" + age + "</b>\n"
-                        + "🌍 Страна: <b>" + country + "</b>" + (user.getPhoneNumber() != null ? " 🔒 по номеру телефона" : "") + "\n"
+                        + "🌍 Страна: <b>" + country + "</b>" + "\n"
                         + "🎮 Платформы: <b>" + platforms + "</b>\n"
                         + "🧩 Жанры: <b>" + genres + "</b>",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("✏️ Изменить никнейм", "profile:nickname")),
                         List.of(keyboardFactory.callback("🎂 " + (user.getAge() != null ? "Изменить возраст" : "Указать возраст"), "profile:edit_age")),
-                        List.of(keyboardFactory.callback(user.getPhoneNumber() != null ? "🔒 Страна — по номеру телефона"
-                                : "🌍 " + (user.getCountry() != null ? "Изменить страну" : "Указать страну"), "profile:edit_country")),
+                        countryEditRow(user),
                         List.of(keyboardFactory.callback("🎮 " + (user.getPlatformsCsv() != null ? "Изменить платформы" : "Указать платформы"), "profile:edit_platforms")),
                         List.of(keyboardFactory.callback("🧩 " + (user.getInterestsCsv() != null ? "Изменить жанры" : "Указать жанры"), "profile:edit_genres")),
                         List.of(keyboardFactory.callback("🏷️ " + (user.getBrawlStarsTag() != null ? "Изменить тег Brawl Stars" : "Привязать тег Brawl Stars"), "profile:brawl_tag")),
