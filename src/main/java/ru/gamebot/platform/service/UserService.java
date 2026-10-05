@@ -1157,6 +1157,20 @@ public class UserService {
         adPlacementStatService.recordRequest(placement);
     }
 
+    /** Первое обращение в поддержку: пока игрок ни разу не писал и ему ещё не предлагали FAQ, сначала показываем ссылку на FAQ
+     *  (чтобы попытался найти ответ сам), и только следующая попытка открывает форму. */
+    public boolean supportFaqGateNeeded(AppUser user) {
+        return user.getSupportFaqShownAt() == null && supportTicketRepository.findTop20ByUserOrderByUpdatedAtDesc(user).isEmpty();
+    }
+
+    @Transactional
+    public void markSupportFaqShown(AppUser user) {
+        if (user.getSupportFaqShownAt() == null) {
+            user.setSupportFaqShownAt(LocalDateTime.now());
+            appUserRepository.save(user);
+        }
+    }
+
     /** Можно ли вернуть прерванную серию просмотром рекламы: серия есть в снимке, потеряно <= STREAK_AD_RESTORE_MAX_LOST_DAYS дней, раз в STREAK_AD_RESTORE_COOLDOWN_DAYS дней. */
     public boolean canRestoreStreakByAd(AppUser user) {
         if (!hasRestorableStreak(user) || restorableStreakDays(user) > STREAK_AD_RESTORE_MAX_LOST_DAYS) return false;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getSupportTickets, createSupportTicket } from '../api/client';
+import { getSupportTickets, createSupportTicket, getSupportFaqGate, markSupportFaqSeen } from '../api/client';
 import BackButton from '../components/BackButton';
 import './QuestsPage.css';
 import './ShopPage.css';
@@ -10,6 +10,37 @@ const STATUS_LABELS = {
   ANSWERED: '✅ Есть ответ',
   CLOSED: '🔒 Закрыта',
 };
+
+const BOT_FAQ_LINK = 'https://t.me/invitetogamebot?start=faq';
+
+/** Первое обращение: сначала предлагаем заглянуть в FAQ (в боте), и только потом показываем форму. */
+function FaqGateCard({ onContinue }) {
+  async function openFaq() {
+    try { await markSupportFaqSeen(); } catch { /* не мешаем открыть FAQ */ }
+    const tg = window.Telegram?.WebApp;
+    if (tg?.openTelegramLink) tg.openTelegramLink(BOT_FAQ_LINK);
+    else window.open(BOT_FAQ_LINK, '_blank');
+  }
+
+  async function proceed() {
+    try { await markSupportFaqSeen(); } catch { /* форму всё равно открываем */ }
+    onContinue();
+  }
+
+  return (
+    <div className="ref-link-card">
+      <div className="ref-link-label">💡 Сначала загляните в FAQ</div>
+      <p className="shop-desc">
+        В FAQ собраны ответы на частые вопросы: про квесты, вывод EXC, награды и отряды. Возможно, нужный ответ уже там.
+        Не нашли — напишите в поддержку, мы ответим.
+      </p>
+      <button className="quest-btn" onClick={openFaq}>❓ Открыть FAQ</button>
+      <button className="quest-btn quest-btn-secondary" style={{ marginTop: 8 }} onClick={proceed}>
+        ✍️ Не нашёл ответ — написать
+      </button>
+    </div>
+  );
+}
 
 function NewTicketForm({ onCreated }) {
   const [text, setText] = useState('');
@@ -106,6 +137,12 @@ function TicketList() {
 export default function SupportPage() {
   const [view, setView] = useState('new');
   const [refreshKey, setRefreshKey] = useState(0);
+  // null — ещё не знаем, true — показать FAQ перед формой, false — сразу форма
+  const [faqGate, setFaqGate] = useState(null);
+
+  useEffect(() => {
+    getSupportFaqGate().then(r => setFaqGate(!!r.needed)).catch(() => setFaqGate(false));
+  }, []);
 
   return (
     <div className="quests-page shop-page">
@@ -121,7 +158,15 @@ export default function SupportPage() {
       </div>
 
       {view === 'new'
-        ? <div className="category-section" style={{ padding: '12px 16px' }}><NewTicketForm onCreated={() => { setView('mine'); setRefreshKey(k => k + 1); }} /></div>
+        ? (
+          <div className="category-section" style={{ padding: '12px 16px' }}>
+            {faqGate === null
+              ? <div className="page-center">Загрузка...</div>
+              : faqGate
+                ? <FaqGateCard onContinue={() => setFaqGate(false)} />
+                : <NewTicketForm onCreated={() => { setView('mine'); setRefreshKey(k => k + 1); }} />}
+          </div>
+        )
         : <TicketList key={refreshKey} />}
     </div>
   );

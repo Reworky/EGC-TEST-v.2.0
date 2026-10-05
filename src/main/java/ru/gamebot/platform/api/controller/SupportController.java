@@ -22,6 +22,7 @@ import ru.gamebot.platform.domain.model.SupportTicket;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.service.SupportService;
 import ru.gamebot.platform.service.TelegramFileService;
+import ru.gamebot.platform.service.UserService;
 
 @Slf4j
 @RestController
@@ -35,6 +36,7 @@ public class SupportController {
     private final AppUserRepository appUserRepository;
     private final TelegramFileService telegramFileService;
     private final GamePlatformBot gamePlatformBot;
+    private final UserService userService;
 
     @GetMapping("/tickets")
     public ResponseEntity<List<SupportTicketDto>> tickets(@AuthenticationPrincipal Long telegramId) {
@@ -46,6 +48,27 @@ public class SupportController {
                 .map(this::toDto)
                 .toList();
         return ResponseEntity.ok(result);
+    }
+
+    /** Первое обращение в поддержку: needed=true - сначала показать ссылку на FAQ (мини-апп). */
+    @GetMapping("/faq-gate")
+    public ResponseEntity<java.util.Map<String, Boolean>> faqGate(@AuthenticationPrincipal Long telegramId) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        return ResponseEntity.ok(java.util.Map.of("needed", userService.supportFaqGateNeeded(user)));
+    }
+
+    /** Игрок увидел предложение заглянуть в FAQ (открыл FAQ или нажал «не нашёл ответ») - дальше форма открывается сразу. */
+    @PostMapping("/faq-gate/seen")
+    public ResponseEntity<Void> faqGateSeen(@AuthenticationPrincipal Long telegramId) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        userService.markSupportFaqShown(user);
+        return ResponseEntity.ok().build();
     }
 
     @PostMapping("/tickets")

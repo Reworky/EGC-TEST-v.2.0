@@ -221,6 +221,9 @@ public class AppUser {
     @Column(length = 24)
     private String pendingAdPlacement;
 
+    /** Когда игроку впервые предложили заглянуть в FAQ перед обращением в поддержку (null - ещё не предлагали). */
+    private LocalDateTime supportFaqShownAt;
+
     /** Дата последнего бесплатного восстановления серии за просмотр рекламы (не чаще раза в STREAK_AD_RESTORE_COOLDOWN_DAYS дней). */
     private LocalDate streakAdRestoreDate;
 

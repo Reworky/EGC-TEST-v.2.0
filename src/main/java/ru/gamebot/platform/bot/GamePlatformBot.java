@@ -792,6 +792,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         }
 
+        // Deep link из мини-аппа (первое обращение в поддержку): открыть FAQ
+        if (startPayload.equals("faq") && user.isRegistrationCompleted()) {
+            sendFaqMenu(user);
+            return;
+        }
         // Deep link из мини-аппа: "нужен тег Brawl Stars для авто-квеста" → сразу в диалог привязки
         if (startPayload.equals("passgift") && user.isRegistrationCompleted()) {
             startPassGiftFlow(user);
@@ -9148,6 +9153,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void handleSupportAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
         switch (action) {
             case "new" -> {
+                // Первое обращение: сначала FAQ (ответ часто уже там), повторное нажатие «Написать» открывает диалог
+                if (userService.supportFaqGateNeeded(user)) {
+                    userService.markSupportFaqShown(user);
+                    sendText(user.getTelegramId(),
+                            "💡 <b>Сначала загляните в FAQ</b>\n\n"
+                                    + "В нём ответы на самые частые вопросы: про квесты, вывод EXC, награды и отряды. Возможно, нужный ответ уже там.\n\n"
+                                    + "Не нашли — напишите в поддержку, мы ответим.",
+                            keyboardFactory.verticalLayout(List.of(
+                                    keyboardFactory.callback("❓ Открыть FAQ", "menu:faq"),
+                                    keyboardFactory.callback("✍️ Не нашёл ответ — написать", "support:new"),
+                                    keyboardFactory.callback("🏠 Меню", "menu:main"))));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                }
                 clearSupportDraft(session);
                 session.setState(SessionState.SUPPORT_INPUT);
                 sendText(user.getTelegramId(),

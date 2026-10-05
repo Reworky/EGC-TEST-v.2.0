@@ -210,6 +210,16 @@ export async function votePoll(id, optionIndex) {
   return data;
 }
 
+// Первое обращение в поддержку: needed=true — сначала предложить FAQ
+export async function getSupportFaqGate() {
+  const { data } = await api.get('/api/support/faq-gate');
+  return data;
+}
+
+export async function markSupportFaqSeen() {
+  await api.post('/api/support/faq-gate/seen');
+}
+
 export async function getSupportTickets() {
   const { data } = await api.get('/api/support/tickets');
   return data;
