@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { getStarsInvoiceLink } from '../api/client';
 import { openStarsInvoice } from '../utils/stars';
+import { starsApprox, useFundRatio } from '../utils/fundStars';
 
 const EGC_PASS_PERKS = [
   '✨ +10% к EXC за все квесты (до 10 000 EXC бонуса в месяц)',
@@ -21,6 +22,7 @@ const EGC_PASS_PERKS = [
 export default function EgcPassCard({ profile, price, onPurchased }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
+  const fundRatio = useFundRatio();
 
   async function handleBuy() {
     setBusy(true);
@@ -64,6 +66,13 @@ export default function EgcPassCard({ profile, price, onPurchased }) {
         ))}
       </div>
       {message && <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.85)', marginBottom: 10 }}>{message}</div>}
+      {active && (
+        <div style={{ fontSize: 12.5, color: '#e9d5ff', marginBottom: 10 }}>
+          📊 Что Pass дал в этом месяце: {profile?.egcPassBoostUsedThisMonth > 0
+            ? <b>+{profile.egcPassBoostUsedThisMonth.toLocaleString('ru-RU')} EXC к наградам{fundRatio != null ? ` (${starsApprox(profile.egcPassBoostUsedThisMonth, fundRatio)})` : ''}</b>
+            : 'бонус появится после ближайших квестов'}
+        </div>
+      )}
       {active ? (
         <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.55)' }}>
           Подписка оформлена, действует до <b style={{ color: '#e9d5ff' }}>{profile.egcPassActiveUntil}</b>,

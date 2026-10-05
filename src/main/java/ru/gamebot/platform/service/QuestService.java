@@ -72,6 +72,8 @@ public class QuestService {
         return COOLDOWN_HOURS;
     }
     private static final int REFERRAL_BONUS_PERCENT = 10;
+    /** Подписчик EGC Pass получает с квестов приглашённых друзей 12% вместо 10% (04.10.2026). */
+    public static final int REFERRAL_BONUS_PERCENT_PASS = 12;
 
     // Жёсткий кулдаун на отправку отчёта убран по решению пользователя (2026-07-11) — throughput и так
     // ограничен часовым кулдауном на взятие, лимитом слотов, 24ч на повтор того же квеста и diminishing returns.
@@ -1297,9 +1299,10 @@ public class QuestService {
         if (!invitedUser.isReferralActive()) {
             invitedUser.setReferralActive(true);
         }
-        long bonus = Math.max(1, earnedCoins * REFERRAL_BONUS_PERCENT / 100);
+        int referralPercent = userService.isEgcPassActive(referrer) ? REFERRAL_BONUS_PERCENT_PASS : REFERRAL_BONUS_PERCENT;
+        long bonus = Math.max(1, earnedCoins * referralPercent / 100);
         UserService.RewardGrant grant = userService.addReward(referrer, 0, bonus, ExcTransactionService.REFERRAL,
-                REFERRAL_BONUS_PERCENT + "% с квеста реферала " + invitedUser.getNickname());
+                referralPercent + "% с квеста реферала " + invitedUser.getNickname());
         referrer.setReferralEarnedExc(referrer.getReferralEarnedExc() + grant.totalExc());
         appUserRepository.save(referrer);
     }

@@ -3333,7 +3333,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         backMenuKeyboard("menu:main"));
                 } catch (IllegalArgumentException e) {
                     session.reset();
-                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
+                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), sinkErrorKeyboard(user, e.getMessage()));
                 }
             }
             case TRANSFER_EXC_RECIPIENT -> handleTransferRecipientInput(user, session, text);
@@ -5455,6 +5455,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void renderTakeQuestResult(AppUser user, Long questId, Quest quest, QuestService.QuestActionResult result) {
         if (result.status() != QuestActionStatus.OK) {
             sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад", takeQuestErrorMessage(user, quest, result));
+            if (result.status() == QuestActionStatus.SLOTS_FULL && !sinkShopService.isEgcPassActive(user)) {
+                sendText(user.getTelegramId(),
+                        "⭐ <b>С EGC Pass у вас 3 слота квеста</b>\n\nМожно вести до трёх квестов одновременно, пока подписка активна.",
+                        keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("⭐ Оформить EGC Pass", "sink:egc_pass")))));
+            }
             return;
         }
         if (quest.getBrawlVerifyType() != null) {
@@ -5563,7 +5568,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case HAS_REJECTED_REPORT ->
                     "❌ Ваш отчёт по этому квесту был отклонён. Нажмите «📤 Отчёт», чтобы исправить ошибки и переотправить.";
             case SLOTS_FULL ->
-                    "📂 У вас уже есть активные квесты. Завершите или отмените один из них, либо купите доп. слот (3 500 EXC) в разделе Предметы клуба.";
+                    "📂 У вас уже есть активные квесты. Завершите или отмените один из них, либо купите доп. слот (3 500 EXC) в разделе Предметы клуба. С EGC Pass у вас будет 3 слота.";
             case SAME_QUEST_COOLDOWN ->
                     "⏳ Этот квест можно выполнять не чаще 1 раза в " + DurationFormatter.format(result.minutesLeft()) + ".";
             case GAME_COOLDOWN ->
@@ -6748,7 +6753,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             "🔀 <b>Реролл активирован</b>\n\nСписано " + SinkShopService.PRICE_REROLL + " EXC. Перейдите в раздел квестов — там уже другой набор заданий.",
                             backMenuKeyboard("menu:sink"));
                 } catch (IllegalArgumentException e) {
-                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
+                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), sinkErrorKeyboard(user, e.getMessage()));
                 }
             }
             case "boost" -> {
@@ -6758,7 +6763,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             "⚡ <b>Буст активирован!</b>\n\nВы получаете +20% к EXC за все квесты в течение 24 часов.\nСписано 3 000 EXC.",
                             backMenuKeyboard("menu:sink"));
                 } catch (IllegalArgumentException e) {
-                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
+                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), sinkErrorKeyboard(user, e.getMessage()));
                 }
             }
             case "boost_info" -> sendText(user.getTelegramId(),
@@ -6784,7 +6789,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         "📂 <b>Доп. слот активирован!</b>\n\nТеперь вы можете вести на один квест больше в течение 48 часов (третий слот открывает только EGC Pass).\nСписано 3 500 EXC.",
                         backMenuKeyboard("menu:sink"));
                 } catch (IllegalArgumentException e) {
-                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
+                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), sinkErrorKeyboard(user, e.getMessage()));
                 }
             }
             case "cooldown_info" -> {
@@ -6802,7 +6807,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         "⏱️ <b>Снятие кулдауна активировано!</b>\n\nВаш следующий квест, если на него действует кулдаун, будет доступен без ожидания.\nСписано 3 000 EXC.",
                         backMenuKeyboard("menu:sink"));
                 } catch (IllegalArgumentException e) {
-                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
+                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), sinkErrorKeyboard(user, e.getMessage()));
                 }
             }
             case "gift" -> {
@@ -6858,7 +6863,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             backMenuKeyboard("menu:main"));
                     } catch (Exception ignored) { }
                 } catch (IllegalArgumentException e) {
-                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
+                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), sinkErrorKeyboard(user, e.getMessage()));
                 }
             }
             case "insurance" -> {
@@ -6868,7 +6873,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             "🛡️ <b>Страховка активирована!</b>\n\nЕсли ваш следующий отчёт по квесту будет отклонён — вы сможете отправить его повторно без штрафа.\nСписано " + SinkShopService.PRICE_INSURANCE + " EXC.",
                             backMenuKeyboard("menu:sink"));
                 } catch (IllegalArgumentException | IllegalStateException e) {
-                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
+                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), sinkErrorKeyboard(user, e.getMessage()));
                 }
             }
             case "passinsurance" -> {
@@ -6878,7 +6883,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             "🛡️ <b>Страховка активирована по EGC Pass!</b>\n\nЕсли ваш следующий отчёт по квесту будет отклонён — вы сможете отправить его повторно без штрафа. Следующая бесплатная — в новом месяце.",
                             backMenuKeyboard("menu:sink"));
                 } catch (IllegalArgumentException | IllegalStateException e) {
-                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
+                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), sinkErrorKeyboard(user, e.getMessage()));
                 }
             }
             case "insurance_info" -> sendText(user.getTelegramId(),
@@ -6900,7 +6905,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             "⚡ <b>XP-буст активирован!</b>\n\n+" + sinkShopService.getXpBoostPercent(user) + "% к XP за все квесты в течение " + hours + " часов.\nСписано " + price + " EXC.",
                             backMenuKeyboard("menu:sink"));
                     } catch (IllegalArgumentException e) {
-                        sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
+                        sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), sinkErrorKeyboard(user, e.getMessage()));
                     }
                 } else if (action.startsWith("excboost:")) {
                     int hours = action.equals("excboost:72") ? 72 : 24;
@@ -6911,7 +6916,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             "⚡ <b>EXC-буст активирован!</b>\n\n+20% к EXC за все квесты в течение " + hours + " часов.\nСписано " + price + " EXC.",
                             backMenuKeyboard("menu:sink"));
                     } catch (IllegalArgumentException e) {
-                        sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
+                        sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), sinkErrorKeyboard(user, e.getMessage()));
                     }
                 } else if (action.startsWith("doubleboost:")) {
                     try {
@@ -6920,7 +6925,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             "⚡⚡ <b>Двойной буст активирован!</b>\n\n+20% к XP и +20% к EXC за все квесты в течение 24 часов.\nСписано " + SinkShopService.PRICE_DOUBLE_BOOST_24H + " EXC.",
                             backMenuKeyboard("menu:sink"));
                     } catch (IllegalArgumentException e) {
-                        sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
+                        sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), sinkErrorKeyboard(user, e.getMessage()));
                     }
                 } else {
                     sendSinkShop(user);
@@ -7074,6 +7079,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("✅ <b>Подписка оформлена</b> — действует до <b>")
                     .append(user.getEgcPassActiveUntil().format(dateFmt))
                     .append("</b>, дальше продлится автоматически. Отменить можно в настройках платежей Telegram.\n\n");
+            long passBonusUsed = UserService.EGC_PASS_BOOST_MONTHLY_CAP_EXC - userService.egcPassBoostRemainingThisMonth(user);
+            sb.append("📊 <b>Что Pass дал в этом месяце</b>\n")
+                    .append(passBonusUsed > 0
+                            ? "• +" + passBonusUsed + " EXC к наградам" + starsNote(passBonusUsed) + "\n"
+                            : "• бонус к наградам появится после ближайших квестов\n")
+                    .append("• 3-й слот квеста и повышенные лимиты\n")
+                    .append("• Бесплатная страховка: ").append(sinkShopService.passInsuranceAvailable(user) ? "доступна" : "уже использована в этом месяце")
+                    .append("\n\n");
         } else {
             sb.append("Подписка ").append(EGC_PASS_STARS_PRICE)
                     .append(" ⭐ / 30 дней, автопродление. Пока не оформлена.\n\n");
@@ -18674,6 +18687,37 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             ));
             sendText(recipientId, text, markup);
         }
+    }
+
+    /** Напоминание: заявки подписчиков EGC Pass ждут дольше обещанных часов (PassPayoutSlaService). */
+    @org.springframework.context.event.EventListener
+    public void onPassPayoutOverdue(ru.gamebot.platform.event.PassPayoutOverdueEvent event) {
+        try {
+            String text = "⏰ <b>Заявки подписчиков EGC Pass ждут дольше "
+                    + ru.gamebot.platform.service.PassPayoutSlaService.SLA_HOURS + " ч</b>\n\n"
+                    + "Просроченных: <b>" + event.getRequestIds().size() + "</b>. Подписчикам обещана обработка в течение "
+                    + ru.gamebot.platform.service.PassPayoutSlaService.SLA_HOURS + " часов, такие заявки идут в списке первыми (👑).";
+            Set<Long> adminIds = adminService.allAdminIds();
+            for (Long recipientId : adminService.allModeratorIds()) {
+                String callbackData = adminIds.contains(recipientId) ? "admin:withdrawals" : "mod:withdrawals";
+                sendText(recipientId, text, keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("💸 Открыть заявки на вывод", callbackData)))));
+            }
+        } catch (Exception e) {
+            log.warn("Failed to send Pass payout overdue reminder", e);
+        }
+    }
+
+    /** Клавиатура «Назад/Меню» с кнопкой покупки EGC Pass, если игрок упёрся в лимит, который у подписчика выше (в тексте есть «EGC Pass») и подписки нет. */
+    private InlineKeyboardMarkup sinkErrorKeyboard(AppUser user, String message) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (message != null && message.contains("EGC Pass") && !sinkShopService.isEgcPassActive(user)) {
+            rows.add(List.of(keyboardFactory.callback("⭐ Оформить EGC Pass", "sink:egc_pass")));
+        }
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", "menu:sink"),
+                keyboardFactory.callback("🏠 Меню", "menu:main")));
+        return keyboardFactory.rowsLayout(rows);
     }
 
     // ── "Донат по играм" — см. GemPurchaseService ────────────────────────────────────

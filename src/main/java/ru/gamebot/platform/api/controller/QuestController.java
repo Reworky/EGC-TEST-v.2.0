@@ -384,6 +384,9 @@ public class QuestController {
             brawlQuestVerificationService.primeBaseline(result.submission().getId(), quest.getBrawlVerifyType(), user.getBrawlStarsTag());
         }
         QuestActionResponseDto response = toResponse(result);
+        if (result.status() == QuestActionStatus.SLOTS_FULL && !userService.isEgcPassActive(user)) {
+            response.setMessage("Достигнут лимит активных квестов. Завершите текущий, купите доп. слот или оформите EGC Pass: с ним 3 слота.");
+        }
         if (result.status() == QuestActionStatus.OK && quest.getGameName() != null && !quest.getGameName().isBlank()
                 && !quest.isSponsored() && !"UGC".equalsIgnoreCase(quest.getGameName())) {
             // Подсказка с названием игры: после «Взять» игрок должен сразу пойти в игру

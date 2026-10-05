@@ -5,6 +5,7 @@ import BackButton from '../components/BackButton';
 import AdBanner from '../components/AdBanner';
 import DonateView from './DonateView';
 import './QuestsPage.css';
+import PassUpsell from '../components/PassUpsell';
 import './ShopPage.css';
 
 const PERK_CATEGORIES = [
@@ -288,6 +289,7 @@ function PerkCard({ item, state, expanded, onToggle, onPurchased }) {
             {busy ? 'Секунду...' : active ? (item.key === 'extraslot' && state.extraSlotFromEgcPass ? 'Включён в EGC Pass' : (item.activeLabel || 'Уже активен')) : 'Купить'}
           </button>
           {message && <div className="quest-message">{message}</div>}
+          <PassUpsell message={message} />
         </div>
       )}
     </div>

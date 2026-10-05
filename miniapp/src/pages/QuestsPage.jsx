@@ -5,6 +5,7 @@ import { useLottie } from '../components/LottieContext';
 import { useParticles } from '../components/ParticlesContext';
 import AdRewardCard from '../components/AdRewardCard';
 import { starsApprox, useFundRatio } from '../utils/fundStars';
+import PassUpsell from '../components/PassUpsell';
 import './QuestsPage.css';
 
 const CATEGORY_ORDER = ['Лёгкие', 'Средние', 'Сложные'];
@@ -308,6 +309,7 @@ function QuestActions({ quest, detail, onChanged }) {
       {message && (
         <div className="quest-message">
           {message}
+          <PassUpsell message={message} />
           {needsTagLink && (
             <button className="quest-btn" style={{ marginTop: 8 }} onClick={() => openBotForTag(needsTagLink.startParam)}>
               {needsTagLink.label}
