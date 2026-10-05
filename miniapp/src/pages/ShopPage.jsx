@@ -26,7 +26,7 @@ const PERK_CATEGORIES = [
       { key: 'insurance', title: '🛡️ Страховка провала', price: 1500, blockedBy: 'insuranceActive', description: 'Если следующий отчёт отклонят — сможете отправить его повторно без штрафа.' },
       { key: 'passinsurance', title: '🛡️ Страховка по EGC Pass', price: 0, blockedBy: 'passInsuranceUsed', activeLabel: 'Уже взята в этом месяце', hideIf: s => !s.egcPass, description: 'Бесплатная страховка провала раз в месяц для подписчиков EGC Pass.' },
       { key: 'extraslot', title: '📂 Доп. слот квеста 48ч', price: 3500, blockedBy: 'extraSlotActive', activeUntilField: 'extraSlotUntil', description: 'На 48 часов на один одновременный квест больше. Третий слот открывает только EGC Pass.' },
-      { key: 'cooldown', title: '⏱️ Снятие кулдауна', price: 3000, blockedBy: 'cooldownBypassActive', activeLabel: 'Ждёт квест с кулдауном', description: 'Снимает кулдаун для следующего квеста в любой игре. Применится автоматически при взятии квеста с кулдауном. Не снимает отдельный лимит «1 квест в час» между любыми квестами. Лимит: 2 раза в сутки, с EGC Pass — 4.' },
+      { key: 'cooldown', title: '⏱️ Снятие кулдауна', price: 3000, blockedBy: 'cooldownBypassActive', activeLabel: 'Ждёт квест с кулдауном', description: 'Снимает кулдаун для следующего квеста в любой игре. Применится автоматически при взятии квеста с кулдауном. Не снимает отдельный лимит «1 квест в час» между любыми квестами. Лимит: 2 раза в сутки, с EGC Pass — 4. Если ни на одном квесте нет кулдауна, купить нельзя; купленное и неиспользованное можно отменить с возвратом EXC.' },
     ],
   },
   {
@@ -271,6 +271,19 @@ function PerkCard({ item, state, expanded, onToggle, onPurchased }) {
     }
   }
 
+  // Купленное, но так и не применённое снятие кулдауна можно отменить и вернуть EXC (жалоба игрока 05.10.2026).
+  async function handleRefund() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await purchasePerk('cooldownrefund');
+      setMessage(res.message);
+      if (res.success) onPurchased();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className={`shop-card ${active ? 'shop-card-locked' : ''}`} onClick={() => onToggle(item.key)}>
       <div className="shop-top">
@@ -288,6 +301,11 @@ function PerkCard({ item, state, expanded, onToggle, onPurchased }) {
           <button className="quest-btn" disabled={busy || active} onClick={handleBuy}>
             {busy ? 'Секунду...' : active ? (item.key === 'extraslot' && state.extraSlotFromEgcPass ? 'Включён в EGC Pass' : (item.activeLabel || 'Уже активен')) : 'Купить'}
           </button>
+          {item.key === 'cooldown' && active && (
+            <button className="quest-btn quest-btn-secondary" disabled={busy} onClick={handleRefund} style={{ marginTop: 8 }}>
+              ↩️ Отменить и вернуть EXC
+            </button>
+          )}
           {message && <div className="quest-message">{message}</div>}
           <PassUpsell message={message} hide={!!state.egcPass} />
         </div>

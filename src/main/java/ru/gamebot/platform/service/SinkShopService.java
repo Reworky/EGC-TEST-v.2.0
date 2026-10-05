@@ -172,6 +172,21 @@ public class SinkShopService {
         appUserRepository.save(user);
     }
 
+    /** Возврат купленного, но так и не применённого снятия кулдауна (оно ждёт квест с кулдауном, а кулдауна нет: например, в квестах «без стен» его не бывает).
+     *  Возвращает 3 000 EXC, снимает «ожидание» и возвращает покупку в дневной счётчик. */
+    @Transactional
+    public void refundCooldownRemoval(AppUser user) {
+        if (user.getCooldownBypassGame() == null) {
+            throw new IllegalArgumentException("Нет купленного и неиспользованного снятия кулдауна.");
+        }
+        user.setCooldownBypassGame(null);
+        excTx.creditExc(user, PRICE_COOLDOWN_REMOVAL, ExcTransactionService.SHOP_REFUND, "Возврат: снятие кулдауна не понадобилось");
+        if (user.getDailyCooldownRemovals() > 0 && LocalDate.now().equals(user.getDailyCooldownDate())) {
+            user.setDailyCooldownRemovals(user.getDailyCooldownRemovals() - 1);
+        }
+        appUserRepository.save(user);
+    }
+
     @Transactional
     public void purchaseCooldownRemoval(AppUser user) {
         int dailyRemovals = getDailyCount(user.getDailyCooldownRemovals(), user.getDailyCooldownDate());

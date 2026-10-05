@@ -419,6 +419,34 @@ public class QuestService {
                 && LocalDateTime.now().isBefore(lastApproved.get().plusHours(cooldownHours(quest, user)));
     }
 
+    /** Есть ли у игрока сейчас хоть один квест с активным кулдауном (повтор того же квеста или общий кулдаун игры). Квесты «без стен»,
+     *  спонсорские и внешние кулдаунов не имеют. Нужен, чтобы не продавать снятие кулдауна, которое нечему снимать. */
+    @Transactional(readOnly = true)
+    public boolean hasAnyActiveCooldown(AppUser user) {
+        LocalDateTime since = LocalDateTime.now().minusDays(15);
+        java.util.Set<Long> seen = new java.util.HashSet<>();
+        int checked = 0;
+        for (QuestSubmission s : questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user)) {
+            if (checked++ > 120 || (s.getCreatedAt() != null && s.getCreatedAt().isBefore(since))) break;
+            if (s.getStatus() != SubmissionStatus.APPROVED) continue;
+            Quest q = s.getQuest();
+            if (q == null || q.isSponsored() || q.isExternalAutoApprove() || q.isRepeatableNoCooldownEligible()) continue;
+            if (!seen.add(q.getId())) continue;
+            if (isSameQuestCooldownActive(user, q) || isCooldownActive(user, q)) return true;
+        }
+        return false;
+    }
+
+    /** Покупка снятия кулдауна с проверкой, что снимать есть что (жалоба игрока 05.10.2026: купил, а применять было не к чему, и кнопка осталась серой). */
+    @Transactional
+    public void purchaseCooldownRemoval(AppUser user) {
+        if (user.getCooldownBypassGame() == null && !hasAnyActiveCooldown(user)) {
+            throw new IllegalArgumentException("Сейчас ни на одном вашем квесте нет кулдауна, снимать нечего. "
+                    + "Купите снятие, когда увидите кулдаун на карточке квеста (у квестов «без стен» кулдауна нет).");
+        }
+        sinkShopService.purchaseCooldownRemoval(user);
+    }
+
     /** Свободен ли квест от кулдаунов прямо сейчас: и повтор ТОГО ЖЕ квеста, и общий кулдаун игры (последний одобренный квест этой
      *  игры, любой). Нужен уведомлениям «кулдаун снят»: они считают срок по одному квесту, а игровой кулдаун от другого квеста той же
      *  игры мог ещё идти (заявка поддержки #240: пришло «кулдаун давно снят», а в списке «ещё 14 часов»). Не учитывает часовой лимит

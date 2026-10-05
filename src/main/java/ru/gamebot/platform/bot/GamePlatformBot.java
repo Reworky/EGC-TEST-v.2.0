@@ -6814,9 +6814,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), sinkErrorKeyboard(user, e.getMessage()));
                 }
             }
+            case "cooldown_refund" -> {
+                try {
+                    sinkShopService.refundCooldownRemoval(user);
+                    sendText(user.getTelegramId(),
+                        "↩️ <b>Снятие кулдауна отменено</b>\n\nВернули <b>" + SinkShopService.PRICE_COOLDOWN_REMOVAL + " EXC</b> на баланс. Купить снятие снова можно, когда на квесте появится кулдаун.",
+                        backMenuKeyboard("menu:sink"));
+                } catch (IllegalArgumentException e) {
+                    sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("menu:sink"));
+                }
+            }
             case "cooldown_info" -> {
                 List<List<InlineKeyboardButton>> rows2 = new ArrayList<>();
-                rows2.add(List.of(keyboardFactory.callback("⏱️ Купить снятие — 3 000 EXC", "sink:buycooldown")));
+                if (user.getCooldownBypassGame() != null) {
+                    rows2.add(List.of(keyboardFactory.callback("↩️ Отменить и вернуть " + SinkShopService.PRICE_COOLDOWN_REMOVAL + " EXC", "sink:cooldown_refund")));
+                } else {
+                    rows2.add(List.of(keyboardFactory.callback("⏱️ Купить снятие — 3 000 EXC", "sink:buycooldown")));
+                }
                 rows2.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:sink")));
                 sendText(user.getTelegramId(),
                     "⏱️ <b>Снятие кулдауна</b>\n\nСнимает текущий кулдаун для следующего квеста в любой игре (для «Сложных» квестов это 14 дней). Не снимает отдельный лимит «1 квест в час» между любыми квестами.\nСтоимость: 3 000 EXC. Лимит: 2 раза в сутки.\n\n💡 После покупки перейдите к нужному квесту — кулдаун будет снят автоматически при взятии.",
@@ -6824,7 +6838,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case "buycooldown" -> {
                 try {
-                    sinkShopService.purchaseCooldownRemoval(user);
+                    questService.purchaseCooldownRemoval(user);
                     sendText(user.getTelegramId(),
                         "⏱️ <b>Снятие кулдауна активировано!</b>\n\nВаш следующий квест, если на него действует кулдаун, будет доступен без ожидания.\nСписано 3 000 EXC.",
                         backMenuKeyboard("menu:sink"));

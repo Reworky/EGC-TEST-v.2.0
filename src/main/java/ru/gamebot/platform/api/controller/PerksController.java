@@ -28,6 +28,7 @@ public class PerksController {
     private final SinkShopService sinkShopService;
     private final AppUserRepository appUserRepository;
     private final UserService userService;
+    private final ru.gamebot.platform.service.QuestService questService;
 
     @Data
     public static class PurchaseRequest {
@@ -94,8 +95,12 @@ public class PerksController {
                     sinkShopService.purchaseExtraSlot(user);
                     yield "Доп. слот активирован! Теперь можно вести на один квест больше в течение 48 часов. Третий слот открывает EGC Pass.";
                 }
+                case "cooldownrefund" -> {
+                    sinkShopService.refundCooldownRemoval(user);
+                    yield "Снятие кулдауна отменено, EXC вернули на баланс.";
+                }
                 case "cooldown" -> {
-                    sinkShopService.purchaseCooldownRemoval(user);
+                    questService.purchaseCooldownRemoval(user);
                     yield "Снятие кулдауна активировано! Следующий квест с кулдауном будет доступен без ожидания.";
                 }
                 case "xpboost24" -> {
