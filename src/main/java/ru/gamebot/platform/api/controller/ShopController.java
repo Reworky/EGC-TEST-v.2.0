@@ -107,7 +107,7 @@ public class ShopController {
 
         RewardRequest req;
         try {
-            req = rewardService.createRewardRequest(user, item);
+            req = rewardService.createRewardRequest(user, item, userData);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.ok(ShopActionResponseDto.builder()
                     .success(false)

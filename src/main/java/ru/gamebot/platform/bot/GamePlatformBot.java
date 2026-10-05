@@ -1161,6 +1161,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if (data.startsWith("shop:group:")) {
+            // Вывод звёздами, как рубли и TON, требует подтверждённого номера телефона (иначе обход защиты от мультиаккаунтов)
+            if ("telegram_stars".equals(data.substring("shop:group:".length())) && user.getPhoneNumber() == null) {
+                answerSilently(callbackQuery.getId());
+                session.setState(SessionState.AWAITING_PHONE_SHARE);
+                session.getData().put("pendingWithdrawal", "stars");
+                sendPhoneShareRequest(user.getTelegramId());
+                return;
+            }
             sendGroupPicker(user, data.substring("shop:group:".length()));
             answerSilently(callbackQuery.getId());
             return;
@@ -7881,7 +7889,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long effectivePrice = rewardService.effectivePrice(reward);
         RewardRequest req;
         try {
-            req = rewardService.createRewardRequest(user, reward);
+            req = rewardService.createRewardRequest(user, reward, userGameData);
         } catch (IllegalArgumentException exception) {
             if (callbackQuery != null) answerSilently(callbackQuery.getId());
             sendRewardCard(user, reward.getId(), "⚠️ " + exception.getMessage());
@@ -18165,6 +18173,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendWithdrawalScreen(user);
         } else if ("ton".equals(pendingWithdrawal)) {
             sendWithdrawalTonWalletQuestion(user);
+        } else if ("stars".equals(pendingWithdrawal)) {
+            sendGroupPicker(user, "telegram_stars");
         } else {
             sendMainMenu(user, null);
         }

@@ -74,6 +74,32 @@ public class RewardService {
         return "d:" + digits;
     }
 
+    /** Ключ юзернейма получателя звёзд для сравнения между аккаунтами: без @, в нижнем регистре; null, если это не похоже на юзернейм Telegram. */
+    static String starsUsernameKey(String details) {
+        if (details == null) return null;
+        String d = details.trim();
+        if (d.startsWith("@")) d = d.substring(1);
+        d = d.toLowerCase();
+        return d.matches("[a-z0-9_]{5,32}") ? "u:" + d : null;
+    }
+
+    /** Один юзернейм получателя звёзд - один аккаунт игрока: бросает исключение (и предупреждает админов), если на него уже ведёт живая заявка другого аккаунта. */
+    private void checkStarsUsernameNotShared(AppUser lockedUser, String username) {
+        String key = starsUsernameKey(username);
+        if (key == null) return;
+        List<AppUser> others = rewardRequestRepository.findActiveWithdrawalsWithDetailsOfOtherUsers(lockedUser.getId()).stream()
+                .filter(r -> "telegram_stars".equals(r.getRewardItem().getPurchaseGroup()))
+                .filter(r -> key.equals(starsUsernameKey(r.getPayoutDetails())))
+                .map(RewardRequest::getUser)
+                .distinct()
+                .toList();
+        if (!others.isEmpty()) {
+            eventPublisher.publishEvent(new ru.gamebot.platform.event.WithdrawalDestinationConflictEvent(this, lockedUser, others, username));
+            throw new IllegalArgumentException("Этот юзернейм уже используется другим аккаунтом. Укажите свой юзернейм "
+                    + "(один получатель - один игрок). Если это ошибка, напишите в поддержку.");
+        }
+    }
+
     /** Бросает исключение (и предупреждает админов), если те же реквизиты уже использует другой аккаунт. */
     private void checkDestinationNotShared(AppUser lockedUser, String payoutDetails) {
         String key = destinationKey(payoutDetails);
@@ -134,6 +160,12 @@ public class RewardService {
      */
     @Transactional
     public RewardRequest createRewardRequest(AppUser user, RewardItem rewardItem) {
+        return createRewardRequest(user, rewardItem, null);
+    }
+
+    /** userData - то, что игрок ввёл при покупке (для вывода в Stars это юзернейм получателя): проверяется ДО списания EXC. */
+    @Transactional
+    public RewardRequest createRewardRequest(AppUser user, RewardItem rewardItem, String userData) {
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
 
@@ -149,6 +181,11 @@ public class RewardService {
             if (!"telegram_stars".equals(rewardItem.getPurchaseGroup())) {
                 throw new IllegalArgumentException("Эта позиция сейчас недоступна.");
             }
+            // Телефон нужен для ВСЕХ способов вывода (раньше звёзды обходили проверку: дубли аккаунтов ловятся именно по номеру, 05.10.2026)
+            if (lockedUser.getPhoneNumber() == null) {
+                throw new IllegalArgumentException("Для вывода нужно подтвердить номер телефона: откройте «Вывод» в боте и поделитесь контактом.");
+            }
+            checkStarsUsernameNotShared(lockedUser, userData);
             checkWithdrawalAllowed(lockedUser);
             if (hasWithdrawalTodayOrPending(lockedUser)) {
                 throw new IllegalArgumentException("Лимит: 1 заявка на вывод в сутки. Следующую можно создать через 24 часа после предыдущей.");
@@ -204,6 +241,9 @@ public class RewardService {
         // а effectivePrice меняется вместе с Health Ratio, так что позже (при отмене/отклонении) без
         // этого снимка невозможно узнать, сколько было списано именно в этот раз.
         request.setPaidPriceCoins(price);
+        if (userData != null && !userData.isBlank()) {
+            request.setPayoutDetails(userData);
+        }
 
         if (rewardItem.getAvatarFrameColor() != null) {
             // Цифровая косметика — применяется мгновенно, без очереди на одобрение администратора
