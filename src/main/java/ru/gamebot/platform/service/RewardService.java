@@ -302,6 +302,10 @@ public class RewardService {
                 || rewardRequestRepository.countPendingWithdrawalsByUser(user) > 0;
     }
 
+    public long countPaidWithdrawalsByUser(AppUser user) {
+        return rewardRequestRepository.countPaidWithdrawalsByUser(user);
+    }
+
     public long countPendingWithdrawalsByUser(AppUser user) {
         return rewardRequestRepository.countPendingWithdrawalsByUser(user);
     }

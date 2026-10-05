@@ -29,6 +29,10 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
     @EntityGraph(attributePaths = {"user", "rewardItem"})
     java.util.Optional<RewardRequest> findWithUserAndRewardItemById(Long id);
 
+    /** Сколько выплат игроку уже выполнено (заявки на вывод со статусом APPROVED) - для проверки игрока перед выплатой. */
+    @Query("SELECT COUNT(r) FROM RewardRequest r WHERE r.user = :user AND r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED'")
+    long countPaidWithdrawalsByUser(@Param("user") AppUser user);
+
     /** Живые заявки на вывод ДРУГИХ игроков с реквизитами — для проверки «реквизиты уже используются другим аккаунтом». */
     @Query("SELECT r FROM RewardRequest r JOIN FETCH r.user WHERE r.rewardItem.category = 'Вывод' AND r.payoutDetails IS NOT NULL "
             + "AND r.user.id <> :userId AND r.status IN ('PENDING', 'IN_PROGRESS', 'APPROVED')")

@@ -10977,6 +10977,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     // ── Withdrawal requests admin ─────────────────────────────────────────────
 
     private void handleAdminWithdrawalAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String action) {
+        if (action.startsWith("check:")) {
+            answerSilently(callbackQuery.getId());
+            sendWithdrawalPlayerCheck(user, parseLong(action.substring("check:".length())), false);
+            return;
+        }
         if (action.startsWith("history:")) {
             int pg = 0;
             try { pg = Integer.parseInt(action.substring("history:".length())); } catch (NumberFormatException ignored) {}
@@ -11306,6 +11311,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("✅ Выплачено", "admin:withdrawal:approve:" + req.getId()),
                 keyboardFactory.callback("❌ Отклонить", "admin:withdrawal:reject:" + req.getId())
         ));
+        adminWdRows.add(List.of(keyboardFactory.callback("🔎 Проверить игрока перед выплатой", "admin:withdrawal:check:" + req.getId())));
         if (multiblockTarget.isPresent()) {
             adminWdRows.add(List.of(keyboardFactory.callback(
                     "🚫 Отклонить + заблокировать оба аккаунта",
@@ -11341,6 +11347,82 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + " EXC</b> (лимит по текущему уровню игрока; заявка могла быть принята при более высоком XP)\n";
         }
         return "📊 Месячный лимит: <b>" + used + " / " + limit + " EXC</b> использовано (осталось " + (limit - used) + ")\n";
+    }
+
+    /** Результат проверки «доступен ли игрок боту»: code BLOCKED / DEACTIVATED / NO_CHAT / OK / UNKNOWN. */
+    private record BotReach(String code, String label) {}
+
+    /** Проверяет, может ли бот писать игроку: sendChatAction (игрок видит «печатает» не дольше 5 секунд). Telegram отвечает 403
+     *  «bot was blocked by the user» (бот заблокирован), «user is deactivated» (аккаунт удалён) или 400 «chat not found». */
+    private BotReach checkBotReach(Long telegramId) {
+        try {
+            String json = objectMapper.writeValueAsString(Map.of("chat_id", telegramId, "action", "typing"));
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create("https://api.telegram.org/bot" + appProperties.getBotToken() + "/sendChatAction"))
+                    .header("Content-Type", "application/json")
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(json))
+                    .build();
+            java.net.http.HttpResponse<String> response = starsHttpClient.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+            String body = response.body() == null ? "" : response.body().toLowerCase();
+            if (response.statusCode() == 200) return new BotReach("OK", "✅ бот может писать игроку");
+            if (body.contains("blocked")) return new BotReach("BLOCKED", "🚫 <b>игрок заблокировал бота</b>: уведомление о выплате до него не дойдёт");
+            if (body.contains("deactivated")) return new BotReach("DEACTIVATED", "🚫 <b>аккаунт Telegram удалён</b>");
+            if (body.contains("chat not found")) return new BotReach("NO_CHAT", "⚠️ чат не найден: игрок не запускал бота или удалил диалог");
+            return new BotReach("UNKNOWN", "⚠️ не удалось проверить (HTTP " + response.statusCode() + ")");
+        } catch (Exception e) {
+            log.warn("Bot reach check failed for {}", telegramId, e);
+            return new BotReach("UNKNOWN", "⚠️ не удалось проверить");
+        }
+    }
+
+    /** Проверка игрока перед выплатой: доступность бота, показатели аккаунта и подсказка, стоит ли платить. Ничего не меняет в заявке. */
+    private void sendWithdrawalPlayerCheck(AppUser viewer, Long reqId, boolean isMod) {
+        RewardRequest req = rewardService.getRequest(reqId);
+        AppUser p = req.getUser();
+        BotReach reach = checkBotReach(p.getTelegramId());
+
+        long ageDays = p.getCreatedAt() == null ? -1 : java.time.temporal.ChronoUnit.DAYS.between(p.getCreatedAt().toLocalDate(), LocalDate.now());
+        long quests = questService.countApprovedByUser(p);
+        long earned = questService.sumEarnedCoinsByUser(p);
+        long paidBefore = rewardService.countPaidWithdrawalsByUser(p);
+        long inQueue = rewardService.countPendingWithdrawalsByUser(p);
+        long daysSinceActive = p.getLastActivityDate() == null ? -1 : java.time.temporal.ChronoUnit.DAYS.between(p.getLastActivityDate(), LocalDate.now());
+        java.util.List<RewardRequest> destDups = rewardService.findDuplicateDestinationWithdrawals(req);
+        java.util.Optional<AppUser> phoneDup = userService.findDuplicatePhoneUser(p.getPhoneNumber(), p.getTelegramId());
+
+        List<String> red = new ArrayList<>();
+        List<String> yellow = new ArrayList<>();
+        if (reach.code().equals("BLOCKED") || reach.code().equals("DEACTIVATED")) red.add("бот недоступен игроку");
+        if (p.isBlocked()) red.add("игрок заблокирован админом");
+        if (p.isFraudSuspect()) red.add("помечен как подозрительный");
+        if (!destDups.isEmpty()) red.add("реквизит уже получал другой аккаунт");
+        if (phoneDup.isPresent()) red.add("номер телефона уже на другом аккаунте");
+        if (reach.code().equals("NO_CHAT") || reach.code().equals("UNKNOWN")) yellow.add("не удалось убедиться, что бот достучится до игрока");
+        if (p.getPhoneNumber() == null) yellow.add("телефон не подтверждён");
+        if (ageDays >= 0 && ageDays < 3) yellow.add("аккаунту меньше 3 дней");
+        if (quests < 3) yellow.add("меньше 3 выполненных квестов");
+        if (daysSinceActive > 30) yellow.add("не заходил больше 30 дней");
+        if (inQueue > 1) yellow.add("несколько заявок на вывод в очереди");
+
+        String verdict = !red.isEmpty()
+                ? "🚫 <b>Платить не стоит без дополнительной проверки:</b> " + String.join("; ", red) + "."
+                : !yellow.isEmpty()
+                    ? "⚠️ <b>Проверьте вручную:</b> " + String.join("; ", yellow) + "."
+                    : "✅ <b>Явных проблем нет, платить можно.</b>";
+
+        String text = "🔎 <b>Проверка игрока перед выплатой В-" + reqDisplayId(req) + "</b>\n\n"
+                + "👤 <b>" + escape(p.getNickname()) + "</b> (ID <code>" + p.getTelegramId() + "</code>)\n\n"
+                + "🤖 Бот: " + reach.label() + "\n"
+                + "📅 Аккаунт: " + (ageDays >= 0 ? ageDays + " дн." : "дата неизвестна") + ", последняя активность: "
+                + (daysSinceActive >= 0 ? daysSinceActive + " дн. назад" : "нет данных") + "\n"
+                + "🎯 Квестов выполнено: <b>" + quests + "</b>, заработано: <b>" + String.format("%,d", earned).replace(',', ' ') + " EXC</b>\n"
+                + "💸 Выплат уже было: <b>" + paidBefore + "</b>, заявок в очереди: <b>" + inQueue + "</b>\n"
+                + "📱 Телефон: " + (p.getPhoneNumber() != null ? "подтверждён" : "<b>не подтверждён</b>") + "\n"
+                + (sinkShopService.isEgcPassActive(p) ? "⭐ Подписчик EGC Pass\n" : "")
+                + "\n" + verdict;
+        String backData = (isMod ? "mod" : "admin") + ":withdrawal:req:" + req.getId();
+        sendText(viewer.getTelegramId(), text, keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("⬅️ К заявке", backData)))));
     }
 
     private void sendPayoutConfirmedCard(AppUser admin, RewardRequest req, boolean isModFlow) {
@@ -19450,6 +19532,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         answerSilently(callbackQuery.getId());
         if (data.equals("mod:withdrawals")) {
             sendModWithdrawals(user);
+        } else if (data.startsWith("mod:withdrawal:check:")) {
+            answerSilently(callbackQuery.getId());
+            sendWithdrawalPlayerCheck(user, Long.parseLong(data.substring("mod:withdrawal:check:".length())), true);
         } else if (data.startsWith("mod:withdrawal:req:")) {
             long reqId = Long.parseLong(data.substring("mod:withdrawal:req:".length()));
             sendModWithdrawalCard(user, reqId);
@@ -19587,6 +19672,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("✅ Выплачено", "mod:withdrawal:approve:" + req.getId()),
                 keyboardFactory.callback("❌ Отклонить", "mod:withdrawal:reject:" + req.getId())
         ));
+        modWdRows.add(List.of(keyboardFactory.callback("🔎 Проверить игрока перед выплатой", "mod:withdrawal:check:" + req.getId())));
         if (multiblockTargetMod.isPresent()) {
             modWdRows.add(List.of(keyboardFactory.callback(
                     "🚫 Отклонить + заблокировать оба аккаунта",
