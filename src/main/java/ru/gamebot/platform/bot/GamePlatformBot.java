@@ -7285,6 +7285,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .append("🤝 12% с квестов друзей вместо 10%\n")
                 .append("🎁 Бесплатный улучшенный сундук каждый день — без реролла за 15⭐\n")
                 .append("⚡ Приоритет в очереди на вывод EXC, заявка обрабатывается в течение " + ru.gamebot.platform.service.PassPayoutSlaService.SLA_HOURS + " часов\n")
+                .append("🔕 Без рекламных вставок в приложении (видео за награду остаются по желанию)\n")
                 .append("💎 Статус-бейдж в профиле\n")
                 .append("💸 Донат по играм (гемы Brawl Stars/Clash Royale/Clash of Clans) — по закупочной цене, без наценки клуба, XP-бонус как за полную цену\n");
         // Прежний Battle Pass (куплен за EXC до объединения) доживает свой срок — XP-буст сезона и значок сохраняются.
