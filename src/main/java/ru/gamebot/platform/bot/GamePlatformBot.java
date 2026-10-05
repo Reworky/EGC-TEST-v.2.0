@@ -8972,7 +8972,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    /** Игрок пытался вывести на реквизиты, которые уже использует другой аккаунт — заявка не создана, админам сигнал
+    /** Игрок вывел на реквизиты, которые уже использует другой аккаунт — заявка создана, игрок ничего не знает, админам сигнал
      *  (возможный мультиаккаунт; решение — за админом, автоматически никого не блокируем). */
     @org.springframework.context.event.EventListener
     public void onWithdrawalDestinationConflict(ru.gamebot.platform.event.WithdrawalDestinationConflictEvent event) {
@@ -8984,7 +8984,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (AppUser other : event.getOtherUsers()) {
             sb.append("• ").append(escape(displayUserName(other))).append(" (<code>").append(other.getTelegramId()).append("</code>)\n");
         }
-        sb.append("\nЗаявка НЕ создана, игроку показано, что реквизиты заняты. Возможен мультиаккаунт — проверьте и решите вручную.");
+        sb.append("\nЗаявка СОЗДАНА как обычная, игрок о подозрении не знает (иначе он сменил бы реквизит). Аккаунт помечен подозрительным. Возможен мультиаккаунт — проверьте и решите вручную: перед выплатой откройте заявку и нажмите «🔎 Проверить игрока перед выплатой».");
         for (Long adminId : adminService.resolvedAdminIds()) {
             try {
                 sendText(adminId, sb.toString(), null);

@@ -83,7 +83,9 @@ public class RewardService {
         return d.matches("[a-z0-9_]{5,32}") ? "u:" + d : null;
     }
 
-    /** Один юзернейм получателя звёзд - один аккаунт игрока: бросает исключение (и предупреждает админов), если на него уже ведёт живая заявка другого аккаунта. */
+    /** Один юзернейм получателя звёзд - один аккаунт игрока. Если на него уже ведёт живая заявка другого аккаунта, игроку НЕ показываем,
+     *  что заметили (иначе он просто сменит реквизит и продолжит мультиаккаунт): заявка создаётся, аккаунт помечается подозрительным,
+     *  админам уходит сигнал, решение - за ними. */
     private void checkStarsUsernameNotShared(AppUser lockedUser, String username) {
         String key = starsUsernameKey(username);
         if (key == null) return;
@@ -94,13 +96,13 @@ public class RewardService {
                 .distinct()
                 .toList();
         if (!others.isEmpty()) {
+            lockedUser.setFraudSuspect(true);
             eventPublisher.publishEvent(new ru.gamebot.platform.event.WithdrawalDestinationConflictEvent(this, lockedUser, others, username));
-            throw new IllegalArgumentException("Этот юзернейм уже используется другим аккаунтом. Укажите свой юзернейм "
-                    + "(один получатель - один игрок). Если это ошибка, напишите в поддержку.");
         }
     }
 
-    /** Бросает исключение (и предупреждает админов), если те же реквизиты уже использует другой аккаунт. */
+    /** Если те же реквизиты уже использует другой аккаунт: игроку НЕ показываем, что заметили (иначе он просто сменит реквизит и продолжит
+     *  мультиаккаунт), заявка создаётся как обычно, аккаунт помечается подозрительным, админам уходит сигнал. */
     private void checkDestinationNotShared(AppUser lockedUser, String payoutDetails) {
         String key = destinationKey(payoutDetails);
         if (key == null) return;
@@ -110,9 +112,8 @@ public class RewardService {
                 .distinct()
                 .toList();
         if (!others.isEmpty()) {
+            lockedUser.setFraudSuspect(true);
             eventPublisher.publishEvent(new ru.gamebot.platform.event.WithdrawalDestinationConflictEvent(this, lockedUser, others, payoutDetails));
-            throw new IllegalArgumentException("Эти реквизиты уже используются другим аккаунтом. Укажите свои реквизиты "
-                    + "(один номер или кошелёк — один игрок). Если это ошибка, напишите в поддержку.");
         }
     }
 
