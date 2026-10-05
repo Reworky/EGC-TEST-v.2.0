@@ -796,19 +796,8 @@ public class UserService {
         user.setLastActivityDate(today);
         user.setLastDormancyTierNotified(0);
 
-        long xpBonus = 0;
-        if (user.getStreakDays() == 7) {
-            xpBonus = 20;
-        } else if (user.getStreakDays() == 30) {
-            xpBonus = 100;
-        } else if (user.getStreakDays() == 90) {
-            xpBonus = 500;
-        }
-
-        if (xpBonus > 0) {
-            creditXp(user, xpBonus);
-        }
-
+        // XP за рубежи серии (7/30/90 дней) начисляет только claimDailyBonus вместе с EXC за рубеж: раньше они начислялись и здесь,
+        // и там - игрок, нажавший /start перед получением бонуса, получал XP дважды (исправлено 06.10.2026).
         appUserRepository.save(user);
         return null;
     }
