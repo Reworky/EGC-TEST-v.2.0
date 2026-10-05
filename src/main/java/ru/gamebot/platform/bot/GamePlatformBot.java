@@ -888,6 +888,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if ("wdquick:region".equals(data)) {
+            if ((isEffectiveAdmin(user) || isEffectiveModerator(user))
+                    && session.getState() == SessionState.REWARD_REJECT_COMMENT
+                    && "withdrawal".equals(session.getData().get("rejectType"))) {
+                clearInlineKeyboard(callbackQuery);
+                answer(callbackQuery.getId(), "Заявка отклонена");
+                handleStateInput(user, session, QUICK_REJECT_REGION);
+            } else {
+                answer(callbackQuery.getId(), "Заявка уже обработана или действие устарело");
+            }
+            return;
+        }
         if ("common:cancel".equals(data) && !user.isRegistrationCompleted()) {
             clearInlineKeyboard(callbackQuery);
             answerSilently(callbackQuery.getId());
@@ -11116,7 +11128,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.setState(SessionState.REWARD_REJECT_COMMENT);
             session.getData().put("rejectType", "withdrawal");
             answer(callbackQuery.getId(), "Введите причину отклонения");
-            sendText(user.getTelegramId(), "❌ <b>Отклонение заявки на вывод</b>\n\nНапишите причину отклонения, она будет отправлена пользователю:", cancelKeyboard());
+            sendText(user.getTelegramId(), "❌ <b>Отклонение заявки на вывод</b>\n\nНапишите причину отклонения, она будет отправлена пользователю, или выберите быстрый ответ:", withdrawalRejectKeyboard());
             return;
         }
         if (action.startsWith("multiblock:")) {
@@ -19674,7 +19686,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.getData().put("rejectType", "withdrawal");
             session.getData().put("rejectBack", "mod");
             session.setState(SessionState.REWARD_REJECT_COMMENT);
-            sendText(user.getTelegramId(), "✏️ Введите причину отклонения заявки #" + reqId + ":", cancelKeyboard());
+            sendText(user.getTelegramId(), "✏️ Введите причину отклонения заявки #" + reqId + " или выберите быстрый ответ:", withdrawalRejectKeyboard());
         } else if (data.startsWith("mod:withdrawal:multiblock:")) {
             String payload = data.substring("mod:withdrawal:multiblock:".length());
             String[] parts = payload.split(":");
@@ -20048,6 +20060,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
         return keyboardFactory.rowsLayout(rows);
+    }
+
+    /** Быстрый ответ при отказе в выводе: причина уходит игроку как есть (EXC возвращаются). */
+    private static final String QUICK_REJECT_REGION =
+            "Отправка в ваш регион временно недоступна. Ожидайте, мы сообщим, как только появится возможность.";
+
+    private InlineKeyboardMarkup withdrawalRejectKeyboard() {
+        return keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("⚡ Регион временно недоступен", "wdquick:region")),
+                List.of(keyboardFactory.callback("❌ Отмена", "common:cancel"))));
     }
 
     private InlineKeyboardMarkup cancelKeyboard() {
