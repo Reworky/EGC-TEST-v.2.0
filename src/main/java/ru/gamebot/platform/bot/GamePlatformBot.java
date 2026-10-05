@@ -18356,7 +18356,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Принимаем только СВОЙ номер: через «Прикрепить -> Контакт» можно прислать чужой, и страна определилась бы по нему.
         if (contact.getUserId() != null && !contact.getUserId().equals(user.getTelegramId())) {
             sendText(user.getTelegramId(),
-                    "⚠️ Это не ваш номер. Нажмите кнопку «Поделиться номером» и отправьте именно свой контакт из Telegram.");
+                    "⚠️ Это не ваш номер. Нажмите кнопку «Поделиться номером» и отправьте именно свой контакт из Telegram.", null);
             return;
         }
         String pendingWithdrawal = session.getData().get("pendingWithdrawal");
