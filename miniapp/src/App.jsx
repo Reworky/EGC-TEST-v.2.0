@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { authMiniApp, getProfile, invalidateCache } from './api/client';
+import InterstitialAd from './components/InterstitialAd';
 import { useTelegram } from './hooks/useTelegram';
 import BottomNav from './components/BottomNav';
 import RegistrationRequiredScreen from './components/RegistrationRequiredScreen';
@@ -164,6 +165,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
+      <InterstitialAd />
       <LottieProvider>
       <ParticlesProvider>
       <div className="app">
