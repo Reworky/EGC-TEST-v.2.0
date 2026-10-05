@@ -563,6 +563,29 @@ public class QuestService {
                 && LocalDateTime.now().isAfter(submission.getExpiresAt());
     }
 
+    /** Ранний доступ EGC Pass (04.10.2026): после смены набора квестов (Quest.packActivatedAt) в течение EARLY_ACCESS_HOURS часов два самых
+     *  ценных по награде квеста нового набора берут только подписчики. Остальные квесты набора доступны всем сразу, чтобы у игроков
+     *  без подписки каталог игры не оказался пустым. */
+    public static final int EARLY_ACCESS_HOURS = 24;
+    public static final int EARLY_ACCESS_TOP_QUESTS = 2;
+
+    /** Сколько часов (округление вверх) у этого квеста ещё действует ранний доступ для игрока без EGC Pass; 0 = квест доступен. */
+    public long earlyAccessHoursLeft(AppUser user, Quest quest) {
+        if (quest.getPackId() == null || quest.getPackActivatedAt() == null) return 0;
+        LocalDateTime until = quest.getPackActivatedAt().plusHours(EARLY_ACCESS_HOURS);
+        LocalDateTime now = LocalDateTime.now();
+        if (!now.isBefore(until)) return 0;
+        if (userService.isEgcPassActive(user)) return 0;
+        List<Quest> top = questRepository.findAllByPackId(quest.getPackId()).stream()
+                .filter(Quest::isActive)
+                .sorted(Comparator.comparingLong(Quest::getRewardCoins).reversed().thenComparing(Quest::getId))
+                .limit(EARLY_ACCESS_TOP_QUESTS)
+                .toList();
+        if (top.stream().noneMatch(q -> q.getId().equals(quest.getId()))) return 0;
+        long minutes = ChronoUnit.MINUTES.between(now, until);
+        return Math.max(1, (minutes + 59) / 60);
+    }
+
     public record QuestActionResult(QuestActionStatus status, long minutesLeft, QuestSubmission submission) {
         public static QuestActionResult ok(QuestSubmission s) {
             return new QuestActionResult(QuestActionStatus.OK, 0, s);
@@ -595,6 +618,10 @@ public class QuestService {
     public QuestActionResult takeQuestChecked(AppUser user, Quest quest, String brawlPartnerTag) {
         if (!quest.isActive()) {
             return QuestActionResult.of(QuestActionStatus.QUEST_INACTIVE, 0);
+        }
+        long earlyAccessHours = earlyAccessHoursLeft(user, quest);
+        if (earlyAccessHours > 0) {
+            return QuestActionResult.of(QuestActionStatus.EARLY_ACCESS_LOCKED, earlyAccessHours * 60);
         }
         // Проверяем лимит участников здесь, а не только внутри createDraftSubmission (которая на
         // переполнении бросает IllegalArgumentException) — иначе исключение улетает необработанным

@@ -120,6 +120,9 @@ public class AppUser {
     /** Когда подписчик EGC Pass в последний раз взял бесплатную страховку (раз в календарный месяц, SinkShopService.claimPassInsurance); null = не брал. */
     private LocalDate egcPassFreeInsuranceDate;
 
+    /** Когда подписчику EGC Pass в последний раз бесплатно сохранили серию входов (раз в календарный месяц, UserService.advanceStreak); null = не сохраняли. */
+    private LocalDate egcPassStreakSaveDate;
+
     private LocalDateTime createdAt;
 
     // Avatar

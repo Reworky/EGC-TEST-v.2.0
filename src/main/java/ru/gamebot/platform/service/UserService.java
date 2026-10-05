@@ -781,12 +781,7 @@ public class UserService {
             return null;
         }
 
-        if (lastDate != null && lastDate.plusDays(1).equals(today)) {
-            user.setStreakDays(user.getStreakDays() + 1);
-        } else {
-            snapshotBrokenStreak(user);
-            user.setStreakDays(1);
-        }
+        advanceStreak(user, today);
         user.setLastActivityDate(today);
         user.setLastDormancyTierNotified(0);
 
@@ -820,12 +815,7 @@ public class UserService {
         LocalDate today = LocalDate.now();
         LocalDate lastActivity = user.getLastActivityDate();
         if (lastActivity == null || !lastActivity.equals(today)) {
-            if (lastActivity != null && lastActivity.plusDays(1).equals(today)) {
-                user.setStreakDays(user.getStreakDays() + 1);
-            } else {
-                snapshotBrokenStreak(user);
-                user.setStreakDays(1);
-            }
+            advanceStreak(user, today);
             user.setLastActivityDate(today);
         }
 
@@ -893,6 +883,29 @@ public class UserService {
      *  (какой из двух сработает первым после пропуска дня), см. поля на AppUser. Не перезаписывает уже
      *  существующий снимок повторно в тот же день — иначе повторный вызов (например claimDailyBonus
      *  сразу после registerActivity в одном заходе) затёр бы валидный снимок нулём/старой датой. */
+    /** Сдвигает серию входов на сегодняшний день: вчера заходил - +1; пропущен ровно один день и у подписчика EGC Pass ещё не использовано
+     *  бесплатное сохранение в этом месяце - серия сохраняется (+1) и игроку уходит уведомление; иначе серия сгорает в 1 (со снимком для восстановления). */
+    private void advanceStreak(AppUser user, LocalDate today) {
+        LocalDate lastDate = user.getLastActivityDate();
+        if (lastDate != null && lastDate.plusDays(1).equals(today)) {
+            user.setStreakDays(user.getStreakDays() + 1);
+        } else if (lastDate != null && lastDate.plusDays(2).equals(today) && freeStreakSaveAvailable(user)) {
+            user.setEgcPassStreakSaveDate(today);
+            user.setStreakDays(user.getStreakDays() + 1);
+            eventPublisher.publishEvent(new ru.gamebot.platform.event.StreakSavedEvent(this, user.getTelegramId(), user.getStreakDays()));
+        } else {
+            snapshotBrokenStreak(user);
+            user.setStreakDays(1);
+        }
+    }
+
+    /** Подписчик EGC Pass, у кого есть серия от 2 дней и бесплатное сохранение в этом календарном месяце ещё не использовано. */
+    public boolean freeStreakSaveAvailable(AppUser user) {
+        if (!isEgcPassActive(user) || user.getStreakDays() < 2) return false;
+        LocalDate last = user.getEgcPassStreakSaveDate();
+        return last == null || !java.time.YearMonth.from(last).equals(java.time.YearMonth.now());
+    }
+
     private void snapshotBrokenStreak(AppUser user) {
         if (user.getStreakDays() < 2) {
             return; // серию из 0-1 дня восстанавливать нечего и не за что платить

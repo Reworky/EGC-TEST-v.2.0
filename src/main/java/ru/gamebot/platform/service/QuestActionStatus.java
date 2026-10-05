@@ -31,5 +31,7 @@ public enum QuestActionStatus {
     /** Подписка на канал теперь проверяется точечно при взятии квеста (2026-09-14), а не сразу
      *  после анкеты — см. GamePlatformBot.handleTakeQuest. Мини-апп должен запретить взятие квеста
      *  тем же образом, иначе через API можно обойти проверку, которая есть в боте. */
-    NEEDS_CHANNEL_SUBSCRIPTION
+    NEEDS_CHANNEL_SUBSCRIPTION,
+    /** Ранний доступ EGC Pass: два самых ценных квеста нового набора первые сутки после смены набора доступны только подписчикам (QuestService.earlyAccessHoursLeft). */
+    EARLY_ACCESS_LOCKED
 }

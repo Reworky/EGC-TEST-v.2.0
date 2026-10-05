@@ -537,6 +537,14 @@ public class WeeklyResetScheduler {
             try {
                 if (user.getStreakDays() < 2) continue;
                 if (!missedDay.equals(user.getLastActivityDate())) continue;
+                // Подписчику EGC Pass серию бесплатно сохранит Pass, если зайти сегодня: вместо «серия прервалась» - подсказка
+                if (userService.freeStreakSaveAvailable(user)) {
+                    if (notificationGate.tryAcquire(user, NudgeType.STREAK_BROKEN)) {
+                        eventPublisher.publishEvent(new ru.gamebot.platform.event.StreakSaveHintEvent(
+                                this, user.getTelegramId(), user.getStreakDays()));
+                    }
+                    continue;
+                }
                 userService.captureStreakBreakIfNeeded(user);
                 if (!userService.hasRestorableStreak(user)) continue;
                 if (!notificationGate.tryAcquire(user, NudgeType.STREAK_BROKEN)) continue;

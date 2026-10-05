@@ -5455,6 +5455,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void renderTakeQuestResult(AppUser user, Long questId, Quest quest, QuestService.QuestActionResult result) {
         if (result.status() != QuestActionStatus.OK) {
             sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад", takeQuestErrorMessage(user, quest, result));
+            if (result.status() == QuestActionStatus.EARLY_ACCESS_LOCKED) {
+                sendText(user.getTelegramId(),
+                        "⭐ <b>Возьми его сразу с EGC Pass</b>\n\nПодписчики получают лучшие квесты нового набора на сутки раньше.",
+                        keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("⭐ Оформить EGC Pass", "sink:egc_pass")))));
+            }
             if (result.status() == QuestActionStatus.SLOTS_FULL && !sinkShopService.isEgcPassActive(user)) {
                 sendText(user.getTelegramId(),
                         "⭐ <b>С EGC Pass у вас 3 слота квеста</b>\n\nМожно вести до трёх квестов одновременно, пока подписка активна.",
@@ -5567,6 +5572,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "📌 По этому квесту уже есть активный прогресс. Используйте карточку ниже, чтобы посмотреть статус или отправить отчёт.";
             case HAS_REJECTED_REPORT ->
                     "❌ Ваш отчёт по этому квесту был отклонён. Нажмите «📤 Отчёт», чтобы исправить ошибки и переотправить.";
+            case EARLY_ACCESS_LOCKED ->
+                    "🔒 <b>Ранний доступ EGC Pass</b>\n\nЭтот квест нового набора ещё около " + (result.minutesLeft() / 60)
+                            + " ч доступен только подписчикам. Остальные квесты набора можно брать уже сейчас, а этот откроется для всех позже.";
             case SLOTS_FULL ->
                     "📂 У вас уже есть активные квесты. Завершите или отмените один из них, либо купите доп. слот (3 500 EXC) в разделе Предметы клуба. С EGC Pass у вас будет 3 слота.";
             case SAME_QUEST_COOLDOWN ->
@@ -17024,6 +17032,32 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendStreakBrokenMessage(event.getTelegramId(), event.getLostDays());
         } catch (Exception e) {
             log.warn("Failed to send streak-broken message to {}", event.getTelegramId(), e);
+        }
+    }
+
+    /** Подписчику EGC Pass бесплатно сохранили серию (пропущен один день). */
+    @org.springframework.context.event.EventListener
+    public void onStreakSaved(ru.gamebot.platform.event.StreakSavedEvent event) {
+        try {
+            sendText(event.getTelegramId(),
+                    "🛡 <b>EGC Pass сохранил твою серию!</b>\n\nТы пропустил вчера, но подписка бесплатно сохранила серию: теперь она "
+                            + event.getStreakDays() + " " + dayWord(event.getStreakDays()) + ". Такое сохранение доступно раз в месяц.",
+                    null);
+        } catch (Exception e) {
+            log.warn("Failed to send streak-saved message to {}", event.getTelegramId(), e);
+        }
+    }
+
+    /** Подписчик EGC Pass пропустил вчера: серия ещё спасается, если зайти сегодня (вместо «серия прервалась»). */
+    @org.springframework.context.event.EventListener
+    public void onStreakSaveHint(ru.gamebot.platform.event.StreakSaveHintEvent event) {
+        try {
+            sendText(event.getTelegramId(),
+                    "🛡 <b>Серия в " + event.getStreakDays() + " " + dayWord(event.getStreakDays()) + " под угрозой, но Pass её спасёт</b>\n\n"
+                            + "Ты не заходил вчера. Загляни сегодня: EGC Pass бесплатно сохранит серию (раз в месяц), и она продолжится.",
+                    keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🎁 Забрать бонус дня", "menu:main")))));
+        } catch (Exception e) {
+            log.warn("Failed to send streak-save hint to {}", event.getTelegramId(), e);
         }
     }
 
