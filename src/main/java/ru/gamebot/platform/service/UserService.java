@@ -284,6 +284,16 @@ public class UserService {
         return appUserRepository.findById(id);
     }
 
+    /** Страна профиля берётся строго из подтверждённого номера телефона и вручную не меняется.
+     *  Вызывать после сохранения номера. Если код номера не распознан, прежняя страна остаётся. */
+    public void applyPhoneCountry(AppUser user) {
+        String fromPhone = PhoneCountry.fromPhone(user.getPhoneNumber());
+        if (fromPhone != null && !fromPhone.equals(user.getCountry())) {
+            user.setCountry(fromPhone);
+            save(user);
+        }
+    }
+
     public Optional<AppUser> findDuplicatePhoneUser(String phoneNumber, Long excludeTelegramId) {
         if (phoneNumber == null || phoneNumber.isBlank()) return Optional.empty();
         return appUserRepository.findByPhoneNumberAndTelegramIdNot(phoneNumber, excludeTelegramId);

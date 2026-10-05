@@ -277,6 +277,7 @@ public class WalletController {
         }
         user.setPhoneNumber(phone);
         userService.save(user);
+        userService.applyPhoneCountry(user);
         userService.findDuplicatePhoneUser(phone, user.getTelegramId()).ifPresent(dup -> {
             user.setFraudSuspect(true);
             userService.save(user);

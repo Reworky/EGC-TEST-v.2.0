@@ -45,6 +45,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         resetStaleAttackWinsBaseline();
         removeAccidentalParticipantLimits();
         backfillOwnedTitlesFromHistory();
+        syncCountryWithPhone();
     }
 
     /** Инцидент 2026-09-22 (тикет поддержки #213): ClashQuestVerificationService для ATTACK_WINS
@@ -366,6 +367,30 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             }
         } catch (Exception e) {
             log.error("[DBMigration] Failed for {}: {}", table, e.getMessage());
+        }
+    }
+
+    /** Страна в профиле берётся строго из подтверждённого номера телефона (05.10.2026): игрок мог сменить страну
+     *  после отмены заявки, номер при этом оставался прежним. Выравниваем уже накопленные профили с номером.
+     *  Идемпотентно: меняются только строки, где страна расходится с кодом номера; номера с нераспознанным кодом не трогаем. */
+    private void syncCountryWithPhone() {
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "SELECT id, phone_number, country FROM app_users WHERE phone_number IS NOT NULL AND phone_number <> ''");
+            int updated = 0;
+            for (Map<String, Object> row : rows) {
+                String fromPhone = ru.gamebot.platform.service.PhoneCountry.fromPhone((String) row.get("PHONE_NUMBER"));
+                String current = (String) row.get("COUNTRY");
+                if (fromPhone != null && !fromPhone.equals(current)) {
+                    jdbcTemplate.update("UPDATE app_users SET country = ? WHERE id = ?", fromPhone, row.get("ID"));
+                    updated++;
+                }
+            }
+            if (updated > 0) {
+                log.info("[DBMigration] syncCountryWithPhone: страна приведена к коду номера у {} игроков", updated);
+            }
+        } catch (Exception e) {
+            log.error("[DBMigration] syncCountryWithPhone failed: {}", e.getMessage());
         }
     }
 }

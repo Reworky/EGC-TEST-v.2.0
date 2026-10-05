@@ -1874,6 +1874,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         backOnlyKeyboard("profile:edit"));
             }
             case "edit_country" -> {
+                if (user.getPhoneNumber() != null) {
+                    sendText(user.getTelegramId(),
+                            "🔒 <b>Страна определена по вашему номеру телефона</b>\n\n"
+                                    + "Сейчас: <b>" + escape(displayValue(user.getCountry(), "не определена")) + "</b>. "
+                                    + "Её нельзя изменить вручную: страна берётся из подтверждённого номера.",
+                            backOnlyKeyboard("profile:edit"));
+                    return;
+                }
                 session.setState(SessionState.EDIT_COUNTRY);
                 String currentCountry = user.getCountry() != null ? user.getCountry() : "не указана";
                 sendText(user.getTelegramId(),
@@ -1998,6 +2006,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendProfileEdit(user);
             }
             case EDIT_COUNTRY -> {
+                if (user.getPhoneNumber() != null) {
+                    session.setState(SessionState.NONE);
+                    sendProfileEdit(user);
+                    return;
+                }
                 String newCountry = text.trim();
                 if (newCountry.isBlank()) {
                     sendText(user.getTelegramId(),
@@ -4353,13 +4366,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "✏️ <b>Редактировать профиль</b>\n\n"
                         + "👤 Никнейм: <b>" + nickname + "</b>\n"
                         + "🎂 Возраст: <b>" + age + "</b>\n"
-                        + "🌍 Страна: <b>" + country + "</b>\n"
+                        + "🌍 Страна: <b>" + country + "</b>" + (user.getPhoneNumber() != null ? " 🔒 по номеру телефона" : "") + "\n"
                         + "🎮 Платформы: <b>" + platforms + "</b>\n"
                         + "🧩 Жанры: <b>" + genres + "</b>",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("✏️ Изменить никнейм", "profile:nickname")),
                         List.of(keyboardFactory.callback("🎂 " + (user.getAge() != null ? "Изменить возраст" : "Указать возраст"), "profile:edit_age")),
-                        List.of(keyboardFactory.callback("🌍 " + (user.getCountry() != null ? "Изменить страну" : "Указать страну"), "profile:edit_country")),
+                        List.of(keyboardFactory.callback(user.getPhoneNumber() != null ? "🔒 Страна — по номеру телефона"
+                                : "🌍 " + (user.getCountry() != null ? "Изменить страну" : "Указать страну"), "profile:edit_country")),
                         List.of(keyboardFactory.callback("🎮 " + (user.getPlatformsCsv() != null ? "Изменить платформы" : "Указать платформы"), "profile:edit_platforms")),
                         List.of(keyboardFactory.callback("🧩 " + (user.getInterestsCsv() != null ? "Изменить жанры" : "Указать жанры"), "profile:edit_genres")),
                         List.of(keyboardFactory.callback("🏷️ " + (user.getBrawlStarsTag() != null ? "Изменить тег Brawl Stars" : "Привязать тег Brawl Stars"), "profile:brawl_tag")),
@@ -18324,10 +18338,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handlePhoneShare(AppUser user, UserSession session, org.telegram.telegrambots.meta.api.objects.Contact contact) {
         String phone = contact.getPhoneNumber();
+        // Принимаем только СВОЙ номер: через «Прикрепить -> Контакт» можно прислать чужой, и страна определилась бы по нему.
+        if (contact.getUserId() != null && !contact.getUserId().equals(user.getTelegramId())) {
+            sendText(user.getTelegramId(),
+                    "⚠️ Это не ваш номер. Нажмите кнопку «Поделиться номером» и отправьте именно свой контакт из Telegram.");
+            return;
+        }
         String pendingWithdrawal = session.getData().get("pendingWithdrawal");
         session.reset();
         user.setPhoneNumber(phone);
         userService.save(user);
+        userService.applyPhoneCountry(user);
         removeReplyKeyboard(user.getTelegramId());
         userService.findDuplicatePhoneUser(phone, user.getTelegramId()).ifPresent(dup -> {
             user.setFraudSuspect(true);
