@@ -5218,30 +5218,88 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String oneTimeBadge = quest.isOneTimePerAccount() ? "🔂 <b>Разовый квест</b> — доступен один раз за аккаунт\n" : "";
         boolean questFlat = gameCatalogService.isFlat(quest.getGameName());
         String personalizedInstruction = questService.personalizeInstruction(quest.getInstruction(), user.getTelegramId());
-        String rewardNote = quest.isRepeatableNoCooldownEligible()
-                ? " (за 1-е сегодня, дальше меньше)"
-                : weeklyLimitNote(questService.weeklyLimitStatus(user, quest));
+        // Упрощённая карточка (05.10.2026, вариант 1 владельца): заголовок, «игра · платформа · срок», награда одной строкой, описание.
+        boolean autoVerified = isAutoVerifiedQuest(quest);
+        boolean notStarted = latest == null || latest.getStatus() == SubmissionStatus.REJECTED || latestExpired;
+        String metaLine = questMetaLine(quest)
+                + (notStarted && quest.getDurationDays() > 0 && !quest.isSponsored() ? " · " + quest.getDurationText() + " на выполнение" : "");
+        String activeDeadline = (latest != null && latest.getStatus() == SubmissionStatus.DRAFT && latest.getExpiresAt() != null && !latestExpired)
+                ? deadlineLine : (notStarted && quest.getDurationDays() > 0 && quest.isSponsored()
+                        ? "⏳ Срок: <b>" + quest.getDurationText() + "</b> с момента старта\n" : "");
+        String statusLine = (latest != null || cooldownLeft > 0) ? "📌 Статус: <b>" + escape(displayStatus) + "</b>\n" : "";
+        String body;
+        if (autoVerified) {
+            String simplified = simplifyAutoInstruction(personalizedInstruction);
+            body = escape(quest.getDescription()) + (simplified.isBlank() ? "" : " " + escape(simplified))
+                    + " Прогресс засчитывается сам, ничего отправлять не нужно.";
+        } else {
+            body = escape(quest.getDescription()) + "\n\n"
+                    + (personalizedInstruction != null && !personalizedInstruction.isBlank()
+                        ? (quest.isSponsored() ? "📎 <b>Ссылки:</b>\n" : "📎 <b>Что нужно сделать:</b>\n") + escape(personalizedInstruction)
+                            + (quest.isSponsored() || quest.getRequirements() == null || quest.getRequirements().isBlank() ? ""
+                                : (quest.isExternalAutoApprove() ? "\n\nℹ️ " : "\n\n✅ <b>Что примет модерация:</b>\n") + escape(quest.getRequirements()))
+                        : (quest.isSponsored() || quest.getRequirements() == null || quest.getRequirements().isBlank() ? ""
+                            : (quest.isExternalAutoApprove() ? "ℹ️ " : "✅ <b>Что примет модерация:</b>\n") + escape(quest.getRequirements())));
+        }
         sendText(user.getTelegramId(),
                 (notice == null ? "" : notice + "\n\n")
                         + sponsorBadge
                         + oneTimeBadge
-                        + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n\n"
-                        + (quest.isSponsored() ? "🎮 Название канала: <b>" : "🎮 Игра: <b>") + escape(quest.getGameName()) + "</b>\n"
-                        + (quest.isSponsored() || "UGC".equalsIgnoreCase(quest.getGameName()) ? "" : (!questFlat && quest.getCategory() != null ? "📚 Формат: <b>" + escape(quest.getCategory()) + "</b>\n" : "") + "🕹️ Платформа: <b>" + escape(quest.getPlatform()) + "</b>\n")
-                        + deadlineLine
-                        + "📌 Статус: <b>" + escape(displayStatus) + "</b>\n\n"
-                        + "🏆 <b>Награда:</b>\n"
-                        + "✨ +" + quest.getRewardXp() + " XP\n"
-                        + "🪙 +" + displayRewardCoins(user, quest) + " EXC" + starsNote(displayRewardCoins(user, quest)) + rewardNote + egcPassRewardNote(user, quest) + "\n"
-                        + (!quest.isSponsored() && !"UGC".equalsIgnoreCase(quest.getGameName()) && quest.getTicketReward() > 0 ? "🎟 +" + quest.getTicketReward() + " билет(а) для Колеса фортуны\n" : "")
+                        + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n"
+                        + metaLine + "\n"
+                        + activeDeadline
+                        + statusLine
                         + "\n"
-                        + "📝 <b>Суть задания:</b>\n" + escape(quest.getDescription()) + "\n\n"
-                        + (personalizedInstruction != null && !personalizedInstruction.isBlank()
-                            ? (quest.isSponsored() ? "📎 <b>Ссылки:</b>\n" : "📎 <b>Что нужно сделать:</b>\n") + escape(personalizedInstruction)
-                                + (quest.isSponsored() ? "" : (quest.isExternalAutoApprove() || quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null || quest.getPubgVerifyType() != null ? "\n\nℹ️ " : "\n\n✅ <b>Что примет модерация:</b>\n") + escape(quest.getRequirements()))
-                            : (quest.isSponsored() ? "" : "📎 <b>Что нужно сделать:</b>\n" + escape(personalizedInstruction)
-                                + (quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null || quest.getPubgVerifyType() != null ? "\n\nℹ️ " : "\n\n✅ <b>Что примет модерация:</b>\n") + escape(quest.getRequirements()))),
+                        + questRewardLine(user, quest) + "\n\n"
+                        + body,
                 verticalWithBackMenu(buttons, backText, backData));
+    }
+
+    private boolean isAutoVerifiedQuest(Quest quest) {
+        return quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null
+                || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null || quest.getPubgVerifyType() != null;
+    }
+
+    /** «Игра · формат · платформа» (для спонсорских квестов - название канала). Без перевода строки. */
+    private String questMetaLine(Quest quest) {
+        if (quest.isSponsored()) return "📢 Канал: <b>" + escape(quest.getGameName()) + "</b>";
+        StringBuilder sb = new StringBuilder(escape(quest.getGameName()));
+        if (!"UGC".equalsIgnoreCase(quest.getGameName())) {
+            if (!gameCatalogService.isFlat(quest.getGameName()) && quest.getCategory() != null) sb.append(" · ").append(escape(quest.getCategory()));
+            if (quest.getPlatform() != null && !quest.getPlatform().isBlank()) sb.append(" · ").append(escape(quest.getPlatform()));
+        }
+        return sb.toString();
+    }
+
+    private static String ticketsWord(int n) {
+        int m100 = n % 100, m10 = n % 10;
+        if (m100 >= 11 && m100 <= 19) return "билетов";
+        return m10 == 1 ? "билет" : (m10 >= 2 && m10 <= 4 ? "билета" : "билетов");
+    }
+
+    /** Награда одной строкой: «🏆 +3 000 EXC (≈ 7,2 ⭐) · +50 XP · 🎟 +1 билет для Колеса» + пометки про недельный лимит и EGC Pass. */
+    private String questRewardLine(AppUser user, Quest quest) {
+        long coins = displayRewardCoins(user, quest);
+        String rewardNote = quest.isRepeatableNoCooldownEligible()
+                ? " (за 1-е сегодня, дальше меньше)"
+                : weeklyLimitNote(questService.weeklyLimitStatus(user, quest));
+        boolean tickets = !quest.isSponsored() && !"UGC".equalsIgnoreCase(quest.getGameName()) && quest.getTicketReward() > 0;
+        return "🏆 <b>+" + fmtExc(coins) + " EXC</b>" + starsNote(coins) + " · +" + quest.getRewardXp() + " XP"
+                + (tickets ? " · 🎟 +" + quest.getTicketReward() + " " + ticketsWord(quest.getTicketReward()) + " для Колеса" : "")
+                + rewardNote + egcPassRewardNote(user, quest);
+    }
+
+    /** Убирает из инструкции квеста с автопроверкой фразы про автоматический учёт (их заменяет одна общая строка в конце карточки). */
+    private static String simplifyAutoInstruction(String instruction) {
+        if (instruction == null || instruction.isBlank()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (String sentence : instruction.trim().split("(?<=[.!?])\\s+")) {
+            String low = sentence.toLowerCase(java.util.Locale.ROOT);
+            boolean autoPhrase = (low.contains("автоматическ") && (low.contains("прогресс") || low.contains("проверя")))
+                    || low.contains("ничего сообщать") || low.contains("ничего отправлять") || low.contains("отчёт отправлять не нужно");
+            if (!autoPhrase) sb.append(sb.length() > 0 ? " " : "").append(sentence.trim());
+        }
+        return sb.toString();
     }
 
     /** Награда для показа игроку ДО взятия/сдачи квеста. Для обычных квестов — статичная quest.getRewardCoins()
@@ -5547,17 +5605,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 (notice.isEmpty() ? "" : notice + "\n\n")
                         + nextStep
                         + firstQuestTutorial
-                        + "🎯 <b>" + escape(freshQuest.getTitle()) + "</b>\n\n"
-                        + (freshQuest.isSponsored() ? "🎮 Название канала: <b>" : "🎮 Игра: <b>") + escape(freshQuest.getGameName()) + "</b>\n"
-                        + (freshQuest.isSponsored() || "UGC".equalsIgnoreCase(freshQuest.getGameName()) ? "" : (!gameCatalogService.isFlat(freshQuest.getGameName()) && freshQuest.getCategory() != null ? "📚 Формат: <b>" + escape(freshQuest.getCategory()) + "</b>\n" : "") + "🕹️ Платформа: <b>" + escape(freshQuest.getPlatform()) + "</b>\n")
+                        + "🎯 <b>" + escape(freshQuest.getTitle()) + "</b>\n"
+                        + questMetaLine(freshQuest) + "\n"
                         + deadlineLine
-                        + "📌 Статус: <b>В процессе</b>\n\n"
-                        + "🏆 <b>Награда</b>\n"
-                        + "✨ +" + freshQuest.getRewardXp() + " XP\n"
-                        + "🪙 +" + displayRewardCoins(user, freshQuest) + " EXC" + starsNote(displayRewardCoins(user, freshQuest))
-                        + (freshQuest.isRepeatableNoCooldownEligible() ? " (за 1-е сегодня, дальше меньше)" : weeklyLimitNote(questService.weeklyLimitStatus(user, freshQuest)))
-                        + egcPassRewardNote(user, freshQuest)
-                        + (!freshQuest.isSponsored() && !"UGC".equalsIgnoreCase(freshQuest.getGameName()) && freshQuest.getTicketReward() > 0 ? "\n🎟 +" + freshQuest.getTicketReward() + " билет(а) для Колеса фортуны" : "")
+                        + "\n"
+                        + questRewardLine(user, freshQuest)
                         + (freshQuest.isExternalAutoApprove()
                             ? "\n\n📎 <b>Что нужно сделать:</b>\n" + escape(questService.personalizeInstruction(freshQuest.getInstruction(), user.getTelegramId()))
                             : "")

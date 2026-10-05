@@ -92,6 +92,18 @@ function GoPlayHint({ gameName, auto }) {
   );
 }
 
+/** Убирает из инструкции квеста с автопроверкой фразы про автоматический учёт: вместо них одна общая строка (упрощение карточки, 05.10.2026). */
+function simplifyAutoInstruction(text) {
+  if (!text) return '';
+  // Без lookbehind в регулярке: на iOS старше 16.4 он ломает разбор всего бандла
+  return (text.trim().match(/[^.!?]+[.!?]*\s*/g) || []).map(x => x.trim()).filter(Boolean).filter(sentence => {
+    const low = sentence.toLowerCase();
+    const autoPhrase = (low.includes('автоматическ') && (low.includes('прогресс') || low.includes('проверя')))
+      || low.includes('ничего сообщать') || low.includes('ничего отправлять') || low.includes('отчёт отправлять не нужно');
+    return !autoPhrase;
+  }).join(' ');
+}
+
 function QuestSkeleton() {
   return (
     <div className="quest-skeleton-item">
@@ -383,14 +395,22 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
       </div>
       {expanded === q.id && (
         <div className="quest-detail" onClick={e => e.stopPropagation()}>
-          <p className="quest-desc">{renderTextWithLinks(details[q.id]?.description ?? q.description)}</p>
-          {details[q.id]?.instruction && (
+          {brawlAutoVerify && !externalAutoApprove ? (
+            <p className="quest-desc">
+              {renderTextWithLinks(details[q.id]?.description ?? q.description)}{' '}
+              {simplifyAutoInstruction(details[q.id]?.instruction)}{' '}
+              Прогресс засчитывается сам, ничего отправлять не нужно.
+            </p>
+          ) : (
+            <p className="quest-desc">{renderTextWithLinks(details[q.id]?.description ?? q.description)}</p>
+          )}
+          {!(brawlAutoVerify && !externalAutoApprove) && details[q.id]?.instruction && (
             <>
               <div className="quest-section-title">Как выполнить</div>
               <p className="quest-instruction">{renderTextWithLinks(details[q.id].instruction)}</p>
             </>
           )}
-          {details[q.id]?.requirements && (
+          {!(brawlAutoVerify && !externalAutoApprove) && details[q.id]?.requirements && (
             <>
               <div className="quest-section-title">
                 {(details[q.id]?.brawlAutoVerify || details[q.id]?.externalAutoApprove) ? 'ℹ️ Информация' : 'Требования'}
