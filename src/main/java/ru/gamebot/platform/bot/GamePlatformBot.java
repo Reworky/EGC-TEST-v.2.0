@@ -7529,7 +7529,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>Пробный месяц EGC Pass активирован!</b>\n\nДействует до <b>" + trialUntil + "</b>, без автопродления: решите сами, продлевать ли. "
                             + "Теперь у вас 3 слота квеста, XP-буст +40%, выше лимиты и приоритет на вывод.",
                     keyboardFactory.rowsLayout(trialRows));
-        } else if (payload.startsWith(PASS_GIFT_PAYLOAD_PREFIX)) {
+        } else if (payload != null && payload.startsWith(PASS_GIFT_PAYLOAD_PREFIX)) {
             Long recipientId = Long.parseLong(payload.substring(PASS_GIFT_PAYLOAD_PREFIX.length()));
             AppUser recipient = userService.findByTelegramId(recipientId)
                     .orElseThrow(() -> new IllegalStateException("Pass gift recipient not found: " + recipientId));
@@ -17167,7 +17167,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(event.getTelegramId(),
                     "🛡 <b>Серия в " + event.getStreakDays() + " " + dayWord(event.getStreakDays()) + " под угрозой, но Pass её спасёт</b>\n\n"
                             + "Ты не заходил вчера. Загляни сегодня: EGC Pass бесплатно сохранит серию (раз в месяц), и она продолжится.",
-                    keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🎁 Забрать бонус дня", "menu:main")))));
+                    keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🏠 Открыть меню", "menu:main")))));
         } catch (Exception e) {
             log.warn("Failed to send streak-save hint to {}", event.getTelegramId(), e);
         }

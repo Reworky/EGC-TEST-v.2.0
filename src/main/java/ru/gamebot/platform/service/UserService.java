@@ -879,10 +879,6 @@ public class UserService {
 
     private static final int STREAK_RESTORE_GRACE_DAYS = 2;
 
-    /** Снимок серии ПЕРЕД сбросом на 1 — вызывается и из registerActivity(), и из claimDailyBonus()
-     *  (какой из двух сработает первым после пропуска дня), см. поля на AppUser. Не перезаписывает уже
-     *  существующий снимок повторно в тот же день — иначе повторный вызов (например claimDailyBonus
-     *  сразу после registerActivity в одном заходе) затёр бы валидный снимок нулём/старой датой. */
     /** Сдвигает серию входов на сегодняшний день: вчера заходил - +1; пропущен ровно один день и у подписчика EGC Pass ещё не использовано
      *  бесплатное сохранение в этом месяце - серия сохраняется (+1) и игроку уходит уведомление; иначе серия сгорает в 1 (со снимком для восстановления). */
     private void advanceStreak(AppUser user, LocalDate today) {
@@ -906,6 +902,10 @@ public class UserService {
         return last == null || !java.time.YearMonth.from(last).equals(java.time.YearMonth.now());
     }
 
+    /** Снимок серии ПЕРЕД сбросом на 1 — вызывается и из registerActivity(), и из claimDailyBonus()
+     *  (какой из двух сработает первым после пропуска дня), см. поля на AppUser. Не перезаписывает уже
+     *  существующий снимок повторно в тот же день — иначе повторный вызов (например claimDailyBonus
+     *  сразу после registerActivity в одном заходе) затёр бы валидный снимок нулём/старой датой. */
     private void snapshotBrokenStreak(AppUser user) {
         if (user.getStreakDays() < 2) {
             return; // серию из 0-1 дня восстанавливать нечего и не за что платить
