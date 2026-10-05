@@ -1182,6 +1182,10 @@ public class UserService {
         if (user.getPendingAdRewardAt().isBefore(LocalDateTime.now().minusHours(1))) {
             return AdRewardResult.NOT_GRANTED;
         }
+        // Реальный просмотр/действие у рекламодателя занимает секунды: награда почти мгновенно после запроса - повод присмотреться (только лог, не блокируем).
+        if (user.getPendingAdRewardAt().plusSeconds(3).isAfter(LocalDateTime.now())) {
+            log.warn("[AdFraud] reward claimed <3s after ad request: userId={}", user.getTelegramId());
+        }
         boolean wheelSpin = AD_PURPOSE_WHEEL.equals(user.getPendingAdPurpose());
         boolean botAd = AD_PURPOSE_BOT.equals(user.getPendingAdPurpose());
         // Показ из блока в боте приходит на тот же URL AdsGram, что и мини-апп; различаем по цели показа, у бота свой дневной лимит.

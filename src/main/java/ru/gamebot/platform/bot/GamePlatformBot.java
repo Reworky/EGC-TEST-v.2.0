@@ -4612,7 +4612,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + buildChestResultMessage(result, user.getCoins());
         Integer messageId = callbackQuery.getMessage() != null ? callbackQuery.getMessage().getMessageId() : null;
         if (messageId == null || !editHtmlMessage(chatId, messageId, "🎁 <b>Открываем сундук…</b>\n\n🔒", null)) {
-            sendText(chatId, resultText, chestResultKeyboard());
+            sendText(chatId, resultText, chestResultKeyboard(user));
             return;
         }
         chestScheduler.schedule(() -> {
@@ -4624,8 +4624,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }, 800, java.util.concurrent.TimeUnit.MILLISECONDS);
         chestScheduler.schedule(() -> {
             try {
-                if (!editHtmlMessage(chatId, messageId, resultText, chestResultKeyboard())) {
-                    sendText(chatId, resultText, chestResultKeyboard());
+                if (!editHtmlMessage(chatId, messageId, resultText, chestResultKeyboard(user))) {
+                    sendText(chatId, resultText, chestResultKeyboard(user));
                 }
             } catch (Exception e) {
                 log.error("Failed to show chest result to {}", chatId, e);
@@ -4647,15 +4647,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return msg.toString();
     }
 
-    private InlineKeyboardMarkup chestResultKeyboard() {
-        return keyboardFactory.rowsLayout(List.of(
-                List.of(keyboardFactory.callback("🔁 Ещё один сундук — " + CHEST_REROLL_STARS_PRICE + " ⭐", "menu:chestreroll")),
-                List.of(keyboardFactory.callback("📋 Призы", "menu:chestprizes")),
-                List.of(
-                        keyboardFactory.callback("⬅️ Назад", "menu:main"),
-                        keyboardFactory.callback("🏠 Меню", "menu:main")
-                )
-        ));
+    private InlineKeyboardMarkup chestResultKeyboard(AppUser user) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("🔁 Ещё один сундук — " + CHEST_REROLL_STARS_PRICE + " ⭐", "menu:chestreroll")));
+        // Игрок только что получил приз - хороший момент предложить рекламу за EXC (по желанию, не навязчиво)
+        InlineKeyboardButton adButton = adOffersAllowed(user) ? botAdOfferButton(user) : null;
+        if (adButton != null) rows.add(List.of(adButton));
+        rows.add(List.of(keyboardFactory.callback("📋 Призы", "menu:chestprizes")));
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", "menu:main"),
+                keyboardFactory.callback("🏠 Меню", "menu:main")));
+        return keyboardFactory.rowsLayout(rows);
     }
 
     /** Таблица призов сундука дня по запросу игрока — те же вероятности, что в UserService, открыто
@@ -7614,7 +7616,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     backMenuKeyboard("menu:profile"));
         } else if ("starsitem:CHEST_REROLL".equals(payload)) {
             ru.gamebot.platform.service.UserService.ChestResult result = userService.openChestPaidReroll(user);
-            sendText(telegramId, buildChestResultMessage(result, user.getCoins()), chestResultKeyboard());
+            sendText(telegramId, buildChestResultMessage(result, user.getCoins()), chestResultKeyboard(user));
         } else if ("starsitem:PATRON_TITLE".equals(payload)) {
             userService.grantPatronTitle(user);
             sendText(telegramId,
@@ -19903,13 +19905,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(telegramId, text, keyboardFactory.rowsLayout(rows));
     }
 
-    /** Кнопка рекламы под сообщением «квест выполнен»: если реклама в боте включена и у игрока остались награды на сегодня,
-     *  объявление показывается прямо в чате одним нажатием; иначе (выключена / лимит бота исчерпан) - прежняя ссылка на рекламу в мини-аппе. */
-    private InlineKeyboardButton watchAdForBonusButton(AppUser user) {
+    /** Предлагать ли игроку рекламу по своей инициативе (кнопки под сообщениями): не новичкам до третьего квеста (не мешаем первым шагам)
+     *  и не подписчикам EGC Pass. Раздел «📺 Реклама» в меню остаётся доступен всем. */
+    private boolean adOffersAllowed(AppUser user) {
+        return user.getCompletedQuests() >= 3 && !userService.isEgcPassActive(user);
+    }
+
+    /** Кнопка «посмотреть рекламу прямо в чате» (блок AdsGram в боте) или null, если реклама в боте выключена либо награды на сегодня закончились. */
+    private InlineKeyboardButton botAdOfferButton(AppUser user) {
         if (adsgramBotAdService.isEnabled()
                 && userService.getAdRewardsRemainingToday(user, ru.gamebot.platform.service.UserService.AdRewardSource.BOT) > 0) {
             return keyboardFactory.callback("🎬 Забери ещё EXC за рекламу", "menu:watchad");
         }
+        return null;
+    }
+
+    /** Кнопка рекламы под сообщением «квест выполнен»: если реклама в боте включена и награды остались на сегодня, объявление показывается
+     *  прямо в чате одним нажатием; иначе - прежняя ссылка на рекламу в мини-аппе. Новичкам и подписчикам Pass не показываем (null). */
+    private InlineKeyboardButton watchAdForBonusButton(AppUser user) {
+        if (!adOffersAllowed(user)) return null;
+        InlineKeyboardButton inChat = botAdOfferButton(user);
+        if (inChat != null) return inChat;
         return keyboardFactory.webApp("🎬 Забери ещё EXC за рекламу", "https://experience-gaming-club.pages.dev/quests?section=ads");
     }
 
