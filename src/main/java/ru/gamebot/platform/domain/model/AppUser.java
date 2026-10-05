@@ -199,6 +199,14 @@ public class AppUser {
     private int adRewardCountAdsgram;
     @Column(columnDefinition = "integer default 0")
     private int adRewardCountTelega;
+    /** Награды за рекламу из блока AdsGram в боте (свой дневной лимит, обнуляется вместе с остальными при смене adRewardDate). */
+    @Column(columnDefinition = "integer default 0")
+    private int adRewardCountAdsgramBot;
+    /** Сколько раз игрок запрашивал рекламу в боте в день botAdRequestDate (включая запросы без результата) - потолок по рекомендации AdsGram (до 30 в сутки). */
+    @Column(columnDefinition = "integer default 0")
+    private int botAdRequestsToday;
+    private LocalDate botAdRequestDate;
+    private LocalDateTime botAdLastRequestAt;
     private LocalDate adRewardDate;
 
     /** Момент запроса рекламы AdsGram, ждущей подтверждения просмотра; null = нет активного показа. */

@@ -1070,7 +1070,7 @@ public class UserService {
     /** У каждой рекламной сети свой дневной лимит показов на игрока — antifraud-риски и реальная
      * монетизация повторных показов различаются по сети, единый лимит на всех не годится. */
     public enum AdRewardSource {
-        ADSGRAM(10), TELEGA(5);
+        ADSGRAM(10), TELEGA(5), BOT(5);
 
         private final int dailyCap;
 
@@ -1093,7 +1093,11 @@ public class UserService {
         if (user.getAdRewardDate() == null || !user.getAdRewardDate().equals(LocalDate.now())) {
             return 0;
         }
-        return source == AdRewardSource.ADSGRAM ? user.getAdRewardCountAdsgram() : user.getAdRewardCountTelega();
+        return switch (source) {
+            case ADSGRAM -> user.getAdRewardCountAdsgram();
+            case TELEGA -> user.getAdRewardCountTelega();
+            case BOT -> user.getAdRewardCountAdsgramBot();
+        };
     }
 
     public int getAdRewardsRemainingToday(AppUser user, AdRewardSource source) {
@@ -1108,6 +1112,35 @@ public class UserService {
     @Transactional
     public void markAdRequested(AppUser user) {
         markAdRequested(user, null);
+    }
+
+    /** Потолок запросов рекламы в боте на игрока в сутки (рекомендация поддержки AdsGram: до 30; оставляем запас) и пауза между запросами. */
+    public static final int BOT_AD_MAX_REQUESTS_PER_DAY = 20;
+    public static final int BOT_AD_MIN_GAP_SECONDS = 60;
+
+    public enum BotAdRequestCheck { OK, TOO_SOON, DAILY_LIMIT }
+
+    /** Регистрирует попытку запросить рекламу в боте (счётчик в сутки + время последней попытки). Нужна ДО обращения к AdsGram:
+     *  считаем и запросы без результата - так игрок не перебирает кнопку без конца. */
+    @Transactional
+    public BotAdRequestCheck registerBotAdRequest(AppUser user) {
+        LocalDate today = LocalDate.now();
+        LocalDateTime now = LocalDateTime.now();
+        if (user.getBotAdRequestDate() == null || !user.getBotAdRequestDate().equals(today)) {
+            user.setBotAdRequestDate(today);
+            user.setBotAdRequestsToday(0);
+        }
+        if (user.getBotAdRequestsToday() >= BOT_AD_MAX_REQUESTS_PER_DAY) {
+            return BotAdRequestCheck.DAILY_LIMIT;
+        }
+        if (user.getBotAdLastRequestAt() != null
+                && user.getBotAdLastRequestAt().plusSeconds(BOT_AD_MIN_GAP_SECONDS).isAfter(now)) {
+            return BotAdRequestCheck.TOO_SOON;
+        }
+        user.setBotAdRequestsToday(user.getBotAdRequestsToday() + 1);
+        user.setBotAdLastRequestAt(now);
+        appUserRepository.save(user);
+        return BotAdRequestCheck.OK;
     }
 
     /** purpose == null — обычный показ (30 EXC); иначе см. AD_PURPOSE_*. Каждый новый запрос перезаписывает
@@ -1132,6 +1165,7 @@ public class UserService {
         return switch (source) {
             case ADSGRAM -> viewsToday == 5 ? 50 : viewsToday == 10 ? 100 : 0;
             case TELEGA -> viewsToday == 3 ? 50 : viewsToday == 5 ? 75 : 0;
+            case BOT -> viewsToday == 3 ? 50 : viewsToday == 5 ? 75 : 0;
         };
     }
 
@@ -1140,7 +1174,7 @@ public class UserService {
      * source определяется вызывающим постбек-эндпоинтом (своя сеть — свой URL), не хранится отдельно
      * от pendingAdRewardAt: сам факт "показ был запрошен недавно" не завязан на конкретную сеть. */
     @Transactional
-    public AdRewardResult claimPendingAdReward(Long telegramId, AdRewardSource source) {
+    public AdRewardResult claimPendingAdReward(Long telegramId, AdRewardSource sourceFromPostback) {
         AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
         if (user == null || user.getPendingAdRewardAt() == null) {
             return AdRewardResult.NOT_GRANTED;
@@ -1150,6 +1184,8 @@ public class UserService {
         }
         boolean wheelSpin = AD_PURPOSE_WHEEL.equals(user.getPendingAdPurpose());
         boolean botAd = AD_PURPOSE_BOT.equals(user.getPendingAdPurpose());
+        // Показ из блока в боте приходит на тот же URL AdsGram, что и мини-апп; различаем по цели показа, у бота свой дневной лимит.
+        AdRewardSource source = botAd ? AdRewardSource.BOT : sourceFromPostback;
         user.setPendingAdRewardAt(null);
         user.setPendingAdPurpose(null);
         LocalDate today = LocalDate.now();
@@ -1157,11 +1193,15 @@ public class UserService {
             user.setAdRewardDate(today);
             user.setAdRewardCountAdsgram(0);
             user.setAdRewardCountTelega(0);
+            user.setAdRewardCountAdsgramBot(0);
         }
         int viewsToday;
         if (source == AdRewardSource.ADSGRAM) {
             viewsToday = user.getAdRewardCountAdsgram() + 1;
             user.setAdRewardCountAdsgram(viewsToday);
+        } else if (source == AdRewardSource.BOT) {
+            viewsToday = user.getAdRewardCountAdsgramBot() + 1;
+            user.setAdRewardCountAdsgramBot(viewsToday);
         } else {
             viewsToday = user.getAdRewardCountTelega() + 1;
             user.setAdRewardCountTelega(viewsToday);
