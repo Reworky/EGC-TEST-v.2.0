@@ -397,8 +397,9 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
         <div className="quest-detail" onClick={e => e.stopPropagation()}>
           {brawlAutoVerify && !externalAutoApprove ? (
             <p className="quest-desc">
-              {renderTextWithLinks(details[q.id]?.description ?? q.description)}{' '}
-              {simplifyAutoInstruction(details[q.id]?.instruction)}{' '}
+              {(details[q.id]?.description ?? q.description)
+                ? renderTextWithLinks(details[q.id]?.description ?? q.description)
+                : simplifyAutoInstruction(details[q.id]?.instruction)}{' '}
               Прогресс засчитывается сам, ничего отправлять не нужно.
             </p>
           ) : (

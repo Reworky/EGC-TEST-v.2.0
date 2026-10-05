@@ -5229,9 +5229,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String statusLine = (latest != null || cooldownLeft > 0) ? "📌 Статус: <b>" + escape(displayStatus) + "</b>\n" : "";
         String body;
         if (autoVerified) {
-            String simplified = simplifyAutoInstruction(personalizedInstruction);
-            body = escape(quest.getDescription()) + (simplified.isBlank() ? "" : " " + escape(simplified))
-                    + " Прогресс засчитывается сам, ничего отправлять не нужно.";
+            // Описание и инструкция у автоквестов почти всегда пересказывают друг друга: показываем одно описание,
+            // инструкцию - только если описания нет.
+            String description = quest.getDescription() == null ? "" : quest.getDescription().trim();
+            String text = description.isBlank() ? simplifyAutoInstruction(personalizedInstruction) : description;
+            body = escape(text) + (text.isBlank() ? "" : " ")
+                    + "Прогресс засчитывается сам, ничего отправлять не нужно.";
         } else {
             body = escape(quest.getDescription()) + "\n\n"
                     + (personalizedInstruction != null && !personalizedInstruction.isBlank()
