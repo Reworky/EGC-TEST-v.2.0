@@ -28,6 +28,8 @@ public class UserProfileDto {
      *  для строки статуса подписки в профиле. Для не-подписчика оба 0. */
     private long egcPassBoostUsedThisMonth;
     private long egcPassBoostMonthlyCap;
+    /** Пробный месяц EGC Pass доступен: подписка ещё ни разу не оформлялась. */
+    private boolean egcPassTrialAvailable;
     private long xp;
     private long coins;
     private int level;

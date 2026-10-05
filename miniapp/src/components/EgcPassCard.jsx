@@ -9,9 +9,12 @@ const EGC_PASS_PERKS = [
   '📂 3-й слот квеста (за EXC доступен только 2-й)',
   '🔀 Выше дневные лимиты: реролл 6 вместо 3, снятие кулдауна 4 вместо 2, бустов 5 вместо 3',
   '🛡️ Бесплатная страховка провала раз в месяц',
+  '🔥 Бесплатное сохранение серии входов раз в месяц',
+  '🚀 Ранний доступ: два лучших квеста нового набора на 24 часа раньше',
+  '🤝 12% с квестов друзей вместо 10%',
   '🎁 Бесплатный улучшенный сундук каждый день',
   '💰 Донат по играм — гемы и пропуски по закупочной цене, без наценки клуба',
-  '⚡ Приоритет в очереди на вывод EXC',
+  '⚡ Приоритет на вывод EXC: заявка обрабатывается в течение 12 часов',
   '💎 Статус-бейдж в профиле',
 ];
 
@@ -19,16 +22,16 @@ const EGC_PASS_PERKS = [
  * стороне Telegram, 2026-09-15). В отличие от разовых Stars-покупок это не скрывается после оплаты:
  * без подписки карточка предлагает оформить, с подпиской — показывает, что она оформлена, и срок.
  * Живёт в собственном разделе «EGC Pass» (Battle Pass объединён с подпиской, 2026-09-24). */
-export default function EgcPassCard({ profile, price, onPurchased }) {
+export default function EgcPassCard({ profile, price, trialPrice, onPurchased }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const fundRatio = useFundRatio();
 
-  async function handleBuy() {
+  async function handleBuy(itemType = 'EGC_PASS') {
     setBusy(true);
     setMessage(null);
     try {
-      const invoice = await getStarsInvoiceLink('EGC_PASS');
+      const invoice = await getStarsInvoiceLink(itemType);
       if (!invoice.success) {
         setMessage(invoice.message);
         return;
@@ -46,6 +49,12 @@ export default function EgcPassCard({ profile, price, onPurchased }) {
     } finally {
       setBusy(false);
     }
+  }
+
+  function openGift() {
+    const tg = window.Telegram?.WebApp;
+    const url = 'https://t.me/invitetogamebot?start=passgift';
+    if (tg) tg.openTelegramLink(url); else window.open(url, '_blank', 'noopener');
   }
 
   const active = profile?.hasEgcPass;
@@ -79,10 +88,20 @@ export default function EgcPassCard({ profile, price, onPurchased }) {
           дальше продлится автоматически. Отменить можно в настройках платежей Telegram.
         </div>
       ) : (
-        <button className="quest-btn" disabled={busy} onClick={handleBuy} style={{ width: '100%' }}>
-          {busy ? '...' : `Оформить — ${price} ⭐ / 30 дней`}
-        </button>
+        <>
+          <button className="quest-btn" disabled={busy} onClick={() => handleBuy('EGC_PASS')} style={{ width: '100%' }}>
+            {busy ? '...' : `Оформить — ${price} ⭐ / 30 дней`}
+          </button>
+          {profile?.egcPassTrialAvailable && trialPrice > 0 && (
+            <button className="quest-btn quest-btn-secondary" disabled={busy} onClick={() => handleBuy('EGC_PASS_TRIAL')} style={{ width: '100%', marginTop: 8 }}>
+              {busy ? '...' : `🎁 Первый месяц за ${trialPrice} ⭐ (без автопродления)`}
+            </button>
+          )}
+        </>
       )}
+      <button className="quest-btn quest-btn-secondary" onClick={openGift} style={{ width: '100%', marginTop: 8 }}>
+        🎁 Подарить Pass другу
+      </button>
     </div>
   );
 }

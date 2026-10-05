@@ -59,6 +59,7 @@ public class ProfileController {
                                     ? UserService.EGC_PASS_BOOST_MONTHLY_CAP_EXC - userService.egcPassBoostRemainingThisMonth(user)
                                     : 0)
                             .egcPassBoostMonthlyCap(userService.isEgcPassActive(user) ? UserService.EGC_PASS_BOOST_MONTHLY_CAP_EXC : 0)
+                            .egcPassTrialAvailable(user.getEgcPassActiveUntil() == null)
                             .xp(user.getXp())
                             .coins(user.getCoins())
                             .level(userService.getLevelNumber(user.getXp()))

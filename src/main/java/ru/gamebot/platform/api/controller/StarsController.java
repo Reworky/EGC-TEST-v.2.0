@@ -57,6 +57,9 @@ public class StarsController {
                 && Arrays.asList(user.getOwnedTitlesCsv().split(",")).contains("patron")) {
             return ResponseEntity.ok(error("Титул уже куплен."));
         }
+        if ("EGC_PASS_TRIAL".equals(itemType) && user.getEgcPassActiveUntil() != null) {
+            return ResponseEntity.ok(error("Пробный месяц доступен только тем, кто ещё не оформлял EGC Pass."));
+        }
         if ("PERMANENT_SLOT".equals(itemType) && user.isPermanentExtraSlot()) {
             return ResponseEntity.ok(error("Доп. слот навсегда уже куплен."));
         }

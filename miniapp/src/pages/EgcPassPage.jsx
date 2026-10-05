@@ -13,13 +13,14 @@ export default function EgcPassPage() {
   const [profile, setProfile] = useState(null);
   const [legacyPass, setLegacyPass] = useState(null);
   const [price, setPrice] = useState(150);
+  const [trialPrice, setTrialPrice] = useState(0);
   const [error, setError] = useState(null);
 
   function reload() {
     setError(null);
     getProfile().then(setProfile).catch(() => setError('Не удалось загрузить данные. Попробуйте ещё раз.'));
     getBattlePass().then(setLegacyPass).catch(() => {});
-    getStarsPrices().then(p => { if (p?.EGC_PASS) setPrice(p.EGC_PASS); }).catch(() => {});
+    getStarsPrices().then(p => { if (p?.EGC_PASS) setPrice(p.EGC_PASS); if (p?.EGC_PASS_TRIAL) setTrialPrice(p.EGC_PASS_TRIAL); }).catch(() => {});
   }
 
   // После оплаты подписки профиль надо перечитать с сервера, а не из кэша — иначе карточка продолжила бы
@@ -39,7 +40,7 @@ export default function EgcPassPage() {
       <div style={{ padding: '16px 16px 0' }}><BackButton to="/profile" label="Профиль" /></div>
 
       <div style={{ marginTop: 16 }}>
-        <EgcPassCard profile={profile} price={price} onPurchased={handlePurchased} />
+        <EgcPassCard profile={profile} price={price} trialPrice={trialPrice} onPurchased={handlePurchased} />
       </div>
 
       {legacyPass?.hasActivePass && (

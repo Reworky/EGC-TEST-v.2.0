@@ -144,5 +144,7 @@ public enum SessionState {
     TOURNAMENT_EDIT_FEE,
     TOURNAMENT_EDIT_START,
     TOURNAMENT_EDIT_END,
-    GEM_PURCHASE_REJECT_COMMENT
+    GEM_PURCHASE_REJECT_COMMENT,
+    /** Ввод ника друга для подарка EGC Pass (sink:passgift / start=passgift). */
+    PASS_GIFT_INPUT
 }

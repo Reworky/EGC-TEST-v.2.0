@@ -243,7 +243,7 @@ public class RewardService {
      *  активна). Пустая строка для остальных, чтобы можно было просто дописывать к сообщению. */
     public String withdrawalPriorityNote(AppUser user) {
         return userService.isEgcPassActive(user)
-                ? " ⭐ Приоритет EGC Pass: ваша заявка рассматривается в первую очередь."
+                ? " ⭐ Приоритет EGC Pass: ваша заявка рассматривается в первую очередь, обычно в течение " + PassPayoutSlaService.SLA_HOURS + " часов."
                 : "";
     }
 
