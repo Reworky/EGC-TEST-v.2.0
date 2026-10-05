@@ -11184,26 +11184,41 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return " (~<b>" + tonAmount + " GRAM</b>, курс 1 GRAM ≈ " + tonRate.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽" + warning + ")";
     }
 
+    /** Кнопки заявок на вывод, разложенные по способам выплаты: заголовок-разделитель «⭐ Звёзды (N)», «💎 TON (N)», «💸 Рубли (N)» и под ним заявки (порядок внутри группы сохраняется). */
+    private List<List<InlineKeyboardButton>> withdrawalRowsByMethod(List<RewardRequest> pending, String callbackPrefix) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        String[][] groups = {{"stars", "⭐ ЗВЁЗДЫ TELEGRAM"}, {"ton", "💎 TON"}, {"rub", "💸 РУБЛИ"}};
+        for (String[] group : groups) {
+            List<RewardRequest> inGroup = new ArrayList<>();
+            for (RewardRequest req : pending) {
+                String kind = isStarsWithdrawal(req) ? "stars" : isCryptoWithdrawal(req) ? "ton" : "rub";
+                if (kind.equals(group[0])) inGroup.add(req);
+            }
+            if (inGroup.isEmpty()) continue;
+            rows.add(List.of(keyboardFactory.callback("— " + group[1] + " (" + inGroup.size() + ") —", "noop")));
+            for (RewardRequest req : inGroup) {
+                String uname = req.getUser().getTelegramUsername() != null
+                        ? "@" + req.getUser().getTelegramUsername()
+                        : "#" + req.getUser().getTelegramId();
+                String passMark = sinkShopService.isEgcPassActive(req.getUser()) ? "👑 " : "";
+                rows.add(List.of(keyboardFactory.callback(
+                        passMark + "В-" + reqDisplayId(req) + " " + uname + " — " + rewardService.actualPaidPrice(req) + " EXC",
+                        callbackPrefix + req.getId())));
+            }
+        }
+        return rows;
+    }
+
     private void sendAdminWithdrawals(AppUser user) {
         List<RewardRequest> pending = rewardService.findPendingWithdrawals();
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        for (RewardRequest req : pending) {
-            String uname = req.getUser().getTelegramUsername() != null
-                    ? "@" + req.getUser().getTelegramUsername()
-                    : "#" + req.getUser().getTelegramId();
-            String type = isStarsWithdrawal(req) ? "⭐ Stars" : isCryptoWithdrawal(req) ? "💎 TON" : "💸 ₽";
-            String passMark = sinkShopService.isEgcPassActive(req.getUser()) ? "👑 " : "";
-            rows.add(List.of(keyboardFactory.callback(
-                    passMark + "В-" + reqDisplayId(req) + " " + uname + " — " + type + " " + rewardService.actualPaidPrice(req) + " EXC",
-                    "admin:withdrawal:req:" + req.getId())));
-        }
+        List<List<InlineKeyboardButton>> rows = withdrawalRowsByMethod(pending, "admin:withdrawal:req:");
         rows.add(List.of(
                 keyboardFactory.callback("📋 История", "admin:withdrawal:history:0"),
                 keyboardFactory.callback("📊 Статистика", "admin:withdrawal:stats")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
         String header = pending.isEmpty()
                 ? "💸 <b>Заявки на вывод EXC</b>\n\nНет новых заявок."
-                : "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>\n👑 — подписчик EGC Pass, его заявка идёт первой.\nСпособ вывода: ⭐ Stars (звёзды Telegram), 💎 TON, 💸 ₽ (рубли).";
+                : "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>\n👑 — подписчик EGC Pass, его заявка идёт первой в своей группе.";
         sendText(user.getTelegramId(), header, keyboardFactory.rowsLayout(rows));
     }
 
@@ -19682,20 +19697,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     backOnlyKeyboard("menu:moderation"));
             return;
         }
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        for (RewardRequest req : pending) {
-            String uname = req.getUser().getTelegramUsername() != null
-                    ? "@" + req.getUser().getTelegramUsername()
-                    : "#" + req.getUser().getTelegramId();
-            String type = isCryptoWithdrawal(req) ? "💎 TON" : "💸 ₽";
-            String passMark = sinkShopService.isEgcPassActive(req.getUser()) ? "👑 " : "";
-            rows.add(List.of(keyboardFactory.callback(
-                    passMark + "В-" + reqDisplayId(req) + " " + uname + " — " + type + " " + rewardService.actualPaidPrice(req) + " EXC",
-                    "mod:withdrawal:req:" + req.getId())));
-        }
+        List<List<InlineKeyboardButton>> rows = withdrawalRowsByMethod(pending, "mod:withdrawal:req:");
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:moderation")));
         sendText(user.getTelegramId(),
-                "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>\n👑 — подписчик EGC Pass, его заявка идёт первой.\nСпособ вывода: ⭐ Stars (звёзды Telegram), 💎 TON, 💸 ₽ (рубли).",
+                "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>\n👑 — подписчик EGC Pass, его заявка идёт первой в своей группе.",
                 keyboardFactory.rowsLayout(rows));
     }
 
