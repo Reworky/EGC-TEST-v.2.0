@@ -1102,6 +1102,8 @@ public class UserService {
 
     /** Цель показа для рекламного колеса: награда за просмотр — спин колеса, а не 30 EXC. */
     public static final String AD_PURPOSE_WHEEL = "WHEEL";
+    /** Цель показа: объявление из блока AdsGram в самом боте (награда та же, 30 EXC; метка нужна для отчёта по рекламе в боте). */
+    public static final String AD_PURPOSE_BOT = "BOT";
 
     @Transactional
     public void markAdRequested(AppUser user) {
@@ -1147,6 +1149,7 @@ public class UserService {
             return AdRewardResult.NOT_GRANTED;
         }
         boolean wheelSpin = AD_PURPOSE_WHEEL.equals(user.getPendingAdPurpose());
+        boolean botAd = AD_PURPOSE_BOT.equals(user.getPendingAdPurpose());
         user.setPendingAdRewardAt(null);
         user.setPendingAdPurpose(null);
         LocalDate today = LocalDate.now();
@@ -1171,7 +1174,7 @@ public class UserService {
             user.setAdWheelSpins(user.getAdWheelSpins() + 1);
         }
         if (totalExc > 0) {
-            String description = (wheelSpin ? "Просмотр рекламы для колеса (" : "Просмотр рекламы (") + source + ")";
+            String description = (wheelSpin ? "Просмотр рекламы для колеса (" : botAd ? "Просмотр рекламы в боте (" : "Просмотр рекламы (") + source + ")";
             if (milestoneBonus > 0) {
                 description += " + бонус за " + viewsToday + "/" + source.getDailyCap() + " просмотров";
             }

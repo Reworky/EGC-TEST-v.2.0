@@ -10,10 +10,13 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import ru.gamebot.platform.domain.model.BotAdStat;
+import ru.gamebot.platform.domain.repository.BotAdStatRepository;
 
 /** Реклама AdsGram прямо в боте (не в мини-аппе) — отдельный формат "Bot" со своим Block ID/токеном. */
 @Slf4j
@@ -35,11 +38,14 @@ public class AdsgramBotAdService {
     private final String apiToken;
     private final String blockId;
     private final boolean enabled;
+    private final BotAdStatRepository statRepository;
 
     public AdsgramBotAdService(@Value("${app.adsgram-api-token:}") String apiToken,
                                 @Value("${app.adsgram-bot-block-id:}") String blockId,
                                 @Value("${app.adsgram-bot-ads-enabled:false}") boolean adsSwitchedOn,
-                                ObjectMapper objectMapper) {
+                                ObjectMapper objectMapper,
+                                BotAdStatRepository statRepository) {
+        this.statRepository = statRepository;
         this.apiToken = apiToken;
         // AdsGram: "Use only the numeric part of the blockid, without the bot- prefix"
         this.blockId = blockId != null ? blockId.replaceFirst("^bot-", "") : blockId;
@@ -66,6 +72,30 @@ public class AdsgramBotAdService {
         if (!enabled) {
             return Optional.empty();
         }
+        Optional<AdContent> result = requestAd(telegramId);
+        countRequest(result.isPresent());
+        return result;
+    }
+
+    /** Счётчик по дням для отчёта «заполняемость рекламы в боте»; сбой записи никогда не должен мешать показу рекламы. */
+    private synchronized void countRequest(boolean filled) {
+        try {
+            LocalDate today = LocalDate.now();
+            BotAdStat stat = statRepository.findById(today).orElseGet(() -> {
+                BotAdStat created = new BotAdStat();
+                created.setDay(today);
+                return created;
+            });
+            stat.setRequests(stat.getRequests() + 1);
+            if (filled) stat.setFilled(stat.getFilled() + 1);
+            else stat.setEmpty(stat.getEmpty() + 1);
+            statRepository.save(stat);
+        } catch (Exception e) {
+            log.warn("Failed to record bot ad stat", e);
+        }
+    }
+
+    private Optional<AdContent> requestAd(Long telegramId) {
         String url = String.format(ADVBOT_URL, telegramId,
                 URLEncoder.encode(blockId, StandardCharsets.UTF_8),
                 URLEncoder.encode(apiToken, StandardCharsets.UTF_8));

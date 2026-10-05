@@ -4688,7 +4688,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         ru.gamebot.platform.service.AdsgramBotAdService.AdContent ad = adOpt.get();
-        userService.markAdRequested(user);
+        userService.markAdRequested(user, ru.gamebot.platform.service.UserService.AD_PURPOSE_BOT);
         answerSilently(callbackQuery.getId());
 
         List<InlineKeyboardButton> buttons = new ArrayList<>();
