@@ -11230,50 +11230,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         ? "@" + req.getUser().getTelegramUsername()
                         : "#" + req.getUser().getTelegramId();
                 String passMark = sinkShopService.isEgcPassActive(req.getUser()) ? "👑 " : "";
-                long waitMin = withdrawalWaitMinutes(req);
+                String created = req.getCreatedAt() == null ? ""
+                        : req.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm")) + " · ";
                 rows.add(List.of(keyboardFactory.callback(
-                        withdrawalWaitIcon(waitMin) + " " + withdrawalWaitText(waitMin) + " · " + passMark + "В-" + reqDisplayId(req) + " " + uname + " — " + rewardService.actualPaidPrice(req) + " EXC",
+                        created + passMark + "В-" + reqDisplayId(req) + " " + uname + " — " + rewardService.actualPaidPrice(req) + " EXC",
                         callbackPrefix + req.getId())));
             }
         }
         return rows;
-    }
-
-    private static final long WITHDRAWAL_SLA_MINUTES = 24 * 60;
-
-    private long withdrawalWaitMinutes(RewardRequest req) {
-        return req.getCreatedAt() == null ? 0
-                : Math.max(0, java.time.temporal.ChronoUnit.MINUTES.between(req.getCreatedAt(), java.time.LocalDateTime.now()));
-    }
-
-    /** 🟢 до 12 ч, 🟡 12-20 ч, 🔴 20 ч и больше (срок выплаты - 24 ч). */
-    private String withdrawalWaitIcon(long minutes) {
-        return minutes >= 20 * 60 ? "🔴" : minutes >= 12 * 60 ? "🟡" : "🟢";
-    }
-
-    /** «25 мин», «5 ч 20 мин», «1 д 3 ч». */
-    private String withdrawalWaitText(long minutes) {
-        if (minutes < 60) return minutes + " мин";
-        long hours = minutes / 60;
-        if (hours < 24) return hours + " ч " + (minutes % 60) + " мин";
-        return (hours / 24) + " д " + (hours % 24) + " ч";
-    }
-
-    /** Строка под шапкой списка: легенда цветов и сколько заявок уже ждут дольше 24 часов. */
-    private String withdrawalWaitSummary(List<RewardRequest> pending) {
-        long oldest = 0;
-        long overdue = 0;
-        long nearing = 0;
-        for (RewardRequest req : pending) {
-            long m = withdrawalWaitMinutes(req);
-            oldest = Math.max(oldest, m);
-            if (m >= WITHDRAWAL_SLA_MINUTES) overdue++;
-            else if (m >= 20 * 60) nearing++;
-        }
-        return "\n⏱ Самая давняя ждёт: <b>" + withdrawalWaitText(oldest) + "</b>"
-                + (overdue > 0 ? "\n🚨 Просрочено (больше 24 ч): <b>" + overdue + "</b>" : "")
-                + (nearing > 0 ? "\n🔴 Скоро 24 ч (20+ ч): <b>" + nearing + "</b>" : "")
-                + "\n🟢 до 12 ч · 🟡 12–20 ч · 🔴 20 ч и больше — оплатить нужно в течение 24 ч.";
     }
 
     private void sendAdminWithdrawals(AppUser user) {
@@ -11285,7 +11249,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
         String header = pending.isEmpty()
                 ? "💸 <b>Заявки на вывод EXC</b>\n\nНет новых заявок."
-                : "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>\n👑 — подписчик EGC Pass, его заявка идёт первой в своей группе." + withdrawalWaitSummary(pending);
+                : "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>\n👑 — подписчик EGC Pass, его заявка идёт первой в своей группе.";
         sendText(user.getTelegramId(), header, keyboardFactory.rowsLayout(rows));
     }
 
@@ -19774,7 +19738,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = withdrawalRowsByMethod(pending, "mod:withdrawal:req:");
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:moderation")));
         sendText(user.getTelegramId(),
-                "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>\n👑 — подписчик EGC Pass, его заявка идёт первой в своей группе." + withdrawalWaitSummary(pending),
+                "💸 <b>Заявки на вывод EXC</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>\n👑 — подписчик EGC Pass, его заявка идёт первой в своей группе.",
                 keyboardFactory.rowsLayout(rows));
     }
 
