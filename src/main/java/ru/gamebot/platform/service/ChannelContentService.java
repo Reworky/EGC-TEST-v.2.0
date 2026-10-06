@@ -198,23 +198,23 @@ public class ChannelContentService {
     public TypeSettings settings(String type) {
         String p = prefix(type);
         // Сетка (UTC; МСК = UTC+3): дефолты согласованы с владельцем 2026-09-26.
+        // Сетка владельца (06.10.2026), время МСК+4 = UTC+7: слоты 12:00 / 16:00 / 20:00 (= 05 / 09 / 13 UTC), между постами ровно 4 часа;
+        // «Свежие квесты» и «Новинки в магазине» в плане не стоят, приходят только когда есть новое, карточка в 00:00 (= 17 UTC).
         int defHour = switch (type) {
-            case TOP_QUESTS_WEEK, WEEKLY_RACE, SHOP_POPULAR, REFERRAL_STATS, HALL_OF_FAME, LEAGUES_WEEK -> 9;
-            // «Гонка отрядов, экватор недели»: среда 05:00 UTC = 12:00 у владельца (МСК+4), решение 06.10.2026
-            case SQUAD_MIDWEEK -> 5;
-            case SQUAD_STATS, WITHDRAW_SUMMARY, WITHDRAW_HOWTO, EGCPASS_PERK, SHOP_ITEMS, SQUAD_RESULTS, REFERRAL_TOP -> 15;
-            case REFERRAL_HOWTO -> 6;
-            case SHOP_NEW -> 16;
+            case HALL_OF_FAME, SQUAD_RESULTS, SQUAD_MIDWEEK, WITHDRAW_HOWTO, SQUAD_STATS, SHOP_POPULAR, TOP_QUESTS_WEEK, WEEKLY_RACE -> 5;
+            case SHOP_ITEMS, WITHDRAW_SUMMARY, REFERRAL_STATS -> 9;
+            case LEAGUES_WEEK, REFERRAL_TOP, REFERRAL_HOWTO, EGCPASS_PERK -> 13;
+            case NEW_QUESTS, SHOP_NEW -> 17;
             default -> 12;
         };
         int defDow = switch (type) {
-            case HALL_OF_FAME, SQUAD_RESULTS -> 1;
-            case LEAGUES_WEEK, REFERRAL_TOP -> 2;
-            case SQUAD_MIDWEEK, EGCPASS_PERK -> 3;
-            case WEEKLY_RACE, WITHDRAW_HOWTO -> 4;
-            case TOP_QUESTS_WEEK, SQUAD_STATS -> 5;
-            case SHOP_POPULAR, SHOP_ITEMS -> 6;
-            case WITHDRAW_SUMMARY, REFERRAL_HOWTO, REFERRAL_STATS -> 7;
+            case HALL_OF_FAME, SHOP_ITEMS -> 1;
+            case SQUAD_RESULTS, LEAGUES_WEEK -> 2;
+            case SQUAD_MIDWEEK, REFERRAL_TOP -> 3;
+            case WITHDRAW_HOWTO, EGCPASS_PERK -> 4;
+            case SQUAD_STATS, SHOP_POPULAR -> 5;
+            case TOP_QUESTS_WEEK -> 6;
+            case WEEKLY_RACE, WITHDRAW_SUMMARY, REFERRAL_HOWTO, REFERRAL_STATS -> 7;
             default -> 1;
         };
         String en = get(p + "enabled");

@@ -46,7 +46,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         removeAccidentalParticipantLimits();
         backfillOwnedTitlesFromHistory();
         syncCountryWithPhone();
-        moveSquadMidweekAutopostTo0500Utc();
+        applyChannelAutopostGrid20261006();
     }
 
     /** Инцидент 2026-09-22 (тикет поддержки #213): ClashQuestVerificationService для ATTACK_WINS
@@ -395,19 +395,37 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         }
     }
 
-    /** «Гонка отрядов, экватор недели» (автопост ChannelContentService.SQUAD_MIDWEEK) - среда 05:00 UTC (12:00 по МСК+4 владельца), навсегда
-     *  (решение 06.10.2026). Если час раньше меняли в админке и он сохранён в app_settings, один раз приводим его к 5; повторно на следующих
-     *  стартах не трогаем (маркер cc.sqmid.hour.v2), чтобы не перебивать будущие правки в админке. Без сохранённого часа действует дефолт 5. */
-    private void moveSquadMidweekAutopostTo0500Utc() {
+    /** Сетка автопостов канала (06.10.2026, владелец: МСК+4 = UTC+7, между постами ровно 4 часа): слоты 12:00 / 16:00 / 20:00 = 05 / 09 / 13 UTC,
+     *  «Свежие квесты» и «Новинки» - 17 UTC (00:00). Один раз приводит сохранённые в админке часы и дни к сетке (маркер cc.grid.v2 в app_settings),
+     *  дальше правки в админке не перебиваются. Без сохранённых значений действуют те же дефолты в ChannelContentService.settings. */
+    private void applyChannelAutopostGrid20261006() {
         try {
             Integer done = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM app_settings WHERE setting_key = 'cc.sqmid.hour.v2'", Integer.class);
+                "SELECT COUNT(*) FROM app_settings WHERE setting_key = 'cc.grid.v2'", Integer.class);
             if (done != null && done > 0) return;
-            int updated = jdbcTemplate.update("UPDATE app_settings SET setting_value = '5' WHERE setting_key = 'cc.sqmid.hour'");
-            jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES ('cc.sqmid.hour.v2', '1')");
-            log.info("[DBMigration] SQUAD_MIDWEEK autopost hour set to 05:00 UTC (stored value updated: {})", updated > 0);
+            // префикс настроек, час UTC, день недели (1 = пн ... 7 = вс; для ежедневных NEW_QUESTS/SHOP_NEW день не используется)
+            Object[][] grid = {
+                {"cc.hof.", 5, 1}, {"cc.sqres.", 5, 2}, {"cc.sqmid.", 5, 3}, {"cc.whow.", 5, 4}, {"cc.sqstat.", 5, 5},
+                {"cc.shopp.", 5, 5}, {"cc.topw.", 5, 6}, {"cc.race.", 5, 7},
+                {"cc.shopi.", 9, 1}, {"cc.wsum.", 9, 7}, {"cc.refstat.", 9, 7},
+                {"cc.lgw.", 13, 2}, {"cc.reftop.", 13, 3}, {"cc.refhow.", 13, 7}, {"cc.pass.", 13, 4},
+                {"cc.newq.", 17, 1}, {"cc.shopn.", 17, 1}
+            };
+            for (Object[] g : grid) {
+                upsertSetting(g[0] + "hour", String.valueOf(g[1]));
+                upsertSetting(g[0] + "dow", String.valueOf(g[2]));
+            }
+            upsertSetting("cc.grid.v2", "1");
+            log.info("[DBMigration] channel autopost grid applied ({} types)", grid.length);
         } catch (Exception e) {
-            log.error("[DBMigration] moveSquadMidweekAutopostTo0500Utc failed: {}", e.getMessage());
+            log.error("[DBMigration] applyChannelAutopostGrid20261006 failed: {}", e.getMessage());
+        }
+    }
+
+    private void upsertSetting(String key, String value) {
+        int updated = jdbcTemplate.update("UPDATE app_settings SET setting_value = ? WHERE setting_key = ?", value, key);
+        if (updated == 0) {
+            jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES (?, ?)", key, value);
         }
     }
 }
