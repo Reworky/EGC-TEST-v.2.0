@@ -199,7 +199,9 @@ public class ChannelContentService {
         String p = prefix(type);
         // Сетка (UTC; МСК = UTC+3): дефолты согласованы с владельцем 2026-09-26.
         int defHour = switch (type) {
-            case TOP_QUESTS_WEEK, SQUAD_MIDWEEK, WEEKLY_RACE, SHOP_POPULAR, REFERRAL_STATS, HALL_OF_FAME, LEAGUES_WEEK -> 9;
+            case TOP_QUESTS_WEEK, WEEKLY_RACE, SHOP_POPULAR, REFERRAL_STATS, HALL_OF_FAME, LEAGUES_WEEK -> 9;
+            // «Гонка отрядов, экватор недели»: среда 05:00 UTC = 12:00 у владельца (МСК+4), решение 06.10.2026
+            case SQUAD_MIDWEEK -> 5;
             case SQUAD_STATS, WITHDRAW_SUMMARY, WITHDRAW_HOWTO, EGCPASS_PERK, SHOP_ITEMS, SQUAD_RESULTS, REFERRAL_TOP -> 15;
             case REFERRAL_HOWTO -> 6;
             case SHOP_NEW -> 16;

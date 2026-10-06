@@ -46,6 +46,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         removeAccidentalParticipantLimits();
         backfillOwnedTitlesFromHistory();
         syncCountryWithPhone();
+        moveSquadMidweekAutopostTo0500Utc();
     }
 
     /** Инцидент 2026-09-22 (тикет поддержки #213): ClashQuestVerificationService для ATTACK_WINS
@@ -391,6 +392,22 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             }
         } catch (Exception e) {
             log.error("[DBMigration] syncCountryWithPhone failed: {}", e.getMessage());
+        }
+    }
+
+    /** «Гонка отрядов, экватор недели» (автопост ChannelContentService.SQUAD_MIDWEEK) - среда 05:00 UTC (12:00 по МСК+4 владельца), навсегда
+     *  (решение 06.10.2026). Если час раньше меняли в админке и он сохранён в app_settings, один раз приводим его к 5; повторно на следующих
+     *  стартах не трогаем (маркер cc.sqmid.hour.v2), чтобы не перебивать будущие правки в админке. Без сохранённого часа действует дефолт 5. */
+    private void moveSquadMidweekAutopostTo0500Utc() {
+        try {
+            Integer done = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM app_settings WHERE setting_key = 'cc.sqmid.hour.v2'", Integer.class);
+            if (done != null && done > 0) return;
+            int updated = jdbcTemplate.update("UPDATE app_settings SET setting_value = '5' WHERE setting_key = 'cc.sqmid.hour'");
+            jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES ('cc.sqmid.hour.v2', '1')");
+            log.info("[DBMigration] SQUAD_MIDWEEK autopost hour set to 05:00 UTC (stored value updated: {})", updated > 0);
+        } catch (Exception e) {
+            log.error("[DBMigration] moveSquadMidweekAutopostTo0500Utc failed: {}", e.getMessage());
         }
     }
 }
