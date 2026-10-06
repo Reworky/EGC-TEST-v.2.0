@@ -107,8 +107,10 @@ function RanksModal({ currentXp, onClose }) {
   );
 }
 
-function BalanceView({ wallet, onChanged, highlightChest }) {
+function BalanceView({ wallet, onChanged, onRefresh, highlightChest }) {
   const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshFailed, setRefreshFailed] = useState(false);
   const [message, setMessage] = useState(null);
   const [messageOk, setMessageOk] = useState(false);
   const [chestBusy, setChestBusy] = useState(false);
@@ -141,6 +143,21 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
   useEffect(() => {
     getStarsPrices().then(p => { if (p.CHEST_REROLL) setChestRerollPrice(p.CHEST_REROLL); }).catch(() => {});
   }, []);
+
+  // Ручное обновление баланса: сбрасываем кэш кошелька (TTL 60 с) и перезапрашиваем, чтобы увидеть
+  // начисления, пришедшие вне мини-аппа (одобренный квест, бонус из бота), не выходя из раздела.
+  async function handleRefresh() {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshFailed(false);
+    try {
+      await onRefresh();
+    } catch {
+      setRefreshFailed(true);
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function handleClaim() {
     setBusy(true);
@@ -331,6 +348,16 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
   return (
     <>
       <BorderBeamCard style={{ margin: '12px 16px', textAlign: 'center' }}>
+        <button
+          type="button"
+          className={`w-refresh-btn${refreshing ? ' spinning' : ''}`}
+          onClick={handleRefresh}
+          disabled={refreshing}
+          aria-label="Обновить баланс"
+          title="Обновить баланс"
+        >
+          <i className="ti ti-refresh" />
+        </button>
         <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 4 }}>
           <i className="ti ti-wallet" /> Баланс клуба
         </div>
@@ -349,6 +376,9 @@ function BalanceView({ wallet, onChanged, highlightChest }) {
         <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
           Звёзды: приблизительный пересчёт по курсу фонда, зачисляется и выводится по нему.
         </div>
+        {refreshFailed && (
+          <div style={{ fontSize: 12, color: '#f87171', marginTop: 6 }}>Не удалось обновить. Попробуйте ещё раз.</div>
+        )}
       </BorderBeamCard>
 
       <div className="w-stats-grid">
@@ -815,6 +845,12 @@ export default function WalletPage() {
     getWallet().then(setWallet).catch(() => setError('Не удалось загрузить кошелёк. Попробуйте ещё раз.'));
   }
 
+  // Ручное обновление: в отличие от reload() не прячет страницу при сбое, а отдаёт ошибку кнопке.
+  async function refresh() {
+    invalidateCache('wallet');
+    setWallet(await getWallet());
+  }
+
   function switchTab(newView) {
     if (newView === 'withdraw' || newView === 'balance') {
       invalidateCache('wallet');
@@ -837,7 +873,7 @@ export default function WalletPage() {
 
       {error && <div className="page-center error-msg">{error}</div>}
       {!error && view !== 'mine' && wallet === null && <div className="page-center">Загрузка...</div>}
-      {!error && view === 'balance' && wallet && <BalanceView wallet={wallet} onChanged={reload} highlightChest={highlightChest} />}
+      {!error && view === 'balance' && wallet && <BalanceView wallet={wallet} onChanged={reload} onRefresh={refresh} highlightChest={highlightChest} />}
       {!error && view === 'withdraw' && wallet && <WithdrawView wallet={wallet} onChanged={reload} />}
       {view === 'mine' && <MyWithdrawalsView onWalletChanged={reload} />}
     </div>
