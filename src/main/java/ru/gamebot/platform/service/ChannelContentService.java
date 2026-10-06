@@ -1251,6 +1251,7 @@ public class ChannelContentService {
         return switch (gameName) {
             case "Brawl Stars" -> "resource:quest_pack_brawl_stars.jpg";
             case "Clash Royale" -> "resource:quest_pack_clash_royale.jpg";
+            case "Clash of Clans" -> "resource:quest_pack_clash_of_clans.jpg";
             default -> null;
         };
     }
