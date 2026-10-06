@@ -221,6 +221,15 @@ public class AppUser {
     @Column(length = 24)
     private String pendingAdPlacement;
 
+    /** Когда игроку выдана награда цели «позови 1 друга» (первый приглашённый выполнил первый квест); null - ещё не выдана. */
+    private LocalDateTime referralGoalRewardedAt;
+    /** Подсказки «позови друга» в удачные моменты: сколько показано и когда последняя (не чаще раза в 3 дня, не больше 4 за всё время). */
+    @Column(columnDefinition = "integer default 0")
+    private int referralNudgeCount;
+    private LocalDateTime referralNudgeAt;
+    /** Для приглашённого: пригласившему уже отправлено напоминание «твой друг не начал первый квест». */
+    private LocalDateTime referrerNudgeSentAt;
+
     /** Когда игроку впервые предложили заглянуть в FAQ перед обращением в поддержку (null - ещё не предлагали). */
     private LocalDateTime supportFaqShownAt;
 

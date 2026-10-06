@@ -893,6 +893,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if (data.startsWith("refnudge:")) {
+            sendReferralNudge(user, data.substring("refnudge:".length()));
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if ("wdquick:region".equals(data)) {
             if ((isEffectiveAdmin(user) || isEffectiveModerator(user))
                     && session.getState() == SessionState.REWARD_REJECT_COMMENT
@@ -4534,7 +4539,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         msg.append("\n\n💰 Баланс: <b>").append(user.getCoins()).append(" EXC</b>");
         msg.append("\n\nВозвращайся завтра — тебя ждёт <b>+").append(nextBonus).append(" EXC</b>.");
         answer(callbackQuery.getId(), "+" + result.totalExc() + " EXC получено!");
-        sendText(user.getTelegramId(), msg.toString(), backMenuKeyboard("menu:main"));
+        InlineKeyboardButton streakNudge = (result.streakDays() == 3 || result.streakDays() == 7)
+                ? referralNudgeButton(user, "streak" + result.streakDays()) : null;
+        sendText(user.getTelegramId(), msg.toString(),
+                streakNudge == null ? backMenuKeyboard("menu:main") : verticalWithBackMenu(new ArrayList<>(List.of(streakNudge)), "⬅️ Назад", "menu:main"));
     }
 
     /** Строки таблицы призов одного из двух пулов сундука дня (те же вероятности, что в UserService.rollAndApply*ChestPrize). */
@@ -4780,9 +4788,34 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyUser(event.getReferrerTelegramId(),
                     "🎉 <b>+" + event.getBonusExc() + " EXC</b> — твой друг <b>" + escape(event.getFriendNickname())
                             + "</b> выполнил первый квест!\n\n"
+                            + (event.getPassDaysGranted() > 0
+                                ? "🎁 И <b>" + event.getPassDaysGranted() + " дня EGC Pass</b> в подарок за первого друга. Загляни в раздел Pass, чтобы увидеть бонусы.\n\n"
+                                : "")
                             + "Это разовый бонус за приглашение, реферальные 10% с его квестов продолжат поступать как обычно.");
         } catch (Exception e) {
             log.error("[Referral] Failed to notify referrer {} about first-quest bonus", event.getReferrerTelegramId(), e);
+        }
+    }
+
+    /** Друг пришёл по ссылке, но за 48 часов не выполнил первый квест: напоминаем пригласившему (один раз на друга). */
+    @org.springframework.context.event.EventListener
+    public void onReferredFriendStalled(ru.gamebot.platform.event.ReferredFriendStalledEvent event) {
+        try {
+            AppUser referrer = userService.findByTelegramId(event.getReferrerTelegramId()).orElse(null);
+            if (referrer == null || referrer.isBlocked()) return;
+            String friend = event.getFriendNickname() != null && !event.getFriendNickname().isBlank() ? event.getFriendNickname() : "друг";
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            if (event.getFriendUsername() != null && !event.getFriendUsername().isBlank()) {
+                rows.add(List.of(keyboardFactory.url("💬 Написать другу", "https://t.me/" + event.getFriendUsername())));
+            }
+            rows.add(List.of(keyboardFactory.url("📣 Позвать ещё друга", userService.buildShareUrl(referrer))));
+            rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
+            sendText(referrer.getTelegramId(),
+                    "👋 Твой друг <b>" + escape(friend) + "</b> зашёл в EGC, но ещё не взял первый квест.\n\n"
+                            + "Напомни ему: за первый квест ему <b>+3 000 EXC</b>" + starsNote(3_000) + ", тебе <b>+2 500 EXC</b>.",
+                    keyboardFactory.rowsLayout(rows));
+        } catch (Exception e) {
+            log.warn("[Referral] Failed to notify referrer {} about stalled friend", event.getReferrerTelegramId(), e);
         }
     }
 
@@ -6125,6 +6158,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "🤝 <b>Реферальная программа EGC</b>\n\n"
                         + boostBanner
+                        + referralGoalBlock(user)
                         + "🔗 Ваша ссылка:\n" + escape(referralLink) + "\n\n"
                         + "👥 Приглашено друзей: <b>" + user.getInvitedFriends() + "</b>\n"
                         + "💎 Заработано на рефералах: <b>" + earned + " EXC</b>\n\n"
@@ -9707,7 +9741,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>" + starsNote(rewardGrant.totalExc()) + "\n"
                             + formatExcBonusLine(rewardGrant)
                             + egcPassBonusLine(submission)
-                            + firstQuestBonus, watchAdForBonusButton(submission.getUser()), nextQuestSuggestionButton(submission.getUser()), sinkShopSuggestionButton(submission.getUser()),
+                            + firstQuestBonus, watchAdForBonusButton(submission.getUser()), referralNudgeButton(submission.getUser(), "quest"), nextQuestSuggestionButton(submission.getUser()), sinkShopSuggestionButton(submission.getUser()),
                             squadSuggestionButton(submission.getUser(), isFirstQuest));
         } catch (Exception e) {
             log.warn("Could not notify user {} about quest approval: {}", submission.getUser().getTelegramId(), e.getMessage());
@@ -11650,12 +11684,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             photo.setPhoto(new InputFile(receiptFileId));
             photo.setCaption(caption);
             photo.setParseMode("HTML");
+            InlineKeyboardButton payoutNudge = referralNudgeButton(req.getUser(), "payout");
+            if (payoutNudge != null) photo.setReplyMarkup(keyboardFactory.rowsLayout(List.of(List.of(payoutNudge))));
             try { execute(photo); } catch (TelegramApiException e) { log.error("Failed to send receipt", e); }
         } else {
             // Та же защита, что и в promptWithdrawalReview ниже: недоступный игрок не должен ронять
             // остаток флоу (пост в ленту активности, приглашение оценить вывод) с ошибкой у админа.
             try {
-                sendText(req.getUser().getTelegramId(), caption, null);
+                InlineKeyboardButton payoutNudge = referralNudgeButton(req.getUser(), "payout");
+                sendText(req.getUser().getTelegramId(), caption,
+                        payoutNudge == null ? null : keyboardFactory.rowsLayout(List.of(List.of(payoutNudge))));
             } catch (Exception e) {
                 log.warn("Failed to notify user {} about withdrawal approval", req.getUser().getTelegramId(), e);
             }
@@ -16925,7 +16963,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в Brawl Stars засчитан.\n\n"
                     + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>" + starsNote(awardedCoinsOf(approved)) + "\n"
                     + egcPassBonusLine(approved)
-                    + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(approved.getUser()), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
+                    + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Brawl Stars API");
         } catch (Exception e) {
             log.error("[BrawlAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
@@ -16941,7 +16979,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в Clash of Clans засчитан.\n\n"
                     + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>" + starsNote(awardedCoinsOf(approved)) + "\n"
                     + egcPassBonusLine(approved)
-                    + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(approved.getUser()), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
+                    + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Clash of Clans API");
         } catch (Exception e) {
             log.error("[ClashAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
@@ -16957,7 +16995,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в Clash Royale засчитан.\n\n"
                     + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>" + starsNote(awardedCoinsOf(approved)) + "\n"
                     + egcPassBonusLine(approved)
-                    + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(approved.getUser()), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
+                    + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Clash Royale API");
         } catch (Exception e) {
             log.error("[ClashRoyaleAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
@@ -16973,7 +17011,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в Dota 2 засчитан.\n\n"
                     + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>" + starsNote(awardedCoinsOf(approved)) + "\n"
                     + egcPassBonusLine(approved)
-                    + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(approved.getUser()), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
+                    + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Steam Web API (Dota 2)");
         } catch (Exception e) {
             log.error("[DotaAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
@@ -16989,7 +17027,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в CS2 засчитан.\n\n"
                     + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>" + starsNote(awardedCoinsOf(approved)) + "\n"
                     + egcPassBonusLine(approved)
-                    + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(approved.getUser()), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
+                    + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Steam Web API (CS2)");
         } catch (Exception e) {
             log.error("[Cs2AutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
@@ -17005,7 +17043,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "Прогресс по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> в PUBG засчитан.\n\n"
                     + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>" + starsNote(awardedCoinsOf(approved)) + "\n"
                     + egcPassBonusLine(approved)
-                    + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(approved.getUser()), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
+                    + "✨ XP: <b>+" + awardedXpOf(approved) + "</b>", watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через официальный PUBG API");
         } catch (Exception e) {
             log.error("[PubgAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
@@ -17020,7 +17058,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>Партнёр подтвердил выполнение!</b>\n\n"
                     + "Квест <b>" + escape(approved.getQuest().getTitle()) + "</b> засчитан.\n\n"
                     + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>" + starsNote(awardedCoinsOf(approved))
-                    + (egcPassBonusLine(approved).isEmpty() ? "" : "\n" + egcPassBonusLine(approved).trim()), watchAdForBonusButton(approved.getUser()), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
+                    + (egcPassBonusLine(approved).isEmpty() ? "" : "\n" + egcPassBonusLine(approved).trim()), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "подтверждено партнёрской сетью");
         } catch (Exception e) {
             log.error("[ActionPay] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
@@ -17527,7 +17565,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String game = questService.mostPopularActiveGame().orElse(null);
             String popular = game == null ? ""
                     : "\n\nСейчас чаще всего выполняют квесты по игре <b>" + escape(game) + "</b>.";
-            String msg = switch (event.getNotificationNumber()) {
+            String inviterNick = null;
+            if (event.getNotificationNumber() == 1 && user.getReferredByTelegramId() != null) {
+                inviterNick = userService.findByTelegramId(user.getReferredByTelegramId()).map(this::displayUserName).orElse(null);
+            }
+            String msg = inviterNick != null
+                    ? "🎁 <b>Тебя пригласил " + escape(inviterNick) + "</b>\n\n"
+                            + "За первый квест тебе начислят <b>+3 000 EXC</b>" + starsNote(3_000) + ". Самый простой старт — квесты по Brawl Stars: прогресс засчитывается сам, ничего отправлять не нужно." + popular
+                    : switch (event.getNotificationNumber()) {
                 case 1 -> "🎮 <b>У тебя уже 200 EXC</b>\n\n"
                         + "Первый квест занимает около 5 минут, а дальше EXC копятся на вывод (минимум 5 000 EXC)." + popular;
                 case 2 -> "💡 <b>Часть квестов не требует скриншотов</b>\n\n"
@@ -19013,7 +19058,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>" + starsNote(rewardGrant.totalExc()) + "\n"
                         + formatExcBonusLine(rewardGrant)
                         + egcPassBonusLine(approved)
-                        + firstQuestBonus, watchAdForBonusButton(approved.getUser()), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()),
+                        + firstQuestBonus, watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()),
                         squadSuggestionButton(approved.getUser(), isFirstQuest));
             } catch (Exception e) {
                 log.warn("Could not notify user {} about AI approval: {}", approved.getUser().getTelegramId(), e.getMessage());
@@ -19923,6 +19968,48 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.addAll(base.getKeyboard());
         }
         sendText(telegramId, text, keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Цель «позови 1 друга» (план «Позови одного», 06.10.2026): блок для экрана «Рефералы»; пусто, если награда за первого друга уже выдана. */
+    private String referralGoalBlock(AppUser user) {
+        if (!userService.referralGoalOpen(user)) return "";
+        boolean pass = userService.isEgcPassActive(user);
+        String reward = pass ? "<b>+2 500 EXC</b>"
+                : "<b>" + ru.gamebot.platform.service.UserService.REFERRAL_GOAL_PASS_DAYS
+                        + " дня EGC Pass бесплатно</b> (+10% EXC, 3-й слот квеста, улучшенный сундук, приоритет на вывод) и <b>+2 500 EXC</b>";
+        if (user.getInvitedFriends() > 0) {
+            return "🎯 <b>Цель: первый друг в деле</b>\n"
+                    + "Твой друг уже в клубе. Как только он выполнит первый квест, ты получишь " + reward + ".\n\n";
+        }
+        return "🎯 <b>Цель: позови 1 друга</b> (0/1)\n"
+                + "Друг выполнит первый квест — и ты получишь " + reward + ".\n"
+                + "Другу: <b>+500 EXC</b> сразу и <b>+3 000 EXC</b>" + starsNote(3_000) + " за первый квест.\n\n";
+    }
+
+    /** Кнопка-подсказка «позови друга» под сообщением в удачный момент (moment: quest, payout, streak3, streak7) или null: не подходит по правилам
+     *  (цель закрыта, уже есть друзья, не чаще раза в 3 дня, не больше 4 раз). */
+    private InlineKeyboardButton referralNudgeButton(AppUser user, String moment) {
+        if ("quest".equals(moment) && user.getCompletedQuests() != 1) return null;
+        if ("payout".equals(moment) && rewardService.countPaidWithdrawalsByUser(user) > 1) return null;
+        if (!userService.tryConsumeReferralNudge(user)) return null;
+        String label = userService.isEgcPassActive(user) ? "🤝 Позови друга — +2 500 EXC" : "🤝 Позови друга — +2 500 EXC и 3 дня Pass";
+        return keyboardFactory.callback(label, "refnudge:" + moment);
+    }
+
+    private void sendReferralNudge(AppUser user, String moment) {
+        boolean pass = userService.isEgcPassActive(user);
+        String passPart = pass ? "" : " и <b>" + ru.gamebot.platform.service.UserService.REFERRAL_GOAL_PASS_DAYS + " дня EGC Pass</b>";
+        String text = switch (moment) {
+            case "quest" -> "🎉 <b>Первый квест выполнен!</b>\n\nХочешь, чтобы друг заработал так же? Позови его: ему <b>+3 500 EXC</b> на старте, тебе <b>+2 500 EXC</b>" + passPart + ".";
+            case "payout" -> "💸 <b>Выплата получена!</b>\n\nПокажи другу, что это работает: за каждого друга, который выполнит первый квест, ты получаешь <b>+2 500 EXC</b>"
+                    + (pass ? "." : ", а за первого ещё и <b>" + ru.gamebot.platform.service.UserService.REFERRAL_GOAL_PASS_DAYS + " дня EGC Pass</b>.");
+            case "streak3", "streak7" -> "🔥 <b>Серия " + ("streak3".equals(moment) ? "3" : "7") + " дней!</b>\n\nС другом веселее: позови его — ему <b>+3 500 EXC</b> на старте, тебе <b>+2 500 EXC</b>" + passPart + " за первого.";
+            default -> "🤝 <b>Позови друга</b>\n\nЕму <b>+3 500 EXC</b> на старте, тебе <b>+2 500 EXC</b>" + passPart + " за первого, кто выполнит первый квест.";
+        };
+        sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.url("📣 Позвать друга", userService.buildShareUrl(user))),
+                List.of(keyboardFactory.callback("🤝 Реферальная программа", "menu:referrals")),
+                List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
     }
 
     /** Предлагать ли игроку рекламу по своей инициативе (кнопки под сообщениями): не новичкам до третьего квеста (не мешаем первым шагам)

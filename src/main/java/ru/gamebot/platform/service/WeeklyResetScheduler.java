@@ -458,6 +458,28 @@ public class WeeklyResetScheduler {
         }
     }
 
+    /** Напоминание пригласившему: друг пришёл по его ссылке 48 часов-7 суток назад, но не выполнил первый квест (06.10.2026).
+     *  Окно в 7 суток и потолок 30 сообщений за запуск - после деплоя бэклог старых приглашённых не даст залпа; одному пригласившему
+     *  не больше одного сообщения за запуск (остальные его друзья уйдут в следующий). Отметка referrerNudgeSentAt - один раз на друга. */
+    @Scheduled(fixedDelay = 1_800_000, initialDelay = 300_000)
+    public void remindReferrersAboutStalledFriends() {
+        LocalDateTime now = LocalDateTime.now();
+        java.util.Set<Long> notifiedReferrers = new java.util.HashSet<>();
+        for (AppUser friend : appUserRepository.findStalledReferredFriends(now.minusDays(7), now.minusHours(48),
+                org.springframework.data.domain.PageRequest.of(0, 30))) {
+            try {
+                Long referrerId = friend.getReferredByTelegramId();
+                if (referrerId == null || referrerId.equals(friend.getTelegramId()) || !notifiedReferrers.add(referrerId)) continue;
+                friend.setReferrerNudgeSentAt(now);
+                appUserRepository.save(friend);
+                eventPublisher.publishEvent(new ru.gamebot.platform.event.ReferredFriendStalledEvent(
+                        this, referrerId, friend.getNickname(), friend.getTelegramUsername()));
+            } catch (Exception e) {
+                log.warn("Failed to process stalled referred friend {}", friend.getTelegramId(), e);
+            }
+        }
+    }
+
     // Многоуровневые сообщения неактивным (14/30/60 дней без активности) — раз в день.
     // Дополняет, а не заменяет, еженедельный дайджест неактивным (sendWeeklyDigests) — тот лёгкий
     // и без EXC, этот — редкий, с обещанием бонуса за возвращение (сам бонус выдаётся при одобрении

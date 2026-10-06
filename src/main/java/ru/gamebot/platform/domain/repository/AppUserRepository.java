@@ -247,6 +247,12 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
             + "AND (u.registrationCompleted = true OR u.trafficSourceCode IS NULL)")
     List<AppUser> findUsersAwaitingFirstQuest(@Param("since") java.time.LocalDateTime since);
 
+    /** Приглашённые, зарегистрировавшиеся в окне [from, to] и не выполнившие первый квест, пригласившему о них ещё не напоминали (напоминание «твой друг не начал»). */
+    @Query("SELECT u FROM AppUser u WHERE u.referredByTelegramId IS NOT NULL AND u.completedQuests = 0 AND u.referrerNudgeSentAt IS NULL "
+            + "AND u.blocked = false AND u.createdAt >= :from AND u.createdAt <= :to ORDER BY u.createdAt ASC")
+    List<AppUser> findStalledReferredFriends(@Param("from") java.time.LocalDateTime from, @Param("to") java.time.LocalDateTime to,
+                                             org.springframework.data.domain.Pageable pageable);
+
     List<AppUser> findAllByReferredByTelegramIdIsNotNullAndReferralActiveTrue();
 
     List<AppUser> findAllByReferredByTelegramId(Long telegramId);

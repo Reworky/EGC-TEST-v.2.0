@@ -82,6 +82,26 @@ export default function ReferralsPage() {
         <div className="ref-hero-sub">EXPERIENCE GAMING CLUB</div>
       </div>
 
+      {data.goalOpen && (
+        <div className="ref-link-card" style={{ marginBottom: 12 }}>
+          <div className="ref-link-label">
+            {data.goalFriendJoined ? '🎯 Цель: первый друг в деле' : '🎯 Цель: позови 1 друга (0/1)'}
+          </div>
+          <p className="shop-desc">
+            {data.goalFriendJoined
+              ? 'Твой друг уже в клубе. Как только он выполнит первый квест, ты получишь '
+              : 'Друг выполнит первый квест — и ты получишь '}
+            {data.goalPassReward
+              ? <><b>{data.goalPassDays} дня EGC Pass бесплатно</b> (+10% EXC, 3-й слот квеста, улучшенный сундук, приоритет на вывод) и <b>+2 500 EXC</b>.</>
+              : <b>+2 500 EXC.</b>}
+            {!data.goalFriendJoined && <> Другу: <b>+500 EXC</b> сразу и <b>+3 000 EXC</b> за первый квест.</>}
+          </p>
+          {!data.goalFriendJoined && (
+            <button className="ref-btn ref-btn-primary" onClick={shareLink}>📣 Позвать друга</button>
+          )}
+        </div>
+      )}
+
       <div className="ref-stats-grid">
         <div className="ref-stat-card">
           <div className="ref-stat-accent" style={{ background: 'linear-gradient(90deg,#7c3aed,#a855f7)' }} />

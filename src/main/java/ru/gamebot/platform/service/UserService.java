@@ -92,8 +92,9 @@ public class UserService {
      *  построении, чтобы сообщения разных отправителей не выглядели как рассылка одного шаблона. */
     private static final String[] SHARE_TEMPLATES = {
             "Залетай в EGC — там реально платят за игру 🎮 У меня уже {баланс_EXC} EXC, ранг «{ранг}».",
-            "Я в EGC уже «{ранг}» и заработал {баланс_EXC} EXC просто за квесты в играх. Присоединяйся:",
-            "Нашёл клуб, где платят EXC за прохождение квестов в играх — уже накопил {баланс_EXC}, ранг «{ранг}». Залетай:"
+            "Залетай в EGC: играешь в Brawl Stars, Clash Royale, Clash of Clans, выполняешь квесты и получаешь EXC. По моей ссылке тебе +3 500 EXC на старте 🎮",
+            "Я зарабатываю в EGC за квесты в играх. Заходи по моей ссылке — тебе +500 EXC сразу и +3 000 EXC за первый квест:",
+            "Нашёл клуб, где платят за игру. Новичкам по моей ссылке дают +3 500 EXC — залетай:"
     };
 
     /** Вариант для игроков с отрядом — акцент на "играть вместе", а не на разовый бонус
@@ -233,6 +234,14 @@ public class UserService {
     public void renewEgcPass(AppUser user) {
         LocalDateTime base = isEgcPassActive(user) ? user.getEgcPassActiveUntil() : LocalDateTime.now();
         user.setEgcPassActiveUntil(base.plusDays(30));
+        appUserRepository.save(user);
+    }
+
+    /** Бесплатные дни EGC Pass (награда за первого друга): продлеваем от максимума (сейчас, текущий срок), как renewEgcPass. */
+    @Transactional
+    public void grantEgcPassDays(AppUser user, int days) {
+        LocalDateTime base = isEgcPassActive(user) ? user.getEgcPassActiveUntil() : LocalDateTime.now();
+        user.setEgcPassActiveUntil(base.plusDays(days));
         appUserRepository.save(user);
     }
 
@@ -1339,6 +1348,29 @@ public class UserService {
     // внедрением: средний ручеёк на активированного реферала оказался ~213 EXC (отчёт
     // "Экономика рефералки"), 2500 EXC — сознательное решение поднять стоимость привлечения.
     private static final long REFERRER_FIRST_QUEST_BONUS = 2_500;
+    /** Награда цели «позови 1 друга»: столько дней EGC Pass за первого друга, выполнившего первый квест. */
+    public static final int REFERRAL_GOAL_PASS_DAYS = 3;
+    private static final int REFERRAL_NUDGE_MAX = 4;
+    private static final int REFERRAL_NUDGE_GAP_DAYS = 3;
+
+    /** Цель «позови 1 друга» ещё открыта: награда за первого друга не выдана. */
+    public boolean referralGoalOpen(AppUser user) {
+        return user.getReferralGoalRewardedAt() == null;
+    }
+
+    /** Подсказка «позови друга» в удачный момент: только тем, у кого цель открыта, нет приглашённых и есть хотя бы один квест;
+     *  не чаще раза в 3 дня и не больше 4 раз. true - можно показать (и подсказка засчитана). */
+    @Transactional
+    public boolean tryConsumeReferralNudge(AppUser user) {
+        if (!referralGoalOpen(user) || user.getInvitedFriends() > 0 || user.getCompletedQuests() < 1) return false;
+        if (user.getReferralNudgeCount() >= REFERRAL_NUDGE_MAX) return false;
+        LocalDateTime last = user.getReferralNudgeAt();
+        if (last != null && last.plusDays(REFERRAL_NUDGE_GAP_DAYS).isAfter(LocalDateTime.now())) return false;
+        user.setReferralNudgeCount(user.getReferralNudgeCount() + 1);
+        user.setReferralNudgeAt(LocalDateTime.now());
+        appUserRepository.save(user);
+        return true;
+    }
 
     // 3.5: 3000 EXC bonus to invited user on their first approved quest + разовый бонус рефереру
     @Transactional
@@ -1367,9 +1399,18 @@ public class UserService {
                         "Бонус за первый квест друга: " + invitedUser.getNickname());
                 long awardedExc = grant.totalExc();
                 referrer.setReferralEarnedExc(referrer.getReferralEarnedExc() + awardedExc);
+                // Цель «позови 1 друга» (06.10.2026): за ПЕРВОГО друга, выполнившего первый квест, - 3 дня EGC Pass (один раз; у подписчика Pass дни не добавляем)
+                int passDays = 0;
+                if (referrer.getReferralGoalRewardedAt() == null) {
+                    referrer.setReferralGoalRewardedAt(LocalDateTime.now());
+                    if (!isEgcPassActive(referrer)) {
+                        grantEgcPassDays(referrer, REFERRAL_GOAL_PASS_DAYS);
+                        passDays = REFERRAL_GOAL_PASS_DAYS;
+                    }
+                }
                 appUserRepository.save(referrer);
                 eventPublisher.publishEvent(new ru.gamebot.platform.event.ReferrerFirstQuestBonusEvent(
-                        this, referrer.getTelegramId(), invitedUser.getNickname(), awardedExc));
+                        this, referrer.getTelegramId(), invitedUser.getNickname(), awardedExc, passDays));
             });
         }
         return true;
