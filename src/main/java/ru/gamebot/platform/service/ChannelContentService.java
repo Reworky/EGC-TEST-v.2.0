@@ -1230,7 +1230,16 @@ public class ChannelContentService {
         String link = botLink();
         if (!link.isBlank()) sb.append(link);
         sb.append("\n\nКакой возьмёшь первым?");
-        return Optional.of(saveDraft(QUEST_ROTATION, sb.toString(), gameName + " / " + packName));
+        return Optional.of(saveDraft(QUEST_ROTATION, sb.toString(), gameName + " / " + packName, questRotationBanner(gameName)));
+    }
+
+    /** Баннер поста «новые квесты по игре» (смена пачки): картинка зашита в ресурсы бота, по одной на игру; для остальных игр поста без картинки. */
+    private static String questRotationBanner(String gameName) {
+        if (gameName == null) return null;
+        return switch (gameName) {
+            case "Brawl Stars" -> "resource:quest_pack_brawl_stars.jpg";
+            default -> null;
+        };
     }
 
     private String botLink() {
