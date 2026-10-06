@@ -819,38 +819,18 @@ public class ChannelContentService {
         return Optional.of(saveDraft(WITHDRAW_SUMMARY, sb.toString(), null));
     }
 
-    /** «Как вывести»: две заготовки по очереди, факты сверены с ботом (минимум 5 000 EXC, одна заявка в сутки, способы, сроки, лимит по уровню). */
+    /** «Как вывести EXC»: один утверждённый владельцем текст (06.10.2026), путь «Кошелёк → Баланс → 💸 Вывести EXC» сверен с ботом (sendBalance), плюс абзац про магазин наград. */
     public Optional<ChannelPostDraft> createWithdrawHowToDraft() {
-        long variant = draftRepository.findAllByType(WITHDRAW_HOWTO).size() % 2;
-        // Условия вывода берём из RewardService, чтобы текст не расходился с правилами
-        int days = RewardService.WITHDRAWAL_MIN_ACCOUNT_AGE_DAYS;
-        int quests = RewardService.WITHDRAWAL_MIN_APPROVED_QUESTS;
-        StringBuilder sb = new StringBuilder();
-        if (variant == 0) {
-            sb.append("🧾 <b>Как вывести EXC: всё просто!</b>\n\n")
-              .append("1. В боте открой «Кошелёк» и выбери вывод.\n")
-              .append("2. Выбери способ: рубли по реквизитам банка, GRAM (TON) на кошелёк или звёзды Telegram.\n")
-              .append("3. Укажи сумму от <b>5 000 EXC</b>. Одна заявка в сутки.\n")
-              .append("4. Заявку обрабатываем в течение 24 часов, чек придёт в бот.\n\n")
-              .append("Вывод открывается, когда аккаунту не меньше ").append(days).append(" ").append(plural(days, "дня", "дней", "дней"))
-              .append(" и выполнено хотя бы ").append(quests).append(" ").append(plural(quests, "одобренный квест", "одобренных квеста", "одобренных квестов"))
-              .append(". Месячный лимит растёт вместе с уровнем: чем выше уровень, тем больше.\n\n");
-            String link = payoutsLink().stripLeading();
-            if (!link.isEmpty()) sb.append(link).append("\n\n");
-            sb.append(ending(variant, "Уже пробовал?", "Ставь 💸, если пригодится", "Всё занимает пару минут"));
-        } else {
-            sb.append("🧾 <b>Вывод EXC: что подготовить заранее</b>\n\n")
-              .append("Перед первым выводом в профиле нужно указать страну и возраст и один раз подтвердить номер телефона.\n")
-              .append("Минимальная сумма <b>5 000 EXC</b>, заявка одна в сутки.\n")
-              .append("Рубли уходят по реквизитам банка, GRAM (TON) на кошелёк, звёзды Telegram на юзернейм.\n")
-              .append("Один реквизит привязан к одному аккаунту, так что мультиаккаунты не пройдут.\n")
-              .append("Итоговая сумма в рублях зависит от коэффициента клуба, он виден в разделе «Магазин».\n")
-              .append("Подписчики EGC Pass идут в очереди на вывод первыми.\n\n");
-            String link = payoutsLink().stripLeading();
-            if (!link.isEmpty()) sb.append(link).append("\n\n");
-            sb.append(ending(variant, "Что выберешь, рубли или GRAM?", "Ставь 💸, если уже выводил", "Инструкция всегда в разделе «Помощь»"));
-        }
-        return Optional.of(saveDraft(WITHDRAW_HOWTO, sb.toString(), null, WITHDRAW_HOWTO_BANNER));
+        String text = "💸 <b>Как вывести EXC?</b>\n\n"
+                + "Заработанные EXC можно забрать себе, и это быстро.\n\n"
+                + "1️⃣ Открой бота, зайди в «Кошелёк», затем в «Баланс» и нажми «💸 Вывести EXC».\n"
+                + "2️⃣ Выбери способ: рубли по СБП, GRAM (TON) или звёзды Telegram.\n"
+                + "3️⃣ Введи сумму и подтверди заявку. Мы обработаем её в течение 24 часов.\n\n"
+                + "Минимум для вывода - 5 000 EXC. Лимит в месяц зависит от твоего ранга.\n\n"
+                + "🛍️ А ещё EXC можно потратить в «Магазине наград». Там есть внутриигровая валюта для твоей любимой игры, "
+                + "например гемы и пропуски. Выводить деньги необязательно, можно сразу прокачать свой аккаунт в любимой игре!\n\n"
+                + "Ставь 🔥, если уже выводил или тратил свои EXC!";
+        return Optional.of(saveDraft(WITHDRAW_HOWTO, text, null, WITHDRAW_HOWTO_BANNER));
     }
 
     /** Проверка вех раз в 10 минут: при пересечении круглого порога числа выплат или суммы - пост «веха». Первый запуск только запоминает пороги (без залпа по накопленному). */
