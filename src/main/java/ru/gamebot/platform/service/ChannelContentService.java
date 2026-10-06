@@ -553,6 +553,9 @@ public class ChannelContentService {
     /** Баннер поста «топ квестов недели»: официальные арты Brawl Stars, Clash Royale и Clash of Clans с кубком (04.10.2026). */
     private static final String TOP_QUESTS_BANNER = "resource:top_quests_banner.png";
 
+    /** Баннер поста «как вывести EXC»: токен EXC со стрелкой к звезде Telegram Stars на фоне арены (06.10.2026), один на обе заготовки. */
+    private static final String WITHDRAW_HOWTO_BANNER = "resource:withdraw_howto_banner.jpg";
+
     /** «Гонка отрядов - экватор недели» (раньше тизер жил в памяти бота): топ-5 недельного рейтинга, отставание второго от лидера, приз. */
     public Optional<ChannelPostDraft> createSquadMidweekDraft(boolean force) {
         List<SquadService.SquadRankEntry> top = squadService.getLeaderboard().stream()
@@ -847,7 +850,7 @@ public class ChannelContentService {
             if (!link.isEmpty()) sb.append(link).append("\n\n");
             sb.append(ending(variant, "Что выберешь, рубли или GRAM?", "Ставь 💸, если уже выводил", "Инструкция всегда в разделе «Помощь»"));
         }
-        return Optional.of(saveDraft(WITHDRAW_HOWTO, sb.toString(), null));
+        return Optional.of(saveDraft(WITHDRAW_HOWTO, sb.toString(), null, WITHDRAW_HOWTO_BANNER));
     }
 
     /** Проверка вех раз в 10 минут: при пересечении круглого порога числа выплат или суммы - пост «веха». Первый запуск только запоминает пороги (без залпа по накопленному). */
