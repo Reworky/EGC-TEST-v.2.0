@@ -12472,6 +12472,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             questPackScheduleService.setCycle(game, Integer.parseInt(parts[1]));
             answerSilently(cbId);
             sendAdminPackSchedule(user, game);
+        } else if (action.startsWith("autopost:")) {
+            String game = decodeGameToken(action.substring("autopost:".length()));
+            boolean on = channelContentService.toggleQuestRotationAutoPublish();
+            answer(cbId, on ? "Посты о смене будут публиковаться сами" : "Посты о смене снова идут на согласование");
+            sendAdminPackSchedule(user, game);
         } else if (action.equals("calendar")) {
             sendAdminPackCalendar(user);
             answerSilently(cbId);
@@ -12566,7 +12571,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (int i = 0; i < order.size(); i++) {
             sb.append(i > 0 ? " → " : "").append(escape(order.get(i).getName()));
         }
-        sb.append("\n\nПустые пачки в ротации не участвуют. Бот напомнит за сутки до смены и пришлёт черновик поста после неё.");
+        sb.append("\n\nПустые пачки в ротации не участвуют. Бот напомнит за сутки до смены и пришлёт ")
+                .append(channelContentService.isQuestRotationAutoPublish() ? "пост на согласование НЕ присылает: он публикуется в канал автоматически (для всех игр)." : "черновик поста после неё.");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback(sch.isEnabled() ? "⏸ Выключить ротацию" : "▶️ Включить ротацию", "admin:packs:schtoggle:" + token)));
         List<InlineKeyboardButton> days = new ArrayList<>();
@@ -12579,6 +12585,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             cycles.add(keyboardFactory.callback((c == sch.getCycleDays() ? "• " : "") + c + " дн.", "admin:packs:schcycle:" + token + ":" + c));
         }
         rows.add(cycles);
+        rows.add(List.of(keyboardFactory.callback(
+                channelContentService.isQuestRotationAutoPublish() ? "📣 Автопубликация поста: ✅ включена" : "📣 Автопубликация поста: ⏸ выключена",
+                "admin:packs:autopost:" + token)));
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", "admin:packs:list:" + token),
                 keyboardFactory.callback("🏠 Меню", "menu:admin")));
@@ -12650,7 +12659,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String head = "🔄 <b>Сменилась пачка квестов — " + escape(event.gameName()) + "</b>\n"
                 + "Включена «" + escape(event.pack().getName()) + "»: возвращено в работу " + event.result().activated()
                 + ", скрыто " + event.result().hidden() + ".\n\n"
-                + "📝 Пост для канала пришлю следующим сообщением — он уйдёт в канал только после вашего ✅.";
+                + (channelContentService.isQuestRotationAutoPublish()
+                    ? "📝 Пост для канала опубликуется автоматически (автопубликация включена), копию пришлю следующим сообщением."
+                    : "📝 Пост для канала пришлю следующим сообщением — он уйдёт в канал только после вашего ✅.");
         for (Long adminId : adminService.resolvedAdminIds()) {
             try {
                 sendText(adminId, head, null);
@@ -17727,10 +17738,44 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     @org.springframework.context.event.EventListener
     public void onChannelPostDraft(ru.gamebot.platform.event.ChannelPostDraftEvent event) {
         try {
+            if (tryAutoPublishQuestRotation(event.getDraftId())) return;
             attachHallBanner(event.getDraftId());
             sendChannelPostCard(event.getDraftId());
         } catch (Exception e) {
             log.error("Failed to send channel post card {}", event.getDraftId(), e);
+        }
+    }
+
+    /** Пост о смене пачки без согласования (включается переключателем на экране «Расписание ротации», по умолчанию выключено): публикуется сразу,
+     *  если в нём не меньше трёх квестов и есть картинка; иначе возвращает false и пост уходит обычной карточкой на согласование.
+     *  Админам приходит копия опубликованного текста. */
+    private boolean tryAutoPublishQuestRotation(Long draftId) {
+        try {
+            java.util.Optional<ru.gamebot.platform.domain.model.ChannelPostDraft> opt = channelContentService.findDraft(draftId);
+            if (opt.isEmpty()) return false;
+            ru.gamebot.platform.domain.model.ChannelPostDraft d = opt.get();
+            if (!ru.gamebot.platform.service.ChannelContentService.QUEST_ROTATION.equals(d.getType())
+                    || !channelContentService.isQuestRotationAutoPublish()
+                    || !ru.gamebot.platform.domain.model.ChannelPostDraft.PENDING.equals(d.getStatus())) {
+                return false;
+            }
+            long bullets = d.getPostText().lines().filter(l -> l.startsWith("• ")).count();
+            if (bullets < 3 || d.getPhotoFileId() == null || d.getPhotoFileId().isBlank()) return false;
+            sendBannerAndText(channelTargetFor(d.getType()), d.getPhotoFileId(), d.getPostText(), null);
+            channelContentService.markPublished(draftId);
+            String notice = "📣 <b>Пост о смене квестов опубликован автоматически</b>\n\n" + d.getPostText();
+            for (Long adminId : adminService.resolvedAdminIds()) {
+                try {
+                    sendBannerAndText(adminId.toString(), d.getPhotoFileId(), notice, null);
+                } catch (Exception e) {
+                    log.warn("Failed to send auto-publish notice to admin {}", adminId, e);
+                }
+            }
+            return true;
+        } catch (Exception e) {
+            // публикация не удалась - пост остаётся PENDING и уйдёт обычной карточкой на согласование
+            log.error("Auto-publish of quest rotation post {} failed, falling back to approval card", draftId, e);
+            return false;
         }
     }
 

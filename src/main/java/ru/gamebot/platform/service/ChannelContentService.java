@@ -227,6 +227,18 @@ public class ChannelContentService {
         try { return v == null ? def : Integer.parseInt(v.trim()); } catch (NumberFormatException e) { return def; }
     }
 
+    /** Пост о смене пачки квестов публикуется в канал сразу, без карточки на согласование (по умолчанию выключено; решение владельца 06.10.2026,
+     *  включается переключателем на экране «Расписание ротации»). Касается только типа QUEST_ROTATION. */
+    public boolean isQuestRotationAutoPublish() {
+        return "1".equals(get("cc.rot.auto"));
+    }
+
+    public boolean toggleQuestRotationAutoPublish() {
+        boolean now = !isQuestRotationAutoPublish();
+        put("cc.rot.auto", now ? "1" : "0");
+        return now;
+    }
+
     public boolean toggleEnabled(String type) {
         boolean now = !settings(type).enabled();
         put(prefix(type) + "enabled", now ? "1" : "0");

@@ -37,7 +37,7 @@ public class QuestPackSchedule {
 
     /** Час смены по Москве. Колонка не «hour»: это зарезервированное слово H2 — запросы к таблице падали с синтаксической ошибкой. */
     @Column(name = "switch_hour", columnDefinition = "integer default 12")
-    private int hour = 12;
+    private int hour = 20; // 20:00 МСК = 00:00 у владельца (МСК+4): слот для постов о смене пачек в сетке контент-плана
 
     /** Когда ротацию включили последний раз — точка отсчёта «до/после» для аналитики (вкладка «Пачки»). */
     private LocalDateTime enabledSince;

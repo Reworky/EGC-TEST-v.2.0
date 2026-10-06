@@ -47,6 +47,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         backfillOwnedTitlesFromHistory();
         syncCountryWithPhone();
         applyChannelAutopostGrid20261006();
+        moveQuestPackSwitchTo2000Msk();
     }
 
     /** Инцидент 2026-09-22 (тикет поддержки #213): ClashQuestVerificationService для ATTACK_WINS
@@ -426,6 +427,25 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         int updated = jdbcTemplate.update("UPDATE app_settings SET setting_value = ? WHERE setting_key = ?", value, key);
         if (updated == 0) {
             jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES (?, ?)", key, value);
+        }
+    }
+
+    /** Смена пачек квестов в 20:00 по МСК (= 00:00 у владельца, МСК+4): слот 00:00 в сетке контент-плана свободен в дни смен (пн Brawl Stars,
+     *  вт Clash Royale, ср Clash of Clans), пост о смене приходит в момент смены. Один раз (маркер rot.hour.v1): час 12 -> 20 и ближайшая
+     *  смена сдвигается на те же 8 часов, чтобы она не пришлась на уже прошедшее время. */
+    private void moveQuestPackSwitchTo2000Msk() {
+        try {
+            Integer done = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM app_settings WHERE setting_key = 'rot.hour.v1'", Integer.class);
+            if (done != null && done > 0) return;
+            int shifted = jdbcTemplate.update(
+                "UPDATE quest_pack_schedules SET next_switch_at = DATEADD('HOUR', 8, next_switch_at) "
+                + "WHERE enabled = TRUE AND next_switch_at IS NOT NULL AND switch_hour = 12 AND HOUR(next_switch_at) = 12");
+            int hours = jdbcTemplate.update("UPDATE quest_pack_schedules SET switch_hour = 20 WHERE switch_hour = 12");
+            jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES ('rot.hour.v1', '1')");
+            log.info("[DBMigration] quest pack switch hour -> 20:00 MSK: hour changed for {} schedules, next switch shifted for {}", hours, shifted);
+        } catch (Exception e) {
+            log.error("[DBMigration] moveQuestPackSwitchTo2000Msk failed: {}", e.getMessage());
         }
     }
 }
