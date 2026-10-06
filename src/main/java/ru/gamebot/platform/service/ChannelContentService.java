@@ -1238,6 +1238,7 @@ public class ChannelContentService {
         if (gameName == null) return null;
         return switch (gameName) {
             case "Brawl Stars" -> "resource:quest_pack_brawl_stars.jpg";
+            case "Clash Royale" -> "resource:quest_pack_clash_royale.jpg";
             default -> null;
         };
     }
