@@ -898,6 +898,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleAcceleratorWant(callbackQuery, user);
             return;
         }
+        if (data.startsWith("gemcancel:")) {
+            handleGemCancel(callbackQuery, user, data.substring("gemcancel:".length()));
+            return;
+        }
         if (data.startsWith("refnudge:")) {
             sendReferralNudge(user, data.substring("refnudge:".length()));
             answerSilently(callbackQuery.getId());
@@ -19420,8 +19424,68 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         List.of(keyboardFactory.url("✍️ Написать менеджеру", managerDmLink(req, pkg))),
                         List.of(keyboardFactory.callback("❓ Как купить TON", "gemfaq:ton"),
                                 keyboardFactory.callback("🔐 Про доступ к аккаунту", "gemfaq:access")),
+                        List.of(keyboardFactory.callback("❌ Отменить заявку", "gemcancel:ask:" + req.getId())),
                         List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
                 )));
+    }
+
+    private static final java.util.Map<String, String> GEM_CANCEL_REASONS = new java.util.LinkedHashMap<>();
+    static {
+        GEM_CANCEL_REASONS.put("price", "дорого");
+        GEM_CANCEL_REASONS.put("wait", "долго ждать");
+        GEM_CANCEL_REASONS.put("access", "не хочу давать доступ к аккаунту");
+        GEM_CANCEL_REASONS.put("changed", "передумал");
+        GEM_CANCEL_REASONS.put("other", "другая причина");
+    }
+
+    /** Отмена игроком заявки на донат (2026-10-07): раньше «не актуально» шло через отклонение админом без причины, и мы не знали,
+     *  что останавливает покупку. Статус остаётся REJECTED (новое значение enum рискованно для ширины колонки), причина начинается с «Отмена игроком:». */
+    private void handleGemCancel(CallbackQuery callbackQuery, AppUser user, String payload) {
+        answerSilently(callbackQuery.getId());
+        String[] parts = payload.split(":");
+        if (parts.length != 2) return;
+        Long reqId = parseLong(parts[1]);
+        if (reqId == null) return;
+        Optional<GemPurchaseRequest> reqOpt = gemPurchaseService.findById(reqId);
+        if (reqOpt.isEmpty() || !reqOpt.get().getUser().getId().equals(user.getId())) {
+            sendText(user.getTelegramId(), "❌ Заявка не найдена.", backMenuKeyboard("menu:main"));
+            return;
+        }
+        GemPurchaseRequest req = reqOpt.get();
+        if (req.getStatus() != ru.gamebot.platform.domain.enums.GemPurchaseStatus.PENDING) {
+            sendText(user.getTelegramId(), "ℹ️ Заявка Д-" + req.getDisplayId() + " уже обработана, отменить её нельзя.", backMenuKeyboard("menu:main"));
+            return;
+        }
+        if ("STARS".equals(req.getPaymentMethod())) {
+            sendText(user.getTelegramId(), "ℹ️ Эта заявка оплачена Stars. Для отмены и возврата напишите в поддержку.", backMenuKeyboard("menu:support"));
+            return;
+        }
+        if ("ask".equals(parts[0])) {
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            rows.add(List.of(keyboardFactory.callback("💵 Дорого", "gemcancel:price:" + reqId)));
+            rows.add(List.of(keyboardFactory.callback("⏳ Долго ждать", "gemcancel:wait:" + reqId)));
+            rows.add(List.of(keyboardFactory.callback("🔐 Не хочу давать доступ к аккаунту", "gemcancel:access:" + reqId)));
+            rows.add(List.of(keyboardFactory.callback("🤔 Передумал", "gemcancel:changed:" + reqId)));
+            rows.add(List.of(keyboardFactory.callback("✏️ Другая причина", "gemcancel:other:" + reqId)));
+            rows.add(List.of(keyboardFactory.callback("⬅️ Не отменять", "menu:main")));
+            sendText(user.getTelegramId(),
+                    "❌ <b>Отменить заявку Д-" + req.getDisplayId() + "?</b>\n\nСкажите, пожалуйста, почему: это поможет нам сделать покупку удобнее.",
+                    keyboardFactory.rowsLayout(rows));
+            return;
+        }
+        String label = GEM_CANCEL_REASONS.get(parts[0]);
+        if (label == null) return;
+        gemPurchaseService.reject(reqId, "Отмена игроком: " + label);
+        sendText(user.getTelegramId(), "✅ Заявка Д-" + req.getDisplayId() + " отменена. Спасибо, что сообщили! Если захотите вернуться, оформить новую можно в разделе Магазин.", backMenuKeyboard("menu:main"));
+        String adminText = "↩️ <b>Игрок отменил заявку Д-" + req.getDisplayId() + "</b>\n\n👤 " + playerDmLink(req.getUser())
+                + "\n📦 " + req.displayLabel() + " · " + req.getPriceRub() + "₽\n💬 Причина: <b>" + escape(label) + "</b>";
+        for (Long adminId : adminService.allModeratorIds()) {
+            try {
+                sendText(adminId, adminText, null);
+            } catch (Exception e) {
+                log.warn("Failed to notify {} about gem purchase cancel", adminId, e);
+            }
+        }
     }
 
     /** Короткие FAQ для игрока после создания заявки на донат (2026-09-25) - закрывают два самых частых вопроса без менеджера. */
@@ -19703,6 +19767,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             reasonRows.add(List.of(keyboardFactory.callback("📦 Нет в наличии", "admin:gempurchase:rejectq:stock:" + id)));
             reasonRows.add(List.of(keyboardFactory.callback("💬 Не удалось связаться", "admin:gempurchase:rejectq:contact:" + id)));
             reasonRows.add(List.of(keyboardFactory.callback("💎 Оплата не поступила", "admin:gempurchase:rejectq:nopay:" + id)));
+            reasonRows.add(List.of(keyboardFactory.callback("🕐 Игрок: не актуально", "admin:gempurchase:rejectq:stale:" + id)));
             reasonRows.add(List.of(keyboardFactory.callback("❌ Отмена", "common:cancel")));
             sendText(user.getTelegramId(), "✏️ Выберите причину отклонения заявки Д-" + displayId + " или напишите свою (игрок увидит её дословно):",
                     keyboardFactory.rowsLayout(reasonRows));
@@ -19834,7 +19899,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             "price", "Цена пакета изменилась. Оформите заявку заново, мы проведём её по актуальной цене.",
             "stock", "Сейчас этого пакета нет в наличии у поставщика. Попробуйте позже.",
             "contact", "Не удалось связаться с вами в личных сообщениях. Напишите в поддержку, и мы продолжим оформление.",
-            "nopay", "Оплата не поступила. Если вы уже оплатили, пришлите подтверждение в поддержку.");
+            "nopay", "Оплата не поступила. Если вы уже оплатили, пришлите подтверждение в поддержку.",
+            "stale", "Отмена игроком: заявка неактуальна (игрок сообщил менеджеру). Если захотите вернуться, оформите новую в разделе Магазин.");
 
     @org.springframework.context.event.EventListener
     public void onGemPurchaseStale(ru.gamebot.platform.event.GemPurchaseStaleEvent event) {
