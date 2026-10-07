@@ -19532,6 +19532,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "";
     }
 
+    /** Ник игрока как скрытая ссылка на личные сообщения: https://t.me/username, если есть юзернейм, иначе tg://user?id=. Ссылка видна только админам в карточках, игроку не уходит. */
+    private String playerDmLink(AppUser player) {
+        String username = player.getTelegramUsername();
+        String href = (username != null && !username.isBlank())
+                ? "https://t.me/" + username
+                : "tg://user?id=" + player.getTelegramId();
+        String name = player.getNickname() != null && !player.getNickname().isBlank() ? player.getNickname() : String.valueOf(player.getTelegramId());
+        return "<a href=\"" + href + "\">" + escape(name) + "</a>";
+    }
+
     private void notifyAdminsAboutGemPurchase(GemPurchaseRequest req) {
         AppUser player = req.getUser();
         String username = player.getTelegramUsername();
@@ -19539,7 +19549,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? "\n✉️ Написать: <a href=\"https://t.me/" + username + "\">@" + username + "</a>"
                 : "\n✉️ Telegram ID: <code>" + player.getTelegramId() + "</code>";
         String text = "💎 <b>Новая заявка на донат</b>\n\n"
-                + "👤 Игрок: <b>" + escape(player.getNickname()) + "</b>" + userLink + "\n"
+                + "👤 Игрок: <b>" + playerDmLink(player) + "</b>" + userLink + "\n"
                 + "🎮 Игра: <b>" + escape(req.getGameName()) + "</b>\n"
                 + "🏷️ Тег: <code>" + escape(req.getGameTag()) + "</code>\n"
                 + "📦 Пакет: <b>" + req.displayLabel() + "</b>\n"
@@ -19583,7 +19593,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendAdminGemPurchaseCard(AppUser user, Long id) {
         gemPurchaseService.findById(id).ifPresentOrElse(req -> {
             String text = "💎 <b>Заявка Д-" + req.getDisplayId() + "</b>\n\n"
-                    + "👤 Игрок: <b>" + escape(req.getUser().getNickname()) + "</b>\n"
+                    + "👤 Игрок: <b>" + playerDmLink(req.getUser()) + "</b>\n"
                     + "🆔 Telegram ID: <code>" + req.getUser().getTelegramId() + "</code>\n"
                     + "🏷️ Тег: <code>" + escape(req.getGameTag()) + "</code>\n"
                     + "📦 Пакет: <b>" + req.displayLabel() + "</b>\n"
