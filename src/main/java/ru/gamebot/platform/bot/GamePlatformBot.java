@@ -6130,51 +6130,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendReferrals(AppUser user) {
         String referralLink = "https://t.me/" + appProperties.getBotUsername() + "?start=ref_" + user.getTelegramId();
         long earned = user.getReferralEarnedExc();
-        long[] milestones = {3_000, 10_000, 30_000, 100_000};
-        long nextMilestone = milestones[milestones.length - 1];
-        for (long m : milestones) {
-            if (earned < m) { nextMilestone = m; break; }
-        }
-        int progressPct = (int) Math.min(100, earned * 100 / nextMilestone);
-        int filled = progressPct / 10;
-        String bar = "█".repeat(filled) + "░".repeat(10 - filled);
 
         String boostBanner = referralBoostService.findActiveBoost()
                 .map(b -> "🚀 <b>Буст-уикенд ×" + b.getMultiplier() + " активен!</b>\n" + formatDeadlineLine(b.getEndAt()) + "\n")
                 .orElse("");
 
         Integer nextFriendMilestone = userService.nextInvitedFriendsMilestone(user.getInvitedFriends());
-        String friendBadgeProgress;
-        if (nextFriendMilestone == null) {
-            friendBadgeProgress = "🏆 Все бейджи за друзей получены!\n\n";
-        } else {
-            int friendPct = (int) Math.min(100, user.getInvitedFriends() * 100L / nextFriendMilestone);
-            int friendFilled = friendPct / 10;
-            String friendBar = "█".repeat(friendFilled) + "░".repeat(10 - friendFilled);
-            friendBadgeProgress = "🎖️ Прогресс до бейджа «" + userService.invitedFriendsBadgeName(nextFriendMilestone)
-                    + "» (" + nextFriendMilestone + " друзей):\n[" + friendBar + "] " + friendPct + "%\n\n";
-        }
+        String friendBadgeProgress = nextFriendMilestone == null
+                ? "🏆 Все бейджи за друзей получены!\n\n"
+                : "🎖️ До бейджа «" + userService.invitedFriendsBadgeName(nextFriendMilestone) + "»: "
+                        + user.getInvitedFriends() + " из " + nextFriendMilestone + " друзей\n\n";
 
         sendText(user.getTelegramId(),
-                "🤝 <b>Реферальная программа EGC</b>\n\n"
+                "🤝 <b>Рефералы EGC</b>\n\n"
                         + boostBanner
                         + referralGoalBlock(user)
-                        + "🔗 Ваша ссылка:\n" + escape(referralLink) + "\n\n"
-                        + "👥 Приглашено друзей: <b>" + user.getInvitedFriends() + "</b>\n"
-                        + "💎 Заработано на рефералах: <b>" + earned + " EXC</b>\n\n"
-                        + "📊 Прогресс до " + nextMilestone + " EXC:\n"
-                        + "[" + bar + "] " + progressPct + "%\n\n"
+                        + "🔗 Твоя ссылка:\n" + escape(referralLink) + "\n\n"
+                        + "👥 Друзей: <b>" + user.getInvitedFriends() + "</b> · 💎 Заработано: <b>" + earned + " EXC</b>\n"
                         + friendBadgeProgress
-                        + "🎁 <b>Как работает:</b>\n\n"
-                        + "Шаг 1 — друг вступает в клуб\n"
-                        + "• Тебе сразу: <b>+300 EXC</b>\n"
-                        + "• Другу сразу: <b>+500 EXC</b>\n\n"
-                        + "Шаг 2 — друг выполняет первый квест\n"
-                        + "• Тебе бонусом: <b>+2 500 EXC</b>\n"
-                        + "• Другу бонусом: <b>+3 000 EXC</b>\n\n"
-                        + "Шаг 3 — друг зарабатывает квестами\n"
-                        + "• Ты получаешь <b>10% от каждого его EXC</b> — пока друг активен (выполняет квесты хотя бы раз в 14 дней)\n\n"
-                        + "Скопируй ссылку и отправь другу — остальное система сделает сама.",
+                        + "<b>Как это работает</b>\n"
+                        + "1. Друг вступает в клуб: тебе <b>+300 EXC</b>, ему <b>+500 EXC</b>.\n"
+                        + "2. Друг делает первый квест: тебе <b>+2 500 EXC</b>, ему <b>+3 000 EXC</b>.\n"
+                        + "3. Дальше ты получаешь <b>10% от его EXC</b>, пока он играет (квест хотя бы раз в 14 дней).\n\n"
+                        + "Скопируй ссылку и отправь другу, остальное система сделает сама.",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.url("🔗 Поделиться", userService.buildShareUrl(user))),
                         List.of(keyboardFactory.callback("🏆 Рейтинг недели", "menu:referral-rating")),
@@ -20020,15 +19998,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!userService.referralGoalOpen(user)) return "";
         boolean pass = userService.isEgcPassActive(user);
         String reward = pass ? "<b>+2 500 EXC</b>"
-                : "<b>" + ru.gamebot.platform.service.UserService.REFERRAL_GOAL_PASS_DAYS
-                        + " дня EGC Pass бесплатно</b> (+10% EXC, 3-й слот квеста, улучшенный сундук, приоритет на вывод) и <b>+2 500 EXC</b>";
+                : "<b>" + ru.gamebot.platform.service.UserService.REFERRAL_GOAL_PASS_DAYS + " дня EGC Pass</b> и <b>+2 500 EXC</b>";
         if (user.getInvitedFriends() > 0) {
-            return "🎯 <b>Цель: первый друг в деле</b>\n"
-                    + "Твой друг уже в клубе. Как только он выполнит первый квест, ты получишь " + reward + ".\n\n";
+            return "🎯 <b>Друг в клубе</b>\n"
+                    + "Как только он выполнит первый квест, ты получишь " + reward + ".\n\n";
         }
-        return "🎯 <b>Цель: позови 1 друга</b> (0/1)\n"
-                + "Друг выполнит первый квест — и ты получишь " + reward + ".\n"
-                + "Другу: <b>+500 EXC</b> сразу и <b>+3 000 EXC</b>" + starsNote(3_000) + " за первый квест.\n\n";
+        return "🎯 <b>Позови друга</b> (0/1)\n"
+                + "Друг сделает первый квест, и ты получишь " + reward + ". Другу тоже достанется: <b>+3 500 EXC</b>.\n\n";
     }
 
     /** Кнопка-подсказка «позови друга» под сообщением в удачный момент (moment: quest, payout, streak3, streak7) или null: не подходит по правилам
