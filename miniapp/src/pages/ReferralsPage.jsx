@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getReferrals, getReferralRanking } from '../api/client';
 import BackButton from '../components/BackButton';
+import AnimatedNumber from '../components/AnimatedNumber';
 import './ReferralsPage.css';
 
 function formatCountdown(endsAtIso) {
@@ -11,6 +12,12 @@ function formatCountdown(endsAtIso) {
   const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
   const s = String(totalSeconds % 60).padStart(2, '0');
   return `${h}:${m}:${s}`;
+}
+
+function daysWord(n) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m100 >= 11 && m100 <= 19) return 'дней';
+  return m10 === 1 ? 'день' : (m10 >= 2 && m10 <= 4 ? 'дня' : 'дней');
 }
 
 function fallbackCopy(text, onDone) {
@@ -31,11 +38,17 @@ export default function ReferralsPage() {
   const [copied, setCopied] = useState(false);
   const [ranking, setRanking] = useState(null);
   const [countdown, setCountdown] = useState(null);
+  const [shownEarned, setShownEarned] = useState(0);
 
   useEffect(() => {
     getReferrals().then(setData).catch(() => setError('Не удалось загрузить данные. Попробуйте ещё раз.'));
     getReferralRanking().then(setRanking).catch(() => setRanking(null));
   }, []);
+
+  // Счётчик «заработано с рефералов» разгоняется от 0 до итога при открытии страницы.
+  useEffect(() => {
+    if (data) setShownEarned(data.earnedExc);
+  }, [data]);
 
   useEffect(() => {
     if (!data?.boostActive || !data?.boostEndsAt) { setCountdown(null); return; }
@@ -76,46 +89,50 @@ export default function ReferralsPage() {
         </div>
       )}
 
-      <div className="ref-hero">
-        <div className="ref-hero-icon">🤝</div>
-        <div className="ref-hero-title">Реферальная программа</div>
-        <div className="ref-hero-sub">EXPERIENCE GAMING CLUB</div>
+      <div className="ref-hero ref-earn">
+        <div className="ref-earn-label">Заработано с рефералов</div>
+        <div className="ref-earn-value">
+          <AnimatedNumber value={shownEarned} duration={1.6} />
+          <span className="ref-earn-unit">EXC</span>
+        </div>
+        <div className="ref-earn-chip">👥 Приглашено друзей: <b>{data.invitedFriends}</b></div>
       </div>
 
       {data.goalOpen && (
-        <div className="ref-link-card" style={{ marginBottom: 12 }}>
-          <div className="ref-link-label">
-            {data.goalFriendJoined ? '🎯 Цель: первый друг в деле' : '🎯 Цель: позови 1 друга (0/1)'}
+        <div className="ref-goal">
+          <div className="ref-goal-head">
+            <div className="ref-goal-icon">🎯</div>
+            <div className="ref-goal-titles">
+              <div className="ref-goal-title">Позови друга</div>
+              <div className="ref-goal-sub">
+                {data.goalFriendJoined ? 'Друг в клубе, ждём его первый квест' : 'Награда за первого друга'}
+              </div>
+            </div>
           </div>
-          <p className="shop-desc">
-            {data.goalFriendJoined
-              ? 'Твой друг уже в клубе. Как только он выполнит первый квест, ты получишь '
-              : 'Друг выполнит первый квест — и ты получишь '}
-            {data.goalPassReward
-              ? <><b>{data.goalPassDays} дня EGC Pass бесплатно</b> (+10% EXC, 3-й слот квеста, улучшенный сундук, приоритет на вывод) и <b>+2 500 EXC</b>.</>
-              : <b>+2 500 EXC.</b>}
-            {!data.goalFriendJoined && <> Другу: <b>+500 EXC</b> сразу и <b>+3 000 EXC</b> за первый квест.</>}
-          </p>
+
+          <div className="ref-goal-steps">
+            <div className={`ref-goal-step${data.goalFriendJoined ? ' done' : ' active'}`}>
+              <span className="ref-goal-dot">{data.goalFriendJoined ? '✓' : '1'}</span>Друг в клубе
+            </div>
+            <div className="ref-goal-line" />
+            <div className={`ref-goal-step${data.goalFriendJoined ? ' active' : ''}`}>
+              <span className="ref-goal-dot">2</span>Его первый квест
+            </div>
+          </div>
+
+          <div className="ref-goal-rewards">
+            {data.goalPassReward && (
+              <span className="ref-goal-chip ref-goal-chip-pass">🎁 {data.goalPassDays} {daysWord(data.goalPassDays)} EGC Pass</span>
+            )}
+            <span className="ref-goal-chip ref-goal-chip-exc">+2 500 EXC</span>
+            {!data.goalFriendJoined && <span className="ref-goal-chip ref-goal-chip-friend">🤝 Другу +3 500 EXC</span>}
+          </div>
+
           {!data.goalFriendJoined && (
-            <button className="ref-btn ref-btn-primary" onClick={shareLink}>📣 Позвать друга</button>
+            <button className="ref-btn ref-btn-primary ref-goal-btn" onClick={shareLink}>📣 Позвать друга</button>
           )}
         </div>
       )}
-
-      <div className="ref-stats-grid">
-        <div className="ref-stat-card">
-          <div className="ref-stat-accent" style={{ background: 'linear-gradient(90deg,#7c3aed,#a855f7)' }} />
-          <div className="ref-stat-label">Приглашено</div>
-          <div className="ref-stat-val">{data.invitedFriends}</div>
-          <div className="ref-stat-unit">друзей</div>
-        </div>
-        <div className="ref-stat-card">
-          <div className="ref-stat-accent" style={{ background: 'linear-gradient(90deg,#f59e0b,#fbbf24)' }} />
-          <div className="ref-stat-label">Заработано</div>
-          <div className="ref-stat-val">{data.earnedExc.toLocaleString()}</div>
-          <div className="ref-stat-unit">EXC</div>
-        </div>
-      </div>
 
       <div className="ref-link-card">
         <div className="ref-link-label">Ваша реферальная ссылка</div>

@@ -352,3 +352,122 @@
   font-style: italic;
   text-align: center;
 }
+
+/* ── Счётчик «Заработано с рефералов» (вместо заголовка «Реферальная программа») ── */
+.ref-earn {
+  padding: 22px 16px 18px;
+  position: relative;
+  overflow: hidden;
+}
+.ref-earn::after {
+  content: '';
+  position: absolute;
+  top: -40px; right: -40px;
+  width: 140px; height: 140px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(245,166,35,0.22), transparent 70%);
+  pointer-events: none;
+}
+.ref-earn-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.55);
+}
+.ref-earn-value {
+  margin: 6px 0 12px;
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1.05;
+  color: #F5A623;
+  font-variant-numeric: tabular-nums;
+}
+.ref-earn-unit {
+  margin-left: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: rgba(255,255,255,0.6);
+}
+.ref-earn-chip {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(168,85,247,0.16);
+  border: 1px solid rgba(168,85,247,0.3);
+  font-size: 12px;
+  color: #c4b5fd;
+}
+.ref-earn-chip b { color: #fff; }
+
+/* ── Цель «Позови друга»: компактная карточка вместо абзаца текста ── */
+.ref-goal {
+  margin: 0 16px 12px;
+  padding: 14px;
+  background: linear-gradient(135deg, rgba(124,58,237,0.20), rgba(245,166,35,0.08));
+  border: 1px solid rgba(168,85,247,0.28);
+  border-radius: 16px;
+}
+.ref-goal-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.ref-goal-icon {
+  width: 40px; height: 40px;
+  flex: none;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 12px;
+  background: rgba(168,85,247,0.2);
+  font-size: 22px;
+}
+.ref-goal-title { font-size: 16px; font-weight: 800; color: #fff; }
+.ref-goal-sub { font-size: 12px; color: rgba(255,255,255,0.55); margin-top: 1px; }
+
+.ref-goal-steps {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.ref-goal-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.45);
+  white-space: nowrap;
+}
+.ref-goal-dot {
+  width: 20px; height: 20px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+  font-size: 11px; font-weight: 700;
+}
+.ref-goal-step.active { color: #fff; }
+.ref-goal-step.active .ref-goal-dot { background: #7c3aed; }
+.ref-goal-step.done { color: #86efac; }
+.ref-goal-step.done .ref-goal-dot { background: #16a34a; color: #fff; }
+.ref-goal-line { flex: 1; height: 2px; border-radius: 1px; background: rgba(255,255,255,0.12); }
+
+.ref-goal-rewards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.ref-goal-chip {
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+.ref-goal-chip-pass { background: rgba(168,85,247,0.2); border-color: rgba(168,85,247,0.4); color: #e9d5ff; }
+.ref-goal-chip-exc { background: rgba(245,166,35,0.16); border-color: rgba(245,166,35,0.4); color: #fbbf24; }
+.ref-goal-chip-friend { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.14); color: rgba(255,255,255,0.7); font-weight: 600; }
+.ref-goal-btn { width: 100%; }
