@@ -47,6 +47,7 @@ public class EngagementCeilingService {
     private final AppUserRepository appUserRepository;
     private final QuestSubmissionRepository questSubmissionRepository;
     private final SinkShopService sinkShopService;
+    private final ru.gamebot.platform.domain.repository.FeatureInterestRepository featureInterestRepository;
 
     public record LimitStat(String title, String note, Double shareBinding, long sampleSize, String extra) {}
 
@@ -214,6 +215,12 @@ public class EngagementCeilingService {
                 if (s.extra() != null) sb.append(esc(s.extra())).append("\n");
             }
             sb.append("\n");
+        }
+        try {
+            sb.append("🚀 <b>Интерес к платному «Ускорителю»</b> (кнопка «Хочу» в Магазине): <b>")
+                    .append(featureInterestRepository.countByFeatureCode("ACCELERATOR")).append("</b> чел.\n\n");
+        } catch (Exception e) {
+            // счётчик интереса не должен ломать отчёт
         }
         sb.append("<i>Разведочная оценка по накопленным данным, не биллинговый расчёт (см. упрощения в подсказках выше). ")
                 .append("Снятие любого лимита увеличивает эмиссию EXC - перед включением сверить с Health Ratio.</i>");

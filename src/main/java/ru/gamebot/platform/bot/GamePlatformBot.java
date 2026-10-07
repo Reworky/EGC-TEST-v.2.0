@@ -183,6 +183,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.domain.repository.TournamentEntryRepository tournamentEntryRepository;
     private final ru.gamebot.platform.domain.repository.BotReviewRepository botReviewRepository;
     private final ru.gamebot.platform.domain.repository.NudgeFeedbackRepository nudgeFeedbackRepository;
+    private final ru.gamebot.platform.domain.repository.FeatureInterestRepository featureInterestRepository;
     private final ru.gamebot.platform.domain.repository.StarsPurchaseRepository starsPurchaseRepository;
     private final ObjectMapper objectMapper;
     private final java.net.http.HttpClient starsHttpClient = java.net.http.HttpClient.newHttpClient();
@@ -891,6 +892,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if ("activation:profile".equals(data)) {
             sendProfile(user);
             answerSilently(callbackQuery.getId());
+            return;
+        }
+        if ("accel:want".equals(data)) {
+            handleAcceleratorWant(callbackQuery, user);
             return;
         }
         if (data.startsWith("refnudge:")) {
@@ -1777,6 +1782,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "news" -> sendNews(user);
             case "polls" -> sendPollList(user);
             case "battlepass" -> sendEgcPassScreen(user); // callback-ключ остался прежним ради старых кнопок
+            case "accelerator" -> sendAcceleratorTeaser(user);
             case "support" -> sendSupport(user);
             case "rules" -> sendRulesMessage(user, backMenuKeyboard("menu:cat:help"));
             case "quickstart" -> { answerSilently(callbackQuery.getId()); sendQuickStartGuide(user); }
@@ -3589,6 +3595,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback("🛍️ Магазин наград", "menu:shop")),
                 List.of(keyboardFactory.callback("⚡ Предметы", "menu:sink")),
+                List.of(keyboardFactory.callback("🚀 Ускоритель (скоро)", "menu:accelerator")),
                 List.of(keyboardFactory.callback(passLabel, "menu:battlepass")),
                 List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
@@ -3614,6 +3621,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendMenuCategory(user, "🛍️ <b>Магазин</b>", List.of(
                     List.of(keyboardFactory.callback("🛍️ Магазин наград", "menu:shop")),
                     List.of(keyboardFactory.callback("⚡ Предметы", "menu:sink")),
+                    List.of(keyboardFactory.callback("🚀 Ускоритель (скоро)", "menu:accelerator")),
                     List.of(keyboardFactory.callback(passLabel, "menu:battlepass"))
             ));
             // "Донат по играм" сюда намеренно не добавлен — см. комментарий в основной ветке выше.
@@ -5167,6 +5175,43 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  — без отдельного полноценного опроса/рассылки, минимальное усилие для игрока (один тап).
      *  Ответ можно оставить повторно — не критично, это лёгкая качественная обратная связь, не метрика,
      *  требующая строгой уникальности. */
+    private static final String FEATURE_ACCELERATOR = "ACCELERATOR";
+
+    /** Проверка спроса на платный «Ускоритель» без разработки (2026-10-07): карточка с кнопкой «Хочу», ничего не списывается и не обещается. */
+    private void sendAcceleratorTeaser(AppUser user) {
+        boolean already = featureInterestRepository.existsByTelegramIdAndFeatureCode(user.getTelegramId(), FEATURE_ACCELERATOR);
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (!already) {
+            rows.add(List.of(keyboardFactory.callback("✋ Хочу", "accel:want")));
+        }
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", "menu:cat:shop"),
+                keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(),
+                "🚀 <b>Ускоритель</b> (скоро)\n\n"
+                        + "На 24 часа убирает паузы между квестами: берёшь следующий квест сразу, без ожидания и без лимита слотов. Работает на квестах с автопроверкой.\n\n"
+                        + "За такие «ускоренные» прохождения EXC не начисляются, зато идёт XP: уровень, лига и отряд растут быстрее.\n\n"
+                        + "Мы ещё решаем, запускать ли его, и цена не определена. "
+                        + (already ? "✅ Ты уже записан, спасибо!" : "Нажми «Хочу», если это тебе нужно, нам важно знать."),
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleAcceleratorWant(CallbackQuery callbackQuery, AppUser user) {
+        try {
+            if (!featureInterestRepository.existsByTelegramIdAndFeatureCode(user.getTelegramId(), FEATURE_ACCELERATOR)) {
+                ru.gamebot.platform.domain.model.FeatureInterest interest = new ru.gamebot.platform.domain.model.FeatureInterest();
+                interest.setTelegramId(user.getTelegramId());
+                interest.setFeatureCode(FEATURE_ACCELERATOR);
+                interest.setCreatedAt(LocalDateTime.now());
+                featureInterestRepository.save(interest);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to save feature interest for {}", user.getTelegramId(), e);
+        }
+        answer(callbackQuery.getId(), "Записали, спасибо! 🙏");
+        sendAcceleratorTeaser(user);
+    }
+
     private void handleNudgeFeedback(CallbackQuery callbackQuery, AppUser user, String reasonCode) {
         String reasonLabel = NUDGE_FEEDBACK_REASONS.get(reasonCode);
         if (reasonLabel == null) {
