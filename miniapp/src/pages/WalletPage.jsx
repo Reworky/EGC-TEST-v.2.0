@@ -376,6 +376,16 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest }) {
         <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
           Звёзды: приблизительный пересчёт по курсу фонда, зачисляется и выводится по нему.
         </div>
+        {wallet.coins < 5000 && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: 12, color: '#c4b5fd', marginBottom: 4 }}>
+              🎯 До первого вывода осталось {(5000 - wallet.coins).toLocaleString('ru-RU')} EXC (минимум 5 000)
+            </div>
+            <div style={{ height: 5, borderRadius: 3, background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+              <div style={{ width: Math.max(2, Math.round(wallet.coins * 100 / 5000)) + '%', height: '100%', background: 'linear-gradient(90deg,#7c3aed,#a855f7)' }} />
+            </div>
+          </div>
+        )}
         {refreshFailed && (
           <div style={{ fontSize: 12, color: '#f87171', marginTop: 6 }}>Не удалось обновить. Попробуйте ещё раз.</div>
         )}

@@ -2720,32 +2720,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case GEM_PURCHASE_REJECT_COMMENT -> {
                 Long reqId = session.getQuestId();
+                // Игрок видит причину дословно: односимвольные отписки («.», «-») оставляли его без объяснения (разбор доната 2026-10-07)
+                if (text.trim().length() < 5) {
+                    sendText(user.getTelegramId(), "⚠️ Причина слишком короткая: игрок увидит её дословно. Напишите хотя бы пару слов.", cancelKeyboard());
+                    return;
+                }
                 session.reset();
                 if (reqId == null) {
                     sendText(user.getTelegramId(), "❌ Сессия истекла.", backMenuKeyboard("admin:gempurchase"));
                     return;
                 }
-                GemPurchaseRequest req = gemPurchaseService.reject(reqId, text.trim());
-                String refundNote = "";
-                if ("STARS".equals(req.getPaymentMethod())) {
-                    boolean refunded = refundStarsPayment(req.getUser().getTelegramId(), req.getTelegramPaymentChargeId());
-                    refundNote = refunded
-                            ? "\n\n💫 Stars возвращены игроку автоматически."
-                            : "\n\n⚠️ Не удалось автоматически вернуть Stars — верните вручную, см. лог сервера.";
-                }
-                // Игрок мог заблокировать бота — сама заявка уже отклонена (DB-запись выше),
-                // уведомление лишь best-effort. Без try/catch необработанное [403] Forbidden всплывало
-                // как "Что-то пошло не так" у АДМИНА, хотя отклонение реально прошло успешно —
-                // инцидент 2026-09-22, жалоба "нельзя отменить заявку" (заявка Д-5, BekaAuraTTM).
-                boolean notified = true;
-                try {
-                    notifyUserGemPurchaseRejected(req, refundNote);
-                } catch (Exception e) {
-                    notified = false;
-                    log.warn("Failed to notify user {} about gem purchase rejection", req.getUser().getTelegramId(), e);
-                }
-                String notifyNote = notified ? ", игрок уведомлён." : " (игрок недоступен — уведомление не доставлено, бот заблокирован).";
-                sendText(user.getTelegramId(), "❌ Заявка Д-" + req.getDisplayId() + " отклонена" + notifyNote + refundNote, backMenuKeyboard("admin:gempurchase"));
+                finishGemPurchaseRejection(user, reqId, text.trim());
             }
             case CLASH_TAG_INPUT -> {
                 ru.gamebot.platform.service.ClashQuestVerificationService.TagLookupResult res =
@@ -4881,6 +4866,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "💰 <b>Баланс</b>\n\n"
                         + (user.getCoins() > 0 ? "⭐ В звёздах: <b>" + healthRatioService.starsApprox(user.getCoins()) + "</b> (по текущему курсу фонда)\n" : "")
                         + "🪙 Монеты клуба: <b>" + user.getCoins() + " EXC</b>\n"
+                        + (user.getCoins() < 5_000 ? "🎯 До первого вывода осталось: <b>" + (5_000 - user.getCoins()) + " EXC</b> (минимум 5 000)\n" : "")
                         + "💱 Курс вывода: <b>" + rateString(ratioPercent) + "</b>\n"
                         + "💠 Активный бонус к EXC: <b>+" + userService.getExcBonusPercent(user.getXp()) + "%</b>\n"
                         + "🎟️ Билеты сезона: <b>" + user.getTickets() + "</b>\n"
@@ -5323,6 +5309,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             buttons.add(keyboardFactory.callback("⏳ Кулдаун по этой игре", "noop"));
         } else if (!hasActiveSubmission) {
             buttons.add(keyboardFactory.callback("🚀 Взять", "quest:take:" + questId));
+        }
+        // Самая частая покупка в «Предметах» (95 за 90 дн., разбор 2026-10-07): предлагаем снятие кулдауна там, где игрок реально упёрся в паузу.
+        if ((cooldownLeft > 0 || gameCooldown) && !hasActiveSubmission && user.getCooldownBypassGame() == null
+                && !quest.isSponsored() && !quest.isExternalAutoApprove() && !quest.isRepeatableNoCooldownEligible()) {
+            buttons.add(keyboardFactory.callback("⏱️ Снять кулдаун — " + SinkShopService.PRICE_COOLDOWN_REMOVAL + " EXC", "sink:cooldown_info"));
         }
         if (hasActiveSubmission) {
             buttons.add(quest.isExternalAutoApprove()
@@ -19691,13 +19682,30 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             sendText(user.getTelegramId(), "✅ Заявка Д-" + req.getDisplayId() + " отмечена выполненной, игроку начислен XP-бонус.", null);
             sendAdminGemPurchaseRequests(user);
+        } else if (action.startsWith("rejectq:")) {
+            // "rejectq:<код>:<id>"
+            String[] parts = action.split(":");
+            String reason = parts.length == 3 ? GEM_REJECT_QUICK_REASONS.get(parts[1]) : null;
+            if (reason == null) {
+                sendText(user.getTelegramId(), "❌ Неизвестная причина.", backMenuKeyboard("admin:gempurchase"));
+                return;
+            }
+            session.reset();
+            finishGemPurchaseRejection(user, Long.parseLong(parts[2]), reason);
         } else if (action.startsWith("reject:")) {
             long id = Long.parseLong(action.substring("reject:".length()));
             session.reset();
             session.setQuestId(id);
             session.setState(SessionState.GEM_PURCHASE_REJECT_COMMENT);
             Long displayId = gemPurchaseService.findById(id).map(GemPurchaseRequest::getDisplayId).orElse(id);
-            sendText(user.getTelegramId(), "✏️ Введите причину отклонения заявки Д-" + displayId + ":", cancelKeyboard());
+            List<List<InlineKeyboardButton>> reasonRows = new ArrayList<>();
+            reasonRows.add(List.of(keyboardFactory.callback("💵 Цена изменилась", "admin:gempurchase:rejectq:price:" + id)));
+            reasonRows.add(List.of(keyboardFactory.callback("📦 Нет в наличии", "admin:gempurchase:rejectq:stock:" + id)));
+            reasonRows.add(List.of(keyboardFactory.callback("💬 Не удалось связаться", "admin:gempurchase:rejectq:contact:" + id)));
+            reasonRows.add(List.of(keyboardFactory.callback("💎 Оплата не поступила", "admin:gempurchase:rejectq:nopay:" + id)));
+            reasonRows.add(List.of(keyboardFactory.callback("❌ Отмена", "common:cancel")));
+            sendText(user.getTelegramId(), "✏️ Выберите причину отклонения заявки Д-" + displayId + " или напишите свою (игрок увидит её дословно):",
+                    keyboardFactory.rowsLayout(reasonRows));
         }
     }
 
@@ -19794,6 +19802,58 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + itemTitle + " на тег " + escape(req.getGameTag()) + "\n"
                         + "🎁 Бонус: +" + req.getXpBonus() + " XP",
                 backMenuKeyboard("menu:main"));
+    }
+
+    /** Отклонение заявки на донат: запись причины, возврат Stars, уведомление игрока. Общий путь для ввода причины текстом и готовых причин кнопками. */
+    private void finishGemPurchaseRejection(AppUser user, Long reqId, String reason) {
+                GemPurchaseRequest req = gemPurchaseService.reject(reqId, reason);
+                String refundNote = "";
+                if ("STARS".equals(req.getPaymentMethod())) {
+                    boolean refunded = refundStarsPayment(req.getUser().getTelegramId(), req.getTelegramPaymentChargeId());
+                    refundNote = refunded
+                            ? "\n\n💫 Stars возвращены игроку автоматически."
+                            : "\n\n⚠️ Не удалось автоматически вернуть Stars — верните вручную, см. лог сервера.";
+                }
+                // Игрок мог заблокировать бота — сама заявка уже отклонена (DB-запись выше),
+                // уведомление лишь best-effort. Без try/catch необработанное [403] Forbidden всплывало
+                // как "Что-то пошло не так" у АДМИНА, хотя отклонение реально прошло успешно —
+                // инцидент 2026-09-22, жалоба "нельзя отменить заявку" (заявка Д-5, BekaAuraTTM).
+                boolean notified = true;
+                try {
+                    notifyUserGemPurchaseRejected(req, refundNote);
+                } catch (Exception e) {
+                    notified = false;
+                    log.warn("Failed to notify user {} about gem purchase rejection", req.getUser().getTelegramId(), e);
+                }
+                String notifyNote = notified ? ", игрок уведомлён." : " (игрок недоступен — уведомление не доставлено, бот заблокирован).";
+                sendText(user.getTelegramId(), "❌ Заявка Д-" + req.getDisplayId() + " отклонена" + notifyNote + refundNote, backMenuKeyboard("admin:gempurchase"));
+    }
+
+    /** Готовые причины отклонения доната (код кнопки -> текст, который увидит игрок). */
+    private static final java.util.Map<String, String> GEM_REJECT_QUICK_REASONS = java.util.Map.of(
+            "price", "Цена пакета изменилась. Оформите заявку заново, мы проведём её по актуальной цене.",
+            "stock", "Сейчас этого пакета нет в наличии у поставщика. Попробуйте позже.",
+            "contact", "Не удалось связаться с вами в личных сообщениях. Напишите в поддержку, и мы продолжим оформление.",
+            "nopay", "Оплата не поступила. Если вы уже оплатили, пришлите подтверждение в поддержку.");
+
+    @org.springframework.context.event.EventListener
+    public void onGemPurchaseStale(ru.gamebot.platform.event.GemPurchaseStaleEvent event) {
+        gemPurchaseService.findById(event.getRequestId()).ifPresent(req -> {
+            String text = "⏰ <b>Заявка на донат Д-" + req.getDisplayId() + " ждёт уже ~" + event.getHoursWaiting() + " ч</b>\n\n"
+                    + "👤 " + playerDmLink(req.getUser()) + "\n"
+                    + "📦 " + req.displayLabel() + " · " + req.getPriceRub() + "₽\n"
+                    + ("STARS".equals(req.getPaymentMethod()) ? "⭐ Оплачено Stars, ждёт выдачи.\n" : "")
+                    + "\nОтветьте игроку или отклоните заявку с причиной.";
+            InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
+                    List.of(keyboardFactory.callback("👀 Открыть заявку", "admin:gempurchase:view:" + req.getId()))));
+            for (Long adminId : adminService.allModeratorIds()) {
+                try {
+                    sendText(adminId, text, markup);
+                } catch (Exception e) {
+                    log.warn("Failed to send stale gem purchase reminder to {}", adminId, e);
+                }
+            }
+        });
     }
 
     private void notifyUserGemPurchaseRejected(GemPurchaseRequest req, String refundNote) {

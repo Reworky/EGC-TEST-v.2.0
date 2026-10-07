@@ -48,6 +48,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         syncCountryWithPhone();
         applyChannelAutopostGrid20261006();
         moveQuestPackSwitchTo1800Msk();
+        hideUnusedShopItems20261007();
     }
 
     /** Инцидент 2026-09-22 (тикет поддержки #213): ClashQuestVerificationService для ATTACK_WINS
@@ -446,6 +447,32 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             log.info("[DBMigration] quest pack switch hour -> 18:00 MSK: hour changed for {} schedules, next switch shifted for {}", hours, shifted);
         } catch (Exception e) {
             log.error("[DBMigration] moveQuestPackSwitchTo1800Msk failed: {}", e.getMessage());
+        }
+    }
+
+    /** Разбор использования магазина (2026-10-07, SQL stats-shop-usage): за 90 дней ни одного заказа подарочных карт, футболки, Council,
+     *  а Stars от 1 000 ⭐ и гемы Clash Royale 1200 недостижимы даже на максимальном ранге (цена выше месячного лимита 150 000 EXC).
+     *  Один раз (маркер shop.hide.v1) прячем их (active=FALSE, заявки и история остаются); игровую валюту за EXC НЕ трогаем: через её группы
+     *  игрок попадает в донат за деньги. Вернуть позицию можно вручную в админке - повторный запуск её снова не скроет. */
+    private void hideUnusedShopItems20261007() {
+        try {
+            Integer done = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM app_settings WHERE setting_key = 'shop.hide.v1'", Integer.class);
+            if (done != null && done > 0) return;
+            String[] titles = {
+                "Telegram Stars - 1000 ⭐", "Telegram Stars - 1500 ⭐", "Telegram Stars - 2500 ⭐",
+                "Telegram Stars - 5000 ⭐", "Telegram Stars - 10000 ⭐", "Clash Royale - Gems 1200",
+                "Gift Card Steam — 100 ₽", "Gift Card Steam — 250 ₽", "Gift Card Steam — 500 ₽", "Gift Card PSN — 500 ₽",
+                "Футболка EGC — брендированная", "EGC Council — статус на 1 месяц"
+            };
+            int hidden = 0;
+            for (String title : titles) {
+                hidden += jdbcTemplate.update("UPDATE reward_items SET active = FALSE WHERE title = ? AND active = TRUE", title);
+            }
+            jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES ('shop.hide.v1', '1')");
+            log.info("[DBMigration] hideUnusedShopItems: hidden {} shop items (unreachable or zero orders in 90 days)", hidden);
+        } catch (Exception e) {
+            log.error("[DBMigration] hideUnusedShopItems20261007 failed: {}", e.getMessage());
         }
     }
 }

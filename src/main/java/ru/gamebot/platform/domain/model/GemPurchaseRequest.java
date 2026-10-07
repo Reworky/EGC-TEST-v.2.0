@@ -82,4 +82,7 @@ public class GemPurchaseRequest {
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    /** Когда админам отправлено напоминание, что заявка без ответа (одно на заявку, см. GemPurchaseReminderScheduler). */
+    private LocalDateTime adminReminderSentAt;
 }
