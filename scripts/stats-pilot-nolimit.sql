@@ -8,14 +8,14 @@ FROM quests q
 WHERE q.repeatable_no_cooldown_eligible = TRUE;
 
 -- 2) По дням с 15.09.2026: сколько игроков, сколько засчитанных прохождений, сколько выплачено EXC.
-SELECT CAST(s.updated_at AS DATE) AS day,
+SELECT CAST(s.updated_at AS DATE) AS dt,
        COUNT(DISTINCT s.user_id) AS players,
        COUNT(*) AS approved,
        SUM(COALESCE(s.awarded_coins, 0)) AS exc_paid
 FROM quest_submissions s JOIN quests q ON q.id = s.quest_id
 WHERE q.repeatable_no_cooldown_eligible = TRUE AND s.status = 'APPROVED' AND s.updated_at >= DATE '2026-09-15'
 GROUP BY CAST(s.updated_at AS DATE)
-ORDER BY day;
+ORDER BY dt;
 
 -- 3) Главный вопрос: сколько игроков хоть раз прошли квест 2+ раз за сутки (то есть реально пользуются «без лимита»).
 --    Распределение по максимуму прохождений за один день: 1 / 2 / 3 / 4+.
