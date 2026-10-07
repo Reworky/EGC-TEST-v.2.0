@@ -17300,7 +17300,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     public void onWeeklyDigestInactive(ru.gamebot.platform.event.WeeklyDigestInactiveEvent event) {
         String msg = "👋 <b>Давно не виделись!</b>\n\n"
                 + "На прошлой неделе ты пропустил:\n"
-                + "— <b>" + event.getNewQuestsCount() + "</b> новых квестов\n"
+                + (event.getNewQuestsCount() > 0 ? "— <b>" + event.getNewQuestsCount() + "</b> новых квестов\n" : "")
                 + "— Колесо фортуны крутили <b>" + event.getTotalSpinsCount() + "</b> раз\n\n"
                 + "Возвращайся — квесты ждут! 👇";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(

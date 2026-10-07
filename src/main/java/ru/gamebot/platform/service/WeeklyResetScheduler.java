@@ -356,7 +356,8 @@ public class WeeklyResetScheduler {
             userRankMap.put(userId, rankCounter++);
         }
 
-        long newQuestsCount = questRepository.countCreatedBetween(weekStart, weekEnd);
+        // Только активные: сидеры пачек создают квесты «Сезон А/Б» выключенными (03.10 в дайджест попало 173 «новых» квестов, которых игроки не видели)
+        long newQuestsCount = questRepository.countActiveCreatedBetween(weekStart, weekEnd);
         long totalSpins = wheelSpinLogRepository.countBetween(weekStart, weekEnd);
 
         for (AppUser user : userService.allRegisteredUsers()) {
