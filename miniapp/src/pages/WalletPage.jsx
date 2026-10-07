@@ -431,11 +431,6 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest }) {
         <div className="ref-progress-label" style={{ color: 'rgba(167,139,250,0.85)', cursor: 'pointer' }} onClick={() => setShowRanks(true)}>
           📊 Лимиты по всем рангам →
         </div>
-        {wallet.fixedRubBalance > 0 && (
-          <div className="ref-progress-label">
-            <i className="ti ti-circle-check"></i> Гарантировано к выводу: {wallet.fixedRubBalance.toLocaleString()} ₽
-          </div>
-        )}
       </div>
 
       <div className="ref-link-card">
