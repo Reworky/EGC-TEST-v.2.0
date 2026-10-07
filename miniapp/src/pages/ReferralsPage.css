@@ -449,17 +449,28 @@
   font-size: 11px; font-weight: 700;
 }
 .ref-goal-step.active { color: #fff; }
-.ref-goal-step.active .ref-goal-dot { background: #7c3aed; }
+.ref-goal-step.active .ref-goal-dot { background: transparent; border: 2px solid #a855f7; color: #e9d5ff; }
 .ref-goal-step.done { color: #86efac; }
 .ref-goal-step.done .ref-goal-dot { background: #16a34a; color: #fff; }
 .ref-goal-line { flex: 1; height: 2px; border-radius: 1px; background: rgba(255,255,255,0.12); }
 
-.ref-goal-rewards {
+.ref-goal-row {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
+.ref-goal-who {
+  width: 46px;
+  flex: none;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: rgba(255,255,255,0.5);
+}
+.ref-goal-row:last-of-type { margin-bottom: 12px; }
 .ref-goal-chip {
   padding: 5px 10px;
   border-radius: 999px;

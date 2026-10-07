@@ -105,28 +105,34 @@ export default function ReferralsPage() {
             <div className="ref-goal-titles">
               <div className="ref-goal-title">Позови друга</div>
               <div className="ref-goal-sub">
-                {data.goalFriendJoined ? 'Друг в клубе, ждём его первый квест' : 'Награда за первого друга'}
+                {data.goalFriendJoined ? 'Друг в клубе, ждём его первый квест' : 'Награды придут, когда друг выполнит первый квест'}
               </div>
             </div>
           </div>
 
           <div className="ref-goal-steps">
             <div className={`ref-goal-step${data.goalFriendJoined ? ' done' : ' active'}`}>
-              <span className="ref-goal-dot">{data.goalFriendJoined ? '✓' : '1'}</span>Друг в клубе
+              <span className="ref-goal-dot">{data.goalFriendJoined ? '✓' : '1'}</span>Друг вступил
             </div>
             <div className="ref-goal-line" />
             <div className={`ref-goal-step${data.goalFriendJoined ? ' active' : ''}`}>
-              <span className="ref-goal-dot">2</span>Его первый квест
+              <span className="ref-goal-dot">2</span>Сделал квест
             </div>
           </div>
 
-          <div className="ref-goal-rewards">
+          <div className="ref-goal-row">
+            <span className="ref-goal-who">Тебе</span>
             {data.goalPassReward && (
               <span className="ref-goal-chip ref-goal-chip-pass">🎁 {data.goalPassDays} {daysWord(data.goalPassDays)} EGC Pass</span>
             )}
             <span className="ref-goal-chip ref-goal-chip-exc">+2 500 EXC</span>
-            {!data.goalFriendJoined && <span className="ref-goal-chip ref-goal-chip-friend">🤝 Другу +3 500 EXC</span>}
           </div>
+          {!data.goalFriendJoined && (
+            <div className="ref-goal-row">
+              <span className="ref-goal-who">Другу</span>
+              <span className="ref-goal-chip ref-goal-chip-friend">+3 500 EXC</span>
+            </div>
+          )}
 
           {!data.goalFriendJoined && (
             <button className="ref-btn ref-btn-primary ref-goal-btn" onClick={shareLink}>📣 Позвать друга</button>
