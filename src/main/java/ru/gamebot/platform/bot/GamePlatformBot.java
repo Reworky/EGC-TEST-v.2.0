@@ -16103,6 +16103,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Ручная выдача Stars-товара — на случай, если оплата у Telegram прошла, а выдача упала с
         // ошибкой (см. handleSuccessfulPayment/notifyAdminsAboutFailedStarsGrant, инцидент 2026-09-19).
         // Переиспользует ту же логику и тот же текст подтверждения игроку, что и обычная покупка.
+        if ("brawlbattles".equals(action)) {
+            AppUser target = userService.findByTelegramId(telegramId).orElse(null);
+            if (target == null) {
+                sendText(admin.getTelegramId(), "⚠️ Пользователь не найден.", backMenuKeyboard("admin:users:0"));
+                return;
+            }
+            sendText(admin.getTelegramId(), brawlQuestVerificationService.diagnoseBattles(target),
+                    backMenuKeyboard("admin:user:view:" + telegramId + ":" + (page == null ? 0 : page)));
+            return;
+        }
         if ("starsgrant".equals(action)) {
             AppUser target = userService.findByTelegramId(telegramId).orElse(null);
             if (target == null) {
@@ -16622,6 +16632,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         keyboardFactory.callback("➖ Списание", "admin:user:debit:" + telegramId + ":" + page)
                 ),
                 List.of(keyboardFactory.callback("🌟 Выдать Stars-товар вручную", "admin:user:starsgrant:" + telegramId + ":" + page)),
+                List.of(keyboardFactory.callback("⚔️ Бои Brawl Stars", "admin:user:brawlbattles:" + telegramId + ":" + page)),
                 List.of(
                         keyboardFactory.callback("⬅️ К списку", "admin:users:" + page),
                         keyboardFactory.callback("🏠 Меню", "menu:main")

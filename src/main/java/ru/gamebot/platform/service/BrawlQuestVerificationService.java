@@ -222,6 +222,52 @@ public class BrawlQuestVerificationService {
         return true;
     }
 
+    /** Диагностика для админа («⚔️ Бои Brawl Stars» в карточке игрока, 2026-10-08): последние бои из battlelog и по каждому активному
+     *  Brawl-квесту игрока - сколько боёв после взятия и сколько из них подходят под условия. Нужна, когда «бот видит бои, а прогресс 0»
+     *  (тикет #274): без неё невозможно понять, не подходят ли бои под условия (поражения, не тот боец) или дело в данных. */
+    public String diagnoseBattles(AppUser user) {
+        String tag = user.getBrawlStarsTag();
+        if (tag == null) return "❌ Тег Brawl Stars не привязан.";
+        List<BrawlStarsApiService.BattleLogEntry> entries;
+        try {
+            entries = brawlStarsApiService.fetchBattleLog(tag);
+        } catch (BrawlStarsApiService.BrawlStarsTransientException e) {
+            return "⚠️ Сервис Brawl Stars сейчас недоступен: " + e.getMessage();
+        }
+        StringBuilder sb = new StringBuilder("⚔️ <b>Бои Brawl Stars</b> " + tag.replace("<", "&lt;") + "\n");
+        if (entries.isEmpty()) {
+            return sb.append("\nБоёв не найдено: история пуста, тег не найден API или игрок не распознан в боях.").toString();
+        }
+        sb.append("Время в UTC. Найдено боёв: ").append(entries.size()).append("\n\n");
+        int shown = 0;
+        for (BrawlStarsApiService.BattleLogEntry e : entries) {
+            if (shown++ >= 12) break;
+            String t = e.battleTime() != null && e.battleTime().length() >= 15
+                    ? e.battleTime().substring(9, 11) + ":" + e.battleTime().substring(11, 13) + ":" + e.battleTime().substring(13, 15) : "?";
+            sb.append(t).append(" · ").append(e.mode()).append(" (").append(e.type() == null ? "-" : e.type()).append(") · ")
+              .append(e.victory() ? "✅ победа" : "❌ не победа").append(" · ")
+              .append(e.playerBrawlerName() == null ? "?" : e.playerBrawlerName()).append("\n");
+        }
+        List<QuestSubmission> mine = questSubmissionRepository.findInProgressBrawlAutoVerify().stream()
+                .filter(sub -> sub.getUser() != null && sub.getUser().getId().equals(user.getId())).toList();
+        if (mine.isEmpty()) {
+            sb.append("\nАктивных автоквестов Brawl Stars у игрока нет.");
+            return sb.toString();
+        }
+        sb.append("\n<b>Активные квесты</b>\n");
+        for (QuestSubmission sub : mine) {
+            Quest quest = sub.getQuest();
+            String since = formatBrawlTime(sub.getCreatedAt());
+            long after = entries.stream().filter(x -> x.battleTime().compareTo(since) > 0).count();
+            long matching = entries.stream().filter(x -> x.battleTime().compareTo(since) > 0 && matchesFilters(x, quest, sub)).count();
+            sb.append("• ").append(quest.getTitle().replace("<", "&lt;")).append("\n  взят ").append(since).append(" · прогресс ")
+              .append(sub.getBrawlProgressCount()).append("/").append(quest.getBrawlTargetCount())
+              .append(" · боёв после взятия: ").append(after).append(", подходят: ").append(matching).append("\n");
+        }
+        sb.append("\nПодходят = победа и нужный боец/режим после момента взятия (так же считает бот).");
+        return sb.toString();
+    }
+
     private boolean csvContains(String csv, String value) {
         if (value == null) return false;
         for (String s : csv.split(",")) {
