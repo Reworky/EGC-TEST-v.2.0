@@ -8,18 +8,34 @@
     <title>EGC Mini App</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <!-- Шрифт и иконки грузятся НЕ блокируя показ приложения: media="print" + onload (раньше внешний сервер, не ответивший вовремя, держал белый экран) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.19.0/tabler-icons.min.css" media="print" onload="this.media='all'">
+    <noscript>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.19.0/tabler-icons.min.css">
+    </noscript>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.19.0/tabler-icons.min.css">
-    <script type="module" src="https://unpkg.com/@splinetool/viewer@1.9.27/build/spline-viewer.js"></script>
+    <!-- AdsGram: async, SDK не нужен для старта; useAdsgram/InterstitialAd инициализируются в момент показа рекламы -->
+    <script async src="https://sad.adsgram.ai/js/sad.min.js"></script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
-    <script src="https://inapp.telega.io/sdk/v1/sdk.js"></script>
+    <!-- Telega.io SDK: асинхронно и с защитой от ошибок. Раньше синхронный <script> в конце body + сразу вызов TelegaIn держали загрузку приложения,
+         пока inapp.telega.io не ответит (при недоступности хоста приложение открывалось десятки секунд). useTelegaAds читает window.__telegaAds в момент показа. -->
     <script>
-      window.__telegaAds = window.TelegaIn.AdsController.create_miniapp({ token: '2f6da1a9-5562-4070-b4ef-20d3bbf4a57a' });
+      (function () {
+        var s = document.createElement('script');
+        s.src = 'https://inapp.telega.io/sdk/v1/sdk.js';
+        s.async = true;
+        s.onload = function () {
+          try {
+            window.__telegaAds = window.TelegaIn.AdsController.create_miniapp({ token: '2f6da1a9-5562-4070-b4ef-20d3bbf4a57a' });
+          } catch (e) { /* реклама не должна ломать приложение */ }
+        };
+        document.head.appendChild(s);
+      })();
     </script>
   </body>
 </html>

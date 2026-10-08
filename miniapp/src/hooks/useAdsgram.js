@@ -15,6 +15,10 @@ export function useAdsgram({ blockIds, onReward, onError }) {
   }, [idsKey]);
 
   return useCallback(() => {
+    // SDK подключается async и мог появиться уже после монтирования: пробуем инициализировать контроллеры в момент показа
+    if (!controllersRef.current.length || !controllersRef.current[0]) {
+      controllersRef.current = ids.map((blockId) => window.Adsgram?.init({ blockId }));
+    }
     const controllers = controllersRef.current;
     if (!controllers.length || !controllers[0]) {
       onError?.({ error: true, description: 'AdsGram недоступен' });
@@ -40,5 +44,6 @@ export function useAdsgram({ blockIds, onReward, onError }) {
         });
     };
     tryShow(0);
-  }, [onError, onReward]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onError, onReward, idsKey]);
 }
