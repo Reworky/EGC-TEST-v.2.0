@@ -56,7 +56,7 @@ public class Tournament {
     private LocalDateTime endDate;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "varchar(32)")
     private Status status;
 
     @Enumerated(EnumType.STRING)

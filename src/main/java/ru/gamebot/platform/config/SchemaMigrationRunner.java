@@ -50,6 +50,9 @@ public class SchemaMigrationRunner implements CommandLineRunner {
         // Расширение enum'ов авто-проверок (2026-09-26): на случай, если колонка когда-то была создана как нативный H2 ENUM
         // с фиксированным списком значений (см. feedback_ddl_auto_enum_columns) - принудительно обычный VARCHAR; для уже
         // VARCHAR(20) - безвредное повторение.
+        // Статус турнира CANCELLED_LOW_TURNOUT (отмена при недоборе, 29.08) не помещался в колонку, созданную нативным H2 ENUM('ACTIVE','FINISHED','REGISTRATION'):
+        // 08.10.2026 планировщик турниров падал на каждом тике ("Value not permitted for column ... CANCELLED_LOW_TURNOUT") и не мог отменить турнир.
+        alterColumn("tournaments", "status", "VARCHAR(32) NOT NULL");
         alterColumn("quests", "brawl_verify_type", "VARCHAR(20)");
         alterColumn("quests", "clash_verify_type", "VARCHAR(20)");
         alterColumn("quests", "clash_royale_verify_type", "VARCHAR(20)");
