@@ -13,6 +13,7 @@ import AnimatedNumber from '../components/AnimatedNumber';
 import AdRewardCard from '../components/AdRewardCard';
 import { useAdsgram } from '../hooks/useAdsgram';
 import AdBanner from '../components/AdBanner';
+import PayoutFeedCard from '../components/PayoutFeedCard';
 import { useParticles } from '../components/ParticlesContext';
 import './QuestsPage.css';
 import './ShopPage.css';
@@ -443,6 +444,8 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest }) {
         </div>
       </div>
 
+      <PayoutFeedCard />
+
       <div className="ref-link-card">
         <div className="ref-link-label">Ежедневный бонус</div>
         {wallet.dailyBonusAvailable && wallet.restorableStreakDays > 0 ? (
@@ -782,6 +785,7 @@ function WithdrawView({ wallet, onChanged }) {
       {method === 'rub' && <WithdrawRubForm wallet={wallet} onDone={onChanged} />}
       {method === 'ton' && <WithdrawTonForm wallet={wallet} onDone={onChanged} />}
       {method === 'stars' && <WithdrawStarsForm wallet={wallet} onDone={onChanged} />}
+      <PayoutFeedCard />
     </>
   );
 }

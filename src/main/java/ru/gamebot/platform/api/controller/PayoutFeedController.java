@@ -1,0 +1,103 @@
+package ru.gamebot.platform.api.controller;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import ru.gamebot.platform.api.dto.PayoutFeedDto;
+import ru.gamebot.platform.domain.model.RewardRequest;
+import ru.gamebot.platform.service.HealthRatioService;
+import ru.gamebot.platform.service.RewardService;
+
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * «Лента выплат» для мини-аппа — те же данные и та же логика, что в боте (GamePlatformBot.payoutFeedText):
+ * последние 8 выплаченных выводов с замаскированными никами и итоги за 24 часа / 7 дней.
+ * Суммы в рублях считаются как в боте: для Stars — по базовой цене позиции 1:1, для остальных —
+ * зафиксированная при заявке сумма либо текущий курс фонда.
+ */
+@CrossOrigin(origins = "*")
+@RestController
+@RequestMapping("/api/payouts")
+@RequiredArgsConstructor
+public class PayoutFeedController {
+
+    private static final int FEED_SIZE = 8;
+    private static final String REVIEWS_URL = "https://t.me/egc_payouts";
+
+    private final RewardService rewardService;
+    private final HealthRatioService healthRatioService;
+
+    @GetMapping("/feed")
+    public PayoutFeedDto feed() {
+        LocalDateTime now = LocalDateTime.now();
+        List<PayoutFeedDto.Item> items = new ArrayList<>();
+        for (RewardRequest r : rewardService.recentApprovedWithdrawals(FEED_SIZE)) {
+            LocalDateTime when = payoutMoment(r);
+            items.add(PayoutFeedDto.Item.builder()
+                    .rub(rub(r))
+                    .method(method(r))
+                    .minutesAgo(when == null ? -1 : Math.max(0, Duration.between(when, now).toMinutes()))
+                    .name(maskNickname(r.getUser() == null ? null : r.getUser().getNickname()))
+                    .build());
+        }
+
+        long dayRub = 0, dayCount = 0, weekRub = 0;
+        List<RewardRequest> week = rewardService.approvedWithdrawalsSince(now.minusDays(7));
+        for (RewardRequest r : week) {
+            long rub = rub(r);
+            weekRub += rub;
+            LocalDateTime when = payoutMoment(r);
+            if (when != null && when.isAfter(now.minusHours(24))) {
+                dayRub += rub;
+                dayCount++;
+            }
+        }
+
+        return PayoutFeedDto.builder()
+                .items(items)
+                .dayRub(dayRub)
+                .dayCount(dayCount)
+                .weekRub(weekRub)
+                .weekCount(week.size())
+                .reviewsUrl(REVIEWS_URL)
+                .build();
+    }
+
+    private static LocalDateTime payoutMoment(RewardRequest r) {
+        return r.getPaidAt() != null ? r.getPaidAt() : r.getCreatedAt();
+    }
+
+    private static boolean isStars(RewardRequest r) {
+        return "telegram_stars".equals(r.getRewardItem().getPurchaseGroup());
+    }
+
+    private static String method(RewardRequest r) {
+        if (isStars(r)) return "stars";
+        String details = r.getPayoutDetails();
+        boolean crypto = details != null && (details.startsWith("TON") || details.startsWith("USDT"));
+        return crypto ? "ton" : "sbp";
+    }
+
+    private long rub(RewardRequest r) {
+        if (isStars(r)) {
+            return Math.round(r.getRewardItem().getPriceCoins() / 100.0);
+        }
+        return r.getFixedRubValue() != null
+                ? r.getFixedRubValue()
+                : Math.round(r.getRewardItem().getPriceCoins() * healthRatioService.getCurrentRatio() / 100.0);
+    }
+
+    /** Ник без полной деанонимизации: первые 2 и последний символы («Пч…ь»); эмодзи не рвём — по code point. */
+    private static String maskNickname(String nickname) {
+        if (nickname == null || nickname.isBlank()) return "Игрок";
+        int[] cps = nickname.trim().codePoints().toArray();
+        if (cps.length <= 3) return new String(cps, 0, 1) + "…";
+        return new String(cps, 0, 2) + "…" + new String(cps, cps.length - 1, 1);
+    }
+}

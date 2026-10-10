@@ -127,3 +127,15 @@
 .w-refresh-btn:disabled { cursor: default; }
 .w-refresh-btn.spinning i { animation: w-refresh-spin 0.8s linear infinite; }
 @keyframes w-refresh-spin { to { transform: rotate(360deg); } }
+
+/* ── «Недавно выплатили» (лента выплат, как в боте) ── */
+.pf-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.pf-empty { font-size: 12px; color: rgba(255,255,255,0.5); }
+.pf-list { display: flex; flex-direction: column; gap: 6px; }
+.pf-row { display: flex; align-items: baseline; gap: 8px; font-size: 13px; }
+.pf-amount { font-weight: 700; color: #34d399; white-space: nowrap; }
+.pf-method { color: rgba(255,255,255,0.75); white-space: nowrap; }
+.pf-meta { margin-left: auto; font-size: 11px; color: rgba(255,255,255,0.4); text-align: right; }
+.pf-totals { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 12px; color: rgba(255,255,255,0.6); display: flex; flex-direction: column; gap: 2px; }
+.pf-totals b { color: #fff; }
+.pf-reviews { margin-top: 10px; padding: 0; background: none; border: none; font-size: 12px; color: rgba(167,139,250,0.9); cursor: pointer; }

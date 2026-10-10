@@ -546,3 +546,37 @@
   color: rgba(255,255,255,0.6);
   margin-top: 3px;
 }
+
+/* ── Спонсорская подписка на канал: места, пояснение раздела, вторая кнопка ── */
+.quest-seats {
+  margin: 6px 0 8px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.75);
+}
+.quest-seats b { color: #FFD76A; }
+.quest-seats-chip {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(251,191,36,0.12);
+  color: #fbbf24;
+}
+.quest-seats-chip.closed {
+  background: rgba(239,83,80,0.12);
+  color: #ef5350;
+}
+.sponsor-intro {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(255,255,255,0.65);
+  background: rgba(251,191,36,0.08);
+  border: 1px solid rgba(251,191,36,0.2);
+}
+.quest-btn-outline {
+  margin-bottom: 8px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.25);
+}

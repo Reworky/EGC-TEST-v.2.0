@@ -39,4 +39,12 @@ public class QuestDto {
 
     /** null, если пользователь ещё не брал этот квест */
     private String submissionStatus;
+
+    /** Спонсорская подписка на канал: сдаётся кнопкой «Я подписался» (проверка через бота), есть счётчик мест. */
+    private boolean channelCheck;
+    /** Осталось мест / всего мест кампании; null - лимита нет. */
+    private Integer seatsLeft;
+    private Integer seatsTotal;
+    /** Кампания закрыта (спонсор остановил или места заняты) - брать/сдавать нельзя. */
+    private boolean campaignClosed;
 }

@@ -61,4 +61,13 @@ public class QuestDetailDto {
     private String submissionStatus;
     private String moderatorComment;
     private String expiresAt;
+
+    /** Спонсорская подписка на канал (сдача кнопкой «Я подписался»), счётчик мест и признак закрытой кампании. */
+    private boolean sponsored;
+    private boolean channelCheck;
+    private Integer seatsLeft;
+    private Integer seatsTotal;
+    private boolean campaignClosed;
+    /** Ссылка на канал - только после «Взять» (иначе игрок подпишется заранее и квест уже «не для новых»). */
+    private String channelUrl;
 }

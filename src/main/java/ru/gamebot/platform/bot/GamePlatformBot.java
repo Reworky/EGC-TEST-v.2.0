@@ -23286,6 +23286,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return status != null && !"left".equalsIgnoreCase(status) && !"kicked".equalsIgnoreCase(status);
     }
 
+    /** Для мини-аппа (QuestController): состоит ли игрок в канале спонсорского квеста. true/false - ответ Telegram;
+     *  null - проверить не удалось (нет доступа к каналу и т.п.): при взятии квеста это не блокирует, при сдаче просим повторить позже.
+     *  alertAdmins - при сбое предупредить админов (как при проверке в боте; у алерта свой лимит частоты). */
+    public Boolean checkQuestChannelMembership(Quest quest, Long telegramId, boolean alertAdmins) {
+        try {
+            return isChannelMember(quest.getChannelCheckChatId(), telegramId);
+        } catch (TelegramApiException e) {
+            log.warn("Channel membership check failed for quest {} user {}", quest.getId(), telegramId, e);
+            if (alertAdmins) {
+                alertSponsorChannelCheckFailure(quest, e);
+            }
+            return null;
+        }
+    }
+
     /** chat_member из канала: если это канал спонсорского квеста, запоминаем выход/возврат игрока (удержание и отчёт для спонсора);
      *  при первом выходе до срока выплаты - мягко зовём вернуться. Остальные каналы (в т.ч. наш) игнорируются одним запросом. */
     private void handleChannelMemberUpdate(org.telegram.telegrambots.meta.api.objects.ChatMemberUpdated update) {

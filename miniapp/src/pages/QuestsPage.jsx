@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getQuests, getSponsoredQuests, getGames, getGamePhotoUrl, getQuestBoost, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard, getTournamentPhotoUrl, getRecommendedQuest } from '../api/client';
+import { getQuests, getSponsoredQuests, channelCheckQuest, getGames, getGamePhotoUrl, getQuestBoost, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard, getTournamentPhotoUrl, getRecommendedQuest } from '../api/client';
 import { useLottie } from '../components/LottieContext';
 import { useParticles } from '../components/ParticlesContext';
 import AdRewardCard from '../components/AdRewardCard';
@@ -193,6 +193,30 @@ function QuestActions({ quest, detail, onChanged }) {
     }
   }
 
+  function openChannel(url) {
+    const tg = window.Telegram?.WebApp;
+    if (tg) {
+      url.includes('t.me/') ? tg.openTelegramLink(url) : tg.openLink(url);
+    } else {
+      window.open(url, '_blank', 'noopener');
+    }
+  }
+
+  // «Я подписался»: сервер сам проверит подписку и начислит награду (как кнопка в боте).
+  async function handleChannelCheck() {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await channelCheckQuest(quest.id);
+      setMessage(res.message);
+      if (res.success) onChanged();
+    } catch (e) {
+      setMessage(e?.response?.data?.message || 'Не получилось, попробуйте чуть позже.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleSubmit() {
     if (!photo && !externalLink.trim()) {
       setMessage('Прикрепите скриншот или ссылку на подтверждение.');
@@ -213,6 +237,49 @@ function QuestActions({ quest, detail, onChanged }) {
       setMessage(e?.response?.data?.message || 'Ошибка отправки. Попробуйте ещё раз.');
     } finally {
       setBusy(false);
+    }
+  }
+
+  // Спонсорская подписка на канал: сдаётся кнопкой «Я подписался», повторно не проходится.
+  const seatsLine = detail.channelCheck && detail.seatsTotal != null
+    ? <div className="quest-seats">👥 Осталось мест: <b>{detail.seatsLeft}</b> из {detail.seatsTotal}</div>
+    : null;
+  if (detail.channelCheck) {
+    if (status === 'APPROVED') {
+      return (
+        <div>
+          {seatsLine}
+          <div className="quest-status quest-status-approved"><i className="ti ti-circle-check"></i> Подписка подтверждена, квест выполнен и оплачен</div>
+        </div>
+      );
+    }
+    if (detail.campaignClosed) {
+      return (
+        <div>
+          {seatsLine}
+          <div className="quest-status quest-status-pending">😔 Квест закрыт — места заняты. Спонсор оплатил ограниченное число подписчиков.</div>
+        </div>
+      );
+    }
+    if (status === 'DRAFT') {
+      return (
+        <div className="quest-submit-form">
+          {seatsLine}
+          <div className="quest-go-hint">
+            <div className="quest-go-hint-title">📢 Подпишитесь на канал и вернитесь сюда</div>
+            <div className="quest-go-hint-text">Нажмите «Я подписался» — подписку проверим сами и сразу начислим награду.</div>
+          </div>
+          {detail.channelUrl && (
+            <button className="quest-btn quest-btn-outline" disabled={busy} onClick={() => openChannel(detail.channelUrl)}>
+              📢 Открыть канал
+            </button>
+          )}
+          <button className="quest-btn" disabled={busy} onClick={handleChannelCheck}>
+            {busy ? 'Проверяем...' : '✅ Я подписался'}
+          </button>
+          {message && <div className="quest-message">{message}</div>}
+        </div>
+      );
     }
   }
 
@@ -315,6 +382,7 @@ function QuestActions({ quest, detail, onChanged }) {
 
   return (
     <div>
+      {seatsLine}
       <button className="quest-btn" disabled={busy} onClick={handleTake}>
         {busy ? 'Секунду...' : 'Взять квест'}
       </button>
@@ -392,6 +460,10 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
       <div className="quest-meta">
         <span className="quest-duration">⏱ {q.durationDays === 1 ? '24 ч' : q.durationDays + ' дн'}</span>
         <span className="quest-platform">{q.platform}</span>
+        {q.channelCheck && q.campaignClosed && !submissionStatus && <span className="quest-seats-chip closed">😔 Закрыт</span>}
+        {q.channelCheck && !q.campaignClosed && q.seatsTotal != null && (
+          <span className="quest-seats-chip">👥 {q.seatsLeft} из {q.seatsTotal}</span>
+        )}
       </div>
       {expanded === q.id && (
         <div className="quest-detail" onClick={e => e.stopPropagation()}>
@@ -635,6 +707,9 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
           )}
           {!sponsoredLoading && sponsoredQuests.length > 0 && (
             <div className="category-section">
+              <div className="sponsor-intro">
+                🤝 Спонсоры — одна из причин, по которой проект работает и платит реальные деньги. Деньги спонсоров идут в фонд выплат, а от его размера зависит курс вывода для всех игроков: чем больше спонсоров мы привлечём вместе, тем выгоднее курс.
+              </div>
               {sponsoredQuests.map(q => (
                 <QuestCard key={q.id} q={q} expanded={expanded} onToggle={onToggle} details={details} onDetailChanged={onDetailChanged} />
               ))}

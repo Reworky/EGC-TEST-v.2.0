@@ -265,10 +265,13 @@ public class QuestController {
 
     @GetMapping("/sponsored")
     public List<QuestDto> sponsored(@AuthenticationPrincipal Long telegramId) {
-        var quests = new java.util.ArrayList<>(questService.findActiveSponsored());
-        quests.removeIf(q -> q.getChannelCheckChatId() != null); // сдаются только в боте (кнопка «Я подписался»)
-        Map<Long, String> statusByQuestId = new java.util.HashMap<>();
         AppUser currentUser = telegramId != null ? appUserRepository.findByTelegramId(telegramId).orElse(null) : null;
+        // Как в боте (sendSponsoredQuestList): активные квесты + завершённые кампании, по которым у игрока уже есть
+        // выполнение или работа в процессе — «✅» остаётся видимым и после закрытия кампании.
+        var quests = new java.util.ArrayList<>(questService.findAllSponsored().stream()
+                .filter(q -> q.isActive() || hasDoneOrLiveSubmission(currentUser, q))
+                .toList());
+        Map<Long, String> statusByQuestId = new java.util.HashMap<>();
         if (currentUser != null) {
             for (var q : quests) {
                 java.util.Optional.ofNullable(questService.getLatestSubmission(currentUser, q))
@@ -292,7 +295,36 @@ public class QuestController {
                 .brawlAutoVerify(q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null || q.getDotaVerifyType() != null || q.getCs2VerifyType() != null || q.getPubgVerifyType() != null)
                 .highlightNew(q.isEffectivelyNew())
                 .submissionStatus(statusByQuestId.get(q.getId()))
+                .channelCheck(q.getChannelCheckChatId() != null)
+                .seatsLeft(seatsLeft(q))
+                .seatsTotal(seatsTotal(q))
+                .campaignClosed(q.getChannelCheckChatId() != null && questService.isChannelCampaignClosed(q))
                 .build()).toList();
+    }
+
+    /** Есть выполненный квест или не истёкшая работа в процессе (DRAFT/PENDING/NEEDS_INFO) - такой квест показываем и после закрытия кампании. */
+    private boolean hasDoneOrLiveSubmission(AppUser user, Quest quest) {
+        if (user == null) return false;
+        QuestSubmission sub = questService.getLatestSubmission(user, quest);
+        if (sub == null) return false;
+        var status = sub.getStatus();
+        return status == ru.gamebot.platform.domain.enums.SubmissionStatus.APPROVED
+                || ((status == ru.gamebot.platform.domain.enums.SubmissionStatus.DRAFT
+                || status == ru.gamebot.platform.domain.enums.SubmissionStatus.PENDING
+                || status == ru.gamebot.platform.domain.enums.SubmissionStatus.NEEDS_INFO) && !questService.isExpired(sub));
+    }
+
+    /** Лимит мест кампании «подпишись на канал»; null - лимита нет (или это не подписка на канал). */
+    private Integer seatsTotal(Quest q) {
+        if (q.getChannelCheckChatId() == null || q.getParticipantLimit() == null || q.getParticipantLimit() <= 0) {
+            return null;
+        }
+        return ((Number) q.getParticipantLimit()).intValue();
+    }
+
+    private Integer seatsLeft(Quest q) {
+        Integer total = seatsTotal(q);
+        return total == null ? null : (int) Math.max(0, total - questService.countApprovedByQuest(q));
     }
 
     @GetMapping("/{id}")
@@ -325,7 +357,12 @@ public class QuestController {
                 .externalAutoApprove(quest.isExternalAutoApprove())
                 .oneTimePerAccount(quest.isOneTimePerAccount())
                 .repeatableNoCooldownEligible(quest.isRepeatableNoCooldownEligible())
-                .brawlAutoVerify(quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null || quest.getPubgVerifyType() != null);
+                .brawlAutoVerify(quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null || quest.getPubgVerifyType() != null)
+                .sponsored(quest.isSponsored())
+                .channelCheck(quest.getChannelCheckChatId() != null)
+                .seatsLeft(seatsLeft(quest))
+                .seatsTotal(seatsTotal(quest))
+                .campaignClosed(quest.getChannelCheckChatId() != null && questService.isChannelCampaignClosed(quest));
 
         if (telegramId != null) {
             appUserRepository.findByTelegramId(telegramId).ifPresent(user -> {
@@ -351,6 +388,11 @@ public class QuestController {
                     AutoVerifyProgress progress = computeAutoVerifyProgress(quest, latest);
                     builder.autoVerifyProgress(progress.progress());
                     builder.autoVerifyTarget(progress.target());
+                    if (quest.getChannelCheckChatId() != null && quest.getChannelCheckUrl() != null
+                            && latest.getStatus() == ru.gamebot.platform.domain.enums.SubmissionStatus.DRAFT
+                            && !questService.isExpired(latest) && !questService.isChannelCampaignClosed(quest)) {
+                        builder.channelUrl(quest.getChannelCheckUrl());
+                    }
                 }
             });
         }
@@ -385,6 +427,17 @@ public class QuestController {
             return ResponseEntity.notFound().build();
         }
 
+        // Спонсор платит за НОВЫХ подписчиков: кто уже в канале, квест взять не может (та же проверка, что в боте).
+        // Если проверить не вышло (нет доступа к каналу) - не блокируем, решит проверка при сдаче.
+        if (quest.getChannelCheckChatId() != null
+                && Boolean.TRUE.equals(gamePlatformBot.checkQuestChannelMembership(quest, telegramId, false))) {
+            return ResponseEntity.ok(QuestActionResponseDto.builder()
+                    .success(false)
+                    .status("ALREADY_SUBSCRIBED")
+                    .message("ℹ️ Ты уже подписан на этот канал: награда за этот квест только для новых подписчиков. Загляни в другие квесты.")
+                    .build());
+        }
+
         QuestService.QuestActionResult result = questService.takeQuestChecked(user, quest);
         if (result.status() == QuestActionStatus.OK && quest.getBrawlVerifyType() != null) {
             brawlQuestVerificationService.primeBaseline(result.submission().getId(), quest.getBrawlVerifyType(), user.getBrawlStarsTag());
@@ -399,6 +452,74 @@ public class QuestController {
             response.setMessage("🚀 Квест активен! Теперь заходите в игру «" + quest.getGameName() + "» и выполняйте задание.");
         }
         return ResponseEntity.ok(response);
+    }
+
+    /** Игроки, у которых сейчас идёт проверка подписки (двойной тап/одновременно бот и мини-апп): вторая проверка не нужна. */
+    private final java.util.Set<Long> channelCheckInFlight = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /** «✅ Я подписался» для спонсорской подписки на канал - тот же порядок проверок и тот же approveSubmission, что в боте
+     *  (GamePlatformBot.handleChannelCheck): взят ли квест, не закрыта ли кампания, не истёк ли срок, подписан ли игрок. */
+    @PostMapping("/{id}/channel-check")
+    public ResponseEntity<QuestActionResponseDto> channelCheck(@PathVariable Long id, @AuthenticationPrincipal Long telegramId) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        Quest quest;
+        try {
+            quest = questService.getQuest(id);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
+        }
+        if (quest.getChannelCheckChatId() == null) {
+            return ResponseEntity.badRequest().body(channelCheckReply(false, "NOT_CHANNEL_QUEST", "Этот квест не про подписку на канал."));
+        }
+        if (!channelCheckInFlight.add(telegramId)) {
+            return ResponseEntity.ok(channelCheckReply(false, "IN_PROGRESS", "Проверяем подписку, подожди секунду."));
+        }
+        try {
+            QuestSubmission latest = questService.getLatestSubmission(user, quest);
+            if (latest == null || latest.getStatus() == ru.gamebot.platform.domain.enums.SubmissionStatus.CANCELLED) {
+                return ResponseEntity.ok(channelCheckReply(false, "NOT_TAKEN", "Сначала возьми квест кнопкой «Взять»."));
+            }
+            if (latest.getStatus() == ru.gamebot.platform.domain.enums.SubmissionStatus.APPROVED) {
+                return ResponseEntity.ok(channelCheckReply(false, "ALREADY_APPROVED", "Этот квест уже выполнен и оплачен."));
+            }
+            if (latest.getStatus() != ru.gamebot.platform.domain.enums.SubmissionStatus.DRAFT) {
+                return ResponseEntity.ok(channelCheckReply(false, "NOT_SUBMITTABLE", "Квест сейчас нельзя сдать. Загляни в «Мои квесты»."));
+            }
+            if (questService.isChannelCampaignClosed(quest)) {
+                return ResponseEntity.ok(channelCheckReply(false, "CAMPAIGN_CLOSED",
+                        "Квест закрыт: спонсор оплатил ограниченное число подписчиков, и все места уже заняты."));
+            }
+            if (questService.isExpired(latest)) {
+                return ResponseEntity.ok(channelCheckReply(false, "EXPIRED", "Срок квеста истёк. Возьми его заново, если он ещё доступен."));
+            }
+            Boolean member = gamePlatformBot.checkQuestChannelMembership(quest, telegramId, true);
+            if (member == null) {
+                return ResponseEntity.ok(channelCheckReply(false, "CHECK_FAILED", "Не удалось проверить подписку, попробуй чуть позже."));
+            }
+            if (!member) {
+                return ResponseEntity.ok(channelCheckReply(false, "NOT_SUBSCRIBED",
+                        "Подписки пока не видно. Открой канал, подпишись и снова нажми «Я подписался»."));
+            }
+            QuestSubmission done = questService.approveSubmission(latest.getId());
+            String holdNote = done.getHeldCoins() != null && done.getHeldReleaseAt() != null
+                    ? " Ещё +" + done.getHeldCoins() + " EXC придёт " + done.getHeldReleaseAt().format(DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+                            + ", если останешься в канале."
+                    : "";
+            return ResponseEntity.ok(channelCheckReply(true, "OK",
+                    "✅ Подписка подтверждена! +" + done.getAwardedCoins() + " EXC, +" + done.getAwardedXp() + " XP." + holdNote));
+        } catch (Exception e) {
+            log.error("Channel check approval failed for quest {} user {}", id, telegramId, e);
+            return ResponseEntity.ok(channelCheckReply(false, "ERROR", "Не получилось, попробуй чуть позже."));
+        } finally {
+            channelCheckInFlight.remove(telegramId);
+        }
+    }
+
+    private QuestActionResponseDto channelCheckReply(boolean success, String status, String message) {
+        return QuestActionResponseDto.builder().success(success).status(status).message(message).build();
     }
 
     @PostMapping("/{id}/report")
