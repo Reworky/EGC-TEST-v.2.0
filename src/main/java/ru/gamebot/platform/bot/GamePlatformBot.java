@@ -5394,8 +5394,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.rowsLayout(rows));
     }
 
+    /** Отметка статуса игрока по спонсорскому квесту в списке: ✅ выполнен, ⏳ в процессе / на проверке, ❌ отклонён, 🎯 ещё не брал. */
+    private String sponsoredQuestTag(AppUser user, Quest quest) {
+        QuestSubmission latest = questService.getLatestSubmission(user, quest);
+        if (latest == null) return "🎯 ";
+        return switch (latest.getStatus()) {
+            case APPROVED -> "✅ ";
+            case DRAFT, PENDING, NEEDS_INFO -> questService.isExpired(latest) ? "🎯 " : "⏳ ";
+            case REJECTED -> "❌ ";
+            default -> "🎯 ";
+        };
+    }
+
     private void sendSponsoredQuestList(AppUser user) {
-        List<Quest> quests = questService.findActiveSponsored();
+        // Активные квесты + завершённые кампании, по которым у игрока уже есть выполнение или работа: «✅» остаётся видимым и после закрытия кампании
+        List<Quest> quests = questService.findAllSponsored().stream()
+                .filter(q -> q.isActive() || java.util.Optional.ofNullable(questService.getLatestSubmission(user, q))
+                        .map(sub -> sub.getStatus() == SubmissionStatus.APPROVED
+                                || ((sub.getStatus() == SubmissionStatus.DRAFT || sub.getStatus() == SubmissionStatus.PENDING
+                                || sub.getStatus() == SubmissionStatus.NEEDS_INFO) && !questService.isExpired(sub)))
+                        .orElse(false))
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         if (quests.isEmpty()) {
             sendText(user.getTelegramId(),
                     "👀 Спонсорские квесты появятся скоро.",
@@ -5403,11 +5422,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         List<InlineKeyboardButton> buttons = new ArrayList<>();
+        boolean anyDone = false;
+        boolean anyInProgress = false;
         for (Quest q : quests) {
-            buttons.add(keyboardFactory.callback("🎯 " + trim(q.getTitle(), 32), "quest:view:sponsored:all:" + q.getId()));
+            String tag = sponsoredQuestTag(user, q);
+            if ("✅ ".equals(tag)) anyDone = true;
+            if ("⏳ ".equals(tag)) anyInProgress = true;
+            buttons.add(keyboardFactory.callback(tag + trim(q.getTitle(), 32), "quest:view:sponsored:all:" + q.getId()));
         }
+        String legend = (anyInProgress || anyDone)
+                ? "\n\n" + (anyDone ? "✅ — выполнен" : "") + (anyDone && anyInProgress ? " · " : "") + (anyInProgress ? "⏳ — в процессе" : "")
+                : "";
         sendText(user.getTelegramId(),
-                "💼 <b>Спонсорские квесты</b>\n\nВыберите задание:",
+                "💼 <b>Спонсорские квесты</b>\n\nВыберите задание:" + legend,
                 verticalWithBackMenu(buttons, "⬅️ Назад", "menu:quests"));
     }
 
