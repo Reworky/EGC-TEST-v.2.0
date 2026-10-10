@@ -132,6 +132,8 @@ public class QuestController {
                                     : questService.findActiveByGameName(game))
                 : (category != null ? questService.findByCategory(category)
                                     : questService.findActiveQuests()));
+        // Квесты «подпишись на канал» (спонсор) сдаются только в боте (кнопка «Я подписался»), в мини-апп их не показываем
+        quests.removeIf(q -> q.getChannelCheckChatId() != null);
         // Новые квесты сверху — та же логика, что и в sendQuestList в боте (см. Quest.isEffectivelyNew).
         quests.sort(java.util.Comparator.comparing(Quest::isEffectivelyNew, java.util.Comparator.reverseOrder())
                 .thenComparing(Quest::getTitle, String.CASE_INSENSITIVE_ORDER));
@@ -263,7 +265,8 @@ public class QuestController {
 
     @GetMapping("/sponsored")
     public List<QuestDto> sponsored(@AuthenticationPrincipal Long telegramId) {
-        var quests = questService.findActiveSponsored();
+        var quests = new java.util.ArrayList<>(questService.findActiveSponsored());
+        quests.removeIf(q -> q.getChannelCheckChatId() != null); // сдаются только в боте (кнопка «Я подписался»)
         Map<Long, String> statusByQuestId = new java.util.HashMap<>();
         AppUser currentUser = telegramId != null ? appUserRepository.findByTelegramId(telegramId).orElse(null) : null;
         if (currentUser != null) {

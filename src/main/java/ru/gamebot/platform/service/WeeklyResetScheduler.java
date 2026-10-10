@@ -331,7 +331,7 @@ public class WeeklyResetScheduler {
                 s.setDeadlineWarningSent(true);
                 questSubmissionRepository.save(s);
                 eventPublisher.publishEvent(new QuestDeadlineWarningEvent(this,
-                        s.getUser().getTelegramId(), s.getQuest().getTitle(), minutesLeft));
+                        s.getUser().getTelegramId(), s.getQuest().getTitle(), minutesLeft, s.getQuest().getChannelCheckChatId() != null));
             } catch (Exception e) {
                 log.warn("Failed to send deadline warning for submission {}", s.getId(), e);
             }

@@ -6542,6 +6542,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 || submission.getStatus() == SubmissionStatus.PENDING
                 || submission.getStatus() == SubmissionStatus.NEEDS_INFO;
         long shownCoins = activeSubmission ? displayRewardCoins(user, quest) : historyRewardCoins(user, quest);
+        // Подписка на канал спонсора: часть награды удержана до проверки «остался в канале»
+        String heldNote = "";
+        if ("PENDING".equals(submission.getHeldStatus()) && submission.getHeldCoins() != null && submission.getHeldReleaseAt() != null) {
+            heldNote = "🔒 Ещё <b>+" + fmtExc(submission.getHeldCoins()) + " EXC</b> придёт "
+                    + submission.getHeldReleaseAt().format(DATE_TIME_FORMATTER).substring(0, 10) + ", если останешься в канале\n";
+        } else if ("RELEASED".equals(submission.getHeldStatus())) {
+            heldNote = "✅ Вторая часть награды выплачена за верность каналу\n";
+        } else if ("FORFEITED".equals(submission.getHeldStatus())) {
+            heldNote = "ℹ️ Вторая часть награды не начислена: ты вышел из канала до срока\n";
+        }
         String weeklyNote = activeSubmission && !quest.isRepeatableNoCooldownEligible()
                 ? weeklyLimitNote(questService.weeklyLimitStatus(user, quest)) : "";
         if (activeSubmission) {
@@ -6555,6 +6565,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "✨ XP: <b>+" + quest.getRewardXp() + "</b>\n"
                         + "🪙 EXC: <b>+" + shownCoins + "</b>" + starsNote(shownCoins) + weeklyNote + "\n"
                         + (quest.getTicketReward() > 0 ? "🎟 Билеты: <b>+" + quest.getTicketReward() + "</b>\n" : "")
+                        + (heldNote)
                         + "\n📝 <b>Суть задания</b>\n" + escape(quest.getDescription()) + moderatorComment,
                 verticalWithBackMenu(buttons, "⬅️ Назад", "menu:myquests"));
     }
@@ -17889,9 +17900,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String timeStr = h > 0 ? h + " ч " + m + " мин" : m + " мин";
         String msg = "⚠️ <b>Квест истекает через " + timeStr + "!</b>\n\n"
                 + "«" + escape(event.getQuestTitle()) + "»\n\n"
-                + "Успей отправить доказательство 👇";
+                + (event.isChannelCheck() ? "Успей подписаться на канал и нажать «✅ Я подписался» 👇" : "Успей отправить доказательство 👇");
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
-                List.of(keyboardFactory.callback("📤 Мои квесты", "menu:myquests"))
+                List.of(keyboardFactory.callback(event.isChannelCheck() ? "📂 Мои квесты" : "📤 Мои квесты", "menu:myquests"))
         ));
         try {
             sendText(event.getTelegramId(), msg, keyboard);
