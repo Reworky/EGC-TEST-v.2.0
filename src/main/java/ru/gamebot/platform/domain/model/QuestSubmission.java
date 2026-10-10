@@ -145,6 +145,11 @@ public class QuestSubmission {
     @Column(columnDefinition = "integer default 0")
     private int brawlProgressCount;
 
+    /** Последняя отправленная игроку ступень прогресса автоквеста: 0 - ничего, 1 - «половина пути», 2 - «последний шаг»
+     *  (см. QuestProgressNotifier). Нужна, чтобы не слать одно и то же при каждом опросе API. */
+    @Column(columnDefinition = "integer default 0")
+    private int progressMilestoneSent;
+
     /** NEW_BRAWLER: имена бойцов игрока (через запятую) на момент первого опроса после взятия квеста.
      * null = ещё не захвачено. Квест засчитывается, когда в текущем списке появляется имя, которого тут нет. */
     @Column(length = 2000)

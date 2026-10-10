@@ -32,6 +32,7 @@ public class ClashQuestVerificationService {
     private final AppUserRepository appUserRepository;
     private final QuestService questService;
     private final ApplicationEventPublisher eventPublisher;
+    private final QuestProgressNotifier questProgressNotifier;
 
     public record TagLookupResult(boolean success, String error, ClashOfClansApiService.PlayerInfo playerInfo) {}
 
@@ -121,6 +122,7 @@ public class ClashQuestVerificationService {
         }
         int delta = current - submission.getClashBaselineValue();
         submission.setClashProgressCount(Math.max(0, delta));
+        questProgressNotifier.onProgress(submission, quest, submission.getClashProgressCount(), quest.getClashTargetCount());
         questSubmissionRepository.save(submission);
         if (delta >= quest.getClashTargetCount()) {
             completeSubmission(submission);
@@ -138,6 +140,7 @@ public class ClashQuestVerificationService {
         int elixirDelta = info.elixirLooted() - submission.getClashBaselineValue2();
         int progress = Math.max(0, Math.max(goldDelta, elixirDelta));
         submission.setClashProgressCount(progress);
+        questProgressNotifier.onProgress(submission, quest, progress, quest.getClashTargetCount());
         questSubmissionRepository.save(submission);
         if (progress >= quest.getClashTargetCount()) {
             completeSubmission(submission);

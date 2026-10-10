@@ -31,6 +31,7 @@ public class ClashRoyaleQuestVerificationService {
     private final AppUserRepository appUserRepository;
     private final QuestService questService;
     private final ApplicationEventPublisher eventPublisher;
+    private final QuestProgressNotifier questProgressNotifier;
 
     public record TagLookupResult(boolean success, String error, ClashRoyaleApiService.PlayerInfo playerInfo) {}
 
@@ -95,6 +96,7 @@ public class ClashRoyaleQuestVerificationService {
         }
         int delta = current - submission.getClashRoyaleBaselineValue();
         submission.setClashRoyaleProgressCount(Math.max(0, delta));
+        questProgressNotifier.onProgress(submission, quest, submission.getClashRoyaleProgressCount(), quest.getClashRoyaleTargetCount());
         questSubmissionRepository.save(submission);
         if (delta >= quest.getClashRoyaleTargetCount()) {
             completeSubmission(submission);

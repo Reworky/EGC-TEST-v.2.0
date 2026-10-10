@@ -4988,6 +4988,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Ступени прогресса автоквеста (2026-10-10): половина пути и последний шаг. Только сообщение, награду не меняет. */
+    @org.springframework.context.event.EventListener
+    public void onQuestProgressMilestone(ru.gamebot.platform.event.QuestProgressMilestoneEvent event) {
+        try {
+            long remaining = event.getTarget() - event.getProgress();
+            String head = event.getLevel() >= 2
+                    ? (remaining == 1 ? "🔥 <b>Остался один шаг!</b>" : "🔥 <b>Почти у цели!</b>")
+                    : "🎯 <b>Половина пути!</b>";
+            String tail = event.getLevel() >= 2
+                    ? "Осталось: <b>" + fmtExc(remaining) + "</b>. Ещё чуть-чуть, и награда твоя."
+                    : "Осталось ещё <b>" + fmtExc(remaining) + "</b>. Так держать!";
+            sendText(event.getTelegramId(),
+                    head + "\n\n«" + escape(event.getQuestTitle()) + "» — <b>" + fmtExc(event.getProgress()) + " / " + fmtExc(event.getTarget()) + "</b>\n" + tail,
+                    keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("📂 Мои квесты", "menu:myquests")))));
+        } catch (Exception e) {
+            log.warn("Failed to send quest progress milestone to {}", event.getTelegramId(), e);
+        }
+    }
+
     /** Друг пришёл по ссылке, но за 48 часов не выполнил первый квест: напоминаем пригласившему (один раз на друга). */
     @org.springframework.context.event.EventListener
     public void onReferredFriendStalled(ru.gamebot.platform.event.ReferredFriendStalledEvent event) {

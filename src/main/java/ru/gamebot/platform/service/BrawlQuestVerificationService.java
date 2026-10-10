@@ -35,6 +35,7 @@ public class BrawlQuestVerificationService {
     private final AppUserRepository appUserRepository;
     private final QuestService questService;
     private final ApplicationEventPublisher eventPublisher;
+    private final QuestProgressNotifier questProgressNotifier;
 
     public record TagLookupResult(boolean success, String error, BrawlStarsApiService.PlayerInfo playerInfo) {}
 
@@ -169,6 +170,7 @@ public class BrawlQuestVerificationService {
         }
         int delta = current - submission.getBrawlBaselineTrophies();
         submission.setBrawlProgressCount(Math.max(0, delta));
+        questProgressNotifier.onProgress(submission, quest, submission.getBrawlProgressCount(), quest.getBrawlTargetCount());
         questSubmissionRepository.save(submission);
         if (delta >= quest.getBrawlTargetCount()) {
             completeSubmission(submission);
@@ -194,6 +196,7 @@ public class BrawlQuestVerificationService {
         }
         submission.setBrawlBattleCursor(newCursor);
         submission.setBrawlProgressCount(submission.getBrawlProgressCount() + matched);
+        questProgressNotifier.onProgress(submission, quest, submission.getBrawlProgressCount(), quest.getBrawlTargetCount());
         questSubmissionRepository.save(submission);
         if (submission.getBrawlProgressCount() >= quest.getBrawlTargetCount()) {
             completeSubmission(submission);

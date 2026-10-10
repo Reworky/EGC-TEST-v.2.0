@@ -39,6 +39,7 @@ public class PubgQuestVerificationService {
     private final AppUserRepository appUserRepository;
     private final QuestService questService;
     private final ApplicationEventPublisher eventPublisher;
+    private final QuestProgressNotifier questProgressNotifier;
 
     public record AccountLookupResult(boolean success, String error, String accountId, int matchesFound) {}
 
@@ -126,6 +127,7 @@ public class PubgQuestVerificationService {
         }
 
         submission.setPubgProgressCount(progress);
+        questProgressNotifier.onProgress(submission, quest, progress, quest.getPubgTargetCount());
         submission.setPubgLastProcessedMatchTime(newCursor);
         if (progress >= quest.getPubgTargetCount()) {
             completed = true;

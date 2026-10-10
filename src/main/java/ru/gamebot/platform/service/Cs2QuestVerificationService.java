@@ -35,6 +35,7 @@ public class Cs2QuestVerificationService {
     private final AppUserRepository appUserRepository;
     private final QuestService questService;
     private final ApplicationEventPublisher eventPublisher;
+    private final QuestProgressNotifier questProgressNotifier;
 
     public record AccountLookupResult(boolean success, String error, Long steamId64, long matchesPlayed) {}
 
@@ -139,6 +140,7 @@ public class Cs2QuestVerificationService {
         }
         long delta = current - submission.getCs2BaselineValue();
         submission.setCs2ProgressCount((int) Math.max(0, Math.min(Integer.MAX_VALUE, delta)));
+        questProgressNotifier.onProgress(submission, quest, submission.getCs2ProgressCount(), quest.getCs2TargetCount());
         questSubmissionRepository.save(submission);
         if (delta >= quest.getCs2TargetCount()) {
             completeSubmission(submission);
