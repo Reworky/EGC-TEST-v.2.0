@@ -6971,6 +6971,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "💱 Курс: <b>" + rateString(ratioPercent) + "</b>\n"
                 + "⚠️ Минимум: <b>5 000 EXC</b>\n"
                 + withdrawalLevelHint(user) + "\n\n"
+                + withdrawalLastPayoutLine()
                 + "Выберите способ получения:";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("💸 В рублях (Сбербанк / СБП)", "shop:withdraw:rub")));
@@ -6978,6 +6979,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("⭐ В звёздах Telegram", "shop:group:telegram_stars")));
         rows.add(List.of(keyboardFactory.callback("📋 Мои заявки на вывод", "menu:my-withdrawals")));
         rows.add(List.of(keyboardFactory.callback("📊 Лимиты по всем рангам", "shop:ranks")));
+        rows.add(List.of(keyboardFactory.callback("💸 Лента выплат", "menu:payouts")));
         rows.add(List.of(keyboardFactory.callback("❌ Отмена", "menu:balance")));
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
@@ -10553,6 +10555,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "traffic:compare" -> { sendAdminTrafficCompare(user); answerSilently(callbackQuery.getId()); return; }
             case "polls" -> { sendAdminPollList(user); answerSilently(callbackQuery.getId()); return; }
             case "sponsors" -> { sendAdminSponsorList(user); answerSilently(callbackQuery.getId()); return; }
+            case "payoutboard" -> { sendPayoutBoardAdmin(user, null); answerSilently(callbackQuery.getId()); return; }
+            case "payoutboard:on" -> {
+                saveAppSetting(ru.gamebot.platform.service.PayoutBoardScheduler.ENABLED_KEY, "true");
+                String result = refreshPayoutBoard();
+                sendPayoutBoardAdmin(user, "Включено: " + result);
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            case "payoutboard:off" -> {
+                saveAppSetting(ru.gamebot.platform.service.PayoutBoardScheduler.ENABLED_KEY, "false");
+                sendPayoutBoardAdmin(user, "Выключено: пост остался в канале как был, обновляться больше не будет.");
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            case "payoutboard:now" -> {
+                String result = refreshPayoutBoard();
+                sendPayoutBoardAdmin(user, "Обновление: " + result);
+                answerSilently(callbackQuery.getId());
+                return;
+            }
             case "sponsors:fast" -> {
                 session.reset();
                 session.setState(SessionState.SPONSOR_FAST_INPUT);
@@ -14209,6 +14231,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback("📨 Рассылки: отчёт", "admin:nudgereport")));
                 rows.add(List.of(keyboardFactory.callback("🗳 Голосования", "admin:polls")));
                 rows.add(List.of(keyboardFactory.callback("📰 Контент канала", "admin:cc")));
+                rows.add(List.of(keyboardFactory.callback("📌 Живая лента выплат в канале", "admin:payoutboard")));
                 long pendingJoin = channelJoinRequestRepository.countByStatus(ChannelJoinRequest.PENDING);
                 rows.add(List.of(keyboardFactory.callback(
                         pendingJoin > 0 ? "📥 Заявки на канал (" + pendingJoin + ")" : "📥 Заявки на канал", "admin:joinreq")));
@@ -21151,6 +21174,99 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             payoutMenuLabelAt = now;
         }
         return payoutMenuLabelCached;
+    }
+
+    /** «💸 Недавно выплатили: …» строкой над выбором способа вывода (там решают, выводить ли); пусто, если свежих выплат нет. */
+    private String withdrawalLastPayoutLine() {
+        String label = payoutMenuLabel();
+        return label.startsWith("💸 Выплачено:") ? label.replaceFirst("^💸 Выплачено:", "💸 Недавно выплатили:") + "\n\n" : "";
+    }
+
+    private static final String PAYOUT_BOARD_MSG_KEY = "payout.board.message_id";
+
+    private String appSettingValue(String key) {
+        return appSettingRepository.findById(key).map(AppSetting::getValue).orElse(null);
+    }
+
+    private void saveAppSetting(String key, String value) {
+        AppSetting setting = new AppSetting();
+        setting.setKey(key);
+        setting.setValue(value);
+        appSettingRepository.save(setting);
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onPayoutBoardRefresh(ru.gamebot.platform.event.PayoutBoardRefreshEvent event) {
+        refreshPayoutBoard();
+    }
+
+    /** Живая «лента выплат» в канале: один закреплённый пост правится на месте. Нет поста (или он удалён) - создаём и закрепляем заново. */
+    private String refreshPayoutBoard() {
+        String chat = requiredChannelChatId();
+        String text = payoutFeedText() + "\n<i>Лента обновляется автоматически</i>";
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.url("🤖 Открыть бота", "https://t.me/" + getBotUsername()))));
+        String existing = appSettingValue(PAYOUT_BOARD_MSG_KEY);
+        if (existing != null && !existing.isBlank()) {
+            try {
+                EditMessageText edit = new EditMessageText();
+                edit.setChatId(chat);
+                edit.setMessageId(Integer.parseInt(existing.trim()));
+                edit.setText(text);
+                edit.setParseMode("HTML");
+                edit.setReplyMarkup(keyboard);
+                execute(edit);
+                return "обновлено";
+            } catch (TelegramApiException e) {
+                if (String.valueOf(e.getMessage()).contains("message is not modified")) {
+                    return "без изменений";
+                }
+                log.warn("Payout board edit failed, recreating the message", e);
+            } catch (NumberFormatException e) {
+                log.warn("Bad payout board message id '{}'", existing);
+            }
+        }
+        try {
+            SendMessage send = new SendMessage();
+            send.setChatId(chat);
+            send.setText(text);
+            send.setParseMode("HTML");
+            send.setReplyMarkup(keyboard);
+            org.telegram.telegrambots.meta.api.objects.Message sent = execute(send);
+            saveAppSetting(PAYOUT_BOARD_MSG_KEY, String.valueOf(sent.getMessageId()));
+            try {
+                org.telegram.telegrambots.meta.api.methods.pinnedmessages.PinChatMessage pin =
+                        new org.telegram.telegrambots.meta.api.methods.pinnedmessages.PinChatMessage();
+                pin.setChatId(chat);
+                pin.setMessageId(sent.getMessageId());
+                pin.setDisableNotification(true);
+                execute(pin);
+            } catch (TelegramApiException pinFailure) {
+                log.warn("Failed to pin payout board message (bot needs the pin right)", pinFailure);
+                return "создано, но не закреплено (нет права закреплять)";
+            }
+            return "создано и закреплено";
+        } catch (TelegramApiException e) {
+            log.warn("Failed to create payout board message", e);
+            return "ошибка: " + e.getMessage();
+        }
+    }
+
+    private void sendPayoutBoardAdmin(AppUser user, String note) {
+        boolean enabled = "true".equalsIgnoreCase(String.valueOf(appSettingValue(ru.gamebot.platform.service.PayoutBoardScheduler.ENABLED_KEY)));
+        String existing = appSettingValue(PAYOUT_BOARD_MSG_KEY);
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback(enabled ? "⏹ Выключить" : "▶️ Включить и закрепить", enabled ? "admin:payoutboard:off" : "admin:payoutboard:on")));
+        rows.add(List.of(keyboardFactory.callback("🔄 Обновить сейчас", "admin:payoutboard:now")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:comm")));
+        sendText(user.getTelegramId(),
+                "📌 <b>Живая лента выплат в канале</b>\n\n"
+                        + "Один закреплённый пост в канале клуба с последними выплатами и итогами за сутки и неделю. Обновляется сам раз в 10 минут, новых постов не создаёт.\n\n"
+                        + "Статус: <b>" + (enabled ? "🟢 включена" : "⚫ выключена") + "</b>\n"
+                        + "Пост: " + (existing == null || existing.isBlank() ? "ещё не создан" : "#" + escape(existing)) + "\n"
+                        + "Нужно, чтобы бот был админом канала с правом закреплять сообщения."
+                        + (note == null ? "" : "\n\n" + escape(note)),
+                keyboardFactory.rowsLayout(rows));
     }
 
     private LocalDateTime payoutMoment(ru.gamebot.platform.domain.model.RewardRequest req) {
