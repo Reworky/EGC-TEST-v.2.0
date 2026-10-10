@@ -5276,17 +5276,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         double ratio = healthRatioService.getCurrentRatio();
         int ratioPercent = (int) Math.round(ratio * 100);
         long effectiveQuestReward = healthRatioService.applyRatio(100);
+        long rub = Math.round(user.getCoins() * ratio / 100.0);
+        String equivalent = user.getCoins() > 0
+                ? healthRatioService.starsApprox(user.getCoins()) + " · ≈ " + fmtExc(rub) + " ₽ (курс фонда " + ratioPercent + "%)\n\n"
+                : "";
         sendText(user.getTelegramId(),
                 "💰 <b>Баланс</b>\n\n"
-                        + (user.getCoins() > 0 ? "⭐ В звёздах: <b>" + healthRatioService.starsApprox(user.getCoins()) + "</b> (по текущему курсу фонда)\n" : "")
-                        + "🪙 Монеты клуба: <b>" + user.getCoins() + " EXC</b>\n"
-                        + (user.getCoins() < 5_000 ? "🎯 До первого вывода осталось: <b>" + (5_000 - user.getCoins()) + " EXC</b> (минимум 5 000)\n" : "")
-                        + "💱 Курс вывода: <b>" + rateString(ratioPercent) + "</b>\n"
-                        + "💠 Активный бонус к EXC: <b>+" + userService.getExcBonusPercent(user.getXp()) + "%</b>\n"
+                        + "🪙 <b>" + fmtExc(user.getCoins()) + " EXC</b>\n\n"
+                        + equivalent
+                        + "💠 Бонус к EXC: <b>+" + userService.getExcBonusPercent(user.getXp()) + "%</b>\n"
                         + "🎟️ Билеты сезона: <b>" + user.getTickets() + "</b>\n"
-                        + "✨ Общий XP: <b>" + user.getXp() + "</b>\n"
-                        + "📈 XP за неделю: <b>" + user.getWeeklyXp() + "</b>\n\n"
-                        + "📊 <b>Состояние фонда клуба: " + ratioPercent + "%</b>\n"
+                        + "✨ XP: <b>" + user.getXp() + "</b> · за неделю: <b>" + user.getWeeklyXp() + "</b>\n\n"
+                        + "📊 Фонд клуба: <b>" + ratioPercent + "%</b>\n"
                         + hrExplanationLine(ratioPercent, effectiveQuestReward),
                 keyboardFactory.rowsLayout(List.of(
                         List.of(
