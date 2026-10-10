@@ -52,8 +52,8 @@ public class SquadService {
      *  1,5 человека - большинство "отрядов" сейчас теги на 1-2 людях, не команды. Суммы скромные
      *  (сопоставимы с REFERRAL_SQUAD_BONUS_POINTS по порядку цены за действие), чтобы не раздувать
      *  Payout Pool - это подталкивающий нудж, а не основной источник дохода игрока. */
-    private static final long SQUAD_MILESTONE_3_BONUS_PER_MEMBER = 200;
-    private static final long SQUAD_MILESTONE_5_BONUS_PER_MEMBER = 150;
+    public static final long SQUAD_MILESTONE_3_BONUS_PER_MEMBER = 200;
+    public static final long SQUAD_MILESTONE_5_BONUS_PER_MEMBER = 150;
 
     private final SquadRepository squadRepository;
     private final AppUserRepository appUserRepository;

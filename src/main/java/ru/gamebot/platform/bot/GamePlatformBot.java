@@ -1833,6 +1833,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "gemdonate" -> sendGemPackageList(user, "brawl_stars"); // обратная совместимость со старыми сообщениями (см. "shop:donate:" — актуальный путь)
             case "cat:club" -> sendClubCategory(user);
             case "cat:help" -> sendHelpCategory(user);
+            case "cat:more" -> sendMoreCategory(user);
             case "cat:fortune" -> sendFortuneCategory(user);
             case "squads" -> sendSquadMenu(user);
             default -> sendMainMenu(user, mainMenuText(user));
@@ -20714,17 +20715,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return keyboardFactory.rowsLayout(rows);
         }
 
-        boolean hasTournament = tournamentService.findCurrentForUser().isPresent();
-        String questsLabel = hasTournament ? "📋 Все квесты и рейтинг 🔥" : "📋 Все квесты и рейтинг";
-        rows.add(List.of(keyboardFactory.callback("🎯 Твой квест сейчас", "quest:recommend")));
-        rows.add(List.of(keyboardFactory.callback(questsLabel, "menu:cat:quests")));
-
+        // Главное меню игрока — «одна цель + 4 кнопки» (2026-10-10, по образцу Mistplay): главное действие, задания дня
+        // с наградой, деньги, люди, а всё остальное — в «⋯ Ещё» (см. sendMoreCategory).
+        rows.add(List.of(keyboardFactory.callback("🎯 Играть — квест для тебя", "quest:recommend")));
         if (userService.dailyTasksEnabled()) {
             rows.add(List.of(keyboardFactory.callback(dailyTasksMenuLabel(user), "menu:dtasks")));
         }
-        rows.add(List.of(keyboardFactory.callback("🤝 Рефералы", "menu:referrals")));
-
         String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошелёк 🔔" : "💰 Кошелёк";
+        rows.add(List.of(
+                keyboardFactory.callback(walletLabel, "menu:cat:wallet"),
+                keyboardFactory.callback("🛍️ Магазин", "menu:cat:shop")
+        ));
+        rows.add(List.of(
+                keyboardFactory.callback("🤝 Друзья", "menu:referrals"),
+                keyboardFactory.callback("⚔️ Отряд", "menu:squads")
+        ));
+        boolean moreBadge = tournamentService.findCurrentForUser().isPresent()
+                || user.getTickets() > 0 || userService.isChestAvailable(user)
+                || !pollService.findActive().isEmpty();
+        rows.add(List.of(
+                keyboardFactory.callback("👤 Профиль", "menu:profile"),
+                keyboardFactory.callback(moreBadge ? "⋯ Ещё 🔔" : "⋯ Ещё", "menu:cat:more")
+        ));
+        return keyboardFactory.rowsLayout(rows);
+    }
+
+    /** Раздел «⋯ Ещё» — всё, что убрано с главного экрана игрока: квесты и рейтинг, фортуна, клуб, помощь, мини-апп. */
+    private void sendMoreCategory(AppUser user) {
+        boolean hasTournament = tournamentService.findCurrentForUser().isPresent();
+        String questsLabel = hasTournament ? "📋 Все квесты и рейтинг 🔥" : "📋 Все квесты и рейтинг";
         String fortuneLabel;
         if (user.getTickets() > 0) {
             fortuneLabel = "🍀 Фортуна 🎟 " + user.getTickets();
@@ -20735,23 +20754,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         long activePolls = pollService.findActive().size();
         String clubLabel = activePolls > 0 ? "👥 Клуб (" + activePolls + ")" : "👥 Клуб";
-
-        rows.add(List.of(
-                keyboardFactory.callback("👤 Профиль", "menu:profile"),
-                keyboardFactory.callback("⚔️ Отряды", "menu:squads")
+        sendMenuCategory(user, "⋯ <b>Ещё</b>", List.of(
+                List.of(keyboardFactory.callback(questsLabel, "menu:cat:quests")),
+                List.of(keyboardFactory.callback(fortuneLabel, "menu:cat:fortune")),
+                List.of(keyboardFactory.callback(clubLabel, "menu:cat:club")),
+                List.of(keyboardFactory.callback("🆘 Помощь", "menu:cat:help")),
+                List.of(keyboardFactory.webApp("🌐 Открыть Mini App", "https://experience-gaming-club.pages.dev"))
         ));
-        rows.add(List.of(
-                keyboardFactory.callback(walletLabel, "menu:cat:wallet"),
-                keyboardFactory.callback("🛍️ Магазин", "menu:cat:shop")
-        ));
-        rows.add(List.of(
-                keyboardFactory.callback(fortuneLabel, "menu:cat:fortune"),
-                keyboardFactory.callback(clubLabel, "menu:cat:club")
-        ));
-
-        rows.add(List.of(keyboardFactory.callback("🆘 Помощь", "menu:cat:help")));
-        rows.add(List.of(keyboardFactory.webApp("🌐 Открыть Mini App", "https://experience-gaming-club.pages.dev")));
-        return keyboardFactory.rowsLayout(rows);
     }
 
     private InlineKeyboardMarkup singleMenuKeyboard() {
@@ -20864,10 +20873,51 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "Выберите нужный раздел ниже и продолжайте прогресс.";
     }
 
+    /** Блок «цель» под балансом в главном меню игрока: что делать сегодня и что за это будет + где отряд.
+     *  Пустая строка, если показывать нечего. */
+    private String userGoalLines(AppUser user) {
+        StringBuilder sb = new StringBuilder();
+        if (userService.dailyTasksEnabled()) {
+            sb.append("\n\n");
+            if (userService.isDailyTasksChestClaimed(user)) {
+                sb.append("✅ Задания дня выполнены, новые — завтра");
+            } else {
+                sb.append("📋 Задания дня ").append(Integer.bitCount(userService.dailyTasksMask(user))).append("/3 → 🎁 +")
+                        .append(UserService.DAILY_TASKS_CHEST_EXC).append(" EXC и 🎟️ билет колеса");
+            }
+        }
+        sb.append(sb.length() == 0 ? "\n\n" : "\n").append(squadMenuLine(user));
+        return sb.toString();
+    }
+
+    private String squadMenuLine(AppUser user) {
+        try {
+            ru.gamebot.platform.domain.model.Squad squad = squadService.findByUser(user).orElse(null);
+            if (squad == null) {
+                return "⚔️ Отряд: нет. Из 3 игроков — +" + ru.gamebot.platform.service.SquadService.SQUAD_MILESTONE_3_BONUS_PER_MEMBER
+                        + " EXC каждому";
+            }
+            int size = squadService.getMembers(squad).size();
+            String name = "«" + escape(squad.getName()) + "»";
+            if (size < 3) {
+                return "⚔️ Отряд " + name + ": " + size + "/3 — ещё " + (3 - size) + " до бонуса +"
+                        + ru.gamebot.platform.service.SquadService.SQUAD_MILESTONE_3_BONUS_PER_MEMBER + " EXC каждому";
+            }
+            if (size < 5) {
+                return "⚔️ Отряд " + name + ": " + size + "/5 — ещё " + (5 - size) + " до бонуса +"
+                        + ru.gamebot.platform.service.SquadService.SQUAD_MILESTONE_5_BONUS_PER_MEMBER + " EXC каждому";
+            }
+            return "⚔️ Отряд " + name + ": " + size + " игроков";
+        } catch (Exception e) {
+            log.warn("Failed to build squad line for main menu, user {}", user.getTelegramId(), e);
+            return "";
+        }
+    }
+
     private String mainMenuText(AppUser user) {
         String role = resolveMenuRole(user, sessionService.get(user.getTelegramId()));
         if (ROLE_USER.equals(role)) {
-            return "Никнейм: " + escape(user.getNickname()) + "\n\n" + userBalanceLine(user);
+            return "Никнейм: " + escape(user.getNickname()) + "\n\n" + userBalanceLine(user) + userGoalLines(user);
         }
         String title = switch (role) {
             case ROLE_ADMIN -> "🛠️ <b>Административный контур активен</b>";
