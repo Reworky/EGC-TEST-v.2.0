@@ -889,6 +889,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleActivationCheck(callbackQuery, user);
             return;
         }
+        if ("activation:show".equals(data)) {
+            answerSilently(callbackQuery.getId());
+            sendCommunityActivationPrompt(user, "🎉 <b>Первая награда твоя!</b>\nЧтобы брать следующие квесты, подпишись на канал.");
+            return;
+        }
         if ("activation:profile".equals(data)) {
             sendProfile(user);
             answerSilently(callbackQuery.getId());
@@ -4027,6 +4032,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         userService.applyWelcomeBonus(activated);
         ru.gamebot.platform.service.UserService.ReferralActivationResult referral =
                 userService.grantReferralReward(activated);
+        // Удержанные бонусы за первый квест (первый квест пройден до подписки) - выдаём сейчас
+        if (userService.claimPendingFirstQuestReferralBonus(activated)) {
+            sendText(activated.getTelegramId(),
+                    "🎁 <b>+3 000 EXC</b> за первый квест уже на балансе — спасибо за подписку!", null);
+        }
         consumePendingSquadInvite(activated);
         if (referral != null) {
             sendText(referral.referrerTelegramId(),
@@ -4187,12 +4197,164 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         user.setOnboardingNotificationsSent(0);
         userService.save(user);
 
+        if (settingEnabled(ONBOARDING_V2_SETTING)) {
+            sendStarterPicker(user, true);
+            return;
+        }
         sendText(user.getTelegramId(),
                 "🎮 <b>Добро пожаловать в EGC!</b>\n\n"
                         + "✅ Тебе начислено <b>200 EXC</b> за регистрацию — это твой стартовый капитал.\n",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("Отлично, что дальше? →", "onboarding:guide"))
                 )));
+    }
+
+    // ─── Онбординг v2: цель + выбор игры + один стартовый квест (2026-10-10) ──────────────────
+    // Идея из анализа Mistplay: у новичка с первой минуты есть цель со шкалой прогресса и ОДНО подсказанное
+    // действие вместо четырёх экранов инструкции. Откат без деплоя: app_settings 'onboarding.v2.enabled' = false.
+
+    private static final String ONBOARDING_V2_SETTING = "onboarding.v2.enabled";
+    private static final String FIRST_QUEST_FREE_SETTING = "onboarding.first_quest_free.enabled";
+    private static final long FIRST_WITHDRAWAL_EXC = 5_000;
+    private static final long WELCOME_BONUS_EXC = 200;
+    private static final long STARTER_ALERT_GAP_MS = 6 * 60 * 60 * 1000L;
+
+    private record StarterGame(String code, String button, String game, String defaultTitles) {}
+
+    /** Игры на первом экране: по данным за 60 дней это ~97% первых квестов новичков (Steam-игры - ~1%, они идут через «Другие игры»).
+     *  Названия квестов - в порядке приоритета и из ОБОИХ сезонов (Сезон А/Б): берётся первый, который сейчас активен.
+     *  Список можно поменять без деплоя: app_settings 'onboarding.starter.<code>' = «название1;название2». */
+    private static final List<StarterGame> STARTER_GAMES = List.of(
+            new StarterGame("bs", "🥊 Brawl Stars", "Brawl Stars", "Сразись в бою 8 раз;Сразись в бою 10 раз"),
+            new StarterGame("cr", "👑 Clash Royale", "Clash Royale", "Сыграй 3 боя;Сыграй 5 боёв"),
+            new StarterGame("coc", "🏰 Clash of Clans", "Clash of Clans", "Выиграй 2 атаки в мультиплеере;Выиграй 3 атаки в мультиплеере"));
+
+    private final java.util.Map<String, Long> starterAlertSentAt = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Включено по умолчанию; выключается значением "false" в app_settings (откат без деплоя). */
+    private boolean settingEnabled(String key) {
+        try {
+            return appSettingRepository.findById(key)
+                    .map(AppSetting::getValue)
+                    .map(v -> !"false".equalsIgnoreCase(v.trim()))
+                    .orElse(true);
+        } catch (Exception e) {
+            log.warn("Failed to read setting {}", key, e);
+            return true;
+        }
+    }
+
+    private String progressBar(long value, long target) {
+        int filled = value <= 0 ? 0 : (int) Math.max(1, Math.min(10, value * 10 / target));
+        return "▰".repeat(filled) + "▱".repeat(10 - filled);
+    }
+
+    /** fresh=true - сразу после регистрации (приветствие + стартовый бонус); false - возврат к незавершённому онбордингу
+     *  (старый игрок, жмущий /start): без «тебе начислено», шкала по реальному балансу. */
+    private void sendStarterPicker(AppUser user, boolean fresh) {
+        long coins = fresh ? WELCOME_BONUS_EXC : user.getCoins();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (StarterGame g : STARTER_GAMES) {
+            rows.add(List.of(keyboardFactory.callback(g.button(), "onboarding:game:" + g.code())));
+        }
+        rows.add(List.of(keyboardFactory.callback("🎲 Другие игры", "onboarding:browse_all")));
+        rows.add(List.of(keyboardFactory.callback("❓ Как это работает", "onboarding:guide")));
+        String head = fresh
+                ? "🎮 <b>Добро пожаловать в EGC!</b>\n\n"
+                        + "✅ Тебе начислено <b>" + WELCOME_BONUS_EXC + " EXC</b> — это твой стартовый капитал.\n\n"
+                : "🎮 <b>Давай начнём с первого квеста</b>\n\n";
+        sendText(user.getTelegramId(),
+                head
+                        + "🎯 <b>Цель — первый вывод: " + fmtExc(FIRST_WITHDRAWAL_EXC) + " EXC</b>\n"
+                        + progressBar(coins, FIRST_WITHDRAWAL_EXC) + " " + fmtExc(Math.min(coins, FIRST_WITHDRAWAL_EXC)) + " / " + fmtExc(FIRST_WITHDRAWAL_EXC) + "\n\n"
+                        + "Первый квест простой, награда придёт сама. Во что играешь?",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private List<String> starterTitles(StarterGame g) {
+        String configured = appSettingRepository.findById("onboarding.starter." + g.code())
+                .map(AppSetting::getValue).filter(v -> !v.isBlank()).orElse(g.defaultTitles());
+        return java.util.Arrays.stream(configured.split(";")).map(String::trim).filter(t -> !t.isEmpty()).toList();
+    }
+
+    private void handleStarterGamePick(AppUser user, String code) {
+        completeOnboarding(user);
+        StarterGame game = STARTER_GAMES.stream().filter(g -> g.code().equals(code)).findFirst().orElse(null);
+        if (game == null) {
+            sendGamingQuestGames(user);
+            return;
+        }
+        Quest quest = questService.findStarterQuest(game.game(), starterTitles(game)).orElse(null);
+        if (quest == null) {
+            alertStarterQuestMissing(game);
+            sendText(user.getTelegramId(),
+                    "🎮 <b>" + escape(game.game()) + "</b> — выбери квест из списка:",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("🎯 Квесты: " + game.game(), "quests:game:" + encodeGameToken(game.game()))))));
+            return;
+        }
+        sendStarterQuestCard(user, quest);
+    }
+
+    private void sendStarterQuestCard(AppUser user, Quest quest) {
+        long reward = quest.getRewardCoins();
+        String description = quest.getDescription() == null ? "" : escape(trim(quest.getDescription(), 300)) + "\n\n";
+        String duration = quest.getDurationText() == null || quest.getDurationText().isBlank() ? "" : "⏱ Срок: " + escape(quest.getDurationText()) + "\n";
+        sendText(user.getTelegramId(),
+                "🎯 <b>Твой первый квест</b>\n\n"
+                        + "<b>" + escape(quest.getTitle()) + "</b> (" + escape(quest.getGameName()) + ")\n"
+                        + description
+                        + "🪙 Награда: <b>" + fmtExc(reward) + " EXC</b>" + starsNote(reward) + "\n"
+                        + duration
+                        + "✅ Засчитается автоматически — ничего отправлять не нужно.\n\n"
+                        + "После награды: " + progressBar(user.getCoins() + reward, FIRST_WITHDRAWAL_EXC) + " "
+                        + fmtExc(Math.min(user.getCoins() + reward, FIRST_WITHDRAWAL_EXC)) + " / " + fmtExc(FIRST_WITHDRAWAL_EXC) + " EXC до первого вывода",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("⚡ Взять квест", "quest:take:" + quest.getId())),
+                        List.of(keyboardFactory.callback("🗺️ Другие квесты", "onboarding:browse_all")),
+                        List.of(keyboardFactory.callback("❓ Как это работает", "onboarding:guide")))));
+    }
+
+    /** Стартового квеста по игре сейчас нет среди активных (смена сезона/переименование) - игрок видит обычный список,
+     *  админам раз в 6 часов уходит предупреждение, чтобы обновили настройку 'onboarding.starter.<code>'. */
+    private void alertStarterQuestMissing(StarterGame game) {
+        long now = System.currentTimeMillis();
+        Long last = starterAlertSentAt.get(game.code());
+        if (last != null && now - last < STARTER_ALERT_GAP_MS) {
+            return;
+        }
+        starterAlertSentAt.put(game.code(), now);
+        String text = "⚠️ <b>Нет стартового квеста: " + escape(game.game()) + "</b>\n\n"
+                + "Ни один из квестов из списка (" + escape(String.join("; ", starterTitles(game))) + ") сейчас не активен. "
+                + "Новичок, выбравший эту игру, видит обычный список квестов. Обновите настройку onboarding.starter." + game.code() + " (названия через «;»).";
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, text, null);
+            } catch (Exception e) {
+                log.warn("Failed to send starter quest alert to admin {}", adminId, e);
+            }
+        }
+    }
+
+    /** Первый квест можно взять без подписки на канал (2026-10-10): подписку просим после первой награды. Только для
+     *  тех, кто ещё ни разу не активировался и не выполнил ни одного квеста. Откат: app_settings 'onboarding.first_quest_free.enabled' = false. */
+    public boolean isFirstQuestFree(AppUser user) {
+        return !user.isRegistrationCompleted() && user.getCompletedQuests() == 0 && settingEnabled(FIRST_QUEST_FREE_SETTING);
+    }
+
+    /** Можно ли игроку брать квест прямо сейчас: первый квест без подписки либо живая подписка на канал. */
+    public boolean mayTakeQuestNow(AppUser user) {
+        return isFirstQuestFree(user) || isActivelySubscribedFresh(user);
+    }
+
+    /** Строка про бонус за первый квест друга: удерживается до подписки на канал (см. UserService.grantFirstQuestReferralBonus). */
+    private String firstQuestReferralLine(AppUser user, boolean isFirstQuest) {
+        if (!isFirstQuest || user.getReferredByTelegramId() == null) {
+            return "";
+        }
+        return user.isReferralFirstQuestBonusPending()
+                ? "\n🎁 Бонус за первый квест <b>+3 000 EXC</b> придёт, как только подпишешься на канал"
+                : "\n🎁 Бонус за первый квест: <b>+3 000 EXC</b>";
     }
 
     private void sendOnboardingGuide(AppUser user) {
@@ -4213,6 +4375,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void resumeOnboarding(AppUser user) {
+        if (settingEnabled(ONBOARDING_V2_SETTING)) {
+            sendStarterPicker(user, false);
+            return;
+        }
         sendOnboardingGuide(user);
     }
 
@@ -4220,6 +4386,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if ("guide".equals(sub)) {
             answerSilently(callbackQuery.getId());
             sendOnboardingGuide(user);
+        } else if (sub.startsWith("game:")) {
+            answerSilently(callbackQuery.getId());
+            handleStarterGamePick(user, sub.substring("game:".length()));
         } else if ("browse_all".equals(sub)) {
             completeOnboarding(user);
             answerSilently(callbackQuery.getId());
@@ -5490,7 +5659,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * и для того, кто уже был подписан, но отписался. */
     private boolean requireActiveSubscriptionForQuest(CallbackQuery callbackQuery, AppUser user, UserSession session,
                                                         Long questId, Long partnerTelegramId) {
-        if (isEffectiveModerator(user) || isActivelySubscribedFresh(user)) {
+        if (isEffectiveModerator(user) || mayTakeQuestNow(user)) {
             return true;
         }
         answerSilently(callbackQuery.getId());
@@ -5502,6 +5671,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         String notice = user.isRegistrationCompleted()
                 ? "⚠️ Похоже, вы отписались от канала. Подпишитесь снова, чтобы продолжить брать квесты."
+                : user.getCompletedQuests() > 0
+                ? "🎉 <b>Первая награда твоя!</b> Чтобы брать следующие квесты, подпишись на канал — это займёт 10 секунд."
                 : "🎯 Чтобы взять этот квест и начать зарабатывать EXC, сначала подпишись на канал — это займёт 10 секунд.";
         sendCommunityActivationPrompt(user, notice);
         return false;
@@ -9750,8 +9921,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         );
         boolean isFirstQuest = currentSubmission.getUser().getCompletedQuests() == 0;
         QuestSubmission submission = questService.approveSubmission(submissionId);
-        String firstQuestBonus = isFirstQuest && submission.getUser().getReferredByTelegramId() != null
-                ? "\n🎁 Бонус за первый квест: <b>+3 000 EXC</b>" : "";
+        String firstQuestBonus = firstQuestReferralLine(submission.getUser(), isFirstQuest);
         try {
             notifyUser(submission.getUser().getTelegramId(),
                     "🎉 Ваш отчёт по квесту <b>" + escape(submission.getQuest().getTitle()) + "</b> одобрен!\n\n"
@@ -17598,8 +17768,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             AppUser user = userService.findByTelegramId(event.getTelegramId()).orElse(null);
             if (user == null) return;
             // Не прошёл подписку на канал: квест взять нельзя, зовём подписаться, а не «выбрать квест»
-            if (!user.isRegistrationCompleted()) {
-                sendCommunityActivationPrompt(user, "👋 <b>Остался один шаг до первого квеста</b>");
+            if (!user.isRegistrationCompleted() && !isFirstQuestFree(user)) {
+                sendCommunityActivationPrompt(user, user.getCompletedQuests() > 0
+                        ? "🎉 <b>Ты уже получил первую награду</b>\nОстался один шаг, чтобы брать новые квесты."
+                        : "👋 <b>Остался один шаг до первого квеста</b>");
                 return;
             }
             String game = questService.mostPopularActiveGame().orElse(null);
@@ -17611,7 +17783,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             String msg = inviterNick != null
                     ? "🎁 <b>Тебя пригласил " + escape(inviterNick) + "</b>\n\n"
-                            + "За первый квест тебе начислят <b>+3 000 EXC</b>" + starsNote(3_000) + ". Самый простой старт — квесты по Brawl Stars: прогресс засчитывается сам, ничего отправлять не нужно." + popular
+                            + "За первый квест тебе начислят <b>+3 000 EXC</b>" + starsNote(3_000) + (user.isRegistrationCompleted() ? "" : " (бонус придёт после подписки на канал)") + ". Самый простой старт — квесты по Brawl Stars: прогресс засчитывается сам, ничего отправлять не нужно." + popular
                     : switch (event.getNotificationNumber()) {
                 case 1 -> "🎮 <b>У тебя уже 200 EXC</b>\n\n"
                         + "Первый квест занимает около 5 минут, а дальше EXC копятся на вывод (минимум 5 000 EXC)." + popular;
@@ -19120,8 +19292,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             );
             boolean isFirstQuest = submission.getUser().getCompletedQuests() == 0;
             QuestSubmission approved = questService.approveSubmission(submission.getId());
-            String firstQuestBonus = isFirstQuest && approved.getUser().getReferredByTelegramId() != null
-                    ? "\n🎁 Бонус за первый квест: <b>+3 000 EXC</b>" : "";
+            String firstQuestBonus = firstQuestReferralLine(approved.getUser(), isFirstQuest);
             int pct = (int) Math.round(aiResult.confidence() * 100);
             log.info("AI auto-approved submission {} (confidence={})", submission.getId(), aiResult.confidence());
             try {
@@ -20253,6 +20424,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  см. QuestService.recommendQuest) и возвращает кнопку для карточки одобрения, или null если
      *  предложить нечего. Открывает квест напрямую (см. "quest:suggest:" в handleCallbackQuery). */
     private InlineKeyboardButton nextQuestSuggestionButton(AppUser user) {
+        // Первый квест пройден без подписки: вместо «следующего квеста» зовём подписаться (иначе нажатие упрётся в гейт)
+        if (!user.isRegistrationCompleted() && user.getCompletedQuests() >= 1 && settingEnabled(FIRST_QUEST_FREE_SETTING)) {
+            return keyboardFactory.callback("📢 Подпишись и бери следующий квест", "activation:show");
+        }
         return questService.recommendQuest(user)
                 .map(q -> keyboardFactory.callback("🎯 Взять следующий квест", "quest:suggest:" + q.getId()))
                 .orElse(null);

@@ -249,6 +249,24 @@ public class QuestService {
         return questRepository.findFirstByTitleAndGameName(title, gameName);
     }
 
+    /** Стартовый квест для первого входа (онбординг v2, 2026-10-10): первое название из списка по приоритету,
+     *  которое СЕЙЧАС можно взять. Квесты ротируются сезонами (Сезон А/Б), поэтому в настройке лежит список
+     *  названий обоих сезонов, а не один квест. Не берём спонсорские/внешние и закрытые для совета/сезонного
+     *  пропуска - стартовый квест должен быть доступен любому новичку. Пусто - стартового квеста нет
+     *  (вызывающий код показывает обычный список). */
+    public Optional<Quest> findStarterQuest(String gameName, List<String> titlesByPriority) {
+        for (String title : titlesByPriority) {
+            Optional<Quest> found = questRepository.findFirstByTitleAndGameName(title.trim(), gameName)
+                    .filter(Quest::isActive)
+                    .filter(q -> !q.isSponsored() && !q.isExternalAutoApprove() && q.getSponsorId() == null)
+                    .filter(q -> !q.isCouncilOnly() && !q.isSeasonOnly());
+            if (found.isPresent()) {
+                return found;
+            }
+        }
+        return Optional.empty();
+    }
+
     public Optional<Quest> recommendQuest(AppUser user) {
         List<QuestSubmission> history = questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user);
         String preferredGame = history.isEmpty() ? null : history.get(0).getQuest().getGameName();
@@ -1341,6 +1359,11 @@ public class QuestService {
         }
         // Fix 3: prevent self-referral (multi-account farming)
         if (referrerTelegramId.equals(invitedUser.getTelegramId())) {
+            return;
+        }
+        // Первый квест без подписки на канал (2026-10-10): процент с заработка идёт только за активированных
+        // (подписанных) игроков - иначе фарм через рефералку без подписки.
+        if (!invitedUser.isRegistrationCompleted()) {
             return;
         }
         AppUser referrer = appUserRepository.findByTelegramId(referrerTelegramId).orElse(null);

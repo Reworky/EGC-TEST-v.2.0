@@ -365,11 +365,14 @@ public class QuestController {
         // без неё мини-апп был бы обходным путём мимо этого правила, раз общая блокировка снята. Именно
         // "Fresh"-вариант, без часового кэша: разовый флаг isRegistrationCompleted() остаётся true
         // навсегда, а кэшированная проверка позволила бы весь час брать квесты после отписки.
-        if (!gamePlatformBot.isActivelySubscribedFresh(user)) {
+        // Первый квест можно взять без подписки (2026-10-10, см. GamePlatformBot.isFirstQuestFree) - подписку просим со второго.
+        if (!gamePlatformBot.mayTakeQuestNow(user)) {
             return ResponseEntity.ok(QuestActionResponseDto.builder()
                     .success(false)
                     .status(QuestActionStatus.NEEDS_CHANNEL_SUBSCRIPTION.name())
-                    .message("Чтобы взять этот квест и начать зарабатывать EXC, сначала подпишись на канал в боте.")
+                    .message(user.getCompletedQuests() > 0
+                            ? "Первая награда твоя! Чтобы брать следующие квесты, подпишись на канал в боте."
+                            : "Чтобы взять этот квест и начать зарабатывать EXC, сначала подпишись на канал в боте.")
                     .build());
         }
         Quest quest;

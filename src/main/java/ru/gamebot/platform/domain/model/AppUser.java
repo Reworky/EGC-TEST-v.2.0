@@ -61,6 +61,12 @@ public class AppUser {
     private Long referredByTelegramId;
     private boolean referralRewardProcessed;
 
+    /** Первый квест пройден ДО подписки на канал (первый квест без подписки, 2026-10-10): бонусы за первый
+     *  квест друга (3 000 EXC приглашённому, 2 500 EXC + 3 дня Pass пригласившему) удерживаются до активации
+     *  аккаунта - выдаются в UserService.claimPendingFirstQuestReferralBonus при подписке. */
+    @Column(columnDefinition = "boolean default false")
+    private boolean referralFirstQuestBonusPending;
+
     /** Последний XP-уровень, о котором уже прислано уведомление-достижение (см. AchievementCheckService).
      *  null = ещё не проверяли — первый проход поллера просто фиксирует текущий уровень, без уведомления. */
     private Integer lastNotifiedLevelNumber;

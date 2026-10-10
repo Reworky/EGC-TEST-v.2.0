@@ -1382,6 +1382,33 @@ public class UserService {
         if (invitedUser.getCompletedQuests() != 0) {
             return false; // only on first quest (completedQuests is incremented before this call)
         }
+        // Первый квест без подписки на канал (2026-10-10): бонусы удерживаем до активации аккаунта, иначе
+        // реферальная ссылка давала бы пригласившему 2 500 EXC + Pass за аккаунт, который так и не подписался.
+        if (!invitedUser.isRegistrationCompleted()) {
+            invitedUser.setReferralFirstQuestBonusPending(true);
+            appUserRepository.save(invitedUser);
+            return false;
+        }
+        return payFirstQuestReferralBonus(invitedUser);
+    }
+
+    /** Выдаёт удержанные бонусы за первый квест (см. grantFirstQuestReferralBonus) сразу после активации
+     *  аккаунта (подписки на канал). true - бонус выдан сейчас (приглашённому нужно сообщить). */
+    @Transactional
+    public boolean claimPendingFirstQuestReferralBonus(AppUser invitedUser) {
+        if (!invitedUser.isReferralFirstQuestBonusPending() || !invitedUser.isRegistrationCompleted()) {
+            return false;
+        }
+        invitedUser.setReferralFirstQuestBonusPending(false);
+        appUserRepository.save(invitedUser);
+        return payFirstQuestReferralBonus(invitedUser);
+    }
+
+    private boolean payFirstQuestReferralBonus(AppUser invitedUser) {
+        Long referrerTelegramId = invitedUser.getReferredByTelegramId();
+        if (referrerTelegramId == null) {
+            return false;
+        }
         // Пробел закрыт 2026-10-01 (владелец подтвердил) - раньше это начисление вообще не
         // логировалось в exc_transactions, см. project_unified_exc_xp_credit_refactor.
         addReward(invitedUser, 0, 3_000, ExcTransactionService.REFERRAL_FIRST_QUEST_WELCOME,
