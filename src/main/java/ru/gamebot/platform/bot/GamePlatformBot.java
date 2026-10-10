@@ -4358,6 +4358,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendOnboardingGuide(AppUser user) {
+        List<List<InlineKeyboardButton>> guideRows = new ArrayList<>();
+        guideRows.add(List.of(keyboardFactory.callback("🗺️ Смотреть квесты", "onboarding:browse_all")));
+        guideRows.add(List.of(keyboardFactory.callback("👤 В профиль", "onboarding:skip")));
+        if (settingEnabled(ONBOARDING_V2_SETTING)) {
+            guideRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "onboarding:back")));
+        }
         sendText(user.getTelegramId(),
                 "📖 <b>Как зарабатывать EXC</b>\n\n"
                         + "1️⃣ <b>Возьми квест</b>\n"
@@ -4368,10 +4374,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "Квесты с автопроверкой засчитываются сразу. Остальные проверит модератор в течение 24 часов — после одобрения EXC и XP зачислятся автоматически.\n\n"
                         + "4️⃣ <b>Выведи деньги</b>\n"
                         + "Раздел 🛍️ Магазин → Вывод EXC. Минимум для вывода — <b>5 000 EXC</b>.",
-                keyboardFactory.rowsLayout(List.of(
-                        List.of(keyboardFactory.callback("🗺️ Смотреть квесты", "onboarding:browse_all")),
-                        List.of(keyboardFactory.callback("👤 В профиль", "onboarding:skip"))
-                )));
+                keyboardFactory.rowsLayout(guideRows));
     }
 
     private void resumeOnboarding(AppUser user) {
@@ -4386,6 +4389,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if ("guide".equals(sub)) {
             answerSilently(callbackQuery.getId());
             sendOnboardingGuide(user);
+        } else if ("back".equals(sub)) {
+            answerSilently(callbackQuery.getId());
+            // Назад из инструкции - на экран выбора игры; приветствие «начислено 200» только пока игрок не двигался дальше
+            sendStarterPicker(user, user.getCompletedQuests() == 0 && user.getCoins() <= WELCOME_BONUS_EXC);
         } else if (sub.startsWith("game:")) {
             answerSilently(callbackQuery.getId());
             handleStarterGamePick(user, sub.substring("game:".length()));
