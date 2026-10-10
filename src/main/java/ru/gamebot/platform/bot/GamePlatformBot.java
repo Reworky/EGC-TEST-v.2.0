@@ -1058,7 +1058,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if ("quest:recommend".equals(data)) {
             answerSilently(callbackQuery.getId());
             questService.recommendQuest(user).ifPresentOrElse(
-                    quest -> sendQuestCard(user, quest.getId(), "menu:main", "⬅️ Назад", "🎯 Подобрали специально для тебя!"),
+                    quest -> sendQuestCard(user, quest.getId(), "menu:main", "⬅️ Назад", "🎯 Подобрали специально для тебя!", null, true),
                     () -> sendText(user.getTelegramId(),
                             "🎯 Сейчас нечего предложить — либо всё уже взято, либо кулдауны. Загляни в полный список квестов.",
                             keyboardFactory.rowsLayout(List.of(
@@ -5639,6 +5639,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendQuestCard(AppUser user, Long questId, String backData, String backText, String notice, String nextQuestData) {
+        sendQuestCard(user, questId, backData, backText, notice, nextQuestData, false);
+    }
+
+    /** allQuestsButton — кнопка «Все квесты» (окно выбора из всего списка): карточка из «🎯 Играть» главного меню. */
+    private void sendQuestCard(AppUser user, Long questId, String backData, String backText, String notice, String nextQuestData,
+                               boolean allQuestsButton) {
         sessionService.get(user.getTelegramId()).getData().put("quest_back_data", backData);
         Quest quest = questService.getQuest(questId);
         QuestSubmission latest = questService.getLatestSubmission(user, quest);
@@ -5702,6 +5708,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (nextQuestData != null) {
             buttons.add(keyboardFactory.callback("➡️ Следующий квест", nextQuestData));
+        }
+        if (allQuestsButton) {
+            buttons.add(keyboardFactory.callback("🗺️ Все квесты", "menu:quests"));
         }
         if (isEffectiveAdmin(user)) {
             buttons.add(keyboardFactory.callback("✏️ Правка", "admin:quest:" + questId));
