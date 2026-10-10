@@ -6531,7 +6531,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // отчёт по квесту, который должен подтверждаться только через API (лазейка, инцидент 2026-08-31,
         // поймана на живой заявке К-1333 "Сразись в бою 6 раз" — квест с BrawlVerifyType).
         boolean autoVerified = quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null || quest.getPubgVerifyType() != null;
-        buttons.add(quest.isExternalAutoApprove()
+        // Закрытая спонсорская кампания: вместо «Я подписался» честно показываем, что квест закрыт (иначе кнопка есть, а нажатие отвечает «закрыт»)
+        boolean sponsorClosed = !quest.isActive() && quest.getChannelCheckChatId() != null
+                && (submission.getStatus() == SubmissionStatus.DRAFT || submission.getStatus() == SubmissionStatus.NEEDS_INFO);
+        buttons.add(sponsorClosed
+                ? keyboardFactory.callback("😔 Квест закрыт — места заняты", "noop")
+                : quest.isExternalAutoApprove()
                 ? keyboardFactory.callback("⏳ Ждём подтверждения от партнёра", "noop")
                 : autoVerified
                     ? keyboardFactory.callback(autoVerifyProgressLabel(quest, submission), "noop")
