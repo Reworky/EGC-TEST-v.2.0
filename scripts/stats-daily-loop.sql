@@ -4,7 +4,7 @@
 -- Запуск на сервере: cd /root/gamebot && git pull && bash scripts/run-sql.sh scripts/stats-daily-loop.sql
 
 -- 1) По дням: сколько игроков забрали ежедневный бонус / открыли сундук / получили награду за квест и сколько EXC выдано на каждый вид.
-SELECT CAST(t.created_at AS DATE) AS day,
+SELECT CAST(t.created_at AS DATE) AS dt,
        COUNT(DISTINCT CASE WHEN t.type = 'DAILY' THEN t.user_id END) AS daily_users,
        COUNT(DISTINCT CASE WHEN t.type = 'CHEST' THEN t.user_id END) AS chest_users,
        COUNT(DISTINCT CASE WHEN t.type = 'QUEST' THEN t.user_id END) AS quest_users,
@@ -15,7 +15,7 @@ SELECT CAST(t.created_at AS DATE) AS day,
 FROM exc_transactions t
 WHERE t.created_at >= DATEADD('DAY', -30, CURRENT_TIMESTAMP) AND t.amount > 0
 GROUP BY CAST(t.created_at AS DATE)
-ORDER BY day;
+ORDER BY dt;
 
 -- 2) Пересечение за последние 14 дней (по игрокам-дням): из тех, кто забрал ежедневный бонус, сколько в тот же день выполнили квест; из выполнивших квест - сколько открыли сундук.
 SELECT COUNT(*) AS user_days,
@@ -49,17 +49,17 @@ GROUP BY CASE WHEN cnt >= 4 THEN '4+' ELSE CAST(cnt AS VARCHAR) END
 ORDER BY quests_per_day;
 
 -- 4) Привычка: у скольких игроков за 30 дней 1 / 2-3 / 4-7 / 8-15 / 16+ дней с любым действием (квест, бонус, сундук, реклама). Показывает, есть ли вообще ядро ежедневных.
-SELECT CASE WHEN days = 1 THEN 'a: 1 день' WHEN days <= 3 THEN 'b: 2-3' WHEN days <= 7 THEN 'c: 4-7'
-            WHEN days <= 15 THEN 'd: 8-15' ELSE 'e: 16+' END AS active_days,
+SELECT CASE WHEN n_days = 1 THEN 'a: 1 день' WHEN n_days <= 3 THEN 'b: 2-3' WHEN n_days <= 7 THEN 'c: 4-7'
+            WHEN n_days <= 15 THEN 'd: 8-15' ELSE 'e: 16+' END AS active_days,
        COUNT(*) AS players
 FROM (
-    SELECT t.user_id, COUNT(DISTINCT CAST(t.created_at AS DATE)) AS days
+    SELECT t.user_id, COUNT(DISTINCT CAST(t.created_at AS DATE)) AS n_days
     FROM exc_transactions t
     WHERE t.created_at >= DATEADD('DAY', -30, CURRENT_TIMESTAMP) AND t.amount > 0 AND t.type IN ('QUEST','DAILY','CHEST','AD_REWARD')
     GROUP BY t.user_id
 ) a
-GROUP BY CASE WHEN days = 1 THEN 'a: 1 день' WHEN days <= 3 THEN 'b: 2-3' WHEN days <= 7 THEN 'c: 4-7'
-              WHEN days <= 15 THEN 'd: 8-15' ELSE 'e: 16+' END
+GROUP BY CASE WHEN n_days = 1 THEN 'a: 1 день' WHEN n_days <= 3 THEN 'b: 2-3' WHEN n_days <= 7 THEN 'c: 4-7'
+              WHEN n_days <= 15 THEN 'd: 8-15' ELSE 'e: 16+' END
 ORDER BY active_days;
 
 -- 5) Цена сегодняшнего цикла для фонда за 30 дней: сколько EXC выдали сундук, ежедневный бонус и квесты, доля сундука+бонуса и среднее за одно открытие.
