@@ -230,12 +230,28 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
            "WHERE s.quest.gameName = :gameName AND s.status = 'APPROVED' AND s.updatedAt >= :since")
     long countApprovedByGameSince(@Param("gameName") String gameName, @Param("since") LocalDateTime since);
 
-    /** Заявки на Brawl-квесты «сыграй/выиграй N боёв» (N от 3), взятые между after и before, по которым прогресс всё ещё 0 и напоминание «не играл» не отправлялось. */
+    /** Заявки на Brawl-квесты «сыграй/выиграй N боёв» (N от 2), взятые между after и before, по которым прогресс всё ещё 0 и напоминание «не играл» не отправлялось. */
     @EntityGraph(attributePaths = {"user", "quest"})
     @Query("SELECT s FROM QuestSubmission s WHERE s.status = 'DRAFT' AND s.noPlayNudgeSentAt IS NULL AND s.brawlProgressCount = 0 " +
            "AND s.createdAt <= :before AND s.createdAt >= :after AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP) " +
-           "AND s.quest.brawlVerifyType = 'BATTLES' AND s.quest.brawlTargetCount >= 3 AND s.user.brawlStarsTag IS NOT NULL")
+           "AND s.quest.brawlVerifyType = 'BATTLES' AND s.quest.brawlTargetCount >= 2 AND s.user.brawlStarsTag IS NOT NULL")
     List<QuestSubmission> findBrawlBattlesNotStarted(@Param("before") LocalDateTime before, @Param("after") LocalDateTime after);
+
+    /** То же для Clash Royale: только «игровые» типы (бои, победы, три короны, кубки) - донат/кланвойны/прокачка от самой игры не зависят. */
+    @EntityGraph(attributePaths = {"user", "quest"})
+    @Query("SELECT s FROM QuestSubmission s WHERE s.status = 'DRAFT' AND s.noPlayNudgeSentAt IS NULL AND s.clashRoyaleProgressCount = 0 " +
+           "AND s.createdAt <= :before AND s.createdAt >= :after AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP) " +
+           "AND s.quest.clashRoyaleVerifyType IN ('BATTLE_COUNT', 'WINS', 'THREE_CROWN_WINS', 'TROPHIES') " +
+           "AND s.quest.clashRoyaleTargetCount >= 2 AND s.user.clashRoyaleTag IS NOT NULL")
+    List<QuestSubmission> findClashRoyaleNotStarted(@Param("before") LocalDateTime before, @Param("after") LocalDateTime after);
+
+    /** То же для Clash of Clans: атаки, трофеи, кубки Строительной базы, сбор ресурсов. Защита/донат/войны/прокачка/ачивки не нужны - от «не зашёл поиграть» не зависят. */
+    @EntityGraph(attributePaths = {"user", "quest"})
+    @Query("SELECT s FROM QuestSubmission s WHERE s.status = 'DRAFT' AND s.noPlayNudgeSentAt IS NULL AND s.clashProgressCount = 0 " +
+           "AND s.createdAt <= :before AND s.createdAt >= :after AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP) " +
+           "AND s.quest.clashVerifyType IN ('ATTACK_WINS', 'TROPHIES', 'BUILDER_TROPHIES', 'RESOURCES') " +
+           "AND s.quest.clashTargetCount >= 2 AND s.user.clashOfClansTag IS NOT NULL")
+    List<QuestSubmission> findClashNotStarted(@Param("before") LocalDateTime before, @Param("after") LocalDateTime after);
 
     /** Незавершённые заявки на квесты с включённой авто-верификацией через Brawl Stars API, у пользователя привязан тег, срок не истёк. */
     @EntityGraph(attributePaths = {"user", "quest"})
