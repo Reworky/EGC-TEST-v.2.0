@@ -5764,7 +5764,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             deadlineLine = "⏳ Срок: <b>" + quest.getDurationText() + "</b> с момента старта\n";
         }
 
-        long cooldownLeft = questService.getCooldownHoursLeft(user, quest);
+        // Спонсорские, партнёрские и «без стен» квесты кулдауна не имеют (см. takeQuestChecked): раньше после выполнения карточка показывала
+        // «Кулдаун (3 ч 58 мин)» по общему расчёту игры, хотя повторно такой квест взять нельзя вовсе.
+        boolean noCooldownQuest = quest.isSponsored() || quest.isExternalAutoApprove() || quest.isRepeatableNoCooldownEligible();
+        long cooldownLeft = noCooldownQuest ? 0 : questService.getCooldownHoursLeft(user, quest);
         String cooldownExact = cooldownLeft > 0 ? DurationFormatter.formatExact(questService.getCooldownMinutesLeft(user, quest)) : "";
         String displayStatus = cooldownLeft > 0
                 ? "⏳ Кулдаун (" + cooldownExact + ")"
@@ -5778,8 +5781,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 && !latestExpired;
         long activeSlots = questService.countActiveDrafts(user);
         long maxSlots = sinkShopService.getMaxQuestSlots(user);
-        boolean slotsFull = activeSlots >= maxSlots && !hasActiveSubmission;
-        boolean gameCooldown = !hasActiveSubmission && cooldownLeft == 0 && questService.isCooldownActive(user, quest);
+        boolean slotsFull = !noCooldownQuest && activeSlots >= maxSlots && !hasActiveSubmission;
+        boolean gameCooldown = !noCooldownQuest && !hasActiveSubmission && cooldownLeft == 0 && questService.isCooldownActive(user, quest);
+        // Разовый квест уже выполнен: честно «Выполнено» вместо кнопки «Взять» (повторно взять нельзя - ALREADY_APPROVED)
+        boolean doneOnce = latest != null && latest.getStatus() == SubmissionStatus.APPROVED
+                && (quest.isOneTimePerAccount() || quest.isExternalAutoApprove());
         // Общий лимит «1 квест в час» (15 мин у новичка) - раньше карточка показывала активную «Взять», а нажатие
         // отвечало «подождите N мин». Спонсорские/внешние/no-cooldown квесты лимит не касается (см. takeQuestChecked).
         long takeCooldownLeft = (hasActiveSubmission || quest.isSponsored() || quest.isExternalAutoApprove()
@@ -5791,7 +5797,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 && sinkShopService.hasCooldownBypass(user, quest.getGameName());
         // Закрытый квест (спонсорская кампания завершена: набрано оплаченное число подписчиков или выбран бюджет): без «Взять»/«Я подписался»
         boolean questClosed = questService.isChannelCampaignClosed(quest);
-        if (questClosed) {
+        if (doneOnce) {
+            buttons.add(keyboardFactory.callback("✅ Выполнено", "noop"));
+        } else if (questClosed) {
             buttons.add(keyboardFactory.callback("😔 Квест закрыт — места заняты", "noop"));
         } else if (cooldownLeft > 0 && !cooldownBypassed) {
             buttons.add(keyboardFactory.callback("⏳ Доступно через " + cooldownExact, "noop"));
