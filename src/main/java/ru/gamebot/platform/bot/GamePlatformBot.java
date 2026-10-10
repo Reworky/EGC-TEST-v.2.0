@@ -3476,6 +3476,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendMainMenu(AppUser user, String text) {
         sessionService.get(user.getTelegramId()).getData().remove(BACK_TO_KEY); // главное меню - обход из «Заданий дня» закончен
+        clearOnboardingBrowseBack(user);
         if (ROLE_MODER.equals(resolveMenuRole(user, sessionService.get(user.getTelegramId())))) {
             sendModerationHub(user);
             return;
@@ -4276,6 +4277,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** fresh=true - сразу после регистрации (приветствие + стартовый бонус); false - возврат к незавершённому онбордингу
      *  (старый игрок, жмущий /start): без «тебе начислено», шкала по реальному балансу. */
     private void sendStarterPicker(AppUser user, boolean fresh) {
+        clearOnboardingBrowseBack(user);
         long coins = fresh ? WELCOME_BONUS_EXC : user.getCoins();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (StarterGame g : STARTER_GAMES) {
@@ -4323,9 +4325,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendStarterQuestCard(AppUser user, Quest quest) {
+        clearOnboardingBrowseBack(user);
         long reward = quest.getRewardCoins();
         String description = quest.getDescription() == null ? "" : escape(trim(quest.getDescription(), 300)) + "\n\n";
         String duration = quest.getDurationText() == null || quest.getDurationText().isBlank() ? "" : "⏱ Срок: " + escape(quest.getDurationText()) + "\n";
+        String starterCode = STARTER_GAMES.stream().filter(g -> g.game().equalsIgnoreCase(quest.getGameName()))
+                .map(StarterGame::code).findFirst().orElse(null);
         sendText(user.getTelegramId(),
                 "🎯 <b>Твой первый квест</b>\n\n"
                         + "<b>" + escape(quest.getTitle()) + "</b> (" + escape(quest.getGameName()) + ")\n"
@@ -4337,7 +4342,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + fmtExc(Math.min(user.getCoins() + reward, FIRST_WITHDRAWAL_EXC)) + " / " + fmtExc(FIRST_WITHDRAWAL_EXC) + " EXC до первого вывода",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("⚡ Взять квест", "quest:take:" + quest.getId())),
-                        List.of(keyboardFactory.callback("🗺️ Другие квесты", "onboarding:browse_all")),
+                        List.of(keyboardFactory.callback("🗺️ Другие квесты", starterCode == null ? "onboarding:browse_all" : "onboarding:browse_all:game:" + starterCode)),
                         List.of(keyboardFactory.callback("❓ Как это работает", "onboarding:guide")),
                         List.of(keyboardFactory.callback("⬅️ Назад", "onboarding:back")))));
     }
@@ -4385,8 +4390,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendOnboardingGuide(AppUser user) {
+        clearOnboardingBrowseBack(user);
         List<List<InlineKeyboardButton>> guideRows = new ArrayList<>();
-        guideRows.add(List.of(keyboardFactory.callback("🗺️ Смотреть квесты", "onboarding:browse_all")));
+        guideRows.add(List.of(keyboardFactory.callback("🗺️ Смотреть квесты", "onboarding:browse_all:guide")));
         guideRows.add(List.of(keyboardFactory.callback("👤 В профиль", "onboarding:skip")));
         guideRows.add(List.of(keyboardFactory.callback("⬅️ Назад", settingEnabled(ONBOARDING_V2_SETTING) ? "onboarding:back" : "menu:main")));
         sendText(user.getTelegramId(),
@@ -4424,9 +4430,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else if (sub.startsWith("game:")) {
             answerSilently(callbackQuery.getId());
             handleStarterGamePick(user, sub.substring("game:".length()));
-        } else if ("browse_all".equals(sub)) {
+        } else if (sub.startsWith("browse_all")) {
             completeOnboarding(user);
             answerSilently(callbackQuery.getId());
+            // «Назад» из списка игр - на экран, откуда нажали: выбор игры / карточка стартового квеста / гайд.
+            String origin = "browse_all:guide".equals(sub) ? "onboarding:guide"
+                    : sub.startsWith("browse_all:game:") ? "onboarding:game:" + sub.substring("browse_all:game:".length())
+                    : "onboarding:back";
+            sessionService.get(user.getTelegramId()).getData().put(ONBOARDING_BROWSE_BACK_KEY, origin);
             sendGamingQuestGames(user);
         } else if ("skip".equals(sub)) {
             completeOnboarding(user);
@@ -5005,6 +5016,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Куда вести кнопку «Назад» на экранах, открытых ярлыком из «Заданий дня» (ключ в сессии; снимается экраном-результатом). */
     private static final String BACK_TO_KEY = "dtasksBackTo";
 
+    /** Откуда новичок открыл список игр («Другие игры» / «Другие квесты» / «Смотреть квесты»): «Назад» из списка ведёт туда,
+     *  а не в раздел «Квесты». Сбрасывается на корневых экранах (главное меню, «Квесты», выбор игры, гайд, карточка). */
+    private static final String ONBOARDING_BROWSE_BACK_KEY = "onboardingBrowseBack";
+
+    private void clearOnboardingBrowseBack(AppUser user) {
+        sessionService.get(user.getTelegramId()).getData().remove(ONBOARDING_BROWSE_BACK_KEY);
+    }
+
     private String peekBackTo(AppUser user, String defaultBack) {
         String v = sessionService.get(user.getTelegramId()).getData().get(BACK_TO_KEY);
         return v != null ? v : defaultBack;
@@ -5297,6 +5316,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** backData != null - экран открыт из другого раздела (например «Задания дня»): добавляем «Назад» туда. */
     private void sendQuestGames(AppUser user, String backData) {
+        clearOnboardingBrowseBack(user);
         String watchAdLabel = "🎬 Забери халявные EXC";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "quests:section:gaming")));
@@ -5315,11 +5335,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendGamingQuestGames(AppUser user) {
+        String back = sessionService.get(user.getTelegramId()).getData().getOrDefault(ONBOARDING_BROWSE_BACK_KEY, "menu:quests");
         List<String> games = questService.findActiveGameNames();
         if (games.isEmpty()) {
             sendText(user.getTelegramId(),
                     "📭 Сейчас в клубе нет активных квестов по играм. Как только новые задания появятся, они откроются здесь.",
-                    backMenuKeyboard("menu:quests"));
+                    backMenuKeyboard(back));
             return;
         }
         games = questService.sortGamesByInterest(user, games);
@@ -5328,7 +5349,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback(trim(game, 28), "quests:game:" + encodeGameToken(game))));
         }
         rows.add(List.of(
-                keyboardFactory.callback("⬅️ Назад", "menu:quests"),
+                keyboardFactory.callback("⬅️ Назад", back),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
         sendText(user.getTelegramId(),
