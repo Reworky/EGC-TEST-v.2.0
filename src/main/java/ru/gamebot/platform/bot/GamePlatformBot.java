@@ -5873,12 +5873,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + oneTimeBadge
                         + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n"
                         + metaLine + "\n"
+                        + placesLeftLine(quest)
                         + activeDeadline
                         + statusLine
                         + "\n"
                         + questRewardLine(user, quest) + "\n\n"
                         + body,
                 verticalWithBackMenu(buttons, backText, backData));
+    }
+
+    /** «👥 Осталось мест: N из M» для спонсорской подписки: спонсор оплатил ограниченное число подписчиков на ВЕСЬ проект (лимит кампании),
+     *  а «разовый» - про то, что каждый игрок получает награду один раз. Без этой строки закрытие квеста после нескольких выполнений выглядело загадкой. */
+    private String placesLeftLine(Quest quest) {
+        if (quest.getChannelCheckChatId() == null || quest.getParticipantLimit() == null || quest.getParticipantLimit() <= 0) {
+            return "";
+        }
+        long left = Math.max(0, quest.getParticipantLimit() - questService.countApprovedByQuest(quest));
+        return "👥 Осталось мест: <b>" + left + "</b> из " + quest.getParticipantLimit() + "\n";
     }
 
     private boolean isAutoVerifiedQuest(Quest quest) {
