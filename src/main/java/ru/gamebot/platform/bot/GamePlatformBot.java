@@ -4306,7 +4306,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + description
                         + "🪙 Награда: <b>" + fmtExc(reward) + " EXC</b>" + starsNote(reward) + "\n"
                         + duration
-                        + "✅ Засчитается автоматически — ничего отправлять не нужно.\n\n"
+                        + "✅ Прогресс засчитается автоматически\n\n"
                         + "После награды: " + progressBar(user.getCoins() + reward, FIRST_WITHDRAWAL_EXC) + " "
                         + fmtExc(Math.min(user.getCoins() + reward, FIRST_WITHDRAWAL_EXC)) + " / " + fmtExc(FIRST_WITHDRAWAL_EXC) + " EXC до первого вывода",
                 keyboardFactory.rowsLayout(List.of(
