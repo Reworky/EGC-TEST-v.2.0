@@ -8332,7 +8332,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("🎫 Пропуски", "shop:passgroup:" + gameKey)),
                 List.of(keyboardFactory.callback("⬅️ Назад", "menu:shop"), keyboardFactory.callback("🏠 Меню", "menu:main"))
         );
-        sendText(user.getTelegramId(), "🎮 <b>" + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\nЧто хотите купить?", keyboardFactory.rowsLayout(rows));
+        String pickerText = "🎮 <b>" + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\nЧто хотите купить?";
+        if ("brawl_stars".equals(gameKey)) {
+            sendResourceBanner(user.getTelegramId(), "brawl_stars_banner.png", pickerText, keyboardFactory.rowsLayout(rows));
+            return;
+        }
+        sendText(user.getTelegramId(), pickerText, keyboardFactory.rowsLayout(rows));
     }
 
     private void sendGroupPicker(AppUser user, String purchaseGroup) {
@@ -8427,33 +8432,40 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), denominationText, keyboardFactory.rowsLayout(rows));
     }
 
-    private volatile String starsBannerFileId = null;
+    /** file_id баннеров из ресурсов по имени файла: после первой отправки картинка берётся из Telegram, а не загружается заново. */
+    private final java.util.Map<String, String> resourceBannerFileIds = new java.util.concurrent.ConcurrentHashMap<>();
 
-    /** Список номиналов Telegram Stars (вывод EXC в звёздах) - с картинкой-баннером; file_id кэшируется после первой отправки, при сбое - обычный текст. */
-    private void sendStarsBanner(Long chatId, String text, InlineKeyboardMarkup keyboard) {
-        if (starsBannerFileId != null) {
-            sendPhotoCaption(chatId, starsBannerFileId, text, keyboard);
+    /** Сообщение с картинкой из ресурсов бота; при сбое (нет файла, ошибка Telegram) - тот же текст без картинки. */
+    private void sendResourceBanner(Long chatId, String resource, String text, InlineKeyboardMarkup keyboard) {
+        String cached = resourceBannerFileIds.get(resource);
+        if (cached != null) {
+            sendPhotoCaption(chatId, cached, text, keyboard);
             return;
         }
         try {
-            try (java.io.InputStream is = getClass().getResourceAsStream("/stars_banner.png")) {
-                if (is == null) throw new java.io.IOException("stars_banner.png not found");
+            try (java.io.InputStream is = getClass().getResourceAsStream("/" + resource)) {
+                if (is == null) throw new java.io.IOException(resource + " not found");
                 byte[] img = is.readAllBytes();
                 SendPhoto sendPhoto = new SendPhoto();
                 sendPhoto.setChatId(chatId.toString());
-                sendPhoto.setPhoto(new InputFile(new java.io.ByteArrayInputStream(img), "stars_banner.png"));
+                sendPhoto.setPhoto(new InputFile(new java.io.ByteArrayInputStream(img), resource));
                 sendPhoto.setCaption(text);
                 sendPhoto.setParseMode("HTML");
                 sendPhoto.setReplyMarkup(keyboard);
                 org.telegram.telegrambots.meta.api.objects.Message sent = execute(sendPhoto);
                 if (sent.getPhoto() != null && !sent.getPhoto().isEmpty()) {
-                    starsBannerFileId = sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId();
+                    resourceBannerFileIds.put(resource, sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId());
                 }
             }
         } catch (Exception e) {
-            log.warn("Failed to send Stars banner", e);
+            log.warn("Failed to send banner {}", resource, e);
             sendText(chatId, text, keyboard);
         }
+    }
+
+    /** Список номиналов Telegram Stars (вывод EXC в звёздах) - с картинкой-баннером. */
+    private void sendStarsBanner(Long chatId, String text, InlineKeyboardMarkup keyboard) {
+        sendResourceBanner(chatId, "stars_banner.png", text, keyboard);
     }
 
     private String groupItemLabel(String title) {
