@@ -6308,7 +6308,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case TAKE_COOLDOWN -> "⏳ Новый квест можно будет взять чуть позже. Подождите ещё <b>" + result.minutesLeft() + " мин.</b>";
             case PARTICIPANT_LIMIT_REACHED ->
                     "🔒 Квест закрыт — набор участников завершён (" + quest.getParticipantLimit() + "/" + quest.getParticipantLimit() + "). Попробуйте другой квест.";
-            default -> "⚠️ Не удалось взять квест.";
+            case QUEST_INACTIVE -> quest.getChannelCheckChatId() != null && questService.isChannelCampaignClosed(quest)
+                    ? "😔 Квест закрыт: спонсор оплатил ограниченное число подписчиков, все места заняты."
+                    : "⚠️ Этот квест сейчас выключен и недоступен. Загляните в другие квесты.";
+            default -> {
+                log.warn("Take quest failed with unhandled status {} (quest {}, user {})", result.status(), quest.getId(), user.getTelegramId());
+                yield "⚠️ Не удалось взять квест (" + result.status() + ").";
+            }
         };
     }
 
