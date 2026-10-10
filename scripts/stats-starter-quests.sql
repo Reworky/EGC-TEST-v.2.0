@@ -1,18 +1,21 @@
 -- Выбор «стартовых» квестов для первого входа игрока (простое действие + автопроверка + быстрая награда). Только чтение.
 -- Запуск на сервере: cd /root/gamebot && git pull && bash scripts/run-sql.sh scripts/stats-starter-quests.sql
 
+-- 0) Страховка: реальные имена колонок автопроверки (если ниже что-то упадёт на имени колонки - пришлите этот список).
+SELECT column_name FROM information_schema.columns WHERE table_name = 'QUESTS' AND (column_name LIKE '%VERIFY_TYPE' OR column_name LIKE '%TARGET_COUNT') ORDER BY column_name;
+
 -- 1) Все доступные сейчас квесты с автопроверкой (active и пакет не приостановлен): по играм, от меньшей награды к большей.
 --    Верхние строки каждой игры - кандидаты в стартовые (самая низкая планка).
 SELECT q.game_name, q.id, q.title, q.reward_coins AS exc, q.duration_days AS days,
        COALESCE(q.brawl_verify_type, q.clash_royale_verify_type, q.clash_verify_type,
-                q.dota_verify_type, q.cs2_verify_type, q.pubg_verify_type) AS verify_type,
+                q.dota_verify_type, q.cs2verify_type, q.pubg_verify_type) AS verify_type,
        COALESCE(q.brawl_target_count, q.clash_royale_target_count, q.clash_target_count,
-                q.dota_target_count, q.cs2_target_count, q.pubg_target_count) AS target,
+                q.dota_target_count, q.cs2target_count, q.pubg_target_count) AS target,
        q.pack_id, q.one_time_per_account AS one_time
 FROM quests q
 WHERE q.active = TRUE AND q.pack_suspended = FALSE
   AND COALESCE(q.brawl_verify_type, q.clash_royale_verify_type, q.clash_verify_type,
-               q.dota_verify_type, q.cs2_verify_type, q.pubg_verify_type) IS NOT NULL
+               q.dota_verify_type, q.cs2verify_type, q.pubg_verify_type) IS NOT NULL
 ORDER BY q.game_name, q.reward_coins, q.title;
 
 -- 2) Как реально проходят квесты за последние 60 дней: сколько взяли, сколько засчитано, сколько минут от взятия до награды (медиана и 90-й процентиль).
@@ -26,7 +29,7 @@ SELECT q.game_name, q.title, q.reward_coins AS exc,
 FROM quest_submissions s JOIN quests q ON q.id = s.quest_id
 WHERE s.status <> 'DRAFT' AND s.created_at >= DATEADD('DAY', -60, CURRENT_TIMESTAMP)
   AND COALESCE(q.brawl_verify_type, q.clash_royale_verify_type, q.clash_verify_type,
-               q.dota_verify_type, q.cs2_verify_type, q.pubg_verify_type) IS NOT NULL
+               q.dota_verify_type, q.cs2verify_type, q.pubg_verify_type) IS NOT NULL
 GROUP BY q.id, q.game_name, q.title, q.reward_coins
 HAVING COUNT(*) >= 5
 ORDER BY q.game_name, med_minutes;
