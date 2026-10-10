@@ -44,7 +44,7 @@ public class QuestSeeder implements CommandLineRunner {
                 {"10 убийств в одном матче",         "PUBG PC"},
                 {"Нанеси 2 000 урона за один матч",  "PUBG PC"},
         }) {
-            questRepository.findAll().stream()
+            seederQuests().stream()
                     .filter(q -> titleAndGame[0].equalsIgnoreCase(q.getTitle())
                              && titleAndGame[1].equalsIgnoreCase(q.getGameName()))
                     .forEach(q -> {
@@ -61,16 +61,18 @@ public class QuestSeeder implements CommandLineRunner {
         // ним у всех игроков — квесты потом пересоздавались через seed() ниже, а история терялась
         // безвозвратно. Баг всплыл 2026-09-21 при разборе подозрения на фарм (см. implementation_log).
         for (String obsolete : List.of("PUBG", "EA FC 25")) {
-            questRepository.findAll().stream()
+            seederQuests().stream()
                     .filter(q -> q.getGameName() != null && q.getGameName().equalsIgnoreCase(obsolete))
                     .forEach(questSubmissionRepository::deleteAllByQuest);
-            questRepository.deleteAllByGameNameIgnoreCase(obsolete);
+            seederQuests().stream()
+                    .filter(q -> q.getGameName() != null && q.getGameName().equalsIgnoreCase(obsolete))
+                    .forEach(questRepository::delete);
             log.info("[QuestSeeder] Deleted obsolete quests for game: '{}'", obsolete);
         }
 
         // Удаляем старые квесты "PUBG / PUBG Mobile" — заменяем на раздельные PUBG PC и PUBG Mobile
         Set<String> keepPubgUnifiedTitles = Set.of(); // удалить все
-        questRepository.findAll().stream()
+        seederQuests().stream()
                 .filter(q -> "PUBG / PUBG Mobile".equalsIgnoreCase(q.getGameName()))
                 .forEach(q -> {
                     questSubmissionRepository.deleteAllByQuest(q);
@@ -118,7 +120,7 @@ public class QuestSeeder implements CommandLineRunner {
                 "Открой улучшение бойца",
                 "Повысь уровень профиля на 1"
         );
-        questRepository.findAll().stream()
+        seederQuests().stream()
                 .filter(q -> "Brawl Stars".equalsIgnoreCase(q.getGameName()) && !keepBsTitles.contains(q.getTitle()))
                 .forEach(q -> {
                     if (q.isActive()) {
@@ -449,7 +451,7 @@ public class QuestSeeder implements CommandLineRunner {
                 "Выиграй бой 8 раз в режиме «Любое столкновение» или «Нокаут»",
                 "Нанеси 100 000 урона в режиме «Любое столкновение» или «Нокаут»"
         );
-        questRepository.findAll().stream()
+        seederQuests().stream()
                 .filter(q -> "Brawl Stars".equalsIgnoreCase(q.getGameName()) && stuckByRenameBug.contains(q.getTitle()) && !q.isActive())
                 .forEach(q -> {
                     q.setActive(true);
@@ -501,7 +503,7 @@ public class QuestSeeder implements CommandLineRunner {
                         "Победи в 8 боях в режиме «Любое столкновение» или «Нокаут».",
                         "Победы в обоих режимах суммируются. Прогресс отслеживается автоматически, ничего сообщать не нужно."})
         );
-        questRepository.findAll().stream()
+        seederQuests().stream()
                 .filter(q -> "Brawl Stars".equalsIgnoreCase(q.getGameName()) && stuckAutoVerifyContent.containsKey(q.getTitle()))
                 .forEach(q -> {
                     String[] content = stuckAutoVerifyContent.get(q.getTitle());
@@ -648,7 +650,7 @@ public class QuestSeeder implements CommandLineRunner {
                 "Спаси 1 союзника за матч",
                 "Сделай 1 возврат за матч"
         );
-        questRepository.findAll().stream()
+        seederQuests().stream()
                 .filter(q -> "PUBG Mobile".equalsIgnoreCase(q.getGameName()) && !keepPubgMobileTitles.contains(q.getTitle()))
                 .forEach(q -> { q.setActive(false); questRepository.save(q); });
 
@@ -760,7 +762,7 @@ public class QuestSeeder implements CommandLineRunner {
                 "Победи в 10 ранговых матчах за неделю",
                 "Достигни ранга Легенда"
         );
-        questRepository.findAll().stream()
+        seederQuests().stream()
                 .filter(q -> "Mobile Legends: Bang Bang".equalsIgnoreCase(q.getGameName()) && !keepMlTitles.contains(q.getTitle()))
                 .forEach(q -> {
                     if (q.isActive()) {
@@ -875,7 +877,7 @@ public class QuestSeeder implements CommandLineRunner {
                 "Разрушь 10 Ратуш в атаках мультиплеера",
                 "Разрушь 100 стен в атаках мультиплеера"
         );
-        questRepository.findAll().stream()
+        seederQuests().stream()
                 .filter(q -> "Clash of Clans".equalsIgnoreCase(q.getGameName()) && !keepCocTitles.contains(q.getTitle()))
                 .forEach(q -> {
                     if (q.isActive()) {
@@ -1091,7 +1093,7 @@ public class QuestSeeder implements CommandLineRunner {
                 "Собери полный комплект железной брони",
                 "Достигни 30 дней выживания"
         );
-        questRepository.findAll().stream()
+        seederQuests().stream()
                 .filter(q -> "Grim Soul: Dark Survival RPG".equalsIgnoreCase(q.getGameName()) && !keepGrimSoulTitles.contains(q.getTitle()))
                 .forEach(q -> {
                     if (q.isActive()) {
@@ -1209,7 +1211,7 @@ public class QuestSeeder implements CommandLineRunner {
                 "Улучши карты на 3 уровня суммарно",
                 "Улучши Королевскую башню"
         );
-        questRepository.findAll().stream()
+        seederQuests().stream()
                 .filter(q -> "Clash Royale".equalsIgnoreCase(q.getGameName()) && !keepCrTitles.contains(q.getTitle()))
                 .forEach(q -> {
                     if (q.isActive()) {
@@ -1404,7 +1406,7 @@ public class QuestSeeder implements CommandLineRunner {
                 "Победи 20 раз в Division Rivals за сезон",
                 "Достигни дивизиона Elite в Division Rivals"
         );
-        questRepository.findAll().stream()
+        seederQuests().stream()
                 .filter(q -> "EA FC 26".equalsIgnoreCase(q.getGameName()) && !keepEaFcTitles.contains(q.getTitle()))
                 .forEach(q -> {
                     if (q.isActive()) {
@@ -1523,7 +1525,7 @@ public class QuestSeeder implements CommandLineRunner {
                 "Набери 30 убийств выстрелом в голову",
                 "Обезвредь бомбу 3 раза"
         );
-        questRepository.findAll().stream()
+        seederQuests().stream()
                 .filter(q -> "CS2".equalsIgnoreCase(q.getGameName()) && !keepCs2Titles.contains(q.getTitle()))
                 .forEach(q -> {
                     if (q.isActive()) {
@@ -1794,7 +1796,7 @@ public class QuestSeeder implements CommandLineRunner {
         setCs2Reward("Набери 30 убийств выстрелом в голову", 1500);
 
         // ── Last Day on Earth: Survival — удалить все квесты ───────────────────
-        questRepository.findAll().stream()
+        seederQuests().stream()
                 .filter(q -> "Last Day on Earth: Survival".equalsIgnoreCase(q.getGameName()))
                 .forEach(q -> {
                     questSubmissionRepository.deleteAllByQuest(q);
@@ -1858,7 +1860,7 @@ public class QuestSeeder implements CommandLineRunner {
                 "Сыграй матч длительностью 30+ минут",
                 "Сыграй матч длительностью 45+ минут"
         );
-        questRepository.findAll().stream()
+        seederQuests().stream()
                 .filter(q -> "Dota 2".equalsIgnoreCase(q.getGameName()) && !keepDotaTitles.contains(q.getTitle()))
                 .forEach(q -> { q.setActive(false); questRepository.save(q); });
 
@@ -2447,8 +2449,17 @@ public class QuestSeeder implements CommandLineRunner {
         }, () -> log.warn("[QuestSeeder] setClashRoyaleVerify: quest not found (seed must run first): '{}'", title));
     }
 
+    /** Квесты, которыми управляет сидер: без спонсорских. У спонсорского квеста «Подпишись на канал» gameName = название канала спонсора, и оно может
+     *  совпасть с названием игры БЕЗ учёта регистра («BRAWL STARS» == «Brawl Stars»): тогда очистки «деактивировать/удалить всё, чего нет в keep-списке»
+     *  гасили такой квест при каждом старте бота (2026-10-10: у игроков «Квест закрыт», хотя кампания жива). Сидер спонсорские квесты не создаёт и не трогает. */
+    private List<Quest> seederQuests() {
+        return questRepository.findAll().stream()
+                .filter(q -> q.getSponsorId() == null && !q.isSponsored())
+                .toList();
+    }
+
     private void deactivateGame(String gameName) {
-        questRepository.findAll().stream()
+        seederQuests().stream()
                 .filter(q -> gameName.equalsIgnoreCase(q.getGameName()) && q.isActive())
                 .forEach(q -> {
                     q.setActive(false);
@@ -2471,7 +2482,7 @@ public class QuestSeeder implements CommandLineRunner {
     /** Как deactivateGame, но точечно по названиям — форсит active=false на каждом деплое независимо
      *  от keepXxxTitles/seedFlat, переживает случайный ручной "включить" в админке. */
     private void deactivateQuests(String gameName, Set<String> titles) {
-        questRepository.findAll().stream()
+        seederQuests().stream()
                 .filter(q -> gameName.equalsIgnoreCase(q.getGameName()) && titles.contains(q.getTitle()) && q.isActive())
                 .forEach(q -> {
                     q.setActive(false);
