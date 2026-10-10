@@ -6037,6 +6037,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     cancelKeyboard());
             return;
         }
+        // Спонсор платит за НОВЫХ подписчиков: кто уже в канале, квест взять не может (иначе платим и спонсору, и игроку за подписку, которой не было).
+        // Если проверить не вышло (нет доступа к каналу) - не блокируем, решает проверка при сдаче.
+        if (quest.getChannelCheckChatId() != null) {
+            try {
+                if (isChannelMember(quest.getChannelCheckChatId(), user.getTelegramId())) {
+                    answerSilently(callbackQuery.getId());
+                    sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                            "ℹ️ Ты уже подписан на этот канал — квест для тех, кто ещё не подписан. Загляни в другие квесты.");
+                    return;
+                }
+            } catch (TelegramApiException e) {
+                log.warn("Pre-take channel check failed for quest {} user {}", questId, user.getTelegramId(), e);
+            }
+        }
         QuestService.QuestActionResult result = questService.takeQuestChecked(user, quest);
         answerSilently(callbackQuery.getId());
         renderTakeQuestResult(user, questId, quest, result);
@@ -22516,7 +22530,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
             Quest quest = new Quest();
             quest.setTitle("Подпишись на «" + title + "»");
-            quest.setDescription("Подпишись на канал «" + title + "» и нажми «✅ Я подписался». "
+            quest.setDescription("Квест для тех, кто ещё не подписан на канал «" + title + "». Подпишись и нажми «✅ Я подписался». "
                     + (100 - FAST_SPONSOR_HOLD_PERCENT) + "% награды придёт сразу, ещё " + FAST_SPONSOR_HOLD_PERCENT + "% — через "
                     + FAST_SPONSOR_HOLD_DAYS + " дн., если останешься в канале.");
             quest.setChannelHoldPercent(FAST_SPONSOR_HOLD_PERCENT);
