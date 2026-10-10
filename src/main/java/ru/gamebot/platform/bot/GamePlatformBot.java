@@ -807,7 +807,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.reset();
             session.getData().put("brawlLinkPurpose", "profile");
             session.setState(SessionState.BRAWL_TAG_INPUT);
-            sendText(user.getTelegramId(), "🏷️ Введите ваш игровой тег Brawl Stars (например: <code>#ABC123</code>):", cancelKeyboard());
+            sendBrawlTagPrompt(user.getTelegramId(), "🏷️ Введите ваш игровой тег Brawl Stars (например: <code>#ABC123</code>):", cancelKeyboard());
             return;
         }
         // Deep link из мини-аппа: та же логика для Clash of Clans / Clash Royale (см. brawltag выше).
@@ -1330,10 +1330,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     session.reset();
                     session.getData().put("brawlTournamentId", String.valueOf(tid));
                     session.setState(SessionState.BRAWL_TAG_INPUT);
-                    sendText(user.getTelegramId(),
-                            "🏷️ Введите ваш игровой тег " + escape(t.getGameName() != null ? t.getGameName() : "игры")
-                                    + " (например: <code>#ABC123</code>):",
-                            cancelKeyboard());
+                    String tournamentTagPrompt = "🏷️ Введите ваш игровой тег " + escape(t.getGameName() != null ? t.getGameName() : "игры")
+                            + " (например: <code>#ABC123</code>):";
+                    if (isBrawlStarsGame(t.getGameName())) {
+                        sendBrawlTagPrompt(user.getTelegramId(), tournamentTagPrompt, cancelKeyboard());
+                    } else {
+                        sendText(user.getTelegramId(), tournamentTagPrompt, cancelKeyboard());
+                    }
                     answerSilently(callbackQuery.getId());
                     return;
                 }
@@ -1401,7 +1404,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.getData().put("brawlTournamentId", retrySuffix);
             }
             session.setState(SessionState.BRAWL_TAG_INPUT);
-            sendText(user.getTelegramId(), "🏷️ Введите игровой тег ещё раз:", cancelKeyboard());
+            boolean retryBrawl = "quest".equals(retrySuffix) || "profile".equals(retrySuffix);
+            if (!retryBrawl) {
+                try {
+                    retryBrawl = tournamentService.findById(Long.parseLong(retrySuffix)).map(retryTournament -> isBrawlStarsGame(retryTournament.getGameName())).orElse(false);
+                } catch (NumberFormatException ignored) {
+                    retryBrawl = true; // "gempurchase" и прочие Brawl-цели
+                }
+            }
+            if (retryBrawl) {
+                sendBrawlTagPrompt(user.getTelegramId(), "🏷️ Введите игровой тег ещё раз:", cancelKeyboard());
+            } else {
+                sendText(user.getTelegramId(), "🏷️ Введите игровой тег ещё раз:", cancelKeyboard());
+            }
             answerSilently(callbackQuery.getId());
             return;
         }
@@ -1862,7 +1877,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.reset();
                 session.getData().put("brawlLinkPurpose", "profile");
                 session.setState(SessionState.BRAWL_TAG_INPUT);
-                sendText(user.getTelegramId(), "🏷️ Введите ваш игровой тег Brawl Stars (например: <code>#ABC123</code>):", cancelKeyboard());
+                sendBrawlTagPrompt(user.getTelegramId(), "🏷️ Введите ваш игровой тег Brawl Stars (например: <code>#ABC123</code>):", cancelKeyboard());
             }
             case "clash_tag" -> {
                 session.reset();
@@ -2711,7 +2726,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     ru.gamebot.platform.service.BrawlQuestVerificationService.TagLookupResult res =
                             brawlQuestVerificationService.lookupTag(text.trim());
                     if (!res.success()) {
-                        sendText(user.getTelegramId(), "❌ " + res.error() + "\n\nПопробуйте ещё раз:", cancelKeyboard());
+                        sendBrawlTagPrompt(user.getTelegramId(), "❌ " + res.error() + "\n\nПопробуйте ещё раз:", cancelKeyboard());
                         return;
                     }
                     session.getData().put("brawlTag", res.playerInfo().tag());
@@ -5699,7 +5714,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.getData().put("brawlLinkPurpose", "quest");
             session.getData().put("brawlPendingQuestId", String.valueOf(questId));
             session.setState(SessionState.BRAWL_TAG_INPUT);
-            sendText(user.getTelegramId(),
+            sendBrawlTagPrompt(user.getTelegramId(),
                     "🏷️ Для этого квеста нужен привязанный тег Brawl Stars — прогресс отслеживается автоматически.\n\n"
                             + "Введите ваш игровой тег (например: <code>#ABC123</code>):",
                     cancelKeyboard());
@@ -19494,9 +19509,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.getData().put("gemPendingPackageKey", packageKey);
                 session.setState(SessionState.BRAWL_TAG_INPUT);
             }
-            sendText(user.getTelegramId(),
-                    "🏷️ Сначала привяжите тег " + escape(GemPurchaseService.gameName(gameKey)) + " — введите его (например: <code>#ABC123</code>):",
-                    cancelKeyboard());
+            String gemTagPrompt = "🏷️ Сначала привяжите тег " + escape(GemPurchaseService.gameName(gameKey)) + " — введите его (например: <code>#ABC123</code>):";
+            if ("clash_royale".equals(gameKey) || "clash_of_clans".equals(gameKey)) {
+                sendText(user.getTelegramId(), gemTagPrompt, cancelKeyboard());
+            } else {
+                sendBrawlTagPrompt(user.getTelegramId(), gemTagPrompt, cancelKeyboard());
+            }
             return;
         }
         sendGemPaymentMethodChoice(user, gameKey, pkg);
@@ -21751,6 +21769,44 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } catch (TelegramApiException e) {
             log.warn("Failed to remove reply keyboard for {}", chatId, e);
         }
+    }
+
+    private volatile String brawlTagHintFileId = null;
+    private static final String BRAWL_TAG_HINT_LINE =
+            "\n\n📍 <b>Где взять тег:</b> в Brawl Stars нажми на свой профиль — тег написан под аватаркой (на картинке отмечен стрелкой).";
+
+    /** Запрос тега Brawl Stars с картинкой-подсказкой «где взять тег» (2026-10-10): новички не понимали, что такое тег и где он.
+     *  Картинка уходит как фото с подписью; file_id кэшируется. Любая ошибка отправки - обычный текстовый запрос, привязка не ломается. */
+    private void sendBrawlTagPrompt(Long chatId, String text, InlineKeyboardMarkup keyboard) {
+        String caption = text + BRAWL_TAG_HINT_LINE;
+        if (caption.length() > 1000) {
+            sendText(chatId, text, keyboard);
+            return;
+        }
+        if (brawlTagHintFileId != null) {
+            sendPhotoCaption(chatId, brawlTagHintFileId, caption, keyboard);
+            return;
+        }
+        try (java.io.InputStream is = getClass().getResourceAsStream("/brawl_tag_hint.jpg")) {
+            if (is == null) throw new java.io.IOException("brawl_tag_hint.jpg not found");
+            SendPhoto photo = new SendPhoto();
+            photo.setChatId(chatId.toString());
+            photo.setPhoto(new InputFile(new java.io.ByteArrayInputStream(is.readAllBytes()), "brawl_tag_hint.jpg"));
+            photo.setCaption(caption);
+            photo.setParseMode("HTML");
+            photo.setReplyMarkup(keyboard);
+            org.telegram.telegrambots.meta.api.objects.Message sent = execute(photo);
+            if (sent.getPhoto() != null && !sent.getPhoto().isEmpty()) {
+                brawlTagHintFileId = sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to send Brawl tag hint image", e);
+            sendText(chatId, text, keyboard);
+        }
+    }
+
+    private boolean isBrawlStarsGame(String gameName) {
+        return gameName != null && gameName.toLowerCase().contains("brawl");
     }
 
     private void sendPhotoCaption(Long chatId, String photoFileId, String caption, InlineKeyboardMarkup keyboard) {
