@@ -5762,7 +5762,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean cooldownBypassed = !hasActiveSubmission && (cooldownLeft > 0 || gameCooldown)
                 && !quest.isSponsored() && !quest.isExternalAutoApprove() && !quest.isRepeatableNoCooldownEligible()
                 && sinkShopService.hasCooldownBypass(user, quest.getGameName());
-        if (cooldownLeft > 0 && !cooldownBypassed) {
+        // Закрытый квест (спонсорская кампания завершена: набрано оплаченное число подписчиков или выбран бюджет): без «Взять»/«Я подписался»
+        boolean questClosed = !quest.isActive();
+        if (questClosed) {
+            buttons.add(keyboardFactory.callback("😔 Квест закрыт — места заняты", "noop"));
+        } else if (cooldownLeft > 0 && !cooldownBypassed) {
             buttons.add(keyboardFactory.callback("⏳ Доступно через " + cooldownExact, "noop"));
         } else if (slotsFull) {
             buttons.add(keyboardFactory.callback("🔒 Слот занят — сдай или отмени активный квест", "noop"));
@@ -5778,7 +5782,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 && !quest.isSponsored() && !quest.isExternalAutoApprove() && !quest.isRepeatableNoCooldownEligible()) {
             buttons.add(keyboardFactory.callback("⏱️ Снять кулдаун — " + SinkShopService.PRICE_COOLDOWN_REMOVAL + " EXC", "sink:cooldown_info"));
         }
-        if (hasActiveSubmission) {
+        if (hasActiveSubmission && !questClosed) {
             buttons.add(quest.isExternalAutoApprove()
                     ? keyboardFactory.callback("⏳ Ждём подтверждения от партнёра", "noop")
                     : (quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null || quest.getPubgVerifyType() != null)
@@ -22762,7 +22766,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             if (!quest.isActive()) {
                 answerSilently(callbackQuery.getId());
-                sendQuestCard(user, questId, back, "⬅️ Назад", "😔 Кампания уже завершена — награды закончились.");
+                sendQuestCard(user, questId, back, "⬅️ Назад",
+                        "😔 <b>Квест закрыт.</b> Спонсор оплатил ограниченное число подписчиков, и все места уже заняты — награда за этот квест больше не выдаётся.");
                 return;
             }
             if (questService.isExpired(latest)) {
