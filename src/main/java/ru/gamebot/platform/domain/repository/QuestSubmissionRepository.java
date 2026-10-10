@@ -33,6 +33,16 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
 
     long countByStatus(SubmissionStatus status);
 
+    /** Удержанные награды, срок которых пришёл (порциями, чтобы после простоя бота не было залпа проверок и сообщений). */
+    @EntityGraph(attributePaths = {"user", "quest"})
+    List<QuestSubmission> findTop100ByHeldStatusAndHeldReleaseAtBeforeOrderByHeldReleaseAtAsc(String heldStatus, LocalDateTime before);
+
+    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.quest = :quest AND s.status = 'APPROVED' AND s.channelLeftAt IS NOT NULL")
+    long countLeftChannelByQuest(@Param("quest") Quest quest);
+
+    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.quest = :quest AND s.heldStatus = :heldStatus")
+    long countByQuestAndHeldStatus(@Param("quest") Quest quest, @Param("heldStatus") String heldStatus);
+
     long countByQuest(Quest quest);
 
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.quest = :quest AND s.status = 'APPROVED'")

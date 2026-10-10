@@ -1280,6 +1280,16 @@ public class QuestService {
         RewardPreview reward = computeReward(user, quest);
         long adjustedCoins = reward.coins();
         long adjustedXp = reward.xp();
+        // Подписка на канал спонсора: часть EXC удерживается до проверки «остался в канале» (см. releaseHeldReward / forfeitHeldReward).
+        // Спонсорский бюджет резервируется целиком сразу; на выплату сейчас идёт adjustedCoins, в бюджете учитывается grossCoins.
+        long grossCoins = adjustedCoins;
+        long heldCoins = 0;
+        int holdPercent = quest.getChannelCheckChatId() != null && quest.getChannelHoldPercent() != null
+                ? Math.max(0, Math.min(90, quest.getChannelHoldPercent())) : 0;
+        if (holdPercent > 0 && grossCoins > 1) {
+            heldCoins = Math.max(1, grossCoins * holdPercent / 100);
+            adjustedCoins = grossCoins - heldCoins;
+        }
         // Фиксируем против месячного потолка ровно здесь — в момент фактического начисления,
         // не в превью (computeReward вызывается и для модераторского превью, и для уведомлений,
         // это бы задвоило счётчик).
@@ -1298,6 +1308,14 @@ public class QuestService {
         submission.setAwardedXp(adjustedXp);
         submission.setAwardedEgcPassBonusCoins(reward.egcPassBonusCoins());
         submission.setAwardedEgcPassBonusXp(reward.egcPassXpBonus());
+        long sponsorShare = Math.max(0, grossCoins - reward.egcPassBonusCoins() - reward.boostBonusCoins());
+        if (heldCoins > 0) {
+            submission.setHeldCoins(heldCoins);
+            submission.setHeldSponsorExc(grossCoins == 0 ? 0 : sponsorShare * heldCoins / grossCoins);
+            submission.setHeldStatus("PENDING");
+            int holdDays = quest.getChannelHoldDays() != null && quest.getChannelHoldDays() > 0 ? quest.getChannelHoldDays() : 7;
+            submission.setHeldReleaseAt(LocalDateTime.now().plusDays(holdDays));
+        }
 
         // 3.5 3000 EXC bonus on first quest (before completedQuests increment)
         userService.grantFirstQuestReferralBonus(user);
@@ -1327,8 +1345,7 @@ public class QuestService {
             // Спонсору засчитываем только награду за квест (после недельного снижения): бонус подписки EGC Pass
             // и EXC-бусты клуб платит из своего кармана (уровневый бонус сюда и раньше не входил) — иначе бюджет
             // спонсора тратился бы на привилегии, которых он не покупал.
-            sponsorService.recordSpend(quest.getSponsorId(),
-                    Math.max(0, adjustedCoins - reward.egcPassBonusCoins() - reward.boostBonusCoins()));
+            sponsorService.recordSpend(quest.getSponsorId(), sponsorShare);
         }
 
         // 3.5 Referral bonus: 10% of EXC earned by referred in first 30 days
@@ -1384,6 +1401,73 @@ public class QuestService {
                 referralPercent + "% с квеста реферала " + invitedUser.getNickname());
         referrer.setReferralEarnedExc(referrer.getReferralEarnedExc() + grant.totalExc());
         appUserRepository.save(referrer);
+    }
+
+    /** Срок удержания вышел, игрок остался в канале: выплачиваем удержанную часть (идемпотентно по heldStatus). */
+    @Transactional
+    public QuestSubmission releaseHeldReward(Long submissionId) {
+        QuestSubmission submission = getSubmission(submissionId);
+        if (!"PENDING".equals(submission.getHeldStatus()) || submission.getHeldCoins() == null) {
+            return submission;
+        }
+        AppUser user = submission.getUser();
+        Quest quest = submission.getQuest();
+        long held = submission.getHeldCoins();
+        UserService.RewardGrant grant = userService.addReward(user, 0, held, ExcTransactionService.QUEST,
+                "Остался в канале: " + quest.getTitle() + " (" + quest.getGameName() + ")");
+        long fixedRub = Math.round(held * healthRatioService.getCurrentRatio() / 100.0);
+        user.setFixedRubBalance(user.getFixedRubBalance() + fixedRub);
+        submission.setUser(user);
+        submission.setFixedRubValue((submission.getFixedRubValue() == null ? 0 : submission.getFixedRubValue()) + fixedRub);
+        submission.setAwardedCoins((submission.getAwardedCoins() == null ? 0 : submission.getAwardedCoins()) + held);
+        submission.setHeldStatus("RELEASED");
+        submission.setUpdatedAt(LocalDateTime.now());
+        questSubmissionRepository.save(submission);
+        grantReferralBonus(user, held);
+        return submission;
+    }
+
+    /** Игрок не удержался в канале к сроку: удержанная часть не выплачивается, оплаченная спонсором доля возвращается в его бюджет. */
+    @Transactional
+    public QuestSubmission forfeitHeldReward(Long submissionId) {
+        QuestSubmission submission = getSubmission(submissionId);
+        if (!"PENDING".equals(submission.getHeldStatus())) {
+            return submission;
+        }
+        submission.setHeldStatus("FORFEITED");
+        submission.setUpdatedAt(LocalDateTime.now());
+        questSubmissionRepository.save(submission);
+        Quest quest = submission.getQuest();
+        if (quest.getSponsorId() != null && submission.getHeldSponsorExc() != null) {
+            sponsorService.refundSpend(quest.getSponsorId(), submission.getHeldSponsorExc());
+        }
+        return submission;
+    }
+
+    /** Квесты «подпишись на канал» по этому чату (для событий chat_member). */
+    public List<Quest> findChannelCheckQuests(String chatId) {
+        return questRepository.findAllByChannelCheckChatId(chatId);
+    }
+
+    /** Бот увидел выход игрока из канала спонсора. Возвращает true, если это первый выход по заявке (повторно не уведомляем). */
+    @Transactional
+    public boolean markChannelLeft(Long submissionId) {
+        QuestSubmission submission = getSubmission(submissionId);
+        if (submission.getChannelLeftAt() != null) {
+            return false;
+        }
+        submission.setChannelLeftAt(LocalDateTime.now());
+        questSubmissionRepository.save(submission);
+        return true;
+    }
+
+    @Transactional
+    public void markChannelRejoined(Long submissionId) {
+        QuestSubmission submission = getSubmission(submissionId);
+        if (submission.getChannelLeftAt() != null) {
+            submission.setChannelLeftAt(null);
+            questSubmissionRepository.save(submission);
+        }
     }
 
     @Transactional

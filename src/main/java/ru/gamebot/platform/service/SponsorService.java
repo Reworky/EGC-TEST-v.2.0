@@ -78,6 +78,35 @@ public class SponsorService {
         });
     }
 
+    /** Возврат в бюджет части, уже учтённой как выданная, но не выплаченной игроку (не удержался в канале). Кампанию автоматически не включает. */
+    @Transactional
+    public void refundSpend(Long sponsorId, long excAmount) {
+        if (excAmount <= 0) return;
+        sponsorRepository.findById(sponsorId).ifPresent(s -> {
+            s.setSpentExc(Math.max(0, s.getSpentExc() - excAmount));
+            sponsorRepository.save(s);
+        });
+    }
+
+    /** Удержание подписчиков по каналам кампании: всего пришло, вышли, удержание выплачено / сорвалось / ещё ждёт. */
+    public record RetentionStats(long total, long left, long released, long forfeited, long pending) {
+        public long stayed() { return Math.max(0, total - left); }
+        public int stayedPercent() { return total == 0 ? 0 : (int) Math.round(stayed() * 100.0 / total); }
+    }
+
+    public RetentionStats retentionStats(Long sponsorId) {
+        long total = 0, left = 0, released = 0, forfeited = 0, pending = 0;
+        for (Quest q : findSponsoredQuests(sponsorId)) {
+            if (q.getChannelCheckChatId() == null) continue;
+            total += questSubmissionRepository.countApprovedByQuest(q);
+            left += questSubmissionRepository.countLeftChannelByQuest(q);
+            released += questSubmissionRepository.countByQuestAndHeldStatus(q, "RELEASED");
+            forfeited += questSubmissionRepository.countByQuestAndHeldStatus(q, "FORFEITED");
+            pending += questSubmissionRepository.countByQuestAndHeldStatus(q, "PENDING");
+        }
+        return new RetentionStats(total, left, released, forfeited, pending);
+    }
+
     @Transactional
     public void deactivate(Long id) {
         sponsorRepository.findById(id).ifPresent(s -> {

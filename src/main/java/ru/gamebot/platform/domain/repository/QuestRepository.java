@@ -21,6 +21,8 @@ public interface QuestRepository extends JpaRepository<Quest, Long> {
 
     List<Quest> findAllByGameNameIgnoreCase(String gameName);
 
+    List<Quest> findAllByChannelCheckChatId(String channelCheckChatId);
+
     long countByPackId(Long packId);
 
     List<Quest> findAllByPackId(Long packId);

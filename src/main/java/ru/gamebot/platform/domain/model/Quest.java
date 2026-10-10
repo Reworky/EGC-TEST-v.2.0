@@ -105,6 +105,11 @@ public class Quest {
     /** Ссылка на канал для кнопки «Открыть канал» (публичная t.me/... или инвайт для закрытого канала). */
     private String channelCheckUrl;
 
+    /** Доля награды EXC (в %), которая удерживается до проверки «остался в канале» через channelHoldDays дней. null/0 = платим сразу целиком. */
+    private Integer channelHoldPercent;
+
+    private Integer channelHoldDays;
+
     @Column(columnDefinition = "boolean default false")
     private boolean externalAutoApprove;
 

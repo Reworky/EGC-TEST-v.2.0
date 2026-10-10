@@ -100,6 +100,25 @@ public class QuestSubmission {
     @Column(nullable = true)
     private Long awardedEgcPassBonusXp;
 
+    /** Удержанная часть награды (EXC, до уровневого бонуса) за подписку на канал спонсора: выплачивается, если игрок остался в канале к heldReleaseAt. */
+    @Column(nullable = true)
+    private Long heldCoins;
+
+    /** Доля удержанных EXC, оплаченная из бюджета спонсора: возвращается в бюджет, если игрок не удержался. */
+    @Column(nullable = true)
+    private Long heldSponsorExc;
+
+    @Column(nullable = true)
+    private LocalDateTime heldReleaseAt;
+
+    /** PENDING / RELEASED / FORFEITED; null - удержания не было. */
+    @Column(nullable = true, length = 16)
+    private String heldStatus;
+
+    /** Когда бот увидел выход игрока из канала спонсора (chat_member); сбрасывается при повторной подписке. null - не выходил. */
+    @Column(nullable = true)
+    private LocalDateTime channelLeftAt;
+
     /** Флаг: уведомление «2 часа до дедлайна» уже отправлено. */
     @Column(nullable = false, columnDefinition = "boolean default false")
     private boolean deadlineWarningSent;

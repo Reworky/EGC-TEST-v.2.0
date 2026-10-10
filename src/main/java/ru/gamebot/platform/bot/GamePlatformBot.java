@@ -230,6 +230,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     @EventListener(ApplicationReadyEvent.class)
     public void registerBot() throws TelegramApiException {
+        // chat_member по умолчанию не приходит: нужен, чтобы видеть выход игроков из каналов спонсоров (бот там админ).
+        // Остальные типы - как у Telegram по умолчанию, иначе бот перестал бы получать то, что получает сейчас.
+        ((org.telegram.telegrambots.bots.DefaultBotOptions) getOptions()).setAllowedUpdates(java.util.List.of(
+                "message", "edited_message", "channel_post", "edited_channel_post", "inline_query", "chosen_inline_result",
+                "callback_query", "shipping_query", "pre_checkout_query", "poll", "poll_answer", "my_chat_member",
+                "chat_member", "chat_join_request"));
         TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
         botsApi.registerBot(this);
         log.info("Telegram bot registered: {}", getBotUsername());
@@ -305,6 +311,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 handleMessage(update.getMessage());
             } else if (update.hasChatJoinRequest()) {
                 handleChatJoinRequest(update.getChatJoinRequest());
+            } else if (update.hasChatMember()) {
+                handleChannelMemberUpdate(update.getChatMember());
             }
         } catch (Exception exception) {
             log.error("Failed to process update", exception);
@@ -10789,6 +10797,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendAdminSponsorView(user, parseLong(action.substring("sponsors:view:".length())));
                     answerSilently(callbackQuery.getId());
                     return;
+                } else if (action.startsWith("sponsors:report:")) {
+                    long reportSponsorId = parseLong(action.substring("sponsors:report:".length()));
+                    sponsorService.findById(reportSponsorId).ifPresent(sp -> sendText(user.getTelegramId(), buildSponsorRetentionReport(sp),
+                            backMenuKeyboard("admin:sponsors:view:" + reportSponsorId)));
+                    answerSilently(callbackQuery.getId());
+                    return;
                 } else if (action.startsWith("sponsors:delete:")) {
                     sponsorService.deleteCampaign(parseLong(action.substring("sponsors:delete:".length())));
                     answer(callbackQuery.getId(), "Кампания удалена.");
@@ -15361,7 +15375,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
                 sb.append("📅 Период: ").append(s.getStartDate().format(fmt)).append(" — ").append(s.getEndDate().format(fmt)).append("\n");
             }
-            sb.append("✅ Одобрено прохождений: <b>").append(completions).append("</b>\n\n");
+            sb.append("✅ Одобрено прохождений: <b>").append(completions).append("</b>\n");
+            ru.gamebot.platform.service.SponsorService.RetentionStats retention = sponsorService.retentionStats(sponsorId);
+            if (retention.total() > 0) {
+                sb.append("👥 Остаются в канале: <b>").append(retention.stayed()).append("</b> из ").append(retention.total())
+                        .append(" (").append(retention.stayedPercent()).append("%) · удержание: ✅ ").append(retention.released())
+                        .append(" / ❌ ").append(retention.forfeited()).append(" / ⏳ ").append(retention.pending()).append("\n");
+            }
+            sb.append("\n");
             sb.append("💵 Оплата: <b>").append(s.getPaidRub()).append(" ₽</b>\n");
             sb.append("   ├ Комиссия EGC: <b>").append(commission).append(" ₽</b>\n");
             sb.append("   └ В Payout Pool: <b>").append(s.getPaidRub() - commission).append(" ₽</b>\n\n");
@@ -15375,6 +15396,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
             rows.add(List.of(keyboardFactory.callback("➕ Создать квест", "admin:sponsors:newquest:" + sponsorId)));
+            if (retention.total() > 0) {
+                rows.add(List.of(keyboardFactory.callback("📄 Отчёт для спонсора", "admin:sponsors:report:" + sponsorId)));
+            }
             if (s.isActive()) {
                 rows.add(List.of(keyboardFactory.callback("⚫ Завершить кампанию", "admin:sponsors:deactivate:" + sponsorId)));
             }
@@ -22336,6 +22360,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private static final long FAST_SPONSOR_XP = 50;
     private static final int FAST_SPONSOR_DEFAULT_DAYS = 30;
+    /** Доля награды EXC, которая выплачивается только если игрок остался в канале через FAST_SPONSOR_HOLD_DAYS дней. */
+    private static final int FAST_SPONSOR_HOLD_PERCENT = 50;
+    private static final int FAST_SPONSOR_HOLD_DAYS = 7;
     /** 70% оплаты идёт в Payout Pool, умножаем на номинальный курс 100 EXC за 1 ₽ — как подсказка в обычной кампании. */
     private static final long FAST_SPONSOR_EXC_PER_RUB = 70;
 
@@ -22449,6 +22476,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🪙 Награда за подписку: <b>" + fmtExc(exc) + " EXC</b> + " + FAST_SPONSOR_XP + " XP\n"
                         + "👥 Хватит на <b>" + fmtExc(limit) + "</b> подписчиков (≈ " + (perSubscriberKopecks / 100) + "," + String.format("%02d", perSubscriberKopecks % 100) + " ₽ за подписчика)\n"
                         + "📅 Срок: <b>" + days + " дн.</b>\n\n"
+                        + "🔒 Выплата в два шага: " + (100 - FAST_SPONSOR_HOLD_PERCENT) + "% сразу, " + FAST_SPONSOR_HOLD_PERCENT + "% через "
+                        + FAST_SPONSOR_HOLD_DAYS + " дн., если человек остался в канале (не удержался — эта часть возвращается в бюджет).\n"
                         + "Подписка проверяется автоматически (бот — админ канала). Как только бюджет кончится, квест выключится сам.\n"
                         + "⚠️ Награду получит и тот, кто уже был подписан до квеста — Telegram не показывает дату подписки.",
                 keyboardFactory.rowsLayout(List.of(
@@ -22482,7 +22511,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
             Quest quest = new Quest();
             quest.setTitle("Подпишись на «" + title + "»");
-            quest.setDescription("Подпишись на канал «" + title + "» и нажми «✅ Я подписался» — награда придёт сразу.");
+            quest.setDescription("Подпишись на канал «" + title + "» и нажми «✅ Я подписался». "
+                    + (100 - FAST_SPONSOR_HOLD_PERCENT) + "% награды придёт сразу, ещё " + FAST_SPONSOR_HOLD_PERCENT + "% — через "
+                    + FAST_SPONSOR_HOLD_DAYS + " дн., если останешься в канале.");
+            quest.setChannelHoldPercent(FAST_SPONSOR_HOLD_PERCENT);
+            quest.setChannelHoldDays(FAST_SPONSOR_HOLD_DAYS);
             quest.setInstruction(link);
             quest.setGameName(title);
             quest.setCategory("Лёгкие");
@@ -22584,10 +22617,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             QuestSubmission done = questService.approveSubmission(latest.getId());
             answerSilently(callbackQuery.getId());
+            String holdNote = done.getHeldCoins() != null && done.getHeldReleaseAt() != null
+                    ? "🔒 Ещё <b>+" + fmtExc(done.getHeldCoins()) + " EXC</b> придёт " + done.getHeldReleaseAt().format(DATE_TIME_FORMATTER).substring(0, 10)
+                            + ", если ты останешься в канале.\n\n"
+                    : "";
             sendText(user.getTelegramId(),
                     "✅ <b>Подписка подтверждена!</b>\n\n"
                             + "🪙 <b>+" + fmtExc(done.getAwardedCoins()) + " EXC</b>" + starsNote(done.getAwardedCoins()) + "\n"
                             + "✨ <b>+" + done.getAwardedXp() + " XP</b>\n\n"
+                            + holdNote
                             + "Спасибо, что с нами и со спонсором!",
                     keyboardFactory.rowsLayout(List.of(
                             List.of(keyboardFactory.callback("🎯 Играть", "quest:recommend")),
@@ -22619,6 +22657,127 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 log.warn("Failed to alert admin {} about sponsor channel check failure", adminId, e);
             }
         }
+    }
+
+    private boolean isChannelMember(String chatId, Long telegramId) throws TelegramApiException {
+        GetChatMember request = new GetChatMember();
+        request.setChatId(chatId);
+        request.setUserId(telegramId);
+        String status = execute(request).getStatus();
+        return status != null && !"left".equalsIgnoreCase(status) && !"kicked".equalsIgnoreCase(status);
+    }
+
+    /** chat_member из канала: если это канал спонсорского квеста, запоминаем выход/возврат игрока (удержание и отчёт для спонсора);
+     *  при первом выходе до срока выплаты - мягко зовём вернуться. Остальные каналы (в т.ч. наш) игнорируются одним запросом. */
+    private void handleChannelMemberUpdate(org.telegram.telegrambots.meta.api.objects.ChatMemberUpdated update) {
+        if (update.getChat() == null || update.getNewChatMember() == null || update.getNewChatMember().getUser() == null) return;
+        List<Quest> quests = questService.findChannelCheckQuests(String.valueOf(update.getChat().getId()));
+        if (quests.isEmpty()) return;
+        String status = update.getNewChatMember().getStatus();
+        boolean left = "left".equalsIgnoreCase(status) || "kicked".equalsIgnoreCase(status);
+        boolean joined = "member".equalsIgnoreCase(status) || "administrator".equalsIgnoreCase(status) || "creator".equalsIgnoreCase(status);
+        if (!left && !joined) return;
+        AppUser user = userService.findByTelegramId(update.getNewChatMember().getUser().getId()).orElse(null);
+        if (user == null) return;
+        for (Quest quest : quests) {
+            QuestSubmission submission = questService.getLatestSubmission(user, quest);
+            if (submission == null || submission.getStatus() != SubmissionStatus.APPROVED) continue;
+            if (joined) {
+                questService.markChannelRejoined(submission.getId());
+            } else if (questService.markChannelLeft(submission.getId())
+                    && "PENDING".equals(submission.getHeldStatus()) && submission.getHeldCoins() != null && submission.getHeldReleaseAt() != null) {
+                String until = submission.getHeldReleaseAt().format(DATE_TIME_FORMATTER).substring(0, 10);
+                try {
+                    sendText(user.getTelegramId(),
+                            "😕 Ты вышел из канала «" + escape(quest.getGameName()) + "».\n\n"
+                                    + "Вернись до <b>" + until + "</b> — тогда придёт оставшаяся часть награды: <b>+" + fmtExc(submission.getHeldCoins()) + " EXC</b>.",
+                            quest.getChannelCheckUrl() == null ? null : keyboardFactory.rowsLayout(List.of(
+                                    List.of(keyboardFactory.url("📢 Вернуться в канал", quest.getChannelCheckUrl())))));
+                } catch (Exception e) {
+                    log.warn("Failed to send channel leave nudge to {}", user.getTelegramId(), e);
+                }
+            }
+        }
+    }
+
+    /** Срок удержания вышел: проверяем подписку и выплачиваем/снимаем удержанную часть награды. Выплата - денежный код, поэтому всё под try/catch с алертом админам. */
+    @org.springframework.context.event.EventListener
+    public void onHeldChannelRewardDue(ru.gamebot.platform.event.HeldChannelRewardDueEvent event) {
+        QuestSubmission submission;
+        try {
+            submission = questService.getSubmission(event.getSubmissionId());
+        } catch (Exception e) {
+            log.warn("Held reward submission {} not found", event.getSubmissionId(), e);
+            return;
+        }
+        if (!"PENDING".equals(submission.getHeldStatus())) return;
+        Quest quest = submission.getQuest();
+        AppUser user = submission.getUser();
+        try {
+            boolean member;
+            try {
+                member = isChannelMember(quest.getChannelCheckChatId(), user.getTelegramId());
+            } catch (TelegramApiException e) {
+                // Не получилось проверить (бот потерял доступ к каналу и т.п.): игрок не виноват - через 3 дня после срока платим без проверки.
+                if (submission.getHeldReleaseAt() != null && submission.getHeldReleaseAt().plusDays(3).isBefore(LocalDateTime.now())) {
+                    member = true;
+                } else {
+                    alertSponsorChannelCheckFailure(quest, e);
+                    return;
+                }
+            }
+            if (member) {
+                QuestSubmission done = questService.releaseHeldReward(submission.getId());
+                sendText(user.getTelegramId(),
+                        "🎁 <b>Награда за верность канала</b>\n\n"
+                                + "Ты остался в «" + escape(quest.getGameName()) + "» — вторая часть награды уже на балансе: <b>+" + fmtExc(done.getHeldCoins()) + " EXC</b>.",
+                        keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🎯 Играть", "quest:recommend")))));
+            } else {
+                questService.forfeitHeldReward(submission.getId());
+                sendText(user.getTelegramId(),
+                        "ℹ️ Оставшаяся часть награды за канал «" + escape(quest.getGameName()) + "» не начислена: ты вышел из канала до срока. "
+                                + "Остальные квесты — по-прежнему с тобой.",
+                        keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🎯 Играть", "quest:recommend")))));
+            }
+        } catch (Exception e) {
+            log.error("Held channel reward processing failed for submission {}", event.getSubmissionId(), e);
+            String text = "🚨 <b>Не удалось обработать удержанную награду за подписку</b>\n\n"
+                    + "Заявка #" + event.getSubmissionId() + ", игрок " + escape(String.valueOf(user.getNickname())) + ".\n"
+                    + "Ошибка: " + escape(String.valueOf(e.getMessage()));
+            for (Long adminId : adminService.resolvedAdminIds()) {
+                try {
+                    sendText(adminId, text, null);
+                } catch (Exception inner) {
+                    log.warn("Failed to alert admin {} about held reward failure", adminId, inner);
+                }
+            }
+        }
+    }
+
+    /** Текст отчёта для спонсора: сколько пришло, сколько осталось, цена за подписчика. Пересылается спонсору как есть. */
+    private String buildSponsorRetentionReport(ru.gamebot.platform.domain.model.Sponsor sponsor) {
+        ru.gamebot.platform.service.SponsorService.RetentionStats st = sponsorService.retentionStats(sponsor.getId());
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
+        String period = sponsor.getStartDate() != null
+                ? sponsor.getStartDate().format(fmt) + " — " + (sponsor.getEndDate() != null ? sponsor.getEndDate().format(fmt) : "…")
+                : "—";
+        StringBuilder sb = new StringBuilder("📊 <b>Отчёт по кампании «" + escape(sponsor.getName()) + "»</b>\n");
+        sb.append("📅 Период: ").append(period).append("\n\n");
+        sb.append("✅ Подписалось через бота: <b>").append(fmtExc(st.total())).append("</b>\n");
+        sb.append("👥 Остаются в канале: <b>").append(fmtExc(st.stayed())).append("</b> (").append(st.stayedPercent()).append("%)\n");
+        sb.append("🔒 Прошли недельное удержание: ").append(fmtExc(st.released()))
+                .append(" · не удержались: ").append(fmtExc(st.forfeited()))
+                .append(" · ещё в ожидании: ").append(fmtExc(st.pending())).append("\n\n");
+        if (sponsor.getPaidRub() > 0 && st.total() > 0) {
+            sb.append("💵 Оплата: ").append(fmtExc(sponsor.getPaidRub())).append(" ₽\n");
+            sb.append("💰 Цена подписчика: ").append(String.format("%.2f", (double) sponsor.getPaidRub() / st.total())).append(" ₽");
+            if (st.stayed() > 0) {
+                sb.append(" · удержанного: ").append(String.format("%.2f", (double) sponsor.getPaidRub() / st.stayed())).append(" ₽");
+            }
+            sb.append("\n");
+        }
+        sb.append("\nДанные бота: выход из канала фиксируется, пока бот — админ канала.");
+        return sb.toString();
     }
 
     /** Бюджет спонсорской кампании выбран до конца: SponsorService уже выключил кампанию и квесты - сообщаем админам итог. */
