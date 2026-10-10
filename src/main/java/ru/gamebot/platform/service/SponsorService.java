@@ -78,6 +78,32 @@ public class SponsorService {
         });
     }
 
+    /** Докупка подписчиков в кампанию «подпишись на канал» (или продление закрытого теста): +N мест, +бюджет, +оплата (70% в Payout Pool), кампания и её квесты
+     *  снова включаются. Цена 0 - бесплатное расширение (тесты). Возвращает, сколько мест теперь свободно. */
+    @Transactional
+    public long topUpChannelCampaign(Long sponsorId, long extraSubs, long priceRub, Long adminTelegramId) {
+        Sponsor s = sponsorRepository.findById(sponsorId).orElseThrow(() -> new IllegalArgumentException("Кампания не найдена."));
+        List<Quest> channelQuests = findSponsoredQuests(sponsorId).stream().filter(q -> q.getChannelCheckChatId() != null).toList();
+        if (channelQuests.isEmpty()) {
+            throw new IllegalArgumentException("В этой кампании нет квеста «подписка на канал».");
+        }
+        Quest main = channelQuests.get(0);
+        long extraRub = extraSubs * priceRub;
+        s.setPaidRub(s.getPaidRub() + extraRub);
+        s.setBudgetExc(s.getBudgetExc() + extraSubs * main.getRewardCoins());
+        s.setActive(true);
+        sponsorRepository.save(s);
+        for (Quest q : channelQuests) {
+            q.setParticipantLimit((q.getParticipantLimit() == null ? 0 : q.getParticipantLimit()) + (int) extraSubs);
+            q.setActive(true);
+            questRepository.save(q);
+        }
+        if (extraRub > 0) {
+            healthRatioService.addToPayoutPool(Math.round(extraRub * (1 - COMMISSION_RATE)), adminTelegramId);
+        }
+        return Math.max(0, main.getParticipantLimit() - questSubmissionRepository.countApprovedByQuest(main));
+    }
+
     /** Квест «подписка на канал» набрал оплаченное число подписчиков: кампания и квесты выключаются, админам уходит уведомление. */
     @Transactional
     public void finishCampaign(Long sponsorId, String reason) {

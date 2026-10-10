@@ -2728,6 +2728,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 finalizeSponsorQuest(user, session, note);
             }
             case SPONSOR_FAST_INPUT -> handleSponsorFastInput(user, session, text);
+            case SPONSOR_TOPUP_INPUT -> handleSponsorTopupInput(user, session, text);
 
             case BRAWL_TAG_INPUT -> {
                 String purpose = session.getData().getOrDefault("brawlLinkPurpose", "tournament");
@@ -10987,6 +10988,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendAdminSponsorView(user, parseLong(action.substring("sponsors:view:".length())));
                     answerSilently(callbackQuery.getId());
                     return;
+                } else if (action.startsWith("sponsors:topup:")) {
+                    long topupSponsorId = parseLong(action.substring("sponsors:topup:".length()));
+                    session.reset();
+                    session.getData().put("topupSponsorId", String.valueOf(topupSponsorId));
+                    session.setState(SessionState.SPONSOR_TOPUP_INPUT);
+                    sendText(user.getTelegramId(),
+                            "➕ <b>Добавить подписчиков в кампанию</b>\n\n"
+                                    + "Одним сообщением: <code>сколько_подписчиков цена_₽_за_подписчика</code>\n"
+                                    + "Например: <code>100 6</code> — докупили 100 подписчиков по 6 ₽ (600 ₽, 70% уйдёт в Payout Pool).\n"
+                                    + "Для теста без оплаты: <code>5 0</code>.\n\n"
+                                    + "Квест и кампания снова включатся.",
+                            cancelKeyboard());
+                    answerSilently(callbackQuery.getId());
+                    return;
                 } else if (action.startsWith("sponsors:report:")) {
                     long reportSponsorId = parseLong(action.substring("sponsors:report:".length()));
                     sponsorService.findById(reportSponsorId).ifPresent(sp -> sendText(user.getTelegramId(), buildSponsorRetentionReport(sp),
@@ -15588,6 +15603,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("➕ Создать квест", "admin:sponsors:newquest:" + sponsorId)));
             if (retention.total() > 0) {
                 rows.add(List.of(keyboardFactory.callback("📄 Отчёт для спонсора", "admin:sponsors:report:" + sponsorId)));
+            }
+            if (linked.stream().anyMatch(q -> q.getChannelCheckChatId() != null)) {
+                rows.add(List.of(keyboardFactory.callback("➕ Добавить подписчиков", "admin:sponsors:topup:" + sponsorId)));
             }
             if (s.isActive()) {
                 rows.add(List.of(keyboardFactory.callback("⚫ Завершить кампанию", "admin:sponsors:deactivate:" + sponsorId)));
@@ -22719,6 +22737,48 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("✅ Создать", "admin:sponsors:fastgo")),
                         List.of(keyboardFactory.callback("❌ Отмена", "common:cancel")))));
+    }
+
+    /** «Добавить подписчиков» в кампанию: сообщение «N цена». Денежная операция (70% оплаты в Payout Pool) - под try/catch с алертом админам. */
+    private void handleSponsorTopupInput(AppUser user, UserSession session, String text) {
+        String[] t = text.trim().split("\\s+");
+        long n;
+        long price;
+        try {
+            if (t.length != 2) throw new NumberFormatException();
+            n = Long.parseLong(t[0]);
+            price = Long.parseLong(t[1]);
+        } catch (NumberFormatException e) {
+            sendText(user.getTelegramId(), "❌ Нужны два числа: сколько подписчиков и цена ₽ за подписчика. Например: <code>100 6</code> (или <code>5 0</code> для теста).", cancelKeyboard());
+            return;
+        }
+        if (n < 1 || n > 100_000 || price < 0) {
+            sendText(user.getTelegramId(), "❌ Подписчиков от 1 до 100 000, цена не меньше 0.", cancelKeyboard());
+            return;
+        }
+        long sponsorId = parseLong(session.getData().getOrDefault("topupSponsorId", "0"));
+        session.reset();
+        try {
+            long free = sponsorService.topUpChannelCampaign(sponsorId, n, price, user.getTelegramId());
+            sendText(user.getTelegramId(),
+                    "✅ <b>Подписчики добавлены</b>\n\n+" + n + " мест"
+                            + (price > 0 ? " · +" + fmtExc(n * price) + " ₽ оплаты (70% в Payout Pool)" : " · без оплаты (тест)") + "\n"
+                            + "Свободно мест сейчас: <b>" + free + "</b>. Квест снова доступен игрокам.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("🤝 Открыть кампанию", "admin:sponsors:view:" + sponsorId)),
+                            List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
+        } catch (IllegalArgumentException e) {
+            sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), backMenuKeyboard("admin:sponsors"));
+        } catch (Exception e) {
+            log.error("Sponsor top-up failed for sponsor {}", sponsorId, e);
+            for (Long adminId : adminService.resolvedAdminIds()) {
+                try {
+                    sendText(adminId, "🚨 <b>Не удалось добавить подписчиков в кампанию #" + sponsorId + "</b>\nОшибка: " + escape(String.valueOf(e.getMessage())), null);
+                } catch (Exception inner) {
+                    log.warn("Failed to alert admin {} about sponsor top-up failure", adminId, inner);
+                }
+            }
+        }
     }
 
     private void createSponsorFastQuest(AppUser user, UserSession session) {
