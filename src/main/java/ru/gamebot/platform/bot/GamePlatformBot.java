@@ -3564,16 +3564,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private volatile String walletBannerFileId = null;
 
+    private String dailyBonusWalletLabel(AppUser user) {
+        return userService.isDailyBonusAvailable(user) ? "🎁 Забрать ежедневный бонус 🔔" : "✅ Бонус за вход получен";
+    }
+
+    /** Куда вести «Назад» с экрана ежедневного бонуса: в «Задания дня» (единственное место, где его забирают), а если задания выключены - в кошелёк. */
+    private String dailyBonusBack() {
+        return userService.dailyTasksEnabled() ? "menu:dtasks" : "menu:cat:wallet";
+    }
+
     private void sendWalletCategory(AppUser user) {
-        String dailyLabel = userService.isDailyBonusAvailable(user)
-                ? "🎁 Забрать ежедневный бонус 🔔"
-                : "✅ Бонус за вход получен";
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
-                List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
-                List.of(keyboardFactory.callback(dailyLabel, "menu:daily")),
-                List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads")),
-                List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
-        ));
+        // Ежедневный бонус забирается только в «Заданиях дня»; в кошельке он остаётся лишь пока задания выключены (app_settings).
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")));
+        if (!userService.dailyTasksEnabled()) {
+            rows.add(List.of(keyboardFactory.callback(dailyBonusWalletLabel(user), "menu:daily")));
+        }
+        rows.add(List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
         if (walletBannerFileId != null) {
             sendPhotoCaption(user.getTelegramId(), walletBannerFileId, "💰 <b>Кошелёк</b>", keyboard);
@@ -3596,11 +3604,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         } catch (Exception e) {
             log.warn("Failed to send wallet banner", e);
-            sendMenuCategory(user, "💰 <b>Кошелёк</b>", List.of(
-                    List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")),
-                    List.of(keyboardFactory.callback(dailyLabel, "menu:daily")),
-                    List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads"))
-            ));
+            List<List<InlineKeyboardButton>> fallbackRows = new ArrayList<>();
+            fallbackRows.add(List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")));
+            if (!userService.dailyTasksEnabled()) {
+                fallbackRows.add(List.of(keyboardFactory.callback(dailyBonusWalletLabel(user), "menu:daily")));
+            }
+            fallbackRows.add(List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads")));
+            sendMenuCategory(user, "💰 <b>Кошелёк</b>", fallbackRows);
         }
     }
 
@@ -4697,7 +4707,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>Ежедневный бонус уже получен</b>\n\n"
                             + "🔥 Серия: <b>" + streak + " " + dayWord(streak) + " подряд</b>\n\n"
                             + "Возвращайся завтра — тебя ждёт <b>+" + nextBonus + " EXC</b>.",
-                    backMenuKeyboard(takeBackTo(user, "menu:cat:wallet")));
+                    backMenuKeyboard(takeBackTo(user, dailyBonusBack())));
             return;
         }
         // Серия уже прервалась (пропущен день) — предлагаем восстановить за Stars ДО обычного
@@ -4717,7 +4727,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.rowsLayout(List.of(
                             List.of(keyboardFactory.callback("💫 Восстановить за " + price + " ⭐", "streak:restore")),
                             List.of(keyboardFactory.callback("🔄 Начать заново", "streak:reset")),
-                            backRow(peekBackTo(user, "menu:cat:wallet"))
+                            backRow(peekBackTo(user, dailyBonusBack()))
                     )));
             return;
         }
@@ -4754,7 +4764,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         answer(callbackQuery.getId(), "+" + result.totalExc() + " EXC получено!");
         InlineKeyboardButton streakNudge = (result.streakDays() == 3 || result.streakDays() == 7)
                 ? referralNudgeButton(user, "streak" + result.streakDays()) : null;
-        String dailyBack = takeBackTo(user, "menu:cat:wallet");
+        String dailyBack = takeBackTo(user, dailyBonusBack());
         sendText(user.getTelegramId(), msg.toString(),
                 streakNudge == null ? backMenuKeyboard(dailyBack) : verticalWithBackMenu(new ArrayList<>(List.of(streakNudge)), "⬅️ Назад", dailyBack));
     }
@@ -5065,7 +5075,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (userService.isDailyTasksChestClaimed(user)) {
             return "✅ Задания дня 3/3";
         }
-        return "📋 Задания дня " + done + "/3" + (mask == UserService.DAILY_TASKS_ALL ? " 🔔" : "");
+        boolean bell = mask == UserService.DAILY_TASKS_ALL || (mask & UserService.DAILY_TASK_BONUS) == 0 && userService.isDailyBonusAvailable(user);
+        return "📋 Задания дня " + done + "/3" + (bell ? " 🔔" : "");
     }
 
     private void sendDailyTasks(AppUser user) {
@@ -20765,7 +20776,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (userService.dailyTasksEnabled()) {
             rows.add(List.of(keyboardFactory.callback(dailyTasksMenuLabel(user), "menu:dtasks")));
         }
-        String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошелёк 🔔" : "💰 Кошелёк";
+        // 🔔 про ежедневный бонус теперь на «Заданиях дня»; в кошельке он лишь когда задания выключены.
+        String walletLabel = !userService.dailyTasksEnabled() && userService.isDailyBonusAvailable(user) ? "💰 Кошелёк 🔔" : "💰 Кошелёк";
         rows.add(List.of(
                 keyboardFactory.callback(walletLabel, "menu:cat:wallet"),
                 keyboardFactory.callback("🛍️ Магазин", "menu:cat:shop")
