@@ -3434,6 +3434,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case TRANSFER_EXC_RECIPIENT -> handleTransferRecipientInput(user, session, text);
             case TRANSFER_EXC_AMOUNT -> handleTransferAmountInput(user, session, text);
             case WITHDRAWAL_INPUT -> handleWithdrawalInput(user, session, text);
+            case WITHDRAWAL_BANK -> handleWithdrawalBank(user, session, text);
             case WITHDRAWAL_DETAILS -> handleWithdrawalDetails(user, session, text);
             case WITHDRAWAL_TON_AMOUNT -> handleWithdrawalTonAmount(user, session, text);
             case WITHDRAWAL_TON_ADDRESS -> handleWithdrawalTonAddress(user, session, text);
@@ -12036,7 +12037,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String wallet = cryptoWalletFromPayoutDetails(req.getPayoutDetails());
             detailsLine = "\n💎 Способ: <b>" + cryptoMethodLabel(req.getPayoutDetails()) + "</b>\n📬 Кошелёк: <code>" + escape(wallet) + "</code>";
         } else if (req.getPayoutDetails() != null) {
-            detailsLine = "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>\n💳 Реквизиты: <code>" + escape(req.getPayoutDetails()) + "</code>";
+            detailsLine = rubDetailsLines(req.getPayoutDetails());
         } else {
             detailsLine = "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>";
         }
@@ -19129,15 +19130,43 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         session.getData().put("withdrawAmount", String.valueOf(amount));
         session.getData().put("withdrawRubles", String.valueOf(rubles));
         session.getData().put("withdrawQuoteAt", String.valueOf(System.currentTimeMillis()));
-        session.setState(SessionState.WITHDRAWAL_DETAILS);
+        session.setState(SessionState.WITHDRAWAL_BANK);
         sendText(user.getTelegramId(),
-                "💳 <b>Введите реквизиты для перевода</b>\n\n"
+                "🏦 <b>Шаг 1 из 2: банк</b>\n\n"
                         + "💸 Сумма: <b>" + amount + " EXC → ~" + rubles + " ₽</b>\n"
                         + "💱 Курс: <b>" + rateString(ratioPercent) + "</b>\n\n"
-                        + "Укажите <b>банк</b> и <b>номер телефона</b>.\n\n"
-                        + "Пример:\n<code>Сбербанк, СБП +7 900 123 45 67</code>\n\n"
+                        + "Напишите <b>название банка</b>, на который сделать перевод.\n\n"
+                        + "Пример: <code>Сбербанк</code>\n\n"
                         + "<i>*на текущий момент переводы осуществляются только по СБП, учитывайте это при создании заявки!</i>",
                 cancelKeyboard());
+    }
+
+    /** Шаг 1 вывода в рублях: название банка (отдельно от номера, чтобы модератор видел банк и копировал только номер). */
+    private void handleWithdrawalBank(AppUser user, UserSession session, String text) {
+        String bank = text.trim();
+        if (bank.length() < 2 || bank.length() > 40 || bank.replaceAll("\\D", "").length() >= 8) {
+            sendText(user.getTelegramId(),
+                    "⚠️ Здесь нужно только <b>название банка</b> (например: <code>Сбербанк</code>). Номер телефона — на следующем шаге.",
+                    cancelKeyboard());
+            return;
+        }
+        session.getData().put("withdrawBank", bank);
+        session.setState(SessionState.WITHDRAWAL_DETAILS);
+        sendText(user.getTelegramId(),
+                "📱 <b>Шаг 2 из 2: номер телефона</b>\n\n"
+                        + "🏦 Банк: <b>" + escape(bank) + "</b>\n\n"
+                        + "Введите <b>номер телефона</b>, к которому привязан этот банк по СБП.\n\n"
+                        + "Пример: <code>+7 900 123 45 67</code>",
+                cancelKeyboard());
+    }
+
+    /** Строки «способ / банк / реквизит» рублёвой заявки для модератора: новый формат разбирается на банк и копируемый номер, старый свободный текст показывается как был. */
+    private String rubDetailsLines(String payoutDetails) {
+        String[] rub = ru.gamebot.platform.service.RewardService.splitRubDetails(payoutDetails);
+        if (rub == null) {
+            return "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>\n💳 Реквизиты: <code>" + escape(payoutDetails) + "</code>";
+        }
+        return "\n💵 Способ: <b>Рубли (СБП)</b>\n🏦 Банк: <b>" + escape(rub[0]) + "</b>\n📱 Номер для перевода: <code>" + escape(rub[1]) + "</code>";
     }
 
     /** Сколько живёт посчитанная сумма в рублях между вводом суммы и вводом реквизитов. */
@@ -19152,11 +19181,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void handleWithdrawalDetails(AppUser user, UserSession session, String text) {
-        String details = text.trim();
-        if (details.length() < 6) {
-            sendText(user.getTelegramId(), "⚠️ Реквизиты слишком короткие. Введите номер карты или телефон:", cancelKeyboard());
+        String bank = session.getData().get("withdrawBank");
+        if (bank == null || bank.isBlank()) {
+            // сессия потеряла шаг с банком (рестарт бота, старое сообщение) - возвращаем на выбор суммы
+            session.reset();
+            sendText(user.getTelegramId(), "⚠️ Не вижу название банка. Начните вывод заново.", backMenuKeyboard("shop:withdraw"));
             return;
         }
+        String digits = text.replaceAll("\\D", "");
+        if (digits.length() < 10 || digits.length() > 11 || (digits.length() == 11 && !(digits.startsWith("7") || digits.startsWith("8")))) {
+            sendText(user.getTelegramId(),
+                    "⚠️ Не похоже на номер телефона. Введите номер в формате <code>+7 900 123 45 67</code> (10–11 цифр):",
+                    cancelKeyboard());
+            return;
+        }
+        // Модератору (и в базе) уходит единый вид «+7XXXXXXXXXX» - его удобно копировать одним нажатием
+        String phone = "+7" + digits.substring(digits.length() - 10);
+        String details = "Банк: " + bank + " | Реквизит: " + phone;
         if (rewardService.hasWithdrawalTodayOrPending(user)) {
             session.reset();
             sendText(user.getTelegramId(),
@@ -20617,7 +20658,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String wallet = cryptoWalletFromPayoutDetails(req.getPayoutDetails());
             detailsLine = "\n💎 Способ: <b>" + cryptoMethodLabel(req.getPayoutDetails()) + "</b>\n📬 Кошелёк: <code>" + escape(wallet) + "</code>";
         } else if (req.getPayoutDetails() != null) {
-            detailsLine = "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>\n💳 Реквизиты: <code>" + escape(req.getPayoutDetails()) + "</code>";
+            detailsLine = rubDetailsLines(req.getPayoutDetails());
         } else {
             detailsLine = "\n💵 Способ: <b>Рубли (СБП / Сбербанк)</b>";
         }

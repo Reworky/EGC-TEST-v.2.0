@@ -60,9 +60,21 @@ public class RewardService {
 
     /** Ключ реквизитов для сравнения между аккаунтами: телефон/карта — только цифры (телефон без +7/8), кошелёк — адрес
      *  в нижнем регистре. Для текста без номера (например, только название банка) ключа нет — такие не сравниваем. */
+    /** Рублёвые реквизиты вывода хранятся одной строкой «Банк: Сбербанк | Реквизит: +79001234567» (с 2026-10-10: банк и телефон вводятся отдельно,
+     *  модератору показываются двумя строками). Возвращает {банк, реквизит}, а для старых свободных строк («Сбербанк, СБП +7 900…») - null. */
+    private static final java.util.regex.Pattern RUB_DETAILS = java.util.regex.Pattern.compile("^Банк:\\s*(.+?)\\s*\\|\\s*Реквизит:\\s*(.+)$", java.util.regex.Pattern.DOTALL);
+
+    public static String[] splitRubDetails(String details) {
+        if (details == null) return null;
+        java.util.regex.Matcher m = RUB_DETAILS.matcher(details.trim());
+        return m.matches() ? new String[] {m.group(1).trim(), m.group(2).trim()} : null;
+    }
+
     static String destinationKey(String details) {
         if (details == null || details.isBlank()) return null;
         String d = details.trim();
+        String[] rub = splitRubDetails(d);
+        if (rub != null) d = rub[1]; // сравниваем только реквизит: цифры названия банка не должны попадать в ключ
         if (d.regionMatches(true, 0, "TON:", 0, 4) || d.startsWith("USDT")) {
             String after = d.contains(":") ? d.substring(d.indexOf(':') + 1) : d;
             String addr = after.split(":rubles=")[0].trim();
@@ -320,7 +332,8 @@ public class RewardService {
             int space = after.indexOf(' ');
             key = (space > 0 ? after.substring(0, space) : after).trim();
         } else {
-            key = pd.trim();
+            String[] rub = splitRubDetails(pd);
+            key = rub != null ? rub[1] : pd.trim();
         }
         if (key.isBlank()) return List.of();
         return rewardRequestRepository.findApprovedWithdrawalsWithPayoutDetailsContaining("%" + key + "%", req.getUser());
