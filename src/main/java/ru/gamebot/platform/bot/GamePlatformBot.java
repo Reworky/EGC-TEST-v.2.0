@@ -8397,13 +8397,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String passNote = passActive
                 ? "\n⭐ Вы EGC Pass — цены ниже, без наценки клуба.\n"
                 : "";
-        sendText(user.getTelegramId(),
-                "🎫 <b>Пропуски " + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\n"
-                        + "Выберите товар" + accountLine + passNote + "\n\n"
-                        + "К каждой покупке — бонус XP\n\n"
-                        + "⚠️ Заявка обрабатывается вручную, зачисление может занять время.\n\n"
-                        + GEM_PURCHASE_ACCOUNT_ACCESS_WARNING,
-                keyboardFactory.rowsLayout(rows));
+        String passesText = "🎫 <b>Пропуски " + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\n"
+                + "Выберите товар" + accountLine + passNote + "\n\n"
+                + "К каждой покупке — бонус XP\n\n"
+                + "⚠️ Заявка обрабатывается вручную, зачисление может занять время.\n\n"
+                + GEM_PURCHASE_ACCOUNT_ACCESS_WARNING;
+        if ("brawl_stars".equals(gameKey)) {
+            sendResourceBanner(user.getTelegramId(), "brawl_passes_banner.png", passesText, keyboardFactory.rowsLayout(rows));
+            return;
+        }
+        sendText(user.getTelegramId(), passesText, keyboardFactory.rowsLayout(rows));
     }
 
     private void sendExcDenominationPicker(AppUser user, String purchaseGroup) {
@@ -8438,27 +8441,33 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** file_id баннеров из ресурсов по имени файла: после первой отправки картинка берётся из Telegram, а не загружается заново. */
     private final java.util.Map<String, String> resourceBannerFileIds = new java.util.concurrent.ConcurrentHashMap<>();
 
-    /** Сообщение с картинкой из ресурсов бота; при сбое (нет файла, ошибка Telegram) - тот же текст без картинки. */
+    /** Сообщение с картинкой из ресурсов бота; при сбое (нет файла, ошибка Telegram) - тот же текст без картинки.
+     *  Подпись к фото в Telegram ограничена 1024 символами: если текст длиннее, картинка уходит отдельно, а текст с кнопками - следом. */
     private void sendResourceBanner(Long chatId, String resource, String text, InlineKeyboardMarkup keyboard) {
+        boolean captionFits = text.length() <= 1000;
         String cached = resourceBannerFileIds.get(resource);
-        if (cached != null) {
-            sendPhotoCaption(chatId, cached, text, keyboard);
-            return;
-        }
         try {
-            try (java.io.InputStream is = getClass().getResourceAsStream("/" + resource)) {
-                if (is == null) throw new java.io.IOException(resource + " not found");
-                byte[] img = is.readAllBytes();
-                SendPhoto sendPhoto = new SendPhoto();
-                sendPhoto.setChatId(chatId.toString());
-                sendPhoto.setPhoto(new InputFile(new java.io.ByteArrayInputStream(img), resource));
+            SendPhoto sendPhoto = new SendPhoto();
+            sendPhoto.setChatId(chatId.toString());
+            if (cached != null) {
+                sendPhoto.setPhoto(new InputFile(cached));
+            } else {
+                try (java.io.InputStream is = getClass().getResourceAsStream("/" + resource)) {
+                    if (is == null) throw new java.io.IOException(resource + " not found");
+                    sendPhoto.setPhoto(new InputFile(new java.io.ByteArrayInputStream(is.readAllBytes()), resource));
+                }
+            }
+            if (captionFits) {
                 sendPhoto.setCaption(text);
                 sendPhoto.setParseMode("HTML");
                 sendPhoto.setReplyMarkup(keyboard);
-                org.telegram.telegrambots.meta.api.objects.Message sent = execute(sendPhoto);
-                if (sent.getPhoto() != null && !sent.getPhoto().isEmpty()) {
-                    resourceBannerFileIds.put(resource, sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId());
-                }
+            }
+            org.telegram.telegrambots.meta.api.objects.Message sent = execute(sendPhoto);
+            if (cached == null && sent.getPhoto() != null && !sent.getPhoto().isEmpty()) {
+                resourceBannerFileIds.put(resource, sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId());
+            }
+            if (!captionFits) {
+                sendText(chatId, text, keyboard);
             }
         } catch (Exception e) {
             log.warn("Failed to send banner {}", resource, e);
