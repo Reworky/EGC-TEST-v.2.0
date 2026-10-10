@@ -3469,7 +3469,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    private volatile String mainMenuBannerFileId = null;
+    /** Кого уже пробовали подтянуть аватар из Telegram при показе меню — чтобы не дёргать getUserProfilePhotos
+     *  на каждое открытие меню у тех, у кого фото скрыто/нет (сбрасывается при рестарте бота). */
+    private final java.util.Set<Long> menuAvatarImportTried = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     private void sendMainMenu(AppUser user, String text) {
         sessionService.get(user.getTelegramId()).getData().remove(BACK_TO_KEY); // главное меню - обход из «Заданий дня» закончен
@@ -3486,33 +3488,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             subscriptionCheckCache.put(user.getTelegramId(), System.currentTimeMillis());
         }
         InlineKeyboardMarkup keyboard = mainMenuKeyboard(user);
-        if (text.length() > 1000) {
+        // К меню прикрепляется аватар игрока (тот же, что в профиле — фото из Telegram). Старые игроки
+        // могли зарегистрироваться до импорта аватара — подтягиваем один раз за запуск бота.
+        if (user.getAvatarFileId() == null && menuAvatarImportTried.add(user.getTelegramId())) {
+            importTelegramAvatar(user);
+        }
+        if (text.length() > 1000 || user.getAvatarFileId() == null) {
             sendText(user.getTelegramId(), text, keyboard);
             return;
         }
-        if (mainMenuBannerFileId != null) {
-            sendPhotoCaption(user.getTelegramId(), mainMenuBannerFileId, text, keyboard);
-            return;
-        }
-        try {
-            try (java.io.InputStream is = getClass().getResourceAsStream("/gamecenter.png")) {
-                if (is == null) throw new java.io.IOException("gamecenter.png not found");
-                byte[] img = is.readAllBytes();
-                SendPhoto sendPhoto = new SendPhoto();
-                sendPhoto.setChatId(user.getTelegramId().toString());
-                sendPhoto.setPhoto(new InputFile(new java.io.ByteArrayInputStream(img), "gamecenter.png"));
-                sendPhoto.setCaption(text);
-                sendPhoto.setParseMode("HTML");
-                sendPhoto.setReplyMarkup(keyboard);
-                org.telegram.telegrambots.meta.api.objects.Message sent = execute(sendPhoto);
-                if (sent.getPhoto() != null && !sent.getPhoto().isEmpty()) {
-                    mainMenuBannerFileId = sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId();
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to send main menu banner", e);
-            sendText(user.getTelegramId(), text, keyboard);
-        }
+        sendPhotoCaption(user.getTelegramId(), user.getAvatarFileId(), text, keyboard);
     }
 
     private void sendMenuCategory(AppUser user, String title, List<List<InlineKeyboardButton>> items) {
