@@ -22795,8 +22795,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             if (!member) {
                 answer(callbackQuery.getId(), "Подписка не найдена");
-                sendQuestCard(user, questId, back, "⬅️ Назад",
-                        "📢 Подписки пока не видно. Откройте канал, подпишитесь и снова нажмите «✅ Я подписался».");
+                // Коротко и по делу: что делать и ссылка, без полной карточки квеста
+                List<List<InlineKeyboardButton>> notYetRows = new ArrayList<>();
+                notYetRows.add(List.of(keyboardFactory.callback("✅ Я подписался", "qchan:check:" + questId)));
+                if (quest.getChannelCheckUrl() != null) {
+                    notYetRows.add(List.of(keyboardFactory.url("📢 Открыть канал", quest.getChannelCheckUrl())));
+                }
+                notYetRows.add(List.of(keyboardFactory.callback("⬅️ Назад", back), keyboardFactory.callback("🏠 Меню", "menu:main")));
+                sendText(user.getTelegramId(),
+                        "📢 Подписки пока не видно. Откройте канал, подпишитесь и снова нажмите «✅ Я подписался».\n\n"
+                                + (quest.getChannelCheckUrl() != null ? "📎 Ссылки:\n" + escape(quest.getChannelCheckUrl()) : ""),
+                        keyboardFactory.rowsLayout(notYetRows));
                 return;
             }
             QuestSubmission done = questService.approveSubmission(latest.getId());
