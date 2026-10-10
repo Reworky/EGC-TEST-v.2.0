@@ -20006,8 +20006,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "⭐ <b>Telegram Stars</b> — рекомендуем: оплата в один тап, подтверждается автоматически, без переписки и проверки перевода.\n"
                 + "💎 <b>GRAM (TON)</b> — перевод вручную: менеджер напишет вам в личные сообщения и пришлёт реквизиты, это дольше.\n\n"
                 + GEM_PURCHASE_ACCOUNT_ACCESS_WARNING;
-        if ("brawl_stars".equals(gameKey) && "brawlpass".equals(pkg.key())) {
-            sendResourceBanner(user.getTelegramId(), "brawl_pass_banner.png", methodText, keyboardFactory.rowsLayout(rows));
+        if ("brawl_stars".equals(gameKey) && ("brawlpass".equals(pkg.key()) || "brawlpassplus".equals(pkg.key()))) {
+            sendResourceBanner(user.getTelegramId(),
+                    "brawlpassplus".equals(pkg.key()) ? "brawl_pass_plus_banner.png" : "brawl_pass_banner.png",
+                    methodText, keyboardFactory.rowsLayout(rows));
             return;
         }
         sendText(user.getTelegramId(), methodText, keyboardFactory.rowsLayout(rows));
