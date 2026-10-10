@@ -889,6 +889,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleActivationCheck(callbackQuery, user);
             return;
         }
+        if (data.startsWith("dtasks:go:")) {
+            handleDailyTasksGo(callbackQuery, user, data.substring("dtasks:go:".length()));
+            return;
+        }
         if ("dtasks:claim".equals(data)) {
             handleDailyTasksClaim(callbackQuery, user);
             return;
@@ -1794,7 +1798,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "faqfile" -> { answerSilently(callbackQuery.getId()); sendFaqFile(user); return; }
             case "main" -> sendMainMenu(user, mainMenuText(user));
             case "profile" -> sendProfile(user);
-            case "quests" -> sendQuestGames(user);
+            case "quests" -> sendQuestGames(user, peekBackTo(user, null));
             case "myquests" -> sendMySubmissions(user);
             case "balance" -> sendBalance(user);
             case "rating" -> sendRatingMenu(user);
@@ -3468,6 +3472,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private volatile String mainMenuBannerFileId = null;
 
     private void sendMainMenu(AppUser user, String text) {
+        sessionService.get(user.getTelegramId()).getData().remove(BACK_TO_KEY); // главное меню - обход из «Заданий дня» закончен
         if (ROLE_MODER.equals(resolveMenuRole(user, sessionService.get(user.getTelegramId())))) {
             sendModerationHub(user);
             return;
@@ -4681,7 +4686,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>Ежедневный бонус уже получен</b>\n\n"
                             + "🔥 Серия: <b>" + streak + " " + dayWord(streak) + " подряд</b>\n\n"
                             + "Возвращайся завтра — тебя ждёт <b>+" + nextBonus + " EXC</b>.",
-                    backMenuKeyboard("menu:main"));
+                    backMenuKeyboard(takeBackTo(user, "menu:main")));
             return;
         }
         // Серия уже прервалась (пропущен день) — предлагаем восстановить за Stars ДО обычного
@@ -4737,8 +4742,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         answer(callbackQuery.getId(), "+" + result.totalExc() + " EXC получено!");
         InlineKeyboardButton streakNudge = (result.streakDays() == 3 || result.streakDays() == 7)
                 ? referralNudgeButton(user, "streak" + result.streakDays()) : null;
+        String dailyBack = takeBackTo(user, "menu:main");
         sendText(user.getTelegramId(), msg.toString(),
-                streakNudge == null ? backMenuKeyboard("menu:main") : verticalWithBackMenu(new ArrayList<>(List.of(streakNudge)), "⬅️ Назад", "menu:main"));
+                streakNudge == null ? backMenuKeyboard(dailyBack) : verticalWithBackMenu(new ArrayList<>(List.of(streakNudge)), "⬅️ Назад", dailyBack));
     }
 
     /** Строки таблицы призов одного из двух пулов сундука дня (те же вероятности, что в UserService.rollAndApply*ChestPrize). */
@@ -4779,7 +4785,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🔁 " + (egcPass ? "Ещё один улучшенный сундук — " : "Улучшенный сундук — ")
                 + CHEST_REROLL_STARS_PRICE + " ⭐", "menu:chestreroll")));
         rows.add(List.of(
-                keyboardFactory.callback("⬅️ Назад", "menu:cat:fortune"),
+                keyboardFactory.callback("⬅️ Назад", peekBackTo(user, "menu:cat:fortune")),
                 keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(), text.toString(), keyboardFactory.rowsLayout(rows));
     }
@@ -4864,7 +4870,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (adButton != null) rows.add(List.of(adButton));
         rows.add(List.of(keyboardFactory.callback("📋 Призы", "menu:chestprizes")));
         rows.add(List.of(
-                keyboardFactory.callback("⬅️ Назад", "menu:main"),
+                keyboardFactory.callback("⬅️ Назад", takeBackTo(user, "menu:main")),
                 keyboardFactory.callback("🏠 Меню", "menu:main")));
         return keyboardFactory.rowsLayout(rows);
     }
@@ -4995,6 +5001,44 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     // ─── Задания дня → «Сундук заданий» (2026-10-10) ─────────────────────────────────────────────────────
 
+    /** Куда вести кнопку «Назад» на экранах, открытых ярлыком из «Заданий дня» (ключ в сессии; снимается экраном-результатом). */
+    private static final String BACK_TO_KEY = "dtasksBackTo";
+
+    private String peekBackTo(AppUser user, String defaultBack) {
+        String v = sessionService.get(user.getTelegramId()).getData().get(BACK_TO_KEY);
+        return v != null ? v : defaultBack;
+    }
+
+    private String takeBackTo(AppUser user, String defaultBack) {
+        String v = sessionService.get(user.getTelegramId()).getData().remove(BACK_TO_KEY);
+        return v != null ? v : defaultBack;
+    }
+
+    /** Ярлык из «Заданий дня» на соответствующий раздел: «Назад» оттуда ведёт обратно в задания дня, а не в главное меню. */
+    private void handleDailyTasksGo(CallbackQuery callbackQuery, AppUser user, String target) {
+        UserSession session = sessionService.get(user.getTelegramId());
+        switch (target) {
+            case "daily" -> {
+                session.getData().put(BACK_TO_KEY, "menu:dtasks");
+                sendDailyBonus(callbackQuery, user);
+            }
+            case "chest" -> {
+                session.getData().put(BACK_TO_KEY, "menu:dtasks");
+                answerSilently(callbackQuery.getId());
+                sendChestPreview(user);
+            }
+            case "quests" -> {
+                session.getData().put(BACK_TO_KEY, "menu:dtasks");
+                answerSilently(callbackQuery.getId());
+                sendQuestGames(user, "menu:dtasks");
+            }
+            default -> {
+                answerSilently(callbackQuery.getId());
+                sendDailyTasks(user);
+            }
+        }
+    }
+
     private String dailyTasksMenuLabel(AppUser user) {
         int mask = userService.dailyTasksMask(user);
         int done = Integer.bitCount(mask);
@@ -5005,6 +5049,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendDailyTasks(AppUser user) {
+        sessionService.get(user.getTelegramId()).getData().remove(BACK_TO_KEY); // вернулись в задания - обход закончен
         if (!userService.dailyTasksEnabled()) {
             sendText(user.getTelegramId(), "📋 Задания дня сейчас недоступны.", backMenuKeyboard("menu:main"));
             return;
@@ -5027,9 +5072,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!claimed && mask == UserService.DAILY_TASKS_ALL) {
             rows.add(List.of(keyboardFactory.callback("🎁 Забрать сундук заданий", "dtasks:claim")));
         } else if (!claimed) {
-            if (!bonus) rows.add(List.of(keyboardFactory.callback("📅 Ежедневный бонус", "menu:daily")));
-            if (!quest) rows.add(List.of(keyboardFactory.callback("🗺️ Квесты", "menu:quests")));
-            if (!chest) rows.add(List.of(keyboardFactory.callback("🎁 Сундук дня", "menu:chestopen")));
+            if (!bonus) rows.add(List.of(keyboardFactory.callback("📅 Ежедневный бонус", "dtasks:go:daily")));
+            if (!quest) rows.add(List.of(keyboardFactory.callback("🗺️ Квесты", "dtasks:go:quests")));
+            if (!chest) rows.add(List.of(keyboardFactory.callback("🎁 Сундук дня", "dtasks:go:chest")));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
         sendText(user.getTelegramId(), text.toString(), keyboardFactory.rowsLayout(rows));
@@ -5246,6 +5291,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendQuestGames(AppUser user) {
+        sendQuestGames(user, null);
+    }
+
+    /** backData != null - экран открыт из другого раздела (например «Задания дня»): добавляем «Назад» туда. */
+    private void sendQuestGames(AppUser user, String backData) {
         String watchAdLabel = "🎬 Забери халявные EXC";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "quests:section:gaming")));
@@ -5253,7 +5303,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🤳 UGC", "quests:section:ugc")));
         rows.add(List.of(keyboardFactory.callback(watchAdLabel, "quests:section:ads")));
         rows.add(List.of(keyboardFactory.callback("📂 Мои квесты", "menu:myquests")));
-        rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
+        if (backData != null) {
+            rows.add(List.of(keyboardFactory.callback("⬅️ Назад", backData), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        } else {
+            rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
+        }
         sendText(user.getTelegramId(),
                 "🗺️ <b>Квесты</b>\n\nВыберите раздел:",
                 keyboardFactory.rowsLayout(rows));
