@@ -184,7 +184,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.domain.repository.BotReviewRepository botReviewRepository;
     private final ru.gamebot.platform.domain.repository.NudgeFeedbackRepository nudgeFeedbackRepository;
     private final ru.gamebot.platform.domain.repository.FeatureInterestRepository featureInterestRepository;
-    private final ru.gamebot.platform.domain.repository.ChannelJoinRepository channelJoinRepository;
     private final ru.gamebot.platform.domain.repository.StarsPurchaseRepository starsPurchaseRepository;
     private final ObjectMapper objectMapper;
     private final java.net.http.HttpClient starsHttpClient = java.net.http.HttpClient.newHttpClient();
@@ -5826,7 +5825,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         ? keyboardFactory.callback(autoVerifyProgressLabel(quest, latest), "noop")
                         : questReportOrCheckButton(quest));
         }
-        if (quest.getChannelCheckUrl() != null && quest.getChannelCheckChatId() != null) {
+        // Ссылка на канал спонсора - только после «Взять»: иначе игрок успевает подписаться заранее и взять квест уже «не новым»
+        if (quest.getChannelCheckUrl() != null && quest.getChannelCheckChatId() != null && hasActiveSubmission && !questClosed) {
             buttons.add(keyboardFactory.url("📢 Открыть канал", quest.getChannelCheckUrl()));
         }
         if (nextQuestData != null) {
@@ -5843,6 +5843,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String oneTimeBadge = quest.isOneTimePerAccount() ? "🔂 <b>Разовый квест</b> — доступен один раз за аккаунт\n" : "";
         boolean questFlat = gameCatalogService.isFlat(quest.getGameName());
         String personalizedInstruction = questService.personalizeInstruction(quest.getInstruction(), user.getTelegramId());
+        if (quest.getChannelCheckChatId() != null && !hasActiveSubmission) {
+            personalizedInstruction = ""; // ссылка на канал показывается только после «Взять»
+        }
         // Упрощённая карточка (05.10.2026, вариант 1 владельца): заголовок, «игра · платформа · срок», награда одной строкой, описание.
         boolean autoVerified = isAutoVerifiedQuest(quest);
         boolean notStarted = latest == null || latest.getStatus() == SubmissionStatus.REJECTED || latestExpired;
@@ -6106,23 +6109,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         // Спонсор платит за НОВЫХ подписчиков: кто уже в канале, квест взять не может (иначе платим и спонсору, и игроку за подписку, которой не было).
+        // Ссылка на канал до «Взять» игроку не показывается (см. sendQuestCard), чтобы нельзя было подписаться и через минуту взять квест.
         // Если проверить не вышло (нет доступа к каналу) - не блокируем, решает проверка при сдаче.
-        boolean newSubscriberAlreadyIn = false;
         if (quest.getChannelCheckChatId() != null) {
             try {
                 if (isChannelMember(quest.getChannelCheckChatId(), user.getTelegramId())) {
-                    // Подписался по ссылке из квеста ДО нажатия «Взять» - это новый подписчик: он вступил в канал после запуска квеста (событие chat_member).
-                    // Блокируем только тех, кто был в канале раньше: им награда не положена, спонсор платит за новых.
-                    boolean joinedAfterLaunch = quest.getCreatedAt() != null
-                            && channelJoinRepository.existsByTelegramIdAndChatIdAndJoinedAtAfter(
-                                    user.getTelegramId(), quest.getChannelCheckChatId(), quest.getCreatedAt());
-                    if (!joinedAfterLaunch) {
-                        answerSilently(callbackQuery.getId());
-                        sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
-                                "ℹ️ Ты уже был подписан на этот канал до запуска квеста — награда только за новых подписчиков. Загляни в другие квесты.");
-                        return;
-                    }
-                    newSubscriberAlreadyIn = true;
+                    answerSilently(callbackQuery.getId());
+                    sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                            "ℹ️ Ты уже подписан на этот канал — награда за этот квест только для новых подписчиков. Загляни в другие квесты.");
+                    return;
                 }
             } catch (TelegramApiException e) {
                 log.warn("Pre-take channel check failed for quest {} user {}", questId, user.getTelegramId(), e);
@@ -6130,15 +6125,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         QuestService.QuestActionResult result = questService.takeQuestChecked(user, quest);
         answerSilently(callbackQuery.getId());
-        if (newSubscriberAlreadyIn && result.status() == QuestActionStatus.OK) {
-            // Подписался по нашей ссылке до нажатия «Взять»: сразу предлагаем забрать награду (подписку проверит «Забрать награду»)
-            sendText(user.getTelegramId(),
-                    "🎉 <b>О, ты уже подписан на этот канал!</b>\n\nЗабери награду за квест «" + escape(quest.getTitle()) + "» — подписку мы уже видим.",
-                    keyboardFactory.rowsLayout(List.of(
-                            List.of(keyboardFactory.callback("🎁 Забрать награду", "qchan:check:" + questId)),
-                            List.of(keyboardFactory.callback("📂 Мои квесты", "menu:myquests"), keyboardFactory.callback("🏠 Меню", "menu:main")))));
-            return;
-        }
         renderTakeQuestResult(user, questId, quest, result);
     }
 
@@ -23032,18 +23018,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean left = "left".equalsIgnoreCase(status) || "kicked".equalsIgnoreCase(status);
         boolean joined = "member".equalsIgnoreCase(status) || "administrator".equalsIgnoreCase(status) || "creator".equalsIgnoreCase(status);
         if (!left && !joined) return;
-        if (joined) {
-            // Запоминаем вход в канал спонсора (даже если человек ещё не в боте): кто вступил после запуска квеста - новый подписчик
-            try {
-                ru.gamebot.platform.domain.model.ChannelJoin join = new ru.gamebot.platform.domain.model.ChannelJoin();
-                join.setTelegramId(update.getNewChatMember().getUser().getId());
-                join.setChatId(String.valueOf(update.getChat().getId()));
-                join.setJoinedAt(LocalDateTime.now());
-                channelJoinRepository.save(join);
-            } catch (Exception e) {
-                log.warn("Failed to record channel join for {}", update.getNewChatMember().getUser().getId(), e);
-            }
-        }
         AppUser user = userService.findByTelegramId(update.getNewChatMember().getUser().getId()).orElse(null);
         if (user == null) return;
         for (Quest quest : quests) {
