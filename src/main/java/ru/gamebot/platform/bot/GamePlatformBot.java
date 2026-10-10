@@ -20862,7 +20862,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * при самом первом /start, см. fullUserWelcomeText/roleWelcomeText (ТЗ "Донастройка главного экрана",
      * 2026-09-14: абзац при каждом возврате воспринимался как избыточный шум). */
     private String userBalanceLine(AppUser user) {
-        return "💰 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>"
+        return "Твой баланс: 💰 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>"
                 + "   ⭐ Ур. " + userService.getLevelNumber(user.getXp()) + " — " + escape(userService.getLevelName(user.getXp()));
     }
 
