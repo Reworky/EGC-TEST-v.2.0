@@ -100,6 +100,18 @@ export async function channelCheckQuest(id) {
   return data;
 }
 
+/** Задания дня (бонус, квест, сундук дня) и «Сундук заданий» — тот же сервис, что в боте. */
+export async function getDailyTasks() {
+  const { data } = await api.get('/api/daily-tasks');
+  return data;
+}
+
+export async function claimDailyTasks() {
+  const { data } = await api.post('/api/daily-tasks/claim');
+  invalidateCache('wallet', 'profile');
+  return data;
+}
+
 /** Лента выплат: последние выплаты (ники замаскированы сервером) и итоги за 24 ч и 7 дней. */
 export async function getPayoutFeed() {
   const { data } = await api.get('/api/payouts/feed');

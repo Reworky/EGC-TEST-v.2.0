@@ -14,6 +14,7 @@ import AdRewardCard from '../components/AdRewardCard';
 import { useAdsgram } from '../hooks/useAdsgram';
 import AdBanner from '../components/AdBanner';
 import PayoutFeedCard from '../components/PayoutFeedCard';
+import DailyTasksCard from '../components/DailyTasksCard';
 import { useParticles } from '../components/ParticlesContext';
 import './QuestsPage.css';
 import './ShopPage.css';
@@ -391,6 +392,11 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest }) {
           <div style={{ fontSize: 12, color: '#f87171', marginTop: 6 }}>Не удалось обновить. Попробуйте ещё раз.</div>
         )}
       </BorderBeamCard>
+
+      <DailyTasksCard
+        refreshKey={`${wallet.coins}-${wallet.dailyBonusAvailable}-${wallet.chestAvailable}`}
+        onClaimed={onChanged}
+      />
 
       <div className="w-stats-grid">
         <div className="w-stat-card">

@@ -401,6 +401,7 @@
 }
 
 .quest-progress-track {
+  position: relative;
   height: 6px;
   background: rgba(255,255,255,0.08);
   border-radius: 3px;
@@ -579,4 +580,21 @@
   margin-bottom: 8px;
   background: transparent;
   border: 1px solid rgba(255,255,255,0.25);
+}
+
+/* Метки ступеней прогресса на шкале автоквеста (половина пути и последний шаг) */
+.quest-progress-tick {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: rgba(255,255,255,0.35);
+}
+.quest-progress-tick.reached { background: rgba(255,255,255,0.9); }
+.quest-progress-hint {
+  font-size: 11px;
+  color: rgba(255,255,255,0.55);
+  text-align: right;
+  margin-top: 2px;
 }

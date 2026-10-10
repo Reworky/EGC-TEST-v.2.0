@@ -135,6 +135,18 @@ const STATUS_COLORS = {
   REJECTED: '#ef5350',
   NEEDS_INFO: '#ef5350',
 };
+// Ступени прогресса автоквестов: последний шаг начинается, когда осталось max(1, цель/10) (как QuestProgressNotifier в боте).
+function lastStepAt(target) {
+  return target - Math.max(1, Math.floor(target / 10));
+}
+
+function stepHint(progress, target) {
+  const left = target - progress;
+  if (progress >= lastStepAt(target)) return `🔥 Последний шаг — осталось ${left}`;
+  if (progress * 2 >= target) return `✅ Половина пути пройдена — осталось ${left}`;
+  return `Осталось ${left}`;
+}
+
 const CANCELABLE_STATUSES = ['DRAFT', 'PENDING', 'NEEDS_INFO', 'REJECTED'];
 
 function QuestActions({ quest, detail, onChanged }) {
@@ -327,8 +339,20 @@ function QuestActions({ quest, detail, onChanged }) {
         <GoPlayHint gameName={detail.gameName} auto />
         <div className="quest-status quest-status-pending">
           <div><i className="ti ti-clock"></i> Прогресс отслеживается автоматически по вашему аккаунту {detail.gameName}</div>
-          <div className="quest-progress-track"><div className="quest-progress-fill" style={{ width: pct + '%' }} /></div>
+          <div className="quest-progress-track">
+            <div className="quest-progress-fill" style={{ width: pct + '%' }} />
+            {/* Ступени как в боте (QuestProgressNotifier): половина пути и последний шаг; только для целей от 5 */}
+            {target >= 5 && (
+              <>
+                <span className={`quest-progress-tick ${progress * 2 >= target ? 'reached' : ''}`} style={{ left: '50%' }} />
+                <span className={`quest-progress-tick ${progress >= lastStepAt(target) ? 'reached' : ''}`} style={{ left: (lastStepAt(target) / target * 100) + '%' }} />
+              </>
+            )}
+          </div>
           <div className="quest-progress-label">{progress} / {target}</div>
+          {target >= 5 && progress < target && (
+            <div className="quest-progress-hint">{stepHint(progress, target)}</div>
+          )}
         </div>
         </>
       );
