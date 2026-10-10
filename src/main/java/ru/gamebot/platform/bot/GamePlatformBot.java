@@ -20873,51 +20873,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "Выберите нужный раздел ниже и продолжайте прогресс.";
     }
 
-    /** Блок «цель» под балансом в главном меню игрока: что делать сегодня и что за это будет + где отряд.
-     *  Пустая строка, если показывать нечего. */
-    private String userGoalLines(AppUser user) {
-        StringBuilder sb = new StringBuilder();
-        if (userService.dailyTasksEnabled()) {
-            sb.append("\n\n");
-            if (userService.isDailyTasksChestClaimed(user)) {
-                sb.append("✅ Задания дня выполнены, новые — завтра");
-            } else {
-                sb.append("📋 Задания дня ").append(Integer.bitCount(userService.dailyTasksMask(user))).append("/3 → 🎁 +")
-                        .append(UserService.DAILY_TASKS_CHEST_EXC).append(" EXC и 🎟️ билет колеса");
-            }
-        }
-        sb.append(sb.length() == 0 ? "\n\n" : "\n").append(squadMenuLine(user));
-        return sb.toString();
-    }
-
-    private String squadMenuLine(AppUser user) {
-        try {
-            ru.gamebot.platform.domain.model.Squad squad = squadService.findByUser(user).orElse(null);
-            if (squad == null) {
-                return "⚔️ Отряд: нет. Из 3 игроков — +" + ru.gamebot.platform.service.SquadService.SQUAD_MILESTONE_3_BONUS_PER_MEMBER
-                        + " EXC каждому";
-            }
-            int size = squadService.getMembers(squad).size();
-            String name = "«" + escape(squad.getName()) + "»";
-            if (size < 3) {
-                return "⚔️ Отряд " + name + ": " + size + "/3 — ещё " + (3 - size) + " до бонуса +"
-                        + ru.gamebot.platform.service.SquadService.SQUAD_MILESTONE_3_BONUS_PER_MEMBER + " EXC каждому";
-            }
-            if (size < 5) {
-                return "⚔️ Отряд " + name + ": " + size + "/5 — ещё " + (5 - size) + " до бонуса +"
-                        + ru.gamebot.platform.service.SquadService.SQUAD_MILESTONE_5_BONUS_PER_MEMBER + " EXC каждому";
-            }
-            return "⚔️ Отряд " + name + ": " + size + " игроков";
-        } catch (Exception e) {
-            log.warn("Failed to build squad line for main menu, user {}", user.getTelegramId(), e);
-            return "";
-        }
-    }
-
     private String mainMenuText(AppUser user) {
         String role = resolveMenuRole(user, sessionService.get(user.getTelegramId()));
         if (ROLE_USER.equals(role)) {
-            return "Никнейм: " + escape(user.getNickname()) + "\n\n" + userBalanceLine(user) + userGoalLines(user);
+            return "Никнейм: " + escape(user.getNickname()) + "\n\n" + userBalanceLine(user);
         }
         String title = switch (role) {
             case ROLE_ADMIN -> "🛠️ <b>Административный контур активен</b>";
