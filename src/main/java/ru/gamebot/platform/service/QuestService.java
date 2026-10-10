@@ -543,7 +543,9 @@ public class QuestService {
         if (quest.isSponsored() || quest.isExternalAutoApprove() || quest.isRepeatableNoCooldownEligible()) {
             return QuestListState.AVAILABLE;
         }
-        if (activeSlots >= maxSlots || getCooldownHoursLeft(user, quest) > 0) {
+        // Купленное снятие кулдауна открывает квест с кулдауном: оно списывается на самом взятии (takeQuestChecked).
+        boolean cooldownBlocks = getCooldownHoursLeft(user, quest) > 0 && !sinkShopService.hasCooldownBypass(user, quest.getGameName());
+        if (activeSlots >= maxSlots || cooldownBlocks) {
             return QuestListState.BLOCKED;
         }
         if (getTakeCooldownMinutesLeft(user) > 0) {

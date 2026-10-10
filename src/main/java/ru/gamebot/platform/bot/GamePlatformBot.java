@@ -5746,16 +5746,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // отвечало «подождите N мин». Спонсорские/внешние/no-cooldown квесты лимит не касается (см. takeQuestChecked).
         long takeCooldownLeft = (hasActiveSubmission || quest.isSponsored() || quest.isExternalAutoApprove()
                 || quest.isRepeatableNoCooldownEligible()) ? 0 : questService.getTakeCooldownMinutesLeft(user);
-        if (cooldownLeft > 0) {
+        // Куплено «Снятие кулдауна» (3 000 EXC): оно списывается на самом взятии квеста (takeQuestChecked), поэтому карточка обязана
+        // показать активную «Взять», а не серую кнопку кулдауна - иначе игрок платит и не может воспользоваться (заявка поддержки #279, 2026-10-10).
+        boolean cooldownBypassed = !hasActiveSubmission && (cooldownLeft > 0 || gameCooldown)
+                && !quest.isSponsored() && !quest.isExternalAutoApprove() && !quest.isRepeatableNoCooldownEligible()
+                && sinkShopService.hasCooldownBypass(user, quest.getGameName());
+        if (cooldownLeft > 0 && !cooldownBypassed) {
             buttons.add(keyboardFactory.callback("⏳ Доступно через " + cooldownExact, "noop"));
         } else if (slotsFull) {
             buttons.add(keyboardFactory.callback("🔒 Слот занят — сдай или отмени активный квест", "noop"));
         } else if (takeCooldownLeft > 0) {
             buttons.add(keyboardFactory.callback("⏳ Следующий квест — через " + takeCooldownLeft + " мин", "noop"));
-        } else if (gameCooldown) {
+        } else if (gameCooldown && !cooldownBypassed) {
             buttons.add(keyboardFactory.callback("⏳ Кулдаун по этой игре", "noop"));
         } else if (!hasActiveSubmission) {
-            buttons.add(keyboardFactory.callback("🚀 Взять", "quest:take:" + questId));
+            buttons.add(keyboardFactory.callback(cooldownBypassed ? "🚀 Взять — кулдаун будет снят" : "🚀 Взять", "quest:take:" + questId));
         }
         // Самая частая покупка в «Предметах» (95 за 90 дн., разбор 2026-10-07): предлагаем снятие кулдауна там, где игрок реально упёрся в паузу.
         if ((cooldownLeft > 0 || gameCooldown) && !hasActiveSubmission && user.getCooldownBypassGame() == null
