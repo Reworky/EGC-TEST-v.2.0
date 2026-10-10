@@ -1798,7 +1798,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "faqfile" -> { answerSilently(callbackQuery.getId()); sendFaqFile(user); return; }
             case "main" -> sendMainMenu(user, mainMenuText(user));
             case "profile" -> sendProfile(user);
-            case "quests" -> sendQuestGames(user, peekBackTo(user, null));
+            case "quests" -> sendQuestGames(user, peekBackTo(user, "menu:cat:quests"));
             case "myquests" -> sendMySubmissions(user);
             case "balance" -> sendBalance(user);
             case "rating" -> sendRatingMenu(user);
@@ -3502,9 +3502,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendMenuCategory(AppUser user, String title, List<List<InlineKeyboardButton>> items) {
+        sendMenuCategory(user, title, items, "menu:main");
+    }
+
+    /** backData — родительский раздел: «⋯ Ещё» для Фортуны/Клуба/Помощи/Квестов и рейтинга (там же «🏠 Меню»), иначе главное меню. */
+    private void sendMenuCategory(AppUser user, String title, List<List<InlineKeyboardButton>> items, String backData) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(items);
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
+        rows.add(backRow(backData));
         sendText(user.getTelegramId(), title, keyboardFactory.rowsLayout(rows));
+    }
+
+    /** «⬅️ Назад» в родительский раздел; если родитель не главное меню — рядом «🏠 Меню». */
+    private List<InlineKeyboardButton> backRow(String backData) {
+        if ("menu:main".equals(backData)) {
+            return List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"));
+        }
+        return List.of(keyboardFactory.callback("⬅️ Назад", backData), keyboardFactory.callback("🏠 Меню", "menu:main"));
     }
 
     private volatile String questBannerFileId = null;
@@ -3516,7 +3529,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("🗺️ Квесты", "menu:quests")),
                 List.of(keyboardFactory.callback("🏆 Рейтинг", "menu:rating")),
                 List.of(keyboardFactory.callback(tournamentLabel, "menu:tournament")),
-                List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
+                backRow("menu:cat:more")
         ));
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
         if (questBannerFileId != null) {
@@ -3544,7 +3557,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     List.of(keyboardFactory.callback("🗺️ Квесты", "menu:quests")),
                     List.of(keyboardFactory.callback("🏆 Рейтинг", "menu:rating")),
                     List.of(keyboardFactory.callback(tournamentLabel, "menu:tournament"))
-            ));
+            ), "menu:cat:more");
         }
     }
 
@@ -3739,7 +3752,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("🛡️ EGC Council", "menu:council")),
                 List.of(keyboardFactory.callback(pollLabel, "menu:polls")),
                 List.of(keyboardFactory.callback("📰 Новости", "menu:news")),
-                List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
+                backRow("menu:cat:more")
         ));
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
         if (clubBannerFileId != null) {
@@ -3767,7 +3780,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     List.of(keyboardFactory.callback("🛡️ EGC Council", "menu:council")),
                     List.of(keyboardFactory.callback(pollLabel, "menu:polls")),
                     List.of(keyboardFactory.callback("📰 Новости", "menu:news"))
-            ));
+            ), "menu:cat:more");
         }
     }
 
@@ -3903,7 +3916,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("📋 Правила клуба", "menu:rules")),
                 List.of(keyboardFactory.callback("🆘 Поддержка", "menu:support")),
                 List.of(keyboardFactory.url("⭐ Отзывы игроков", "https://t.me/egc_payouts"))
-        ));
+        ), "menu:cat:more");
     }
 
     private void sendFortuneCategory(AppUser user) {
@@ -3923,7 +3936,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback(wheelLabel, "wheel:menu")),
                 List.of(keyboardFactory.callback(chestLabel, "menu:chestopen")),
                 List.of(keyboardFactory.callback(rerollLabel, "menu:chestreroll"))
-        ));
+        ), "menu:cat:more");
     }
 
     private void sendRulesMessage(AppUser user, InlineKeyboardMarkup keyboard) {
@@ -4270,6 +4283,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         rows.add(List.of(keyboardFactory.callback("🎲 Другие игры", "onboarding:browse_all")));
         rows.add(List.of(keyboardFactory.callback("❓ Как это работает", "onboarding:guide")));
+        rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
         String head = fresh
                 ? "🎮 <b>Добро пожаловать в EGC!</b>\n\n"
                         + "✅ Тебе начислено <b>" + WELCOME_BONUS_EXC + " EXC</b> — это твой стартовый капитал.\n\n"
@@ -4301,7 +4315,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(),
                     "🎮 <b>" + escape(game.game()) + "</b> — выбери квест из списка:",
                     keyboardFactory.rowsLayout(List.of(
-                            List.of(keyboardFactory.callback("🎯 Квесты: " + game.game(), "quests:game:" + encodeGameToken(game.game()))))));
+                            List.of(keyboardFactory.callback("🎯 Квесты: " + game.game(), "quests:game:" + encodeGameToken(game.game()))),
+                            List.of(keyboardFactory.callback("⬅️ Назад", "onboarding:back")))));
             return;
         }
         sendStarterQuestCard(user, quest);
@@ -4323,7 +4338,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("⚡ Взять квест", "quest:take:" + quest.getId())),
                         List.of(keyboardFactory.callback("🗺️ Другие квесты", "onboarding:browse_all")),
-                        List.of(keyboardFactory.callback("❓ Как это работает", "onboarding:guide")))));
+                        List.of(keyboardFactory.callback("❓ Как это работает", "onboarding:guide")),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "onboarding:back")))));
     }
 
     /** Стартового квеста по игре сейчас нет среди активных (смена сезона/переименование) - игрок видит обычный список,
@@ -4372,13 +4388,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> guideRows = new ArrayList<>();
         guideRows.add(List.of(keyboardFactory.callback("🗺️ Смотреть квесты", "onboarding:browse_all")));
         guideRows.add(List.of(keyboardFactory.callback("👤 В профиль", "onboarding:skip")));
-        if (settingEnabled(ONBOARDING_V2_SETTING)) {
-            guideRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "onboarding:back")));
-        }
+        guideRows.add(List.of(keyboardFactory.callback("⬅️ Назад", settingEnabled(ONBOARDING_V2_SETTING) ? "onboarding:back" : "menu:main")));
         sendText(user.getTelegramId(),
                 "📖 <b>Как это работает</b>\n\n"
                         + "1️⃣ <b>Возьми квест</b>\n"
-                        + "«🗺️ Квесты» → выбери игру → открой квест → «Взять».\n\n"
+                        + "«🎯 Играть» или «⋯ Ещё» → «📋 Все квесты и рейтинг» → выбери игру → открой квест → «Взять».\n\n"
                         + "2️⃣ <b>Играй как обычно</b>\n"
                         + "Один раз привяжи игровой тег или ID (бот сам попросит) — дальше прогресс считается автоматически, ничего отправлять не нужно.\n"
                         + "Если у квеста нужен отчёт (например PUBG Mobile) — отправь скриншот через «📂 Мои квесты», проверит модератор до 24 часов.\n\n"
@@ -4432,7 +4446,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendQuickStartGuide(AppUser user) {
         String text = "📖 <b>Быстрый старт — как это работает</b>\n\n"
                 + "1️⃣ <b>Возьми квест</b>\n"
-                + "Раздел 🗺️ Квесты → выбери игру → нажми «Взять квест».\n"
+                + "Нажми 🎯 Играть или открой «⋯ Ещё» → «📋 Все квесты и рейтинг» → выбери игру → нажми «Взять квест».\n"
                 + "Квесты бывают Лёгкие 🟢, Средние 🟡 и Сложные 🔴 — чем сложнее, тем больше наград.\n\n"
                 + "2️⃣ <b>Выполни задание</b>\n"
                 + "Для квестов с привязкой игрового аккаунта прогресс засчитывается автоматически — ничего отправлять не нужно.\n"
@@ -4537,7 +4551,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("📊 Все ранги", "profile:ranks")),
                 List.of(keyboardFactory.callback(avatarBtn, "profile:avatar")),
                 List.of(keyboardFactory.callback("✏️ Редактировать профиль", "profile:edit")),
-                List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
+                backRow("menu:main")
         ));
 
         if (user.getAvatarFileId() != null) {
@@ -4672,7 +4686,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>Ежедневный бонус уже получен</b>\n\n"
                             + "🔥 Серия: <b>" + streak + " " + dayWord(streak) + " подряд</b>\n\n"
                             + "Возвращайся завтра — тебя ждёт <b>+" + nextBonus + " EXC</b>.",
-                    backMenuKeyboard(takeBackTo(user, "menu:main")));
+                    backMenuKeyboard(takeBackTo(user, "menu:cat:wallet")));
             return;
         }
         // Серия уже прервалась (пропущен день) — предлагаем восстановить за Stars ДО обычного
@@ -4691,7 +4705,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + (lost + 1) + "-го дня как ни в чём не бывало (плюс бонус за сегодня), либо начать заново.",
                     keyboardFactory.rowsLayout(List.of(
                             List.of(keyboardFactory.callback("💫 Восстановить за " + price + " ⭐", "streak:restore")),
-                            List.of(keyboardFactory.callback("🔄 Начать заново", "streak:reset"))
+                            List.of(keyboardFactory.callback("🔄 Начать заново", "streak:reset")),
+                            backRow(peekBackTo(user, "menu:cat:wallet"))
                     )));
             return;
         }
@@ -4728,7 +4743,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         answer(callbackQuery.getId(), "+" + result.totalExc() + " EXC получено!");
         InlineKeyboardButton streakNudge = (result.streakDays() == 3 || result.streakDays() == 7)
                 ? referralNudgeButton(user, "streak" + result.streakDays()) : null;
-        String dailyBack = takeBackTo(user, "menu:main");
+        String dailyBack = takeBackTo(user, "menu:cat:wallet");
         sendText(user.getTelegramId(), msg.toString(),
                 streakNudge == null ? backMenuKeyboard(dailyBack) : verticalWithBackMenu(new ArrayList<>(List.of(streakNudge)), "⬅️ Назад", dailyBack));
     }
@@ -5224,7 +5239,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendBalance(AppUser user) {
-        sendBalance(user, "menu:main");
+        sendBalance(user, "menu:cat:wallet");
     }
 
     private void sendBalance(AppUser user, String backData) {
@@ -5277,7 +5292,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendQuestGames(AppUser user) {
-        sendQuestGames(user, null);
+        sendQuestGames(user, "menu:cat:quests");
     }
 
     /** backData != null - экран открыт из другого раздела (например «Задания дня»): добавляем «Назад» туда. */
@@ -6454,7 +6469,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("📆 Недельный", "rate:weekly")
         ));
         rows.add(List.of(keyboardFactory.callback("🏅 Таблица лиг", "rate:leagues")));
-        rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
+        rows.add(backRow("menu:cat:quests"));
         sendText(user.getTelegramId(),
                 "🏆 <b>Рейтинг</b>\n\n" + leagueLine
                         + "Еженедельно лидеры лиг получают EXC-призы.",
@@ -6582,10 +6597,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         List.of(keyboardFactory.url("🔗 Поделиться", userService.buildShareUrl(user))),
                         List.of(keyboardFactory.callback("🏆 Рейтинг недели", "menu:referral-rating")),
                         List.of(keyboardFactory.callback("👥 Мои друзья", "menu:referral-friends")),
-                        List.of(
-                                keyboardFactory.callback("⬅️ Назад", "menu:main"),
-                                keyboardFactory.callback("🏠 Меню", "menu:main")
-                        )
+                        backRow("menu:main")
                 )));
     }
 
@@ -8498,7 +8510,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
             }
             rows.add(List.of(keyboardFactory.callback("🏆 VIP-турниры", "menu:tournament")));
-            rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
+            rows.add(backRow("menu:cat:club"));
             sendText(user.getTelegramId(),
                     "🛡️ <b>EGC Council</b>\n\n"
                             + "Добро пожаловать, участник Council.\n\n"
@@ -8510,7 +8522,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (canJoin) {
                 rows.add(List.of(keyboardFactory.callback("✅ Вступить в Council — 10 000 EXC", "council:join")));
             }
-            rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
+            rows.add(backRow("menu:cat:club"));
             sendText(user.getTelegramId(),
                     "🛡️ <b>EGC Council</b>\n\n"
                             + "Закрытое сообщество лучших игроков клуба.\n\n"
@@ -8549,7 +8561,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (current.isEmpty()) {
             sendText(user.getTelegramId(),
                     "🏆 <b>Турнир</b>\n\n⏳ Активных турниров нет. Следите за новостями клуба!",
-                    backMenuKeyboard("menu:main"));
+                    backMenuKeyboard("menu:cat:quests"));
             return;
         }
         if (current.size() == 1) {
@@ -8563,7 +8575,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             pick.add(List.of(keyboardFactory.callback(
                     "🏆 " + trim(c.getName(), 28) + " · " + status, "tournament:view:" + c.getId())));
         }
-        pick.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
+        pick.add(backRow("menu:cat:quests"));
         sendText(user.getTelegramId(),
                 "🏆 <b>Турниры</b>\n\nСейчас идёт несколько турниров - выберите нужный:",
                 keyboardFactory.rowsLayout(pick));
@@ -8673,7 +8685,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendNews(AppUser user) {
         List<NewsPost> posts = newsService.latestNews();
         if (posts.isEmpty()) {
-            sendText(user.getTelegramId(), "📰 Новостная лента уже готовится. Пока можно сосредоточиться на квестах и росте профиля.", backMenuKeyboard("menu:main"));
+            sendText(user.getTelegramId(), "📰 Новостная лента уже готовится. Пока можно сосредоточиться на квестах и росте профиля.", backMenuKeyboard("menu:cat:club"));
             return;
         }
 
@@ -8684,7 +8696,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     .append("🕒 ").append(escape(post.getPublishedAt().format(DATE_TIME_FORMATTER))).append("\n\n");
         }
 
-        sendText(user.getTelegramId(), builder.toString(), backMenuKeyboard("menu:main"));
+        sendText(user.getTelegramId(), builder.toString(), backMenuKeyboard("menu:cat:club"));
     }
 
     // ─── Squads ───────────────────────────────────────────────────────────────
@@ -8707,7 +8719,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             keyboardFactory.callback("➕ Создать отряд", "squad:create"),
                             keyboardFactory.callback("🔗 Вступить по коду", "squad:join_prompt"),
                             keyboardFactory.callback("🏆 Рейтинг отрядов", "squad:leaderboard"),
-                            keyboardFactory.callback("🏠 Меню", "menu:main")
+                            keyboardFactory.callback("⬅️ Назад", "menu:main")
                     )));
         } else {
             sendSquadCard(user, squad);
@@ -8773,7 +8785,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🏆 Рейтинг отрядов", "squad:leaderboard")));
         rows.add(List.of(keyboardFactory.callback("🔎 Каталог отрядов", "squad:catalog:0"),
                 keyboardFactory.callback("🔍 Поиск", "squad:search_prompt")));
-        rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
+        rows.add(backRow("menu:main"));
 
         sendCardWithPhoto(user.getTelegramId(), squad.getFlagFileId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
@@ -9555,6 +9567,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.verticalLayout(List.of(
                         keyboardFactory.callback("✍️ Написать в поддержку", "support:new"),
                         keyboardFactory.callback("📬 История диалогов", "support:list"),
+                        keyboardFactory.callback("⬅️ Назад", "menu:cat:help"),
                         keyboardFactory.callback("🏠 Меню", "menu:main")
                 )));
     }
@@ -15962,7 +15975,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (polls.isEmpty()) {
             sendText(user.getTelegramId(),
                     "🗳 <b>Голосования</b>\n\nАктивных голосований нет. Следите за обновлениями!",
-                    backMenuKeyboard("menu:main"));
+                    backMenuKeyboard("menu:cat:club"));
             return;
         }
         StringBuilder sb = new StringBuilder("🗳 <b>Активные голосования</b>\n\nВыберите, чтобы проголосовать:\n");
@@ -15975,7 +15988,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     prefix + poll.getQuestion() + " (" + total + " голосов)",
                     "poll:view:" + poll.getId())));
         }
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
+        rows.add(backRow("menu:cat:club"));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
