@@ -5435,7 +5435,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? "\n\n" + (anyDone ? "✅ — выполнен" : "") + (anyDone && anyInProgress ? " · " : "") + (anyInProgress ? "⏳ — в процессе" : "")
                 : "";
         sendText(user.getTelegramId(),
-                "💼 <b>Спонсорские квесты</b>\n\nВыберите задание:" + legend,
+                "💼 <b>Спонсорские квесты</b>\n\n"
+                        + "🤝 Спонсоры — одна из причин, по которой проект работает и платит вам реальные деньги. "
+                        + "Чем лояльнее вы относитесь к таким квестам, тем стабильнее проект может выплачивать вам дальше.\n\n"
+                        + "Выберите задание:" + legend,
                 verticalWithBackMenu(buttons, "⬅️ Назад", "menu:quests"));
     }
 
@@ -21091,6 +21094,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (userService.dailyTasksEnabled()) {
             rows.add(List.of(keyboardFactory.callback(dailyTasksMenuLabel(user), "menu:dtasks")));
         }
+        // Пока есть открытый спонсорский квест, который игрок ещё не выполнил, - заметная кнопка в меню (иначе он лежит на третьем уровне).
+        // Стоимость на кнопке не пишем: акцент на том, что спонсоры - причина, по которой проект работает и платит игрокам.
+        if (hasOpenSponsorQuestFor(user)) {
+            rows.add(List.of(keyboardFactory.callback("💼 Квест от спонсора", "quests:section:sponsored")));
+        }
         // 🔔 про ежедневный бонус теперь на «Заданиях дня»; в кошельке он лишь когда задания выключены.
         String walletLabel = !userService.dailyTasksEnabled() && userService.isDailyBonusAvailable(user) ? "💰 Кошелёк 🔔" : "💰 Кошелёк";
         rows.add(List.of(
@@ -21133,6 +21141,36 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("🆘 Помощь", "menu:cat:help")),
                 List.of(keyboardFactory.webApp("🌐 Открыть Mini App", "https://experience-gaming-club.pages.dev"))
         ));
+    }
+
+    private volatile List<Quest> openSponsorChannelQuests = List.of();
+    private volatile long openSponsorChannelQuestsAt = 0;
+
+    /** Открытые спонсорские квесты «подпишись на канал» (активны, кампания не закрыта) - кэш на минуту: главное меню рисуется очень часто. */
+    private List<Quest> openSponsorChannelQuests() {
+        long now = System.currentTimeMillis();
+        if (now - openSponsorChannelQuestsAt > 60_000) {
+            try {
+                openSponsorChannelQuests = questService.findActiveSponsored().stream()
+                        .filter(q -> q.getChannelCheckChatId() != null && !questService.isChannelCampaignClosed(q))
+                        .toList();
+            } catch (Exception e) {
+                log.warn("Failed to refresh open sponsor quests", e);
+            }
+            openSponsorChannelQuestsAt = now;
+        }
+        return openSponsorChannelQuests;
+    }
+
+    /** Есть ли у игрока открытый спонсорский квест, который он ещё не выполнил (не в процессе проверки и не одобрен). */
+    private boolean hasOpenSponsorQuestFor(AppUser user) {
+        for (Quest q : openSponsorChannelQuests()) {
+            QuestSubmission latest = questService.getLatestSubmission(user, q);
+            if (latest == null || (latest.getStatus() != SubmissionStatus.APPROVED && latest.getStatus() != SubmissionStatus.PENDING)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private InlineKeyboardMarkup singleMenuKeyboard() {
