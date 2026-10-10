@@ -6568,6 +6568,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : autoVerified
                     ? keyboardFactory.callback(autoVerifyProgressLabel(quest, submission), "noop")
                     : questReportOrCheckButton(quest));
+        if (quest.getChannelCheckChatId() != null && quest.getChannelCheckUrl() != null) {
+            buttons.add(keyboardFactory.url("📢 Открыть канал", quest.getChannelCheckUrl()));
+        }
         if (canCancel) {
             buttons.add(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + submission.getId()));
         }
