@@ -4882,7 +4882,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (adButton != null) rows.add(List.of(adButton));
         rows.add(List.of(keyboardFactory.callback("📋 Призы", "menu:chestprizes")));
         rows.add(List.of(
-                keyboardFactory.callback("⬅️ Назад", takeBackTo(user, "menu:main")),
+                keyboardFactory.callback("⬅️ Назад", takeBackTo(user, "menu:cat:fortune")),
                 keyboardFactory.callback("🏠 Меню", "menu:main")));
         return keyboardFactory.rowsLayout(rows);
     }
@@ -8647,7 +8647,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (t.getScoringType().isTrophyRace()) {
             rows.add(List.of(keyboardFactory.callback("📜 Правила турнира", "tournament:rules:" + t.getId())));
         }
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
+        // Несколько турниров - назад к выбору, один - в «⋯ Ещё» (откуда пришли).
+        rows.add(backRow(tournamentService.findAllCurrentForUser().size() > 1 ? "menu:tournament" : "menu:cat:more"));
         InlineKeyboardMarkup tournamentKeyboard = keyboardFactory.rowsLayout(rows);
         if (t.getPhotoFileId() != null) {
             sendPhotoCaption(user.getTelegramId(), t.getPhotoFileId(), sb.toString(), tournamentKeyboard);

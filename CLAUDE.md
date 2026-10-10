@@ -18,6 +18,7 @@ Spring Boot 3 / Java 21 бэкенд (`src/main/java/ru/gamebot/platform`) + Rea
 - Новое примитивное поле на существующей Entity — только с `@Column(columnDefinition=...default...)`; расширение enum на `@Enumerated(STRING)` — с `columnDefinition=varchar(N)` по длине СВОЕГО enum'а.
 - Новый `@Scheduled` или сидер: сначала продумать поведение на уже накопленных данных (бэклог), не только в стабильном режиме.
 - Любой delete внутри QuestSeeder/CommandLineRunner проверять на коллизию с актуальными названиями (equalsIgnoreCase не различает регистр).
+- После правок меню/кнопок/«Назад»: `python3 scripts/journey_audit.py` (статический аудит пути игрока: мёртвые кнопки, экраны без выхода, «Назад» не туда; отчёт в `audit/`, в git не идёт).
 - Платёжный код всегда в try/catch с алертом админам.
 
 ## Память проекта
