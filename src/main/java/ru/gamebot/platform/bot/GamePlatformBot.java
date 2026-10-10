@@ -20001,13 +20001,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("❌ Отмена", gemDonateBackTarget(gameKey, pkg)))
         ));
         String passNote = price < pkg.priceRub() ? " <i>(закупочная цена, EGC Pass)</i>" : "";
-        sendText(user.getTelegramId(),
-                "💎 <b>" + pkg.displayLabel() + " — " + price + "₽</b>" + passNote + "\n\n"
-                        + "Выберите способ оплаты:\n\n"
-                        + "⭐ <b>Telegram Stars</b> — рекомендуем: оплата в один тап, подтверждается автоматически, без переписки и проверки перевода.\n"
-                        + "💎 <b>GRAM (TON)</b> — перевод вручную: менеджер напишет вам в личные сообщения и пришлёт реквизиты, это дольше.\n\n"
-                        + GEM_PURCHASE_ACCOUNT_ACCESS_WARNING,
-                keyboardFactory.rowsLayout(rows));
+        String methodText = "💎 <b>" + pkg.displayLabel() + " — " + price + "₽</b>" + passNote + "\n\n"
+                + "Выберите способ оплаты:\n\n"
+                + "⭐ <b>Telegram Stars</b> — рекомендуем: оплата в один тап, подтверждается автоматически, без переписки и проверки перевода.\n"
+                + "💎 <b>GRAM (TON)</b> — перевод вручную: менеджер напишет вам в личные сообщения и пришлёт реквизиты, это дольше.\n\n"
+                + GEM_PURCHASE_ACCOUNT_ACCESS_WARNING;
+        if ("brawl_stars".equals(gameKey) && "brawlpass".equals(pkg.key())) {
+            sendResourceBanner(user.getTelegramId(), "brawl_pass_banner.png", methodText, keyboardFactory.rowsLayout(rows));
+            return;
+        }
+        sendText(user.getTelegramId(), methodText, keyboardFactory.rowsLayout(rows));
     }
 
     private void handleGemPurchaseMethodChoice(AppUser user, UserSession session, String method, String gameKey, String packageKey) {
