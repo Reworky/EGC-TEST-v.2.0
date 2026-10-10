@@ -8413,7 +8413,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Игры с донат-каталогом открывают этот пикер номиналов ИЗ экрана выбора способа оплаты (см.
         // sendGroupPicker) — "Назад" должен вернуть туда, а не сразу в общий Магазин наград.
         // Кастомизация (рамка аватара) открывает этот же пикер из "⚙️ Предметы клуба" — тоже своя цель.
+        // Звёзды Telegram - способ вывода EXC, открываются только с экрана «Вывод EXC» (shop:withdraw), туда и возвращаемся.
         String backTarget = !GemPurchaseService.packagesFor(purchaseGroup).isEmpty() ? "shop:group:" + purchaseGroup
+                : "telegram_stars".equals(purchaseGroup) ? "shop:withdraw"
                 : "Кастомизация".equals(items.get(0).getCategory()) ? "sink:cat:customization" : "menu:shop";
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", backTarget), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(),
@@ -8445,7 +8447,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + limitStatus;
         // Рамка аватара открывается только через пикер номиналов Кастомизации (см. sendGroupPicker),
         // не напрямую из Магазина наград — "Назад" должен вести обратно в пикер (2026-09-20).
-        String backTarget = "Кастомизация".equals(reward.getCategory()) && reward.getPurchaseGroup() != null
+        String backTarget = ("Кастомизация".equals(reward.getCategory()) || "telegram_stars".equals(reward.getPurchaseGroup())) && reward.getPurchaseGroup() != null
                 ? "shop:group:" + reward.getPurchaseGroup()
                 : "menu:shop";
         InlineKeyboardMarkup keyboard = verticalWithBackMenu(
