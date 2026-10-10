@@ -1323,6 +1323,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleQuestEditCallback(callbackQuery, user, session, data.substring("qe:".length()));
             return;
         }
+        if ("payouts:refresh".equals(data)) {
+            handlePayoutsRefresh(callbackQuery, user);
+            return;
+        }
         if (data.startsWith("rate:")) {
             sendLeaderboard(user, data.substring("rate:".length()));
             answer(callbackQuery.getId(), "Рейтинг готов");
@@ -1825,6 +1829,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "myquests" -> sendMySubmissions(user);
             case "balance" -> sendBalance(user);
             case "rating" -> sendRatingMenu(user);
+            case "payouts" -> sendPayoutFeed(user);
             case "referrals" -> sendReferrals(user);
             case "referral-rating" -> sendReferralRanking(user);
             case "referral-friends" -> sendReferralFriendsList(user);
@@ -21118,7 +21123,115 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("👤 Профиль", "menu:profile"),
                 keyboardFactory.callback(moreBadge ? "⋯ Ещё 🔔" : "⋯ Ещё", "menu:cat:more")
         ));
+        // Живая «витрина доверия»: последняя выплата прямо на кнопке внизу меню, нажатие открывает ленту выплат
+        rows.add(List.of(keyboardFactory.callback(payoutMenuLabel(), "menu:payouts")));
         return keyboardFactory.rowsLayout(rows);
+    }
+
+    private volatile String payoutMenuLabelCached = "💸 Лента выплат";
+    private volatile long payoutMenuLabelAt = 0;
+
+    /** Подпись нижней кнопки меню: «💸 Выплачено: 1 250 ₽ · 12 мин назад». Кэш на минуту; если свежих выплат нет (старше 3 дней) - нейтральное «Лента выплат». */
+    private String payoutMenuLabel() {
+        long now = System.currentTimeMillis();
+        if (now - payoutMenuLabelAt > 60_000) {
+            String label = "💸 Лента выплат";
+            try {
+                List<ru.gamebot.platform.domain.model.RewardRequest> latest = rewardService.recentApprovedWithdrawals(1);
+                if (!latest.isEmpty()) {
+                    LocalDateTime when = payoutMoment(latest.get(0));
+                    if (when != null && when.isAfter(LocalDateTime.now().minusDays(3))) {
+                        label = "💸 Выплачено: " + fmtExc(fixedOrCurrentRub(latest.get(0))) + " ₽ · " + agoText(when);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to build payout menu label", e);
+            }
+            payoutMenuLabelCached = label;
+            payoutMenuLabelAt = now;
+        }
+        return payoutMenuLabelCached;
+    }
+
+    private LocalDateTime payoutMoment(ru.gamebot.platform.domain.model.RewardRequest req) {
+        return req.getPaidAt() != null ? req.getPaidAt() : req.getCreatedAt();
+    }
+
+    private String agoText(LocalDateTime when) {
+        long minutes = java.time.Duration.between(when, LocalDateTime.now()).toMinutes();
+        if (minutes < 1) return "только что";
+        if (minutes < 60) return minutes + " мин назад";
+        long hours = minutes / 60;
+        if (hours < 24) return hours + " ч назад";
+        return (hours / 24) + " дн. назад";
+    }
+
+    /** Ник игрока в ленте выплат без полной деанонимизации: первые 2 и последний символы («Пч…ь»). Эмодзи не рвём - работаем по code point. */
+    private String maskNickname(String nickname) {
+        if (nickname == null || nickname.isBlank()) return "Игрок";
+        int[] cps = nickname.trim().codePoints().toArray();
+        if (cps.length <= 3) return new String(cps, 0, 1) + "…";
+        return new String(cps, 0, 2) + "…" + new String(cps, cps.length - 1, 1);
+    }
+
+    private String payoutFeedText() {
+        StringBuilder sb = new StringBuilder("💸 <b>Лента выплат</b>\n\nРеальные выплаты игрокам проекта:\n\n");
+        List<ru.gamebot.platform.domain.model.RewardRequest> recent = rewardService.recentApprovedWithdrawals(8);
+        if (recent.isEmpty()) {
+            sb.append("Пока выплат нет — первые скоро появятся здесь.\n");
+        }
+        for (ru.gamebot.platform.domain.model.RewardRequest r : recent) {
+            String method = isStarsWithdrawal(r) ? "⭐ Stars" : isCryptoWithdrawal(r) ? "TON" : "СБП";
+            LocalDateTime when = payoutMoment(r);
+            sb.append("• <b>").append(fmtExc(fixedOrCurrentRub(r))).append(" ₽</b> · ").append(method)
+                    .append(when != null ? " · " + agoText(when) : "")
+                    .append(" · ").append(escape(maskNickname(r.getUser() == null ? null : r.getUser().getNickname()))).append("\n");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        List<ru.gamebot.platform.domain.model.RewardRequest> week = rewardService.approvedWithdrawalsSince(now.minusDays(7));
+        long dayRub = 0, dayCount = 0, weekRub = 0;
+        for (ru.gamebot.platform.domain.model.RewardRequest r : week) {
+            long rub = fixedOrCurrentRub(r);
+            weekRub += rub;
+            LocalDateTime when = payoutMoment(r);
+            if (when != null && when.isAfter(now.minusHours(24))) {
+                dayRub += rub;
+                dayCount++;
+            }
+        }
+        if (!week.isEmpty()) {
+            sb.append("\n📊 За 24 часа: <b>").append(fmtExc(dayRub)).append(" ₽</b> · ").append(dayCount).append(" выплат\n");
+            sb.append("📊 За 7 дней: <b>").append(fmtExc(weekRub)).append(" ₽</b> · ").append(week.size()).append(" выплат\n");
+        }
+        return sb.toString();
+    }
+
+    private InlineKeyboardMarkup payoutFeedKeyboard() {
+        return keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("🔄 Обновить", "payouts:refresh")),
+                List.of(keyboardFactory.callback("💸 Вывести EXC", "shop:withdraw")),
+                backRow("menu:main")));
+    }
+
+    private void sendPayoutFeed(AppUser user) {
+        try {
+            sendText(user.getTelegramId(), payoutFeedText(), payoutFeedKeyboard());
+        } catch (Exception e) {
+            log.warn("Failed to send payout feed to {}", user.getTelegramId(), e);
+            sendText(user.getTelegramId(), "💸 Лента выплат временно недоступна. Попробуйте позже.", backMenuKeyboard("menu:main"));
+        }
+    }
+
+    /** «🔄 Обновить» в ленте выплат: перерисовываем то же сообщение; если выплат стало не больше (текст тот же) - просто отвечаем. */
+    private void handlePayoutsRefresh(CallbackQuery callbackQuery, AppUser user) {
+        try {
+            Integer messageId = callbackQuery.getMessage() == null ? null : callbackQuery.getMessage().getMessageId();
+            boolean edited = messageId != null && editHtmlMessage(user.getTelegramId(), messageId, payoutFeedText(), payoutFeedKeyboard());
+            answer(callbackQuery.getId(), edited ? "Обновлено" : "Новых выплат пока нет");
+        } catch (Exception e) {
+            log.warn("Failed to refresh payout feed for {}", user.getTelegramId(), e);
+            answerSilently(callbackQuery.getId());
+        }
     }
 
     /** Раздел «⋯ Ещё» — всё, что убрано с главного экрана игрока: рейтинг, турнир, фортуна, клуб, помощь, мини-апп. */
