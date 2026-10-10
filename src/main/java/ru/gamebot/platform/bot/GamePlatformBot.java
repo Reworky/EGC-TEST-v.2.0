@@ -1798,7 +1798,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "faqfile" -> { answerSilently(callbackQuery.getId()); sendFaqFile(user); return; }
             case "main" -> sendMainMenu(user, mainMenuText(user));
             case "profile" -> sendProfile(user);
-            case "quests" -> sendQuestGames(user, peekBackTo(user, "menu:cat:quests"));
+            case "quests" -> sendQuestGames(user, peekBackTo(user, "menu:main"));
             case "myquests" -> sendMySubmissions(user);
             case "balance" -> sendBalance(user);
             case "rating" -> sendRatingMenu(user);
@@ -4398,7 +4398,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "📖 <b>Как это работает</b>\n\n"
                         + "1️⃣ <b>Возьми квест</b>\n"
-                        + "«🎯 Играть» или «⋯ Ещё» → «📋 Все квесты и рейтинг» → выбери игру → открой квест → «Взять».\n\n"
+                        + "«🎯 Играть» → «🗺️ Все квесты» → выбери игру → открой квест → «Взять».\n\n"
                         + "2️⃣ <b>Играй как обычно</b>\n"
                         + "Один раз привяжи игровой тег или ID (бот сам попросит) — дальше прогресс считается автоматически, ничего отправлять не нужно.\n"
                         + "Если у квеста нужен отчёт (например PUBG Mobile) — отправь скриншот через «📂 Мои квесты», проверит модератор до 24 часов.\n\n"
@@ -4457,7 +4457,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendQuickStartGuide(AppUser user) {
         String text = "📖 <b>Быстрый старт — как это работает</b>\n\n"
                 + "1️⃣ <b>Возьми квест</b>\n"
-                + "Нажми 🎯 Играть или открой «⋯ Ещё» → «📋 Все квесты и рейтинг» → выбери игру → нажми «Взять квест».\n"
+                + "Нажми 🎯 Играть → «🗺️ Все квесты» → выбери игру → нажми «Взять квест».\n"
                 + "Квесты бывают Лёгкие 🟢, Средние 🟡 и Сложные 🔴 — чем сложнее, тем больше наград.\n\n"
                 + "2️⃣ <b>Выполни задание</b>\n"
                 + "Для квестов с привязкой игрового аккаунта прогресс засчитывается автоматически — ничего отправлять не нужно.\n"
@@ -5311,7 +5311,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendQuestGames(AppUser user) {
-        sendQuestGames(user, "menu:cat:quests");
+        sendQuestGames(user, "menu:main");
     }
 
     /** backData != null - экран открыт из другого раздела (например «Задания дня»): добавляем «Назад» туда. */
@@ -6490,7 +6490,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("📆 Недельный", "rate:weekly")
         ));
         rows.add(List.of(keyboardFactory.callback("🏅 Таблица лиг", "rate:leagues")));
-        rows.add(backRow("menu:cat:quests"));
+        rows.add(backRow("menu:cat:more"));
         sendText(user.getTelegramId(),
                 "🏆 <b>Рейтинг</b>\n\n" + leagueLine
                         + "Еженедельно лидеры лиг получают EXC-призы.",
@@ -8582,7 +8582,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (current.isEmpty()) {
             sendText(user.getTelegramId(),
                     "🏆 <b>Турнир</b>\n\n⏳ Активных турниров нет. Следите за новостями клуба!",
-                    backMenuKeyboard("menu:cat:quests"));
+                    backMenuKeyboard("menu:cat:more"));
             return;
         }
         if (current.size() == 1) {
@@ -8596,7 +8596,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             pick.add(List.of(keyboardFactory.callback(
                     "🏆 " + trim(c.getName(), 28) + " · " + status, "tournament:view:" + c.getId())));
         }
-        pick.add(backRow("menu:cat:quests"));
+        pick.add(backRow("menu:cat:more"));
         sendText(user.getTelegramId(),
                 "🏆 <b>Турниры</b>\n\nСейчас идёт несколько турниров - выберите нужный:",
                 keyboardFactory.rowsLayout(pick));
@@ -20783,10 +20783,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return keyboardFactory.rowsLayout(rows);
     }
 
-    /** Раздел «⋯ Ещё» — всё, что убрано с главного экрана игрока: квесты и рейтинг, фортуна, клуб, помощь, мини-апп. */
+    /** Раздел «⋯ Ещё» — всё, что убрано с главного экрана игрока: рейтинг, турнир, фортуна, клуб, помощь, мини-апп. */
     private void sendMoreCategory(AppUser user) {
         boolean hasTournament = tournamentService.findCurrentForUser().isPresent();
-        String questsLabel = hasTournament ? "📋 Все квесты и рейтинг 🔥" : "📋 Все квесты и рейтинг";
+        String tournamentLabel = hasTournament ? "⚔️ Турнир 🔥" : "⚔️ Турнир";
         String fortuneLabel;
         if (user.getTickets() > 0) {
             fortuneLabel = "🍀 Фортуна 🎟 " + user.getTickets();
@@ -20798,7 +20798,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long activePolls = pollService.findActive().size();
         String clubLabel = activePolls > 0 ? "👥 Клуб (" + activePolls + ")" : "👥 Клуб";
         sendMenuCategory(user, "⋯ <b>Ещё</b>", List.of(
-                List.of(keyboardFactory.callback(questsLabel, "menu:cat:quests")),
+                List.of(keyboardFactory.callback("🏆 Рейтинг", "menu:rating")),
+                List.of(keyboardFactory.callback(tournamentLabel, "menu:tournament")),
                 List.of(keyboardFactory.callback(fortuneLabel, "menu:cat:fortune")),
                 List.of(keyboardFactory.callback(clubLabel, "menu:cat:club")),
                 List.of(keyboardFactory.callback("🆘 Помощь", "menu:cat:help")),
