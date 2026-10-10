@@ -22803,8 +22803,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
                 notYetRows.add(List.of(keyboardFactory.callback("⬅️ Назад", back), keyboardFactory.callback("🏠 Меню", "menu:main")));
                 sendText(user.getTelegramId(),
-                        "📢 Подписки пока не видно. Откройте канал, подпишитесь и снова нажмите «✅ Я подписался».\n\n"
-                                + (quest.getChannelCheckUrl() != null ? "📎 Ссылки:\n" + escape(quest.getChannelCheckUrl()) : ""),
+                        "📢 Подписки пока не видно. Откройте канал, подпишитесь и снова нажмите «✅ Я подписался».",
                         keyboardFactory.rowsLayout(notYetRows));
                 return;
             }
