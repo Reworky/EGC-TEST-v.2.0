@@ -3974,11 +3974,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String rerollLabel = egcPass
                 ? "🔁 Ещё один улучшенный сундук — " + CHEST_REROLL_STARS_PRICE + " ⭐"
                 : "🔁 Улучшенный сундук дня — " + CHEST_REROLL_STARS_PRICE + " ⭐";
-        sendMenuCategory(user, "🍀 <b>Фортуна</b>", List.of(
+        List<List<InlineKeyboardButton>> fortuneRows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback(wheelLabel, "wheel:menu")),
                 List.of(keyboardFactory.callback(chestLabel, "menu:chestopen")),
                 List.of(keyboardFactory.callback(rerollLabel, "menu:chestreroll"))
-        ), "menu:cat:more");
+        ));
+        fortuneRows.add(backRow("menu:cat:more"));
+        // Баннер «Фортуна» (Экси у колеса); при сбое отправки sendResourceBanner шлёт обычный текст с теми же кнопками.
+        sendResourceBanner(user.getTelegramId(), "fortune_banner.jpg", "🍀 <b>Фортуна</b>",
+                keyboardFactory.rowsLayout(fortuneRows));
     }
 
     private void sendRulesMessage(AppUser user, InlineKeyboardMarkup keyboard) {
@@ -6774,7 +6778,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "🎖️ До бейджа «" + userService.invitedFriendsBadgeName(nextFriendMilestone) + "»: "
                         + user.getInvitedFriends() + " из " + nextFriendMilestone + " друзей\n\n";
 
-        sendText(user.getTelegramId(),
+        // Баннер «Рефералы» (Экси у портала-приглашения); если подпись длиннее лимита Telegram,
+        // sendResourceBanner сам пришлёт картинку без подписи и текст отдельным сообщением.
+        sendResourceBanner(user.getTelegramId(), "referrals_banner.jpg",
                 "🤝 <b>Рефералы EGC</b>\n\n"
                         + boostBanner
                         + referralGoalBlock(user)
