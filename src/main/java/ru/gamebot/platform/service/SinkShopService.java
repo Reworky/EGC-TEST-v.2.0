@@ -57,8 +57,13 @@ public class SinkShopService {
     private final ExcTransactionService excTx;
     private final ru.gamebot.platform.domain.repository.ExcTransferRepository excTransferRepository;
 
+    /** Реролл квеста отключён 2026-10-10: механики «заменить набор квестов» в проекте никогда не было - покупка только списывала EXC (13 покупок за 90 дн.).
+     *  Вернуть можно, когда появится реальная замена набора; до тех пор покупать нельзя ни в боте, ни в мини-апп (оба пути идут через этот метод). */
     @Transactional
     public void purchaseReroll(AppUser user) {
+        if (true) {
+            throw new IllegalArgumentException("Реролл квеста временно недоступен. EXC не списаны.");
+        }
         int dailyRerolls = getDailyCount(user.getDailyRerollCount(), user.getDailyRerollDate());
         if (dailyRerolls >= maxDailyRerolls(user)) {
             throw new IllegalArgumentException("Достигнут дневной лимит реролла квеста (" + maxDailyRerolls(user) + " в сутки)." + passLimitHint(user, PASS_MAX_DAILY_REROLLS));

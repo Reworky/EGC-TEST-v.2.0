@@ -6297,11 +6297,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // Fix 4: cooldown 1h after rejection to prevent instant resubmit spam
             LocalDateTime rejectedAt = latest.getUpdatedAt();
             if (rejectedAt != null && LocalDateTime.now().isBefore(rejectedAt.plusHours(1))) {
-                long minsLeft = java.time.temporal.ChronoUnit.MINUTES.between(LocalDateTime.now(), rejectedAt.plusHours(1));
-                answerSilently(callbackQuery.getId());
-                sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
-                        "⏳ После отклонения повторный отчёт можно отправить через <b>" + Math.max(1, minsLeft) + " мин.</b>");
-                return;
+                if (user.isRetryInsuranceActive()) {
+                    // Купленная/бесплатная по EGC Pass «Страховка провала»: снимает ожидание после отклонения (в Mini App это работало, в боте - нет)
+                    sinkShopService.consumeInsurance(user);
+                } else {
+                    long minsLeft = java.time.temporal.ChronoUnit.MINUTES.between(LocalDateTime.now(), rejectedAt.plusHours(1));
+                    answerSilently(callbackQuery.getId());
+                    sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
+                            "⏳ После отклонения повторный отчёт можно отправить через <b>" + Math.max(1, minsLeft) + " мин.</b>\n"
+                                    + "Страховка провала (Магазин → Предметы → Квесты) снимает это ожидание.");
+                    return;
+                }
             }
             latest = questService.resetToDraft(latest);
         }
@@ -7345,15 +7351,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (slotFromPass) info.append("📂 Доп. слот квеста: <b>включён в EGC Pass</b>\n");
         else if (slotActive) info.append("📂 Доп. слот активен до: <b>").append(user.getQuestSlotExtraUntil().format(dtFmt)).append("</b>\n");
         info.append(slotFromPass
-                ? "⭐ EGC Pass: 3-й слот, реролл до <b>" + SinkShopService.PASS_MAX_DAILY_REROLLS + "</b> в сутки, снятие кулдауна до <b>"
+                ? "⭐ EGC Pass: 3-й слот, снятие кулдауна до <b>"
                         + SinkShopService.PASS_MAX_DAILY_COOLDOWN_REMOVALS + "</b> в сутки, бесплатная страховка раз в месяц\n"
-                : "🔒 В EGC Pass: 3-й слот квеста (за EXC доступен только 2-й), реролл до " + SinkShopService.PASS_MAX_DAILY_REROLLS
-                        + " в сутки, снятие кулдауна до " + SinkShopService.PASS_MAX_DAILY_COOLDOWN_REMOVALS
+                : "🔒 В EGC Pass: 3-й слот квеста (за EXC доступен только 2-й), снятие кулдауна до " + SinkShopService.PASS_MAX_DAILY_COOLDOWN_REMOVALS
                         + " в сутки, бесплатная страховка раз в месяц\n");
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.callback("🔀 Реролл квеста — 2 000 EXC", "sink:reroll")));
-
         if (insuranceActive) {
             rows.add(List.of(keyboardFactory.callback("🛡️ Страховка активна ✅", "sink:insurance_info")));
         } else if (sinkShopService.passInsuranceAvailable(user)) {
@@ -7403,10 +7406,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "myitems" -> sendMyItems(user);
             case "reroll" -> {
                 try {
+                    // Реролл отключён (см. SinkShopService.purchaseReroll): старые сообщения с этой кнопкой не должны ничего списывать.
                     sinkShopService.purchaseReroll(user);
-                    sendText(user.getTelegramId(),
-                            "🔀 <b>Реролл активирован</b>\n\nСписано " + SinkShopService.PRICE_REROLL + " EXC. Перейдите в раздел квестов — там уже другой набор заданий.",
-                            backMenuKeyboard("menu:sink"));
                 } catch (IllegalArgumentException e) {
                     sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), sinkErrorKeyboard(user, e.getMessage()));
                 }
@@ -7415,7 +7416,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 try {
                     sinkShopService.purchaseBoost(user);
                     sendText(user.getTelegramId(),
-                            "⚡ <b>Буст активирован!</b>\n\nВы получаете +20% к EXC за все квесты в течение 24 часов.\nСписано 3 000 EXC.",
+                            "⚡ <b>Буст активирован!</b>\n\nВы получаете +20% к EXC за все квесты в течение 24 часов.\nСписано " + SinkShopService.PRICE_EXC_BOOST_24H + " EXC.",
                             backMenuKeyboard("menu:sink"));
                 } catch (IllegalArgumentException e) {
                     sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), sinkErrorKeyboard(user, e.getMessage()));
@@ -7824,7 +7825,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .append("✨ +10% к EXC за все квесты (до 10 000 EXC бонуса в месяц)\n")
                 .append("📈 +5% к XP за все квесты, а купленный XP-буст даёт +40% вместо +20%\n")
                 .append("📂 3-й слот квеста (за EXC доступен только 2-й)\n")
-                .append("🔀 Выше дневные лимиты: реролл 6 вместо 3, снятие кулдауна 4 вместо 2, бустов 5 вместо 3\n")
+                .append("🔀 Выше дневные лимиты: снятие кулдауна 4 вместо 2, бустов 5 вместо 3\n")
                 .append("🛡️ Бесплатная страховка провала раз в месяц\n")
                 .append("🔥 Бесплатное сохранение серии входов раз в месяц (если пропущен один день)\n")
                 .append("🚀 Ранний доступ: два лучших квеста нового набора на 24 часа раньше остальных\n")

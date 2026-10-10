@@ -22,7 +22,6 @@ const PERK_CATEGORIES = [
   {
     title: 'Квесты',
     items: [
-      { key: 'reroll', title: '🔀 Реролл квеста', price: 2000, description: 'Заменяет ваш текущий набор доступных квестов на новый. Лимит: 3 в сутки, с EGC Pass — 6.' },
       { key: 'insurance', title: '🛡️ Страховка провала', price: 1500, blockedBy: 'insuranceActive', description: 'Если следующий отчёт отклонят — сможете отправить его повторно без штрафа.' },
       { key: 'passinsurance', title: '🛡️ Страховка по EGC Pass', price: 0, blockedBy: 'passInsuranceUsed', activeLabel: 'Уже взята в этом месяце', hideIf: s => !s.egcPass, description: 'Бесплатная страховка провала раз в месяц для подписчиков EGC Pass.' },
       { key: 'extraslot', title: '📂 Доп. слот квеста 48ч', price: 3500, blockedBy: 'extraSlotActive', activeUntilField: 'extraSlotUntil', description: 'На 48 часов на один одновременный квест больше. Третий слот открывает только EGC Pass.' },
@@ -510,7 +509,7 @@ const STARS_PRICE_FALLBACK = { AVATAR_FRAME: 35, PATRON_TITLE: 60, PERMANENT_SLO
 const SECTION_META = {
   'Мои предметы': { icon: '🎒', gradient: 'teal', subtitle: 'Всё, что у вас есть: рамки, титулы, бусты, билеты' },
   'Бусты': { icon: '⚡', gradient: 'gold', subtitle: 'Временные ускорители XP и EXC' },
-  'Квесты': { icon: '🎯', gradient: 'purple', subtitle: 'Реролл, страховка, доп. слот' },
+  'Квесты': { icon: '🎯', gradient: 'purple', subtitle: 'Страховка, доп. слот, снятие кулдауна' },
   'Кастомизация': { icon: '🎭', gradient: 'fire', subtitle: 'Рамки и титулы профиля' },
   'Социальные': { icon: '🤝', gradient: 'teal', subtitle: 'Подарки друзьям' },
 };

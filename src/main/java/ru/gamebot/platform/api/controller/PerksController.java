@@ -81,7 +81,7 @@ public class PerksController {
             String message = switch (key) {
                 case "reroll" -> {
                     sinkShopService.purchaseReroll(user);
-                    yield "Реролл активирован. Перейдите в раздел квестов — там уже другой набор заданий.";
+                    yield "Реролл квеста временно недоступен.";
                 }
                 case "insurance" -> {
                     sinkShopService.purchaseInsurance(user);
