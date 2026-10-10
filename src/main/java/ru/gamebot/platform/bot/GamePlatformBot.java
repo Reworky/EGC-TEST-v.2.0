@@ -20895,10 +20895,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "Выберите нужный раздел ниже и продолжайте прогресс.";
     }
 
+    /** Цель новичка в главном меню: полоса до первого вывода. После FIRST_WITHDRAWAL_EXC строка пропадает. */
+    private String firstWithdrawalProgressLine(AppUser user) {
+        long coins = user.getCoins();
+        if (coins >= FIRST_WITHDRAWAL_EXC) return "";
+        return "\n🎯 До вывода: " + progressBar(coins, FIRST_WITHDRAWAL_EXC) + " "
+                + fmtExc(Math.max(coins, 0)) + " / " + fmtExc(FIRST_WITHDRAWAL_EXC);
+    }
+
     private String mainMenuText(AppUser user) {
         String role = resolveMenuRole(user, sessionService.get(user.getTelegramId()));
         if (ROLE_USER.equals(role)) {
-            return "Никнейм: " + escape(user.getNickname()) + "\n\n" + userBalanceLine(user);
+            return "Никнейм: " + escape(user.getNickname()) + "\n\n" + userBalanceLine(user) + firstWithdrawalProgressLine(user);
         }
         String title = switch (role) {
             case ROLE_ADMIN -> "🛠️ <b>Административный контур активен</b>";
