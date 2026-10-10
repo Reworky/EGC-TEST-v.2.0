@@ -8418,9 +8418,41 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "telegram_stars".equals(purchaseGroup) ? "shop:withdraw"
                 : "Кастомизация".equals(items.get(0).getCategory()) ? "sink:cat:customization" : "menu:shop";
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", backTarget), keyboardFactory.callback("🏠 Меню", "menu:main")));
-        sendText(user.getTelegramId(),
-                "🎁 <b>" + escape(groupLabel) + "</b>\n\nВыберите номинал:",
-                keyboardFactory.rowsLayout(rows));
+        String denominationText = "🎁 <b>" + escape(groupLabel) + "</b>\n\nВыберите номинал:";
+        if ("telegram_stars".equals(purchaseGroup)) {
+            sendStarsBanner(user.getTelegramId(), denominationText, keyboardFactory.rowsLayout(rows));
+            return;
+        }
+        sendText(user.getTelegramId(), denominationText, keyboardFactory.rowsLayout(rows));
+    }
+
+    private volatile String starsBannerFileId = null;
+
+    /** Список номиналов Telegram Stars (вывод EXC в звёздах) - с картинкой-баннером; file_id кэшируется после первой отправки, при сбое - обычный текст. */
+    private void sendStarsBanner(Long chatId, String text, InlineKeyboardMarkup keyboard) {
+        if (starsBannerFileId != null) {
+            sendPhotoCaption(chatId, starsBannerFileId, text, keyboard);
+            return;
+        }
+        try {
+            try (java.io.InputStream is = getClass().getResourceAsStream("/stars_banner.png")) {
+                if (is == null) throw new java.io.IOException("stars_banner.png not found");
+                byte[] img = is.readAllBytes();
+                SendPhoto sendPhoto = new SendPhoto();
+                sendPhoto.setChatId(chatId.toString());
+                sendPhoto.setPhoto(new InputFile(new java.io.ByteArrayInputStream(img), "stars_banner.png"));
+                sendPhoto.setCaption(text);
+                sendPhoto.setParseMode("HTML");
+                sendPhoto.setReplyMarkup(keyboard);
+                org.telegram.telegrambots.meta.api.objects.Message sent = execute(sendPhoto);
+                if (sent.getPhoto() != null && !sent.getPhoto().isEmpty()) {
+                    starsBannerFileId = sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId();
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to send Stars banner", e);
+            sendText(chatId, text, keyboard);
+        }
     }
 
     private String groupItemLabel(String title) {
