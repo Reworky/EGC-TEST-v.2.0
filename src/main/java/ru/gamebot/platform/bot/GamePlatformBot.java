@@ -21325,6 +21325,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private InlineKeyboardMarkup payoutFeedKeyboard() {
         return keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("🔄 Обновить", "payouts:refresh")),
+                List.of(keyboardFactory.url("⭐ Отзывы игроков", "https://t.me/egc_payouts")),
                 List.of(keyboardFactory.callback("💸 Вывести EXC", "shop:withdraw")),
                 backRow("menu:main")));
     }
