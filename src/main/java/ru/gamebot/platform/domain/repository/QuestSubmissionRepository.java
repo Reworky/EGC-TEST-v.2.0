@@ -230,6 +230,13 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
            "WHERE s.quest.gameName = :gameName AND s.status = 'APPROVED' AND s.updatedAt >= :since")
     long countApprovedByGameSince(@Param("gameName") String gameName, @Param("since") LocalDateTime since);
 
+    /** Заявки на Brawl-квесты «сыграй/выиграй N боёв» (N от 3), взятые между after и before, по которым прогресс всё ещё 0 и напоминание «не играл» не отправлялось. */
+    @EntityGraph(attributePaths = {"user", "quest"})
+    @Query("SELECT s FROM QuestSubmission s WHERE s.status = 'DRAFT' AND s.noPlayNudgeSentAt IS NULL AND s.brawlProgressCount = 0 " +
+           "AND s.createdAt <= :before AND s.createdAt >= :after AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP) " +
+           "AND s.quest.brawlVerifyType = 'BATTLES' AND s.quest.brawlTargetCount >= 3 AND s.user.brawlStarsTag IS NOT NULL")
+    List<QuestSubmission> findBrawlBattlesNotStarted(@Param("before") LocalDateTime before, @Param("after") LocalDateTime after);
+
     /** Незавершённые заявки на квесты с включённой авто-верификацией через Brawl Stars API, у пользователя привязан тег, срок не истёк. */
     @EntityGraph(attributePaths = {"user", "quest"})
     @Query("SELECT s FROM QuestSubmission s WHERE s.status = 'DRAFT' AND s.quest.brawlVerifyType IS NOT NULL " +

@@ -150,6 +150,9 @@ public class QuestSubmission {
     @Column(columnDefinition = "integer default 0")
     private int progressMilestoneSent;
 
+    /** Когда игроку отправлено напоминание «взял квест, но не играл» (см. QuestNoPlayNudgeService); null - не отправлялось. Один раз на заявку. */
+    private LocalDateTime noPlayNudgeSentAt;
+
     /** NEW_BRAWLER: имена бойцов игрока (через запятую) на момент первого опроса после взятия квеста.
      * null = ещё не захвачено. Квест засчитывается, когда в текущем списке появляется имя, которого тут нет. */
     @Column(length = 2000)

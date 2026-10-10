@@ -4988,6 +4988,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Напоминание «взял квест, но не играл» (2026-10-10): одно сообщение через 4 часа, если по Brawl-квесту на N боёв прогресс 0. */
+    @org.springframework.context.event.EventListener
+    public void onQuestNoPlayNudge(ru.gamebot.platform.event.QuestNoPlayNudgeEvent event) {
+        try {
+            long n = event.getTarget();
+            long mod10 = n % 10;
+            long mod100 = n % 100;
+            String battles = mod10 == 1 && mod100 != 11 ? "бой"
+                    : (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) ? "боя" : "боёв";
+            String left = "";
+            if (event.getMinutesLeft() >= 0) {
+                long hours = event.getMinutesLeft() / 60;
+                left = "\n⏳ Осталось времени: <b>" + (hours >= 48 ? (hours / 24) + " дн." : Math.max(1, hours) + " ч") + "</b>";
+            }
+            sendText(event.getTelegramId(),
+                    "🎮 <b>Квест ждёт тебя</b>\n\n«" + escape(event.getQuestTitle()) + "»\n"
+                            + "Ты взял его, но пока не сыграл ни одного боя. Нужно " + (event.isRequireVictory() ? "выиграть " : "сыграть ")
+                            + "<b>" + n + " " + battles + "</b>." + left + "\n\n"
+                            + "Зайди в Brawl Stars — прогресс засчитается сам, ничего отправлять не нужно.",
+                    keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("📂 Мои квесты", "menu:myquests")))));
+        } catch (Exception e) {
+            log.warn("Failed to send no-play nudge to {}", event.getTelegramId(), e);
+        }
+    }
+
     /** Ступени прогресса автоквеста (2026-10-10): половина пути и последний шаг. Только сообщение, награду не меняет. */
     @org.springframework.context.event.EventListener
     public void onQuestProgressMilestone(ru.gamebot.platform.event.QuestProgressMilestoneEvent event) {

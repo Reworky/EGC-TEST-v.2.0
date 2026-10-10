@@ -7,6 +7,7 @@ public enum NudgeType {
     QUEST_DEADLINE(100, true, "⏰ Дедлайн квеста"),
     STREAK_BROKEN(95, true, "💔 Серия прервалась"),
     STREAK_AT_RISK(90, false, "🔥 Серия под угрозой"),
+    QUEST_NO_PLAY(85, false, "🎮 Взял квест, но не играл"),
     COOLDOWN_EXPIRED(80, false, "🎮 Кулдаун снят"),
     ONBOARDING(75, false, "👋 Онбординг"),
     SECOND_QUEST(70, false, "🎁 Второй квест"),
