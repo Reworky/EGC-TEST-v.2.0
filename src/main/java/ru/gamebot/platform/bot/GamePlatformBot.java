@@ -6179,8 +6179,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Brawl Stars (там прогресс считается от снимка primeBaseline в момент взятия), для остальных игр это не утверждаем.
         // Мини-обучение из трёх шагов - пока у игрока нет ни одного выполненного квеста (2026-09-25). Партнёрским квестам не нужно:
         // у них своя инструкция со ссылкой ниже.
+        boolean channelCheckQuest = freshQuest.getChannelCheckChatId() != null;
         String firstQuestTutorial = "";
-        if (!freshQuest.isExternalAutoApprove() && user.getCompletedQuests() == 0) {
+        if (!freshQuest.isExternalAutoApprove() && !channelCheckQuest && user.getCompletedQuests() == 0) {
             firstQuestTutorial = "📖 <b>Как это работает</b>\n"
                     + (freshQuestAutoVerified
                         ? "1️⃣ Играйте: бот сам следит за прогрессом\n"
@@ -6195,7 +6196,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Название игры в подсказке (для спонсорских и UGC-квестов «игра» - канал или ролик, поэтому там без названия)
         String goToGame = freshQuest.isSponsored() || "UGC".equalsIgnoreCase(freshQuest.getGameName()) || freshQuest.getGameName() == null
                 ? "в игру" : "в игру «" + escape(freshQuest.getGameName()) + "»";
+        // Квест «подпишись на канал» (спонсор): ни игры, ни скриншота - подписка проверяется автоматически по кнопке «Я подписался».
+        String channelHold = channelCheckQuest && freshQuest.getChannelHoldPercent() != null && freshQuest.getChannelHoldPercent() > 0
+                ? "🔒 " + (100 - freshQuest.getChannelHoldPercent()) + "% награды придёт сразу, ещё " + freshQuest.getChannelHoldPercent()
+                        + "% — через " + (freshQuest.getChannelHoldDays() != null ? freshQuest.getChannelHoldDays() : 7) + " дн., если останешься в канале.\n\n"
+                : "";
         String nextStep = freshQuest.isExternalAutoApprove() ? ""
+                : channelCheckQuest
+                    ? "🚀 <b>Квест активен! Осталось подписаться на канал.</b>\n\n"
+                        + "1️⃣ Нажмите «📢 Открыть канал» и подпишитесь\n"
+                        + "2️⃣ Вернитесь сюда и нажмите «✅ Я подписался»\n"
+                        + "Проверка автоматическая, скриншот отправлять не нужно.\n\n"
+                        + channelHold
                 : freshQuestAutoVerified
                     ? "🚀 <b>Квест активен! Теперь заходите " + goToGame + " и выполняйте задание.</b>\n\n"
                         + (freshQuest.getBrawlVerifyType() != null
