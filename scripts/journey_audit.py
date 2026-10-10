@@ -108,8 +108,11 @@ def main():
     eq, starts, cases = set(), set(), set()
     for m in re.finditer(r'"([^"\n]+)"\s*\.equals\(\s*(?:data|action|sub|target)\s*\)|(?:data|action|sub)\s*\.equals\(\s*"([^"\n]+)"\s*\)', src):
         eq.add(m.group(1) or m.group(2))
-    for m in re.finditer(r'(?:data|action|sub|target)\s*\.startsWith\(\s*"([^"\n]+)"', src):
-        starts.add(m.group(1))
+    starts_data = set()
+    for m in re.finditer(r'(data|action|sub|target)\s*\.startsWith\(\s*"([^"\n]+)"', src):
+        starts.add(m.group(2))
+        if m.group(1) == "data":
+            starts_data.add(m.group(2))
     for m in re.finditer(r'case\s+((?:"[^"\n]+"\s*,\s*)*"[^"\n]+")\s*->', src):
         for lit in re.findall(r'"([^"\n]+)"', m.group(1)):
             cases.add(lit)
@@ -118,9 +121,11 @@ def main():
         if data_prefix is None:
             return True  # динамика целиком, не проверяем
         d = data_prefix
-        if d in eq or any(d.startswith(p) for p in starts):
+        # admin:*-действия разбирает вложенный switch по action, остальные callback'и - только прямые проверки data.startsWith
+        pool = starts if d.startswith(("admin:", "menu:", "mod:")) else starts_data
+        if d in eq or any(d.startswith(p) for p in pool):
             return True
-        if d.rstrip(":") in eq or (dynamic and any(p.startswith(d) or d.startswith(p) for p in starts)):
+        if d.rstrip(":") in eq or (dynamic and any(p.startswith(d) or d.startswith(p) for p in pool)):
             return True
         segs = d.split(":")
         # menu:profile -> case "profile"; menu:cat:more -> case "cat:more"

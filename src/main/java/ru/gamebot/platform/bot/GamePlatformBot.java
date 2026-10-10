@@ -1049,6 +1049,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "Раздел обновлен");
             return;
         }
+        if (data.startsWith("quest:card:")) {
+            // Карточка квеста по прямому id (EGC Council, возврат к квесту после покупки снятия кулдауна)
+            Long cardQuestId = parseLong(data.substring("quest:card:".length()));
+            answerSilently(callbackQuery.getId());
+            if (cardQuestId != null) {
+                sendQuestCard(user, cardQuestId, currentQuestBackData(user), "⬅️ Назад", null);
+            }
+            return;
+        }
         if (data.startsWith("quest:view:")) {
             handleQuestView(callbackQuery, user, session, data.substring("quest:view:".length()));
             return;
@@ -5709,6 +5718,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendQuestCard(AppUser user, Long questId, String backData, String backText, String notice, String nextQuestData,
                                boolean allQuestsButton) {
         sessionService.get(user.getTelegramId()).getData().put("quest_back_data", backData);
+        sessionService.get(user.getTelegramId()).getData().put("last_quest_id", String.valueOf(questId));
         Quest quest = questService.getQuest(questId);
         QuestSubmission latest = questService.getLatestSubmission(user, quest);
         boolean latestExpired = latest != null && questService.isExpired(latest);
@@ -7462,9 +7472,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "buycooldown" -> {
                 try {
                     questService.purchaseCooldownRemoval(user);
+                    // Снятие списывается на взятии квеста: ведём игрока обратно к последнему просмотренному квесту, где теперь активна «Взять».
+                    String lastQuest = sessionService.get(user.getTelegramId()).getData().get("last_quest_id");
+                    List<List<InlineKeyboardButton>> afterBuy = new ArrayList<>();
+                    if (lastQuest != null) {
+                        afterBuy.add(List.of(keyboardFactory.callback("🎯 Вернуться к квесту", "quest:card:" + lastQuest)));
+                    }
+                    afterBuy.add(List.of(keyboardFactory.callback("🗺️ Выбрать другой квест", "menu:quests")));
+                    afterBuy.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:sink")));
                     sendText(user.getTelegramId(),
-                        "⏱️ <b>Снятие кулдауна активировано!</b>\n\nВаш следующий квест, если на него действует кулдаун, будет доступен без ожидания.\nСписано 3 000 EXC.",
-                        backMenuKeyboard("menu:sink"));
+                        "⏱️ <b>Снятие кулдауна активировано!</b>\n\nСписано 3 000 EXC. Откройте квест с кулдауном и нажмите «🚀 Взять» — кулдаун снимется при взятии.\n"
+                                + "Лимит «1 квест в час» между любыми квестами не снимается.\nНе пригодилось — можно вернуть 3 000 EXC в «Предметы» → «Снятие кулдауна».",
+                        keyboardFactory.rowsLayout(afterBuy));
                 } catch (IllegalArgumentException e) {
                     sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), sinkErrorKeyboard(user, e.getMessage()));
                 }
