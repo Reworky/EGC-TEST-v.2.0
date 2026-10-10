@@ -20717,7 +20717,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         // Главное меню игрока — «одна цель + 4 кнопки» (2026-10-10, по образцу Mistplay): главное действие, задания дня
         // с наградой, деньги, люди, а всё остальное — в «⋯ Ещё» (см. sendMoreCategory).
-        rows.add(List.of(keyboardFactory.callback("🎯 Играть — квест для тебя", "quest:recommend")));
+        rows.add(List.of(keyboardFactory.callback("🎯 Играть", "quest:recommend")));
         if (userService.dailyTasksEnabled()) {
             rows.add(List.of(keyboardFactory.callback(dailyTasksMenuLabel(user), "menu:dtasks")));
         }
