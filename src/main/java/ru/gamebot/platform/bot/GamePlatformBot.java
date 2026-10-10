@@ -313,6 +313,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 handleChatJoinRequest(update.getChatJoinRequest());
             } else if (update.hasChatMember()) {
                 handleChannelMemberUpdate(update.getChatMember());
+            } else if (update.hasMyChatMember()) {
+                handleBotChatMemberUpdate(update.getMyChatMember());
             }
         } catch (Exception exception) {
             log.error("Failed to process update", exception);
@@ -10356,11 +10358,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(user.getTelegramId(),
                         "⚡ <b>Быстрый квест на подписку</b>\n\n"
                                 + "Сначала добавьте бота <b>админом</b> в канал спонсора (права не нужны, достаточно статуса админа) — "
-                                + "иначе подписку не проверить.\n\n"
-                                + "Затем одним сообщением: <code>канал оплата_₽ награда_EXC [дней]</code>\n"
-                                + "Например: <code>@mychannel 1200 300</code> или <code>@mychannel 1200 300 14</code>\n\n"
-                                + "Закрытый канал: <code>-1001234567890 1200 300 30 https://t.me/+инвайт</code>\n"
-                                + "По умолчанию квест идёт 30 дней. Бюджет = 70% оплаты × 100 EXC/₽.",
+                                + "иначе подписку не проверить. Как только бот станет админом, он сам пришлёт вам ID канала.\n\n"
+                                + "Затем одним сообщением: <code>канал подписчиков цена_₽ награда_EXC [дней]</code>\n"
+                                + "Например: <code>@mychannel 200 6 300</code> — 200 подписчиков по 6 ₽ (спонсор платит 1 200 ₽), игроку 300 EXC.\n\n"
+                                + "Закрытый канал: <code>-1001234567890 200 6 300 30 https://t.me/+инвайт</code>\n"
+                                + "Срок по умолчанию 30 дней. Когда наберётся оплаченное число подписчиков, квест выключится сам.",
                         cancelKeyboard());
                 answerSilently(callbackQuery.getId());
                 return;
@@ -22363,8 +22365,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Доля награды EXC, которая выплачивается только если игрок остался в канале через FAST_SPONSOR_HOLD_DAYS дней. */
     private static final int FAST_SPONSOR_HOLD_PERCENT = 50;
     private static final int FAST_SPONSOR_HOLD_DAYS = 7;
-    /** 70% оплаты идёт в Payout Pool, умножаем на номинальный курс 100 EXC за 1 ₽ — как подсказка в обычной кампании. */
-    private static final long FAST_SPONSOR_EXC_PER_RUB = 70;
 
     private final java.util.Set<Long> channelCheckInFlight = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -22401,27 +22401,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 return;
             }
         }
-        if (chat == null || nums.size() < 2 || nums.size() > 3) {
-            sendText(user.getTelegramId(), "❌ Нужны канал и два числа: оплата в ₽ и награда в EXC (и, по желанию, дней).\nНапример: <code>@mychannel 1200 300</code>", cancelKeyboard());
+        if (chat == null || nums.size() < 3 || nums.size() > 4) {
+            sendText(user.getTelegramId(), "❌ Нужны канал и три числа: сколько подписчиков, цена за подписчика в ₽, награда игроку в EXC (и, по желанию, дней).\nНапример: <code>@mychannel 200 6 300</code>", cancelKeyboard());
             return;
         }
         if (link == null) {
-            sendText(user.getTelegramId(), "❌ Для закрытого канала добавьте инвайт-ссылку: <code>-100… 1200 300 30 https://t.me/+…</code>", cancelKeyboard());
+            sendText(user.getTelegramId(), "❌ Для закрытого канала добавьте инвайт-ссылку: <code>-100… 200 6 300 30 https://t.me/+…</code>", cancelKeyboard());
             return;
         }
-        long rub = nums.get(0);
-        long exc = nums.get(1);
-        long days = nums.size() == 3 ? nums.get(2) : FAST_SPONSOR_DEFAULT_DAYS;
-        long budget = rub * FAST_SPONSOR_EXC_PER_RUB;
-        if (rub <= 0 || exc <= 0 || days < 1 || days > 365) {
-            sendText(user.getTelegramId(), "❌ Оплата и награда должны быть больше нуля, срок — от 1 до 365 дней.", cancelKeyboard());
+        long subs = nums.get(0);
+        long price = nums.get(1);
+        long exc = nums.get(2);
+        long days = nums.size() == 4 ? nums.get(3) : FAST_SPONSOR_DEFAULT_DAYS;
+        if (subs <= 0 || subs > 100_000 || price <= 0 || exc <= 0 || days < 1 || days > 365) {
+            sendText(user.getTelegramId(), "❌ Подписчиков — от 1 до 100 000, цена и награда больше нуля, срок — от 1 до 365 дней.", cancelKeyboard());
             return;
         }
-        long limit = budget / exc;
-        if (limit < 1) {
-            sendText(user.getTelegramId(), "❌ Награда " + exc + " EXC больше всего бюджета (" + budget + " EXC). Уменьшите награду или увеличьте оплату.", cancelKeyboard());
-            return;
-        }
+        long rub = subs * price;
+        long budget = subs * exc;
+        long limit = subs;
 
         String title;
         String chatId;
@@ -22463,22 +22461,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         session.getData().put("sfChatId", chatId);
         session.getData().put("sfTitle", title);
         session.getData().put("sfLink", link);
-        session.getData().put("sfRub", String.valueOf(rub));
+        session.getData().put("sfSubs", String.valueOf(subs));
+        session.getData().put("sfPrice", String.valueOf(price));
         session.getData().put("sfExc", String.valueOf(exc));
         session.getData().put("sfDays", String.valueOf(days));
         session.setState(SessionState.NONE);
-        long perSubscriberKopecks = rub * 100 / limit;
+        double hr = healthRatioService.getCurrentRatio();
+        long commission = Math.round(rub * 0.30);
+        long poolRub = rub - commission;
+        long cashAtHr = Math.round(budget * 0.01 * hr);
         sendText(user.getTelegramId(),
                 "⚡ <b>Проверьте квест</b>\n\n"
                         + "📢 Канал: <b>" + escape(title) + "</b>" + (subscribers != null ? " (сейчас " + fmtExc(subscribers) + " подписчиков)" : "") + "\n"
-                        + "💵 Оплата: <b>" + fmtExc(rub) + " ₽</b> (70% уйдёт в Payout Pool, 30% комиссия)\n"
-                        + "💎 Бюджет: <b>" + fmtExc(budget) + " EXC</b>\n"
-                        + "🪙 Награда за подписку: <b>" + fmtExc(exc) + " EXC</b> + " + FAST_SPONSOR_XP + " XP\n"
-                        + "👥 Хватит на <b>" + fmtExc(limit) + "</b> подписчиков (≈ " + (perSubscriberKopecks / 100) + "," + String.format("%02d", perSubscriberKopecks % 100) + " ₽ за подписчика)\n"
-                        + "📅 Срок: <b>" + days + " дн.</b>\n\n"
+                        + "👥 Оплачено подписчиков: <b>" + fmtExc(subs) + "</b> × " + fmtExc(price) + " ₽ = <b>" + fmtExc(rub) + " ₽</b>\n"
+                        + "   ├ комиссия EGC 30%: " + fmtExc(commission) + " ₽\n"
+                        + "   └ в Payout Pool 70%: " + fmtExc(poolRub) + " ₽\n"
+                        + "🪙 Игроку: <b>" + fmtExc(exc) + " EXC</b> + " + FAST_SPONSOR_XP + " XP за подписку\n"
+                        + "💎 Бюджет: <b>" + fmtExc(budget) + " EXC</b> (номинал " + fmtExc(budget / 100) + " ₽, по текущему курсу фонда " + Math.round(hr * 100) + "% — около " + fmtExc(cashAtHr) + " ₽)\n"
+                        + "📅 Срок: <b>" + days + " дн.</b> или пока не наберётся " + fmtExc(subs) + " подписчиков\n\n"
                         + "🔒 Выплата в два шага: " + (100 - FAST_SPONSOR_HOLD_PERCENT) + "% сразу, " + FAST_SPONSOR_HOLD_PERCENT + "% через "
                         + FAST_SPONSOR_HOLD_DAYS + " дн., если человек остался в канале (не удержался — эта часть возвращается в бюджет).\n"
-                        + "Подписка проверяется автоматически (бот — админ канала). Как только бюджет кончится, квест выключится сам.\n"
+                        + "Подписка проверяется автоматически (бот — админ канала). Квест выключится сам по лимиту подписчиков или бюджету.\n"
                         + "⚠️ Награду получит и тот, кто уже был подписан до квеста — Telegram не показывает дату подписки.",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("✅ Создать", "admin:sponsors:fastgo")),
@@ -22487,7 +22490,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void createSponsorFastQuest(AppUser user, UserSession session) {
         Map<String, String> d = session.getData();
-        if (d.get("sfChatId") == null || d.get("sfTitle") == null) {
+        if (d.get("sfChatId") == null || d.get("sfTitle") == null || d.get("sfSubs") == null) {
             sendText(user.getTelegramId(), "⚠️ Данные квеста потерялись (сессия истекла). Начните заново.",
                     backMenuKeyboard("admin:sponsors"));
             return;
@@ -22495,10 +22498,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String chatId = d.get("sfChatId");
         String title = d.get("sfTitle");
         String link = d.get("sfLink");
-        long rub = Long.parseLong(d.get("sfRub"));
+        long subs = Long.parseLong(d.get("sfSubs"));
+        long price = Long.parseLong(d.get("sfPrice"));
         long exc = Long.parseLong(d.get("sfExc"));
         int days = Integer.parseInt(d.get("sfDays"));
-        long budget = rub * FAST_SPONSOR_EXC_PER_RUB;
+        long rub = subs * price;
+        long budget = subs * exc;
         session.reset(); // повторное нажатие «Создать» уже ничего не создаст — данные из сессии убраны
         Long sponsorId = null;
         try {
@@ -22524,7 +22529,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             quest.setRewardCoins(exc);
             quest.setDurationDays(days);
             quest.setDurationText(days + " дн.");
-            quest.setParticipantLimit((int) Math.min(Integer.MAX_VALUE, Math.max(1, budget / exc)));
+            quest.setParticipantLimit((int) Math.min(Integer.MAX_VALUE, subs));
             quest.setSponsored(true);
             quest.setSponsorId(sponsorId);
             quest.setOneTimePerAccount(true);
@@ -22535,7 +22540,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(),
                     "✅ <b>Квест создан и уже виден игрокам</b>\n\n"
                             + "🎯 " + escape(quest.getTitle()) + "\n"
-                            + "💎 Бюджет: " + fmtExc(budget) + " EXC · награда " + fmtExc(exc) + " EXC · до " + fmtExc(budget / exc) + " подписчиков\n\n"
+                            + "💎 Бюджет: " + fmtExc(budget) + " EXC · награда " + fmtExc(exc) + " EXC · до " + fmtExc(subs) + " подписчиков\n\n"
                             + "Ниже готовый текст анонса для канала.",
                     keyboardFactory.rowsLayout(List.of(
                             List.of(keyboardFactory.callback("🤝 Открыть кампанию", "admin:sponsors:view:" + sponsorId)),
@@ -22655,6 +22660,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(adminId, text, null);
             } catch (Exception e) {
                 log.warn("Failed to alert admin {} about sponsor channel check failure", adminId, e);
+            }
+        }
+    }
+
+    /** Бота сделали админом канала/группы: сразу присылаем админам ID и заготовку команды — для закрытого канала ID иначе не узнать. */
+    private void handleBotChatMemberUpdate(org.telegram.telegrambots.meta.api.objects.ChatMemberUpdated update) {
+        if (update.getChat() == null || update.getNewChatMember() == null || update.getOldChatMember() == null) return;
+        String type = update.getChat().getType();
+        if (!"channel".equals(type) && !"supergroup".equals(type) && !"group".equals(type)) return;
+        String newStatus = update.getNewChatMember().getStatus();
+        String oldStatus = update.getOldChatMember().getStatus();
+        boolean nowAdmin = "administrator".equalsIgnoreCase(newStatus) || "creator".equalsIgnoreCase(newStatus);
+        boolean wasAdmin = "administrator".equalsIgnoreCase(oldStatus) || "creator".equalsIgnoreCase(oldStatus);
+        if (nowAdmin == wasAdmin) return;
+        String title = update.getChat().getTitle() == null ? "без названия" : update.getChat().getTitle();
+        String text = nowAdmin
+                ? "🤖 <b>Бот добавлен админом</b> в «" + escape(title) + "»\n\n"
+                        + "ID канала: <code>" + update.getChat().getId() + "</code>"
+                        + (update.getChat().getUserName() != null ? "\nАдрес: @" + escape(update.getChat().getUserName()) : "") + "\n\n"
+                        + "Для спонсорского квеста: Управление квестами → Спонсоры → «⚡ Быстрый квест на подписку» и сообщение вида\n"
+                        + "<code>" + update.getChat().getId() + " 200 6 300 30 https://t.me/+инвайт</code>\n"
+                        + "(подписчиков, цена ₽, награда EXC, дней, ссылка для закрытого канала)."
+                : "⚠️ <b>Бота убрали из админов</b> «" + escape(title) + "» (ID <code>" + update.getChat().getId() + "</code>). "
+                        + "Если там идёт спонсорский квест, подписку проверить будет нельзя — попросите вернуть бота.";
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, text, null);
+            } catch (Exception e) {
+                log.warn("Failed to notify admin {} about bot admin status change", adminId, e);
             }
         }
     }
@@ -22783,9 +22817,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Бюджет спонсорской кампании выбран до конца: SponsorService уже выключил кампанию и квесты - сообщаем админам итог. */
     @org.springframework.context.event.EventListener
     public void onSponsorBudgetExhausted(ru.gamebot.platform.event.SponsorBudgetExhaustedEvent event) {
-        String text = "🏁 <b>Бюджет спонсора выбран</b>\n\n"
-                + "Кампания «" + escape(event.getSponsorName()) + "»: выдано " + fmtExc(event.getSpentExc()) + " из " + fmtExc(event.getBudgetExc()) + " EXC.\n"
-                + "Кампания и её квесты выключены автоматически. Можно отправить спонсору итог.";
+        String text = "🏁 <b>Кампания спонсора завершена</b> — " + escape(event.getReason()) + "\n\n"
+                + "«" + escape(event.getSponsorName()) + "»: выдано " + fmtExc(event.getSpentExc()) + " из " + fmtExc(event.getBudgetExc()) + " EXC.\n"
+                + "Кампания и её квесты выключены автоматически. Через " + FAST_SPONSOR_HOLD_DAYS + " дн. дозревает удержанная часть наград — потом отправьте спонсору отчёт.";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("🤝 Открыть кампанию", "admin:sponsors:view:" + event.getSponsorId()))));
         for (Long adminId : adminService.resolvedAdminIds()) {

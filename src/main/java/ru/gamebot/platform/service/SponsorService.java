@@ -73,8 +73,19 @@ public class SponsorService {
             if (s.getBudgetExc() > 0 && s.isActive() && s.getSpentExc() >= s.getBudgetExc()) {
                 deactivate(s.getId());
                 eventPublisher.publishEvent(new ru.gamebot.platform.event.SponsorBudgetExhaustedEvent(
-                        this, s.getId(), s.getName(), s.getBudgetExc(), s.getSpentExc()));
+                        this, s.getId(), s.getName(), s.getBudgetExc(), s.getSpentExc(), "бюджет выбран"));
             }
+        });
+    }
+
+    /** Квест «подписка на канал» набрал оплаченное число подписчиков: кампания и квесты выключаются, админам уходит уведомление. */
+    @Transactional
+    public void finishCampaign(Long sponsorId, String reason) {
+        sponsorRepository.findById(sponsorId).ifPresent(s -> {
+            if (!s.isActive()) return;
+            deactivate(s.getId());
+            eventPublisher.publishEvent(new ru.gamebot.platform.event.SponsorBudgetExhaustedEvent(
+                    this, s.getId(), s.getName(), s.getBudgetExc(), s.getSpentExc(), reason));
         });
     }
 

@@ -1346,6 +1346,12 @@ public class QuestService {
             // и EXC-бусты клуб платит из своего кармана (уровневый бонус сюда и раньше не входил) — иначе бюджет
             // спонсора тратился бы на привилегии, которых он не покупал.
             sponsorService.recordSpend(quest.getSponsorId(), sponsorShare);
+            // Оплаченное число подписчиков набрано (спонсор платит за подписчика): закрываем кампанию, не дожидаясь исчерпания бюджета.
+            // Текущая заявка уже сохранена как APPROVED выше, поэтому COUNT её включает - «+1» не нужен.
+            if (quest.getChannelCheckChatId() != null && quest.getParticipantLimit() != null && quest.getParticipantLimit() > 0
+                    && questSubmissionRepository.countApprovedByQuest(quest) >= quest.getParticipantLimit()) {
+                sponsorService.finishCampaign(quest.getSponsorId(), "набрано " + quest.getParticipantLimit() + " подписчиков");
+            }
         }
 
         // 3.5 Referral bonus: 10% of EXC earned by referred in first 30 days
