@@ -5763,7 +5763,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 && !quest.isSponsored() && !quest.isExternalAutoApprove() && !quest.isRepeatableNoCooldownEligible()
                 && sinkShopService.hasCooldownBypass(user, quest.getGameName());
         // Закрытый квест (спонсорская кампания завершена: набрано оплаченное число подписчиков или выбран бюджет): без «Взять»/«Я подписался»
-        boolean questClosed = !quest.isActive();
+        boolean questClosed = questService.isChannelCampaignClosed(quest);
         if (questClosed) {
             buttons.add(keyboardFactory.callback("😔 Квест закрыт — места заняты", "noop"));
         } else if (cooldownLeft > 0 && !cooldownBypassed) {
@@ -6532,7 +6532,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // поймана на живой заявке К-1333 "Сразись в бою 6 раз" — квест с BrawlVerifyType).
         boolean autoVerified = quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null || quest.getPubgVerifyType() != null;
         // Закрытая спонсорская кампания: вместо «Я подписался» честно показываем, что квест закрыт (иначе кнопка есть, а нажатие отвечает «закрыт»)
-        boolean sponsorClosed = !quest.isActive() && quest.getChannelCheckChatId() != null
+        boolean sponsorClosed = quest.getChannelCheckChatId() != null && questService.isChannelCampaignClosed(quest)
                 && (submission.getStatus() == SubmissionStatus.DRAFT || submission.getStatus() == SubmissionStatus.NEEDS_INFO);
         buttons.add(sponsorClosed
                 ? keyboardFactory.callback("😔 Квест закрыт — места заняты", "noop")
@@ -22769,7 +22769,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendQuestCard(user, questId, back, "⬅️ Назад", "⚠️ Квест сейчас нельзя сдать. Откройте «Мои квесты».");
                 return;
             }
-            if (!quest.isActive()) {
+            if (questService.isChannelCampaignClosed(quest)) {
                 answerSilently(callbackQuery.getId());
                 sendQuestCard(user, questId, back, "⬅️ Назад",
                         "😔 <b>Квест закрыт.</b> Спонсор оплатил ограниченное число подписчиков, и все места уже заняты — награда за этот квест больше не выдаётся.");

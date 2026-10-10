@@ -1452,6 +1452,23 @@ public class QuestService {
         return submission;
     }
 
+    /** Спонсорская кампания квеста «подпишись на канал» действительно закрыта: завершена (sponsors.active = false: вручную, по бюджету или по лимиту)
+     *  либо одобрено оплаченное число подписчиков. Одного лишь quests.active = false недостаточно: этот флаг мог погаснуть по постороннему поводу
+     *  (так сидер гасил квест при каждом рестарте), а игрок, уже взявший квест, ни при чём - ему честно проверяем подписку. */
+    public boolean isChannelCampaignClosed(Quest quest) {
+        if (quest.getChannelCheckChatId() == null) {
+            return !quest.isActive();
+        }
+        if (quest.getSponsorId() != null) {
+            var sponsor = sponsorService.findById(quest.getSponsorId());
+            if (sponsor.isPresent() && !sponsor.get().isActive()) {
+                return true;
+            }
+        }
+        return quest.getParticipantLimit() != null && quest.getParticipantLimit() > 0
+                && questSubmissionRepository.countApprovedByQuest(quest) >= quest.getParticipantLimit();
+    }
+
     /** Квесты «подпишись на канал» по этому чату (для событий chat_member). */
     public List<Quest> findChannelCheckQuests(String chatId) {
         return questRepository.findAllByChannelCheckChatId(chatId);
