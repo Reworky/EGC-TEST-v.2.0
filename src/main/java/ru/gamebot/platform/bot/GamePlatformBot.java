@@ -8358,9 +8358,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // в общий Магазин наград (см. sendGameCategoryPicker/hasMultipleDonationProductTypes).
             String backTarget = hasMultipleDonationProductTypes(purchaseGroup) ? "shop:gamecat:" + purchaseGroup : "menu:shop";
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", backTarget), keyboardFactory.callback("🏠 Меню", "menu:main")));
-            sendText(user.getTelegramId(),
-                    "🎁 <b>" + escape(groupLabel) + "</b>\n\nВыберите способ оплаты:",
-                    keyboardFactory.rowsLayout(rows));
+            String payMethodText = "🎁 <b>" + escape(groupLabel) + "</b>\n\nВыберите способ оплаты:";
+            if ("brawl_stars".equals(purchaseGroup)) {
+                sendResourceBanner(user.getTelegramId(), "brawl_gems_banner.png", payMethodText, keyboardFactory.rowsLayout(rows));
+                return;
+            }
+            sendText(user.getTelegramId(), payMethodText, keyboardFactory.rowsLayout(rows));
             return;
         }
         sendExcDenominationPicker(user, purchaseGroup);
