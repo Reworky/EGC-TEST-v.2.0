@@ -889,6 +889,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleActivationCheck(callbackQuery, user);
             return;
         }
+        if ("dtasks:claim".equals(data)) {
+            handleDailyTasksClaim(callbackQuery, user);
+            return;
+        }
         if ("activation:show".equals(data)) {
             answerSilently(callbackQuery.getId());
             sendCommunityActivationPrompt(user, "🎉 <b>Первая награда твоя!</b>\nЧтобы брать следующие квесты, подпишись на канал.");
@@ -1813,6 +1817,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "admin" -> sendAdminPanel(user);
             case "moderation" -> sendModerationHub(user);
             case "daily" -> { sendDailyBonus(callbackQuery, user); return; }
+            case "dtasks" -> { answerSilently(callbackQuery.getId()); sendDailyTasks(user); return; }
             case "chestprizes" -> sendChestPrizeList(user);
             case "chestopen" -> { answerSilently(callbackQuery.getId()); sendChestPreview(user); return; }
             case "chestgo" -> { sendChestOpenAnimated(callbackQuery, user); return; }
@@ -4985,6 +4990,100 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "Это разовый бонус за приглашение, реферальные 10% с его квестов продолжат поступать как обычно.");
         } catch (Exception e) {
             log.error("[Referral] Failed to notify referrer {} about first-quest bonus", event.getReferrerTelegramId(), e);
+        }
+    }
+
+    // ─── Задания дня → «Сундук заданий» (2026-10-10) ─────────────────────────────────────────────────────
+
+    private String dailyTasksMenuLabel(AppUser user) {
+        int mask = userService.dailyTasksMask(user);
+        int done = Integer.bitCount(mask);
+        if (userService.isDailyTasksChestClaimed(user)) {
+            return "✅ Задания дня 3/3";
+        }
+        return "📋 Задания дня " + done + "/3" + (mask == UserService.DAILY_TASKS_ALL ? " 🔔" : "");
+    }
+
+    private void sendDailyTasks(AppUser user) {
+        if (!userService.dailyTasksEnabled()) {
+            sendText(user.getTelegramId(), "📋 Задания дня сейчас недоступны.", backMenuKeyboard("menu:main"));
+            return;
+        }
+        int mask = userService.dailyTasksMask(user);
+        boolean claimed = userService.isDailyTasksChestClaimed(user);
+        boolean bonus = (mask & UserService.DAILY_TASK_BONUS) != 0;
+        boolean quest = (mask & UserService.DAILY_TASK_QUEST) != 0;
+        boolean chest = (mask & UserService.DAILY_TASK_CHEST) != 0;
+        String questText = user.getCompletedQuests() == 0 ? "Выполни первый квест" : "Выполни 1 квест";
+        StringBuilder text = new StringBuilder("📋 <b>Задания дня</b> — " + Integer.bitCount(mask) + "/3\n\n");
+        text.append(bonus ? "✅" : "⬜").append(" Забери ежедневный бонус\n");
+        text.append(quest ? "✅" : "⬜").append(" ").append(questText).append("\n");
+        text.append(chest ? "✅" : "⬜").append(" Открой сундук дня\n\n");
+        text.append("🎁 За все три — <b>Сундук заданий</b>: +").append(UserService.DAILY_TASKS_CHEST_EXC)
+                .append(" EXC и 🎟️ ").append(UserService.DAILY_TASKS_CHEST_TICKETS).append(" билет колеса.\n");
+        text.append(claimed ? "\n✅ Сундук заданий сегодня уже получен. Новые задания — завтра."
+                : "\nНовые задания — каждый день.");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (!claimed && mask == UserService.DAILY_TASKS_ALL) {
+            rows.add(List.of(keyboardFactory.callback("🎁 Забрать сундук заданий", "dtasks:claim")));
+        } else if (!claimed) {
+            if (!bonus) rows.add(List.of(keyboardFactory.callback("📅 Ежедневный бонус", "menu:daily")));
+            if (!quest) rows.add(List.of(keyboardFactory.callback("🗺️ Квесты", "menu:quests")));
+            if (!chest) rows.add(List.of(keyboardFactory.callback("🎁 Сундук дня", "menu:chestopen")));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
+        sendText(user.getTelegramId(), text.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleDailyTasksClaim(CallbackQuery callbackQuery, AppUser user) {
+        UserService.DailyTasksClaimResult result;
+        try {
+            result = userService.claimDailyTasksChest(user);
+        } catch (Exception e) {
+            log.error("Daily tasks chest claim failed for user {}", user.getTelegramId(), e);
+            answer(callbackQuery.getId(), "Не получилось, попробуй чуть позже");
+            return;
+        }
+        switch (result.status()) {
+            case OK -> {
+                answerSilently(callbackQuery.getId());
+                sendText(user.getTelegramId(),
+                        "🎁 <b>Сундук заданий открыт!</b>\n\n"
+                                + "🪙 <b>+" + result.exc() + " EXC</b>" + starsNote(result.exc()) + "\n"
+                                + "🎟️ <b>+" + result.tickets() + " билет колеса</b>\n\n"
+                                + "Новые задания — завтра. До встречи!",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("🗺️ Квесты", "menu:quests")),
+                                List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
+            }
+            case ALREADY_CLAIMED -> {
+                answer(callbackQuery.getId(), "Сегодня сундук заданий уже получен");
+                sendDailyTasks(user);
+            }
+            case NOT_READY -> {
+                answerSilently(callbackQuery.getId());
+                sendDailyTasks(user);
+            }
+            case CAP_REACHED -> {
+                answerSilently(callbackQuery.getId());
+                sendText(user.getTelegramId(),
+                        "😔 <b>Сундуки заданий на сегодня закончились</b>\n\nДневной лимит клуба исчерпан. Завтра будет новый набор заданий и новый сундук.",
+                        backMenuKeyboard("menu:main"));
+            }
+            case DISABLED -> answer(callbackQuery.getId(), "Задания дня сейчас недоступны");
+        }
+    }
+
+    /** Все три задания дня выполнены - зовём забрать сундук. */
+    @org.springframework.context.event.EventListener
+    public void onDailyTasksCompleted(ru.gamebot.platform.event.DailyTasksCompletedEvent event) {
+        try {
+            sendText(event.getTelegramId(),
+                    "🎉 <b>Все задания дня выполнены!</b>\n\nЗабери Сундук заданий: +" + UserService.DAILY_TASKS_CHEST_EXC
+                            + " EXC и 🎟️ " + UserService.DAILY_TASKS_CHEST_TICKETS + " билет колеса.",
+                    keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🎁 Забрать сундук заданий", "dtasks:claim")))));
+        } catch (Exception e) {
+            log.warn("Failed to send daily tasks completed message to {}", event.getTelegramId(), e);
         }
     }
 
@@ -20581,6 +20680,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🎯 Твой квест сейчас", "quest:recommend")));
         rows.add(List.of(keyboardFactory.callback(questsLabel, "menu:cat:quests")));
 
+        if (userService.dailyTasksEnabled()) {
+            rows.add(List.of(keyboardFactory.callback(dailyTasksMenuLabel(user), "menu:dtasks")));
+        }
         rows.add(List.of(keyboardFactory.callback("🤝 Рефералы", "menu:referrals")));
 
         String walletLabel = userService.isDailyBonusAvailable(user) ? "💰 Кошелёк 🔔" : "💰 Кошелёк";

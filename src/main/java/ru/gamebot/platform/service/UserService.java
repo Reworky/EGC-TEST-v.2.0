@@ -87,6 +87,7 @@ public class UserService {
     private final WheelService wheelService;
     private final AppProperties appProperties;
     private final SquadRepository squadRepository;
+    private final ru.gamebot.platform.domain.repository.AppSettingRepository appSettingRepository;
 
     /** Варианты текста для кнопки «Поделиться» (Telegram share-ссылка) — случайный выбор при каждом
      *  построении, чтобы сообщения разных отправителей не выглядели как рассылка одного шаблона. */
@@ -876,6 +877,7 @@ public class UserService {
         // без восстановления (иначе "Начать заново" оставлял бы висеть предложение купить старую серию).
         user.setLastBrokenStreakDays(null);
         user.setLastBrokenStreakUntil(null);
+        markDailyTask(user, DAILY_TASK_BONUS);
         appUserRepository.save(user);
 
         return new DailyBonusResult(totalExc, dailyExc, milestoneExc, xpBonus, streak, milestoneText);
@@ -989,8 +991,112 @@ public class UserService {
         // один из перков пакета: не нужно отдельно платить 15⭐ за реролл каждый день.
         ChestResult result = isEgcPassActive(user) ? rollAndApplyPremiumChestPrize(user) : rollAndApplyChestPrize(user);
         user.setLastChestOpenedDate(LocalDate.now());
+        markDailyTask(user, DAILY_TASK_CHEST);
         appUserRepository.save(user);
         return result;
+    }
+
+    // ── Задания дня → «Сундук заданий» (2026-10-10, идея из Mistplay: дневные задания и сундук) ──────────────────────────────
+    // Три задания в сутки: забрать ежедневный бонус, выполнить квест, открыть сундук дня. За все три - «Сундук заданий»:
+    // 300 EXC + 1 билет колеса сверх обычного сундука дня, суточный потолок выдачи - см. dailyTasksCapExc. Состояние - в AppUser
+    // (дата набора + битовая маска), без отдельной таблицы; сброс ленивый по дате. Откат без деплоя: app_settings 'daily_tasks.enabled' = false.
+
+    public static final int DAILY_TASK_BONUS = 1;
+    public static final int DAILY_TASK_QUEST = 2;
+    public static final int DAILY_TASK_CHEST = 4;
+    public static final int DAILY_TASKS_ALL = 7;
+    public static final long DAILY_TASKS_CHEST_EXC = 300;
+    public static final int DAILY_TASKS_CHEST_TICKETS = 1;
+    public static final long DAILY_TASKS_DEFAULT_CAP_EXC = 15_000;
+    private static final String DAILY_TASKS_ENABLED_KEY = "daily_tasks.enabled";
+    private static final String DAILY_TASKS_CAP_KEY = "daily_tasks.cap_exc";
+
+    public boolean dailyTasksEnabled() {
+        try {
+            return appSettingRepository.findById(DAILY_TASKS_ENABLED_KEY)
+                    .map(ru.gamebot.platform.domain.model.AppSetting::getValue)
+                    .map(v -> !"false".equalsIgnoreCase(v.trim()))
+                    .orElse(true);
+        } catch (Exception e) {
+            log.warn("Failed to read setting {}", DAILY_TASKS_ENABLED_KEY, e);
+            return true;
+        }
+    }
+
+    private long dailyTasksCapExc() {
+        try {
+            return appSettingRepository.findById(DAILY_TASKS_CAP_KEY)
+                    .map(ru.gamebot.platform.domain.model.AppSetting::getValue)
+                    .map(v -> Long.parseLong(v.trim()))
+                    .orElse(DAILY_TASKS_DEFAULT_CAP_EXC);
+        } catch (Exception e) {
+            return DAILY_TASKS_DEFAULT_CAP_EXC;
+        }
+    }
+
+    /** Отметки заданий за СЕГОДНЯ (0, если набор ещё не начат или относится к вчера). */
+    public int dailyTasksMask(AppUser user) {
+        return LocalDate.now().equals(user.getDailyTasksDate()) ? user.getDailyTasksMask() : 0;
+    }
+
+    public boolean isDailyTasksChestClaimed(AppUser user) {
+        return LocalDate.now().equals(user.getDailyTasksClaimedDate());
+    }
+
+    /** Отмечает выполненное задание в переданном объекте игрока. НЕ сохраняет - вызывающий код сохраняет игрока сам (бонус, сундук, одобрение
+     *  квеста уже делают это). Ошибка не должна ломать основное действие. Когда набралось все три - событие для уведомления «забери сундук». */
+    public void markDailyTask(AppUser user, int bit) {
+        try {
+            if (!dailyTasksEnabled()) {
+                return;
+            }
+            LocalDate today = LocalDate.now();
+            if (!today.equals(user.getDailyTasksDate())) {
+                user.setDailyTasksDate(today);
+                user.setDailyTasksMask(0);
+            }
+            int before = user.getDailyTasksMask();
+            int after = before | bit;
+            if (after == before) {
+                return;
+            }
+            user.setDailyTasksMask(after);
+            if (after == DAILY_TASKS_ALL && !today.equals(user.getDailyTasksClaimedDate())) {
+                eventPublisher.publishEvent(new ru.gamebot.platform.event.DailyTasksCompletedEvent(this, user.getTelegramId()));
+            }
+        } catch (Exception e) {
+            log.warn("Failed to mark daily task {} for user {}", bit, user.getTelegramId(), e);
+        }
+    }
+
+    public enum DailyTasksClaimStatus { OK, NOT_READY, ALREADY_CLAIMED, CAP_REACHED, DISABLED }
+
+    public record DailyTasksClaimResult(DailyTasksClaimStatus status, long exc, int tickets) {}
+
+    @Transactional
+    public DailyTasksClaimResult claimDailyTasksChest(AppUser user) {
+        if (!dailyTasksEnabled()) {
+            return new DailyTasksClaimResult(DailyTasksClaimStatus.DISABLED, 0, 0);
+        }
+        AppUser fresh = appUserRepository.findByIdForUpdate(user.getId()).orElse(user);
+        LocalDate today = LocalDate.now();
+        if (today.equals(fresh.getDailyTasksClaimedDate())) {
+            return new DailyTasksClaimResult(DailyTasksClaimStatus.ALREADY_CLAIMED, 0, 0);
+        }
+        int mask = today.equals(fresh.getDailyTasksDate()) ? fresh.getDailyTasksMask() : 0;
+        if (mask != DAILY_TASKS_ALL) {
+            return new DailyTasksClaimResult(DailyTasksClaimStatus.NOT_READY, 0, 0);
+        }
+        // Потолок считается по журналу операций за сегодня. Гонка двух одновременных забираний может превысить его на один сундук - принято.
+        long issuedToday = excTransactionRepository.sumAmountByTypeSince(ExcTransactionService.DAILY_TASKS, today.atStartOfDay());
+        if (issuedToday + DAILY_TASKS_CHEST_EXC > dailyTasksCapExc()) {
+            return new DailyTasksClaimResult(DailyTasksClaimStatus.CAP_REACHED, 0, 0);
+        }
+        excTx.creditExc(fresh, DAILY_TASKS_CHEST_EXC, ExcTransactionService.DAILY_TASKS, "Сундук заданий дня");
+        wheelService.addTickets(fresh, DAILY_TASKS_CHEST_TICKETS, "Задания дня");
+        fresh.setDailyTasksClaimedDate(today);
+        appUserRepository.save(fresh);
+        return new DailyTasksClaimResult(DailyTasksClaimStatus.OK, DAILY_TASKS_CHEST_EXC, DAILY_TASKS_CHEST_TICKETS);
     }
 
     /** Платный реролл за Telegram Stars (запрошено 2026-09-14) — ОТДЕЛЬНЫЙ, заметно более щедрый пул

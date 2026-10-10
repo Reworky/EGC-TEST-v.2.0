@@ -1317,6 +1317,7 @@ public class QuestService {
         // Обещанный сообщением «вернись и выполни квест» бонус за возвращение - выдаём здесь, на реальном возврате
         userService.claimDormancyReturnBonus(user);
         user.setCompletedQuests(user.getCompletedQuests() + 1);
+        userService.markDailyTask(user, UserService.DAILY_TASK_QUEST);
         user.setFixedRubBalance(user.getFixedRubBalance() + fixedRub);
         submission.setUser(user);
         questSubmissionRepository.save(submission);

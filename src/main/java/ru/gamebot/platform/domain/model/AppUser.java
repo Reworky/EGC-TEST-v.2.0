@@ -67,6 +67,13 @@ public class AppUser {
     @Column(columnDefinition = "boolean default false")
     private boolean referralFirstQuestBonusPending;
 
+    /** Задания дня (2026-10-10): за какой день набор отметок, битовая маска выполненного (1 - ежедневный бонус, 2 - квест, 4 - сундук дня)
+     *  и дата, когда игрок забрал «Сундук заданий». Сброс - ленивый, по сравнению даты (см. UserService.markDailyTask). */
+    private LocalDate dailyTasksDate;
+    @Column(columnDefinition = "integer default 0")
+    private int dailyTasksMask;
+    private LocalDate dailyTasksClaimedDate;
+
     /** Последний XP-уровень, о котором уже прислано уведомление-достижение (см. AchievementCheckService).
      *  null = ещё не проверяли — первый проход поллера просто фиксирует текущий уровень, без уведомления. */
     private Integer lastNotifiedLevelNumber;

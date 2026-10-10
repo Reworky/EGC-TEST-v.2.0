@@ -25,6 +25,8 @@ public class ExcTransactionService {
     public static final String REFERRAL   = "REFERRAL";
     public static final String DAILY      = "DAILY";
     public static final String CHEST      = "CHEST";
+    /** Сундук заданий дня (2026-10-10): 300 EXC за выполнение трёх заданий, суточный потолок - UserService.DAILY_TASKS_DEFAULT_CAP_EXC. */
+    public static final String DAILY_TASKS = "DAILY_TASKS";
     public static final String SECOND_QUEST_NUDGE = "SECOND_QUEST_NUDGE";
     public static final String SHOP_BUY   = "SHOP_BUY";
     public static final String SHOP_REFUND= "SHOP_REFUND";
@@ -144,6 +146,7 @@ public class ExcTransactionService {
             case REFERRAL_FIRST_QUEST_BONUS -> "🤝 Бонус за первый квест друга";
             case SQUAD_MILESTONE -> "👨‍👩‍👧‍👦 Бонус за рост отряда";
             case SQUAD_GOAL -> "🎯 Командная цель отряда";
+            case DAILY_TASKS -> "📋 Сундук заданий дня";
             default             -> "📌 Прочее";
         };
     }
