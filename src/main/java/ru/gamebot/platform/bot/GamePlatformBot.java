@@ -1094,6 +1094,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleTakeQuestWithPartner(callbackQuery, user, parseLong(parts[0]), parseLong(parts[1]));
             return;
         }
+        if (data.startsWith("qchan:check:")) {
+            handleChannelCheck(callbackQuery, user, parseLong(data.substring("qchan:check:".length())));
+            return;
+        }
         if (data.startsWith("quest:report:")) {
             handleReportStart(callbackQuery, user, session, parseLong(data.substring("quest:report:".length())));
             return;
@@ -2704,6 +2708,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 String note = "0".equals(text.trim()) ? "" : text.trim();
                 finalizeSponsorQuest(user, session, note);
             }
+            case SPONSOR_FAST_INPUT -> handleSponsorFastInput(user, session, text);
 
             case BRAWL_TAG_INPUT -> {
                 String purpose = session.getData().getOrDefault("brawlLinkPurpose", "tournament");
@@ -5752,7 +5757,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     ? keyboardFactory.callback("⏳ Ждём подтверждения от партнёра", "noop")
                     : (quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null || quest.getPubgVerifyType() != null)
                         ? keyboardFactory.callback(autoVerifyProgressLabel(quest, latest), "noop")
-                        : keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
+                        : questReportOrCheckButton(quest));
+        }
+        if (quest.getChannelCheckUrl() != null && quest.getChannelCheckChatId() != null) {
+            buttons.add(keyboardFactory.url("📢 Открыть канал", quest.getChannelCheckUrl()));
         }
         if (nextQuestData != null) {
             buttons.add(keyboardFactory.callback("➡️ Следующий квест", nextQuestData));
@@ -6111,7 +6119,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean freshQuestAutoVerified = freshQuest.getBrawlVerifyType() != null || freshQuest.getClashVerifyType() != null || freshQuest.getClashRoyaleVerifyType() != null || freshQuest.getDotaVerifyType() != null || freshQuest.getCs2VerifyType() != null || freshQuest.getPubgVerifyType() != null;
         buttons.add(freshQuest.isExternalAutoApprove() || freshQuestAutoVerified
                 ? keyboardFactory.callback(freshQuestAutoVerified ? autoVerifyProgressLabel(freshQuest, submission) : "⏳ Ждём подтверждения от партнёра", "noop")
-                : keyboardFactory.callback("📤 Отчёт", "quest:report:" + questId));
+                : questReportOrCheckButton(freshQuest));
+        if (freshQuest.getChannelCheckUrl() != null) {
+            buttons.add(keyboardFactory.url("📢 Открыть канал", freshQuest.getChannelCheckUrl()));
+        }
         buttons.add(keyboardFactory.callback("📂 Мои квесты", "menu:myquests"));
         buttons.add(keyboardFactory.callback("🏠 Меню", "menu:main"));
         if (isEffectiveAdmin(user)) {
@@ -6221,7 +6232,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Серверная проверка, не только скрытие кнопки в UI — иначе кнопка "Отчёт" из другого экрана
         // (или просто старое сообщение с ней) даёт вручную отправить отчёт по квесту, который должен
         // подтверждаться только через API (инцидент 2026-08-31, см. sendMyQuestCard).
-        if (quest.isExternalAutoApprove() || quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null || quest.getPubgVerifyType() != null) {
+        if (quest.isExternalAutoApprove() || quest.getChannelCheckChatId() != null || quest.getBrawlVerifyType() != null || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null || quest.getPubgVerifyType() != null) {
             answerSilently(callbackQuery.getId());
             sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад",
                     "ℹ️ Этот квест подтверждается автоматически — отправлять отчёт не нужно и нельзя.");
@@ -6462,7 +6473,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? keyboardFactory.callback("⏳ Ждём подтверждения от партнёра", "noop")
                 : autoVerified
                     ? keyboardFactory.callback(autoVerifyProgressLabel(quest, submission), "noop")
-                    : keyboardFactory.callback("📤 Отчёт", "quest:report:" + quest.getId()));
+                    : questReportOrCheckButton(quest));
         if (canCancel) {
             buttons.add(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + submission.getId()));
         }
@@ -10331,6 +10342,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "traffic:compare" -> { sendAdminTrafficCompare(user); answerSilently(callbackQuery.getId()); return; }
             case "polls" -> { sendAdminPollList(user); answerSilently(callbackQuery.getId()); return; }
             case "sponsors" -> { sendAdminSponsorList(user); answerSilently(callbackQuery.getId()); return; }
+            case "sponsors:fast" -> {
+                session.reset();
+                session.setState(SessionState.SPONSOR_FAST_INPUT);
+                sendText(user.getTelegramId(),
+                        "⚡ <b>Быстрый квест на подписку</b>\n\n"
+                                + "Сначала добавьте бота <b>админом</b> в канал спонсора (права не нужны, достаточно статуса админа) — "
+                                + "иначе подписку не проверить.\n\n"
+                                + "Затем одним сообщением: <code>канал оплата_₽ награда_EXC [дней]</code>\n"
+                                + "Например: <code>@mychannel 1200 300</code> или <code>@mychannel 1200 300 14</code>\n\n"
+                                + "Закрытый канал: <code>-1001234567890 1200 300 30 https://t.me/+инвайт</code>\n"
+                                + "По умолчанию квест идёт 30 дней. Бюджет = 70% оплаты × 100 EXC/₽.",
+                        cancelKeyboard());
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            case "sponsors:fastgo" -> {
+                answerSilently(callbackQuery.getId());
+                createSponsorFastQuest(user, session);
+                return;
+            }
             case "sponsors:create" -> {
                 session.reset();
                 session.setState(SessionState.SPONSOR_CREATE_NAME);
@@ -15307,6 +15338,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     icon + " " + s.getName() + " — " + rem + " EXC осталось",
                     "admin:sponsors:view:" + s.getId())));
         }
+        rows.add(List.of(keyboardFactory.callback("⚡ Быстрый квест на подписку", "admin:sponsors:fast")));
         rows.add(List.of(keyboardFactory.callback("➕ Добавить спонсора", "admin:sponsors:create")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:edit")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
@@ -22298,6 +22330,312 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long registered = userService.totalRegisteredUsers();
         long roundedBase = (registered / 50) * 50;
         return roundedBase >= 50 ? "👥 Уже <b>" + roundedBase + "+</b> игроков в клубе\n\n" : "";
+    }
+
+    // ── Быстрый спонсорский квест «подпишись на канал» с автопроверкой ─────────────────────
+
+    private static final long FAST_SPONSOR_XP = 50;
+    private static final int FAST_SPONSOR_DEFAULT_DAYS = 30;
+    /** 70% оплаты идёт в Payout Pool, умножаем на номинальный курс 100 EXC за 1 ₽ — как подсказка в обычной кампании. */
+    private static final long FAST_SPONSOR_EXC_PER_RUB = 70;
+
+    private final java.util.Set<Long> channelCheckInFlight = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    private InlineKeyboardButton questReportOrCheckButton(Quest quest) {
+        return quest.getChannelCheckChatId() != null
+                ? keyboardFactory.callback("✅ Я подписался", "qchan:check:" + quest.getId())
+                : keyboardFactory.callback("📤 Отчёт", "quest:report:" + quest.getId());
+    }
+
+    private void handleSponsorFastInput(AppUser user, UserSession session, String text) {
+        String chat = null;
+        String link = null;
+        List<Long> nums = new ArrayList<>();
+        for (String tok : text.trim().split("\\s+")) {
+            if (tok.isEmpty()) continue;
+            if (tok.startsWith("http") || tok.contains("t.me/")) {
+                String full = tok.startsWith("http") ? tok : "https://" + tok;
+                if (tok.contains("t.me/+") || tok.contains("joinchat")) {
+                    link = full;
+                } else if (chat == null) {
+                    String name = tok.replaceFirst("^(https?://)?t\\.me/", "").replaceAll("[/?].*$", "");
+                    chat = "@" + name;
+                    if (link == null) link = "https://t.me/" + name;
+                }
+            } else if (tok.startsWith("@")) {
+                chat = tok;
+                if (link == null) link = "https://t.me/" + tok.substring(1);
+            } else if (tok.matches("-100\\d+")) {
+                chat = tok;
+            } else if (tok.matches("\\d+")) {
+                nums.add(Long.parseLong(tok));
+            } else {
+                sendText(user.getTelegramId(), "❌ Не понял «" + escape(tok) + "». Формат: <code>@канал оплата_₽ награда_EXC [дней]</code>", cancelKeyboard());
+                return;
+            }
+        }
+        if (chat == null || nums.size() < 2 || nums.size() > 3) {
+            sendText(user.getTelegramId(), "❌ Нужны канал и два числа: оплата в ₽ и награда в EXC (и, по желанию, дней).\nНапример: <code>@mychannel 1200 300</code>", cancelKeyboard());
+            return;
+        }
+        if (link == null) {
+            sendText(user.getTelegramId(), "❌ Для закрытого канала добавьте инвайт-ссылку: <code>-100… 1200 300 30 https://t.me/+…</code>", cancelKeyboard());
+            return;
+        }
+        long rub = nums.get(0);
+        long exc = nums.get(1);
+        long days = nums.size() == 3 ? nums.get(2) : FAST_SPONSOR_DEFAULT_DAYS;
+        long budget = rub * FAST_SPONSOR_EXC_PER_RUB;
+        if (rub <= 0 || exc <= 0 || days < 1 || days > 365) {
+            sendText(user.getTelegramId(), "❌ Оплата и награда должны быть больше нуля, срок — от 1 до 365 дней.", cancelKeyboard());
+            return;
+        }
+        long limit = budget / exc;
+        if (limit < 1) {
+            sendText(user.getTelegramId(), "❌ Награда " + exc + " EXC больше всего бюджета (" + budget + " EXC). Уменьшите награду или увеличьте оплату.", cancelKeyboard());
+            return;
+        }
+
+        String title;
+        String chatId;
+        Integer subscribers = null;
+        try {
+            org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat getChat =
+                    new org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat();
+            getChat.setChatId(chat);
+            Chat found = execute(getChat);
+            if (found == null || found.getTitle() == null) {
+                sendText(user.getTelegramId(), "❌ Канал «" + escape(chat) + "» не найден.", cancelKeyboard());
+                return;
+            }
+            title = found.getTitle();
+            chatId = String.valueOf(found.getId());
+            long botId = execute(new org.telegram.telegrambots.meta.api.methods.GetMe()).getId();
+            GetChatMember me = new GetChatMember();
+            me.setChatId(chatId);
+            me.setUserId(botId);
+            String status = execute(me).getStatus();
+            if (!"administrator".equalsIgnoreCase(status) && !"creator".equalsIgnoreCase(status)) {
+                sendText(user.getTelegramId(), "❌ Бот не админ в «" + escape(title) + "». Добавьте его администратором канала и пришлите сообщение ещё раз.", cancelKeyboard());
+                return;
+            }
+            try {
+                org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMemberCount count =
+                        new org.telegram.telegrambots.meta.api.methods.groupadministration.GetChatMemberCount();
+                count.setChatId(chatId);
+                subscribers = execute(count);
+            } catch (Exception ignored) {
+                // число подписчиков - только для справки в превью
+            }
+        } catch (TelegramApiException e) {
+            log.warn("Sponsor fast quest: cannot access channel {}", chat, e);
+            sendText(user.getTelegramId(), "❌ Бот не видит канал «" + escape(chat) + "» (" + escape(String.valueOf(e.getMessage())) + "). Проверьте адрес и что бот — админ канала.", cancelKeyboard());
+            return;
+        }
+
+        session.getData().put("sfChatId", chatId);
+        session.getData().put("sfTitle", title);
+        session.getData().put("sfLink", link);
+        session.getData().put("sfRub", String.valueOf(rub));
+        session.getData().put("sfExc", String.valueOf(exc));
+        session.getData().put("sfDays", String.valueOf(days));
+        session.setState(SessionState.NONE);
+        long perSubscriberKopecks = rub * 100 / limit;
+        sendText(user.getTelegramId(),
+                "⚡ <b>Проверьте квест</b>\n\n"
+                        + "📢 Канал: <b>" + escape(title) + "</b>" + (subscribers != null ? " (сейчас " + fmtExc(subscribers) + " подписчиков)" : "") + "\n"
+                        + "💵 Оплата: <b>" + fmtExc(rub) + " ₽</b> (70% уйдёт в Payout Pool, 30% комиссия)\n"
+                        + "💎 Бюджет: <b>" + fmtExc(budget) + " EXC</b>\n"
+                        + "🪙 Награда за подписку: <b>" + fmtExc(exc) + " EXC</b> + " + FAST_SPONSOR_XP + " XP\n"
+                        + "👥 Хватит на <b>" + fmtExc(limit) + "</b> подписчиков (≈ " + (perSubscriberKopecks / 100) + "," + String.format("%02d", perSubscriberKopecks % 100) + " ₽ за подписчика)\n"
+                        + "📅 Срок: <b>" + days + " дн.</b>\n\n"
+                        + "Подписка проверяется автоматически (бот — админ канала). Как только бюджет кончится, квест выключится сам.\n"
+                        + "⚠️ Награду получит и тот, кто уже был подписан до квеста — Telegram не показывает дату подписки.",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("✅ Создать", "admin:sponsors:fastgo")),
+                        List.of(keyboardFactory.callback("❌ Отмена", "common:cancel")))));
+    }
+
+    private void createSponsorFastQuest(AppUser user, UserSession session) {
+        Map<String, String> d = session.getData();
+        if (d.get("sfChatId") == null || d.get("sfTitle") == null) {
+            sendText(user.getTelegramId(), "⚠️ Данные квеста потерялись (сессия истекла). Начните заново.",
+                    backMenuKeyboard("admin:sponsors"));
+            return;
+        }
+        String chatId = d.get("sfChatId");
+        String title = d.get("sfTitle");
+        String link = d.get("sfLink");
+        long rub = Long.parseLong(d.get("sfRub"));
+        long exc = Long.parseLong(d.get("sfExc"));
+        int days = Integer.parseInt(d.get("sfDays"));
+        long budget = rub * FAST_SPONSOR_EXC_PER_RUB;
+        session.reset(); // повторное нажатие «Создать» уже ничего не создаст — данные из сессии убраны
+        Long sponsorId = null;
+        try {
+            // Оплата попадает в Payout Pool внутри create() - денежная операция, поэтому весь блок под try/catch с алертом админам.
+            ru.gamebot.platform.domain.model.Sponsor sponsor = sponsorService.create(title, "Подписка на «" + title + "»", rub, budget,
+                    LocalDateTime.now(), LocalDateTime.now().plusDays(days), user.getTelegramId());
+            sponsorId = sponsor.getId();
+            sponsor.setSponsorContact("");
+            sponsorService.save(sponsor);
+
+            Quest quest = new Quest();
+            quest.setTitle("Подпишись на «" + title + "»");
+            quest.setDescription("Подпишись на канал «" + title + "» и нажми «✅ Я подписался» — награда придёт сразу.");
+            quest.setInstruction(link);
+            quest.setGameName(title);
+            quest.setCategory("Лёгкие");
+            quest.setPlatform("Telegram");
+            quest.setRewardXp(FAST_SPONSOR_XP);
+            quest.setRewardCoins(exc);
+            quest.setDurationDays(days);
+            quest.setDurationText(days + " дн.");
+            quest.setParticipantLimit((int) Math.min(Integer.MAX_VALUE, Math.max(1, budget / exc)));
+            quest.setSponsored(true);
+            quest.setSponsorId(sponsorId);
+            quest.setOneTimePerAccount(true);
+            quest.setChannelCheckChatId(chatId);
+            quest.setChannelCheckUrl(link);
+            questService.createQuest(quest);
+
+            sendText(user.getTelegramId(),
+                    "✅ <b>Квест создан и уже виден игрокам</b>\n\n"
+                            + "🎯 " + escape(quest.getTitle()) + "\n"
+                            + "💎 Бюджет: " + fmtExc(budget) + " EXC · награда " + fmtExc(exc) + " EXC · до " + fmtExc(budget / exc) + " подписчиков\n\n"
+                            + "Ниже готовый текст анонса для канала.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("🤝 Открыть кампанию", "admin:sponsors:view:" + sponsorId)),
+                            List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
+            sendText(user.getTelegramId(), buildQuestAnnouncement(quest), null);
+        } catch (Exception e) {
+            log.error("Sponsor fast quest creation failed (sponsorId={})", sponsorId, e);
+            String msg = "🚨 <b>Быстрый спонсорский квест не создан до конца</b>\n\n"
+                    + "Канал: " + escape(title) + ", оплата " + rub + " ₽.\n"
+                    + (sponsorId != null ? "Кампания #" + sponsorId + " уже создана и оплата учтена в Payout Pool — добавьте квест вручную в разделе «Спонсоры».\n" : "Кампания не создана, деньги в пул не попали.\n")
+                    + "Ошибка: " + escape(String.valueOf(e.getMessage()));
+            for (Long adminId : adminService.resolvedAdminIds()) {
+                try {
+                    sendText(adminId, msg, null);
+                } catch (Exception inner) {
+                    log.warn("Failed to alert admin {} about sponsor fast quest failure", adminId, inner);
+                }
+            }
+        }
+    }
+
+    /** Игрок нажал «✅ Я подписался»: проверяем членство через getChatMember (бот — админ канала) и сразу начисляем награду. */
+    private void handleChannelCheck(CallbackQuery callbackQuery, AppUser user, Long questId) {
+        Quest quest = questService.getQuest(questId);
+        if (quest.getChannelCheckChatId() == null) {
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if (!channelCheckInFlight.add(user.getTelegramId())) {
+            answerSilently(callbackQuery.getId()); // двойной тап: вторая проверка не нужна, награду начислит первая
+            return;
+        }
+        try {
+            String back = currentQuestBackData(user);
+            QuestSubmission latest = questService.getLatestSubmission(user, quest);
+            if (latest == null || latest.getStatus() == SubmissionStatus.CANCELLED) {
+                answerSilently(callbackQuery.getId());
+                sendQuestCard(user, questId, back, "⬅️ Назад", "⚠️ Сначала возьмите квест кнопкой «🚀 Взять».");
+                return;
+            }
+            if (latest.getStatus() == SubmissionStatus.APPROVED) {
+                answerSilently(callbackQuery.getId());
+                sendQuestCard(user, questId, back, "⬅️ Назад", "✅ <b>Этот квест уже выполнен и оплачен.</b>");
+                return;
+            }
+            if (latest.getStatus() != SubmissionStatus.DRAFT) {
+                answerSilently(callbackQuery.getId());
+                sendQuestCard(user, questId, back, "⬅️ Назад", "⚠️ Квест сейчас нельзя сдать. Откройте «Мои квесты».");
+                return;
+            }
+            if (!quest.isActive()) {
+                answerSilently(callbackQuery.getId());
+                sendQuestCard(user, questId, back, "⬅️ Назад", "😔 Кампания уже завершена — награды закончились.");
+                return;
+            }
+            if (questService.isExpired(latest)) {
+                answerSilently(callbackQuery.getId());
+                sendQuestCard(user, questId, back, "⬅️ Назад", "⌛ Срок квеста истёк. Возьмите его заново, если он ещё доступен.");
+                return;
+            }
+            boolean member;
+            try {
+                GetChatMember request = new GetChatMember();
+                request.setChatId(quest.getChannelCheckChatId());
+                request.setUserId(user.getTelegramId());
+                String status = execute(request).getStatus();
+                member = status != null && !"left".equalsIgnoreCase(status) && !"kicked".equalsIgnoreCase(status);
+            } catch (TelegramApiException e) {
+                log.warn("Channel check failed for quest {} user {}", questId, user.getTelegramId(), e);
+                answer(callbackQuery.getId(), "Не удалось проверить, попробуй чуть позже");
+                alertSponsorChannelCheckFailure(quest, e);
+                return;
+            }
+            if (!member) {
+                answer(callbackQuery.getId(), "Подписка не найдена");
+                sendQuestCard(user, questId, back, "⬅️ Назад",
+                        "📢 Подписки пока не видно. Откройте канал, подпишитесь и снова нажмите «✅ Я подписался».");
+                return;
+            }
+            QuestSubmission done = questService.approveSubmission(latest.getId());
+            answerSilently(callbackQuery.getId());
+            sendText(user.getTelegramId(),
+                    "✅ <b>Подписка подтверждена!</b>\n\n"
+                            + "🪙 <b>+" + fmtExc(done.getAwardedCoins()) + " EXC</b>" + starsNote(done.getAwardedCoins()) + "\n"
+                            + "✨ <b>+" + done.getAwardedXp() + " XP</b>\n\n"
+                            + "Спасибо, что с нами и со спонсором!",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("🎯 Играть", "quest:recommend")),
+                            List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
+        } catch (Exception e) {
+            log.error("Channel check approval failed for quest {} user {}", questId, user.getTelegramId(), e);
+            answer(callbackQuery.getId(), "Не получилось, попробуй чуть позже");
+        } finally {
+            channelCheckInFlight.remove(user.getTelegramId());
+        }
+    }
+
+    private final java.util.Map<Long, Long> sponsorChannelAlertAt = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Бот потерял доступ к каналу спонсора (убрали из админов/удалили канал): игроки не могут сдать квест - предупреждаем админов не чаще раза в 6 часов. */
+    private void alertSponsorChannelCheckFailure(Quest quest, Exception cause) {
+        long now = System.currentTimeMillis();
+        Long last = sponsorChannelAlertAt.get(quest.getId());
+        if (last != null && now - last < 6 * 3_600_000L) return;
+        sponsorChannelAlertAt.put(quest.getId(), now);
+        String text = "⚠️ <b>Не проверяется подписка на канал спонсора</b>\n\n"
+                + "Квест: " + escape(quest.getTitle()) + " (#" + quest.getId() + ")\n"
+                + "Проверьте, что бот всё ещё админ канала. Игроки видят «не удалось проверить».\n"
+                + "Ошибка: " + escape(String.valueOf(cause.getMessage()));
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, text, null);
+            } catch (Exception e) {
+                log.warn("Failed to alert admin {} about sponsor channel check failure", adminId, e);
+            }
+        }
+    }
+
+    /** Бюджет спонсорской кампании выбран до конца: SponsorService уже выключил кампанию и квесты - сообщаем админам итог. */
+    @org.springframework.context.event.EventListener
+    public void onSponsorBudgetExhausted(ru.gamebot.platform.event.SponsorBudgetExhaustedEvent event) {
+        String text = "🏁 <b>Бюджет спонсора выбран</b>\n\n"
+                + "Кампания «" + escape(event.getSponsorName()) + "»: выдано " + fmtExc(event.getSpentExc()) + " из " + fmtExc(event.getBudgetExc()) + " EXC.\n"
+                + "Кампания и её квесты выключены автоматически. Можно отправить спонсору итог.";
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("🤝 Открыть кампанию", "admin:sponsors:view:" + event.getSponsorId()))));
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, text, keyboard);
+            } catch (Exception e) {
+                log.warn("Failed to send sponsor budget alert to admin {}", adminId, e);
+            }
+        }
     }
 
     // ── Sponsor quest creation ───────────────────────────────────────────────

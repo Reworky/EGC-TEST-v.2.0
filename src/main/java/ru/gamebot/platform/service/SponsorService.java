@@ -2,6 +2,7 @@ package ru.gamebot.platform.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.model.Quest;
@@ -26,6 +27,7 @@ public class SponsorService {
     private final QuestRepository questRepository;
     private final QuestSubmissionRepository questSubmissionRepository;
     private final HealthRatioService healthRatioService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public List<Sponsor> findAll() { return sponsorRepository.findAllByOrderByCreatedAtDesc(); }
     public List<Sponsor> findActive() { return sponsorRepository.findAllByActiveTrueOrderByCreatedAtDesc(); }
@@ -66,6 +68,13 @@ public class SponsorService {
         sponsorRepository.findById(sponsorId).ifPresent(s -> {
             s.setSpentExc(s.getSpentExc() + excAmount);
             sponsorRepository.save(s);
+            // Бюджет оплачен спонсором заранее и ограничен: как только выбран - кампания и её квесты выключаются сами
+            // (раньше остаток просто показывался и квест продолжал платить из кармана клуба). Кампании под отчёт (budget=0) не трогаем.
+            if (s.getBudgetExc() > 0 && s.isActive() && s.getSpentExc() >= s.getBudgetExc()) {
+                deactivate(s.getId());
+                eventPublisher.publishEvent(new ru.gamebot.platform.event.SponsorBudgetExhaustedEvent(
+                        this, s.getId(), s.getName(), s.getBudgetExc(), s.getSpentExc()));
+            }
         });
     }
 

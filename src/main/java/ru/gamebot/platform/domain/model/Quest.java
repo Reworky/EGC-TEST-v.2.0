@@ -98,6 +98,13 @@ public class Quest {
 
     private Long sponsorId;
 
+    /** Спонсорский квест «подпишись на канал» с автопроверкой: chat_id или @username канала, где бот админ
+     *  (проверка через getChatMember по кнопке «Я подписался», отчёт и модератор не нужны). null = обычный квест. */
+    private String channelCheckChatId;
+
+    /** Ссылка на канал для кнопки «Открыть канал» (публичная t.me/... или инвайт для закрытого канала). */
+    private String channelCheckUrl;
+
     @Column(columnDefinition = "boolean default false")
     private boolean externalAutoApprove;
 

@@ -789,7 +789,7 @@ public class QuestService {
     @Transactional
     public QuestActionResult submitReportChecked(AppUser user, Quest quest, String mediaType, String fileId,
                                                   String photoUniqueIds, String externalLink, String comment) {
-        if (quest.isExternalAutoApprove() || quest.getBrawlVerifyType() != null
+        if (quest.isExternalAutoApprove() || quest.getChannelCheckChatId() != null || quest.getBrawlVerifyType() != null
                 || quest.getClashVerifyType() != null || quest.getClashRoyaleVerifyType() != null
                 || quest.getDotaVerifyType() != null || quest.getCs2VerifyType() != null
                 || quest.getPubgVerifyType() != null) {
