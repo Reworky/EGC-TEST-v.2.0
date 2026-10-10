@@ -5376,7 +5376,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else {
             rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
         }
-        sendText(user.getTelegramId(),
+        // Баннер «Квесты» (Экси у доски заданий) — тот же файл, что на экране «Квесты и рейтинг».
+        sendResourceBanner(user.getTelegramId(), "quest_banner.png",
                 "🗺️ <b>Квесты</b>\n\nВыберите раздел:",
                 keyboardFactory.rowsLayout(rows));
     }
@@ -6667,7 +6668,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ));
         rows.add(List.of(keyboardFactory.callback("🏅 Таблица лиг", "rate:leagues")));
         rows.add(backRow("menu:cat:more"));
-        sendText(user.getTelegramId(),
+        // Баннер «Рейтинг» (Экси у подиума); подпись короткая, влезает в лимит Telegram.
+        sendResourceBanner(user.getTelegramId(), "rating_banner.jpg",
                 "🏆 <b>Рейтинг</b>\n\n" + leagueLine
                         + "Еженедельно лидеры лиг получают EXC-призы.",
                 keyboardFactory.rowsLayout(rows));
