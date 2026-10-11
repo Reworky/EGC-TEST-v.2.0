@@ -133,17 +133,39 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     long countByTrafficSourceCodeAndWelcomeBonusPaidTrue(String trafficSourceCode);
 
-    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.lastActivityDate = :today")
-    long countActiveOnDate(@Param("today") java.time.LocalDate today);
+    // «Активность» игроков (исправлено 2026-10-11): раньше смотрели только на lastActivityDate - она обновляется текстовыми сообщениями
+    // (и получением ежедневного бонуса), а нажатия кнопок не считались, поэтому «Активны за 7/30 дней», «Заходило сегодня» и возвраты D7/D30
+    // занижались для тех, кто пользуется ботом кнопками. Теперь активен тот, у кого ЛЮБОЙ из трёх признаков (дата сообщения, метка действия в
+    // боте, метка открытия мини-аппа) попадает в период; считаются те же игроки, что в DAU/MAU: прошёл регистрацию или выполнил квест.
+    // Публичные методы остались с прежними сигнатурами (default), поэтому вызывающий код не менялся.
 
-    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.lastActivityDate >= :since")
-    long countActiveSince(@Param("since") java.time.LocalDate since);
+    default long countActiveOnDate(java.time.LocalDate day) {
+        return countActivePlayersOnDay(day, day.atStartOfDay(), day.plusDays(1).atStartOfDay());
+    }
+
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE (u.registrationCompleted = true OR u.completedQuests > 0) "
+            + "AND (u.lastActivityDate = :day OR (u.lastBotActivityAt >= :dayStart AND u.lastBotActivityAt < :dayEnd) "
+            + "OR (u.lastMiniAppOpenAt >= :dayStart AND u.lastMiniAppOpenAt < :dayEnd))")
+    long countActivePlayersOnDay(@Param("day") java.time.LocalDate day, @Param("dayStart") LocalDateTime dayStart, @Param("dayEnd") LocalDateTime dayEnd);
+
+    default long countActiveSince(java.time.LocalDate since) {
+        return countActivePlayersSince(since, since.atStartOfDay());
+    }
+
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE (u.registrationCompleted = true OR u.completedQuests > 0) "
+            + "AND (u.lastActivityDate >= :since OR u.lastBotActivityAt >= :sinceTs OR u.lastMiniAppOpenAt >= :sinceTs)")
+    long countActivePlayersSince(@Param("since") java.time.LocalDate since, @Param("sinceTs") LocalDateTime sinceTs);
 
     /** То же самое ("Активны за N дней", вкладка «Активность»), сегментировано по членству в отряде -
      *  ТЗ EGC_TZ_otryady (2026-10-01), Этап 1. */
-    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.lastActivityDate >= :since "
+    default long countActiveSinceBySquad(java.time.LocalDate since, boolean inSquad) {
+        return countActivePlayersSinceBySquad(since, since.atStartOfDay(), inSquad);
+    }
+
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE (u.registrationCompleted = true OR u.completedQuests > 0) "
+            + "AND (u.lastActivityDate >= :since OR u.lastBotActivityAt >= :sinceTs OR u.lastMiniAppOpenAt >= :sinceTs) "
             + "AND ((:inSquad = true AND u.squadId IS NOT NULL) OR (:inSquad = false AND u.squadId IS NULL))")
-    long countActiveSinceBySquad(@Param("since") java.time.LocalDate since, @Param("inSquad") boolean inSquad);
+    long countActivePlayersSinceBySquad(@Param("since") java.time.LocalDate since, @Param("sinceTs") LocalDateTime sinceTs, @Param("inSquad") boolean inSquad);
 
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.weeklyXp > :weeklyXp")
     long countWithMoreWeeklyXp(@Param("weeklyXp") long weeklyXp);
@@ -154,8 +176,14 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt >= :from AND u.createdAt < :to")
     long countRegisteredBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
-    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt >= :from AND u.createdAt < :to AND u.lastActivityDate >= :activeSince")
-    long countRegisteredBetweenAndActiveSince(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to, @Param("activeSince") java.time.LocalDate activeSince);
+    default long countRegisteredBetweenAndActiveSince(LocalDateTime from, LocalDateTime to, java.time.LocalDate activeSince) {
+        return countCohortActiveSince(from, to, activeSince, activeSince.atStartOfDay());
+    }
+
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt >= :from AND u.createdAt < :to "
+            + "AND (u.lastActivityDate >= :activeSince OR u.lastBotActivityAt >= :activeSinceTs OR u.lastMiniAppOpenAt >= :activeSinceTs)")
+    long countCohortActiveSince(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
+                                @Param("activeSince") java.time.LocalDate activeSince, @Param("activeSinceTs") LocalDateTime activeSinceTs);
 
     /** Та же когорта "возврата" (UserService.retention), сегментированная по ТЕКУЩЕМУ членству в отряде -
      *  см. countDistinctActiveSinceBySquad выше про смысл inSquad и почему не переиспользуется sourceFilter. */
@@ -163,10 +191,16 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
             + "AND ((:inSquad = true AND u.squadId IS NOT NULL) OR (:inSquad = false AND u.squadId IS NULL))")
     long countRegisteredBetweenBySquad(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to, @Param("inSquad") boolean inSquad);
 
-    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt >= :from AND u.createdAt < :to AND u.lastActivityDate >= :activeSince "
+    default long countRegisteredBetweenAndActiveSinceBySquad(LocalDateTime from, LocalDateTime to, java.time.LocalDate activeSince, boolean inSquad) {
+        return countCohortActiveSinceBySquad(from, to, activeSince, activeSince.atStartOfDay(), inSquad);
+    }
+
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt >= :from AND u.createdAt < :to "
+            + "AND (u.lastActivityDate >= :activeSince OR u.lastBotActivityAt >= :activeSinceTs OR u.lastMiniAppOpenAt >= :activeSinceTs) "
             + "AND ((:inSquad = true AND u.squadId IS NOT NULL) OR (:inSquad = false AND u.squadId IS NULL))")
-    long countRegisteredBetweenAndActiveSinceBySquad(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
-                                                      @Param("activeSince") java.time.LocalDate activeSince, @Param("inSquad") boolean inSquad);
+    long countCohortActiveSinceBySquad(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to,
+                                       @Param("activeSince") java.time.LocalDate activeSince, @Param("activeSinceTs") LocalDateTime activeSinceTs,
+                                       @Param("inSquad") boolean inSquad);
 
     long countByRegistrationCompletedTrueAndSquadIdIsNotNull();
 
@@ -178,7 +212,7 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
      *  (см. UserService.churnDayReport). lastActivityDate обновляется на КАЖДОЕ сообщение боту
      *  (registerActivity), поэтому разница с createdAt - надёжный прокси "на какой день человек зашёл
      *  в последний раз", даже без отдельного лога визитов. */
-    @Query("SELECT u.createdAt, u.lastActivityDate FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt <= :maxCreatedAt")
+    @Query("SELECT u.createdAt, u.lastActivityDate, u.lastBotActivityAt, u.lastMiniAppOpenAt FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt <= :maxCreatedAt")
     List<Object[]> findCreatedAtAndLastActivityForChurn(@Param("maxCreatedAt") LocalDateTime maxCreatedAt);
 
     /** Перекрёстная проверка "отряды vs рефералка" (ТЗ EGC_TZ_otryady, рекомендация после Этапа 1, 2026-10-01):

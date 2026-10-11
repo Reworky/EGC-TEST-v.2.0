@@ -12347,7 +12347,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long earned = questService.sumEarnedCoinsByUser(p);
         long paidBefore = rewardService.countPaidWithdrawalsByUser(p);
         long inQueue = rewardService.countPendingWithdrawalsByUser(p);
-        long daysSinceActive = p.getLastActivityDate() == null ? -1 : java.time.temporal.ChronoUnit.DAYS.between(p.getLastActivityDate(), LocalDate.now());
+        LocalDate lastSeen = UserService.lastSeenDate(p);
+        long daysSinceActive = lastSeen == null ? -1 : java.time.temporal.ChronoUnit.DAYS.between(lastSeen, LocalDate.now());
         java.util.List<RewardRequest> destDups = rewardService.findDuplicateDestinationWithdrawals(req);
         java.util.Optional<AppUser> phoneDup = userService.findDuplicatePhoneUser(p.getPhoneNumber(), p.getTelegramId());
 

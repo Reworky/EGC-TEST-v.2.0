@@ -666,6 +666,19 @@ public class UserService {
         return new RegistrationFunnelReport(totalStarted, enteredNickname, stuck, activated);
     }
 
+    /** Последний день, когда игрок что-то делал: максимум из даты последнего текстового сообщения (lastActivityDate) и меток последнего
+     *  действия в боте / открытия мини-аппа. Нужен там, где важна именно дата последнего захода («момент оттока», карточка игрока). */
+    public static LocalDate lastSeenDate(LocalDate lastActivityDate, LocalDateTime lastBotActivityAt, LocalDateTime lastMiniAppOpenAt) {
+        LocalDate best = lastActivityDate;
+        if (lastBotActivityAt != null && (best == null || lastBotActivityAt.toLocalDate().isAfter(best))) best = lastBotActivityAt.toLocalDate();
+        if (lastMiniAppOpenAt != null && (best == null || lastMiniAppOpenAt.toLocalDate().isAfter(best))) best = lastMiniAppOpenAt.toLocalDate();
+        return best;
+    }
+
+    public static LocalDate lastSeenDate(AppUser u) {
+        return lastSeenDate(u.getLastActivityDate(), u.getLastBotActivityAt(), u.getLastMiniAppOpenAt());
+    }
+
     public ChurnDayReport churnDayReport() {
         LocalDateTime maxCreatedAt = LocalDateTime.now().minusDays(CHURN_ANALYSIS_CAP_DAYS);
         List<Object[]> rows = appUserRepository.findCreatedAtAndLastActivityForChurn(maxCreatedAt);
@@ -673,7 +686,8 @@ public class UserService {
         int cohortSize = 0;
         for (Object[] row : rows) {
             LocalDateTime createdAt = (LocalDateTime) row[0];
-            LocalDate lastActivityDate = (LocalDate) row[1];
+            // Последний день захода = максимум из даты последнего сообщения и меток действия в боте/мини-аппе (кнопки раньше не считались)
+            LocalDate lastActivityDate = lastSeenDate((LocalDate) row[1], (LocalDateTime) row[2], (LocalDateTime) row[3]);
             if (createdAt == null || lastActivityDate == null) continue;
             cohortSize++;
             long offset = java.time.temporal.ChronoUnit.DAYS.between(createdAt.toLocalDate(), lastActivityDate);
@@ -1841,8 +1855,8 @@ public class UserService {
     public ZeroQuestBreakdown breakdownZeroQuestUsers(java.time.LocalDateTime from, java.time.LocalDateTime to) {
         List<AppUser> users = appUserRepository.findRegisteredBetweenWithCompletedQuests(from, to, 0);
         long returnedLater = users.stream()
-                .filter(u -> u.getLastActivityDate() != null
-                        && u.getLastActivityDate().isAfter(u.getCreatedAt().toLocalDate()))
+                .filter(u -> lastSeenDate(u) != null
+                        && lastSeenDate(u).isAfter(u.getCreatedAt().toLocalDate()))
                 .count();
         return new ZeroQuestBreakdown(users.size() - returnedLater, returnedLater);
     }
