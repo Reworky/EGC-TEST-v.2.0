@@ -897,6 +897,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if ("chan:here".equals(data)) {
+            handleChannelPresence(callbackQuery, user);
+            return;
+        }
         if ("activation:check".equals(data)) {
             handleActivationCheck(callbackQuery, user);
             return;
@@ -5191,6 +5195,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .append(" EXC и 🎟️ ").append(UserService.DAILY_TASKS_CHEST_TICKETS).append(" билет колеса.\n");
         text.append(claimed ? "\n✅ Сундук заданий сегодня уже получен. Новые задания — завтра."
                 : "\nНовые задания — каждый день.");
+        // Бонус вне сундука (не входит в 3/3): нажатие «👍 Я здесь» под постом в канале, раз в сутки
+        boolean presenceOn = socialTaskService.enabled();
+        boolean presenceDone = presenceOn && socialTaskService.presenceClaimedToday(user);
+        if (presenceOn) {
+            text.append("\n\n").append(presenceDone ? "✅" : "⬜")
+                    .append(" Бонус: загляни в канал и нажми «👍 Я здесь» под постом — +")
+                    .append(ru.gamebot.platform.service.SocialTaskService.PRESENCE_REWARD_EXC).append(" EXC");
+        }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (!claimed && mask == UserService.DAILY_TASKS_ALL) {
             rows.add(List.of(keyboardFactory.callback("🎁 Забрать сундук заданий", "dtasks:claim")));
@@ -5198,6 +5210,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (!bonus) rows.add(List.of(keyboardFactory.callback("📅 Ежедневный бонус", "dtasks:go:daily")));
             if (!quest) rows.add(List.of(keyboardFactory.callback("🗺️ Квесты", "dtasks:go:quests")));
             if (!chest) rows.add(List.of(keyboardFactory.callback("🎁 Сундук дня", "dtasks:go:chest")));
+        }
+        if (presenceOn && !presenceDone) {
+            rows.add(List.of(keyboardFactory.url("📢 Открыть канал", requiredChannelUrl())));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
         sendText(user.getTelegramId(), text.toString(), keyboardFactory.rowsLayout(rows));
@@ -5623,21 +5638,87 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Сбой проверки подписки или начисления награды за соцсети: предупреждаем админов не чаще раза в 6 часов на пару «задание + причина». */
     private void alertSocialTaskFailure(ru.gamebot.platform.service.SocialTaskService.SocialTask task, String reason, Exception cause) {
+        alertSocialAdmins(task.code() + ":" + reason,
+                "⚠️ <b>Задания «Соцсети»: " + escape(reason) + "</b>\n\n"
+                        + "Задание: " + escape(task.title()) + " (" + escape(task.chatId()) + ")\n"
+                        + "Проверьте, что бот админ канала. Игроки видят «не удалось проверить / не получилось».\n"
+                        + "Ошибка: " + escape(String.valueOf(cause.getMessage())));
+    }
+
+    private void alertSocialAdmins(String key, String text) {
         long now = System.currentTimeMillis();
-        String key = task.code() + ":" + reason;
         Long last = socialAlertAt.get(key);
         if (last != null && now - last < 6 * 3_600_000L) return;
         socialAlertAt.put(key, now);
-        String text = "⚠️ <b>Задания «Соцсети»: " + escape(reason) + "</b>\n\n"
-                + "Задание: " + escape(task.title()) + " (" + escape(task.chatId()) + ")\n"
-                + "Проверьте, что бот админ канала. Игроки видят «не удалось проверить / не получилось».\n"
-                + "Ошибка: " + escape(String.valueOf(cause.getMessage()));
         for (Long adminId : adminService.resolvedAdminIds()) {
             try {
                 sendText(adminId, text, null);
             } catch (Exception e) {
                 log.warn("Failed to alert admin {} about social task failure", adminId, e);
             }
+        }
+    }
+
+    // ── «👍 Я здесь»: кнопка под постами в каналах и ежедневная награда за её нажатие ──
+
+    /** Кнопка под каждым постом бота в канале; null, если задания «Соцсети» выключены. */
+    private InlineKeyboardMarkup channelPresenceKeyboard() {
+        if (!socialTaskService.enabled()) return null;
+        return keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback(
+                "👍 Я здесь · +" + ru.gamebot.platform.service.SocialTaskService.PRESENCE_REWARD_EXC + " EXC", "chan:here"))));
+    }
+
+    private final java.util.Set<Long> presenceInFlight = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    private void handleChannelPresence(CallbackQuery callbackQuery, AppUser user) {
+        if (!socialTaskService.enabled()) {
+            answer(callbackQuery.getId(), "Награда сейчас недоступна");
+            return;
+        }
+        if (!user.isRegistrationCompleted()) {
+            answer(callbackQuery.getId(), "Сначала открой бота и пройди регистрацию — тогда награда придёт");
+            return;
+        }
+        if (callbackQuery.getMessage() == null || callbackQuery.getMessage().getChatId() == null) {
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if (socialTaskService.presenceClaimedToday(user)) {
+            answer(callbackQuery.getId(), "Сегодня награда уже получена. Приходи завтра!");
+            return;
+        }
+        if (!presenceInFlight.add(user.getTelegramId())) {
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        try {
+            boolean member;
+            try {
+                member = isChannelMember(callbackQuery.getMessage().getChatId().toString(), user.getTelegramId());
+            } catch (TelegramApiException e) {
+                log.warn("Presence membership check failed: user {}", user.getTelegramId(), e);
+                answer(callbackQuery.getId(), "Не удалось проверить, попробуй чуть позже");
+                return;
+            }
+            if (!member) {
+                answer(callbackQuery.getId(), "Подпишись на канал, чтобы получить награду");
+                return;
+            }
+            switch (socialTaskService.claimPresence(user)) {
+                case OK -> answer(callbackQuery.getId(),
+                        "✅ +" + ru.gamebot.platform.service.SocialTaskService.PRESENCE_REWARD_EXC + " EXC за заход в канал. До завтра!");
+                case ALREADY_TODAY -> answer(callbackQuery.getId(), "Сегодня награда уже получена. Приходи завтра!");
+                case CAP_REACHED -> answer(callbackQuery.getId(), "Награды за заход на сегодня закончились. Приходи завтра!");
+                case DISABLED -> answer(callbackQuery.getId(), "Награда сейчас недоступна");
+            }
+        } catch (Exception e) {
+            log.error("Channel presence claim failed: user {}", user.getTelegramId(), e);
+            answer(callbackQuery.getId(), "Не получилось, попробуй чуть позже");
+            alertSocialAdmins("presence:error",
+                    "⚠️ <b>«👍 Я здесь»: ошибка начисления награды</b>\n\nИгроки видят «не получилось». Ошибка: "
+                            + escape(String.valueOf(e.getMessage())));
+        } finally {
+            presenceInFlight.remove(user.getTelegramId());
         }
     }
 
@@ -12932,6 +13013,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     msg.setChatId(requiredChannelChatId());
                     msg.setText(text);
                     msg.setParseMode("HTML");
+                    msg.setReplyMarkup(channelPresenceKeyboard());
                     execute(msg);
                 } catch (Exception e) {
                     log.error("Failed to post approved squad teaser to channel", e);
@@ -12978,7 +13060,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             if (op.equals("approve")) {
                 try {
-                    sendBannerAndText(requiredChannelChatId(), tOpt.get().getPhotoFileId(), text, null);
+                    sendBannerAndText(requiredChannelChatId(), tOpt.get().getPhotoFileId(), text, channelPresenceKeyboard());
                     saveTournamentFeedText(tid, null);
                     clearInlineKeyboard(callbackQuery);
                     answer(callbackQuery.getId(), "✅ Опубликовано");
@@ -13010,6 +13092,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     msg.setChatId(requiredChannelChatId());
                     msg.setText(text);
                     msg.setParseMode("HTML");
+                    msg.setReplyMarkup(channelPresenceKeyboard());
                     execute(msg);
                 } catch (Exception e) {
                     log.error("Failed to post approved ticket raffle results to channel", e);
@@ -13045,6 +13128,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     msg.setChatId(requiredChannelChatId());
                     msg.setText(text);
                     msg.setParseMode("HTML");
+                    msg.setReplyMarkup(channelPresenceKeyboard());
                     execute(msg);
                 } catch (Exception e) {
                     log.error("Failed to post approved weekend boost announcement to channel", e);
@@ -13080,6 +13164,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     msg.setChatId(requiredChannelChatId());
                     msg.setText(text);
                     msg.setParseMode("HTML");
+                    msg.setReplyMarkup(channelPresenceKeyboard());
                     execute(msg);
                 } catch (Exception e) {
                     log.error("Failed to post approved weekly review summary to channel", e);
@@ -13121,6 +13206,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     photo.setPhoto(new InputFile(receiptFileId));
                     photo.setCaption(text);
                     photo.setParseMode("HTML");
+                    photo.setReplyMarkup(channelPresenceKeyboard());
                     execute(photo);
                 } else {
                     SendMessage msg = new SendMessage();
@@ -13128,6 +13214,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     msg.setText(text);
                     msg.setParseMode("HTML");
                     msg.setDisableWebPagePreview(true);
+                    msg.setReplyMarkup(channelPresenceKeyboard());
                     execute(msg);
                 }
             } catch (Exception e) {
@@ -16832,6 +16919,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             msg.setChatId(requiredChannelChatId());
             msg.setText(sb.toString());
             msg.setParseMode("HTML");
+            msg.setReplyMarkup(channelPresenceKeyboard());
             execute(msg);
         } catch (Exception e) {
             log.error("Failed to publish poll results for poll {}", poll.getId(), e);
@@ -18901,7 +18989,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             long bullets = d.getPostText().lines().filter(l -> l.startsWith("• ")).count();
             if (bullets < 3 || d.getPhotoFileId() == null || d.getPhotoFileId().isBlank()) return false;
-            sendBannerAndText(channelTargetFor(d.getType()), d.getPhotoFileId(), d.getPostText(), null);
+            sendBannerAndText(channelTargetFor(d.getType()), d.getPhotoFileId(), d.getPostText(), channelPresenceKeyboard());
             channelContentService.markPublished(draftId);
             String notice = "📣 <b>Пост о смене квестов опубликован автоматически</b>\n\n" + d.getPostText();
             for (Long adminId : adminService.resolvedAdminIds()) {
@@ -19000,7 +19088,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         switch (parts[0]) {
             case "approve" -> {
                 try {
-                    sendBannerAndText(channelTargetFor(d.getType()), d.getPhotoFileId(), d.getPostText(), null);
+                    sendBannerAndText(channelTargetFor(d.getType()), d.getPhotoFileId(), d.getPostText(), channelPresenceKeyboard());
                     channelContentService.markPublished(draftId);
                     clearInlineKeyboard(callbackQuery);
                     answer(callbackQuery.getId(), "✅ Опубликовано");

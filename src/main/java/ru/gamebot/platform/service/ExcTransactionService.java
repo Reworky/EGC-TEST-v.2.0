@@ -29,6 +29,8 @@ public class ExcTransactionService {
     public static final String DAILY_TASKS = "DAILY_TASKS";
     /** Разовая награда за задание «Соцсети» (2026-10-11, SocialTaskService): подписка на наш канал. */
     public static final String SOCIAL_TASK = "SOCIAL_TASK";
+    /** Ежедневная награда «👍 Я здесь» за нажатие кнопки под постом в канале - ОТДЕЛЬНЫЙ тип от SOCIAL_TASK: по нему считается суточный потолок выдачи. */
+    public static final String CHANNEL_PRESENCE = "CHANNEL_PRESENCE";
     public static final String SECOND_QUEST_NUDGE = "SECOND_QUEST_NUDGE";
     public static final String SHOP_BUY   = "SHOP_BUY";
     public static final String SHOP_REFUND= "SHOP_REFUND";
@@ -150,6 +152,7 @@ public class ExcTransactionService {
             case SQUAD_GOAL -> "🎯 Командная цель отряда";
             case DAILY_TASKS -> "📋 Сундук заданий дня";
             case SOCIAL_TASK -> "🌐 Соцсети";
+            case CHANNEL_PRESENCE -> "👍 Заход в канал";
             default             -> "📌 Прочее";
         };
     }
