@@ -62,7 +62,7 @@ ORDER BY active_30d DESC;
 -- 3) Реальный дневной ряд по СОБЫТИЯМ (не зависит от того, что поле захода хранит только первый заход дня):
 --    «действовали» = были начисления/списания EXC или взяли/сдали квест в этот день. Это нижняя граница DAU (кто только
 --    открыл бота и ничего не сделал, сюда не попадает), зато цифра по каждому дню честная.
-SELECT d AS day, COUNT(DISTINCT uid) AS players_with_action
+SELECT d AS activity_day, COUNT(DISTINCT uid) AS players_with_action
 FROM (
   SELECT CAST(t.created_at AS DATE) AS d, t.user_id AS uid FROM exc_transactions t
   WHERE t.created_at >= DATEADD('DAY', -14, CURRENT_TIMESTAMP)
