@@ -8523,6 +8523,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendResourceBanner(user.getTelegramId(), "brawl_passes_banner.png", passesText, keyboardFactory.rowsLayout(rows));
             return;
         }
+        if ("clash_royale".equals(gameKey)) {
+            sendResourceBanner(user.getTelegramId(), "cr_pass_banner.jpg", passesText, keyboardFactory.rowsLayout(rows));
+            return;
+        }
         sendText(user.getTelegramId(), passesText, keyboardFactory.rowsLayout(rows));
     }
 
@@ -20165,6 +20169,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendResourceBanner(user.getTelegramId(),
                     "brawlpassplus".equals(pkg.key()) ? "brawl_pass_plus_banner.png" : "brawl_pass_banner.png",
                     methodText, keyboardFactory.rowsLayout(rows));
+            return;
+        }
+        if ("clash_royale".equals(gameKey) && pkg.gems() <= 0) { // сезонные пропуски Clash Royale (Mini/Diamond Pass)
+            sendResourceBanner(user.getTelegramId(), "cr_pass_banner.jpg", methodText, keyboardFactory.rowsLayout(rows));
             return;
         }
         sendText(user.getTelegramId(), methodText, keyboardFactory.rowsLayout(rows));
