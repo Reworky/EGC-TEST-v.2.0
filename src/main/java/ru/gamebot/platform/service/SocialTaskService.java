@@ -25,8 +25,6 @@ import ru.gamebot.platform.domain.repository.SocialTaskClaimRepository;
 @RequiredArgsConstructor
 public class SocialTaskService {
 
-    public static final String MAIN_CODE = "main";
-    public static final long MAIN_REWARD_EXC = 50;
     public static final String PAYOUTS_CODE = "payouts";
     public static final long PAYOUTS_REWARD_EXC = 100;
     private static final String ENABLED_KEY = "social_tasks.enabled";
@@ -56,19 +54,9 @@ public class SocialTaskService {
         }
     }
 
-    /** Порядок = порядок в списке у игрока: основной канал первым. */
+    /** Порядок = порядок в списке у игрока. Основной канал в список не входит: подписка на него и так обязательна для квестов. */
     public List<SocialTask> tasks() {
         List<SocialTask> list = new ArrayList<>();
-        String mainChat = mainChatId();
-        if (mainChat != null) {
-            list.add(new SocialTask(
-                    MAIN_CODE,
-                    "📢 Основной канал клуба",
-                    "Новости, новые квесты, розыгрыши и итоги недели — всё главное про клуб. Подпишись, чтобы ничего не пропускать.",
-                    mainChat,
-                    mainUrl(),
-                    MAIN_REWARD_EXC));
-        }
         String username = appProperties.getPayoutChannelUsername();
         if (username != null && !username.isBlank()) {
             String chatId = username.startsWith("@") ? username : "@" + username;
@@ -81,21 +69,6 @@ public class SocialTaskService {
                     PAYOUTS_REWARD_EXC));
         }
         return list;
-    }
-
-    private String mainChatId() {
-        String id = appProperties.getRequiredChannelId();
-        if (id != null && !id.isBlank()) return id.trim();
-        String username = appProperties.getRequiredChannelUsername();
-        return username == null || username.isBlank() ? null : username.trim();
-    }
-
-    private String mainUrl() {
-        String url = appProperties.getRequiredChannelUrl();
-        if (url != null && !url.isBlank()) return url.trim();
-        String username = appProperties.getRequiredChannelUsername();
-        if (username != null && !username.isBlank()) return "https://t.me/" + username.replace("@", "").trim();
-        return "https://t.me/exgamingclub";
     }
 
     public Optional<SocialTask> find(String code) {
