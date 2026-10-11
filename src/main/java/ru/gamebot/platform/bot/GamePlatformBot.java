@@ -2206,11 +2206,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     }
                 }
                 String kind = session.getData().getOrDefault("fin_kind", ru.gamebot.platform.domain.model.FinanceEntry.OTHER);
-                financeService.add(kind, amount, entryDate, note);
+                // Запись пока не сохраняем: следующим шагом админ выбирает, какую долю суммы направить в фонд выплат (admin:fin:pool:N)
+                session.getData().put("fin_amount", String.valueOf(amount));
+                session.getData().put("fin_date", entryDate.toString());
+                session.getData().put("fin_note", note);
                 session.setState(SessionState.NONE);
-                sendText(user.getTelegramId(), "✅ Записано: " + ru.gamebot.platform.domain.model.FinanceEntry.kindLabel(kind) + ", " + amount + " ₽ ("
-                                + entryDate.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + ")",
-                        backMenuKeyboard("admin:an:tab:PNL"));
+                String hint = ru.gamebot.platform.domain.model.FinanceEntry.SPONSOR.equals(kind) ? "\n\nДля спонсоров обычно 70% (30% — комиссия клуба)." : "";
+                sendText(user.getTelegramId(),
+                        "💵 <b>" + ru.gamebot.platform.domain.model.FinanceEntry.kindLabel(kind) + ": " + amount + " ₽</b> ("
+                                + entryDate.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + ")\n\n"
+                                + "Какую долю направить в фонд выплат? Доход запишется в любом случае." + hint,
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("0% — только записать", "admin:fin:pool:0"),
+                                        keyboardFactory.callback("30%", "admin:fin:pool:30")),
+                                List.of(keyboardFactory.callback("50%", "admin:fin:pool:50"),
+                                        keyboardFactory.callback("70%", "admin:fin:pool:70")),
+                                List.of(keyboardFactory.callback("100% в фонд", "admin:fin:pool:100")),
+                                List.of(keyboardFactory.callback("❌ Отмена", "admin:fin:cancel")))));
             }
             case INC_INPUT -> {
                 String title = text.trim();
@@ -14251,7 +14263,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 long pendingW = rewardService.findPendingWithdrawals().size();
                 rows.add(List.of(keyboardFactory.callback(pendingW > 0 ? "💸 Заявки на вывод (" + pendingW + ")" : "💸 Заявки на вывод", "admin:withdrawals")));
                 rows.add(List.of(keyboardFactory.callback("🎁 Магазин наград", "admin:rewards")));
-                rows.add(List.of(keyboardFactory.callback("💳 Пополнить Payout Pool", "admin:payout")));
+                rows.add(List.of(keyboardFactory.callback("💵 Доходы клуба (записать / в фонд)", "admin:fin:add")));
                 rows.add(List.of(keyboardFactory.callback("📒 Финансовая сводка (P&L)", "admin:an:tab:PNL")));
                 rows.add(List.of(keyboardFactory.callback("💰 Экономика и выплаты", "admin:an:tab:ECONOMY")));
                 rows.add(List.of(keyboardFactory.callback("🤝 Экономика рефералки", "admin:stats:referral")));
@@ -14568,11 +14580,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void handleFinanceAction(AppUser user, UserSession session, String action) {
         String[] p = action.split(":");
         switch (p[0]) {
-            case "add" -> sendText(user.getTelegramId(), "💵 <b>Записать доход</b>\n\nВыберите вид дохода:",
+            case "add" -> sendText(user.getTelegramId(), "💵 <b>Доходы клуба</b>\n\nЕдиное место, куда вносятся доходы: запись попадёт в финансовую сводку, "
+                            + "а следующим шагом выберете, какую долю направить в фонд выплат (от неё зависит курс вывода игрокам).\n\n"
+                            + "Спонсорские кампании записываются сами при создании и докупке. Выберите вид дохода:",
                     keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("Спонсор (платёж вручную)", "admin:fin:kind:" + ru.gamebot.platform.domain.model.FinanceEntry.SPONSOR)),
                             List.of(keyboardFactory.callback("Прямая реклама (комиссия менеджера)", "admin:fin:kind:" + ru.gamebot.platform.domain.model.FinanceEntry.DIRECT_ADS)),
                             List.of(keyboardFactory.callback("Yandex РСЯ", "admin:fin:kind:" + ru.gamebot.platform.domain.model.FinanceEntry.YANDEX_RSYA)),
                             List.of(keyboardFactory.callback("Прочее", "admin:fin:kind:" + ru.gamebot.platform.domain.model.FinanceEntry.OTHER)),
+                            List.of(keyboardFactory.callback("💳 Только пополнить фонд (не доход)", "admin:payout")),
                             List.of(keyboardFactory.callback("⬅️ Назад", "admin:an:tab:PNL")))));
             case "kind" -> {
                 String kind = p.length > 1 ? p[1] : ru.gamebot.platform.domain.model.FinanceEntry.OTHER;
@@ -14596,6 +14612,45 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
                 rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:an:tab:PNL")));
                 sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+            }
+            case "pool" -> {
+                // Сохранение дохода + доля в фонд выплат. Данные берём из сессии и сразу очищаем: повторное нажатие ничего не задвоит.
+                String amountStr = session.getData().remove("fin_amount");
+                String dateStr = session.getData().remove("fin_date");
+                String noteStr = session.getData().remove("fin_note");
+                String kind = session.getData().getOrDefault("fin_kind", ru.gamebot.platform.domain.model.FinanceEntry.OTHER);
+                int pct = p.length > 1 && parseLong(p[1]) != null ? (int) Math.max(0, Math.min(100, parseLong(p[1]))) : 0;
+                if (amountStr == null) {
+                    sendText(user.getTelegramId(), "ℹ️ Эта запись уже сохранена или устарела. Чтобы внести доход, откройте «💵 Доходы клуба».",
+                            backMenuKeyboard("admin:an:tab:PNL"));
+                    return;
+                }
+                long amount = Long.parseLong(amountStr);
+                java.time.LocalDate entryDate = dateStr == null ? java.time.LocalDate.now() : java.time.LocalDate.parse(dateStr);
+                long poolAmount = Math.round(amount * pct / 100.0);
+                String note = noteStr == null ? "" : noteStr;
+                if (poolAmount > 0) {
+                    note = (note.isBlank() ? "" : note + " ") + "(в фонд " + poolAmount + " ₽)";
+                }
+                financeService.add(kind, amount, entryDate, note);
+                StringBuilder done = new StringBuilder("✅ Записано: " + ru.gamebot.platform.domain.model.FinanceEntry.kindLabel(kind) + ", " + amount + " ₽ ("
+                        + entryDate.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + ")");
+                if (poolAmount > 0) {
+                    healthRatioService.addToPayoutPool(poolAmount, user.getTelegramId());
+                    int ratioPercent = (int) Math.round(healthRatioService.getCurrentRatio() * 100);
+                    done.append("\n💳 В фонд выплат: <b>").append(poolAmount).append(" ₽</b> (").append(pct)
+                            .append("%). Состояние фонда: <b>").append(ratioPercent).append("%</b>");
+                } else {
+                    done.append("\n💳 В фонд выплат ничего не направлено.");
+                }
+                session.getData().remove("fin_kind");
+                sendText(user.getTelegramId(), done.toString(), backMenuKeyboard("admin:an:tab:PNL"));
+            }
+            case "cancel" -> {
+                session.getData().remove("fin_amount");
+                session.getData().remove("fin_date");
+                session.getData().remove("fin_note");
+                sendText(user.getTelegramId(), "Отменено, ничего не записано.", backMenuKeyboard("admin:an:tab:PNL"));
             }
             case "del" -> {
                 Long id = p.length > 1 ? parseLong(p[1]) : null;

@@ -27,6 +27,7 @@ public class SponsorService {
     private final QuestRepository questRepository;
     private final QuestSubmissionRepository questSubmissionRepository;
     private final HealthRatioService healthRatioService;
+    private final FinanceService financeService;
     private final ApplicationEventPublisher eventPublisher;
 
     public List<Sponsor> findAll() { return sponsorRepository.findAllByOrderByCreatedAtDesc(); }
@@ -58,9 +59,20 @@ public class SponsorService {
             healthRatioService.addToPayoutPool(poolAmount, adminTelegramId);
             log.info("Sponsor '{}' funded payout pool: {}₽ (commission {}₽)",
                     name, poolAmount, paidRub - poolAmount);
+            recordSponsorIncome(paidRub, "Спонсор «" + name + "»" + (campaignName == null || campaignName.isBlank() ? "" : ", кампания «" + campaignName + "»")
+                    + " (в фонд " + poolAmount + " ₽)");
         }
 
         return s;
+    }
+
+    /** Платёж спонсора попадает в финансовую сводку сам (единый учёт доходов). Сбой записи не должен ломать создание кампании и пополнение фонда. */
+    private void recordSponsorIncome(long amountRub, String note) {
+        try {
+            financeService.add(ru.gamebot.platform.domain.model.FinanceEntry.SPONSOR, amountRub, java.time.LocalDate.now(), note);
+        } catch (Exception e) {
+            log.warn("Failed to record sponsor income {}₽ ({})", amountRub, note, e);
+        }
     }
 
     @Transactional
@@ -99,7 +111,9 @@ public class SponsorService {
             questRepository.save(q);
         }
         if (extraRub > 0) {
-            healthRatioService.addToPayoutPool(Math.round(extraRub * (1 - COMMISSION_RATE)), adminTelegramId);
+            long extraPool = Math.round(extraRub * (1 - COMMISSION_RATE));
+            healthRatioService.addToPayoutPool(extraPool, adminTelegramId);
+            recordSponsorIncome(extraRub, "Докупка подписчиков: " + s.getName() + " (+" + extraSubs + " мест, в фонд " + extraPool + " ₽)");
         }
         return Math.max(0, main.getParticipantLimit() - questSubmissionRepository.countApprovedByQuest(main));
     }

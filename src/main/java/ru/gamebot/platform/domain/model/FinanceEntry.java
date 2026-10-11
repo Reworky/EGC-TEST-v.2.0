@@ -21,6 +21,7 @@ public class FinanceEntry {
 
     public static final String DIRECT_ADS = "DIRECT_ADS";
     public static final String YANDEX_RSYA = "YANDEX_RSYA";
+    public static final String SPONSOR = "SPONSOR";
     public static final String OTHER = "OTHER";
 
     @Id
@@ -46,6 +47,7 @@ public class FinanceEntry {
         return switch (kind == null ? "" : kind) {
             case DIRECT_ADS -> "Прямая реклама";
             case YANDEX_RSYA -> "Yandex РСЯ";
+            case SPONSOR -> "Спонсоры";
             default -> "Прочее";
         };
     }
