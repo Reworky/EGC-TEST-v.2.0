@@ -26,7 +26,7 @@ import ru.gamebot.platform.domain.repository.SocialTaskClaimRepository;
 public class SocialTaskService {
 
     public static final String MAIN_CODE = "main";
-    public static final long MAIN_REWARD_EXC = 100;
+    public static final long MAIN_REWARD_EXC = 50;
     public static final String PAYOUTS_CODE = "payouts";
     public static final long PAYOUTS_REWARD_EXC = 100;
     private static final String ENABLED_KEY = "social_tasks.enabled";
