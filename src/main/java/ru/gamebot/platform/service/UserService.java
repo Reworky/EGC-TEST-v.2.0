@@ -506,15 +506,17 @@ public class UserService {
         return appUserRepository.countNewUsersSince(since);
     }
 
-    /** Троттлинг раз в день на запись (не на чтение) — иначе каждое сообщение/callback в боте писало бы
-     *  в БД, а бот получает такие апдейты на порядки чаще, чем открытия мини-аппа. */
+    /** Троттлинг раз в ЧАС на запись (не на чтение) — иначе каждое сообщение/callback в боте писало бы
+     *  в БД, а бот получает такие апдейты на порядки чаще, чем открытия мини-аппа. Раньше писали раз в сутки (время ПЕРВОГО захода
+     *  дня), из-за чего вечерняя активность не попадала в скользящее окно DAU «24 ч»; теперь метка ≤ часа от последнего действия
+     *  (исправлено 2026-10-11). */
     @Transactional
     public void touchBotActivity(Long telegramId) {
         AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
         if (user == null) return;
         notificationGate.markReturnIfNeeded(user);
         LocalDateTime now = LocalDateTime.now();
-        if (user.getLastBotActivityAt() != null && user.getLastBotActivityAt().toLocalDate().equals(now.toLocalDate())) {
+        if (user.getLastBotActivityAt() != null && user.getLastBotActivityAt().isAfter(now.minusHours(1))) {
             return;
         }
         user.setLastBotActivityAt(now);
@@ -527,7 +529,7 @@ public class UserService {
         if (user == null) return;
         notificationGate.markReturnIfNeeded(user);
         LocalDateTime now = LocalDateTime.now();
-        if (user.getLastMiniAppOpenAt() != null && user.getLastMiniAppOpenAt().toLocalDate().equals(now.toLocalDate())) {
+        if (user.getLastMiniAppOpenAt() != null && user.getLastMiniAppOpenAt().isAfter(now.minusHours(1))) {
             return;
         }
         user.setLastMiniAppOpenAt(now);
@@ -573,8 +575,8 @@ public class UserService {
         LocalDateTime maxCreatedAt = "ORGANIC".equals(sourceFilter)
                 ? LocalDateTime.now().minusDays(ORGANIC_MIN_ACCOUNT_AGE_DAYS) : null;
 
-        long dau = appUserRepository.countDistinctActiveSince(since1d.toLocalDate(), since1d, sourceFilter, maxCreatedAt);
-        long mau = appUserRepository.countDistinctActiveSince(since30d.toLocalDate(), since30d, sourceFilter, maxCreatedAt);
+        long dau = appUserRepository.countDistinctActiveSince(since1d, sourceFilter, maxCreatedAt);
+        long mau = appUserRepository.countDistinctActiveSince(since30d, sourceFilter, maxCreatedAt);
         double dauMauPercent = mau > 0 ? dau * 100.0 / mau : 0;
 
         long weeklyQuestTakers = questSubmissionRepository.countDistinctUsersWithApprovedSince(since7d, sourceFilter, maxCreatedAt);
@@ -622,8 +624,8 @@ public class UserService {
         for (boolean inSquad : new boolean[]{true, false}) {
             for (boolean referred : new boolean[]{true, false}) {
                 long segmentSize = appUserRepository.countBySquadAndReferral(inSquad, referred);
-                long dau = appUserRepository.countDistinctActiveSinceBySquadAndReferral(since1d.toLocalDate(), since1d, inSquad, referred);
-                long mau = appUserRepository.countDistinctActiveSinceBySquadAndReferral(since30d.toLocalDate(), since30d, inSquad, referred);
+                long dau = appUserRepository.countDistinctActiveSinceBySquadAndReferral(since1d, inSquad, referred);
+                long mau = appUserRepository.countDistinctActiveSinceBySquadAndReferral(since30d, inSquad, referred);
                 double pct = mau > 0 ? dau * 100.0 / mau : 0;
                 out.add(new SquadReferralCell(inSquad, referred, segmentSize, dau, mau, pct));
             }
@@ -713,8 +715,8 @@ public class UserService {
         LocalDateTime since7d = LocalDateTime.now().minusDays(7);
         LocalDateTime since30d = LocalDateTime.now().minusDays(30);
 
-        long dau = appUserRepository.countDistinctActiveSinceBySquad(since1d.toLocalDate(), since1d, inSquad);
-        long mau = appUserRepository.countDistinctActiveSinceBySquad(since30d.toLocalDate(), since30d, inSquad);
+        long dau = appUserRepository.countDistinctActiveSinceBySquad(since1d, inSquad);
+        long mau = appUserRepository.countDistinctActiveSinceBySquad(since30d, inSquad);
         double dauMauPercent = mau > 0 ? dau * 100.0 / mau : 0;
 
         long weeklyQuestTakers = questSubmissionRepository.countDistinctUsersWithApprovedSinceBySquad(since7d, inSquad);

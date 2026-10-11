@@ -29,14 +29,12 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     long countByLastMiniAppOpenAtAfter(LocalDateTime since);
 
-    /** Уникальные активные игроки за период. Намеренно смотрит на 3 поля, не только на lastBotActivityAt/
-     *  lastMiniAppOpenAt: те завели только 2026-09-08 ("замер активности бот vs мини-апп"), поэтому для
-     *  30-дневного окна их одних не хватает — первые ~24 дня этого окна для них попросту NULL, что молча
-     *  занижает счётчик (реальный инцидент: MAU по этим двум полям 160 vs 911 по lastActivityDate на ту же
-     *  дату). lastActivityDate ведётся с самого начала проекта — добавляем его как OR, чтобы не терять
-     *  историю, накопленную до 09-08. Основа для DAU/MAU (см. UserService.getEngagementReport). */
-    @Query("SELECT COUNT(DISTINCT u) FROM AppUser u WHERE u.lastActivityDate >= :sinceDate OR u.lastBotActivityAt >= :sinceDateTime OR u.lastMiniAppOpenAt >= :sinceDateTime")
-    long countDistinctActiveSince(@Param("sinceDate") java.time.LocalDate sinceDate, @Param("sinceDateTime") LocalDateTime sinceDateTime);
+    /* Определение «активного игрока» для DAU/MAU (исправлено 2026-10-11): (1) только ИГРОКИ - прошедшие регистрацию (подписка на канал)
+     *  ИЛИ выполнившие хотя бы один квест (после онбординга v2 первый квест можно взять без подписки); разовые заходы по рекламе
+     *  без регистрации раньше раздували MAU более чем вдвое (57% «активных» давали ~8 заходов в сутки); (2) активность - только по
+     *  временным меткам lastBotActivityAt (любое действие в боте, в том числе нажатия кнопок) и lastMiniAppOpenAt: окна DAU/MAU теперь
+     *  скользящие и одинаковые. Поле lastActivityDate (дата, обновляется только текстовыми сообщениями) из расчёта убрано: метки
+     *  заведены 08.09.2026, а 30-дневное окно полностью лежит после этой даты. */
 
     /** То же самое, с фильтром по источнику трафика (см. UserService.getEngagementReport) — sourceFilter:
      *  null = вся аудитория, "ORGANIC" = только trafficSourceCode IS NULL (органика/реферал), иначе —
@@ -45,19 +43,21 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
      *  попадает партия только что зарегистрированных, которые технически "активны" просто потому что
      *  недавно зашли, ещё не успели ни прижиться, ни отвалиться — это раздувает цифру до того, как
      *  станет ясно, реальные это игроки или нет. null = без этого ограничения. */
-    @Query("SELECT COUNT(DISTINCT u) FROM AppUser u WHERE (u.lastActivityDate >= :sinceDate OR u.lastBotActivityAt >= :sinceDateTime OR u.lastMiniAppOpenAt >= :sinceDateTime) "
+    @Query("SELECT COUNT(DISTINCT u) FROM AppUser u WHERE (u.lastBotActivityAt >= :sinceDateTime OR u.lastMiniAppOpenAt >= :sinceDateTime) "
+            + "AND (u.registrationCompleted = true OR u.completedQuests > 0) "
             + "AND (:sourceFilter IS NULL OR (:sourceFilter = 'ORGANIC' AND u.trafficSourceCode IS NULL) OR u.trafficSourceCode = :sourceFilter) "
             + "AND (:maxCreatedAt IS NULL OR u.createdAt <= :maxCreatedAt)")
-    long countDistinctActiveSince(@Param("sinceDate") java.time.LocalDate sinceDate, @Param("sinceDateTime") LocalDateTime sinceDateTime,
+    long countDistinctActiveSince(@Param("sinceDateTime") LocalDateTime sinceDateTime,
                                    @Param("sourceFilter") String sourceFilter, @Param("maxCreatedAt") LocalDateTime maxCreatedAt);
 
     /** То же самое, с сегментацией по членству в отряде вместо источника трафика - разовая диагностика
      *  гипотезы "отряды удерживают активность" (ТЗ EGC_TZ_otryady, 2026-10-01), Этап 1. inSquad=true -
      *  squadId IS NOT NULL, false - IS NULL. Отдельный метод, а не переиспользование sourceFilter: это
      *  два разных среза аудитории, смешивать их в одном параметре было бы путаницей осей. */
-    @Query("SELECT COUNT(DISTINCT u) FROM AppUser u WHERE (u.lastActivityDate >= :sinceDate OR u.lastBotActivityAt >= :sinceDateTime OR u.lastMiniAppOpenAt >= :sinceDateTime) "
+    @Query("SELECT COUNT(DISTINCT u) FROM AppUser u WHERE (u.lastBotActivityAt >= :sinceDateTime OR u.lastMiniAppOpenAt >= :sinceDateTime) "
+            + "AND (u.registrationCompleted = true OR u.completedQuests > 0) "
             + "AND ((:inSquad = true AND u.squadId IS NOT NULL) OR (:inSquad = false AND u.squadId IS NULL))")
-    long countDistinctActiveSinceBySquad(@Param("sinceDate") java.time.LocalDate sinceDate, @Param("sinceDateTime") LocalDateTime sinceDateTime,
+    long countDistinctActiveSinceBySquad(@Param("sinceDateTime") LocalDateTime sinceDateTime,
                                           @Param("inSquad") boolean inSquad);
 
     /**
@@ -194,10 +194,11 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     @Query("SELECT u.id FROM AppUser u WHERE u.lastActivityDate >= :sinceDate OR u.lastBotActivityAt >= :sinceDateTime OR u.lastMiniAppOpenAt >= :sinceDateTime")
     List<Long> findActiveUserIdsSince(@Param("sinceDate") java.time.LocalDate sinceDate, @Param("sinceDateTime") LocalDateTime sinceDateTime);
 
-    @Query("SELECT COUNT(DISTINCT u) FROM AppUser u WHERE (u.lastActivityDate >= :sinceDate OR u.lastBotActivityAt >= :sinceDateTime OR u.lastMiniAppOpenAt >= :sinceDateTime) "
+    @Query("SELECT COUNT(DISTINCT u) FROM AppUser u WHERE (u.lastBotActivityAt >= :sinceDateTime OR u.lastMiniAppOpenAt >= :sinceDateTime) "
+            + "AND (u.registrationCompleted = true OR u.completedQuests > 0) "
             + "AND ((:inSquad = true AND u.squadId IS NOT NULL) OR (:inSquad = false AND u.squadId IS NULL)) "
             + "AND ((:referred = true AND u.referredByTelegramId IS NOT NULL) OR (:referred = false AND u.referredByTelegramId IS NULL))")
-    long countDistinctActiveSinceBySquadAndReferral(@Param("sinceDate") java.time.LocalDate sinceDate, @Param("sinceDateTime") LocalDateTime sinceDateTime,
+    long countDistinctActiveSinceBySquadAndReferral(@Param("sinceDateTime") LocalDateTime sinceDateTime,
                                                      @Param("inSquad") boolean inSquad, @Param("referred") boolean referred);
 
     /** Воронка "сколько квестов реально сделал новый игрок" — для диагностики, отваливаются ли
