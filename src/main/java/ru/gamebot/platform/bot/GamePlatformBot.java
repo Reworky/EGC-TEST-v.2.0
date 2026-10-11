@@ -18556,7 +18556,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ));
         String msg = "🔥 <b>Серия из " + event.getStreakDays() + " дней под угрозой!</b>\n\n"
                 + "Ты не заходил сегодня. Дни считаются по UTC: серия сгорит в <b>00:00 UTC</b> (это 03:00 по Москве).\n\n"
-                + "Нажми кнопку ниже до этого времени — я подтвержу, что серия сохранена. Если не успеешь, я тоже напишу.";
+                + "Нажми кнопку ниже до этого времени — серия сохранится, и сразу сможешь забрать ежедневный бонус. Если не успеешь, я тоже напишу.";
         try {
             sendText(event.getTelegramId(), msg, keyboard);
         } catch (Exception e) {
@@ -18625,9 +18625,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (lastBefore.equals(today)) return;
             if (lastBefore.plusDays(1).equals(today)) {
                 if (startText != null && startText.trim().endsWith(" streak")) {
+                    // Серию сохраняет сам заход, а ежедневный бонус нужно забрать отдельно - раньше после кнопки из уведомления игрок
+                    // оставался в меню и бонус (до 500 EXC) оставался нетронутым днями (разбор игрока 7770977063, 11.10.2026).
+                    boolean bonusLeft = userService.isDailyBonusAvailable(user);
+                    long bonusExc = Math.min(150L + (long) (user.getStreakDays() - 1) * 50, 500L);
                     sendText(user.getTelegramId(),
                             "✅ <b>Успел! Серия сохранена</b>\n\nСерия: <b>" + user.getStreakDays() + " " + dayWord(user.getStreakDays())
-                                    + " подряд</b>. Возвращайся завтра, чтобы продолжить.", null);
+                                    + " подряд</b>. "
+                                    + (bonusLeft ? "Ежедневный бонус за сегодня ещё не получен — забери его." : "Возвращайся завтра, чтобы продолжить."),
+                            bonusLeft ? keyboardFactory.rowsLayout(List.of(
+                                    List.of(keyboardFactory.callback("🎁 Забрать бонус +" + bonusExc + " EXC", "menu:daily")))) : null);
                 }
             } else if (userService.hasRestorableStreak(user)) {
                 sendStreakBrokenMessage(user.getTelegramId(), userService.restorableStreakDays(user));
