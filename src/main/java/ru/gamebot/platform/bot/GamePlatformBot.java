@@ -5483,7 +5483,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if ("⏳ ".equals(tag)) anyInProgress = true;
             buttons.add(keyboardFactory.callback(tag + trim(q.getTitle(), 32), "quest:view:sponsored:all:" + q.getId()));
         }
-        buttons.add(keyboardFactory.callback("💡 Откуда берутся деньги", "menu:moneyloop"));
         String legend = (anyInProgress || anyDone)
                 ? "\n\n" + (anyDone ? "✅ — выполнен" : "") + (anyDone && anyInProgress ? " · " : "") + (anyInProgress ? "⏳ — в процессе" : "")
                 : "";
