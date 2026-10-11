@@ -42,21 +42,41 @@ FROM (
 ) x
 ORDER BY ord;
 
--- Из чего состоит «активный за 30 дней» (по самому «сильному» признаку):
-SELECT CASE WHEN u.completed_quests > 0 THEN 'делал квесты'
-            WHEN u.registration_completed = TRUE THEN 'зарегистрирован, квестов нет'
-            WHEN u.nickname IS NOT NULL AND u.nickname <> '' THEN 'только ник'
-            ELSE 'только /start (без ника)' END AS who,
-       COUNT(*) AS active_30d
-FROM app_users u
-WHERE u.last_activity_date >= CAST(DATEADD('DAY', -30, CURRENT_TIMESTAMP) AS DATE)
-   OR u.last_bot_activity_at >= DATEADD('DAY', -30, CURRENT_TIMESTAMP)
-   OR u.last_mini_app_open_at >= DATEADD('DAY', -30, CURRENT_TIMESTAMP)
-GROUP BY 1
+-- ВАЖНО про колонки «календарно»: DAU считается за СЕГОДНЯ, то есть за неполный день, если скрипт запущен не вечером;
+-- сравнивать pct_calendar с pct_bot нельзя, смотрите на MAU и на сегменты. Честный DAU по дням даёт запрос 3 ниже.
+
+-- 2) Из чего состоит «активный за 30 дней» (по самому «сильному» признаку):
+SELECT who, COUNT(*) AS active_30d
+FROM (
+  SELECT CASE WHEN u.completed_quests > 0 THEN 'делал квесты'
+              WHEN u.registration_completed = TRUE THEN 'зарегистрирован, квестов нет'
+              ELSE 'не прошёл регистрацию (подписка на канал)' END AS who
+  FROM app_users u
+  WHERE u.last_activity_date >= CAST(DATEADD('DAY', -30, CURRENT_TIMESTAMP) AS DATE)
+     OR u.last_bot_activity_at >= DATEADD('DAY', -30, CURRENT_TIMESTAMP)
+     OR u.last_mini_app_open_at >= DATEADD('DAY', -30, CURRENT_TIMESTAMP)
+) x
+GROUP BY who
 ORDER BY active_30d DESC;
 
--- Сколько вообще нужно «доверия» полям активности: у скольких активных нет НИ ОДНОГО из трёх признаков за 30 дней нельзя проверить,
--- но можно посмотреть, сколько аккаунтов, созданных за 30 дней, вообще не имеют отметки активности (по ним MAU не знает про заход):
+-- 3) Реальный дневной ряд по СОБЫТИЯМ (не зависит от того, что поле захода хранит только первый заход дня):
+--    «действовали» = были начисления/списания EXC или взяли/сдали квест в этот день. Это нижняя граница DAU (кто только
+--    открыл бота и ничего не сделал, сюда не попадает), зато цифра по каждому дню честная.
+SELECT d AS day, COUNT(DISTINCT uid) AS players_with_action
+FROM (
+  SELECT CAST(t.created_at AS DATE) AS d, t.user_id AS uid FROM exc_transactions t
+  WHERE t.created_at >= DATEADD('DAY', -14, CURRENT_TIMESTAMP)
+  UNION ALL
+  SELECT CAST(s.created_at AS DATE), s.user_id FROM quest_submissions s
+  WHERE s.created_at >= DATEADD('DAY', -14, CURRENT_TIMESTAMP)
+  UNION ALL
+  SELECT CAST(s.updated_at AS DATE), s.user_id FROM quest_submissions s
+  WHERE s.updated_at >= DATEADD('DAY', -14, CURRENT_TIMESTAMP)
+) y
+GROUP BY d
+ORDER BY d;
+
+-- 4) У скольких аккаунтов, созданных за 30 дней, нет НИ ОДНОЙ отметки активности (по ним MAU не знает про заход):
 SELECT COUNT(*) AS created_30d_without_any_activity_mark
 FROM app_users u
 WHERE u.created_at >= DATEADD('DAY', -30, CURRENT_TIMESTAMP)
