@@ -139,6 +139,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final SupportService supportService;
     private final KeyboardFactory keyboardFactory;
     private final ru.gamebot.platform.service.HealthRatioService healthRatioService;
+    private final ru.gamebot.platform.service.StreamerDealService streamerDealService;
     private final ru.gamebot.platform.service.ExchangeRateService exchangeRateService;
     private final ru.gamebot.platform.service.SinkShopService sinkShopService;
     private final ru.gamebot.platform.service.CouncilService councilService;
@@ -2224,6 +2225,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 List.of(keyboardFactory.callback("100% в фонд", "admin:fin:pool:100")),
                                 List.of(keyboardFactory.callback("❌ Отмена", "admin:fin:cancel")))));
             }
+            case STREAMER_CALC_INPUT -> handleStreamerCalcInput(user, session, text);
+            case STREAMER_SETTING_INPUT -> handleStreamerSettingInput(user, session, text);
             case INC_INPUT -> {
                 String title = text.trim();
                 if (title.length() < 3) {
@@ -11015,6 +11018,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 } else if (action.startsWith("an:")) {
                     handleAnalyticsAction(callbackQuery, user, session, action.substring("an:".length()));
                     return;
+                } else if (action.equals("streamer") || action.startsWith("streamer:")) {
+                    handleStreamerAction(user, session, action);
+                    answerSilently(callbackQuery.getId());
+                    return;
                 } else if (action.startsWith("fin:")) {
                     handleFinanceAction(user, session, action.substring("fin:".length()));
                     answerSilently(callbackQuery.getId());
@@ -14662,6 +14669,117 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    // ─── Калькулятор сделки со стримером (StreamerDealService) ───────────────────────────────
+
+    private InlineKeyboardMarkup streamerKeyboard() {
+        return keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("⚙️ Допущения", "admin:streamer:cfg")),
+                List.of(keyboardFactory.callback("⬅️ Назад", "admin:traffic"))));
+    }
+
+    private void handleStreamerAction(AppUser user, UserSession session, String action) {
+        if (!isEffectiveAdmin(user)) {
+            sendText(user.getTelegramId(), "⛔ Доступ запрещён.", mainMenuKeyboard(user));
+            return;
+        }
+        String[] p = action.split(":");
+        String sub = p.length > 1 ? p[1] : "";
+        switch (sub) {
+            case "cfg" -> sendStreamerConfig(user);
+            case "set" -> {
+                ru.gamebot.platform.service.StreamerDealService.ParamDef def = p.length > 2 ? streamerDealService.param(p[2]) : null;
+                if (def == null) {
+                    sendStreamerConfig(user);
+                    return;
+                }
+                session.getData().put("streamer_key", def.key());
+                session.setState(SessionState.STREAMER_SETTING_INPUT);
+                sendText(user.getTelegramId(),
+                        "⚙️ <b>" + escape(def.label()) + "</b>\n\nВведите число (" + escape(def.unit()) + "), допустимо от " + def.min() + " до " + def.max()
+                                + (def.auto() ? ".\n<code>0</code> — вернуть автоматический расчёт по данным проекта." : "."),
+                        keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("⬅️ К допущениям", "admin:streamer:cfg")))));
+            }
+            default -> {
+                session.getData().remove("streamer_key");
+                session.setState(SessionState.STREAMER_CALC_INPUT);
+                sendText(user.getTelegramId(),
+                        "🎙 <b>Калькулятор сделки со стримером</b>\n\n"
+                                + "Пришлите показатели одной строкой, через пробел:\n"
+                                + "<code>онлайн  %РФ/СНГ  упоминаний  цена₽</code>\n\n"
+                                + "Например: <code>250 90 3 15000</code> (средний онлайн 250, 90% аудитории из РФ/СНГ, 3 упоминания, просит 15 000 ₽). "
+                                + "Можно <code>15к</code>. Если цену не называл, четвёртое число опустите: <code>250 90 3</code>. "
+                                + "Допустимо ключами: <code>ccv=250 ru=90 m=3 fee=15к ctr=3 link=src</code> "
+                                + "(<code>link=src</code> — трекинговая ссылка без реферальных EXC, <code>ctr=</code> — свой % кликов).\n\n"
+                                + "Можно считать сколько угодно стримеров подряд: присылайте следующую строку.",
+                        streamerKeyboard());
+            }
+        }
+    }
+
+    private void handleStreamerCalcInput(AppUser user, UserSession session, String text) {
+        if (!isEffectiveAdmin(user)) {
+            session.setState(SessionState.NONE);
+            sendText(user.getTelegramId(), "⛔ Доступ запрещён.", mainMenuKeyboard(user));
+            return;
+        }
+        try {
+            ru.gamebot.platform.service.StreamerDealService.Input in = streamerDealService.parse(text);
+            String report = streamerDealService.report(in, streamerDealService.assumptions());
+            if (report.length() > 3900) report = report.substring(0, 3890) + "…";
+            sendText(user.getTelegramId(), report, streamerKeyboard()); // состояние не сбрасываем: следующий стример - следующей строкой
+        } catch (IllegalArgumentException e) {
+            sendText(user.getTelegramId(), "❌ " + escape(e.getMessage()) + "\n\nФормат: <code>онлайн %РФ/СНГ упоминаний цена</code>, например <code>250 90 3 15000</code>.",
+                    streamerKeyboard());
+        } catch (Exception e) {
+            log.error("Streamer calc failed for input '{}'", text, e);
+            sendText(user.getTelegramId(), "⚠️ Не удалось посчитать, попробуйте ещё раз.", streamerKeyboard());
+        }
+    }
+
+    private void sendStreamerConfig(AppUser user) {
+        ru.gamebot.platform.service.StreamerDealService.Assumptions a = streamerDealService.assumptions();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (ru.gamebot.platform.service.StreamerDealService.ParamDef d : streamerDealService.editableParams()) {
+            rows.add(List.of(keyboardFactory.callback("✏️ " + trim(d.label(), 40), "admin:streamer:set:" + d.key())));
+        }
+        rows.add(List.of(keyboardFactory.callback("🎙 К расчёту", "admin:streamer")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:traffic")));
+        String text = streamerDealService.configText(a);
+        if (text.length() > 3900) text = text.substring(0, 3890) + "…";
+        sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleStreamerSettingInput(AppUser user, UserSession session, String text) {
+        if (!isEffectiveAdmin(user)) {
+            session.setState(SessionState.NONE);
+            sendText(user.getTelegramId(), "⛔ Доступ запрещён.", mainMenuKeyboard(user));
+            return;
+        }
+        String key = session.getData().get("streamer_key");
+        ru.gamebot.platform.service.StreamerDealService.ParamDef def = key == null ? null : streamerDealService.param(key);
+        if (def == null) {
+            session.setState(SessionState.NONE);
+            sendStreamerConfig(user);
+            return;
+        }
+        double value;
+        try {
+            value = Double.parseDouble(text.trim().replace(',', '.'));
+        } catch (Exception e) {
+            sendText(user.getTelegramId(), "❌ Нужно число, например <code>2.5</code>.", cancelKeyboard());
+            return;
+        }
+        boolean autoReset = def.auto() && value == 0;
+        if (!autoReset && (value < def.min() || value > def.max())) {
+            sendText(user.getTelegramId(), "❌ Допустимо от " + def.min() + " до " + def.max() + (def.auto() ? " (или 0 — авто)." : "."), cancelKeyboard());
+            return;
+        }
+        saveAppSetting(def.key(), String.valueOf(autoReset ? 0 : value));
+        session.getData().remove("streamer_key");
+        session.setState(SessionState.NONE);
+        sendStreamerConfig(user);
+    }
+
     private void sendAnalyticsTabSafe(AppUser user, UserSession session, String tabName) {
         ru.gamebot.platform.service.AnalyticsService.Tab t = parseTab(tabName);
         if (t != null) sendAnalyticsTab(user, session, t); else sendAnalyticsHome(user);
@@ -15533,6 +15651,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(navRow);
         }
         rows.add(List.of(keyboardFactory.callback("📊 Сравнение закупов", "admin:traffic:compare")));
+        rows.add(List.of(keyboardFactory.callback("🎙 Калькулятор стримера", "admin:streamer")));
         rows.add(List.of(keyboardFactory.callback("➕ Создать источник", "admin:traffic:create")));
         rows.add(List.of(keyboardFactory.callback("📦 Пачка ссылок", "admin:traffic:batch")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));

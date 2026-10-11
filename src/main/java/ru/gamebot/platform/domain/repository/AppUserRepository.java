@@ -258,6 +258,16 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt >= :since AND u.referredByTelegramId IS NOT NULL")
     long countReferredNewUsersSince(@Param("since") LocalDateTime since);
 
+    /** Воронка «пришли по реферальной ссылке» для калькулятора стримеров (StreamerDealService): все, кто нажал /start по ссылке друга. */
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.referredByTelegramId IS NOT NULL AND u.createdAt >= :since")
+    long countReferredCreatedSince(@Param("since") LocalDateTime since);
+
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.referredByTelegramId IS NOT NULL AND u.registrationCompleted = true AND u.createdAt >= :since")
+    long countReferredRegisteredSince(@Param("since") LocalDateTime since);
+
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.referredByTelegramId IS NOT NULL AND u.registrationCompleted = true AND u.completedQuests > 0 AND u.createdAt >= :since")
+    long countReferredQuestersSince(@Param("since") LocalDateTime since);
+
     // ── Экономика рефералки (2026-09-09) — для расчёта разового бонуса рефереру vs текущие 10% ──
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.referredByTelegramId IS NOT NULL")
     long countAllReferredUsers();
