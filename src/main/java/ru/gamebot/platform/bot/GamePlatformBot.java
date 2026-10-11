@@ -1823,6 +1823,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         switch (action) {
             case "faq" -> sendFaqMenu(user);
+            case "moneyloop" -> { answerSilently(callbackQuery.getId()); sendMoneyLoopScreen(user); return; }
             case "faqfile" -> { answerSilently(callbackQuery.getId()); sendFaqFile(user); return; }
             case "main" -> sendMainMenu(user, mainMenuText(user));
             case "profile" -> sendProfile(user);
@@ -3967,8 +3968,32 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Единая строка на рекламных местах (спонсорские квесты/рассылки, раздел «Реклама», гайд): приучает видеть в рекламе источник выплат.
+     *  Формулировка намеренно без «оплачивает все выплаты»: пока фонд пополняется и личными средствами владельца, а не только доходом. */
+    private static final String SPONSOR_LOOP_LINE = "💰 Спонсоры и реклама пополняют фонд выплат — от него зависит курс вывода для всех игроков.";
+
+    /** Схема «Откуда деньги» без цифр (цифры - когда проект выйдет в ноль): спонсор → фонд → выплаты → активность → больше спонсоров. */
+    private void sendMoneyLoopScreen(AppUser user) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("💼 Спонсорские квесты", "quests:section:sponsored")));
+        rows.add(List.of(keyboardFactory.callback("📺 Реклама за EXC", "quests:section:ads")));
+        rows.add(List.of(keyboardFactory.callback("❓ Что такое курс фонда", "menu:faq")));
+        rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(),
+                "💡 <b>Откуда берутся деньги</b>\n\n"
+                        + "1️⃣ Спонсоры и рекламодатели платят клубу за внимание игроков: подписки, задания, просмотры, посты.\n"
+                        + "2️⃣ Эти деньги идут в <b>фонд выплат</b>.\n"
+                        + "3️⃣ Из фонда клуб платит вам за квесты. Чем больше фонд, тем выше курс вывода: при 100% 1 000 EXC = 10 ₽.\n"
+                        + "4️⃣ Когда игроки выполняют спонсорские задания, смотрят рекламу и читают посты, спонсоры видят результат и приходят снова — фонд растёт.\n\n"
+                        + "🔁 Больше активности → больше спонсоров → больше фонд → выше курс и больше выплат.\n\n"
+                        + "Поэтому реклама в клубе — не помеха, а то, на что клуб платит вам. "
+                        + "Заглядывайте в «💼 Спонсорские квесты», не отключайте бота и не пропускайте рекламные посты: это работает на ваш курс.",
+                keyboardFactory.rowsLayout(rows));
+    }
+
     private void sendHelpCategory(AppUser user) {
         sendMenuCategory(user, "🆘 <b>Помощь</b>", List.of(
+                List.of(keyboardFactory.callback("💡 Откуда берутся деньги", "menu:moneyloop")),
                 List.of(keyboardFactory.callback("❓ FAQ — частые вопросы", "menu:faq")),
                 List.of(keyboardFactory.callback("📋 Правила клуба", "menu:rules")),
                 List.of(keyboardFactory.callback("🆘 Поддержка", "menu:support")),
@@ -4453,6 +4478,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         clearOnboardingBrowseBack(user);
         List<List<InlineKeyboardButton>> guideRows = new ArrayList<>();
         guideRows.add(List.of(keyboardFactory.callback("🗺️ Смотреть квесты", "onboarding:browse_all:guide")));
+        guideRows.add(List.of(keyboardFactory.callback("💡 Откуда берутся деньги", "menu:moneyloop")));
         guideRows.add(List.of(keyboardFactory.callback("👤 В профиль", "onboarding:skip")));
         guideRows.add(List.of(keyboardFactory.callback("⬅️ Назад", settingEnabled(ONBOARDING_V2_SETTING) ? "onboarding:back" : "menu:main")));
         sendText(user.getTelegramId(),
@@ -4467,7 +4493,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "4️⃣ <b>Выведи деньги</b>\n"
                         + "«💰 Кошелёк» → «💰 Баланс» → «💸 Вывести EXC». Минимум — <b>5 000 EXC</b>. "
                         + "Вывод открывается через 3 дня после регистрации и после 3 выполненных квестов. "
-                        + "Сумма в рублях зависит от курса фонда — он виден на экране вывода.",
+                        + "Сумма в рублях зависит от курса фонда — он виден на экране вывода.\n\n"
+                        + SPONSOR_LOOP_LINE,
                 keyboardFactory.rowsLayout(guideRows));
     }
 
@@ -5456,6 +5483,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if ("⏳ ".equals(tag)) anyInProgress = true;
             buttons.add(keyboardFactory.callback(tag + trim(q.getTitle(), 32), "quest:view:sponsored:all:" + q.getId()));
         }
+        buttons.add(keyboardFactory.callback("💡 Откуда берутся деньги", "menu:moneyloop"));
         String legend = (anyInProgress || anyDone)
                 ? "\n\n" + (anyDone ? "✅ — выполнен" : "") + (anyDone && anyInProgress ? " · " : "") + (anyInProgress ? "⏳ — в процессе" : "")
                 : "";
@@ -5488,7 +5516,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback(watchAdLabel, "menu:watchad"),
                 keyboardFactory.webApp("🎬 Реклама в приложении", "https://experience-gaming-club.pages.dev/quests?section=ads")));
         sendText(user.getTelegramId(),
-                "📺 <b>Реклама</b>\n\nПосмотри рекламу — получи EXC. В боте можно получить награду до " + ru.gamebot.platform.service.UserService.AdRewardSource.BOT.getDailyCap() + " раз в день, в приложении — свой лимит.",
+                "📺 <b>Реклама</b>\n\nПосмотри рекламу — получи EXC. В боте можно получить награду до " + ru.gamebot.platform.service.UserService.AdRewardSource.BOT.getDailyCap() + " раз в день, в приложении — свой лимит.\n\n"
+                        + SPONSOR_LOOP_LINE,
                 verticalWithBackMenu(buttons, "⬅️ Назад", backTarget));
     }
 
@@ -19911,6 +19940,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "📋 Квест: \"" + quest.getTitle() + "\"\n"
                 + "💰 Награда: " + String.format("%,d", quest.getRewardCoins()) + " EXC" + starsNote(quest.getRewardCoins()) + "\n\n"
                 + "📅 Период: " + period + "\n\n"
+                + (isSponsored ? SPONSOR_LOOP_LINE + "\n\n" : "")
                 + "👉 Выполнить → @" + getBotUsername();
     }
 
