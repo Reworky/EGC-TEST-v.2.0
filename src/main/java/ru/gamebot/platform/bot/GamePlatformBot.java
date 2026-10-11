@@ -8450,6 +8450,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendResourceBanner(user.getTelegramId(), "brawl_stars_banner.png", pickerText, keyboardFactory.rowsLayout(rows));
             return;
         }
+        if ("clash_of_clans".equals(gameKey)) {
+            sendResourceBanner(user.getTelegramId(), "coc_picker_banner.jpg", pickerText, keyboardFactory.rowsLayout(rows));
+            return;
+        }
         sendText(user.getTelegramId(), pickerText, keyboardFactory.rowsLayout(rows));
     }
 
@@ -8478,6 +8482,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             if ("clash_royale".equals(purchaseGroup)) {
                 sendResourceBanner(user.getTelegramId(), "cr_gems_banner.jpg", payMethodText, keyboardFactory.rowsLayout(rows));
+                return;
+            }
+            if ("clash_of_clans".equals(purchaseGroup)) {
+                sendResourceBanner(user.getTelegramId(), "coc_gems_banner.jpg", payMethodText, keyboardFactory.rowsLayout(rows));
                 return;
             }
             sendText(user.getTelegramId(), payMethodText, keyboardFactory.rowsLayout(rows));
@@ -8525,6 +8533,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if ("clash_royale".equals(gameKey)) {
             sendResourceBanner(user.getTelegramId(), "cr_pass_banner.jpg", passesText, keyboardFactory.rowsLayout(rows));
+            return;
+        }
+        if ("clash_of_clans".equals(gameKey)) {
+            sendResourceBanner(user.getTelegramId(), "coc_gold_banner.jpg", passesText, keyboardFactory.rowsLayout(rows));
             return;
         }
         sendText(user.getTelegramId(), passesText, keyboardFactory.rowsLayout(rows));
@@ -20173,6 +20185,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if ("clash_royale".equals(gameKey) && pkg.gems() <= 0) { // сезонные пропуски Clash Royale (Mini/Diamond Pass)
             sendResourceBanner(user.getTelegramId(), "cr_pass_banner.jpg", methodText, keyboardFactory.rowsLayout(rows));
+            return;
+        }
+        if ("clash_of_clans".equals(gameKey) && pkg.gems() <= 0) { // Gold Pass
+            sendResourceBanner(user.getTelegramId(), "coc_gold_banner.jpg", methodText, keyboardFactory.rowsLayout(rows));
             return;
         }
         sendText(user.getTelegramId(), methodText, keyboardFactory.rowsLayout(rows));
