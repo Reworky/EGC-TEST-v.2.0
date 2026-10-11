@@ -178,6 +178,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.PubgQuestVerificationService pubgQuestVerificationService;
     private final ru.gamebot.platform.service.ScheduledBroadcastService scheduledBroadcastService;
     private final ru.gamebot.platform.service.AdsgramBotAdService adsgramBotAdService;
+    private final ru.gamebot.platform.service.SocialTaskService socialTaskService;
     private final GemPurchaseService gemPurchaseService;
     private final ru.gamebot.platform.domain.repository.ChannelJoinRequestRepository channelJoinRequestRepository;
     private final ru.gamebot.platform.domain.repository.AppSettingRepository appSettingRepository;
@@ -1024,6 +1025,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if ("quests:section:ugc".equals(data)) {
             sendUgcQuestList(user);
             answerSilently(callbackQuery.getId());
+            return;
+        }
+        if ("quests:section:social".equals(data)) {
+            answerSilently(callbackQuery.getId());
+            sendSocialTasksList(user);
+            return;
+        }
+        if (data.startsWith("social:view:")) {
+            answerSilently(callbackQuery.getId());
+            sendSocialTaskCard(user, data.substring("social:view:".length()), null);
+            return;
+        }
+        if (data.startsWith("social:check:")) {
+            handleSocialTaskCheck(callbackQuery, user, data.substring("social:check:".length()));
             return;
         }
         if ("quests:section:ads".equals(data)) {
@@ -5411,6 +5426,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "quests:section:gaming")));
         rows.add(List.of(keyboardFactory.callback("💼 Спонсорские квесты", "quests:section:sponsored")));
         rows.add(List.of(keyboardFactory.callback("🤳 UGC", "quests:section:ugc")));
+        if (socialTaskService.enabled() && !socialTaskService.tasks().isEmpty()) {
+            rows.add(List.of(keyboardFactory.callback("🌐 Соцсети", "quests:section:social")));
+        }
         rows.add(List.of(keyboardFactory.callback(watchAdLabel, "quests:section:ads")));
         rows.add(List.of(keyboardFactory.callback("📂 Мои квесты", "menu:myquests")));
         if (backData != null) {
@@ -5498,6 +5516,129 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendUgcQuestList(AppUser user) {
         sendQuestList(user, "UGC", null, "menu:quests");
+    }
+
+    // ── Подраздел «🌐 Соцсети» в Квестах: разовая награда за подписку на наши каналы (SocialTaskService) ──
+
+    private static final String SOCIAL_LIST_CALLBACK = "quests:section:social";
+
+    private void sendSocialTasksList(AppUser user) {
+        List<ru.gamebot.platform.service.SocialTaskService.SocialTask> tasks = socialTaskService.tasks();
+        if (!socialTaskService.enabled() || tasks.isEmpty()) {
+            sendText(user.getTelegramId(), "🌐 Задания по соцсетям сейчас недоступны.", backMenuKeyboard("menu:quests"));
+            return;
+        }
+        java.util.Set<String> claimed = socialTaskService.claimedCodes(user);
+        StringBuilder text = new StringBuilder("🌐 <b>Наши соцсети</b>\n\n"
+                + "Подпишись и получи EXC. Награда приходит сразу после проверки, один раз на аккаунт.\n\n");
+        List<InlineKeyboardButton> buttons = new ArrayList<>();
+        for (ru.gamebot.platform.service.SocialTaskService.SocialTask task : tasks) {
+            boolean done = claimed.contains(task.code());
+            text.append(done ? "✅ " : "⬜ ").append(escape(task.title()))
+                    .append(" — <b>+").append(task.rewardExc()).append(" EXC</b>\n");
+            buttons.add(keyboardFactory.callback((done ? "✅ " : "") + task.title(), "social:view:" + task.code()));
+        }
+        text.append("\nСкоро появятся и другие площадки.");
+        sendText(user.getTelegramId(), text.toString(), verticalWithBackMenu(buttons, "⬅️ Назад", "menu:quests"));
+    }
+
+    /** extraNote - короткая строка над карточкой (например «подписки пока не видно»); null - обычная карточка. */
+    private void sendSocialTaskCard(AppUser user, String code, String extraNote) {
+        java.util.Optional<ru.gamebot.platform.service.SocialTaskService.SocialTask> taskOpt = socialTaskService.find(code);
+        if (taskOpt.isEmpty() || !socialTaskService.enabled()) {
+            sendSocialTasksList(user);
+            return;
+        }
+        ru.gamebot.platform.service.SocialTaskService.SocialTask task = taskOpt.get();
+        boolean done = socialTaskService.isClaimed(user, task);
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.url("📣 Открыть канал", task.url())));
+        if (!done) {
+            rows.add(List.of(keyboardFactory.callback("✅ Я подписался", "social:check:" + task.code())));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", SOCIAL_LIST_CALLBACK), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(),
+                (extraNote == null ? "" : extraNote + "\n\n")
+                        + "<b>" + escape(task.title()) + "</b>\n\n"
+                        + escape(task.description()) + "\n\n"
+                        + (done ? "✅ Награда за это задание уже получена."
+                                : "🎁 Награда: <b>+" + task.rewardExc() + " EXC</b>"),
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private final java.util.Set<Long> socialCheckInFlight = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final java.util.Map<String, Long> socialAlertAt = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private void handleSocialTaskCheck(CallbackQuery callbackQuery, AppUser user, String code) {
+        java.util.Optional<ru.gamebot.platform.service.SocialTaskService.SocialTask> taskOpt = socialTaskService.find(code);
+        if (taskOpt.isEmpty() || !socialTaskService.enabled()) {
+            answer(callbackQuery.getId(), "Задание недоступно");
+            return;
+        }
+        ru.gamebot.platform.service.SocialTaskService.SocialTask task = taskOpt.get();
+        if (!socialCheckInFlight.add(user.getTelegramId())) {
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        try {
+            if (socialTaskService.isClaimed(user, task)) {
+                answerSilently(callbackQuery.getId());
+                sendSocialTaskCard(user, code, null);
+                return;
+            }
+            boolean member;
+            try {
+                member = isChannelMember(task.chatId(), user.getTelegramId());
+            } catch (TelegramApiException e) {
+                log.warn("Social task channel check failed: task {} user {}", code, user.getTelegramId(), e);
+                answer(callbackQuery.getId(), "Не удалось проверить, попробуй чуть позже");
+                alertSocialTaskFailure(task, "не проверяется подписка на канал", e);
+                return;
+            }
+            if (!member) {
+                answer(callbackQuery.getId(), "Подписка не найдена");
+                sendSocialTaskCard(user, code,
+                        "Не вижу подписки на канал. Подпишитесь и нажмите «Я подписался» ещё раз.");
+                return;
+            }
+            ru.gamebot.platform.service.SocialTaskService.ClaimResult result = socialTaskService.claim(user, task);
+            answerSilently(callbackQuery.getId());
+            switch (result.status()) {
+                case OK -> sendText(user.getTelegramId(),
+                        "✅ <b>Награда +" + result.exc() + " EXC зачислена.</b> Спасибо, что с нами!",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("🌐 К списку заданий", SOCIAL_LIST_CALLBACK)),
+                                List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
+                case ALREADY_CLAIMED -> sendSocialTaskCard(user, code, null);
+                case DISABLED -> sendSocialTasksList(user);
+            }
+        } catch (Exception e) {
+            log.error("Social task claim failed: task {} user {}", code, user.getTelegramId(), e);
+            answer(callbackQuery.getId(), "Не получилось, попробуй чуть позже");
+            alertSocialTaskFailure(task, "ошибка начисления награды", e);
+        } finally {
+            socialCheckInFlight.remove(user.getTelegramId());
+        }
+    }
+
+    /** Сбой проверки подписки или начисления награды за соцсети: предупреждаем админов не чаще раза в 6 часов на пару «задание + причина». */
+    private void alertSocialTaskFailure(ru.gamebot.platform.service.SocialTaskService.SocialTask task, String reason, Exception cause) {
+        long now = System.currentTimeMillis();
+        String key = task.code() + ":" + reason;
+        Long last = socialAlertAt.get(key);
+        if (last != null && now - last < 6 * 3_600_000L) return;
+        socialAlertAt.put(key, now);
+        String text = "⚠️ <b>Задания «Соцсети»: " + escape(reason) + "</b>\n\n"
+                + "Задание: " + escape(task.title()) + " (" + escape(task.chatId()) + ")\n"
+                + "Проверьте, что бот админ канала. Игроки видят «не удалось проверить / не получилось».\n"
+                + "Ошибка: " + escape(String.valueOf(cause.getMessage()));
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, text, null);
+            } catch (Exception e) {
+                log.warn("Failed to alert admin {} about social task failure", adminId, e);
+            }
+        }
     }
 
     /** Подраздел «Реклама» в Квестах — список доступных источников рекламы за EXC. Два источника:
