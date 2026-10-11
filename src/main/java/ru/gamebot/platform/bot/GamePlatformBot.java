@@ -8450,6 +8450,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendResourceBanner(user.getTelegramId(), "brawl_stars_banner.png", pickerText, keyboardFactory.rowsLayout(rows));
             return;
         }
+        if ("clash_royale".equals(gameKey)) {
+            sendResourceBanner(user.getTelegramId(), "cr_picker_banner.jpg", pickerText, keyboardFactory.rowsLayout(rows));
+            return;
+        }
         if ("clash_of_clans".equals(gameKey)) {
             sendResourceBanner(user.getTelegramId(), "coc_picker_banner.jpg", pickerText, keyboardFactory.rowsLayout(rows));
             return;
