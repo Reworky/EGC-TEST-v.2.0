@@ -8476,6 +8476,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendResourceBanner(user.getTelegramId(), "brawl_gems_banner.png", payMethodText, keyboardFactory.rowsLayout(rows));
                 return;
             }
+            if ("clash_royale".equals(purchaseGroup)) {
+                sendResourceBanner(user.getTelegramId(), "cr_gems_banner.jpg", payMethodText, keyboardFactory.rowsLayout(rows));
+                return;
+            }
             sendText(user.getTelegramId(), payMethodText, keyboardFactory.rowsLayout(rows));
             return;
         }
