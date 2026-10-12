@@ -35,6 +35,11 @@ public class UserSession {
         rewardId = null;
         submissionId = null;
         supportTicketId = null;
+        // «Откуда пришёл админ» (группа админки) живёт дольше одного шага: иначе «Назад» после любого действия с reset() вело бы в корень админки
+        String adminNav = data.get(ADMIN_NAV_KEY);
         data.clear();
+        if (adminNav != null) data.put(ADMIN_NAV_KEY, adminNav);
     }
+
+    public static final String ADMIN_NAV_KEY = "admin_nav";
 }

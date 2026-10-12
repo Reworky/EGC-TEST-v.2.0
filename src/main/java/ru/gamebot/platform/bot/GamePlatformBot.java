@@ -946,7 +946,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if ("common:cancel".equals(data)) {
+            String adminNav = session.getData().get(UserSession.ADMIN_NAV_KEY);
             session.reset();
+            if (adminNav != null && adminNav.startsWith("grp:") && isEffectiveAdmin(user)) {
+                answer(callbackQuery.getId(), "Отменено");
+                sendAdminGroup(user, adminNav.substring("grp:".length()));
+                return;
+            }
             sendMainMenu(user, "↩️ Текущее действие отменено. Возвращаю вас в главное меню.");
             answer(callbackQuery.getId(), "Отменено");
             return;
@@ -3536,6 +3542,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final java.util.Set<Long> menuAvatarImportTried = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     private void sendMainMenu(AppUser user, String text) {
+        sessionService.get(user.getTelegramId()).getData().remove(UserSession.ADMIN_NAV_KEY);
         sessionService.get(user.getTelegramId()).getData().remove(BACK_TO_KEY); // главное меню - обход из «Заданий дня» закончен
         clearOnboardingBrowseBack(user);
         if (ROLE_MODER.equals(resolveMenuRole(user, sessionService.get(user.getTelegramId())))) {
@@ -10699,6 +10706,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendAdminPanel(AppUser user) {
+        sessionService.get(user.getTelegramId()).getData().remove(UserSession.ADMIN_NAV_KEY);
         if (!isEffectiveAdmin(user)) {
             sendText(user.getTelegramId(), "⛔ Этот раздел доступен только администраторам.", mainMenuKeyboard(user));
             return;
@@ -11043,7 +11051,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         sessionService.get(targetId).reset();
                         answer(callbackQuery.getId(), "Сброшено");
                         sendText(user.getTelegramId(),
-                                "✅ Игрок " + targetId + " сброшен до состояния «только что создан».", null);
+                                "✅ Игрок " + targetId + " сброшен до состояния «только что создан».", backMenuKeyboard("admin:users:0"));
                     } catch (IllegalArgumentException e) {
                         answer(callbackQuery.getId(), "Ошибка");
                         sendText(user.getTelegramId(), "❌ " + escape(e.getMessage()), null);
@@ -11105,7 +11113,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             keyboardFactory.rowsLayout(List.of(
                                     List.of(keyboardFactory.callback("🟢 Легкие", "qe:cat:Легкие")),
                                     List.of(keyboardFactory.callback("🟡 Средние", "qe:cat:Средние")),
-                                    List.of(keyboardFactory.callback("🔴 Сложные", "qe:cat:Сложные"))
+                                    List.of(keyboardFactory.callback("🔴 Сложные", "qe:cat:Сложные")),
+                                    List.of(keyboardFactory.callback("⬅️ Назад", "admin:quest:" + qid))
                             )));
                 } else if (action.startsWith("edit-platform:")) {
                     session.reset();
@@ -12144,6 +12153,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if (action.startsWith("req:")) {
+            session.reset(); // вернулись к заявке с шага «загрузите чек» - ожидание фото больше не нужно
             sendAdminWithdrawalCard(user, parseLong(action.substring("req:".length())));
             answerSilently(callbackQuery.getId());
             return;
@@ -12177,7 +12187,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(),
                     "🧾 <b>Загрузите скриншот чека</b>\n\nОтправьте фото подтверждения оплаты — оно будет отправлено пользователю и опубликовано в @egc_payouts (после вашего одобрения). Подпись к фото (например, ссылка на чек) тоже попадёт в пост.\n\nИли нажмите «Пропустить» если чек не нужен.",
                     keyboardFactory.rowsLayout(List.of(
-                            List.of(keyboardFactory.callback("⏭️ Пропустить", "admin:withdrawal:approve:skip:" + reqId))
+                            List.of(keyboardFactory.callback("⏭️ Пропустить", "admin:withdrawal:approve:skip:" + reqId)),
+                            List.of(keyboardFactory.callback("⬅️ Назад", "admin:withdrawal:req:" + reqId))
                     )));
             return;
         }
@@ -14484,7 +14495,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin")));
+        // «Назад» самой группы ведёт в корень админки: на время отправки подмену отключаем, а группу запоминаем уже после - для её экранов
+        sessionService.get(user.getTelegramId()).getData().remove(UserSession.ADMIN_NAV_KEY);
         sendText(user.getTelegramId(), title, keyboardFactory.rowsLayout(rows));
+        sessionService.get(user.getTelegramId()).getData().put(UserSession.ADMIN_NAV_KEY, "grp:" + group);
     }
 
     /** «Потолок ограничений» (запрос владельца 2026-09-27): по каждому лимиту - доля активных игроков,
@@ -15586,7 +15600,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "лимитом не считаются. «Вернулись» - игрок открыл бота или мини-апп в течение 48 ч после сообщения; "
                         + "считаются сообщения старше 48 ч.</i>");
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(List.of(
-                List.of(keyboardFactory.callback("🔄 Обновить", "admin:nudgereport"), keyboardFactory.callback("🏠 Меню", "menu:main")))));
+                List.of(keyboardFactory.callback("🔄 Обновить", "admin:nudgereport")),
+                List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin"), keyboardFactory.callback("🏠 Меню", "menu:main")))));
     }
 
     /** «🩺 Проверка ошибок» (2026-09-25): одним экраном - есть ли у текущей версии бота ошибки. Источники: WARN/ERROR из
@@ -15660,7 +15675,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("🔄 Обновить", "admin:health"),
                         keyboardFactory.callback("🧹 Сбросить счётчики", "admin:health:reset")),
-                List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
+                List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin"), keyboardFactory.callback("🏠 Меню", "menu:main")))));
     }
 
     private void sendAdminLiveStatus(AppUser user) {
@@ -15676,7 +15691,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🕐 Обновлено: <b>" + updatedAt + "</b>",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("🔄 Обновить", "admin:live")),
-                        List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
+                        List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin"), keyboardFactory.callback("🏠 Меню", "menu:main"))
                 )));
     }
 
@@ -20071,6 +20086,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback((active ? "✅ " : "") + p, "qe:plat:" + p)));
         }
         rows.add(List.of(keyboardFactory.callback("✔️ Сохранить", "qe:plat:done")));
+        if (session.getQuestId() != null) {
+            rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:quest:" + session.getQuestId())));
+        }
         String selectedText = selected.isEmpty() ? "не выбрано" : String.join(", ", selected);
         sendText(user.getTelegramId(),
                 "🕹️ Выберите платформы:\nВыбрано: <b>" + escape(selectedText) + "</b>",
@@ -23273,6 +23291,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * под сообщением) — например, ссылка на канал отзывов в приветствии новичка выглядела как отдельный
      * вылетающий баннер, отвлекающий от инструкции (запрошено 2026-09-14). */
     private void sendText(Long chatId, String text, InlineKeyboardMarkup keyboard, boolean disablePreview) {
+        redirectAdminBackToGroup(chatId, keyboard);
         SendMessage message = new SendMessage();
         message.setChatId(chatId.toString());
         message.setText(text);
@@ -23283,6 +23302,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             execute(message);
         } catch (TelegramApiException exception) {
             throw new IllegalStateException("Failed to send message to " + chatId, exception);
+        }
+    }
+
+    /** Админ пришёл на экран из меню группы (Игроки / Квесты / Деньги / Коммуникации / Рост / Система): его «Назад» с корнем админки,
+     *  статистикой и т.п. ведёт в эту группу, а не в корень админки. Подмена только у кнопок «Назад», кнопки «Меню» не трогаем. */
+    private void redirectAdminBackToGroup(Long chatId, InlineKeyboardMarkup keyboard) {
+        if (keyboard == null || keyboard.getKeyboard() == null) return;
+        try {
+            String nav = sessionService.get(chatId).getData().get(UserSession.ADMIN_NAV_KEY);
+            if (nav == null || !nav.startsWith("grp:")) return;
+            String target = "admin:" + nav;
+            for (List<InlineKeyboardButton> row : keyboard.getKeyboard()) {
+                for (InlineKeyboardButton b : row) {
+                    String d = b.getCallbackData();
+                    if (d != null && b.getText() != null && b.getText().contains("Назад")
+                            && ("menu:admin".equals(d) || "admin:stats".equals(d))) {
+                        b.setCallbackData(target);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to redirect admin back button for {}", chatId, e);
         }
     }
 
