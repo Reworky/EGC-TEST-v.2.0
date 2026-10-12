@@ -187,7 +187,7 @@ public class RewardSeeder implements CommandLineRunner {
         // Новые цены держат запас ~1.2x против актуального доната.
         seed("Brawl Stars - Gems 30",
                 "Пополнение 30 гемов на аккаунт Brawl Stars. Доставка на email. Срок доставки — до 24 ч.",
-                "Brawl Stars", 35_900, brawlPrompt, 1_000, "brawl_stars");
+                "Brawl Stars", 28_600, brawlPrompt, 1_000, "brawl_stars"); // 2026-10-12: донат 30 гемов = 238 ₽ -> 238 × 100 × 1.2, округлено вверх до сотен
 
         seed("Brawl Stars - Gems 60",
                 "Пополнение 60 гемов на аккаунт Brawl Stars. Доставка на email. Срок доставки — до 24 ч.",

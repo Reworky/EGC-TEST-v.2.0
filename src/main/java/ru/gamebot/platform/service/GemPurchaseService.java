@@ -64,15 +64,17 @@ public class GemPurchaseService {
 
     // Цены — розница Купикод на 2026-09-20 + 18% наценка (та же формула, что раньше с donatov.net,
     // см. класс-javadoc). XP-бонус — по калибровке ~0.68 XP/₽ (см. javadoc).
+    // 2026-10-12: пакеты 30/80/170/360 пересчитаны по новой рознице Купикод (скидочные цены 202/483/969/1959 ₽, обычные 260/589/1189/2336 ₽):
+    // цена = round(закупка × 1.18), XP = round(цена × 0.68). Остальные пакеты - снимок 2026-09-20, ждут свежих цен поставщика.
     public static final List<GemPackage> BRAWL_PACKAGES = List.of(
-            new GemPackage("30", 30, 299, 203),
+            new GemPackage("30", 30, 238, 162),
             new GemPackage("60", 60, 565, 384),
-            new GemPackage("80", 80, 649, 441),
+            new GemPackage("80", 80, 570, 388),
             new GemPackage("110", 110, 951, 647),
-            new GemPackage("170", 170, 1_320, 898),
+            new GemPackage("170", 170, 1_143, 777),
             new GemPackage("200", 200, 1_617, 1_100),
             new GemPackage("250", 250, 2_004, 1_363),
-            new GemPackage("360", 360, 2_590, 1_761),
+            new GemPackage("360", 360, 2_312, 1_572),
             new GemPackage("440", 440, 3_313, 2_253),
             new GemPackage("530", 530, 4_062, 2_762),
             new GemPackage("950", 950, 7_152, 4_863),
