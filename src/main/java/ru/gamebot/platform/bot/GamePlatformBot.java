@@ -2238,7 +2238,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 List.of(keyboardFactory.callback("50%", "admin:fin:pool:50"),
                                         keyboardFactory.callback("70%", "admin:fin:pool:70")),
                                 List.of(keyboardFactory.callback("100% в фонд", "admin:fin:pool:100")),
-                                List.of(keyboardFactory.callback("❌ Отмена", "admin:fin:cancel")))));
+                                List.of(keyboardFactory.callback("⬅️ Назад", "admin:fin:add:" + session.getData().getOrDefault("fin_origin", "money")),
+                                        keyboardFactory.callback("❌ Отмена", "admin:fin:cancel")))));
             }
             case STREAMER_CALC_INPUT -> handleStreamerCalcInput(user, session, text);
             case STREAMER_SETTING_INPUT -> handleStreamerSettingInput(user, session, text);
@@ -10920,7 +10921,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 return;
             }
             case "payout" -> {
+                String finOrigin = session.getData().getOrDefault("fin_origin", "money");
                 session.reset();
+                session.getData().put("fin_origin", finOrigin);
                 session.setState(SessionState.PAYOUT_POOL_INPUT);
                 double ratio = healthRatioService.getCurrentRatio();
                 long pool = healthRatioService.getPayoutPoolRub();
@@ -10931,7 +10934,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 + "💰 Payout Pool: <b>" + pool + " ₽</b>\n"
                                 + "📉 Общий долг EXC: <b>" + debt + " EXC (" + (debt / 100) + " ₽)</b>\n\n"
                                 + "Введите сумму пополнения в рублях:",
-                        cancelKeyboard());
+                        backOrCancelKeyboard("admin:fin:add:" + finOrigin));
             }
             default -> {
                 if (action.startsWith("quest:")) {
@@ -14414,7 +14417,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 long pendingW = rewardService.findPendingWithdrawals().size();
                 rows.add(List.of(keyboardFactory.callback(pendingW > 0 ? "💸 Заявки на вывод (" + pendingW + ")" : "💸 Заявки на вывод", "admin:withdrawals")));
                 rows.add(List.of(keyboardFactory.callback("🎁 Магазин наград", "admin:rewards")));
-                rows.add(List.of(keyboardFactory.callback("💵 Доходы клуба (записать / в фонд)", "admin:fin:add")));
+                rows.add(List.of(keyboardFactory.callback("💵 Доходы клуба (записать / в фонд)", "admin:fin:add:money")));
                 rows.add(List.of(keyboardFactory.callback("📒 Финансовая сводка (P&L)", "admin:an:tab:PNL")));
                 rows.add(List.of(keyboardFactory.callback("💰 Экономика и выплаты", "admin:an:tab:ECONOMY")));
                 rows.add(List.of(keyboardFactory.callback("🤝 Экономика рефералки", "admin:stats:referral")));
@@ -14540,8 +14543,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("📤 Экспорт CSV", "admin:an:csv:" + t)));
         switch (tab) {
             case PNL -> {
-                rows.add(List.of(keyboardFactory.callback("➕ Записать доход", "admin:fin:add"), keyboardFactory.callback("🗑 Записи", "admin:fin:list")));
-                rows.add(List.of(keyboardFactory.callback("📜 История доходов", "admin:fin:history:0")));
+                rows.add(List.of(keyboardFactory.callback("➕ Записать доход", "admin:fin:add:pnl"), keyboardFactory.callback("🗑 Записи", "admin:fin:list")));
+                rows.add(List.of(keyboardFactory.callback("📜 История доходов", "admin:fin:history:0:pnl")));
             }
             case TECH -> {
                 rows.add(List.of(keyboardFactory.callback("➕ Инцидент", "admin:inc:add"), keyboardFactory.callback("✅ Закрыть инцидент", "admin:inc:list")));
@@ -14729,15 +14732,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Куда ведёт «Назад» с экрана «Доходы клуба»: в меню «Деньги» или во вкладку P&L - откуда админ пришёл. */
+    private String finBackTarget(UserSession session) {
+        return "pnl".equals(session.getData().get("fin_origin")) ? "admin:an:tab:PNL" : "admin:grp:money";
+    }
+
     private static final int INCOME_HISTORY_PAGE_SIZE = 12;
 
     /** «📜 История доходов»: все записанные доходы клуба (в том числе автоматические от спонсорских кампаний), новые сверху, по страницам. */
-    private void sendIncomeHistory(AppUser user, int page) {
+    private void sendIncomeHistory(AppUser user, UserSession session, int page) {
         java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
         org.springframework.data.domain.Page<ru.gamebot.platform.domain.model.FinanceEntry> pageData = financeService.history(page, INCOME_HISTORY_PAGE_SIZE);
         int totalPages = Math.max(1, pageData.getTotalPages());
         if (page >= totalPages) {
-            sendIncomeHistory(user, totalPages - 1);
+            sendIncomeHistory(user, session, totalPages - 1);
             return;
         }
         long total = 0, count = 0;
@@ -14770,15 +14778,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (page > 0) nav.add(keyboardFactory.callback("⬅️ Новее", "admin:fin:history:" + (page - 1)));
         if (page + 1 < totalPages) nav.add(keyboardFactory.callback("Старее ➡️", "admin:fin:history:" + (page + 1)));
         if (!nav.isEmpty()) rows.add(nav);
-        rows.add(List.of(keyboardFactory.callback("🗑 Удалить запись", "admin:fin:list")));
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:fin:add"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        rows.add(List.of(keyboardFactory.callback("🗑 Удалить запись", "admin:fin:list:h")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:fin:add:" + session.getData().getOrDefault("fin_origin", "money")),
+                keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     private void handleFinanceAction(AppUser user, UserSession session, String action) {
         String[] p = action.split(":");
         switch (p[0]) {
-            case "add" -> sendText(user.getTelegramId(), "💵 <b>Доходы клуба</b>\n\nЕдиное место, куда вносятся доходы: запись попадёт в финансовую сводку, "
+            case "add" -> {
+                // Откуда пришли: «money» (меню «Деньги») или «pnl» (вкладка P&L) - туда ведёт «Назад»; незавершённая запись сбрасывается
+                String origin = p.length > 1 ? p[1] : session.getData().getOrDefault("fin_origin", "money");
+                session.getData().put("fin_origin", "pnl".equals(origin) ? "pnl" : "money");
+                session.getData().remove("fin_amount");
+                session.getData().remove("fin_date");
+                session.getData().remove("fin_note");
+                sendText(user.getTelegramId(), "💵 <b>Доходы клуба</b>\n\nЕдиное место, куда вносятся доходы: запись попадёт в финансовую сводку, "
                             + "а следующим шагом выберете, какую долю направить в фонд выплат (от неё зависит курс вывода игрокам).\n\n"
                             + "Спонсорские кампании записываются сами при создании и докупке. Выберите вид дохода:",
                     keyboardFactory.rowsLayout(List.of(
@@ -14788,7 +14804,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             List.of(keyboardFactory.callback("Прочее", "admin:fin:kind:" + ru.gamebot.platform.domain.model.FinanceEntry.OTHER)),
                             List.of(keyboardFactory.callback("💳 Только пополнить фонд (не доход)", "admin:payout")),
                             List.of(keyboardFactory.callback("📜 История доходов", "admin:fin:history:0")),
-                            List.of(keyboardFactory.callback("⬅️ Назад", "admin:an:tab:PNL")))));
+                            List.of(keyboardFactory.callback("⬅️ Назад", finBackTarget(session))))));
+            }
             case "kind" -> {
                 String kind = p.length > 1 ? p[1] : ru.gamebot.platform.domain.model.FinanceEntry.OTHER;
                 session.getData().put("fin_kind", kind);
@@ -14798,19 +14815,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 + "Введите сумму в рублях (слитно, без пробелов), при желании дату и заметку:\n"
                                 + "<code>15000</code>\n<code>15000 24.09.2026 Telega.io, пост</code>\n<code>15000 Telega.io</code>\n\n"
                                 + "Без даты запись пойдёт сегодняшним числом.",
-                        cancelKeyboard());
+                        backOrCancelKeyboard("admin:fin:add:" + session.getData().getOrDefault("fin_origin", "money")));
             }
-            case "history" -> sendIncomeHistory(user, p.length > 1 && parseLong(p[1]) != null ? parseLong(p[1]).intValue() : 0);
+            case "history" -> {
+                if (p.length > 2 && ("pnl".equals(p[2]) || "money".equals(p[2]))) session.getData().put("fin_origin", p[2]);
+                sendIncomeHistory(user, session, p.length > 1 && parseLong(p[1]) != null ? parseLong(p[1]).intValue() : 0);
+            }
             case "list" -> {
+                boolean fromHistory = p.length > 1 && "h".equals(p[1]);
                 List<ru.gamebot.platform.domain.model.FinanceEntry> latest = financeService.latest();
                 List<List<InlineKeyboardButton>> rows = new ArrayList<>();
                 StringBuilder sb = new StringBuilder("🗑 <b>Последние записи доходов</b>\n\nНажмите на запись, чтобы удалить её.\n");
                 if (latest.isEmpty()) sb.append("\nЗаписей пока нет.");
                 for (ru.gamebot.platform.domain.model.FinanceEntry e : latest) {
                     rows.add(List.of(keyboardFactory.callback("🗑 " + e.getEntryDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM")) + " · "
-                            + ru.gamebot.platform.domain.model.FinanceEntry.kindLabel(e.getKind()) + " · " + e.getAmountRub() + " ₽", "admin:fin:del:" + e.getId())));
+                            + ru.gamebot.platform.domain.model.FinanceEntry.kindLabel(e.getKind()) + " · " + e.getAmountRub() + " ₽",
+                            "admin:fin:del:" + e.getId() + (fromHistory ? ":h" : ""))));
                 }
-                rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:an:tab:PNL")));
+                rows.add(List.of(keyboardFactory.callback("⬅️ Назад", fromHistory ? "admin:fin:history:0" : "admin:an:tab:PNL")));
                 sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
             }
             case "pool" -> {
@@ -14822,7 +14844,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 int pct = p.length > 1 && parseLong(p[1]) != null ? (int) Math.max(0, Math.min(100, parseLong(p[1]))) : 0;
                 if (amountStr == null) {
                     sendText(user.getTelegramId(), "ℹ️ Эта запись уже сохранена или устарела. Чтобы внести доход, откройте «💵 Доходы клуба».",
-                            backMenuKeyboard("admin:an:tab:PNL"));
+                            backMenuKeyboard("admin:fin:add:" + session.getData().getOrDefault("fin_origin", "money")));
                     return;
                 }
                 long amount = Long.parseLong(amountStr);
@@ -14844,18 +14866,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     done.append("\n💳 В фонд выплат ничего не направлено.");
                 }
                 session.getData().remove("fin_kind");
-                sendText(user.getTelegramId(), done.toString(), backMenuKeyboard("admin:an:tab:PNL"));
+                sendText(user.getTelegramId(), done.toString(), keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("📜 История доходов", "admin:fin:history:0")),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "admin:fin:add:" + session.getData().getOrDefault("fin_origin", "money")),
+                                keyboardFactory.callback("🏠 Меню", "menu:main")))));
             }
             case "cancel" -> {
                 session.getData().remove("fin_amount");
                 session.getData().remove("fin_date");
                 session.getData().remove("fin_note");
-                sendText(user.getTelegramId(), "Отменено, ничего не записано.", backMenuKeyboard("admin:an:tab:PNL"));
+                sendText(user.getTelegramId(), "Отменено, ничего не записано.", backMenuKeyboard("admin:fin:add:" + session.getData().getOrDefault("fin_origin", "money")));
             }
             case "del" -> {
                 Long id = p.length > 1 ? parseLong(p[1]) : null;
                 if (id != null) financeService.delete(id);
-                handleFinanceAction(user, session, "list");
+                handleFinanceAction(user, session, p.length > 2 && "h".equals(p[2]) ? "list:h" : "list");
             }
             default -> sendAnalyticsTabSafe(user, session, "PNL");
         }
@@ -19624,11 +19649,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         healthRatioService.addToPayoutPool(amount, user.getTelegramId());
         double ratio = healthRatioService.getCurrentRatio();
         int ratioPercent = (int) Math.round(ratio * 100);
+        String finOrigin = session.getData().getOrDefault("fin_origin", "money");
         session.reset();
+        session.getData().put("fin_origin", finOrigin);
         sendText(user.getTelegramId(),
                 "✅ Payout Pool пополнен на <b>" + amount + " ₽</b>.\n\n"
                         + "📊 Новый Состояние фонда: <b>" + ratioPercent + "%</b>",
-                mainMenuKeyboard(user));
+                backMenuKeyboard("admin:fin:add:" + finOrigin));
     }
 
     private void handlePhoneShare(AppUser user, UserSession session, org.telegram.telegrambots.meta.api.objects.Contact contact) {
