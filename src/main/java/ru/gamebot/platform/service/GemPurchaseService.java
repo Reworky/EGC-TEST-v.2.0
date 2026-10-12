@@ -141,15 +141,16 @@ public class GemPurchaseService {
 
     // Цены — розница Купикод на 2026-09-20 + 18% наценка, тот же принцип (добавлено в тот же вечер
     // по запросу пользователя — "тоже самое для Clash of Clans").
-    public static final List<GemPackage> CLASH_OF_CLANS_PACKAGES = List.of(
-            new GemPackage("80", 80, 156, 106),
+    // 2026-10-12: пакеты 80/500/1200/2500 и Gold Pass пересчитаны по новой рознице Купикод (107/519/1029/2069 и 729 ₽): цена = round(закупка × 1.18), XP = round(цена × 0.68).
+    private static final List<GemPackage> CLASH_OF_CLANS_ALL_PACKAGES = List.of(
+            new GemPackage("80", 80, 126, 86),
             new GemPackage("160", 160, 287, 195),
-            new GemPackage("500", 500, 678, 461),
+            new GemPackage("500", 500, 612, 416),
             new GemPackage("580", 580, 761, 517),
-            new GemPackage("1200", 1_200, 1_339, 911),
+            new GemPackage("1200", 1_200, 1_214, 826),
             new GemPackage("1280", 1_280, 1_369, 931),
             new GemPackage("1700", 1_700, 1_876, 1_276),
-            new GemPackage("2500", 2_500, 2_722, 1_851),
+            new GemPackage("2500", 2_500, 2_441, 1_660),
             new GemPackage("2580", 2_580, 2_618, 1_780),
             new GemPackage("3000", 3_000, 3_132, 2_130),
             new GemPackage("6500", 6_500, 6_554, 4_457),
@@ -162,8 +163,18 @@ public class GemPurchaseService {
             new GemPackage("70000", 70_000, 60_495, 41_137),
             new GemPackage("140000", 140_000, 121_213, 82_425),
             // Единственный пропуск Clash of Clans у Kupikod называется "Gold Pass".
-            new GemPackage("cocgoldpass", 0, 929, 632, "Gold Pass")
+            new GemPackage("cocgoldpass", 0, 860, 585, "Gold Pass")
     );
+
+    /** Пакеты гемов Clash of Clans, СКРЫТЫЕ от игроков (решение владельца 2026-10-12, как у Brawl Stars и Clash Royale): оставлены только
+     *  80/500/1200/2500 с актуальными ценами Купикод. Gold Pass не скрывается. Вернуть позицию = убрать ключ отсюда (и обновить цену). */
+    private static final java.util.Set<String> CLASH_OF_CLANS_HIDDEN_KEYS = java.util.Set.of(
+            "160", "580", "1280", "1700", "2580", "3000", "6500", "7700", "9000", "14000", "20500", "28000", "42000", "70000", "140000");
+
+    /** Каталог Clash of Clans, видимый игрокам (бот и мини-апп). */
+    public static final List<GemPackage> CLASH_OF_CLANS_PACKAGES = CLASH_OF_CLANS_ALL_PACKAGES.stream()
+            .filter(p -> !CLASH_OF_CLANS_HIDDEN_KEYS.contains(p.key()))
+            .toList();
 
     /** gameKey (purchaseGroup, например "brawl_stars"/"clash_royale") -> (отображаемое имя игры,
      *  каталог пакетов). Единая точка для добавления новой игры в донат — остальной код (GamePlatformBot)

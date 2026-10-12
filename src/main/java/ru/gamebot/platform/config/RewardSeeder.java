@@ -211,7 +211,7 @@ public class RewardSeeder implements CommandLineRunner {
         // поставщика доната donatov.net -> Купикод). Новые цены держат запас ~1.2x против доната.
         seed("Clash of Clans - Gems 80",
                 "Пополнение 80 гемов на аккаунт Clash of Clans. Доставка через Supercell ID. Срок доставки — до 24 ч.",
-                "Clash of Clans", 18_800, cocPrompt, 1_000, "clash_of_clans");
+                "Clash of Clans", 15_200, cocPrompt, 1_000, "clash_of_clans"); // 2026-10-12: донат 126 ₽ -> 126 × 100 × 1.2 вверх до сотен
 
         // Количество пачки уменьшено 260 -> 160 гемов (2026-09-12) — старый тайтл деактивируем,
         // чтобы не остался дублирующим активным товаром по старой цене/объёму.
@@ -219,13 +219,15 @@ public class RewardSeeder implements CommandLineRunner {
             if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
         });
 
-        seed("Clash of Clans - Gems 160",
-                "Пополнение 160 гемов на аккаунт Clash of Clans. Доставка через Supercell ID. Срок доставки — до 24 ч.",
-                "Clash of Clans", 34_500, cocPrompt, 5_000, "clash_of_clans");
+        // 2026-10-12 (решение владельца): в магазине Clash of Clans остаются только позиции с обновлёнными ценами Купикод (80 и 500 гемов);
+        // 160 выключается, деактивируем на каждом старте - чтобы вернуть, убрать из списка.
+        rewardItemRepository.findByTitle("Clash of Clans - Gems 160").ifPresent(item -> {
+            if (item.isActive()) { item.setActive(false); rewardItemRepository.save(item); }
+        });
 
         seed("Clash of Clans - Gems 500",
                 "Пополнение 500 гемов на аккаунт Clash of Clans. Доставка через Supercell ID. Срок доставки — до 24 ч.",
-                "Clash of Clans", 81_400, cocPrompt, 15_000, "clash_of_clans");
+                "Clash of Clans", 73_500, cocPrompt, 15_000, "clash_of_clans"); // 2026-10-12: донат 612 ₽ -> 612 × 100 × 1.2 вверх до сотен
 
         rewardItemRepository.findByTitle("Mobile Legends — 86 Diamonds").ifPresent(old -> {
             if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
