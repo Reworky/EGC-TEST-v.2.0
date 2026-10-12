@@ -28,7 +28,7 @@ public class SocialTaskService {
     public static final String PAYOUTS_CODE = "payouts";
     public static final long PAYOUTS_REWARD_EXC = 100;
     public static final String TIKTOK_CODE = "tiktok";
-    public static final long TIKTOK_REWARD_EXC = 50;
+    public static final long TIKTOK_REWARD_EXC = 20;
     private static final String TIKTOK_URL = "https://www.tiktok.com/@experience_gaming_club";
     private static final String ENABLED_KEY = "social_tasks.enabled";
 
