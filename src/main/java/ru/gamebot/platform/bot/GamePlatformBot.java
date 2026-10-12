@@ -21798,10 +21798,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Текст напоминания через сутки: тоже без названия канала. */
     private String sponsorQuestReminderText(Quest quest) {
-        return "⏰ <b>Квест от спонсора ещё ждёт</b>\n\n"
-                + "🎁 <b>" + fmtExc(quest.getRewardCoins()) + " EXC</b> за подписку на канал — это 10 секунд.\n\n"
-                + (sponsorQuestRaisesRate(quest) ? "📈 Каждая подписка немного повышает курс вывода для всех.\n\n" : "")
-                + "👥 Мест ограниченное число, потом квест закроется.";
+        return "<b>⏰ Квест от спонсора ещё ждёт</b>\n\n"
+                + "🎁 " + fmtExc(quest.getRewardCoins()) + " EXC за подписку на канал — это 10 секунд.\n\n"
+                + (sponsorQuestRaisesRate(quest) ? "<b>💡 Каждая подписка немного повышает курс вывода для всех.</b>\n\n" : "")
+                + "Мест ограниченное число, потом квест закроется.";
     }
 
     private void alertAdminsPlain(String text) {
