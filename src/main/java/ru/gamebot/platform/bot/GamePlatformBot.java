@@ -8690,7 +8690,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String groupLabel = groupItemLabel(items.get(0).getTitle());
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
             rows.add(List.of(keyboardFactory.callback("🪙 Купить за токены EXC — выбор номинала", "shop:excgroup:" + purchaseGroup)));
-            rows.add(List.of(keyboardFactory.callback("💰 Купить за реальные деньги (GRAM/Stars)", "shop:donate:" + purchaseGroup)));
+            rows.add(List.of(keyboardFactory.callback("💰 Купить за Telegram Stars/GRAM", "shop:donate:" + purchaseGroup)));
             // "Назад" ведёт в выбор ТИПА товара (Гемы/Пропуски), если он есть у этой игры — иначе сразу
             // в общий Магазин наград (см. sendGameCategoryPicker/hasMultipleDonationProductTypes).
             String backTarget = hasMultipleDonationProductTypes(purchaseGroup) ? "shop:gamecat:" + purchaseGroup : "menu:shop";

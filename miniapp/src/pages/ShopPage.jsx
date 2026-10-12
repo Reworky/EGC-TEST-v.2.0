@@ -234,7 +234,7 @@ function ShopItemsView({ expanded, onToggle }) {
           <div className="category-header">{cat}</div>
           {DONATE_GAMES[cat] && (
             <button className="quest-btn" style={{ marginBottom: 12 }} onClick={() => setDonateGame(DONATE_GAMES[cat])}>
-              💰 Купить за реальные деньги (Stars / GRAM)
+              💰 Купить за Telegram Stars/GRAM
             </button>
           )}
           {list.map(item => (
