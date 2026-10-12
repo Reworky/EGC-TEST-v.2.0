@@ -22,7 +22,7 @@ public class RewardService {
 
     private static final String WITHDRAWAL_CATEGORY = "Вывод";
     /** Минимальная сумма вывода в рубли/TON (то же число проверяют бот и мини-апп; здесь — страховка внутри сервиса). */
-    private static final long MIN_WITHDRAWAL_EXC = 5_000;
+    public static final long MIN_WITHDRAWAL_EXC = 5_000;
 
     private final RewardItemRepository rewardItemRepository;
     private final RewardRequestRepository rewardRequestRepository;
@@ -51,11 +51,20 @@ public class RewardService {
         }
         if (user.getCompletedQuests() < WITHDRAWAL_MIN_APPROVED_QUESTS) {
             if (missing.length() > 0) missing.append(" и ");
-            missing.append("выполнить ещё ").append(WITHDRAWAL_MIN_APPROVED_QUESTS - user.getCompletedQuests()).append(" кв.");
+            int questsLeft = WITHDRAWAL_MIN_APPROVED_QUESTS - user.getCompletedQuests();
+            missing.append("выполнить ещё ").append(questsLeft).append(" ").append(questsWord(questsLeft));
         }
         if (missing.length() == 0) return null;
         return "Вывод открывается через " + WITHDRAWAL_MIN_ACCOUNT_AGE_DAYS + " дня после регистрации и после "
-                + WITHDRAWAL_MIN_APPROVED_QUESTS + " одобренных квестов — так мы защищаем клуб от накруток. Вам нужно: " + missing + ".";
+                + WITHDRAWAL_MIN_APPROVED_QUESTS + " одобренных квестов.\nВам нужно: " + missing + ".";
+    }
+
+    private static String questsWord(int n) {
+        int m100 = n % 100, m10 = n % 10;
+        if (m100 >= 11 && m100 <= 14) return "квестов";
+        if (m10 == 1) return "квест";
+        if (m10 >= 2 && m10 <= 4) return "квеста";
+        return "квестов";
     }
 
     /** Ключ реквизитов для сравнения между аккаунтами: телефон/карта — только цифры (телефон без +7/8), кошелёк — адрес

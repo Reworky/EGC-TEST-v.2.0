@@ -1186,11 +1186,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendRanksTable(user, "shop:withdraw");
             return;
         }
-        if (data.equals("shop:withdraw")) {
+        if (data.equals("shop:withdraw") || data.equals("shop:withdraw:feed")) {
             answerSilently(callbackQuery.getId());
+            // «Назад» с экрана «вывод недоступен» ведёт туда, откуда пришли: на «Баланс» или в ленту выплат
+            String lockedBack = data.endsWith(":feed") ? "menu:payouts" : "menu:balance";
             String withdrawalBlock = rewardService.withdrawalEligibilityBlock(user);
             if (withdrawalBlock != null) {
-                sendText(user.getTelegramId(), "🔒 <b>Вывод пока недоступен</b>\n\n" + escape(withdrawalBlock), backMenuKeyboard("menu:main"));
+                sendWithdrawalLocked(user, withdrawalBlock, lockedBack);
                 return;
             }
             if (rewardService.hasWithdrawalTodayOrPending(user)) {
@@ -5355,6 +5357,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case 2, 3, 4 -> "дня";
             default -> "дней";
         };
+    }
+
+    /** «Вывод пока недоступен»: условия + сколько у игрока сейчас в рублях по курсу фонда и сколько осталось до минимума + подсказка про магазин. Текст утверждён владельцем 2026-10-12. */
+    private void sendWithdrawalLocked(AppUser user, String block, String backData) {
+        double ratio = healthRatioService.getCurrentRatio();
+        int ratioPercent = (int) Math.round(ratio * 100);
+        long coins = user.getCoins();
+        long rub = Math.round(coins * ratio / 100.0);
+        long min = ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC;
+        String minLine = coins >= min
+                ? "Баланса уже хватает на минимум для вывода."
+                : "Минимум для вывода - " + fmtExc(min) + " EXC, осталось " + fmtExc(min - coins) + " EXC.";
+        sendText(user.getTelegramId(),
+                "🔒 <b>Вывод пока недоступен</b>\n\n" + escape(block) + "\n\n"
+                        + "💰 У вас " + fmtExc(coins) + " EXC ≈ " + fmtExc(rub) + " ₽ (курс фонда " + ratioPercent + "%). " + minLine + "\n"
+                        + "🛍 А пока можно потратить EXC в магазине проекта.",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("🎯 Играть", "quest:recommend")),
+                        List.of(keyboardFactory.callback("🛍️ Магазин", "menu:shop")),
+                        List.of(keyboardFactory.callback("⬅️ Назад", backData), keyboardFactory.callback("🏠 Меню", "menu:main")))));
     }
 
     private void sendBalance(AppUser user) {
@@ -21754,7 +21776,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("🔄 Обновить", "payouts:refresh")),
                 List.of(keyboardFactory.url("⭐ Отзывы игроков", "https://t.me/egc_payouts")),
-                List.of(keyboardFactory.callback("💸 Вывести EXC", "shop:withdraw")),
+                List.of(keyboardFactory.callback("💸 Вывести EXC", "shop:withdraw:feed")),
                 backRow("menu:main")));
     }
 
