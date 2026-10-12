@@ -95,17 +95,19 @@ public class RewardSeeder implements CommandLineRunner {
         });
 
         // Цены пересчитаны на паритет с курсом вывода (себестоимость закупки × 100) — 2026-09-12.
+        // 2026-10-12: новая закупка 100 G-Coins — 75 ₽, «500 + 10» — 437 ₽, «1000 + 50» — 849 ₽ (поставщик добавляет бонусные монеты сверх номинала) ->
+        // 7 500 / 43 700 / 84 900 EXC по тому же паритету. Пакет 2500 + 200 (2169 ₽) в магазин не заводили (слишком крупная сумма).
         seed("PUBG PC - G-Coin 100",
                 "Пополнение 100 G-Coin на аккаунт PUBG PC. Доставляется по электронной почте. Срок доставки — до 24 ч.",
-                "PUBG PC", 8_400, null, 1_000, "pubg_pc");
+                "PUBG PC", 7_500, null, 1_000, "pubg_pc");
 
         seed("PUBG PC - G-Coin 500",
                 "Пополнение 500 G-Coin на аккаунт PUBG PC. Доставляется по электронной почте. Срок доставки — до 24 ч.",
-                "PUBG PC", 42_000, null, 15_000, "pubg_pc");
+                "PUBG PC", 43_700, null, 15_000, "pubg_pc");
 
         seed("PUBG PC - G-Coin 1000",
                 "Пополнение 1000 G-Coin на аккаунт PUBG PC. Доставляется по электронной почте. Срок доставки — до 24 ч.",
-                "PUBG PC", 85_300, null, 75_000, "pubg_pc");
+                "PUBG PC", 84_900, null, 75_000, "pubg_pc");
 
         // Deactivate old PUBG Mobile entry
         rewardItemRepository.findByTitle("PUBG Mobile — 60 UC").ifPresent(old -> {
