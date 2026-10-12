@@ -20478,6 +20478,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // PUBG PC: отдельного «тега» нет - берём привязанный PUBG-аккаунт, если он есть; иначе все данные модератор запросит лично в переписке
             case "pubg_pc" -> user.getPubgAccountId() != null && !user.getPubgAccountId().isBlank()
                     ? user.getPubgAccountId() : "PUBG PC (данные запросит модератор)";
+            // PUBG Mobile: Player ID в профиле игрока не хранится - модератор спросит его лично в переписке
+            case "pubg_mobile" -> "PUBG Mobile (Player ID запросит модератор)";
             default -> user.getBrawlStarsTag();
         };
     }
@@ -20510,7 +20512,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
         String tag = gemPurchaseGameTag(user, gameKey);
-        boolean pubg = "pubg_pc".equals(gameKey);
+        boolean pubg = "pubg_pc".equals(gameKey) || "pubg_mobile".equals(gameKey);
         String accountLine = !pubg && tag != null && !tag.isBlank()
                 ? " который хотите получить на свой аккаунт " + escape(tag)
                 : " который хотите получить";
@@ -20519,7 +20521,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "";
         sendText(user.getTelegramId(),
                 "💎 <b>Донат " + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\n"
-                        + "Выберите пакет " + (pubg ? "G-Coins" : "гемов") + accountLine + passNote + "\n\n"
+                        + "Выберите пакет " + ("pubg_pc".equals(gameKey) ? "G-Coins" : pubg ? "UC" : "гемов") + accountLine + passNote + "\n\n"
                         + "К каждой покупке — бонус XP\n\n"
                         + "⚠️ Заявка обрабатывается вручную, зачисление может занять время.\n\n"
                         + gemPurchaseWarning(gameKey),
@@ -20575,6 +20577,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  оплаты, подтверждение TON) — специально не один раз, чтобы точно увидели до списания денег. */
     /** Предупреждение перед донатом: для PUBG PC своё (там не Supercell ID), для остальных игр - общее про доступ к аккаунту. */
     private String gemPurchaseWarning(String gameKey) {
+        if ("pubg_mobile".equals(gameKey)) {
+            return "⚠️ <b>Важно перед покупкой:</b> для зачисления UC потребуется ваш PUBG Mobile Player ID (вход в аккаунт не нужен). "
+                    + "Данные модератор запросит лично в переписке, нигде в боте вводить их не нужно.";
+        }
         if ("pubg_pc".equals(gameKey)) {
             return "⚠️ <b>Важно перед покупкой:</b> для зачисления G-Coins поставщик (топап-сервис) может запросить данные вашего аккаунта PUBG — "
                     + "это требование поставщика, не самого бота. Все данные модератор запросит лично в переписке, нигде в боте вводить их не нужно.";

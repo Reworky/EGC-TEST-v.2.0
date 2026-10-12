@@ -120,13 +120,26 @@ public class RewardSeeder implements CommandLineRunner {
                 + "Где найти: откройте профиль в игре → ваш ID указан под никнеймом.\n\n"
                 + "Введите Player ID:";
 
-        seed("PUBG Mobile - UC 120",
-                "Пополнение 120 UC на аккаунт PUBG Mobile. Зачисляется по Player ID без входа в аккаунт. Срок доставки — до 24 ч.",
-                "PUBG Mobile", 16_800, pubgMobilePrompt, 1_000, "pubg_mobile");
+        // 2026-10-12: пакеты у поставщика теперь 60 / «300 + 25» / «600 + 60» / «1500 + 300» UC (закупка 86 / 418 / 899 / 2249 ₽), старых 120 и 240 UC там нет -
+        // их выключаем (цены устарели и были бы ниже доната). Новые позиции 60 / 300 / 600 UC; цена в EXC по правилу гемов: донат (101 / 493 / 1061 ₽) × 100 × 1.2
+        // вверх до сотен = 12 200 / 59 200 / 127 400. Пакет 1500 + 300 есть только в донате за рубли.
+        for (String oldTitle : List.of("PUBG Mobile - UC 120", "PUBG Mobile - UC 240")) {
+            rewardItemRepository.findByTitle(oldTitle).ifPresent(item -> {
+                if (item.isActive()) { item.setActive(false); rewardItemRepository.save(item); }
+            });
+        }
 
-        seed("PUBG Mobile - UC 240",
-                "Пополнение 240 UC на аккаунт PUBG Mobile. Зачисляется по Player ID без входа в аккаунт. Срок доставки — до 24 ч.",
-                "PUBG Mobile", 33_600, pubgMobilePrompt, 5_000, "pubg_mobile");
+        seed("PUBG Mobile - UC 60",
+                "Пополнение 60 UC на аккаунт PUBG Mobile. Зачисляется по Player ID без входа в аккаунт. Срок доставки — до 24 ч.",
+                "PUBG Mobile", 12_200, pubgMobilePrompt, 1_000, "pubg_mobile");
+
+        seed("PUBG Mobile - UC 300",
+                "Пополнение 325 UC (300 + 25 бонусных) на аккаунт PUBG Mobile. Зачисляется по Player ID без входа в аккаунт. Срок доставки — до 24 ч.",
+                "PUBG Mobile", 59_200, pubgMobilePrompt, 5_000, "pubg_mobile");
+
+        seed("PUBG Mobile - UC 600",
+                "Пополнение 660 UC (600 + 60 бонусных) на аккаунт PUBG Mobile. Зачисляется по Player ID без входа в аккаунт. Срок доставки — до 24 ч.",
+                "PUBG Mobile", 127_400, pubgMobilePrompt, 15_000, "pubg_mobile");
 
         // EA FC 26 — coming soon (visible but not purchasable)
         rewardItemRepository.findByTitle("EA FC 26 — 500 FC Points").ifPresent(item -> {

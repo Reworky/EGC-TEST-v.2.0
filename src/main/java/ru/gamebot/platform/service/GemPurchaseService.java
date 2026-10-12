@@ -62,6 +62,7 @@ public class GemPurchaseService {
     public static final String CLASH_ROYALE = "Clash Royale";
     public static final String CLASH_OF_CLANS = "Clash of Clans";
     public static final String PUBG_PC = "PUBG PC";
+    public static final String PUBG_MOBILE = "PUBG Mobile";
 
     // Цены — розница Купикод на 2026-09-20 + 18% наценка (та же формула, что раньше с donatov.net,
     // см. класс-javadoc). XP-бонус — по калибровке ~0.68 XP/₽ (см. javadoc).
@@ -177,6 +178,16 @@ public class GemPurchaseService {
             new GemPackage("2500", 2_700, 2_559, 1_740, "2500 + 200 G-Coins")
     );
 
+    /** PUBG Mobile (UC, 2026-10-12): закупка Купикод (скидочная) 60 / «300 + 25» / «600 + 60» / «1500 + 300» UC = 86 / 418 / 899 / 2249 ₽
+     *  (обычная 99 / 525 / 1099 / 2699), цена = round(закупка × 1.18), XP = round(цена × 0.68). key совпадает с числом в названии EXC-товара
+     *  «PUBG Mobile - UC N», gems - сколько UC получит игрок (с бонусом поставщика), label - подпись пакета. */
+    public static final List<GemPackage> PUBG_MOBILE_PACKAGES = List.of(
+            new GemPackage("60", 60, 101, 69, "60 UC"),
+            new GemPackage("300", 325, 493, 335, "300 + 25 UC"),
+            new GemPackage("600", 660, 1_061, 721, "600 + 60 UC"),
+            new GemPackage("1500", 1_800, 2_654, 1_805, "1500 + 300 UC")
+    );
+
     /** Пакеты гемов Clash of Clans, СКРЫТЫЕ от игроков (решение владельца 2026-10-12, как у Brawl Stars и Clash Royale): оставлены только
      *  80/500/1200/2500 с актуальными ценами Купикод. Gold Pass не скрывается. Вернуть позицию = убрать ключ отсюда (и обновить цену). */
     private static final java.util.Set<String> CLASH_OF_CLANS_HIDDEN_KEYS = java.util.Set.of(
@@ -201,6 +212,8 @@ public class GemPurchaseService {
         CATALOG.put("clash_of_clans", CLASH_OF_CLANS_PACKAGES);
         GAME_NAMES.put("pubg_pc", PUBG_PC);
         CATALOG.put("pubg_pc", PUBG_PC_PACKAGES);
+        GAME_NAMES.put("pubg_mobile", PUBG_MOBILE);
+        CATALOG.put("pubg_mobile", PUBG_MOBILE_PACKAGES);
     }
 
     /** Отображаемое имя игры для gameName заявки/текстов — если ключ не найден (донат для этой игры
