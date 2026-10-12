@@ -61,6 +61,7 @@ public class GemPurchaseService {
     public static final String BRAWL_STARS = "Brawl Stars";
     public static final String CLASH_ROYALE = "Clash Royale";
     public static final String CLASH_OF_CLANS = "Clash of Clans";
+    public static final String PUBG_PC = "PUBG PC";
 
     // Цены — розница Купикод на 2026-09-20 + 18% наценка (та же формула, что раньше с donatov.net,
     // см. класс-javadoc). XP-бонус — по калибровке ~0.68 XP/₽ (см. javadoc).
@@ -166,6 +167,16 @@ public class GemPurchaseService {
             new GemPackage("cocgoldpass", 0, 860, 585, "Gold Pass")
     );
 
+    /** PUBG PC (G-Coins, 2026-10-12): закупка Купикод 100 / «500 + 10» / «1000 + 50» / «2500 + 200» = 75 / 437 / 849 / 2169 ₽, цена = round(закупка × 1.18),
+     *  XP = round(цена × 0.68). key совпадает с числом в названии EXC-товара «PUBG PC - G-Coin N» (так RewardSeeder сверяет цены), gems - сколько монет
+     *  получит игрок (с бонусом поставщика), label - подпись пакета (у валютных пакетов label не делает их «пропусками»: пропуск = gems <= 0). */
+    public static final List<GemPackage> PUBG_PC_PACKAGES = List.of(
+            new GemPackage("100", 100, 89, 61, "100 G-Coins"),
+            new GemPackage("500", 510, 516, 351, "500 + 10 G-Coins"),
+            new GemPackage("1000", 1_050, 1_002, 681, "1000 + 50 G-Coins"),
+            new GemPackage("2500", 2_700, 2_559, 1_740, "2500 + 200 G-Coins")
+    );
+
     /** Пакеты гемов Clash of Clans, СКРЫТЫЕ от игроков (решение владельца 2026-10-12, как у Brawl Stars и Clash Royale): оставлены только
      *  80/500/1200/2500 с актуальными ценами Купикод. Gold Pass не скрывается. Вернуть позицию = убрать ключ отсюда (и обновить цену). */
     private static final java.util.Set<String> CLASH_OF_CLANS_HIDDEN_KEYS = java.util.Set.of(
@@ -188,6 +199,8 @@ public class GemPurchaseService {
         CATALOG.put("clash_royale", CLASH_ROYALE_PACKAGES);
         GAME_NAMES.put("clash_of_clans", CLASH_OF_CLANS);
         CATALOG.put("clash_of_clans", CLASH_OF_CLANS_PACKAGES);
+        GAME_NAMES.put("pubg_pc", PUBG_PC);
+        CATALOG.put("pubg_pc", PUBG_PC_PACKAGES);
     }
 
     /** Отображаемое имя игры для gameName заявки/текстов — если ключ не найден (донат для этой игры

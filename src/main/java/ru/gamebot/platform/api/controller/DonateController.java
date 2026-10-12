@@ -132,7 +132,7 @@ public class DonateController {
                 PackageDto p = new PackageDto();
                 p.setKey(pkg.key());
                 p.setLabel(pkg.displayLabel());
-                p.setPass(pkg.label() != null);
+                p.setPass(pkg.gems() <= 0);
                 p.setPriceRub(price);
                 p.setRegularPriceRub(pkg.priceRub());
                 p.setXpBonus(pkg.xpBonus());

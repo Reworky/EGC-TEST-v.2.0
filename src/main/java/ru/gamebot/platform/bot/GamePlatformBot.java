@@ -8650,7 +8650,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private boolean hasMultipleDonationProductTypes(String gameKey) {
         List<GemPurchaseService.GemPackage> packages = GemPurchaseService.packagesFor(gameKey);
         boolean hasCurrency = packages.stream().anyMatch(p -> p.gems() > 0);
-        boolean hasLabelItems = packages.stream().anyMatch(p -> p.label() != null);
+        boolean hasLabelItems = packages.stream().anyMatch(p -> p.label() != null && p.gems() <= 0);
         return hasCurrency && hasLabelItems;
     }
 
@@ -8746,7 +8746,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "Выберите товар" + accountLine + passNote + "\n\n"
                 + "К каждой покупке — бонус XP\n\n"
                 + "⚠️ Заявка обрабатывается вручную, зачисление может занять время.\n\n"
-                + GEM_PURCHASE_ACCOUNT_ACCESS_WARNING;
+                + gemPurchaseWarning(gameKey);
         if ("brawl_stars".equals(gameKey)) {
             sendResourceBanner(user.getTelegramId(), "brawl_passes_banner.png", passesText, keyboardFactory.rowsLayout(rows));
             return;
@@ -20475,6 +20475,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return switch (gameKey) {
             case "clash_royale" -> user.getClashRoyaleTag();
             case "clash_of_clans" -> user.getClashOfClansTag();
+            // PUBG PC: отдельного «тега» нет - берём привязанный PUBG-аккаунт, если он есть; иначе все данные модератор запросит лично в переписке
+            case "pubg_pc" -> user.getPubgAccountId() != null && !user.getPubgAccountId().isBlank()
+                    ? user.getPubgAccountId() : "PUBG PC (данные запросит модератор)";
             default -> user.getBrawlStarsTag();
         };
     }
@@ -20507,7 +20510,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
         String tag = gemPurchaseGameTag(user, gameKey);
-        String accountLine = tag != null && !tag.isBlank()
+        boolean pubg = "pubg_pc".equals(gameKey);
+        String accountLine = !pubg && tag != null && !tag.isBlank()
                 ? " который хотите получить на свой аккаунт " + escape(tag)
                 : " который хотите получить";
         String passNote = passActive
@@ -20515,10 +20519,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "";
         sendText(user.getTelegramId(),
                 "💎 <b>Донат " + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\n"
-                        + "Выберите пакет гемов" + accountLine + passNote + "\n\n"
+                        + "Выберите пакет " + (pubg ? "G-Coins" : "гемов") + accountLine + passNote + "\n\n"
                         + "К каждой покупке — бонус XP\n\n"
                         + "⚠️ Заявка обрабатывается вручную, зачисление может занять время.\n\n"
-                        + GEM_PURCHASE_ACCOUNT_ACCESS_WARNING,
+                        + gemPurchaseWarning(gameKey),
                 keyboardFactory.rowsLayout(rows));
     }
 
@@ -20569,6 +20573,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  есть, но честно предупреждать заранее, до оплаты — не после. См. project_gem_purchase_pilot.
      *  Показывается на КАЖДОМ шаге, где ещё не поздно передумать (список товаров, выбор способа
      *  оплаты, подтверждение TON) — специально не один раз, чтобы точно увидели до списания денег. */
+    /** Предупреждение перед донатом: для PUBG PC своё (там не Supercell ID), для остальных игр - общее про доступ к аккаунту. */
+    private String gemPurchaseWarning(String gameKey) {
+        if ("pubg_pc".equals(gameKey)) {
+            return "⚠️ <b>Важно перед покупкой:</b> для зачисления G-Coins поставщик (топап-сервис) может запросить данные вашего аккаунта PUBG — "
+                    + "это требование поставщика, не самого бота. Все данные модератор запросит лично в переписке, нигде в боте вводить их не нужно.";
+        }
+        return GEM_PURCHASE_ACCOUNT_ACCESS_WARNING;
+    }
+
     private static final String GEM_PURCHASE_ACCOUNT_ACCESS_WARNING =
             "⚠️ <b>Важно перед покупкой:</b> для зачисления поставщик (топап-сервис) запросит доступ "
                     + "к вашему игровому аккаунту (email и/или код входа Supercell ID) — это требование "
@@ -20578,7 +20591,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** "Отмена" на экранах выбора способа оплаты/подтверждения донат-пакета должна вернуть к списку,
      *  откуда реально пришли — гемы и пропуски разные экраны (см. sendGemPackageList/sendPassDonateList). */
     private String gemDonateBackTarget(String gameKey, GemPurchaseService.GemPackage pkg) {
-        return pkg.label() != null ? "shop:passgroup:" + gameKey : "shop:donate:" + gameKey;
+        return pkg.gems() <= 0 ? "shop:passgroup:" + gameKey : "shop:donate:" + gameKey;
     }
 
     public int gemPurchaseStarsPrice(long priceRub) {
@@ -20608,7 +20621,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "Выберите способ оплаты:\n\n"
                 + "⭐ <b>Telegram Stars</b> — рекомендуем: оплата в один тап, подтверждается автоматически, без переписки и проверки перевода.\n"
                 + "💎 <b>GRAM (TON)</b> — перевод вручную: менеджер напишет вам в личные сообщения и пришлёт реквизиты, это дольше.\n\n"
-                + GEM_PURCHASE_ACCOUNT_ACCESS_WARNING;
+                + gemPurchaseWarning(gameKey);
         if ("brawl_stars".equals(gameKey) && ("brawlpass".equals(pkg.key()) || "brawlpassplus".equals(pkg.key()))) {
             sendResourceBanner(user.getTelegramId(),
                     "brawlpassplus".equals(pkg.key()) ? "brawl_pass_plus_banner.png" : "brawl_pass_banner.png",
@@ -20652,7 +20665,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + pkg.displayLabel() + " — ~" + tonAmount + " GRAM (TON) (" + price + "₽ по текущему курсу)\n\n"
                         + "Тег: <code>" + escape(tag) + "</code>\n\n"
                         + "После подтверждения модератор свяжется с вами в личных сообщениях, чтобы уточнить детали и прислать реквизиты для оплаты.\n\n"
-                        + GEM_PURCHASE_ACCOUNT_ACCESS_WARNING + "\n\n"
+                        + gemPurchaseWarning(gameKey) + "\n\n"
                         + "Создать заявку?",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("✅ Создать заявку", "gemdonate:confirmton:" + gameKey + ":" + pkg.key())),
@@ -20796,7 +20809,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String tag = gemPurchaseGameTag(user, gameKey);
         // Валютные пакеты ("30 гемов") дополняем именем игры для ясности; у label-товаров (например,
         // "Brawl Pass") имя игры дублировало бы название — не добавляем (2026-09-20).
-        String itemTitle = pkg.label() != null ? pkg.displayLabel() : pkg.displayLabel() + " " + GemPurchaseService.gameName(gameKey);
+        String itemTitle = pkg.gems() <= 0 ? pkg.displayLabel() : pkg.displayLabel() + " " + GemPurchaseService.gameName(gameKey);
         return new StarsItemSpec(
                 "💎 " + itemTitle,
                 "Зачисление на тег " + tag + ". Покупку оформляет администратор вручную после оплаты — обычно в течение некоторого времени.",
