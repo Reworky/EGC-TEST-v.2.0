@@ -21787,9 +21787,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? (100 - holdPercent) + "% награды придёт сразу, остальное через " + holdDays + " дн., если останешься в канале."
                 : "Награда придёт сразу после проверки.";
         String rateLine = sponsorQuestRaisesRate(quest)
-                ? "📈 Помни, выполнив этот квест, ты немного повышаешь курс вывода для всех."
-                : SPONSOR_LOOP_LINE;
-        return "💼 <b>Новый квест от спонсора</b>\n\n"
+                ? "<b>💡 Помни, выполнив этот квест, ты немного повышаешь курс вывода для всех.</b>"
+                : "<b>" + SPONSOR_LOOP_LINE + "</b>";
+        return "<b>💼 Новый квест от спонсора</b>\n\n"
                 + "🎁 " + fmtExc(quest.getRewardCoins()) + " EXC + " + quest.getRewardXp() + " XP за подписку на канал.\n\n"
                 + "Открой квест, и успей выполнить его, места ограничены!\n\n"
                 + payout + "\n\n"
