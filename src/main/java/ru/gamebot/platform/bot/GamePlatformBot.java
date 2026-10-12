@@ -21906,14 +21906,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (questService.getLatestSubmission(u, quest) != null) continue;
             if (quest.getChannelCheckChatId() != null) {
                 try {
-                    if (isChannelMember(quest.getChannelCheckChatId(), u.getTelegramId())) {
+                    boolean member = isChannelMember(quest.getChannelCheckChatId(), u.getTelegramId());
+                    accessStreak = 0;
+                    Thread.sleep(40); // ~25 проверок в секунду: без пауз Telegram отвечает «слишком много запросов» и рассылка ложно обрывалась бы
+                    if (member) {
                         inChannel++;
-                        accessStreak = 0;
                         continue;
                     }
-                    accessStreak = 0;
                 } catch (TelegramApiException e) {
                     noAccess++;
+                    String err = String.valueOf(e.getMessage()).toLowerCase(java.util.Locale.ROOT);
+                    if (err.contains("too many requests") || err.contains("retry after")) {
+                        Thread.sleep(5000); // лимит запросов, не потеря доступа: подождать и идти дальше (этого игрока заденет повторный запуск)
+                        continue;
+                    }
                     accessStreak++;
                     if (accessStreak >= 5) { aborted = true; break; } // бот потерял доступ к каналу - дальше проверять нечем
                     Thread.sleep(1000);
