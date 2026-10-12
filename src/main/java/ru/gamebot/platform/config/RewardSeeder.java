@@ -159,17 +159,19 @@ public class RewardSeeder implements CommandLineRunner {
         // Цены подняты 2026-09-20 (тот же повод, что у Brawl Stars выше — смена поставщика доната
         // donatov.net -> Купикод, розничные цены заметно выросли, старые EXC-цены оказались бы дешевле
         // доната). Новые цены держат запас ~1.2x против актуального доната Купикод.
-        seed("Clash Royale - Gems 160",
-                "Пополнение 160 гемов на аккаунт Clash Royale. Доставка на email. Срок доставки — до 24 ч.",
-                "Clash Royale", 33_600, crPrompt, 1_000, "clash_royale");
+        // 2026-10-12 (решение владельца): в магазине Clash Royale остаются только позиции с обновлёнными ценами Купикод (500 и 1200 гемов);
+        // 160 выключается (цена устарела, поставщик поменял розницу), деактивируем на каждом старте - чтобы вернуть, убрать из списка.
+        rewardItemRepository.findByTitle("Clash Royale - Gems 160").ifPresent(item -> {
+            if (item.isActive()) { item.setActive(false); rewardItemRepository.save(item); }
+        });
 
         seed("Clash Royale - Gems 500",
                 "Пополнение 500 гемов на аккаунт Clash Royale. Доставка на email. Срок доставки — до 24 ч.",
-                "Clash Royale", 77_700, crPrompt, 5_000, "clash_royale");
+                "Clash Royale", 73_500, crPrompt, 5_000, "clash_royale"); // 2026-10-12: донат 612 ₽ -> 612 × 100 × 1.2 вверх до сотен
 
         seed("Clash Royale - Gems 1200",
                 "Пополнение 1200 гемов на аккаунт Clash Royale. Доставка на email. Срок доставки — до 24 ч.",
-                "Clash Royale", 151_600, crPrompt, 15_000, "clash_royale");
+                "Clash Royale", 145_700, crPrompt, 15_000, "clash_royale"); // 2026-10-12: донат 1214 ₽ -> 1214 × 100 × 1.2 вверх до сотен
 
         rewardItemRepository.findByTitle("Brawl Stars — 80 Gems").ifPresent(old -> {
             if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }

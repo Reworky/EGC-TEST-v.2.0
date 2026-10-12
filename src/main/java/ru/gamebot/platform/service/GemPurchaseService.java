@@ -102,14 +102,16 @@ public class GemPurchaseService {
 
     // Цены — розница Купикод на 2026-09-20 + 18% наценка, тот же принцип, что у Brawl Stars выше
     // (добавлено в тот же день по запросу пользователя — "такая же история для Clash Royale").
-    public static final List<GemPackage> CLASH_ROYALE_PACKAGES = List.of(
+    // 2026-10-12: пакеты 80/500/1200/2500 и Diamond Pass пересчитаны по новой рознице Купикод (107/519/1029/2069 и 1239 ₽): цена = round(закупка × 1.18), XP = round(цена × 0.68).
+    private static final List<GemPackage> CLASH_ROYALE_ALL_PACKAGES = List.of(
+            new GemPackage("80", 80, 126, 86),
             new GemPackage("160", 160, 280, 190),
-            new GemPackage("500", 500, 647, 440),
+            new GemPackage("500", 500, 612, 416),
             new GemPackage("580", 580, 758, 515),
-            new GemPackage("1200", 1_200, 1_263, 859),
+            new GemPackage("1200", 1_200, 1_214, 826),
             new GemPackage("1280", 1_280, 1_363, 927),
             new GemPackage("1700", 1_700, 1_869, 1_271),
-            new GemPackage("2500", 2_500, 2_516, 1_711),
+            new GemPackage("2500", 2_500, 2_441, 1_660),
             new GemPackage("2580", 2_580, 2_604, 1_771),
             new GemPackage("3000", 3_000, 3_118, 2_120),
             new GemPackage("6500", 6_500, 6_293, 4_279),
@@ -123,8 +125,19 @@ public class GemPurchaseService {
             new GemPackage("140000", 140_000, 119_943, 81_561),
             // Сезонные пропуски Clash Royale (у Kupikod называются "Mini Pass"/"Diamond Pass").
             new GemPackage("crminipass", 0, 506, 344, "Mini Pass"),
-            new GemPackage("crdiamondpass", 0, 1_483, 1_008, "Diamond Pass")
+            new GemPackage("crdiamondpass", 0, 1_462, 994, "Diamond Pass")
     );
+
+    /** Пакеты гемов Clash Royale, СКРЫТЫЕ от игроков (решение владельца 2026-10-12, как у Brawl Stars): оставлены только 80/500/1200/2500
+     *  с актуальными ценами Купикод (скриншот 2026-10-12: 107/519/1029/2069 ₽ закупки -> ×1.18). Пропуска (Mini/Diamond Pass) не скрываются.
+     *  Вернуть позицию = убрать ключ отсюда (и обновить цену по свежей рознице). */
+    private static final java.util.Set<String> CLASH_ROYALE_HIDDEN_KEYS = java.util.Set.of(
+            "160", "580", "1280", "1700", "2580", "3000", "6500", "7700", "9000", "14000", "20500", "28000", "42000", "70000", "140000");
+
+    /** Каталог Clash Royale, видимый игрокам (бот и мини-апп). */
+    public static final List<GemPackage> CLASH_ROYALE_PACKAGES = CLASH_ROYALE_ALL_PACKAGES.stream()
+            .filter(p -> !CLASH_ROYALE_HIDDEN_KEYS.contains(p.key()))
+            .toList();
 
     // Цены — розница Купикод на 2026-09-20 + 18% наценка, тот же принцип (добавлено в тот же вечер
     // по запросу пользователя — "тоже самое для Clash of Clans").
