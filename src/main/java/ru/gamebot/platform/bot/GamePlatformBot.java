@@ -14541,6 +14541,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         switch (tab) {
             case PNL -> {
                 rows.add(List.of(keyboardFactory.callback("➕ Записать доход", "admin:fin:add"), keyboardFactory.callback("🗑 Записи", "admin:fin:list")));
+                rows.add(List.of(keyboardFactory.callback("📜 История доходов", "admin:fin:history:0")));
             }
             case TECH -> {
                 rows.add(List.of(keyboardFactory.callback("➕ Инцидент", "admin:inc:add"), keyboardFactory.callback("✅ Закрыть инцидент", "admin:inc:list")));
@@ -14728,6 +14729,52 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    private static final int INCOME_HISTORY_PAGE_SIZE = 12;
+
+    /** «📜 История доходов»: все записанные доходы клуба (в том числе автоматические от спонсорских кампаний), новые сверху, по страницам. */
+    private void sendIncomeHistory(AppUser user, int page) {
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
+        org.springframework.data.domain.Page<ru.gamebot.platform.domain.model.FinanceEntry> pageData = financeService.history(page, INCOME_HISTORY_PAGE_SIZE);
+        int totalPages = Math.max(1, pageData.getTotalPages());
+        if (page >= totalPages) {
+            sendIncomeHistory(user, totalPages - 1);
+            return;
+        }
+        long total = 0, count = 0;
+        StringBuilder byKind = new StringBuilder();
+        for (Object[] row : financeService.totalsByKind()) {
+            long n = ((Number) row[1]).longValue();
+            long sum = ((Number) row[2]).longValue();
+            total += sum;
+            count += n;
+            byKind.append("• ").append(ru.gamebot.platform.domain.model.FinanceEntry.kindLabel((String) row[0]))
+                    .append(": <b>").append(fmtExc(sum)).append(" ₽</b> (").append(n).append(")\n");
+        }
+        StringBuilder sb = new StringBuilder("📜 <b>История доходов</b>\n\n");
+        if (count == 0) {
+            sb.append("Записей пока нет.");
+        } else {
+            sb.append("Всего записано: <b>").append(fmtExc(total)).append(" ₽</b> · записей: ").append(count).append("\n")
+                    .append(byKind).append("\nСтраница ").append(page + 1).append(" из ").append(totalPages).append("\n\n");
+            for (ru.gamebot.platform.domain.model.FinanceEntry e : pageData.getContent()) {
+                sb.append("📅 ").append(e.getEntryDate().format(fmt)).append(" · ")
+                        .append(ru.gamebot.platform.domain.model.FinanceEntry.kindLabel(e.getKind()))
+                        .append(" · <b>").append(fmtExc(e.getAmountRub())).append(" ₽</b>\n");
+                if (e.getNote() != null && !e.getNote().isBlank()) {
+                    sb.append("   <i>").append(escape(trim(e.getNote(), 80))).append("</i>\n");
+                }
+            }
+        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        List<InlineKeyboardButton> nav = new ArrayList<>();
+        if (page > 0) nav.add(keyboardFactory.callback("⬅️ Новее", "admin:fin:history:" + (page - 1)));
+        if (page + 1 < totalPages) nav.add(keyboardFactory.callback("Старее ➡️", "admin:fin:history:" + (page + 1)));
+        if (!nav.isEmpty()) rows.add(nav);
+        rows.add(List.of(keyboardFactory.callback("🗑 Удалить запись", "admin:fin:list")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:fin:add"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
     private void handleFinanceAction(AppUser user, UserSession session, String action) {
         String[] p = action.split(":");
         switch (p[0]) {
@@ -14740,6 +14787,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             List.of(keyboardFactory.callback("Yandex РСЯ", "admin:fin:kind:" + ru.gamebot.platform.domain.model.FinanceEntry.YANDEX_RSYA)),
                             List.of(keyboardFactory.callback("Прочее", "admin:fin:kind:" + ru.gamebot.platform.domain.model.FinanceEntry.OTHER)),
                             List.of(keyboardFactory.callback("💳 Только пополнить фонд (не доход)", "admin:payout")),
+                            List.of(keyboardFactory.callback("📜 История доходов", "admin:fin:history:0")),
                             List.of(keyboardFactory.callback("⬅️ Назад", "admin:an:tab:PNL")))));
             case "kind" -> {
                 String kind = p.length > 1 ? p[1] : ru.gamebot.platform.domain.model.FinanceEntry.OTHER;
@@ -14752,6 +14800,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 + "Без даты запись пойдёт сегодняшним числом.",
                         cancelKeyboard());
             }
+            case "history" -> sendIncomeHistory(user, p.length > 1 && parseLong(p[1]) != null ? parseLong(p[1]).intValue() : 0);
             case "list" -> {
                 List<ru.gamebot.platform.domain.model.FinanceEntry> latest = financeService.latest();
                 List<List<InlineKeyboardButton>> rows = new ArrayList<>();

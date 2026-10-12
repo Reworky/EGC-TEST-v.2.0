@@ -3,6 +3,8 @@ package ru.gamebot.platform.service;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import ru.gamebot.platform.domain.model.FinanceEntry;
 import ru.gamebot.platform.domain.repository.FinanceEntryRepository;
@@ -29,6 +31,16 @@ public class FinanceService {
 
     public List<FinanceEntry> between(LocalDate from, LocalDate to) {
         return repository.findAllByEntryDateBetweenOrderByEntryDateDesc(from, to);
+    }
+
+    /** История всех записанных доходов (новые сверху), страница с нуля. */
+    public Page<FinanceEntry> history(int page, int size) {
+        return repository.findAllByOrderByEntryDateDescIdDesc(PageRequest.of(Math.max(0, page), size));
+    }
+
+    /** Итоги за всё время по видам: [вид, число записей, сумма ₽]. */
+    public List<Object[]> totalsByKind() {
+        return repository.totalsByKind();
     }
 
     public List<FinanceEntry> latest() {
