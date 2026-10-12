@@ -262,6 +262,12 @@ public class RewardSeeder implements CommandLineRunner {
                 "Пополнение 500 гемов на аккаунт Clash of Clans. Доставка через Supercell ID. Срок доставки — до 24 ч.",
                 "Clash of Clans", 73_500, cocPrompt, 15_000, "clash_of_clans"); // 2026-10-12: донат 612 ₽ -> 612 × 100 × 1.2 вверх до сотен
 
+        // 2026-10-12: заведена позиция 1200 гемов (есть у поставщика, донат 1 214 ₽): цена в EXC = донат × 100 × 1.2 вверх до сотен.
+        // 2500 гемов (293 000 EXC) в магазин EXC не заводили - слишком крупная сумма, остаётся только в донате за рубли.
+        seed("Clash of Clans - Gems 1200",
+                "Пополнение 1200 гемов на аккаунт Clash of Clans. Доставка через Supercell ID. Срок доставки — до 24 ч.",
+                "Clash of Clans", 145_700, cocPrompt, 15_000, "clash_of_clans");
+
         rewardItemRepository.findByTitle("Mobile Legends — 86 Diamonds").ifPresent(old -> {
             if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
         });
