@@ -21778,7 +21778,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    /** Текст пуша при создании: ОБЕЗЛИЧЕННЫЙ - без названия канала и спонсора (название игрок увидит в карточке после нажатия кнопки). */
+    /** Текст пуша при создании: ОБЕЗЛИЧЕННЫЙ - без названия канала и спонсора (название игрок увидит в карточке после нажатия кнопки).
+     *  Формулировка утверждена владельцем 2026-10-12 дословно. */
     private String sponsorQuestPushText(Quest quest) {
         int holdPercent = quest.getChannelHoldPercent() == null ? 0 : quest.getChannelHoldPercent();
         int holdDays = quest.getChannelHoldDays() == null ? 0 : quest.getChannelHoldDays();
@@ -21786,14 +21787,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? (100 - holdPercent) + "% награды придёт сразу, остальное через " + holdDays + " дн., если останешься в канале."
                 : "Награда придёт сразу после проверки.";
         String rateLine = sponsorQuestRaisesRate(quest)
-                ? "📈 Спонсор платит за каждого подписчика больше, чем получаешь ты, и разница остаётся в фонде выплат. "
-                        + "Выполнив квест, ты немного повышаешь курс вывода для всех."
+                ? "📈 Помни, выполнив этот квест, ты немного повышаешь курс вывода для всех."
                 : SPONSOR_LOOP_LINE;
         return "💼 <b>Новый квест от спонсора</b>\n\n"
-                + "🎁 <b>" + fmtExc(quest.getRewardCoins()) + " EXC</b> + " + quest.getRewardXp() + " XP за подписку на канал.\n\n"
-                + "Открой квест, подпишись и нажми «✅ Я подписался»: " + payout + "\n\n"
-                + rateLine + "\n\n"
-                + "👥 Мест ограниченное число.";
+                + "🎁 " + fmtExc(quest.getRewardCoins()) + " EXC + " + quest.getRewardXp() + " XP за подписку на канал.\n\n"
+                + "Открой квест, и успей выполнить его, места ограничены!\n\n"
+                + payout + "\n\n"
+                + rateLine;
     }
 
     /** Текст напоминания через сутки: тоже без названия канала. */
