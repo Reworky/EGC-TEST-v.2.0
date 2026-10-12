@@ -207,11 +207,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     // Итоги турнира, ждущие одобрения админа, хранятся в Tournament.resultsFeedText (в БД) — личные уведомления
     // победителям уходят сразу, без ожидания: приз уже зачислен, только пост в канал требует согласования.
 
-    /** Итоги ежедневного розыгрыша билетов, ждущие одобрения/правки администратора перед публикацией
-     * в канал (2026-09-14, см. WeeklyResetScheduler.drawDailyTicketRaffle) — билеты победителям уже
-     * начислены и личные уведомления уже ушли, согласование нужно только для поста в канал. */
-    private volatile String pendingTicketRaffleFeedText;
-
     /** Анонс буста выходных, ждущий одобрения/правки администратора перед публикацией в канал
      * (2026-09-14, см. WeeklyResetScheduler.startWeekendBoost) — сам буст уже активен и работает
      * сразу для всех, согласование нужно только для текста поста в канал. */
@@ -2340,9 +2335,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     long tid = parseLong(target.substring("tournament:".length()));
                     saveTournamentFeedText(tid, text.trim());
                     sendTournamentFeedCard(tid);
-                } else if (target.equals("ticketraffle")) {
-                    pendingTicketRaffleFeedText = text.trim();
-                    sendTicketRaffleFeedCard();
                 } else if (target.equals("weekendboost")) {
                     pendingWeekendBoostFeedText = text.trim();
                     sendWeekendBoostFeedCard();
@@ -13005,41 +12997,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             return;
         }
-        if (action.equals("ticketraffle:approve")) {
-            String text = pendingTicketRaffleFeedText;
-            if (text != null) {
-                try {
-                    SendMessage msg = new SendMessage();
-                    msg.setChatId(requiredChannelChatId());
-                    msg.setText(text);
-                    msg.setParseMode("HTML");
-                    execute(msg);
-                } catch (Exception e) {
-                    log.error("Failed to post approved ticket raffle results to channel", e);
-                }
-            }
-            pendingTicketRaffleFeedText = null;
-            clearInlineKeyboard(callbackQuery);
-            answer(callbackQuery.getId(), "✅ Опубликовано");
-            return;
-        }
-        if (action.equals("ticketraffle:edit")) {
-            session.reset();
-            session.setState(SessionState.ADMINFEED_EDIT);
-            session.getData().put("editTarget", "ticketraffle");
-            answerSilently(callbackQuery.getId());
-            sendText(user.getTelegramId(),
-                    "✏️ Текущий текст:\n\n" + (pendingTicketRaffleFeedText != null ? pendingTicketRaffleFeedText : "—")
-                            + "\n\nПришлите новый текст поста:",
-                    cancelKeyboard());
-            return;
-        }
-        if (action.equals("ticketraffle:reject")) {
-            pendingTicketRaffleFeedText = null;
-            clearInlineKeyboard(callbackQuery);
-            answer(callbackQuery.getId(), "❌ Отклонено");
-            return;
-        }
         if (action.equals("weekendboost:approve")) {
             String text = pendingWeekendBoostFeedText;
             if (text != null) {
@@ -19368,8 +19325,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Ежедневный розыгрыш билетов колеса фортуны — см. WeeklyResetScheduler.drawDailyTicketRaffle.
-     * Билеты уже начислены и личные уведомления уже ушли к моменту вызова — событие только готовит
-     * пост в канал на согласование, ничего экономически значимого само не делает. */
+     * Билеты уже начислены к моменту вызова; здесь только личные уведомления победителям. Пост с итогами в канал убран по решению
+     * владельца (2026-10-12). */
     @org.springframework.context.event.EventListener
     public void onTicketRaffleDrawn(ru.gamebot.platform.event.TicketRaffleDrawnEvent event) {
         for (AppUser winner : event.getWinners()) {
@@ -19383,33 +19340,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         )));
             } catch (Exception e) {
                 log.warn("Failed to notify ticket raffle winner {}", winner.getTelegramId(), e);
-            }
-        }
-
-        StringBuilder sb = new StringBuilder("🎟 <b>Розыгрыш билетов дня</b>\n\n");
-        sb.append("Сегодня повезло ").append(event.getWinners().size()).append(" игрокам:\n\n");
-        for (AppUser winner : event.getWinners()) {
-            String nick = winner.getNickname() != null ? winner.getNickname() : "Игрок";
-            sb.append("🎉 ").append(escape(nick)).append(" — +1 билет 🎡\n");
-        }
-        sb.append("\nЗаходи каждый день — следующий розыгрыш уже завтра!");
-        pendingTicketRaffleFeedText = sb.toString();
-        sendTicketRaffleFeedCard();
-    }
-
-    private void sendTicketRaffleFeedCard() {
-        String text = pendingTicketRaffleFeedText;
-        if (text == null) return;
-        String preview = "🧾 <b>Розыгрыш билетов — на согласование</b>\n\n" + text;
-        InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
-                keyboardFactory.callback("✅ Опубликовать", "adminfeed:ticketraffle:approve"),
-                keyboardFactory.callback("✏️ Изменить", "adminfeed:ticketraffle:edit"),
-                keyboardFactory.callback("❌ Отклонить", "adminfeed:ticketraffle:reject")));
-        for (Long adminId : adminService.resolvedAdminIds()) {
-            try {
-                sendText(adminId, preview, markup);
-            } catch (Exception e) {
-                log.warn("Failed to send ticket raffle results candidate to admin {}", adminId, e);
             }
         }
     }
