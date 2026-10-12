@@ -5506,6 +5506,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "Чем лояльнее вы относитесь к таким квестам, тем стабильнее проект может выплачивать вам дальше.\n\n"
                         + "Деньги спонсоров идут в фонд выплат, а от его размера зависит курс вывода для всех игроков. "
                         + "Чаще заглядывайте сюда и выполняйте задания: чем больше спонсоров мы привлечём вместе, тем выгоднее будет курс.\n\n"
+                        + (quests.stream().anyMatch(q -> q.getChannelCheckChatId() != null && sponsorQuestRaisesRate(q))
+                            ? "<b>💡 Каждый выполненный квест на подписку немного повышает курс вывода для всех игроков.</b>\n\n" : "")
                         + "Выберите задание:" + legend,
                 verticalWithBackMenu(buttons, "⬅️ Назад", "menu:quests"));
     }
@@ -6084,7 +6086,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + statusLine
                         + "\n"
                         + questRewardLine(user, quest) + "\n\n"
-                        + body,
+                        + body
+                        + sponsorRateNote(quest),
                 verticalWithBackMenu(buttons, backText, backData));
     }
 
@@ -21778,6 +21781,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Строка про курс вывода для карточки спонсорского квеста на подписку (та же формулировка, что в пуше); пусто, если квест не повышает курс. */
+    private String sponsorRateNote(Quest quest) {
+        if (!quest.isSponsored() || quest.getChannelCheckChatId() == null || !sponsorQuestRaisesRate(quest)) return "";
+        return "\n\n<b>💡 Помни, выполнив этот квест, ты немного повышаешь курс вывода для всех.</b>";
+    }
+
     /** Текст пуша при создании: ОБЕЗЛИЧЕННЫЙ - без названия канала и спонсора (название игрок увидит в карточке после нажатия кнопки).
      *  Формулировка утверждена владельцем 2026-10-12 дословно. */
     private String sponsorQuestPushText(Quest quest) {
@@ -23753,7 +23762,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "🪙 <b>+" + fmtExc(done.getAwardedCoins()) + " EXC</b>" + starsNote(done.getAwardedCoins()) + "\n"
                             + "✨ <b>+" + done.getAwardedXp() + " XP</b>\n\n"
                             + holdNote
-                            + "Спасибо, что с нами и со спонсором!",
+                            + (sponsorQuestRaisesRate(quest)
+                                ? "<b>💡 Спасибо! Спонсор заплатил клубу за твою подписку, и часть денег осталась в фонде выплат: курс вывода для всех чуть повысится (курс пересчитывается раз в 4 часа).</b>"
+                                : "Спасибо, что с нами и со спонсором!"),
                     keyboardFactory.rowsLayout(List.of(
                             List.of(keyboardFactory.callback("🎯 Играть", "quest:recommend")),
                             List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
