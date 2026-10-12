@@ -1573,6 +1573,11 @@ public class QuestService {
         return questSubmissionRepository.countApprovedByUser(user);
     }
 
+    /** Сколько заявок взято на квест (для воронки спонсорского квеста: он одноразовый, заявка = игрок). */
+    public long countTakenByQuest(Quest quest) {
+        return questSubmissionRepository.countByQuest(quest);
+    }
+
     public long countApprovedByQuest(Quest quest) {
         return questSubmissionRepository.countApprovedByQuest(quest);
     }

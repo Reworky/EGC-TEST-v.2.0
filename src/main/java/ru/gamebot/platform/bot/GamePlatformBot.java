@@ -179,6 +179,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ScheduledBroadcastService scheduledBroadcastService;
     private final ru.gamebot.platform.service.AdsgramBotAdService adsgramBotAdService;
     private final ru.gamebot.platform.service.SocialTaskService socialTaskService;
+    private final ru.gamebot.platform.service.SponsorQuestPromoService sponsorPromoService;
     private final GemPurchaseService gemPurchaseService;
     private final ru.gamebot.platform.domain.repository.ChannelJoinRequestRepository channelJoinRequestRepository;
     private final ru.gamebot.platform.domain.repository.AppSettingRepository appSettingRepository;
@@ -1087,6 +1088,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if ("quest:recommend".equals(data)) {
             answerSilently(callbackQuery.getId());
+            if (offerSponsorQuestInPlay(user)) {
+                return;
+            }
             questService.recommendQuest(user).ifPresentOrElse(
                     quest -> sendQuestCard(user, quest.getId(), "menu:main", "⬅️ Назад", "🎯 Подобрали специально для тебя!", null, true),
                     () -> sendText(user.getTelegramId(),
@@ -5943,6 +5947,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sessionService.get(user.getTelegramId()).getData().put("quest_back_data", backData);
         sessionService.get(user.getTelegramId()).getData().put("last_quest_id", String.valueOf(questId));
         Quest quest = questService.getQuest(questId);
+        if (quest.isSponsored() && quest.getChannelCheckChatId() != null) {
+            sponsorPromoService.recordViewedOnce(questId, user.getId());
+        }
         QuestSubmission latest = questService.getLatestSubmission(user, quest);
         boolean latestExpired = latest != null && questService.isExpired(latest);
         String statusText = latest == null ? "Не начат"
@@ -15961,6 +15968,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         .append(" (").append(retention.stayedPercent()).append("%) · удержание: ✅ ").append(retention.released())
                         .append(" / ❌ ").append(retention.forfeited()).append(" / ⏳ ").append(retention.pending()).append("\n");
             }
+            for (ru.gamebot.platform.domain.model.Quest fq : linked) {
+                if (fq.getChannelCheckChatId() == null) continue;
+                ru.gamebot.platform.service.SponsorQuestPromoService.Funnel f = sponsorPromoService.funnel(fq.getId());
+                sb.append("\n📣 <b>Воронка квеста</b> (игроков):\n")
+                        .append("   Пуш: ").append(f.pushed()).append(" · напоминание: ").append(f.reminded())
+                        .append(" · в «Играть»: ").append(f.shownInPlay()).append("\n")
+                        .append("   Открыли: ").append(f.viewed()).append(" → взяли: ").append(questService.countTakenByQuest(fq))
+                        .append(" → выполнили: ").append(questService.countApprovedByQuest(fq))
+                        .append(" → остались: ").append(retention.stayed()).append("\n");
+            }
             sb.append("\n");
             sb.append("💵 Оплата: <b>").append(s.getPaidRub()).append(" ₽</b>\n");
             sb.append("   ├ Комиссия EGC: <b>").append(commission).append(" ₽</b>\n");
@@ -21730,6 +21747,188 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return false;
     }
 
+    // ── Видимость спонсорских квестов «подпишись на канал»: пуш при создании, напоминание через сутки, показ в «Играть» ──
+
+    private final java.util.concurrent.ExecutorService sponsorPushExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
+
+    private static boolean recentlyActive(AppUser u, java.time.LocalDate today, java.time.LocalDateTime since) {
+        return (u.getLastActivityDate() != null && !u.getLastActivityDate().isBefore(today.minusDays(14)))
+                || (u.getLastBotActivityAt() != null && !u.getLastBotActivityAt().isBefore(since))
+                || (u.getLastMiniAppOpenAt() != null && !u.getLastMiniAppOpenAt().isBefore(since));
+    }
+
+    private InlineKeyboardMarkup sponsorQuestKeyboard(Quest quest) {
+        return keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("🎯 Взять квест", "quest:view:sponsored:all:" + quest.getId()))));
+    }
+
+    /** Текст пуша при создании (согласован владельцем). */
+    private String sponsorQuestPushText(Quest quest) {
+        int holdPercent = quest.getChannelHoldPercent() == null ? 0 : quest.getChannelHoldPercent();
+        int holdDays = quest.getChannelHoldDays() == null ? 0 : quest.getChannelHoldDays();
+        String payout = holdPercent > 0 && holdDays > 0
+                ? (100 - holdPercent) + "% награды придёт сразу, остальное — через " + holdDays + " дн., если останешься в канале."
+                : "Награда придёт сразу после проверки.";
+        return "💼 <b>Новый квест от спонсора</b>\n\n"
+                + "📢 Канал «" + escape(quest.getGameName()) + "»\n"
+                + "🎁 Награда: <b>" + fmtExc(quest.getRewardCoins()) + " EXC</b> + " + quest.getRewardXp() + " XP\n\n"
+                + "Подпишись и нажми «✅ Я подписался». " + payout + "\n\n"
+                + "Мест ограниченное число: спонсор оплатил определённое количество подписчиков.\n\n"
+                + SPONSOR_LOOP_LINE;
+    }
+
+    /** Текст напоминания через сутки (согласован владельцем). */
+    private String sponsorQuestReminderText(Quest quest) {
+        return "⏰ <b>Квест от спонсора ещё ждёт тебя</b>\n\n"
+                + "📢 «" + escape(quest.getGameName()) + "» — <b>" + fmtExc(quest.getRewardCoins()) + " EXC</b> за подписку. Это займёт 10 секунд.\n\n"
+                + "Мест ограниченное число: когда оплаченные подписчики закончатся, квест закроется.";
+    }
+
+    private void alertAdminsPlain(String text) {
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, text, null);
+            } catch (Exception e) {
+                log.warn("Failed to notify admin {}", adminId, e);
+            }
+        }
+    }
+
+    /** Рассылка о новом спонсорском квесте: в фоне, игрокам, активным за 14 дней, которые ещё НЕ в канале спонсора (иначе квест взять нельзя). */
+    private void pushSponsorQuestToPlayers(Quest quest) {
+        if (!sponsorPromoService.pushEnabled()) {
+            alertAdminsPlain("ℹ️ Рассылка игрокам о новом спонсорском квесте выключена (по умолчанию). Квест виден в меню «💼 Квест от спонсора» и в «🎯 Играть».\n"
+                    + "Включить: <code>bash scripts/run-sql.sh scripts/sponsor-push-on.sql</code>");
+            return;
+        }
+        Long questId = quest.getId();
+        sponsorPushExecutor.submit(() -> {
+            try {
+                runSponsorQuestPush(questId);
+            } catch (Exception e) {
+                log.error("Sponsor quest push failed for quest {}", questId, e);
+                alertAdminsPlain("🚨 <b>Рассылка о спонсорском квесте #" + questId + " оборвалась</b>\nОшибка: " + escape(String.valueOf(e.getMessage())));
+            }
+        });
+    }
+
+    private void runSponsorQuestPush(Long questId) throws InterruptedException {
+        Quest quest = questService.getQuest(questId);
+        java.time.LocalDate today = java.time.LocalDate.now();
+        java.time.LocalDateTime since = java.time.LocalDateTime.now().minusDays(14);
+        String text = sponsorQuestPushText(quest);
+        InlineKeyboardMarkup keyboard = sponsorQuestKeyboard(quest);
+        int sent = 0, inChannel = 0, gated = 0, noAccess = 0, failed = 0, accessStreak = 0;
+        boolean aborted = false;
+        for (AppUser u : userService.allRegisteredUsers()) {
+            if (u.isBlocked() || !recentlyActive(u, today, since)) continue;
+            if (sponsorPromoService.has(questId, u.getId(), ru.gamebot.platform.service.SponsorQuestPromoService.KIND_PUSH)) continue;
+            if (questService.getLatestSubmission(u, quest) != null) continue;
+            if (quest.getChannelCheckChatId() != null) {
+                try {
+                    if (isChannelMember(quest.getChannelCheckChatId(), u.getTelegramId())) {
+                        inChannel++;
+                        accessStreak = 0;
+                        continue;
+                    }
+                    accessStreak = 0;
+                } catch (TelegramApiException e) {
+                    noAccess++;
+                    accessStreak++;
+                    if (accessStreak >= 5) { aborted = true; break; } // бот потерял доступ к каналу - дальше проверять нечем
+                    Thread.sleep(1000);
+                    continue;
+                }
+            }
+            if (!notificationGate.tryAcquire(u, ru.gamebot.platform.service.NudgeType.SPONSOR_QUEST)) {
+                gated++;
+                continue;
+            }
+            try {
+                sendText(u.getTelegramId(), text, keyboard);
+                sponsorPromoService.record(questId, u.getId(), ru.gamebot.platform.service.SponsorQuestPromoService.KIND_PUSH);
+                sent++;
+            } catch (Exception e) {
+                failed++; // чаще всего игрок заблокировал бота
+            }
+            Thread.sleep(60);
+        }
+        alertAdminsPlain((aborted ? "⚠️ <b>Рассылка о спонсорском квесте прервана</b> (бот не видит подписчиков канала — проверьте, что он админ)\n\n"
+                : "📣 <b>Рассылка о спонсорском квесте завершена</b>\n\n")
+                + "Квест: " + escape(quest.getTitle()) + "\n"
+                + "✅ Отправлено: <b>" + sent + "</b>\n"
+                + "👥 Пропущено, уже в канале: " + inChannel + "\n"
+                + "🔕 Пропущено лимитом частоты: " + gated + "\n"
+                + "⚠️ Не удалось проверить подписку: " + noAccess + " · не доставлено: " + failed);
+    }
+
+    /** Напоминание через сутки тем, кому ушёл пуш, кто ещё не открыл/не взял квест и не вступил в канал: раз в час, до 300 сообщений за проход. */
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 3_600_000, initialDelay = 600_000)
+    public void remindSponsorQuests() {
+        try {
+            if (!sponsorPromoService.pushEnabled()) return;
+            int budget = 300;
+            for (Quest quest : openSponsorChannelQuests()) {
+                if (budget <= 0) break;
+                budget -= remindSponsorQuestPlayers(quest, budget);
+            }
+        } catch (Exception e) {
+            log.warn("Sponsor quest reminder run failed", e);
+        }
+    }
+
+    private int remindSponsorQuestPlayers(Quest quest, int budget) throws InterruptedException {
+        int sent = 0;
+        String text = sponsorQuestReminderText(quest);
+        InlineKeyboardMarkup keyboard = sponsorQuestKeyboard(quest);
+        for (Long userId : sponsorPromoService.reminderCandidates(quest.getId())) {
+            if (sent >= budget) break;
+            if (sponsorPromoService.has(quest.getId(), userId, ru.gamebot.platform.service.SponsorQuestPromoService.KIND_REMINDER)) continue;
+            AppUser u = userService.findById(userId).orElse(null);
+            if (u == null || u.isBlocked()) continue;
+            if (questService.getLatestSubmission(u, quest) != null) continue;
+            try {
+                if (isChannelMember(quest.getChannelCheckChatId(), u.getTelegramId())) continue;
+            } catch (TelegramApiException e) {
+                continue;
+            }
+            if (!notificationGate.tryAcquire(u, ru.gamebot.platform.service.NudgeType.SPONSOR_QUEST)) continue; // попробуем в следующий проход, пока не вышло окно 72 ч
+            try {
+                sendText(u.getTelegramId(), text, keyboard);
+                sponsorPromoService.record(quest.getId(), u.getId(), ru.gamebot.platform.service.SponsorQuestPromoService.KIND_REMINDER);
+                sent++;
+            } catch (Exception e) {
+                sponsorPromoService.record(quest.getId(), u.getId(), ru.gamebot.platform.service.SponsorQuestPromoService.KIND_REMINDER); // не доставлено - не пытаемся снова
+            }
+            Thread.sleep(60);
+        }
+        return sent;
+    }
+
+    /** «🎯 Играть»: открытый спонсорский квест на подписку показывается первым - не чаще раза в сутки на игрока и только тому, кто ещё не в канале спонсора.
+     *  Возвращает true, если показали (тогда обычная рекомендация не отправляется). */
+    private boolean offerSponsorQuestInPlay(AppUser user) {
+        try {
+            if (!sponsorPromoService.playEnabled()) return false;
+            for (Quest q : openSponsorChannelQuests()) {
+                if (questService.getLatestSubmission(user, q) != null) continue;
+                if (sponsorPromoService.shownInPlayToday(q.getId(), user.getId())) continue;
+                try {
+                    if (isChannelMember(q.getChannelCheckChatId(), user.getTelegramId())) continue;
+                } catch (TelegramApiException e) {
+                    continue; // проверить не вышло - не предлагаем то, что можем не принять
+                }
+                sponsorPromoService.record(q.getId(), user.getId(), ru.gamebot.platform.service.SponsorQuestPromoService.KIND_SHOWN_PLAY);
+                sendQuestCard(user, q.getId(), "menu:main", "⬅️ Назад",
+                        "💼 <b>Квест от спонсора</b> — подпишись на канал и получи награду. Другие квесты — по кнопке «🎯 Играть» ещё раз.", null, true);
+                return true;
+            }
+        } catch (Exception e) {
+            log.warn("Failed to offer sponsor quest in Play for {}", user.getTelegramId(), e);
+        }
+        return false;
+    }
+
     private InlineKeyboardMarkup singleMenuKeyboard() {
         return keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
@@ -23428,7 +23627,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             quest.setOneTimePerAccount(true);
             quest.setChannelCheckChatId(chatId);
             quest.setChannelCheckUrl(link);
-            questService.createQuest(quest);
+            Quest createdQuest = questService.createQuest(quest);
 
             sendText(user.getTelegramId(),
                     "✅ <b>Квест создан и уже виден игрокам</b>\n\n"
@@ -23439,6 +23638,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             List.of(keyboardFactory.callback("🤝 Открыть кампанию", "admin:sponsors:view:" + sponsorId)),
                             List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
             sendText(user.getTelegramId(), buildQuestAnnouncement(quest), null);
+            pushSponsorQuestToPlayers(createdQuest);
         } catch (Exception e) {
             log.error("Sponsor fast quest creation failed (sponsorId={})", sponsorId, e);
             String msg = "🚨 <b>Быстрый спонсорский квест не создан до конца</b>\n\n"
