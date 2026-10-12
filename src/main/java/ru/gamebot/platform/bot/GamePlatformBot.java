@@ -21762,26 +21762,46 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("🎯 Взять квест", "quest:view:sponsored:all:" + quest.getId()))));
     }
 
-    /** Текст пуша при создании (согласован владельцем). */
+    /** Фонд остаётся в плюсе с каждого подписчика: спонсор отдаёт в фонд (за вычетом комиссии) больше, чем стоит награда по текущему курсу.
+     *  Только тогда обещаем игрокам, что квест повышает курс вывода (иначе фраза была бы неправдой). */
+    private boolean sponsorQuestRaisesRate(Quest quest) {
+        try {
+            if (quest.getSponsorId() == null || quest.getParticipantLimit() == null || quest.getParticipantLimit() <= 0) return false;
+            ru.gamebot.platform.domain.model.Sponsor sponsor = sponsorService.findById(quest.getSponsorId()).orElse(null);
+            if (sponsor == null || sponsor.getPaidRub() <= 0) return false;
+            double poolPerSubscriber = (double) (sponsor.getPaidRub() - sponsorService.commissionRub(sponsor)) / quest.getParticipantLimit();
+            double rewardRub = quest.getRewardCoins() / 100.0;
+            return poolPerSubscriber > healthRatioService.getCurrentRatio() * rewardRub;
+        } catch (Exception e) {
+            log.warn("Failed to evaluate sponsor quest rate effect for quest {}", quest.getId(), e);
+            return false;
+        }
+    }
+
+    /** Текст пуша при создании: ОБЕЗЛИЧЕННЫЙ - без названия канала и спонсора (название игрок увидит в карточке после нажатия кнопки). */
     private String sponsorQuestPushText(Quest quest) {
         int holdPercent = quest.getChannelHoldPercent() == null ? 0 : quest.getChannelHoldPercent();
         int holdDays = quest.getChannelHoldDays() == null ? 0 : quest.getChannelHoldDays();
         String payout = holdPercent > 0 && holdDays > 0
-                ? (100 - holdPercent) + "% награды придёт сразу, остальное — через " + holdDays + " дн., если останешься в канале."
+                ? (100 - holdPercent) + "% награды придёт сразу, остальное через " + holdDays + " дн., если останешься в канале."
                 : "Награда придёт сразу после проверки.";
+        String rateLine = sponsorQuestRaisesRate(quest)
+                ? "📈 Спонсор платит за каждого подписчика больше, чем получаешь ты, и разница остаётся в фонде выплат. "
+                        + "Выполнив квест, ты немного повышаешь курс вывода для всех."
+                : SPONSOR_LOOP_LINE;
         return "💼 <b>Новый квест от спонсора</b>\n\n"
-                + "📢 Канал «" + escape(quest.getGameName()) + "»\n"
-                + "🎁 Награда: <b>" + fmtExc(quest.getRewardCoins()) + " EXC</b> + " + quest.getRewardXp() + " XP\n\n"
-                + "Подпишись и нажми «✅ Я подписался». " + payout + "\n\n"
-                + "Мест ограниченное число: спонсор оплатил определённое количество подписчиков.\n\n"
-                + SPONSOR_LOOP_LINE;
+                + "🎁 <b>" + fmtExc(quest.getRewardCoins()) + " EXC</b> + " + quest.getRewardXp() + " XP за подписку на канал.\n\n"
+                + "Открой квест, подпишись и нажми «✅ Я подписался»: " + payout + "\n\n"
+                + rateLine + "\n\n"
+                + "👥 Мест ограниченное число.";
     }
 
-    /** Текст напоминания через сутки (согласован владельцем). */
+    /** Текст напоминания через сутки: тоже без названия канала. */
     private String sponsorQuestReminderText(Quest quest) {
-        return "⏰ <b>Квест от спонсора ещё ждёт тебя</b>\n\n"
-                + "📢 «" + escape(quest.getGameName()) + "» — <b>" + fmtExc(quest.getRewardCoins()) + " EXC</b> за подписку. Это займёт 10 секунд.\n\n"
-                + "Мест ограниченное число: когда оплаченные подписчики закончатся, квест закроется.";
+        return "⏰ <b>Квест от спонсора ещё ждёт</b>\n\n"
+                + "🎁 <b>" + fmtExc(quest.getRewardCoins()) + " EXC</b> за подписку на канал — это 10 секунд.\n\n"
+                + (sponsorQuestRaisesRate(quest) ? "📈 Каждая подписка немного повышает курс вывода для всех.\n\n" : "")
+                + "👥 Мест ограниченное число, потом квест закроется.";
     }
 
     private void alertAdminsPlain(String text) {
