@@ -11247,6 +11247,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendAdminSponsorView(user, parseLong(action.substring("sponsors:view:".length())));
                     answerSilently(callbackQuery.getId());
                     return;
+                } else if (action.startsWith("sponsors:push:")) {
+                    sendSponsorPushConfirm(user, parseLong(action.substring("sponsors:push:".length())));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("sponsors:pushgo:")) {
+                    startManualSponsorPush(callbackQuery, user, parseLong(action.substring("sponsors:pushgo:".length())));
+                    return;
                 } else if (action.startsWith("sponsors:topup:")) {
                     long topupSponsorId = parseLong(action.substring("sponsors:topup:".length()));
                     session.reset();
@@ -15992,6 +15999,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
             rows.add(List.of(keyboardFactory.callback("➕ Создать квест", "admin:sponsors:newquest:" + sponsorId)));
+            if (s.isActive() && activeChannelQuestOf(sponsorId) != null) {
+                rows.add(List.of(keyboardFactory.callback("📣 Разослать игрокам", "admin:sponsors:push:" + sponsorId)));
+            }
             if (retention.total() > 0) {
                 rows.add(List.of(keyboardFactory.callback("📄 Отчёт для спонсора", "admin:sponsors:report:" + sponsorId)));
             }
@@ -21813,22 +21823,73 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    /** Рассылка о новом спонсорском квесте: в фоне, игрокам, активным за 14 дней, которые ещё НЕ в канале спонсора (иначе квест взять нельзя). */
+    private final java.util.Set<Long> sponsorPushRunning = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /** Рассылка о новом спонсорском квесте при создании: только если рассылка включена (по умолчанию выключена до одобрения текста). */
     private void pushSponsorQuestToPlayers(Quest quest) {
         if (!sponsorPromoService.pushEnabled()) {
-            alertAdminsPlain("ℹ️ Рассылка игрокам о новом спонсорском квесте выключена (по умолчанию). Квест виден в меню «💼 Квест от спонсора» и в «🎯 Играть».\n"
-                    + "Включить: <code>bash scripts/run-sql.sh scripts/sponsor-push-on.sql</code>");
+            alertAdminsPlain("ℹ️ Автоматическая рассылка игрокам о новом спонсорском квесте выключена. Квест виден в меню «💼 Квест от спонсора» и в «🎯 Играть».\n"
+                    + "Разослать вручную: «🤝 Открыть кампанию» → «📣 Разослать игрокам». Включить автоматически: <code>bash scripts/run-sql.sh scripts/sponsor-push-on.sql</code>");
             return;
         }
-        Long questId = quest.getId();
+        submitSponsorQuestPush(quest.getId());
+    }
+
+    /** Запуск рассылки в фоне (игрокам, активным за 14 дней, ещё НЕ в канале спонсора; кому уже слали - не повторяем). Возвращает false, если уже идёт. */
+    private boolean submitSponsorQuestPush(Long questId) {
+        if (!sponsorPushRunning.add(questId)) return false;
         sponsorPushExecutor.submit(() -> {
             try {
                 runSponsorQuestPush(questId);
             } catch (Exception e) {
                 log.error("Sponsor quest push failed for quest {}", questId, e);
                 alertAdminsPlain("🚨 <b>Рассылка о спонсорском квесте #" + questId + " оборвалась</b>\nОшибка: " + escape(String.valueOf(e.getMessage())));
+            } finally {
+                sponsorPushRunning.remove(questId);
             }
         });
+        return true;
+    }
+
+    /** Открытый квест на подписку этой кампании (активный, места не закончились) или null. */
+    private Quest activeChannelQuestOf(long sponsorId) {
+        return sponsorService.findSponsoredQuests(sponsorId).stream()
+                .filter(q -> q.isActive() && q.getChannelCheckChatId() != null && !questService.isChannelCampaignClosed(q))
+                .findFirst().orElse(null);
+    }
+
+    /** Кнопка «📣 Разослать игрокам»: сначала показываем текст и кому уйдёт, рассылка - только после подтверждения. */
+    private void sendSponsorPushConfirm(AppUser user, long sponsorId) {
+        Quest quest = activeChannelQuestOf(sponsorId);
+        if (quest == null) {
+            sendText(user.getTelegramId(), "⚠️ У кампании нет открытого квеста на подписку (закрыт, выключен или места закончились).",
+                    backMenuKeyboard("admin:sponsors:view:" + sponsorId));
+            return;
+        }
+        sendText(user.getTelegramId(),
+                "📣 <b>Разослать игрокам?</b>\n\n"
+                        + "Получат: активные за 14 дней, которые ещё не в канале спонсора, не брали этот квест и не получали другое напоминание за последние 20 часов. "
+                        + "Тем, кому уже слали, повторно не уйдёт. Рассылка идёт в фоне, сводка придёт сюда.\n\n"
+                        + "Текст сообщения:\n\n" + sponsorQuestPushText(quest) + "\n\n"
+                        + "Напоминание через сутки включается отдельно: <code>scripts/sponsor-push-on.sql</code>.",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("✅ Разослать", "admin:sponsors:pushgo:" + sponsorId)),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "admin:sponsors:view:" + sponsorId)))));
+    }
+
+    private void startManualSponsorPush(CallbackQuery callbackQuery, AppUser user, long sponsorId) {
+        Quest quest = activeChannelQuestOf(sponsorId);
+        if (quest == null) {
+            answer(callbackQuery.getId(), "Нет открытого квеста на подписку");
+            return;
+        }
+        if (!submitSponsorQuestPush(quest.getId())) {
+            answer(callbackQuery.getId(), "Рассылка по этому квесту уже идёт");
+            return;
+        }
+        answerSilently(callbackQuery.getId());
+        sendText(user.getTelegramId(), "🚀 <b>Рассылка запущена</b>\n\nСводка (сколько отправлено и сколько пропущено) придёт сюда, когда закончится.",
+                backMenuKeyboard("admin:sponsors:view:" + sponsorId));
     }
 
     private void runSponsorQuestPush(Long questId) throws InterruptedException {
