@@ -5556,7 +5556,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         java.util.Set<String> claimed = socialTaskService.claimedCodes(user);
         StringBuilder text = new StringBuilder("🌐 <b>Наши соцсети</b>\n\n"
-                + "Подпишись и получи EXC. Награда приходит сразу после проверки, один раз на аккаунт.\n\n");
+                + "Подпишись и получи EXC. Награда приходит сразу, один раз на аккаунт.\n\n");
         List<InlineKeyboardButton> buttons = new ArrayList<>();
         for (ru.gamebot.platform.service.SocialTaskService.SocialTask task : tasks) {
             boolean done = claimed.contains(task.code());
@@ -5578,7 +5578,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ru.gamebot.platform.service.SocialTaskService.SocialTask task = taskOpt.get();
         boolean done = socialTaskService.isClaimed(user, task);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.url("📣 Открыть канал", task.url())));
+        rows.add(List.of(keyboardFactory.url(task.linkLabel(), task.url())));
         if (!done) {
             rows.add(List.of(keyboardFactory.callback("✅ Я подписался", "social:check:" + task.code())));
         }
@@ -5612,9 +5612,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendSocialTaskCard(user, code, null);
                 return;
             }
+            if (task.trust() && user.getCompletedQuests() < 1) {
+                // Подписку проверить нечем - награда только игрокам, уже выполнившим хотя бы один квест (защита от пустых аккаунтов)
+                answer(callbackQuery.getId(), "Сначала выполни хотя бы один квест");
+                return;
+            }
             boolean member;
             try {
-                member = isChannelMember(task.chatId(), user.getTelegramId());
+                member = task.trust() || isChannelMember(task.chatId(), user.getTelegramId());
             } catch (TelegramApiException e) {
                 log.warn("Social task channel check failed: task {} user {}", code, user.getTelegramId(), e);
                 answer(callbackQuery.getId(), "Не удалось проверить, попробуй чуть позже");

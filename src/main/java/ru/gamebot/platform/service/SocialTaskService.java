@@ -27,6 +27,9 @@ public class SocialTaskService {
 
     public static final String PAYOUTS_CODE = "payouts";
     public static final long PAYOUTS_REWARD_EXC = 100;
+    public static final String TIKTOK_CODE = "tiktok";
+    public static final long TIKTOK_REWARD_EXC = 50;
+    private static final String TIKTOK_URL = "https://www.tiktok.com/@experience_gaming_club";
     private static final String ENABLED_KEY = "social_tasks.enabled";
 
     private final SocialTaskClaimRepository claimRepository;
@@ -36,7 +39,10 @@ public class SocialTaskService {
     private final AppProperties appProperties;
 
     /** chatId - то, что передаётся в getChatMember (id или @username канала, бот в нём админ); url - ссылка для игрока. */
-    public record SocialTask(String code, String title, String description, String chatId, String url, long rewardExc) {}
+    /** trust=true - подписку проверить нечем (TikTok, Instagram...): награда выдаётся по нажатию «Я подписался» (chatId = null), одноразово на аккаунт.
+     *  linkLabel - подпись кнопки-ссылки на карточке задания. */
+    public record SocialTask(String code, String title, String description, String chatId, String url, long rewardExc,
+                             String linkLabel, boolean trust) {}
 
     public enum ClaimStatus { OK, ALREADY_CLAIMED, DISABLED }
 
@@ -66,8 +72,19 @@ public class SocialTaskService {
                     "Здесь мы публикуем реальные выплаты игрокам и отзывы. Подпишись, чтобы видеть, что клуб платит.",
                     chatId,
                     "https://t.me/" + chatId.substring(1),
-                    PAYOUTS_REWARD_EXC));
+                    PAYOUTS_REWARD_EXC,
+                    "📣 Открыть канал",
+                    false));
         }
+        list.add(new SocialTask(
+                TIKTOK_CODE,
+                "🎵 TikTok клуба",
+                "Подпишись на наш TikTok: короткие ролики про игры и новости клуба.",
+                null,
+                TIKTOK_URL,
+                TIKTOK_REWARD_EXC,
+                "🎵 Открыть TikTok",
+                true));
         return list;
     }
 
