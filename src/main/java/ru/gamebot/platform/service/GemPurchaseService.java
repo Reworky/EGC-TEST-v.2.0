@@ -66,7 +66,7 @@ public class GemPurchaseService {
     // см. класс-javadoc). XP-бонус — по калибровке ~0.68 XP/₽ (см. javadoc).
     // 2026-10-12: пакеты 30/80/170/360 пересчитаны по новой рознице Купикод (скидочные цены 202/483/969/1959 ₽, обычные 260/589/1189/2336 ₽):
     // цена = round(закупка × 1.18), XP = round(цена × 0.68). Остальные пакеты - снимок 2026-09-20, ждут свежих цен поставщика.
-    public static final List<GemPackage> BRAWL_PACKAGES = List.of(
+    private static final List<GemPackage> BRAWL_ALL_PACKAGES = List.of(
             new GemPackage("30", 30, 238, 162),
             new GemPackage("60", 60, 565, 384),
             new GemPackage("80", 80, 570, 388),
@@ -87,6 +87,17 @@ public class GemPurchaseService {
             new GemPackage("brawlpass", 0, 1_169, 795, "Brawl Pass"),
             new GemPackage("brawlpassplus", 0, 1_564, 1_064, "Brawl Pass +Plus")
     );
+
+    /** Пакеты гемов Brawl Stars, СКРЫТЫЕ от игроков (решение владельца 2026-10-12): оставлены только 30/80/170/360 с актуальными ценами Купикод,
+     *  остальные - с устаревшими ценами и слишком крупными суммами. Строки в BRAWL_ALL_PACKAGES не удаляем: вернуть позицию = убрать ключ отсюда
+     *  (заодно сначала обновив цену по свежей рознице). Сезонные пропуски (brawlpass*) не скрываются. */
+    private static final java.util.Set<String> BRAWL_HIDDEN_KEYS = java.util.Set.of(
+            "60", "110", "200", "250", "440", "530", "950", "1310", "2000", "4000", "6000");
+
+    /** Каталог Brawl Stars, видимый игрокам (бот и мини-апп). */
+    public static final List<GemPackage> BRAWL_PACKAGES = BRAWL_ALL_PACKAGES.stream()
+            .filter(p -> !BRAWL_HIDDEN_KEYS.contains(p.key()))
+            .toList();
 
     // Цены — розница Купикод на 2026-09-20 + 18% наценка, тот же принцип, что у Brawl Stars выше
     // (добавлено в тот же день по запросу пользователя — "такая же история для Clash Royale").

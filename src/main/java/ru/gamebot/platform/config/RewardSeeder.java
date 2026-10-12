@@ -189,13 +189,14 @@ public class RewardSeeder implements CommandLineRunner {
                 "Пополнение 30 гемов на аккаунт Brawl Stars. Доставка на email. Срок доставки — до 24 ч.",
                 "Brawl Stars", 28_600, brawlPrompt, 1_000, "brawl_stars"); // 2026-10-12: донат 30 гемов = 238 ₽ -> 238 × 100 × 1.2, округлено вверх до сотен
 
-        seed("Brawl Stars - Gems 60",
-                "Пополнение 60 гемов на аккаунт Brawl Stars. Доставка на email. Срок доставки — до 24 ч.",
-                "Brawl Stars", 67_800, brawlPrompt, 5_000, "brawl_stars");
-
-        seed("Brawl Stars - Gems 110",
-                "Пополнение 110 гемов на аккаунт Brawl Stars. Доставка на email. Срок доставки — до 24 ч.",
-                "Brawl Stars", 114_200, brawlPrompt, 15_000, "brawl_stars");
+        // 2026-10-12 (решение владельца): в магазине Brawl Stars остаётся только позиция 30 гемов с актуальной ценой; 60 и 110 выключены -
+        // цены устарели (поставщик Купикод поменял розницу), суммы лишние. Не удаляем (история заявок), а деактивируем на каждом старте:
+        // чтобы вернуть позицию, нужно убрать её название из этого списка.
+        for (String hiddenTitle : List.of("Brawl Stars - Gems 60", "Brawl Stars - Gems 110")) {
+            rewardItemRepository.findByTitle(hiddenTitle).ifPresent(item -> {
+                if (item.isActive()) { item.setActive(false); rewardItemRepository.save(item); }
+            });
+        }
 
         rewardItemRepository.findByTitle("Clash of Clans — 80 Gems").ifPresent(old -> {
             if (old.isActive()) { old.setActive(false); rewardItemRepository.save(old); }
