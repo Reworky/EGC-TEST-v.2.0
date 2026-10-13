@@ -37,7 +37,7 @@ public class SquadService {
      *  снято ради вирусного роста по образцу крупных Telegram-сообществ/кланов (см. rewardTopSquad:
      *  недельный приз ограничен PRIZE_MAX_RECIPIENTS, а не размером отряда, поэтому рост отряда
      *  не увеличивает расходы клуба). */
-    private static final int MAX_MEMBERS = 500;
+    private static final int MAX_MEMBERS = 50;
     private static final int MIN_MEMBERS = 2;
     public static final long WEEKLY_PRIZE_POOL = 10_000L;
     /** Приз получают не "все участники", а топ-N по недельному XP — иначе при большом отряде

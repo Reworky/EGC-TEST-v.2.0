@@ -10043,7 +10043,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    /** Отрядам не задано верхнего лимита в 15 (MAX_MEMBERS = 500 в SquadService) — без пагинации
+    /** Отрядам не задано верхнего лимита в 15 (MAX_MEMBERS = 50 в SquadService) — без пагинации
      *  список кнопок-участников мог бы повторить вчерашний инцидент "reply markup is too long"
      *  (см. sendAdminTrafficList, коммит f26d9f1). Тот же паттерн постраничности. */
     private static final int ADMIN_SQUAD_MEMBERS_PAGE_SIZE = 15;
