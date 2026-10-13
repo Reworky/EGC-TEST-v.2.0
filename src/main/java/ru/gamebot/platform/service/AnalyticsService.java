@@ -115,6 +115,7 @@ public class AnalyticsService {
     private final HealthRatioService healthRatioService;
     private final TrafficFunnelService funnelService;
     private final FinanceService financeService;
+    private final ExpenseService expenseService;
     private final IncidentEntryRepository incidentRepo;
     private final HeartbeatService heartbeatService;
     private final ErrorMonitorService errorMonitor;
@@ -519,6 +520,12 @@ public class AnalyticsService {
     }
 
     /** Выплаты в окне [from, to): разность двух накопительных «с момента» - других запросов по окну в сервисе выплат нет. */
+    /** Выплаты игрокам в рублях (₽ + GRAM в рублях) за календарные даты включительно - для панели «Финансы». */
+    public long payoutsRub(LocalDate from, LocalDate to) {
+        RewardService.WithdrawalPeriodStats w = withdrawalsBetween(from.atStartOfDay(), to.plusDays(1).atStartOfDay());
+        return w.totalRub() + w.totalTonRub();
+    }
+
     private RewardService.WithdrawalPeriodStats withdrawalsBetween(LocalDateTime from, LocalDateTime to) {
         RewardService.WithdrawalPeriodStats a = rewardService.withdrawalStatsSince(from);
         RewardService.WithdrawalPeriodStats b = rewardService.withdrawalStatsSince(to);
@@ -607,7 +614,17 @@ public class AnalyticsService {
         long payoutsPrev = prev.totalRub() + prev.totalTonRub();
         out.add(L("payouts", "Выплаты пользователям (₽ + GRAM в рублях)", "₽", (double) payouts, (double) payoutsPrev,
                 "звёзды Telegram (" + cur.totalStars() + " ⭐) в итог не входят: их рублёвый курс не задан", true));
-        out.add(L("net", "ИТОГ: доходы минус выплаты", "₽", (double) (revenue - payouts), (double) (revenuePrev - payoutsPrev),
+        java.util.Map<String, Long> expCur = expenseService.sumsByKind(from, to);
+        java.util.Map<String, Long> expPrev = expenseService.sumsByKind(pfrom, pto);
+        for (String k : ru.gamebot.platform.domain.model.ExpenseEntry.KINDS) {
+            if (expCur.get(k) == 0 && expPrev.get(k) == 0) continue;
+            out.add(L("exp_" + k.toLowerCase(), "Расход: " + ru.gamebot.platform.domain.model.ExpenseEntry.kindLabel(k).toLowerCase(), "₽",
+                    (double) expCur.get(k), (double) expPrev.get(k), "вводится вручную («💼 Финансы» → «➖ Расход»)", true));
+        }
+        long expenses = expCur.values().stream().mapToLong(Long::longValue).sum();
+        long expensesPrev = expPrev.values().stream().mapToLong(Long::longValue).sum();
+        out.add(L("exp_total", "Расходы всего (без выплат игрокам)", "₽", (double) expenses, (double) expensesPrev, null, true));
+        out.add(L("net", "ИТОГ: доходы минус выплаты и расходы", "₽", (double) (revenue - payouts - expenses), (double) (revenuePrev - payoutsPrev - expensesPrev),
                 "прибыль (+) или убыток (−) проекта за период", false));
         StringBuilder sb = new StringBuilder("<b>Записи о доходах за период</b>\n");
         List<FinanceEntry> entries = financeService.between(from, to);

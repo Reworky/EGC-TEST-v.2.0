@@ -152,6 +152,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.EngagementCeilingService engagementCeilingService;
     private final ru.gamebot.platform.service.ChannelContentService channelContentService;
     private final ru.gamebot.platform.service.FinanceService financeService;
+    private final ru.gamebot.platform.service.ExpenseService expenseService;
+    private final ru.gamebot.platform.service.FinancePanelService financePanelService;
     private final ru.gamebot.platform.service.AlertService alertService;
     private final ru.gamebot.platform.service.AdvertiserService advertiserService;
     private final ru.gamebot.platform.domain.repository.IncidentEntryRepository incidentEntryRepository;
@@ -2212,6 +2214,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
             }
             case FIN_ENTRY_INPUT -> {
+                if ("REC".equals(session.getData().get("fin_dir"))) {
+                    handleRecurringExpenseInput(user, session, text);
+                    return;
+                }
                 String[] tok = text.trim().split("\\s+", 3);
                 long amount;
                 try { amount = Long.parseLong(tok[0]); } catch (Exception e) { amount = -1; }
@@ -2230,6 +2236,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     }
                 }
                 String kind = session.getData().getOrDefault("fin_kind", ru.gamebot.platform.domain.model.FinanceEntry.OTHER);
+                if ("EXP".equals(session.getData().get("fin_dir"))) {
+                    // Расход: доля в фонд выплат не спрашивается, запись сохраняется сразу
+                    expenseService.add(kind, amount, entryDate, note);
+                    session.getData().remove("fin_dir");
+                    session.getData().remove("fin_kind");
+                    session.setState(SessionState.NONE);
+                    sendText(user.getTelegramId(), "✅ Расход записан: <b>" + ru.gamebot.platform.domain.model.ExpenseEntry.kindLabel(kind) + "</b>, "
+                                    + fmtExc(amount) + " ₽ (" + entryDate.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + ")",
+                            keyboardFactory.rowsLayout(List.of(
+                                    List.of(keyboardFactory.callback("➖ Ещё расход", "admin:fin:exp"),
+                                            keyboardFactory.callback("📒 P&L", "admin:fin:pl:m")),
+                                    List.of(keyboardFactory.callback("💼 Финансы", "admin:fin:home"),
+                                            keyboardFactory.callback("🏠 Меню", "menu:main")))));
+                    return;
+                }
                 // Запись пока не сохраняем: следующим шагом админ выбирает, какую долю суммы направить в фонд выплат (admin:fin:pool:N)
                 session.getData().put("fin_amount", String.valueOf(amount));
                 session.getData().put("fin_date", entryDate.toString());
@@ -2320,8 +2341,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     return;
                 }
                 session.reset();
+                ru.gamebot.platform.domain.model.TrafficSource spendSource = trafficSourceService.findById(sourceId).orElse(null);
+                long prevSpend = spendSource == null ? 0 : spendSource.getSpendRub();
+                String spendSourceName = spendSource == null ? "источник" : spendSource.getName();
                 trafficSourceService.setSpend(sourceId, rub);
-                sendText(user.getTelegramId(), "✅ Расход записан: <b>" + rub + " ₽</b>.", backMenuKeyboard("admin:traffic:view:" + sourceId));
+                // Разница с прошлой суммой уходит в расходы клуба (P&L): сама сумма на источнике хранится без даты
+                String pnlNote = "";
+                try {
+                    long delta = rub - prevSpend;
+                    if (delta > 0) {
+                        expenseService.add(ru.gamebot.platform.domain.model.ExpenseEntry.TRAFFIC, delta, java.time.LocalDate.now(), "Источник: " + spendSourceName);
+                        pnlNote = "\n🧾 В P&amp;L добавлен расход «Закуп трафика»: +" + fmtExc(delta) + " ₽.";
+                    } else if (delta < 0) {
+                        pnlNote = "\nℹ️ Сумма уменьшена, но в P&amp;L расход не списан: при необходимости удалите запись в «💼 Финансы» → «📜 Журнал».";
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to record traffic spend as expense for source {}", sourceId, e);
+                    pnlNote = "\n⚠️ В источнике сумма сохранена, но в P&amp;L расход записать не удалось: внесите его вручную в «💼 Финансы».";
+                }
+                sendText(user.getTelegramId(), "✅ Расход записан: <b>" + rub + " ₽</b>." + pnlNote, backMenuKeyboard("admin:traffic:view:" + sourceId));
             }
             case TRAFFIC_BATCH_COUNT -> {
                 Integer count = parseInteger(text.trim());
@@ -14455,8 +14493,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 long pendingW = rewardService.findPendingWithdrawals().size();
                 rows.add(List.of(keyboardFactory.callback(pendingW > 0 ? "💸 Заявки на вывод (" + pendingW + ")" : "💸 Заявки на вывод", "admin:withdrawals")));
                 rows.add(List.of(keyboardFactory.callback("🎁 Магазин наград", "admin:rewards")));
-                rows.add(List.of(keyboardFactory.callback("💵 Доходы клуба (записать / в фонд)", "admin:fin:add:money")));
-                rows.add(List.of(keyboardFactory.callback("📒 Финансовая сводка (P&L)", "admin:an:tab:PNL")));
+                rows.add(List.of(keyboardFactory.callback("💼 Финансы: доходы, расходы, P&L", "admin:fin:home")));
                 rows.add(List.of(keyboardFactory.callback("💰 Экономика и выплаты", "admin:an:tab:ECONOMY")));
                 rows.add(List.of(keyboardFactory.callback("🤝 Экономика рефералки", "admin:stats:referral")));
             }
@@ -14584,7 +14621,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("📤 Экспорт CSV", "admin:an:csv:" + t)));
         switch (tab) {
             case PNL -> {
-                rows.add(List.of(keyboardFactory.callback("➕ Записать доход", "admin:fin:add:pnl"), keyboardFactory.callback("🗑 Записи", "admin:fin:list")));
+                rows.add(List.of(keyboardFactory.callback("➕ Записать доход", "admin:fin:add:pnl"), keyboardFactory.callback("➖ Записать расход", "admin:fin:exp:pnl")));
+                rows.add(List.of(keyboardFactory.callback("💼 Панель «Финансы»", "admin:fin:home"), keyboardFactory.callback("🗑 Записи", "admin:fin:list")));
                 rows.add(List.of(keyboardFactory.callback("📜 История доходов", "admin:fin:history:0:pnl")));
             }
             case TECH -> {
@@ -14775,7 +14813,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Куда ведёт «Назад» с экрана «Доходы клуба»: в меню «Деньги» или во вкладку P&L - откуда админ пришёл. */
     private String finBackTarget(UserSession session) {
-        return "pnl".equals(session.getData().get("fin_origin")) ? "admin:an:tab:PNL" : "admin:grp:money";
+        String origin = session.getData().get("fin_origin");
+        if ("home".equals(origin)) return "admin:fin:home";
+        return "pnl".equals(origin) ? "admin:an:tab:PNL" : "admin:grp:money";
     }
 
     private static final int INCOME_HISTORY_PAGE_SIZE = 12;
@@ -14831,7 +14871,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "add" -> {
                 // Откуда пришли: «money» (меню «Деньги») или «pnl» (вкладка P&L) - туда ведёт «Назад»; незавершённая запись сбрасывается
                 String origin = p.length > 1 ? p[1] : session.getData().getOrDefault("fin_origin", "money");
-                session.getData().put("fin_origin", "pnl".equals(origin) ? "pnl" : "money");
+                session.getData().put("fin_origin", "pnl".equals(origin) || "home".equals(origin) ? origin : "money");
+                session.getData().remove("fin_dir");
                 session.getData().remove("fin_amount");
                 session.getData().remove("fin_date");
                 session.getData().remove("fin_note");
@@ -14850,6 +14891,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case "kind" -> {
                 String kind = p.length > 1 ? p[1] : ru.gamebot.platform.domain.model.FinanceEntry.OTHER;
+                session.getData().remove("fin_dir");
                 session.getData().put("fin_kind", kind);
                 session.setState(SessionState.FIN_ENTRY_INPUT);
                 sendText(user.getTelegramId(),
@@ -14860,7 +14902,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         backOrCancelKeyboard("admin:fin:add:" + session.getData().getOrDefault("fin_origin", "money")));
             }
             case "history" -> {
-                if (p.length > 2 && ("pnl".equals(p[2]) || "money".equals(p[2]))) session.getData().put("fin_origin", p[2]);
+                if (p.length > 2 && ("pnl".equals(p[2]) || "money".equals(p[2]) || "home".equals(p[2]))) session.getData().put("fin_origin", p[2]);
                 sendIncomeHistory(user, session, p.length > 1 && parseLong(p[1]) != null ? parseLong(p[1]).intValue() : 0);
             }
             case "list" -> {
@@ -14914,6 +14956,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 keyboardFactory.callback("🏠 Меню", "menu:main")))));
             }
             case "cancel" -> {
+                session.getData().remove("fin_dir");
                 session.getData().remove("fin_amount");
                 session.getData().remove("fin_date");
                 session.getData().remove("fin_note");
@@ -14924,7 +14967,299 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 if (id != null) financeService.delete(id);
                 handleFinanceAction(user, session, p.length > 2 && "h".equals(p[2]) ? "list:h" : "list");
             }
+            case "home" -> sendFinanceHome(user, session);
+            case "exp" -> sendExpenseKinds(user, session, p.length > 1 ? p[1] : null);
+            case "ekind" -> {
+                String kind = p.length > 1 ? p[1] : ru.gamebot.platform.domain.model.ExpenseEntry.OTHER;
+                session.getData().put("fin_dir", "EXP");
+                session.getData().put("fin_kind", kind);
+                session.setState(SessionState.FIN_ENTRY_INPUT);
+                sendText(user.getTelegramId(),
+                        "➖ <b>Расход: " + ru.gamebot.platform.domain.model.ExpenseEntry.kindLabel(kind) + "</b>\n\n"
+                                + "Введите сумму в рублях (слитно, без пробелов), при желании дату и заметку:\n"
+                                + "<code>5000</code>\n<code>5000 24.09.2026 Сервер, октябрь</code>\n<code>5000 Сервер</code>\n\n"
+                                + "Без даты запись пойдёт сегодняшним числом.",
+                        backOrCancelKeyboard("admin:fin:exp"));
+            }
+            case "pl" -> sendFinancePl(user, session, p.length > 1 ? p[1] : "m");
+            case "journal" -> sendFinanceJournal(user, session, p.length > 1 && parseLong(p[1]) != null ? parseLong(p[1]).intValue() : 0);
+            case "jlist" -> sendFinanceJournalDelete(user, p.length > 1 && parseLong(p[1]) != null ? parseLong(p[1]).intValue() : 0);
+            case "jdel" -> {
+                Long id = p.length > 2 ? parseLong(p[2]) : null;
+                int page = p.length > 3 && parseLong(p[3]) != null ? parseLong(p[3]).intValue() : 0;
+                if (id != null) {
+                    if ("I".equals(p[1])) financeService.delete(id); else expenseService.delete(id);
+                }
+                sendFinanceJournalDelete(user, page);
+            }
+            case "rec" -> sendRecurringExpenses(user, session);
+            case "rkind" -> {
+                String kind = p.length > 1 ? p[1] : ru.gamebot.platform.domain.model.ExpenseEntry.OTHER;
+                session.getData().put("fin_dir", "REC");
+                session.getData().put("fin_kind", kind);
+                session.setState(SessionState.FIN_ENTRY_INPUT);
+                sendText(user.getTelegramId(),
+                        "🔁 <b>Регулярный расход: " + ru.gamebot.platform.domain.model.ExpenseEntry.kindLabel(kind) + "</b>\n\n"
+                                + "Введите сумму в месяц, день месяца (1-28) и заметку:\n"
+                                + "<code>3500 5 Сервер Амстердам</code>\n\n"
+                                + "Расход будет записываться сам в этот день каждого месяца. Если день этого месяца уже прошёл, "
+                                + "первая запись будет в следующем месяце (за текущий внесите расход вручную).",
+                        backOrCancelKeyboard("admin:fin:rec"));
+            }
+            case "rdel" -> {
+                Long id = p.length > 1 ? parseLong(p[1]) : null;
+                if (id != null) expenseService.deleteRecurring(id);
+                sendRecurringExpenses(user, session);
+            }
             default -> sendAnalyticsTabSafe(user, session, "PNL");
+        }
+    }
+
+    // ─── Единая панель «Финансы»: доходы, расходы, P&L ───────────────────────────────────────
+
+    private static final java.time.ZoneId FIN_ZONE = java.time.ZoneId.of("Europe/Moscow");
+    private static final int JOURNAL_PAGE_SIZE = 10;
+
+    private String finSigned(long v) {
+        return (v > 0 ? "+" : "") + fmtExc(v);
+    }
+
+    /** Сравнение с прошлым периодом одной строкой: « ▲12%» / « ▼5%»; пусто, если сравнивать не с чем. */
+    private String finDelta(long cur, long prev) {
+        if (prev == 0) return "";
+        long pct = Math.round((cur - prev) * 100.0 / Math.abs(prev));
+        if (pct == 0) return " (=)";
+        return pct > 0 ? " (▲" + pct + "%)" : " (▼" + Math.abs(pct) + "%)";
+    }
+
+    private String finBar(long part, long total) {
+        int filled = total <= 0 ? 0 : (int) Math.min(8, Math.round(part * 8.0 / total));
+        return "█".repeat(filled) + "░".repeat(8 - filled);
+    }
+
+    private String finTotalsBlock(ru.gamebot.platform.service.FinancePanelService.Report cur, ru.gamebot.platform.service.FinancePanelService.Report prev) {
+        boolean cmp = prev != null;
+        StringBuilder sb = new StringBuilder();
+        sb.append("💵 Доходы: <b>").append(fmtExc(cur.incomeTotal())).append(" ₽</b>").append(cmp ? finDelta(cur.incomeTotal(), prev.incomeTotal()) : "").append("\n");
+        sb.append("🧾 Расходы: <b>").append(fmtExc(cur.expensesTotal())).append(" ₽</b>").append(cmp ? finDelta(cur.expensesTotal(), prev.expensesTotal()) : "").append("\n");
+        sb.append("🎮 Выплаты игрокам: <b>").append(fmtExc(cur.payouts())).append(" ₽</b>").append(cmp ? finDelta(cur.payouts(), prev.payouts()) : "").append("\n");
+        sb.append("━━━━━━━━━━\n");
+        sb.append(cur.net() >= 0 ? "📈 Итог: <b>" : "📉 Итог: <b>").append(finSigned(cur.net())).append(" ₽</b>").append(cmp ? finDelta(cur.net(), prev.net()) : "");
+        if (cur.marginPercent() != null) sb.append(" · маржа ").append(cur.marginPercent()).append("%");
+        return sb.append("\n").toString();
+    }
+
+    /** Стартовый экран «💼 Финансы»: P&L текущего месяца (к тому же числу прошлого месяца) и кнопки действий. */
+    private void sendFinanceHome(AppUser user, UserSession session) {
+        session.getData().put("fin_origin", "home");
+        session.getData().remove("fin_dir");
+        session.getData().remove("fin_kind");
+        java.time.LocalDate today = java.time.LocalDate.now(FIN_ZONE);
+        java.time.LocalDate from = today.withDayOfMonth(1);
+        java.time.LocalDate prevFrom = from.minusMonths(1);
+        java.time.LocalDate prevTo = prevFrom.plusDays(today.getDayOfMonth() - 1L);
+        if (prevTo.isAfter(from.minusDays(1))) prevTo = from.minusDays(1);
+        ru.gamebot.platform.service.FinancePanelService.Report cur = financePanelService.report(from, today);
+        ru.gamebot.platform.service.FinancePanelService.Report prev = financePanelService.report(prevFrom, prevTo);
+        String month = from.format(java.time.format.DateTimeFormatter.ofPattern("LLLL yyyy", java.util.Locale.forLanguageTag("ru")));
+        String text = "💼 <b>Финансы — " + month + "</b>\n"
+                + "<i>1–" + today.getDayOfMonth() + " число, в скобках сравнение с тем же периодом прошлого месяца</i>\n\n"
+                + finTotalsBlock(cur, prev)
+                + "\nДоходы и расходы вносятся здесь же. Спонсорские кампании записываются сами, регулярные расходы — по расписанию.";
+        sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("➕ Доход", "admin:fin:add:home"), keyboardFactory.callback("➖ Расход", "admin:fin:exp")),
+                List.of(keyboardFactory.callback("📒 P&L подробно", "admin:fin:pl:m"), keyboardFactory.callback("📜 Журнал", "admin:fin:journal:0")),
+                List.of(keyboardFactory.callback("🔁 Регулярные расходы", "admin:fin:rec"), keyboardFactory.callback("💳 В фонд выплат", "admin:payout")),
+                List.of(keyboardFactory.callback("📈 Аналитика P&L (тренды, CSV)", "admin:an:tab:PNL")),
+                List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:money"), keyboardFactory.callback("🏠 Меню", "menu:main")))));
+    }
+
+    private void sendExpenseKinds(AppUser user, UserSession session, String origin) {
+        if ("pnl".equals(origin) || "home".equals(origin)) session.getData().put("fin_origin", origin);
+        session.getData().remove("fin_dir");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (String k : ru.gamebot.platform.domain.model.ExpenseEntry.KINDS) {
+            rows.add(List.of(keyboardFactory.callback(ru.gamebot.platform.domain.model.ExpenseEntry.kindLabel(k), "admin:fin:ekind:" + k)));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", finBackTarget(session)), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), "➖ <b>Расходы клуба</b>\n\nЗапись попадёт в P&amp;L (расходы вычитаются из дохода). "
+                + "Выплаты игрокам вносить не нужно — они берутся из заявок на вывод, закуп трафика по источникам записывается сам.\n\nВыберите статью расхода:",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    /** «📒 P&L подробно»: доходы и расходы по статьям с долями, выплаты игрокам, итог и маржа за выбранный период. */
+    private void sendFinancePl(AppUser user, UserSession session, String periodKey) {
+        java.time.LocalDate today = java.time.LocalDate.now(FIN_ZONE);
+        java.time.LocalDate monthStart = today.withDayOfMonth(1);
+        java.time.LocalDate from, to, prevFrom = null, prevTo = null;
+        String label;
+        switch (periodKey) {
+            case "7" -> {
+                from = today.minusDays(6); to = today; label = "последние 7 дней";
+                prevFrom = from.minusDays(7); prevTo = from.minusDays(1);
+            }
+            case "pm" -> {
+                from = monthStart.minusMonths(1); to = monthStart.minusDays(1);
+                label = from.format(java.time.format.DateTimeFormatter.ofPattern("LLLL yyyy", java.util.Locale.forLanguageTag("ru")));
+                prevFrom = from.minusMonths(1); prevTo = from.minusDays(1);
+            }
+            case "q" -> {
+                from = monthStart.minusMonths(2); to = today; label = "3 месяца";
+                prevFrom = from.minusMonths(3); prevTo = from.minusDays(1);
+            }
+            case "all" -> { from = java.time.LocalDate.of(2020, 1, 1); to = today; label = "всё время"; }
+            default -> {
+                periodKey = "m";
+                from = monthStart; to = today;
+                label = from.format(java.time.format.DateTimeFormatter.ofPattern("LLLL yyyy", java.util.Locale.forLanguageTag("ru"))) + " (1–" + today.getDayOfMonth() + ")";
+                prevFrom = monthStart.minusMonths(1);
+                prevTo = prevFrom.plusDays(today.getDayOfMonth() - 1L);
+                if (prevTo.isAfter(monthStart.minusDays(1))) prevTo = monthStart.minusDays(1);
+            }
+        }
+        ru.gamebot.platform.service.FinancePanelService.Report cur = financePanelService.report(from, to);
+        ru.gamebot.platform.service.FinancePanelService.Report prev = prevFrom == null ? null : financePanelService.report(prevFrom, prevTo);
+        StringBuilder sb = new StringBuilder("📒 <b>P&amp;L — " + escape(label) + "</b>\n");
+        if (prev != null) sb.append("<i>в скобках сравнение с предыдущим периодом</i>\n");
+        sb.append("\n💵 <b>ДОХОДЫ: ").append(fmtExc(cur.incomeTotal())).append(" ₽</b>\n");
+        boolean any = false;
+        for (java.util.Map.Entry<String, Long> e : cur.income().entrySet()) {
+            if (e.getValue() == 0) continue;
+            any = true;
+            sb.append(" ").append(finBar(e.getValue(), cur.incomeTotal())).append(" ")
+                    .append(ru.gamebot.platform.domain.model.FinanceEntry.kindLabel(e.getKey())).append(": ").append(fmtExc(e.getValue())).append(" ₽\n");
+        }
+        if (!any) sb.append(" — записей нет\n");
+        sb.append("\n🧾 <b>РАСХОДЫ: ").append(fmtExc(cur.expensesTotal())).append(" ₽</b>\n");
+        any = false;
+        for (java.util.Map.Entry<String, Long> e : cur.expenses().entrySet()) {
+            if (e.getValue() == 0) continue;
+            any = true;
+            sb.append(" ").append(finBar(e.getValue(), cur.expensesTotal())).append(" ")
+                    .append(ru.gamebot.platform.domain.model.ExpenseEntry.kindLabel(e.getKey())).append(": ").append(fmtExc(e.getValue())).append(" ₽\n");
+        }
+        if (!any) sb.append(" — записей нет\n");
+        sb.append("\n🎮 Выплаты игрокам: <b>").append(fmtExc(cur.payouts())).append(" ₽</b> <i>(₽ + GRAM в рублях; звёзды не входят)</i>\n\n");
+        sb.append(finTotalsBlock(cur, prev));
+        String[][] periods = {{"7", "7 дн."}, {"m", "Месяц"}, {"pm", "Прошлый"}, {"q", "Квартал"}, {"all", "Всё"}};
+        List<InlineKeyboardButton> periodRow = new ArrayList<>();
+        for (String[] pr : periods) {
+            periodRow.add(keyboardFactory.callback((pr[0].equals(periodKey) ? "✅ " : "") + pr[1], "admin:fin:pl:" + pr[0]));
+        }
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(List.of(
+                periodRow,
+                List.of(keyboardFactory.callback("➕ Доход", "admin:fin:add:home"), keyboardFactory.callback("➖ Расход", "admin:fin:exp")),
+                List.of(keyboardFactory.callback("⬅️ Назад", "admin:fin:home"), keyboardFactory.callback("🏠 Меню", "menu:main")))));
+    }
+
+    /** «📜 Журнал»: доходы и расходы одним списком, новые сверху. */
+    private void sendFinanceJournal(AppUser user, UserSession session, int page) {
+        List<ru.gamebot.platform.service.FinancePanelService.JournalItem> all = financePanelService.journal();
+        int totalPages = Math.max(1, (all.size() + JOURNAL_PAGE_SIZE - 1) / JOURNAL_PAGE_SIZE);
+        page = Math.max(0, Math.min(page, totalPages - 1));
+        StringBuilder sb = new StringBuilder("📜 <b>Журнал доходов и расходов</b>\n\n");
+        if (all.isEmpty()) {
+            sb.append("Записей пока нет.");
+        } else {
+            sb.append("Записей: ").append(all.size()).append(" · страница ").append(page + 1).append(" из ").append(totalPages).append("\n\n");
+            for (ru.gamebot.platform.service.FinancePanelService.JournalItem it : all.subList(page * JOURNAL_PAGE_SIZE, Math.min(all.size(), (page + 1) * JOURNAL_PAGE_SIZE))) {
+                sb.append(it.income() ? "➕ " : "➖ ").append(it.date().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"))).append(" · ")
+                        .append(it.label()).append(" · <b>").append(fmtExc(it.amountRub())).append(" ₽</b>\n");
+                if (it.note() != null && !it.note().isBlank()) sb.append("   <i>").append(escape(trim(it.note(), 80))).append("</i>\n");
+            }
+        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        List<InlineKeyboardButton> nav = new ArrayList<>();
+        if (page > 0) nav.add(keyboardFactory.callback("⬅️ Новее", "admin:fin:journal:" + (page - 1)));
+        if (page + 1 < totalPages) nav.add(keyboardFactory.callback("Старее ➡️", "admin:fin:journal:" + (page + 1)));
+        if (!nav.isEmpty()) rows.add(nav);
+        if (!all.isEmpty()) rows.add(List.of(keyboardFactory.callback("🗑 Удалить запись", "admin:fin:jlist:" + page)));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:fin:home"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendFinanceJournalDelete(AppUser user, int page) {
+        List<ru.gamebot.platform.service.FinancePanelService.JournalItem> all = financePanelService.journal();
+        int totalPages = Math.max(1, (all.size() + JOURNAL_PAGE_SIZE - 1) / JOURNAL_PAGE_SIZE);
+        page = Math.max(0, Math.min(page, totalPages - 1));
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (ru.gamebot.platform.service.FinancePanelService.JournalItem it : all.subList(Math.min(all.size(), page * JOURNAL_PAGE_SIZE), Math.min(all.size(), (page + 1) * JOURNAL_PAGE_SIZE))) {
+            rows.add(List.of(keyboardFactory.callback("🗑 " + (it.income() ? "➕ " : "➖ ")
+                    + it.date().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM")) + " · " + trim(it.label(), 22) + " · " + fmtExc(it.amountRub()) + " ₽",
+                    "admin:fin:jdel:" + (it.income() ? "I" : "E") + ":" + it.id() + ":" + page)));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:fin:journal:" + page)));
+        sendText(user.getTelegramId(), "🗑 <b>Удаление записи</b>\n\nНажмите на запись, чтобы удалить её (это страница журнала, на которой вы были). Удаление необратимо.",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    /** «🔁 Регулярные расходы»: список правил (сервер, подписки) и добавление/удаление. */
+    private void sendRecurringExpenses(AppUser user, UserSession session) {
+        session.getData().remove("fin_dir");
+        List<ru.gamebot.platform.domain.model.RecurringExpense> list = expenseService.recurring();
+        StringBuilder sb = new StringBuilder("🔁 <b>Регулярные расходы</b>\n\nЗаписываются сами раз в месяц в указанный день (проверка каждое утро по Москве), админам приходит уведомление.\n\n");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (list.isEmpty()) {
+            sb.append("Пока ничего не настроено.");
+        }
+        for (ru.gamebot.platform.domain.model.RecurringExpense r : list) {
+            sb.append("• ").append(r.getDayOfMonth()).append("-го · ").append(ru.gamebot.platform.domain.model.ExpenseEntry.kindLabel(r.getKind()))
+                    .append(" · <b>").append(fmtExc(r.getAmountRub())).append(" ₽</b>");
+            if (r.getNote() != null && !r.getNote().isBlank()) sb.append(" · ").append(escape(trim(r.getNote(), 60)));
+            sb.append("\n");
+            rows.add(List.of(keyboardFactory.callback("🗑 " + r.getDayOfMonth() + "-го · " + fmtExc(r.getAmountRub()) + " ₽"
+                    + (r.getNote() == null || r.getNote().isBlank() ? "" : " · " + trim(r.getNote(), 20)), "admin:fin:rdel:" + r.getId())));
+        }
+        sb.append("\nДобавить: выберите статью.");
+        for (String k : ru.gamebot.platform.domain.model.ExpenseEntry.KINDS) {
+            rows.add(List.of(keyboardFactory.callback("➕ " + ru.gamebot.platform.domain.model.ExpenseEntry.kindLabel(k), "admin:fin:rkind:" + k)));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:fin:home"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleRecurringExpenseInput(AppUser user, UserSession session, String text) {
+        String[] tok = text.trim().split("\\s+", 3);
+        long amount;
+        int day;
+        try { amount = Long.parseLong(tok[0]); } catch (Exception e) { amount = -1; }
+        try { day = tok.length > 1 ? Integer.parseInt(tok[1]) : -1; } catch (Exception e) { day = -1; }
+        if (amount <= 0 || day < 1 || day > 28) {
+            sendText(user.getTelegramId(), "❌ Формат: сумма в рублях, день месяца (1-28), заметка. Например: <code>3500 5 Сервер Амстердам</code>", cancelKeyboard());
+            return;
+        }
+        String kind = session.getData().getOrDefault("fin_kind", ru.gamebot.platform.domain.model.ExpenseEntry.OTHER);
+        expenseService.addRecurring(kind, amount, day, tok.length > 2 ? tok[2] : "");
+        session.getData().remove("fin_dir");
+        session.getData().remove("fin_kind");
+        session.setState(SessionState.NONE);
+        sendRecurringExpenses(user, session);
+    }
+
+    /** Раз в сутки (07:15 МСК): записывает наступившие регулярные расходы и уведомляет админов. Бэклога нет — см. ExpenseService. */
+    @org.springframework.scheduling.annotation.Scheduled(cron = "0 15 7 * * *", zone = "Europe/Moscow")
+    public void runRecurringExpenses() {
+        try {
+            for (ru.gamebot.platform.domain.model.ExpenseEntry e : expenseService.postDueRecurring()) {
+                String text = "🔁 <b>Записан регулярный расход</b>\n" + ru.gamebot.platform.domain.model.ExpenseEntry.kindLabel(e.getKind())
+                        + ": <b>" + fmtExc(e.getAmountRub()) + " ₽</b>" + (e.getNote() == null ? "" : "\n<i>" + escape(e.getNote()) + "</i>");
+                for (Long adminId : adminService.resolvedAdminIds()) {
+                    try {
+                        sendText(adminId, text, null);
+                    } catch (Exception ex) {
+                        log.warn("Failed to send recurring expense notice to admin {}", adminId, ex);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Recurring expenses job failed", e);
+            for (Long adminId : adminService.resolvedAdminIds()) {
+                try {
+                    sendText(adminId, "⚠️ Не удалось записать регулярные расходы, смотрите логи.", null);
+                } catch (Exception ignored) {
+                    // уведомление админу — best effort
+                }
+            }
         }
     }
 

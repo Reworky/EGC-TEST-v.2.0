@@ -43,6 +43,10 @@ public class FinanceService {
         return repository.totalsByKind();
     }
 
+    public List<FinanceEntry> all() {
+        return repository.findAll();
+    }
+
     public List<FinanceEntry> latest() {
         return repository.findTop10ByOrderByCreatedAtDesc();
     }

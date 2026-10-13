@@ -49,6 +49,7 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
         applyChannelAutopostGrid20261006();
         moveQuestPackSwitchTo1800Msk();
         hideUnusedShopItems20261007();
+        importTrafficSpendToExpenses20261013();
     }
 
     /** Инцидент 2026-09-22 (тикет поддержки #213): ClashQuestVerificationService для ATTACK_WINS
@@ -447,6 +448,32 @@ public class DatabaseMigrationRunner implements CommandLineRunner {
             log.info("[DBMigration] quest pack switch hour -> 18:00 MSK: hour changed for {} schedules, next switch shifted for {}", hours, shifted);
         } catch (Exception e) {
             log.error("[DBMigration] moveQuestPackSwitchTo1800Msk failed: {}", e.getMessage());
+        }
+    }
+
+    /** Панель «Финансы» (2026-10-13): «Расход на закуп» по источникам трафика хранился суммой без даты и в P&L не попадал.
+     *  Один раз (маркер fin.traffic.v1) переносим накопленную сумму ОДНОЙ записью расхода «Закуп трафика»; дата записи - день создания
+     *  самого раннего источника с расходом (реальные даты трат неизвестны), чтобы не раздуть текущий месяц. Дальше каждое новое значение
+     *  расхода в карточке источника записывается в расходы разницей (см. TRAFFIC_SPEND_INPUT). */
+    private void importTrafficSpendToExpenses20261013() {
+        try {
+            Integer done = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM app_settings WHERE setting_key = 'fin.traffic.v1'", Integer.class);
+            if (done != null && done > 0) return;
+            Long sum = jdbcTemplate.queryForObject(
+                "SELECT COALESCE(SUM(spend_rub), 0) FROM traffic_sources WHERE spend_rub > 0", Long.class);
+            if (sum != null && sum > 0) {
+                java.sql.Timestamp first = jdbcTemplate.queryForObject(
+                    "SELECT MIN(created_at) FROM traffic_sources WHERE spend_rub > 0", java.sql.Timestamp.class);
+                java.time.LocalDate date = first == null ? java.time.LocalDate.now() : first.toLocalDateTime().toLocalDate();
+                jdbcTemplate.update(
+                    "INSERT INTO expense_entries (kind, amount_rub, entry_date, note, created_at) VALUES ('TRAFFIC', ?, ?, ?, CURRENT_TIMESTAMP)",
+                    sum, java.sql.Date.valueOf(date), "Перенос: закуп по источникам трафика на момент запуска панели «Финансы»");
+            }
+            jdbcTemplate.update("INSERT INTO app_settings (setting_key, setting_value) VALUES ('fin.traffic.v1', '1')");
+            log.info("[DBMigration] traffic spend imported into expense_entries: {} RUB", sum);
+        } catch (Exception e) {
+            log.error("[DBMigration] importTrafficSpendToExpenses20261013 failed: {}", e.getMessage());
         }
     }
 
