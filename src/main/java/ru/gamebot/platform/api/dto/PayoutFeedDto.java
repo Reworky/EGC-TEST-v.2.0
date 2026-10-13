@@ -20,6 +20,8 @@ public class PayoutFeedDto {
     @Builder
     public static class Item {
         private long rub;
+        /** Сумма в «родной» единице способа: «1 200 ₽» (СБП), «1 000 ⭐» (Stars), «~12.5 GRAM» (крипто). */
+        private String amountText;
         /** stars | ton | sbp */
         private String method;
         private long minutesAgo;

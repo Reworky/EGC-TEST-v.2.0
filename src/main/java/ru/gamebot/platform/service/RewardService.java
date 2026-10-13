@@ -381,6 +381,16 @@ public class RewardService {
         return rubAndTonRubOf(rewardRequestRepository.findAllApprovedWithdrawals());
     }
 
+    /** Номинал Stars в заявке на вывод («Telegram Stars - 1000 ⭐» → 1000); 0, если номинал не удалось прочитать. */
+    public long starsAmountOf(RewardRequest r) {
+        String title = r.getRewardItem() != null && r.getRewardItem().getTitle() != null ? r.getRewardItem().getTitle() : "";
+        try {
+            return Long.parseLong(title.replaceAll(".*- (\\d+).*", "$1"));
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
     private long[] rubAndTonRubOf(List<RewardRequest> requests) {
         long rubTotal = 0;
         long tonRubTotal = 0;

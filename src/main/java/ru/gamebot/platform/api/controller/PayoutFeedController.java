@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import ru.gamebot.platform.api.dto.PayoutFeedDto;
 import ru.gamebot.platform.domain.model.RewardRequest;
+import ru.gamebot.platform.service.ExchangeRateService;
 import ru.gamebot.platform.service.HealthRatioService;
 import ru.gamebot.platform.service.RewardService;
 
@@ -32,6 +33,7 @@ public class PayoutFeedController {
 
     private final RewardService rewardService;
     private final HealthRatioService healthRatioService;
+    private final ExchangeRateService exchangeRateService;
 
     @GetMapping("/feed")
     public PayoutFeedDto feed() {
@@ -41,6 +43,7 @@ public class PayoutFeedController {
             LocalDateTime when = payoutMoment(r);
             items.add(PayoutFeedDto.Item.builder()
                     .rub(rub(r))
+                    .amountText(amountText(r))
                     .method(method(r))
                     .minutesAgo(when == null ? -1 : Math.max(0, Duration.between(when, now).toMinutes()))
                     .name(maskNickname(r.getUser() == null ? null : r.getUser().getNickname()))
@@ -82,6 +85,22 @@ public class PayoutFeedController {
         String details = r.getPayoutDetails();
         boolean crypto = details != null && (details.startsWith("TON") || details.startsWith("USDT"));
         return crypto ? "ton" : "sbp";
+    }
+
+    /** Как в боте (GamePlatformBot.payoutAmountText): СБП и старые USDT - рубли, Stars - число звёзд, GRAM - ~количество монет по текущему курсу. */
+    private String amountText(RewardRequest r) {
+        try {
+            if (isStars(r)) {
+                long stars = rewardService.starsAmountOf(r);
+                if (stars > 0) return String.format("%,d", stars).replace(',', ' ') + " ⭐";
+            } else if ("ton".equals(method(r)) && r.getPayoutDetails().startsWith("TON")) {
+                java.math.BigDecimal gram = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(rub(r)));
+                return "~" + gram.stripTrailingZeros().toPlainString() + " GRAM";
+            }
+        } catch (Exception e) {
+            // лента не должна падать из-за курса: покажем рубли
+        }
+        return String.format("%,d", rub(r)).replace(',', ' ') + " ₽";
     }
 
     private long rub(RewardRequest r) {

@@ -12289,6 +12289,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return details != null && (details.startsWith("TON") || details.startsWith("USDT"));
     }
 
+    /** Сумма выплаты в «родной» единице способа (для ленты выплат и постов в канал): СБП и старые USDT — рубли, Stars — число звёзд,
+     *  GRAM (TON) — ~количество монет по текущему курсу (точное число монет в заявке не хранится). Без HTML. */
+    private String payoutAmountText(RewardRequest req) {
+        try {
+            if (isStarsWithdrawal(req)) {
+                long stars = rewardService.starsAmountOf(req);
+                if (stars > 0) return fmtExc(stars) + " ⭐";
+            } else if (isCryptoWithdrawal(req) && req.getPayoutDetails().startsWith("TON")) {
+                java.math.BigDecimal gram = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(fixedOrCurrentRub(req)));
+                return "~" + gram.stripTrailingZeros().toPlainString() + " GRAM";
+            }
+        } catch (Exception e) {
+            log.warn("Failed to build payout amount text for request {}", req.getId(), e);
+        }
+        return fmtExc(fixedOrCurrentRub(req)) + " ₽";
+    }
+
     private boolean isStarsWithdrawal(RewardRequest req) {
         return "telegram_stars".equals(req.getRewardItem().getPurchaseGroup());
     }
@@ -12763,7 +12780,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? "https://t.me/" + player.getTelegramUsername()
                 : "tg://user?id=" + player.getTelegramId();
         String text = "💸 Игрок <b><a href=\"" + profileLink + "\">" + nickname + "</a></b> вывел <b>"
-                + rewardService.actualPaidPrice(req) + " EXC</b>!";
+                + payoutAmountText(req) + "</b>!";
         if (receiptCaption != null && !receiptCaption.isBlank()) {
             text += "\n\n" + escape(receiptCaption.trim());
         }
@@ -12776,8 +12793,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void postWithdrawalToActivityFeed(RewardRequest req, String receiptFileId, String receiptCaption) {
         // С 2026-09-26 пруф - черновик в БД (переживает рестарт) и БЕЗ ника игрока: согласие у игроков не запрашиваем (решение владельца),
         // поэтому публикуем сумму и способ, а имя админ при желании добавляет сам через «Изменить».
-        String method = isStarsWithdrawal(req) ? "звёздами Telegram" : isCryptoWithdrawal(req) ? "в GRAM (TON)" : "рублями";
-        String text = "💸 <b>Ещё одна выплата!</b>\n\nИгрок вывел <b>" + rewardService.actualPaidPrice(req) + " EXC</b> " + method + " 🔥";
+        String method = isStarsWithdrawal(req) ? "звёздами Telegram" : isCryptoWithdrawal(req) ? "криптовалютой (GRAM, TON)" : "по СБП";
+        String text = "💸 <b>Ещё одна выплата!</b>\n\nИгрок вывел <b>" + payoutAmountText(req) + "</b> " + method + " 🔥";
         if (receiptCaption != null && !receiptCaption.isBlank()) {
             text += "\n\n" + escape(receiptCaption.trim());
         }
@@ -22125,9 +22142,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("Пока выплат нет — первые скоро появятся здесь.\n");
         }
         for (ru.gamebot.platform.domain.model.RewardRequest r : recent) {
-            String method = isStarsWithdrawal(r) ? "⭐ Stars" : isCryptoWithdrawal(r) ? "TON" : "СБП";
+            String method = isStarsWithdrawal(r) ? "⭐ Stars" : isCryptoWithdrawal(r) ? "GRAM" : "СБП";
             LocalDateTime when = payoutMoment(r);
-            sb.append("• <b>").append(fmtExc(fixedOrCurrentRub(r))).append(" ₽</b> · ").append(method)
+            sb.append("• <b>").append(payoutAmountText(r)).append("</b> · ").append(method)
                     .append(when != null ? " · " + agoText(when) : "")
                     .append(" · ").append(escape(maskNickname(r.getUser() == null ? null : r.getUser().getNickname()))).append("\n");
         }
