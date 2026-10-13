@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.Setter;
 
-/** Ручная запись дохода проекта для финансовой сводки (P&L): прямая продажа рекламы (комиссия менеджера), Yandex РСЯ и т.п.
+/** Ручная запись дохода проекта для финансовой сводки (P&L): прямая продажа рекламы (комиссия менеджера), Yandex РСЯ, Telega.io и т.п.
  *  Данных нет в самой платформе, поэтому вводятся админом вручную. */
 @Getter
 @Setter
@@ -21,6 +21,7 @@ public class FinanceEntry {
 
     public static final String DIRECT_ADS = "DIRECT_ADS";
     public static final String YANDEX_RSYA = "YANDEX_RSYA";
+    public static final String TELEGA = "TELEGA";
     public static final String SPONSOR = "SPONSOR";
     public static final String OTHER = "OTHER";
 
@@ -47,6 +48,7 @@ public class FinanceEntry {
         return switch (kind == null ? "" : kind) {
             case DIRECT_ADS -> "Прямая реклама";
             case YANDEX_RSYA -> "Yandex РСЯ";
+            case TELEGA -> "Telega.io";
             case SPONSOR -> "Спонсоры";
             default -> "Прочее";
         };

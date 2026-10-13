@@ -134,6 +134,7 @@ public class StreamerDealService {
         try {
             LocalDate from = today.minusDays(29);
             income = financeService.sumByKind(FinanceEntry.DIRECT_ADS, from, today) + financeService.sumByKind(FinanceEntry.YANDEX_RSYA, from, today)
+                    + financeService.sumByKind(FinanceEntry.TELEGA, from, today)
                     + financeService.sumByKind(FinanceEntry.SPONSOR, from, today) + financeService.sumByKind(FinanceEntry.OTHER, from, today);
             RewardService.WithdrawalPeriodStats w = rewardService.withdrawalStatsSince(now.minusDays(30));
             payouts = w.totalRub() + w.totalTonRub();

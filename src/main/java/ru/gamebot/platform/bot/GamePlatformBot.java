@@ -14842,6 +14842,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             List.of(keyboardFactory.callback("Спонсор (платёж вручную)", "admin:fin:kind:" + ru.gamebot.platform.domain.model.FinanceEntry.SPONSOR)),
                             List.of(keyboardFactory.callback("Прямая реклама (комиссия менеджера)", "admin:fin:kind:" + ru.gamebot.platform.domain.model.FinanceEntry.DIRECT_ADS)),
                             List.of(keyboardFactory.callback("Yandex РСЯ", "admin:fin:kind:" + ru.gamebot.platform.domain.model.FinanceEntry.YANDEX_RSYA)),
+                            List.of(keyboardFactory.callback("Telega.io", "admin:fin:kind:" + ru.gamebot.platform.domain.model.FinanceEntry.TELEGA)),
                             List.of(keyboardFactory.callback("Прочее", "admin:fin:kind:" + ru.gamebot.platform.domain.model.FinanceEntry.OTHER)),
                             List.of(keyboardFactory.callback("💳 Только пополнить фонд (не доход)", "admin:payout")),
                             List.of(keyboardFactory.callback("📜 История доходов", "admin:fin:history:0")),
