@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getSupportTickets, createSupportTicket, getSupportFaqGate, markSupportFaqSeen } from '../api/client';
+import { getSupportTickets, createSupportTicket, getSupportFaqGate, markSupportFaqSeen, getSupportHours } from '../api/client';
 import BackButton from '../components/BackButton';
 import './QuestsPage.css';
 import './ShopPage.css';
@@ -43,10 +43,13 @@ function FaqGateCard({ onContinue }) {
 }
 
 function NewTicketForm({ onCreated }) {
+  const [hours, setHours] = useState(null);
   const [text, setText] = useState('');
   const [photo, setPhoto] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
+
+  useEffect(() => { getSupportHours().then(setHours).catch(() => {}); }, []);
 
   async function handleSubmit() {
     if (!text.trim() && !photo) {
@@ -61,7 +64,7 @@ function NewTicketForm({ onCreated }) {
       if (res.success) {
         setText('');
         setPhoto(null);
-        onCreated();
+        onCreated(res.message);
       }
     } finally {
       setBusy(false);
@@ -72,6 +75,12 @@ function NewTicketForm({ onCreated }) {
     <div className="ref-link-card">
       <div className="ref-link-label">Новая заявка</div>
       <p className="shop-desc">Опишите проблему — текстом, скриншотом или и тем, и другим. Ответ придёт прямо в бот.</p>
+      {hours && (
+        <p className="shop-desc">
+          🕘 Часы работы: {hours.text}.
+          {!hours.open && <><br /><b>{hours.notice}</b></>}
+        </p>
+      )}
       <textarea
         className="quest-textarea"
         placeholder="Что случилось?"
@@ -137,6 +146,7 @@ function TicketList() {
 export default function SupportPage() {
   const [view, setView] = useState('new');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [notice, setNotice] = useState(null);
   // null — ещё не знаем, true — показать FAQ перед формой, false — сразу форма
   const [faqGate, setFaqGate] = useState(null);
 
@@ -164,10 +174,15 @@ export default function SupportPage() {
               ? <div className="page-center">Загрузка...</div>
               : faqGate
                 ? <FaqGateCard onContinue={() => setFaqGate(false)} />
-                : <NewTicketForm onCreated={() => { setView('mine'); setRefreshKey(k => k + 1); }} />}
+                : <NewTicketForm onCreated={(msg) => { setNotice(msg || null); setView('mine'); setRefreshKey(k => k + 1); }} />}
           </div>
         )
-        : <TicketList key={refreshKey} />}
+        : (
+          <>
+            {notice && <div className="quest-message" style={{ margin: '12px 16px 0' }}>{notice}</div>}
+            <TicketList key={refreshKey} />
+          </>
+        )}
     </div>
   );
 }

@@ -244,6 +244,12 @@ export async function markSupportFaqSeen() {
   await api.post('/api/support/faq-gate/seen');
 }
 
+// График поддержки: open - сейчас рабочее время, text - когда отвечаем, notice - текст для нерабочего времени
+export async function getSupportHours() {
+  const { data } = await api.get('/api/support/hours');
+  return data;
+}
+
 export async function getSupportTickets() {
   const { data } = await api.get('/api/support/tickets');
   return data;

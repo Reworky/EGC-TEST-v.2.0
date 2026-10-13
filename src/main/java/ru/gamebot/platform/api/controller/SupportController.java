@@ -20,6 +20,7 @@ import ru.gamebot.platform.bot.GamePlatformBot;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.SupportTicket;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
+import ru.gamebot.platform.service.SupportHoursService;
 import ru.gamebot.platform.service.SupportService;
 import ru.gamebot.platform.service.TelegramFileService;
 import ru.gamebot.platform.service.UserService;
@@ -33,6 +34,7 @@ public class SupportController {
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
 
     private final SupportService supportService;
+    private final SupportHoursService supportHoursService;
     private final AppUserRepository appUserRepository;
     private final TelegramFileService telegramFileService;
     private final GamePlatformBot gamePlatformBot;
@@ -48,6 +50,16 @@ public class SupportController {
                 .map(this::toDto)
                 .toList();
         return ResponseEntity.ok(result);
+    }
+
+    /** График поддержки для мини-аппа: open - сейчас рабочее время; text - когда отвечаем; notice - что показать, если не работаем. */
+    @GetMapping("/hours")
+    public ResponseEntity<java.util.Map<String, Object>> hours() {
+        boolean open = supportHoursService.isOpen();
+        return ResponseEntity.ok(java.util.Map.of(
+                "open", open,
+                "text", supportHoursService.scheduleText(),
+                "notice", supportHoursService.afterHoursNoticePlain()));
     }
 
     /** Первое обращение в поддержку: needed=true - сначала показать ссылку на FAQ (мини-апп). */
@@ -112,9 +124,10 @@ public class SupportController {
         }
         gamePlatformBot.notifyModeratorsAboutSupportTicket(ticket, text, photoFileId);
 
+        String afterHours = supportHoursService.isOpen() ? "" : "\n\n" + supportHoursService.afterHoursNoticePlain();
         return ResponseEntity.ok(ShopActionResponseDto.builder()
                 .success(true)
-                .message("Заявка отправлена. Ответ придёт прямо в бот.")
+                .message("Заявка отправлена. Ответ придёт прямо в бот." + afterHours)
                 .build());
     }
 

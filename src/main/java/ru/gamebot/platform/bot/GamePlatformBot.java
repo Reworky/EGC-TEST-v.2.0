@@ -137,6 +137,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final AdminService adminService;
     private final SessionService sessionService;
     private final SupportService supportService;
+    private final ru.gamebot.platform.service.SupportHoursService supportHoursService;
     private final KeyboardFactory keyboardFactory;
     private final ru.gamebot.platform.service.HealthRatioService healthRatioService;
     private final ru.gamebot.platform.service.StreamerDealService streamerDealService;
@@ -10112,7 +10113,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "🆘 <b>Поддержка</b>\n\n"
                         + "Напишите нам — вопрос, проблема, предложение.\n"
                         + "Все ваши сообщения попадают в один диалог, не нужно открывать новую заявку каждый раз.\n\n"
-                        + "Ответ придёт прямо сюда.",
+                        + "Ответ придёт прямо сюда.\n\n"
+                        + "🕘 Часы работы: " + supportHoursService.scheduleText() + "."
+                        + (supportHoursService.isOpen() ? "" : "\n\n" + supportHoursService.afterHoursNotice()),
                 keyboardFactory.verticalLayout(List.of(
                         keyboardFactory.callback("✍️ Написать в поддержку", "support:new"),
                         keyboardFactory.callback("📬 История диалогов", "support:list"),
@@ -10172,7 +10175,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         "💬 <b>Поддержка</b>\n\n"
                                 + "Напишите ваш вопрос или проблему.\n"
                                 + "Можно отправлять текст, фото, видео и документы — всё попадёт в один диалог.\n\n"
-                                + "Ответ придёт прямо сюда.",
+                                + "Ответ придёт прямо сюда.\n\n"
+                                + "🕘 Часы работы: " + supportHoursService.scheduleText() + "."
+                                + (supportHoursService.isOpen() ? "" : "\n\n" + supportHoursService.afterHoursNotice()),
                         backMenuKeyboard("menu:support"));
                 answerSilently(callbackQuery.getId());
             }
@@ -10298,14 +10303,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>Диалог открыт</b>\n\n"
                             + "Ваше сообщение (#" + ticket.getId() + ") принято в поддержку.\n"
                             + "Можете продолжать писать — все сообщения попадут в один чат.\n"
-                            + "Ответ придёт прямо сюда.",
+                            + "Ответ придёт прямо сюда."
+                            + afterHoursSupportNotice(session, true),
                     chatKeyboard);
         } else {
             sendText(user.getTelegramId(),
-                    "💬 Сообщение добавлено в диалог #" + ticket.getId() + ".",
+                    "💬 Сообщение добавлено в диалог #" + ticket.getId() + "."
+                            + afterHoursSupportNotice(session, false),
                     chatKeyboard);
         }
     }
+
+    private static final long SUPPORT_AFTER_HOURS_REPEAT_MS = 3L * 60 * 60 * 1000;
+
+    /** Уведомление о нерабочем времени поддержки для подтверждения обращения: пустая строка в рабочие часы. При открытии нового диалога
+     *  показывается всегда, в дописанных сообщениях - не чаще раза в 3 часа, чтобы не повторять одно и то же на каждое сообщение. */
+    private String afterHoursSupportNotice(UserSession session, boolean newDialog) {
+        if (supportHoursService.isOpen()) return "";
+        long now = System.currentTimeMillis();
+        Long last = parseLong(session.getData().get("support_offhours_at"));
+        if (!newDialog && last != null && now - last < SUPPORT_AFTER_HOURS_REPEAT_MS) return "";
+        session.getData().put("support_offhours_at", String.valueOf(now));
+        return "\n\n" + supportHoursService.afterHoursNotice();    }
 
     private void handleSupportReplyMessage(AppUser moderator, UserSession session, Message message) {
         SupportTicket ticket = supportService.getTicket(session.getSupportTicketId());
