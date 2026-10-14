@@ -50,8 +50,23 @@ public class BrawlQuestPackSeeder implements CommandLineRunner {
             questPackService.ensureMainPack(GAME);
             seedPack("Сезон А", packA());
             seedPack("Сезон Б", packB());
+            appendShowdownNote();
         } catch (Exception e) {
             log.error("[BrawlQuestPackSeeder] failed", e);
+        }
+    }
+
+    /** Подпись в описании квестов «выиграй бой»: в Showdown (соло/дуэт) API не отдаёт победу/поражение, и победой считается только 1-е место
+     *  (BrawlStarsApiService), а игроки привыкли считать успехом топ-4 (жалоба игрока 2026-10-14: «прогресс не обновляется»). QuestSeeder
+     *  (Order 2) и сидер пачек на каждом старте заново пишут описания без этой фразы, поэтому дописываем её здесь, после них, - один раз на квест. */
+    private static final String SHOWDOWN_NOTE = " В режиме «Столкновение» (Showdown) победой считается только 1-е место.";
+
+    private void appendShowdownNote() {
+        for (Quest q : questRepository.findAllByGameNameIgnoreCase(GAME)) {
+            String d = q.getDescription();
+            if (!q.isBrawlRequireVictory() || d == null || d.contains("Showdown") || d.length() + SHOWDOWN_NOTE.length() > 4000) continue;
+            q.setDescription(d + SHOWDOWN_NOTE);
+            questRepository.save(q);
         }
     }
 
