@@ -2248,7 +2248,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                     + fmtExc(amount) + " ₽ (" + entryDate.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + ")",
                             keyboardFactory.rowsLayout(List.of(
                                     List.of(keyboardFactory.callback("➖ Ещё расход", "admin:fin:exp"),
-                                            keyboardFactory.callback("📒 P&L", "admin:fin:pl:m")),
+                                            keyboardFactory.callback("📒 P&L", "admin:fin:pl:30")),
                                     List.of(keyboardFactory.callback("💼 Финансы", "admin:fin:home"),
                                             keyboardFactory.callback("🏠 Меню", "menu:main")))));
                     return;
@@ -15126,26 +15126,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return sb.append("\n").toString();
     }
 
-    /** Стартовый экран «💼 Финансы»: P&L текущего месяца (к тому же числу прошлого месяца) и кнопки действий. */
+    /** Стартовый экран «💼 Финансы»: P&L за последние 30 дней (к предыдущим 30 дням) и кнопки действий. */
     private void sendFinanceHome(AppUser user, UserSession session) {
         session.getData().put("fin_origin", "home");
         session.getData().remove("fin_dir");
         session.getData().remove("fin_kind");
         java.time.LocalDate today = java.time.LocalDate.now(FIN_ZONE);
-        java.time.LocalDate from = today.withDayOfMonth(1);
-        java.time.LocalDate prevFrom = from.minusMonths(1);
-        java.time.LocalDate prevTo = prevFrom.plusDays(today.getDayOfMonth() - 1L);
-        if (prevTo.isAfter(from.minusDays(1))) prevTo = from.minusDays(1);
+        java.time.LocalDate from = today.minusDays(29);
+        java.time.LocalDate prevFrom = from.minusDays(30);
+        java.time.LocalDate prevTo = from.minusDays(1);
         ru.gamebot.platform.service.FinancePanelService.Report cur = financePanelService.report(from, today);
         ru.gamebot.platform.service.FinancePanelService.Report prev = financePanelService.report(prevFrom, prevTo);
-        String month = from.format(java.time.format.DateTimeFormatter.ofPattern("LLLL yyyy", java.util.Locale.forLanguageTag("ru")));
-        String text = "💼 <b>Финансы — " + month + "</b>\n"
-                + "<i>1–" + today.getDayOfMonth() + " число, в скобках сравнение с тем же периодом прошлого месяца</i>\n\n"
+        java.time.format.DateTimeFormatter dm = java.time.format.DateTimeFormatter.ofPattern("dd.MM");
+        String text = "💼 <b>Финансы — последние 30 дней</b>\n"
+                + "<i>" + from.format(dm) + "–" + today.format(dm) + ", в скобках сравнение с предыдущими 30 днями</i>\n\n"
                 + finTotalsBlock(cur, prev)
                 + "\nДоходы и расходы вносятся здесь же. Спонсорские кампании записываются сами, регулярные расходы — по расписанию.";
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("➕ Доход", "admin:fin:add:home"), keyboardFactory.callback("➖ Расход", "admin:fin:exp")),
-                List.of(keyboardFactory.callback("📒 P&L подробно", "admin:fin:pl:m"), keyboardFactory.callback("📜 Журнал", "admin:fin:journal:0")),
+                List.of(keyboardFactory.callback("📒 P&L подробно", "admin:fin:pl:30"), keyboardFactory.callback("📜 Журнал", "admin:fin:journal:0")),
                 List.of(keyboardFactory.callback("🔁 Регулярные расходы", "admin:fin:rec"), keyboardFactory.callback("💳 В фонд выплат", "admin:payout")),
                 List.of(keyboardFactory.callback("📈 Аналитика P&L (тренды, CSV)", "admin:an:tab:PNL")),
                 List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:money"), keyboardFactory.callback("🏠 Меню", "menu:main")))));
@@ -15174,6 +15173,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "7" -> {
                 from = today.minusDays(6); to = today; label = "последние 7 дней";
                 prevFrom = from.minusDays(7); prevTo = from.minusDays(1);
+            }
+            case "30" -> {
+                from = today.minusDays(29); to = today; label = "последние 30 дней";
+                prevFrom = from.minusDays(30); prevTo = from.minusDays(1);
             }
             case "pm" -> {
                 from = monthStart.minusMonths(1); to = monthStart.minusDays(1);
@@ -15218,7 +15221,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!any) sb.append(" — записей нет\n");
         sb.append("\n🎮 Выплаты игрокам: <b>").append(fmtExc(cur.payouts())).append(" ₽</b> <i>(₽ + GRAM в рублях; звёзды не входят)</i>\n\n");
         sb.append(finTotalsBlock(cur, prev));
-        String[][] periods = {{"7", "7 дн."}, {"m", "Месяц"}, {"pm", "Прошлый"}, {"q", "Квартал"}, {"all", "Всё"}};
+        String[][] periods = {{"7", "7 дн."}, {"30", "30 дн."}, {"m", "Месяц"}, {"pm", "Прошл."}, {"q", "Квартал"}, {"all", "Всё"}};
         List<InlineKeyboardButton> periodRow = new ArrayList<>();
         for (String[] pr : periods) {
             periodRow.add(keyboardFactory.callback((pr[0].equals(periodKey) ? "✅ " : "") + pr[1], "admin:fin:pl:" + pr[0]));
