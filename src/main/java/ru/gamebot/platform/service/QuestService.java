@@ -1624,6 +1624,11 @@ public class QuestService {
         return questSubmissionRepository.countActiveInProgress();
     }
 
+    /** Из квестов «в работе» - те, чьи игроки заходили в бота не раньше since; остальные считаем брошенными. */
+    public long countActiveInProgressByUsersActiveSince(java.time.LocalDate since) {
+        return questSubmissionRepository.countActiveInProgressByUsersActiveSince(since);
+    }
+
     public List<Object[]> getTopQuestsByCompletions() {
         return questSubmissionRepository.findTopQuestsByCompletions();
     }

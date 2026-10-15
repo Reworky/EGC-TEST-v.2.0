@@ -172,6 +172,11 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.status IN ('DRAFT','PENDING','NEEDS_INFO') AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP)")
     long countActiveInProgress();
 
+    /** То же, но только квесты игроков, которые заходили в бота не раньше since (отсекает «брошенные» квесты). */
+    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.status IN ('DRAFT','PENDING','NEEDS_INFO') AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP) "
+            + "AND s.user.lastActivityDate >= :since")
+    long countActiveInProgressByUsersActiveSince(@Param("since") java.time.LocalDate since);
+
     @Query("SELECT CASE WHEN COUNT(s) > 0 THEN true ELSE false END FROM QuestSubmission s " +
            "WHERE s.user.id <> :userId AND s.photoUniqueIds IS NOT NULL " +
            "AND s.photoUniqueIds <> '' AND s.photoUniqueIds LIKE CONCAT('%', :uid, '%')")

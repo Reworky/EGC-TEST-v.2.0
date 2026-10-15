@@ -14807,8 +14807,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         html.append("<h2 id=\"LIVE\">📡 Сейчас на платформе</h2>");
         try {
-            html.append("<div class=\"b\">🎯 Квестов в работе: <b>").append(questService.countActiveInProgress())
-                    .append("</b>\n🟢 Заходило в бота сегодня: <b>").append(userService.countActiveToday()).append("</b></div>");
+            long liveQuests = questService.countActiveInProgress();
+            long liveQuestsWeek = questService.countActiveInProgressByUsersActiveSince(java.time.LocalDate.now().minusDays(6));
+            html.append("<div class=\"b\">🎯 Квестов в работе: <b>").append(liveQuests)
+                    .append("</b> (у заходивших за 7 дней: <b>").append(liveQuestsWeek).append("</b>, брошенных: <b>")
+                    .append(Math.max(0, liveQuests - liveQuestsWeek))
+                    .append("</b>)\n🟢 Заходило в бота сегодня: <b>").append(userService.countActiveToday()).append("</b></div>");
         } catch (Exception e) {
             log.warn("Full analytics report: live block failed", e);
             html.append("<p>⚠️ Блок «Сейчас» не удалось посчитать, подробности в логе.</p>");
@@ -16058,12 +16062,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendAdminLiveStatus(AppUser user) {
         long activeQuests = questService.countActiveInProgress();
         long activeToday = userService.countActiveToday();
+        java.time.LocalDate today = java.time.LocalDate.now();
+        long questsToday = questService.countActiveInProgressByUsersActiveSince(today);
+        long questsWeek = questService.countActiveInProgressByUsersActiveSince(today.minusDays(6));
+        long abandoned = Math.max(0, activeQuests - questsWeek);
         String updatedAt = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
 
         sendText(user.getTelegramId(),
                 "📡 <b>Сейчас на платформе</b>\n\n"
                         + "🎯 Квестов в работе: <b>" + activeQuests + "</b>\n"
-                        + "   <i>(взято в работу или отправлено на проверку, срок не истёк)</i>\n\n"
+                        + "   <i>(взято или на проверке, срок не истёк; сюда входят и брошенные)</i>\n"
+                        + "   🟢 у игроков, заходивших сегодня: <b>" + questsToday + "</b>\n"
+                        + "   🟡 у заходивших за 7 дней: <b>" + questsWeek + "</b>\n"
+                        + "   💤 брошенные (игрок не заходил 7+ дней): <b>" + abandoned + "</b>\n\n"
                         + "🟢 Заходило в бота сегодня: <b>" + activeToday + "</b>\n\n"
                         + "🕐 Обновлено: <b>" + updatedAt + "</b>",
                 keyboardFactory.rowsLayout(List.of(
