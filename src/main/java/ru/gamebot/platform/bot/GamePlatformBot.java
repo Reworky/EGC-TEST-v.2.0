@@ -15119,6 +15119,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         StringBuilder sb = new StringBuilder();
         sb.append("💵 Доходы: <b>").append(fmtExc(cur.incomeTotal())).append(" ₽</b>").append(cmp ? finDelta(cur.incomeTotal(), prev.incomeTotal()) : "").append("\n");
         sb.append("🧾 Расходы: <b>").append(fmtExc(cur.expensesTotal())).append(" ₽</b>").append(cmp ? finDelta(cur.expensesTotal(), prev.expensesTotal()) : "").append("\n");
+        long adSpend = cur.expenses().getOrDefault(ru.gamebot.platform.domain.model.ExpenseEntry.TRAFFIC, 0L);
+        long adSpendPrev = cmp ? prev.expenses().getOrDefault(ru.gamebot.platform.domain.model.ExpenseEntry.TRAFFIC, 0L) : 0L;
+        sb.append("   📣 из них закуп рекламы: <b>").append(fmtExc(adSpend)).append(" ₽</b>").append(cmp ? finDelta(adSpend, adSpendPrev) : "").append("\n");
         sb.append("🎮 Выплаты игрокам: <b>").append(fmtExc(cur.payouts())).append(" ₽</b>").append(cmp ? finDelta(cur.payouts(), prev.payouts()) : "").append("\n");
         sb.append("━━━━━━━━━━\n");
         sb.append(cur.net() >= 0 ? "📈 Итог: <b>" : "📉 Итог: <b>").append(finSigned(cur.net())).append(" ₽</b>").append(cmp ? finDelta(cur.net(), prev.net()) : "");
