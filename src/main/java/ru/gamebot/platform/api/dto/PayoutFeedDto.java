@@ -14,6 +14,9 @@ public class PayoutFeedDto {
     private long dayCount;
     private long weekRub;
     private long weekCount;
+    /** Всего выплачено за всё время (пересчитывается не чаще раза в 10 минут). */
+    private long totalRub;
+    private long totalCount;
     private String reviewsUrl;
 
     @Data

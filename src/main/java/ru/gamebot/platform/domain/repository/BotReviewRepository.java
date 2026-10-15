@@ -23,4 +23,8 @@ public interface BotReviewRepository extends JpaRepository<BotReview, Long> {
      * высокая оценка, затем свежее — чтобы лучшие отзывы недели попадали в цитаты первыми. */
     @EntityGraph(attributePaths = {"user"})
     List<BotReview> findAllByStatusAndCreatedAtAfterOrderByStarsDescCreatedAtDesc(BotReviewStatus status, LocalDateTime after);
+
+    /** Опубликованные отзывы с высокой оценкой для публичного блока на сайте (свежие первыми). */
+    @EntityGraph(attributePaths = {"user"})
+    List<BotReview> findByStatusAndStarsGreaterThanEqualOrderByCreatedAtDesc(BotReviewStatus status, int stars, org.springframework.data.domain.Pageable pageable);
 }

@@ -35,6 +35,9 @@ public class PayoutFeedController {
     private final HealthRatioService healthRatioService;
     private final ExchangeRateService exchangeRateService;
 
+    private long[] cachedTotals;
+    private LocalDateTime cachedAt;
+
     @GetMapping("/feed")
     public PayoutFeedDto feed() {
         LocalDateTime now = LocalDateTime.now();
@@ -62,14 +65,34 @@ public class PayoutFeedController {
             }
         }
 
+        long[] totals = totalsCached(now);
+
         return PayoutFeedDto.builder()
                 .items(items)
                 .dayRub(dayRub)
                 .dayCount(dayCount)
                 .weekRub(weekRub)
                 .weekCount(week.size())
+                .totalRub(totals[0])
+                .totalCount(totals[1])
                 .reviewsUrl(REVIEWS_URL)
                 .build();
+    }
+
+    /** Итог «выплачено за всё время»: сумма по всем выплаченным выводам, кэш на 10 минут (эндпоинт публичный). Сбой подсчёта не ломает ленту. */
+    private synchronized long[] totalsCached(LocalDateTime now) {
+        if (cachedTotals != null && cachedAt != null && cachedAt.isAfter(now.minusMinutes(10))) return cachedTotals;
+        try {
+            List<RewardRequest> all = rewardService.approvedWithdrawalsSince(LocalDateTime.of(2000, 1, 1, 0, 0));
+            long sum = 0;
+            for (RewardRequest r : all) sum += rub(r);
+            cachedTotals = new long[]{sum, all.size()};
+            cachedAt = now;
+        } catch (Exception e) {
+            // лента важнее итога: отдаём прошлое значение или нули
+            if (cachedTotals == null) cachedTotals = new long[]{0, 0};
+        }
+        return cachedTotals;
     }
 
     private static LocalDateTime payoutMoment(RewardRequest r) {
