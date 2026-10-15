@@ -8528,6 +8528,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // тот же общий "Что-то пошло не так" повторился на покупке сундука за Stars: сохранение
         // StarsPurchase (repository.save, до этого try) тоже может бросить исключение и обойти
         // "безопасный" catch — расширил try на весь метод, включая запись в журнал.
+        // Журнал и выдача товара - раздельно (2026-10-15): запись в журнал упала на слишком длинном ID платежа (131 символ при колонке 128),
+        // и из-за неё игрок не получил оплаченный EGC Pass. Сбой журнала - только алерт админам, товар выдаём всё равно.
         try {
             ru.gamebot.platform.domain.model.StarsPurchase purchase = new ru.gamebot.platform.domain.model.StarsPurchase();
             purchase.setTelegramId(telegramId);
@@ -8536,7 +8538,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             purchase.setTelegramPaymentChargeId(payment.getTelegramPaymentChargeId());
             purchase.setCreatedAt(LocalDateTime.now());
             starsPurchaseRepository.save(purchase);
-
+        } catch (Exception journalError) {
+            log.error("Failed to journal Stars purchase (payload={}, telegramId={}, chargeId={}), granting anyway",
+                    payload, telegramId, payment.getTelegramPaymentChargeId(), journalError);
+            try {
+                for (Long adminId : adminService.allAdminIds()) {
+                    sendText(adminId, "⚠️ Покупка за Stars не записана в журнал (товар будет выдан): игрок <b>" + escape(user.getNickname())
+                            + "</b> (<code>" + user.getTelegramId() + "</code>), " + escape(payload) + ", " + payment.getTotalAmount()
+                            + " ⭐. Charge ID: <code>" + escape(payment.getTelegramPaymentChargeId()) + "</code>. Запишите вручную для сверки с выплатами Telegram.", null);
+                }
+            } catch (Exception ignored) {
+                // алерт вторичен
+            }
+        }
+        try {
             grantStarsPurchase(user, telegramId, payload, payment);
         } catch (Exception e) {
             log.error("Failed to process Stars purchase (payload={}, telegramId={}, chargeId={})",

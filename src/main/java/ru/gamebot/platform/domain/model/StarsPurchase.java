@@ -34,7 +34,8 @@ public class StarsPurchase {
     @Column(nullable = false)
     private int starsAmount;
 
-    @Column(length = 128)
+    /** ID платежа Telegram бывает длиннее 128 символов (2026-10-15: 131 - запись падала, и покупка не выдавалась); запас до 512. */
+    @Column(length = 512)
     private String telegramPaymentChargeId;
 
     @Column(nullable = false)

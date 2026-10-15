@@ -56,6 +56,8 @@ public class SchemaMigrationRunner implements CommandLineRunner {
         alterColumn("quests", "brawl_verify_type", "VARCHAR(20)");
         alterColumn("quests", "clash_verify_type", "VARCHAR(20)");
         alterColumn("quests", "clash_royale_verify_type", "VARCHAR(20)");
+        // ID платежа Telegram Stars стал длиннее 128 символов (инцидент 2026-10-15, EGC Pass не выдался): ddl-auto сам колонку не расширяет
+        alterColumn("stars_purchases", "telegram_payment_charge_id", "VARCHAR(512)");
         createIndexIfMissing("idx_notif_user_sent", "notification_log", "user_id, sent_at");
         createIndexIfMissing("idx_notif_sent", "notification_log", "sent_at");
     }
