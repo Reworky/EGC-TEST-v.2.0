@@ -30,6 +30,12 @@ public class SocialTaskService {
     public static final String TIKTOK_CODE = "tiktok";
     public static final long TIKTOK_REWARD_EXC = 20;
     private static final String TIKTOK_URL = "https://www.tiktok.com/@experience_gaming_club";
+    public static final String YOUTUBE_CODE = "youtube";
+    public static final long YOUTUBE_REWARD_EXC = 20;
+    private static final String YOUTUBE_URL = "https://www.youtube.com/@EXPERIENCEGAMINGCLUB";
+    public static final String INSTAGRAM_CODE = "instagram";
+    public static final long INSTAGRAM_REWARD_EXC = 20;
+    private static final String INSTAGRAM_URL = "https://www.instagram.com/exgamingclub";
     private static final String ENABLED_KEY = "social_tasks.enabled";
 
     private final SocialTaskClaimRepository claimRepository;
@@ -84,6 +90,24 @@ public class SocialTaskService {
                 TIKTOK_URL,
                 TIKTOK_REWARD_EXC,
                 "🎵 Открыть TikTok",
+                true));
+        list.add(new SocialTask(
+                YOUTUBE_CODE,
+                "📺 YouTube клуба",
+                "Подпишись на наш YouTube: обзоры игр, разборы квестов и новости клуба.",
+                null,
+                YOUTUBE_URL,
+                YOUTUBE_REWARD_EXC,
+                "📺 Открыть YouTube",
+                true));
+        list.add(new SocialTask(
+                INSTAGRAM_CODE,
+                "📸 Instagram клуба",
+                "Подпишись на наш Instagram: картинки, истории и анонсы клуба.",
+                null,
+                INSTAGRAM_URL,
+                INSTAGRAM_REWARD_EXC,
+                "📸 Открыть Instagram",
                 true));
         return list;
     }
