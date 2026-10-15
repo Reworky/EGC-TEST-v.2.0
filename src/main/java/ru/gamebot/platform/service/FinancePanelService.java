@@ -47,6 +47,15 @@ public class FinancePanelService {
         return new Report(from, to, income, expenseService.sumsByKind(from, to), analyticsService.payoutsRub(from, to));
     }
 
+    /** Дата самой ранней записи дохода или расхода; null, если записей ещё нет. */
+    public LocalDate firstRecordDate() {
+        LocalDate first = null;
+        for (JournalItem it : journal()) {
+            if (first == null || it.date().isBefore(first)) first = it.date();
+        }
+        return first;
+    }
+
     /** Все записи доходов и расходов, новые сверху (по дате, затем по порядку создания). */
     public List<JournalItem> journal() {
         List<JournalItem> items = new ArrayList<>();
