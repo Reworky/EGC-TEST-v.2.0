@@ -122,7 +122,7 @@ public class ProofStatsService {
                 || q.isExternalAutoApprove() || q.getChannelCheckChatId() != null);
     }
 
-    private static String verificationMethod(Quest q) {
+    static String verificationMethod(Quest q) {
         if (q == null) return "screenshot";
         if (q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null
                 || q.getDotaVerifyType() != null || q.getCs2VerifyType() != null || q.getPubgVerifyType() != null) return "game_api";

@@ -152,6 +152,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.TrafficFunnelService trafficFunnelService;
     private final ru.gamebot.platform.service.QuestPoolHealthService questPoolHealthService;
     private final ru.gamebot.platform.service.AnalyticsService analyticsService;
+    private final ru.gamebot.platform.service.RetentionService retentionService;
     private final ru.gamebot.platform.service.EngagementCeilingService engagementCeilingService;
     private final ru.gamebot.platform.service.ChannelContentService channelContentService;
     private final ru.gamebot.platform.service.FinanceService financeService;
@@ -441,6 +442,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (text != null && text.equals("/sponsors_list") && isEffectiveAdmin(user)) {
             handleSponsorsList(user);
+            return;
+        }
+
+        if (text != null && text.startsWith("/srctype") && isEffectiveAdmin(user)) {
+            String[] parts = text.trim().split("\\s+");
+            if (parts.length != 3) {
+                sendText(user.getTelegramId(), "Формат: <code>/srctype КОД paid|partner|organic|referral|auto</code>\n"
+                        + "Задаёт тип источника для вкладки «Удержание»; auto - определять по наличию расхода.");
+            } else {
+                sendText(user.getTelegramId(), escape(retentionService.setSourceType(parts[1], parts[2])));
+            }
             return;
         }
 
@@ -14717,6 +14729,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback("➕ Инцидент", "admin:inc:add"), keyboardFactory.callback("✅ Закрыть инцидент", "admin:inc:list")));
             }
             case SOURCES -> rows.add(List.of(keyboardFactory.callback("📊 Сравнение закупов", "admin:traffic:compare")));
+            case RETENTION -> rows.add(List.of(keyboardFactory.callback("🔄 Обновить (пересчёт)", "admin:an:retrefresh")));
             case QUESTS -> rows.add(List.of(keyboardFactory.callback("🧭 Пул квестов", "admin:stats:questpool")));
             case ENGAGEMENT -> rows.add(List.of(keyboardFactory.callback("🧪 Отряды: диагностика (рефералка)", "admin:squadretention")));
             case SQUADS -> rows.add(List.of(keyboardFactory.callback("⚔️ Состав отряда", "admin:squads:search")));
@@ -14750,6 +14763,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     session.getData().put("an_p", p[1]);
                     sendAnalyticsTab(user, session, pt);
                 }
+            }
+            case "retrefresh" -> {
+                retentionService.invalidate();
+                sendAnalyticsTab(user, session, ru.gamebot.platform.service.AnalyticsService.Tab.RETENTION);
             }
             case "cmp" -> {
                 ru.gamebot.platform.service.AnalyticsService.Tab ct = p.length > 1 ? parseTab(p[1]) : null;

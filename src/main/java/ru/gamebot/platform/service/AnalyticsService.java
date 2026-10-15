@@ -44,6 +44,7 @@ public class AnalyticsService {
         USERS("👥", "Пользователи и приток"),
         ACTIVITY("📈", "Активность"),
         ENGAGEMENT("🔥", "Вовлечённость"),
+        RETENTION("🔄", "Удержание"),
         QUESTS("🎯", "Квесты"),
         ECONOMY("💰", "Экономика и выплаты"),
         WITHDRAWALS("💸", "Выводы игроков"),
@@ -119,6 +120,7 @@ public class AnalyticsService {
     private final IncidentEntryRepository incidentRepo;
     private final HeartbeatService heartbeatService;
     private final ErrorMonitorService errorMonitor;
+    private final RetentionService retentionService;
 
     // ───────────────────────── снимок: дополнительные поля для трендов ─────────────────────────
 
@@ -217,6 +219,7 @@ public class AnalyticsService {
                 case USERS -> usersTab(p, pv, fromDate, lines);
                 case ACTIVITY -> activityTab(fromDate, lines);
                 case ENGAGEMENT -> engagementTab(fromDate, lines);
+                case RETENTION -> retentionTab(lines, extras);
                 case QUESTS -> questsTab(p, pv, fromDate, lines);
                 case ECONOMY -> economyTab(p, pv, fromDate, lines);
                 case REFERRAL -> referralTab(p, pv, fromDate, lines);
@@ -234,6 +237,79 @@ public class AnalyticsService {
             extras.add("⚠️ Часть данных не удалось посчитать, подробности в логе (раздел «Проверка ошибок»).");
         }
         return new TabData(tab, p, lines, extras);
+    }
+
+    /** Вкладка «Удержание»: когорты D1/D7/D30 по журналу активных дней (определения - в RetentionService). Период вкладки не влияет. */
+    private void retentionTab(List<Line> out, List<String> extras) {
+        RetentionService.Report r = retentionService.report();
+        out.add(L("ret_d1", "Возврат D1 (4 зрелые недели)", "%", pctOrNull(r.recentD1()), pctOrNull(r.prevD1()), "против предыдущих 4 зрелых недель", false));
+        out.add(L("ret_d7", "Возврат D7 (4 зрелые недели)", "%", pctOrNull(r.recentD7()), pctOrNull(r.prevD7()), "против предыдущих 4 зрелых недель", false));
+        out.add(L("ret_d30", "Возврат D30 (4 зрелые недели)", "%", pctOrNull(r.recentD30()), pctOrNull(r.prevD30()), "против предыдущих 4 зрелых недель", false));
+        out.add(L("ret_users", "Игроков в когортах журнала", "", (double) r.cohortUsers(), null));
+
+        StringBuilder head = new StringBuilder("<i>Возврат на день N = игрок был активен ровно в день «регистрация + N» (сутки по Москве). "
+                + "Окно 7/30 = был активен хотя бы раз за эти дни. Когорта = неделя регистрации (с понедельника). "
+                + "«—» = день ещё не наступил или не покрыт журналом, «мало» = в выборке меньше " + RetentionService.MIN_SAMPLE + " человек. "
+                + "Показатели вкладки «Отряды» считаются по другому определению («активен за последние N дней»).</i>\n");
+        if (r.journalStart() == null) {
+            head.append("\n⚠️ Журнал активности пока пуст: цифры появятся после первых заходов игроков.");
+        } else {
+            head.append("\nЖурнал ведётся с <b>").append(r.journalStart().format(DateTimeFormatter.ofPattern("dd.MM.yyyy")))
+                    .append("</b>: игроки, пришедшие раньше, в расчёт не входят (историю восстановить нельзя). Первые цифры: D1 через сутки, D7 через неделю, D30 через месяц.");
+        }
+        extras.add(head.toString());
+
+        StringBuilder weeks = new StringBuilder("<b>Когорты по неделям регистрации</b>\n<pre>неделя  игр   D1   D7  D30  ок7 ок30\n");
+        DateTimeFormatter wf = DateTimeFormatter.ofPattern("dd.MM");
+        for (RetentionService.WeekRow w : r.weeks()) {
+            weeks.append(String.format("%-7s %4d %4s %4s %4s %4s %4s%n", w.weekStart().format(wf), w.size(),
+                    w.d1().text(), w.d7().text(), w.d30().text(), w.w7().text(), w.w30().text()));
+        }
+        if (r.weeks().isEmpty()) weeks.append("(нет данных)\n");
+        weeks.append("</pre>");
+        extras.add(weeks.toString());
+
+        for (java.util.Map.Entry<String, List<RetentionService.SegmentRow>> seg : r.segments().entrySet()) {
+            StringBuilder sb = new StringBuilder("<b>Разрез: ").append(escape(seg.getKey())).append("</b>\n<pre>значение          игр   D1   D7  D30\n");
+            int shown = 0;
+            for (RetentionService.SegmentRow row : seg.getValue()) {
+                if (shown++ >= 6) break;
+                String label = row.label() == null ? "—" : row.label();
+                if (label.length() > 16) label = label.substring(0, 15) + "…";
+                sb.append(String.format("%-16s %4d %4s %4s %4s%n", escape(label), row.size(), row.d1().text(), row.d7().text(), row.d30().text()));
+            }
+            if (seg.getValue().isEmpty()) sb.append("(нет данных)\n");
+            sb.append("</pre>");
+            extras.add(sb.toString());
+        }
+        extras.add("<i>В разрезах у каждого показателя своя выборка: берутся игроки, у которых день N уже прошёл. Тип источника задаётся командой "
+                + "<code>/srctype КОД paid|partner|organic|referral|auto</code>; без неё метка с расходом считается платным закупом.</i>");
+
+        if (!r.costs().isEmpty()) {
+            StringBuilder sb = new StringBuilder("<b>Стоимость вернувшегося игрока</b> <i>(расход источника за всё время, введён вручную)</i>\n");
+            int shown = 0;
+            for (RetentionService.SourceCost c : r.costs()) {
+                if (shown++ >= 5) break;
+                sb.append("• <code>").append(escape(c.code())).append("</code> ").append(c.spendRub()).append(" ₽: ");
+                sb.append(c.registered() > 0 ? Math.round((double) c.spendRub() / c.registered()) + " ₽/регистрация" : "—");
+                sb.append("; D7: ").append(costText(c.spendRub(), c.n7(), c.returned7()));
+                sb.append("; D30: ").append(costText(c.spendRub(), c.n30(), c.returned30())).append("\n");
+            }
+            extras.add(sb.toString());
+        }
+    }
+
+    private static Double pctOrNull(RetentionService.Rate r) {
+        Integer p = r == null ? null : r.percent();
+        return p == null ? null : p.doubleValue();
+    }
+
+    /** «₽ за вернувшегося» = расход / вернувшиеся; если выборка меньше минимума - с пометкой «ориентир». */
+    private static String costText(long spend, long n, long returned) {
+        if (n == 0) return "—";
+        if (returned == 0) return "пока никто не вернулся (n=" + n + ")";
+        String v = Math.round((double) spend / returned) + " ₽";
+        return n < RetentionService.MIN_SAMPLE ? v + " (ориентир, n=" + n + ")" : v + " (n=" + n + ")";
     }
 
     private void usersTab(Period p, Period pv, LocalDate fromDate, List<Line> out) {

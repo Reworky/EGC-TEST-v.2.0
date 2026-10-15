@@ -166,6 +166,11 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT s FROM QuestSubmission s WHERE s.user = :user AND s.status = 'APPROVED' ORDER BY s.updatedAt DESC")
     List<QuestSubmission> findAllApprovedByUserOrderByUpdatedAtDesc(@Param("user") AppUser user);
 
+    /** Первая заявка каждого игрока (по времени создания): пары [id игрока, квест] для разрезов когортной аналитики (RetentionService). */
+    @Query("SELECT s.user.id, q FROM QuestSubmission s JOIN s.quest q WHERE s.createdAt IS NOT NULL "
+            + "AND s.createdAt = (SELECT MIN(s2.createdAt) FROM QuestSubmission s2 WHERE s2.user = s.user)")
+    List<Object[]> findFirstSubmissionPerUser();
+
     @Query("SELECT s FROM QuestSubmission s WHERE s.quest = :quest AND s.status IN ('DRAFT','PENDING','REJECTED','NEEDS_INFO')")
     List<QuestSubmission> findActiveByQuest(@Param("quest") Quest quest);
 
