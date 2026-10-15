@@ -6404,6 +6404,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     cancelKeyboard());
             return;
         }
+        if (quest.getClashRoyaleVerifyType() == ru.gamebot.platform.domain.enums.ClashRoyaleVerifyType.TROPHIES) {
+            String capProblem = clashRoyaleQuestVerificationService.trophyCapProblem(user, quest);
+            if (capProblem != null) {
+                answerSilently(callbackQuery.getId());
+                sendText(user.getTelegramId(), capProblem, backMenuKeyboard("menu:quests"));
+                return;
+            }
+        }
         if (quest.getDotaVerifyType() != null && user.getDotaAccountId() == null) {
             answerSilently(callbackQuery.getId());
             session.reset();

@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.gamebot.platform.domain.enums.ClashRoyaleVerifyType;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.model.QuestSubmission;
@@ -34,6 +35,30 @@ public class ClashRoyaleQuestVerificationService {
     private final QuestProgressNotifier questProgressNotifier;
 
     public record TagLookupResult(boolean success, String error, ClashRoyaleApiService.PlayerInfo playerInfo) {}
+
+    /** Потолок поля trophies в API Clash Royale: у игрока выше 14 000 кубков API отдаёт ровно 14 000 (тикет #318, 2026-10-15: в игре 15 000,
+     *  а trophies = bestTrophies = 14000). Прирост кубков у таких игроков не отследить, поэтому квест «Набери N кубков» им не выдаём. */
+    public static final int TROPHY_API_CAP = 14000;
+
+    /** null - квест можно брать (в том числе при сбое API: не блокируем из-за временной ошибки); иначе объяснение для игрока, почему нельзя. */
+    public String trophyCapProblem(AppUser user, Quest quest) {
+        if (quest.getClashRoyaleVerifyType() != ClashRoyaleVerifyType.TROPHIES || user.getClashRoyaleTag() == null || !clashRoyaleApiService.isEnabled()) {
+            return null;
+        }
+        try {
+            Optional<ClashRoyaleApiService.PlayerInfo> info = clashRoyaleApiService.fetchPlayer(user.getClashRoyaleTag());
+            if (info.isEmpty()) return null;
+            int current = info.get().trophies();
+            if (current + quest.getClashRoyaleTargetCount() > TROPHY_API_CAP) {
+                return "🏆 Этот квест тебе не подходит: у тебя уже " + current + " кубков, а Clash Royale отдаёт боту не больше "
+                        + TROPHY_API_CAP + ". Прирост на " + quest.getClashRoyaleTargetCount() + " кубков отследить не получится. "
+                        + "Выбери другой квест Clash Royale, например по победам или коронам.";
+            }
+        } catch (ClashRoyaleApiService.ClashRoyaleApiTransientException e) {
+            log.warn("Clash Royale trophy cap check skipped (API unavailable) for user {}", user.getTelegramId(), e);
+        }
+        return null;
+    }
 
     public TagLookupResult lookupTag(String rawTag) {
         if (!clashRoyaleApiService.isEnabled()) {
