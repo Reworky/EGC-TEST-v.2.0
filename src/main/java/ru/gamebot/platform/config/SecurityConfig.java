@@ -40,6 +40,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/postback/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/public/mediakit/*").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/public/proof").permitAll()
+                        // Лента выплат для главной страницы сайта: ники замаскированы, те же данные публикуются в канале @egc_payouts
+                        .requestMatchers(HttpMethod.GET, "/api/payouts/feed").permitAll()
                         // Личный кабинет — нужен JWT
                         .requestMatchers("/api/profile/**").authenticated()
                         .anyRequest().authenticated()
