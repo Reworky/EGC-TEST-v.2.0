@@ -8,15 +8,15 @@ import ru.gamebot.platform.domain.model.UserActivityDay;
 
 public interface UserActivityDayRepository extends JpaRepository<UserActivityDay, Long> {
 
-    boolean existsByUserIdAndDay(Long userId, LocalDate day);
+    boolean existsByUserIdAndActivityDay(Long userId, LocalDate activityDay);
 
-    long countByDay(LocalDate day);
+    long countByActivityDay(LocalDate activityDay);
 
     /** Первый день, с которого ведётся журнал (null - журнал пуст). */
-    @Query("SELECT MIN(d.day) FROM UserActivityDay d")
+    @Query("SELECT MIN(d.activityDay) FROM UserActivityDay d")
     LocalDate findFirstDay();
 
     /** Все пары «игрок - активный день» для расчёта когорт (RetentionService). */
-    @Query("SELECT d.userId, d.day FROM UserActivityDay d")
+    @Query("SELECT d.userId, d.activityDay FROM UserActivityDay d")
     List<Object[]> findAllPairs();
 }

@@ -38,10 +38,10 @@ public class ActivityDayService {
             TransactionTemplate tx = new TransactionTemplate(transactionManager);
             tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
             tx.executeWithoutResult(status -> {
-                if (!repository.existsByUserIdAndDay(userId, today)) {
+                if (!repository.existsByUserIdAndActivityDay(userId, today)) {
                     UserActivityDay row = new UserActivityDay();
                     row.setUserId(userId);
-                    row.setDay(today);
+                    row.setActivityDay(today);
                     row.setSource(source);
                     repository.save(row);
                 }

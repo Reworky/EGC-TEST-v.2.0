@@ -25,8 +25,9 @@ public class UserActivityDay {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    @Column(nullable = false)
-    private LocalDate day;
+    /** Имя поля не «day»: DAY - ключевое слово HQL, в JPQL-запросах безопаснее другое имя (колонка в БД по-прежнему day). */
+    @Column(name = "day", nullable = false)
+    private LocalDate activityDay;
 
     /** bot | app: откуда пришла первая за день активность. */
     @Column(nullable = false, length = 8)

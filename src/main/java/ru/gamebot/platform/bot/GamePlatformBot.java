@@ -449,9 +449,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String[] parts = text.trim().split("\\s+");
             if (parts.length != 3) {
                 sendText(user.getTelegramId(), "Формат: <code>/srctype КОД paid|partner|organic|referral|auto</code>\n"
-                        + "Задаёт тип источника для вкладки «Удержание»; auto - определять по наличию расхода.");
+                        + "Задаёт тип источника для вкладки «Удержание»; auto - определять по наличию расхода.", null);
             } else {
-                sendText(user.getTelegramId(), escape(retentionService.setSourceType(parts[1], parts[2])));
+                sendText(user.getTelegramId(), escape(retentionService.setSourceType(parts[1], parts[2])), null);
             }
             return;
         }
