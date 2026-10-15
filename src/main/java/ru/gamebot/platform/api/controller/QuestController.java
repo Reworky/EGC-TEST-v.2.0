@@ -45,6 +45,7 @@ public class QuestController {
     private final TelegramFileService telegramFileService;
     private final GamePlatformBot gamePlatformBot;
     private final BrawlQuestVerificationService brawlQuestVerificationService;
+    private final ru.gamebot.platform.service.ClashRoyaleQuestVerificationService clashRoyaleQuestVerificationService;
     private final ru.gamebot.platform.service.QuestRewardBoostService questRewardBoostService;
     private final ru.gamebot.platform.service.GameCatalogService gameCatalogService;
     private final ru.gamebot.platform.service.UserService userService;
@@ -435,6 +436,16 @@ public class QuestController {
                     .success(false)
                     .status("ALREADY_SUBSCRIBED")
                     .message("ℹ️ Ты уже подписан на этот канал: награда за этот квест только для новых подписчиков. Загляни в другие квесты.")
+                    .build());
+        }
+
+        // Кубки Clash Royale: API отдаёт не больше 14 000, игроку у потолка квест на прирост не выдаём (та же проверка, что в боте)
+        String trophyCapProblem = clashRoyaleQuestVerificationService.trophyCapProblem(user, quest);
+        if (trophyCapProblem != null) {
+            return ResponseEntity.ok(QuestActionResponseDto.builder()
+                    .success(false)
+                    .status("CR_TROPHY_CAP")
+                    .message(trophyCapProblem)
                     .build());
         }
 
