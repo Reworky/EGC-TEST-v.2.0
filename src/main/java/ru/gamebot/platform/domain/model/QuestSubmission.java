@@ -70,6 +70,9 @@ public class QuestSubmission {
     private LocalDateTime updatedAt;
     private LocalDateTime expiresAt;
 
+    /** Когда заявку закрыла автоматика как брошенную (см. AbandonedQuestService); null - закрыта игроком/модератором или ещё открыта. */
+    private LocalDateTime autoClosedAt;
+
     /** Отдельный порядковый номер, присваивается только при одобрении квеста (не связан с displayId заявки). */
     private Long completionDisplayId;
 

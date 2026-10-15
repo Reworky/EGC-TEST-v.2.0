@@ -172,6 +172,15 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.status IN ('DRAFT','PENDING','NEEDS_INFO') AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP)")
     long countActiveInProgress();
 
+    /** Кандидаты на автозакрытие брошенных (AbandonedQuestService): «взят»/«нужна информация», срок не истёк, заявка и её последнее изменение старше
+     *  before, игрок не заходил с activeBefore (или дата захода не записана). «На проверке» сюда не попадает намеренно. */
+    @Query("SELECT s FROM QuestSubmission s JOIN FETCH s.user u JOIN FETCH s.quest q WHERE s.status IN ('DRAFT','NEEDS_INFO') "
+            + "AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP) AND s.createdAt < :before "
+            + "AND (s.updatedAt IS NULL OR s.updatedAt < :before) AND (u.lastActivityDate IS NULL OR u.lastActivityDate < :activeBefore) "
+            + "ORDER BY s.createdAt ASC")
+    List<QuestSubmission> findAbandonedCandidates(@Param("before") java.time.LocalDateTime before,
+                                                  @Param("activeBefore") java.time.LocalDate activeBefore);
+
     /** То же, но только квесты игроков, которые заходили в бота не раньше since (отсекает «брошенные» квесты). */
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.status IN ('DRAFT','PENDING','NEEDS_INFO') AND (s.expiresAt IS NULL OR s.expiresAt > CURRENT_TIMESTAMP) "
             + "AND s.user.lastActivityDate >= :since")

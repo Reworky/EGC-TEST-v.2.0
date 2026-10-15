@@ -130,6 +130,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final AppProperties appProperties;
     private final UserService userService;
     private final QuestService questService;
+    private final ru.gamebot.platform.service.AbandonedQuestService abandonedQuestService;
     private final QuestPackService questPackService;
     private final QuestPackScheduleService questPackScheduleService;
     private final RewardService rewardService;
@@ -10886,6 +10887,41 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 answerSilently(callbackQuery.getId());
                 return;
             }
+            case "abandoned" -> { sendAbandonedQuestsAdmin(user, null); answerSilently(callbackQuery.getId()); return; }
+            case "abandoned:on" -> {
+                saveAppSetting(ru.gamebot.platform.service.AbandonedQuestService.ENABLED_KEY, "true");
+                sendAbandonedQuestsAdmin(user, "Автозакрытие включено: каждый день в 04:30 МСК.");
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            case "abandoned:off" -> {
+                saveAppSetting(ru.gamebot.platform.service.AbandonedQuestService.ENABLED_KEY, "false");
+                sendAbandonedQuestsAdmin(user, "Автозакрытие выключено.");
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            case "abandoned:confirm" -> {
+                int abandonedCount = abandonedQuestService.findCandidates().size();
+                sendText(user.getTelegramId(), "🧹 <b>Закрыть брошенные квесты сейчас?</b>\n\nБудет закрыто: <b>" + abandonedCount + "</b>. Игрокам ничего не отправляется, заявки останутся в истории со статусом «отменён».",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("✅ Да, закрыть", "admin:abandoned:close"), keyboardFactory.callback("❌ Нет", "admin:abandoned")))));
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            case "abandoned:close" -> {
+                int abandonedClosed;
+                try {
+                    abandonedClosed = abandonedQuestService.closeAbandoned().size();
+                } catch (Exception abandonedEx) {
+                    log.error("Manual abandoned quests close failed", abandonedEx);
+                    sendText(user.getTelegramId(), "⚠️ Не удалось закрыть брошенные квесты, смотрите логи.", backMenuKeyboard("admin:abandoned"));
+                    answerSilently(callbackQuery.getId());
+                    return;
+                }
+                sendAbandonedQuestsAdmin(user, "Закрыто брошенных квестов: " + abandonedClosed + ".");
+                answerSilently(callbackQuery.getId());
+                return;
+            }
             case "sponsors:fast" -> {
                 session.reset();
                 session.setState(SessionState.SPONSOR_FAST_INPUT);
@@ -14517,6 +14553,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback("➕ Квест", "admin:create"), keyboardFactory.callback("📋 По шаблону", "admin:template")));
                 rows.add(List.of(keyboardFactory.callback("✏️ Квесты", "admin:edit"), keyboardFactory.callback("📈 Топ квестов", "admin:queststats")));
                 rows.add(List.of(keyboardFactory.callback("🧭 Пул квестов", "admin:stats:questpool")));
+                rows.add(List.of(keyboardFactory.callback("🧹 Брошенные квесты", "admin:abandoned")));
                 rows.add(List.of(keyboardFactory.callback("📊 Статистика UGC-квестов", "admin:ugcstats")));
                 rows.add(List.of(keyboardFactory.callback("📊 Brawl Stars", "admin:brawlstats"), keyboardFactory.callback("📊 Clash of Clans", "admin:clashstats")));
                 rows.add(List.of(keyboardFactory.callback("📊 Clash Royale", "admin:clashroyalestats"), keyboardFactory.callback("📊 CS2", "admin:cs2stats")));
@@ -22124,6 +22161,53 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } catch (TelegramApiException e) {
             log.warn("Failed to create payout board message", e);
             return "ошибка: " + e.getMessage();
+        }
+    }
+
+    /** «🧹 Брошенные квесты»: что закрыла бы автоматика прямо сейчас, переключатель автозакрытия и ручной запуск. */
+    private void sendAbandonedQuestsAdmin(AppUser user, String note) {
+        List<QuestSubmission> candidates = abandonedQuestService.findCandidates();
+        boolean enabled = abandonedQuestService.isEnabled();
+        long drafts = candidates.stream().filter(s -> s.getStatus() == ru.gamebot.platform.domain.enums.SubmissionStatus.DRAFT).count();
+        StringBuilder sb = new StringBuilder("🧹 <b>Брошенные квесты (игровые)</b>\n\n");
+        if (note != null) sb.append("ℹ️ ").append(escape(note)).append("\n\n");
+        sb.append("Правило: игрок не заходил в бота ").append(ru.gamebot.platform.service.AbandonedQuestService.INACTIVE_DAYS)
+                .append("+ дней и заявка не менялась столько же, срок квеста не истёк. Закрывается статус «взят» и «нужна информация». ")
+                .append("Не трогаем: «на проверке», спонсорские, UGC и автопроверяемые квесты с прогрессом.\n\n");
+        sb.append("Сейчас подходят: <b>").append(candidates.size()).append("</b> (взято: ").append(drafts)
+                .append(" · нужна информация: ").append(candidates.size() - drafts).append(")\n");
+        int shown = 0;
+        for (QuestSubmission s : candidates) {
+            if (shown++ >= 10) { sb.append("…и ещё ").append(candidates.size() - 10).append("\n"); break; }
+            String last = s.getUser().getLastActivityDate() == null ? "—" : s.getUser().getLastActivityDate().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM"));
+            sb.append("• ").append(escape(trim(String.valueOf(s.getUser().getNickname()), 16))).append(" · ").append(escape(trim(s.getQuest().getTitle(), 36)))
+                    .append(" · взят ").append(s.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM"))).append(" · заходил ").append(last).append("\n");
+        }
+        sb.append("\n🤖 Автозакрытие: <b>").append(enabled ? "включено (каждый день в 04:30 МСК)" : "выключено").append("</b>");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (!candidates.isEmpty()) rows.add(List.of(keyboardFactory.callback("🧹 Закрыть сейчас (" + candidates.size() + ")", "admin:abandoned:confirm")));
+        rows.add(List.of(keyboardFactory.callback(enabled ? "⏹ Выключить автозакрытие" : "▶️ Включить автозакрытие", enabled ? "admin:abandoned:off" : "admin:abandoned:on")));
+        rows.add(List.of(keyboardFactory.callback("🔄 Обновить", "admin:abandoned")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:quests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Раз в сутки (04:30 МСК): если автозакрытие включено, закрывает брошенные игровые квесты и сообщает админам итог. Без уведомлений игрокам. */
+    @org.springframework.scheduling.annotation.Scheduled(cron = "0 30 4 * * *", zone = "Europe/Moscow")
+    public void runAbandonedQuestAutoClose() {
+        try {
+            if (!abandonedQuestService.isEnabled()) return;
+            int closed = abandonedQuestService.closeAbandoned().size();
+            if (closed == 0) return;
+            for (Long adminId : adminService.resolvedAdminIds()) {
+                try {
+                    sendText(adminId, "🧹 Автозакрытие: закрыто брошенных игровых квестов — <b>" + closed + "</b>.", null);
+                } catch (Exception e) {
+                    log.warn("Failed to send abandoned quests notice to admin {}", adminId, e);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Abandoned quests auto close failed", e);
         }
     }
 
