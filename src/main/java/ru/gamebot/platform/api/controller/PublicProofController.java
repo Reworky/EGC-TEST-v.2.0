@@ -35,7 +35,7 @@ public class PublicProofController {
         out.put("autoApprovedPercent", s.autoApprovedPercent());
         out.put("manualDecided", s.manualDecided());
         out.put("rejectedManualPercent", s.rejectedManualPercent());
-        out.put("submitted", s.submitted());
+        out.put("duplicates", s.duplicates());
         out.put("duplicatePercent", s.duplicatePercent());
         out.put("retention7Percent", s.retention7Percent());
         out.put("retentionCohort7", s.retentionCohort7());

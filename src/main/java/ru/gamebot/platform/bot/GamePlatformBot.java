@@ -22289,7 +22289,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             sb.append("\n");
         }
-        sb.append("📸 Дубли скриншотов: ").append(proofPct(st.duplicatePercent(), st.submitted())).append(" · найдено ").append(st.duplicates()).append("\n");
+        sb.append("📸 Повторные скриншоты среди проверенных вручную: ").append(proofPct(st.duplicatePercent(), st.manualDecided())).append(" · найдено ").append(st.duplicates()).append("\n");
         sb.append("🔁 Активность через неделю у новых игроков (зарег. 7–14 дн. назад): ").append(proofPct(st.retention7Percent(), st.retentionCohort7())).append("\n");
         sb.append("🔁 То же через месяц (зарег. 30–60 дн. назад): ").append(proofPct(st.retention30Percent(), st.retentionCohort30())).append("\n\n");
         sb.append("<b>Не считается (данных нет):</b> время до проверки (у заявки нет даты сдачи), баны за мультиаккаунты по периодам, платный/органический трафик. На страницу эти блоки не выводятся.");

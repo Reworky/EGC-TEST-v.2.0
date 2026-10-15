@@ -176,13 +176,6 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT s FROM QuestSubmission s JOIN FETCH s.quest q JOIN FETCH s.user u WHERE s.status IN ('APPROVED','REJECTED') AND s.updatedAt >= :since")
     List<QuestSubmission> findDecidedSince(@Param("since") java.time.LocalDateTime since);
 
-    /** Сданные игроком заявки (не черновики), созданные за период. */
-    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.status IN ('PENDING','APPROVED','REJECTED','NEEDS_INFO') AND s.createdAt >= :since")
-    long countSubmittedSince(@Param("since") java.time.LocalDateTime since);
-
-    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.duplicatePhotoDetected = true AND s.createdAt >= :since")
-    long countDuplicatesSince(@Param("since") java.time.LocalDateTime since);
-
     /** Кандидаты на автозакрытие брошенных (AbandonedQuestService): «взят»/«нужна информация», срок не истёк, заявка и её последнее изменение старше
      *  before, игрок не заходил с activeBefore (или дата захода не записана). «На проверке» сюда не попадает намеренно. */
     @Query("SELECT s FROM QuestSubmission s JOIN FETCH s.user u JOIN FETCH s.quest q WHERE s.status IN ('DRAFT','NEEDS_INFO') "

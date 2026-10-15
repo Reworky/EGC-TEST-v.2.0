@@ -48,10 +48,11 @@ public class ProofStatsService {
                         long autoApproved, Integer autoApprovedPercent,
                         long manualDecided, long rejectedManual, Integer rejectedManualPercent,
                         Map<RejectionReasonCode, Long> rejectionReasons,
-                        long submitted, long duplicates, Integer duplicatePercent,
+                        long duplicates, Integer duplicatePercent,
                         long retentionCohort7, Integer retention7Percent,
                         long retentionCohort30, Integer retention30Percent) {
-        /** Одобрено / проверено (одобрено + отклонено) за период; null, если проверок меньше MIN_SAMPLE. */
+        /** Одобрено / проверено (одобрено + отклонено) за период; null, если проверок меньше MIN_SAMPLE. Для витрины не годится: автоквесты не отклоняются,
+         *  и доля почти всегда ~100%. */
         public Integer approvedPercent() {
             return decided >= MIN_SAMPLE ? (int) Math.round(approved * 100.0 / decided) : null;
         }
@@ -77,7 +78,7 @@ public class ProofStatsService {
         LocalDateTime since = now.minusDays(WINDOW_DAYS);
         List<QuestSubmission> decidedList = submissionRepository.findDecidedSince(since);
 
-        long approved = 0, rejected = 0, autoApproved = 0, manualDecided = 0, rejectedManual = 0;
+        long approved = 0, rejected = 0, autoApproved = 0, manualDecided = 0, rejectedManual = 0, duplicatesManual = 0;
         Set<Long> approvedUsers = new HashSet<>();
         Map<RejectionReasonCode, Long> reasons = new EnumMap<>(RejectionReasonCode.class);
         for (QuestSubmission s : decidedList) {
@@ -93,10 +94,10 @@ public class ProofStatsService {
             if (!auto) {
                 manualDecided++;
                 if (s.getStatus() == SubmissionStatus.REJECTED) rejectedManual++;
+                if (s.isDuplicatePhotoDetected()) duplicatesManual++;
             }
         }
-        long submitted = submissionRepository.countSubmittedSince(since);
-        long duplicates = submissionRepository.countDuplicatesSince(since);
+        // Дубли скриншотов считаем только среди проверенных вручную заявок: у автоквестов скриншотов нет, и в знаменателе они давали бы заниженную долю
         UserService.RetentionReport ret = userService.retention();
 
         return new Stats(now, WINDOW_DAYS,
@@ -105,7 +106,7 @@ public class ProofStatsService {
                 autoApproved, percentOrNull(autoApproved, approved),
                 manualDecided, rejectedManual, percentOrNull(rejectedManual, manualDecided),
                 reasons,
-                submitted, duplicates, percentOrNull(duplicates, submitted),
+                duplicatesManual, percentOrNull(duplicatesManual, manualDecided),
                 ret.cohort7(), percentOrNull(ret.retained7(), ret.cohort7()),
                 ret.cohort30(), percentOrNull(ret.retained30(), ret.cohort30()));
     }
