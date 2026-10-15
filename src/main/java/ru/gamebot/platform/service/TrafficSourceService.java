@@ -11,13 +11,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.model.TrafficSource;
+import ru.gamebot.platform.domain.model.TrafficSpendEntry;
 import ru.gamebot.platform.domain.repository.TrafficSourceRepository;
+import ru.gamebot.platform.domain.repository.TrafficSpendEntryRepository;
 
 @Service
 @RequiredArgsConstructor
 public class TrafficSourceService {
 
     private final TrafficSourceRepository trafficSourceRepository;
+    private final TrafficSpendEntryRepository spendEntryRepository;
 
     public List<TrafficSource> findAll() {
         return trafficSourceRepository.findAllByOrderByCreatedAtDesc();
@@ -76,6 +79,23 @@ public class TrafficSourceService {
             ts.setClicks(ts.getClicks() + 1);
             trafficSourceRepository.save(ts);
         });
+    }
+
+    /** Расход за период (для вкладки «Удержание»): сохраняет запись и увеличивает общую сумму источника на ту же величину. false - источник не найден. */
+    @Transactional
+    public boolean addSpendEntry(Long id, long amountRub, LocalDate from, LocalDate to) {
+        TrafficSource ts = trafficSourceRepository.findById(id).orElse(null);
+        if (ts == null || amountRub <= 0 || from == null || to == null || to.isBefore(from)) return false;
+        TrafficSpendEntry e = new TrafficSpendEntry();
+        e.setSourceCode(ts.getCode());
+        e.setAmountRub(amountRub);
+        e.setFromDate(from);
+        e.setToDate(to);
+        e.setCreatedAt(LocalDateTime.now());
+        spendEntryRepository.save(e);
+        ts.setSpendRub(ts.getSpendRub() + amountRub);
+        trafficSourceRepository.save(ts);
+        return true;
     }
 
     @Transactional

@@ -219,7 +219,7 @@ public class AnalyticsService {
                 case USERS -> usersTab(p, pv, fromDate, lines);
                 case ACTIVITY -> activityTab(fromDate, lines);
                 case ENGAGEMENT -> engagementTab(fromDate, lines);
-                case RETENTION -> retentionTab(lines, extras);
+                case RETENTION -> retentionTab(lines, extras, null);
                 case QUESTS -> questsTab(p, pv, fromDate, lines);
                 case ECONOMY -> economyTab(p, pv, fromDate, lines);
                 case REFERRAL -> referralTab(p, pv, fromDate, lines);
@@ -240,7 +240,20 @@ public class AnalyticsService {
     }
 
     /** Вкладка «Удержание»: когорты D1/D7/D30 по журналу активных дней (определения - в RetentionService). Период вкладки не влияет. */
-    private void retentionTab(List<Line> out, List<String> extras) {
+    /** Вкладка «Удержание» с одним выбранным разрезом (переключатель в боте): segKey = src | game | qtype | squad; null - все разрезы (полный отчёт). */
+    public TabData computeRetention(String segKey) {
+        List<Line> lines = new ArrayList<>();
+        List<String> extras = new ArrayList<>();
+        try {
+            retentionTab(lines, extras, segKey);
+        } catch (Exception e) {
+            log.error("Analytics tab RETENTION failed", e);
+            extras.add("⚠️ Часть данных не удалось посчитать, подробности в логе (раздел «Проверка ошибок»).");
+        }
+        return new TabData(Tab.RETENTION, Period.lastDays(7), lines, extras);
+    }
+
+    private void retentionTab(List<Line> out, List<String> extras, String segKey) {
         RetentionService.Report r = retentionService.report();
         out.add(L("ret_d1", "Возврат D1 (4 зрелые недели)", "%", pctOrNull(r.recentD1()), pctOrNull(r.prevD1()), "против предыдущих 4 зрелых недель", false));
         out.add(L("ret_d7", "Возврат D7 (4 зрелые недели)", "%", pctOrNull(r.recentD7()), pctOrNull(r.prevD7()), "против предыдущих 4 зрелых недель", false));
@@ -270,7 +283,8 @@ public class AnalyticsService {
         extras.add(weeks.toString());
 
         for (java.util.Map.Entry<String, List<RetentionService.SegmentRow>> seg : r.segments().entrySet()) {
-            StringBuilder sb = new StringBuilder("<b>Разрез: ").append(escape(seg.getKey())).append("</b>\n<pre>значение          игр   D1   D7  D30\n");
+            if (segKey != null && !segKey.equals(seg.getKey())) continue;
+            StringBuilder sb = new StringBuilder("<b>Разрез: ").append(escape(RetentionService.SEGMENT_TITLES.getOrDefault(seg.getKey(), seg.getKey()))).append("</b>\n<pre>значение          игр   D1   D7  D30\n");
             int shown = 0;
             for (RetentionService.SegmentRow row : seg.getValue()) {
                 if (shown++ >= 6) break;
@@ -283,14 +297,14 @@ public class AnalyticsService {
             extras.add(sb.toString());
         }
         extras.add("<i>В разрезах у каждого показателя своя выборка: берутся игроки, у которых день N уже прошёл. Тип источника задаётся командой "
-                + "<code>/srctype КОД paid|partner|organic|referral|auto</code>; без неё метка с расходом считается платным закупом.</i>");
+                + "кнопкой «🏷 Тип источника» в карточке источника (или командой <code>/srctype КОД paid|partner|organic|referral|auto</code>); без неё метка с расходом считается платным закупом.</i>");
 
         if (!r.costs().isEmpty()) {
-            StringBuilder sb = new StringBuilder("<b>Стоимость вернувшегося игрока</b> <i>(расход источника за всё время, введён вручную)</i>\n");
+            StringBuilder sb = new StringBuilder("<b>Стоимость вернувшегося игрока</b> <i>(расход источника, введён вручную; с периодом - по игрокам этого периода)</i>\n");
             int shown = 0;
             for (RetentionService.SourceCost c : r.costs()) {
                 if (shown++ >= 5) break;
-                sb.append("• <code>").append(escape(c.code())).append("</code> ").append(c.spendRub()).append(" ₽: ");
+                sb.append("• <code>").append(escape(c.code())).append("</code> ").append(c.period() == null ? "" : c.period() + " ").append(c.spendRub()).append(" ₽: ");
                 sb.append(c.registered() > 0 ? Math.round((double) c.spendRub() / c.registered()) + " ₽/регистрация" : "—");
                 sb.append("; D7: ").append(costText(c.spendRub(), c.n7(), c.returned7()));
                 sb.append("; D30: ").append(costText(c.spendRub(), c.n30(), c.returned30())).append("\n");
@@ -911,10 +925,14 @@ public class AnalyticsService {
         StringBuilder sb = new StringBuilder();
         sb.append(d.tab().icon).append(" <b>").append(d.tab().title).append("</b>\n");
         DateTimeFormatter f = DateTimeFormatter.ofPattern("dd.MM HH:mm");
-        sb.append("<i>Период: ").append(d.period().label()).append(" (").append(d.period().from().format(f)).append(" - ")
-          .append(d.period().to().format(f)).append(" UTC)");
-        if (compare) sb.append(", сравнение с предыдущим окном такой же длины");
-        sb.append("</i>\n\n");
+        if (d.tab() == Tab.RETENTION) {
+            sb.append("<i>Когортная вкладка: период не выбирается, расчёт обновляется раз в час</i>\n\n");
+        } else {
+            sb.append("<i>Период: ").append(d.period().label()).append(" (").append(d.period().from().format(f)).append(" - ")
+              .append(d.period().to().format(f)).append(" UTC)");
+            if (compare) sb.append(", сравнение с предыдущим окном такой же длины");
+            sb.append("</i>\n\n");
+        }
         for (Line l : d.lines()) {
             sb.append(l.label()).append(": <b>").append(valueText(l.value(), l.unit())).append("</b>");
             if (compare && l.prev() != null && l.value() != null) sb.append(" ").append(deltaText(l.value(), l.prev(), l.unit(), l.lowerIsBetter()));
@@ -1012,6 +1030,9 @@ public class AnalyticsService {
                     sb.append(r[0]).append(';').append(r[1]).append(';').append(csvCell(String.valueOf(r[2]))).append(';').append(csvCell(String.valueOf(r[3]))).append(';')
                       .append(r[4] == null ? "" : ((LocalDateTime) r[4]).format(f)).append(';').append(r[5] == null ? "" : r[5]).append('\n');
                 }
+            }
+            case RETENTION -> {
+                return retentionService.csv();
             }
             case ECONOMY -> {
                 sb.append("дата;telegram_id;тип;сумма EXC\n");

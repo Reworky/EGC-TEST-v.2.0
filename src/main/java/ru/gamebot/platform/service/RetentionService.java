@@ -19,10 +19,12 @@ import ru.gamebot.platform.domain.model.AppSetting;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Quest;
 import ru.gamebot.platform.domain.model.TrafficSource;
+import ru.gamebot.platform.domain.model.TrafficSpendEntry;
 import ru.gamebot.platform.domain.repository.AppSettingRepository;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
 import ru.gamebot.platform.domain.repository.TrafficSourceRepository;
+import ru.gamebot.platform.domain.repository.TrafficSpendEntryRepository;
 import ru.gamebot.platform.domain.repository.UserActivityDayRepository;
 
 /**
@@ -56,6 +58,7 @@ public class RetentionService {
     private final UserActivityDayRepository dayRepo;
     private final QuestSubmissionRepository submissionRepo;
     private final TrafficSourceRepository sourceRepo;
+    private final TrafficSpendEntryRepository spendEntryRepo;
     private final AppSettingRepository settingRepo;
 
     private Report cached;
@@ -79,7 +82,12 @@ public class RetentionService {
 
     public record SegmentRow(String label, long size, Rate d1, Rate d7, Rate d30) {}
 
-    public record SourceCost(String code, String name, long spendRub, long registered, long n7, long returned7, long n30, long returned30) {}
+    /** period = null: расход за всё время по всем игрокам источника; иначе расход за период и игроки, зарегистрированные в этот период. */
+    public record SourceCost(String code, String name, String period, long spendRub, long registered, long n7, long returned7, long n30, long returned30) {}
+
+    /** Ключи и подписи разрезов (переключатель во вкладке «Удержание»). */
+    public static final Map<String, String> SEGMENT_TITLES = Map.of("src", "Источник", "game", "Первая игра", "qtype", "Тип первого квеста", "squad", "Отряд (по состоянию сейчас)");
+    public static final List<String> SEGMENT_KEYS = List.of("src", "game", "qtype", "squad");
 
     public record Report(LocalDate today, LocalDate journalStart, long cohortUsers, List<WeekRow> weeks,
                          Map<String, List<SegmentRow>> segments, List<SourceCost> costs,
@@ -161,28 +169,51 @@ public class RetentionService {
 
         // Разрезы: учитываются игроки, у которых день N уже прошёл (по каждому показателю своя выборка)
         Map<String, List<SegmentRow>> segments = new LinkedHashMap<>();
-        segments.put("Источник", segment(cohort, days, today, Member::srcType));
-        segments.put("Первая игра", segment(cohort, days, today, Member::game));
-        segments.put("Тип первого квеста", segment(cohort, days, today, Member::firstType));
-        segments.put("Отряд (по состоянию сейчас)", segment(cohort, days, today, m -> m.inSquad() ? "в отряде" : "без отряда"));
+        segments.put("src", segment(cohort, days, today, Member::srcType));
+        segments.put("game", segment(cohort, days, today, Member::game));
+        segments.put("qtype", segment(cohort, days, today, Member::firstType));
+        segments.put("squad", segment(cohort, days, today, m -> m.inSquad() ? "в отряде" : "без отряда"));
 
-        // Стоимость вернувшегося: расход источника (вводится вручную, за всё время) / вернувшиеся из игроков этого источника
+        // Стоимость вернувшегося: расход источника / вернувшиеся из его игроков. Расход за период (кнопка в карточке источника) считается
+        // по игрокам, зарегистрированным в этот период; расход без периода (общая сумма) - по всем игрокам источника.
+        Map<String, List<TrafficSpendEntry>> entriesByCode = new HashMap<>();
+        for (TrafficSpendEntry e : spendEntryRepo.findAllByOrderByFromDateAsc()) {
+            entriesByCode.computeIfAbsent(e.getSourceCode(), k -> new ArrayList<>()).add(e);
+        }
         List<SourceCost> costs = new ArrayList<>();
+        java.time.format.DateTimeFormatter df = java.time.format.DateTimeFormatter.ofPattern("dd.MM");
         for (TrafficSource s : sources) {
-            if (s.getSpendRub() <= 0) continue;
-            long reg = members.stream().filter(m -> s.getCode().equals(m.srcCode())).count();
-            long n7 = 0, r7 = 0, n30 = 0, r30 = 0;
-            for (Member m : cohort) {
-                if (!s.getCode().equals(m.srcCode())) continue;
-                Set<LocalDate> act = days.getOrDefault(m.id(), Set.of());
-                if (m.day0().plusDays(7).isBefore(today)) { n7++; if (act.contains(m.day0().plusDays(7))) r7++; }
-                if (m.day0().plusDays(30).isBefore(today)) { n30++; if (act.contains(m.day0().plusDays(30))) r30++; }
+            List<TrafficSpendEntry> entries = entriesByCode.get(s.getCode());
+            if (entries != null && !entries.isEmpty()) {
+                for (TrafficSpendEntry e : entries) {
+                    costs.add(costFor(s, members, cohort, days, today, e.getFromDate(), e.getToDate(), e.getAmountRub(),
+                            e.getFromDate().format(df) + "-" + e.getToDate().format(df)));
+                }
+            } else if (s.getSpendRub() > 0) {
+                costs.add(costFor(s, members, cohort, days, today, null, null, s.getSpendRub(), null));
             }
-            costs.add(new SourceCost(s.getCode(), s.getName(), s.getSpendRub(), reg, n7, r7, n30, r30));
         }
         costs.sort(Comparator.comparingLong(SourceCost::spendRub).reversed());
 
         return new Report(today, journalStart, cohort.size(), weeks, segments, costs, d1r, d1p, d7r, d7p, d30r, d30p);
+    }
+
+    private static SourceCost costFor(TrafficSource s, List<Member> members, List<Member> cohort, Map<Long, Set<LocalDate>> days, LocalDate today,
+                                      LocalDate from, LocalDate to, long spend, String period) {
+        long reg = 0, n7 = 0, r7 = 0, n30 = 0, r30 = 0;
+        for (Member m : members) {
+            if (!s.getCode().equals(m.srcCode())) continue;
+            if (from != null && (m.day0().isBefore(from) || m.day0().isAfter(to))) continue;
+            reg++;
+        }
+        for (Member m : cohort) {
+            if (!s.getCode().equals(m.srcCode())) continue;
+            if (from != null && (m.day0().isBefore(from) || m.day0().isAfter(to))) continue;
+            Set<LocalDate> act = days.getOrDefault(m.id(), Set.of());
+            if (m.day0().plusDays(7).isBefore(today)) { n7++; if (act.contains(m.day0().plusDays(7))) r7++; }
+            if (m.day0().plusDays(30).isBefore(today)) { n30++; if (act.contains(m.day0().plusDays(30))) r30++; }
+        }
+        return new SourceCost(s.getCode(), s.getName(), period, spend, reg, n7, r7, n30, r30);
     }
 
     /** Недельная когорта: DN считается, только если неделя целиком внутри журнала и день N прошёл у последнего зарегистрировавшегося. */
@@ -273,6 +304,68 @@ public class RetentionService {
             case "channel_check" -> "проверка подписки";
             default -> "скриншот";
         };
+    }
+
+    /** Текущая ручная метка типа источника: paid | partner | organic | referral, либо null (определяется автоматически). */
+    public String currentType(String code) {
+        return settingRepo.findById(SRCTYPE_PREFIX + code).map(AppSetting::getValue).map(String::trim).filter(v -> typeLabel(v) != null).orElse(null);
+    }
+
+    /** Кнопка «Тип источника» в карточке: auto -> paid -> partner -> organic -> referral -> auto. Возвращает подпись нового типа. */
+    public String cycleSourceType(String code) {
+        String cur = currentType(code);
+        String next = cur == null ? "paid" : switch (cur) {
+            case "paid" -> "partner";
+            case "partner" -> "organic";
+            case "organic" -> "referral";
+            default -> "auto";
+        };
+        setSourceType(code, next);
+        return typeText(code);
+    }
+
+    /** Подпись для карточки источника: ручная метка или «авто». */
+    public String typeText(String code) {
+        String cur = currentType(code);
+        return cur == null ? "авто (по наличию расхода)" : typeLabel(cur);
+    }
+
+    /** Таблица когорт и разрезов для выгрузки CSV (разделитель «;»). */
+    public String csv() {
+        Report r = report();
+        StringBuilder sb = new StringBuilder("\uFEFF");
+        sb.append("Журнал активности с;").append(r.journalStart() == null ? "" : r.journalStart()).append('\n');
+        sb.append("Недельная когорта;Игроков;D1;D1 n;D7;D7 n;D30;D30 n;Окно 7;Окно 7 n;Окно 30;Окно 30 n\n");
+        for (WeekRow w : r.weeks()) {
+            sb.append(w.weekStart()).append(';').append(w.size());
+            for (Rate x : new Rate[]{w.d1(), w.d7(), w.d30(), w.w7(), w.w30()}) sb.append(';').append(csvPct(x)).append(';').append(x.measurable() ? x.n() : "");
+            sb.append('\n');
+        }
+        sb.append('\n').append("Разрез;Значение;Игроков;D1;D1 n;D7;D7 n;D30;D30 n\n");
+        for (Map.Entry<String, List<SegmentRow>> seg : r.segments().entrySet()) {
+            for (SegmentRow row : seg.getValue()) {
+                sb.append(csvText(SEGMENT_TITLES.getOrDefault(seg.getKey(), seg.getKey()))).append(';').append(csvText(row.label())).append(';').append(row.size());
+                for (Rate x : new Rate[]{row.d1(), row.d7(), row.d30()}) sb.append(';').append(csvPct(x)).append(';').append(x.measurable() ? x.n() : "");
+                sb.append('\n');
+            }
+        }
+        sb.append('\n').append("Источник;Период расхода;Расход, руб;Зарегистрировано;D7 n;D7 вернулось;D30 n;D30 вернулось\n");
+        for (SourceCost c : r.costs()) {
+            sb.append(csvText(c.code())).append(';').append(c.period() == null ? "всё время" : c.period()).append(';').append(c.spendRub()).append(';')
+              .append(c.registered()).append(';').append(c.n7()).append(';').append(c.returned7()).append(';').append(c.n30()).append(';').append(c.returned30()).append('\n');
+        }
+        return sb.toString();
+    }
+
+    private static String csvPct(Rate x) {
+        Integer p = x.percent();
+        return p == null ? "" : String.valueOf(p);
+    }
+
+    private static String csvText(String v) {
+        if (v == null) return "";
+        String t = v.replace("\"", "\"\"");
+        return t.contains(";") || t.contains("\"") ? "\"" + t + "\"" : t;
     }
 
     /** Сохраняет тип источника для кода (команда /srctype). type = paid | partner | organic | referral | auto (сброс). */

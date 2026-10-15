@@ -2376,6 +2376,48 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
                 sendText(user.getTelegramId(), "✅ Расход записан: <b>" + rub + " ₽</b>." + pnlNote, backMenuKeyboard("admin:traffic:view:" + sourceId));
             }
+            case TRAFFIC_SPEND_PERIOD_INPUT -> {
+                Long sourceId = parseLong(session.getData().get("trafficSpendId"));
+                java.util.regex.Matcher pm = java.util.regex.Pattern
+                        .compile("^\\s*(\\d{1,9})\\s+(\\d{2}\\.\\d{2}\\.\\d{4})\\s*-\\s*(\\d{2}\\.\\d{2}\\.\\d{4})\\s*$").matcher(text);
+                java.time.LocalDate pFrom = null;
+                java.time.LocalDate pTo = null;
+                long pRub = 0;
+                if (sourceId != null && pm.matches()) {
+                    try {
+                        java.time.format.DateTimeFormatter pf = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
+                        pRub = Long.parseLong(pm.group(1));
+                        pFrom = java.time.LocalDate.parse(pm.group(2), pf);
+                        pTo = java.time.LocalDate.parse(pm.group(3), pf);
+                    } catch (Exception e) {
+                        pFrom = null;
+                    }
+                }
+                if (pFrom == null || pTo == null || pTo.isBefore(pFrom) || pRub <= 0) {
+                    sendText(user.getTelegramId(), "❌ Формат: <code>3000 01.10.2026-07.10.2026</code> (сумма в рублях, затем даты закупа: начало-конец).", cancelKeyboard());
+                    return;
+                }
+                session.reset();
+                ru.gamebot.platform.domain.model.TrafficSource periodSource = trafficSourceService.findById(sourceId).orElse(null);
+                if (periodSource == null || !trafficSourceService.addSpendEntry(sourceId, pRub, pFrom, pTo)) {
+                    sendText(user.getTelegramId(), "❌ Источник не найден.", backMenuKeyboard("admin:traffic"));
+                    return;
+                }
+                retentionService.invalidate();
+                String periodPnl = "";
+                try {
+                    java.time.LocalDate expDate = pTo.isAfter(java.time.LocalDate.now()) ? java.time.LocalDate.now() : pTo;
+                    expenseService.add(ru.gamebot.platform.domain.model.ExpenseEntry.TRAFFIC, pRub, expDate,
+                            "Источник: " + periodSource.getName() + " (" + text.trim().replaceAll("^\\d+\\s+", "") + ")");
+                    periodPnl = "\n🧾 В P&amp;L добавлен расход «Закуп трафика»: +" + fmtExc(pRub) + " ₽.";
+                } catch (Exception e) {
+                    log.warn("Failed to record period traffic spend as expense for source {}", sourceId, e);
+                    periodPnl = "\n⚠️ В источнике сумма сохранена, но в P&amp;L расход записать не удалось: внесите его вручную в «💼 Финансы».";
+                }
+                sendText(user.getTelegramId(), "✅ Расход за период записан: <b>" + pRub + " ₽</b> (" + pFrom.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"))
+                        + " - " + pTo.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + ")." + periodPnl,
+                        backMenuKeyboard("admin:traffic:view:" + sourceId));
+            }
             case TRAFFIC_BATCH_COUNT -> {
                 Integer count = parseInteger(text.trim());
                 if (count == null || count < 1 || count > 50) {
@@ -11383,6 +11425,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendAdminTrafficView(user, parseLong(action.substring("traffic:view:".length())));
                     answerSilently(callbackQuery.getId());
                     return;
+                } else if (action.startsWith("traffic:spendp:")) {
+                    Long periodSourceId = parseLong(action.substring("traffic:spendp:".length()));
+                    if (periodSourceId != null) {
+                        session.reset();
+                        session.setState(SessionState.TRAFFIC_SPEND_PERIOD_INPUT);
+                        session.getData().put("trafficSpendId", String.valueOf(periodSourceId));
+                        sendText(user.getTelegramId(),
+                                "🗓 <b>Расход за период</b>\n\nВведите сумму в рублях и даты закупа: <code>3000 01.10.2026-07.10.2026</code>. "
+                                        + "Сумма прибавится к общему расходу источника и попадёт в P&amp;L (закуп трафика), а во вкладке «Удержание» "
+                                        + "стоимость вернувшегося посчитается по игрокам, пришедшим в этот период. Общий расход «заменой» (кнопка слева) не трогайте для тех же денег: будет двойной учёт.",
+                                cancelKeyboard());
+                    }
+                    answerSilently(callbackQuery.getId());
+                    return;
+                } else if (action.startsWith("traffic:type:")) {
+                    Long typeSourceId = parseLong(action.substring("traffic:type:".length()));
+                    if (typeSourceId != null) {
+                        trafficSourceService.findById(typeSourceId).ifPresent(src -> retentionService.cycleSourceType(src.getCode()));
+                        sendAdminTrafficView(user, typeSourceId);
+                    }
+                    answerSilently(callbackQuery.getId());
+                    return;
                 } else if (action.startsWith("traffic:spend:")) {
                     Long spendSourceId = parseLong(action.substring("traffic:spend:".length()));
                     if (spendSourceId != null) {
@@ -14704,7 +14768,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendAnalyticsTab(AppUser user, UserSession session, ru.gamebot.platform.service.AnalyticsService.Tab tab) {
         ru.gamebot.platform.service.AnalyticsService.Period period = analyticsPeriod(session);
         boolean compare = "1".equals(session.getData().get("an_cmp"));
-        String text = analyticsService.format(analyticsService.compute(tab, period), compare);
+        String retSeg = session.getData().getOrDefault("an_seg", "src");
+        String text = analyticsService.format(tab == ru.gamebot.platform.service.AnalyticsService.Tab.RETENTION
+                ? analyticsService.computeRetention(retSeg) : analyticsService.compute(tab, period), compare);
         if (text.length() > 3900) text = text.substring(0, 3890) + "…";
         String cur = session.getData().getOrDefault("an_p", "7");
         String t = tab.name();
@@ -14729,7 +14795,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback("➕ Инцидент", "admin:inc:add"), keyboardFactory.callback("✅ Закрыть инцидент", "admin:inc:list")));
             }
             case SOURCES -> rows.add(List.of(keyboardFactory.callback("📊 Сравнение закупов", "admin:traffic:compare")));
-            case RETENTION -> rows.add(List.of(keyboardFactory.callback("🔄 Обновить (пересчёт)", "admin:an:retrefresh")));
+            case RETENTION -> {
+                List<InlineKeyboardButton> segRow1 = new ArrayList<>();
+                List<InlineKeyboardButton> segRow2 = new ArrayList<>();
+                String[] segLabels = {"Источник", "Игра", "Тип квеста", "Отряд"};
+                for (int i = 0; i < ru.gamebot.platform.service.RetentionService.SEGMENT_KEYS.size(); i++) {
+                    String key = ru.gamebot.platform.service.RetentionService.SEGMENT_KEYS.get(i);
+                    InlineKeyboardButton b = keyboardFactory.callback((key.equals(retSeg) ? "✅ " : "") + segLabels[i], "admin:an:retseg:" + key);
+                    (i < 2 ? segRow1 : segRow2).add(b);
+                }
+                rows.add(segRow1);
+                rows.add(segRow2);
+                rows.add(List.of(keyboardFactory.callback("🔄 Обновить (пересчёт)", "admin:an:retrefresh")));
+            }
             case QUESTS -> rows.add(List.of(keyboardFactory.callback("🧭 Пул квестов", "admin:stats:questpool")));
             case ENGAGEMENT -> rows.add(List.of(keyboardFactory.callback("🧪 Отряды: диагностика (рефералка)", "admin:squadretention")));
             case SQUADS -> rows.add(List.of(keyboardFactory.callback("⚔️ Состав отряда", "admin:squads:search")));
@@ -14763,6 +14841,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     session.getData().put("an_p", p[1]);
                     sendAnalyticsTab(user, session, pt);
                 }
+            }
+            case "retseg" -> {
+                String key = p.length > 1 ? p[1] : "src";
+                session.getData().put("an_seg", ru.gamebot.platform.service.RetentionService.SEGMENT_KEYS.contains(key) ? key : "src");
+                sendAnalyticsTab(user, session, ru.gamebot.platform.service.AnalyticsService.Tab.RETENTION);
             }
             case "retrefresh" -> {
                 retentionService.invalidate();
@@ -16560,7 +16643,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (p > 0) nav.add(keyboardFactory.callback("⬅️", "admin:traffic:view:page:" + sourceId + ":" + (p - 1)));
             if (p < totalPages - 1) nav.add(keyboardFactory.callback("➡️", "admin:traffic:view:page:" + sourceId + ":" + (p + 1)));
             if (!nav.isEmpty()) rows.add(nav);
-            rows.add(List.of(keyboardFactory.callback("💰 Указать расход", "admin:traffic:spend:" + sourceId)));
+            rows.add(List.of(keyboardFactory.callback("💰 Указать расход", "admin:traffic:spend:" + sourceId),
+                    keyboardFactory.callback("🗓 Расход за период", "admin:traffic:spendp:" + sourceId)));
+            rows.add(List.of(keyboardFactory.callback("🏷 Тип: " + retentionService.typeText(ts.getCode()), "admin:traffic:type:" + sourceId)));
             rows.add(List.of(keyboardFactory.callback("🗑 Удалить источник", "admin:traffic:delete:" + sourceId)));
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:traffic")));
             sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
