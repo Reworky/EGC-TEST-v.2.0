@@ -131,6 +131,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final UserService userService;
     private final QuestService questService;
     private final ru.gamebot.platform.service.AbandonedQuestService abandonedQuestService;
+    private final ru.gamebot.platform.service.ProofStatsService proofStatsService;
     private final QuestPackService questPackService;
     private final QuestPackScheduleService questPackScheduleService;
     private final RewardService rewardService;
@@ -10887,6 +10888,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 answerSilently(callbackQuery.getId());
                 return;
             }
+            case "proof" -> { sendProofStatsAdmin(user); answerSilently(callbackQuery.getId()); return; }
+            case "proof:csv" -> {
+                try {
+                    sendCsvDocument(user.getTelegramId(), proofStatsService.exportCsv(ru.gamebot.platform.service.ProofStatsService.WINDOW_DAYS),
+                            "egc_proof_export_" + java.time.LocalDate.now() + ".csv",
+                            "🛡 Обезличенная выгрузка за " + ru.gamebot.platform.service.ProofStatsService.WINDOW_DAYS + " дн.: хэш игрока (соль только у нас), время, статус, игра, квест, способ проверки.");
+                } catch (Exception proofEx) {
+                    log.error("Proof export failed", proofEx);
+                    sendText(user.getTelegramId(), "⚠️ Не удалось собрать выгрузку, смотрите логи.", backMenuKeyboard("admin:proof"));
+                }
+                answerSilently(callbackQuery.getId());
+                return;
+            }
             case "abandoned" -> { sendAbandonedQuestsAdmin(user, null); answerSilently(callbackQuery.getId()); return; }
             case "abandoned:on" -> {
                 saveAppSetting(ru.gamebot.platform.service.AbandonedQuestService.ENABLED_KEY, "true");
@@ -14554,6 +14568,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback("✏️ Квесты", "admin:edit"), keyboardFactory.callback("📈 Топ квестов", "admin:queststats")));
                 rows.add(List.of(keyboardFactory.callback("🧭 Пул квестов", "admin:stats:questpool")));
                 rows.add(List.of(keyboardFactory.callback("🧹 Брошенные квесты", "admin:abandoned")));
+                rows.add(List.of(keyboardFactory.callback("🛡 Доказательства для студий", "admin:proof")));
                 rows.add(List.of(keyboardFactory.callback("📊 Статистика UGC-квестов", "admin:ugcstats")));
                 rows.add(List.of(keyboardFactory.callback("📊 Brawl Stars", "admin:brawlstats"), keyboardFactory.callback("📊 Clash of Clans", "admin:clashstats")));
                 rows.add(List.of(keyboardFactory.callback("📊 Clash Royale", "admin:clashroyalestats"), keyboardFactory.callback("📊 CS2", "admin:cs2stats")));
@@ -22238,6 +22253,50 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             log.warn("Failed to create payout board message", e);
             return "ошибка: " + e.getMessage();
         }
+    }
+
+    private static String proofPct(Integer v, long sample) {
+        return v == null ? "мало данных (выборка " + sample + ", нужно от " + ru.gamebot.platform.service.ProofStatsService.MIN_SAMPLE + ")"
+                : v + "% (выборка " + sample + ")";
+    }
+
+    /** «🛡 Доказательства для студий»: цифры за 30 дней для страницы egc-club.online/partners/proof (те же значения отдаёт публичный /api/public/proof). */
+    private void sendProofStatsAdmin(AppUser user) {
+        ru.gamebot.platform.service.ProofStatsService.Stats st;
+        try {
+            st = proofStatsService.compute();
+        } catch (Exception e) {
+            log.error("Proof stats failed", e);
+            sendText(user.getTelegramId(), "⚠️ Не удалось посчитать цифры, смотрите логи.", backMenuKeyboard("admin:grp:quests"));
+            return;
+        }
+        StringBuilder sb = new StringBuilder("🛡 <b>Доказательства для студий — за " + st.windowDays() + " дн.</b>\n");
+        sb.append("<i>Те же цифры идут на страницу egc-club.online/partners/proof (обновляются раз в час). Доля показывается, только если выборка ≥ ")
+                .append(ru.gamebot.platform.service.ProofStatsService.MIN_SAMPLE).append(".</i>\n\n");
+        sb.append("👥 Игроков в базе: <b>").append(fmtExc(st.playersTotal())).append("</b> · активных за 7 дней: <b>").append(st.activeWeek()).append("</b>\n");
+        sb.append("✅ Игроков с одобренным квестом: <b>").append(st.playersApproved()).append("</b>\n\n");
+        sb.append("🔎 Проверено заявок: <b>").append(st.decided()).append("</b> (одобрено ").append(st.approved()).append(", отклонено ").append(st.rejected()).append(")\n");
+        sb.append("   доля одобренных: ").append(proofPct(st.approvedPercent(), st.decided())).append("\n");
+        sb.append("🤖 Одобрено без модератора (API игры, постбэк, проверка подписки): ").append(proofPct(st.autoApprovedPercent(), st.approved())).append("\n");
+        sb.append("🧑‍⚖️ Отклонено из проверенных модератором: ").append(proofPct(st.rejectedManualPercent(), st.manualDecided())).append("\n");
+        if (!st.rejectionReasons().isEmpty()) {
+            sb.append("   причины отклонений: ");
+            boolean firstReason = true;
+            for (java.util.Map.Entry<ru.gamebot.platform.domain.enums.RejectionReasonCode, Long> e : st.rejectionReasons().entrySet()) {
+                if (!firstReason) sb.append(", ");
+                firstReason = false;
+                sb.append(e.getKey().name().toLowerCase()).append(" ").append(e.getValue());
+            }
+            sb.append("\n");
+        }
+        sb.append("📸 Дубли скриншотов: ").append(proofPct(st.duplicatePercent(), st.submitted())).append(" · найдено ").append(st.duplicates()).append("\n");
+        sb.append("🔁 Активность через неделю у новых игроков (зарег. 7–14 дн. назад): ").append(proofPct(st.retention7Percent(), st.retentionCohort7())).append("\n");
+        sb.append("🔁 То же через месяц (зарег. 30–60 дн. назад): ").append(proofPct(st.retention30Percent(), st.retentionCohort30())).append("\n\n");
+        sb.append("<b>Не считается (данных нет):</b> время до проверки (у заявки нет даты сдачи), баны за мультиаккаунты по периодам, платный/органический трафик. На страницу эти блоки не выводятся.");
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("📤 Обезличенная выгрузка (CSV)", "admin:proof:csv")),
+                List.of(keyboardFactory.callback("🔄 Пересчитать", "admin:proof")),
+                List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:quests"), keyboardFactory.callback("🏠 Меню", "menu:main")))));
     }
 
     /** «🧹 Брошенные квесты»: что закрыла бы автоматика прямо сейчас, переключатель автозакрытия и ручной запуск. */
