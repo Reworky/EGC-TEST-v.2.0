@@ -28,13 +28,13 @@ public class SocialTaskService {
     public static final String PAYOUTS_CODE = "payouts";
     public static final long PAYOUTS_REWARD_EXC = 100;
     public static final String TIKTOK_CODE = "tiktok";
-    public static final long TIKTOK_REWARD_EXC = 20;
+    public static final long TIKTOK_REWARD_EXC = 70;
     private static final String TIKTOK_URL = "https://www.tiktok.com/@experience_gaming_club";
     public static final String YOUTUBE_CODE = "youtube";
-    public static final long YOUTUBE_REWARD_EXC = 20;
+    public static final long YOUTUBE_REWARD_EXC = 70;
     private static final String YOUTUBE_URL = "https://www.youtube.com/@EXPERIENCEGAMINGCLUB";
     public static final String INSTAGRAM_CODE = "instagram";
-    public static final long INSTAGRAM_REWARD_EXC = 20;
+    public static final long INSTAGRAM_REWARD_EXC = 70;
     private static final String INSTAGRAM_URL = "https://www.instagram.com/exgamingclub";
     private static final String ENABLED_KEY = "social_tasks.enabled";
 
