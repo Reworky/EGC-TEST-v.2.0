@@ -1909,6 +1909,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        // Нераспознанное нажатие: пишем в лог, какая именно кнопка (data) и чья - иначе по жалобе «неизвестное действие» не понять, что нажимал игрок
+        log.warn("Unknown callback data '{}' from user {} (nick {})", data, user.getTelegramId(), user.getNickname());
         answer(callbackQuery.getId(), "Неизвестное действие");
     }
 
