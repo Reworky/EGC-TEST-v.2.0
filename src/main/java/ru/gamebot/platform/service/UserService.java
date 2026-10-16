@@ -1507,21 +1507,49 @@ public class UserService {
         if (invitedUser.getCompletedQuests() != 0) {
             return false; // only on first quest (completedQuests is incremented before this call)
         }
-        // Первый квест без подписки на канал (2026-10-10): бонусы удерживаем до активации аккаунта, иначе
-        // реферальная ссылка давала бы пригласившему 2 500 EXC + Pass за аккаунт, который так и не подписался.
-        if (!invitedUser.isRegistrationCompleted()) {
-            invitedUser.setReferralFirstQuestBonusPending(true);
-            appUserRepository.save(invitedUser);
+        // С 2026-10-16 бонус не выплачивается на первом квесте (защита от мультиаккаунтов: пара «пригласил двойника» давала 5 500 EXC за один квест):
+        // он удерживается, пока приглашённый не активирует аккаунт (подписка на канал), не выполнит REFERRAL_BONUS_MIN_QUESTS квестов и пока не пройдёт
+        // REFERRAL_BONUS_MIN_AGE_DAYS дней с регистрации. Выплату делают claimPendingFirstQuestReferralBonus (при подписке) и ReferralBonusReleaseScheduler.
+        invitedUser.setReferralFirstQuestBonusPending(true);
+        appUserRepository.save(invitedUser);
+        return false;
+    }
+
+    /** Сколько квестов и дней нужно приглашённому, чтобы реферальный бонус был выплачен (тот же порог, что открывает вывод). */
+    public static final int REFERRAL_BONUS_MIN_QUESTS = RewardService.WITHDRAWAL_MIN_APPROVED_QUESTS;
+    public static final int REFERRAL_BONUS_MIN_AGE_DAYS = RewardService.WITHDRAWAL_MIN_ACCOUNT_AGE_DAYS;
+    /** Бонус приглашённому за приглашение (после выполнения условий). */
+    public static final long REFERRAL_WELCOME_BONUS_EXC = 3_000;
+
+    /** Условия выплаты удержанного бонуса: активирован, не заблокирован, вывод не заморожен, достаточно квестов и дней. */
+    public boolean referralBonusConditionsMet(AppUser u) {
+        return u.isRegistrationCompleted() && !u.isBlocked() && !u.isWithdrawalFrozen()
+                && u.getCompletedQuests() >= REFERRAL_BONUS_MIN_QUESTS
+                && u.getCreatedAt() != null && !u.getCreatedAt().plusDays(REFERRAL_BONUS_MIN_AGE_DAYS).isAfter(LocalDateTime.now());
+    }
+
+    /** Выплачивает удержанный реферальный бонус, если условия выполнены. Атомарно: строка игрока блокируется, флаг снимается и бонус платится в одной
+     *  транзакции - при сбое всё откатывается (бонус остаётся удержанным), двойной выплаты нет. true - выплачено сейчас. */
+    @Transactional
+    public boolean releaseReferralBonusIfDue(Long userId) {
+        AppUser u = appUserRepository.findByIdForUpdate(userId).orElse(null);
+        if (u == null || !u.isReferralFirstQuestBonusPending() || !referralBonusConditionsMet(u)) {
             return false;
         }
-        return payFirstQuestReferralBonus(invitedUser);
+        u.setReferralFirstQuestBonusPending(false);
+        appUserRepository.save(u);
+        boolean paid = payFirstQuestReferralBonus(u);
+        if (paid) {
+            eventPublisher.publishEvent(new ru.gamebot.platform.event.ReferralWelcomeBonusPaidEvent(this, u.getTelegramId(), REFERRAL_WELCOME_BONUS_EXC));
+        }
+        return paid;
     }
 
     /** Выдаёт удержанные бонусы за первый квест (см. grantFirstQuestReferralBonus) сразу после активации
      *  аккаунта (подписки на канал). true - бонус выдан сейчас (приглашённому нужно сообщить). */
     @Transactional
     public boolean claimPendingFirstQuestReferralBonus(AppUser invitedUser) {
-        if (!invitedUser.isReferralFirstQuestBonusPending() || !invitedUser.isRegistrationCompleted()) {
+        if (!invitedUser.isReferralFirstQuestBonusPending() || !referralBonusConditionsMet(invitedUser)) {
             return false;
         }
         invitedUser.setReferralFirstQuestBonusPending(false);
@@ -1536,8 +1564,8 @@ public class UserService {
         }
         // Пробел закрыт 2026-10-01 (владелец подтвердил) - раньше это начисление вообще не
         // логировалось в exc_transactions, см. project_unified_exc_xp_credit_refactor.
-        addReward(invitedUser, 0, 3_000, ExcTransactionService.REFERRAL_FIRST_QUEST_WELCOME,
-                "Бонус за первый одобренный квест");
+        addReward(invitedUser, 0, REFERRAL_WELCOME_BONUS_EXC, ExcTransactionService.REFERRAL_FIRST_QUEST_WELCOME,
+                "Бонус за приглашение (после " + REFERRAL_BONUS_MIN_QUESTS + " квестов)");
 
         // Самореферал не награждаем (та же защита, что и в QuestService.grantReferralBonus);
         // если referrer не найден — бонус приглашённому выше всё равно уже начислен.

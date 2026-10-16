@@ -22,7 +22,7 @@ public class ReferralDto {
     private boolean goalOpen;
     /** За цель положены бесплатные дни EGC Pass (у подписчика Pass их нет, ему только EXC). */
     private boolean goalPassReward;
-    /** Друг уже в клубе (invitedFriends > 0), ждём его первый квест. */
+    /** Друг уже в клубе (invitedFriends > 0), ждём его 3 квеста и 3 дня. */
     private boolean goalFriendJoined;
     private int goalPassDays;
 }

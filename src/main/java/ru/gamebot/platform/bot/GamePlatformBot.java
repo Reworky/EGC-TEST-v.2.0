@@ -4233,8 +4233,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "При HR &lt; 100% курс EXC к рублю снижается пропорционально.\n"
                 + "Текущий HR всегда виден в боте перед выводом.\n\n"
                 + "<b>5. Реферальная программа</b>\n"
-                + "• Тебе: +300 EXC сразу, +2 500 EXC когда друг выполнит первый квест, +10% от EXC друга пока он активен (квест хотя бы раз в 14 дней)\n"
-                + "• Другу: +500 EXC сразу, +3 000 EXC после первого квеста\n"
+                + "• Тебе: +300 EXC сразу, +2 500 EXC когда друг выполнит 3 квеста и пройдёт 3 дня в клубе, +10% от EXC друга пока он активен (квест хотя бы раз в 14 дней)\n"
+                + "• Другу: +500 EXC сразу, +3 000 EXC после 3 квестов и 3 дней в клубе\n"
                 + "Самореферал и технические аккаунты не засчитываются.\n\n"
                 + "<b>6. Блокировка аккаунтов</b>\n"
                 + "Пожизненная блокировка без предупреждения:\n"
@@ -4320,7 +4320,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Удержанные бонусы за первый квест (первый квест пройден до подписки) - выдаём сейчас
         if (userService.claimPendingFirstQuestReferralBonus(activated)) {
             sendText(activated.getTelegramId(),
-                    "🎁 <b>+3 000 EXC</b> за первый квест уже на балансе — спасибо за подписку!", null);
+                    "🎁 <b>+3 000 EXC</b> за приглашение уже на балансе — спасибо за подписку!", null);
         }
         consumePendingSquadInvite(activated);
         if (referral != null) {
@@ -4339,7 +4339,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendReferralBonusMessage(AppUser user, ru.gamebot.platform.service.UserService.ReferralActivationResult referral) {
         sendText(user.getTelegramId(),
                 "🪙 <b>Реферальный бонус: +" + referral.invitedBonus() + " EXC</b> уже на балансе!\n\n"
-                        + "Ещё <b>3 000 EXC</b> придут после первого выполненного квеста.",
+                        + "Ещё <b>3 000 EXC</b> придут, когда выполнишь 3 квеста и пройдёт 3 дня в клубе.",
                 null);
     }
 
@@ -4645,8 +4645,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return "";
         }
         return user.isReferralFirstQuestBonusPending()
-                ? "\n🎁 Бонус за первый квест <b>+3 000 EXC</b> придёт, как только подпишешься на канал"
-                : "\n🎁 Бонус за первый квест: <b>+3 000 EXC</b>";
+                ? "\n🎁 Бонус за приглашение <b>+3 000 EXC</b> придёт после подписки на канал, 3 квестов и 3 дней в клубе"
+                : "\n🎁 Бонус за приглашение <b>+3 000 EXC</b> придёт, когда выполнишь 3 квеста и пройдёт 3 дня в клубе";
     }
 
     private void sendOnboardingGuide(AppUser user) {
@@ -5259,11 +5259,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     @org.springframework.context.event.EventListener
+    public void onReferralWelcomeBonusPaid(ru.gamebot.platform.event.ReferralWelcomeBonusPaidEvent event) {
+        try {
+            notifyUser(event.getInvitedTelegramId(),
+                    "🎁 <b>+" + String.format("%,d", event.getBonusExc()).replace(',', ' ') + " EXC</b> за приглашение уже на балансе: ты выполнил 3 квеста и провёл в клубе 3 дня. Спасибо, что с нами!");
+        } catch (Exception e) {
+            log.error("[Referral] Failed to notify invited {} about welcome bonus", event.getInvitedTelegramId(), e);
+        }
+    }
+
+    @org.springframework.context.event.EventListener
     public void onReferrerFirstQuestBonus(ru.gamebot.platform.event.ReferrerFirstQuestBonusEvent event) {
         try {
             notifyUser(event.getReferrerTelegramId(),
                     "🎉 <b>+" + event.getBonusExc() + " EXC</b> — твой друг <b>" + escape(event.getFriendNickname())
-                            + "</b> выполнил первый квест!\n\n"
+                            + "</b> выполнил 3 квеста и прошёл проверку клуба!\n\n"
                             + (event.getPassDaysGranted() > 0
                                 ? "🎁 И <b>" + event.getPassDaysGranted() + " дня EGC Pass</b> в подарок за первого друга. Загляни в раздел Pass, чтобы увидеть бонусы.\n\n"
                                 : "")
@@ -5471,7 +5481,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
             sendText(referrer.getTelegramId(),
                     "👋 Твой друг <b>" + escape(friend) + "</b> зашёл в EGC, но ещё не взял первый квест.\n\n"
-                            + "Напомни ему: за первый квест ему <b>+3 000 EXC</b>" + starsNote(3_000) + ", тебе <b>+2 500 EXC</b>.",
+                            + "Напомни ему: за 3 квеста ему <b>+3 000 EXC</b>" + starsNote(3_000) + ", тебе <b>+2 500 EXC</b>.",
                     keyboardFactory.rowsLayout(rows));
         } catch (Exception e) {
             log.warn("[Referral] Failed to notify referrer {} about stalled friend", event.getReferrerTelegramId(), e);
@@ -7174,7 +7184,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + friendBadgeProgress
                         + "<b>Как это работает</b>\n"
                         + "1. Друг вступает в клуб: тебе <b>+300 EXC</b>, ему <b>+500 EXC</b>.\n"
-                        + "2. Друг делает первый квест: тебе <b>+2 500 EXC</b>, ему <b>+3 000 EXC</b>.\n"
+                        + "2. Друг выполняет 3 квеста, и проходит 3 дня в клубе: тебе <b>+2 500 EXC</b>, ему <b>+3 000 EXC</b>.\n"
                         + "3. Дальше ты получаешь <b>10% от его EXC</b>, пока он играет (квест хотя бы раз в 14 дней).\n\n"
                         + "Скопируй ссылку и отправь другу, остальное система сделает сама.",
                 keyboardFactory.rowsLayout(List.of(
@@ -19530,7 +19540,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             String msg = inviterNick != null
                     ? "🎁 <b>Тебя пригласил " + escape(inviterNick) + "</b>\n\n"
-                            + "За первый квест тебе начислят <b>+3 000 EXC</b>" + starsNote(3_000) + (user.isRegistrationCompleted() ? "" : " (бонус придёт после подписки на канал)") + ". Самый простой старт — квесты по Brawl Stars: прогресс засчитывается сам, ничего отправлять не нужно." + popular
+                            + "За 3 выполненных квеста и 3 дня в клубе тебе начислят <b>+3 000 EXC</b>" + starsNote(3_000) + (user.isRegistrationCompleted() ? "" : " (после подписки на канал)") + ". Самый простой старт — квесты по Brawl Stars: прогресс засчитывается сам, ничего отправлять не нужно." + popular
                     : switch (event.getNotificationNumber()) {
                 case 1 -> "🎮 <b>У тебя уже 200 EXC</b>\n\n"
                         + "Первый квест занимает около 5 минут, а дальше EXC копятся на вывод (минимум 5 000 EXC)." + popular;
@@ -22165,10 +22175,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "<b>" + ru.gamebot.platform.service.UserService.REFERRAL_GOAL_PASS_DAYS + " дня EGC Pass</b> и <b>+2 500 EXC</b>";
         if (user.getInvitedFriends() > 0) {
             return "🎯 <b>Друг в клубе</b>\n"
-                    + "Как только он выполнит первый квест, ты получишь " + reward + ".\n\n";
+                    + "Как только он выполнит 3 квеста и проведёт 3 дня в клубе, ты получишь " + reward + ".\n\n";
         }
         return "🎯 <b>Позови друга</b> (0/1)\n"
-                + "Друг сделает первый квест, и ты получишь " + reward + ". Другу тоже достанется: <b>+3 500 EXC</b>.\n\n";
+                + "Друг выполнит 3 квеста и проведёт 3 дня в клубе, и ты получишь " + reward + ". Другу тоже достанется: до <b>+3 500 EXC</b>.\n\n";
     }
 
     /** Кнопка-подсказка «позови друга» под сообщением в удачный момент (moment: quest, payout, streak3, streak7) или null: не подходит по правилам
@@ -22185,11 +22195,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean pass = userService.isEgcPassActive(user);
         String passPart = pass ? "" : " и <b>" + ru.gamebot.platform.service.UserService.REFERRAL_GOAL_PASS_DAYS + " дня EGC Pass</b>";
         String text = switch (moment) {
-            case "quest" -> "🎉 <b>Первый квест выполнен!</b>\n\nХочешь, чтобы друг заработал так же? Позови его: ему <b>+3 500 EXC</b> на старте, тебе <b>+2 500 EXC</b>" + passPart + ".";
-            case "payout" -> "💸 <b>Выплата получена!</b>\n\nПокажи другу, что это работает: за каждого друга, который выполнит первый квест, ты получаешь <b>+2 500 EXC</b>"
+            case "quest" -> "🎉 <b>Первый квест выполнен!</b>\n\nХочешь, чтобы друг заработал так же? Позови его: ему до <b>+3 500 EXC</b>, тебе <b>+2 500 EXC</b>" + passPart + ".";
+            case "payout" -> "💸 <b>Выплата получена!</b>\n\nПокажи другу, что это работает: за каждого друга, который выполнит 3 квеста, ты получаешь <b>+2 500 EXC</b>"
                     + (pass ? "." : ", а за первого ещё и <b>" + ru.gamebot.platform.service.UserService.REFERRAL_GOAL_PASS_DAYS + " дня EGC Pass</b>.");
-            case "streak3", "streak7" -> "🔥 <b>Серия " + ("streak3".equals(moment) ? "3" : "7") + " дней!</b>\n\nС другом веселее: позови его — ему <b>+3 500 EXC</b> на старте, тебе <b>+2 500 EXC</b>" + passPart + " за первого.";
-            default -> "🤝 <b>Позови друга</b>\n\nЕму <b>+3 500 EXC</b> на старте, тебе <b>+2 500 EXC</b>" + passPart + " за первого, кто выполнит первый квест.";
+            case "streak3", "streak7" -> "🔥 <b>Серия " + ("streak3".equals(moment) ? "3" : "7") + " дней!</b>\n\nС другом веселее: позови его — ему до <b>+3 500 EXC</b>, тебе <b>+2 500 EXC</b>" + passPart + " за первого.";
+            default -> "🤝 <b>Позови друга</b>\n\nЕму до <b>+3 500 EXC</b>, тебе <b>+2 500 EXC</b>" + passPart + " за первого, кто выполнит 3 квеста.";
         };
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.url("📣 Позвать друга", userService.buildShareUrl(user))),

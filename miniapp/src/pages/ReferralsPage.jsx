@@ -105,7 +105,7 @@ export default function ReferralsPage() {
             <div className="ref-goal-titles">
               <div className="ref-goal-title">Позови друга</div>
               <div className="ref-goal-sub">
-                {data.goalFriendJoined ? 'Друг в клубе, ждём его первый квест' : 'Награды придут, когда друг выполнит первый квест'}
+                {data.goalFriendJoined ? 'Друг в клубе, ждём его 3 квеста' : 'Награды придут, когда друг выполнит 3 квеста и проведёт 3 дня в клубе'}
               </div>
             </div>
           </div>
@@ -213,7 +213,7 @@ export default function ReferralsPage() {
         <div className="ref-step">
           <div className="ref-step-num">2</div>
           <div className="ref-step-body">
-            <div className="ref-step-title">Друг выполняет первый квест</div>
+            <div className="ref-step-title">Друг выполняет 3 квеста и проводит 3 дня в клубе</div>
             <div className="ref-step-desc">Тебе бонусом: <b>+2 500 EXC</b> · Другу бонусом: <b>+3 000 EXC</b></div>
           </div>
         </div>

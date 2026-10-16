@@ -329,4 +329,7 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     boolean existsByDotaAccountIdAndTelegramIdNot(Long accountId, Long telegramId);
     boolean existsByCs2SteamId64AndTelegramIdNot(Long steamId64, Long telegramId);
     boolean existsByPubgAccountIdAndTelegramIdNot(String accountId, Long telegramId);
+
+    /** Удержанные реферальные бонусы, условия которых выполнены (см. ReferralBonusReleaseScheduler): активирован, достаточно квестов, прошло достаточно дней. */
+    List<AppUser> findAllByReferralFirstQuestBonusPendingTrueAndRegistrationCompletedTrueAndCompletedQuestsGreaterThanEqualAndCreatedAtBefore(int minQuests, LocalDateTime before);
 }
