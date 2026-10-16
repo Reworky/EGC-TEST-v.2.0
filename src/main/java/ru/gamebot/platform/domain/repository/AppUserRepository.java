@@ -321,4 +321,12 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     /** Регистрации за период для выгрузки в CSV (границы: from включительно, to исключительно). */
     List<AppUser> findAllByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtAsc(LocalDateTime from, LocalDateTime to);
+
+    // Один игровой аккаунт - один аккаунт клуба (2026-10-16): тег уже привязан к другому аккаунту?
+    boolean existsByBrawlStarsTagIgnoreCaseAndTelegramIdNot(String tag, Long telegramId);
+    boolean existsByClashRoyaleTagIgnoreCaseAndTelegramIdNot(String tag, Long telegramId);
+    boolean existsByClashOfClansTagIgnoreCaseAndTelegramIdNot(String tag, Long telegramId);
+    boolean existsByDotaAccountIdAndTelegramIdNot(Long accountId, Long telegramId);
+    boolean existsByCs2SteamId64AndTelegramIdNot(Long steamId64, Long telegramId);
+    boolean existsByPubgAccountIdAndTelegramIdNot(String accountId, Long telegramId);
 }

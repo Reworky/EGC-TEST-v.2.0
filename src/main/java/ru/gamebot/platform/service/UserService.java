@@ -1959,6 +1959,34 @@ public class UserService {
         return appUserRepository.save(user);
     }
 
+    /** Игровой аккаунт уже привязан к другому аккаунту клуба? game: brawl | cr | coc | dota | cs2 | pubg. Нераспознанные значения не блокируем. */
+    public boolean isGameAccountLinkedToOther(String game, String value, Long ownTelegramId) {
+        if (value == null || value.isBlank() || ownTelegramId == null) return false;
+        try {
+            return switch (game) {
+                case "brawl" -> appUserRepository.existsByBrawlStarsTagIgnoreCaseAndTelegramIdNot(value.trim(), ownTelegramId);
+                case "cr" -> appUserRepository.existsByClashRoyaleTagIgnoreCaseAndTelegramIdNot(value.trim(), ownTelegramId);
+                case "coc" -> appUserRepository.existsByClashOfClansTagIgnoreCaseAndTelegramIdNot(value.trim(), ownTelegramId);
+                case "dota" -> appUserRepository.existsByDotaAccountIdAndTelegramIdNot(Long.parseLong(value.trim()), ownTelegramId);
+                case "cs2" -> appUserRepository.existsByCs2SteamId64AndTelegramIdNot(Long.parseLong(value.trim()), ownTelegramId);
+                case "pubg" -> appUserRepository.existsByPubgAccountIdAndTelegramIdNot(value.trim(), ownTelegramId);
+                default -> false;
+            };
+        } catch (Exception e) {
+            log.warn("Game account uniqueness check failed ({}): {}", game, e.getMessage());
+            return false;
+        }
+    }
+
+    /** Заморозка вывода на проверку (админская команда /wdfreeze). */
+    @Transactional
+    public AppUser setWithdrawalFrozen(Long telegramId, boolean frozen) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId)
+                .orElseThrow(() -> new IllegalArgumentException("Игрок с таким Telegram ID не найден."));
+        user.setWithdrawalFrozen(frozen);
+        return appUserRepository.save(user);
+    }
+
     @Transactional
     public AppUser blockUser(Long telegramId, String reason) {
         AppUser user = appUserRepository.findByTelegramId(telegramId)

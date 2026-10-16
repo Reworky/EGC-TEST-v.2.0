@@ -151,6 +151,10 @@ public class AppUser {
     @Column(columnDefinition = "boolean default false")
     private boolean fraudSuspect;
 
+    /** Вывод заморожен на проверку (2026-10-16, мультиаккаунты с общим игровым тегом): заявки на вывод любым способом не принимаются. Админ: /wdfreeze ID on|off. */
+    @Column(columnDefinition = "boolean default false")
+    private boolean withdrawalFrozen;
+
     // Sink items
     private LocalDateTime excBoostActiveUntil;
     private String profileTitle;

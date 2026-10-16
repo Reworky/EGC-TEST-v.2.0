@@ -43,6 +43,9 @@ public class RewardService {
 
     /** null — вывод доступен; иначе понятное игроку объяснение, чего не хватает. */
     public String withdrawalEligibilityBlock(AppUser user) {
+        if (user.isWithdrawalFrozen()) {
+            return "Вывод по вашему аккаунту временно приостановлен на проверку. Напишите в поддержку: мы разберёмся и сообщим результат.";
+        }
         StringBuilder missing = new StringBuilder();
         if (user.getCreatedAt() != null && user.getCreatedAt().plusDays(WITHDRAWAL_MIN_ACCOUNT_AGE_DAYS).isAfter(LocalDateTime.now())) {
             java.time.Duration left = java.time.Duration.between(LocalDateTime.now(), user.getCreatedAt().plusDays(WITHDRAWAL_MIN_ACCOUNT_AGE_DAYS));

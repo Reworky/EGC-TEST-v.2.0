@@ -445,6 +445,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (text != null && text.startsWith("/wdfreeze") && isEffectiveAdmin(user)) {
+            String[] fz = text.trim().split("\\s+");
+            if (fz.length != 3 || (!"on".equalsIgnoreCase(fz[2]) && !"off".equalsIgnoreCase(fz[2]))) {
+                sendText(user.getTelegramId(), "Формат: <code>/wdfreeze TelegramID on|off</code> - заморозить или разморозить вывод игрока на проверку.", null);
+            } else {
+                try {
+                    boolean on = "on".equalsIgnoreCase(fz[2]);
+                    AppUser frozenUser = userService.setWithdrawalFrozen(Long.parseLong(fz[1]), on);
+                    sendText(user.getTelegramId(), (on ? "🧊 Вывод заморожен: " : "✅ Вывод разморожен: ") + escape(frozenUser.getNickname()) + " (" + frozenUser.getTelegramId() + ")", null);
+                } catch (Exception e) {
+                    sendText(user.getTelegramId(), "⚠️ " + escape(String.valueOf(e.getMessage())), null);
+                }
+            }
+            return;
+        }
+
         if (text != null && text.startsWith("/srctype") && isEffectiveAdmin(user)) {
             String[] parts = text.trim().split("\\s+");
             if (parts.length != 3) {
@@ -706,6 +722,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
 
         sendMainMenu(user, mainMenuText(user));
+    }
+
+    /** Игровой аккаунт уже привязан к другому аккаунту клуба: привязку не делаем, объясняем игроку, админам - короткий сигнал. */
+    private void rejectTakenGameAccount(CallbackQuery callbackQuery, AppUser user, UserSession session, String gameLabel, String accountValue) {
+        session.reset();
+        answer(callbackQuery.getId(), "Этот игровой аккаунт уже занят");
+        sendText(user.getTelegramId(),
+                "⚠️ <b>Этот игровой аккаунт (" + escape(accountValue) + ") уже привязан к другому аккаунту клуба.</b>\n\n"
+                        + "К одному аккаунту клуба можно привязать только свой игровой аккаунт, и наоборот. "
+                        + "Если вы потеряли доступ к старому Telegram, напишите в поддержку: мы поможем перенести привязку.",
+                backMenuKeyboard("menu:main"));
+        try {
+            for (Long adminId : adminService.allAdminIds()) {
+                sendText(adminId, "ℹ️ Попытка привязать занятый игровой аккаунт: <b>" + escape(user.getNickname()) + "</b> (<code>" + user.getTelegramId()
+                        + "</code>), " + escape(gameLabel) + " " + escape(accountValue) + ".", null);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to alert admins about taken game account", e);
+        }
     }
 
     private void handleStart(Message message) {
@@ -1436,6 +1471,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     session.reset();
                     return;
                 }
+                if (userService.isGameAccountLinkedToOther("brawl", tag, user.getTelegramId())) {
+                    rejectTakenGameAccount(callbackQuery, user, session, "Brawl Stars", tag);
+                    return;
+                }
                 var playerInfo = new ru.gamebot.platform.service.BrawlStarsApiService.PlayerInfo(tag, name, Integer.parseInt(trophiesStr), 0, 0, 0, 0);
                 brawlQuestVerificationService.linkTag(user, playerInfo);
                 String pendingQuestIdStr = session.getData().get("brawlPendingQuestId");
@@ -1506,6 +1545,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             // linkTag использует только playerInfo.tag() — остальные поля (attackWins/золото/эликсир) для
             // привязки не нужны, поэтому их не сохраняем в сессии и восстанавливаем нулями.
+        if (userService.isGameAccountLinkedToOther("coc", tag, user.getTelegramId())) {
+            rejectTakenGameAccount(callbackQuery, user, session, "Clash of Clans", tag);
+            return;
+        }
             var playerInfo = new ru.gamebot.platform.service.ClashOfClansApiService.PlayerInfo(tag, name, Integer.parseInt(townHallStr), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, java.util.Map.of());
             clashQuestVerificationService.linkTag(user, playerInfo);
             String pendingQuestIdStr = session.getData().get("clashPendingQuestId");
@@ -1536,6 +1579,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.reset();
                 return;
             }
+        if (userService.isGameAccountLinkedToOther("cr", tag, user.getTelegramId())) {
+            rejectTakenGameAccount(callbackQuery, user, session, "Clash Royale", tag);
+            return;
+        }
             // linkTag использует только playerInfo.tag() — остальные поля для привязки не нужны.
             var playerInfo = new ru.gamebot.platform.service.ClashRoyaleApiService.PlayerInfo(tag, name, Integer.parseInt(trophiesStr), 0, 0, 0, 0, 0, 0, 0);
             clashRoyaleQuestVerificationService.linkTag(user, playerInfo);
@@ -1565,6 +1612,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.reset();
                 return;
             }
+        if (userService.isGameAccountLinkedToOther("dota", accountIdStr, user.getTelegramId())) {
+            rejectTakenGameAccount(callbackQuery, user, session, "Dota 2", accountIdStr);
+            return;
+        }
             dota2QuestVerificationService.linkAccount(user, Long.parseLong(accountIdStr));
             String pendingQuestIdStr = session.getData().get("dotaPendingQuestId");
             session.reset();
@@ -1589,6 +1640,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.reset();
                 return;
             }
+        if (userService.isGameAccountLinkedToOther("cs2", steamIdStr, user.getTelegramId())) {
+            rejectTakenGameAccount(callbackQuery, user, session, "CS2", steamIdStr);
+            return;
+        }
             cs2QuestVerificationService.linkAccount(user, Long.parseLong(steamIdStr));
             String pendingQuestIdStr = session.getData().get("cs2PendingQuestId");
             session.reset();
@@ -1613,6 +1668,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.reset();
                 return;
             }
+        if (userService.isGameAccountLinkedToOther("pubg", accountId, user.getTelegramId())) {
+            rejectTakenGameAccount(callbackQuery, user, session, "PUBG", accountId);
+            return;
+        }
             pubgQuestVerificationService.linkAccount(user, accountId);
             String pendingQuestIdStr = session.getData().get("pubgPendingQuestId");
             session.reset();
@@ -12806,6 +12865,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (reach.code().equals("BLOCKED") || reach.code().equals("DEACTIVATED")) red.add("бот недоступен игроку");
         if (p.isBlocked()) red.add("игрок заблокирован админом");
         if (p.isFraudSuspect()) red.add("помечен как подозрительный");
+        if (p.isWithdrawalFrozen()) red.add("вывод заморожен на проверку");
         if (!destDups.isEmpty()) red.add("реквизит уже получал другой аккаунт");
         if (phoneDup.isPresent()) red.add("номер телефона уже на другом аккаунте");
         if (reach.code().equals("NO_CHAT") || reach.code().equals("UNKNOWN")) yellow.add("не удалось убедиться, что бот достучится до игрока");
