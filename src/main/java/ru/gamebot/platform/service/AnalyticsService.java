@@ -267,8 +267,14 @@ public class AnalyticsService {
         if (r.journalStart() == null) {
             head.append("\n⚠️ Журнал активности пока пуст: цифры появятся после первых заходов игроков.");
         } else {
+            java.time.LocalDate firstMonday = r.journalStart().with(java.time.temporal.TemporalAdjusters.nextOrSame(java.time.DayOfWeek.MONDAY));
+            DateTimeFormatter df = DateTimeFormatter.ofPattern("dd.MM");
             head.append("\nЖурнал ведётся с <b>").append(r.journalStart().format(DateTimeFormatter.ofPattern("dd.MM.yyyy")))
-                    .append("</b>: игроки, пришедшие раньше, в расчёт не входят (историю восстановить нельзя). Первые цифры: D1 через сутки, D7 через неделю, D30 через месяц.");
+                    .append("</b>: игроки, пришедшие раньше, в расчёт не входят (историю восстановить нельзя). Сейчас в когортах журнала: <b>")
+                    .append(r.cohortUsers()).append("</b>.\nПервые цифры в таблице недель (первая полная неделя с ").append(firstMonday.format(df))
+                    .append("): D1 с ").append(firstMonday.plusDays(8).format(df)).append(", D7 с ").append(firstMonday.plusDays(14).format(df))
+                    .append(", D30 с ").append(firstMonday.plusDays(37).format(df))
+                    .append(". В разрезах цифры идут раньше: у каждого игрока по его собственному дню (D1 с ").append(r.journalStart().plusDays(2).format(df)).append(").");
         }
         extras.add(head.toString());
 

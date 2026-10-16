@@ -14798,15 +14798,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String cur = session.getData().getOrDefault("an_p", "7");
         String t = tab.name();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(
-                keyboardFactory.callback((cur.equals("today") ? "✅ " : "") + "Сегодня", "admin:an:p:today:" + t),
-                keyboardFactory.callback((cur.equals("7") ? "✅ " : "") + "7 дн.", "admin:an:p:7:" + t),
-                keyboardFactory.callback((cur.equals("30") ? "✅ " : "") + "30 дн.", "admin:an:p:30:" + t),
-                keyboardFactory.callback((cur.equals("custom") ? "✅ " : "") + "Свой…", "admin:an:p:custom:" + t)));
-        rows.add(List.of(keyboardFactory.callback(compare ? "🔀 Сравнение: вкл" : "🔀 Сравнение: выкл", "admin:an:cmp:" + t)));
-        rows.add(List.of(
-                keyboardFactory.callback("📈 Тренд 30 дн.", "admin:an:trend:" + t + ":30"),
-                keyboardFactory.callback("📈 Тренд 90 дн.", "admin:an:trend:" + t + ":90")));
+        if (tab != ru.gamebot.platform.service.AnalyticsService.Tab.RETENTION) {
+            rows.add(List.of(
+                    keyboardFactory.callback((cur.equals("today") ? "✅ " : "") + "Сегодня", "admin:an:p:today:" + t),
+                    keyboardFactory.callback((cur.equals("7") ? "✅ " : "") + "7 дн.", "admin:an:p:7:" + t),
+                    keyboardFactory.callback((cur.equals("30") ? "✅ " : "") + "30 дн.", "admin:an:p:30:" + t),
+                    keyboardFactory.callback((cur.equals("custom") ? "✅ " : "") + "Свой…", "admin:an:p:custom:" + t)));
+            rows.add(List.of(keyboardFactory.callback(compare ? "🔀 Сравнение: вкл" : "🔀 Сравнение: выкл", "admin:an:cmp:" + t)));
+            rows.add(List.of(
+                    keyboardFactory.callback("📈 Тренд 30 дн.", "admin:an:trend:" + t + ":30"),
+                    keyboardFactory.callback("📈 Тренд 90 дн.", "admin:an:trend:" + t + ":90")));
+        }
         rows.add(List.of(keyboardFactory.callback("📤 Экспорт CSV", "admin:an:csv:" + t)));
         switch (tab) {
             case PNL -> {
