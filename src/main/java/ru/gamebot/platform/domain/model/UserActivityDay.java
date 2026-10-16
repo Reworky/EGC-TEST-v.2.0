@@ -14,8 +14,8 @@ import java.time.LocalDate;
 @Setter
 @Entity
 @Table(name = "user_activity_days",
-        uniqueConstraints = @UniqueConstraint(name = "uq_uad_user_day", columnNames = {"user_id", "day"}),
-        indexes = @Index(name = "idx_uad_day", columnList = "day"))
+        uniqueConstraints = @UniqueConstraint(name = "uq_uad_user_day", columnNames = {"user_id", "activity_day"}),
+        indexes = @Index(name = "idx_uad_day", columnList = "activity_day"))
 public class UserActivityDay {
 
     @Id
@@ -25,8 +25,8 @@ public class UserActivityDay {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    /** Имя поля не «day»: DAY - ключевое слово HQL, в JPQL-запросах безопаснее другое имя (колонка в БД по-прежнему day). */
-    @Column(name = "day", nullable = false)
+    /** Колонка activity_day, а не day: DAY - ключевое слово H2/HQL, таблица с такой колонкой не создалась (инцидент 2026-10-16: «Table USER_ACTIVITY_DAYS not found»). */
+    @Column(name = "activity_day", nullable = false)
     private LocalDate activityDay;
 
     /** bot | app: откуда пришла первая за день активность. */
