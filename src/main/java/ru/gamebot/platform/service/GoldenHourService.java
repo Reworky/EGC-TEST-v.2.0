@@ -15,7 +15,7 @@ import ru.gamebot.platform.event.GoldenHourPushEvent;
 /** «Золотой час» (2026-10-17): каждый день в окне (по умолчанию 16:00-17:00 UTC = 19:00-20:00 по Москве) EXC-награда за засчитанный квест
  *  выше на PERCENT% для первых MAX_QUESTS квестов игрока в окне. Строится на глобальном бусте наград (QuestRewardBoostService): раз в сутки
  *  заводится событие на окно. За 30 минут до окна активным за 7 дней игрокам уходит напоминание (через лимит частоты NotificationGateService);
- *  по умолчанию напоминание ВЫКЛЮЧЕНО до согласования текста владельцем (/goldenhour push on). Все параметры - в app_settings (gh.*). */
+ *  текст напоминания согласован владельцем 2026-10-17, поэтому оно включено по умолчанию (выключить: /goldenhour push off). Все параметры - в app_settings (gh.*). */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -58,7 +58,7 @@ public class GoldenHourService {
 
     public boolean enabled() { return !"0".equals(get("gh.enabled")); }
     public void setEnabled(boolean v) { put("gh.enabled", v ? "1" : "0"); }
-    public boolean pushEnabled() { return "1".equals(get("gh.push")); }
+    public boolean pushEnabled() { return !"0".equals(get("gh.push")); }
     public void setPushEnabled(boolean v) { put("gh.push", v ? "1" : "0"); }
     public int startHourUtc() { return getInt("gh.hour", DEFAULT_START_HOUR_UTC, 0, 23); }
     public void setStartHourUtc(int h) { put("gh.hour", String.valueOf(Math.max(0, Math.min(23, h)))); }
