@@ -20,6 +20,10 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @EntityGraph(attributePaths = {"user", "quest"})
     List<QuestSubmission> findAllByUserOrderByCreatedAtDesc(AppUser user);
 
+    /** Кто брал квесты этой игры с указанной даты (для рассылки о новых квестах по игре, PlatformPushService). */
+    @Query("SELECT DISTINCT s.user.id FROM QuestSubmission s WHERE s.quest.gameName = :game AND s.createdAt >= :since")
+    List<Long> findUserIdsWithSubmissionInGameSince(@Param("game") String game, @Param("since") LocalDateTime since);
+
     @EntityGraph(attributePaths = {"user", "quest"})
     Optional<QuestSubmission> findTopByUserAndQuestOrderByCreatedAtDesc(AppUser user, Quest quest);
 

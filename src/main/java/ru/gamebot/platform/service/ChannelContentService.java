@@ -198,12 +198,16 @@ public class ChannelContentService {
     private static boolean defaultEnabled(String type) {
         // 17.10.2026 (решение владельца): «Свежие квесты», «Новинки в магазине» и «Лиги недели» из автопостинга убраны - пост про новое владелец
         // делает сам, лиги не нужны. Включить любой можно в «Контент канала».
-        return !(NEW_QUESTS.equals(type) || SHOP_NEW.equals(type) || LEAGUES_WEEK.equals(type));
+        return !(NEW_QUESTS.equals(type) || SHOP_NEW.equals(type) || LEAGUES_WEEK.equals(type) || WEEKLY_RACE.equals(type));
     }
 
     /** Разовая миграция настроек (17.10.2026): раз и навсегда выключает автопосты, убранные владельцем, даже если раньше они были включены явно.
      *  Маркер cc.migr.20261017 - чтобы после этого владелец мог включить любой из них обратно и перезапуск бота не выключал его снова. */
     private void applyChannelPlanMigration() {
+        if (get("cc.migr.20261017b") == null) {
+            put(prefix(WEEKLY_RACE) + "enabled", "0"); // «Гонка за Зал славы» теперь короткая рассылка в бота (PlatformPushService), поста в канал нет
+            put("cc.migr.20261017b", "1");
+        }
         if (get("cc.migr.20261017") != null) return;
         for (String type : List.of(NEW_QUESTS, SHOP_NEW, LEAGUES_WEEK)) {
             put(prefix(type) + "enabled", "0");

@@ -294,6 +294,11 @@ public class SquadService {
 
     /** Returns top-20 active squads sorted by weeklyXp descending. */
     public List<SquadRankEntry> getLeaderboard() {
+        return getFullLeaderboard().stream().limit(20).toList();
+    }
+
+    /** Все активные отряды с недельным XP больше нуля по убыванию (без лимита top-20): нужен, чтобы сообщить любому отряду его место. */
+    public List<SquadRankEntry> getFullLeaderboard() {
         List<Squad> active = squadRepository.findAllByStatus("ACTIVE");
         return active.stream()
                 .map(s -> {
@@ -303,7 +308,6 @@ public class SquadService {
                 })
                 .filter(e -> e.weeklyXp() > 0)
                 .sorted(Comparator.comparingLong(SquadRankEntry::weeklyXp).reversed())
-                .limit(20)
                 .toList();
     }
 

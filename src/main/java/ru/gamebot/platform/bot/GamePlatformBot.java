@@ -180,6 +180,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ModeratorBonusService moderatorBonusService;
     private final ru.gamebot.platform.service.WeeklyGoalService weeklyGoalService;
     private final ru.gamebot.platform.service.GoldenHourService goldenHourService;
+    private final ru.gamebot.platform.service.PlatformPushService platformPushService;
     private final ru.gamebot.platform.service.TrophyTournamentService trophyTournamentService;
     private final ru.gamebot.platform.service.BrawlQuestVerificationService brawlQuestVerificationService;
     private final ru.gamebot.platform.service.ClashQuestVerificationService clashQuestVerificationService;
@@ -474,6 +475,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (text != null && text.equals("/commands") && isEffectiveAdmin(user)) {
             sendAdminCommands(user);
+            return;
+        }
+
+        if (text != null && text.startsWith("/push") && isEffectiveAdmin(user)) {
+            handlePlatformPushCommand(user, text.trim());
             return;
         }
 
@@ -6230,6 +6236,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(admin.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
+    /** Короткая рассылка игроку (PlatformPushService): текст и одна кнопка; для рассылки по игре - кнопка ведёт к квестам этой игры. */
+    @org.springframework.context.event.EventListener
+    public void onPlayerPush(ru.gamebot.platform.event.PlayerPushEvent event) {
+        try {
+            String callback = event.getGameName() != null ? "quests:game:" + encodeGameToken(event.getGameName()) : event.getButtonCallback();
+            sendText(event.getTelegramId(), event.getHtml(),
+                    keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback(event.getButtonText(), callback)))));
+        } catch (Exception e) {
+            log.warn("Failed to send platform push to {}", event.getTelegramId(), e);
+        }
+    }
+
+    /** Админ: /push status | on NAME | off NAME, где NAME - boost, rotation, squad, hall (короткие рассылки вместо постов канала). */
+    private void handlePlatformPushCommand(AppUser admin, String text) {
+        String[] p = text.split("\\s+");
+        String sub = p.length > 1 ? p[1].toLowerCase() : "status";
+        String name = p.length > 2 ? p[2].toLowerCase() : null;
+        if (("on".equals(sub) || "off".equals(sub)) && name != null && ru.gamebot.platform.service.PlatformPushService.NAMES.contains(name)) {
+            platformPushService.setEnabled(name, "on".equals(sub));
+        }
+        StringBuilder sb = new StringBuilder("📣 <b>Короткие рассылки игрокам</b>\n\n");
+        sb.append(platformPushService.enabled("boost") ? "🔔" : "🔕").append(" boost: буст выходных (пятница 18:00 UTC)\n");
+        sb.append(platformPushService.enabled("rotation") ? "🔔" : "🔕").append(" rotation: новые квесты по игре (при смене пачки)\n");
+        sb.append(platformPushService.enabled("squad") ? "🔔" : "🔕").append(" squad: гонка отрядов (среда 05:00 UTC)\n");
+        sb.append(platformPushService.enabled("hall") ? "🔔" : "🔕").append(" hall: гонка за Зал славы (воскресенье 05:00 UTC)\n\n");
+        sb.append("Включить или выключить: <code>/push on boost</code>, <code>/push off hall</code>. Все рассылки идут без согласования и через лимит частоты (не больше 2 сообщений в сутки на игрока).");
+        sendText(admin.getTelegramId(), sb.toString(), null);
+    }
+
     private record AdminCommand(String name, String args, String description) {}
 
     /** Команды администратора: показываются в меню «/» у админов (setMyCommands с областью «чат админа») и на экране «Система → Команды».
@@ -6241,6 +6276,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("user", "", "Посмотреть бота глазами игрока"),
             new AdminCommand("commands", "", "Список админ-команд"),
             new AdminCommand("wdnudge", "test|send|stats", "Рассылка «вывод открыт» (A/B)"),
+            new AdminCommand("push", "status|on NAME|off NAME", "Короткие рассылки игрокам: буст выходных, новые квесты по игре, гонка отрядов, гонка за Зал славы"),
             new AdminCommand("goldenhour", "status|on|off|hour N|percent N|max N|push on|off|pushtest", "Золотой час: окно, бонус, лимит квестов, напоминание игрокам"),
             new AdminCommand("dailycode", "now|on|off|status", "Пост «Код дня»: создать сейчас, включить, выключить, состояние"),
             new AdminCommand("clubgoal", "status|link ID текст|off", "Цель клуба: состояние, кнопка-портал в квест, выключить портал"),
@@ -14770,9 +14806,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Создаёт черновик поста о смене пачки: карточка с ✅/✏️/❌ уходит админам сама (ChannelPostDraftEvent). */
     private void createQuestRotationPostDraft(String gameName, String packName, List<Quest> quests) {
         try {
-            if (channelContentService.createQuestRotationDraft(gameName, packName, quests).isEmpty()) {
-                log.warn("Quest rotation post draft not created for {} / {}: no quests", gameName, packName);
-            }
+            // С 17.10.2026 вместо поста в канал на согласование - короткая рассылка игрокам этой игры (PlatformPushService.pushQuestRotation).
+            platformPushService.pushQuestRotation(gameName, packName, quests);
         } catch (Exception e) {
             log.error("Failed to create quest rotation post draft for {} / {}", gameName, packName, e);
             for (Long adminId : adminService.resolvedAdminIds()) {
@@ -14790,9 +14825,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String head = "🔄 <b>Сменилась пачка квестов — " + escape(event.gameName()) + "</b>\n"
                 + "Включена «" + escape(event.pack().getName()) + "»: возвращено в работу " + event.result().activated()
                 + ", скрыто " + event.result().hidden() + ".\n\n"
-                + (channelContentService.isQuestRotationAutoPublish()
-                    ? "📝 Пост для канала опубликуется автоматически (автопубликация включена), копию пришлю следующим сообщением."
-                    : "📝 Пост для канала пришлю следующим сообщением — он уйдёт в канал только после вашего ✅.");
+                + (platformPushService.enabled("rotation")
+                    ? "📣 Игрокам этой игры уходит короткая рассылка в бота (без согласования). Поста в канал не будет, при желании напишите его сами."
+                    : "📣 Рассылка о смене квестов выключена (/push on rotation), поста в канал тоже не будет.");
         for (Long adminId : adminService.resolvedAdminIds()) {
             try {
                 sendText(adminId, head, null);
@@ -21090,8 +21125,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Буст выходных запущен — см. WeeklyResetScheduler.startWeekendBoost. Буст уже активен и работает
      * для всех сразу; событие только готовит анонс в канал на согласование администратора. */
-    @org.springframework.context.event.EventListener
     public void onWeekendBoostStarted(ru.gamebot.platform.event.WeekendBoostStartedEvent event) {
+        // С 17.10.2026 анонс буста выходных не идёт в канал на согласование: игрокам уходит короткая рассылка в бота (PlatformPushService.onWeekendBoostStarted).
+        if (true) return;
         String endText = event.getEndAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm"));
         int maxQuests = ru.gamebot.platform.service.QuestRewardBoostService.MAX_BOOSTED_QUESTS_PER_USER;
         pendingWeekendBoostFeedText = "🔥 <b>Буст выходных: +" + event.getBoostPercent() + "% EXC за квесты!</b>\n\n"
