@@ -5911,6 +5911,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Подтверждение начисления бонуса админу/модератору: кому (имя, тег, ID) и сколько начислено (XP, EXC с учётом бонуса уровня, билеты). */
+    private String bonusGrantedText(Long targetTelegramId, UserService.RewardGrant g) {
+        AppUser target = userService.findByTelegramId(targetTelegramId).orElse(null);
+        String who = target == null
+                ? "<code>" + targetTelegramId + "</code>"
+                : "<b>" + escape(displayUserName(target)) + "</b> (" + escape(displayTag(target)) + ", ID <code>" + targetTelegramId + "</code>)";
+        return "✅ Бонус начислен игроку " + who + "\n"
+                + "✨ XP: <b>+" + g.xp() + "</b>\n"
+                + "🪙 EXC: <b>+" + g.totalExc() + "</b>" + (g.bonusExc() > 0 ? " (включая +" + g.bonusExc() + " за уровень)" : "") + "\n"
+                + "🎟️ Билеты: <b>+" + g.tickets() + "</b>";
+    }
+
     // ───────────────────────── бонус игроку от модератора (2026-10-17) ─────────────────────────
 
     private void startModBonusInput(AppUser mod, Long targetTelegramId) {
@@ -5971,7 +5983,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "💬 Основание: <b>" + escape(parts[3].trim()) + "</b>");
         alertAdminsPlain("🎁 <b>Бонус от модератора</b>\nМодератор: <code>" + mod.getTelegramId() + "</code> (" + escape(displayUserName(mod)) + ")\nИгроку: <code>" + targetId
                 + "</code>\n+" + g.xp() + " XP, +" + g.totalExc() + " EXC, +" + g.tickets() + " 🎟\nПричина: " + escape(parts[3].trim()));
-        sendText(mod.getTelegramId(), "✅ Бонус начислен игроку " + targetId + ".", backMenuKeyboard("menu:main"));
+        sendText(mod.getTelegramId(), bonusGrantedText(targetId, g), backMenuKeyboard("menu:main"));
     }
 
     private record AdminCommand(String name, String args, String description) {}
@@ -19291,7 +19303,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + formatExcBonusLine(rewardGrant)
                             + "🎟️ Билеты: <b>+" + rewardGrant.tickets() + "</b>\n"
                             + "💬 Основание: <b>" + escape(comment) + "</b>");
-            sendAdminUserCard(user, telegramId, returnPage, "✅ Бонус начислен игроку " + telegramId + ".");
+            sendAdminUserCard(user, telegramId, returnPage, bonusGrantedText(telegramId, rewardGrant));
             return;
         }
 
@@ -19322,7 +19334,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + formatExcBonusLine(rewardGrant)
                         + "🎟️ Билеты: <b>+" + rewardGrant.tickets() + "</b>\n"
                         + "💬 Основание: <b>" + escape(comment) + "</b>");
-        sendText(user.getTelegramId(), "✅ Бонус начислен игроку " + telegramId + ".", mainMenuKeyboard(user));
+        sendText(user.getTelegramId(), bonusGrantedText(telegramId, rewardGrant), mainMenuKeyboard(user));
     }
 
     private void handleDebitInput(AppUser user, UserSession session, String text) {
