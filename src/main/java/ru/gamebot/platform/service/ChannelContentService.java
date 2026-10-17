@@ -196,7 +196,21 @@ public class ChannelContentService {
 
     /** Все автопосты включены по умолчанию (2026-09-26, сетка согласована с владельцем): каждый всё равно идёт админу на согласование, а расписание задаёт день и час; отключить любой можно в админке. */
     private static boolean defaultEnabled(String type) {
-        return true;
+        // 17.10.2026 (решение владельца): «Свежие квесты», «Новинки в магазине» и «Лиги недели» из автопостинга убраны - пост про новое владелец
+        // делает сам, лиги не нужны. Включить любой можно в «Контент канала».
+        return !(NEW_QUESTS.equals(type) || SHOP_NEW.equals(type) || LEAGUES_WEEK.equals(type));
+    }
+
+    /** Разовая миграция настроек (17.10.2026): раз и навсегда выключает автопосты, убранные владельцем, даже если раньше они были включены явно.
+     *  Маркер cc.migr.20261017 - чтобы после этого владелец мог включить любой из них обратно и перезапуск бота не выключал его снова. */
+    private void applyChannelPlanMigration() {
+        if (get("cc.migr.20261017") != null) return;
+        for (String type : List.of(NEW_QUESTS, SHOP_NEW, LEAGUES_WEEK)) {
+            put(prefix(type) + "enabled", "0");
+        }
+        put("cc.dcode.enabled", "0");
+        put("cc.migr.20261017", "1");
+        log.info("[ChannelContent] 17.10.2026 plan applied: NEW_QUESTS, SHOP_NEW, LEAGUES_WEEK and DAILY_CODE auto-posts switched off");
     }
 
     public TypeSettings settings(String type) {
@@ -376,6 +390,11 @@ public class ChannelContentService {
     public void tick() {
         LocalDateTime now = LocalDateTime.now();
         try {
+            applyChannelPlanMigration();
+        } catch (Exception e) {
+            log.error("[ChannelContent] applyChannelPlanMigration failed", e);
+        }
+        try {
             deliverDueCards();
         } catch (Exception e) {
             log.error("[ChannelContent] deliverDueCards failed", e);
@@ -425,8 +444,9 @@ public class ChannelContentService {
 
     // ───────────────────────── «код дня» ─────────────────────────
 
+    /** Автопост кода дня по умолчанию ВЫКЛЮЧЕН (решение владельца 17.10.2026: код выходит не каждый день и запускается вручную: «Создать пост с кодом сейчас» или «Обычный пост: цель или код»). */
     public boolean isDailyCodeEnabled() {
-        return !"0".equals(get("cc.dcode.enabled"));
+        return "1".equals(get("cc.dcode.enabled"));
     }
 
     public boolean setDailyCodeEnabled(boolean enabled) {

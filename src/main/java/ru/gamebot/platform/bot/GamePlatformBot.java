@@ -6195,7 +6195,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         int hour = channelContentService.dailyCodeHour();
         sb.append("🔑 <b>Код дня</b>\nАвтопост: ").append(channelContentService.isDailyCodeEnabled() ? "🔔 включён" : "🔕 выключен")
                 .append(", ").append(String.format("%02d:00", hour)).append(" UTC (").append(String.format("%02d:00", (hour + 3) % 24)).append(" по Москве).\n")
-                .append("Каждый день в это время бот сам готовит пост с кодом и присылает вам карточку на согласование. Код заработает после того, как вы нажмёте «✅ Опубликовать».\n");
+                .append(channelContentService.isDailyCodeEnabled()
+                        ? "Каждый день в это время бот сам готовит пост с кодом и присылает вам карточку на согласование. Код заработает после того, как вы нажмёте «✅ Опубликовать».\n"
+                        : "Автопост выключен: код дня запускается вручную кнопками ниже. Код заработает после того, как вы нажмёте «✅ Опубликовать» в карточке.\n");
         clubActivityService.latestCode().ifPresentOrElse(c -> sb.append("Последний код: <code>").append(c.getCode()).append("</code>, действует до ")
                         .append(c.getValidUntil()).append(", ввели: ").append(clubActivityService.codeClaimsCount(c.getId())).append(".\n"),
                 () -> sb.append("Кодов ещё не было.\n"));
