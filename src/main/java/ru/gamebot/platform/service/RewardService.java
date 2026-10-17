@@ -62,6 +62,37 @@ public class RewardService {
                 + WITHDRAWAL_MIN_APPROVED_QUESTS + " одобренных квестов.\nВам нужно: " + missing + ".";
     }
 
+    /** Сколько осталось до открытия вывода по условиям «3 квеста и 3 дня»; 0/0 - условия выполнены (или вывод заморожен: подсказка про условия тогда не нужна). */
+    public record WithdrawalProgress(int questsLeft, int daysLeft) {
+        public boolean unlocked() { return questsLeft == 0 && daysLeft == 0; }
+    }
+
+    public WithdrawalProgress withdrawalProgress(AppUser user) {
+        if (user.isWithdrawalFrozen()) return new WithdrawalProgress(0, 0);
+        int questsLeft = Math.max(0, WITHDRAWAL_MIN_APPROVED_QUESTS - user.getCompletedQuests());
+        int daysLeft = 0;
+        if (user.getCreatedAt() != null) {
+            java.time.LocalDateTime openAt = user.getCreatedAt().plusDays(WITHDRAWAL_MIN_ACCOUNT_AGE_DAYS);
+            if (openAt.isAfter(LocalDateTime.now())) {
+                long minutes = java.time.Duration.between(LocalDateTime.now(), openAt).toMinutes();
+                daysLeft = (int) Math.max(1, (minutes + 24 * 60 - 1) / (24 * 60));
+            }
+        }
+        return new WithdrawalProgress(questsLeft, daysLeft);
+    }
+
+    public static String daysWordRu(int n) {
+        int m100 = n % 100, m10 = n % 10;
+        if (m100 >= 11 && m100 <= 14) return "дней";
+        if (m10 == 1) return "день";
+        if (m10 >= 2 && m10 <= 4) return "дня";
+        return "дней";
+    }
+
+    public static String questsWordRu(int n) {
+        return questsWord(n);
+    }
+
     private static String questsWord(int n) {
         int m100 = n % 100, m10 = n % 10;
         if (m100 >= 11 && m100 <= 14) return "квестов";

@@ -27,4 +27,7 @@ public class WalletDto {
     private int streakRestorePriceStars;
     /** Прерванную серию можно вернуть бесплатно просмотром рекламы (потеряно немного дней, не чаще раза в 14 дней). */
     private boolean streakAdRestoreAvailable;
+    /** Сколько квестов и дней осталось до открытия вывода (0/0 - условия выполнены); мини-апп показывает это новичкам над балансом. */
+    private int withdrawalQuestsLeft;
+    private int withdrawalDaysLeft;
 }

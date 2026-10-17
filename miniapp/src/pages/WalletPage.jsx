@@ -21,6 +21,14 @@ import './ShopPage.css';
 import './ReferralsPage.css';
 import './WalletPage.css';
 
+function ruPlural(n, one, few, many) {
+  const m100 = n % 100, m10 = n % 10;
+  if (m100 >= 11 && m100 <= 14) return many;
+  if (m10 === 1) return one;
+  if (m10 >= 2 && m10 <= 4) return few;
+  return many;
+}
+
 const STATUS_LABELS = {
   PENDING: <><i className="ti ti-clock"></i> Ожидает</>,
   IN_PROGRESS: <><i className="ti ti-clock"></i> В обработке</>,
@@ -378,6 +386,13 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest }) {
         <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
           Звёзды: приблизительный пересчёт по курсу фонда, зачисляется и выводится по нему.
         </div>
+        {(wallet.withdrawalQuestsLeft > 0 || wallet.withdrawalDaysLeft > 0) && (
+          <div style={{ fontSize: 12, color: '#c4b5fd', marginTop: 10 }}>
+            {wallet.withdrawalQuestsLeft > 0
+              ? `🔓 До вывода: ${3 - wallet.withdrawalQuestsLeft} из 3 квестов${wallet.withdrawalDaysLeft > 0 ? ` · ещё ${wallet.withdrawalDaysLeft} ${ruPlural(wallet.withdrawalDaysLeft, 'день', 'дня', 'дней')}` : ''}. Осталось: ${wallet.withdrawalQuestsLeft} ${ruPlural(wallet.withdrawalQuestsLeft, 'квест', 'квеста', 'квестов')}.`
+              : `🔓 Квесты уже выполнены, осталось подождать ${wallet.withdrawalDaysLeft} ${ruPlural(wallet.withdrawalDaysLeft, 'день', 'дня', 'дней')}. Вывод откроется автоматически.`}
+          </div>
+        )}
         {wallet.coins < 5000 && (
           <div style={{ marginTop: 10 }}>
             <div style={{ fontSize: 12, color: '#c4b5fd', marginBottom: 4 }}>

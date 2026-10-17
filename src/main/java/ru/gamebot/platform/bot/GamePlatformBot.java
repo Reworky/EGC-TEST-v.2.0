@@ -5579,7 +5579,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🎟️ Билеты сезона: <b>" + user.getTickets() + "</b>\n"
                         + "✨ XP: <b>" + user.getXp() + "</b> · за неделю: <b>" + user.getWeeklyXp() + "</b>\n\n"
                         + "📊 Фонд клуба: <b>" + ratioPercent + "%</b>\n"
-                        + hrExplanationLine(ratioPercent, effectiveQuestReward),
+                        + hrExplanationLine(ratioPercent, effectiveQuestReward)
+                        + withdrawalProgressBlock(user),
                 keyboardFactory.rowsLayout(List.of(
                         List.of(
                                 keyboardFactory.callback("💸 Вывести EXC", "shop:withdraw"),
@@ -5587,6 +5588,37 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         ),
                         List.of(keyboardFactory.callback("⬅️ Назад", backData))
                 )));
+    }
+
+    /** Средняя награда за квест для оценки «это примерно N квестов» на экране баланса (только подсказка, на расчёты не влияет). */
+    private static final long WITHDRAWAL_HINT_AVG_QUEST_EXC = 1_000;
+
+    /** Подсказка «сколько осталось до вывода» на экране баланса: условия «3 квеста и 3 дня», потом минимум EXC. Пусто, если вывод
+     *  заморожен или баланс уже выше минимума и условия выполнены. */
+    private String withdrawalProgressBlock(AppUser user) {
+        if (user.isWithdrawalFrozen()) return "";
+        ru.gamebot.platform.service.RewardService.WithdrawalProgress p = rewardService.withdrawalProgress(user);
+        long coins = user.getCoins();
+        long min = ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC;
+        if (!p.unlocked()) {
+            if (p.questsLeft() == 0) {
+                return "\n\n🔓 Квесты уже выполнены, осталось подождать <b>" + p.daysLeft() + " "
+                        + ru.gamebot.platform.service.RewardService.daysWordRu(p.daysLeft()) + "</b>. Вывод откроется автоматически.";
+            }
+            String left = "ещё " + p.questsLeft() + " " + ru.gamebot.platform.service.RewardService.questsWordRu(p.questsLeft());
+            if (p.daysLeft() > 0) {
+                left += " и " + p.daysLeft() + " " + ru.gamebot.platform.service.RewardService.daysWordRu(p.daysLeft()) + " в клубе";
+            }
+            return "\n\n🔓 <b>До вывода осталось:</b> " + left + ".\nУ тебя уже <b>" + fmtExc(coins) + " EXC</b>. Минимум для вывода "
+                    + fmtExc(min) + " EXC.";
+        }
+        if (coins < min) {
+            long quests = (min - coins + WITHDRAWAL_HINT_AVG_QUEST_EXC - 1) / WITHDRAWAL_HINT_AVG_QUEST_EXC;
+            return "\n\n🔓 Вывод открыт. До минимума " + fmtExc(min) + " EXC осталось <b>" + fmtExc(min - coins)
+                    + " EXC</b>, это примерно " + quests + " "
+                    + ru.gamebot.platform.service.RewardService.questsWordRu((int) Math.min(quests, Integer.MAX_VALUE)) + ".";
+        }
+        return "";
     }
 
     /** « (≈ 6,2 ⭐)» для подписи рядом с суммой EXC; пусто, если суммы нет. Только показ, расчёты не затрагивает. */

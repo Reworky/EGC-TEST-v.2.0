@@ -83,6 +83,7 @@ public class WalletController {
                 restorePrice = gamePlatformBot.streakRestorePriceStars(restorableDays);
             }
         }
+        RewardService.WithdrawalProgress withdrawalProgress = rewardService.withdrawalProgress(user);
         return ResponseEntity.ok(WalletDto.builder()
                 .coins(user.getCoins())
                 .excBonusPercent(userService.getExcBonusPercent(user.getXp()))
@@ -102,6 +103,8 @@ public class WalletController {
                 .restorableStreakDays(restorableDays)
                 .streakRestorePriceStars(restorePrice)
                 .streakAdRestoreAvailable(bonusAvailable && userService.canRestoreStreakByAd(user))
+                .withdrawalQuestsLeft(withdrawalProgress.questsLeft())
+                .withdrawalDaysLeft(withdrawalProgress.daysLeft())
                 .build());
     }
 
