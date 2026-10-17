@@ -177,6 +177,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.NotificationGateService notificationGate;
     private final ru.gamebot.platform.service.WithdrawalNudgeService withdrawalNudgeService;
     private final ru.gamebot.platform.service.ClubActivityService clubActivityService;
+    private final ru.gamebot.platform.service.ModeratorBonusService moderatorBonusService;
     private final ru.gamebot.platform.service.TrophyTournamentService trophyTournamentService;
     private final ru.gamebot.platform.service.BrawlQuestVerificationService brawlQuestVerificationService;
     private final ru.gamebot.platform.service.ClashQuestVerificationService clashQuestVerificationService;
@@ -1925,6 +1926,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.setState(SessionState.MOD_USER_SEARCH);
             answer(callbackQuery.getId(), "Введите TG ID или ник");
             sendText(user.getTelegramId(), "🔍 <b>Поиск игрока</b>\n\nВведите Telegram ID или никнейм:", cancelKeyboard());
+            return;
+        }
+        if ("mod:bonus".equals(data) && isEffectiveModerator(user)) {
+            session.reset();
+            session.setState(SessionState.MOD_BONUS_SEARCH);
+            answer(callbackQuery.getId(), "Введите TG ID или ник");
+            sendText(user.getTelegramId(), "🎁 <b>Бонус игроку</b>\n\nВведите Telegram ID или никнейм игрока:", cancelKeyboard());
             return;
         }
         if (data.startsWith("mod:user:") && isEffectiveModerator(user)) {
@@ -3697,6 +3705,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendModUserCard(user, found.getTelegramId(), null);
                 }
             }
+            case MOD_BONUS_SEARCH -> {
+                String query = text.trim();
+                AppUser found = resolveUserBySearch(query);
+                if (found == null) {
+                    sendText(user.getTelegramId(), "❌ Игрок «" + escape(query) + "» не найден (ни по TG ID, ни по нику, ни по @username). Введите ещё раз:", cancelKeyboard());
+                } else {
+                    startModBonusInput(user, found.getTelegramId());
+                }
+            }
+            case MOD_BONUS_INPUT -> handleModBonusInput(user, session, text);
             case BONUS_SEARCH -> {
                 String query = text.trim();
                 AppUser found = resolveUserBySearch(query);
@@ -5891,6 +5909,69 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } catch (Exception e) {
             sendText(admin.getTelegramId(), "⚠️ " + escape(String.valueOf(e.getMessage())), null);
         }
+    }
+
+    // ───────────────────────── бонус игроку от модератора (2026-10-17) ─────────────────────────
+
+    private void startModBonusInput(AppUser mod, Long targetTelegramId) {
+        AppUser target = userService.findByTelegramId(targetTelegramId).orElse(null);
+        if (target == null) {
+            sendText(mod.getTelegramId(), "⚠️ Игрок не найден.", backMenuKeyboard("menu:main"));
+            return;
+        }
+        UserSession session = sessionService.get(mod.getTelegramId());
+        session.reset();
+        session.setState(SessionState.MOD_BONUS_INPUT);
+        session.getData().put("modbonus_target", String.valueOf(targetTelegramId));
+        sendText(mod.getTelegramId(),
+                "🎁 <b>Бонус игроку</b>\n\n"
+                        + "Игрок: <b>" + escape(displayUserName(target)) + "</b> • " + escape(displayTag(target)) + " • ID <code>" + target.getTelegramId() + "</code>\n\n"
+                        + "Отправьте одним сообщением: <code>XP EXC БИЛЕТЫ причина</code>\n"
+                        + "Пример: <code>50 100 1 Помог в поддержке</code>\n\n"
+                        + "Лимиты: за раз до " + ru.gamebot.platform.service.ModeratorBonusService.MAX_XP_PER_GRANT + " XP, "
+                        + ru.gamebot.platform.service.ModeratorBonusService.MAX_EXC_PER_GRANT + " EXC, "
+                        + ru.gamebot.platform.service.ModeratorBonusService.MAX_TICKETS_PER_GRANT + " 🎟; за 24 часа до "
+                        + ru.gamebot.platform.service.ModeratorBonusService.MAX_XP_PER_DAY + " XP и "
+                        + ru.gamebot.platform.service.ModeratorBonusService.MAX_EXC_PER_DAY + " EXC. Причина обязательна, админы видят каждое начисление.",
+                cancelKeyboard());
+    }
+
+    private void handleModBonusInput(AppUser mod, UserSession session, String text) {
+        Long targetId = parseLong(session.getData().get("modbonus_target"));
+        String[] parts = text.trim().split("\\s+", 4);
+        Long xp = parts.length > 0 ? parsePositiveLong(parts[0]) : null;
+        Long exc = parts.length > 1 ? parsePositiveLong(parts[1]) : null;
+        Long tickets = parts.length > 2 ? parsePositiveLong(parts[2]) : null;
+        if (targetId == null || parts.length < 4 || xp == null || exc == null || tickets == null) {
+            sendText(mod.getTelegramId(), "⚠️ Формат: <code>XP EXC БИЛЕТЫ причина</code>, например <code>50 100 1 Помог в поддержке</code>.", cancelKeyboard());
+            return;
+        }
+        ru.gamebot.platform.service.ModeratorBonusService.Result r;
+        try {
+            r = moderatorBonusService.grant(mod, targetId, xp, exc, tickets, parts[3]);
+        } catch (Exception e) {
+            log.error("Moderator bonus failed: moderator {} target {}", mod.getTelegramId(), targetId, e);
+            alertAdminsPlain("⚠️ Ошибка начисления бонуса модератором " + mod.getTelegramId() + " игроку " + targetId + ": " + escape(String.valueOf(e.getMessage())));
+            session.reset();
+            sendText(mod.getTelegramId(), "⚠️ Не получилось начислить бонус, попробуйте позже.", backMenuKeyboard("menu:main"));
+            return;
+        }
+        if (!r.ok()) {
+            sendText(mod.getTelegramId(), "⚠️ " + escape(r.error()), cancelKeyboard());
+            return;
+        }
+        session.reset();
+        UserService.RewardGrant g = r.grant();
+        notifyUser(targetId,
+                "🎁 Модератор клуба начислил вам бонус.\n\n"
+                        + "✨ XP: <b>+" + g.xp() + "</b>\n"
+                        + "🪙 EXC: <b>+" + g.totalExc() + "</b>" + starsNote(g.totalExc()) + "\n"
+                        + formatExcBonusLine(g)
+                        + "🎟️ Билеты: <b>+" + g.tickets() + "</b>\n"
+                        + "💬 Основание: <b>" + escape(parts[3].trim()) + "</b>");
+        alertAdminsPlain("🎁 <b>Бонус от модератора</b>\nМодератор: <code>" + mod.getTelegramId() + "</code> (" + escape(displayUserName(mod)) + ")\nИгроку: <code>" + targetId
+                + "</code>\n+" + g.xp() + " XP, +" + g.totalExc() + " EXC, +" + g.tickets() + " 🎟\nПричина: " + escape(parts[3].trim()));
+        sendText(mod.getTelegramId(), "✅ Бонус начислен игроку " + targetId + ".", backMenuKeyboard("menu:main"));
     }
 
     private record AdminCommand(String name, String args, String description) {}
@@ -10775,7 +10856,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         ),
                         List.of(keyboardFactory.callback(wLabelMod, "mod:withdrawals")),
                         List.of(keyboardFactory.callback(gLabelMod, "admin:gempurchase")),
-                        List.of(keyboardFactory.callback("🔍 Поиск игрока", "mod:usersearch")),
+                        List.of(keyboardFactory.callback("🔍 Поиск игрока", "mod:usersearch"),
+                                keyboardFactory.callback("🎁 Бонус игроку", "mod:bonus")),
                         List.of(keyboardFactory.callback("🏠 Главное меню", "menu:main"))
                 )));
     }
@@ -18948,6 +19030,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendUserWithdrawalHistory(mod, telegramId, "mod");
             return;
         }
+        if ("bonus".equals(action)) {
+            startModBonusInput(mod, telegramId);
+            return;
+        }
         sendText(mod.getTelegramId(), "⚠️ Действие с пользователем не распознано.", backMenuKeyboard("menu:main"));
     }
 
@@ -18981,6 +19067,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("📋 Квесты игрока", "mod:user:quests:" + telegramId + ":0")),
                 List.of(keyboardFactory.callback("💳 История EXC", "mod:user:exc:" + telegramId + ":0")),
                 List.of(keyboardFactory.callback("💸 История выводов", "mod:user:withdrawals:" + telegramId + ":0")),
+                List.of(keyboardFactory.callback("🎁 Начислить бонус", "mod:user:bonus:" + telegramId + ":0")),
                 List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
         ));
         sendText(mod.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
