@@ -5733,6 +5733,40 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return "●".repeat(d) + "○".repeat(ru.gamebot.platform.service.WeeklyGoalService.TARGET_DAYS - d);
     }
 
+    /** Компактные строки статуса в главном меню (17.10.2026, решение владельца): «📅 Цель недели: ●●○○ 2/4 дн.» и «⚡ Золотой час до 20:00 МСК: +50%» отдельными короткими строками и,
+     *  пока цель не закрыта, «🤝 Позови друга: +2 500 EXC и 3 дня Pass». Когда можно забрать награду недели, вместо цели недели показывается «🎁 Забери награду недели!»,
+     *  а строка про друга скрывается. При любой ошибке возвращает пустую строку: меню не должно ломаться. */
+    private String mainMenuStatusLines(AppUser user) {
+        try {
+            List<String> parts = new ArrayList<>();
+            boolean claimable = false;
+            if (user.isRegistrationCompleted()) {
+                if (weeklyGoalService.claimableWeek(user).isPresent()) {
+                    claimable = true;
+                    parts.add("🎁 Забери награду недели!");
+                } else {
+                    ru.gamebot.platform.service.WeeklyGoalService.Progress p = weeklyGoalService.progress(user);
+                    parts.add("📅 Цель недели: " + weeklyDots(p.days()) + " " + Math.min(p.days(), ru.gamebot.platform.service.WeeklyGoalService.TARGET_DAYS)
+                            + "/" + ru.gamebot.platform.service.WeeklyGoalService.TARGET_DAYS + " дн.");
+                }
+            }
+            String gh = goldenHourService.compactLine();
+            if (!gh.isEmpty()) parts.add(gh);
+            StringBuilder sb = new StringBuilder();
+            for (String part : parts) sb.append("\n").append(part);
+            if (!claimable && user.isRegistrationCompleted() && userService.referralGoalOpen(user)
+                    && user.getInvitedFriends() == 0 && user.getCompletedQuests() >= 1) {
+                sb.append("\n🤝 Позови друга: ").append(userService.isEgcPassActive(user)
+                        ? "+2 500 EXC"
+                        : "+2 500 EXC и " + ru.gamebot.platform.service.UserService.REFERRAL_GOAL_PASS_DAYS + " дня Pass");
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            log.warn("Main menu status lines failed for user {}", user.getTelegramId(), e);
+            return "";
+        }
+    }
+
     private boolean weeklyGoalClaimable(AppUser user) {
         try {
             return user.isRegistrationCompleted() && weeklyGoalService.claimableWeek(user).isPresent();
@@ -24004,7 +24038,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private String mainMenuText(AppUser user) {
         String role = resolveMenuRole(user, sessionService.get(user.getTelegramId()));
         if (ROLE_USER.equals(role)) {
-            return "Никнейм: " + escape(user.getNickname()) + "\n\n" + userBalanceLine(user) + firstWithdrawalProgressLine(user) + weeklyGoalLine(user) + goldenHourLine();
+            return "Никнейм: " + escape(user.getNickname()) + "\n\n" + userBalanceLine(user) + firstWithdrawalProgressLine(user) + mainMenuStatusLines(user);
         }
         String title = switch (role) {
             case ROLE_ADMIN -> "🛠️ <b>Административный контур активен</b>";

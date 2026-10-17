@@ -86,6 +86,17 @@ public class GoldenHourService {
         return "⚡ Золотой час " + (now.isBefore(start) ? "сегодня" : "завтра") + " " + window + " по Москве: " + bonus;
     }
 
+    /** Короткая строка для главного меню: «⚡ Золотой час до 20:00 МСК: +50%» во время окна, иначе «⚡ Золотой час в 19:00 МСК»; пусто, если выключен. */
+    public String compactLine() {
+        if (!enabled()) return "";
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime start = LocalDate.now().atTime(startHourUtc(), 0);
+        if (!now.isBefore(start) && now.isBefore(start.plusHours(1))) {
+            return "⚡ Золотой час до " + String.format("%02d:00", endHourMsk()) + " МСК: +" + percent() + "%";
+        }
+        return "⚡ Золотой час в " + String.format("%02d:00", startHourMsk()) + " МСК";
+    }
+
     @Scheduled(fixedDelay = 300_000, initialDelay = 90_000)
     public void tick() {
         try {
