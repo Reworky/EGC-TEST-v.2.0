@@ -5911,12 +5911,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    /** Подтверждение начисления бонуса админу/модератору: кому (имя, тег, ID) и сколько начислено (XP, EXC с учётом бонуса уровня, билеты). */
+    /** Подтверждение начисления бонуса админу/модератору: кому (тег) и сколько начислено (XP, EXC с учётом бонуса уровня, билеты). */
     private String bonusGrantedText(Long targetTelegramId, UserService.RewardGrant g) {
         AppUser target = userService.findByTelegramId(targetTelegramId).orElse(null);
         String who = target == null
                 ? "<code>" + targetTelegramId + "</code>"
-                : "<b>" + escape(displayUserName(target)) + "</b> (" + escape(displayTag(target)) + ", ID <code>" + targetTelegramId + "</code>)";
+                : "<b>" + escape(target.getTelegramUsername() != null && !target.getTelegramUsername().isBlank() ? displayTag(target) : displayUserName(target)) + "</b>";
         return "✅ Бонус начислен игроку " + who + "\n"
                 + "✨ XP: <b>+" + g.xp() + "</b>\n"
                 + "🪙 EXC: <b>+" + g.totalExc() + "</b>" + (g.bonusExc() > 0 ? " (включая +" + g.bonusExc() + " за уровень)" : "") + "\n"
