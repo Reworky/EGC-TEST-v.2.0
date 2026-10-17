@@ -2,10 +2,10 @@
 -- Запуск на сервере: cd /root/gamebot && git pull && bash scripts/run-sql.sh scripts/stats-bot-ads.sql
 
 -- 1) Запросы объявления по дням: всего, найдено, no-fill, процент заполнения.
-SELECT day, requests, filled, empty,
+SELECT stat_day AS day, requests, filled, empty,
        ROUND(100.0 * filled / NULLIF(requests, 0), 1) AS fill_pct
 FROM bot_ad_stats
-ORDER BY day DESC
+ORDER BY stat_day DESC
 LIMIT 30;
 
 -- 2) Награды за рекламу в боте по дням: сколько наград, сколько игроков, сколько EXC выдано.

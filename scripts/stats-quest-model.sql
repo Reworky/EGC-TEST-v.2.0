@@ -58,7 +58,7 @@ GROUP BY CASE WHEN q.sponsored THEN 'спонсорские' ELSE 'обычны�
 -- B1) Реклама за награду по местам за 30 дней: нажатий «смотреть» и выдано наград.
 SELECT placement, SUM(requests) AS requests, SUM(rewards) AS rewards
 FROM ad_placement_stats
-WHERE day >= DATEADD('DAY', -30, CURRENT_DATE)
+WHERE stat_day >= DATEADD('DAY', -30, CURRENT_DATE)
 GROUP BY placement
 ORDER BY requests DESC;
 
@@ -66,7 +66,7 @@ ORDER BY requests DESC;
 SELECT SUM(requests) AS requests, SUM(filled) AS filled, SUM(empty) AS empty,
        ROUND(100.0 * SUM(filled) / NULLIF(SUM(requests), 0), 1) AS fill_pct
 FROM bot_ad_stats
-WHERE day >= DATEADD('DAY', -30, CURRENT_DATE);
+WHERE stat_day >= DATEADD('DAY', -30, CURRENT_DATE);
 
 -- B3) Выдано EXC за рекламу за 30 дней: наград, игроков, EXC (это «цена» касания рекламы).
 SELECT COUNT(*) AS rewards, COUNT(DISTINCT user_id) AS players, SUM(amount) AS exc_paid

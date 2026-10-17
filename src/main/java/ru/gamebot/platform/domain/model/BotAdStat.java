@@ -1,5 +1,6 @@
 package ru.gamebot.platform.domain.model;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -14,7 +15,9 @@ import lombok.Setter;
 @Table(name = "bot_ad_stats")
 public class BotAdStat {
 
+    /** Колонка stat_day, а не day: DAY - ключевое слово H2/HQL, таблица с такой колонкой не создавалась (инцидент 2026-10-17). */
     @Id
+    @Column(name = "stat_day")
     private LocalDate day;
 
     private long requests;
