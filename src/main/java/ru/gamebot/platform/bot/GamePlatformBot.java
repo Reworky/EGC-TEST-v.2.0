@@ -175,6 +175,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ErrorMonitorService errorMonitorService;
     private final ru.gamebot.platform.service.DeployService deployService;
     private final ru.gamebot.platform.service.NotificationGateService notificationGate;
+    private final ru.gamebot.platform.service.WithdrawalNudgeService withdrawalNudgeService;
     private final ru.gamebot.platform.service.TrophyTournamentService trophyTournamentService;
     private final ru.gamebot.platform.service.BrawlQuestVerificationService brawlQuestVerificationService;
     private final ru.gamebot.platform.service.ClashQuestVerificationService clashQuestVerificationService;
@@ -458,6 +459,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendText(user.getTelegramId(), "⚠️ " + escape(String.valueOf(e.getMessage())), null);
                 }
             }
+            return;
+        }
+
+        if (text != null && text.startsWith("/wdnudge") && isEffectiveAdmin(user)) {
+            handleWithdrawalNudgeCommand(user, text.trim());
             return;
         }
 
@@ -5588,6 +5594,80 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         ),
                         List.of(keyboardFactory.callback("⬅️ Назад", backData))
                 )));
+    }
+
+    /** A/B-рассылка «вывод у тебя уже открыт» (админ): /wdnudge test - пример себе, /wdnudge send - назначить группы и отправить группе A,
+     *  /wdnudge stats - сравнение A и B. Получатели: вывод открыт, баланс 5 000+, заявок не было, заходил за 7 дней (см. WithdrawalNudgeRepository). */
+    private void handleWithdrawalNudgeCommand(AppUser admin, String text) {
+        String[] parts = text.split("\\s+");
+        String sub = parts.length > 1 ? parts[1].toLowerCase() : "";
+        try {
+            switch (sub) {
+                case "test" -> sendText(admin.getTelegramId(), withdrawalOpenText(admin), withdrawalOpenKeyboard());
+                case "stats" -> {
+                    StringBuilder sb = new StringBuilder("📊 <b>Рассылка «вывод открыт»: A/B</b>\n");
+                    java.util.List<Object[]> rows = withdrawalNudgeService.stats();
+                    if (rows.isEmpty()) sb.append("\nГруппы ещё не назначены. Подходят сейчас: ").append(withdrawalNudgeService.eligibleCount()).append(".");
+                    for (Object[] r : rows) {
+                        long total = ((Number) r[1]).longValue();
+                        long sent = ((Number) r[2]).longValue();
+                        long withdrew = ((Number) r[3]).longValue();
+                        long active = ((Number) r[4]).longValue();
+                        sb.append("\nГруппа <b>").append(r[0]).append("</b>").append("A".equals(r[0]) ? " (сообщение)" : " (контроль)")
+                                .append(": назначено ").append(total).append(", отправлено ").append(sent)
+                                .append("\n   подали заявку на вывод: ").append(withdrew).append(" (").append(total == 0 ? 0 : Math.round(100.0 * withdrew / total)).append("%)")
+                                .append("\n   заходили после назначения: ").append(active).append(" (").append(total == 0 ? 0 : Math.round(100.0 * active / total)).append("%)\n");
+                    }
+                    sendText(admin.getTelegramId(), sb.toString(), null);
+                }
+                case "send" -> {
+                    java.util.List<Long> pending = withdrawalNudgeService.assignAndPendingGroupA();
+                    int sent = 0, skipped = 0;
+                    for (Long id : pending) {
+                        AppUser u = userService.findById(id).orElse(null);
+                        if (u == null || u.isBlocked() || u.getCoins() < ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC
+                                || rewardService.withdrawalEligibilityBlock(u) != null) {
+                            skipped++;
+                            continue;
+                        }
+                        if (!notificationGate.tryAcquire(u, ru.gamebot.platform.service.NudgeType.WITHDRAWAL_OPEN)) {
+                            skipped++; // лимит частоты: останется неотправленным, повторный /wdnudge send доберёт
+                            continue;
+                        }
+                        try {
+                            sendText(u.getTelegramId(), withdrawalOpenText(u), withdrawalOpenKeyboard());
+                            sent++;
+                        } catch (Exception e) {
+                            log.warn("Withdrawal nudge not delivered to user {}", id, e);
+                        }
+                        withdrawalNudgeService.markSent(id); // не доставлено (бот заблокирован) - тоже не повторяем
+                        Thread.sleep(60);
+                    }
+                    sendText(admin.getTelegramId(), "✅ Отправлено группе A: " + sent + ", пропущено: " + skipped
+                            + ".\nПропущенные (лимит частоты или условия изменились) можно добрать повторным <code>/wdnudge send</code>. Итоги: <code>/wdnudge stats</code>.", null);
+                }
+                default -> sendText(admin.getTelegramId(), "Формат: <code>/wdnudge test|send|stats</code>\n"
+                        + "test - пример сообщения вам; send - назначить группы A/B и отправить группе A; stats - сравнение групп.", null);
+            }
+        } catch (Exception e) {
+            log.warn("/wdnudge failed", e);
+            sendText(admin.getTelegramId(), "⚠️ " + escape(String.valueOf(e.getMessage())), null);
+        }
+    }
+
+    private String withdrawalOpenText(AppUser user) {
+        double ratio = healthRatioService.getCurrentRatio();
+        long rub = Math.round(user.getCoins() * ratio / 100.0);
+        return "🔓 <b>Вывод у тебя уже открыт!</b>\n"
+                + "У тебя <b>" + fmtExc(user.getCoins()) + " EXC</b> ≈ " + fmtExc(rub) + " ₽. Минимум для вывода "
+                + fmtExc(ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) + " EXC.\n"
+                + "Заявка занимает пару минут: <b>Баланс → 💸 Вывести EXC</b>.";
+    }
+
+    private InlineKeyboardMarkup withdrawalOpenKeyboard() {
+        return keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("💸 Вывести EXC", "shop:withdraw")),
+                List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))));
     }
 
     /** Средняя награда за квест для оценки «это примерно N квестов» на экране баланса (только подсказка, на расчёты не влияет). */

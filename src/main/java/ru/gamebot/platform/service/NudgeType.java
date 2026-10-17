@@ -12,6 +12,7 @@ public enum NudgeType {
     ONBOARDING(75, false, "👋 Онбординг"),
     SECOND_QUEST(70, false, "🎁 Второй квест"),
     SPONSOR_QUEST(65, false, "💼 Спонсорский квест"),
+    WITHDRAWAL_OPEN(55, false, "💸 Вывод открыт"),
     DORMANCY(60, false, "💤 Возвращение (14/30/60 дн.)"),
     QUEST_GAP(50, false, "👀 Квесты не берёшь"),
     COOLDOWN_REMINDER(45, false, "⏰ Повтор про кулдаун"),
