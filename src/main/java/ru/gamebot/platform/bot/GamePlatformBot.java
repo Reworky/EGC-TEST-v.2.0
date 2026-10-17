@@ -945,6 +945,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        // Информационные кнопки статуса («✅ Выполнено», «⏳ Доступно через…», прогресс автопроверки): нажатие ничего не делает.
+        // Раньше обработчика не было вовсе, и игрок получал «Неизвестное действие» (жалоба 2026-10-17, аккаунты dilyel и zerottyy).
+        if ("noop".equals(data)) {
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+
         if ("activation:check".equals(data)) {
             handleActivationCheck(callbackQuery, user);
             return;
@@ -6207,7 +6214,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else if (cooldownLeft > 0 && !cooldownBypassed) {
             buttons.add(keyboardFactory.callback("⏳ Доступно через " + cooldownExact, "noop"));
         } else if (slotsFull) {
-            buttons.add(keyboardFactory.callback("🔒 Слот занят — сдай или отмени активный квест", "noop"));
+            buttons.add(keyboardFactory.callback("🔒 Слот занят — открыть «Мои квесты» (там можно отменить)", "menu:myquests"));
         } else if (takeCooldownLeft > 0) {
             buttons.add(keyboardFactory.callback("⏳ Следующий квест — через " + takeCooldownLeft + " мин", "noop"));
         } else if (gameCooldown && !cooldownBypassed) {
