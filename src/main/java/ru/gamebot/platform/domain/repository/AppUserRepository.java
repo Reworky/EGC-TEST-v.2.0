@@ -60,6 +60,18 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     long countDistinctActiveSinceBySquad(@Param("sinceDateTime") LocalDateTime sinceDateTime,
                                           @Param("inSquad") boolean inSquad);
 
+    /** Сопоставимая когорта для сравнения «в отряде» / «без отряда» (UserService.getSquadMatchedReport): зарегистрированные, аккаунт не младше
+     *  createdBefore, не меньше minQuests одобренных квестов. */
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.createdAt <= :createdBefore AND u.completedQuests >= :minQuests "
+            + "AND ((:inSquad = true AND u.squadId IS NOT NULL) OR (:inSquad = false AND u.squadId IS NULL))")
+    long countMatchedCohort(@Param("inSquad") boolean inSquad, @Param("createdBefore") LocalDateTime createdBefore, @Param("minQuests") int minQuests);
+
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE (u.lastBotActivityAt >= :since OR u.lastMiniAppOpenAt >= :since) "
+            + "AND u.registrationCompleted = true AND u.createdAt <= :createdBefore AND u.completedQuests >= :minQuests "
+            + "AND ((:inSquad = true AND u.squadId IS NOT NULL) OR (:inSquad = false AND u.squadId IS NULL))")
+    long countMatchedCohortActiveSince(@Param("since") LocalDateTime since, @Param("inSquad") boolean inSquad,
+                                       @Param("createdBefore") LocalDateTime createdBefore, @Param("minQuests") int minQuests);
+
     /**
      * Блокирует строку пользователя на время транзакции (SELECT ... FOR UPDATE).
      * Нужно везде, где идёт схема "проверить лимит → записать" (взятие квеста и т.п.),

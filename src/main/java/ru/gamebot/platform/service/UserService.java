@@ -613,6 +613,21 @@ public class UserService {
         return new SquadCohortReport(inSquad, segmentSize, active7, active30, engagementReportBySquad(inSquad), retentionBySquad(inSquad));
     }
 
+    /** Сопоставимые игроки для сравнения «в отряде» и «без отряда» (2026-10-17): аккаунт старше MATCHED_MIN_ACCOUNT_AGE_DAYS и минимум
+     *  minQuests одобренных квестов. Обычный DAU/MAU «без отряда» раздут однодневными новичками с закупа, а в отряды вступают уже
+     *  активные - на таких игроках разрыв меньше (17.10: 59,7% против 18,3% при 3+ квестах вместо 41% против 3,5%). Это связь, а не доказательство причины. */
+    public static final int MATCHED_MIN_ACCOUNT_AGE_DAYS = 14;
+
+    public record SquadMatchedReport(long players, long dau, long mau, double dauMauPercent, double active30Percent) {}
+
+    public SquadMatchedReport getSquadMatchedReport(boolean inSquad, int minQuests) {
+        LocalDateTime createdBefore = LocalDateTime.now().minusDays(MATCHED_MIN_ACCOUNT_AGE_DAYS);
+        long players = appUserRepository.countMatchedCohort(inSquad, createdBefore, minQuests);
+        long dau = appUserRepository.countMatchedCohortActiveSince(LocalDateTime.now().minusDays(1), inSquad, createdBefore, minQuests);
+        long mau = appUserRepository.countMatchedCohortActiveSince(LocalDateTime.now().minusDays(30), inSquad, createdBefore, minQuests);
+        return new SquadMatchedReport(players, dau, mau, mau > 0 ? dau * 100.0 / mau : 0, players > 0 ? mau * 100.0 / players : 0);
+    }
+
     /** Одна ячейка перекрёстной проверки "отряды x рефералка" - см. squadReferralCrossCheck. */
     public record SquadReferralCell(boolean inSquad, boolean referred, long segmentSize, long dau, long mau, double dauMauPercent) {}
 
@@ -2097,6 +2112,7 @@ public class UserService {
         user.setReferralEarnedExc(0);
         user.setPendingSquadInviteCode(null);
         user.setSquadId(null);
+        user.setSquadJoinedAt(null);
         user.setTrafficSourceCode(null);
         user.setProfileTitle(null);
         user.setAvatarFileId(null);

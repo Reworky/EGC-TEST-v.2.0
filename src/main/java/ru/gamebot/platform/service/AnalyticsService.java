@@ -407,6 +407,17 @@ public class AnalyticsService {
         out.add(L("dau_mau_in", "DAU/MAU — в отряде", "%", inSquad.engagement().dauMauPercent(), dauMauInPrev));
         out.add(L("dau_mau_no", "DAU/MAU — без отряда", "%", noSquad.engagement().dauMauPercent(), dauMauNoPrev));
 
+        UserService.SquadMatchedReport matchedIn = userService.getSquadMatchedReport(true, 3);
+        UserService.SquadMatchedReport matchedNo = userService.getSquadMatchedReport(false, 3);
+        out.add(L("dau_mau_in_cmp", "DAU/MAU — в отряде (3+ квестов, аккаунт 14+ дн.)", "%", matchedIn.dauMauPercent(), null,
+                "сопоставимые игроки: " + matchedIn.players() + " чел.", false));
+        out.add(L("dau_mau_no_cmp", "DAU/MAU — без отряда (3+ квестов, аккаунт 14+ дн.)", "%", matchedNo.dauMauPercent(), null,
+                "сопоставимые игроки: " + matchedNo.players() + " чел.", false));
+        out.add(L("active30_in_cmp", "Заходили за 30 дн. — в отряде (3+ квестов, 14+ дн.)", "%", matchedIn.active30Percent(), null,
+                "доля игроков группы; не зависит от размера MAU", false));
+        out.add(L("active30_no_cmp", "Заходили за 30 дн. — без отряда (3+ квестов, 14+ дн.)", "%", matchedNo.active30Percent(), null,
+                "доля игроков группы; не зависит от размера MAU", false));
+
         out.add(L("ret7_in", "Возврат 7д — в отряде", "%", inSquad.retention().percent7(), null,
                 "когорта " + inSquad.retention().cohort7() + " чел.", false));
         out.add(L("ret7_no", "Возврат 7д — без отряда", "%", noSquad.retention().percent7(), null,
@@ -422,6 +433,8 @@ public class AnalyticsService {
                 "когорта " + inSquad.engagement().retentionCohort() + " чел. — самая строгая метрика", false));
         out.add(L("second_no", "Возврат за 2-й квест — без отряда", "%", noSquad.engagement().retentionPercent(), secondNoPrev,
                 "когорта " + noSquad.engagement().retentionCohort() + " чел.", false));
+
+        extras.add("ℹ️ <b>Как читать «Отряды»</b>\n\nОбщий DAU/MAU «в отряде» против «без отряда» завышает разрыв: вне отрядов много однодневных новичков с закупа, а в отряды вступают уже активные. Сравнивайте строки «(3+ квестов, аккаунт 14+ дн.)» - там игроки сопоставимы. Это связь, а не доказанная причина: с 17.10 дата вступления сохраняется (squadJoinedAt), через 3-4 недели можно сравнить активность одного игрока до и после вступления.");
 
         List<UserService.SquadLeaderboardEntry> top = userService.topActiveSquadsByQuests7d(5);
         if (top.isEmpty()) {

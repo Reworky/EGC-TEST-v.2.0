@@ -134,6 +134,7 @@ public class SquadService {
         squad = squadRepository.save(squad);
 
         captain.setSquadId(squad.getId());
+        captain.setSquadJoinedAt(java.time.LocalDateTime.now());
         appUserRepository.save(captain);
         return squad;
     }
@@ -153,6 +154,7 @@ public class SquadService {
             throw new IllegalStateException("Отряд уже заполнен (" + MAX_MEMBERS + "/" + MAX_MEMBERS + " игроков).");
         }
         user.setSquadId(squad.getId());
+        user.setSquadJoinedAt(java.time.LocalDateTime.now());
         appUserRepository.save(user);
         cancelPendingRequests(user);
         awardReferralSquadBonus(user, squad);
@@ -233,6 +235,7 @@ public class SquadService {
         }
         Squad squad = squadRepository.findById(user.getSquadId()).orElse(null);
         user.setSquadId(null);
+        user.setSquadJoinedAt(null);
         appUserRepository.save(user);
 
         if (squad != null && user.getTelegramId().equals(squad.getCaptainTelegramId())) {
@@ -261,6 +264,7 @@ public class SquadService {
         List<AppUser> members = appUserRepository.findAllBySquadId(squad.getId());
         for (AppUser member : members) {
             member.setSquadId(null);
+            member.setSquadJoinedAt(null);
         }
         appUserRepository.saveAll(members);
         squad.setStatus("DISBANDED");
@@ -284,6 +288,7 @@ public class SquadService {
             throw new IllegalStateException("Этот игрок не состоит в вашем отряде.");
         }
         member.setSquadId(null);
+        member.setSquadJoinedAt(null);
         appUserRepository.save(member);
     }
 
