@@ -2422,6 +2422,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendAlertsScreen(user);
             }
             case DAILY_CODE_INPUT -> handleDailyCodeInput(user, session, text);
+            case CLUB_POST_INPUT -> {
+                session.reset();
+                sendText(user.getTelegramId(), registerClubPost(text), backMenuKeyboard("admin:club"));
+            }
             case BONUS_INPUT -> handleBonusInput(user, session, text);
             case DEBIT_INPUT -> handleDebitInput(user, session, text);
             case BROADCAST_MESSAGE -> handleBroadcast(user, session, text);
@@ -5797,7 +5801,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             int filled = Math.max(0, Math.min(10, g.getCurrentCount() * 10 / Math.max(1, g.getTargetCount())));
             String bar = "█".repeat(filled) + "░".repeat(10 - filled);
             sb.append("📣 <b>Цель дня:</b> ").append(Math.min(g.getCurrentCount(), g.getTargetCount())).append(" / ").append(g.getTargetCount())
-                    .append(" реакций под постом дня\n").append(bar).append("\n");
+                    .append(" реакций под постом\n").append(bar).append("\n");
             String url = channelPostUrl(g.getChannelMessageId());
             if (ru.gamebot.platform.domain.model.ClubGoal.DONE.equals(g.getStatus())) {
                 if (clubActivityService.goalClaimed(g, user.getId())) {
@@ -5805,15 +5809,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 } else if (!clubActivityService.goalClaimable(g)) {
                     sb.append("\nЦель выполнена, но время забрать награду уже вышло.");
                 } else if (clubActivityService.eligibleForGoal(g, user.getId())) {
-                    sb.append("\n🎉 Цель выполнена! Забирайте: <b>+").append(g.getRewardExc()).append(" EXC и +").append(g.getRewardTickets()).append(" 🎟</b>.");
+                    sb.append("\n🎉 Цель выполнена! Забирайте: <b>").append(goalRewardText(g)).append("</b>.");
                     rows.add(List.of(keyboardFactory.callback("🎁 Забрать награду", "club:claim:" + g.getId())));
                 } else {
                     sb.append("\n🎉 Цель выполнена! Награду получают те, кто ввёл код дня этого поста.");
                     rows.add(List.of(keyboardFactory.callback("🔑 Код дня", "club:code")));
                 }
             } else {
-                sb.append("Поставьте реакцию под постом в канале. Если цель выполнена, награду получат все, кто ввёл код дня: <b>+")
-                        .append(g.getRewardExc()).append(" EXC и +").append(g.getRewardTickets()).append(" 🎟</b>.\nСчётчик обновляется с задержкой в несколько минут.");
+                sb.append("Поставьте реакцию под постом в канале. Если цель выполнена, награду получат ")
+                        .append(g.getDailyCodeId() != null ? "все, кто ввёл код дня" : "все игроки клуба").append(": <b>")
+                        .append(goalRewardText(g)).append("</b>.\nСчётчик обновляется с задержкой в несколько минут.");
             }
             if (url != null) rows.add(0, List.of(keyboardFactory.url("📢 Открыть пост", url)));
         }
@@ -5840,6 +5845,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendText(admin.getTelegramId(), "✅ В «Цели клуба» теперь кнопка на квест: <b>" + escape(quest.getTitle()) + "</b>"
                             + (quest.isSponsored() ? " (спонсорский)" : "") + ".\nУбрать: <code>/clubgoal off</code>.", null);
                 }
+                case "post" -> sendText(admin.getTelegramId(), registerClubPost(text.substring(text.toLowerCase().indexOf("post") + 4)), null);
                 case "off" -> sendText(admin.getTelegramId(), clubActivityService.closeLinkGoal() > 0 ? "✅ Кнопка-портал убрана." : "Активной кнопки-портала не было.", null);
                 default -> {
                     StringBuilder sb = new StringBuilder("🎯 <b>Цель клуба: состояние</b>\n\n");
@@ -5985,6 +5991,56 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(mod.getTelegramId(), bonusGrantedText(targetId, g), backMenuKeyboard("menu:main"));
     }
 
+    private static Integer parseChannelMessageId(String token) {
+        if (token == null) return null;
+        String t = token.trim();
+        int cut = t.indexOf('?');
+        if (cut >= 0) t = t.substring(0, cut);
+        while (t.endsWith("/")) t = t.substring(0, t.length() - 1);
+        String last = t.substring(t.lastIndexOf('/') + 1);
+        try {
+            int id = Integer.parseInt(last);
+            return id > 0 ? id : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /** Цель клуба (и, если указан код, код дня) под обычным постом канала: «ССЫЛКА [КОД] [ЧИСЛО_РЕАКЦИЙ]». Возвращает текст ответа админу. */
+    private String registerClubPost(String raw) {
+        String[] t = raw == null ? new String[0] : raw.trim().split("\\s+");
+        Integer messageId = t.length > 0 ? parseChannelMessageId(t[0]) : null;
+        if (messageId == null) {
+            return "⚠️ Не вижу ссылку на пост. Пришлите ссылку вида <code>https://t.me/exgamingclub/123</code> (можно добавить код и число реакций).";
+        }
+        String code = null;
+        int target = ru.gamebot.platform.service.ClubActivityService.GOAL_TARGET_REACTIONS;
+        for (int i = 1; i < t.length; i++) {
+            if (t[i].matches("\\d{1,4}")) {
+                target = Integer.parseInt(t[i]);
+            } else if (t[i].matches("[A-Za-zА-Яа-яЁё0-9-]{3,32}")) {
+                code = t[i];
+            } else {
+                return "⚠️ Не понял «" + escape(t[i]) + "». После ссылки можно указать код (буквы, цифры, дефис, 3-32 знака) и число реакций.";
+            }
+        }
+        try {
+            ru.gamebot.platform.domain.model.ClubGoal g = clubActivityService.registerManualPost(messageId, code, target);
+            return "✅ Пост <code>" + messageId + "</code> теперь в «Цели клуба»: " + g.getTargetCount() + " реакций.\n"
+                    + (code != null
+                    ? "🔑 Код дня: <code>" + escape(code) + "</code> (действует 24 часа). Убедитесь, что он есть в тексте поста.\nНаграда за цель: +" + g.getRewardExc() + " EXC и +" + g.getRewardTickets() + " 🎟 тем, кто ввёл код."
+                    : "Кода нет, поэтому награда за цель - только +" + g.getRewardTickets() + " 🎟 любому игроку (EXC без кода не даём, чтобы расходы были под контролем).")
+                    + "\nПрежняя цель по реакциям закрыта.";
+        } catch (Exception e) {
+            log.error("Failed to register club post {}", messageId, e);
+            return "⚠️ Не получилось: " + escape(String.valueOf(e.getMessage()));
+        }
+    }
+
+    private String goalRewardText(ru.gamebot.platform.domain.model.ClubGoal g) {
+        return (g.getRewardExc() > 0 ? "+" + g.getRewardExc() + " EXC и " : "") + "+" + g.getRewardTickets() + " 🎟";
+    }
+
     /** Админ-экран «Код дня и цель клуба» (Коммуникации): состояние, ручной запуск поста с кодом, переключатель и час автопоста, кнопка-портал в квест. */
     private void sendAdminClubScreen(AppUser admin) {
         StringBuilder sb = new StringBuilder("🔑 <b>Код дня</b> и 🎯 <b>цель клуба</b>\n\n");
@@ -6007,6 +6063,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("▶️ Создать пост с кодом сейчас", "admin:club:now")));
+        rows.add(List.of(keyboardFactory.callback("📎 Обычный пост: цель или код", "admin:club:post")));
         rows.add(List.of(
                 keyboardFactory.callback(channelContentService.isDailyCodeEnabled() ? "🔕 Выключить автопост" : "🔔 Включить автопост", "admin:club:tog"),
                 keyboardFactory.callback("🕐 −1 ч", "admin:club:hour:-1"),
@@ -11593,6 +11650,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "club:now" -> {
                 answer(callbackQuery.getId(), channelContentService.createDailyCodeDraft(true).isPresent()
                         ? "Черновик создан, карточка придёт сообщением" : "Не получилось создать черновик");
+            }
+            case "club:post" -> {
+                session.reset();
+                session.setState(SessionState.CLUB_POST_INPUT);
+                answerSilently(callbackQuery.getId());
+                sendText(user.getTelegramId(),
+                        "📎 <b>Обычный пост в цель клуба</b>\n\n"
+                                + "Пришлите одним сообщением ссылку на пост в канале (долгое нажатие на пост → «Копировать ссылку»). Дальше по желанию:\n"
+                                + "• <b>код</b>, который вы сами вписали в текст поста, - тогда это ещё и код дня;\n"
+                                + "• <b>число</b> - сколько реакций нужно набрать (по умолчанию " + ru.gamebot.platform.service.ClubActivityService.GOAL_TARGET_REACTIONS + ").\n\n"
+                                + "Примеры:\n<code>https://t.me/exgamingclub/123</code> - только цель по реакциям\n"
+                                + "<code>https://t.me/exgamingclub/123 SPRING-7</code> - цель и код дня\n"
+                                + "<code>https://t.me/exgamingclub/123 SPRING-7 50</code> - цель на 50 реакций и код дня",
+                        cancelKeyboard());
             }
             case "club:tog" -> {
                 channelContentService.setDailyCodeEnabled(!channelContentService.isDailyCodeEnabled());

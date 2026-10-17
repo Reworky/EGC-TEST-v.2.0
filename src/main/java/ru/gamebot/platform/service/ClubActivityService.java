@@ -89,6 +89,36 @@ public class ClubActivityService {
         return dc;
     }
 
+    /** Обычный пост канала, сделанный руками: цель по реакциям под ним (target) и, если админ вписал код в текст поста, - код дня (24 ч).
+     *  Без кода награду может забрать любой игрок, поэтому EXC за такую цель не даём (только билет): расходы нельзя ограничить кодом. */
+    @Transactional
+    public ClubGoal registerManualPost(Integer messageId, String code, int target) {
+        LocalDateTime now = LocalDateTime.now();
+        Long codeId = null;
+        if (code != null && !code.isBlank()) {
+            DailyCode dc = new DailyCode();
+            dc.setCode(code.trim());
+            dc.setChannelMessageId(messageId);
+            dc.setPublishedAt(now);
+            dc.setValidUntil(now.plusHours(CODE_TTL_HOURS));
+            codeId = codeRepository.save(dc).getId();
+        }
+        for (ClubGoal old : goalRepository.findAllByGoalTypeAndStatus(ClubGoal.REACTIONS, ClubGoal.ACTIVE)) {
+            old.setStatus(ClubGoal.EXPIRED);
+            goalRepository.save(old);
+        }
+        ClubGoal goal = new ClubGoal();
+        goal.setGoalType(ClubGoal.REACTIONS);
+        goal.setTitle("Цель: реакции под постом");
+        goal.setTargetCount(Math.max(5, Math.min(5000, target)));
+        goal.setChannelMessageId(messageId);
+        goal.setDailyCodeId(codeId);
+        goal.setRewardExc(codeId != null ? GOAL_REWARD_EXC : 0);
+        goal.setRewardTickets(GOAL_REWARD_TICKETS);
+        goal.setExpiresAt(now.plusHours(GOAL_TTL_HOURS));
+        return goalRepository.save(goal);
+    }
+
     public Optional<DailyCode> activeCode() {
         return codeRepository.findFirstByValidUntilAfterOrderByIdDesc(LocalDateTime.now());
     }
