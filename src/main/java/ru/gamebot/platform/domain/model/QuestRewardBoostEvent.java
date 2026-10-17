@@ -1,5 +1,6 @@
 package ru.gamebot.platform.domain.model;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -32,4 +33,12 @@ public class QuestRewardBoostEvent {
     private boolean active;
 
     private LocalDateTime createdAt;
+
+    /** На сколько первых одобренных квестов игрока действует буст; null - как у обычного буста (QuestRewardBoostService.MAX_BOOSTED_QUESTS_PER_USER). */
+    @Column(name = "max_boosted_quests")
+    private Integer maxBoostedQuests;
+
+    /** Вид буста: null - обычный (выходные), GOLDEN_HOUR - ежедневный золотой час (GoldenHourService). */
+    @Column(name = "boost_kind", length = 24)
+    private String boostKind;
 }

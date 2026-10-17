@@ -40,12 +40,21 @@ public class QuestRewardBoostService {
         java.util.Optional<QuestRewardBoostEvent> boost = findActiveBoost();
         if (boost.isEmpty()) return 0;
         long done = questSubmissionRepository.countApprovedByUserBetween(user, boost.get().getStartAt(), LocalDateTime.now());
-        return done < MAX_BOOSTED_QUESTS_PER_USER ? boost.get().getBoostPercent() : 0;
+        int cap = boost.get().getMaxBoostedQuests() != null ? boost.get().getMaxBoostedQuests() : MAX_BOOSTED_QUESTS_PER_USER;
+        return done < cap ? boost.get().getBoostPercent() : 0;
     }
 
     @Transactional
     public QuestRewardBoostEvent create(LocalDateTime startAt, LocalDateTime endAt, int boostPercent) {
+        return create(startAt, endAt, boostPercent, null, null);
+    }
+
+    /** maxBoostedQuests - на сколько первых квестов игрока действует буст (null - как у выходных), boostKind - метка вида (GOLDEN_HOUR). */
+    @Transactional
+    public QuestRewardBoostEvent create(LocalDateTime startAt, LocalDateTime endAt, int boostPercent, Integer maxBoostedQuests, String boostKind) {
         QuestRewardBoostEvent event = new QuestRewardBoostEvent();
+        event.setMaxBoostedQuests(maxBoostedQuests);
+        event.setBoostKind(boostKind);
         event.setStartAt(startAt);
         event.setEndAt(endAt);
         event.setBoostPercent(boostPercent);

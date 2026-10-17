@@ -179,6 +179,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ClubActivityService clubActivityService;
     private final ru.gamebot.platform.service.ModeratorBonusService moderatorBonusService;
     private final ru.gamebot.platform.service.WeeklyGoalService weeklyGoalService;
+    private final ru.gamebot.platform.service.GoldenHourService goldenHourService;
     private final ru.gamebot.platform.service.TrophyTournamentService trophyTournamentService;
     private final ru.gamebot.platform.service.BrawlQuestVerificationService brawlQuestVerificationService;
     private final ru.gamebot.platform.service.ClashQuestVerificationService clashQuestVerificationService;
@@ -473,6 +474,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (text != null && text.equals("/commands") && isEffectiveAdmin(user)) {
             sendAdminCommands(user);
+            return;
+        }
+
+        if (text != null && text.startsWith("/goldenhour") && isEffectiveAdmin(user)) {
+            handleGoldenHourCommand(user, text.trim());
             return;
         }
 
@@ -5654,6 +5660,66 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 )));
     }
 
+    // ───────────────────────── «Золотой час» (2026-10-17) ─────────────────────────
+
+    /** Строка золотого часа для главного меню и «Квестов» (с переносом перед ней); пусто, если выключен или при ошибке. */
+    private String goldenHourLine() {
+        try {
+            String line = goldenHourService.statusLine();
+            return line.isEmpty() ? "" : "\n" + line;
+        } catch (Exception e) {
+            log.warn("Golden hour line failed", e);
+            return "";
+        }
+    }
+
+    /** Напоминание о золотом часе за 30 минут до окна (GoldenHourService, только активным за 7 дней, через лимит частоты). */
+    @org.springframework.context.event.EventListener
+    public void onGoldenHourPush(ru.gamebot.platform.event.GoldenHourPushEvent event) {
+        try {
+            sendText(event.getTelegramId(),
+                    "⚡ <b>Золотой час сегодня с " + String.format("%02d:00", event.getStartHourMsk()) + " до " + String.format("%02d:00", event.getEndHourMsk()) + " по Москве</b>\n\n"
+                            + "В это время награда за квесты выше на <b>" + event.getPercent() + "%</b>: это работает на первые " + event.getMaxQuests()
+                            + " засчитанных квеста. Возьми квест заранее и закрой его в этот час.",
+                    keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🎯 Квесты", "menu:quests")))));
+        } catch (Exception e) {
+            log.warn("Failed to send golden hour push to {}", event.getTelegramId(), e);
+        }
+    }
+
+    /** Админ: /goldenhour status | on | off | hour N | percent N | max N | push on | push off | pushtest. Час - по UTC (Москва = UTC+3). */
+    private void handleGoldenHourCommand(AppUser admin, String text) {
+        String[] p = text.split("\\s+");
+        String sub = p.length > 1 ? p[1].toLowerCase() : "status";
+        Integer num = p.length > 2 ? parseInteger(p[2]) : null;
+        try {
+            switch (sub) {
+                case "on" -> goldenHourService.setEnabled(true);
+                case "off" -> goldenHourService.setEnabled(false);
+                case "hour" -> { if (num != null) goldenHourService.setStartHourUtc(num); }
+                case "percent" -> { if (num != null) goldenHourService.setPercent(num); }
+                case "max" -> { if (num != null) goldenHourService.setMaxQuests(num); }
+                case "push" -> goldenHourService.setPushEnabled(p.length > 2 && "on".equalsIgnoreCase(p[2]));
+                case "pushtest" -> {
+                    goldenHourService.sendTestPush(admin.getTelegramId());
+                    return;
+                }
+                default -> { }
+            }
+            sendText(admin.getTelegramId(),
+                    "⚡ <b>Золотой час</b>\n\n"
+                            + "Включён: " + (goldenHourService.enabled() ? "да" : "нет") + "\n"
+                            + "Окно: " + String.format("%02d:00", goldenHourService.startHourUtc()) + "-" + String.format("%02d:00", (goldenHourService.startHourUtc() + 1) % 24)
+                            + " UTC (" + String.format("%02d:00", goldenHourService.startHourMsk()) + "-" + String.format("%02d:00", goldenHourService.endHourMsk()) + " по Москве)\n"
+                            + "Бонус: +" + goldenHourService.percent() + "% EXC, первые " + goldenHourService.maxQuests() + " квеста игрока в окне\n"
+                            + "Напоминание игрокам за 30 минут до окна: " + (goldenHourService.pushEnabled() ? "включено" : "выключено (включить: /goldenhour push on)") + "\n\n"
+                            + "Команды: <code>/goldenhour on|off</code>, <code>hour N</code> (час UTC), <code>percent N</code>, <code>max N</code>, <code>push on|off</code>, <code>pushtest</code> (пример напоминания вам)",
+                    null);
+        } catch (Exception e) {
+            sendText(admin.getTelegramId(), "⚠️ " + escape(String.valueOf(e.getMessage())), null);
+        }
+    }
+
     // ───────────────────────── «Цель недели» (2026-10-17) ─────────────────────────
 
     private static String weeklyDots(int days) {
@@ -6173,6 +6239,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("user", "", "Посмотреть бота глазами игрока"),
             new AdminCommand("commands", "", "Список админ-команд"),
             new AdminCommand("wdnudge", "test|send|stats", "Рассылка «вывод открыт» (A/B)"),
+            new AdminCommand("goldenhour", "status|on|off|hour N|percent N|max N|push on|off|pushtest", "Золотой час: окно, бонус, лимит квестов, напоминание игрокам"),
             new AdminCommand("dailycode", "now|on|off|status", "Пост «Код дня»: создать сейчас, включить, выключить, состояние"),
             new AdminCommand("clubgoal", "status|link ID текст|off", "Цель клуба: состояние, кнопка-портал в квест, выключить портал"),
             new AdminCommand("wdfreeze", "ID on|off", "Заморозить или разморозить вывод игрока"),
@@ -6378,7 +6445,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         // Баннер «Квесты» (Экси у доски заданий) — тот же файл, что на экране «Квесты и рейтинг».
         sendResourceBanner(user.getTelegramId(), "quest_banner.png",
-                "🗺️ <b>Квесты</b>\n\nВыберите раздел:",
+                "🗺️ <b>Квесты</b>" + goldenHourLine() + "\n\nВыберите раздел:",
                 keyboardFactory.rowsLayout(rows));
     }
 
@@ -23899,7 +23966,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private String mainMenuText(AppUser user) {
         String role = resolveMenuRole(user, sessionService.get(user.getTelegramId()));
         if (ROLE_USER.equals(role)) {
-            return "Никнейм: " + escape(user.getNickname()) + "\n\n" + userBalanceLine(user) + firstWithdrawalProgressLine(user) + weeklyGoalLine(user);
+            return "Никнейм: " + escape(user.getNickname()) + "\n\n" + userBalanceLine(user) + firstWithdrawalProgressLine(user) + weeklyGoalLine(user) + goldenHourLine();
         }
         String title = switch (role) {
             case ROLE_ADMIN -> "🛠️ <b>Административный контур активен</b>";
