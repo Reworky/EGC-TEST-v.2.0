@@ -247,6 +247,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         log.info("Resolved admin IDs: {}", adminService.resolvedAdminIds());
         log.info("Resolved moderator IDs: {}", adminService.resolvedModeratorIds());
         setupMenuButton();
+        setupAdminCommandMenus();
         drainNewsQueue();
         notifyAdminsStartup();
     }
@@ -459,6 +460,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendText(user.getTelegramId(), "⚠️ " + escape(String.valueOf(e.getMessage())), null);
                 }
             }
+            return;
+        }
+
+        if (text != null && text.equals("/commands") && isEffectiveAdmin(user)) {
+            sendAdminCommands(user);
             return;
         }
 
@@ -5594,6 +5600,65 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         ),
                         List.of(keyboardFactory.callback("⬅️ Назад", backData))
                 )));
+    }
+
+    private record AdminCommand(String name, String args, String description) {}
+
+    /** Команды администратора: показываются в меню «/» у админов (setMyCommands с областью «чат админа») и на экране «Система → Команды».
+     *  Новую админ-команду добавлять и сюда тоже. */
+    private static final List<AdminCommand> ADMIN_COMMANDS = List.of(
+            new AdminCommand("menu", "", "Главное меню"),
+            new AdminCommand("admin", "", "Включить роль администратора"),
+            new AdminCommand("moder", "", "Включить роль модератора"),
+            new AdminCommand("user", "", "Посмотреть бота глазами игрока"),
+            new AdminCommand("commands", "", "Список админ-команд"),
+            new AdminCommand("wdnudge", "test|send|stats", "Рассылка «вывод открыт» (A/B)"),
+            new AdminCommand("wdfreeze", "ID on|off", "Заморозить или разморозить вывод игрока"),
+            new AdminCommand("resetuser", "ID", "Сбросить игрока до «только что создан» (с подтверждением)"),
+            new AdminCommand("resetlimit", "ID", "Сбросить месячный лимит вывода игрока"),
+            new AdminCommand("resendreview", "ID отзыва", "Отправить карточку отзыва на модерацию заново"),
+            new AdminCommand("add_sponsor", "(несколько строк)", "Добавить спонсора к квесту"),
+            new AdminCommand("sponsor_stats", "ID квеста", "Статистика спонсора по квесту"),
+            new AdminCommand("sponsors_list", "", "Список спонсоров"),
+            new AdminCommand("srctype", "КОД тип", "Тип источника трафика для вкладки «Удержание»"),
+            new AdminCommand("squadretention", "", "Диагностика удержания отрядов"),
+            new AdminCommand("clearme", "", "Стереть мой прогресс (тест регистрации с нуля)"),
+            new AdminCommand("resetreqid", "", "ОПАСНО: удалить все заявки на вывод и сбросить счётчик ID"));
+
+    /** Меню «/» с админ-командами только в чатах админов (у остальных остаётся общее меню из BotFather). Если чата с админом ещё нет
+     *  (не нажимал /start), Telegram вернёт ошибку - пропускаем, меню появится после перезапуска бота. */
+    private void setupAdminCommandMenus() {
+        List<org.telegram.telegrambots.meta.api.objects.commands.BotCommand> commands = new ArrayList<>();
+        commands.add(org.telegram.telegrambots.meta.api.objects.commands.BotCommand.builder().command("start").description("Меню").build());
+        for (AdminCommand c : ADMIN_COMMANDS) {
+            String description = c.args().isEmpty() ? c.description() : c.description() + " (" + c.args() + ")";
+            commands.add(org.telegram.telegrambots.meta.api.objects.commands.BotCommand.builder()
+                    .command(c.name()).description(description.length() > 250 ? description.substring(0, 250) : description).build());
+        }
+        for (Long adminId : adminService.allAdminIds()) {
+            try {
+                execute(org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands.builder()
+                        .commands(commands)
+                        .scope(org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeChat.builder()
+                                .chatId(String.valueOf(adminId)).build())
+                        .build());
+            } catch (Exception e) {
+                log.warn("Admin command menu not set for {}: {}", adminId, e.getMessage());
+            }
+        }
+    }
+
+    private void sendAdminCommands(AppUser user) {
+        if (!isEffectiveAdmin(user)) {
+            sendText(user.getTelegramId(), "⛔ Этот раздел доступен только администраторам.", null);
+            return;
+        }
+        StringBuilder sb = new StringBuilder("📋 <b>Команды администратора</b>\n\nНажми на команду, чтобы скопировать. Они же видны в меню «/» рядом с полем ввода.\n");
+        for (AdminCommand c : ADMIN_COMMANDS) {
+            sb.append("\n<code>/").append(c.name()).append(c.args().isEmpty() ? "" : " " + c.args()).append("</code>\n   ")
+                    .append(escape(c.description())).append("\n");
+        }
+        sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("admin:grp:system"));
     }
 
     /** A/B-рассылка «вывод у тебя уже открыт» (админ): /wdnudge test - пример себе, /wdnudge send - назначить группы и отправить группе A,
@@ -11099,6 +11164,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "advstats" -> sendAdminAdvertiserStats(user);
             case "an" -> sendAnalyticsHome(user);
             case "squadretention" -> handleSquadRetentionDiagnostic(user);
+            case "commands" -> sendAdminCommands(user);
             case "ceiling" -> sendEngagementCeilingReport(user);
             case "adv" -> sendAdvertiserHome(user);
             case "stats:reset_weekly" -> sendAdminResetWeeklyConfirm(user);
@@ -14908,6 +14974,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
                 rows.add(List.of(keyboardFactory.callback("📱 Бот vs Мини-апп", "admin:surface-activity")));
                 rows.add(List.of(keyboardFactory.callback("🩹 Откат недельного XP (Brawl)", "admin:xpoverpay:weekly:audit")));
+                rows.add(List.of(keyboardFactory.callback("📋 Команды", "admin:commands")));
             }
             default -> {
                 sendMainMenu(user, mainMenuText(user));
