@@ -85,6 +85,9 @@ public class ChannelContentService {
     /** Пост о смене пачки квестов (создаётся при смене пачки, см. QuestPackScheduleService); в ALL_TYPES не входит —
      *  расписания и ручной кнопки у него нет, карточка на согласование уходит сразу после смены. */
     public static final String QUEST_ROTATION = "QUEST_ROTATION";
+    /** «Код дня» (2026-10-17): ежедневный пост с кодом для бота, идёт админу на согласование как все остальные. Намеренно НЕ в ALL_TYPES
+     *  (расписание и ручная кнопка - своя: /dailycode on|off|now и час в настройках cc.dcode.hour), чтобы не трогать экран «Контент канала». */
+    public static final String DAILY_CODE = "DAILY_CODE";
     public static final List<String> ALL_TYPES = List.of(NEW_QUESTS, TOP_QUESTS_WEEK, SQUAD_MIDWEEK, SQUAD_RESULTS, SQUAD_STATS,
             TOURNEY_REG_CLOSING, TOURNEY_ACTIVE, TOURNEY_CANCELLED, WITHDRAW_SUMMARY, WITHDRAW_MILESTONE, WITHDRAW_HOWTO, WITHDRAW_PROOF,
             HALL_OF_FAME, WEEKLY_RACE, LEAGUES_WEEK, SHOP_NEW, EGCPASS_PERK, SHOP_POPULAR, SHOP_ITEMS,
@@ -144,6 +147,7 @@ public class ChannelContentService {
     private final RewardRequestRepository rewardRequestRepository;
     private final AppUserRepository appUserRepository;
     private final RewardItemRepository rewardItemRepository;
+    private final ClubActivityService clubActivityService;
 
     @Value("${app.bot-username:}")
     private String botUsername;
@@ -376,6 +380,11 @@ public class ChannelContentService {
         } catch (Exception e) {
             log.error("[ChannelContent] deliverDueCards failed", e);
         }
+        try {
+            dailyCodeTick(now);
+        } catch (Exception e) {
+            log.error("[ChannelContent] dailyCodeTick failed", e);
+        }
         for (String type : ALL_TYPES) {
             if (isEventType(type)) continue; // событийные/по срокам турнира: см. onSquadPrize, tournamentTick, onTournamentCancelled
             try {
@@ -412,6 +421,55 @@ public class ChannelContentService {
                 log.error("[ChannelContent] Scheduled run failed for {}", type, e);
             }
         }
+    }
+
+    // ───────────────────────── «код дня» ─────────────────────────
+
+    public boolean isDailyCodeEnabled() {
+        return !"0".equals(get("cc.dcode.enabled"));
+    }
+
+    public boolean setDailyCodeEnabled(boolean enabled) {
+        put("cc.dcode.enabled", enabled ? "1" : "0");
+        return enabled;
+    }
+
+    public int dailyCodeHour() {
+        return Math.max(0, Math.min(23, parseInt(get("cc.dcode.hour"), 9)));
+    }
+
+    public int setDailyCodeHour(int hourUtc) {
+        int h = Math.max(0, Math.min(23, hourUtc));
+        put("cc.dcode.hour", String.valueOf(h));
+        return h;
+    }
+
+    /** Раз в сутки в заданный час (UTC) создаёт черновик поста с кодом; публикация - только после одобрения админом. */
+    private void dailyCodeTick(LocalDateTime now) {
+        if (!isDailyCodeEnabled() || now.getHour() != dailyCodeHour()) return;
+        String today = LocalDate.now().toString();
+        if (today.equals(get("cc.dcode.last"))) return;
+        put("cc.dcode.last", today);
+        createDailyCodeDraft(false);
+    }
+
+    /** force=true - ручной запуск админом (/dailycode now): создаёт новый черновик, даже если сегодня уже был. */
+    public Optional<ChannelPostDraft> createDailyCodeDraft(boolean force) {
+        Optional<ChannelPostDraft> latest = draftRepository.findFirstByTypeOrderByIdDesc(DAILY_CODE);
+        if (!force && latest.isPresent() && ChannelPostDraft.PENDING.equals(latest.get().getStatus())) {
+            log.info("[ChannelContent] DAILY_CODE skipped: previous draft {} still waits for approval", latest.get().getId());
+            return Optional.empty();
+        }
+        String code = clubActivityService.generateCode();
+        StringBuilder sb = new StringBuilder("🔑 <b>код дня</b>\n\n");
+        sb.append("Спрятал для вас код. Введите его в боте и получите билет и XP, а за каждый седьмой день подряд ещё и EXC.\n\n");
+        sb.append("<b>Код дня: ").append(code).append("</b>\n\n");
+        if (botUsername != null && !botUsername.isBlank()) {
+            sb.append("Где вводить: <a href=\"https://t.me/").append(botUsername).append("\">@").append(botUsername).append("</a> → Квесты → 🔑 Код дня.\n\n");
+        }
+        sb.append("И поставьте реакцию под этим постом 🔥 Если клуб наберёт ").append(ClubActivityService.GOAL_TARGET_REACTIONS)
+                .append(" реакций, всем, кто ввёл код, достанется бонус.");
+        return Optional.of(saveDraft(DAILY_CODE, sb.toString(), code));
     }
 
     // ───────────────────────── «новые квесты» ─────────────────────────

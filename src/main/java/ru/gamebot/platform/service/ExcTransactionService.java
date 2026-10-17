@@ -79,6 +79,10 @@ public class ExcTransactionService {
     /** Награда участнику за выполненную командную цель недели (SquadService.settleWeeklyGoals, 2026-10-03) —
      *  отдельный тип: это не приз за место в рейтинге (SQUAD_PRIZE) и не разовый бонус за размер (SQUAD_MILESTONE). */
     public static final String SQUAD_GOAL = "SQUAD_GOAL";
+    /** Награда за «Код дня» (ClubActivityService, 2026-10-17): за 7-й день серии подряд, остальные дни - билет и XP без EXC. */
+    public static final String DAILY_CODE = "DAILY_CODE";
+    /** Награда за выполненную цель клуба по реакциям (ClubActivityService, 2026-10-17). */
+    public static final String CLUB_GOAL = "CLUB_GOAL";
 
     @Transactional(propagation = Propagation.REQUIRED)
     public void log(AppUser user, long amount, String type, String description) {
@@ -150,6 +154,8 @@ public class ExcTransactionService {
             case SQUAD_GOAL -> "🎯 Командная цель отряда";
             case DAILY_TASKS -> "📋 Сундук заданий дня";
             case SOCIAL_TASK -> "🌐 Соцсети";
+            case DAILY_CODE -> "🔑 Код дня";
+            case CLUB_GOAL -> "🎯 Цель клуба";
             default             -> "📌 Прочее";
         };
     }
