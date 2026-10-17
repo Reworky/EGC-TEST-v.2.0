@@ -83,6 +83,8 @@ public class ExcTransactionService {
     public static final String DAILY_CODE = "DAILY_CODE";
     /** Награда за выполненную цель клуба по реакциям (ClubActivityService, 2026-10-17). */
     public static final String CLUB_GOAL = "CLUB_GOAL";
+    /** Награда за «Цель недели» (WeeklyGoalService, 2026-10-17): 4 активных дня за неделю. */
+    public static final String WEEKLY_GOAL = "WEEKLY_GOAL";
 
     @Transactional(propagation = Propagation.REQUIRED)
     public void log(AppUser user, long amount, String type, String description) {
@@ -156,6 +158,7 @@ public class ExcTransactionService {
             case SOCIAL_TASK -> "🌐 Соцсети";
             case DAILY_CODE -> "🔑 Код дня";
             case CLUB_GOAL -> "🎯 Цель клуба";
+            case WEEKLY_GOAL -> "📅 Цель недели";
             default             -> "📌 Прочее";
         };
     }

@@ -178,6 +178,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.WithdrawalNudgeService withdrawalNudgeService;
     private final ru.gamebot.platform.service.ClubActivityService clubActivityService;
     private final ru.gamebot.platform.service.ModeratorBonusService moderatorBonusService;
+    private final ru.gamebot.platform.service.WeeklyGoalService weeklyGoalService;
     private final ru.gamebot.platform.service.TrophyTournamentService trophyTournamentService;
     private final ru.gamebot.platform.service.BrawlQuestVerificationService brawlQuestVerificationService;
     private final ru.gamebot.platform.service.ClashQuestVerificationService clashQuestVerificationService;
@@ -1100,6 +1101,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.startsWith("profile:")) {
             handleProfileAction(callbackQuery, user, session, data.substring("profile:".length()));
+            return;
+        }
+        if (data.startsWith("weekly:")) {
+            handleWeeklyGoalCallback(callbackQuery, user, data.substring("weekly:".length()));
             return;
         }
         if (data.startsWith("club:")) {
@@ -5425,7 +5430,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .append(" EXC и 🎟️ ").append(UserService.DAILY_TASKS_CHEST_TICKETS).append(" билет колеса.\n");
         text.append(claimed ? "\n✅ Сундук заданий сегодня уже получен. Новые задания — завтра."
                 : "\nНовые задания — каждый день.");
+        text.append("\n").append(weeklyGoalLine(user));
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (weeklyGoalClaimable(user)) {
+            rows.add(List.of(keyboardFactory.callback("🎁 Забрать награду недели", "weekly:claim")));
+        }
         if (!claimed && mask == UserService.DAILY_TASKS_ALL) {
             rows.add(List.of(keyboardFactory.callback("🎁 Забрать сундук заданий", "dtasks:claim")));
         } else if (!claimed) {
@@ -5643,6 +5652,79 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         ),
                         List.of(keyboardFactory.callback("⬅️ Назад", backData))
                 )));
+    }
+
+    // ───────────────────────── «Цель недели» (2026-10-17) ─────────────────────────
+
+    private static String weeklyDots(int days) {
+        int d = Math.max(0, Math.min(days, ru.gamebot.platform.service.WeeklyGoalService.TARGET_DAYS));
+        return "●".repeat(d) + "○".repeat(ru.gamebot.platform.service.WeeklyGoalService.TARGET_DAYS - d);
+    }
+
+    private boolean weeklyGoalClaimable(AppUser user) {
+        try {
+            return user.isRegistrationCompleted() && weeklyGoalService.claimableWeek(user).isPresent();
+        } catch (Exception e) {
+            log.warn("Weekly goal check failed for user {}", user.getTelegramId(), e);
+            return false;
+        }
+    }
+
+    /** Строка «Цель недели» для главного меню и «Заданий дня»; пустая для незавершивших регистрацию и при любой ошибке (меню не должно ломаться). */
+    private String weeklyGoalLine(AppUser user) {
+        try {
+            if (!user.isRegistrationCompleted()) return "";
+            if (weeklyGoalService.claimableWeek(user).isPresent()) return "\n📅 Цель недели выполнена, заберите награду!";
+            ru.gamebot.platform.service.WeeklyGoalService.Progress p = weeklyGoalService.progress(user);
+            return "\n📅 Цель недели: " + weeklyDots(p.days()) + " " + Math.min(p.days(), ru.gamebot.platform.service.WeeklyGoalService.TARGET_DAYS)
+                    + " из " + ru.gamebot.platform.service.WeeklyGoalService.TARGET_DAYS;
+        } catch (Exception e) {
+            log.warn("Weekly goal line failed for user {}", user.getTelegramId(), e);
+            return "";
+        }
+    }
+
+    private void handleWeeklyGoalCallback(CallbackQuery callbackQuery, AppUser user, String action) {
+        if ("claim".equals(action)) {
+            try {
+                ru.gamebot.platform.service.WeeklyGoalService.ClaimResult r = weeklyGoalService.claim(user);
+                switch (r.status()) {
+                    case OK -> answer(callbackQuery.getId(), "🎁 +" + r.exc() + " EXC и +" + r.tickets() + " 🎟");
+                    case NOT_REGISTERED -> answer(callbackQuery.getId(), "Сначала завершите регистрацию");
+                    default -> answer(callbackQuery.getId(), "Награду уже забрали или цель ещё не выполнена");
+                }
+            } catch (Exception e) {
+                log.error("Weekly goal claim failed for user {}", user.getTelegramId(), e);
+                alertAdminsPlain("⚠️ Ошибка выдачи награды за цель недели: игрок " + user.getTelegramId() + ": " + escape(String.valueOf(e.getMessage())));
+                answer(callbackQuery.getId(), "⚠️ Не вышло, попробуйте позже");
+            }
+        } else {
+            answerSilently(callbackQuery.getId());
+        }
+        sendWeeklyGoalScreen(user);
+    }
+
+    private void sendWeeklyGoalScreen(AppUser user) {
+        StringBuilder sb = new StringBuilder("📅 <b>Цель недели</b>\n<i>Совершай действия в "
+                + ru.gamebot.platform.service.WeeklyGoalService.TARGET_DAYS + " разных дня за неделю и получи награду.</i>\n\n");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (!user.isRegistrationCompleted()) {
+            sb.append("Завершите регистрацию в боте, и цель недели заработает.");
+        } else {
+            ru.gamebot.platform.service.WeeklyGoalService.Progress p = weeklyGoalService.progress(user);
+            sb.append("Прогресс: ").append(weeklyDots(p.days())).append(" (").append(Math.min(p.days(), ru.gamebot.platform.service.WeeklyGoalService.TARGET_DAYS))
+                    .append(" из ").append(ru.gamebot.platform.service.WeeklyGoalService.TARGET_DAYS).append(" дней)\n")
+                    .append(p.todayActive() ? "Сегодня уже засчитан ✅\n" : "Сегодня пока нет действия за награду.\n")
+                    .append("Награда: <b>+").append(ru.gamebot.platform.service.WeeklyGoalService.REWARD_EXC).append(" EXC и +")
+                    .append(ru.gamebot.platform.service.WeeklyGoalService.REWARD_TICKETS).append(" 🎟</b>. Неделя заканчивается в воскресенье.\n\n")
+                    .append("Что засчитывает день: засчитанный квест, ежедневный бонус или код дня. Награду за прошлую неделю можно забрать до конца вторника.");
+            if (weeklyGoalClaimable(user)) {
+                rows.add(List.of(keyboardFactory.callback("🎁 Забрать награду", "weekly:claim")));
+            }
+            rows.add(List.of(keyboardFactory.callback("🎯 Квесты", "menu:quests"), keyboardFactory.callback("🔑 Код дня", "club:code")));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:quests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     // ───────────────────────── «Код дня» и «Цель клуба» (2026-10-17) ─────────────────────────
@@ -6287,6 +6369,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         rows.add(List.of(keyboardFactory.callback(watchAdLabel, "quests:section:ads")));
         rows.add(List.of(keyboardFactory.callback("🔑 Код дня", "club:code"), keyboardFactory.callback("🎯 Цель клуба", "club:goal")));
+        rows.add(List.of(keyboardFactory.callback("📅 Цель недели", "weekly:show")));
         rows.add(List.of(keyboardFactory.callback("📂 Мои квесты", "menu:myquests")));
         if (backData != null) {
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", backData), keyboardFactory.callback("🏠 Меню", "menu:main")));
@@ -23816,7 +23899,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private String mainMenuText(AppUser user) {
         String role = resolveMenuRole(user, sessionService.get(user.getTelegramId()));
         if (ROLE_USER.equals(role)) {
-            return "Никнейм: " + escape(user.getNickname()) + "\n\n" + userBalanceLine(user) + firstWithdrawalProgressLine(user);
+            return "Никнейм: " + escape(user.getNickname()) + "\n\n" + userBalanceLine(user) + firstWithdrawalProgressLine(user) + weeklyGoalLine(user);
         }
         String title = switch (role) {
             case ROLE_ADMIN -> "🛠️ <b>Административный контур активен</b>";
