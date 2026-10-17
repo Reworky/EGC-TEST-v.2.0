@@ -14,7 +14,9 @@ for f in scripts/squad-audit/${1:-}*.sql; do
 done
 docker cp gamebot:/app/app.jar /root/app.jar
 docker run --rm --network gamebot-net \
-  -v /root/gamebot/data:/data -v /root/app.jar:/app.jar:ro -v "$TMP":/query.sql:ro -v "$OUT":/out \
+  -v /root/gamebot/data:/data -v /root/app.jar:/app.jar:ro -v "$TMP":/query.sql:ro \
   maven:3.9.8-eclipse-temurin-21 bash -c "cd /tmp && jar xf /app.jar BOOT-INF/lib/h2-2.2.224.jar && java -cp BOOT-INF/lib/h2-2.2.224.jar org.h2.tools.RunScript -url 'jdbc:h2:file:/data/game-platform-bot;AUTO_SERVER=TRUE' -user sa -password '' -script /query.sql -showResults" 2>&1 | grep -v -E "^(Successfully copied|warning)"
+# H2 в режиме AUTO_SERVER выполняет запрос в процессе бота, поэтому CSVWRITE пишет внутрь контейнера gamebot (/out) - забираем оттуда.
+docker cp gamebot:/out/. "$OUT"/ && docker exec gamebot rm -rf /out
 echo "--- готовые файлы (строк с заголовком) ---"
 wc -l "$OUT"/*.csv
