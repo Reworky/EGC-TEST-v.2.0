@@ -19436,12 +19436,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "💰 EXC: <b>" + target.getCoins() + "</b>\n"
                 + "🎟 Билеты: <b>" + target.getTickets() + "</b>\n"
                 + "📅 Зарегистрирован: <b>" + (target.getCreatedAt() != null ? target.getCreatedAt().toLocalDate().toString() : "—") + "</b>\n"
-                + (target.isBlocked()
-                        ? "🚫 Статус: <b>заблокирован</b>"
-                                + (target.getBlockReason() != null && !target.getBlockReason().isBlank()
-                                        ? "\n   Причина: <i>" + escape(target.getBlockReason()) + "</i>"
-                                        : "")
-                        : "🟢 Статус: <b>активен</b>")
+                + adminCardStatusBlock(target)
                 + "\n\n" + buildGameTagsBlock(target);
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
@@ -19452,6 +19447,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
         ));
         sendText(mod.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Статус аккаунта для админ-карточки: блокировка (с причиной и датой), заморозка вывода, пометка «подозрительный»; если ничего нет - «активен». */
+    private String adminCardStatusBlock(AppUser target) {
+        StringBuilder sb = new StringBuilder();
+        if (target.isBlocked()) {
+            sb.append("🚫 Статус: <b>заблокирован</b>");
+            if (target.getBlockedAt() != null) sb.append(" (с ").append(target.getBlockedAt().toLocalDate()).append(")");
+            if (target.getBlockReason() != null && !target.getBlockReason().isBlank()) {
+                sb.append("\n   Причина: <i>").append(escape(target.getBlockReason())).append("</i>");
+            }
+        }
+        if (target.isWithdrawalFrozen()) {
+            if (sb.length() > 0) sb.append("\n");
+            sb.append("🧊 Вывод: <b>заморожен на проверку</b>");
+        }
+        if (target.isFraudSuspect()) {
+            if (sb.length() > 0) sb.append("\n");
+            sb.append("⚠️ Антифрод: <b>помечен как подозрительный</b>");
+        }
+        return sb.length() == 0 ? "🟢 Статус: <b>активен</b>, ограничений нет" : sb.toString();
     }
 
     private void sendAdminUserCard(AppUser admin, Long telegramId, int page, String notice) {
@@ -19475,12 +19491,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🛡️ Роль: <b>" + escape(humanRole(highestAvailableRole(target))) + "</b>\n"
                 + configuredNote + "\n"
                 + "✅ Регистрация: <b>" + (target.isRegistrationCompleted() ? "завершена" : "не завершена") + "</b>\n"
-                + (target.isBlocked()
-                        ? "🚫 Статус: <b>заблокирован</b>"
-                                + (target.getBlockReason() != null && !target.getBlockReason().isBlank()
-                                        ? "\n   Причина: <i>" + escape(target.getBlockReason()) + "</i>"
-                                        : "")
-                        : "🟢 Статус: <b>активен</b>")
+                + adminCardStatusBlock(target)
                 + "\n\n" + buildGameTagsBlock(target);
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
