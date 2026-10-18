@@ -181,6 +181,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.WeeklyGoalService weeklyGoalService;
     private final ru.gamebot.platform.service.GoldenHourService goldenHourService;
     private final ru.gamebot.platform.service.PlatformPushService platformPushService;
+    private final ru.gamebot.platform.service.SupportManagerLinkService supportManagerLinkService;
     private final ru.gamebot.platform.service.TrophyTournamentService trophyTournamentService;
     private final ru.gamebot.platform.service.BrawlQuestVerificationService brawlQuestVerificationService;
     private final ru.gamebot.platform.service.ClashQuestVerificationService clashQuestVerificationService;
@@ -11148,9 +11149,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendSupport(AppUser user) {
         sendText(user.getTelegramId(),
                 "🆘 <b>Поддержка</b>\n\n"
-                        + "Напишите нам — вопрос, проблема, предложение.\n"
-                        + "Все ваши сообщения попадают в один диалог, не нужно открывать новую заявку каждый раз.\n\n"
-                        + "Ответ придёт прямо сюда.\n\n"
+                        + "Вопрос, проблема, предложение: нажми «Написать в поддержку», и ты окажешься в личном чате с менеджером.\n"
+                        + "Прошлые обращения лежат в «Истории диалогов».\n\n"
                         + "🕘 Часы работы: " + supportHoursService.scheduleText() + "."
                         + (supportHoursService.isOpen() ? "" : "\n\n" + supportHoursService.afterHoursNotice()),
                 keyboardFactory.verticalLayout(List.of(
@@ -11207,16 +11207,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     answerSilently(callbackQuery.getId());
                     return;
                 }
+                // С 18.10.2026 обращение заканчивается личным чатом с менеджером в Telegram, а не перепиской через бота (старые заявки и история остаются).
                 clearSupportDraft(session);
-                session.setState(SessionState.SUPPORT_INPUT);
                 sendText(user.getTelegramId(),
                         "💬 <b>Поддержка</b>\n\n"
-                                + "Напишите ваш вопрос или проблему.\n"
-                                + "Можно отправлять текст, фото, видео и документы — всё попадёт в один диалог.\n\n"
-                                + "Ответ придёт прямо сюда.\n\n"
+                                + "Напиши менеджеру в личные сообщения: он ответит там. Текст с твоим ником и ID уже подставлен, останется описать вопрос и нажать «Отправить». "
+                                + "Скриншоты и видео тоже можно прикреплять.\n\n"
                                 + "🕘 Часы работы: " + supportHoursService.scheduleText() + "."
                                 + (supportHoursService.isOpen() ? "" : "\n\n" + supportHoursService.afterHoursNotice()),
-                        backMenuKeyboard("menu:support"));
+                        keyboardFactory.verticalLayout(List.of(
+                                keyboardFactory.url("💬 Написать менеджеру", supportManagerLinkService.linkFor(user)),
+                                keyboardFactory.callback("📬 История диалогов", "support:list"),
+                                keyboardFactory.callback("⬅️ Назад", "menu:support"),
+                                keyboardFactory.callback("🏠 Меню", "menu:main"))));
                 answerSilently(callbackQuery.getId());
             }
             case "list" -> {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getSupportTickets, createSupportTicket, getSupportFaqGate, markSupportFaqSeen, getSupportHours } from '../api/client';
+import { getSupportTickets, getSupportManagerLink, getSupportFaqGate, markSupportFaqSeen, getSupportHours } from '../api/client';
 import BackButton from '../components/BackButton';
 import './QuestsPage.css';
 import './ShopPage.css';
@@ -42,30 +42,24 @@ function FaqGateCard({ onContinue }) {
   );
 }
 
-function NewTicketForm({ onCreated }) {
+/** С 18.10.2026 обращение в поддержку заканчивается личным чатом с менеджером в Telegram (текст с ником и ID подставлен), а не формой заявки. */
+function NewTicketForm() {
   const [hours, setHours] = useState(null);
-  const [text, setText] = useState('');
-  const [photo, setPhoto] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
 
   useEffect(() => { getSupportHours().then(setHours).catch(() => {}); }, []);
 
-  async function handleSubmit() {
-    if (!text.trim() && !photo) {
-      setMessage('Опишите проблему текстом или приложите скриншот.');
-      return;
-    }
+  async function openManagerChat() {
     setBusy(true);
     setMessage(null);
     try {
-      const res = await createSupportTicket({ text: text.trim(), photo });
-      setMessage(res.message);
-      if (res.success) {
-        setText('');
-        setPhoto(null);
-        onCreated(res.message);
-      }
+      const { url } = await getSupportManagerLink();
+      const tg = window.Telegram?.WebApp;
+      if (tg?.openTelegramLink) tg.openTelegramLink(url);
+      else window.open(url, '_blank');
+    } catch {
+      setMessage('Не удалось открыть чат. Попробуйте ещё раз.');
     } finally {
       setBusy(false);
     }
@@ -73,29 +67,18 @@ function NewTicketForm({ onCreated }) {
 
   return (
     <div className="ref-link-card">
-      <div className="ref-link-label">Новая заявка</div>
-      <p className="shop-desc">Опишите проблему — текстом, скриншотом или и тем, и другим. Ответ придёт прямо в бот.</p>
+      <div className="ref-link-label">Написать менеджеру</div>
+      <p className="shop-desc">
+        Нажми кнопку, и откроется личный чат с менеджером. Текст с твоим ником и ID уже подставлен: опиши вопрос, при необходимости приложи скриншот и нажми «Отправить».
+      </p>
       {hours && (
         <p className="shop-desc">
           🕘 Часы работы: {hours.text}.
           {!hours.open && <><br /><b>{hours.notice}</b></>}
         </p>
       )}
-      <textarea
-        className="quest-textarea"
-        placeholder="Что случилось?"
-        value={text}
-        onChange={e => setText(e.target.value)}
-      />
-      <input
-        type="file"
-        accept="image/*"
-        className="quest-file-input"
-        onChange={e => setPhoto(e.target.files?.[0] || null)}
-        style={{ marginTop: 8 }}
-      />
-      <button className="quest-btn" disabled={busy} onClick={handleSubmit}>
-        {busy ? 'Отправка...' : '✍️ Отправить заявку'}
+      <button className="quest-btn" disabled={busy} onClick={openManagerChat}>
+        {busy ? 'Открываю...' : '💬 Написать менеджеру'}
       </button>
       {message && <div className="quest-message">{message}</div>}
     </div>
@@ -160,10 +143,10 @@ export default function SupportPage() {
 
       <div className="view-toggle">
         <button className={`view-tab ${view === 'new' ? 'active' : ''}`} onClick={() => setView('new')}>
-          Новая заявка
+          Написать
         </button>
         <button className={`view-tab ${view === 'mine' ? 'active' : ''}`} onClick={() => { setView('mine'); setRefreshKey(k => k + 1); }}>
-          Мои заявки
+          История
         </button>
       </div>
 
@@ -174,7 +157,7 @@ export default function SupportPage() {
               ? <div className="page-center">Загрузка...</div>
               : faqGate
                 ? <FaqGateCard onContinue={() => setFaqGate(false)} />
-                : <NewTicketForm onCreated={(msg) => { setNotice(msg || null); setView('mine'); setRefreshKey(k => k + 1); }} />}
+                : <NewTicketForm />}
           </div>
         )
         : (

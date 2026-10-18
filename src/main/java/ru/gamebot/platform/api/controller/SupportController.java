@@ -39,6 +39,7 @@ public class SupportController {
     private final TelegramFileService telegramFileService;
     private final GamePlatformBot gamePlatformBot;
     private final UserService userService;
+    private final ru.gamebot.platform.service.SupportManagerLinkService supportManagerLinkService;
 
     @GetMapping("/tickets")
     public ResponseEntity<List<SupportTicketDto>> tickets(@AuthenticationPrincipal Long telegramId) {
@@ -81,6 +82,16 @@ public class SupportController {
         }
         userService.markSupportFaqShown(user);
         return ResponseEntity.ok().build();
+    }
+
+    /** Ссылка на личный чат с менеджером с подставленным текстом (ник и ID игрока); мини-апп открывает её вместо формы новой заявки. */
+    @GetMapping("/manager-link")
+    public ResponseEntity<java.util.Map<String, String>> managerLink(@AuthenticationPrincipal Long telegramId) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        return ResponseEntity.ok(java.util.Map.of("url", supportManagerLinkService.linkFor(user)));
     }
 
     @PostMapping("/tickets")

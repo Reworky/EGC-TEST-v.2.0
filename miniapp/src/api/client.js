@@ -250,6 +250,11 @@ export async function getSupportHours() {
   return data;
 }
 
+export async function getSupportManagerLink() {
+  const { data } = await api.get('/api/support/manager-link');
+  return data;
+}
+
 export async function getSupportTickets() {
   const { data } = await api.get('/api/support/tickets');
   return data;
