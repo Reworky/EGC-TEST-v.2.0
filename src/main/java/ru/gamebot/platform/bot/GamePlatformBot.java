@@ -1306,6 +1306,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             // «Назад» с экрана «вывод недоступен» ведёт туда, откуда пришли: на «Баланс» или в ленту выплат
             String lockedBack = data.endsWith(":feed") ? "menu:payouts" : "menu:balance";
+            // Откуда открыли «Вывод EXC»: из ленты выплат «Отмена» ведёт в главное меню (жалоба владельца 2026-10-18), из «Баланса» - на «Баланс»
+            session.getData().put(WITHDRAWAL_ORIGIN_KEY, data.endsWith(":feed") ? "feed" : "balance");
             String withdrawalBlock = rewardService.withdrawalEligibilityBlock(user);
             if (withdrawalBlock != null) {
                 sendWithdrawalLocked(user, withdrawalBlock, lockedBack);
@@ -5369,6 +5371,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Куда вести кнопку «Назад» на экранах, открытых ярлыком из «Заданий дня» (ключ в сессии; снимается экраном-результатом). */
     private static final String BACK_TO_KEY = "dtasksBackTo";
+    /** Откуда открыли экран «Вывод EXC» (feed - лента выплат, balance - «Баланс»): от этого зависит, куда ведёт «Отмена». */
+    private static final String WITHDRAWAL_ORIGIN_KEY = "wdOrigin";
 
     /** Откуда новичок открыл список игр («Другие игры» / «Другие квесты» / «Смотреть квесты»): «Назад» из списка ведёт туда,
      *  а не в раздел «Квесты». Сбрасывается на корневых экранах (главное меню, «Квесты», выбор игры, гайд, карточка). */
@@ -8271,7 +8275,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("📋 Мои заявки на вывод", "menu:my-withdrawals")));
         rows.add(List.of(keyboardFactory.callback("📊 Лимиты по всем рангам", "shop:ranks")));
         rows.add(List.of(keyboardFactory.callback("💸 Лента выплат", "menu:payouts")));
-        rows.add(List.of(keyboardFactory.callback("❌ Отмена", "menu:balance")));
+        String cancelTo = "feed".equals(sessionService.get(user.getTelegramId()).getData().get(WITHDRAWAL_ORIGIN_KEY)) ? "menu:main" : "menu:balance";
+        rows.add(List.of(keyboardFactory.callback("❌ Отмена", cancelTo)));
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
 
