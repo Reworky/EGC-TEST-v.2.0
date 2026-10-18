@@ -53,7 +53,7 @@ export default function DailyTasksCard({ refreshKey, onClaimed }) {
       <div className="dt-list">
         {rows.map(r => (
           <div key={r.text} className={`dt-row ${r.done ? 'done' : ''}`}>
-            <span className="dt-mark">{r.done ? '✅' : '⬜'}</span>
+            <span className="dt-mark">{r.done ? '✅' : '⚪'}</span>
             <span className="dt-text">{r.text}</span>
             {r.action && <button type="button" className="dt-go" onClick={r.action}>К квестам →</button>}
           </div>

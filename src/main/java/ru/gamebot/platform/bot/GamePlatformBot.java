@@ -5440,9 +5440,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean chest = (mask & UserService.DAILY_TASK_CHEST) != 0;
         String questText = user.getCompletedQuests() == 0 ? "Выполни первый квест" : "Выполни 1 квест";
         StringBuilder text = new StringBuilder("📋 <b>Задания дня</b> — " + Integer.bitCount(mask) + "/3\n\n");
-        text.append(bonus ? "✅" : "⬜").append(" Забери ежедневный бонус\n");
-        text.append(quest ? "✅" : "⬜").append(" ").append(questText).append("\n");
-        text.append(chest ? "✅" : "⬜").append(" Открой сундук дня\n\n");
+        text.append(bonus ? "✅" : "⚪").append(" Забери ежедневный бонус\n");
+        text.append(quest ? "✅" : "⚪").append(" ").append(questText).append("\n");
+        text.append(chest ? "✅" : "⚪").append(" Открой сундук дня\n\n");
         text.append("🎁 За все три — <b>Сундук заданий</b>: +").append(UserService.DAILY_TASKS_CHEST_EXC)
                 .append(" EXC и 🎟️ ").append(UserService.DAILY_TASKS_CHEST_TICKETS).append(" билет колеса.\n");
         text.append(claimed ? "\n✅ Сундук заданий сегодня уже получен. Новые задания — завтра."
@@ -6618,7 +6618,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<InlineKeyboardButton> buttons = new ArrayList<>();
         for (ru.gamebot.platform.service.SocialTaskService.SocialTask task : tasks) {
             boolean done = claimed.contains(task.code());
-            text.append(done ? "✅ " : "⬜ ").append(escape(task.title()))
+            text.append(done ? "✅ " : "⚪ ").append(escape(task.title()))
                     .append(" — <b>+").append(task.rewardExc()).append(" EXC</b>\n");
             buttons.add(keyboardFactory.callback((done ? "✅ " : "") + task.title(), "social:view:" + task.code()));
         }
