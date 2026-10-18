@@ -639,6 +639,9 @@ public class ChannelContentService {
     /** Баннер поста «как вывести EXC»: токен EXC со стрелкой к звезде Telegram Stars на фоне арены (06.10.2026), один на обе заготовки. */
     private static final String WITHDRAW_HOWTO_BANNER = "resource:withdraw_howto_banner.jpg";
 
+    /** Баннер поста «Гонка за Зал славы»: Экси бежит к пьедесталу с короной в стиле баннера Зала славы (18.10.2026, согласован владельцем); лежит в ресурсах бота. */
+    private static final String WEEKLY_RACE_BANNER = "resource:weekly_race_banner.jpg";
+
     /** «Гонка отрядов - экватор недели» (раньше тизер жил в памяти бота): топ-5 недельного рейтинга, отставание второго от лидера, приз. */
     public Optional<ChannelPostDraft> createSquadMidweekDraft(boolean force) {
         List<SquadService.SquadRankEntry> top = squadService.getLeaderboard().stream()
@@ -1043,7 +1046,7 @@ public class ChannelContentService {
         String link = botLink().stripLeading();
         if (!link.isEmpty()) sb.append(link).append("\n\n");
         sb.append(ending(top.get(0).getWeeklyXp(), "Кто успеет подняться в тройку?", "Ставь 🏁, если ещё в гонке", "До конца недели можно многое успеть, погнали"));
-        return Optional.of(saveDraft(WEEKLY_RACE, sb.toString(), null));
+        return Optional.of(saveDraft(WEEKLY_RACE, sb.toString(), null, WEEKLY_RACE_BANNER));
     }
 
     /** «Лиги недели»: создаётся при сбросе недельного XP (понедельник 00:00 UTC): сколько игроков в каждой лиге и сколько выплачено призами. Только цифры, без имён. */
