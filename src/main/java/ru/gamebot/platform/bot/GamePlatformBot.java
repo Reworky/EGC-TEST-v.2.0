@@ -5788,7 +5788,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (weeklyGoalService.claimableWeek(user).isPresent()) return "\n📅 Цель недели выполнена, заберите награду!";
             ru.gamebot.platform.service.WeeklyGoalService.Progress p = weeklyGoalService.progress(user);
             return "\n📅 Цель недели: " + weeklyDots(p.days()) + " " + Math.min(p.days(), ru.gamebot.platform.service.WeeklyGoalService.TARGET_DAYS)
-                    + " из " + ru.gamebot.platform.service.WeeklyGoalService.TARGET_DAYS;
+                    + " из " + ru.gamebot.platform.service.WeeklyGoalService.TARGET_DAYS + " дн.";
         } catch (Exception e) {
             log.warn("Weekly goal line failed for user {}", user.getTelegramId(), e);
             return "";
