@@ -4604,6 +4604,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new StarterGame("coc", "🏰 Clash of Clans", "Clash of Clans", "Выиграй 2 атаки в мультиплеере;Выиграй 3 атаки в мультиплеере"));
 
     private final java.util.Map<String, Long> starterAlertSentAt = new java.util.concurrent.ConcurrentHashMap<>();
+    /** Игра -> id запасного стартового квеста, о котором админам уже сообщили (одно сообщение на каждую смену запасного). */
+    private final java.util.Map<String, Long> starterFallbackNotified = new java.util.concurrent.ConcurrentHashMap<>();
 
     /** Включено по умолчанию; выключается значением "false" в app_settings (откат без деплоя). */
     private boolean settingEnabled(String key) {
@@ -4756,21 +4758,34 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         List.of(keyboardFactory.callback("⬅️ Назад", "onboarding:back")))));
     }
 
-    /** Стартового квеста по игре сейчас нет среди активных (смена сезона/переименование) - игрок видит обычный список,
-     *  админам раз в 6 часов уходит предупреждение, чтобы обновили настройку 'onboarding.starter.<code>'. */
+    /** Стартового квеста по игре сейчас нет среди активных (смена пачки/сезона/переименование). Если нашёлся запасной (самый лёгкий активный
+     *  квест игры с автопроверкой), новичок получает его, а админам один раз на каждую смену запасного квеста уходит информационное сообщение
+     *  без требования что-то делать. Если запасного нет, новичок видит обычный список, а админам раз в 6 часов уходит предупреждение. */
     private void alertStarterQuestMissing(StarterGame game, Quest fallback) {
-        long now = System.currentTimeMillis();
-        Long last = starterAlertSentAt.get(game.code());
-        if (last != null && now - last < STARTER_ALERT_GAP_MS) {
-            return;
+        String text;
+        if (fallback != null) {
+            Long notified = starterFallbackNotified.get(game.code());
+            if (fallback.getId().equals(notified)) {
+                return;
+            }
+            starterFallbackNotified.put(game.code(), fallback.getId());
+            text = "ℹ️ <b>Стартовый квест подобран автоматически: " + escape(game.game()) + "</b>\n\n"
+                    + "Квестов из списка (" + escape(String.join("; ", starterTitles(game))) + ") сейчас нет среди активных (смена пачки). "
+                    + "Новичкам предлагается «" + escape(fallback.getTitle()) + "» - самый лёгкий активный квест с автопроверкой. Ничего делать не нужно: "
+                    + "когда пачка сменится, подберётся новый; если вернутся квесты из списка, снова пойдут они.\n"
+                    + "Свой список: <code>/firstquest " + game.code() + " название1;название2</code> (подробнее: /firstquest).";
+        } else {
+            long now = System.currentTimeMillis();
+            Long last = starterAlertSentAt.get(game.code());
+            if (last != null && now - last < STARTER_ALERT_GAP_MS) {
+                return;
+            }
+            starterAlertSentAt.put(game.code(), now);
+            text = "⚠️ <b>Нет стартового квеста: " + escape(game.game()) + "</b>\n\n"
+                    + "Ни один из квестов из списка (" + escape(String.join("; ", starterTitles(game))) + ") сейчас не активен, "
+                    + "и подходящего запасного (лёгкий квест с автопроверкой) тоже нет. Новичок, выбравший эту игру, видит обычный список квестов.\n"
+                    + "Задать список: <code>/firstquest " + game.code() + " название1;название2</code>.";
         }
-        starterAlertSentAt.put(game.code(), now);
-        String text = "⚠️ <b>Нет стартового квеста: " + escape(game.game()) + "</b>\n\n"
-                + "Ни один из квестов из списка (" + escape(String.join("; ", starterTitles(game))) + ") сейчас не активен. "
-                + (fallback != null
-                        ? "Новичку автоматически предложен запасной квест: «" + escape(fallback.getTitle()) + "».\n"
-                        : "Новичок, выбравший эту игру, видит обычный список квестов.\n")
-                + "Обновить список: <code>/firstquest " + game.code() + " название1;название2</code> (подробнее: /firstquest).";
         for (Long adminId : adminService.resolvedAdminIds()) {
             try {
                 sendText(adminId, text, null);
