@@ -267,6 +267,16 @@ public class QuestService {
         return Optional.empty();
     }
 
+    /** Запасной стартовый квест, когда ни одного из списка onboarding.starter.* нет среди активных (смена пачки/сезона):
+     *  самый «дешёвый» по награде (награды у нас выставлены по усилию) активный квест игры с автопроверкой, без партнёра/спонсора/внешних офферов. */
+    public Optional<Quest> findStarterFallback(String gameName) {
+        return findActiveByGameName(gameName).stream()
+                .filter(q -> !q.isExternalAutoApprove() && !q.isCouncilOnly() && !q.isSeasonOnly() && !q.isBrawlRequireTeam())
+                .filter(q -> q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null
+                        || q.getDotaVerifyType() != null || q.getCs2VerifyType() != null || q.getPubgVerifyType() != null)
+                .min(Comparator.comparingLong(Quest::getRewardCoins).thenComparing(Quest::getId));
+    }
+
     public Optional<Quest> recommendQuest(AppUser user) {
         List<QuestSubmission> history = questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user);
         String preferredGame = history.isEmpty() ? null : history.get(0).getQuest().getGameName();

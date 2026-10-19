@@ -474,6 +474,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (text != null && (text.equals("/firstquest") || text.startsWith("/firstquest ")) && isEffectiveAdmin(user)) {
+            handleStarterCommand(user, text.trim());
+            return;
+        }
+
         if (text != null && text.equals("/commands") && isEffectiveAdmin(user)) {
             sendAdminCommands(user);
             return;
@@ -4657,7 +4662,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         Quest quest = questService.findStarterQuest(game.game(), starterTitles(game)).orElse(null);
         if (quest == null) {
-            alertStarterQuestMissing(game);
+            Quest fallback = questService.findStarterFallback(game.game()).orElse(null);
+            alertStarterQuestMissing(game, fallback);
+            if (fallback != null) {
+                sendStarterQuestCard(user, fallback);
+                return;
+            }
             sendText(user.getTelegramId(),
                     "🎮 <b>" + escape(game.game()) + "</b> — выбери квест из списка:",
                     keyboardFactory.rowsLayout(List.of(
@@ -4666,6 +4676,61 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         sendStarterQuestCard(user, quest);
+    }
+
+    /** Админ: /firstquest - списки стартовых квестов по играм и какие из них сейчас активны; /firstquest bs А;Б - задать; /firstquest bs default - вернуть по умолчанию. */
+    private void handleStarterCommand(AppUser admin, String text) {
+        String[] p = text.split("\\s+", 3);
+        StringBuilder note = new StringBuilder();
+        if (p.length >= 2) {
+            String code = p[1].toLowerCase();
+            StarterGame target = STARTER_GAMES.stream().filter(g -> g.code().equals(code)).findFirst().orElse(null);
+            if (target == null) {
+                sendText(admin.getTelegramId(), "⚠️ Неизвестная игра «" + escape(p[1]) + "». Коды: "
+                        + STARTER_GAMES.stream().map(StarterGame::code).collect(java.util.stream.Collectors.joining(", ")) + ".", null);
+                return;
+            }
+            if (p.length < 3 || p[2].isBlank()) {
+                sendText(admin.getTelegramId(), "Формат: <code>/firstquest " + code + " название1;название2</code> или <code>/firstquest " + code + " default</code>.", null);
+                return;
+            }
+            String value = p[2].trim();
+            try {
+                if ("default".equalsIgnoreCase(value)) {
+                    appSettingRepository.deleteById("onboarding.starter." + code);
+                    note.append("↩️ ").append(escape(target.game())).append(": возвращён список по умолчанию.\n\n");
+                } else {
+                    AppSetting setting = new AppSetting();
+                    setting.setKey("onboarding.starter." + code);
+                    setting.setValue(value);
+                    appSettingRepository.save(setting);
+                    note.append("✅ ").append(escape(target.game())).append(": список обновлён.\n\n");
+                }
+            } catch (Exception e) {
+                log.warn("Failed to update starter list {}", code, e);
+                sendText(admin.getTelegramId(), "⚠️ Не удалось сохранить: " + escape(String.valueOf(e.getMessage())), null);
+                return;
+            }
+        }
+        StringBuilder sb = new StringBuilder(note).append("🎯 <b>Стартовые квесты новичков</b>\n\n");
+        for (StarterGame g : STARTER_GAMES) {
+            boolean custom = appSettingRepository.findById("onboarding.starter." + g.code()).map(AppSetting::getValue).filter(v -> !v.isBlank()).isPresent();
+            Quest active = questService.findStarterQuest(g.game(), starterTitles(g)).orElse(null);
+            sb.append(active != null ? "🟢 " : "🔴 ").append("<b>").append(escape(g.game())).append("</b> (<code>").append(g.code()).append("</code>")
+                    .append(custom ? ", свой список" : ", по умолчанию").append(")\n");
+            for (String t : starterTitles(g)) {
+                sb.append(" • ").append(escape(t)).append("\n");
+            }
+            if (active != null) {
+                sb.append("   сейчас: «").append(escape(active.getTitle())).append("»\n");
+            } else {
+                Quest fb = questService.findStarterFallback(g.game()).orElse(null);
+                sb.append("   нет активного из списка; запасной: ").append(fb != null ? "«" + escape(fb.getTitle()) + "»" : "нет").append("\n");
+            }
+            sb.append("\n");
+        }
+        sb.append("Задать: <code>/firstquest bs название1;название2</code>\nВернуть по умолчанию: <code>/firstquest bs default</code>");
+        sendText(admin.getTelegramId(), sb.toString(), null);
     }
 
     private void sendStarterQuestCard(AppUser user, Quest quest) {
@@ -4693,7 +4758,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Стартового квеста по игре сейчас нет среди активных (смена сезона/переименование) - игрок видит обычный список,
      *  админам раз в 6 часов уходит предупреждение, чтобы обновили настройку 'onboarding.starter.<code>'. */
-    private void alertStarterQuestMissing(StarterGame game) {
+    private void alertStarterQuestMissing(StarterGame game, Quest fallback) {
         long now = System.currentTimeMillis();
         Long last = starterAlertSentAt.get(game.code());
         if (last != null && now - last < STARTER_ALERT_GAP_MS) {
@@ -4702,7 +4767,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         starterAlertSentAt.put(game.code(), now);
         String text = "⚠️ <b>Нет стартового квеста: " + escape(game.game()) + "</b>\n\n"
                 + "Ни один из квестов из списка (" + escape(String.join("; ", starterTitles(game))) + ") сейчас не активен. "
-                + "Новичок, выбравший эту игру, видит обычный список квестов. Обновите настройку onboarding.starter." + game.code() + " (названия через «;»).";
+                + (fallback != null
+                        ? "Новичку автоматически предложен запасной квест: «" + escape(fallback.getTitle()) + "».\n"
+                        : "Новичок, выбравший эту игру, видит обычный список квестов.\n")
+                + "Обновить список: <code>/firstquest " + game.code() + " название1;название2</code> (подробнее: /firstquest).";
         for (Long adminId : adminService.resolvedAdminIds()) {
             try {
                 sendText(adminId, text, null);
@@ -6320,6 +6388,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("dailycode", "now|on|off|status", "Пост «Код дня»: создать сейчас, включить, выключить, состояние"),
             new AdminCommand("clubgoal", "status|link ID текст|off", "Цель клуба: состояние, кнопка-портал в квест, выключить портал"),
             new AdminCommand("wdfreeze", "ID on|off", "Заморозить или разморозить вывод игрока"),
+            new AdminCommand("firstquest", "[bs|cr|coc название1;название2|default]", "Стартовые квесты новичков: показать списки, задать для игры или вернуть по умолчанию"),
             new AdminCommand("resetuser", "ID", "Сбросить игрока до «только что создан» (с подтверждением)"),
             new AdminCommand("resetlimit", "ID", "Сбросить месячный лимит вывода игрока"),
             new AdminCommand("resendreview", "ID отзыва", "Отправить карточку отзыва на модерацию заново"),
