@@ -44,6 +44,7 @@ public class CouncilService {
                     "Для вступления в EGC Council нужен уровень 6 «Герой EXPERIENCE» или выше.\n"
                     + "Ваш текущий уровень: " + userService.getLevelNumber(user.getXp()) + ".");
         }
+        excTx.refreshCoins(user);
         if (user.getCoins() < PRICE_EXC) {
             throw new IllegalStateException(
                     "Для вступления нужно " + PRICE_EXC + " EXC. У вас: " + user.getCoins() + " EXC.");

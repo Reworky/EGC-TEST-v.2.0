@@ -80,6 +80,7 @@ public class PollService {
         if (hasVoted(poll, user)) return new VoteResult(false, "Вы уже проголосовали.");
         List<String> options = getOptions(poll);
         if (optionIndex < 0 || optionIndex >= options.size()) return new VoteResult(false, "Неверный вариант.");
+        excTx.refreshCoins(user);
         if (user.getCoins() < poll.getPriceExc()) return new VoteResult(false, "Недостаточно EXC. Нужно: " + poll.getPriceExc());
 
         excTx.creditExc(user, -poll.getPriceExc(), ExcTransactionService.POLL, "Голосование: " + poll.getQuestion());

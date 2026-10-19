@@ -1645,6 +1645,7 @@ public class UserService {
         if (rewardGrant.totalExc() != 0 && excType != null) {
             excTx.creditExc(user, rewardGrant.totalExc(), excType, excDescription);
         } else {
+            excTx.refreshCoins(user);
             user.setCoins(user.getCoins() + rewardGrant.totalExc());
             appUserRepository.save(user);
         }
@@ -1663,6 +1664,7 @@ public class UserService {
         AppUser user = appUserRepository.findByTelegramId(telegramId)
                 .orElseThrow(() -> new IllegalArgumentException("Игрок с таким Telegram ID не найден."));
 
+        excTx.refreshCoins(user);
         if (user.getXp() < xp) {
             throw new IllegalArgumentException("Недостаточно XP для списания.");
         }

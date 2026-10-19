@@ -88,6 +88,7 @@ public class TrophyTournamentService {
         if (tournamentEntryRepository.existsByTournamentAndGameTag(tournament, playerInfo.tag())) {
             return new TournamentService.JoinResult(false, "Этот тег уже зарегистрирован в этом турнире.");
         }
+        excTx.refreshCoins(user);
         if (user.getCoins() < tournament.getEntryFeeExc()) {
             return new TournamentService.JoinResult(false, "Недостаточно EXC. Нужно: " + tournament.getEntryFeeExc());
         }

@@ -125,6 +125,7 @@ public class TournamentService {
             return new JoinResult(false, "Регистрация ещё не открыта.");
         if (hasEntered(tournament, user))
             return new JoinResult(false, "Вы уже зарегистрированы.");
+        excTx.refreshCoins(user);
         if (user.getCoins() < tournament.getEntryFeeExc())
             return new JoinResult(false, "Недостаточно EXC. Нужно: " + tournament.getEntryFeeExc());
 

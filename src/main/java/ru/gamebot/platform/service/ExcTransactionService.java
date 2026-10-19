@@ -98,6 +98,15 @@ public class ExcTransactionService {
         repo.save(tx);
     }
 
+    /** Блокирует строку игрока и подтягивает в переданный объект актуальный баланс из БД. Объект игрока загружается в начале обработки нажатия/запроса,
+     *  и если за это время баланс изменили (награда, бонус, мини-апп, второй тап), расчёт «старый баланс ± сумма» затирал чужое изменение
+     *  (жалоба игрока 2026-10-19). Блокировка держится до конца текущей транзакции. Вызывать и перед проверкой «хватает ли EXC». */
+    @Transactional(propagation = Propagation.REQUIRED)
+    public void refreshCoins(AppUser user) {
+        if (user.getId() == null) return;
+        appUserRepository.findByIdForUpdate(user.getId()).ifPresent(fresh -> user.setCoins(fresh.getCoins()));
+    }
+
     /** Единая точка изменения баланса EXC (ТЗ "Единая точка начисления EXC и XP", 2026-10-01) -
      *  применяет дельту к coins и логирует операцию одним вызовом вместо двух соседних действий,
      *  разбросанных сейчас по 30+ мест в коде. На этом этапе НЕ добавляет новых проверок/ограничений -
@@ -108,6 +117,7 @@ public class ExcTransactionService {
      *  amount может быть отрицательным (списание) или положительным (начисление). */
     @Transactional(propagation = Propagation.REQUIRED)
     public void creditExc(AppUser user, long amount, String type, String description) {
+        refreshCoins(user);
         user.setCoins(user.getCoins() + amount);
         appUserRepository.save(user);
         log(user, amount, type, description);
