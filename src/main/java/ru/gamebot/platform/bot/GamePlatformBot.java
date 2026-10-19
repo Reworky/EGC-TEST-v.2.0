@@ -25911,16 +25911,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             if (member) {
                 QuestSubmission done = questService.releaseHeldReward(submission.getId());
-                sendText(user.getTelegramId(),
-                        "🎁 <b>Награда за верность канала</b>\n\n"
-                                + "Ты остался в «" + escape(quest.getGameName()) + "» — вторая часть награды уже на балансе: <b>+" + fmtExc(done.getHeldCoins()) + " EXC</b>.",
-                        keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🎯 Играть", "quest:recommend")))));
+                // Выплата уже проведена: недоставленное сообщение (игрок заблокировал бота) не должно выглядеть для админов как сбой награды.
+                try {
+                    sendText(user.getTelegramId(),
+                            "🎁 <b>Награда за верность канала</b>\n\n"
+                                    + "Ты остался в «" + escape(quest.getGameName()) + "» — вторая часть награды уже на балансе: <b>+" + fmtExc(done.getHeldCoins()) + " EXC</b>.",
+                            keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🎯 Играть", "quest:recommend")))));
+                } catch (Exception notifyError) {
+                    log.warn("Held reward paid, but notification to {} failed", user.getTelegramId(), notifyError);
+                }
             } else {
                 questService.forfeitHeldReward(submission.getId());
-                sendText(user.getTelegramId(),
-                        "ℹ️ Оставшаяся часть награды за канал «" + escape(quest.getGameName()) + "» не начислена: ты вышел из канала до срока. "
-                                + "Остальные квесты — по-прежнему с тобой.",
-                        keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🎯 Играть", "quest:recommend")))));
+                try {
+                    sendText(user.getTelegramId(),
+                            "ℹ️ Оставшаяся часть награды за канал «" + escape(quest.getGameName()) + "» не начислена: ты вышел из канала до срока. "
+                                    + "Остальные квесты — по-прежнему с тобой.",
+                            keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🎯 Играть", "quest:recommend")))));
+                } catch (Exception notifyError) {
+                    log.warn("Held reward forfeited, but notification to {} failed", user.getTelegramId(), notifyError);
+                }
             }
         } catch (Exception e) {
             log.error("Held channel reward processing failed for submission {}", event.getSubmissionId(), e);
