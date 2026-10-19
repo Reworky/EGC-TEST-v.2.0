@@ -86,6 +86,7 @@ public class SinkShopService {
      *  уже купленные надеваются бесплатно, как рамки аватара (ownedFramesCsv). */
     @Transactional
     public void purchaseTitle(AppUser user, String title, long price) {
+        refreshLocked(user);
         String csv = user.getOwnedTitlesCsv();
         boolean alreadyOwned = csv != null && Arrays.asList(csv.split(",")).contains(title);
         if (!alreadyOwned) {
@@ -98,6 +99,7 @@ public class SinkShopService {
 
     @Transactional
     public void purchaseInsurance(AppUser user) {
+        refreshLocked(user);
         if (user.isRetryInsuranceActive()) {
             throw new IllegalStateException("Страховка уже активна.");
         }
@@ -108,6 +110,7 @@ public class SinkShopService {
 
     @Transactional
     public void purchaseXpBoost(AppUser user, int hours) {
+        refreshLocked(user);
         if (isXpBoostActive(user)) {
             throw new IllegalArgumentException("XP-буст уже активен.");
         }
@@ -125,6 +128,7 @@ public class SinkShopService {
 
     @Transactional
     public void purchaseExcBoostTimed(AppUser user, int hours) {
+        refreshLocked(user);
         if (isExcBoostActive(user)) {
             throw new IllegalArgumentException("EXC-буст уже активен.");
         }
@@ -142,6 +146,7 @@ public class SinkShopService {
 
     @Transactional
     public void purchaseDoubleBoost(AppUser user, int hours) {
+        refreshLocked(user);
         if (isXpBoostActive(user)) {
             throw new IllegalArgumentException("XP-буст уже активен. Сначала дождитесь окончания.");
         }
@@ -163,6 +168,7 @@ public class SinkShopService {
 
     @Transactional
     public void purchaseExtraSlot(AppUser user) {
+        refreshLocked(user);
         if (user.isPermanentExtraSlot()) {
             throw new IllegalArgumentException("У вас уже есть доп. слот квеста навсегда — покупать временный не нужно.");
         }
@@ -181,6 +187,7 @@ public class SinkShopService {
      *  Возвращает 3 000 EXC, снимает «ожидание» и возвращает покупку в дневной счётчик. */
     @Transactional
     public void refundCooldownRemoval(AppUser user) {
+        refreshLocked(user);
         if (user.getCooldownBypassGame() == null) {
             throw new IllegalArgumentException("Нет купленного и неиспользованного снятия кулдауна.");
         }
@@ -194,6 +201,7 @@ public class SinkShopService {
 
     @Transactional
     public void purchaseCooldownRemoval(AppUser user) {
+        refreshLocked(user);
         int dailyRemovals = getDailyCount(user.getDailyCooldownRemovals(), user.getDailyCooldownDate());
         if (dailyRemovals >= maxDailyCooldownRemovals(user)) {
             throw new IllegalArgumentException("Достигнут дневной лимит снятий кулдауна (" + maxDailyCooldownRemovals(user) + " в сутки)." + passLimitHint(user, PASS_MAX_DAILY_COOLDOWN_REMOVALS));
@@ -210,6 +218,13 @@ public class SinkShopService {
 
     @Transactional
     public boolean purchaseGiftBoost(AppUser sender, AppUser recipient) {
+        if (sender.getId() != null && recipient.getId() != null && !sender.getId().equals(recipient.getId())) {
+            // Порядок блокировок по id: два игрока, дарящие друг другу одновременно, не должны взаимно заблокироваться.
+            AppUser first = sender.getId() < recipient.getId() ? sender : recipient;
+            AppUser second = first == sender ? recipient : sender;
+            refreshLocked(first);
+            refreshLocked(second);
+        }
         if (sender.getTelegramId().equals(recipient.getTelegramId())) {
             throw new IllegalArgumentException("Нельзя отправить подарок самому себе.");
         }
@@ -383,6 +398,15 @@ public class SinkShopService {
             user.setWithdrawalYear(now.getYear());
             appUserRepository.save(user);
         }
+    }
+
+    /** Блокирует строку игрока и подтягивает в переданный объект актуальное состояние из БД (баланс, лимиты, активные предметы).
+     *  Без этого покупка считает баланс от объекта, загруженного в начале обработки нажатия, и при параллельном начислении/списании
+     *  (награда, бонус, мини-апп, двойной тап) затирает чужое изменение или проходит проверки дважды (жалоба игрока 2026-10-19: баланс после снятия кулдауна не сошёлся). */
+    private void refreshLocked(AppUser user) {
+        if (user.getId() == null) return;
+        appUserRepository.findByIdForUpdate(user.getId())
+                .ifPresent(fresh -> org.springframework.beans.BeanUtils.copyProperties(fresh, user));
     }
 
     private void deductCoins(AppUser user, long price) {
