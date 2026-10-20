@@ -6012,7 +6012,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (!claimed) rows.add(List.of(keyboardFactory.callback("✍️ Ввести код", "club:code:enter")));
         }
         if (streak > 0) sb.append("\n🔥 Серия: <b>").append(streak).append("</b> ").append(ru.gamebot.platform.service.RewardService.daysWordRu(streak)).append(" подряд");
-        rows.add(List.of(keyboardFactory.callback("🎯 Цель клуба", "club:goal")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:quests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
@@ -6030,7 +6029,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         InlineKeyboardMarkup after = keyboardFactory.rowsLayout(List.of(
-                List.of(keyboardFactory.callback("🎯 Цель клуба", "club:goal")),
                 List.of(keyboardFactory.callback("⬅️ Назад", "club:code"), keyboardFactory.callback("🏠 Меню", "menu:main"))));
         switch (r.status()) {
             case OK -> {
@@ -6089,7 +6087,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     rows.add(List.of(keyboardFactory.callback("🎁 Забрать награду", "club:claim:" + g.getId())));
                 } else {
                     sb.append("\n🎉 Цель выполнена! Награду получают те, кто ввёл код дня этого поста.");
-                    rows.add(List.of(keyboardFactory.callback("🔑 Код дня", "club:code")));
                 }
             } else {
                 sb.append("Поставьте реакцию под постом в канале. Если цель выполнена, награду получат ")
@@ -6098,7 +6095,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             if (url != null) rows.add(0, List.of(keyboardFactory.url("📢 Открыть пост", url)));
         }
-        rows.add(List.of(keyboardFactory.callback("🔑 Код дня", "club:code")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:quests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
