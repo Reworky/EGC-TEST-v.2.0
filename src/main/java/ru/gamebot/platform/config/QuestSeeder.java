@@ -2166,6 +2166,39 @@ public class QuestSeeder implements CommandLineRunner {
             questRepository.save(puzzleMoviesQuest);
             log.info("[QuestSeeder] Created external quest: Puzzle Movies (admitad, PURCHASE)");
         }
+        // ── Внешний CPI-квест: установка приложения по офферу Mobidea 37030 (только РФ, только Android), 2026-10-20 ──
+        // Создаётся НЕАКТИВНЫМ: перед включением владельцу нужно (1) подтвердить, что оффер разрешает мотивированный трафик (вкладка «Разрешённый
+        // трафик» в Mobidea, как у Puzzle Movies), (2) выбрать награду по выплате (EXC ≈ выплата в ₽ × 100 × доля, не больше ~половины выплаты),
+        // (3) прописать в Mobidea Postback URL /api/postback/mobidea?token=...&pub_click_id={click_id}&offer_id=37030&payout={payout}&status={status}
+        // (имена макросов сверить с кабинетом) и MOBIDEA_POSTBACK_TOKEN в окружении бота. pub_click_id = Telegram ID игрока ({TG_ID}).
+        // FLAT 500 = награда квеста (как у Skyeng: награда берётся из каталога игры); при смене награды править ОБА места.
+        gameCatalogService.setDifficultyMode("Партнёрские приложения", "FLAT", 500L, 0);
+        if (questRepository.findFirstByTitleAndGameName("Установи приложение (только Android, только РФ)", "Партнёрские приложения").isEmpty()) {
+            Quest mobideaInstall = new Quest();
+            mobideaInstall.setTitle("Установи приложение (только Android, только РФ)");
+            mobideaInstall.setGameName("Партнёрские приложения");
+            mobideaInstall.setPlatform("Android");
+            mobideaInstall.setDurationDays(30);
+            mobideaInstall.setDurationText("30 дней");
+            mobideaInstall.setRewardXp(0);
+            mobideaInstall.setRewardCoins(500);
+            mobideaInstall.setDescription("Установи и запусти приложение по своей персональной ссылке. Засчитывается ТОЛЬКО для игроков из России и ТОЛЬКО на телефонах с Android: "
+                    + "на iPhone и из других стран установка не засчитается.");
+            mobideaInstall.setInstruction("🔗 Открой ссылку на Android-телефоне (из России, без VPN), установи приложение из Google Play и запусти его:\n"
+                    + "https://www.ubelivablebridge.study/click?offer_id=37030&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=quest\n\n"
+                    + "⚠️ Только Android и только Россия: на iPhone, при VPN или из другой страны установка не засчитается.");
+            mobideaInstall.setRequirements("Подтверждение приходит от партнёра автоматически, обычно в течение нескольких часов или дней. "
+                    + "Отчёт отправлять не нужно, EXC начислится сам.");
+            mobideaInstall.setParticipantLimit(500);
+            mobideaInstall.setActive(false);
+            mobideaInstall.setExternalAutoApprove(true);
+            mobideaInstall.setExternalOfferId("37030");
+            mobideaInstall.setExternalNetwork("mobidea");
+            mobideaInstall.setExternalTargetType("INSTALL");
+            mobideaInstall.setCreatedAt(LocalDateTime.now());
+            questRepository.save(mobideaInstall);
+            log.info("[QuestSeeder] Created external quest (inactive): Mobidea 37030 install, Android/RU");
+        }
         // ── Антифрод: разовые квесты (проверка текущего состояния аккаунта, а не свежего действия) ──
         // Баланс/ранг/лига не сбрасываются между попытками — без этого флага такие квесты фармились
         // повторно каждый кулдаун без единого нового действия (жалоба игрока, скриншот с 4.25М золота

@@ -49,6 +49,9 @@ public class PostbackController {
     @Value("${app.admitad-postback-token:}")
     private String admitadToken;
 
+    @Value("${app.mobidea-postback-token:}")
+    private String mobideaToken;
+
     @Value("${app.adsgram-reward-token:}")
     private String adsgramRewardToken;
 
@@ -102,6 +105,42 @@ public class PostbackController {
         }
 
         return processConversion("admitad", subid, offerId, orderId, orderSum);
+    }
+
+    /**
+     * Постбек Mobidea (CPI-офферы): сервер-сервер GET. Имена параметров в кабинете Mobidea могут отличаться, поэтому читаем несколько вероятных
+     * вариантов каждого: наш идентификатор (pub_click_id, он же Telegram ID игрока - подставляется в ссылку вместо {TG_ID}), ID оффера, сумму выплаты,
+     * статус. Конверсии со статусом rejected/declined/reversed/cancelled игнорируются. Перед боевым запуском сверить макросы с кабинетом
+     * (Postback URL) и сделать тестовую конверсию.
+     */
+    @GetMapping("/mobidea")
+    public ResponseEntity<String> mobidea(@RequestParam Map<String, String> params) {
+        if (!isValidToken(params.get("token"), mobideaToken)) {
+            log.warn("[Mobidea] Postback rejected: bad token");
+            return ResponseEntity.status(403).body("forbidden");
+        }
+        log.info("[Mobidea] incoming params: {}", params);
+        String status = firstNonBlank(params, "status", "conversion_status", "state");
+        if (status != null && java.util.Set.of("rejected", "declined", "reversed", "cancelled", "canceled", "fraud", "pending")
+                .contains(status.trim().toLowerCase())) {
+            log.info("[Mobidea] Postback ignored, status={}, params={}", status, params);
+            return ResponseEntity.ok("ignored");
+        }
+        return processConversion("mobidea",
+                firstNonBlank(params, "pub_click_id", "click_id", "clickid", "subid", "sub_id"),
+                firstNonBlank(params, "offer_id", "offerid", "offer"),
+                firstNonBlank(params, "transaction_id", "conversion_id", "txid", "order_id"),
+                firstNonBlank(params, "payout", "revenue", "commission", "amount"));
+    }
+
+    private String firstNonBlank(Map<String, String> params, String... keys) {
+        for (String key : keys) {
+            String v = params.get(key);
+            if (v != null && !v.isBlank()) {
+                return v;
+            }
+        }
+        return null;
     }
 
     /**

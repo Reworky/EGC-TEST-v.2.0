@@ -43,6 +43,7 @@ app:
   cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
   actionpay-postback-token: ${ACTIONPAY_POSTBACK_TOKEN:}
   admitad-postback-token: ${ADMITAD_POSTBACK_TOKEN:}
+  mobidea-postback-token: ${MOBIDEA_POSTBACK_TOKEN:}
   adsgram-reward-token: ${ADSGRAM_REWARD_TOKEN:}
   telega-reward-token: ${TELEGA_REWARD_TOKEN:}
   adsgram-api-token: ${ADSGRAM_API_TOKEN:}
