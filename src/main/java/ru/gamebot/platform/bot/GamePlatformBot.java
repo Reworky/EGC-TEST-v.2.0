@@ -1163,6 +1163,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if ("ads:money".equals(data)) {
+            sendAdsList(user, "menu:moneyloop");
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if ("wallet:section:ads".equals(data)) {
             sendAdsList(user, "menu:cat:wallet");
             answerSilently(callbackQuery.getId());
@@ -4240,7 +4245,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendMoneyLoopScreen(AppUser user) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("💼 Спонсорские квесты", "quests:section:sponsored")));
-        rows.add(List.of(keyboardFactory.callback("📺 Реклама за EXC", "quests:section:ads")));
+        rows.add(List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "ads:money")));
         rows.add(List.of(keyboardFactory.callback("❓ Что такое курс фонда", "menu:faq")));
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(),
@@ -5542,6 +5547,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (!quest) rows.add(List.of(keyboardFactory.callback("🗺️ Квесты", "dtasks:go:quests")));
             if (!chest) rows.add(List.of(keyboardFactory.callback("🎁 Сундук дня", "dtasks:go:chest")));
         }
+        rows.add(List.of(keyboardFactory.callback("📅 Цель недели", "weekly:show")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
         sendText(user.getTelegramId(), text.toString(), keyboardFactory.rowsLayout(rows));
     }
@@ -5917,7 +5923,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             rows.add(List.of(keyboardFactory.callback("🎯 Квесты", "menu:quests"), keyboardFactory.callback("🔑 Код дня", "club:code")));
         }
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:quests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", userService.dailyTasksEnabled() ? "menu:dtasks" : "menu:main"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
@@ -6590,7 +6596,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** backData != null - экран открыт из другого раздела (например «Задания дня»): добавляем «Назад» туда. */
     private void sendQuestGames(AppUser user, String backData) {
         clearOnboardingBrowseBack(user);
-        String watchAdLabel = "🎬 Забери халявные EXC";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "quests:section:gaming")));
         rows.add(List.of(keyboardFactory.callback("💼 Спонсорские квесты", "quests:section:sponsored")));
@@ -6598,9 +6603,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (socialTaskService.enabled() && !socialTaskService.tasks().isEmpty()) {
             rows.add(List.of(keyboardFactory.callback("🌐 Соцсети", "quests:section:social")));
         }
-        rows.add(List.of(keyboardFactory.callback(watchAdLabel, "quests:section:ads")));
         rows.add(List.of(keyboardFactory.callback("🔑 Код дня", "club:code"), keyboardFactory.callback("🎯 Цель клуба", "club:goal")));
-        rows.add(List.of(keyboardFactory.callback("📅 Цель недели", "weekly:show")));
         rows.add(List.of(keyboardFactory.callback("📂 Мои квесты", "menu:myquests")));
         if (backData != null) {
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", backData), keyboardFactory.callback("🏠 Меню", "menu:main")));
