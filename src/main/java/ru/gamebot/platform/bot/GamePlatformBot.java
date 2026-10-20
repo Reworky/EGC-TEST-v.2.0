@@ -6070,7 +6070,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendClubGoalScreen(AppUser user) {
         StringBuilder sb = new StringBuilder("🎯 <b>Цель клуба</b>\n<i>Общие цели, которые клуб выполняет вместе: цель выполнена, значит награда твоя.</i>\n");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        clubActivityService.activeLinkGoal().ifPresent(g -> {
+        java.util.Optional<ru.gamebot.platform.domain.model.ClubGoal> linkGoal = clubActivityService.activeLinkGoal();
+        linkGoal.ifPresent(g -> {
             boolean sponsored = false;
             try {
                 sponsored = questService.getQuest(g.getQuestId()).isSponsored();
@@ -6082,7 +6083,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         java.util.Optional<ru.gamebot.platform.domain.model.ClubGoal> rg = clubActivityService.currentReactionsGoal();
         sb.append("\n");
         if (rg.isEmpty() || ru.gamebot.platform.domain.model.ClubGoal.EXPIRED.equals(rg.get().getStatus())) {
-            sb.append("📣 Цель дня появится вместе с постом дня в канале.");
+            // Если в цель клуба уже добавлена любая цель (квест-портал), строку «цель дня появится…» не показываем: она вводила бы в заблуждение
+            if (linkGoal.isEmpty()) sb.append("📣 Цель дня появится вместе с постом дня в канале.");
         } else {
             ru.gamebot.platform.domain.model.ClubGoal g = rg.get();
             int filled = Math.max(0, Math.min(10, g.getCurrentCount() * 10 / Math.max(1, g.getTargetCount())));
