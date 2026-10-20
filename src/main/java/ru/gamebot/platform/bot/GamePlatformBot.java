@@ -5967,6 +5967,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else if ("goal".equals(action)) {
             answerSilently(callbackQuery.getId());
             sendClubGoalScreen(user);
+        } else if (action.startsWith("quest:")) {
+            // Квест из «Цели клуба» (в т.ч. спонсорский): карточка с «Назад» обратно в «Цель клуба», а не в меню
+            answerSilently(callbackQuery.getId());
+            Long goalQuestId = parseLong(action.substring("quest:".length()));
+            if (goalQuestId != null) {
+                sendQuestCard(user, goalQuestId, "club:goal", "⬅️ Назад", null);
+            }
         } else if (action.startsWith("claim:")) {
             Long goalId = parseLong(action.substring("claim:".length()));
             if (goalId == null) {
@@ -6064,7 +6071,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             } catch (Exception ignored) { }
             sb.append("\n").append(sponsored ? "💼 <b>От спонсора: " : "⭐ <b>").append(escape(g.getTitle())).append("</b>\n");
             if (g.getDescription() != null && !g.getDescription().isBlank()) sb.append(escape(g.getDescription())).append("\n");
-            rows.add(List.of(keyboardFactory.callback("💼 Открыть квест", "quest:card:" + g.getQuestId())));
+            rows.add(List.of(keyboardFactory.callback("💼 Открыть квест", "club:quest:" + g.getQuestId())));
         });
         java.util.Optional<ru.gamebot.platform.domain.model.ClubGoal> rg = clubActivityService.currentReactionsGoal();
         sb.append("\n");
