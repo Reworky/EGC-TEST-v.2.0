@@ -6264,6 +6264,91 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Админка → Коммуникации → «Курс дня и красная кнопка»: состояние обоих режимов и управление кнопками (те же настройки, что в командах /course и /redbutton). */
+    private void sendAdminCourseScreen(AppUser admin) {
+        StringBuilder sb = new StringBuilder("📈 <b>Курс дня и красная кнопка</b>\n\n");
+        sb.append(bonusCourseService.statusText()).append("\n\n").append(redButtonService.statusText());
+        sb.append("\n\nПосты курса дня и тизеры идут на согласование, красная кнопка выходит без согласования (за 10 минут придёт предупреждение с отменой).");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(
+                keyboardFactory.callback("▶️ Создать пост сейчас", "admin:course:dnow"),
+                keyboardFactory.callback(bonusCourseService.isEnabled() ? "🔕 Выключить автопост" : "🔔 Включить автопост", "admin:course:dtog")));
+        rows.add(List.of(
+                keyboardFactory.callback("🕐 Час −1", "admin:course:dhour:-1"), keyboardFactory.callback("🕐 Час +1", "admin:course:dhour:1"),
+                keyboardFactory.callback("💰 Потолок −25", "admin:course:cap:-25"), keyboardFactory.callback("💰 Потолок +25", "admin:course:cap:25")));
+        rows.add(List.of(
+                keyboardFactory.callback("🎯 Бюджет дня −10", "admin:course:dbud:-10"), keyboardFactory.callback("🎯 Бюджет дня +10", "admin:course:dbud:10")));
+        rows.add(List.of(
+                keyboardFactory.callback("▶️ Выпустить сейчас", "admin:course:rnow"),
+                keyboardFactory.callback(redButtonService.isEnabled() ? "🔕 Выключить" : "🔔 Включить", "admin:course:rtog")));
+        rows.add(List.of(
+                keyboardFactory.callback("🗓 Перепланировать неделю", "admin:course:rplan"),
+                keyboardFactory.callback("🎯 Бюджет −10", "admin:course:rbud:-10"), keyboardFactory.callback("🎯 Бюджет +10", "admin:course:rbud:10")));
+        rows.add(List.of(
+                keyboardFactory.callback("📅 В неделю −1", "admin:course:rweek:-1"), keyboardFactory.callback("📅 В неделю +1", "admin:course:rweek:1"),
+                keyboardFactory.callback("⏱ Окно −15 мин", "admin:course:rwin:-15"), keyboardFactory.callback("⏱ Окно +15 мин", "admin:course:rwin:15")));
+        for (ru.gamebot.platform.domain.model.RedButtonSchedule r : redButtonService.planned()) {
+            java.time.LocalDateTime msk = r.getPlannedAt().plusHours(3);
+            rows.add(List.of(keyboardFactory.callback("❌ Отменить #" + r.getId() + " (" + String.format("%02d.%02d %02d:%02d", msk.getDayOfMonth(), msk.getMonthValue(), msk.getHour(), msk.getMinute()) + " МСК, +" + r.getPercent() + "%)",
+                    "admin:course:rcancel:" + r.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("📊 Аналитика", "admin:an:tab:COURSE"), keyboardFactory.callback("🔄 Обновить", "admin:course")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:comm"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(admin.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleCourseAdminAction(CallbackQuery callbackQuery, AppUser user, String action) {
+        String[] p = action.split(":");
+        String sub = p.length > 1 ? p[1] : "";
+        String arg = p.length > 2 ? p[2] : "";
+        Long delta = parseLong(arg);
+        String toast = null;
+        try {
+            switch (sub) {
+                case "dnow" -> {
+                    bonusCourseService.createDailyDraft(null);
+                    toast = "Черновик создан, карточка придёт сообщением";
+                }
+                case "dtog" -> bonusCourseService.setEnabled(!bonusCourseService.isEnabled());
+                case "dhour" -> {
+                    int h = (bonusCourseService.postHourUtc() + (delta == null ? 0 : delta.intValue()) + 24) % 24;
+                    toast = bonusCourseService.setParam("hour", String.valueOf(h));
+                }
+                case "cap" -> toast = bonusCourseService.setParam("cap", String.valueOf(Math.max(25, bonusCourseService.capRub() + (delta == null ? 0 : delta))));
+                case "dbud" -> toast = bonusCourseService.setParam("budget", String.valueOf(Math.max(0, bonusCourseService.dailyBudgetRub() + (delta == null ? 0 : delta))));
+                case "rtog" -> redButtonService.setEnabled(!redButtonService.isEnabled());
+                case "rplan" -> toast = "Неделя перепланирована, кнопок: " + redButtonService.replanWeek();
+                case "rbud" -> toast = redButtonService.setParam("budget", String.valueOf(Math.max(0, redButtonService.budgetRub() + (delta == null ? 0 : delta))));
+                case "rweek" -> toast = redButtonService.setParam("perweek", String.valueOf(Math.max(0, Math.min(7, redButtonService.perWeek() + (delta == null ? 0 : delta.intValue())))));
+                case "rwin" -> toast = redButtonService.setParam("window", String.valueOf(Math.max(5, redButtonService.windowMin() + (delta == null ? 0 : delta.intValue()))));
+                case "rcancel" -> toast = delta != null && redButtonService.cancel(delta) ? "Красная кнопка отменена" : "Уже поздно или отменена";
+                case "rnow" -> {
+                    if ("ok".equals(arg)) {
+                        ru.gamebot.platform.domain.model.RedButtonSchedule r = redButtonService.createNow(null);
+                        toast = "Красная кнопка #" + r.getId() + " (+" + r.getPercent() + "%) выйдет в течение минуты";
+                    } else {
+                        answerSilently(callbackQuery.getId());
+                        sendText(user.getTelegramId(), "🔴 <b>Выпустить красную кнопку сейчас?</b>\n\nПост выйдет в канал в течение минуты БЕЗ согласования, бонус случайный в заданном диапазоне.",
+                                keyboardFactory.rowsLayout(List.of(
+                                        List.of(keyboardFactory.callback("✅ Да, выпустить", "admin:course:rnow:ok")),
+                                        List.of(keyboardFactory.callback("❌ Отмена", "admin:course")))));
+                        return;
+                    }
+                }
+                default -> { }
+            }
+        } catch (Exception e) {
+            log.error("Course admin action {} failed", action, e);
+            toast = "Ошибка: " + e.getMessage();
+        }
+        if (toast != null) {
+            toast = toast.replaceAll("<[^>]+>", "");
+            answer(callbackQuery.getId(), toast.length() > 190 ? toast.substring(0, 190) : toast);
+        }
+        else answerSilently(callbackQuery.getId());
+        sendAdminCourseScreen(user);
+    }
+
     /** Админ: /redbutton status | on | off | now [процент] | plan | cancel ID | set КЛЮЧ ЗНАЧЕНИЕ | text post|teaser ТЕКСТ - «красная кнопка». */
     private void handleRedButtonCommand(AppUser admin, String text) {
         String[] p = text.split("\\s+", 4);
@@ -12837,6 +12922,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     handleAdvertiserAction(user, session, action.substring("adv:".length()));
                     answerSilently(callbackQuery.getId());
                     return;
+                } else if (action.equals("course") || action.startsWith("course:")) {
+                    handleCourseAdminAction(callbackQuery, user, action);
+                    return;
                 } else if (action.equals("cc") || action.startsWith("cc:")) {
                     handleChannelContentAction(callbackQuery, user, action);
                     return;
@@ -16125,6 +16213,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback("📨 Рассылки: отчёт", "admin:nudgereport")));
                 rows.add(List.of(keyboardFactory.callback("🗳 Голосования", "admin:polls")));
                 rows.add(List.of(keyboardFactory.callback("📰 Контент канала", "admin:cc")));
+                rows.add(List.of(keyboardFactory.callback("📈 Курс дня и красная кнопка", "admin:course")));
                 rows.add(List.of(keyboardFactory.callback("🔑 Код дня и 🎯 цель клуба", "admin:club")));
                 rows.add(List.of(keyboardFactory.callback("📌 Живая лента выплат в канале", "admin:payoutboard")));
                 long pendingJoin = channelJoinRequestRepository.countByStatus(ChannelJoinRequest.PENDING);
@@ -16273,6 +16362,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case ENGAGEMENT -> rows.add(List.of(keyboardFactory.callback("🧪 Отряды: диагностика (рефералка)", "admin:squadretention")));
             case SQUADS -> rows.add(List.of(keyboardFactory.callback("⚔️ Состав отряда", "admin:squads:search")));
             case FRAUD -> rows.add(List.of(keyboardFactory.callback("🕵️ Повторы разовых квестов", "admin:onetimeabuse")));
+            case COURSE -> rows.add(List.of(keyboardFactory.callback("⚙️ Управление: курс дня и красная кнопка", "admin:course")));
             case TOURNAMENTS -> rows.add(List.of(keyboardFactory.callback("🏆 Управление турнирами", "admin:tournaments")));
             default -> { }
         }

@@ -91,7 +91,7 @@ public class RedButtonService {
         }
     }
 
-    private int perWeek() { return (int) Math.max(0, Math.min(7, parseLong(get("bcr.perweek"), DEFAULT_PER_WEEK))); }
+    public int perWeek() { return (int) Math.max(0, Math.min(7, parseLong(get("bcr.perweek"), DEFAULT_PER_WEEK))); }
 
     private int startHour() { return (int) Math.max(0, Math.min(23, parseLong(get("bcr.start"), DEFAULT_START_HOUR_UTC))); }
 
@@ -103,9 +103,9 @@ public class RedButtonService {
 
     private int stepPercent() { return (int) Math.max(1, parseLong(get("bcr.step"), DEFAULT_STEP_PERCENT)); }
 
-    private int windowMin() { return (int) Math.max(5, Math.min(720, parseLong(get("bcr.window"), DEFAULT_WINDOW_MIN))); }
+    public int windowMin() { return (int) Math.max(5, Math.min(720, parseLong(get("bcr.window"), DEFAULT_WINDOW_MIN))); }
 
-    private long budgetRub() { return Math.max(0, parseLong(get("bcr.budget"), DEFAULT_BUDGET_RUB)); }
+    public long budgetRub() { return Math.max(0, parseLong(get("bcr.budget"), DEFAULT_BUDGET_RUB)); }
 
     private int teaserHours() { return (int) Math.max(0, Math.min(168, parseLong(get("bcr.teaserhours"), DEFAULT_TEASER_HOURS))); }
 
@@ -333,6 +333,11 @@ public class RedButtonService {
     }
 
     // ───────────────────────── для бота ─────────────────────────
+
+    /** Запланированные, но ещё не вышедшие кнопки (для экрана админки: список с кнопками «Отменить»). */
+    public List<RedButtonSchedule> planned() {
+        return scheduleRepository.findByStatusInOrderByPlannedAt(List.of(RedButtonSchedule.PLANNED));
+    }
 
     public Optional<RedButtonSchedule> find(Long id) {
         return id == null ? Optional.empty() : scheduleRepository.findById(id);
