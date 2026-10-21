@@ -21113,6 +21113,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback((st.enabled() ? "🔔 " : "🔕 ") + label, "admin:cc:type:" + ccKey(type))));
         }
         sb.append("Черновиков на согласовании: <b>").append(channelContentService.pendingCount()).append("</b>");
+        rows.add(List.of(keyboardFactory.callback("🗓 Расписание на 14 дней + очередь ручных", "admin:cc:sched:14")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:comm"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
@@ -21179,11 +21180,52 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
+    /** «Контент канала» → «Расписание»: единая лента ближайших дней (время МСК+4 = UTC+7) - включённые автопосты по реальным настройкам
+     *  и очередь ручных постов. ⚠️ - зазор до предыдущего поста меньше 4 часов. Кнопка у ручного поста присылает его карточку сейчас. */
+    private void sendChannelScheduleScreen(AppUser user, int days) {
+        java.util.List<ru.gamebot.platform.service.ChannelContentService.ScheduleEntry> list =
+                channelContentService.upcomingSchedule(days, GamePlatformBot::channelPostTitle);
+        String[] dn = {"", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"};
+        StringBuilder sb = new StringBuilder("🗓 <b>Расписание на ").append(days).append(" дней</b>\n"
+                + "Время МСК+4 (UTC+7). ✍️ - ручной пост из очереди, 🤖 - автопост по вашим настройкам. ⚠️ - меньше 4 часов до предыдущего.\n"
+                + "Не входят посты по событию (пруфы, вехи, турнирные).\n\n");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        java.time.LocalDateTime prev = null;
+        java.time.LocalDate lastDay = null;
+        int manualButtons = 0;
+        for (ru.gamebot.platform.service.ChannelContentService.ScheduleEntry e : list) {
+            java.time.LocalDateTime local = e.atUtc().plusHours(7);
+            if (!local.toLocalDate().equals(lastDay)) {
+                lastDay = local.toLocalDate();
+                sb.append("\n<b>").append(dn[local.getDayOfWeek().getValue()]).append(" ")
+                        .append(String.format("%02d.%02d", local.getDayOfMonth(), local.getMonthValue())).append("</b>\n");
+            }
+            boolean tight = prev != null && java.time.Duration.between(prev, e.atUtc()).toMinutes() < 240;
+            sb.append(tight ? "⚠️ " : "").append(String.format("%02d:%02d ", local.getHour(), local.getMinute()))
+                    .append(e.manual() ? "✍️ " : "🤖 ").append(escape(e.title())).append("\n");
+            if (e.manual() && e.draftId() != null && manualButtons < 20) {
+                manualButtons++;
+                String lbl = String.format("👁 %02d.%02d %02d:%02d %s", local.getDayOfMonth(), local.getMonthValue(), local.getHour(), local.getMinute(), e.title());
+                rows.add(List.of(keyboardFactory.callback(lbl.length() > 60 ? lbl.substring(0, 60) : lbl, "admin:cc:show:" + e.draftId())));
+            }
+            prev = e.atUtc();
+        }
+        if (list.isEmpty()) sb.append("Ничего не запланировано.");
+        String text = sb.length() > 3900 ? sb.substring(0, 3900) + "…" : sb.toString();
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:cc"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
+    }
+
     private void handleChannelContentAction(CallbackQuery callbackQuery, AppUser user, String action) {
         String[] p = action.split(":");
         if (p.length < 3) {
             sendChannelContentPanel(user);
             answerSilently(callbackQuery.getId());
+            return;
+        }
+        if ("sched".equals(p[1])) {
+            answerSilently(callbackQuery.getId());
+            sendChannelScheduleScreen(user, parseLong(p[2]) == null ? 14 : parseLong(p[2]).intValue());
             return;
         }
         if ("show".equals(p[1])) {

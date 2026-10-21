@@ -398,7 +398,11 @@ public class ChannelContentService {
 
     /** Разведение раз-в-2-недели и раз-в-4-недели постов по разным неделям (индекс недели от понедельника): по неделям набор не совпадает. */
     private static boolean phaseOk(String type) {
-        long week = (LocalDate.now().toEpochDay() - 4) / 7; // 1970-01-05 - понедельник
+        return phaseOk(type, LocalDate.now());
+    }
+
+    private static boolean phaseOk(String type, LocalDate date) {
+        long week = (date.toEpochDay() - 4) / 7; // 1970-01-05 - понедельник
         return switch (type) {
             case SQUAD_STATS, REFERRAL_STATS -> week % 2 == 0;
             case SHOP_POPULAR, WITHDRAW_SUMMARY -> week % 2 == 1;
@@ -408,6 +412,38 @@ public class ChannelContentService {
             case REFERRAL_HOWTO -> week % 4 == 3;
             default -> true;
         };
+    }
+
+    /** Строка общего расписания: момент (UTC), название, ручной ли пост. */
+    public record ScheduleEntry(LocalDateTime atUtc, String title, boolean manual, Long draftId) { }
+
+    /** Ближайшие `days` суток по реальным настройкам: включённые автопосты по дню/часу (с учётом чередования раз в 2 и 4 недели)
+     *  плюс очередь ручных постов. Нужен экрану «Контент канала → Расписание», чтобы владелец видел наслоения. Событийные посты без часа
+     *  (пруфы, вехи, турнирные) не входят. */
+    public List<ScheduleEntry> upcomingSchedule(int days, java.util.function.Function<String, String> titleOf) {
+        LocalDateTime now = LocalDateTime.now();
+        List<ScheduleEntry> out = new java.util.ArrayList<>();
+        for (String type : ALL_TYPES) {
+            if (isEventType(type) && !isDelayedEvent(type)) continue;
+            if (NEW_QUESTS.equals(type) || SHOP_NEW.equals(type)) continue;
+            TypeSettings st = settings(type);
+            if (!st.enabled()) continue;
+            for (int i = 0; i <= days; i++) {
+                LocalDate d = now.toLocalDate().plusDays(i);
+                if (d.getDayOfWeek().getValue() != st.dayOfWeek() || !phaseOk(type, d)) continue;
+                LocalDateTime at = d.atTime(st.hour(), 0);
+                if (at.isAfter(now) && at.isBefore(now.plusDays(days))) out.add(new ScheduleEntry(at, titleOf.apply(type), false, null));
+            }
+        }
+        for (ChannelPostDraft d : draftRepository.findAllByType(MANUAL_POST)) {
+            if (!ChannelPostDraft.PENDING.equals(d.getStatus()) || d.getSendAfter() == null || d.getCardSentAt() != null) continue;
+            if (d.getSendAfter().isBefore(now.plusDays(days))) {
+                String[] m = d.getMeta() == null ? new String[0] : d.getMeta().split("\\|", 3);
+                out.add(new ScheduleEntry(d.getSendAfter(), m.length > 1 ? m[1] : "Пост из плана", true, d.getId()));
+            }
+        }
+        out.sort(java.util.Comparator.comparing(ScheduleEntry::atUtc));
+        return out;
     }
 
     /** Раз в 10 минут: если автопост включён, наступил его час (по времени сервера, UTC) и сегодня ещё не формировался - делаем черновик. */
