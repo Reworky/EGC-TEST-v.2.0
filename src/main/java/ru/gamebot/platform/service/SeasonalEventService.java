@@ -199,6 +199,12 @@ public class SeasonalEventService {
                 .orElse(0L);
     }
 
+    /** Приз недели отрядов прямо сейчас: базовый пул плюс надбавка, пока идёт включённое событие (для текстов «Приз победителю» в постах и рассылках). */
+    public long squadPoolNow() {
+        long bonus = current().map(Event::squadBonusExc).orElse(0L);
+        return SquadService.WEEKLY_PRIZE_POOL + Math.max(0, bonus);
+    }
+
     /** Подпись события для транзакции/уведомления; без события - null. */
     public String squadBonusLabel() {
         return configured().filter(Event::enabled).map(Event::title).orElse(null);

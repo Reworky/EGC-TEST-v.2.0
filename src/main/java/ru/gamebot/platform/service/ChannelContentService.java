@@ -137,6 +137,7 @@ public class ChannelContentService {
     private final QuestRepository questRepository;
     private final QuestSubmissionRepository submissionRepository;
     private final ChannelPostDraftRepository draftRepository;
+    private final SeasonalEventService seasonalEventService;
     private final AppSettingRepository settingRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final SquadService squadService;
@@ -224,15 +225,15 @@ public class ChannelContentService {
         // Сетка владельца (06.10.2026), время МСК+4 = UTC+7: слоты 12:00 / 16:00 / 20:00 (= 05 / 09 / 13 UTC), между постами ровно 4 часа;
         // «Свежие квесты» и «Новинки в магазине» в плане не стоят, приходят только когда есть новое, карточка в 00:00 (= 17 UTC).
         int defHour = switch (type) {
-            case HALL_OF_FAME, SQUAD_RESULTS, SQUAD_MIDWEEK, WITHDRAW_HOWTO, SQUAD_STATS, SHOP_POPULAR, TOP_QUESTS_WEEK, WEEKLY_RACE -> 5;
-            case SHOP_ITEMS, WITHDRAW_SUMMARY, REFERRAL_STATS -> 9;
+            case HALL_OF_FAME, SQUAD_MIDWEEK, WITHDRAW_HOWTO, SQUAD_STATS, SHOP_POPULAR, TOP_QUESTS_WEEK, WEEKLY_RACE -> 5;
+            case SHOP_ITEMS, WITHDRAW_SUMMARY, REFERRAL_STATS, SQUAD_RESULTS -> 9; // SQUAD_RESULTS: 21.10.2026 с вторника на понедельник (день расчёта недели)
             case LEAGUES_WEEK, REFERRAL_TOP, REFERRAL_HOWTO, EGCPASS_PERK -> 13;
             case NEW_QUESTS, SHOP_NEW -> 17;
             default -> 12;
         };
         int defDow = switch (type) {
-            case HALL_OF_FAME, SHOP_ITEMS -> 1;
-            case SQUAD_RESULTS, LEAGUES_WEEK -> 2;
+            case HALL_OF_FAME, SHOP_ITEMS, SQUAD_RESULTS -> 1;
+            case LEAGUES_WEEK -> 2;
             case SQUAD_MIDWEEK, REFERRAL_TOP -> 3;
             case WITHDRAW_HOWTO, EGCPASS_PERK -> 4;
             case SQUAD_STATS, SHOP_POPULAR -> 5;
@@ -659,7 +660,7 @@ public class ChannelContentService {
             long gap = top.get(0).weeklyXp() - top.get(1).weeklyXp();
             sb.append("До лидера второму отряду не хватает <b>").append(num(gap)).append(" XP</b>.\n\n");
         }
-        sb.append("🏆 Приз победителю - <b>").append(num(SquadService.WEEKLY_PRIZE_POOL)).append(" EXC</b>: их делят лучшие по опыту участники отряда. ")
+        sb.append("🏆 Приз победителю - <b>").append(num(seasonalEventService.squadPoolNow())).append(" EXC</b>: их делят лучшие по опыту участники отряда. ")
           .append("Неделя закончится в понедельник в 00:00 UTC.\n\n");
         sb.append(squadLink());
         sb.append("\n\n").append(ending(top.get(0).weeklyXp(), "Кто успеет подтянуться?", "Ставь ⚔️, если твой отряд в гонке.", "Ещё есть время подняться выше."));
@@ -671,19 +672,19 @@ public class ChannelContentService {
     public void onSquadPrize(SquadPrizeEvent e) {
         try {
             if (!settings(SQUAD_RESULTS).enabled()) return;
-            createSquadResultsDraft(e.getSquad(), e.getTotalWeeklyXp(), e.getMembers().size(), e.getPrizePerMember());
+            createSquadResultsDraft(e.getSquad(), e.getTotalWeeklyXp(), e.getMembers().size(), e.getPrizePerMember(), e.getPoolExc());
         } catch (Exception ex) {
             log.error("[ChannelContent] Failed to create squad results draft", ex);
         }
     }
 
-    private Optional<ChannelPostDraft> createSquadResultsDraft(Squad winner, long winnerXp, int winnersCount, long prizePerMember) {
+    private Optional<ChannelPostDraft> createSquadResultsDraft(Squad winner, long winnerXp, int winnersCount, long prizePerMember, long poolExc) {
         String winnerName = safeName(winner.getName());
         long members = squadService.memberCount(winner);
         StringBuilder sb = new StringBuilder("🏆 <b>Итоги недели у отрядов!</b>\n\n");
         sb.append("Победил отряд <b>").append(winnerName != null ? "«" + esc(winnerName) + "»" : "без публичного названия").append("</b>, поздравляем 🔥 <b>")
           .append(num(winnerXp)).append(" XP</b>, в отряде ").append(members).append(" ").append(plural((int) members, "игрок", "игрока", "игроков")).append(".\n");
-        sb.append("Приз <b>").append(num(SquadService.WEEKLY_PRIZE_POOL)).append(" EXC</b> поделили ").append(winnersCount).append(" ")
+        sb.append("Приз <b>").append(num(poolExc)).append(" EXC</b> поделили ").append(winnersCount).append(" ")
           .append(plural(winnersCount, "лучший участник", "лучших участника", "лучших участников")).append(", каждому по <b>").append(num(prizePerMember)).append(" EXC</b>.\n\n");
         List<SquadService.SquadRankEntry> rest = squadService.getLeaderboard().stream()
                 .filter(x -> !x.squad().getId().equals(winner.getId()) && safeName(x.squad().getName()) != null).limit(2).toList();

@@ -374,7 +374,7 @@ public class SquadService {
         log.info("Squad weekly prize: {} EXC each to top {} of {} members of squad '{}' (total XP: {}), event bonus {}",
                 prizePerMember, payoutCount, members.size(), top.squad().getName(), top.weeklyXp(), eventBonus);
 
-        eventPublisher.publishEvent(new SquadPrizeEvent(this, top.squad(), winners, prizePerMember, top.weeklyXp()));
+        eventPublisher.publishEvent(new SquadPrizeEvent(this, top.squad(), winners, prizePerMember, top.weeklyXp(), pool));
     }
 
     // ── Флаг отряда ─────────────────────────────────────────────────────────────

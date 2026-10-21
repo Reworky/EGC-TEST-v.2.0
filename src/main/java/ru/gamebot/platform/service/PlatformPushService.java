@@ -42,6 +42,7 @@ public class PlatformPushService {
     private final NotificationGateService notificationGate;
     private final QuestSubmissionRepository questSubmissionRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final SeasonalEventService seasonalEventService;
 
     // ───────────────────────── настройки ─────────────────────────
 
@@ -149,7 +150,7 @@ public class PlatformPushService {
                                 + (board.size() > 1 ? " Отрыв от второго: <b>" + num(e.weeklyXp() - board.get(1).weeklyXp()) + " XP</b>." : "")
                         : "Твой отряд «" + name + "» сейчас на <b>" + rank + "-м</b> месте: " + num(e.weeklyXp()) + " XP. До первого места не хватает <b>"
                                 + num(board.get(0).weeklyXp() - e.weeklyXp()) + " XP</b>.")
-                        + "\nПобедитель недели делит <b>" + num(SquadService.WEEKLY_PRIZE_POOL) + " EXC</b>. Неделя закончится в понедельник в 00:00 UTC.";
+                        + "\nПобедитель недели делит <b>" + num(seasonalEventService.squadPoolNow()) + " EXC</b>. Неделя закончится в понедельник в 00:00 UTC.";
                 for (AppUser m : squadService.getMembers(e.squad())) {
                     if (activeSince(m, since) && send(m, NudgeType.SQUAD_RACE, html, "⚔️ Мой отряд", "menu:squads", null)) sent++;
                 }
