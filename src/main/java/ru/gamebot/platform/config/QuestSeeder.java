@@ -118,7 +118,10 @@ public class QuestSeeder implements CommandLineRunner {
                 "Прокачай силу бойцов на 3 уровня",
                 "Подними ранг бойцов на 2",
                 "Открой улучшение бойца",
-                "Повысь уровень профиля на 1"
+                "Повысь уровень профиля на 1",
+                // Хэллоуин-2026 (seedHalloweenQuests): без этого сидер деактивирует их на каждом старте
+                "Тыквенный забег",
+                "Бой на кладбище"
         );
         seederQuests().stream()
                 .filter(q -> "Brawl Stars".equalsIgnoreCase(q.getGameName()) && !keepBsTitles.contains(q.getTitle()))
@@ -875,7 +878,10 @@ public class QuestSeeder implements CommandLineRunner {
                 "Улучши войска и заклинания на 3 уровня",
                 "Улучши Зал строителя",
                 "Разрушь 10 Ратуш в атаках мультиплеера",
-                "Разрушь 100 стен в атаках мультиплеера"
+                "Разрушь 100 стен в атаках мультиплеера",
+                // Хэллоуин-2026 (seedHalloweenQuests)
+                "Страж деревни",
+                "Щедрая тыква"
         );
         seederQuests().stream()
                 .filter(q -> "Clash of Clans".equalsIgnoreCase(q.getGameName()) && !keepCocTitles.contains(q.getTitle()))
@@ -1209,7 +1215,10 @@ public class QuestSeeder implements CommandLineRunner {
                 "Задонать 100 карт клану",
                 // квесты на прокачку (2026-09-26), создаются в seedSupercellProgressionQuests()
                 "Улучши карты на 3 уровня суммарно",
-                "Улучши Королевскую башню"
+                "Улучши Королевскую башню",
+                // Хэллоуин-2026 (seedHalloweenQuests)
+                "Ночь в Арене",
+                "Тёмный забег"
         );
         seederQuests().stream()
                 .filter(q -> "Clash Royale".equalsIgnoreCase(q.getGameName()) && !keepCrTitles.contains(q.getTitle()))
@@ -1388,6 +1397,7 @@ public class QuestSeeder implements CommandLineRunner {
         }
 
         seedSupercellProgressionQuests();
+        seedHalloweenQuests();
 
         // ── EA FC 26: FLAT-режим — единый список без выбора категории, по образцу Brawl Stars/Clash of Clans/Clash Royale ──
         // (игра сейчас скрыта от игроков, см. deactivateGame ниже — готовим формат заранее на момент возврата)
@@ -2241,6 +2251,82 @@ public class QuestSeeder implements CommandLineRunner {
         clearRepeatableNoCooldown("Сыграй 3 матча в любом режиме", "CS2");
         clearRepeatableNoCooldown("Сыграй 5 боёв", "Clash Royale");
         clearRepeatableNoCooldown("Сыграй 3 матча подряд", "PUBG PC");
+    }
+
+    /**
+     * Хэллоуин-2026 (ТЗ «Хэллоуинское обновление», пункт 2): шесть квестов по уже работающим типам авто-проверки, окно 28.10 00:00 - 01.11 23:59 МСК
+     * (P2 стартуют на сутки позже, 29.10, чтобы P1 успели показать, что проверка не сбоит). Квесты видны только пока включено событие halloween2026
+     * (/event halloween) и не выбран потолок затрат (SeasonalEventService.isQuestAvailable). Создаются один раз (награда и XP потом не перезаписываются),
+     * разовые на аккаунт. Тема в названии и описании; привязки к внутриигровому хэллоуинскому режиму нет.
+     */
+    private void seedHalloweenQuests() {
+        final String code = "halloween2026";
+        final LocalDateTime p1From = LocalDateTime.of(2026, 10, 28, 0, 0);
+        final LocalDateTime p2From = LocalDateTime.of(2026, 10, 29, 0, 0);
+        final LocalDateTime until = LocalDateTime.of(2026, 11, 2, 0, 0); // исключительно: весь день 01.11 включён
+        final String auto = "Ничего отправлять не нужно: прогресс проверяется автоматически через официальный API игры, награда зачислится сама.";
+
+        // P1
+        createHalloweenQuest("Тыквенный забег", "Brawl Stars", 1400,
+                "🎃 Хэллоуинский забег: проведи 6 боёв в любом режиме Brawl Stars. Победа не обязательна.",
+                "Играй в любом режиме. Прогресс считается автоматически.", auto);
+        setBrawlVerify("Тыквенный забег", BrawlVerifyType.BATTLES, 6, false, false, false, null, null);
+        createHalloweenQuest("Ночь в Арене", "Clash Royale", 2000,
+                "🎃 Ночь в Арене: одержи 5 побед в Арене Clash Royale.",
+                "Играй бои в Арене и побеждай. Прогресс считается автоматически.", auto);
+        setClashRoyaleVerify("Ночь в Арене", ClashRoyaleVerifyType.WINS, 5,
+                "🎃 Ночь в Арене: одержи 5 побед в Арене Clash Royale — прогресс считается автоматически.",
+                "Играй бои в Арене и побеждай. Прогресс отслеживается автоматически, ничего сообщать не нужно.", auto);
+        createHalloweenQuest("Страж деревни", "Clash of Clans", 2000,
+                "🎃 Страж деревни: отбей 3 атаки на свою деревню в мультиплеере Clash of Clans.",
+                "Держи оборону деревни сильной. Прогресс считается автоматически.", auto);
+        setClashVerify("Страж деревни", ClashVerifyType.DEFENSE_WINS, 3,
+                "🎃 Страж деревни: успешно отбей 3 атаки на свою деревню в мультиплеере — прогресс считается автоматически.",
+                "Держи оборону деревни сильной. Прогресс отслеживается автоматически, ничего сообщать не нужно.", auto);
+        // P2
+        createHalloweenQuest("Бой на кладбище", "Brawl Stars", 1400,
+                "🎃 Бой на кладбище: выиграй 3 боя в Brawl Stars.",
+                "Играй и побеждай в любом режиме. Прогресс считается автоматически.", auto);
+        setBrawlVerify("Бой на кладбище", BrawlVerifyType.BATTLES, 3, true, false, false, null, null);
+        createHalloweenQuest("Тёмный забег", "Clash Royale", 1500,
+                "🎃 Тёмный забег: сыграй 5 боёв в Clash Royale. Победа не обязательна.",
+                "Играй бои в любом режиме. Прогресс считается автоматически.", auto);
+        setClashRoyaleVerify("Тёмный забег", ClashRoyaleVerifyType.BATTLE_COUNT, 5,
+                "🎃 Тёмный забег: проведи 5 боёв в Clash Royale — прогресс считается автоматически.",
+                "Играй бои в любом режиме — победа не требуется. Прогресс отслеживается автоматически.", auto);
+        createHalloweenQuest("Щедрая тыква", "Clash of Clans", 2000,
+                "🎃 Щедрая тыква: задонать 300 войск участникам своего клана в Clash of Clans.",
+                "Отвечай на запросы войск в клановом чате. Прогресс считается автоматически.", auto);
+        setClashVerify("Щедрая тыква", ClashVerifyType.DONATIONS, 300,
+                "🎃 Щедрая тыква: задонать суммарно 300 и более единиц войск участникам клана — прогресс считается автоматически.",
+                "Отвечай на запросы войск в клановом чате или донать напрямую. Прогресс отслеживается автоматически.", auto);
+
+        for (String[] q : new String[][]{
+                {"Тыквенный забег", "Brawl Stars", "p1"}, {"Ночь в Арене", "Clash Royale", "p1"}, {"Страж деревни", "Clash of Clans", "p1"},
+                {"Бой на кладбище", "Brawl Stars", "p2"}, {"Тёмный забег", "Clash Royale", "p2"}, {"Щедрая тыква", "Clash of Clans", "p2"}}) {
+            questRepository.findFirstByTitleAndGameName(q[0], q[1]).ifPresent(quest -> {
+                if (quest.getEventCode() == null) { // окно и код выставляем один раз: ручные правки админа не затираются
+                    quest.setEventCode(code);
+                    quest.setAvailableFrom("p1".equals(q[2]) ? p1From : p2From);
+                    quest.setAvailableUntil(until);
+                    questRepository.save(quest);
+                }
+            });
+            markOneTimePerAccount(q[0], q[1]);
+        }
+        setShortLabel("Тыквенный забег", "Brawl Stars", "🎃 Забег×6");
+        setShortLabel("Бой на кладбище", "Brawl Stars", "🎃 Победа×3");
+        setShortLabel("Ночь в Арене", "Clash Royale", "🎃 Победа×5");
+        setShortLabel("Тёмный забег", "Clash Royale", "🎃 Бои×5");
+        setShortLabel("Страж деревни", "Clash of Clans", "🎃 3 защиты");
+        setShortLabel("Щедрая тыква", "Clash of Clans", "🎃 300 войск");
+    }
+
+    /** Создаёт хэллоуинский квест один раз (если уже есть - не трогает награду и XP, чтобы не затереть правки админа). */
+    private void createHalloweenQuest(String title, String gameName, long rewardCoins, String description, String instruction, String requirements) {
+        if (questRepository.findFirstByTitleAndGameName(title, gameName).isEmpty()) {
+            seedFlat(title, gameName, "Mobile", 5, "5 дней", 50, rewardCoins, description, instruction, requirements);
+        }
     }
 
     /** Квесты на ПРОКАЧКУ для трёх игр Supercell (2026-09-26): прогресс считается по числам профиля из официального API

@@ -180,6 +180,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ModeratorBonusService moderatorBonusService;
     private final ru.gamebot.platform.service.WeeklyGoalService weeklyGoalService;
     private final ru.gamebot.platform.service.GoldenHourService goldenHourService;
+    private final ru.gamebot.platform.service.SeasonalEventService seasonalEventService;
     private final ru.gamebot.platform.service.PlatformPushService platformPushService;
     private final ru.gamebot.platform.service.SupportManagerLinkService supportManagerLinkService;
     private final ru.gamebot.platform.service.TrophyTournamentService trophyTournamentService;
@@ -476,6 +477,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (text != null && (text.equals("/firstquest") || text.startsWith("/firstquest ")) && isEffectiveAdmin(user)) {
             handleStarterCommand(user, text.trim());
+            return;
+        }
+
+        if (text != null && (text.equals("/event") || text.startsWith("/event ")) && isEffectiveAdmin(user)) {
+            handleEventCommand(user, text.trim());
             return;
         }
 
@@ -4685,6 +4691,55 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendStarterQuestCard(user, quest);
     }
 
+    /** Админ: /event - состояние; /event halloween - записать пресет Хэллоуина-2026 и включить; /event on|off - рубильник. */
+    private void handleEventCommand(AppUser admin, String text) {
+        String[] p = text.split("\\s+");
+        String sub = p.length > 1 ? p[1].toLowerCase() : "status";
+        StringBuilder note = new StringBuilder();
+        try {
+            switch (sub) {
+                case "halloween" -> {
+                    seasonalEventService.configure("halloween2026", "Хэллоуин в EGC",
+                            java.time.LocalDateTime.of(2026, 10, 26, 0, 0), java.time.LocalDateTime.of(2026, 11, 1, 23, 59),
+                            5_000L, 300_000L, "halloween", true);
+                    note.append("✅ Пресет «Хэллоуин в EGC» записан и включён: 26.10 00:00 - 01.11 23:59 МСК, надбавка отрядам +5 000 EXC, потолок квестов 300 000 EXC.\n\n");
+                }
+                case "on" -> {
+                    seasonalEventService.setEnabled(true);
+                    note.append("✅ Событие включено.\n\n");
+                }
+                case "off" -> {
+                    seasonalEventService.setEnabled(false);
+                    note.append("⏹ Событие выключено: баннеры, квесты события и надбавка отрядам исчезают.\n\n");
+                }
+                default -> { }
+            }
+        } catch (Exception e) {
+            log.warn("Event command failed", e);
+            sendText(admin.getTelegramId(), "⚠️ Не получилось: " + escape(String.valueOf(e.getMessage())), null);
+            return;
+        }
+        StringBuilder sb = new StringBuilder(note).append("🎃 <b>Сезонное событие</b>\n\n");
+        var cfg = seasonalEventService.configured();
+        if (cfg.isEmpty()) {
+            sb.append("Событие не настроено. Пресет: <code>/event halloween</code>");
+        } else {
+            var e = cfg.get();
+            var now = ru.gamebot.platform.service.SeasonalEventService.nowMsk();
+            String phase = !e.enabled() ? "⏹ выключено" : now.isBefore(e.start()) ? "⏳ ждёт начала" : now.isBefore(e.end()) ? "▶️ идёт" : "🏁 закончилось";
+            long used = seasonalEventService.usedBudgetFresh(e.code());
+            java.time.format.DateTimeFormatter f = java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm");
+            sb.append("«").append(escape(e.title())).append("» (<code>").append(escape(e.code())).append("</code>)\n")
+                    .append("Статус: ").append(phase).append("\n")
+                    .append("Окно (МСК): ").append(e.start().format(f)).append(" - ").append(e.end().format(f)).append("\n")
+                    .append("Надбавка к призу отрядов: <b>+").append(fmtExc(e.squadBonusExc())).append(" EXC</b>\n")
+                    .append("Потолок квестов: <b>").append(e.questBudgetExc() > 0 ? fmtExc(e.questBudgetExc()) + " EXC" : "нет").append("</b>, выдано ").append(fmtExc(used)).append(" EXC")
+                    .append(e.questBudgetExc() > 0 ? " (" + Math.min(100, used * 100 / e.questBudgetExc()) + "%)" : "").append("\n\n")
+                    .append("Включить: <code>/event on</code>, выключить: <code>/event off</code>.");
+        }
+        sendText(admin.getTelegramId(), sb.toString(), null);
+    }
+
     /** Админ: /firstquest - списки стартовых квестов по играм и какие из них сейчас активны; /firstquest bs А;Б - задать; /firstquest bs default - вернуть по умолчанию. */
     private void handleStarterCommand(AppUser admin, String text) {
         String[] p = text.split("\\s+", 3);
@@ -5763,6 +5818,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     // ───────────────────────── «Золотой час» (2026-10-17) ─────────────────────────
 
     /** Строка золотого часа для главного меню и «Квестов» (с переносом перед ней); пусто, если выключен или при ошибке. */
+    /** Строка баннера сезонного события («🎃 Хэллоуин в EGC: до 01.11, осталось 3д 04:12»); пусто, если события нет или оно выключено. */
+    private String eventBannerLine() {
+        try {
+            var ev = seasonalEventService.current();
+            if (ev.isEmpty()) return "";
+            var e = ev.get();
+            long mins = Math.max(0, java.time.Duration.between(ru.gamebot.platform.service.SeasonalEventService.nowMsk(), e.end()).toMinutes());
+            String left = mins >= 1440
+                    ? (mins / 1440) + "д " + String.format("%02d:%02d", (mins % 1440) / 60, mins % 60)
+                    : String.format("%02d:%02d", mins / 60, mins % 60);
+            return "\n🎃 <b>" + escape(e.title()) + "</b>: до " + e.end().format(DateTimeFormatter.ofPattern("dd.MM")) + ", осталось " + left;
+        } catch (Exception ex) {
+            log.warn("Event banner line failed", ex);
+            return "";
+        }
+    }
+
+    /** Пул недели отрядов с сезонной надбавкой («🎃 Пул недели с надбавкой: 15 000 EXC»); пусто, если надбавки нет. */
+    private String eventSquadPoolLine() {
+        try {
+            var ev = seasonalEventService.current();
+            if (ev.isEmpty() || ev.get().squadBonusExc() <= 0) return "";
+            long pool = ru.gamebot.platform.service.SquadService.WEEKLY_PRIZE_POOL + ev.get().squadBonusExc();
+            return "\n🎃 Пул недели с надбавкой: <b>" + String.format("%,d", pool).replace(',', ' ') + " EXC</b>";
+        } catch (Exception ex) {
+            return "";
+        }
+    }
+
     private String goldenHourLine() {
         try {
             String line = goldenHourService.statusLine();
@@ -5846,6 +5930,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             String gh = goldenHourService.compactLine();
             if (!gh.isEmpty()) parts.add(gh);
+            String eventLine = eventBannerLine();
+            if (!eventLine.isEmpty()) parts.add(eventLine.trim());
             StringBuilder sb = new StringBuilder();
             for (String part : parts) sb.append("\n").append(part);
             if (!claimable && user.isRegistrationCompleted() && userService.referralGoalOpen(user)
@@ -6414,6 +6500,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("dailycode", "now|on|off|status", "Пост «Код дня»: создать сейчас, включить, выключить, состояние"),
             new AdminCommand("clubgoal", "status|link ID текст|off", "Цель клуба: состояние, кнопка-портал в квест, выключить портал"),
             new AdminCommand("wdfreeze", "ID on|off", "Заморозить или разморозить вывод игрока"),
+            new AdminCommand("event", "[halloween|on|off]", "Сезонное событие (Хэллоуин): состояние, включить пресет или выключить, затраты на квесты и надбавка отрядам"),
             new AdminCommand("firstquest", "[bs|cr|coc название1;название2|default]", "Стартовые квесты новичков: показать списки, задать для игры или вернуть по умолчанию"),
             new AdminCommand("resetuser", "ID", "Сбросить игрока до «только что создан» (с подтверждением)"),
             new AdminCommand("resetlimit", "ID", "Сбросить месячный лимит вывода игрока"),
@@ -6614,7 +6701,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         // Баннер «Квесты» (Экси у доски заданий) — тот же файл, что на экране «Квесты и рейтинг».
         sendResourceBanner(user.getTelegramId(), "quest_banner.png",
-                "🗺️ <b>Квесты</b>" + goldenHourLine() + "\n\nВыберите раздел:",
+                "🗺️ <b>Квесты</b>" + goldenHourLine() + eventBannerLine() + "\n\nВыберите раздел:",
                 keyboardFactory.rowsLayout(rows));
     }
 
@@ -10390,7 +10477,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ru.gamebot.platform.domain.model.Squad squad = squadService.findByUser(user).orElse(null);
         if (squad == null) {
             sendText(user.getTelegramId(),
-                    "⚔️ <b>Отряды</b>\n\n"
+                    "⚔️ <b>Отряды</b>" + eventBannerLine() + eventSquadPoolLine() + "\n\n"
                             + "Собирайте отряд — от 2 игроков, чем больше, тем сильнее конкуренция за призовые места.\n"
                             + "Суммарный XP участников — рейтинг вашего отряда.\n"
                             + "Каждую неделю топ-отряд делит <b>10 000 EXC</b> между лучшими игроками недели.\n"
@@ -10422,7 +10509,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         int shown = Math.min(sortedMembers.size(), 15);
 
         StringBuilder sb = new StringBuilder();
-        sb.append("⚔️ <b>Отряд «").append(escape(squad.getName())).append("»</b>\n\n");
+        sb.append("⚔️ <b>Отряд «").append(escape(squad.getName())).append("»</b>").append(eventBannerLine()).append(eventSquadPoolLine()).append("\n\n");
         sb.append("👥 Состав (").append(members.size()).append(" участников):\n");
         for (int i = 0; i < shown; i++) {
             ru.gamebot.platform.domain.model.AppUser m = sortedMembers.get(i);
@@ -26062,6 +26149,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         sb.append("\nДанные бота: выход из канала фиксируется, пока бот — админ канала.");
         return sb.toString();
+    }
+
+    /** Затраты на квесты сезонного события достигли 80% / 100% потолка: предупреждаем админов (при 100% квесты события перестают выдаваться сами). */
+    @org.springframework.context.event.EventListener
+    public void onEventBudgetAlert(ru.gamebot.platform.event.EventBudgetAlertEvent event) {
+        String text = (event.getPercent() >= 100 ? "🛑" : "⚠️") + " <b>Потолок затрат события «" + escape(event.getTitle()) + "»: " + event.getPercent() + "%</b>\n\n"
+                + "Выдано " + fmtExc(event.getUsedExc()) + " из " + fmtExc(event.getBudgetExc()) + " EXC по квестам события."
+                + (event.getPercent() >= 100 ? "\nКвесты события больше не выдаются новым игрокам; уже взятые можно закончить." : "")
+                + "\nСостояние: /event";
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, text, null);
+            } catch (Exception e) {
+                log.warn("Failed to send event budget alert to admin {}", adminId, e);
+            }
+        }
     }
 
     /** Бюджет спонсорской кампании выбран до конца: SponsorService уже выключил кампанию и квесты - сообщаем админам итог. */

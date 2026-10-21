@@ -66,7 +66,7 @@ public class QuestPackService {
         main.setCreatedAt(LocalDateTime.now());
         main = packRepository.save(main);
         for (Quest q : questRepository.findAllByGameNameIgnoreCase(gameName)) {
-            if (q.isActive() && q.getPackId() == null && !q.isSponsored()) {
+            if (q.isActive() && q.getPackId() == null && !q.isSponsored() && q.getEventCode() == null) {
                 q.setPackId(main.getId());
                 questRepository.save(q);
             }
@@ -129,8 +129,8 @@ public class QuestPackService {
         int activated = 0;
         int hidden = 0;
         for (Quest q : questRepository.findAllByGameNameIgnoreCase(game)) {
-            if (q.isSponsored()) {
-                continue;
+            if (q.isSponsored() || q.getEventCode() != null) {
+                continue; // квесты сезонного события живут по окну и рубильнику события (SeasonalEventService), а не по пачкам
             }
             if (q.getPackId() == null && q.isActive()) {
                 q.setPackId(main.getId()); // активный квест вне пачек — в «Основную»
@@ -206,8 +206,8 @@ public class QuestPackService {
             active = packRepository.save(main);
         }
         for (Quest q : questRepository.findAllByGameNameIgnoreCase(gameName)) {
-            if (q.isSponsored()) {
-                continue;
+            if (q.isSponsored() || q.getEventCode() != null) {
+                continue; // квесты сезонного события живут по окну и рубильнику события (SeasonalEventService), а не по пачкам
             }
             boolean changed = false;
             if (q.getPackId() == null) {

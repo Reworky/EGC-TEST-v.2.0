@@ -96,9 +96,12 @@ public class QuestService {
     private final SponsorService sponsorService;
     private final ApplicationEventPublisher eventPublisher;
     private final WheelService wheelService;
+    private final SeasonalEventService seasonalEventService;
 
     public List<Quest> findActiveQuests() {
-        return questRepository.findAllByActiveTrueOrderByCreatedAtDesc();
+        return questRepository.findAllByActiveTrueOrderByCreatedAtDesc().stream()
+                .filter(seasonalEventService::isQuestAvailable)
+                .toList();
     }
 
     public List<Quest> findActiveSponsored() {
@@ -271,7 +274,7 @@ public class QuestService {
      *  самый «дешёвый» по награде (награды у нас выставлены по усилию) активный квест игры с автопроверкой, без партнёра/спонсора/внешних офферов. */
     public Optional<Quest> findStarterFallback(String gameName) {
         return findActiveByGameName(gameName).stream()
-                .filter(q -> !q.isExternalAutoApprove() && !q.isCouncilOnly() && !q.isSeasonOnly() && !q.isBrawlRequireTeam())
+                .filter(q -> !q.isExternalAutoApprove() && !q.isCouncilOnly() && !q.isSeasonOnly() && !q.isBrawlRequireTeam() && q.getEventCode() == null)
                 .filter(q -> q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null
                         || q.getDotaVerifyType() != null || q.getCs2VerifyType() != null || q.getPubgVerifyType() != null)
                 .min(Comparator.comparingLong(Quest::getRewardCoins).thenComparing(Quest::getId));
@@ -337,7 +340,7 @@ public class QuestService {
     }
 
     public long countActive() {
-        return questRepository.findAllByActiveTrueOrderByCreatedAtDesc().size();
+        return findActiveQuests().size();
     }
 
     public Quest getQuest(Long questId) {
@@ -675,6 +678,10 @@ public class QuestService {
     @Transactional
     public QuestActionResult takeQuestChecked(AppUser user, Quest quest, String brawlPartnerTag) {
         if (!quest.isActive()) {
+            return QuestActionResult.of(QuestActionStatus.QUEST_INACTIVE, 0);
+        }
+        // Сезонный квест вне окна, при выключенном событии или после выбранного потолка затрат события новым игрокам не выдаётся.
+        if (!seasonalEventService.isQuestAvailable(quest)) {
             return QuestActionResult.of(QuestActionStatus.QUEST_INACTIVE, 0);
         }
         long earlyAccessHours = earlyAccessHoursLeft(user, quest);
@@ -1369,6 +1376,9 @@ public class QuestService {
         // 3.5 Referral bonus: 10% of EXC earned by referred in first 30 days
         grantReferralBonus(user, adjustedCoins);
         notifyReferrerSecondQuestSignal(user);
+
+        // Квест сезонного события: проверка порогов 80%/100% потолка затрат (ошибка здесь не должна ломать начисление).
+        seasonalEventService.onQuestApproved(quest);
 
         return submission;
     }

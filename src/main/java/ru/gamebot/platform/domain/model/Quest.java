@@ -45,6 +45,14 @@ public class Quest {
      * квест новым навсегда, забыв снять флаг вручную, теперь невозможно (см. isEffectivelyNew). */
     private LocalDateTime highlightNewUntil;
 
+    /** Окно доступности сезонного квеста (по МСК, 2026-10-21, Хэллоуин): вне окна квест не виден и не берётся. null - без ограничения. */
+    private LocalDateTime availableFrom;
+    private LocalDateTime availableUntil;
+
+    /** Код сезонного события (SeasonalEventService): квест виден только пока событие с этим кодом включено; затраты на квесты события считаются по нему. null - обычный квест. */
+    @Column(length = 64)
+    private String eventCode;
+
     /** Показывать ли пометку 🆕 в списке квестов (см. sendQuestList в GamePlatformBot, QuestController
      * в мини-аппе) — квест создан в последние 7 дней ИЛИ ещё не истёк редакторский буст highlightNewUntil.
      * Оба пути гаснут сами по себе автоматически — введено 2026-09-14, обновлено 2026-09-17 (раньше

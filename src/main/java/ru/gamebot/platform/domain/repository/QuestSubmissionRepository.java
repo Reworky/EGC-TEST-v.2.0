@@ -52,6 +52,10 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.quest = :quest AND s.status = 'APPROVED'")
     long countApprovedByQuest(@Param("quest") Quest quest);
 
+    /** Сколько EXC начислено по одобренным заявкам квестов сезонного события (затраты события для потолка questBudgetExc). */
+    @Query("SELECT COALESCE(SUM(s.awardedCoins), 0) FROM QuestSubmission s WHERE s.quest.eventCode = :eventCode AND s.status = 'APPROVED'")
+    long sumAwardedCoinsByEventCode(@Param("eventCode") String eventCode);
+
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.quest = :quest AND s.status = 'APPROVED' AND s.updatedAt >= :from AND s.updatedAt < :to")
     long countApprovedByQuestBetween(@Param("quest") Quest quest,
                                      @Param("from") LocalDateTime from,

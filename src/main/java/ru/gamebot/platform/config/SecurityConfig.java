@@ -37,6 +37,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/tournament/*/photo").permitAll()
                         .requestMatchers("/api/shop/**").permitAll()
                         .requestMatchers("/api/stats").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/events/current").permitAll()
                         .requestMatchers("/api/postback/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/public/mediakit/*").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/public/proof").permitAll()

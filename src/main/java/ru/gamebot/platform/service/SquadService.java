@@ -61,6 +61,7 @@ public class SquadService {
     private final ExcTransactionService excTx;
     private final QuestSubmissionRepository submissionRepository;
     private final SquadJoinRequestRepository joinRequestRepository;
+    private final SeasonalEventService seasonalEventService;
 
     /** Заявка в отряд висит не дольше стольких дней (старые не показываются капитану и не принимаются). */
     public static final int JOIN_REQUEST_TTL_DAYS = 14;
@@ -350,15 +351,28 @@ public class SquadService {
                 .toList();
         int payoutCount = Math.min(sorted.size(), PRIZE_MAX_RECIPIENTS);
         List<AppUser> winners = sorted.subList(0, payoutCount);
-        long prizePerMember = WEEKLY_PRIZE_POOL / payoutCount;
+        // Сезонная надбавка к призу (Хэллоуин «Охота на призраков»): считается по МСК и по строгим границам недели (SeasonalEventService.squadBonusForFinishedWeek).
+        long eventBonus = 0;
+        String eventLabel = null;
+        try {
+            eventBonus = seasonalEventService.squadBonusForFinishedWeek();
+            eventLabel = eventBonus > 0 ? seasonalEventService.squadBonusLabel() : null;
+        } catch (Exception e) {
+            log.warn("Seasonal squad bonus lookup failed - paying the regular pool only", e);
+            eventBonus = 0;
+        }
+        long pool = WEEKLY_PRIZE_POOL + eventBonus;
+        long prizePerMember = pool / payoutCount;
         // До рефакторинга 2026-10-01 эта выплата не логировалась в exc_transactions вообще (найдено
         // при миграции на единую точку начисления) - теперь каждому победителю отдельная запись SQUAD_PRIZE.
         for (AppUser member : winners) {
             excTx.creditExc(member, prizePerMember, ExcTransactionService.SQUAD_PRIZE,
-                    "Приз топ-отряда недели: " + top.squad().getName());
+                    eventLabel != null
+                            ? "🎃 " + eventLabel + " (+бонус): приз топ-отряда недели: " + top.squad().getName()
+                            : "Приз топ-отряда недели: " + top.squad().getName());
         }
-        log.info("Squad weekly prize: {} EXC each to top {} of {} members of squad '{}' (total XP: {})",
-                prizePerMember, payoutCount, members.size(), top.squad().getName(), top.weeklyXp());
+        log.info("Squad weekly prize: {} EXC each to top {} of {} members of squad '{}' (total XP: {}), event bonus {}",
+                prizePerMember, payoutCount, members.size(), top.squad().getName(), top.weeklyXp(), eventBonus);
 
         eventPublisher.publishEvent(new SquadPrizeEvent(this, top.squad(), winners, prizePerMember, top.weeklyXp()));
     }
