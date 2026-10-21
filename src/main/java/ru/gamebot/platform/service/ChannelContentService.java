@@ -208,6 +208,13 @@ public class ChannelContentService {
     /** Разовая миграция настроек (17.10.2026): раз и навсегда выключает автопосты, убранные владельцем, даже если раньше они были включены явно.
      *  Маркер cc.migr.20261017 - чтобы после этого владелец мог включить любой из них обратно и перезапуск бота не выключал его снова. */
     private void applyChannelPlanMigration() {
+        if (get("cc.migr.20261021b") == null) {
+            // 21.10.2026: «Топ рефереров недели» - понедельник 13 UTC (был среда): данные фиксируются в понедельник 00:00 UTC
+            put(prefix(REFERRAL_TOP) + "dow", "1");
+            put(prefix(REFERRAL_TOP) + "hour", "13");
+            put("cc.migr.20261021b", "1");
+            log.info("[ChannelContent] 21.10.2026 plan applied: REFERRAL_TOP -> Mon 13 UTC");
+        }
         if (get("cc.migr.20261021") == null) {
             // 21.10.2026: в базе остались старые сдвиги (итоги отрядов во вторник 05 UTC), которые перекрывали новые дефолты. Фиксируем явно:
             // итоги отрядов - понедельник 09 UTC (16:00 МСК+4), «Предметы клуба» - четверг 05 UTC (не совпадают с итогами раз в 4 недели).
@@ -245,10 +252,10 @@ public class ChannelContentService {
             default -> 12;
         };
         int defDow = switch (type) {
-            case HALL_OF_FAME, SQUAD_RESULTS -> 1;
+            case HALL_OF_FAME, SQUAD_RESULTS, REFERRAL_TOP -> 1; // REFERRAL_TOP: 21.10.2026 со среды на понедельник (итоги недели не должны выходить в середине следующей)
             case SHOP_ITEMS -> 4; // 21.10.2026: с понедельника на четверг - итоги отрядов переехали на понедельник 09 UTC, раз в 4 недели совпадали бы
             case LEAGUES_WEEK -> 2;
-            case SQUAD_MIDWEEK, REFERRAL_TOP -> 3;
+            case SQUAD_MIDWEEK -> 3;
             case WITHDRAW_HOWTO, EGCPASS_PERK -> 4;
             case SQUAD_STATS, SHOP_POPULAR -> 5;
             case TOP_QUESTS_WEEK -> 6;
@@ -303,7 +310,19 @@ public class ChannelContentService {
     /** Ставит в очередь ручной пост: карточка админам уйдёт в sendAfter (UTC) через deliverDueCards(). Повторно тот же ключ не создаётся
      *  (даже если пост уже опубликован или отклонён). Возвращает true, если черновик создан. */
     public boolean queueManualPost(String key, String rubric, String note, String text, LocalDateTime sendAfter) {
-        if (draftRepository.existsByTypeAndMetaStartingWith(MANUAL_POST, key + "|")) return false;
+        if (draftRepository.existsByTypeAndMetaStartingWith(MANUAL_POST, key + "|")) {
+            // Время в JSON поправили: ещё не отправленной карточке переносим срок (текст не трогаем - его мог отредактировать админ)
+            if (sendAfter.isAfter(LocalDateTime.now())) {
+                for (ChannelPostDraft ex : draftRepository.findAllByType(MANUAL_POST)) {
+                    if (ex.getMeta() != null && ex.getMeta().startsWith(key + "|") && ChannelPostDraft.PENDING.equals(ex.getStatus())
+                            && ex.getCardSentAt() == null && !sendAfter.equals(ex.getSendAfter())) {
+                        ex.setSendAfter(sendAfter);
+                        draftRepository.save(ex);
+                    }
+                }
+            }
+            return false;
+        }
         ChannelPostDraft d = new ChannelPostDraft();
         d.setType(MANUAL_POST);
         d.setPostText(text.length() > 4000 ? text.substring(0, 4000) : text);
