@@ -248,7 +248,9 @@ public class BrawlQuestVerificationService {
             String t = e.battleTime() != null && e.battleTime().length() >= 15
                     ? e.battleTime().substring(9, 11) + ":" + e.battleTime().substring(11, 13) + ":" + e.battleTime().substring(13, 15) : "?";
             sb.append(t).append(" · ").append(e.mode()).append(" (").append(e.type() == null ? "-" : e.type()).append(") · ")
-              .append(e.victory() ? "✅ победа" : "❌ не победа").append(" · ")
+              .append(e.victory() ? "✅ победа" : "❌ не победа")
+              .append(e.mode() != null && e.mode().toLowerCase().contains("showdown") ? " (место " + (e.rank() == null ? "не пришло от API" : e.rank()) + ")" : "")
+              .append(" · ")
               .append(e.playerBrawlerName() == null ? "?" : e.playerBrawlerName()).append("\n");
         }
         List<QuestSubmission> mine = questSubmissionRepository.findInProgressBrawlAutoVerify().stream()

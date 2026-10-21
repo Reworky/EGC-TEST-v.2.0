@@ -153,7 +153,8 @@ public class BrawlStarsApiService {
             boolean victory,
             boolean isTeamMode,
             String playerBrawlerName, // the queried tag's own brawler in this battle
-            List<String> teammateTags // other players in the SAME team as self (team-mode only, empty otherwise)
+            List<String> teammateTags, // other players in the SAME team as self (team-mode only, empty otherwise)
+            Integer rank              // Showdown: место игрока в бою (поле battle.rank), null - если API его не отдал; нужен только диагностике админа
     ) {}
 
     /**
@@ -251,7 +252,8 @@ public class BrawlStarsApiService {
                     // (this player's own battlelog, so it's already their placement) — verified live, rank 1 = win.
                     victory = battle.path("rank").asInt(Integer.MAX_VALUE) == 1;
                 }
-                out.add(new BattleLogEntry(battleTime, mode, type, victory, isTeamMode, brawlerName, teammateTags));
+                out.add(new BattleLogEntry(battleTime, mode, type, victory, isTeamMode, brawlerName, teammateTags,
+                        battle.has("rank") ? battle.path("rank").asInt() : null));
             }
         } catch (Exception e) {
             log.warn("Failed to parse Brawl Stars battlelog response", e);
