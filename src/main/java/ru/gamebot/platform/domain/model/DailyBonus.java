@@ -49,6 +49,10 @@ public class DailyBonus {
 
     private Long channelMessageId;
 
+    /** Сколько раз игроки открыли бота по кнопке под постом (с повторами, до проверки подписки): для конверсии нажатие -> активация. */
+    @Column(columnDefinition = "integer default 0")
+    private int clicks;
+
     @Column(nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }

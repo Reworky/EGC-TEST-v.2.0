@@ -6453,6 +6453,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(chat, "Такого курса дня нет. Загляни в последний пост канала.", backMenuKeyboard("menu:main"));
                 return;
             }
+            bonusCourseService.recordClick(bonusId);
             if (!isActivelySubscribedFresh(user)) {
                 sendText(chat, "📢 <b>Бонус только для подписчиков канала.</b>\n\nПодпишись на канал и нажми «Проверить» ещё раз.",
                         keyboardFactory.rowsLayout(List.of(

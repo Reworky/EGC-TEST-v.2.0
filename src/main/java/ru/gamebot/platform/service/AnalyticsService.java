@@ -55,7 +55,8 @@ public class AnalyticsService {
         TOURNAMENTS("🏆", "Турниры"),
         TECH("🛠", "Техническое здоровье"),
         PACKS("📦", "Пачки квестов"),
-        FRAUD("🕵️", "Фрод и злоупотребления");
+        FRAUD("🕵️", "Фрод и злоупотребления"),
+        COURSE("📈", "Курс дня и красная кнопка");
 
         public final String icon;
         public final String title;
@@ -121,6 +122,7 @@ public class AnalyticsService {
     private final HeartbeatService heartbeatService;
     private final ErrorMonitorService errorMonitor;
     private final RetentionService retentionService;
+    private final CourseAnalyticsService courseAnalytics;
 
     // ───────────────────────── снимок: дополнительные поля для трендов ─────────────────────────
 
@@ -231,6 +233,7 @@ public class AnalyticsService {
                 case TOURNAMENTS -> tournamentsTab(lines, extras);
                 case TECH -> techTab(p, pv, lines, extras);
                 case FRAUD -> fraudTab(p, lines, extras);
+                case COURSE -> courseTab(p, pv, lines, extras);
             }
         } catch (Exception e) {
             log.error("Analytics tab {} failed", tab, e);
@@ -747,6 +750,39 @@ public class AnalyticsService {
             sb.append("\n");
         }
         extras.add(sb.toString());
+    }
+
+    /** Вкладка «Курс дня и красная кнопка» (этап 4 ТЗ): цифры считает CourseAnalyticsService. Просмотры поста Bot API не отдаёт - есть только нажатия на кнопку. */
+    private void courseTab(Period p, Period pv, List<Line> out, List<String> extras) {
+        CourseAnalyticsService.Report r = courseAnalytics.report(p.from(), p.to());
+        CourseAnalyticsService.Report q = courseAnalytics.report(pv.from(), pv.to());
+        out.add(L("c_posts_d", "Постов «Курс дня»", "", (double) r.dailyPosts(), (double) q.dailyPosts(), null, false));
+        out.add(L("c_posts_r", "Красных кнопок", "", (double) r.redPosts(), (double) q.redPosts(), null, false));
+        out.add(L("c_clicks", "Нажатий на кнопку под постом", "", (double) r.clicks(), (double) q.clicks(), "открыли бота по кнопке, с повторами и до проверки подписки", false));
+        out.add(L("c_act", "Активаций бонуса", "", (double) r.activations(), (double) q.activations(),
+                "курс дня: " + r.activationsDaily() + ", красная: " + r.activationsRed(), false));
+        out.add(L("c_users", "Игроков активировали", "", (double) r.activatingUsers(), (double) q.activatingUsers(), null, false));
+        out.add(L("c_conv", "Конверсия нажатие → активация", "%", r.clicks() == 0 ? null : r.activationsOfPublished() * 100.0 / r.clicks(),
+                q.clicks() == 0 ? null : q.activationsOfPublished() * 100.0 / q.clicks(), "активации постов периода / нажатия по ним; потеря в основном на проверке подписки", false));
+        out.add(L("c_dau", "Активации к DAU (в среднем за день)", "%", r.activationsPerDauPct(), q.activationsPerDauPct(), "уникальные игроки с активацией / активные в журнале в тот же день", false));
+        out.add(L("c_ret_a", "Вернулись на след. день: активировавшие", "%", r.returnActivatedPct(), q.returnActivatedPct(),
+                "выборка " + r.returnSample() + " (дни, у которых следующий день уже прошёл)", false));
+        out.add(L("c_ret_b", "Вернулись на след. день: все активные в те же дни", "%", r.returnBasePct(), q.returnBasePct(), "база для сравнения: даёт ли бонус возврат сверх обычного", false));
+        out.add(L("c_w_with", "Заявок на вывод с бонусом", "", (double) r.withdrawalsWithBonus(), (double) q.withdrawalsWithBonus(), "рубли и TON", false));
+        out.add(L("c_w_without", "Заявок на вывод без бонуса", "", (double) r.withdrawalsWithout(), (double) q.withdrawalsWithout(), null, false));
+        out.add(L("c_avg_with", "Средняя заявка с бонусом (с бонусом внутри)", "₽", r.avgRubWith(), q.avgRubWith(), null, false));
+        out.add(L("c_avg_without", "Средняя заявка без бонуса", "₽", r.avgRubWithout(), q.avgRubWithout(), null, false));
+        out.add(L("c_paid", "Бонус в заявках (резерв + выплачено)", "₽", (double) r.bonusPaidRub(), (double) q.bonusPaidRub(), "без отменённых и отклонённых заявок", true));
+        out.add(L("c_budget", "Бюджет бонусов: использовано из выделенного", "₽", (double) r.budgetUsedRub(), (double) q.budgetUsedRub(),
+                "выделено " + r.budgetTotalRub() + " ₽ на опубликованные в периоде посты", true));
+        out.add(L("c_react_a", "Красная кнопка: реакция, среднее", "мин", r.redReactionAvgMin(), q.redReactionAvgMin(), "минут от публикации до нажатия", false));
+        out.add(L("c_react_m", "Красная кнопка: реакция, медиана", "мин", r.redReactionMedianMin(), q.redReactionMedianMin(), null, false));
+        out.add(L("c_fraud_a", "Антифрод: активации у помеченных или заблокированных", "", (double) r.suspectActivations(), (double) q.suspectActivations(), "помечены уже после активации; ожидаемо 0", true));
+        out.add(L("c_fraud_p", "Антифрод: бонус в заявках таких игроков", "₽", (double) r.bonusToSuspectsRub(), (double) q.bonusToSuspectsRub(), "если больше 0 - проверьте этих игроков и отклоните заявки", true));
+        if (!r.perBonusLines().isEmpty()) {
+            extras.add("<b>Последние кнопки периода</b>\n" + String.join("\n", r.perBonusLines()));
+        }
+        extras.add("<i>Просмотры поста недоступны: Telegram не отдаёт боту счётчик просмотров канала. Возврат на следующий день и активации к DAU считаются по журналу активных дней (с момента его запуска).</i>");
     }
 
     private void tournamentsTab(List<Line> out, List<String> extras) {

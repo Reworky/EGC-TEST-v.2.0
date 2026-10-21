@@ -243,6 +243,15 @@ public class BonusCourseService {
 
     // ───────────────────────── активация ─────────────────────────
 
+    /** Нажатие на кнопку под постом (до проверки подписки): для конверсии нажатие -> активация во вкладке аналитики. Сбой не мешает активации. */
+    public void recordClick(Long bonusId) {
+        try {
+            if (bonusId != null) dailyBonusRepository.addClick(bonusId);
+        } catch (Exception e) {
+            log.warn("[BonusCourse] click counter failed for bonus {}", bonusId, e);
+        }
+    }
+
     /** Подписку на канал проверяет бот ДО вызова (нужен Telegram API). Метод намеренно без @Transactional: гонка двойного нажатия закрыта
      *  уникальным индексом (игрок, бонус), и его нарушение не должно помечать внешнюю транзакцию rollback-only. */
     public Activation activate(AppUser user, Long bonusId) {
