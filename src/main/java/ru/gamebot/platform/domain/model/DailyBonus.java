@@ -19,6 +19,7 @@ import lombok.Setter;
 public class DailyBonus {
 
     public static final String DAILY = "DAILY";
+    public static final String RED = "RED";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -40,7 +41,8 @@ public class DailyBonus {
     @Column(nullable = false)
     private long budgetUsedRub;
 
-    /** Когда пост опубликован в канале (с этого момента можно активировать) и до какого момента бонус действует. null - пост ещё не вышел. */
+    /** Когда пост опубликован в канале (с этого момента можно активировать) и до какого момента можно активировать. null - пост ещё не вышел.
+     *  У DAILY бонус игрока действует до endsAt, у RED окно активации - до endsAt, а бонус игрока живёт дольше (user_bonus.validUntil = активация + несколько часов). */
     private LocalDateTime publishedAt;
 
     private LocalDateTime endsAt;

@@ -55,7 +55,7 @@ public class BonusCourseService {
 
     public enum ActivationStatus { OK, ALREADY, NOT_FOUND, NOT_STARTED, CLOSED, BUDGET_OVER, DENIED }
 
-    public record Activation(ActivationStatus status, int percent, LocalDateTime validUntil) { }
+    public record Activation(ActivationStatus status, int percent, LocalDateTime validUntil, String type) { }
 
     /** Что применено к заявке на вывод: бонус, процент и сумма в рублях (добавляется к базовой сумме). */
     public record Applied(Long bonusId, int percent, long bonusRub) { }
@@ -247,30 +247,41 @@ public class BonusCourseService {
      *  уникальным индексом (игрок, бонус), и его нарушение не должно помечать внешнюю транзакцию rollback-only. */
     public Activation activate(AppUser user, Long bonusId) {
         Optional<DailyBonus> opt = findBonus(bonusId);
-        if (opt.isEmpty()) return new Activation(ActivationStatus.NOT_FOUND, 0, null);
+        if (opt.isEmpty()) return new Activation(ActivationStatus.NOT_FOUND, 0, null, null);
         DailyBonus b = opt.get();
         if (user.isBlocked() || user.isFraudSuspect() || user.isWithdrawalFrozen()) {
-            return new Activation(ActivationStatus.DENIED, b.getPercent(), null);
+            return new Activation(ActivationStatus.DENIED, b.getPercent(), null, b.getType());
         }
-        if (b.getPublishedAt() == null || b.getEndsAt() == null) return new Activation(ActivationStatus.NOT_STARTED, b.getPercent(), null);
+        if (b.getPublishedAt() == null || b.getEndsAt() == null) return new Activation(ActivationStatus.NOT_STARTED, b.getPercent(), null, b.getType());
         LocalDateTime now = LocalDateTime.now();
-        if (!now.isBefore(b.getEndsAt())) return new Activation(ActivationStatus.CLOSED, b.getPercent(), b.getEndsAt());
+        if (!now.isBefore(b.getEndsAt())) return new Activation(ActivationStatus.CLOSED, b.getPercent(), b.getEndsAt(), b.getType());
         if (userBonusRepository.existsByUserIdAndBonusId(user.getId(), b.getId())) {
-            return new Activation(ActivationStatus.ALREADY, b.getPercent(), b.getEndsAt());
+            return new Activation(ActivationStatus.ALREADY, b.getPercent(), existingValidUntil(user, b), b.getType());
         }
-        if (b.getBudgetTotalRub() - b.getBudgetUsedRub() < 1) return new Activation(ActivationStatus.BUDGET_OVER, b.getPercent(), b.getEndsAt());
+        if (b.getBudgetTotalRub() - b.getBudgetUsedRub() < 1) return new Activation(ActivationStatus.BUDGET_OVER, b.getPercent(), b.getEndsAt(), b.getType());
         UserBonus ub = new UserBonus();
         ub.setUserId(user.getId());
         ub.setBonusId(b.getId());
         ub.setPercent(b.getPercent());
         ub.setActivatedAt(now);
-        ub.setValidUntil(b.getEndsAt());
+        // DAILY: до конца окна бонуса дня; RED: несколько часов с момента активации (окно нажатия короткое, а бонус живёт дольше)
+        LocalDateTime validUntil = DailyBonus.RED.equals(b.getType()) ? now.plusHours(redValidHours()) : b.getEndsAt();
+        ub.setValidUntil(validUntil);
         try {
             userBonusRepository.save(ub);
         } catch (DataIntegrityViolationException e) {
-            return new Activation(ActivationStatus.ALREADY, b.getPercent(), b.getEndsAt());
+            return new Activation(ActivationStatus.ALREADY, b.getPercent(), existingValidUntil(user, b), b.getType());
         }
-        return new Activation(ActivationStatus.OK, b.getPercent(), b.getEndsAt());
+        return new Activation(ActivationStatus.OK, b.getPercent(), validUntil, b.getType());
+    }
+
+    /** Сколько часов после нажатия действует бонус красной кнопки. */
+    public int redValidHours() { return (int) Math.max(1, Math.min(24, parseLong(get("bcr.validhours"), 3))); }
+
+    public void setRedValidHours(int hours) { put("bcr.validhours", String.valueOf(Math.max(1, Math.min(24, hours)))); }
+
+    private LocalDateTime existingValidUntil(AppUser user, DailyBonus b) {
+        return userBonusRepository.findByUserIdAndBonusId(user.getId(), b.getId()).map(UserBonus::getValidUntil).orElse(b.getEndsAt());
     }
 
     // ───────────────────────── применение к выводу ─────────────────────────
@@ -339,7 +350,7 @@ public class BonusCourseService {
             sb.append("Бонусов ещё не было. Создать сейчас: <code>/course now</code>.");
         } else {
             DailyBonus b = last.get();
-            sb.append("Последний: +").append(b.getPercent()).append("% (").append(b.getBonusDate()).append("), ")
+            sb.append("Последний: ").append(b.getType()).append(" +").append(b.getPercent()).append("% (").append(b.getBonusDate()).append("), ")
                     .append(b.getPublishedAt() == null ? "пост ещё не опубликован" : "опубликован " + b.getPublishedAt() + ", до " + b.getEndsAt()).append("\n");
             sb.append("Активаций: ").append(userBonusRepository.countByBonusId(b.getId())).append("; бюджет: ")
                     .append(b.getBudgetUsedRub()).append(" из ").append(b.getBudgetTotalRub()).append(" ₽");

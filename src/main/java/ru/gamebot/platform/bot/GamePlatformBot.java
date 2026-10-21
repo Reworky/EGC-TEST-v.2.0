@@ -156,6 +156,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.EngagementCeilingService engagementCeilingService;
     private final ru.gamebot.platform.service.ChannelContentService channelContentService;
     private final ru.gamebot.platform.service.BonusCourseService bonusCourseService;
+    private final ru.gamebot.platform.service.RedButtonService redButtonService;
     private final ru.gamebot.platform.service.FinanceService financeService;
     private final ru.gamebot.platform.service.ExpenseService expenseService;
     private final ru.gamebot.platform.service.FinancePanelService financePanelService;
@@ -508,6 +509,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (text != null && text.startsWith("/dailycode") && isEffectiveAdmin(user)) {
             handleDailyCodeCommand(user, text.trim());
+            return;
+        }
+
+        if (text != null && (text.equals("/redbutton") || text.startsWith("/redbutton ")) && isEffectiveAdmin(user)) {
+            handleRedButtonCommand(user, text.trim());
             return;
         }
 
@@ -1898,6 +1904,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.startsWith("revmod:") && isEffectiveModerator(user)) {
             handleReviewModAction(callbackQuery, data.substring("revmod:".length()));
+            return;
+        }
+        if (data.startsWith("redbtn:") && isEffectiveAdmin(user)) {
+            handleRedButtonCallback(callbackQuery, data.substring("redbtn:".length()));
             return;
         }
         if (data.startsWith("adminfeed:") && isEffectiveAdmin(user)) {
@@ -6254,6 +6264,150 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Админ: /redbutton status | on | off | now [процент] | plan | cancel ID | set КЛЮЧ ЗНАЧЕНИЕ | text post|teaser ТЕКСТ - «красная кнопка». */
+    private void handleRedButtonCommand(AppUser admin, String text) {
+        String[] p = text.split("\\s+", 4);
+        String sub = p.length > 1 ? p[1].toLowerCase() : "status";
+        Long chat = admin.getTelegramId();
+        try {
+            switch (sub) {
+                case "on" -> {
+                    redButtonService.setEnabled(true);
+                    sendText(chat, "🔔 Красная кнопка включена: расписание на неделю составится в ближайшую минуту.", null);
+                }
+                case "off" -> {
+                    redButtonService.setEnabled(false);
+                    sendText(chat, "🔕 Красная кнопка выключена, невышедшие кнопки отменены (уже вышедшая закроется сама).", null);
+                }
+                case "now" -> {
+                    Long pct = p.length > 2 ? parseLong(p[2]) : null;
+                    if (p.length > 2 && (pct == null || pct < 1 || pct > 500)) {
+                        sendText(chat, "Формат: <code>/redbutton now</code> или <code>/redbutton now 40</code> (процент от 1 до 500).", null);
+                        return;
+                    }
+                    ru.gamebot.platform.domain.model.RedButtonSchedule r = redButtonService.createNow(pct == null ? null : pct.intValue());
+                    sendText(chat, "🔴 Красная кнопка #" + r.getId() + " (+" + r.getPercent() + "%) выйдет в канал в течение минуты БЕЗ согласования.", null);
+                }
+                case "plan" -> {
+                    int n = redButtonService.replanWeek();
+                    sendText(chat, "🗓 Неделя перепланирована, кнопок: " + n + ".\n\n" + redButtonService.statusText(), null);
+                }
+                case "cancel" -> {
+                    Long id = p.length > 2 ? parseLong(p[2]) : null;
+                    sendText(chat, id != null && redButtonService.cancel(id) ? "❌ Кнопка #" + id + " отменена." : "Не получилось: кнопка не найдена или уже вышла.", null);
+                }
+                case "set" -> {
+                    if (p.length < 4) {
+                        sendText(chat, "Формат: <code>/redbutton set window 60</code>. Параметры: perweek, start, end, min, max, step, window, valid, budget, teaser, warn.", null);
+                        return;
+                    }
+                    sendText(chat, redButtonService.setParam(p[2], p[3].trim()), null);
+                }
+                case "text" -> {
+                    if (p.length < 4) {
+                        sendText(chat, "Формат: <code>/redbutton text post ТЕКСТ</code> или <code>/redbutton text teaser ТЕКСТ</code> (HTML-теги разрешены; в посте подстановки {p} {w} {until} {v} {cap}).", null);
+                        return;
+                    }
+                    sendText(chat, redButtonService.setText(p[2], p[3]), null);
+                }
+                default -> sendText(chat, redButtonService.statusText(), null);
+            }
+        } catch (Exception e) {
+            sendText(chat, "⚠️ " + escape(String.valueOf(e.getMessage())), null);
+        }
+    }
+
+    private void handleRedButtonCallback(CallbackQuery callbackQuery, String action) {
+        String[] parts = action.split(":");
+        if (parts.length > 1 && "cancel".equals(parts[0])) {
+            Long id = parseLong(parts[1]);
+            boolean ok = id != null && redButtonService.cancel(id);
+            clearInlineKeyboard(callbackQuery);
+            answer(callbackQuery.getId(), ok ? "❌ Красная кнопка отменена" : "Уже поздно или отменена");
+            return;
+        }
+        answerSilently(callbackQuery.getId());
+    }
+
+    /** События красной кнопки (RedButtonService): предупреждение админам, публикация без согласования, правка поста после окна, тревога о сбое. */
+    @org.springframework.context.event.EventListener
+    public void onRedButtonEvent(ru.gamebot.platform.event.RedButtonEvent event) {
+        try {
+            switch (event.getKind()) {
+                case WARN -> sendRedButtonWarning(event.getScheduleId());
+                case PUBLISH -> publishRedButton(event.getScheduleId());
+                case CLOSE -> closeRedButton(event.getScheduleId());
+                case ALERT -> alertAdminsPlain(event.getMessage());
+            }
+        } catch (Exception e) {
+            log.error("Red button event {} failed", event.getKind(), e);
+        }
+    }
+
+    private void sendRedButtonWarning(Long id) {
+        ru.gamebot.platform.domain.model.RedButtonSchedule r = redButtonService.find(id).orElse(null);
+        if (r == null || !ru.gamebot.platform.domain.model.RedButtonSchedule.PLANNED.equals(r.getStatus())) return;
+        java.time.LocalDateTime at = r.getPlannedAt();
+        java.time.LocalDateTime msk = at.plusHours(3);
+        java.time.LocalDateTime tz7 = at.plusHours(7);
+        String text = "🔴 <b>Красная кнопка выйдет в канал без согласования</b>\n\n"
+                + "Бонус: <b>+" + r.getPercent() + "%</b>\n"
+                + "Время: " + String.format("%02d:%02d", at.getHour(), at.getMinute()) + " UTC, "
+                + String.format("%02d:%02d", msk.getHour(), msk.getMinute()) + " по Москве, "
+                + String.format("%02d:%02d", tz7.getHour(), tz7.getMinute()) + " по UTC+7.\n\n"
+                + "Если сейчас не время, отмените.";
+        InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("❌ Отменить кнопку #" + id, "redbtn:cancel:" + id))));
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, text, markup);
+            } catch (Exception e) {
+                log.warn("Failed to send red button warning to admin {}", adminId, e);
+            }
+        }
+    }
+
+    private void publishRedButton(Long id) {
+        ru.gamebot.platform.service.RedButtonService.Prepared prepared = redButtonService.prepare(id);
+        if (prepared == null) return;
+        Integer messageId;
+        try {
+            InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
+                    List.of(keyboardFactory.url("🔴 Нажать красную кнопку", prepared.deepLink()))));
+            messageId = sendBannerAndTextReturningId(requiredChannelChatId(), null, prepared.text(), keyboard);
+        } catch (Exception e) {
+            log.error("Failed to publish red button {}", id, e);
+            boolean retry = redButtonService.onPublishFailed(id);
+            alertAdminsPlain(retry
+                    ? "⚠️ Красная кнопка #" + id + ": не удалось опубликовать, повторю через минуту."
+                    : "⚠️ Красная кнопка #" + id + ": не удалось опубликовать после повтора, кнопка отменена. Причина: " + escape(String.valueOf(e.getMessage())));
+            return;
+        }
+        try {
+            redButtonService.onPublished(id, messageId);
+            alertAdminsPlain("🔴 Красная кнопка #" + id + " вышла в канал. Закроется через окно нажатия.");
+        } catch (Exception e) {
+            log.error("Red button {} published, but window not opened", id, e);
+            alertAdminsPlain("⚠️ Красная кнопка #" + id + " опубликована, но окно нажатия не открыто: " + escape(String.valueOf(e.getMessage())));
+        }
+    }
+
+    private void closeRedButton(Long id) {
+        ru.gamebot.platform.domain.model.RedButtonSchedule r = redButtonService.find(id).orElse(null);
+        if (r == null || r.getChannelMessageId() == null) return;
+        EditMessageText edit = new EditMessageText();
+        edit.setChatId(requiredChannelChatId());
+        edit.setMessageId(r.getChannelMessageId().intValue());
+        edit.setText(redButtonService.closedText(r));
+        edit.setParseMode("HTML");
+        try {
+            execute(edit);
+        } catch (TelegramApiException e) {
+            log.error("Failed to close red button post {}", id, e);
+            alertAdminsPlain("⚠️ Красная кнопка #" + id + ": не удалось отредактировать пост в канале (кнопка может остаться под постом, но бонус уже не выдаётся). Уберите её вручную.");
+        }
+    }
+
     /** Админ: /course status | on | off | now [процент] | set hour|cap|budget|endhour|weights ЗНАЧЕНИЕ - «Курс дня», бонус к курсу вывода (пост всегда через согласование). */
     private void handleCourseCommand(AppUser admin, String text) {
         String[] p = text.split("\\s+");
@@ -6310,11 +6464,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             java.time.LocalDateTime endMsk = a.validUntil() == null ? null : a.validUntil().plusHours(3);
             String until = endMsk == null ? "" : String.format("%02d:%02d", endMsk.getHour(), endMsk.getMinute());
             String text = switch (a.status()) {
-                case OK -> "✅ <b>Курс дня включён: +" + a.percent() + "%</b>\n\n"
+                case OK -> "✅ <b>" + (ru.gamebot.platform.domain.model.DailyBonus.RED.equals(a.type()) ? "Красная кнопка нажата" : "Курс дня включён") + ": +" + a.percent() + "%</b>\n\n"
                         + "Он действует до " + until + " по Москве. Создай заявку на вывод в рублях или TON, и бонус добавится к сумме автоматически "
                         + "(считается максимум с " + bonusCourseService.capRub() + " ₽ на заявку). Выводить можно раз в сутки.";
                 case ALREADY -> "Ты уже включил курс дня (+" + a.percent() + "%)" + (until.isEmpty() ? "." : ", он действует до " + until + " по Москве.");
-                case CLOSED -> "⌛ Этот курс дня уже закончился. Следующий будет в одном из ближайших постов канала.";
+                case CLOSED -> ru.gamebot.platform.domain.model.DailyBonus.RED.equals(a.type())
+                        ? "🔴 Красная кнопка уже погасла. Следи за каналом: следующая выйдет внезапно."
+                        : "⌛ Этот курс дня уже закончился. Следующий будет в одном из ближайших постов канала.";
                 case BUDGET_OVER -> "😔 Бонус на сегодня уже разобрали. Загляни в канал завтра.";
                 case NOT_STARTED -> "⏳ Этот курс дня ещё не открыт, попробуй чуть позже.";
                 case DENIED -> "Для этого аккаунта бонус недоступен. Если это ошибка, напиши в поддержку.";
@@ -6582,6 +6738,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("push", "status|on NAME|off NAME", "Короткие рассылки игрокам: буст выходных, новые квесты по игре, гонка отрядов, гонка за Зал славы"),
             new AdminCommand("goldenhour", "status|on|off|hour N|percent N|max N|push on|off|pushtest", "Золотой час: окно, бонус, лимит квестов, напоминание игрокам"),
             new AdminCommand("dailycode", "now|on|off|status", "Пост «Код дня»: создать сейчас, включить, выключить, состояние"),
+            new AdminCommand("redbutton", "status|on|off|now [%]|plan|cancel ID|set КЛЮЧ ЗНАЧЕНИЕ|text post|teaser ТЕКСТ", "«Красная кнопка»: редкий крупный бонус к курсу вывода (расписание, предупреждение, закрытие)"),
             new AdminCommand("course", "status|on|off|now [%]|set КЛЮЧ ЗНАЧЕНИЕ", "«Курс дня»: бонус к курсу вывода (пост с кнопкой, проценты, потолок, бюджет)"),
             new AdminCommand("clubgoal", "status|link ID текст|off", "Цель клуба: состояние, кнопка-портал в квест, выключить портал"),
             new AdminCommand("wdfreeze", "ID on|off", "Заморозить или разморозить вывод игрока"),
@@ -20916,6 +21073,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case ru.gamebot.platform.service.ChannelContentService.DAILY_CODE -> "Код дня";
             case ru.gamebot.platform.service.ChannelContentService.MANUAL_POST -> "Пост из плана";
             case ru.gamebot.platform.service.ChannelContentService.DAILY_BUTTON -> "Курс дня";
+            case ru.gamebot.platform.service.ChannelContentService.RED_BUTTON_TEASER -> "Тизер красной кнопки";
             default -> "Пост для канала";
         };
     }

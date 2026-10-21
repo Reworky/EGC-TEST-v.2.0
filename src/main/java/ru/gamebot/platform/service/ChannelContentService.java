@@ -94,6 +94,8 @@ public class ChannelContentService {
     /** «Курс дня» (21.10.2026): пост с кнопкой-ссылкой на бота, активирует бонус к курсу вывода (BonusCourseService). Не в ALL_TYPES: расписание и кнопки нет, ручной запуск - /course now.
      *  meta = id записи daily_bonus. */
     public static final String DAILY_BUTTON = "DAILY_BUTTON";
+    /** Тизер «красной кнопки» (за сутки до первой кнопки недели, без даты); через обычное одобрение админом. meta = id red_button_schedule. */
+    public static final String RED_BUTTON_TEASER = "RED_BUTTON_TEASER";
     public static final List<String> ALL_TYPES = List.of(NEW_QUESTS, TOP_QUESTS_WEEK, SQUAD_MIDWEEK, SQUAD_RESULTS, SQUAD_STATS,
             TOURNEY_REG_CLOSING, TOURNEY_ACTIVE, TOURNEY_CANCELLED, WITHDRAW_SUMMARY, WITHDRAW_MILESTONE, WITHDRAW_HOWTO, WITHDRAW_PROOF,
             HALL_OF_FAME, WEEKLY_RACE, LEAGUES_WEEK, SHOP_NEW, EGCPASS_PERK, SHOP_POPULAR, SHOP_ITEMS,
