@@ -43,6 +43,9 @@ public class RewardService {
 
     /** null — вывод доступен; иначе понятное игроку объяснение, чего не хватает. */
     public String withdrawalEligibilityBlock(AppUser user) {
+        if (user.isBlocked()) {
+            return "Аккаунт заблокирован администратором. Напишите в поддержку.";
+        }
         if (user.isWithdrawalFrozen()) {
             return "Вывод по вашему аккаунту временно приостановлен на проверку. Напишите в поддержку: мы разберёмся и сообщим результат.";
         }
