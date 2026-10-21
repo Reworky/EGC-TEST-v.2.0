@@ -4,6 +4,7 @@ import { authMiniApp, getProfile, invalidateCache } from './api/client';
 import InterstitialAd from './components/InterstitialAd';
 import { useTelegram } from './hooks/useTelegram';
 import BottomNav from './components/BottomNav';
+import EventBanner from './components/EventBanner';
 import RegistrationRequiredScreen from './components/RegistrationRequiredScreen';
 import { LottieProvider } from './components/LottieContext';
 import { ParticlesProvider } from './components/ParticlesContext';
@@ -169,6 +170,7 @@ export default function App() {
       <LottieProvider>
       <ParticlesProvider>
       <div className="app">
+        <EventBanner />
         <Suspense fallback={null}>
         <Routes>
           <Route path="/" element={<Navigate to="/quests" replace />} />

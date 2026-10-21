@@ -473,3 +473,6 @@ export async function donatePurchase({ gameKey, packageKey, method }) {
   const { data } = await api.post('/api/donate/purchase', { gameKey, packageKey, method });
   return data;
 }
+
+/** Текущее сезонное событие (Хэллоуин и т.п.) для баннера: {active:false} или {active:true, title, themeKey, endsAt}. Без данных игрока, кэш 60 с. */
+export const getCurrentEvent = () => cached('event-current', () => api.get('/api/events/current').then(r => r.data));

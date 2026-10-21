@@ -1,0 +1,21 @@
+.event-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 12px 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(124, 58, 237, 0.18);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+.event-banner-timer { opacity: 0.85; font-weight: 500; white-space: nowrap; }
+/* Хэллоуин: меняется только акцент плашки (оранжевый), остальная перекраска приложения не нужна и рискованна. */
+.event-theme-halloween {
+  background: rgba(249, 115, 22, 0.16);
+  border-color: rgba(249, 115, 22, 0.5);
+}
+.event-theme-halloween .event-banner-title { color: #fdba74; }
