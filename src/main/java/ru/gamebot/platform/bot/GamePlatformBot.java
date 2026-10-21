@@ -21446,9 +21446,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Админка → «Коммуникации» → «Контент канала»: хронологическое расписание (день → час), не список из 22 карточек подряд
      *  (жалоба владельца 2026-09-27: «хочу чётко понимать, в какой день, в какое время, какой пост выходит и где его отредактировать»).
      *  Каждая строка - кнопка на экран этого типа, где и происходит редактирование. */
-    private void sendChannelContentPanel(AppUser user) {
+    private void sendChannelContentFullList(AppUser user) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        StringBuilder sb = new StringBuilder("📰 <b>Контент канала</b>\n\n"
+        StringBuilder sb = new StringBuilder("📰 <b>Контент канала: все посты списком</b>\n\n"
                 + "Расписание по дням и часам (время сервера UTC = Москва минус 3 часа). Нажмите на пост, чтобы включить/выключить, "
                 + "сдвинуть время или сформировать вручную - каждый пост всё равно сначала приходит на согласование.\n\n");
         List<String> sorted = new ArrayList<>(ru.gamebot.platform.service.ChannelContentService.ALL_TYPES);
@@ -21467,8 +21467,100 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         sb.append("Черновиков на согласовании: <b>").append(channelContentService.pendingCount()).append("</b>");
         rows.add(List.of(keyboardFactory.callback("🗓 Расписание на 14 дней + очередь ручных", "admin:cc:sched:14")));
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:comm"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ По дням недели", "admin:cc"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private static final String[] DAY_SHORT = {"", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"};
+
+    /** Админка → «Контент канала» (главный экран, с 21.10.2026): кнопки по дням недели. В скобках - сколько постов (автопосты + очередь ручных) в ближайшие 14 дней в этот день. */
+    private void sendChannelContentPanel(AppUser user) {
+        java.util.List<ru.gamebot.platform.service.ChannelContentService.ScheduleEntry> list =
+                channelContentService.upcomingSchedule(14, GamePlatformBot::channelPostTitle);
+        int[] cnt = new int[8];
+        for (ru.gamebot.platform.service.ChannelContentService.ScheduleEntry e : list) cnt[e.atUtc().plusHours(7).getDayOfWeek().getValue()]++;
+        int today = java.time.LocalDateTime.now().plusHours(7).getDayOfWeek().getValue();
+        List<InlineKeyboardButton> first = new ArrayList<>();
+        List<InlineKeyboardButton> second = new ArrayList<>();
+        for (int d = 1; d <= 7; d++) {
+            InlineKeyboardButton b = keyboardFactory.callback((d == today ? "📍 " : "") + DAY_SHORT[d] + " · " + cnt[d], "admin:cc:day:" + d);
+            (d <= 4 ? first : second).add(b);
+        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(first);
+        rows.add(second);
+        rows.add(List.of(keyboardFactory.callback("🔁 Ежедневно и по событию", "admin:cc:day:0")));
+        rows.add(List.of(keyboardFactory.callback("🗓 Расписание на 14 дней + очередь ручных", "admin:cc:sched:14")));
+        rows.add(List.of(keyboardFactory.callback("📋 Все посты списком", "admin:cc:all")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:comm"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(),
+                "📰 <b>Контент канала</b>\n\n"
+                        + "Выберите день недели: откроются посты этого дня, автопосты (с настройками) и очередь ручных. 📍 - сегодня, число - сколько постов в ближайшие 14 дней. "
+                        + "Время везде по UTC+7 (Москва плюс 4). Каждый пост сначала приходит на согласование.\n\n"
+                        + "Черновиков на согласовании: <b>" + channelContentService.pendingCount() + "</b>",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Экран одного дня недели (1-7) или «ежедневно и по событию» (0): автопосты дня кнопками (настройки типа), затем ближайшие даты с постами и ручными из очереди. */
+    private void sendChannelContentDay(AppUser user, int dow) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        StringBuilder sb = new StringBuilder();
+        List<String> types = new ArrayList<>();
+        for (String t : ru.gamebot.platform.service.ChannelContentService.ALL_TYPES) {
+            int g = ccSortKey(t)[0];
+            if (dow == 0 ? (g == 0 || g == 8) : g == dow) types.add(t);
+        }
+        types.sort(java.util.Comparator.<String>comparingInt(t -> ccSortKey(t)[0]).thenComparingInt(t -> ccSortKey(t)[1]));
+        if (dow == 0) {
+            sb.append("🔁 <b>Ежедневно и по событию</b>\n\nПосты без дня недели: выходят каждый день или по событию (турниры, вехи, пруфы).\n\n");
+        } else {
+            sb.append("📅 <b>").append(weekdayNomRu(dow)).append("</b>\n\nВремя по UTC+7. Нажмите на автопост, чтобы включить/выключить, сдвинуть время или сформировать вручную.\n\n");
+        }
+        if (types.isEmpty() && dow != 0) sb.append("Автопостов в этот день нет.\n");
+        for (String type : types) {
+            int[] key = ccSortKey(type);
+            ru.gamebot.platform.service.ChannelContentService.TypeSettings st = channelContentService.settings(type);
+            String label = (key[0] == 8 ? "" : String.format("%02d:00 · ", (key[1] + 7) % 24)) + channelPostTitle(type);
+            rows.add(List.of(keyboardFactory.callback((st.enabled() ? "🔔 " : "🔕 ") + label, "admin:cc:type:" + ccKey(type))));
+        }
+        if (dow == 0) {
+            rows.add(List.of(keyboardFactory.callback((bonusCourseService.isEnabled() ? "🔔 " : "🔕 ") + String.format("%02d:00 · ", (bonusCourseService.postHourUtc() + 7) % 24) + "Курс дня (бонус к выводу)", "admin:course")));
+            rows.add(List.of(keyboardFactory.callback((redButtonService.isEnabled() ? "🔔 " : "🔕 ") + "Красная кнопка (случайные дни)", "admin:course")));
+            rows.add(List.of(keyboardFactory.callback((channelContentService.isDailyCodeEnabled() ? "🔔 " : "🔕 ") + String.format("%02d:00 · ", (channelContentService.dailyCodeHour() + 7) % 24) + "Код дня и цель клуба", "admin:club")));
+        } else {
+            // ближайшие даты этого дня недели: автопосты по реальным настройкам и ручные из очереди, красные кнопки
+            java.util.List<ru.gamebot.platform.service.ChannelContentService.ScheduleEntry> list =
+                    channelContentService.upcomingSchedule(35, GamePlatformBot::channelPostTitle);
+            java.time.LocalDate lastDay = null;
+            int manualButtons = 0;
+            StringBuilder dates = new StringBuilder();
+            for (ru.gamebot.platform.service.ChannelContentService.ScheduleEntry e : list) {
+                java.time.LocalDateTime local = e.atUtc().plusHours(7);
+                if (local.getDayOfWeek().getValue() != dow) continue;
+                if (!local.toLocalDate().equals(lastDay)) {
+                    lastDay = local.toLocalDate();
+                    dates.append("\n<b>").append(String.format("%02d.%02d", local.getDayOfMonth(), local.getMonthValue())).append("</b>\n");
+                }
+                dates.append(String.format("%02d:%02d ", local.getHour(), local.getMinute())).append(e.manual() ? "✍️ " : "🤖 ").append(escape(e.title())).append("\n");
+                if (e.manual() && e.draftId() != null && manualButtons < 12) {
+                    manualButtons++;
+                    String lbl = String.format("👁 %02d.%02d %02d:%02d %s", local.getDayOfMonth(), local.getMonthValue(), local.getHour(), local.getMinute(), e.title());
+                    rows.add(List.of(keyboardFactory.callback(lbl.length() > 60 ? lbl.substring(0, 60) : lbl, "admin:cc:show:" + e.draftId())));
+                }
+            }
+            for (ru.gamebot.platform.domain.model.RedButtonSchedule r : redButtonService.planned()) {
+                java.time.LocalDateTime local = r.getPlannedAt().plusHours(7);
+                if (local.getDayOfWeek().getValue() != dow) continue;
+                dates.append(String.format("%02d.%02d %02d:%02d ", local.getDayOfMonth(), local.getMonthValue(), local.getHour(), local.getMinute()))
+                        .append("🔴 красная кнопка +").append(r.getPercent()).append("%\n");
+            }
+            if (dates.length() > 0) sb.append("<b>Ближайшие даты</b> (✍️ ручной пост из очереди, 🤖 автопост)").append(dates);
+            else sb.append("\nВ ближайшие 5 недель в этот день постов нет.");
+            sb.append("\n\n📈 Курс дня выходит ежедневно, он в разделе «Ежедневно и по событию».");
+        }
+        String text = sb.length() > 3900 ? sb.substring(0, 3900) + "…" : sb.toString();
+        rows.add(List.of(keyboardFactory.callback("⬅️ По дням недели", "admin:cc"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
 
     /** Экран одного типа: полное описание расписания (UTC и Москва) плюс управление - открывается по клику на строку расписания. */
@@ -21571,9 +21663,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleChannelContentAction(CallbackQuery callbackQuery, AppUser user, String action) {
         String[] p = action.split(":");
+        if (p.length == 2 && "all".equals(p[1])) {
+            answerSilently(callbackQuery.getId());
+            sendChannelContentFullList(user);
+            return;
+        }
         if (p.length < 3) {
             sendChannelContentPanel(user);
             answerSilently(callbackQuery.getId());
+            return;
+        }
+        if ("day".equals(p[1])) {
+            Long d = parseLong(p[2]);
+            answerSilently(callbackQuery.getId());
+            if (d == null || d < 0 || d > 7) sendChannelContentPanel(user); else sendChannelContentDay(user, d.intValue());
             return;
         }
         if ("sched".equals(p[1])) {
