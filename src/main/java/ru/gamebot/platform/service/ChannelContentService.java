@@ -91,6 +91,9 @@ public class ChannelContentService {
     /** Ручной пост из очереди плана (21.10.2026): текст заготовлен заранее (ресурс channel_manual_posts.json), карточка на согласование уходит
      *  админам в назначенный час (sendAfter). Не в ALL_TYPES: расписания и кнопки «Сформировать» нет. meta = "ключ|рубрика|заметка". */
     public static final String MANUAL_POST = "MANUAL_POST";
+    /** «Курс дня» (21.10.2026): пост с кнопкой-ссылкой на бота, активирует бонус к курсу вывода (BonusCourseService). Не в ALL_TYPES: расписание и кнопки нет, ручной запуск - /course now.
+     *  meta = id записи daily_bonus. */
+    public static final String DAILY_BUTTON = "DAILY_BUTTON";
     public static final List<String> ALL_TYPES = List.of(NEW_QUESTS, TOP_QUESTS_WEEK, SQUAD_MIDWEEK, SQUAD_RESULTS, SQUAD_STATS,
             TOURNEY_REG_CLOSING, TOURNEY_ACTIVE, TOURNEY_CANCELLED, WITHDRAW_SUMMARY, WITHDRAW_MILESTONE, WITHDRAW_HOWTO, WITHDRAW_PROOF,
             HALL_OF_FAME, WEEKLY_RACE, LEAGUES_WEEK, SHOP_NEW, EGCPASS_PERK, SHOP_POPULAR, SHOP_ITEMS,
@@ -305,6 +308,11 @@ public class ChannelContentService {
     public long pendingCount() {
         return draftRepository.countByStatus(ChannelPostDraft.PENDING)
                 - draftRepository.countByTypeAndStatusAndCardSentAtIsNull(MANUAL_POST, ChannelPostDraft.PENDING);
+    }
+
+    /** Черновик поста, текст которого собрал другой сервис (например BonusCourseService): уходит админам на согласование как обычный. */
+    public ChannelPostDraft createExternalDraft(String type, String text, String meta) {
+        return saveDraft(type, text, meta);
     }
 
     /** Ставит в очередь ручной пост: карточка админам уйдёт в sendAfter (UTC) через deliverDueCards(). Повторно тот же ключ не создаётся

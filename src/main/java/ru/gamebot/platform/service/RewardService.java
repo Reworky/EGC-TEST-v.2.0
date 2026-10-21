@@ -34,6 +34,7 @@ public class RewardService {
     private final ExcTransactionService excTx;
     private final AppUserRepository appUserRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final BonusCourseService bonusCourseService;
 
     // ── Защита вывода от мультиаккаунтов (решение владельца 2026-10-03) ──
     /** Вывод открывается не раньше, чем через столько дней после регистрации... */
@@ -572,6 +573,7 @@ public class RewardService {
         excTx.creditExc(requester, price, ExcTransactionService.SHOP_REFUND, "Отмена заявки: " + req.getRewardItem().getTitle());
         // reverseWithdrawal for ALL items since recordWithdrawal is called for all in createRewardRequest
         sinkShopService.reverseWithdrawal(requester, price);
+        bonusCourseService.releaseBudget(req);
         return rewardRequestRepository.save(req);
     }
 
@@ -588,6 +590,7 @@ public class RewardService {
         long price = actualPaidPrice(req);
         excTx.creditExc(user, price, ExcTransactionService.SHOP_REFUND, "Возврат (отклонение): " + req.getRewardItem().getTitle());
         sinkShopService.reverseWithdrawal(user, price);
+        bonusCourseService.releaseBudget(req);
         // Отклонение — не вина игрока, поэтому снимаем cooldown по ценовому диапазону товара (Layer 4)
         if (!isWithdrawal) {
             shopLimitService.reverseCooldown(user, req.getRewardItem().getPriceCoins());
@@ -661,6 +664,11 @@ public class RewardService {
             throw new IllegalArgumentException("Недостаточно EXC. Ваш баланс: " + lockedUser.getCoins() + " EXC.");
         }
 
+        // «Курс дня»: бонус к сумме в рублях (резерв бюджета под той же блокировкой игрока); итог входит в fixedRubValue, название заявки и сумму в TON
+        BonusCourseService.Applied bonus = bonusCourseService.applyToWithdrawal(lockedUser, rubles);
+        long bonusRub = bonus == null ? 0 : bonus.bonusRub();
+        rubles += bonusRub;
+
         RewardItem withdrawItem = new RewardItem();
         withdrawItem.setTitle("Вывод " + excAmount + " EXC → " + rubles + " ₽ (GRAM/TON)");
         withdrawItem.setDescription("Заявка на вывод в GRAM (TON) · Кошелёк: " + tonWallet);
@@ -687,6 +695,7 @@ public class RewardService {
         request.setDisplayId(rewardRequestRepository.findMaxWithdrawalDisplayId() + 1);
         request.setFixedRubValue(rubles);
         request.setPaidPriceCoins(excAmount);
+        applyBonusFields(request, bonus);
         return rewardRequestRepository.save(request);
     }
 
@@ -735,6 +744,11 @@ public class RewardService {
             throw new IllegalArgumentException("Недостаточно EXC. Ваш баланс: " + lockedUser.getCoins() + " EXC.");
         }
 
+        // «Курс дня»: см. createTonWithdrawalRequest
+        BonusCourseService.Applied bonus = bonusCourseService.applyToWithdrawal(lockedUser, rubles);
+        long bonusRub = bonus == null ? 0 : bonus.bonusRub();
+        rubles += bonusRub;
+
         RewardItem withdrawItem = new RewardItem();
         withdrawItem.setTitle("Вывод " + excAmount + " EXC → " + rubles + " ₽");
         withdrawItem.setDescription("Заявка на вывод средств");
@@ -759,7 +773,15 @@ public class RewardService {
         request.setDisplayId(rewardRequestRepository.findMaxWithdrawalDisplayId() + 1);
         request.setFixedRubValue(rubles);
         request.setPaidPriceCoins(excAmount);
+        applyBonusFields(request, bonus);
         return rewardRequestRepository.save(request);
+    }
+
+    private static void applyBonusFields(RewardRequest request, BonusCourseService.Applied bonus) {
+        if (bonus == null) return;
+        request.setBonusId(bonus.bonusId());
+        request.setBonusPercent(bonus.percent());
+        request.setBonusAmountRub(bonus.bonusRub());
     }
 
     public boolean isFrameOwned(AppUser user, String frameKey) {

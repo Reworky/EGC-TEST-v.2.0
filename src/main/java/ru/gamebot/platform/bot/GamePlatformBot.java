@@ -155,6 +155,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.RetentionService retentionService;
     private final ru.gamebot.platform.service.EngagementCeilingService engagementCeilingService;
     private final ru.gamebot.platform.service.ChannelContentService channelContentService;
+    private final ru.gamebot.platform.service.BonusCourseService bonusCourseService;
     private final ru.gamebot.platform.service.FinanceService financeService;
     private final ru.gamebot.platform.service.ExpenseService expenseService;
     private final ru.gamebot.platform.service.FinancePanelService financePanelService;
@@ -507,6 +508,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (text != null && text.startsWith("/dailycode") && isEffectiveAdmin(user)) {
             handleDailyCodeCommand(user, text.trim());
+            return;
+        }
+
+        if (text != null && (text.equals("/course") || text.startsWith("/course ")) && isEffectiveAdmin(user)) {
+            handleCourseCommand(user, text.trim());
             return;
         }
 
@@ -890,6 +896,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // как реального игрока, тот же паттерн, что и у остальных deep-link'ов ниже.
         if (startPayload.equals("review") && user.isRegistrationCompleted()) {
             promptGeneralReview(user);
+            return;
+        }
+        // «Курс дня»: кнопка под постом в канале ведёт сюда (start=btn_<id записи daily_bonus>)
+        if (startPayload.startsWith("btn_") && user.isRegistrationCompleted()) {
+            handleBonusButton(user, parseLong(startPayload.substring("btn_".length())));
             return;
         }
         if (startPayload.startsWith("squad_") && user.isRegistrationCompleted()) {
@@ -6243,6 +6254,79 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Админ: /course status | on | off | now [процент] | set hour|cap|budget|endhour|weights ЗНАЧЕНИЕ - «Курс дня», бонус к курсу вывода (пост всегда через согласование). */
+    private void handleCourseCommand(AppUser admin, String text) {
+        String[] p = text.split("\\s+");
+        String sub = p.length > 1 ? p[1].toLowerCase() : "status";
+        try {
+            switch (sub) {
+                case "on" -> {
+                    bonusCourseService.setEnabled(true);
+                    sendText(admin.getTelegramId(), "🔔 Ежедневный пост «Курс дня» включён.", null);
+                }
+                case "off" -> {
+                    bonusCourseService.setEnabled(false);
+                    sendText(admin.getTelegramId(), "🔕 Ежедневный пост «Курс дня» выключен.", null);
+                }
+                case "now" -> {
+                    Long pct = p.length > 2 ? parseLong(p[2]) : null;
+                    if (p.length > 2 && (pct == null || pct < 1 || pct > 500)) {
+                        sendText(admin.getTelegramId(), "Формат: <code>/course now</code> или <code>/course now 15</code> (процент от 1 до 500).", null);
+                        return;
+                    }
+                    bonusCourseService.createDailyDraft(pct == null ? null : pct.intValue());
+                    sendText(admin.getTelegramId(), "✅ Черновик поста «Курс дня» создан, карточка на согласование придёт сообщением.", null);
+                }
+                case "set" -> {
+                    if (p.length < 4) {
+                        sendText(admin.getTelegramId(), "Формат: <code>/course set cap 100</code>. Параметры: hour, cap, budget, endhour, weights.", null);
+                        return;
+                    }
+                    sendText(admin.getTelegramId(), bonusCourseService.setParam(p[2], p[3]), null);
+                }
+                default -> sendText(admin.getTelegramId(), bonusCourseService.statusText(), null);
+            }
+        } catch (Exception e) {
+            sendText(admin.getTelegramId(), "⚠️ " + escape(String.valueOf(e.getMessage())), null);
+        }
+    }
+
+    /** Игрок нажал кнопку «Курс дня» под постом в канале. Подписку на канал проверяем живьём (бонус только подписчикам). */
+    private void handleBonusButton(AppUser user, Long bonusId) {
+        Long chat = user.getTelegramId();
+        try {
+            if (bonusId == null) {
+                sendText(chat, "Такого курса дня нет. Загляни в последний пост канала.", backMenuKeyboard("menu:main"));
+                return;
+            }
+            if (!isActivelySubscribedFresh(user)) {
+                sendText(chat, "📢 <b>Бонус только для подписчиков канала.</b>\n\nПодпишись на канал и нажми «Проверить» ещё раз.",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.url("📢 Подписаться на канал", requiredChannelUrl())),
+                                List.of(keyboardFactory.url("🔄 Проверить", bonusCourseService.deepLink(bonusId))))));
+                return;
+            }
+            ru.gamebot.platform.service.BonusCourseService.Activation a = bonusCourseService.activate(user, bonusId);
+            java.time.LocalDateTime endMsk = a.validUntil() == null ? null : a.validUntil().plusHours(3);
+            String until = endMsk == null ? "" : String.format("%02d:%02d", endMsk.getHour(), endMsk.getMinute());
+            String text = switch (a.status()) {
+                case OK -> "✅ <b>Курс дня включён: +" + a.percent() + "%</b>\n\n"
+                        + "Он действует до " + until + " по Москве. Создай заявку на вывод в рублях или TON, и бонус добавится к сумме автоматически "
+                        + "(считается максимум с " + bonusCourseService.capRub() + " ₽ на заявку). Выводить можно раз в сутки.";
+                case ALREADY -> "Ты уже включил курс дня (+" + a.percent() + "%)" + (until.isEmpty() ? "." : ", он действует до " + until + " по Москве.");
+                case CLOSED -> "⌛ Этот курс дня уже закончился. Следующий будет в одном из ближайших постов канала.";
+                case BUDGET_OVER -> "😔 Бонус на сегодня уже разобрали. Загляни в канал завтра.";
+                case NOT_STARTED -> "⏳ Этот курс дня ещё не открыт, попробуй чуть позже.";
+                case DENIED -> "Для этого аккаунта бонус недоступен. Если это ошибка, напиши в поддержку.";
+                case NOT_FOUND -> "Такого курса дня нет. Загляни в последний пост канала.";
+            };
+            sendText(chat, text, backMenuKeyboard("menu:main"));
+        } catch (Exception e) {
+            log.error("[BonusCourse] button handling failed for user {} bonus {}", chat, bonusId, e);
+            sendText(chat, "⚠️ Не получилось включить курс дня, попробуй ещё раз через минуту.", backMenuKeyboard("menu:main"));
+        }
+    }
+
     /** Админ: /dailycode now | on | off | hour N | status - ежедневный пост с кодом дня (всегда через согласование). */
     private void handleDailyCodeCommand(AppUser admin, String text) {
         String[] p = text.split("\\s+");
@@ -6498,6 +6582,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("push", "status|on NAME|off NAME", "Короткие рассылки игрокам: буст выходных, новые квесты по игре, гонка отрядов, гонка за Зал славы"),
             new AdminCommand("goldenhour", "status|on|off|hour N|percent N|max N|push on|off|pushtest", "Золотой час: окно, бонус, лимит квестов, напоминание игрокам"),
             new AdminCommand("dailycode", "now|on|off|status", "Пост «Код дня»: создать сейчас, включить, выключить, состояние"),
+            new AdminCommand("course", "status|on|off|now [%]|set КЛЮЧ ЗНАЧЕНИЕ", "«Курс дня»: бонус к курсу вывода (пост с кнопкой, проценты, потолок, бюджет)"),
             new AdminCommand("clubgoal", "status|link ID текст|off", "Цель клуба: состояние, кнопка-портал в квест, выключить портал"),
             new AdminCommand("wdfreeze", "ID on|off", "Заморозить или разморозить вывод игрока"),
             new AdminCommand("event", "[halloween|on|off]", "Сезонное событие (Хэллоуин): состояние, включить пресет или выключить, затраты на квесты и надбавка отрядам"),
@@ -8572,7 +8657,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long excAmount = Long.parseLong(session.getData().getOrDefault("ton_exc_amount", "0"));
         long rubles = Long.parseLong(session.getData().getOrDefault("ton_rubles", "0"));
         java.math.BigDecimal tonRate2 = exchangeRateService.getTonRubRate();
-        java.math.BigDecimal tonAmount2 = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(rubles));
         try {
             RewardRequest tonReq = rewardService.createTonWithdrawalRequest(user, excAmount, rubles, 0, wallet);
             session.reset();
@@ -8580,7 +8664,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>Заявка на вывод в TON принята!</b>\n\n"
                     + "🔢 Номер заявки: <b>В-" + tonReq.getId() + "</b>\n"
                     + "💸 Сумма: <b>" + excAmount + " EXC</b>\n"
-                    + "💵 Эквивалент: <b>" + rubles + " ₽</b> → ~<b>" + tonAmount2 + " TON</b>\n"
+                    + "💵 Эквивалент: <b>" + tonReq.getFixedRubValue() + " ₽</b>" + bonusNote(tonReq) + " → ~<b>" + exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(tonReq.getFixedRubValue())) + " TON</b>\n"
                     + "📈 Курс: 1 TON = " + tonRate2.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽\n"
                     + "💎 Способ: <b>GRAM (TON)</b>\n"
                     + "📬 Кошелёк: <code>" + escape(wallet) + "</code>\n\n"
@@ -20831,6 +20915,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case ru.gamebot.platform.service.ChannelContentService.QUEST_ROTATION -> "Смена квестов";
             case ru.gamebot.platform.service.ChannelContentService.DAILY_CODE -> "Код дня";
             case ru.gamebot.platform.service.ChannelContentService.MANUAL_POST -> "Пост из плана";
+            case ru.gamebot.platform.service.ChannelContentService.DAILY_BUTTON -> "Курс дня";
             default -> "Пост для канала";
         };
     }
@@ -20974,8 +21059,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         answer(callbackQuery.getId(), "⚠️ В тексте нет кода " + d.getMeta() + ", верните его или отклоните пост");
                         return;
                     }
-                    Integer publishedId = sendBannerAndTextReturningId(channelTargetFor(d.getType()), d.getPhotoFileId(), d.getPostText(), null);
+                    boolean isCourseButton = ru.gamebot.platform.service.ChannelContentService.DAILY_BUTTON.equals(d.getType());
+                    InlineKeyboardMarkup postKeyboard = null;
+                    Long courseBonusId = isCourseButton ? parseLong(d.getMeta()) : null;
+                    if (isCourseButton) {
+                        if (courseBonusId == null || bonusCourseService.findBonus(courseBonusId).isEmpty()) {
+                            answer(callbackQuery.getId(), "⚠️ Не найден бонус дня для этого поста, отклоните его");
+                            return;
+                        }
+                        postKeyboard = keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.url("📈 Включить курс дня", bonusCourseService.deepLink(courseBonusId)))));
+                    }
+                    Integer publishedId = sendBannerAndTextReturningId(channelTargetFor(d.getType()), d.getPhotoFileId(), d.getPostText(), postKeyboard);
                     channelContentService.markPublished(draftId);
+                    if (isCourseButton) {
+                        try {
+                            bonusCourseService.onPostPublished(courseBonusId, publishedId);
+                        } catch (Exception e) {
+                            log.error("Course day bonus {} post published, but window not opened", courseBonusId, e);
+                            alertAdminsPlain("⚠️ Пост «Курс дня» опубликован, но бонус не открыт: " + e.getMessage());
+                        }
+                    }
                     if (isCodePost) {
                         try {
                             clubActivityService.onCodePostPublished(d.getMeta(), publishedId);
@@ -21774,7 +21878,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "✅ <b>Заявка на вывод принята!</b>\n\n"
                     + "🔢 Номер заявки: <b>В-" + withdrawalReq.getId() + "</b>\n"
                     + "💸 Сумма: <b>" + amount + " EXC</b>\n"
-                    + "💵 К выплате: <b>~" + rubles + " ₽</b>\n\n"
+                    + "💵 К выплате: <b>~" + withdrawalReq.getFixedRubValue() + " ₽</b>" + bonusNote(withdrawalReq) + "\n\n"
                     + "Ожидайте, в течение 24 часов администратор выполнит перевод!"
                     + (rewardService.withdrawalPriorityNote(user).isEmpty() ? "" : "\n\n" + rewardService.withdrawalPriorityNote(user).trim()),
                 backMenuKeyboard("menu:main"));
@@ -22318,6 +22422,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** «Курс дня»: пометка к сумме выплаты, если к заявке применён бонус (пусто, если нет). */
+    private static String bonusNote(RewardRequest req) {
+        if (req.getBonusAmountRub() <= 0) return "";
+        return " (с бонусом курса дня +" + req.getBonusPercent() + "%: +" + req.getBonusAmountRub() + " ₽)";
+    }
+
     public void notifyAdminsAboutWithdrawal(AppUser user, RewardRequest req) {
         String username = user.getTelegramUsername();
         String userLink = (username != null && !username.isBlank())
@@ -22349,6 +22459,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🌍 Страна: <b>" + escape(user.getCountry() != null ? user.getCountry() : "Не указана") + "</b>\n"
                 + "🪙 Сумма: <b>" + rewardService.actualPaidPrice(req) + " EXC</b>\n"
                 + "📦 Тип: <b>" + escape(req.getRewardItem().getTitle()) + "</b>"
+                + (req.getBonusAmountRub() > 0
+                    ? "\n🎁 Бонус курса дня: <b>+" + req.getBonusAmountRub() + " ₽</b> (+" + req.getBonusPercent() + "%), итого к выплате <b>"
+                        + fixedOrCurrentRub(req) + " ₽</b>"
+                    : "")
                 + details;
         Set<Long> adminIds = adminService.allAdminIds();
         for (Long recipientId : adminService.allModeratorIds()) {

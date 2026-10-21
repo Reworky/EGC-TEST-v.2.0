@@ -1,5 +1,6 @@
 package ru.gamebot.platform.domain.model;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -63,4 +64,13 @@ public class RewardRequest {
 
     /** Когда заявка закрыта/выплачена (RewardService.approveRequest): нужно для метрики «время выплаты» в постах канала. null - у заявок до 2026-09-26. */
     private LocalDateTime paidAt;
+
+    /** «Курс дня» (21.10.2026): какой бонус применён к заявке на вывод, его процент и сумма в рублях (уже входит в fixedRubValue). null/0 - бонуса нет. */
+    private Long bonusId;
+
+    @Column(columnDefinition = "integer default 0")
+    private int bonusPercent;
+
+    @Column(columnDefinition = "bigint default 0")
+    private long bonusAmountRub;
 }

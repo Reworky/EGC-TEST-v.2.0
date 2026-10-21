@@ -250,7 +250,9 @@ public class WalletController {
             return ResponseEntity.ok(ShopActionResponseDto.builder()
                     .success(true)
                     .message("Заявка на вывод В-" + (req.getDisplayId() != null ? req.getDisplayId() : req.getId())
-                            + " принята! " + body.getAmount() + " EXC → ~" + rubles + " ₽. Администратор обработает в течение 24 часов."
+                            + " принята! " + body.getAmount() + " EXC → ~" + req.getFixedRubValue() + " ₽"
+                            + (req.getBonusAmountRub() > 0 ? " (с бонусом курса дня +" + req.getBonusPercent() + "%: +" + req.getBonusAmountRub() + " ₽)" : "")
+                            + ". Администратор обработает в течение 24 часов."
                             + rewardService.withdrawalPriorityNote(user))
                     .build());
         } catch (IllegalArgumentException e) {
@@ -282,11 +284,14 @@ public class WalletController {
         try {
             RewardRequest req = rewardService.createTonWithdrawalRequest(user, body.getAmount(), rubles, resolution.fixedRubUsed(), wallet);
             gamePlatformBot.notifyAdminsAboutWithdrawal(user, req);
-            BigDecimal tonAmount = exchangeRateService.rubToTon(BigDecimal.valueOf(rubles));
+            long finalRubles = req.getFixedRubValue() != null ? req.getFixedRubValue() : rubles;
+            BigDecimal tonAmount = exchangeRateService.rubToTon(BigDecimal.valueOf(finalRubles));
             return ResponseEntity.ok(ShopActionResponseDto.builder()
                     .success(true)
                     .message("Заявка на вывод В-" + (req.getDisplayId() != null ? req.getDisplayId() : req.getId())
-                            + " принята! " + body.getAmount() + " EXC → ~" + rubles + " ₽ → ~" + tonAmount + " GRAM. Администратор обработает в течение 24 часов."
+                            + " принята! " + body.getAmount() + " EXC → ~" + finalRubles + " ₽"
+                            + (req.getBonusAmountRub() > 0 ? " (с бонусом курса дня +" + req.getBonusPercent() + "%: +" + req.getBonusAmountRub() + " ₽)" : "")
+                            + " → ~" + tonAmount + " GRAM. Администратор обработает в течение 24 часов."
                             + rewardService.withdrawalPriorityNote(user))
                     .build());
         } catch (IllegalArgumentException e) {
