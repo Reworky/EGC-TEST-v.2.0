@@ -20830,6 +20830,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case ru.gamebot.platform.service.ChannelContentService.REFERRAL_STATS -> "Рефералы в цифрах";
             case ru.gamebot.platform.service.ChannelContentService.QUEST_ROTATION -> "Смена квестов";
             case ru.gamebot.platform.service.ChannelContentService.DAILY_CODE -> "Код дня";
+            case ru.gamebot.platform.service.ChannelContentService.MANUAL_POST -> "Пост из плана";
             default -> "Пост для канала";
         };
     }
@@ -20910,6 +20911,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Для поста из очереди плана: рубрика и заметка (какую картинку сделать, что проверить перед публикацией). В опубликованный текст не попадает. */
+    private String manualPostHint(ru.gamebot.platform.domain.model.ChannelPostDraft d) {
+        if (!ru.gamebot.platform.service.ChannelContentService.MANUAL_POST.equals(d.getType()) || d.getMeta() == null) return "";
+        String[] m = d.getMeta().split("\\|", 3);
+        StringBuilder sb = new StringBuilder("📌 <i>").append(escape(m.length > 1 ? m[1] : "")).append("</i>\n");
+        if (m.length > 2 && !m[2].isBlank()) sb.append("📝 <i>").append(escape(m[2])).append("</i>\n");
+        return sb.append("— — —\n\n").toString();
+    }
+
     /** Карточка автопоста «на согласование»: превью + ✅ Опубликовать / ✏️ Изменить (текст или картинка) / ❌ Отклонить. */
     private void sendChannelPostCard(Long draftId) {
         java.util.Optional<ru.gamebot.platform.domain.model.ChannelPostDraft> opt = channelContentService.findDraft(draftId);
@@ -20917,7 +20927,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ru.gamebot.platform.domain.model.ChannelPostDraft d = opt.get();
         String proofWarning = ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF.equals(d.getType())
                 ? "⚠️ Перед публикацией проверьте, что на чеке закрыты реквизиты (карта, кошелёк, телефон, номер счёта).\n\n" : "";
-        String preview = "🧾 <b>" + channelPostTitle(d.getType()) + " - на согласование</b>\n\n" + proofWarning + d.getPostText();
+        String preview = "🧾 <b>" + channelPostTitle(d.getType()) + " - на согласование</b>\n\n" + proofWarning + manualPostHint(d) + d.getPostText();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(
                 keyboardFactory.callback("✅ Опубликовать", "adminfeed:cp:approve:" + draftId),

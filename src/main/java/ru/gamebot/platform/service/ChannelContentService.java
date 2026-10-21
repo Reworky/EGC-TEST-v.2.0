@@ -88,6 +88,9 @@ public class ChannelContentService {
     /** «Код дня» (2026-10-17): ежедневный пост с кодом для бота, идёт админу на согласование как все остальные. Намеренно НЕ в ALL_TYPES
      *  (расписание и ручная кнопка - своя: /dailycode on|off|now и час в настройках cc.dcode.hour), чтобы не трогать экран «Контент канала». */
     public static final String DAILY_CODE = "DAILY_CODE";
+    /** Ручной пост из очереди плана (21.10.2026): текст заготовлен заранее (ресурс channel_manual_posts.json), карточка на согласование уходит
+     *  админам в назначенный час (sendAfter). Не в ALL_TYPES: расписания и кнопки «Сформировать» нет. meta = "ключ|рубрика|заметка". */
+    public static final String MANUAL_POST = "MANUAL_POST";
     public static final List<String> ALL_TYPES = List.of(NEW_QUESTS, TOP_QUESTS_WEEK, SQUAD_MIDWEEK, SQUAD_RESULTS, SQUAD_STATS,
             TOURNEY_REG_CLOSING, TOURNEY_ACTIVE, TOURNEY_CANCELLED, WITHDRAW_SUMMARY, WITHDRAW_MILESTONE, WITHDRAW_HOWTO, WITHDRAW_PROOF,
             HALL_OF_FAME, WEEKLY_RACE, LEAGUES_WEEK, SHOP_NEW, EGCPASS_PERK, SHOP_POPULAR, SHOP_ITEMS,
@@ -225,14 +228,15 @@ public class ChannelContentService {
         // Сетка владельца (06.10.2026), время МСК+4 = UTC+7: слоты 12:00 / 16:00 / 20:00 (= 05 / 09 / 13 UTC), между постами ровно 4 часа;
         // «Свежие квесты» и «Новинки в магазине» в плане не стоят, приходят только когда есть новое, карточка в 00:00 (= 17 UTC).
         int defHour = switch (type) {
-            case HALL_OF_FAME, SQUAD_MIDWEEK, WITHDRAW_HOWTO, SQUAD_STATS, SHOP_POPULAR, TOP_QUESTS_WEEK, WEEKLY_RACE -> 5;
-            case SHOP_ITEMS, WITHDRAW_SUMMARY, REFERRAL_STATS, SQUAD_RESULTS -> 9; // SQUAD_RESULTS: 21.10.2026 с вторника на понедельник (день расчёта недели)
+            case HALL_OF_FAME, SQUAD_MIDWEEK, WITHDRAW_HOWTO, SQUAD_STATS, SHOP_POPULAR, TOP_QUESTS_WEEK, WEEKLY_RACE, SHOP_ITEMS -> 5;
+            case WITHDRAW_SUMMARY, REFERRAL_STATS, SQUAD_RESULTS -> 9; // SQUAD_RESULTS: 21.10.2026 с вторника на понедельник (день расчёта недели)
             case LEAGUES_WEEK, REFERRAL_TOP, REFERRAL_HOWTO, EGCPASS_PERK -> 13;
             case NEW_QUESTS, SHOP_NEW -> 17;
             default -> 12;
         };
         int defDow = switch (type) {
-            case HALL_OF_FAME, SHOP_ITEMS, SQUAD_RESULTS -> 1;
+            case HALL_OF_FAME, SQUAD_RESULTS -> 1;
+            case SHOP_ITEMS -> 4; // 21.10.2026: с понедельника на четверг - итоги отрядов переехали на понедельник 09 UTC, раз в 4 недели совпадали бы
             case LEAGUES_WEEK -> 2;
             case SQUAD_MIDWEEK, REFERRAL_TOP -> 3;
             case WITHDRAW_HOWTO, EGCPASS_PERK -> 4;
@@ -282,7 +286,22 @@ public class ChannelContentService {
     }
 
     public long pendingCount() {
-        return draftRepository.countByStatus(ChannelPostDraft.PENDING);
+        return draftRepository.countByStatus(ChannelPostDraft.PENDING)
+                - draftRepository.countByTypeAndStatusAndCardSentAtIsNull(MANUAL_POST, ChannelPostDraft.PENDING);
+    }
+
+    /** Ставит в очередь ручной пост: карточка админам уйдёт в sendAfter (UTC) через deliverDueCards(). Повторно тот же ключ не создаётся
+     *  (даже если пост уже опубликован или отклонён). Возвращает true, если черновик создан. */
+    public boolean queueManualPost(String key, String rubric, String note, String text, LocalDateTime sendAfter) {
+        if (draftRepository.existsByTypeAndMetaStartingWith(MANUAL_POST, key + "|")) return false;
+        ChannelPostDraft d = new ChannelPostDraft();
+        d.setType(MANUAL_POST);
+        d.setPostText(text.length() > 4000 ? text.substring(0, 4000) : text);
+        String meta = key + "|" + rubric + "|" + (note == null ? "" : note);
+        d.setMeta(meta.length() > 2000 ? meta.substring(0, 2000) : meta);
+        d.setSendAfter(sendAfter);
+        draftRepository.save(d);
+        return true;
     }
 
     // ───────────────────────── черновики ─────────────────────────
