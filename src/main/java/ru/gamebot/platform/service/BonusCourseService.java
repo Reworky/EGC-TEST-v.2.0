@@ -345,6 +345,34 @@ public class BonusCourseService {
 
     // ───────────────────────── админка ─────────────────────────
 
+    /** Описание «Курса дня» простыми словами для экрана админки (без команд и технических параметров). Время: UTC+7 и Москва. */
+    public String humanSummary() {
+        int h = postHourUtc();
+        int endMsk = (endHourUtc() + 3) % 24;
+        List<int[]> w = parseWeights(weights());
+        int min = w.stream().mapToInt(a -> a[0]).min().orElse(0);
+        int max = w.stream().mapToInt(a -> a[0]).max().orElse(0);
+        StringBuilder sb = new StringBuilder();
+        sb.append("Что это: каждый день в канале пост с кнопкой. Игрок нажимает, и бот добавляет бонус к сумме его заявки на вывод (рубли и TON).\n\n");
+        sb.append("Автопост: ").append(isEnabled() ? "🔔 <b>включён</b>" : "🔕 <b>выключен</b>").append("\n");
+        sb.append("Время поста: <b>").append(String.format("%02d:00", (h + 7) % 24)).append("</b> по UTC+7 (")
+                .append(String.format("%02d:00", (h + 3) % 24)).append(" по Москве). Пост сначала приходит вам на согласование.\n");
+        sb.append("Бонус действует до ").append(String.format("%02d:00", endMsk)).append(" по Москве.\n");
+        sb.append("Размер бонуса: от +").append(min).append("% до +").append(max).append("%, в среднем ").append(String.format(Locale.ROOT, "%.1f", averagePercent(weights()))).append("%.\n");
+        sb.append("Потолок: бонус считается максимум со <b>").append(capRub()).append(" ₽</b> заявки.\n");
+        sb.append("Бюджет на день: <b>").append(dailyBudgetRub()).append(" ₽</b> (когда он кончится, бонус перестаёт выдаваться).\n\n");
+        Optional<DailyBonus> last = dailyBonusRepository.findFirstByOrderByIdDesc();
+        if (last.isEmpty() || !DailyBonus.DAILY.equals(last.get().getType())) {
+            sb.append("Постов «Курс дня» ещё не было.");
+        } else {
+            DailyBonus b = last.get();
+            sb.append("Последний: +").append(b.getPercent()).append("% (").append(String.format("%02d.%02d", b.getBonusDate().getDayOfMonth(), b.getBonusDate().getMonthValue())).append("), ")
+                    .append(b.getPublishedAt() == null ? "пост ещё не опубликован" : "включили " + userBonusRepository.countByBonusId(b.getId()) + ", нажатий " + b.getClicks())
+                    .append(", бюджет ").append(b.getBudgetUsedRub()).append(" из ").append(b.getBudgetTotalRub()).append(" ₽.");
+        }
+        return sb.toString();
+    }
+
     public String statusText() {
         StringBuilder sb = new StringBuilder("📈 <b>Курс дня: состояние</b>\n\n");
         int h = postHourUtc();

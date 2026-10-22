@@ -468,6 +468,41 @@ public class RedButtonService {
         return tpl;
     }
 
+    /** Описание «Красной кнопки» простыми словами для экрана админки. Время: UTC+7 и Москва. */
+    public String humanSummary() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Что это: редкий пост с кнопкой и крупным бонусом. Выходит в случайное время БЕЗ согласования, кнопка живёт недолго, потом пост закрывается.\n\n");
+        sb.append("Автоматические кнопки: ").append(isEnabled() ? "🔔 <b>включены</b>" : "🔕 <b>выключены</b>").append("\n");
+        sb.append("Сколько: <b>").append(perWeek()).append("</b> в неделю, в случайные дни, время с ")
+                .append(String.format("%02d:00", (startHour() + 7) % 24)).append(" до ").append(String.format("%02d:00", (endHour() + 7) % 24))
+                .append(" по UTC+7 (").append(String.format("%02d:00", (startHour() + 3) % 24)).append("-").append(String.format("%02d:00", (endHour() + 3) % 24)).append(" по Москве).\n");
+        sb.append("Бонус: +").append(minPercent()).append("…+").append(maxPercent()).append("%, действует ").append(bonusCourseService.redValidHours()).append(" ч после нажатия.\n");
+        sb.append("Кнопка активна: <b>").append(windowMin()).append(" мин</b>. Бюджет одной кнопки: <b>").append(budgetRub()).append(" ₽</b>.\n");
+        sb.append("Перед первой кнопкой недели выходит тизер за ").append(teaserHours()).append(" ч (через согласование), а за ").append(warnMin())
+                .append(" мин до каждой кнопки вам приходит предупреждение с кнопкой «Отменить».\n\n");
+        List<RedButtonSchedule> planned = planned();
+        if (planned.isEmpty()) {
+            sb.append("Запланированных кнопок нет.");
+        } else {
+            sb.append("<b>Запланировано:</b>\n");
+            for (RedButtonSchedule r : planned) {
+                LocalDateTime t = r.getPlannedAt().plusHours(7);
+                LocalDateTime msk = r.getPlannedAt().plusHours(3);
+                sb.append("• ").append(String.format("%02d.%02d %02d:%02d", t.getDayOfMonth(), t.getMonthValue(), t.getHour(), t.getMinute())).append(" по UTC+7 (")
+                        .append(String.format("%02d:%02d", msk.getHour(), msk.getMinute())).append(" по Москве), +").append(r.getPercent()).append("%\n");
+            }
+        }
+        List<RedButtonSchedule> last = scheduleRepository.findTop8ByOrderByPlannedAtDesc();
+        for (RedButtonSchedule r : last) {
+            if (RedButtonSchedule.PUBLISHED.equals(r.getStatus()) || RedButtonSchedule.CLOSED.equals(r.getStatus())) {
+                sb.append("\nПоследняя вышла: ").append(String.format("%02d.%02d", r.getPlannedAt().plusHours(7).getDayOfMonth(), r.getPlannedAt().plusHours(7).getMonthValue()))
+                        .append(", +").append(r.getPercent()).append("%, нажали ").append(r.getBonusId() == null ? 0 : userBonusRepository.countByBonusId(r.getBonusId())).append(".");
+                break;
+            }
+        }
+        return sb.toString();
+    }
+
     public String statusText() {
         StringBuilder sb = new StringBuilder("🔴 <b>Красная кнопка: состояние</b>\n\n");
         sb.append("Автопланирование: ").append(isEnabled() ? "🔔 включено" : "🔕 выключено").append("\n");
