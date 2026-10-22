@@ -10331,6 +10331,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendResourceBanner(user.getTelegramId(), "coc_gems_banner.jpg", payMethodText, keyboardFactory.rowsLayout(rows));
                 return;
             }
+            if ("steam_topup".equals(purchaseGroup)) {
+                sendResourceBanner(user.getTelegramId(), "steam_balance_banner.jpg", payMethodText, keyboardFactory.rowsLayout(rows));
+                return;
+            }
             sendText(user.getTelegramId(), payMethodText, keyboardFactory.rowsLayout(rows));
             return;
         }
@@ -23111,6 +23115,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if ("clash_of_clans".equals(gameKey) && pkg.gems() <= 0) { // Gold Pass
             sendResourceBanner(user.getTelegramId(), "coc_gold_banner.jpg", methodText, keyboardFactory.rowsLayout(rows));
+            return;
+        }
+        if ("steam_topup".equals(gameKey)) { // пополнение баланса Steam
+            sendResourceBanner(user.getTelegramId(), "steam_balance_banner.jpg", methodText, keyboardFactory.rowsLayout(rows));
             return;
         }
         sendText(user.getTelegramId(), methodText, keyboardFactory.rowsLayout(rows));
