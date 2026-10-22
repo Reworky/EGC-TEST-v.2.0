@@ -213,8 +213,7 @@ public class BonusCourseService {
         sb.append("1 000 EXC = <b>").append(String.format(ru, "%.2f", boosted)).append(" ₽</b> вместо ").append(String.format(ru, "%.2f", base)).append(" ₽.\n\n");
         sb.append("Как забрать: жми кнопку ниже, бот включит бонус. Он действует до ").append(String.format("%02d:%02d", msk.getHour(), msk.getMinute()))
                 .append(" по Москве и работает для заявок на вывод в рублях и в TON, которые ты создашь после включения. ");
-        sb.append("Бонус добавляется к любой заявке на вывод. Если заявка больше ").append(capRub()).append(" ₽, бонус считается только с первых ").append(capRub())
-                .append(" ₽. Общий запас бонусов на сегодня ограничен: кто успел, тот и забрал.\n\n");
+        sb.append("Бонус добавляется к заявке на вывод. Общий запас бонусов на сегодня ограничен: кто успел, тот и забрал.\n\n");
         sb.append("Успеешь вывести сегодня? ⚡");
         return sb.toString();
     }

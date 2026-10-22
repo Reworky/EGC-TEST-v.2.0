@@ -6578,7 +6578,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String text = switch (a.status()) {
                 case OK -> "✅ <b>" + (ru.gamebot.platform.domain.model.DailyBonus.RED.equals(a.type()) ? "Красная кнопка нажата" : "Курс дня включён") + ": +" + a.percent() + "%</b>\n\n"
                         + "Он действует до " + until + " по Москве. Создай заявку на вывод в рублях или TON, и бонус добавится к сумме автоматически. "
-                        + "Бонус добавляется к любой заявке; если она больше " + bonusCourseService.capRub() + " ₽, он считается только с первых " + bonusCourseService.capRub() + " ₽. Выводить можно раз в сутки.";
+                        + "Выводить можно раз в сутки.";
                 case ALREADY -> "Ты уже включил курс дня (+" + a.percent() + "%)" + (until.isEmpty() ? "." : ", он действует до " + until + " по Москве.");
                 case CLOSED -> ru.gamebot.platform.domain.model.DailyBonus.RED.equals(a.type())
                         ? "🔴 Красная кнопка уже погасла. Следи за каналом: следующая выйдет внезапно."
