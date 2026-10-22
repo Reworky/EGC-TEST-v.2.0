@@ -218,6 +218,7 @@ public class BrawlStarsApiService {
                 if (battleTime == null || mode == null) continue;
 
                 JsonNode ownEntry = null;
+                int ownIndex = -1;
                 List<String> teammateTags = new ArrayList<>();
                 boolean isTeamMode = battle.has("teams") && battle.path("teams").size() > 0;
                 if (isTeamMode) {
@@ -237,23 +238,30 @@ public class BrawlStarsApiService {
                         }
                     }
                 } else {
+                    int idx = 0;
                     for (JsonNode player : battle.path("players")) {
-                        if (tagsLikelyEqual(selfTag, player.path("tag").asText(""))) ownEntry = player;
+                        if (tagsLikelyEqual(selfTag, player.path("tag").asText(""))) {
+                            ownEntry = player;
+                            ownIndex = idx;
+                        }
+                        idx++;
                     }
                 }
                 if (ownEntry == null) continue; // could not locate self in this entry — skip defensively
 
                 String brawlerName = ownEntry.path("brawler").path("name").asText(null);
+                // Место в Showdown. 22.10.2026 выяснилось по живому ответу API: в soloShowdown поля battle.rank больше НЕТ (только mode, type,
+                // trophyChange, players), поэтому победы в Showdown не засчитывались никому. Список players идёт по местам: сверено на 8 боях
+                // (позиция 1 -> +13...+21 трофеев, 4 -> +6, 8 -> -1, 9 -> -2). Для duoShowdown (teams) такой проверки ещё нет - там победа по-прежнему не определяется.
+                Integer rank = battle.has("rank") ? Integer.valueOf(battle.path("rank").asInt())
+                        : (ownIndex >= 0 && "soloShowdown".equalsIgnoreCase(mode) ? Integer.valueOf(ownIndex + 1) : null);
                 boolean victory;
                 if (battle.has("result")) {
                     victory = "victory".equalsIgnoreCase(battle.path("result").asText(""));
                 } else {
-                    // Showdown-style (soloShowdown/duoShowdown): no "result", "rank" is on battle itself
-                    // (this player's own battlelog, so it's already their placement) — verified live, rank 1 = win.
-                    victory = battle.path("rank").asInt(Integer.MAX_VALUE) == 1;
+                    victory = rank != null && rank == 1;
                 }
-                out.add(new BattleLogEntry(battleTime, mode, type, victory, isTeamMode, brawlerName, teammateTags,
-                        battle.has("rank") ? battle.path("rank").asInt() : null));
+                out.add(new BattleLogEntry(battleTime, mode, type, victory, isTeamMode, brawlerName, teammateTags, rank));
             }
         } catch (Exception e) {
             log.warn("Failed to parse Brawl Stars battlelog response", e);
