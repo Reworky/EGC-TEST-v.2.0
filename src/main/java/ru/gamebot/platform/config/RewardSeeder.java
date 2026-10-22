@@ -325,10 +325,10 @@ public class RewardSeeder implements CommandLineRunner {
                 + "Доступно для стран: " + steamCountries + ".\n\nВведите логин Steam:";
         seed("Steam - Пополнение 100",
                 "Пополнение баланса Steam на 100 ₽. Нужен только логин Steam. Сейчас работает для стран: " + steamCountries + ". Срок зачисления - до 24 ч.",
-                "Steam", 15_300, steamPrompt, 5_000, "steam_topup");
+                "CS2", 15_300, steamPrompt, 5_000, "steam_topup");
         seed("Steam - Пополнение 200",
                 "Пополнение баланса Steam на 200 ₽. Нужен только логин Steam. Сейчас работает для стран: " + steamCountries + ". Срок зачисления - до 24 ч.",
-                "Steam", 30_600, steamPrompt, 15_000, "steam_topup");
+                "CS2", 30_600, steamPrompt, 15_000, "steam_topup");
 
         // ── Вывод в Telegram Stars (2026-09-13) ───────────────────────────────────
         // Альтернативный способ вывода наряду с рублями/TON — исполняется ВРУЧНУЮ администратором

@@ -8699,7 +8699,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // findAvailableRewards() по priceCoins) — непредсказуемо для пользователя. Brawl
             // Stars/Clash Royale/Clash of Clans (донат-игры) закреплены наверху списка в этом порядке
             // (запрошено 2026-09-20), остальные категории идут следом в прежнем порядке.
-            List<String> priorityCategories = List.of("Brawl Stars", "Clash Royale", "Clash of Clans", "Steam");
+            List<String> priorityCategories = List.of("Brawl Stars", "Clash Royale", "Clash of Clans", "CS2");
             java.util.LinkedHashMap<String, List<RewardItem>> orderedByCategory = new java.util.LinkedHashMap<>();
             for (String cat : priorityCategories) {
                 List<RewardItem> items = byCategory.remove(cat);
