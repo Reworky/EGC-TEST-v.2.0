@@ -108,15 +108,10 @@ public class PlatformPushService {
     /** Новые квесты по игре после смены пачки: игрокам, брали квесты этой игры за 60 дней и заходившим за 30. */
     public void pushQuestRotation(String gameName, String packName, List<Quest> quests) {
         if (!enabled("rotation") || quests == null || quests.isEmpty()) return;
-        List<Quest> sorted = new ArrayList<>(quests);
-        sorted.sort((a, b) -> Long.compare(b.getRewardCoins(), a.getRewardCoins()));
-        StringBuilder sb = new StringBuilder("🎮 <b>Новые квесты по ").append(esc(gameName)).append("</b>\n\nВ боте обновился набор: теперь их <b>")
-                .append(quests.size()).append("</b>. Самые щедрые: ");
-        List<String> top = new ArrayList<>();
-        for (Quest q : sorted.subList(0, Math.min(2, sorted.size()))) {
-            top.add(esc(q.getTitle()) + " (" + num(q.getRewardCoins()) + " EXC)");
-        }
-        sb.append(String.join(", ", top)).append(".\n\nТе, что уже взял, можно спокойно доделать.");
+        // Формат владельца (22.10.2026): жирный заголовок, число квестов, призыв и кнопка в раздел «Квесты»; одинаково для всех игр и пачек
+        StringBuilder sb = new StringBuilder("<b>❗️Новые квесты по ").append(esc(gameName)).append("</b>\n\n")
+                .append("В боте обновился набор: теперь их ").append(quests.size()).append(".\n\n")
+                .append("Обязательно зайди и попробуй 👇");
         String html = sb.toString();
         CompletableFuture.runAsync(() -> {
             Set<Long> ids = new HashSet<>(questSubmissionRepository.findUserIdsWithSubmissionInGameSince(gameName, LocalDateTime.now().minusDays(GAME_HISTORY_DAYS)));
@@ -124,7 +119,7 @@ public class PlatformPushService {
             int sent = 0;
             for (Long id : ids) {
                 AppUser u = userService.findById(id).orElse(null);
-                if (u != null && activeSince(u, since) && send(u, NudgeType.PACK_ROTATION, html, "🎮 Квесты: " + gameName, null, gameName)) sent++;
+                if (u != null && activeSince(u, since) && send(u, NudgeType.PACK_ROTATION, html, "🎮 Попробовать", "menu:quests", null)) sent++;
             }
             log.info("[PlatformPush] pack rotation '{}' ({}) sent to {} player(s)", gameName, packName, sent);
         });
