@@ -339,6 +339,16 @@ public class RedButtonService {
         return scheduleRepository.findByStatusInOrderByPlannedAt(List.of(RedButtonSchedule.PLANNED));
     }
 
+    /** Все красные кнопки (кроме отменённых) для календаря админки. */
+    public List<RedButtonSchedule> allSchedules() {
+        List<RedButtonSchedule> out = new java.util.ArrayList<>();
+        for (RedButtonSchedule r : scheduleRepository.findAll()) {
+            if (!RedButtonSchedule.CANCELLED.equals(r.getStatus())) out.add(r);
+        }
+        out.sort(java.util.Comparator.comparing(RedButtonSchedule::getPlannedAt));
+        return out;
+    }
+
     public Optional<RedButtonSchedule> find(Long id) {
         return id == null ? Optional.empty() : scheduleRepository.findById(id);
     }

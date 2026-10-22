@@ -21501,14 +21501,112 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         sb.append("Черновиков на согласовании: <b>").append(channelContentService.pendingCount()).append("</b>");
         rows.add(List.of(keyboardFactory.callback("🗓 Расписание на 14 дней + очередь ручных", "admin:cc:sched:14")));
-        rows.add(List.of(keyboardFactory.callback("⬅️ По дням недели", "admin:cc"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ По дням недели", "admin:cc:week"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     private static final String[] DAY_SHORT = {"", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"};
 
+    private static final String[] MONTH_NAMES = {"", "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"};
+
+    /** «Контент канала» - главный экран (с 22.10.2026): календарь месяца. В кнопке-дне число постов (автопосты + ручные + красные кнопки), 📍 - сегодня (UTC+7). */
+    private void sendChannelContentCalendar(AppUser user, java.time.YearMonth ym) {
+        java.time.LocalDate today = java.time.LocalDateTime.now().plusHours(7).toLocalDate();
+        List<ru.gamebot.platform.service.ChannelContentService.ManualQueueEntry> manual = channelContentService.manualQueue();
+        List<ru.gamebot.platform.domain.model.RedButtonSchedule> reds = redButtonService.allSchedules();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(
+                keyboardFactory.callback("◀", "admin:cc:cal:" + ym.minusMonths(1)),
+                keyboardFactory.callback(MONTH_NAMES[ym.getMonthValue()] + " " + ym.getYear(), "noop"),
+                keyboardFactory.callback("▶", "admin:cc:cal:" + ym.plusMonths(1))));
+        List<InlineKeyboardButton> head = new ArrayList<>();
+        for (int d = 1; d <= 7; d++) head.add(keyboardFactory.callback(DAY_SHORT[d], "noop"));
+        rows.add(head);
+        List<InlineKeyboardButton> week = new ArrayList<>();
+        int offset = ym.atDay(1).getDayOfWeek().getValue() - 1;
+        for (int i = 0; i < offset; i++) week.add(keyboardFactory.callback("·", "noop"));
+        int total = 0;
+        for (int day = 1; day <= ym.lengthOfMonth(); day++) {
+            java.time.LocalDate date = ym.atDay(day);
+            int n = channelContentService.autoEntriesOnLocalDate(date).size();
+            for (ru.gamebot.platform.service.ChannelContentService.ManualQueueEntry m : manual) {
+                if (m.atUtc().plusHours(7).toLocalDate().equals(date)) n++;
+            }
+            for (ru.gamebot.platform.domain.model.RedButtonSchedule r : reds) {
+                if (r.getPlannedAt().plusHours(7).toLocalDate().equals(date)) n++;
+            }
+            total += n;
+            String label = (date.equals(today) ? "📍" : "") + day + (n > 0 ? "·" + n : "");
+            week.add(keyboardFactory.callback(label, "admin:cc:date:" + date));
+            if (week.size() == 7) {
+                rows.add(new ArrayList<>(week));
+                week.clear();
+            }
+        }
+        if (!week.isEmpty()) {
+            while (week.size() < 7) week.add(keyboardFactory.callback("·", "noop"));
+            rows.add(new ArrayList<>(week));
+        }
+        rows.add(List.of(keyboardFactory.callback("📍 Сегодня", "admin:cc:cal:" + java.time.YearMonth.from(today)),
+                keyboardFactory.callback("📋 По дням недели", "admin:cc:week")));
+        rows.add(List.of(keyboardFactory.callback("🔁 Ежедневно и по событию", "admin:cc:day:0"),
+                keyboardFactory.callback("🗓 14 дней", "admin:cc:sched:14")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:comm"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(),
+                "📰 <b>Контент канала: календарь</b>\n\n"
+                        + "Нажмите на дату, чтобы увидеть все посты этого дня. Число после точки - сколько постов в этот день (автопосты, ручные из очереди, красные кнопки), 📍 - сегодня. "
+                        + "Курс дня выходит каждый день и в число не входит. Время везде по UTC+7.\n\n"
+                        + "Постов в месяце: <b>" + total + "</b>. На согласовании: <b>" + channelContentService.pendingCount() + "</b>",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Экран одной даты календаря: все посты этого дня по времени - ручные из очереди (со статусом), автопосты по расписанию, красные кнопки. */
+    private void sendChannelContentDate(AppUser user, java.time.LocalDate date) {
+        record Row(java.time.LocalDateTime at, String text, String callback, String button) { }
+        List<Row> items = new ArrayList<>();
+        for (ru.gamebot.platform.service.ChannelContentService.ManualQueueEntry m : channelContentService.manualQueue()) {
+            java.time.LocalDateTime local = m.atUtc().plusHours(7);
+            if (!local.toLocalDate().equals(date)) continue;
+            String state = ru.gamebot.platform.domain.model.ChannelPostDraft.PUBLISHED.equals(m.status()) ? "✅ вышел"
+                    : ru.gamebot.platform.domain.model.ChannelPostDraft.REJECTED.equals(m.status()) ? "❌ отклонён"
+                    : m.cardSent() ? "📨 карточка у вас, ждёт одобрения" : "⏳ в очереди";
+            boolean pending = ru.gamebot.platform.domain.model.ChannelPostDraft.PENDING.equals(m.status());
+            items.add(new Row(local, "✍️ " + escape(m.rubric()) + " - " + state, pending ? "admin:cc:show:" + m.draftId() : null,
+                    pending ? "👁 " + String.format("%02d:%02d", local.getHour(), local.getMinute()) + " " + m.rubric() : null));
+        }
+        for (ru.gamebot.platform.service.ChannelContentService.AutoOnDate a : channelContentService.autoEntriesOnLocalDate(date)) {
+            java.time.LocalDateTime local = a.atUtc().plusHours(7);
+            items.add(new Row(local, "🤖 " + escape(channelPostTitle(a.type())), "admin:cc:type:" + ccKey(a.type()),
+                    "⚙️ " + String.format("%02d:%02d", local.getHour(), local.getMinute()) + " " + channelPostTitle(a.type())));
+        }
+        for (ru.gamebot.platform.domain.model.RedButtonSchedule r : redButtonService.allSchedules()) {
+            java.time.LocalDateTime local = r.getPlannedAt().plusHours(7);
+            if (!local.toLocalDate().equals(date)) continue;
+            items.add(new Row(local, "🔴 красная кнопка +" + r.getPercent() + "% - " + r.getStatus(), "admin:course:red", null));
+        }
+        items.sort(java.util.Comparator.comparing(Row::at));
+        StringBuilder sb = new StringBuilder("📅 <b>").append(weekdayNomRu(date.getDayOfWeek().getValue())).append(", ")
+                .append(String.format("%02d.%02d.%d", date.getDayOfMonth(), date.getMonthValue(), date.getYear())).append("</b>\n\nВремя по UTC+7.\n\n");
+        if (items.isEmpty()) sb.append("В этот день постов нет.\n");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        java.util.Set<String> used = new java.util.HashSet<>();
+        for (Row r : items) {
+            sb.append(String.format("%02d:%02d ", r.at().getHour(), r.at().getMinute())).append(r.text()).append("\n");
+            if (r.callback() != null && r.button() != null && used.add(r.callback())) {
+                String lbl = r.button();
+                rows.add(List.of(keyboardFactory.callback(lbl.length() > 60 ? lbl.substring(0, 60) : lbl, r.callback())));
+            }
+        }
+        sb.append("\n📈 Курс дня выходит ежедневно в ").append(String.format("%02d:00", (bonusCourseService.postHourUtc() + 7) % 24)).append(" (если автопост включён).");
+        rows.add(List.of(keyboardFactory.callback("◀ " + String.format("%02d.%02d", date.minusDays(1).getDayOfMonth(), date.minusDays(1).getMonthValue()), "admin:cc:date:" + date.minusDays(1)),
+                keyboardFactory.callback("▶ " + String.format("%02d.%02d", date.plusDays(1).getDayOfMonth(), date.plusDays(1).getMonthValue()), "admin:cc:date:" + date.plusDays(1))));
+        rows.add(List.of(keyboardFactory.callback("📆 Календарь", "admin:cc:cal:" + java.time.YearMonth.from(date)), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        String text = sb.length() > 3900 ? sb.substring(0, 3900) + "…" : sb.toString();
+        sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
+    }
+
     /** Админка → «Контент канала» (главный экран, с 21.10.2026): кнопки по дням недели. В скобках - сколько постов (автопосты + очередь ручных) в ближайшие 14 дней в этот день. */
-    private void sendChannelContentPanel(AppUser user) {
+    private void sendChannelContentWeekPanel(AppUser user) {
         java.util.List<ru.gamebot.platform.service.ChannelContentService.ScheduleEntry> list =
                 channelContentService.upcomingSchedule(14, GamePlatformBot::channelPostTitle);
         int[] cnt = new int[8];
@@ -21526,7 +21624,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🔁 Ежедневно и по событию", "admin:cc:day:0")));
         rows.add(List.of(keyboardFactory.callback("🗓 Расписание на 14 дней + очередь ручных", "admin:cc:sched:14")));
         rows.add(List.of(keyboardFactory.callback("📋 Все посты списком", "admin:cc:all")));
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:comm"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        rows.add(List.of(keyboardFactory.callback("📆 Календарь", "admin:cc"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(),
                 "📰 <b>Контент канала</b>\n\n"
                         + "Выберите день недели: откроются посты этого дня, автопосты (с настройками) и очередь ручных. 📍 - сегодня, число - сколько постов в ближайшие 14 дней. "
@@ -21621,7 +21719,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("\n\n📈 Курс дня выходит ежедневно, он в разделе «Ежедневно и по событию».");
         }
         String text = sb.length() > 3900 ? sb.substring(0, 3900) + "…" : sb.toString();
-        rows.add(List.of(keyboardFactory.callback("⬅️ По дням недели", "admin:cc"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ По дням недели", "admin:cc:week"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
 
@@ -21725,20 +21823,43 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleChannelContentAction(CallbackQuery callbackQuery, AppUser user, String action) {
         String[] p = action.split(":");
+        if (p.length == 2 && "week".equals(p[1])) {
+            answerSilently(callbackQuery.getId());
+            sendChannelContentWeekPanel(user);
+            return;
+        }
         if (p.length == 2 && "all".equals(p[1])) {
             answerSilently(callbackQuery.getId());
             sendChannelContentFullList(user);
             return;
         }
         if (p.length < 3) {
-            sendChannelContentPanel(user);
+            sendChannelContentCalendar(user, java.time.YearMonth.from(java.time.LocalDateTime.now().plusHours(7)));
             answerSilently(callbackQuery.getId());
+            return;
+        }
+        if ("cal".equals(p[1])) {
+            answerSilently(callbackQuery.getId());
+            try {
+                sendChannelContentCalendar(user, java.time.YearMonth.parse(p[2]));
+            } catch (Exception e) {
+                sendChannelContentCalendar(user, java.time.YearMonth.from(java.time.LocalDateTime.now().plusHours(7)));
+            }
+            return;
+        }
+        if ("date".equals(p[1])) {
+            answerSilently(callbackQuery.getId());
+            try {
+                sendChannelContentDate(user, java.time.LocalDate.parse(p[2]));
+            } catch (Exception e) {
+                sendChannelContentCalendar(user, java.time.YearMonth.from(java.time.LocalDateTime.now().plusHours(7)));
+            }
             return;
         }
         if ("day".equals(p[1])) {
             Long d = parseLong(p[2]);
             answerSilently(callbackQuery.getId());
-            if (d == null || d < 0 || d > 7) sendChannelContentPanel(user); else sendChannelContentDay(user, d.intValue());
+            if (d == null || d < 0 || d > 7) sendChannelContentCalendar(user, java.time.YearMonth.from(java.time.LocalDateTime.now().plusHours(7))); else sendChannelContentDay(user, d.intValue());
             return;
         }
         if ("sched".equals(p[1])) {

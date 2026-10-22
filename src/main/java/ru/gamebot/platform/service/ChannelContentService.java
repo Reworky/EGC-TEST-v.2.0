@@ -456,6 +456,28 @@ public class ChannelContentService {
     /** Строка общего расписания: момент (UTC), название, ручной ли пост. */
     public record ScheduleEntry(LocalDateTime atUtc, String title, boolean manual, Long draftId) { }
 
+    /** Автопост по расписанию на дату (в календаре админки): тип и момент выхода (UTC). Дата - календарная по UTC+7 (часовой пояс владельца). */
+    public record AutoOnDate(LocalDateTime atUtc, String type) { }
+
+    /** Включённые автопосты, которые по настройкам (день недели, час, чередование 2/4 недели) выходят в указанную дату по UTC+7. Для прошлых дат - то, что было по расписанию. */
+    public List<AutoOnDate> autoEntriesOnLocalDate(LocalDate localDate) {
+        List<AutoOnDate> out = new java.util.ArrayList<>();
+        for (String type : ALL_TYPES) {
+            if (isEventType(type) && !isDelayedEvent(type)) continue;
+            if (NEW_QUESTS.equals(type) || SHOP_NEW.equals(type)) continue;
+            TypeSettings st = settings(type);
+            if (!st.enabled()) continue;
+            for (int back = 0; back <= 1; back++) {
+                LocalDate utcDate = localDate.minusDays(back);
+                if (utcDate.getDayOfWeek().getValue() != st.dayOfWeek() || !phaseOk(type, utcDate)) continue;
+                LocalDateTime at = utcDate.atTime(st.hour(), 0);
+                if (at.plusHours(7).toLocalDate().equals(localDate)) out.add(new AutoOnDate(at, type));
+            }
+        }
+        out.sort(java.util.Comparator.comparing(AutoOnDate::atUtc));
+        return out;
+    }
+
     /** Ручной пост из очереди плана с любым статусом (для экрана «Контент канала» по дням): время карточки (UTC), рубрика, статус черновика, ушла ли карточка админам. */
     public record ManualQueueEntry(Long draftId, LocalDateTime atUtc, String rubric, String status, boolean cardSent) { }
 
