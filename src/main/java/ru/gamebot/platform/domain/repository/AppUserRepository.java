@@ -325,6 +325,13 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     long countByBlockedTrue();
 
+    /** «Доля фрода» в витрине проекта: зарегистрированные игроки, заблокированные или помеченные подозрительными. */
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND (u.blocked = true OR u.fraudSuspect = true)")
+    long countFraudOrBlocked();
+
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.fraudSuspect = true")
+    long countFraudSuspects();
+
     long countByReferredByTelegramIdIsNotNull();
 
     long countByReferredByTelegramIdIsNotNullAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(LocalDateTime from, LocalDateTime to);

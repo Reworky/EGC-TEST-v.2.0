@@ -56,7 +56,8 @@ public class AnalyticsService {
         TECH("🛠", "Техническое здоровье"),
         PACKS("📦", "Пачки квестов"),
         FRAUD("🕵️", "Фрод и злоупотребления"),
-        COURSE("📈", "Курс дня и красная кнопка");
+        COURSE("📈", "Курс дня и красная кнопка"),
+        KPI("🏪", "Витрина проекта");
 
         public final String icon;
         public final String title;
@@ -234,6 +235,7 @@ public class AnalyticsService {
                 case TECH -> techTab(p, pv, lines, extras);
                 case FRAUD -> fraudTab(p, lines, extras);
                 case COURSE -> courseTab(p, pv, lines, extras);
+                case KPI -> kpiTab(p, pv, fromDate, lines, extras);
             }
         } catch (Exception e) {
             log.error("Analytics tab {} failed", tab, e);
@@ -785,6 +787,73 @@ public class AnalyticsService {
         extras.add("<i>Просмотры поста недоступны: Telegram не отдаёт боту счётчик просмотров канала. Возврат на следующий день и активации к DAU считаются по журналу активных дней (с момента его запуска).</i>");
     }
 
+    /** Вкладка «Витрина проекта» (22.10.2026): шесть ключевых метрик в одном месте. Это ДУБЛИ показателей из других вкладок («Удержание», «Вовлечённость», «Пользователи и приток»,
+     *  «Финансовая сводка», «Фрод»), которые остаются на своих местах без изменений; считаются тем же кодом и теми же сервисами. Период влияет на пункты 4 и 5. */
+    private void kpiTab(Period p, Period pv, LocalDate fromDate, List<Line> out, List<String> extras) {
+        // 1. D1 / D7 / D30 (когорты по журналу активных дней, как во вкладке «Удержание»)
+        RetentionService.Report rr = retentionService.report();
+        out.add(L("k_d1", "1. Возврат D1 (4 зрелые недели)", "%", pctOrNull(rr.recentD1()), pctOrNull(rr.prevD1()), "против предыдущих 4 зрелых недель; период не выбирается", false));
+        out.add(L("k_d7", "   Возврат D7 (4 зрелые недели)", "%", pctOrNull(rr.recentD7()), pctOrNull(rr.prevD7()), null, false));
+        out.add(L("k_d30", "   Возврат D30 (4 зрелые недели)", "%", pctOrNull(rr.recentD30()), pctOrNull(rr.prevD30()), null, false));
+
+        // 2. DAU / MAU и 3. доля новичков со вторым квестом (как во вкладке «Вовлечённость»)
+        UserService.EngagementReport er = userService.getEngagementReport(null);
+        Double dauPrev = snapVal(fromDate, PlatformSnapshot::getDau);
+        Double mauPrev = snapVal(fromDate, PlatformSnapshot::getMau);
+        out.add(L("k_dau", "2. DAU (активны за 24 ч)", "", (double) er.dau(), dauPrev));
+        out.add(L("k_mau", "   MAU (активны за 30 дней)", "", (double) er.mau(), mauPrev));
+        Double ratioPrev = (dauPrev != null && mauPrev != null && mauPrev > 0) ? dauPrev * 100.0 / mauPrev : null;
+        out.add(L("k_dau_mau", "   DAU / MAU", "%", er.dauMauPercent(), ratioPrev, "норма: 10-20% окей, 20%+ хорошо, 25-30%+ уровень топ-игр", false));
+        out.add(L("k_second", "3. Доля новичков, сделавших 2-й квест", "%", er.retentionPercent(), snapVal(fromDate, PlatformSnapshot::getSecondQuestReturnPct),
+                "из когорты «1-й квест ≥7 дн. назад»; в когорте " + er.retentionCohort() + " чел.", false));
+
+        // 4. Доля органики и рефералов среди новых за период (как «Новых за период» во вкладке «Пользователи и приток»)
+        long fresh = userRepo.countRegisteredBetween(p.from(), p.to());
+        long freshPrev = userRepo.countRegisteredBetween(pv.from(), pv.to());
+        long ads = userRepo.countByTrafficSourceCodeIsNotNullAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(p.from(), p.to());
+        long ref = userRepo.countByReferredByTelegramIdIsNotNullAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(p.from(), p.to());
+        long adsPrev = userRepo.countByTrafficSourceCodeIsNotNullAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(pv.from(), pv.to());
+        long refPrev = userRepo.countByReferredByTelegramIdIsNotNullAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(pv.from(), pv.to());
+        long organic = Math.max(0, fresh - ads - ref);
+        long organicPrev = Math.max(0, freshPrev - adsPrev - refPrev);
+        out.add(L("k_new", "4. Новых игроков за период", "", (double) fresh, (double) freshPrev));
+        out.add(L("k_org", "   Доля органики среди новых", "%", fresh == 0 ? null : pct(organic, fresh), freshPrev == 0 ? null : pct(organicPrev, freshPrev),
+                "органика = без рекламной ссылки и без реферала", false));
+        out.add(L("k_ref", "   Доля рефералов среди новых", "%", fresh == 0 ? null : pct(ref, fresh), freshPrev == 0 ? null : pct(refPrev, freshPrev), null, false));
+        out.add(L("k_ads", "   Доля рекламных ссылок среди новых", "%", fresh == 0 ? null : pct(ads, fresh), freshPrev == 0 ? null : pct(adsPrev, freshPrev), null, false));
+
+        // 5. Маржа: доход минус выплаты (доходы и выплаты считаются как во вкладке «Финансовая сводка»; расходы не вычитаются)
+        LocalDate from = p.from().toLocalDate();
+        LocalDate to = p.to().minusNanos(1).toLocalDate();
+        LocalDate pfrom = pv.from().toLocalDate();
+        LocalDate pto = pv.to().minusNanos(1).toLocalDate();
+        long revenue = revenueBetween(from, to);
+        long revenuePrev = revenueBetween(pfrom, pto);
+        RewardService.WithdrawalPeriodStats cur = withdrawalsBetween(p.from(), p.to());
+        RewardService.WithdrawalPeriodStats prev = withdrawalsBetween(pv.from(), pv.to());
+        long payouts = cur.totalRub() + cur.totalTonRub();
+        long payoutsPrev = prev.totalRub() + prev.totalTonRub();
+        out.add(L("k_rev", "5. Доходы за период", "₽", (double) revenue, (double) revenuePrev, "то, что внесено в «Финансы» (реклама, спонсоры, прочее)", false));
+        out.add(L("k_pay", "   Выплаты игрокам", "₽", (double) payouts, (double) payoutsPrev, "рубли + GRAM в рублях; звёзды не входят", true));
+        out.add(L("k_margin", "   Маржа: доход минус выплаты", "₽", (double) (revenue - payouts), (double) (revenuePrev - payoutsPrev), "расходы (закупы, сервисы) здесь не вычитаются, итог с ними - во вкладке «Финансовая сводка»", false));
+        out.add(L("k_margin_pct", "   Маржа, % от дохода", "%", revenue == 0 ? null : (revenue - payouts) * 100.0 / revenue,
+                revenuePrev == 0 ? null : (revenuePrev - payoutsPrev) * 100.0 / revenuePrev, null, false));
+
+        // 6. Доля фрода: заблокированные и помеченные подозрительными среди зарегистрированных
+        long total = Math.max(1, userService.totalRegisteredUsers());
+        long flagged = userRepo.countFraudOrBlocked();
+        out.add(L("k_fraud", "6. Доля фрода среди игроков", "%", pct(flagged, total), null,
+                "заблокированные или помеченные подозрительными: " + flagged + " из " + total + " (подозрительных " + userRepo.countFraudSuspects()
+                        + ", заблокированных " + userRepo.countByBlockedTrue() + "); считается на сейчас, не за период", true));
+        extras.add("<i>Все цифры повторяют показатели других вкладок («Удержание», «Вовлечённость», «Пользователи и приток», «Финансовая сводка», «Фрод»): там они остались как были.</i>");
+    }
+
+    private long revenueBetween(LocalDate from, LocalDate to) {
+        return financeService.sumByKind(FinanceEntry.DIRECT_ADS, from, to) + financeService.sumByKind(FinanceEntry.YANDEX_RSYA, from, to)
+                + financeService.sumByKind(FinanceEntry.TELEGA, from, to) + financeService.sumByKind(FinanceEntry.SPONSOR, from, to)
+                + financeService.sumByKind(FinanceEntry.OTHER, from, to);
+    }
+
     private void tournamentsTab(List<Line> out, List<String> extras) {
         List<Tournament> all = tournamentRepo.findAllByOrderByCreatedAtDesc();
         long totalEntries = 0, totalPool = 0;
@@ -921,6 +990,8 @@ public class AnalyticsService {
             case WITHDRAWALS -> List.of(new TrendMetric("Выплачено за 7 дн., EXC", PlatformSnapshot::getPaidOutExc7d), new TrendMetric("Получателей выплат", PlatformSnapshot::getUniqueWithdrawalRecipients));
             case TECH -> List.of(new TrendMetric("Аптайм за 7 дн., ‰", PlatformSnapshot::getUptimePermille7d), new TrendMetric("Ср. время проверки, мин", PlatformSnapshot::getAvgReviewMin7d));
             case FRAUD -> List.of(new TrendMetric("Заблокировано", PlatformSnapshot::getBlockedUsers));
+            case KPI -> List.of(new TrendMetric("DAU", PlatformSnapshot::getDau), new TrendMetric("MAU", PlatformSnapshot::getMau),
+                    new TrendMetric("Возврат за 2-м квестом, %", PlatformSnapshot::getSecondQuestReturnPct), new TrendMetric("Заблокировано", PlatformSnapshot::getBlockedUsers));
             default -> List.of();
         };
     }
