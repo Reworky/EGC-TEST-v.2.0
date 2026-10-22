@@ -1084,7 +1084,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if ("common:cancel".equals(data)) {
             String adminNav = session.getData().get(UserSession.ADMIN_NAV_KEY);
+            SessionState stateBeforeCancel = session.getState();
             session.reset();
+            // Отмена на любом шаге создания спонсора/спонсорского квеста (в т.ч. «⚡ Быстрый квест на подписку») возвращает в список спонсорских квестов, а не в главное меню
+            if (stateBeforeCancel != null && stateBeforeCancel.name().startsWith("SPONSOR_") && isEffectiveAdmin(user)) {
+                answer(callbackQuery.getId(), "Отменено");
+                sendAdminSponsorList(user);
+                return;
+            }
             if (adminNav != null && adminNav.startsWith("grp:") && isEffectiveAdmin(user)) {
                 answer(callbackQuery.getId(), "Отменено");
                 sendAdminGroup(user, adminNav.substring("grp:".length()));
