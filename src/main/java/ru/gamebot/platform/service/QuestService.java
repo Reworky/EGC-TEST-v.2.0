@@ -1367,7 +1367,9 @@ public class QuestService {
             sponsorService.recordSpend(quest.getSponsorId(), sponsorShare);
             // Оплаченное число подписчиков набрано (спонсор платит за подписчика): закрываем кампанию, не дожидаясь исчерпания бюджета.
             // Текущая заявка уже сохранена как APPROVED выше, поэтому COUNT её включает - «+1» не нужен.
-            if (quest.getChannelCheckChatId() != null && quest.getParticipantLimit() != null && quest.getParticipantLimit() > 0
+            // Ручные спонсорские квесты (без автопроверки) с реальным оплаченным лимитом (меньше 10 000, как «заглушка» старых квестов) закрываются так же
+            boolean paidLimit = quest.getChannelCheckChatId() != null || (quest.getParticipantLimit() != null && quest.getParticipantLimit() < 10_000);
+            if (paidLimit && quest.getParticipantLimit() != null && quest.getParticipantLimit() > 0
                     && questSubmissionRepository.countApprovedByQuest(quest) >= quest.getParticipantLimit()) {
                 sponsorService.finishCampaign(quest.getSponsorId(), "набрано " + quest.getParticipantLimit() + " подписчиков");
             }

@@ -223,6 +223,10 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT s.user.id, SUM(s.quest.rewardXp) FROM QuestSubmission s WHERE s.status = 'APPROVED' AND s.updatedAt >= :from AND s.updatedAt < :to GROUP BY s.user.id ORDER BY SUM(s.quest.rewardXp) DESC")
     List<Object[]> findUserXpRankingBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
+    /** Заявки по спонсорским квестам с ручной проверкой (без автопроверки подписки), ждущие модерации с момента before - для напоминания модераторам. */
+    @Query("SELECT s FROM QuestSubmission s WHERE s.status = 'PENDING' AND s.quest.sponsored = true AND s.quest.channelCheckChatId IS NULL AND s.updatedAt < :before")
+    List<QuestSubmission> findPendingSponsoredManualBefore(@Param("before") LocalDateTime before);
+
     /** Все активные заявки (DRAFT/PENDING) у которых истёк дедлайн — для автоотмены. */
     @EntityGraph(attributePaths = {"user", "quest"})
     @Query("SELECT s FROM QuestSubmission s WHERE s.status IN ('DRAFT','PENDING') AND s.expiresAt IS NOT NULL AND s.expiresAt < CURRENT_TIMESTAMP")

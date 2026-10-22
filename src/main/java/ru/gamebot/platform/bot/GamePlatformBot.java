@@ -3057,6 +3057,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 finalizeSponsorQuest(user, session, note);
             }
             case SPONSOR_FAST_INPUT -> handleSponsorFastInput(user, session, text);
+            case SPONSOR_MANUAL_INPUT -> handleSponsorManualInput(user, session, text);
             case SPONSOR_TOPUP_INPUT -> handleSponsorTopupInput(user, session, text);
 
             case BRAWL_TAG_INPUT -> {
@@ -7728,9 +7729,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** «👥 Осталось мест: N из M» для спонсорской подписки: спонсор оплатил ограниченное число подписчиков на ВЕСЬ проект (лимит кампании),
      *  а «разовый» - про то, что каждый игрок получает награду один раз. Без этой строки закрытие квеста после нескольких выполнений выглядело загадкой. */
     private String placesLeftLine(Quest quest) {
-        if (quest.getChannelCheckChatId() == null || quest.getParticipantLimit() == null || quest.getParticipantLimit() <= 0) {
-            return "";
-        }
+        if (quest.getParticipantLimit() == null || quest.getParticipantLimit() <= 0) return "";
+        // Автоподписка (проверка канала) или ручной спонсорский квест с реальным оплаченным лимитом (10 000 - заглушка старых квестов)
+        if (quest.getChannelCheckChatId() == null && !(quest.isSponsored() && quest.getParticipantLimit() < 10_000)) return "";
         long left = Math.max(0, quest.getParticipantLimit() - questService.countApprovedByQuest(quest));
         return "👥 Осталось мест: <b>" + left + "</b> из " + quest.getParticipantLimit() + "\n";
     }
@@ -12074,13 +12075,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendModerationQueue(Long chatId) {
-        List<QuestSubmission> submissions = questService.getPendingSubmissions();
+        List<QuestSubmission> submissions = new ArrayList<>(questService.getPendingSubmissions());
+        // Спонсорские квесты (спонсор платит за результат) идут в очереди первыми; порядок внутри групп сохраняется (sort стабильный)
+        submissions.sort(java.util.Comparator.comparing((QuestSubmission x) -> x.getQuest() != null && x.getQuest().isSponsored() ? 0 : 1));
         long suspectCount = userService.countFraudSuspects();
 
         List<InlineKeyboardButton> buttons = new ArrayList<>();
         for (QuestSubmission submission : submissions) {
             boolean suspect = submission.getUser().isFraudSuspect();
-            String prefix = suspect ? "⚠️ " : "🔎 ";
+            boolean sponsoredSub = submission.getQuest() != null && submission.getQuest().isSponsored();
+            String prefix = suspect ? "⚠️ " : sponsoredSub ? "💎 " : "🔎 ";
             String title = prefix + "К-" + (submission.getDisplayId() != null ? submission.getDisplayId() : submission.getId()) + " " + trim(submission.getUser().getNickname() + " / " + submission.getQuest().getTitle(), 22);
             buttons.add(keyboardFactory.callback(title, "mod:view:" + submission.getId()));
         }
@@ -12561,6 +12565,40 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
                 sendAbandonedQuestsAdmin(user, "Закрыто брошенных квестов: " + abandonedClosed + ".");
                 answerSilently(callbackQuery.getId());
+                return;
+            }
+            case "sponsors:newquest" -> {
+                session.reset();
+                sendText(user.getTelegramId(),
+                        "➕ <b>Новый спонсорский квест</b>\n\nКакое направление?\n\n"
+                                + "⚡ <b>Автоматический</b> - подписка на Telegram-канал. Бот сам проверяет подписку и закрывает квест, когда набрано оплаченное число.\n\n"
+                                + "✍️ <b>С ручной проверкой</b> - YouTube, TikTok, Instagram, сайт или любое задание. Игрок присылает скриншот, модератор принимает.\n\n"
+                                + "🧰 <b>Расширенный режим</b> - прежнее создание по шагам (спонсор, бюджет, даты, квест).",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("⚡ Автоматический (Telegram-канал)", "admin:sponsors:fast")),
+                                List.of(keyboardFactory.callback("✍️ С ручной проверкой", "admin:sponsors:manual")),
+                                List.of(keyboardFactory.callback("🧰 Расширенный режим (по шагам)", "admin:sponsors:create")),
+                                List.of(keyboardFactory.callback("⬅️ Назад", "admin:sponsors")))));
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            case "sponsors:manual" -> {
+                session.reset();
+                session.setState(SessionState.SPONSOR_MANUAL_INPUT);
+                sendText(user.getTelegramId(),
+                        "✍️ <b>Квест с ручной проверкой</b>\n\n"
+                                + "Одним сообщением через « | »:\n"
+                                + "<code>Название | ссылка | награда EXC | сколько человек | срок в днях | цена ₽ за человека</code>\n\n"
+                                + "Срок и цену можно не писать: срок по умолчанию " + FAST_SPONSOR_DEFAULT_DAYS + " дней, цена 0 (оплату тогда не заводим).\n\n"
+                                + "Пример:\n<code>Подпишись на YouTube «Название» | https://youtube.com/@канал | 300 | 50 | 14 | 6</code>\n\n"
+                                + "Площадка определяется по ссылке, текст задания и XP бот подставит сам. Число человек обязательно: квест закроется, когда принято столько заявок.",
+                        cancelKeyboard());
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            case "sponsors:mango" -> {
+                answerSilently(callbackQuery.getId());
+                createSponsorManualQuest(user, session);
                 return;
             }
             case "sponsors:fast" -> {
@@ -18266,8 +18304,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     icon + " " + s.getName() + " — " + rem + " EXC осталось",
                     "admin:sponsors:view:" + s.getId())));
         }
-        rows.add(List.of(keyboardFactory.callback("⚡ Быстрый квест на подписку", "admin:sponsors:fast")));
-        rows.add(List.of(keyboardFactory.callback("➕ Добавить спонсора", "admin:sponsors:create")));
+        rows.add(List.of(keyboardFactory.callback("➕ Новый квест", "admin:sponsors:newquest")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:edit")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
@@ -26392,6 +26429,173 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return quest.getChannelCheckChatId() != null
                 ? keyboardFactory.callback("✅ Я подписался", "qchan:check:" + quest.getId())
                 : keyboardFactory.callback("📤 Отчёт", "quest:report:" + quest.getId());
+    }
+
+    /** Платформа по ссылке для карточки ручного спонсорского квеста. */
+    private static String sponsorPlatformLabel(String link) {
+        String l = link.toLowerCase();
+        if (l.contains("youtube.com") || l.contains("youtu.be")) return "YouTube";
+        if (l.contains("tiktok.com")) return "TikTok";
+        if (l.contains("instagram.com")) return "Instagram";
+        if (l.contains("t.me/") || l.contains("telegram.me/")) return "Telegram";
+        if (l.contains("vk.com") || l.contains("vkvideo.ru")) return "VK";
+        if (l.contains("twitch.tv")) return "Twitch";
+        if (l.contains("discord.gg") || l.contains("discord.com")) return "Discord";
+        String host = l.replaceFirst("^https?://", "").replaceAll("[/?#].*$", "").replaceFirst("^www\\.", "");
+        return host.isBlank() ? "Сайт" : host;
+    }
+
+    /** Ручной спонсорский квест (22.10.2026): «Название | ссылка | награда EXC | человек | [дней] | [цена ₽ за человека]». Ничего не создаёт, только проверяет и показывает предпросмотр. */
+    private void handleSponsorManualInput(AppUser user, UserSession session, String text) {
+        String[] parts = text.split("\\|");
+        for (int i = 0; i < parts.length; i++) parts[i] = parts[i].trim();
+        if (parts.length < 4 || parts.length > 6) {
+            sendText(user.getTelegramId(), "❌ Нужно от 4 до 6 полей через « | »: название, ссылка, награда EXC, сколько человек, [срок в днях], [цена ₽ за человека].", cancelKeyboard());
+            return;
+        }
+        String title = parts[0];
+        String link = parts[1];
+        long exc, people, days = FAST_SPONSOR_DEFAULT_DAYS, price = 0;
+        try {
+            exc = Long.parseLong(parts[2].replaceAll("\\s", ""));
+            people = Long.parseLong(parts[3].replaceAll("\\s", ""));
+            if (parts.length >= 5 && !parts[4].isEmpty()) days = Long.parseLong(parts[4].replaceAll("\\s", ""));
+            if (parts.length == 6 && !parts[5].isEmpty()) price = Long.parseLong(parts[5].replaceAll("\\s", ""));
+        } catch (NumberFormatException e) {
+            sendText(user.getTelegramId(), "❌ Награда, число человек, срок и цена должны быть числами. Пример: <code>Подпишись на YouTube «Название» | https://youtube.com/@канал | 300 | 50 | 14 | 6</code>", cancelKeyboard());
+            return;
+        }
+        if (title.length() < 3 || title.length() > 120) {
+            sendText(user.getTelegramId(), "❌ Название: от 3 до 120 символов.", cancelKeyboard());
+            return;
+        }
+        if (!link.startsWith("http://") && !link.startsWith("https://")) {
+            sendText(user.getTelegramId(), "❌ Ссылка должна начинаться с http:// или https://", cancelKeyboard());
+            return;
+        }
+        if (exc <= 0 || exc > 1_000_000 || people <= 0 || people > 9_999 || days < 1 || days > 365 || price < 0 || price > 100_000) {
+            sendText(user.getTelegramId(), "❌ Награда: от 1 до 1 000 000 EXC, человек: от 1 до 9 999, срок: от 1 до 365 дней, цена: от 0 до 100 000 ₽.", cancelKeyboard());
+            return;
+        }
+        String platform = sponsorPlatformLabel(link);
+        long rub = people * price;
+        long budget = people * exc;
+        session.getData().put("smTitle", title);
+        session.getData().put("smLink", link);
+        session.getData().put("smExc", String.valueOf(exc));
+        session.getData().put("smPeople", String.valueOf(people));
+        session.getData().put("smDays", String.valueOf(days));
+        session.getData().put("smPrice", String.valueOf(price));
+        session.getData().put("smPlatform", platform);
+        session.setState(SessionState.NONE);
+        double hr = healthRatioService.getCurrentRatio();
+        StringBuilder sb = new StringBuilder("✍️ <b>Проверьте квест</b>\n\n");
+        sb.append("🎯 ").append(escape(title)).append("\n");
+        sb.append("📢 Площадка: <b>").append(escape(platform)).append("</b>\n");
+        sb.append("🔗 ").append(escape(link)).append("\n");
+        sb.append("🪙 Игроку: <b>").append(fmtExc(exc)).append(" EXC</b> + ").append(FAST_SPONSOR_XP).append(" XP\n");
+        sb.append("👥 Мест: <b>").append(fmtExc(people)).append("</b> (квест закроется после ").append(fmtExc(people)).append(" принятых заявок)\n");
+        sb.append("📅 Срок: <b>").append(days).append(" дн.</b>\n");
+        sb.append("💎 Бюджет: <b>").append(fmtExc(budget)).append(" EXC</b> (номинал ").append(fmtExc(budget / 100)).append(" ₽, по курсу фонда ")
+                .append(Math.round(hr * 100)).append("% это ").append(fmtExc(Math.round(budget * 0.01 * hr))).append(" ₽)\n");
+        if (price > 0) {
+            long commission = Math.round(rub * 0.30);
+            sb.append("💰 Оплата спонсора: ").append(fmtExc(people)).append(" × ").append(fmtExc(price)).append(" ₽ = <b>").append(fmtExc(rub)).append(" ₽</b> (комиссия EGC 30%: ")
+                    .append(fmtExc(commission)).append(" ₽, в Payout Pool: ").append(fmtExc(rub - commission)).append(" ₽)\n");
+        } else {
+            sb.append("💰 Оплата не заводится (цена 0).\n");
+        }
+        sb.append("\n<b>Как увидит игрок:</b> «💎 Спонсорский квест», «").append(escape(title)).append("», строка «Осталось мест», ссылка и кнопка «📤 Отчёт» (скриншот на проверку модератору).");
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("✅ Создать квест", "admin:sponsors:mango")),
+                List.of(keyboardFactory.callback("✏️ Ввести заново", "admin:sponsors:manual")),
+                List.of(keyboardFactory.callback("❌ Отмена", "admin:sponsors")))));
+    }
+
+    /** Создание ручного спонсорского квеста по данным из сессии (как createSponsorFastQuest: деньги - под try/catch с алертом админам). */
+    private void createSponsorManualQuest(AppUser user, UserSession session) {
+        Map<String, String> d = session.getData();
+        if (d.get("smTitle") == null || d.get("smLink") == null || d.get("smExc") == null || d.get("smPeople") == null) {
+            sendText(user.getTelegramId(), "⚠️ Данные квеста потерялись (сессия истекла). Начните заново.", backMenuKeyboard("admin:sponsors"));
+            return;
+        }
+        String title = d.get("smTitle");
+        String link = d.get("smLink");
+        String platform = d.getOrDefault("smPlatform", "Сайт");
+        long exc = Long.parseLong(d.get("smExc"));
+        long people = Long.parseLong(d.get("smPeople"));
+        int days = Integer.parseInt(d.getOrDefault("smDays", String.valueOf(FAST_SPONSOR_DEFAULT_DAYS)));
+        long price = Long.parseLong(d.getOrDefault("smPrice", "0"));
+        long rub = people * price;
+        long budget = people * exc;
+        session.reset(); // повторное нажатие «Создать» уже ничего не создаст
+        Long sponsorId = null;
+        try {
+            ru.gamebot.platform.domain.model.Sponsor sponsor = sponsorService.create(title, "Ручная проверка: " + platform, rub, budget,
+                    LocalDateTime.now(), LocalDateTime.now().plusDays(days), user.getTelegramId());
+            sponsorId = sponsor.getId();
+            sponsor.setSponsorContact("");
+            sponsorService.save(sponsor);
+
+            Quest quest = new Quest();
+            quest.setTitle(title);
+            quest.setDescription("Открой ссылку, выполни задание и нажми «📤 Отчёт»: отправь скриншот, на котором видно, что задание выполнено. "
+                    + "Награда придёт после проверки модератором.");
+            quest.setInstruction(link);
+            quest.setGameName(platform);
+            quest.setCategory("Лёгкие");
+            quest.setPlatform(platform);
+            quest.setRewardXp(FAST_SPONSOR_XP);
+            quest.setRewardCoins(exc);
+            quest.setDurationDays(days);
+            quest.setDurationText(days + " дн.");
+            quest.setParticipantLimit((int) Math.min(9_999, people));
+            quest.setSponsored(true);
+            quest.setSponsorId(sponsorId);
+            quest.setOneTimePerAccount(true);
+            Quest createdQuest = questService.createQuest(quest);
+
+            sendText(user.getTelegramId(),
+                    "✅ <b>Квест создан и уже виден игрокам</b>\n\n"
+                            + "🎯 " + escape(title) + "\n"
+                            + "💎 Бюджет: " + fmtExc(budget) + " EXC · награда " + fmtExc(exc) + " EXC · мест " + fmtExc(people) + "\n"
+                            + "🛡 Заявки приходят модераторам со скриншотом, спонсорские идут первыми.\n\n"
+                            + "Ниже готовый текст анонса для канала.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("🤝 Открыть кампанию", "admin:sponsors:view:" + sponsorId)),
+                            List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
+            sendText(user.getTelegramId(), buildQuestAnnouncement(quest), null);
+            pushSponsorQuestToPlayers(createdQuest);
+        } catch (Exception e) {
+            log.error("Sponsor manual quest creation failed (sponsorId={})", sponsorId, e);
+            String msg = "🚨 <b>Спонсорский квест с ручной проверкой не создан до конца</b>\n\n"
+                    + "Название: " + escape(title) + ", оплата " + rub + " ₽.\n"
+                    + (sponsorId != null ? "Кампания #" + sponsorId + " уже создана и оплата учтена в Payout Pool — добавьте квест вручную в разделе «Спонсоры».\n" : "Кампания не создана.\n")
+                    + "Ошибка: " + escape(String.valueOf(e.getMessage()));
+            for (Long adminId : adminService.resolvedAdminIds()) {
+                try {
+                    sendText(adminId, msg, null);
+                } catch (Exception inner) {
+                    log.warn("Failed to alert admin {} about sponsor manual quest failure", adminId, inner);
+                }
+            }
+        }
+    }
+
+    /** Напоминание: заявки по спонсорским квестам с ручной проверкой ждут модерации (SponsorModerationReminderService). */
+    @org.springframework.context.event.EventListener
+    public void onSponsorModerationOverdue(ru.gamebot.platform.event.SponsorModerationOverdueEvent event) {
+        try {
+            String text = "⏰ <b>Спонсорские заявки ждут проверки дольше "
+                    + ru.gamebot.platform.service.SponsorModerationReminderService.WAIT_HOURS + " ч</b>\n\n"
+                    + "Ждут: <b>" + event.getSubmissionIds().size() + "</b>. Спонсор платит за результат, такие заявки идут в очереди первыми (💎).";
+            for (Long recipientId : adminService.allModeratorIds()) {
+                sendText(recipientId, text, keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("🛡 Центр модерации", "menu:moderation")))));
+            }
+        } catch (Exception e) {
+            log.warn("Failed to send sponsor moderation reminder", e);
+        }
     }
 
     private void handleSponsorFastInput(AppUser user, UserSession session, String text) {
