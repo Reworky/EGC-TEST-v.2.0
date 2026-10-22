@@ -25386,8 +25386,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         record.setFirstName(request.getUser().getFirstName());
         record.setLastName(request.getUser().getLastName());
         record.setBio(request.getBio());
-        record = channelJoinRequestRepository.save(record);
-        sendJoinRequestCard(record.getId());
+        channelJoinRequestRepository.save(record);
+        // С 22.10.2026 админам больше не уходит карточка на каждую заявку (владелец: заявок много, это шум): число ожидающих видно в
+        // Админка → Коммуникации → «📥 Заявки на канал (N)» и в сводном напоминании раз в 2 часа (remindPendingChannelJoinRequests)
     }
 
     /** Ссылка-приглашение на канал ТОЛЬКО для кнопки "📢 Подписаться на канал" в боте — создаётся один
@@ -25500,15 +25501,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!pending.isEmpty()) {
             rows.add(List.of(keyboardFactory.callback("✅ Принять всех (" + pending.size() + ")", "admin:joinreq:approveall")));
         }
+        int shown = 0;
         for (ChannelJoinRequest r : pending) {
+            if (shown++ >= 10) break;
             String label = (r.getFirstName() != null ? r.getFirstName() : "Без имени")
                     + (r.getUsername() != null ? " (@" + r.getUsername() + ")" : "");
             rows.add(List.of(keyboardFactory.callback("👤 " + label, "admin:joinreq:show:" + r.getId())));
         }
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:comm")));
+        rows.add(List.of(keyboardFactory.callback("🔄 Обновить", "admin:joinreq"), keyboardFactory.callback("⬅️ Назад", "admin:grp:comm")));
         String header = pending.isEmpty()
                 ? "📥 <b>Заявки на канал</b>\n\nНет заявок, ожидающих решения."
-                : "📥 <b>Заявки на канал</b>\n\nОжидают решения: <b>" + pending.size() + "</b>\nНажми на заявку, чтобы открыть карточку с кнопками ✅/❌, или прими все разом.";
+                : "📥 <b>Заявки на канал</b>\n\nОжидают решения: <b>" + pending.size() + "</b>" + (pending.size() > 10 ? " (ниже 10 самых старых)" : "") + "\nНажми на заявку, чтобы открыть карточку с кнопками ✅/❌, или прими все разом.";
         sendText(user.getTelegramId(), header, keyboardFactory.rowsLayout(rows));
     }
 
