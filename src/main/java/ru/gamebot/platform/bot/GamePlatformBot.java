@@ -4636,8 +4636,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new StarterGame("coc", "🏰 Clash of Clans", "Clash of Clans", "Выиграй 2 атаки в мультиплеере;Выиграй 3 атаки в мультиплеере"));
 
     private final java.util.Map<String, Long> starterAlertSentAt = new java.util.concurrent.ConcurrentHashMap<>();
-    /** Игра -> id запасного стартового квеста, о котором админам уже сообщили (одно сообщение на каждую смену запасного). */
-    private final java.util.Map<String, Long> starterFallbackNotified = new java.util.concurrent.ConcurrentHashMap<>();
 
     /** Включено по умолчанию; выключается значением "false" в app_settings (откат без деплоя). */
     private boolean settingEnabled(String key) {
@@ -4845,11 +4843,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void alertStarterQuestMissing(StarterGame game, Quest fallback) {
         String text;
         if (fallback != null) {
-            Long notified = starterFallbackNotified.get(game.code());
-            if (fallback.getId().equals(notified)) {
+            // Запоминаем в app_settings, а не в памяти: иначе после каждого перезапуска бота (деплоя) сообщение приходило бы заново
+            String notifiedKey = "onboarding.starter.fallbacknotified." + game.code();
+            String notified = appSettingRepository.findById(notifiedKey).map(AppSetting::getValue).orElse(null);
+            if (String.valueOf(fallback.getId()).equals(notified)) {
                 return;
             }
-            starterFallbackNotified.put(game.code(), fallback.getId());
+            AppSetting notifiedSetting = appSettingRepository.findById(notifiedKey).orElseGet(AppSetting::new);
+            notifiedSetting.setKey(notifiedKey);
+            notifiedSetting.setValue(String.valueOf(fallback.getId()));
+            appSettingRepository.save(notifiedSetting);
             text = "ℹ️ <b>Стартовый квест подобран автоматически: " + escape(game.game()) + "</b>\n\n"
                     + "Квестов из списка (" + escape(String.join("; ", starterTitles(game))) + ") сейчас нет среди активных (смена пачки). "
                     + "Новичкам предлагается «" + escape(fallback.getTitle()) + "» - самый лёгкий активный квест с автопроверкой. Ничего делать не нужно: "
