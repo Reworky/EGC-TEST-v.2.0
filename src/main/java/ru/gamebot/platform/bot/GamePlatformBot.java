@@ -21343,7 +21343,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             return;
                         }
                         postKeyboard = keyboardFactory.rowsLayout(List.of(
-                                List.of(keyboardFactory.url("Получить бонус!", bonusCourseService.deepLink(courseBonusId)))));
+                                List.of(keyboardFactory.url("🟢 Нажать зелёную кнопку", bonusCourseService.deepLink(courseBonusId)))));
                     }
                     Integer publishedId = sendBannerAndTextReturningId(channelTargetFor(d.getType()), d.getPhotoFileId(), d.getPostText(), postKeyboard);
                     channelContentService.markPublished(draftId);
