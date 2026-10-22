@@ -23,7 +23,7 @@ tag = os.environ["TAG"].upper()
 items = d.get("items", [])
 print("боёв в ответе:", len(items))
 print("(в журнале время UTC; ключи battle - что лежит в самом бою)\n")
-for it in items[:14]:
+for it in [x for x in items if "howdown" in str(x.get("battle", {}).get("mode"))][:10] or items[:14]:
     b = it.get("battle", {})
     me = None
     for p in b.get("players", []):
@@ -39,4 +39,7 @@ for it in items[:14]:
     pl = b.get("players", [])
     if pl:
         print("    ключи игрока:", ", ".join(pl[0].keys()))
+        idx = [i for i, p in enumerate(pl) if p.get("tag", "").replace("#", "").upper().replace("O", "0") == tag.replace("O", "0")]
+        print("    игроков в бою:", len(pl), "| место игрока по порядку в списке players (1 = первый):", (idx[0] + 1) if idx else None)
+        print("    порядок бойцов в списке:", ", ".join(str(p.get("brawler", {}).get("name")) for p in pl))
 '
