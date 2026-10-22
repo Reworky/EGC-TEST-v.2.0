@@ -213,7 +213,8 @@ public class BonusCourseService {
         sb.append("1 000 EXC = <b>").append(String.format(ru, "%.2f", boosted)).append(" ₽</b> вместо ").append(String.format(ru, "%.2f", base)).append(" ₽.\n\n");
         sb.append("Как забрать: жми кнопку ниже, бот включит бонус. Он действует до ").append(String.format("%02d:%02d", msk.getHour(), msk.getMinute()))
                 .append(" по Москве и работает для заявок на вывод в рублях и в TON, которые ты создашь после включения. ");
-        sb.append("Бонус считается максимум с ").append(capRub()).append(" ₽ на заявку, а общий запас на сегодня ограничен: кто успел, тот и забрал.\n\n");
+        sb.append("Бонус добавляется к любой заявке на вывод. Если заявка больше ").append(capRub()).append(" ₽, бонус считается только с первых ").append(capRub())
+                .append(" ₽. Общий запас бонусов на сегодня ограничен: кто успел, тот и забрал.\n\n");
         sb.append("Успеешь вывести сегодня? ⚡");
         return sb.toString();
     }
@@ -359,7 +360,7 @@ public class BonusCourseService {
                 .append(String.format("%02d:00", (h + 3) % 24)).append(" по Москве). Пост сначала приходит вам на согласование.\n");
         sb.append("Бонус действует до ").append(String.format("%02d:00", endMsk)).append(" по Москве.\n");
         sb.append("Размер бонуса: от +").append(min).append("% до +").append(max).append("%, в среднем ").append(String.format(Locale.ROOT, "%.1f", averagePercent(weights()))).append("%.\n");
-        sb.append("Потолок: бонус считается максимум со <b>").append(capRub()).append(" ₽</b> заявки.\n");
+        sb.append("Потолок: бонус добавляется к любой заявке, но если она больше <b>").append(capRub()).append(" ₽</b>, считается только с первых ").append(capRub()).append(" ₽.\n");
         sb.append("Бюджет на день: <b>").append(dailyBudgetRub()).append(" ₽</b> (когда он кончится, бонус перестаёт выдаваться).\n\n");
         Optional<DailyBonus> last = dailyBonusRepository.findFirstByOrderByIdDesc();
         if (last.isEmpty() || !DailyBonus.DAILY.equals(last.get().getType())) {
