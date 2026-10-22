@@ -934,6 +934,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             startPassGiftFlow(user);
             return;
         }
+        // Deep link из мини-аппа (донат «Пополнение Steam»): нужен логин Steam
+        if (startPayload.equals("steamlogin") && user.isRegistrationCompleted()) {
+            session.reset();
+            session.setState(SessionState.STEAM_LOGIN_INPUT);
+            sendText(user.getTelegramId(), STEAM_LOGIN_PROMPT, cancelKeyboard());
+            return;
+        }
         if (startPayload.equals("brawltag") && user.isRegistrationCompleted()) {
             session.reset();
             session.getData().put("brawlLinkPurpose", "profile");
@@ -1863,6 +1870,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             return;
         }
+        if (data.startsWith("gemdonate:steamlogin:")) {
+            answerSilently(callbackQuery.getId());
+            session.reset();
+            session.getData().put("steamPendingPackageKey", data.substring("gemdonate:steamlogin:".length()));
+            session.setState(SessionState.STEAM_LOGIN_INPUT);
+            sendText(user.getTelegramId(), STEAM_LOGIN_PROMPT, cancelKeyboard());
+            return;
+        }
         if (data.startsWith("gemdonate:method:")) {
             answerSilently(callbackQuery.getId());
             // Формат: "gemdonate:method:<TON|STARS>:<gameKey>:<packageKey>".
@@ -2452,6 +2467,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case STREAMER_CALC_INPUT -> handleStreamerCalcInput(user, session, text);
             case STREAMER_SETTING_INPUT -> handleStreamerSettingInput(user, session, text);
+            case STEAM_LOGIN_INPUT -> handleSteamLoginInput(user, session, text);
             case INC_INPUT -> {
                 String title = text.trim();
                 if (title.length() < 3) {
@@ -8683,7 +8699,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // findAvailableRewards() по priceCoins) — непредсказуемо для пользователя. Brawl
             // Stars/Clash Royale/Clash of Clans (донат-игры) закреплены наверху списка в этом порядке
             // (запрошено 2026-09-20), остальные категории идут следом в прежнем порядке.
-            List<String> priorityCategories = List.of("Brawl Stars", "Clash Royale", "Clash of Clans");
+            List<String> priorityCategories = List.of("Brawl Stars", "Clash Royale", "Clash of Clans", "Steam");
             java.util.LinkedHashMap<String, List<RewardItem>> orderedByCategory = new java.util.LinkedHashMap<>();
             for (String cat : priorityCategories) {
                 List<RewardItem> items = byCategory.remove(cat);
@@ -22886,6 +22902,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     ? user.getPubgAccountId() : "PUBG PC (данные запросит модератор)";
             // PUBG Mobile: Player ID в профиле игрока не хранится - модератор спросит его лично в переписке
             case "pubg_mobile" -> "PUBG Mobile (Player ID запросит модератор)";
+            // Steam: логин вводит игрок (один раз, хранится в профиле); пока не введён - null, бот запросит его перед оплатой
+            case "steam_topup" -> user.getSteamLogin();
             default -> user.getBrawlStarsTag();
         };
     }
@@ -22919,7 +22937,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ));
         String tag = gemPurchaseGameTag(user, gameKey);
         boolean pubg = "pubg_pc".equals(gameKey) || "pubg_mobile".equals(gameKey);
-        String accountLine = !pubg && tag != null && !tag.isBlank()
+        boolean steam = "steam_topup".equals(gameKey);
+        String accountLine = steam ? (tag != null && !tag.isBlank() ? " для логина Steam " + escape(tag) : "")
+                : !pubg && tag != null && !tag.isBlank()
                 ? " который хотите получить на свой аккаунт " + escape(tag)
                 : " который хотите получить";
         String passNote = passActive
@@ -22927,7 +22947,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "";
         sendText(user.getTelegramId(),
                 "💎 <b>Донат " + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\n"
-                        + "Выберите пакет " + ("pubg_pc".equals(gameKey) ? "G-Coins" : pubg ? "UC" : "гемов") + accountLine + passNote + "\n\n"
+                        + (steam ? "Выберите сумму пополнения баланса Steam" : "Выберите пакет " + ("pubg_pc".equals(gameKey) ? "G-Coins" : pubg ? "UC" : "гемов")) + accountLine + passNote + "\n\n"
                         + "К каждой покупке — бонус XP\n\n"
                         + "⚠️ Заявка обрабатывается вручную, зачисление может занять время.\n\n"
                         + gemPurchaseWarning(gameKey),
@@ -22944,6 +22964,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String tag = gemPurchaseGameTag(user, gameKey);
         if (tag == null || tag.isBlank()) {
             session.reset();
+            if ("steam_topup".equals(gameKey)) {
+                session.getData().put("steamPendingPackageKey", packageKey);
+                session.setState(SessionState.STEAM_LOGIN_INPUT);
+                sendText(user.getTelegramId(), STEAM_LOGIN_PROMPT, cancelKeyboard());
+                return;
+            }
             // Тег Clash Royale/Clash of Clans подхватывает уже существующий флоу привязки тега для
             // квестов (тот же паттерн "...PendingQuestId", что уже был — см. cr:confirm/clash:confirm)
             // — не заводим отдельную систему "purpose", как у Brawl Stars, она там уже нужна была для
@@ -22983,6 +23009,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  оплаты, подтверждение TON) — специально не один раз, чтобы точно увидели до списания денег. */
     /** Предупреждение перед донатом: для PUBG PC своё (там не Supercell ID), для остальных игр - общее про доступ к аккаунту. */
     private String gemPurchaseWarning(String gameKey) {
+        if ("steam_topup".equals(gameKey)) {
+            return "⚠️ <b>Важно перед покупкой:</b> сейчас пополнение работает только для аккаунтов Steam из стран: " + STEAM_TOPUP_COUNTRIES
+                    + ". Нужен только логин Steam (не ник и не email), пароль и вход в аккаунт не требуются. Убедитесь, что логин указан верно: пополнение зачисляется именно на него.";
+        }
         if ("pubg_mobile".equals(gameKey)) {
             return "⚠️ <b>Важно перед покупкой:</b> для зачисления UC потребуется ваш PUBG Mobile Player ID (вход в аккаунт не нужен). "
                     + "Данные модератор запросит лично в переписке, нигде в боте вводить их не нужно.";
@@ -22992,6 +23022,34 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "это требование поставщика, не самого бота. Все данные модератор запросит лично в переписке, нигде в боте вводить их не нужно.";
         }
         return GEM_PURCHASE_ACCOUNT_ACCESS_WARNING;
+    }
+
+    /** Страны, для которых сейчас доступно пополнение Steam у реселлера (22.10.2026). Одно место для текстов бота и мини-аппа. */
+    public static final String STEAM_TOPUP_COUNTRIES = "Россия, Беларусь, Казахстан, Узбекистан, Армения, Киргизия, Молдова, Таджикистан, Туркменистан";
+
+    private static final String STEAM_LOGIN_PROMPT = "🎮 <b>Логин Steam</b>\n\nВведите ваш <b>логин</b> Steam: тот, которым вы входите в аккаунт (не ник и не email).\n"
+            + "Пополнение будет зачислено именно на него. Пароль не нужен.\n\nДоступно для стран: " + STEAM_TOPUP_COUNTRIES + ".";
+
+    /** Игрок ввёл логин Steam: проверяем формат, сохраняем в профиль и продолжаем покупку, если она была начата. */
+    private void handleSteamLoginInput(AppUser user, UserSession session, String text) {
+        String login = text == null ? "" : text.trim();
+        if (login.length() < 3 || login.length() > 64 || login.contains(" ") || login.contains("@")) {
+            sendText(user.getTelegramId(), "❌ Логин Steam: от 3 до 64 символов, без пробелов и без @ (это не email и не ник). Введите ещё раз:", cancelKeyboard());
+            return;
+        }
+        user.setSteamLogin(login);
+        userService.save(user);
+        String pendingKey = session.getData().get("steamPendingPackageKey");
+        session.reset();
+        if (pendingKey != null) {
+            Optional<GemPurchaseService.GemPackage> pkg = gemPurchaseService.findPackage("steam_topup", pendingKey);
+            if (pkg.isPresent()) {
+                sendText(user.getTelegramId(), "✅ Логин сохранён: <code>" + escape(login) + "</code>", null);
+                sendGemPaymentMethodChoice(user, "steam_topup", pkg.get());
+                return;
+            }
+        }
+        sendText(user.getTelegramId(), "✅ Логин Steam сохранён: <code>" + escape(login) + "</code>", backMenuKeyboard("shop:donate:steam_topup"));
     }
 
     private static final String GEM_PURCHASE_ACCOUNT_ACCESS_WARNING =
@@ -23029,7 +23087,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("❌ Отмена", gemDonateBackTarget(gameKey, pkg)))
         ));
         String passNote = price < pkg.priceRub() ? " <i>(закупочная цена, EGC Pass)</i>" : "";
+        String steamLoginLine = "";
+        if ("steam_topup".equals(gameKey)) {
+            String steamLogin = gemPurchaseGameTag(user, gameKey);
+            steamLoginLine = "🎮 Логин Steam: <code>" + escape(steamLogin == null ? "" : steamLogin) + "</code>\n\n";
+            rows.add(rows.size() - 1, List.of(keyboardFactory.callback("✏️ Изменить логин", "gemdonate:steamlogin:" + pkg.key())));
+        }
         String methodText = "💎 <b>" + pkg.displayLabel() + " — " + price + "₽</b>" + passNote + "\n\n"
+                + steamLoginLine
                 + "Выберите способ оплаты:\n\n"
                 + "⭐ <b>Telegram Stars</b> — рекомендуем: оплата в один тап, подтверждается автоматически, без переписки и проверки перевода.\n"
                 + "💎 <b>GRAM (TON)</b> — перевод вручную: менеджер напишет вам в личные сообщения и пришлёт реквизиты, это дольше.\n\n"

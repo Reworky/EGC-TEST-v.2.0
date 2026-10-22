@@ -330,6 +330,10 @@ public class AppUser {
     private String pubgAccountId;
     private LocalDateTime pubgLinkedAt;
 
+    /** Логин Steam (не ник и не email) для пополнения баланса Steam в донате/магазине (22.10.2026). Вводится игроком один раз, можно изменить. */
+    @jakarta.persistence.Column(length = 100)
+    private String steamLogin;
+
     // Season Pass
     private java.time.LocalDateTime seasonPassActiveUntil;
 

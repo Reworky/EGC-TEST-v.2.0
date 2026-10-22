@@ -76,7 +76,7 @@ function PackageCard({ pkg, egcPass, tagLinked, expanded, onToggle, onDone }) {
       {expanded && (
         <div className="shop-detail" onClick={e => e.stopPropagation()}>
           {!tagLinked ? (
-            <p className="shop-desc">Сначала привяжите тег игры (кнопка выше).</p>
+            <p className="shop-desc">Сначала укажите логин или привяжите тег игры (кнопка выше).</p>
           ) : confirmTon ? (
             <>
               <p className="shop-desc">
@@ -156,12 +156,15 @@ export default function DonateView({ gameKey, onBack }) {
       <div style={{ marginBottom: 14 }}><BackButton label="Назад" onClick={onBack} /></div>
       <div className="category-header">💰 Донат {game.name}</div>
 
+      {game.gameKey === 'steam_topup' && (
+        <p className="shop-desc">Пополнение работает только для аккаунтов Steam из стран: Россия, Беларусь, Казахстан, Узбекистан, Армения, Киргизия, Молдова, Таджикистан, Туркменистан. Нужен только логин Steam (не ник и не email), пароль не нужен.</p>
+      )}
       {game.tagLinked ? (
-        <p className="shop-desc">Зачисление на аккаунт <b>{game.tag}</b>. К каждой покупке — бонус XP.</p>
+        <p className="shop-desc">{game.gameKey === 'steam_topup' ? 'Зачисление на логин Steam' : 'Зачисление на аккаунт'} <b>{game.tag}</b>. К каждой покупке — бонус XP.</p>
       ) : (
         <div className="shop-card" style={{ marginBottom: 12 }}>
-          <p className="shop-desc">🏷️ Чтобы купить, сначала привяжите тег {game.name} — это делается один раз в боте.</p>
-          <button className="quest-btn" onClick={() => openBotForTag(game.tagStartParam)}>🏷️ Открыть бота и привязать тег</button>
+          <p className="shop-desc">{game.gameKey === 'steam_topup' ? '🎮 Чтобы купить, сначала укажите логин Steam — это делается один раз в боте.' : `🏷️ Чтобы купить, сначала привяжите тег ${game.name} — это делается один раз в боте.`}</p>
+          <button className="quest-btn" onClick={() => openBotForTag(game.tagStartParam)}>{game.gameKey === 'steam_topup' ? '🎮 Открыть бота и указать логин' : '🏷️ Открыть бота и привязать тег'}</button>
         </div>
       )}
 

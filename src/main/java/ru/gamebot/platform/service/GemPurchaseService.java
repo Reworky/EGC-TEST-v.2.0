@@ -63,6 +63,7 @@ public class GemPurchaseService {
     public static final String CLASH_OF_CLANS = "Clash of Clans";
     public static final String PUBG_PC = "PUBG PC";
     public static final String PUBG_MOBILE = "PUBG Mobile";
+    public static final String STEAM_TOPUP = "Steam";
 
     // Цены — розница Купикод на 2026-09-20 + 18% наценка (та же формула, что раньше с donatov.net,
     // см. класс-javadoc). XP-бонус — по калибровке ~0.68 XP/₽ (см. javadoc).
@@ -198,6 +199,17 @@ public class GemPurchaseService {
             .filter(p -> !CLASH_OF_CLANS_HIDDEN_KEYS.contains(p.key()))
             .toList();
 
+    /** Пополнение баланса Steam (22.10.2026, для России и стран СНГ: Узбекистан, Россия, Армения, Беларусь, Казахстан, Киргизия, Молдова, Таджикистан, Туркменистан).
+     *  Реселлер берёт комиссию 8% поверх суммы пополнения (владелец: пополнение на 100 ₽ обходится в 108 ₽), поэтому закупка = сумма × 1.08, цена = round(закупка × 1.18),
+     *  XP = round(цена × 0.68) - те же формулы, что у игровой валюты. Ключ пакета = сумма пополнения в рублях (gems = та же сумма, label - название);
+     *  реселлер принимает любую сумму от 100 до 12 000 ₽, в каталоге только ходовые номиналы. costRub() = закупка (EGC Pass). Нужен только логин Steam. */
+    public static final List<GemPackage> STEAM_TOPUP_PACKAGES = List.of(
+            new GemPackage("100", 100, 127, 86, "Пополнение Steam 100 ₽"),
+            new GemPackage("200", 200, 255, 173, "Пополнение Steam 200 ₽"),
+            new GemPackage("500", 500, 637, 433, "Пополнение Steam 500 ₽"),
+            new GemPackage("1000", 1_000, 1_274, 866, "Пополнение Steam 1000 ₽")
+    );
+
     /** gameKey (purchaseGroup, например "brawl_stars"/"clash_royale") -> (отображаемое имя игры,
      *  каталог пакетов). Единая точка для добавления новой игры в донат — остальной код (GamePlatformBot)
      *  работает через packagesFor/gameName/findPackage, не зная конкретных игр напрямую. */
@@ -214,6 +226,8 @@ public class GemPurchaseService {
         CATALOG.put("pubg_pc", PUBG_PC_PACKAGES);
         GAME_NAMES.put("pubg_mobile", PUBG_MOBILE);
         CATALOG.put("pubg_mobile", PUBG_MOBILE_PACKAGES);
+        GAME_NAMES.put("steam_topup", STEAM_TOPUP);
+        CATALOG.put("steam_topup", STEAM_TOPUP_PACKAGES);
     }
 
     /** Отображаемое имя игры для gameName заявки/текстов — если ключ не найден (донат для этой игры

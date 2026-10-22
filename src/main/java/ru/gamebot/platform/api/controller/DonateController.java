@@ -125,6 +125,7 @@ public class DonateController {
             game.setTagStartParam(switch (gameKey) {
                 case "clash_royale" -> "crtag";
                 case "clash_of_clans" -> "clashtag";
+                case "steam_topup" -> "steamlogin";
                 default -> "brawltag";
             });
             for (GemPackage pkg : GemPurchaseService.packagesFor(gameKey)) {
