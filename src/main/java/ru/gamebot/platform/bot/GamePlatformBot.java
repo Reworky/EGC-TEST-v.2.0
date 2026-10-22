@@ -4843,21 +4843,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void alertStarterQuestMissing(StarterGame game, Quest fallback) {
         String text;
         if (fallback != null) {
-            // Запоминаем в app_settings, а не в памяти: иначе после каждого перезапуска бота (деплоя) сообщение приходило бы заново
-            String notifiedKey = "onboarding.starter.fallbacknotified." + game.code();
-            String notified = appSettingRepository.findById(notifiedKey).map(AppSetting::getValue).orElse(null);
-            if (String.valueOf(fallback.getId()).equals(notified)) {
-                return;
-            }
-            AppSetting notifiedSetting = appSettingRepository.findById(notifiedKey).orElseGet(AppSetting::new);
-            notifiedSetting.setKey(notifiedKey);
-            notifiedSetting.setValue(String.valueOf(fallback.getId()));
-            appSettingRepository.save(notifiedSetting);
-            text = "ℹ️ <b>Стартовый квест подобран автоматически: " + escape(game.game()) + "</b>\n\n"
-                    + "Квестов из списка (" + escape(String.join("; ", starterTitles(game))) + ") сейчас нет среди активных (смена пачки). "
-                    + "Новичкам предлагается «" + escape(fallback.getTitle()) + "» - самый лёгкий активный квест с автопроверкой. Ничего делать не нужно: "
-                    + "когда пачка сменится, подберётся новый; если вернутся квесты из списка, снова пойдут они.\n"
-                    + "Свой список: <code>/firstquest " + game.code() + " название1;название2</code> (подробнее: /firstquest).";
+            // С 22.10.2026 админам о подобранном запасном квесте больше не пишем (решение владельца: приходило после каждой регистрации).
+            // Запасной квест новичок получает как и раньше; предупреждение «нет стартового квеста» (ветка ниже) остаётся.
+            return;
         } else {
             long now = System.currentTimeMillis();
             Long last = starterAlertSentAt.get(game.code());
