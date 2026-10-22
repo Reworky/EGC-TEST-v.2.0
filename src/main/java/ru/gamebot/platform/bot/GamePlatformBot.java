@@ -13097,6 +13097,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendSponsorPushConfirm(user, parseLong(action.substring("sponsors:push:".length())));
                     answerSilently(callbackQuery.getId());
                     return;
+                } else if (action.startsWith("sponsors:pushok:")) {
+                    handleSponsorPushDecision(callbackQuery, true, parseLong(action.substring("sponsors:pushok:".length())));
+                    return;
+                } else if (action.startsWith("sponsors:pushno:")) {
+                    handleSponsorPushDecision(callbackQuery, false, parseLong(action.substring("sponsors:pushno:".length())));
+                    return;
                 } else if (action.startsWith("sponsors:pushgo:")) {
                     startManualSponsorPush(callbackQuery, user, parseLong(action.substring("sponsors:pushgo:".length())));
                     return;
@@ -24717,14 +24723,44 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private final java.util.Set<Long> sponsorPushRunning = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
-    /** Рассылка о новом спонсорском квесте при создании: только если рассылка включена (по умолчанию выключена до одобрения текста). */
+    /** Рассылка о новом спонсорском квесте при создании (с 22.10.2026, решение владельца): сразу уходит карточка на одобрение админам с текстом сообщения,
+     *  сама рассылка запускается только после «✅ Разослать». Настройка sponsor_push.enabled теперь управляет только напоминанием через сутки. */
     private void pushSponsorQuestToPlayers(Quest quest) {
-        if (!sponsorPromoService.pushEnabled()) {
-            alertAdminsPlain("ℹ️ Автоматическая рассылка игрокам о новом спонсорском квесте выключена. Квест виден в меню «💼 Квест от спонсора» и в «🎯 Играть».\n"
-                    + "Разослать вручную: «🤝 Открыть кампанию» → «📣 Разослать игрокам». Включить автоматически: <code>bash scripts/run-sql.sh scripts/sponsor-push-on.sql</code>");
+        String audience = quest.getChannelCheckChatId() != null
+                ? "активные за 14 дней, которые ещё не в канале спонсора, не брали этот квест и не получали рассылку по нему"
+                : "активные за 14 дней, которые не брали этот квест и не получали рассылку по нему";
+        String text = "📣 <b>Разослать игрокам о новом спонсорском квесте?</b>\n\n"
+                + "Квест: " + escape(quest.getTitle()) + "\n"
+                + "Получат: " + audience + ". Рассылка идёт в фоне, сводка придёт сюда.\n\n"
+                + "Текст сообщения:\n\n" + sponsorQuestPushText(quest);
+        InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(List.of(
+                keyboardFactory.callback("✅ Разослать", "admin:sponsors:pushok:" + quest.getId()),
+                keyboardFactory.callback("❌ Не рассылать", "admin:sponsors:pushno:" + quest.getId()))));
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendText(adminId, text, markup);
+            } catch (Exception e) {
+                log.warn("Failed to send sponsor push approval card to admin {}", adminId, e);
+            }
+        }
+    }
+
+    /** Решение админа по карточке рассылки о новом спонсорском квесте (pushok - запустить, pushno - отказаться). */
+    private void handleSponsorPushDecision(CallbackQuery callbackQuery, boolean approve, Long questId) {
+        clearInlineKeyboard(callbackQuery);
+        if (questId == null) {
+            answer(callbackQuery.getId(), "Карточка устарела");
             return;
         }
-        submitSponsorQuestPush(quest.getId());
+        if (!approve) {
+            answer(callbackQuery.getId(), "Рассылка отменена");
+            return;
+        }
+        if (!submitSponsorQuestPush(questId)) {
+            answer(callbackQuery.getId(), "Рассылка по этому квесту уже идёт");
+            return;
+        }
+        answer(callbackQuery.getId(), "🚀 Рассылка запущена");
     }
 
     /** Запуск рассылки в фоне (игрокам, активным за 14 дней, ещё НЕ в канале спонсора; кому уже слали - не повторяем). Возвращает false, если уже идёт. */
