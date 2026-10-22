@@ -456,6 +456,20 @@ public class ChannelContentService {
     /** Строка общего расписания: момент (UTC), название, ручной ли пост. */
     public record ScheduleEntry(LocalDateTime atUtc, String title, boolean manual, Long draftId) { }
 
+    /** Ручной пост из очереди плана с любым статусом (для экрана «Контент канала» по дням): время карточки (UTC), рубрика, статус черновика, ушла ли карточка админам. */
+    public record ManualQueueEntry(Long draftId, LocalDateTime atUtc, String rubric, String status, boolean cardSent) { }
+
+    public List<ManualQueueEntry> manualQueue() {
+        List<ManualQueueEntry> out = new java.util.ArrayList<>();
+        for (ChannelPostDraft d : draftRepository.findAllByType(MANUAL_POST)) {
+            if (d.getSendAfter() == null) continue;
+            String[] m = d.getMeta() == null ? new String[0] : d.getMeta().split("\\|", 3);
+            out.add(new ManualQueueEntry(d.getId(), d.getSendAfter(), m.length > 1 ? m[1] : "Пост из плана", d.getStatus(), d.getCardSentAt() != null));
+        }
+        out.sort(java.util.Comparator.comparing(ManualQueueEntry::atUtc));
+        return out;
+    }
+
     /** Ближайшие `days` суток по реальным настройкам: включённые автопосты по дню/часу (с учётом чередования раз в 2 и 4 недели)
      *  плюс очередь ручных постов. Нужен экрану «Контент канала → Расписание», чтобы владелец видел наслоения. Событийные посты без часа
      *  (пруфы, вехи, турнирные) не входят. */

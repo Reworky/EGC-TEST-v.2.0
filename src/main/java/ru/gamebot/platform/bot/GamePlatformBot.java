@@ -21562,34 +21562,62 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback((redButtonService.isEnabled() ? "🔔 " : "🔕 ") + "Красная кнопка (случайные дни)", "admin:course")));
             rows.add(List.of(keyboardFactory.callback((channelContentService.isDailyCodeEnabled() ? "🔔 " : "🔕 ") + String.format("%02d:00 · ", (channelContentService.dailyCodeHour() + 7) % 24) + "Код дня и цель клуба", "admin:club")));
         } else {
-            // ближайшие даты этого дня недели: автопосты по реальным настройкам и ручные из очереди, красные кнопки
+            // 1) постоянное расписание автопостов этого дня: все типы, не только те, что выпадают на ближайшие даты
+            if (!types.isEmpty()) {
+                sb.append("<b>🤖 Автопосты этого дня</b>\n");
+                for (String type : types) {
+                    int[] key = ccSortKey(type);
+                    int every = ru.gamebot.platform.service.ChannelContentService.intervalDays(type);
+                    String cadence = every == 7 ? "каждую неделю" : every == 14 ? "раз в 2 недели" : every == 28 ? "раз в 4 недели" : "каждый день";
+                    sb.append(channelContentService.settings(type).enabled() ? "🔔 " : "🔕 ")
+                            .append(String.format("%02d:00 ", (key[1] + 7) % 24)).append(escape(channelPostTitle(type))).append(" - ").append(cadence).append("\n");
+                }
+                sb.append("\n");
+            }
+            // 2) ВСЕ ручные посты очереди на этот день недели (любая дата и любой статус)
+            StringBuilder manual = new StringBuilder();
+            int manualButtons = 0;
+            java.time.LocalDate lastManualDay = null;
+            for (ru.gamebot.platform.service.ChannelContentService.ManualQueueEntry m : channelContentService.manualQueue()) {
+                java.time.LocalDateTime local = m.atUtc().plusHours(7);
+                if (local.getDayOfWeek().getValue() != dow) continue;
+                String state = ru.gamebot.platform.domain.model.ChannelPostDraft.PUBLISHED.equals(m.status()) ? "✅ вышел"
+                        : ru.gamebot.platform.domain.model.ChannelPostDraft.REJECTED.equals(m.status()) ? "❌ отклонён"
+                        : m.cardSent() ? "📨 карточка у вас, ждёт одобрения" : "⏳ в очереди";
+                manual.append(String.format("%02d.%02d %02d:%02d ", local.getDayOfMonth(), local.getMonthValue(), local.getHour(), local.getMinute()))
+                        .append(escape(m.rubric())).append(" - ").append(state).append("\n");
+                if (ru.gamebot.platform.domain.model.ChannelPostDraft.PENDING.equals(m.status()) && manualButtons < 15) {
+                    manualButtons++;
+                    String lbl = String.format("👁 %02d.%02d %02d:%02d %s", local.getDayOfMonth(), local.getMonthValue(), local.getHour(), local.getMinute(), m.rubric());
+                    rows.add(List.of(keyboardFactory.callback(lbl.length() > 60 ? lbl.substring(0, 60) : lbl, "admin:cc:show:" + m.draftId())));
+                }
+            }
+            sb.append("<b>✍️ Ручные посты из очереди</b>\n").append(manual.length() > 0 ? manual : "Ручных постов на этот день нет.\n").append("\n");
+            // 3) ближайшие даты автопостов по реальным настройкам и красные кнопки
             java.util.List<ru.gamebot.platform.service.ChannelContentService.ScheduleEntry> list =
                     channelContentService.upcomingSchedule(35, GamePlatformBot::channelPostTitle);
             java.time.LocalDate lastDay = null;
-            int manualButtons = 0;
             StringBuilder dates = new StringBuilder();
             for (ru.gamebot.platform.service.ChannelContentService.ScheduleEntry e : list) {
+                if (e.manual()) continue;
                 java.time.LocalDateTime local = e.atUtc().plusHours(7);
                 if (local.getDayOfWeek().getValue() != dow) continue;
                 if (!local.toLocalDate().equals(lastDay)) {
+                    if (lastDay != null) dates.append("\n");
                     lastDay = local.toLocalDate();
-                    dates.append("\n<b>").append(String.format("%02d.%02d", local.getDayOfMonth(), local.getMonthValue())).append("</b>\n");
+                    dates.append(String.format("%02d.%02d", local.getDayOfMonth(), local.getMonthValue())).append(": ");
+                } else {
+                    dates.append("; ");
                 }
-                dates.append(String.format("%02d:%02d ", local.getHour(), local.getMinute())).append(e.manual() ? "✍️ " : "🤖 ").append(escape(e.title())).append("\n");
-                if (e.manual() && e.draftId() != null && manualButtons < 12) {
-                    manualButtons++;
-                    String lbl = String.format("👁 %02d.%02d %02d:%02d %s", local.getDayOfMonth(), local.getMonthValue(), local.getHour(), local.getMinute(), e.title());
-                    rows.add(List.of(keyboardFactory.callback(lbl.length() > 60 ? lbl.substring(0, 60) : lbl, "admin:cc:show:" + e.draftId())));
-                }
+                dates.append(String.format("%02d:%02d ", local.getHour(), local.getMinute())).append(escape(e.title()));
             }
             for (ru.gamebot.platform.domain.model.RedButtonSchedule r : redButtonService.planned()) {
                 java.time.LocalDateTime local = r.getPlannedAt().plusHours(7);
                 if (local.getDayOfWeek().getValue() != dow) continue;
-                dates.append(String.format("%02d.%02d %02d:%02d ", local.getDayOfMonth(), local.getMonthValue(), local.getHour(), local.getMinute()))
-                        .append("🔴 красная кнопка +").append(r.getPercent()).append("%\n");
+                dates.append("\n").append(String.format("%02d.%02d %02d:%02d ", local.getDayOfMonth(), local.getMonthValue(), local.getHour(), local.getMinute()))
+                        .append("🔴 красная кнопка +").append(r.getPercent()).append("%");
             }
-            if (dates.length() > 0) sb.append("<b>Ближайшие даты</b> (✍️ ручной пост из очереди, 🤖 автопост)").append(dates);
-            else sb.append("\nВ ближайшие 5 недель в этот день постов нет.");
+            sb.append("<b>🗓 Ближайшие выходы автопостов</b> (на 5 недель)\n").append(dates.length() > 0 ? dates : "в ближайшие 5 недель автопостов в этот день нет");
             sb.append("\n\n📈 Курс дня выходит ежедневно, он в разделе «Ежедневно и по событию».");
         }
         String text = sb.length() > 3900 ? sb.substring(0, 3900) + "…" : sb.toString();
