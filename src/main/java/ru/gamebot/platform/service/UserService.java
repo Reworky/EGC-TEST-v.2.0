@@ -482,6 +482,9 @@ public class UserService {
         }
         fresh.setWelcomeBonusPaid(true);
         fresh.setLastBonusDate(LocalDate.now());
+        // Приветственный бонус заменяет ежедневный в день регистрации (ежедневный на этот день уже «занят»), поэтому и задание дня «забрать ежедневный бонус»
+        // засчитываем, иначе у новичка в первый день сундук заданий недостижим (найдено 23.10.2026 по жалобе игрока)
+        markDailyTask(fresh, DAILY_TASK_BONUS);
         excTx.creditExc(fresh, 200, ExcTransactionService.WELCOME_BONUS, "Приветственный бонус за регистрацию");
         return true;
     }
