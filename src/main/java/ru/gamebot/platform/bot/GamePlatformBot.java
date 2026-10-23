@@ -20787,7 +20787,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ));
         try {
             sendText(event.getTelegramId(), msg, keyboard);
-            if (event.getPassBonusExc() >= 100) egcPassFunnelService.offerSent(event.getTelegramId(), "DIGEST");
         } catch (Exception e) {
             log.warn("Failed to send cooldown notification to {}", event.getTelegramId(), e);
         }
@@ -20868,6 +20867,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(digestRows);
         try {
             sendText(event.getTelegramId(), msg, keyboard);
+            if (event.getPassBonusExc() >= 100) egcPassFunnelService.offerSent(event.getTelegramId(), "DIGEST");
         } catch (Exception e) {
             log.warn("Failed to send weekly digest to {}", event.getTelegramId(), e);
         }
