@@ -850,9 +850,33 @@ public class UserService {
         return user.getLastBonusDate() == null || !user.getLastBonusDate().equals(LocalDate.now());
     }
 
+    /** Сколько ежедневного EXC игрок получит, если заберёт бонус сейчас (без бонуса за рубеж серии): считает серию так же, как claimDailyBonus, но ничего не меняет.
+     *  Нужен экрану мини-аппа: раньше там показывалась сумма «на завтра» (на 50 EXC больше реальной, если игрок уже заходил сегодня). */
+    public long previewDailyBonusExc(AppUser user) {
+        LocalDate today = LocalDate.now();
+        LocalDate last = user.getLastActivityDate();
+        int streak = user.getStreakDays();
+        if (last == null) {
+            streak = 1;
+        } else if (last.equals(today)) {
+            // серия уже сдвинута сегодняшним заходом
+        } else if (last.plusDays(1).equals(today)) {
+            streak = streak + 1;
+        } else if (last.plusDays(2).equals(today) && freeStreakSaveAvailable(user)) {
+            streak = streak + 1;
+        } else {
+            streak = 1;
+        }
+        return Math.min(150L + (long) (Math.max(streak, 1) - 1) * 50, 500L);
+    }
+
     @Transactional
     public DailyBonusResult claimDailyBonus(AppUser user) {
         if (!isDailyBonusAvailable(user)) {
+            return null;
+        }
+        // Атомарный замок на сегодня: два параллельных запроса (двойное нажатие в мини-аппе, бот + мини-апп) не должны оба начислить бонус
+        if (appUserRepository.claimDailyBonusDay(user.getId(), LocalDate.now()) == 0) {
             return null;
         }
         // Update streak first

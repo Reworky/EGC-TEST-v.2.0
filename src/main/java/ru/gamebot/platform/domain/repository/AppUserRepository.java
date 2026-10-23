@@ -325,6 +325,11 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     long countByBlockedTrue();
 
+    /** Атомарно «занимает» ежедневный бонус на сегодня: 1 - занял, 0 - уже получен (в том числе параллельным запросом из бота или мини-аппа). Вызывать только внутри транзакции начисления. */
+    @Modifying
+    @Query("UPDATE AppUser u SET u.lastBonusDate = :today WHERE u.id = :id AND (u.lastBonusDate IS NULL OR u.lastBonusDate <> :today)")
+    int claimDailyBonusDay(@Param("id") Long id, @Param("today") java.time.LocalDate today);
+
     /** «Доля фрода» в витрине проекта: зарегистрированные игроки, заблокированные или помеченные подозрительными. */
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND (u.blocked = true OR u.fraudSuspect = true)")
     long countFraudOrBlocked();

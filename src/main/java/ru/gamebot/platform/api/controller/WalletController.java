@@ -70,8 +70,9 @@ public class WalletController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
         int ratioPercent = (int) Math.round(healthRatioService.getCurrentRatio() * 100);
-        long nextDailyBonus = Math.min(150L + (long) user.getStreakDays() * 50, 500L);
         boolean bonusAvailable = userService.isDailyBonusAvailable(user);
+        // Пока бонус не забран - сумма СЕГОДНЯШНЕГО бонуса; после - завтрашнего (серия + 1)
+        long nextDailyBonus = bonusAvailable ? userService.previewDailyBonusExc(user) : Math.min(150L + (long) user.getStreakDays() * 50, 500L);
         // Как в боте (sendDailyBonus): снимок прерванной серии делаем ДО показа бонуса, иначе первый же
         // claimDailyBonus обнулит серию, не оставив шанса её восстановить.
         int restorableDays = 0;

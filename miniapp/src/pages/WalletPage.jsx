@@ -489,7 +489,7 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest }) {
           </>
         ) : wallet.dailyBonusAvailable ? (
           <>
-            <p className="shop-desc"><i className="ti ti-flame"></i> Серия: {wallet.streakDays} дн. · Следующий бонус: +{wallet.nextDailyBonusExc} EXC</p>
+            <p className="shop-desc"><i className="ti ti-flame"></i> Серия: {wallet.streakDays} дн. · Бонус сегодня: +{wallet.nextDailyBonusExc} EXC</p>
             <ShimmerButton disabled={busy} onClick={handleClaim}>
               {busy ? 'Секунду...' : <><i className="ti ti-gift" style={{ marginRight: 6 }} /> Забрать бонус</>}
             </ShimmerButton>
