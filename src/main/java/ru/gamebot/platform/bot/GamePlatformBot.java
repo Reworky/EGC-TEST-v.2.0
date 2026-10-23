@@ -8527,7 +8527,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             AppUser player = players.get(i);
             long xp = weekly ? player.getWeeklyXp() : player.getXp();
             String place = i < 3 ? medals[i] : "<b>" + (i + 1) + ".</b>";
-            builder.append(place).append(" ").append(escape(player.getNickname()));
+            builder.append(place).append(" ").append(escape(player.getNickname())).append(userService.isEgcPassActive(player) ? " ⭐" : "");
             builder.append(" — <b>").append(xp).append(" XP</b>\n");
         }
 
@@ -10920,6 +10920,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             ru.gamebot.platform.domain.model.AppUser m = sortedMembers.get(i);
             String crown = m.getTelegramId().equals(squad.getCaptainTelegramId()) ? " 👑" : "";
             sb.append("• <b>").append(escape(m.getNickname())).append("</b>")
+                    .append(userService.isEgcPassActive(m) ? " ⭐" : "")
                     .append(crown)
                     .append(" — ").append(String.format("%,d", m.getWeeklyXp()).replace(',', ' ')).append(" XP\n");
         }

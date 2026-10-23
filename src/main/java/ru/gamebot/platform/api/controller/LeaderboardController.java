@@ -52,7 +52,8 @@ public class LeaderboardController {
                 .levelName(userService.getLevelName(u.getXp()))
                 .profileTitle(u.getProfileTitle())
                 .xp(weekly ? u.getWeeklyXp() : u.getXp())
-                .completedQuests(u.getCompletedQuests());
+                .completedQuests(u.getCompletedQuests())
+                .egcPass(userService.isEgcPassActive(u));
         if (weekly && includeLeague) {
             UserService.League league = UserService.getLeague(u.getWeeklyXp());
             builder.leagueName(league.displayName).leagueExcPrize(league.excPrize);

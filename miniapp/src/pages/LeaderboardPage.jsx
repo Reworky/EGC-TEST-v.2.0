@@ -12,7 +12,7 @@ function EntryRow({ entry, isMe }) {
     <div className={`lb-row ${isMe ? 'lb-row-me' : ''}`}>
       <div className="lb-rank">{entry.rank <= 3 ? MEDALS[entry.rank - 1] : entry.rank}</div>
       <div className="lb-info">
-        <div className="lb-nickname">{entry.nickname}</div>
+        <div className="lb-nickname">{entry.nickname}{entry.egcPass ? ' ⭐' : ''}</div>
         <div className="lb-sub">{entry.levelName}{entry.profileTitle ? ` · ${entry.profileTitle}` : ''}</div>
       </div>
       <div className="lb-xp">{entry.xp.toLocaleString()} XP</div>
