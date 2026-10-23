@@ -267,10 +267,9 @@ public class QuestController {
     @GetMapping("/sponsored")
     public List<QuestDto> sponsored(@AuthenticationPrincipal Long telegramId) {
         AppUser currentUser = telegramId != null ? appUserRepository.findByTelegramId(telegramId).orElse(null) : null;
-        // Как в боте (sendSponsoredQuestList): активные квесты + завершённые кампании, по которым у игрока уже есть
-        // выполнение или работа в процессе — «✅» остаётся видимым и после закрытия кампании.
+        // Как в боте (sendSponsoredQuestList): только активные квесты; завершённая кампания пропадает у всех, в том числе у выполнивших (решение владельца 23.10.2026).
         var quests = new java.util.ArrayList<>(questService.findAllSponsored().stream()
-                .filter(q -> q.isActive() || hasDoneOrLiveSubmission(currentUser, q))
+                .filter(Quest::isActive)
                 .toList());
         Map<Long, String> statusByQuestId = new java.util.HashMap<>();
         if (currentUser != null) {

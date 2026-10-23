@@ -994,6 +994,8 @@ public class QuestService {
                 .filter(s -> s.getStatus() == SubmissionStatus.DRAFT
                         || s.getStatus() == SubmissionStatus.PENDING
                         || s.getStatus() == SubmissionStatus.NEEDS_INFO)
+                // Завершённая спонсорская кампания (квест выключен) пропадает и из «Мои квесты» (решение владельца 23.10.2026)
+                .filter(s -> s.getQuest() == null || s.getQuest().isActive() || !(s.getQuest().isSponsored() || s.getQuest().isExternalAutoApprove()))
                 .toList();
     }
 

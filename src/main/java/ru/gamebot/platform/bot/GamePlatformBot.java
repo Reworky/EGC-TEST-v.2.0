@@ -7107,13 +7107,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendSponsoredQuestList(AppUser user) {
-        // Активные квесты + завершённые кампании, по которым у игрока уже есть выполнение или работа: «✅» остаётся видимым и после закрытия кампании
+        // Только активные квесты (решение владельца 23.10.2026): когда кампания завершена и квест выключен, он пропадает из списка у ВСЕХ, в том числе
+        // у тех, кто его выполнил (раньше у выполнивших оставалась «✅»).
         List<Quest> quests = questService.findAllSponsored().stream()
-                .filter(q -> q.isActive() || java.util.Optional.ofNullable(questService.getLatestSubmission(user, q))
-                        .map(sub -> sub.getStatus() == SubmissionStatus.APPROVED
-                                || ((sub.getStatus() == SubmissionStatus.DRAFT || sub.getStatus() == SubmissionStatus.PENDING
-                                || sub.getStatus() == SubmissionStatus.NEEDS_INFO) && !questService.isExpired(sub)))
-                        .orElse(false))
+                .filter(Quest::isActive)
                 .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         if (quests.isEmpty()) {
             sendText(user.getTelegramId(),
