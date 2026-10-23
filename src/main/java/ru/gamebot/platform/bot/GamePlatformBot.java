@@ -9346,6 +9346,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "cat:quests" -> sendSinkQuests(user);
             case "cat:social" -> sendSinkSocial(user);
             case "egc_pass" -> sendEgcPassScreen(user);
+            case "egc_pass_all" -> sendEgcPassScreen(user, true);
             case "passgift" -> startPassGiftFlow(user);
             case "myitems" -> sendMyItems(user);
             case "reroll" -> {
@@ -9746,9 +9747,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendEgcPassScreen(AppUser user) {
+        sendEgcPassScreen(user, false);
+    }
+
+    /** showAll=false - короткий оффер (главная выгода + 3 перка) для тех, у кого Pass нет; true - полный список перков («Все перки»). У владельцев Pass всегда полный экран. */
+    private void sendEgcPassScreen(AppUser user, boolean showAll) {
         boolean active = sinkShopService.isEgcPassActive(user);
+        if (!active && !showAll) egcPassFunnelService.screenOpened(user.getTelegramId());
         java.time.format.DateTimeFormatter dateFmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
-        StringBuilder sb = new StringBuilder("⭐ <b>EGC Pass</b>\n\n");
+        StringBuilder sb = new StringBuilder(!active && !showAll
+                ? "⭐ <b>EGC Pass</b>: донат дешевле, вывод быстрее, больше слотов\n\n" : "⭐ <b>EGC Pass</b>\n\n");
         if (active) {
             sb.append("✅ <b>Подписка оформлена</b> — действует до <b>")
                     .append(user.getEgcPassActiveUntil().format(dateFmt))
@@ -9765,7 +9773,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("Подписка ").append(EGC_PASS_STARS_PRICE)
                     .append(" ⭐ / 30 дней, автопродление. Пока не оформлена.\n\n");
         }
-        sb.append("<b>Что входит:</b>\n")
+        if (active || showAll) {
+            sb.append("<b>Что входит:</b>\n")
                 .append("✨ +10% к EXC за все квесты (до 10 000 EXC бонуса в месяц)\n")
                 .append("📈 +5% к XP за все квесты, а купленный XP-буст даёт +40% вместо +20%\n")
                 .append("📂 3-й слот квеста (за EXC доступен только 2-й)\n")
@@ -9779,6 +9788,32 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .append("🔕 Без рекламных вставок в приложении (видео за награду остаются по желанию)\n")
                 .append("💎 Статус-бейдж в профиле\n")
                 .append("💸 Донат по играм (гемы Brawl Stars/Clash Royale/Clash of Clans) — по закупочной цене, без наценки клуба, XP-бонус как за полную цену\n");
+        } else {
+            // Короткий оффер: главная выгода в заголовке, цифры на живых данных, остальное - по кнопке «Все перки»
+            java.time.LocalDateTime nowDt = java.time.LocalDateTime.now();
+            long earned7 = questService.approvedCoinsBetween(user, nowDt.minusDays(7), nowDt);
+            long wouldAdd = Math.min(earned7 / 10, UserService.EGC_PASS_BOOST_MONTHLY_CAP_EXC);
+            if (wouldAdd >= 50) {
+                sb.append("📊 <b>За последние 7 дней с Pass вы получили бы ещё +").append(wouldAdd).append(" EXC</b> к наградам за квесты.\n\n");
+            }
+            java.util.Optional<GemPurchaseService.GemPackage> brawlPassPkg = gemPurchaseService.findPackage("brawl_stars", "brawlpass");
+            sb.append("<b>Главное:</b>\n");
+            if (brawlPassPkg.isPresent() && brawlPassPkg.get().priceRub() - brawlPassPkg.get().costRub() >= 20) {
+                GemPurchaseService.GemPackage pk = brawlPassPkg.get();
+                sb.append("💸 <b>Донат дешевле:</b> Brawl Pass ").append(pk.costRub()).append("₽ вместо ").append(pk.priceRub())
+                        .append("₽ (минус ").append(pk.priceRub() - pk.costRub()).append("₽ с одной покупки), так же гемы и пропуска Clash\n");
+            } else {
+                sb.append("💸 <b>Донат по закупочной цене</b>, без наценки клуба\n");
+            }
+            sb.append("⚡ <b>Вывод в приоритете:</b> заявка обрабатывается в течение ")
+                    .append(ru.gamebot.platform.service.PassPayoutSlaService.SLA_HOURS).append(" часов\n")
+                    .append("📂 <b>3 слота квестов</b> и лучшие квесты нового набора на 24 часа раньше\n")
+                    .append("✨ Плюс +10% EXC и +5% XP за квесты, бесплатный улучшенный сундук каждый день и ещё несколько перков\n");
+            long holders = userService.countEgcPassActiveNow();
+            if (holders >= 20) {
+                sb.append("\n👥 Pass уже у <b>").append(holders).append("</b> игроков клуба.\n");
+            }
+        }
         // Прежний Battle Pass (куплен за EXC до объединения) доживает свой срок — XP-буст сезона и значок сохраняются.
         if (seasonService.hasActivePass(user)) {
             sb.append("\n🎫 Ваш прежний Battle Pass (куплен за EXC) действует до <b>")
@@ -9788,18 +9823,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (!active) {
-            String url = createStarsInvoiceLink("starsitem:EGC_PASS");
-            if (url != null) {
-                rows.add(List.of(keyboardFactory.url("💳 Оформить за " + EGC_PASS_STARS_PRICE + " ⭐", url)));
-            } else {
-                sb.append("\n⚠️ Не удалось создать счёт. Попробуйте ещё раз позже.");
-            }
-            // Пробный месяц дешевле: только тем, кто ещё ни разу не оформлял Pass
+            // Пробный месяц дешевле (только тем, кто ещё ни разу не оформлял Pass) - первой кнопкой: пока человек не почувствовал разницу, платить полную цену он не будет
             if (user.getEgcPassActiveUntil() == null) {
                 String trialUrl = createStarsInvoiceLink("starsitem:EGC_PASS_TRIAL");
                 if (trialUrl != null) {
                     rows.add(List.of(keyboardFactory.url("🎁 Первый месяц за " + EGC_PASS_TRIAL_STARS_PRICE + " ⭐ (без автопродления)", trialUrl)));
                 }
+            }
+            String url = createStarsInvoiceLink("starsitem:EGC_PASS");
+            if (url != null) {
+                rows.add(List.of(keyboardFactory.url("💳 Оформить за " + EGC_PASS_STARS_PRICE + " ⭐ в месяц", url)));
+            } else {
+                sb.append("\n⚠️ Не удалось создать счёт. Попробуйте ещё раз позже.");
+            }
+            if (!showAll) {
+                rows.add(List.of(keyboardFactory.callback("📋 Все перки", "sink:egc_pass_all")));
             }
         }
         rows.add(List.of(keyboardFactory.callback("🎁 Подарить Pass другу", "sink:passgift")));
@@ -20714,6 +20752,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ));
         try {
             sendText(event.getTelegramId(), msg, keyboard);
+            if (event.getPassBonusExc() >= 100) egcPassFunnelService.offerSent(event.getTelegramId(), "DIGEST");
         } catch (Exception e) {
             log.warn("Failed to send cooldown notification to {}", event.getTelegramId(), e);
         }
@@ -21018,6 +21057,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             sendText(event.getTelegramId(), msg, keyboardFactory.rowsLayout(List.of(
                     List.of(keyboardFactory.callback("⭐ Про EGC Pass", "sink:egc_pass")))));
+            egcPassFunnelService.offerSent(event.getTelegramId(), "TEASER");
         } catch (Exception e) {
             log.warn("Failed to send EGC Pass teaser to {}", event.getTelegramId(), e);
         }

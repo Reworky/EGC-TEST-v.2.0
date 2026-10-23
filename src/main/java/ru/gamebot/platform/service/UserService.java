@@ -968,6 +968,11 @@ public class UserService {
     }
 
     /** Подписчик EGC Pass, у кого есть серия от 2 дней и бесплатное сохранение в этом календарном месяце ещё не использовано. */
+    /** Сколько игроков сейчас с активным EGC Pass (для «социального доказательства» на экране оффера). */
+    public long countEgcPassActiveNow() {
+        return appUserRepository.countEgcPassActive(LocalDateTime.now());
+    }
+
     public boolean freeStreakSaveAvailable(AppUser user) {
         if (!isEgcPassActive(user) || user.getStreakDays() < 2) return false;
         LocalDate last = user.getEgcPassStreakSaveDate();

@@ -1610,6 +1610,11 @@ public class QuestService {
         return questSubmissionRepository.sumIssuedCoinsByUser(user);
     }
 
+    /** Сколько EXC игрок получил за одобренные квесты в окне (для расчёта «сколько добавил бы EGC Pass» на экране оффера). */
+    public long approvedCoinsBetween(AppUser user, LocalDateTime from, LocalDateTime to) {
+        return questSubmissionRepository.sumApprovedCoinsByUserBetween(user, from, to);
+    }
+
     public List<QuestSubmission> findApprovedByUser(AppUser user) {
         return questSubmissionRepository.findAllApprovedByUserOrderByUpdatedAtDesc(user);
     }
