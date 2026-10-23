@@ -231,7 +231,7 @@ public class ShopLimitService {
         }
 
         long used = user.getMonthlyWithdrawnExc();
-        long limit = sinkShopService.getMonthlyLimit(user.getXp());
+        long limit = sinkShopService.getMonthlyLimit(user);
         return "✅ Доступно — использовано " + used + " из " + limit + " EXC в этом месяце";
     }
 }

@@ -66,7 +66,7 @@ public class ProfileController {
                             .levelName(userService.getLevelName(user.getXp()))
                             .completedQuests(user.getCompletedQuests())
                             .streakDays(user.getStreakDays())
-                            .monthlyWithdrawalLimit(sinkShopService.getMonthlyLimit(user.getXp()))
+                            .monthlyWithdrawalLimit(sinkShopService.getMonthlyLimit(user))
                             .remainingWithdrawalLimit(sinkShopService.getRemainingWithdrawalLimit(user))
                             .hasAvatar(user.getAvatarFileId() != null)
                             .avatarFrameColor(user.getAvatarFrameColor())

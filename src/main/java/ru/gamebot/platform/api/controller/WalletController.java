@@ -92,7 +92,7 @@ public class WalletController {
                 .xp(user.getXp())
                 .weeklyXp(user.getWeeklyXp())
                 .healthRatioPercent(ratioPercent)
-                .monthlyWithdrawalLimit(sinkShopService.getMonthlyLimit(user.getXp()))
+                .monthlyWithdrawalLimit(sinkShopService.getMonthlyLimit(user))
                 .remainingWithdrawalLimit(sinkShopService.getRemainingWithdrawalLimit(user))
                 .dailyBonusAvailable(bonusAvailable)
                 .streakDays(user.getStreakDays())

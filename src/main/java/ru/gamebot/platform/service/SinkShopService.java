@@ -362,9 +362,18 @@ public class SinkShopService {
         return 10_000;
     }
 
+    /** Лимит вывода/трат игрока: по XP, у владельца EGC Pass в PASS_WITHDRAWAL_LIMIT_MULTIPLIER раз больше (решение владельца 23.10.2026; по данным 211 игроков упираются в лимит,
+     *  х5 даёт ≈95% возможной выгоды). Курс фонда от повышения лимита не меняется - выводятся уже заработанные EXC (пул и долг уменьшаются в одной пропорции). */
+    public long getMonthlyLimit(AppUser user) {
+        long base = getMonthlyLimit(user.getXp());
+        return isEgcPassActive(user) ? base * PASS_WITHDRAWAL_LIMIT_MULTIPLIER : base;
+    }
+
+    public static final int PASS_WITHDRAWAL_LIMIT_MULTIPLIER = 5;
+
     public long getRemainingWithdrawalLimit(AppUser user) {
         refreshWithdrawalMonthIfNeeded(user);
-        return Math.max(0, getMonthlyLimit(user.getXp()) - user.getMonthlyWithdrawnExc());
+        return Math.max(0, getMonthlyLimit(user) - user.getMonthlyWithdrawnExc());
     }
 
     @Transactional

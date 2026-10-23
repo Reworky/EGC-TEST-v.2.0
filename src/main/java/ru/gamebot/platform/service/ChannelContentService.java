@@ -133,7 +133,7 @@ public class ChannelContentService {
     /** «Популярное в магазине» не формируется, если за 14 дней заказов каталога меньше. */
     private static final long MIN_SHOP_ORDERS = 10;
     /** Цена EGC Pass в Stars: держать в синхроне с EGC_PASS_STARS_PRICE в GamePlatformBot. */
-    private static final int EGC_PASS_STARS = 150;
+    private static final int EGC_PASS_STARS = 65;
     private static final int MAX_SHOP_ITEMS_IN_POST = 5;
     /** «Топ рефереров недели» не создаём, если призёров меньше (слабая неделя). */
     private static final int MIN_REFERRAL_WINNERS = 3;

@@ -8781,7 +8781,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "🛍️ <b>Магазин наград</b>\n\n"
                         + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>\n"
                         + "📊 Состояние фонда: <b>" + ratioPercent + "%</b>\n"
-                        + "📤 Лимит вывода: <b>" + sinkShopService.getMonthlyLimit(user.getXp()) + " EXC/мес</b> (осталось: " + remaining + " EXC)\n"
+                        + "📤 Лимит вывода: <b>" + sinkShopService.getMonthlyLimit(user) + " EXC/мес</b> (осталось: " + remaining + " EXC)\n"
                         + "💱 Курс вывода: <b>" + rateString(ratioPercent) + "</b>\n"
                         + withdrawalLevelHint(user),
                 keyboardFactory.rowsLayout(rows));
@@ -8805,7 +8805,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         int ratioPercent = (int) Math.round(healthRatioService.getCurrentRatio() * 100);
         String text = "💸 <b>Вывод EXC</b>\n\n"
                 + "🪙 Баланс: <b>" + user.getCoins() + " EXC</b>\n"
-                + "📤 Остаток лимита: <b>" + remaining + " EXC (из " + sinkShopService.getMonthlyLimit(user.getXp()) + "/мес)</b>\n"
+                + "📤 Остаток лимита: <b>" + remaining + " EXC (из " + sinkShopService.getMonthlyLimit(user) + "/мес)</b>\n"
                 + "💱 Курс: <b>" + rateString(ratioPercent) + "</b>\n"
                 + "⚠️ Минимум: <b>5 000 EXC</b>\n"
                 + withdrawalLevelHint(user) + "\n\n"
@@ -9598,9 +9598,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * 150⭐/мес ≈ 210₽ по ориентировочному курсу ~1,4₽/⭐ — дешевле, чем купить разово всё входящее
      * (рамка+слот+реролл на 30 дней ≈ 35+75+450 ⭐), но не бесплатно, чтобы не обесценивать разовые
      * покупки тех, кто уже их сделал. Лимит Telegram — не больше 10 000⭐ за подписку, с запасом. */
-    private static final int EGC_PASS_STARS_PRICE = 150;
+    private static final int EGC_PASS_STARS_PRICE = 65;
     /** Пробный месяц EGC Pass для тех, кто ещё ни разу не оформлял Pass: разовый платёж (без автопродления), 30 дней. */
-    private static final int EGC_PASS_TRIAL_STARS_PRICE = 75;
+    private static final int EGC_PASS_TRIAL_STARS_PRICE = 33;
     /** Подарок EGC Pass другу: 30 дней по полной цене, без автопродления; бонус обоим в EXC. */
     private static final int EGC_PASS_GIFT_STARS_PRICE = EGC_PASS_STARS_PRICE;
     private static final long PASS_GIFT_SENDER_BONUS_EXC = 1_000;
@@ -9657,7 +9657,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "Доп. слот квеста — навсегда", PERMANENT_SLOT_STARS_PRICE),
             "starsitem:EGC_PASS", new StarsItemSpec(
                     "EGC Pass — подписка на 30 дней",
-                    "+10% EXC и +5% XP (EXC до 10 000/мес), 3-й слот, XP-буст +40%, выше лимиты, сохранение серии, ранний доступ к квестам, вывод за 12 ч, 12% с рефералов. Автопродление, отмена в настройках Telegram.",
+                    "Лимит вывода ×5, +10% EXC и +5% XP, 3-й слот, XP-буст +40%, сохранение серии, ранний доступ к квестам, вывод за 12 ч, донат дешевле. Автопродление, отмена в настройках Telegram.",
                     "EGC Pass (30 дней)", EGC_PASS_STARS_PRICE, EGC_PASS_SUBSCRIPTION_PERIOD_SECONDS),
             "starsitem:EGC_PASS_TRIAL", new StarsItemSpec(
                     "EGC Pass: пробный месяц",
@@ -9775,6 +9775,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (active || showAll) {
             sb.append("<b>Что входит:</b>\n")
+                .append("📤 Лимит вывода ×").append(SinkShopService.PASS_WITHDRAWAL_LIMIT_MULTIPLIER).append(" (например, 10 000 → 50 000 EXC в месяц)\n")
                 .append("✨ +10% к EXC за все квесты (до 10 000 EXC бонуса в месяц)\n")
                 .append("📈 +5% к XP за все квесты, а купленный XP-буст даёт +40% вместо +20%\n")
                 .append("📂 3-й слот квеста (за EXC доступен только 2-й)\n")
@@ -9805,6 +9806,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             } else {
                 sb.append("💸 <b>Донат по закупочной цене</b>, без наценки клуба\n");
             }
+            long baseLimit = sinkShopService.getMonthlyLimit(user.getXp());
+            sb.append("📤 <b>Лимит вывода ×").append(SinkShopService.PASS_WITHDRAWAL_LIMIT_MULTIPLIER).append(":</b> ").append(String.format("%,d", baseLimit).replace(',', ' '))
+                    .append(" → ").append(String.format("%,d", baseLimit * SinkShopService.PASS_WITHDRAWAL_LIMIT_MULTIPLIER).replace(',', ' ')).append(" EXC в месяц\n");
             sb.append("⚡ <b>Вывод в приоритете:</b> заявка обрабатывается в течение ")
                     .append(ru.gamebot.platform.service.PassPayoutSlaService.SLA_HOURS).append(" часов\n")
                     .append("📂 <b>3 слота квестов</b> и лучшие квесты нового набора на 24 часа раньше\n")
@@ -14392,7 +14396,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Строка "остаток месячного лимита" для карточки заявки на вывод (эта заявка уже учтена в счётчике на момент подачи). */
     private String monthlyLimitLine(AppUser requester) {
-        long limit = sinkShopService.getMonthlyLimit(requester.getXp());
+        long limit = sinkShopService.getMonthlyLimit(requester);
         // getRemainingWithdrawalLimit заодно обнуляет счётчик при смене месяца - читаем реальный счётчик ПОСЛЕ него.
         // Раньше used считался как limit - remaining и обрезался до лимита: при превышении (лимит игрока упал после отката
         // завышенного XP, а заявка была принята при старом уровне) карточка показывала «25000 / 25000» и скрывала превышение.
@@ -19947,7 +19951,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .sorted(java.util.Comparator.comparing(ru.gamebot.platform.domain.model.RewardRequest::getCreatedAt))
                 .toList();
 
-        long monthlyLimit = sinkShopService.getMonthlyLimit(target.getXp());
+        long monthlyLimit = sinkShopService.getMonthlyLimit(target);
 
         StringBuilder sb = new StringBuilder();
         sb.append("💸 <b>История выводов</b>\n")
@@ -21086,7 +21090,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     @org.springframework.context.event.EventListener
     public void onEgcPassTeaser(ru.gamebot.platform.event.EgcPassTeaserEvent event) {
         String msg = "⭐ <b>Ты уже выполнил " + event.getCompletedQuests() + " квестов</b>\n\n"
-                + "С EGC Pass награды за квесты растут: <b>+10% EXC</b> и <b>+5% XP</b>, плюс доп. слот квеста, бесплатный улучшенный "
+                + "С EGC Pass лимит вывода <b>в 5 раз больше</b>, награды за квесты растут: <b>+10% EXC</b> и <b>+5% XP</b>, плюс доп. слот квеста, бесплатный улучшенный "
                 + "сундук каждый день и приоритет в очереди на вывод. Подписка " + EGC_PASS_STARS_PRICE + " ⭐ в месяц.\n\n"
                 + "Подробности по кнопке 👇";
         try {
