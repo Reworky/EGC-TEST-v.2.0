@@ -57,7 +57,8 @@ public class AnalyticsService {
         PACKS("📦", "Пачки квестов"),
         FRAUD("🕵️", "Фрод и злоупотребления"),
         COURSE("📈", "Курс дня и красная кнопка"),
-        KPI("🏪", "Витрина проекта");
+        KPI("🏪", "Витрина проекта"),
+        EGC_PASS("⭐", "EGC Pass: продажи");
 
         public final String icon;
         public final String title;
@@ -124,6 +125,7 @@ public class AnalyticsService {
     private final ErrorMonitorService errorMonitor;
     private final RetentionService retentionService;
     private final CourseAnalyticsService courseAnalytics;
+    private final EgcPassFunnelService egcPassFunnel;
 
     // ───────────────────────── снимок: дополнительные поля для трендов ─────────────────────────
 
@@ -236,6 +238,7 @@ public class AnalyticsService {
                 case FRAUD -> fraudTab(p, lines, extras);
                 case COURSE -> courseTab(p, pv, lines, extras);
                 case KPI -> kpiTab(p, pv, fromDate, lines, extras);
+                case EGC_PASS -> egcPassTab(p, pv, lines, extras);
             }
         } catch (Exception e) {
             log.error("Analytics tab {} failed", tab, e);
@@ -852,6 +855,27 @@ public class AnalyticsService {
         return financeService.sumByKind(FinanceEntry.DIRECT_ADS, from, to) + financeService.sumByKind(FinanceEntry.YANDEX_RSYA, from, to)
                 + financeService.sumByKind(FinanceEntry.TELEGA, from, to) + financeService.sumByKind(FinanceEntry.SPONSOR, from, to)
                 + financeService.sumByKind(FinanceEntry.OTHER, from, to);
+    }
+
+    /** Вкладка «EGC Pass: продажи» (23.10.2026): воронка показ → открытие экрана → покупка, продления и число владельцев сейчас. */
+    private void egcPassTab(Period p, Period pv, List<Line> out, List<String> extras) {
+        EgcPassFunnelService.Funnel f = egcPassFunnel.funnel(p.from(), p.to());
+        EgcPassFunnelService.Funnel q = egcPassFunnel.funnel(pv.from(), pv.to());
+        long buyers = f.firstPurchases() + f.trialPurchases();
+        long buyersPrev = q.firstPurchases() + q.trialPurchases();
+        out.add(L("p_active", "Владельцев Pass сейчас", "", (double) userRepo.countEgcPassActive(LocalDateTime.now()), null, "подписка или пробный месяц ещё действуют", false));
+        out.add(L("p_offers", "Показов предложения", "", (double) f.offers(), (double) q.offers(), "уникальных игроков: " + f.offerUsers(), false));
+        out.add(L("p_opens", "Открытий экрана Pass", "", (double) f.opens(), (double) q.opens(), "уникальных игроков: " + f.openUsers(), false));
+        out.add(L("p_first", "Новых покупок (платных)", "", (double) f.firstPurchases(), (double) q.firstPurchases(), null, false));
+        out.add(L("p_trial", "Пробных месяцев", "", (double) f.trialPurchases(), (double) q.trialPurchases(), null, false));
+        out.add(L("p_renew", "Продлений", "", (double) f.renewals(), (double) q.renewals(), "главный показатель ценности: покупают ли второй раз", false));
+        out.add(L("p_conv", "Конверсия: открыли экран → купили", "%", f.openUsers() == 0 ? null : Math.min(100.0, buyers * 100.0 / f.openUsers()),
+                q.openUsers() == 0 ? null : Math.min(100.0, buyersPrev * 100.0 / q.openUsers()), "новые покупки и пробные / уникальные открывшие экран", false));
+        StringBuilder sb = new StringBuilder("<b>Откуда показы предложения</b>\n");
+        if (f.bySource().isEmpty()) sb.append("Показов за период нет.\n");
+        for (Object[] r : f.bySource()) sb.append("• ").append(escape(String.valueOf(r[0]))).append(": ").append(r[1]).append(" (игроков ").append(r[2]).append(")\n");
+        extras.add(sb.toString());
+        extras.add("<i>Показы и открытия считаются с момента добавления вкладки (23.10.2026); покупки и продления берутся из журнала Stars за весь период.</i>");
     }
 
     private void tournamentsTab(List<Line> out, List<String> extras) {

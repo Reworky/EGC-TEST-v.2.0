@@ -325,6 +325,10 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     long countByBlockedTrue();
 
+    /** Подписчики EGC Pass прямо сейчас (для «социального доказательства» и аналитики). */
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.egcPassActiveUntil > :now")
+    long countEgcPassActive(@Param("now") java.time.LocalDateTime now);
+
     /** Атомарно «занимает» ежедневный бонус на сегодня: 1 - занял, 0 - уже получен (в том числе параллельным запросом из бота или мини-аппа). Вызывать только внутри транзакции начисления. */
     @Modifying
     @Query("UPDATE AppUser u SET u.lastBonusDate = :today WHERE u.id = :id AND (u.lastBonusDate IS NULL OR u.lastBonusDate <> :today)")

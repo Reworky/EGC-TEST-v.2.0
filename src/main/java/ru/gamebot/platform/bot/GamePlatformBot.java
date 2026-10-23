@@ -156,6 +156,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.EngagementCeilingService engagementCeilingService;
     private final ru.gamebot.platform.service.ChannelContentService channelContentService;
     private final ru.gamebot.platform.service.BonusCourseService bonusCourseService;
+    private final ru.gamebot.platform.service.EgcPassFunnelService egcPassFunnelService;
     private final ru.gamebot.platform.service.RedButtonService redButtonService;
     private final ru.gamebot.platform.service.FinanceService financeService;
     private final ru.gamebot.platform.service.ExpenseService expenseService;
@@ -23287,11 +23288,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("❌ Отмена", gemDonateBackTarget(gameKey, pkg)))
         ));
         String passNote = price < pkg.priceRub() ? " <i>(закупочная цена, EGC Pass)</i>" : "";
+        // Продажа EGC Pass тем, у кого его нет: честная экономия на ЭТОЙ покупке (цифры реальные: закупка поставщика без наценки клуба)
+        long passSaving = pkg.priceRub() - pkg.costRub();
+        boolean passUpsell = !sinkShopService.isEgcPassActive(user) && passSaving >= 20;
+        if (passUpsell) {
+            passNote += "\n⭐ <i>С EGC Pass этот пакет стоил бы " + pkg.costRub() + "₽ вместо " + pkg.priceRub() + "₽: экономия " + passSaving + "₽ за одну покупку.</i>";
+            egcPassFunnelService.offerSent(user.getTelegramId(), "DONATE_HINT");
+        }
         String steamLoginLine = "";
         if ("steam_topup".equals(gameKey)) {
             String steamLogin = gemPurchaseGameTag(user, gameKey);
             steamLoginLine = "🎮 Логин Steam: <code>" + escape(steamLogin == null ? "" : steamLogin) + "</code>\n\n";
             rows.add(rows.size() - 1, List.of(keyboardFactory.callback("✏️ Изменить логин", "gemdonate:steamlogin:" + pkg.key())));
+        }
+        if (passUpsell) {
+            rows.add(rows.size() - 1, List.of(keyboardFactory.callback("⭐ Как получить цену " + pkg.costRub() + "₽ (EGC Pass)", "sink:egc_pass")));
         }
         String methodText = "💎 <b>" + pkg.displayLabel() + " — " + price + "₽</b>" + passNote + "\n\n"
                 + steamLoginLine

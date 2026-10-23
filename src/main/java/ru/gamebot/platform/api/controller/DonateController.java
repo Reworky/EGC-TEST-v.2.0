@@ -56,6 +56,8 @@ public class DonateController {
         private long priceRub;
         /** Обычная цена — для зачёркивания, когда у игрока EGC Pass и priceRub = закупочная. */
         private long regularPriceRub;
+        /** Цена для владельца EGC Pass (закупочная): мини-апп показывает экономию тем, у кого Pass ещё нет. */
+        private long passPriceRub;
         private long xpBonus;
         private int starsPrice;
         private BigDecimal tonAmount;
@@ -136,6 +138,7 @@ public class DonateController {
                 p.setPass(pkg.gems() <= 0);
                 p.setPriceRub(price);
                 p.setRegularPriceRub(pkg.priceRub());
+                p.setPassPriceRub(pkg.costRub());
                 p.setXpBonus(pkg.xpBonus());
                 p.setStarsPrice(gamePlatformBot.gemPurchaseStarsPrice(price));
                 p.setTonAmount(exchangeRateService.rubToTon(BigDecimal.valueOf(price)));
