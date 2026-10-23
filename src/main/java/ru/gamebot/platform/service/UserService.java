@@ -968,6 +968,15 @@ public class UserService {
     }
 
     /** Подписчик EGC Pass, у кого есть серия от 2 дней и бесплатное сохранение в этом календарном месяце ещё не использовано. */
+    /** Занимает разовое предложение EGC Pass (бит маски): true - предложение ещё не показывалось и теперь отмечено, false - уже было. */
+    @Transactional
+    public boolean claimEgcPassOfferBit(AppUser user, int bit) {
+        if ((user.getEgcPassOffersMask() & bit) != 0) return false;
+        user.setEgcPassOffersMask(user.getEgcPassOffersMask() | bit);
+        appUserRepository.save(user);
+        return true;
+    }
+
     /** Сколько игроков сейчас с активным EGC Pass (для «социального доказательства» на экране оффера). */
     public long countEgcPassActiveNow() {
         return appUserRepository.countEgcPassActive(LocalDateTime.now());

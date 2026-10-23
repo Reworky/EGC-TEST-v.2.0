@@ -13979,6 +13979,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🎁 <b>" + escape(req.getRewardItem().getTitle()) + "</b>\n\n"
                         + "Свяжитесь с администратором для получения, если необходимо.",
                 null);
+        maybeOfferPassAfter(req.getUser(), 2, "FIRST_PURCHASE",
+                "🎁 <b>Первая покупка в клубе!</b>\n\nС EGC Pass донат гемов и пропусков стоит дешевле (закупочная цена, без наценки клуба), плюс +10% EXC и +5% XP за все квесты.");
     }
 
     private void notifyUserRewardRejected(RewardRequest req) {
@@ -14544,6 +14546,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void notifyUserWithdrawalApproved(RewardRequest req, String receiptFileId, String receiptCaption) {
+        notifyUserWithdrawalApprovedMain(req, receiptFileId, receiptCaption);
+        maybeOfferPassAfter(req.getUser(), 1, "FIRST_PAYOUT",
+                "💸 <b>Первая выплата получена!</b>\n\nС EGC Pass следующие заявки на вывод обрабатываются в приоритете (в течение "
+                        + ru.gamebot.platform.service.PassPayoutSlaService.SLA_HOURS + " часов), а донат гемов и пропусков стоит дешевле: по закупочной цене, без наценки клуба.");
+    }
+
+    private void notifyUserWithdrawalApprovedMain(RewardRequest req, String receiptFileId, String receiptCaption) {
         // Было: isUsdt = payoutDetails != null — ловило и рублёвые реквизиты тоже, не только крипту. Исправлено.
         String method = isStarsWithdrawal(req) ? "Telegram Stars (@" + starsUsername(req) + ")"
                 : isCryptoWithdrawal(req) ? cryptoMethodLabel(req.getPayoutDetails()) : "рубли (СБП / Сбербанк)";
@@ -20627,6 +20636,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  (он уже включён в общую сумму выше) — либо что месячный потолок бонуса исчерпан. Пустая строка,
      *  если подписки нет. Раньше бонус молча растворялся в общей сумме, и игрок не мог увидеть, что
      *  подписка вообще сработала. */
+    private final java.util.Map<Long, java.time.LocalDate> passQuestHintDay = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Разовое предложение EGC Pass «в момент пользы» (после первой выплаты / первой покупки): раз в жизни на каждый повод, не владельцам Pass. */
+    private void maybeOfferPassAfter(AppUser user, int bit, String source, String text) {
+        try {
+            if (sinkShopService.isEgcPassActive(user) || !userService.claimEgcPassOfferBit(user, bit)) return;
+            String trial = user.getEgcPassActiveUntil() == null ? "\n\nПервый месяц можно попробовать за " + EGC_PASS_TRIAL_STARS_PRICE + " ⭐." : "";
+            sendText(user.getTelegramId(), text + trial, keyboardFactory.rowsLayout(List.of(
+                    List.of(keyboardFactory.callback("⭐ Про EGC Pass", "sink:egc_pass")))));
+            egcPassFunnelService.offerSent(user.getTelegramId(), source);
+        } catch (Exception e) {
+            log.warn("Failed to send EGC Pass offer {} to {}", source, user.getTelegramId(), e);
+        }
+    }
+
     private String egcPassBonusLine(QuestSubmission approved) {
         long bonus = approved.getAwardedEgcPassBonusCoins() != null ? approved.getAwardedEgcPassBonusCoins() : 0;
         long bonusXp = approved.getAwardedEgcPassBonusXp() != null ? approved.getAwardedEgcPassBonusXp() : 0;
@@ -20638,6 +20662,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "</b> (уже включён в сумму)\n";
         }
         AppUser player = approved.getUser();
+        // Не владельцу Pass, втянувшемуся (3+ квеста): сколько добавил бы Pass именно за этот квест, не чаще раза в день (цифра реальная: +10% от награды)
+        if (!userService.isEgcPassActive(player) && player.getCompletedQuests() >= 3) {
+            long wouldAdd = awardedCoinsOf(approved) / 10;
+            java.time.LocalDate today = java.time.LocalDate.now();
+            if (wouldAdd >= 50 && !today.equals(passQuestHintDay.get(player.getTelegramId()))) {
+                passQuestHintDay.put(player.getTelegramId(), today);
+                egcPassFunnelService.offerSent(player.getTelegramId(), "QUEST_HINT");
+                return "⭐ <i>С EGC Pass здесь было бы ещё +" + wouldAdd + " EXC</i>\n";
+            }
+        }
         if (userService.isEgcPassActive(player) && userService.egcPassBoostRemainingThisMonth(player) <= 0) {
             return "⭐ Бонус EGC Pass за этот месяц исчерпан ("
                     + String.format("%,d", UserService.EGC_PASS_BOOST_MONTHLY_CAP_EXC).replace(',', ' ')
@@ -23873,6 +23907,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + itemTitle + " на тег " + escape(req.getGameTag()) + "\n"
                         + "🎁 Бонус: +" + req.getXpBonus() + " XP",
                 backMenuKeyboard("menu:main"));
+        long passPrice = Math.round(req.getPriceRub() / ru.gamebot.platform.service.GemPurchaseService.MARKUP_MULTIPLIER);
+        long saving = req.getPriceRub() - passPrice;
+        if (saving >= 20) {
+            maybeOfferPassAfter(req.getUser(), 2, "FIRST_PURCHASE",
+                    "⭐ <b>С EGC Pass эта покупка стоила бы " + passPrice + "₽ вместо " + req.getPriceRub() + "₽</b>: закупочная цена, без наценки клуба (минус " + saving
+                            + "₽). К тому же +10% EXC и +5% XP за все квесты, приоритет на вывод и 3 слота квестов.");
+        }
     }
 
     /** Отклонение заявки на донат: запись причины, возврат Stars, уведомление игрока. Общий путь для ввода причины текстом и готовых причин кнопками. */
