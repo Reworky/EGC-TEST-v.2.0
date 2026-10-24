@@ -9868,7 +9868,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("⬅️ Назад", "menu:cat:shop"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
-        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+        // Баннер-карточка пасса; длинный текст (>1000 символов) sendResourceBanner сам отправит отдельным сообщением с кнопками
+        sendResourceBanner(user.getTelegramId(), "egc_pass_banner.jpg", sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     /** Отправка sendInvoice напрямую через HTTP, в обход библиотеки telegrambots. Актуальная версия
