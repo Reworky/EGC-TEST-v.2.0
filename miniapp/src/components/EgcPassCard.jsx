@@ -96,7 +96,7 @@ export default function EgcPassCard({ profile, price, trialPrice, onPurchased })
           </button>
           {profile?.egcPassTrialAvailable && trialPrice > 0 && (
             <button className="quest-btn quest-btn-secondary" disabled={busy} onClick={() => handleBuy('EGC_PASS_TRIAL')} style={{ width: '100%', marginTop: 8 }}>
-              {busy ? '...' : `🎁 Первый месяц за ${trialPrice} ⭐ (без автопродления)`}
+              {busy ? '...' : `🎁 Пробные 14 дней за ${trialPrice} ⭐ (без автопродления)`}
             </button>
           )}
         </>

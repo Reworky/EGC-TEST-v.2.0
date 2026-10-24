@@ -9618,8 +9618,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * (рамка+слот+реролл на 30 дней ≈ 35+75+450 ⭐), но не бесплатно, чтобы не обесценивать разовые
      * покупки тех, кто уже их сделал. Лимит Telegram — не больше 10 000⭐ за подписку, с запасом. */
     private static final int EGC_PASS_STARS_PRICE = 65;
-    /** Пробный месяц EGC Pass для тех, кто ещё ни разу не оформлял Pass: разовый платёж (без автопродления), 30 дней. */
-    private static final int EGC_PASS_TRIAL_STARS_PRICE = 33;
+    /** Пробный период EGC Pass для тех, кто ещё ни разу не оформлял Pass: разовый платёж (без автопродления), 14 дней за 25 ⭐ (с 24.10.2026; было 30 дней за 33 ⭐:
+     *  у топ-игроков 30 дней за 33 ⭐ уходили в минус, а 33 ⭐ за 14 дней были бы дороже обычной подписки за день). */
+    private static final int EGC_PASS_TRIAL_STARS_PRICE = 25;
+    private static final int EGC_PASS_TRIAL_DAYS = 14;
     /** Подарок EGC Pass другу: 30 дней по полной цене, без автопродления; бонус обоим в EXC. */
     private static final int EGC_PASS_GIFT_STARS_PRICE = EGC_PASS_STARS_PRICE;
     private static final long PASS_GIFT_SENDER_BONUS_EXC = 1_000;
@@ -9679,9 +9681,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "Лимит вывода ×5, +10% EXC и +5% XP, 3-й слот, XP-буст +40%, сохранение серии, ранний доступ к квестам, вывод за 12 ч, донат дешевле. Автопродление, отмена в настройках Telegram.",
                     "EGC Pass (30 дней)", EGC_PASS_STARS_PRICE, EGC_PASS_SUBSCRIPTION_PERIOD_SECONDS),
             "starsitem:EGC_PASS_TRIAL", new StarsItemSpec(
-                    "EGC Pass: пробный месяц",
-                    "30 дней EGC Pass дешевле обычной цены, без автопродления. Только для тех, кто ещё не оформлял Pass: 3-й слот, XP-буст +40%, выше лимиты, приоритет на вывод.",
-                    "EGC Pass (пробный месяц)", EGC_PASS_TRIAL_STARS_PRICE),
+                    "EGC Pass: пробные 14 дней",
+                    "14 дней EGC Pass дешевле обычной цены, без автопродления. Только для тех, кто ещё не оформлял Pass: 3-й слот, XP-буст +40%, выше лимиты, приоритет на вывод.",
+                    "EGC Pass (пробные 14 дней)", EGC_PASS_TRIAL_STARS_PRICE),
             "starsitem:STREAK_RESTORE", new StarsItemSpec(
                     "Восстановление серии входов",
                     "Продолжить прерванную серию ежедневных входов вместо начала с первого дня — плюс бонус за сегодня.",
@@ -9850,7 +9852,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (user.getEgcPassActiveUntil() == null) {
                 String trialUrl = createStarsInvoiceLink("starsitem:EGC_PASS_TRIAL");
                 if (trialUrl != null) {
-                    rows.add(List.of(keyboardFactory.url("🎁 Первый месяц за " + EGC_PASS_TRIAL_STARS_PRICE + " ⭐ (без автопродления)", trialUrl)));
+                    rows.add(List.of(keyboardFactory.url("🎁 Пробные " + EGC_PASS_TRIAL_DAYS + " дней за " + EGC_PASS_TRIAL_STARS_PRICE + " ⭐ (без автопродления)", trialUrl)));
                 }
             }
             String url = createStarsInvoiceLink("starsitem:EGC_PASS");
@@ -10065,7 +10067,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return "Доп. слот квеста навсегда уже куплен ранее — повторная покупка не нужна.";
         }
         if ("starsitem:EGC_PASS_TRIAL".equals(payload) && user.getEgcPassActiveUntil() != null) {
-            return "Пробный месяц доступен только тем, кто ещё не оформлял EGC Pass.";
+            return "Пробные дни доступны только тем, кто ещё не оформлял EGC Pass.";
         }
         if (payload != null && payload.startsWith(PASS_GIFT_PAYLOAD_PREFIX)) {
             try {
@@ -10204,7 +10206,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "+10% к EXC и +5% к XP за квесты, доп. слот, бесплатный улучшенный сундук каждый день и приоритет на вывод уже включены — спасибо, что поддержали проект.",
                     backMenuKeyboard("menu:main"));
         } else if ("starsitem:EGC_PASS_TRIAL".equals(payload)) {
-            userService.renewEgcPass(user);
+            userService.grantEgcPassDays(user, EGC_PASS_TRIAL_DAYS);
             String trialUntil = user.getEgcPassActiveUntil().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"));
             List<List<InlineKeyboardButton>> trialRows = new ArrayList<>();
             String subUrl = createStarsInvoiceLink("starsitem:EGC_PASS");
@@ -10213,7 +10215,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             trialRows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
             sendText(telegramId,
-                    "✅ <b>Пробный месяц EGC Pass активирован!</b>\n\nДействует до <b>" + trialUntil + "</b>, без автопродления: решите сами, продлевать ли. "
+                    "✅ <b>Пробные " + EGC_PASS_TRIAL_DAYS + " дней EGC Pass активированы!</b>\n\nДействует до <b>" + trialUntil + "</b>, без автопродления: решите сами, продлевать ли. "
                             + "Теперь у вас 3 слота квеста, XP-буст +40%, выше лимиты и приоритет на вывод.",
                     keyboardFactory.rowsLayout(trialRows));
         } else if (payload != null && payload.startsWith(PASS_GIFT_PAYLOAD_PREFIX)) {
@@ -20733,7 +20735,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void maybeOfferPassAfter(AppUser user, int bit, String source, String text) {
         try {
             if (sinkShopService.isEgcPassActive(user) || !userService.claimEgcPassOfferBit(user, bit)) return;
-            String trial = user.getEgcPassActiveUntil() == null ? "\n\nПервый месяц можно попробовать за " + EGC_PASS_TRIAL_STARS_PRICE + " ⭐." : "";
+            String trial = user.getEgcPassActiveUntil() == null ? "\n\nПервые " + EGC_PASS_TRIAL_DAYS + " дней можно попробовать за " + EGC_PASS_TRIAL_STARS_PRICE + " ⭐." : "";
             sendText(user.getTelegramId(), text + trial, keyboardFactory.rowsLayout(List.of(
                     List.of(keyboardFactory.callback("⭐ Про EGC Pass", "sink:egc_pass")))));
             egcPassFunnelService.offerSent(user.getTelegramId(), source);

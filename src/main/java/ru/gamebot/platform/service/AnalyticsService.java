@@ -867,7 +867,7 @@ public class AnalyticsService {
         out.add(L("p_offers", "Показов предложения", "", (double) f.offers(), (double) q.offers(), "уникальных игроков: " + f.offerUsers(), false));
         out.add(L("p_opens", "Открытий экрана Pass", "", (double) f.opens(), (double) q.opens(), "уникальных игроков: " + f.openUsers(), false));
         out.add(L("p_first", "Новых покупок (платных)", "", (double) f.firstPurchases(), (double) q.firstPurchases(), null, false));
-        out.add(L("p_trial", "Пробных месяцев", "", (double) f.trialPurchases(), (double) q.trialPurchases(), null, false));
+        out.add(L("p_trial", "Пробных периодов (14 дней)", "", (double) f.trialPurchases(), (double) q.trialPurchases(), null, false));
         out.add(L("p_renew", "Продлений", "", (double) f.renewals(), (double) q.renewals(), "главный показатель ценности: покупают ли второй раз", false));
         out.add(L("p_conv", "Конверсия: открыли экран → купили", "%", f.openUsers() == 0 ? null : Math.min(100.0, buyers * 100.0 / f.openUsers()),
                 q.openUsers() == 0 ? null : Math.min(100.0, buyersPrev * 100.0 / q.openUsers()), "новые покупки и пробные / уникальные открывшие экран", false));
