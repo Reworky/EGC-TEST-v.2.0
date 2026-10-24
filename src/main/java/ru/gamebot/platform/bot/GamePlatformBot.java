@@ -2031,6 +2031,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             return;
         }
+        // Заявки на награды магазина (не вывод) обрабатывает и менеджер - тот же общий пул, что и заявки на вывод. Только работа с заявками:
+        // правка каталога наград (admin:reward:edit/delete/toggle и т.д.) остаётся у админа.
+        if ((data.equals("admin:reward:requests") || data.startsWith("admin:reward:req:") || data.startsWith("admin:reward:inprogress:")
+                || data.startsWith("admin:reward:approve:") || data.startsWith("admin:reward:reject:")) && isEffectiveModerator(user)) {
+            handleAdminAction(callbackQuery, user, session, data.substring("admin:".length()));
+            return;
+        }
         if (data.startsWith("admin:") && isEffectiveAdmin(user)) {
             handleAdminAction(callbackQuery, user, session, data.substring("admin:".length()));
             return;
@@ -9079,7 +9086,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "👤 " + usernameStr + " (<b>" + escape(user.getNickname()) + "</b>)\n"
                 + "🎁 <b>" + escape(req.getRewardItem().getTitle()) + "</b>\n"
                 + "🪙 " + rewardService.actualPaidPrice(req) + " EXC возвращено";
-        for (Long adminId : adminService.allAdminIds()) {
+        for (Long adminId : adminService.allModeratorIds()) {
             sendText(adminId, text, null);
         }
     }
@@ -11769,12 +11776,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String gLabelMod = pendingGemPurchasesMod > 0
                 ? "💎 Заявки на донат (" + pendingGemPurchasesMod + ")"
                 : "💎 Заявки на донат";
+        long pendingRewardsMod = rewardService.findPendingRequests().size();
+        String rLabelMod = pendingRewardsMod > 0
+                ? "🛍️ Заявки на награды (" + pendingRewardsMod + ")"
+                : "🛍️ Заявки на награды";
         sendText(user.getTelegramId(),
                 "🛡️ <b>Центр модерации</b>\n\n"
                         + "📂 Отчёты по квестам: <b>" + questService.pendingCount() + "</b>\n"
                         + "🆘 Открытые заявки поддержки: <b>" + supportService.activeTicketCount() + "</b>\n"
                         + "💸 Заявки на вывод: <b>" + pendingWithdrawalsMod + "</b>\n"
-                        + "💎 Заявки на донат: <b>" + pendingGemPurchasesMod + "</b>\n\n"
+                        + "💎 Заявки на донат: <b>" + pendingGemPurchasesMod + "</b>\n"
+                        + "🛍️ Заявки на награды: <b>" + pendingRewardsMod + "</b>\n\n"
                         + "Здесь собрана вся оперативная работа по платформе.",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(
@@ -11783,6 +11795,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         ),
                         List.of(keyboardFactory.callback(wLabelMod, "mod:withdrawals")),
                         List.of(keyboardFactory.callback(gLabelMod, "admin:gempurchase")),
+                        List.of(keyboardFactory.callback(rLabelMod, "admin:reward:requests")),
                         List.of(keyboardFactory.callback("🔍 Поиск игрока", "mod:usersearch"),
                                 keyboardFactory.callback("🎁 Бонус игроку", "mod:bonus")),
                         List.of(keyboardFactory.callback("🏠 Главное меню", "menu:main"))
@@ -13917,12 +13930,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         answerSilently(callbackQuery.getId());
     }
 
+    /** Куда ведёт «Назад» из заявок на награды: админу - в «Магазин наград», менеджеру (у него этого раздела нет) - в «Центр модерации». */
+    private String rewardRequestsBackTarget(AppUser user) {
+        return isEffectiveAdmin(user) ? "admin:rewards" : "menu:moderation";
+    }
+
     private void sendAdminRewardRequests(AppUser user) {
         List<RewardRequest> pending = rewardService.findPendingRequests();
         if (pending.isEmpty()) {
             sendText(user.getTelegramId(),
                     "📥 <b>Заявки на выдачу наград</b>\n\nНет новых заявок.",
-                    backMenuKeyboard("admin:rewards"));
+                    backMenuKeyboard(rewardRequestsBackTarget(user)));
             return;
         }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
@@ -13934,7 +13952,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + " — " + trim(req.getRewardItem().getTitle(), 20);
             rows.add(List.of(keyboardFactory.callback(label, "admin:reward:req:" + req.getId())));
         }
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:rewards")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", rewardRequestsBackTarget(user))));
         sendText(user.getTelegramId(),
                 "📥 <b>Заявки на выдачу наград</b>\n\nОжидают обработки: <b>" + pending.size() + "</b>",
                 keyboardFactory.rowsLayout(rows));
@@ -16341,6 +16359,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 title = "💰 <b>Деньги</b>";
                 long pendingW = rewardService.findPendingWithdrawals().size();
                 rows.add(List.of(keyboardFactory.callback(pendingW > 0 ? "💸 Заявки на вывод (" + pendingW + ")" : "💸 Заявки на вывод", "admin:withdrawals")));
+                long pendingR = rewardService.findPendingRequests().size();
+                rows.add(List.of(keyboardFactory.callback(pendingR > 0 ? "🛍️ Заявки на награды (" + pendingR + ")" : "🛍️ Заявки на награды", "admin:reward:requests")));
                 rows.add(List.of(keyboardFactory.callback("🎁 Магазин наград", "admin:rewards")));
                 rows.add(List.of(keyboardFactory.callback("💼 Финансы: доходы, расходы, P&L", "admin:fin:home")));
                 rows.add(List.of(keyboardFactory.callback("💰 Экономика и выплаты", "admin:an:tab:ECONOMY")));
@@ -24156,7 +24176,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String dataLine = userGameData != null && !userGameData.isBlank()
                 ? "\n📋 Данные игрока: <code>" + escape(userGameData) + "</code>"
                 : "";
-        for (Long adminId : adminService.allAdminIds()) {
+        for (Long adminId : adminService.allModeratorIds()) {
             sendText(adminId,
                     "🛍️ <b>Новая заявка на выдачу награды</b>\n\n"
                             + "👤 Игрок: <b>" + escape(user.getNickname()) + "</b>\n"
@@ -24351,7 +24371,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback("👥 Игроки", "admin:grp:players"),
                     keyboardFactory.callback("🎯 Квесты", "admin:grp:quests")
             ));
-            long pendingW = rewardService.findPendingWithdrawals().size();
+            long pendingW = rewardService.findPendingWithdrawals().size() + rewardService.findPendingRequests().size();
             rows.add(List.of(
                     keyboardFactory.callback(pendingW > 0 ? "💰 Деньги (" + pendingW + ")" : "💰 Деньги", "admin:grp:money"),
                     keyboardFactory.callback("📣 Коммуникации", "admin:grp:comm")
@@ -24378,6 +24398,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     ? "💎 Заявки на донат (" + pendingGemPurchasesMod + ")"
                     : "💎 Заявки на донат";
             rows.add(List.of(keyboardFactory.callback(gLabelMod, "admin:gempurchase")));
+            long pendingRewardsMod = rewardService.findPendingRequests().size();
+            rows.add(List.of(keyboardFactory.callback(pendingRewardsMod > 0
+                    ? "🛍️ Заявки на награды (" + pendingRewardsMod + ")" : "🛍️ Заявки на награды", "admin:reward:requests")));
             rows.add(List.of(keyboardFactory.callback("🔍 Поиск игрока", "mod:usersearch")));
             return keyboardFactory.rowsLayout(rows);
         }
