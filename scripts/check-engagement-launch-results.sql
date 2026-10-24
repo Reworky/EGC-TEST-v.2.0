@@ -1,23 +1,23 @@
 -- Первые итоги запусков 17-18.10: золотой час, код дня, цель клуба, A/B-рассылка «вывод открыт». Только чтение.
 -- Запуск: cd /root/gamebot && git pull origin main && bash scripts/run-sql.sh scripts/check-engagement-launch-results.sql
--- Время сервера = UTC. Золотой час по умолчанию 16:00-17:00 UTC (19:00-20:00 МСК).
+-- Время сервера = UTC. (Алиас day в H2 зарезервирован - не использовать.) Золотой час по умолчанию 16:00-17:00 UTC (19:00-20:00 МСК).
 
 -- 1) Окна золотого часа: заводились ли ежедневно (последние 10)
 SELECT start_at, end_at, boost_percent, max_boosted_quests, boost_kind, active
 FROM quest_reward_boost_events WHERE boost_kind = 'GOLDEN_HOUR' ORDER BY start_at DESC LIMIT 10;
 
 -- 2) Засчитанные квесты по дням: в окне золотого часа (16-й час UTC) и за весь день, игроки в окне. Сравнить дни до запуска (до 17.10) и после
-SELECT CAST(s.updated_at AS DATE) AS day,
+SELECT CAST(s.updated_at AS DATE) AS quest_date,
        SUM(CASE WHEN HOUR(s.updated_at) = 16 THEN 1 ELSE 0 END) AS quests_in_window,
        COUNT(DISTINCT CASE WHEN HOUR(s.updated_at) = 16 THEN s.user_id END) AS players_in_window,
        COUNT(*) AS quests_day, COUNT(DISTINCT s.user_id) AS players_day,
        ROUND(100.0 * SUM(CASE WHEN HOUR(s.updated_at) = 16 THEN 1 ELSE 0 END) / COUNT(*), 1) AS window_share_pct
 FROM quest_submissions s
 WHERE s.status = 'APPROVED' AND s.updated_at >= DATEADD('DAY', -16, CURRENT_TIMESTAMP)
-GROUP BY CAST(s.updated_at AS DATE) ORDER BY day;
+GROUP BY CAST(s.updated_at AS DATE) ORDER BY quest_date;
 
 -- 3) Код дня: сколько игроков ввели код, доля от активных в тот день (DAU по журналу)
-SELECT CAST(c.published_at AS DATE) AS day, c.code, COUNT(cl.id) AS claims,
+SELECT CAST(c.published_at AS DATE) AS code_date, c.code, COUNT(cl.id) AS claims,
        (SELECT COUNT(*) FROM user_activity_days a WHERE a.activity_day = CAST(c.published_at AS DATE)) AS dau,
        ROUND(100.0 * COUNT(cl.id) / NULLIF((SELECT COUNT(*) FROM user_activity_days a WHERE a.activity_day = CAST(c.published_at AS DATE)), 0), 1) AS claims_pct_of_dau
 FROM daily_codes c LEFT JOIN daily_code_claims cl ON cl.code_id = c.id
