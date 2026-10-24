@@ -40,6 +40,7 @@ public class ProofStatsService {
     private final QuestSubmissionRepository submissionRepository;
     private final UserService userService;
     private final AppSettingRepository appSettingRepository;
+    private final RetentionService retentionService;
 
     /** Полные цифры (для админа): размеры выборок и разбивка причин. Доли null, если выборка меньше MIN_SAMPLE. */
     public record Stats(LocalDateTime collectedAt, int windowDays,
@@ -49,6 +50,7 @@ public class ProofStatsService {
                         long manualDecided, long rejectedManual, Integer rejectedManualPercent,
                         Map<RejectionReasonCode, Long> rejectionReasons,
                         long duplicates, Integer duplicatePercent,
+                        long retentionCohort1, Integer retention1Percent,
                         long retentionCohort7, Integer retention7Percent,
                         long retentionCohort30, Integer retention30Percent) {
         /** Одобрено / проверено (одобрено + отклонено) за период; null, если проверок меньше MIN_SAMPLE. Для витрины не годится: автоквесты не отклоняются,
@@ -98,7 +100,8 @@ public class ProofStatsService {
             }
         }
         // Дубли скриншотов считаем только среди проверенных вручную заявок: у автоквестов скриншотов нет, и в знаменателе они давали бы заниженную долю
-        UserService.RetentionReport ret = userService.retention();
+        // Точный возврат на 1-й/7-й/30-й день из журнала активных дней (RetentionService; с 24.10.2026 вместо приближения «активен за 7 дней среди зарегистрированных 7-14 дн. назад»)
+        RetentionService.PublicRates ret = retentionService.report().publicRates();
 
         return new Stats(now, WINDOW_DAYS,
                 userService.totalRegisteredUsers(), userService.countActiveSince(LocalDate.now().minusDays(6)), approvedUsers.size(),
@@ -107,8 +110,9 @@ public class ProofStatsService {
                 manualDecided, rejectedManual, percentOrNull(rejectedManual, manualDecided),
                 reasons,
                 duplicatesManual, percentOrNull(duplicatesManual, manualDecided),
-                ret.cohort7(), percentOrNull(ret.retained7(), ret.cohort7()),
-                ret.cohort30(), percentOrNull(ret.retained30(), ret.cohort30()));
+                ret.d1().n(), ret.d1().percent(),
+                ret.d7().n(), ret.d7().percent(),
+                ret.d30().n(), ret.d30().percent());
     }
 
     private static Integer percentOrNull(long part, long total) {

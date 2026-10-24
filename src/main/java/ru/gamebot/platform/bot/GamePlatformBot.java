@@ -24646,8 +24646,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("\n");
         }
         sb.append("📸 Повторные скриншоты среди проверенных вручную: ").append(proofPct(st.duplicatePercent(), st.manualDecided())).append(" · найдено ").append(st.duplicates()).append("\n");
-        sb.append("🔁 Активность через неделю у новых игроков (зарег. 7–14 дн. назад): ").append(proofPct(st.retention7Percent(), st.retentionCohort7())).append("\n");
-        sb.append("🔁 То же через месяц (зарег. 30–60 дн. назад): ").append(proofPct(st.retention30Percent(), st.retentionCohort30())).append("\n\n");
+        sb.append("🔁 Вернулись на 1-й день после регистрации: ").append(proofPct(st.retention1Percent(), st.retentionCohort1())).append("\n");
+        sb.append("🔁 Вернулись на 7-й день: ").append(proofPct(st.retention7Percent(), st.retentionCohort7())).append("\n");
+        sb.append("🔁 Вернулись на 30-й день: ").append(proofPct(st.retention30Percent(), st.retentionCohort30())).append("\n");
+        sb.append("<i>Возврат считается по журналу активных дней (с 16.10), только когорты не меньше 30 игроков и наблюдения не старше 45 дней; без разбивки по трафику.</i>\n\n");
         sb.append("<b>Не считается (данных нет):</b> время до проверки (у заявки нет даты сдачи), баны за мультиаккаунты по периодам, платный/органический трафик. На страницу эти блоки не выводятся.");
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("📤 Обезличенная выгрузка (CSV)", "admin:proof:csv")),

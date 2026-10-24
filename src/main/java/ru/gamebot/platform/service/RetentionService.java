@@ -89,9 +89,17 @@ public class RetentionService {
     public static final Map<String, String> SEGMENT_TITLES = Map.of("src", "Источник", "game", "Первая игра", "qtype", "Тип первого квеста", "squad", "Отряд (по состоянию сейчас)");
     public static final List<String> SEGMENT_KEYS = List.of("src", "game", "qtype", "squad");
 
+    /** Свежесть публичных цифр (страница доказательств для студий, ТЗ 15.10): учитывается только возврат, наблюдавшийся не раньше стольки дней назад. */
+    public static final int PUBLIC_MAX_AGE_DAYS = 45;
+
+    /** Публичные D1/D7/D30: все игроки журнала вместе (без разбивки по источникам и платному/органическому трафику), у каждого игрока свой день N;
+     *  процент только при выборке не меньше MIN_SAMPLE (иначе Rate.percent() = null). */
+    public record PublicRates(Rate d1, Rate d7, Rate d30) {}
+
     public record Report(LocalDate today, LocalDate journalStart, long cohortUsers, List<WeekRow> weeks,
                          Map<String, List<SegmentRow>> segments, List<SourceCost> costs,
-                         Rate recentD1, Rate prevD1, Rate recentD7, Rate prevD7, Rate recentD30, Rate prevD30) {}
+                         Rate recentD1, Rate prevD1, Rate recentD7, Rate prevD7, Rate recentD30, Rate prevD30,
+                         PublicRates publicRates) {}
 
     private record Member(long id, LocalDate day0, String srcType, String game, String firstType, boolean inSquad, String srcCode) {}
 
@@ -195,7 +203,8 @@ public class RetentionService {
         }
         costs.sort(Comparator.comparingLong(SourceCost::spendRub).reversed());
 
-        return new Report(today, journalStart, cohort.size(), weeks, segments, costs, d1r, d1p, d7r, d7p, d30r, d30p);
+        PublicRates publicRates = new PublicRates(freshRate(cohort, days, today, 1), freshRate(cohort, days, today, 7), freshRate(cohort, days, today, 30));
+        return new Report(today, journalStart, cohort.size(), weeks, segments, costs, d1r, d1p, d7r, d7p, d30r, d30p, publicRates);
     }
 
     private static SourceCost costFor(TrafficSource s, List<Member> members, List<Member> cohort, Map<Long, Set<LocalDate>> days, LocalDate today,
@@ -257,6 +266,19 @@ public class RetentionService {
         }
         rows.sort(Comparator.comparingLong(SegmentRow::size).reversed());
         return rows;
+    }
+
+    /** Как userRate, но день N должен быть не старше PUBLIC_MAX_AGE_DAYS: на витрину не выносим давние наблюдения. */
+    private static Rate freshRate(List<Member> list, Map<Long, Set<LocalDate>> days, LocalDate today, int n) {
+        LocalDate oldest = today.minusDays(PUBLIC_MAX_AGE_DAYS);
+        long eligible = 0, ret = 0;
+        for (Member m : list) {
+            LocalDate observed = m.day0().plusDays(n);
+            if (!observed.isBefore(today) || observed.isBefore(oldest)) continue;
+            eligible++;
+            if (days.getOrDefault(m.id(), Set.of()).contains(observed)) ret++;
+        }
+        return new Rate(eligible, ret, eligible > 0);
     }
 
     /** По игрокам группы, у которых день N уже прошёл (у каждого своя зрелость). */
