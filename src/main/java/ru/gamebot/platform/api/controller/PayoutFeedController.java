@@ -41,13 +41,27 @@ public class PayoutFeedController {
     @GetMapping("/feed")
     public PayoutFeedDto feed() {
         LocalDateTime now = LocalDateTime.now();
+        // Выводы и выданные награды магазина одной лентой по времени; итоги в рублях ниже считаются только по выводам.
+        List<RewardRequest> recent = new ArrayList<>(rewardService.recentApprovedWithdrawals(FEED_SIZE));
+        try {
+            recent.addAll(rewardService.recentIssuedRewards(FEED_SIZE));
+        } catch (Exception e) {
+            // награды - дополнение к ленте, сбой их выборки не должен ломать выплаты
+        }
+        recent.sort((a, b) -> {
+            LocalDateTime ta = payoutMoment(a), tb = payoutMoment(b);
+            if (ta == null) return tb == null ? 0 : 1;
+            if (tb == null) return -1;
+            return tb.compareTo(ta);
+        });
         List<PayoutFeedDto.Item> items = new ArrayList<>();
-        for (RewardRequest r : rewardService.recentApprovedWithdrawals(FEED_SIZE)) {
+        for (RewardRequest r : recent.subList(0, Math.min(FEED_SIZE, recent.size()))) {
             LocalDateTime when = payoutMoment(r);
+            boolean reward = isShopReward(r);
             items.add(PayoutFeedDto.Item.builder()
-                    .rub(rub(r))
-                    .amountText(amountText(r))
-                    .method(method(r))
+                    .rub(reward ? 0 : rub(r))
+                    .amountText(reward ? r.getRewardItem().getTitle() : amountText(r))
+                    .method(reward ? "reward" : method(r))
                     .minutesAgo(when == null ? -1 : Math.max(0, Duration.between(when, now).toMinutes()))
                     .name(maskNickname(r.getUser() == null ? null : r.getUser().getNickname()))
                     .build());
@@ -97,6 +111,10 @@ public class PayoutFeedController {
 
     private static LocalDateTime payoutMoment(RewardRequest r) {
         return r.getPaidAt() != null ? r.getPaidAt() : r.getCreatedAt();
+    }
+
+    private static boolean isShopReward(RewardRequest r) {
+        return !"Вывод".equals(r.getRewardItem().getCategory());
     }
 
     private static boolean isStars(RewardRequest r) {

@@ -24730,14 +24730,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private String payoutFeedText() {
         StringBuilder sb = new StringBuilder("💸 <b>Лента выплат</b>\n\nРеальные выплаты игрокам проекта:\n\n");
-        List<ru.gamebot.platform.domain.model.RewardRequest> recent = rewardService.recentApprovedWithdrawals(8);
+        // Выводы и выданные награды магазина одной лентой по времени; итоги ниже - только по выводам (в рублях).
+        List<ru.gamebot.platform.domain.model.RewardRequest> recent = new ArrayList<>(rewardService.recentApprovedWithdrawals(8));
+        try {
+            recent.addAll(rewardService.recentIssuedRewards(8));
+        } catch (Exception e) {
+            log.warn("Failed to load issued rewards for payout feed", e);
+        }
+        recent.sort((a, b) -> {
+            LocalDateTime ta = payoutMoment(a), tb = payoutMoment(b);
+            if (ta == null) return tb == null ? 0 : 1;
+            if (tb == null) return -1;
+            return tb.compareTo(ta);
+        });
+        if (recent.size() > 8) recent = new ArrayList<>(recent.subList(0, 8));
         if (recent.isEmpty()) {
             sb.append("Пока выплат нет — первые скоро появятся здесь.\n");
         }
         for (ru.gamebot.platform.domain.model.RewardRequest r : recent) {
-            String method = isStarsWithdrawal(r) ? "⭐ Stars" : isCryptoWithdrawal(r) ? "GRAM" : "СБП";
+            boolean shopReward = !"Вывод".equals(r.getRewardItem().getCategory());
+            String method = shopReward ? "🎁 Награда" : isStarsWithdrawal(r) ? "⭐ Stars" : isCryptoWithdrawal(r) ? "GRAM" : "СБП";
             LocalDateTime when = payoutMoment(r);
-            sb.append("• <b>").append(payoutAmountText(r)).append("</b> · ").append(method)
+            sb.append("• <b>").append(shopReward ? escape(r.getRewardItem().getTitle()) : payoutAmountText(r)).append("</b> · ").append(method)
                     .append(when != null ? " · " + agoText(when) : "")
                     .append(" · ").append(escape(maskNickname(r.getUser() == null ? null : r.getUser().getNickname()))).append("\n");
         }

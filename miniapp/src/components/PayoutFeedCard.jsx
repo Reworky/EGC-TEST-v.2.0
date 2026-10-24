@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getPayoutFeed } from '../api/client';
 
-const METHOD_LABEL = { stars: '⭐ Stars', ton: 'GRAM', sbp: 'СБП' };
+const METHOD_LABEL = { stars: '⭐ Stars', ton: 'GRAM', sbp: 'СБП', reward: '🎁 Награда' };
 
 function agoText(minutes) {
   if (minutes == null || minutes < 0) return '';

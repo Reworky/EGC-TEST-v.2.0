@@ -375,6 +375,11 @@ public class RewardService {
         return rewardRequestRepository.findRecentApprovedWithdrawals(org.springframework.data.domain.PageRequest.of(0, Math.max(1, limit)));
     }
 
+    /** Последние выданные награды магазина (самые свежие первыми) - для ленты выплат рядом с выводами. */
+    public List<RewardRequest> recentIssuedRewards(int limit) {
+        return rewardRequestRepository.findRecentIssuedRewards(org.springframework.data.domain.PageRequest.of(0, Math.max(1, limit)));
+    }
+
     /** Выплаченные выводы, созданные не раньше since (для итогов ленты: за сутки, за неделю). */
     public List<RewardRequest> approvedWithdrawalsSince(java.time.LocalDateTime since) {
         return rewardRequestRepository.findApprovedWithdrawalsSince(since);

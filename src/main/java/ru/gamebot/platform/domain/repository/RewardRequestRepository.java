@@ -119,6 +119,11 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
     @Query("SELECT r FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED' ORDER BY COALESCE(r.paidAt, r.createdAt) DESC")
     List<RewardRequest> findRecentApprovedWithdrawals(Pageable pageable);
 
+    /** Последние выданные награды магазина (не вывод) для ленты выплат: только закрытые менеджером (paid_at заполнен; мгновенная косметика без выдачи сюда не попадает). */
+    @EntityGraph(attributePaths = {"user", "rewardItem"})
+    @Query("SELECT r FROM RewardRequest r WHERE r.rewardItem.category <> 'Вывод' AND r.status = 'APPROVED' AND r.paidAt IS NOT NULL ORDER BY r.paidAt DESC")
+    List<RewardRequest> findRecentIssuedRewards(Pageable pageable);
+
     /** Сколько разных игроков получили выплату (для поста «сводка выплат» в канале). */
     @Query("SELECT COUNT(DISTINCT r.user.id) FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED' AND r.createdAt >= :since")
     long countDistinctWithdrawalUsersSince(@Param("since") LocalDateTime since);
