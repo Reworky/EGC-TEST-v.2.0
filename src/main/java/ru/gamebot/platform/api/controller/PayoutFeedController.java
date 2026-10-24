@@ -59,7 +59,7 @@ public class PayoutFeedController {
             LocalDateTime when = payoutMoment(r);
             boolean reward = isShopReward(r);
             items.add(PayoutFeedDto.Item.builder()
-                    .rub(reward ? 0 : rub(r))
+                    .rub(reward ? rewardService.shopRewardRub(r) : rub(r))
                     .amountText(reward ? r.getRewardItem().getTitle() : amountText(r))
                     .method(reward ? "reward" : method(r))
                     .minutesAgo(when == null ? -1 : Math.max(0, Duration.between(when, now).toMinutes()))
@@ -67,10 +67,16 @@ public class PayoutFeedController {
                     .build());
         }
 
+        // Итоги: выводы и выданные награды магазина (по рублёвому эквиваленту на момент выдачи).
         long dayRub = 0, dayCount = 0, weekRub = 0;
-        List<RewardRequest> week = rewardService.approvedWithdrawalsSince(now.minusDays(7));
+        List<RewardRequest> week = new ArrayList<>(rewardService.approvedWithdrawalsSince(now.minusDays(7)));
+        try {
+            week.addAll(rewardService.issuedRewardsSince(now.minusDays(7)));
+        } catch (Exception e) {
+            // награды - дополнение к итогам, сбой их выборки не должен ломать выплаты
+        }
         for (RewardRequest r : week) {
-            long rub = rub(r);
+            long rub = isShopReward(r) ? rewardService.shopRewardRub(r) : rub(r);
             weekRub += rub;
             LocalDateTime when = payoutMoment(r);
             if (when != null && when.isAfter(now.minusHours(24))) {
@@ -97,9 +103,10 @@ public class PayoutFeedController {
     private synchronized long[] totalsCached(LocalDateTime now) {
         if (cachedTotals != null && cachedAt != null && cachedAt.isAfter(now.minusMinutes(10))) return cachedTotals;
         try {
-            List<RewardRequest> all = rewardService.approvedWithdrawalsSince(LocalDateTime.of(2000, 1, 1, 0, 0));
+            List<RewardRequest> all = new ArrayList<>(rewardService.approvedWithdrawalsSince(LocalDateTime.of(2000, 1, 1, 0, 0)));
+            all.addAll(rewardService.issuedRewardsSince(LocalDateTime.of(2000, 1, 1, 0, 0)));
             long sum = 0;
-            for (RewardRequest r : all) sum += rub(r);
+            for (RewardRequest r : all) sum += isShopReward(r) ? rewardService.shopRewardRub(r) : rub(r);
             cachedTotals = new long[]{sum, all.size()};
             cachedAt = now;
         } catch (Exception e) {

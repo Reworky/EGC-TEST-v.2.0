@@ -121,8 +121,13 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
 
     /** Последние выданные награды магазина (не вывод) для ленты выплат: только закрытые менеджером (paid_at заполнен; мгновенная косметика без выдачи сюда не попадает). */
     @EntityGraph(attributePaths = {"user", "rewardItem"})
-    @Query("SELECT r FROM RewardRequest r WHERE r.rewardItem.category <> 'Вывод' AND r.status = 'APPROVED' AND r.paidAt IS NOT NULL ORDER BY r.paidAt DESC")
+    @Query("SELECT r FROM RewardRequest r WHERE (r.rewardItem.category IS NULL OR r.rewardItem.category <> 'Вывод') AND r.status = 'APPROVED' AND r.paidAt IS NOT NULL ORDER BY r.paidAt DESC")
     List<RewardRequest> findRecentIssuedRewards(Pageable pageable);
+
+    /** Выданные награды магазина, закрытые не раньше since (для итогов ленты выплат: за сутки, неделю, всё время). */
+    @EntityGraph(attributePaths = {"rewardItem"})
+    @Query("SELECT r FROM RewardRequest r WHERE (r.rewardItem.category IS NULL OR r.rewardItem.category <> 'Вывод') AND r.status = 'APPROVED' AND r.paidAt IS NOT NULL AND r.paidAt >= :since")
+    List<RewardRequest> findIssuedRewardsSince(@Param("since") LocalDateTime since);
 
     /** Сколько разных игроков получили выплату (для поста «сводка выплат» в канале). */
     @Query("SELECT COUNT(DISTINCT r.user.id) FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED' AND r.createdAt >= :since")

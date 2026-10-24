@@ -24756,10 +24756,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     .append(" · ").append(escape(maskNickname(r.getUser() == null ? null : r.getUser().getNickname()))).append("\n");
         }
         LocalDateTime now = LocalDateTime.now();
-        List<ru.gamebot.platform.domain.model.RewardRequest> week = rewardService.approvedWithdrawalsSince(now.minusDays(7));
+        List<ru.gamebot.platform.domain.model.RewardRequest> week = new ArrayList<>(rewardService.approvedWithdrawalsSince(now.minusDays(7)));
+        try {
+            week.addAll(rewardService.issuedRewardsSince(now.minusDays(7)));
+        } catch (Exception e) {
+            log.warn("Failed to load issued rewards for payout feed totals", e);
+        }
         long dayRub = 0, dayCount = 0, weekRub = 0;
         for (ru.gamebot.platform.domain.model.RewardRequest r : week) {
-            long rub = fixedOrCurrentRub(r);
+            long rub = "Вывод".equals(r.getRewardItem().getCategory()) ? fixedOrCurrentRub(r) : rewardService.shopRewardRub(r);
             weekRub += rub;
             LocalDateTime when = payoutMoment(r);
             if (when != null && when.isAfter(now.minusHours(24))) {

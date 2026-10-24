@@ -380,6 +380,20 @@ public class RewardService {
         return rewardRequestRepository.findRecentIssuedRewards(org.springframework.data.domain.PageRequest.of(0, Math.max(1, limit)));
     }
 
+    /** Выданные награды магазина, закрытые не раньше since (итоги ленты выплат). */
+    public List<RewardRequest> issuedRewardsSince(java.time.LocalDateTime since) {
+        return rewardRequestRepository.findIssuedRewardsSince(since);
+    }
+
+    /** Рублёвый эквивалент выданной награды магазина: фиксируется при выдаче (approveRequest) по курсу фонда на этот момент;
+     *  у наград, выданных до появления фиксации, - пересчёт по текущему курсу. */
+    public long shopRewardRub(RewardRequest req) {
+        if (req.getFixedRubValue() != null) {
+            return req.getFixedRubValue();
+        }
+        return Math.round(actualPaidPrice(req) * healthRatioService.getCurrentRatio() / 100.0);
+    }
+
     /** Выплаченные выводы, созданные не раньше since (для итогов ленты: за сутки, за неделю). */
     public List<RewardRequest> approvedWithdrawalsSince(java.time.LocalDateTime since) {
         return rewardRequestRepository.findApprovedWithdrawalsSince(since);
@@ -536,6 +550,14 @@ public class RewardService {
         if (WITHDRAWAL_CATEGORY.equals(req.getRewardItem().getCategory())) {
             long rubles = parseRubFromTitle(req.getRewardItem().getTitle(), req.getRewardItem().getPriceCoins());
             healthRatioService.deductFromPayoutPool(rubles);
+        } else if (req.getFixedRubValue() == null) {
+            // Награда магазина: фиксируем рублёвый эквивалент на момент выдачи - для итогов ленты выплат (курс фонда потом меняется).
+            // Только запись числа; на фонд, выплаты и отчёты по выводам не влияет (все они фильтруют категорию «Вывод»).
+            try {
+                req.setFixedRubValue(Math.round(actualPaidPrice(req) * healthRatioService.getCurrentRatio() / 100.0));
+            } catch (Exception e) {
+                // без эквивалента награда всё равно выдаётся, лента посчитает по текущему курсу
+            }
         }
         return rewardRequestRepository.save(req);
     }
