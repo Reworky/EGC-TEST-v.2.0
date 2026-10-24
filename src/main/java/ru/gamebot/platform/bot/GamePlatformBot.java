@@ -640,12 +640,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String receiptCaption = message.getCaption();
             Long reqId = session.getQuestId();
             boolean isModReceiptFlow = "mod".equals(session.getData().get("receiptFlow"));
+            boolean isRewardReceipt = "reward".equals(session.getData().get("receiptType"));
             session.reset();
             RewardRequest req;
             try {
                 req = rewardService.approveRequest(reqId);
             } catch (IllegalArgumentException staleRequest) {
-                sendText(user.getTelegramId(), "⚠️ " + staleRequest.getMessage(), backMenuKeyboard("menu:admin"));
+                sendText(user.getTelegramId(), "⚠️ " + staleRequest.getMessage(), backMenuKeyboard(isRewardReceipt ? rewardRequestsBackTarget(user) : "menu:admin"));
+                return;
+            }
+            if (isRewardReceipt) {
+                notifyUserRewardIssued(req, fileId, receiptCaption);
+                sendText(user.getTelegramId(), "✅ Награда М-" + reqDisplayId(req) + " выдана: игроку отправлено подтверждение, пост для канала выплат ушёл на согласование.", null);
+                sendAdminRewardRequests(user);
                 return;
             }
             notifyUserWithdrawalApproved(req, fileId, receiptCaption);
@@ -2034,7 +2041,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Заявки на награды магазина (не вывод) обрабатывает и менеджер - тот же общий пул, что и заявки на вывод. Только работа с заявками:
         // правка каталога наград (admin:reward:edit/delete/toggle и т.д.) остаётся у админа.
         if ((data.equals("admin:reward:requests") || data.startsWith("admin:reward:req:") || data.startsWith("admin:reward:inprogress:")
-                || data.startsWith("admin:reward:approve:") || data.startsWith("admin:reward:reject:")) && isEffectiveModerator(user)) {
+                || data.startsWith("admin:reward:approve:") || data.startsWith("admin:reward:approveskip:") || data.startsWith("admin:reward:reject:")) && isEffectiveModerator(user)) {
             handleAdminAction(callbackQuery, user, session, data.substring("admin:".length()));
             return;
         }
@@ -13905,8 +13912,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "🔄 Взято в разработку");
             return;
         }
-        if (action.startsWith("approve:")) {
-            Long reqId = parseLong(action.substring("approve:".length()));
+        // «Выдано» - тот же порядок, что у выплат: скриншот подтверждения -> игроку -> черновик поста в канал выплат на согласование -> просьба об отзыве.
+        if (action.startsWith("approveskip:")) {
+            Long reqId = parseLong(action.substring("approveskip:".length()));
+            session.reset();
             RewardRequest req;
             try {
                 req = rewardService.approveRequest(reqId);
@@ -13914,9 +13923,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 answer(callbackQuery.getId(), staleRequest.getMessage());
                 return;
             }
-            notifyUserRewardApproved(req);
+            notifyUserRewardIssued(req, null, null);
             sendAdminRewardRequests(user);
             answer(callbackQuery.getId(), "✅ Выдано");
+            return;
+        }
+        if (action.startsWith("approve:")) {
+            Long reqId = parseLong(action.substring("approve:".length()));
+            session.reset();
+            session.setQuestId(reqId);
+            session.getData().put("receiptType", "reward");
+            session.setState(SessionState.WITHDRAWAL_RECEIPT);
+            answer(callbackQuery.getId(), "Загрузите подтверждение выдачи");
+            sendText(user.getTelegramId(),
+                    "🧾 <b>Загрузите скриншот выдачи награды</b>\n\nОтправьте фото подтверждения (чек, скрин пополнения, отправленного подарка) - оно будет отправлено игроку и опубликовано в @egc_payouts (после вашего одобрения). Подпись к фото тоже попадёт в пост.\n\n⚠️ Закройте на фото логины, пароли, номера карт и другие данные игрока.\n\nИли нажмите «Пропустить», если подтверждение не нужно.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("⏭️ Пропустить", "admin:reward:approveskip:" + reqId)),
+                            List.of(keyboardFactory.callback("⬅️ Назад", "admin:reward:req:" + reqId))
+                    )));
             return;
         }
         if (action.startsWith("reject:")) {
@@ -14001,14 +14025,47 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 null);
     }
 
-    private void notifyUserRewardApproved(RewardRequest req) {
-        sendText(req.getUser().getTelegramId(),
-                "✅ <b>Ваша награда выдана!</b>\n\n"
-                        + "🎁 <b>" + escape(req.getRewardItem().getTitle()) + "</b>\n\n"
-                        + "Свяжитесь с администратором для получения, если необходимо.",
-                null);
+    /** Выдача награды магазина с подтверждением: игроку (с фото, если есть), черновик пруфа для @egc_payouts на согласование, просьба оценить выдачу.
+     *  Тот же путь, что у выплат (notifyUserWithdrawalApprovedMain), отличается только текстами. */
+    private void notifyUserRewardIssued(RewardRequest req, String receiptFileId, String receiptCaption) {
+        String caption = "✅ <b>Ваша награда выдана!</b>\n\n"
+                + "🔢 Номер заявки: <b>М-" + reqDisplayId(req) + "</b>\n"
+                + "🎁 Награда: <b>" + escape(req.getRewardItem().getTitle()) + "</b>\n"
+                + "🪙 Стоимость: <b>" + rewardService.actualPaidPrice(req) + " EXC</b>\n\n"
+                + "Если что-то не пришло - напишите в поддержку.";
+        try {
+            if (receiptFileId != null) {
+                SendPhoto photo = new SendPhoto();
+                photo.setChatId(req.getUser().getTelegramId().toString());
+                photo.setPhoto(new InputFile(receiptFileId));
+                photo.setCaption(caption);
+                photo.setParseMode("HTML");
+                execute(photo);
+            } else {
+                sendText(req.getUser().getTelegramId(), caption, null);
+            }
+        } catch (Exception e) {
+            // Недоступный игрок не должен ронять остаток флоу (пост в канал, отзыв) с ошибкой у менеджера.
+            log.warn("Failed to notify user {} about issued reward {}", req.getUser().getTelegramId(), req.getId(), e);
+        }
         maybeOfferPassAfter(req.getUser(), 2, "FIRST_PURCHASE",
                 "🎁 <b>Первая покупка в клубе!</b>\n\nС EGC Pass донат гемов и пропусков стоит дешевле (закупочная цена, без наценки клуба), плюс +10% EXC и +5% XP за все квесты.");
+        postRewardToActivityFeed(req, receiptFileId, receiptCaption);
+        promptOrderReview(req, "🙏 Оцени, пожалуйста, как мы выдали награду - это необязательно, но очень помогает клубу.");
+    }
+
+    /** Пруф по выданной награде: черновик на согласование (тот же тип WITHDRAW_PROOF и тот же канал выплат), без ника игрока. */
+    private void postRewardToActivityFeed(RewardRequest req, String receiptFileId, String receiptCaption) {
+        String text = "🎁 <b>Награда выдана!</b>\n\nИгрок получил <b>" + escape(req.getRewardItem().getTitle()) + "</b> за <b>"
+                + rewardService.actualPaidPrice(req) + " EXC</b> 🔥";
+        if (receiptCaption != null && !receiptCaption.isBlank()) {
+            text += "\n\n" + escape(receiptCaption.trim());
+        }
+        try {
+            channelContentService.createProofDraft(req.getId(), text, receiptFileId);
+        } catch (Exception e) {
+            log.error("Failed to create reward proof draft for request {}", req.getId(), e);
+        }
     }
 
     private void notifyUserRewardRejected(RewardRequest req) {
@@ -14706,6 +14763,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * Собранный отзыв уходит на модерацию ({@link #sendReviewModerationCard}), затем публикуется
      * в канал отзывов ({@link #publishReviewToChannel}). */
     private void promptWithdrawalReview(RewardRequest req) {
+        promptOrderReview(req, "🙏 Оцени, пожалуйста, качество вывода — это необязательно, но очень помогает клубу.");
+    }
+
+    /** Просьба оценить заявку 1-5 звёзд (вывод или выдача награды): отзыв привязывается к заявке, дальше общий флоу модерации и публикации. */
+    private void promptOrderReview(RewardRequest req, String promptText) {
         Long telegramId = req.getUser().getTelegramId();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(
@@ -14720,9 +14782,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // заявки — sendText пробрасывает исключение наружу при неудаче, а этот вызов идёт последним
         // в notifyUserWithdrawalApproved, уже после того как заявка одобрена и чек отправлен.
         try {
-            sendText(telegramId,
-                    "🙏 Оцени, пожалуйста, качество вывода — это необязательно, но очень помогает клубу.",
-                    keyboardFactory.rowsLayout(rows));
+            sendText(telegramId, promptText, keyboardFactory.rowsLayout(rows));
         } catch (Exception e) {
             log.warn("Failed to prompt withdrawal review for user {}", telegramId, e);
         }
@@ -21335,7 +21395,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_SUMMARY -> "Пруф от Экси: сводка выплат";
             case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_MILESTONE -> "Веха выплат";
             case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_HOWTO -> "Как вывести EXC";
-            case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF -> "Пруф: выплата";
+            case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF -> "Пруф: выплата или выдача награды";
             case ru.gamebot.platform.service.ChannelContentService.HALL_OF_FAME -> "Зал славы недели";
             case ru.gamebot.platform.service.ChannelContentService.WEEKLY_RACE -> "Гонка за Зал славы";
             case ru.gamebot.platform.service.ChannelContentService.LEAGUES_WEEK -> "Лиги недели";
@@ -21888,7 +21948,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_ACTIVE.equals(type)) when = "за 24 часа до финиша турнира";
         else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_CANCELLED.equals(type)) when = "сразу при отмене турнира";
         else if (ru.gamebot.platform.service.ChannelContentService.WITHDRAW_MILESTONE.equals(type)) when = "при пересечении круглого порога выплат";
-        else if (ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF.equals(type)) when = "после закрытия заявки на вывод (уходит в канал выплат, без ника)";
+        else if (ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF.equals(type)) when = "после закрытия заявки на вывод или на награду (уходит в канал выплат, без ника)";
         else if (daily) when = "каждый день в " + String.format("%02d:00", st.hour()) + " UTC";
         else when = (every > 7 ? "раз в " + (every / 7) + " нед., по " : "каждую неделю, по ") + weekdayNomRu(st.dayOfWeek()).toLowerCase() + "м в " + String.format("%02d:00", st.hour()) + " UTC";
 
