@@ -164,13 +164,17 @@ public class WeeklyResetScheduler {
         tournamentService.settleFinishedTournaments();
     }
 
-    // Проверяем каждые 5 минут, у кого истёк 24ч кулдаун (единый для всех неспонсорских квестов,
-    // см. QuestService.cooldownHours — отдельная 336ч-ветка для «Сложные» убрана 2026-09-17)
+    // Проверяем каждые 5 минут, у кого истёк кулдаун на повтор квеста. Срок у игрока свой (QuestService.cooldownHours): 4 ч у новичка,
+    // 12 ч у UGC, иначе 24 ч (отдельная 336ч-ветка для «Сложные» убрана 2026-09-17). Раньше окно всегда было 24 ч, и новичок с кулдауном 4 ч
+    // получал «кулдаун снят» с опозданием на 20 часов (24.10.2026). Окна 4/12/24 ч не пересекаются, поэтому игрок не получит дубль, а при
+    // запуске бэклога нет - каждое окно скользящее, 5 минут.
     @Scheduled(fixedDelay = 300_000)
     public void notifyCooldownExpired() {
         LocalDateTime now = LocalDateTime.now();
-        notifyExpired(questSubmissionRepository.findUsersWhoseNormalQuestCooldownExpiredBetween(
-                now.minusHours(24).minusMinutes(5), now.minusHours(24)));
+        for (int hours : new int[]{4, 12, 24}) {
+            notifyExpired(questSubmissionRepository.findUsersWhoseNormalQuestCooldownExpiredBetween(
+                    now.minusHours(hours).minusMinutes(5), now.minusHours(hours)), hours);
+        }
     }
 
     // Первое "Кулдаун снят!" (см. notifyCooldownExpired выше) одноразовое по конструкции — скользящее
@@ -802,7 +806,7 @@ public class WeeklyResetScheduler {
         }
     }
 
-    private void notifyExpired(List<Object[]> rows) {
+    private void notifyExpired(List<Object[]> rows, int windowHours) {
         for (Object[] row : rows) {
             try {
                 Long telegramId = (Long) row[0];
@@ -814,6 +818,8 @@ public class WeeklyResetScheduler {
                 // Общий кулдаун игры от другого квеста мог ещё идти (заявка #240): тогда «кулдаун снят» - неправда, пропускаем
                 // (до лимита частоты, чтобы не тратить окно); игрок получит повторное напоминание, когда квест действительно освободится
                 Quest expiredQuest = questRepository.findFirstByTitleAndGameName(questTitle, gameName).orElse(null);
+                // Окно этого прохода подходит только тем, у кого кулдаун на этот квест именно столько часов; квест не нашёлся - по старому правилу 24 ч
+                if (expiredQuest == null ? windowHours != 24 : questService.cooldownHoursFor(target, expiredQuest) != windowHours) continue;
                 if (expiredQuest != null && !questService.isCooldownFree(target, expiredQuest)) continue;
                 if (!notificationGate.tryAcquire(target, NudgeType.COOLDOWN_EXPIRED)) continue;
                 eventPublisher.publishEvent(new CooldownExpiredEvent(this, telegramId, gameName, questTitle));

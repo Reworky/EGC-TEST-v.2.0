@@ -71,6 +71,11 @@ public class QuestService {
         // остальных 90%+ квестов, которые давно на этой логике.
         return COOLDOWN_HOURS;
     }
+    /** Реальный кулдаун на повтор квеста для игрока в часах (4 у новичка, 12 у UGC, иначе 24) - для уведомления «кулдаун снят» в нужный момент. */
+    public int cooldownHoursFor(AppUser user, Quest quest) {
+        return cooldownHours(quest, user);
+    }
+
     private static final int REFERRAL_BONUS_PERCENT = 10;
     /** Подписчик EGC Pass получает с квестов приглашённых друзей 12% вместо 10% (04.10.2026). */
     public static final int REFERRAL_BONUS_PERCENT_PASS = 12;
