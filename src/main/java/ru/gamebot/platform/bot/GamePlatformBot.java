@@ -10199,7 +10199,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>Доп. слот квеста навсегда куплен!</b>\n\nТеперь можно вести на 1 активный квест больше — постоянно, без ограничения по времени.",
                     backMenuKeyboard("menu:quests"));
         } else if ("starsitem:EGC_PASS".equals(payload)) {
+            boolean hadPassBefore = user.getEgcPassActiveUntil() != null;
             userService.renewEgcPass(user);
+            notifyAdminsAboutPassPurchase(user, hadPassBefore ? "🔄 Продление подписки (30 дней)" : "🆕 Подписка, первая оплата (30 дней)", payment.getTotalAmount(), null);
             String until = user.getEgcPassActiveUntil().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"));
             sendText(telegramId,
                     "✅ <b>EGC Pass активирован!</b>\n\nДействует до <b>" + until + "</b>, дальше продлится автоматически.\n\n"
@@ -10207,6 +10209,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     backMenuKeyboard("menu:main"));
         } else if ("starsitem:EGC_PASS_TRIAL".equals(payload)) {
             userService.grantEgcPassDays(user, EGC_PASS_TRIAL_DAYS);
+            notifyAdminsAboutPassPurchase(user, "🎁 Пробный период (" + EGC_PASS_TRIAL_DAYS + " дней)", payment.getTotalAmount(), null);
             String trialUntil = user.getEgcPassActiveUntil().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"));
             List<List<InlineKeyboardButton>> trialRows = new ArrayList<>();
             String subUrl = createStarsInvoiceLink("starsitem:EGC_PASS");
@@ -10223,6 +10226,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             AppUser recipient = userService.findByTelegramId(recipientId)
                     .orElseThrow(() -> new IllegalStateException("Pass gift recipient not found: " + recipientId));
             userService.renewEgcPass(recipient);
+            notifyAdminsAboutPassPurchase(user, "🎀 Подарок EGC Pass другому игроку (30 дней)", payment.getTotalAmount(), recipient);
             userService.addReward(user, 0, PASS_GIFT_SENDER_BONUS_EXC, ru.gamebot.platform.service.ExcTransactionService.BONUS, "Бонус за подарок EGC Pass другу");
             userService.addReward(recipient, 0, PASS_GIFT_RECIPIENT_BONUS_EXC, ru.gamebot.platform.service.ExcTransactionService.BONUS, "Бонус: вам подарили EGC Pass");
             String giftUntil = recipient.getEgcPassActiveUntil().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"));
@@ -10261,6 +10265,32 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     backMenuKeyboard("menu:main"));
         } else {
             log.warn("Successful payment with unknown payload '{}' from user {}", payload, telegramId);
+        }
+    }
+
+    /** Админам: кто-то купил EGC Pass (пробный, первая подписка, продление, подарок). Сбой уведомления не должен ломать выдачу оплаченного товара. */
+    private void notifyAdminsAboutPassPurchase(AppUser buyer, String kind, int stars, AppUser giftRecipient) {
+        try {
+            AppUser holder = giftRecipient != null ? giftRecipient : buyer;
+            String username = buyer.getTelegramUsername() != null && !buyer.getTelegramUsername().isBlank() ? " (@" + buyer.getTelegramUsername() + ")" : "";
+            String until = holder.getEgcPassActiveUntil() == null ? "—"
+                    : holder.getEgcPassActiveUntil().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+            String text = "⭐ <b>Куплен EGC Pass</b>\n\n"
+                    + "📦 Что: <b>" + kind + "</b>\n"
+                    + "👤 Покупатель: <b>" + escape(buyer.getNickname()) + "</b>" + escape(username) + "\n"
+                    + "🆔 Telegram ID: <code>" + buyer.getTelegramId() + "</code>\n"
+                    + (giftRecipient != null ? "🎁 Получатель: <b>" + escape(giftRecipient.getNickname()) + "</b> (<code>" + giftRecipient.getTelegramId() + "</code>)\n" : "")
+                    + "💰 Оплачено: <b>" + stars + " ⭐</b>\n"
+                    + "📅 Pass действует до: <b>" + until + "</b>";
+            for (Long adminId : adminService.allAdminIds()) {
+                try {
+                    sendText(adminId, text, null);
+                } catch (Exception e) {
+                    log.warn("Failed to send Pass purchase alert to admin {}", adminId, e);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to build Pass purchase alert", e);
         }
     }
 
