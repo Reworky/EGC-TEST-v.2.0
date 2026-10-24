@@ -6087,8 +6087,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private String channelPostUrl(Integer messageId) {
         if (messageId == null) return null;
-        String un = appProperties.getRequiredChannelUsername();
-        if (un != null && !un.isBlank()) return "https://t.me/" + un.replace("@", "") + "/" + messageId;
+        String un = publicChannelUsername();
+        if (un != null) return "https://t.me/" + un + "/" + messageId;
         String id = appProperties.getRequiredChannelId();
         if (id != null && id.trim().startsWith("-100")) return "https://t.me/c/" + id.trim().substring(4) + "/" + messageId;
         return null;
@@ -13079,6 +13079,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 } else if (action.equals("joinreq") || action.startsWith("joinreq:")) {
                     handleJoinRequestAdminAction(callbackQuery, user, action);
                     return;
+                } else if (action.equals("channelmode") || action.startsWith("channelmode:")) {
+                    if (action.equals("channelmode")) {
+                        answerSilently(callbackQuery.getId());
+                        sendAdminChannelModeScreen(user);
+                    } else {
+                        handleChannelModeAction(callbackQuery, user, action);
+                    }
+                    return;
                 } else if (action.startsWith("an:")) {
                     handleAnalyticsAction(callbackQuery, user, session, action.substring("an:".length()));
                     return;
@@ -16443,6 +16451,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback(
                         pendingJoin > 0 ? "📥 Заявки на канал (" + pendingJoin + ")" : "📥 Заявки на канал", "admin:joinreq")));
                 rows.add(List.of(keyboardFactory.callback("🔗 Ссылка «Подписаться» (для бота)", "admin:joinreq:link")));
+                rows.add(List.of(keyboardFactory.callback("📢 Канал: открытый / закрытый", "admin:channelmode")));
             }
             case "growth" -> {
                 title = "🏆 <b>События и рост</b>";
@@ -25633,6 +25642,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (existing != null) {
             return existing;
         }
+        String created = createActivationInviteLink();
+        if (created != null) {
+            return created;
+        }
+        // Заявки по обычной ссылке канала попадут в общую ручную очередь - деградация терпимая,
+        // но взятие квеста/бонус для таких игроков будет ждать одобрения админа.
+        return requiredChannelUrl();
+    }
+
+    /** Создаёт ссылку-приглашение для кнопки бота и кэширует её в app_settings; null - создать не удалось (нет прав у бота в канале). */
+    private String createActivationInviteLink() {
         try {
             CreateChatInviteLink create = new CreateChatInviteLink();
             create.setChatId(requiredChannelChatId());
@@ -25646,11 +25666,122 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             botActivationInviteLink = url;
             return url;
         } catch (TelegramApiException exception) {
-            // Заявки по обычной ссылке канала попадут в общую ручную очередь — деградация терпимая,
-            // но взятие квеста/бонус для таких игроков будет ждать одобрения админа.
-            log.warn("Failed to create dedicated activation invite link, falling back to public channel link", exception);
-            return requiredChannelUrl();
+            log.warn("Failed to create dedicated activation invite link", exception);
+            return null;
         }
+    }
+
+    // ───────────────────────── Режим канала: открытый / закрытый (24.10.2026) ─────────────────────────
+    // Переключатель только для ссылок, которые бот показывает и строит (кнопка «Подписаться», ссылки на посты). Сам канал определяется по
+    // REQUIRED_CHANNEL_ID и от режима не зависит; тип канала в Telegram меняется вручную. Без записи в базе - поведение по настройкам сервера, как раньше.
+    private static final String CHANNEL_MODE_SETTING_KEY = "channel.mode";
+    private static final String CHANNEL_USERNAME_SETTING_KEY = "channel.username";
+
+    private String channelMode() {
+        String v = appSettingRepository.findById(CHANNEL_MODE_SETTING_KEY).map(AppSetting::getValue).orElse(null);
+        return "open".equals(v) || "closed".equals(v) ? v : null;
+    }
+
+    /** Публичное имя канала для ссылок (без @); null - канал закрытый или имени нет. */
+    private String publicChannelUsername() {
+        if ("closed".equals(channelMode())) return null;
+        String env = appProperties.getRequiredChannelUsername();
+        if (env != null && !env.isBlank()) return env.replace("@", "").trim();
+        String stored = appSettingRepository.findById(CHANNEL_USERNAME_SETTING_KEY).map(AppSetting::getValue).orElse(null);
+        return stored != null && !stored.isBlank() ? stored.trim() : null;
+    }
+
+    /** Ссылка-приглашение для закрытого канала: уже созданная или новая; null - не получилось. */
+    private String closedChannelInviteLink() {
+        String existing = resolvedActivationInviteLink();
+        return existing != null ? existing : createActivationInviteLink();
+    }
+
+    /** Что сейчас в Telegram: публичное имя канала или null, если канал закрытый. Бросает исключение, если Telegram не ответил. */
+    private String telegramChannelUsername() throws TelegramApiException {
+        org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat getChat =
+                new org.telegram.telegrambots.meta.api.methods.groupadministration.GetChat();
+        getChat.setChatId(requiredChannelChatId());
+        Chat found = execute(getChat);
+        return found == null || found.getUserName() == null || found.getUserName().isBlank() ? null : found.getUserName();
+    }
+
+    private void handleChannelModeAction(CallbackQuery callbackQuery, AppUser user, String action) {
+        answerSilently(callbackQuery.getId());
+        switch (action) {
+            case "channelmode:closed" -> {
+                String link = closedChannelInviteLink();
+                if (link == null) {
+                    sendText(user.getTelegramId(), "❌ Не получилось создать ссылку-приглашение. Бот должен быть администратором канала с правом «Добавление участников».",
+                            backMenuKeyboard("admin:channelmode"));
+                    return;
+                }
+                saveSetting(CHANNEL_MODE_SETTING_KEY, "closed");
+            }
+            case "channelmode:open" -> {
+                String name;
+                try {
+                    name = telegramChannelUsername();
+                } catch (TelegramApiException e) {
+                    log.warn("Failed to read channel type from Telegram", e);
+                    sendText(user.getTelegramId(), "❌ Telegram не ответил. Попробуйте ещё раз через минуту.", backMenuKeyboard("admin:channelmode"));
+                    return;
+                }
+                if (name == null) {
+                    sendText(user.getTelegramId(), "❌ У канала нет публичного имени. Сначала в Telegram: Управление каналом → Тип канала → Публичный, задайте имя, потом нажмите «Сделать открытым» ещё раз.",
+                            backMenuKeyboard("admin:channelmode"));
+                    return;
+                }
+                saveSetting(CHANNEL_USERNAME_SETTING_KEY, name);
+                saveSetting(CHANNEL_MODE_SETTING_KEY, "open");
+            }
+            case "channelmode:default" -> appSettingRepository.findById(CHANNEL_MODE_SETTING_KEY).ifPresent(appSettingRepository::delete);
+            default -> { }
+        }
+        sendAdminChannelModeScreen(user);
+    }
+
+    private void saveSetting(String key, String value) {
+        AppSetting setting = appSettingRepository.findById(key).orElseGet(AppSetting::new);
+        setting.setKey(key);
+        setting.setValue(value);
+        appSettingRepository.save(setting);
+    }
+
+    private void sendAdminChannelModeScreen(AppUser user) {
+        String mode = channelMode();
+        String modeText = "open".equals(mode) ? "🔓 открытый" : "closed".equals(mode) ? "🔒 закрытый" : "как в настройках сервера";
+        String telegramText;
+        boolean telegramPublic;
+        try {
+            String name = telegramChannelUsername();
+            telegramPublic = name != null;
+            telegramText = telegramPublic ? "🔓 открытый (@" + escape(name) + ")" : "🔒 закрытый";
+        } catch (Exception e) {
+            telegramPublic = false;
+            telegramText = "не удалось узнать";
+            mode = mode == null ? "" : mode;
+        }
+        String warning = "";
+        if ("closed".equals(mode) && telegramPublic) {
+            warning = "\n⚠️ В боте режим «закрытый», а в Telegram канал ещё открытый: игроки получат ссылку-приглашение, это не страшно.";
+        } else if ("open".equals(mode) && "🔒 закрытый".equals(telegramText)) {
+            warning = "\n⚠️ В боте режим «открытый», а в Telegram канал закрытый: ссылка на имя канала не будет работать. Сделайте канал публичным в Telegram или переключите бота на «закрытый».";
+        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("🔒 Сделать закрытым", "admin:channelmode:closed")));
+        rows.add(List.of(keyboardFactory.callback("🔓 Сделать открытым", "admin:channelmode:open")));
+        rows.add(List.of(keyboardFactory.callback("↩️ Как в настройках сервера", "admin:channelmode:default")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:comm")));
+        sendText(user.getTelegramId(),
+                "📢 <b>Канал игроков: открытый или закрытый</b>\n\n"
+                        + "Сейчас в Telegram: <b>" + telegramText + "</b>\n"
+                        + "Режим ссылок в боте: <b>" + modeText + "</b>\n"
+                        + "Кнопка «Подписаться» ведёт сюда: " + escape(requiredChannelUrl()) + "\n" + warning + "\n\n"
+                        + "Эта кнопка меняет только ссылки, которые показывает бот. Тип канала меняется отдельно в Telegram: Управление каналом → Тип канала. "
+                        + "Ссылки на сайте-лендинге и в описаниях соцсетей правятся вручную. "
+                        + "Когда канал становится закрытым, Telegram может освободить его короткое имя, и получить его обратно не гарантировано.",
+                keyboardFactory.rowsLayout(rows));
     }
 
     private String resolvedActivationInviteLink() {
@@ -25851,6 +25982,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private String requiredChannelUrl() {
+        String mode = channelMode();
+        if ("closed".equals(mode)) {
+            // Закрытый канал: ссылка-приглашение от бота (создаётся один раз и хранится в базе), запасной вариант - ссылка из настроек сервера
+            String invite = closedChannelInviteLink();
+            if (invite != null) return invite;
+            if (appProperties.getRequiredChannelUrl() != null && !appProperties.getRequiredChannelUrl().isBlank()) {
+                return appProperties.getRequiredChannelUrl().trim();
+            }
+            return "https://t.me/" + getBotUsername();
+        }
+        if ("open".equals(mode)) {
+            String publicName = publicChannelUsername();
+            if (publicName != null) return "https://t.me/" + publicName;
+        }
         if (appProperties.getRequiredChannelUrl() != null && !appProperties.getRequiredChannelUrl().isBlank()) {
             return appProperties.getRequiredChannelUrl().trim();
         }
