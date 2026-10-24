@@ -9426,8 +9426,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     }
                     afterBuy.add(List.of(keyboardFactory.callback("🗺️ Выбрать другой квест", "menu:quests")));
                     afterBuy.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:sink")));
+                    long takeWaitMin = questService.getTakeCooldownMinutesLeft(user);
+                    String takeWaitNote = takeWaitMin > 0
+                            ? "⏳ Сейчас действует лимит «1 квест в час»: новый квест можно взять через <b>" + takeWaitMin + " мин</b>. Снятие не пропадёт, сработает при взятии.\n"
+                            : "";
                     sendText(user.getTelegramId(),
                         "⏱️ <b>Снятие кулдауна активировано!</b>\n\nСписано 3 000 EXC. Откройте квест с кулдауном и нажмите «🚀 Взять» — кулдаун снимется при взятии.\n"
+                                + takeWaitNote
                                 + "Лимит «1 квест в час» между любыми квестами не снимается.\nНе пригодилось — можно вернуть 3 000 EXC в «Предметы» → «Снятие кулдауна».",
                         keyboardFactory.rowsLayout(afterBuy));
                 } catch (IllegalArgumentException e) {

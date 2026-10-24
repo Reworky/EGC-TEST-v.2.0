@@ -101,7 +101,9 @@ public class PerksController {
                 }
                 case "cooldown" -> {
                     questService.purchaseCooldownRemoval(user);
-                    yield "Снятие кулдауна активировано! Следующий квест с кулдауном будет доступен без ожидания.";
+                    long takeWait = questService.getTakeCooldownMinutesLeft(user);
+                    yield "Снятие кулдауна активировано! Следующий квест с кулдауном будет доступен без ожидания."
+                            + (takeWait > 0 ? " Но лимит «1 квест в час» остаётся: взять квест можно через " + takeWait + " мин, снятие сработает при взятии." : "");
                 }
                 case "xpboost24" -> {
                     sinkShopService.purchaseXpBoost(user, 24);
