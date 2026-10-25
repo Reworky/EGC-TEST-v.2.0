@@ -10760,9 +10760,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long price = item != null ? rewardService.effectivePrice(item) : c.priceExc();
         StringBuilder text = new StringBuilder("📦 <b>" + escape(c.displayName()) + "</b>\n\n");
         if (!c.skins().isEmpty()) {
-            text.append("<b>Что внутри (").append(c.skins().size()).append("):</b>\n");
+            // Состав свёрнут в раскрывающуюся цитату Telegram (blockquote expandable): карточка короткая, список открывается по нажатию
+            text.append("<b>Что внутри (").append(c.skins().size()).append("):</b>\n<blockquote expandable>");
             for (String skin : c.skins()) text.append("• ").append(escape(skin)).append("\n");
-            text.append("<i>Редкие предметы (ножи, перчатки) в список не входят.</i>\n\n");
+            text.append("<i>Редкие предметы (ножи, перчатки) в список не входят.</i></blockquote>\n");
         }
         text.append("🪙 Стоимость: <b>").append(price).append(" EXC</b>")
                 .append(c.withKey() ? " (кейс + ключ)" : " (кейс без ключа)").append("\n");
