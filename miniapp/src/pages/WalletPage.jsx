@@ -375,7 +375,7 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest }) {
           <i className="ti ti-refresh" />
         </button>
         <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 4 }}>
-          <i className="ti ti-wallet" /> Баланс клуба
+          <i className="ti ti-wallet" /> Твой баланс
         </div>
         <div style={{ fontSize: 30, fontWeight: 600, color: '#F5A623' }}>
           <i className="ti ti-coin" style={{ marginRight: 4 }} />
