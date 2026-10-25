@@ -9920,7 +9920,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (active || showAll) {
             sb.append("<b>Что входит:</b>\n")
                 .append("📤 Лимит вывода +").append(String.format("%,d", SinkShopService.PASS_WITHDRAWAL_LIMIT_BONUS_EXC).replace(',', ' ')).append(" EXC в месяц (например, 10 000 → 20 000 EXC)\n")
-                .append("✨ +10% к EXC за все квесты (до 5 000 EXC бонуса в месяц)\n")
+                .append("✨ +10% к EXC за все квесты (до 10 000 EXC бонуса в месяц)\n")
                 .append("📈 +5% к XP за все квесты, а купленный XP-буст даёт +40% вместо +20%\n")
                 .append("📂 3-й слот квеста (за EXC доступен только 2-й)\n")
                 .append("🔀 Выше дневные лимиты: снятие кулдауна 4 вместо 2, бустов 5 вместо 3\n")

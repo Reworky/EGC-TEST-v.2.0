@@ -254,8 +254,8 @@ public class UserService {
      *  XP — не валюта, но от него зависят уровень (бонус к EXC-наградам и месячный лимит вывода) и
      *  недельный рейтинг, поэтому цифра скромная. Аддитивен к остальным XP-бустам (SinkShop, Battle Pass). */
     public static final int EGC_PASS_XP_BOOST_PCT = 5;
-    /** Потолок бонуса +10% EXC в месяц: 5 000 (с 25.10.2026; было 10 000) - при цене 99 ⭐ худший расход бонуса ≈ 18 ₽ вместо 36 ₽ (фонд 36%). */
-    public static final long EGC_PASS_BOOST_MONTHLY_CAP_EXC = 5_000L;
+    /** Потолок бонуса +10% EXC в месяц: 10 000 (решение владельца 25.10.2026: потолок 5 000 был введён и сразу возвращён). */
+    public static final long EGC_PASS_BOOST_MONTHLY_CAP_EXC = 10_000L;
 
     /** Сколько ещё EXC можно начислить бонусом EGC Pass в текущем календарном месяце — сбрасывает
      *  счётчик при смене месяца (тот же паттерн, что и SinkShopService.refreshWithdrawalMonthIfNeeded).
