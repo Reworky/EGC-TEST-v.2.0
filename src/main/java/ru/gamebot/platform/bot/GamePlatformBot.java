@@ -10621,7 +10621,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 index = 0;
             }
         }
-        boolean sourcePhoto = callbackQuery.getMessage() != null && callbackQuery.getMessage().hasPhoto();
+        boolean sourcePhoto = callbackQuery.getMessage() instanceof Message sourceMessage && sourceMessage.hasPhoto();
         if ("menu".equals(parts[0])) {
             sendCs2Menu(user, messageId, sourcePhoto);
         } else {
