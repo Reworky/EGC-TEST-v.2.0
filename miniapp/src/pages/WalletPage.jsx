@@ -21,6 +21,12 @@ import './ShopPage.css';
 import './ReferralsPage.css';
 import './WalletPage.css';
 
+// Сколько ждать до вывода: меньше суток - точно в часах, иначе в днях (бэкенд отдаёт и то и другое).
+function withdrawalWaitText(w) {
+  if (w.withdrawalHoursLeft > 0 && w.withdrawalHoursLeft < 24) return `${w.withdrawalHoursLeft} ч.`;
+  return `${w.withdrawalDaysLeft} ${ruPlural(w.withdrawalDaysLeft, 'день', 'дня', 'дней')}`;
+}
+
 function ruPlural(n, one, few, many) {
   const m100 = n % 100, m10 = n % 10;
   if (m100 >= 11 && m100 <= 14) return many;
@@ -389,8 +395,8 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest }) {
         {(wallet.withdrawalQuestsLeft > 0 || wallet.withdrawalDaysLeft > 0) && (
           <div style={{ fontSize: 12, color: '#c4b5fd', marginTop: 10 }}>
             {wallet.withdrawalQuestsLeft > 0
-              ? `🔓 До вывода: ${3 - wallet.withdrawalQuestsLeft} из 3 квестов${wallet.withdrawalDaysLeft > 0 ? ` · ещё ${wallet.withdrawalDaysLeft} ${ruPlural(wallet.withdrawalDaysLeft, 'день', 'дня', 'дней')}` : ''}. Осталось: ${wallet.withdrawalQuestsLeft} ${ruPlural(wallet.withdrawalQuestsLeft, 'квест', 'квеста', 'квестов')}.`
-              : `🔓 Квесты уже выполнены, осталось подождать ${wallet.withdrawalDaysLeft} ${ruPlural(wallet.withdrawalDaysLeft, 'день', 'дня', 'дней')}. Вывод откроется автоматически.`}
+              ? `🔓 До вывода: ${3 - wallet.withdrawalQuestsLeft} из 3 квестов${wallet.withdrawalDaysLeft > 0 ? ` · ещё ${withdrawalWaitText(wallet)}` : ''}. Осталось: ${wallet.withdrawalQuestsLeft} ${ruPlural(wallet.withdrawalQuestsLeft, 'квест', 'квеста', 'квестов')}.`
+              : `🔓 Квесты уже выполнены, осталось подождать ${withdrawalWaitText(wallet)}. Вывод откроется автоматически.`}
           </div>
         )}
         {wallet.coins < 5000 && (

@@ -67,22 +67,31 @@ public class RewardService {
     }
 
     /** Сколько осталось до открытия вывода по условиям «3 квеста и 3 дня»; 0/0 - условия выполнены (или вывод заморожен: подсказка про условия тогда не нужна). */
-    public record WithdrawalProgress(int questsLeft, int daysLeft) {
+    public record WithdrawalProgress(int questsLeft, int daysLeft, int hoursLeft) {
         public boolean unlocked() { return questsLeft == 0 && daysLeft == 0; }
+
+        /** Срок ожидания для подсказки: меньше суток - точно в часах («5 ч.»), иначе в днях («2 дня»). Пусто, если ждать нечего. */
+        public String waitText() {
+            if (daysLeft == 0) return "";
+            if (hoursLeft < 24) return hoursLeft + " ч.";
+            return daysLeft + " " + daysWordRu(daysLeft);
+        }
     }
 
     public WithdrawalProgress withdrawalProgress(AppUser user) {
-        if (user.isWithdrawalFrozen()) return new WithdrawalProgress(0, 0);
+        if (user.isWithdrawalFrozen()) return new WithdrawalProgress(0, 0, 0);
         int questsLeft = Math.max(0, WITHDRAWAL_MIN_APPROVED_QUESTS - user.getCompletedQuests());
         int daysLeft = 0;
+        int hoursLeft = 0;
         if (user.getCreatedAt() != null) {
             java.time.LocalDateTime openAt = user.getCreatedAt().plusDays(WITHDRAWAL_MIN_ACCOUNT_AGE_DAYS);
             if (openAt.isAfter(LocalDateTime.now())) {
                 long minutes = java.time.Duration.between(LocalDateTime.now(), openAt).toMinutes();
                 daysLeft = (int) Math.max(1, (minutes + 24 * 60 - 1) / (24 * 60));
+                hoursLeft = (int) Math.max(1, (minutes + 59) / 60);
             }
         }
-        return new WithdrawalProgress(questsLeft, daysLeft);
+        return new WithdrawalProgress(questsLeft, daysLeft, hoursLeft);
     }
 
     public static String daysWordRu(int n) {

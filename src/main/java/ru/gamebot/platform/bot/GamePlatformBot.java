@@ -7016,12 +7016,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long min = ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC;
         if (!p.unlocked()) {
             if (p.questsLeft() == 0) {
-                return "\n\n🔓 Квесты уже выполнены, осталось подождать <b>" + p.daysLeft() + " "
-                        + ru.gamebot.platform.service.RewardService.daysWordRu(p.daysLeft()) + "</b>. Вывод откроется автоматически.";
+                return "\n\n🔓 Квесты уже выполнены, осталось подождать <b>" + p.waitText() + "</b>. Вывод откроется автоматически.";
             }
             String left = "ещё " + p.questsLeft() + " " + ru.gamebot.platform.service.RewardService.questsWordRu(p.questsLeft());
             if (p.daysLeft() > 0) {
-                left += " и " + p.daysLeft() + " " + ru.gamebot.platform.service.RewardService.daysWordRu(p.daysLeft()) + " в клубе";
+                left += " и " + p.waitText() + " в клубе";
             }
             return "\n\n🔓 <b>До вывода осталось:</b> " + left + ".\nУ тебя уже <b>" + fmtExc(coins) + " EXC</b>. Минимум для вывода "
                     + fmtExc(min) + " EXC.";

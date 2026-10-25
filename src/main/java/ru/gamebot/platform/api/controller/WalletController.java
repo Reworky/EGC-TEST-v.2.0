@@ -106,6 +106,7 @@ public class WalletController {
                 .streakAdRestoreAvailable(bonusAvailable && userService.canRestoreStreakByAd(user))
                 .withdrawalQuestsLeft(withdrawalProgress.questsLeft())
                 .withdrawalDaysLeft(withdrawalProgress.daysLeft())
+                .withdrawalHoursLeft(withdrawalProgress.hoursLeft())
                 .build());
     }
 

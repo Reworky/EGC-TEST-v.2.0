@@ -30,4 +30,6 @@ public class WalletDto {
     /** Сколько квестов и дней осталось до открытия вывода (0/0 - условия выполнены); мини-апп показывает это новичкам над балансом. */
     private int withdrawalQuestsLeft;
     private int withdrawalDaysLeft;
+    /** Часов до открытия вывода (округление вверх); мини-апп показывает часы вместо дней, когда осталось меньше суток. */
+    private int withdrawalHoursLeft;
 }
