@@ -66,9 +66,7 @@ public class ReferralController {
                 .nextFriendMilestone(nextFriendMilestone)
                 .friendProgressPercent(friendProgressPercent)
                 .goalOpen(userService.referralGoalOpen(user))
-                .goalPassReward(!userService.isEgcPassActive(user))
                 .goalFriendJoined(user.getInvitedFriends() > 0)
-                .goalPassDays(UserService.REFERRAL_GOAL_PASS_DAYS)
                 .build());
     }
 

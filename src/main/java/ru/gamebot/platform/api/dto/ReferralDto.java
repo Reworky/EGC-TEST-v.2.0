@@ -20,9 +20,6 @@ public class ReferralDto {
     private int friendProgressPercent;
     /** Цель «позови 1 друга» открыта: награда за первого друга, выполнившего первый квест, ещё не выдана. */
     private boolean goalOpen;
-    /** За цель положены бесплатные дни EGC Pass (у подписчика Pass их нет, ему только EXC). */
-    private boolean goalPassReward;
     /** Друг уже в клубе (invitedFriends > 0), ждём его 3 квеста и 3 дня. */
     private boolean goalFriendJoined;
-    private int goalPassDays;
 }

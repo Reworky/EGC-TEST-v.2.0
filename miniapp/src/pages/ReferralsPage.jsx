@@ -14,12 +14,6 @@ function formatCountdown(endsAtIso) {
   return `${h}:${m}:${s}`;
 }
 
-function daysWord(n) {
-  const m10 = n % 10, m100 = n % 100;
-  if (m100 >= 11 && m100 <= 19) return 'дней';
-  return m10 === 1 ? 'день' : (m10 >= 2 && m10 <= 4 ? 'дня' : 'дней');
-}
-
 function fallbackCopy(text, onDone) {
   const textarea = document.createElement('textarea');
   textarea.value = text;
@@ -122,9 +116,6 @@ export default function ReferralsPage() {
 
           <div className="ref-goal-row">
             <span className="ref-goal-who">Тебе</span>
-            {data.goalPassReward && (
-              <span className="ref-goal-chip ref-goal-chip-pass">🎁 {data.goalPassDays} {daysWord(data.goalPassDays)} EGC Pass</span>
-            )}
             <span className="ref-goal-chip ref-goal-chip-exc">+2 500 EXC</span>
           </div>
           {!data.goalFriendJoined && (
