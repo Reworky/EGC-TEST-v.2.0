@@ -1016,7 +1016,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Чистка ленты: на навигационных кнопках (меню, каталог магазина) после показа нового экрана удаляем экран, с которого нажали.
      *  Удаляются только экраны, которые сам бот показал в ответ на такие кнопки (см. navRecord): рассылки, уведомления, чеки и т.п. остаются. */
+    /** Чистка ленты и правка экранов на месте при навигации (коммиты 12b8041f ... b7bf32b4). ВЫКЛЮЧЕНО 25.10.2026 по решению владельца: кнопка
+     *  оставляет старое сообщение, новый экран приходит ниже, как раньше. Код сохранён: чтобы вернуть, поставить true. Каталог кейсов CS2 и меню CS2
+     *  листаются правкой на месте независимо от этого флага (handleCaseCallback). */
+    private static final boolean NAV_FEED_CLEANUP_ENABLED = false;
+
     private void handleCallback(CallbackQuery callbackQuery) {
+        if (!NAV_FEED_CLEANUP_ENABLED) {
+            handleCallbackInner(callbackQuery);
+            return;
+        }
         boolean nav = callbackQuery.getMessage() != null && isNavCleanupCallback(callbackQuery.getData());
         if (!nav && callbackQuery.getMessage() != null && isEditInPlaceActionCallback(callbackQuery.getData())) {
             // Кнопка-действие: результат показываем в том же сообщении, если оно наш экран такого же вида; ничего не удаляем
@@ -1120,6 +1129,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Команды /menu и /start показывают главное меню: запоминаем такой экран, чтобы первая же навигационная кнопка на нём тоже чистила ленту.
      *  Сами команды ничего не удаляют. */
     private void handleMessageTrackingMenu(Message message) {
+        if (!NAV_FEED_CLEANUP_ENABLED) {
+            handleMessage(message);
+            return;
+        }
         String text = message.getText();
         boolean menuCommand = text != null && message.getChatId() != null
                 && ("/menu".equals(text.trim()) || "/start".equals(text.trim()));
