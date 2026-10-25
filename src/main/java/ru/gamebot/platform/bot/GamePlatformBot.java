@@ -1025,6 +1025,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         Long chatId = callbackQuery.getMessage().getChatId();
         Integer sourceMessageId = callbackQuery.getMessage().getMessageId();
         NavCtx ctx = new NavCtx(chatId);
+        ctx.sourceMessageId = sourceMessageId;
+        ctx.sourcePhoto = callbackQuery.getMessage() instanceof Message sourceMsg && sourceMsg.hasPhoto();
         navCtx.set(ctx);
         try {
             handleCallbackInner(callbackQuery);
@@ -1032,8 +1034,72 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             navCtx.remove();
         }
         // Старый экран убираем, только если обработчик действительно показал новый (иначе игрок остался бы с пустым чатом)
-        if (ctx.sent > 0) {
+        if (ctx.sent > 0 && !ctx.sourceUsed) {
             navCleanup(chatId, sourceMessageId);
+        }
+    }
+
+    /** Правка на месте: если навигационная кнопка нажата на нашем экране, а первый показанный обработчиком экран такого же вида
+     *  (текст -> текст, картинка -> картинка), он переписывает то же сообщение: лента не засоряется, картинка не пропадает из кэша клиента.
+     *  Возвращает id сообщения-источника или null (нельзя: другой вид экрана, чужое сообщение, не первая отправка). */
+    private Integer takeEditableSource(Long chatId, boolean wantPhoto) {
+        NavCtx ctx = navCtx.get();
+        if (ctx == null || !ctx.chatId.equals(chatId) || ctx.sourceMessageId == null || ctx.firstSendDone) return null;
+        ctx.firstSendDone = true;
+        if (ctx.pendingPhoto != null) return null; // перед текстом уже отправлен баннер без кнопок - это экран «баннер + текст», на месте его не правим
+        if (ctx.sourcePhoto != wantPhoto) return null;
+        LinkedHashMap<Integer, Integer> screens = navScreens.get(chatId);
+        if (screens == null) return null;
+        Integer companion;
+        synchronized (screens) {
+            companion = screens.get(ctx.sourceMessageId);
+        }
+        if (companion == null || companion.intValue() != (wantPhoto ? NAV_KEEP_PHOTO : 0)) return null;
+        return ctx.sourceMessageId;
+    }
+
+    private void navEdited() {
+        NavCtx ctx = navCtx.get();
+        if (ctx != null) ctx.sourceUsed = true;
+    }
+
+    private boolean editTextMessage(Long chatId, Integer messageId, String text, InlineKeyboardMarkup keyboard, boolean disablePreview) {
+        try {
+            EditMessageText edit = new EditMessageText();
+            edit.setChatId(chatId.toString());
+            edit.setMessageId(messageId);
+            edit.setText(text);
+            edit.setParseMode("HTML");
+            edit.setReplyMarkup(keyboard);
+            edit.setDisableWebPagePreview(disablePreview);
+            execute(edit);
+            return true;
+        } catch (TelegramApiException e) {
+            if (e.getMessage() != null && e.getMessage().contains("message is not modified")) return true;
+            log.warn("Failed to edit text message {} in chat {}", messageId, chatId, e);
+            return false;
+        }
+    }
+
+    private boolean editPhotoByFileId(Long chatId, Integer messageId, String fileId, String caption, InlineKeyboardMarkup keyboard) {
+        if (messageId == null || caption.length() > 1000) return false;
+        try {
+            org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto media = new org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto();
+            media.setMedia(fileId);
+            media.setCaption(caption);
+            media.setParseMode("HTML");
+            org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageMedia edit =
+                    new org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageMedia();
+            edit.setChatId(chatId.toString());
+            edit.setMessageId(messageId);
+            edit.setMedia(media);
+            edit.setReplyMarkup(keyboard);
+            execute(edit);
+            return true;
+        } catch (TelegramApiException e) {
+            if (e.getMessage() != null && e.getMessage().contains("message is not modified")) return true;
+            log.warn("Failed to edit photo message {} in chat {}", messageId, chatId, e);
+            return false;
         }
     }
 
@@ -10564,6 +10630,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendResourceBanner(Long chatId, String resource, String text, InlineKeyboardMarkup keyboard) {
         boolean captionFits = text.length() <= 1000;
         String cached = resourceBannerFileIds.get(resource);
+        if (captionFits) {
+            Integer editId = takeEditableSource(chatId, true);
+            if (editId != null && editPhotoMessage(chatId, editId, resource, text, keyboard)) {
+                navEdited();
+                return;
+            }
+        }
         try {
             SendPhoto sendPhoto = new SendPhoto();
             sendPhoto.setChatId(chatId.toString());
@@ -10692,6 +10765,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         int sent;
         /** Картинка без кнопок, отправленная перед текстом экрана (баннер списка квестов): следующий текст берёт её в пару и удаляется вместе с ней. */
         Integer pendingPhoto;
+        /** Сообщение, на которое нажали кнопку (экран, который можно переписать на месте), и является ли оно картинкой. */
+        Integer sourceMessageId;
+        boolean sourcePhoto;
+        /** Первая отправка обработчика уже рассмотрена (правка на месте возможна только для неё). */
+        boolean firstSendDone;
+        /** Экран-источник переписан на месте: удалять его чисткой не нужно. */
+        boolean sourceUsed;
         NavCtx(Long chatId) { this.chatId = chatId; }
     }
 
@@ -26779,6 +26859,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** companionPhotoId - id картинки, отправленной прямо перед этим текстом (длинный текст под баннером): удаляются вместе. */
     private void sendTextTracked(Long chatId, String text, InlineKeyboardMarkup keyboard, boolean disablePreview, Integer companionPhotoId) {
         redirectAdminBackToGroup(chatId, keyboard);
+        if (companionPhotoId == null) {
+            Integer editId = takeEditableSource(chatId, false);
+            if (editId != null && editTextMessage(chatId, editId, text, keyboard, disablePreview)) {
+                navEdited();
+                return;
+            }
+        }
         SendMessage message = new SendMessage();
         message.setChatId(chatId.toString());
         message.setText(text);
@@ -26888,6 +26975,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendPhotoCaption(Long chatId, String photoFileId, String caption, InlineKeyboardMarkup keyboard) {
+        if (keyboard != null) {
+            Integer editId = takeEditableSource(chatId, true);
+            if (editId != null && editPhotoByFileId(chatId, editId, photoFileId, caption, keyboard)) {
+                navEdited();
+                return;
+            }
+        }
         try {
             SendPhoto message = new SendPhoto();
             message.setChatId(chatId.toString());
