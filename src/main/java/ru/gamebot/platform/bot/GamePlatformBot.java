@@ -10629,6 +10629,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         text.append("🪙 Стоимость: <b>").append(price).append(" EXC</b>")
                 .append(c.withKey() ? " (кейс + ключ)" : " (кейс без ключа)").append("\n");
+        if (!c.withKey()) text.append("🔑 Чтобы открыть кейс, ключ покупается отдельно в Steam.\n");
         if (n > 1) text.append("<i>").append(idx + 1).append(" из ").append(n).append("</i>");
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
