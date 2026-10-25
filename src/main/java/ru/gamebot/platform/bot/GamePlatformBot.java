@@ -10625,7 +10625,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!c.skins().isEmpty()) {
             text.append("<b>Что внутри (").append(c.skins().size()).append("):</b>\n");
             for (String skin : c.skins()) text.append("• ").append(escape(skin)).append("\n");
-            text.append("\n");
+            text.append("<i>Редкие предметы (ножи, перчатки) в список не входят.</i>\n\n");
         }
         text.append("🪙 Стоимость: <b>").append(price).append(" EXC</b>")
                 .append(c.withKey() ? " (кейс + ключ)" : " (кейс без ключа)").append("\n");
