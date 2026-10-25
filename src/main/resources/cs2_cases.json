@@ -1,17 +1,30 @@
 {
-  "_comment": "Каталог кейсов CS2 для магазина наград. costRub - ОРИЕНТИР закупки (кейс + ключ), перед открытием игрокам сверить с реальной закупкой. Цена в EXC считается как у игровой валюты: закупка x 1.18 x 100 x 1.2, вверх до сотен. Картинка кейса: src/main/resources/cases/<key>.jpg (нет файла - карточка без картинки). tags: popular, new.",
+  "_comment": "Каталог кейсов CS2 для магазина наград. costRub - закупка за кейс в рублях (число с точкой допустимо); withKey - идёт ли ключ в комплекте. Цена в EXC: закупка x 1.18 x 100 x 1.2, вверх до сотен. Картинка: src/main/resources/cases/<key>.jpg (нет файла - карточка без картинки). skins - состав кейса, строки как в игре.",
   "cases": [
-    { "key": "kilowatt", "name": "Kilowatt Case", "series": "Новые", "costRub": 300, "tags": ["new", "popular"], "blurb": "Свежий кейс с ножами-кастетами и нашумевшими скинами Kilowatt." },
-    { "key": "revolution", "name": "Revolution Case", "series": "Новые", "costRub": 300, "tags": ["popular"], "blurb": "Один из самых популярных кейсов последних лет: яркие скины и перчатки." },
-    { "key": "recoil", "name": "Recoil Case", "series": "Новые", "costRub": 300, "tags": ["popular"], "blurb": "Кейс с оружием в стиле уличного граффити и редкими ножами." },
-    { "key": "dreams_nightmares", "name": "Dreams & Nightmares Case", "series": "Новые", "costRub": 300, "tags": ["popular"], "blurb": "Мрачная эстетика и узнаваемые скины, любимый кейс коллекционеров." },
-    { "key": "fever", "name": "Fever Case", "series": "Новые", "costRub": 300, "tags": ["new"], "blurb": "Новинка с яркими скинами и ножами." },
-    { "key": "fracture", "name": "Fracture Case", "series": "Классика", "costRub": 300, "tags": [], "blurb": "Скины с эффектом трещин и ломаных линий." },
-    { "key": "snakebite", "name": "Snakebite Case", "series": "Классика", "costRub": 300, "tags": [], "blurb": "Кейс про змей: скины с яркой окраской." },
-    { "key": "prisma2", "name": "Prisma 2 Case", "series": "Классика", "costRub": 300, "tags": [], "blurb": "Радужные переливы и неоновые цвета." },
-    { "key": "clutch", "name": "Clutch Case", "series": "Классика", "costRub": 300, "tags": [], "blurb": "Кейс с перчатками и ножами для любителей клатчей." },
-    { "key": "gallery", "name": "Gallery Case", "series": "Классика", "costRub": 300, "tags": [], "blurb": "Скины в стиле художественной галереи." },
-    { "key": "danger_zone", "name": "Danger Zone Case", "series": "Классика", "costRub": 300, "tags": [], "blurb": "Скины из режима Danger Zone." },
-    { "key": "cs20", "name": "CS20 Case", "series": "Классика", "costRub": 300, "tags": [], "blurb": "Юбилейный кейс к 20-летию Counter-Strike." }
+    {
+      "key": "revolution",
+      "name": "Революция",
+      "costRub": 11.7,
+      "withKey": false,
+      "skins": [
+        "MAG-7 | Бессонница",
+        "MP9 | Пушинка",
+        "SCAR-20 | Фрагменты",
+        "P250 | Ре.конструкция",
+        "MP5-SD | Ликвидация",
+        "SG 553 | Киберсила",
+        "Tec-9 | Повстанец",
+        "M4A1-S | Эмфорозавр-S",
+        "Glock-18 | Кролик в тени",
+        "MAC-10 | Саккаку",
+        "Револьвер R8 | Банановая пушка",
+        "P90 | Неокоролева",
+        "AWP | Двойственность",
+        "UMP-45 | Дикое дитя",
+        "P2000 | Сорвиголова",
+        "M4A4 | Темукау",
+        "AK-47 | Выстрел в голову"
+      ]
+    }
   ]
 }

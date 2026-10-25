@@ -32,7 +32,8 @@ public class Cs2CaseSeeder implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
         for (Cs2CaseCatalog.CaseDef c : catalog.all()) {
-            String description = c.blurb() + " В комплекте кейс и ключ. Выдаём обменом в Steam на вашу ссылку обмена. Срок - до 24 ч.";
+            String description = c.displayName() + (c.withKey() ? " с ключом" : " (без ключа)") + ". Внутри " + c.skins().size()
+                    + " скинов: " + String.join(", ", c.skins()) + ". Выдаём обменом в Steam на вашу ссылку обмена. Срок - до 24 ч.";
             RewardItem item = rewardItemRepository.findByTitle(c.title()).orElseGet(RewardItem::new);
             boolean isNew = item.getId() == null;
             if (isNew) {
@@ -43,11 +44,21 @@ public class Cs2CaseSeeder implements CommandLineRunner {
             item.setCategory(Cs2CaseCatalog.CATEGORY);
             item.setPriceCoins(c.priceExc());
             item.setUserDataPrompt(TRADE_PROMPT);
-            item.setMinLevelXp(5_000);
+            // Дешёвые кейсы без XP-гейта, дорогие - как пополнение Steam (доступ под месячный лимит трат)
+            item.setMinLevelXp(c.priceExc() < 20_000 ? 0 : 5_000);
             item.setPurchaseGroup(Cs2CaseCatalog.GROUP);
             item.setActive(catalog.isEnabled());
             rewardItemRepository.save(item);
             if (isNew) log.info("[Cs2CaseSeeder] Created '{}': {} EXC, active={}", c.title(), c.priceExc(), catalog.isEnabled());
+        }
+        // Товары группы, которых больше нет в каталоге (старые заготовки), скрываем; не удаляем - история заявок остаётся
+        java.util.Set<String> titles = catalog.all().stream().map(Cs2CaseCatalog.CaseDef::title).collect(java.util.stream.Collectors.toSet());
+        for (RewardItem old : rewardItemRepository.findAll()) {
+            if (Cs2CaseCatalog.GROUP.equals(old.getPurchaseGroup()) && !titles.contains(old.getTitle()) && old.isActive()) {
+                old.setActive(false);
+                rewardItemRepository.save(old);
+                log.info("[Cs2CaseSeeder] Hidden '{}': no longer in catalog", old.getTitle());
+            }
         }
     }
 }
