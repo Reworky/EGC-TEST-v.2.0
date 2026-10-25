@@ -10691,6 +10691,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (data.startsWith("menu:")) {
             return !NAV_CLEANUP_MENU_EXCLUDED.contains(data.substring("menu:".length()));
         }
+        // Предметы клуба (экраны и справочные карточки), колесо, справка и выбор пакета/способа оплаты доната, «Мои обращения»,
+        // выбор способа вывода EXC. Покупки и платные кнопки sink:*, ввод данных, чеки и подтверждения сюда НЕ входят
+        if (data.startsWith("sink:cat:") || data.equals("sink:egc_pass") || data.equals("sink:egc_pass_all")
+                || data.equals("sink:myitems") || data.equals("sink:titles") || data.equals("sink:soon")
+                || data.equals("sink:boost_info") || data.equals("sink:xpboost_info") || data.equals("sink:excboost_info")
+                || data.equals("sink:slot_info") || data.equals("sink:cooldown_info") || data.equals("sink:insurance_info")
+                || data.equals("wheel:menu") || data.equals("wheel:spin")
+                || data.startsWith("gemfaq:") || data.startsWith("gemdonate:pkg:") || data.startsWith("gemdonate:method:")
+                || data.equals("support:list")
+                || data.equals("shop:withdraw:rub") || data.equals("shop:withdraw:ton")
+                || data.equals("shop:withdraw:ton:has_wallet") || data.equals("shop:withdraw:ton:no_wallet")) {
+            return true;
+        }
         // Профиль, рейтинг, клуб, отряды, турниры: только просмотры и обновления экранов; ввод данных (ник, теги, возраст, флаг, поиск),
         // выход/роспуск/исключение, приглашения и заявки - действия или ввод с состоянием, их экраны не трогаем
         if (data.startsWith("rate:") || data.startsWith("myexc:") || data.startsWith("weekly:")
