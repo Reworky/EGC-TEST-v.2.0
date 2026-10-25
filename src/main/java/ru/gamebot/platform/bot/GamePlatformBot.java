@@ -10620,7 +10620,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", "menu:shop"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")));
-        sendText(user.getTelegramId(), "🎁 <b>CS2</b>\n\nВыберите раздел:", keyboardFactory.rowsLayout(rows));
+        sendResourceBanner(user.getTelegramId(), "cs2_banner.jpg", "🎁 <b>CS2</b>\n\nВыберите раздел:", keyboardFactory.rowsLayout(rows));
     }
 
     private void deleteMessageQuietly(Long chatId, Integer messageId) {
