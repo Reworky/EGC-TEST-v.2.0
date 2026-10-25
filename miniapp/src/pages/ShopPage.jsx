@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { getWallet, getShopItems, getShopStats, purchaseItem, getMyRewards, getProfile, getPerksState, purchasePerk, sendGiftBoost, sendExcTransfer, cancelReward, equipFrame, getStarsInvoiceLink, getStarsPrices } from '../api/client';
+import { Fragment, useEffect, useState } from 'react';
+import { getCs2Cases, getWallet, getShopItems, getShopStats, purchaseItem, getMyRewards, getProfile, getPerksState, purchasePerk, sendGiftBoost, sendExcTransfer, cancelReward, equipFrame, getStarsInvoiceLink, getStarsPrices } from '../api/client';
 import { openStarsInvoice } from '../utils/stars';
 import BackButton from '../components/BackButton';
 import AdBanner from '../components/AdBanner';
@@ -147,6 +147,59 @@ function ShopItemCard({ item, expanded, onToggle, onPurchased, ownedFrames, acti
   );
 }
 
+// ── Каталог кейсов CS2: плитки с картинками, по нажатию - состав и цена. Виден всем; купить можно только когда обмен включён (itemId != null) ──
+function Cs2CasesSection({ shopItems, onPurchased }) {
+  const [cases, setCases] = useState(null);
+  const [selected, setSelected] = useState(null);
+
+  useEffect(() => { getCs2Cases().then(setCases).catch(() => setCases([])); }, []);
+
+  if (!cases || cases.length === 0) return null;
+  const imageSrc = c => `${import.meta.env.BASE_URL}cases/${c.key}.jpg`;
+  const shopItem = selected && selected.itemId ? shopItems.find(i => i.id === selected.itemId) : null;
+
+  return (
+    <div className="category-section">
+      <div className="category-header">CS2 · Кейсы</div>
+      <div className="cs2-grid">
+        {cases.map(c => (
+          <button key={c.key} type="button" className="cs2-tile" onClick={() => setSelected(c)}>
+            <img className="cs2-tile-img" src={imageSrc(c)} alt={c.name} loading="lazy" />
+            <div className="cs2-tile-name">{c.name}</div>
+            <div className="cs2-tile-price">{c.priceExc.toLocaleString()} EXC</div>
+          </button>
+        ))}
+      </div>
+
+      {selected && (
+        <div className="fund-modal-overlay" onClick={() => setSelected(null)}>
+          <div className="fund-modal cs2-modal" onClick={e => e.stopPropagation()}>
+            <img className="cs2-modal-img" src={imageSrc(selected)} alt={selected.name} />
+            <div className="fund-modal-title">Кейс «{selected.name}»</div>
+            {selected.skins.length > 0 && (
+              <>
+                <p className="fund-modal-text" style={{ marginBottom: 6 }}><b>Что внутри ({selected.skins.length}):</b></p>
+                <ul className="cs2-skins">
+                  {selected.skins.map(s => <li key={s}>{s}</li>)}
+                </ul>
+                <p className="fund-modal-text" style={{ opacity: 0.6, fontSize: 12 }}>Редкие предметы (ножи, перчатки) в список не входят.</p>
+              </>
+            )}
+            <p className="fund-modal-text">
+              <b>{selected.priceExc.toLocaleString()} EXC</b> · {selected.withKey ? 'кейс + ключ' : 'кейс без ключа'}
+              {!selected.withKey && <><br />🔑 Чтобы открыть кейс, ключ покупается отдельно в Steam.</>}
+            </p>
+            {shopItem
+              ? <ShopItemCard item={shopItem} expanded onToggle={() => {}} onPurchased={() => { setSelected(null); onPurchased(); }} />
+              : <button className="quest-btn" disabled style={{ width: '100%', opacity: 0.6 }}>🔒 Обмен скоро откроется</button>}
+            <button className="fund-modal-close" onClick={() => setSelected(null)}>Закрыть</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ShopItemsView({ expanded, onToggle }) {
   const [items, setItems] = useState(null);
   const [stats, setStats] = useState(null);
@@ -176,7 +229,7 @@ function ShopItemsView({ expanded, onToggle }) {
   }
 
   // Кастомизация (рамки аватара) объединена с титулами в разделе «Предметы» — здесь не дублируем.
-  const groupedRaw = items.filter(item => item.category !== 'Кастомизация').reduce((acc, item) => {
+  const groupedRaw = items.filter(item => item.category !== 'Кастомизация' && item.category !== 'CS2 кейсы').reduce((acc, item) => {
     const cat = item.category || 'Другое';
     (acc[cat] = acc[cat] || []).push(item);
     return acc;
@@ -230,7 +283,8 @@ function ShopItemsView({ expanded, onToggle }) {
       </div>
 
       {Object.entries(grouped).map(([cat, list]) => (
-        <div key={cat} className="category-section">
+        <Fragment key={cat}>
+        <div className="category-section">
           <div className="category-header">{cat}</div>
           {DONATE_GAMES[cat] && (
             <button className="quest-btn" style={{ marginBottom: 12 }} onClick={() => setDonateGame(DONATE_GAMES[cat])}>
@@ -247,7 +301,10 @@ function ShopItemsView({ expanded, onToggle }) {
             />
           ))}
         </div>
+        {cat === 'CS2' && <Cs2CasesSection shopItems={items} onPurchased={reload} />}
+        </Fragment>
       ))}
+      {!grouped.CS2 && <Cs2CasesSection shopItems={items} onPurchased={reload} />}
     </>
   );
 }

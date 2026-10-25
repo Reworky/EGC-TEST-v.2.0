@@ -12,7 +12,7 @@ import './ReferralsPage.css';
 export default function EgcPassPage() {
   const [profile, setProfile] = useState(null);
   const [legacyPass, setLegacyPass] = useState(null);
-  const [price, setPrice] = useState(150);
+  const [price, setPrice] = useState(65);
   const [error, setError] = useState(null);
 
   function reload() {

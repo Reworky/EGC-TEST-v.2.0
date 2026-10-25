@@ -279,3 +279,67 @@
 .shop-date {
   font-size: 11px;
 }
+
+/* ── Каталог кейсов CS2 ── */
+.cs2-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.cs2-tile {
+  background: rgba(255,255,255,0.04);
+  border: 0.5px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  padding: 8px;
+  color: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cs2-tile-img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 10px;
+  background: #121220;
+  display: block;
+}
+
+.cs2-tile-name {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 8px 2px 2px;
+}
+
+.cs2-tile-price {
+  font-size: 12px;
+  font-weight: 700;
+  color: #F5A623;
+  margin: 0 2px 2px;
+}
+
+.cs2-modal {
+  max-width: 360px;
+  max-height: 86vh;
+  overflow-y: auto;
+}
+
+.cs2-modal-img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.cs2-skins {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: rgba(255,255,255,0.75);
+}

@@ -144,6 +144,11 @@ export async function getShopItems() {
   return cached('shopItems', async () => { const { data } = await api.get('/api/shop/items'); return data; });
 }
 
+// Каталог кейсов CS2 (виден всем; itemId = null, пока обмен выключен)
+export async function getCs2Cases() {
+  return cached('cs2Cases', async () => { const { data } = await api.get('/api/shop/cs2-cases'); return data; });
+}
+
 export async function getStarsWithdrawItems() {
   return cached('starsWithdrawItems', async () => { const { data } = await api.get('/api/shop/withdraw/stars'); return data; });
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getProfile, getWallet, getAvatarUrl, equipFrame, invalidateCache } from '../api/client';
+import { getProfile, getWallet, getAvatarUrl, equipFrame, getStarsPrices, invalidateCache } from '../api/client';
 import { RANKS_DATA } from '../data/ranks';
 import AnimatedNumber from '../components/AnimatedNumber';
 import fireFrame from '../assets/frames/fire.png';
@@ -327,6 +327,7 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [error, setError] = useState(null);
   const [showRanks, setShowRanks] = useState(false);
+  const [passPrice, setPassPrice] = useState(null);
 
   useEffect(() => {
     Promise.all([
@@ -336,6 +337,10 @@ export default function ProfilePage() {
       setProfile(p);
       setWallet(w);
     }).catch(() => setError('Профиль не найден. Зарегистрируйтесь через бота.'));
+  }, []);
+
+  useEffect(() => {
+    getStarsPrices().then(p => { if (p?.EGC_PASS) setPassPrice(p.EGC_PASS); }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -538,7 +543,7 @@ export default function ProfilePage() {
           </div>
           {profile.hasEgcPass
             ? <span className="p-badge-active">Активен</span>
-            : <span className="p-badge-buy">150 ⭐</span>}
+            : <span className="p-badge-buy">{passPrice ? `${passPrice} ⭐` : 'Оформить'}</span>}
         </Link>
 
         {/* Wallet */}

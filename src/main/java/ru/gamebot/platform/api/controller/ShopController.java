@@ -20,6 +20,7 @@ import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.RewardItem;
 import ru.gamebot.platform.domain.model.RewardRequest;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
+import ru.gamebot.platform.service.Cs2CaseCatalog;
 import ru.gamebot.platform.service.HealthRatioService;
 import ru.gamebot.platform.service.RewardService;
 import ru.gamebot.platform.service.ShopLimitService;
@@ -34,11 +35,26 @@ public class ShopController {
     private final ShopLimitService shopLimitService;
     private final AppUserRepository appUserRepository;
     private final GamePlatformBot gamePlatformBot;
+    private final Cs2CaseCatalog cs2CaseCatalog;
 
     @GetMapping("/items")
     public List<RewardItemDto> items(@AuthenticationPrincipal Long telegramId) {
         AppUser user = telegramId != null ? appUserRepository.findByTelegramId(telegramId).orElse(null) : null;
         return rewardService.findAvailableRewards().stream().map(item -> toDto(item, user)).toList();
+    }
+
+    /** Кейс CS2 для каталога мини-аппа. itemId = null, пока обмен выключен (товар неактивен): кейс виден, но купить его нельзя. */
+    public record Cs2CaseDto(String key, String name, long priceExc, boolean withKey, List<String> skins, Long itemId) {}
+
+    /** Каталог кейсов CS2: виден всем всегда (карточки, составы, цены), покупка возможна только когда товар активен (CS2_CASES_ENABLED). */
+    @GetMapping("/cs2-cases")
+    public List<Cs2CaseDto> cs2Cases() {
+        List<RewardItem> active = rewardService.findByPurchaseGroup(Cs2CaseCatalog.GROUP);
+        return cs2CaseCatalog.all().stream().map(c -> {
+            RewardItem item = active.stream().filter(r -> r.getTitle().equals(c.title())).findFirst().orElse(null);
+            long price = item != null ? rewardService.effectivePrice(item) : c.priceExc();
+            return new Cs2CaseDto(c.key(), c.name(), price, c.withKey(), c.skins(), item != null ? item.getId() : null);
+        }).toList();
     }
 
     /** Вывод в Telegram Stars — сознательно НЕ в findAvailableRewards()/общем каталоге (см. RewardService),
