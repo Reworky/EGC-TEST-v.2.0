@@ -11,4 +11,4 @@ SELECT telegram_id,
        blocked,
        coins
 FROM app_users
-WHERE LOWER(telegram_username) LIKE '%birthday13%';
+WHERE LOWER(telegram_username) LIKE '%beyondbirthday%';
