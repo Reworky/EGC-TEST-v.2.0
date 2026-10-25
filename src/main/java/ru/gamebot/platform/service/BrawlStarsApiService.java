@@ -22,7 +22,8 @@ import org.springframework.stereotype.Service;
 public class BrawlStarsApiService {
 
     private static final String PLAYER_URL = "https://api.brawlstars.com/v1/players/%s";
-    private static final int MAX_ATTEMPTS = 3;
+    // 25.10.2026: было 3 попытки по 15 с (~45 с ожидания): при сбое Supercell кнопка «протухала» (query is too old). Теперь 2 по 8 с (~17 с)
+    private static final int MAX_ATTEMPTS = 2;
     private static final long BASE_BACKOFF_MS = 500;
     /** Без явного таймаута HttpClient.newHttpClient() может зависнуть на TCP-уровне на неопределённое
      *  время (нет ни connect-, ни request-таймаута по умолчанию) — а checkInProgressSubmissions идёт
@@ -35,7 +36,7 @@ public class BrawlStarsApiService {
      *  что зависшая попытка сама себя оборвёт (IOException -> уже обрабатывается retry/catch ниже),
      *  а батч продолжит идти дальше. */
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
-    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(8);
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;

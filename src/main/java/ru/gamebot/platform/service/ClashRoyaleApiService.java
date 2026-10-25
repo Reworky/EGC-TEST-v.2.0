@@ -24,13 +24,14 @@ import org.springframework.stereotype.Service;
 public class ClashRoyaleApiService {
 
     private static final String PLAYER_URL = "https://api.clashroyale.com/v1/players/%s";
-    private static final int MAX_ATTEMPTS = 3;
+    // 25.10.2026: было 3 попытки по 15 с (~45 с ожидания): при сбое Supercell кнопка «протухала» (query is too old). Теперь 2 по 8 с (~17 с)
+    private static final int MAX_ATTEMPTS = 2;
     private static final long BASE_BACKOFF_MS = 500;
     /** Тот же фикс, см. BrawlStarsApiService/ClashOfClansApiService (коммиты 9950579, 7d060ad) —
      *  HttpClient.newHttpClient() без таймаута может зависнуть на TCP-уровне навсегда и заблокировать
      *  весь последовательный батч ClashRoyaleQuestVerificationService.checkInProgressSubmissions. */
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
-    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(8);
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;

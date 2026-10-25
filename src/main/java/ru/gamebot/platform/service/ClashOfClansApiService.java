@@ -24,7 +24,8 @@ import org.springframework.stereotype.Service;
 public class ClashOfClansApiService {
 
     private static final String PLAYER_URL = "https://api.clashofclans.com/v1/players/%s";
-    private static final int MAX_ATTEMPTS = 3;
+    // 25.10.2026: было 3 попытки по 15 с (~45 с ожидания): при сбое Supercell кнопка «протухала» (query is too old). Теперь 2 по 8 с (~17 с)
+    private static final int MAX_ATTEMPTS = 2;
     private static final long BASE_BACKOFF_MS = 500;
     /** См. тот же фикс и его обоснование в BrawlStarsApiService (коммит 9950579) — без явного таймаута
      *  HttpClient.newHttpClient() может зависнуть на TCP-уровне навсегда, а ClashQuestVerificationService.
@@ -33,7 +34,7 @@ public class ClashOfClansApiService {
      *  13 ожидающих заявок на квест "Выиграй 3 атаки в мультиплеере" (разные игроки) clash_progress_count
      *  оставался 0 без единой ошибки в логе за сутки — тот же класс симптомов, что был у Brawl. */
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
-    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(8);
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
