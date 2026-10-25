@@ -10691,6 +10691,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (data.startsWith("menu:")) {
             return !NAV_CLEANUP_MENU_EXCLUDED.contains(data.substring("menu:".length()));
         }
+        // Профиль, рейтинг, клуб, отряды, турниры: только просмотры и обновления экранов; ввод данных (ник, теги, возраст, флаг, поиск),
+        // выход/роспуск/исключение, приглашения и заявки - действия или ввод с состоянием, их экраны не трогаем
+        if (data.startsWith("rate:") || data.startsWith("myexc:") || data.startsWith("weekly:")
+                || data.equals("profile:balance") || data.equals("profile:edit") || data.equals("profile:ranks")
+                || data.equals("profile:edit_platforms") || data.equals("profile:edit_genres")
+                || data.equals("club:code") || data.equals("club:goal") || data.startsWith("club:quest:") || data.startsWith("club:claim:")
+                || data.equals("squad:leaderboard") || data.equals("squad:leaderboard_overall") || data.equals("squad:reqs")
+                || data.equals("squad:kick_list") || data.equals("squad:recruit_toggle") || data.equals("squad:leave_confirm")
+                || data.equals("squad:disband_confirm") || data.startsWith("squad:catalog:") || data.startsWith("squad:view:")
+                || data.startsWith("tournament:view:") || data.startsWith("tournament:rules:") || data.startsWith("tournament:leaderboard:")
+                || data.startsWith("poll:view:")) {
+            return true;
+        }
         // Квесты: только просмотр (взять/отменить/отчёт/проверка подписки - действия, их экраны не трогаем)
         if (data.startsWith("quests:section:") || data.startsWith("quests:game:") || data.startsWith("quests:list:")
                 || data.startsWith("quests:cat:") || data.startsWith("quest:card:") || data.startsWith("quest:view:")
