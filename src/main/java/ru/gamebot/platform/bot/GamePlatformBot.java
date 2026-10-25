@@ -10585,7 +10585,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 resourceBannerFileIds.put(resource, sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId());
             }
             if (captionFits) {
-                navRecord(chatId, sent.getMessageId(), null);
+                navRecord(chatId, sent.getMessageId(), NAV_KEEP_PHOTO);
             } else {
                 sendTextTracked(chatId, text, keyboard, false, sent.getMessageId());
             }
@@ -10621,12 +10621,53 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 index = 0;
             }
         }
-        deleteMessageQuietly(user.getTelegramId(), messageId);
-        sendCaseCard(user, index);
+        boolean sourcePhoto = callbackQuery.getMessage() != null && callbackQuery.getMessage().hasPhoto();
+        if ("menu".equals(parts[0])) {
+            sendCs2Menu(user, messageId, sourcePhoto);
+        } else {
+            sendCaseCard(user, index, messageId, sourcePhoto);
+        }
+    }
+
+    /** Правка сообщения-картинки на месте: меняет картинку, подпись и кнопки в том же сообщении. Старое сообщение не удаляется и не
+     *  пересоздаётся, поэтому лента не засоряется и уже загруженные картинки остаются в кэше клиента. false - не получилось (отправим заново). */
+    private boolean editPhotoMessage(Long chatId, Integer messageId, String resource, String caption, InlineKeyboardMarkup keyboard) {
+        if (messageId == null || caption.length() > 1000) return false;
+        String cached = resourceBannerFileIds.get(resource);
+        try (java.io.InputStream stream = cached == null ? getClass().getResourceAsStream("/" + resource) : null) {
+            if (cached == null && stream == null) return false;
+            org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto media = new org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto();
+            if (cached != null) media.setMedia(cached); else media.setMedia(stream, resource);
+            media.setCaption(caption);
+            media.setParseMode("HTML");
+            org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageMedia edit =
+                    new org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageMedia();
+            edit.setChatId(chatId.toString());
+            edit.setMessageId(messageId);
+            edit.setMedia(media);
+            edit.setReplyMarkup(keyboard);
+            Object result = execute(edit);
+            if (cached == null && result instanceof Message edited && edited.getPhoto() != null && !edited.getPhoto().isEmpty()) {
+                resourceBannerFileIds.put(resource, edited.getPhoto().get(edited.getPhoto().size() - 1).getFileId());
+            }
+            return true;
+        } catch (TelegramApiException e) {
+            if (e.getMessage() != null && e.getMessage().contains("message is not modified")) return true;
+            log.warn("Failed to edit photo message {} in chat {}", messageId, chatId, e);
+            return false;
+        } catch (java.io.IOException e) {
+            log.warn("Failed to read banner {}", resource, e);
+            return false;
+        }
     }
 
     /** Единая точка входа CS2 в магазине: выбор между пополнением Steam и кейсами. */
     private void sendCs2Menu(AppUser user) {
+        sendCs2Menu(user, null, false);
+    }
+
+    /** sourceMessageId/sourcePhoto - сообщение, из которого пришли (карточка кейса): если это картинка, меню правится в нём на месте. */
+    private void sendCs2Menu(AppUser user, Integer sourceMessageId, boolean sourcePhoto) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (!rewardService.findByPurchaseGroup("steam_topup").isEmpty()) {
             rows.add(List.of(keyboardFactory.callback("💳 Пополнение Steam", "shop:group:steam_topup")));
@@ -10637,7 +10678,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", "menu:shop"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")));
-        sendResourceBanner(user.getTelegramId(), "cs2_banner.jpg", "🎁 <b>CS2</b>\n\nВыберите раздел:", keyboardFactory.rowsLayout(rows));
+        String text = "🎁 <b>CS2</b>\n\nВыберите раздел:";
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
+        if (sourcePhoto && editPhotoMessage(user.getTelegramId(), sourceMessageId, "cs2_banner.jpg", text, keyboard)) {
+            return;
+        }
+        deleteMessageQuietly(user.getTelegramId(), sourceMessageId);
+        sendResourceBanner(user.getTelegramId(), "cs2_banner.jpg", text, keyboard);
     }
 
     private static final class NavCtx {
@@ -10705,6 +10752,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 || data.equals("shop:withdraw") || data.equals("shop:withdraw:feed");
     }
 
+    /** Метка в navScreens: экран с картинкой. Такие сообщения чистка ленты НЕ удаляет: после удаления клиент Telegram сбрасывает кэш картинки,
+     *  и при возврате в раздел её приходилось загружать заново (25.10.2026). */
+    private static final int NAV_KEEP_PHOTO = -1;
+
     private void navRecord(Long chatId, Integer messageId, Integer companionId) {
         NavCtx ctx = navCtx.get();
         if (ctx == null || messageId == null || !ctx.chatId.equals(chatId)) return;
@@ -10731,8 +10782,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             companion = screens.remove(messageId);
         }
         if (companion == null) return; // не наш экран (рассылка, уведомление, первый экран после /start) - оставляем
+        if (companion != 0) return; // экран с картинкой (сама картинка или текст под баннером) - не удаляем, чтобы картинка не терялась из кэша
         deleteMessageQuietly(chatId, messageId);
-        if (companion > 0) deleteMessageQuietly(chatId, companion);
     }
 
     private void deleteMessageQuietly(Long chatId, Integer messageId) {
@@ -10744,9 +10795,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    private void sendCaseCard(AppUser user, int index) {
+    private void sendCaseCard(AppUser user, int index, Integer sourceMessageId, boolean sourcePhoto) {
         List<ru.gamebot.platform.service.Cs2CaseCatalog.CaseDef> list = cs2CaseCatalog.all();
         if (list.isEmpty()) {
+            deleteMessageQuietly(user.getTelegramId(), sourceMessageId);
             sendShop(user);
             return;
         }
@@ -10786,11 +10838,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? keyboardFactory.callback("🛒 Обменять", "shop:buy:" + item.getId())
                 : keyboardFactory.callback("🔒 Обмен скоро откроется", "noop")));
         rows.add(List.of(
-                keyboardFactory.callback("⬅️ Назад", "shop:cs2"),
+                keyboardFactory.callback("⬅️ Назад", "case:menu"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")));
 
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
-        if (getClass().getResource("/" + c.imageResource()) != null) {
+        boolean hasImage = getClass().getResource("/" + c.imageResource()) != null;
+        // Листаем на месте: картинка и подпись меняются в том же сообщении (если источник - сообщение-картинка)
+        if (hasImage && sourcePhoto && editPhotoMessage(user.getTelegramId(), sourceMessageId, c.imageResource(), text.toString(), keyboard)) {
+            return;
+        }
+        deleteMessageQuietly(user.getTelegramId(), sourceMessageId);
+        if (hasImage) {
             sendResourceBanner(user.getTelegramId(), c.imageResource(), text.toString(), keyboard);
         } else {
             sendText(user.getTelegramId(), text.toString(), keyboard);
@@ -26842,7 +26900,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (keyboard == null && navContext != null && navContext.chatId.equals(chatId) && sentPhoto != null) {
                 navContext.pendingPhoto = sentPhoto.getMessageId(); // баннер без кнопок: удалим вместе со следующим текстом экрана
             } else {
-                navRecord(chatId, sentPhoto == null ? null : sentPhoto.getMessageId(), null);
+                navRecord(chatId, sentPhoto == null ? null : sentPhoto.getMessageId(), NAV_KEEP_PHOTO);
             }
         } catch (TelegramApiException exception) {
             log.warn("Failed to send photo message to {}", chatId, exception);
