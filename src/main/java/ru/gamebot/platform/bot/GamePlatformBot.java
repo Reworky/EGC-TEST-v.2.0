@@ -1018,6 +1018,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  Удаляются только экраны, которые сам бот показал в ответ на такие кнопки (см. navRecord): рассылки, уведомления, чеки и т.п. остаются. */
     private void handleCallback(CallbackQuery callbackQuery) {
         boolean nav = callbackQuery.getMessage() != null && isNavCleanupCallback(callbackQuery.getData());
+        if (!nav && callbackQuery.getMessage() != null && isEditInPlaceActionCallback(callbackQuery.getData())) {
+            // Кнопка-действие: результат показываем в том же сообщении, если оно наш экран такого же вида; ничего не удаляем
+            NavCtx actionCtx = new NavCtx(callbackQuery.getMessage().getChatId());
+            actionCtx.editOnly = true;
+            actionCtx.sourceMessageId = callbackQuery.getMessage().getMessageId();
+            actionCtx.sourcePhoto = callbackQuery.getMessage() instanceof Message actionMsg && actionMsg.hasPhoto();
+            navCtx.set(actionCtx);
+            try {
+                handleCallbackInner(callbackQuery);
+            } finally {
+                navCtx.remove();
+            }
+            return;
+        }
         if (!nav) {
             handleCallbackInner(callbackQuery);
             return;
@@ -10772,6 +10786,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean firstSendDone;
         /** Экран-источник переписан на месте: удалять его чисткой не нужно. */
         boolean sourceUsed;
+        /** Кнопка-действие (взять квест, отменить заявку и т.п.): экран переписывается на месте, но результат не попадает в чистку ленты. */
+        boolean editOnly;
         NavCtx(Long chatId) { this.chatId = chatId; }
     }
 
@@ -10786,6 +10802,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Меню-кнопки, где экран правится на месте, приходит счёт/файл/анимация или это админские экраны: старое сообщение не трогаем. */
     private static final java.util.Set<String> NAV_CLEANUP_MENU_EXCLUDED = java.util.Set.of(
             "daily", "dtasks", "chestopen", "chestgo", "chestreroll", "watchad", "faqfile", "admin", "moderation");
+
+    /** Кнопки-действия, результат которых безопасно показать правкой того же сообщения (первый экран обработчика). Платежи и счета,
+     *  файлы, анимации, админские и модераторские экраны, ввод данных сюда НЕ входят. */
+    private static boolean isEditInPlaceActionCallback(String data) {
+        if (data == null) return false;
+        return data.startsWith("quest:take:") || data.startsWith("quest:takepartner:") || data.startsWith("myquest:cancel:")
+                || data.startsWith("reward:cancel:") || data.startsWith("poll:vote:") || data.startsWith("tournament:join:")
+                || data.startsWith("social:check:") || data.startsWith("qchan:check:") || data.startsWith("refnudge:")
+                || data.startsWith("shop:buy:") || data.startsWith("gemcancel:");
+    }
 
     private static boolean isNavCleanupCallback(String data) {
         if (data == null) return false;
@@ -10839,6 +10865,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void navRecord(Long chatId, Integer messageId, Integer companionId) {
         NavCtx ctx = navCtx.get();
         if (ctx == null || messageId == null || !ctx.chatId.equals(chatId)) return;
+        if (ctx.editOnly) return; // кнопки-действия: новые сообщения в чистку не попадают (чеки, подтверждения остаются в ленте)
         if (companionId == null && ctx.pendingPhoto != null) {
             companionId = ctx.pendingPhoto;
         }
