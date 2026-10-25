@@ -1,6 +1,6 @@
 -- Почему у игрока не открыт вывод: дата регистрации, квесты, заморозка. Только чтение.
 -- Запуск: cd /root/gamebot && git pull && bash scripts/run-sql.sh scripts/check-user-withdrawal-gate.sql
--- Ник игрока (его часть, без @) поменяйте в LIKE '%...%' ниже. Сервер в UTC, Москва = +3 ч.
+-- Ищем по Telegram ID (по части ника цепляются похожие аккаунты, например beyondbirthdayBB1 и beyondbirthdaybb): поменяйте число ниже. Сервер в UTC, Москва = +3 ч.
 SELECT telegram_id,
        telegram_username,
        created_at                                    AS registered_utc,
@@ -11,4 +11,4 @@ SELECT telegram_id,
        blocked,
        coins
 FROM app_users
-WHERE LOWER(telegram_username) LIKE '%beyondbirthday%';
+WHERE telegram_id = 8752874130;
