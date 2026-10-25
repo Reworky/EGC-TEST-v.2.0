@@ -1446,6 +1446,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if (data.equals("shop:cs2")) {
+            sendCs2Menu(user);
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if (data.startsWith("case:")) {
             handleCaseCallback(callbackQuery, user, data.substring("case:".length()));
             return;
@@ -8712,6 +8717,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        boolean cs2EntryAdded = false;
 
         if (!rewards.isEmpty()) {
             java.util.LinkedHashMap<String, List<RewardItem>> byCategory = new java.util.LinkedHashMap<>();
@@ -8723,7 +8729,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // findAvailableRewards() по priceCoins) — непредсказуемо для пользователя. Brawl
             // Stars/Clash Royale/Clash of Clans (донат-игры) закреплены наверху списка в этом порядке
             // (запрошено 2026-09-20), остальные категории идут следом в прежнем порядке.
-            List<String> priorityCategories = List.of("Brawl Stars", "Clash Royale", "Clash of Clans", "CS2");
+            List<String> priorityCategories = List.of("Brawl Stars", "Clash Royale", "Clash of Clans", "CS2", ru.gamebot.platform.service.Cs2CaseCatalog.CATEGORY);
             java.util.LinkedHashMap<String, List<RewardItem>> orderedByCategory = new java.util.LinkedHashMap<>();
             for (String cat : priorityCategories) {
                 List<RewardItem> items = byCategory.remove(cat);
@@ -8732,6 +8738,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             orderedByCategory.putAll(byCategory);
             byCategory = orderedByCategory;
             for (Map.Entry<String, List<RewardItem>> entry : byCategory.entrySet()) {
+                // CS2: одна общая точка входа (пополнение Steam и кейсы) - разделы выбираются уже внутри (sendCs2Menu)
+                if ("CS2".equals(entry.getKey()) || ru.gamebot.platform.service.Cs2CaseCatalog.CATEGORY.equals(entry.getKey())) {
+                    if (!cs2EntryAdded) {
+                        rows.add(List.of(keyboardFactory.callback("🎁 CS2 — выбор раздела", "shop:cs2")));
+                        cs2EntryAdded = true;
+                    }
+                    continue;
+                }
                 // Кастомизация (рамка аватара, титулы) перенесена в ⚙️ Предметы клуба (2026-09-15) —
                 // здесь остаётся только игровая валюта, см. addCustomizationSection/sendSinkShop.
                 if ("Кастомизация".equals(entry.getKey())) continue;
@@ -8749,9 +8763,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
                 for (Map.Entry<String, List<RewardItem>> groupEntry : byGroup.entrySet()) {
                     List<RewardItem> groupItems = groupEntry.getValue();
-                    if (ru.gamebot.platform.service.Cs2CaseCatalog.GROUP.equals(groupEntry.getKey())) {
-                        rows.add(List.of(keyboardFactory.callback("📦 CS2 кейсы (" + groupItems.size() + ")", "case:home")));
-                    } else if (groupItems.size() > 1) {
+                    if (groupItems.size() > 1) {
                         // Show as single entry leading to denomination picker — если в категории
                         // (игре) всего одна группа валюты, на верхнем уровне показываем просто
                         // название игры (entry.getKey(), = category), а название валюты/номинал —
@@ -8791,8 +8803,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         }
 
-        if (!cs2CaseCatalog.isEnabled() && adminService.isAdmin(user.getTelegramId())) {
-            rows.add(List.of(keyboardFactory.callback("📦 CS2 кейсы (превью админа)", "case:home")));
+        // Кейсы CS2 видны всем даже при выключенном обмене (items неактивны) - вход в них через единый раздел CS2
+        if (!cs2EntryAdded && !cs2CaseCatalog.all().isEmpty()) {
+            rows.add(List.of(keyboardFactory.callback("🎁 CS2 — выбор раздела", "shop:cs2")));
         }
         rows.add(List.of(keyboardFactory.callback("📋 Мои заявки", "menu:my-rewards")));
         rows.add(List.of(
@@ -10425,7 +10438,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("💰 Купить за Telegram Stars/GRAM", "shop:donate:" + purchaseGroup)));
             // "Назад" ведёт в выбор ТИПА товара (Гемы/Пропуски), если он есть у этой игры — иначе сразу
             // в общий Магазин наград (см. sendGameCategoryPicker/hasMultipleDonationProductTypes).
-            String backTarget = hasMultipleDonationProductTypes(purchaseGroup) ? "shop:gamecat:" + purchaseGroup : "menu:shop";
+            String backTarget = hasMultipleDonationProductTypes(purchaseGroup) ? "shop:gamecat:" + purchaseGroup
+                    : "steam_topup".equals(purchaseGroup) ? "shop:cs2" : "menu:shop";
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", backTarget), keyboardFactory.callback("🏠 Меню", "menu:main")));
             String payMethodText = "🎁 <b>" + escape(groupLabel) + "</b>\n\nВыберите способ оплаты:";
             if ("brawl_stars".equals(purchaseGroup)) {
@@ -10580,10 +10594,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  чтобы карусель оставалась одним окном (сообщение с картинкой нельзя править в текстовое и наоборот). */
     private void handleCaseCallback(CallbackQuery callbackQuery, AppUser user, String arg) {
         answerSilently(callbackQuery.getId());
-        if (!cs2CaseCatalog.isEnabled() && !adminService.isAdmin(user.getTelegramId())) {
-            sendShop(user);
-            return;
-        }
         Integer messageId = callbackQuery.getMessage() != null ? callbackQuery.getMessage().getMessageId() : null;
         String[] parts = arg.split(":");
         int index = 0;
@@ -10596,6 +10606,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         deleteMessageQuietly(user.getTelegramId(), messageId);
         sendCaseCard(user, index);
+    }
+
+    /** Единая точка входа CS2 в магазине: выбор между пополнением Steam и кейсами. */
+    private void sendCs2Menu(AppUser user) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (!rewardService.findByPurchaseGroup("steam_topup").isEmpty()) {
+            rows.add(List.of(keyboardFactory.callback("💳 Пополнение Steam", "shop:group:steam_topup")));
+        }
+        if (!cs2CaseCatalog.all().isEmpty()) {
+            rows.add(List.of(keyboardFactory.callback("📦 Кейсы (" + cs2CaseCatalog.all().size() + ")", "case:v:all:0")));
+        }
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", "menu:shop"),
+                keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), "🎁 <b>CS2</b>\n\nВыберите раздел:", keyboardFactory.rowsLayout(rows));
     }
 
     private void deleteMessageQuietly(Long chatId, Integer messageId) {
@@ -10646,9 +10671,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         rows.add(List.of(item != null
                 ? keyboardFactory.callback("🛒 Обменять", "shop:buy:" + item.getId())
-                : keyboardFactory.callback("🔒 Обмен пока выключен", "noop")));
+                : keyboardFactory.callback("🔒 Обмен скоро откроется", "noop")));
         rows.add(List.of(
-                keyboardFactory.callback("⬅️ Назад", "menu:shop"),
+                keyboardFactory.callback("⬅️ Назад", "shop:cs2"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")));
 
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
