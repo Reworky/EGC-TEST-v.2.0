@@ -9804,7 +9804,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "Доп. слот квеста — навсегда", PERMANENT_SLOT_STARS_PRICE),
             "starsitem:EGC_PASS", new StarsItemSpec(
                     "EGC Pass — подписка на 30 дней",
-                    "Лимит вывода ×5, +10% EXC и +5% XP, 3-й слот, XP-буст +40%, сохранение серии, ранний доступ к квестам, вывод за 12 ч, донат дешевле. Автопродление, отмена в настройках Telegram.",
+                    "Лимит вывода +10 000 EXC, +10% EXC и +5% XP, 3-й слот, XP-буст +40%, сохранение серии, ранний доступ к квестам, вывод за 12 ч, донат дешевле. Автопродление, отмена в настройках Telegram.",
                     "EGC Pass (30 дней)", EGC_PASS_STARS_PRICE, EGC_PASS_SUBSCRIPTION_PERIOD_SECONDS),
             "starsitem:STREAK_RESTORE", new StarsItemSpec(
                     "Восстановление серии входов",
@@ -9918,7 +9918,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (active || showAll) {
             sb.append("<b>Что входит:</b>\n")
-                .append("📤 Лимит вывода ×").append(SinkShopService.PASS_WITHDRAWAL_LIMIT_MULTIPLIER).append(" (например, 10 000 → 50 000 EXC в месяц)\n")
+                .append("📤 Лимит вывода +").append(String.format("%,d", SinkShopService.PASS_WITHDRAWAL_LIMIT_BONUS_EXC).replace(',', ' ')).append(" EXC в месяц (например, 10 000 → 20 000 EXC)\n")
                 .append("✨ +10% к EXC за все квесты (до 10 000 EXC бонуса в месяц)\n")
                 .append("📈 +5% к XP за все квесты, а купленный XP-буст даёт +40% вместо +20%\n")
                 .append("📂 3-й слот квеста (за EXC доступен только 2-й)\n")
@@ -9950,8 +9950,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sb.append("💸 <b>Донат по закупочной цене</b>, без наценки клуба\n");
             }
             long baseLimit = sinkShopService.getMonthlyLimit(user.getXp());
-            sb.append("📤 <b>Лимит вывода ×").append(SinkShopService.PASS_WITHDRAWAL_LIMIT_MULTIPLIER).append(":</b> ").append(String.format("%,d", baseLimit).replace(',', ' '))
-                    .append(" → ").append(String.format("%,d", baseLimit * SinkShopService.PASS_WITHDRAWAL_LIMIT_MULTIPLIER).replace(',', ' ')).append(" EXC в месяц\n");
+            sb.append("📤 <b>Лимит вывода +").append(String.format("%,d", SinkShopService.PASS_WITHDRAWAL_LIMIT_BONUS_EXC).replace(',', ' ')).append(":</b> ").append(String.format("%,d", baseLimit).replace(',', ' '))
+                    .append(" → ").append(String.format("%,d", baseLimit + SinkShopService.PASS_WITHDRAWAL_LIMIT_BONUS_EXC).replace(',', ' ')).append(" EXC в месяц\n");
             sb.append("⚡ <b>Вывод в приоритете:</b> заявка обрабатывается в течение ")
                     .append(ru.gamebot.platform.service.PassPayoutSlaService.SLA_HOURS).append(" часов\n")
                     .append("📂 <b>3 слота квестов</b> и лучшие квесты нового набора на 24 часа раньше\n")
@@ -21560,7 +21560,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     @org.springframework.context.event.EventListener
     public void onEgcPassTeaser(ru.gamebot.platform.event.EgcPassTeaserEvent event) {
         String msg = "⭐ <b>Ты уже выполнил " + event.getCompletedQuests() + " квестов</b>\n\n"
-                + "С EGC Pass лимит вывода <b>в 5 раз больше</b>, награды за квесты растут: <b>+10% EXC</b> и <b>+5% XP</b>, плюс доп. слот квеста, бесплатный улучшенный "
+                + "С EGC Pass лимит вывода <b>больше на 10 000 EXC в месяц</b>, награды за квесты растут: <b>+10% EXC</b> и <b>+5% XP</b>, плюс доп. слот квеста, бесплатный улучшенный "
                 + "сундук каждый день и приоритет в очереди на вывод. Подписка " + EGC_PASS_STARS_PRICE + " ⭐ в месяц.\n\n"
                 + "Подробности по кнопке 👇";
         try {

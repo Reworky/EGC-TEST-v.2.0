@@ -362,14 +362,27 @@ public class SinkShopService {
         return 10_000;
     }
 
-    /** Лимит вывода/трат игрока: по XP, у владельца EGC Pass в PASS_WITHDRAWAL_LIMIT_MULTIPLIER раз больше (решение владельца 23.10.2026; по данным 211 игроков упираются в лимит,
-     *  х5 даёт ≈95% возможной выгоды). Курс фонда от повышения лимита не меняется - выводятся уже заработанные EXC (пул и долг уменьшаются в одной пропорции). */
+    /** Лимит вывода/трат игрока: по XP, у владельца EGC Pass на PASS_WITHDRAWAL_LIMIT_BONUS_EXC больше, одинаково для любого ранга (решение владельца 25.10.2026).
+     *  Было ×5 (с 23.10): по данным трёх первых подписчиков лишний вывод за месяц (~626 ₽ при фонде 36%) втрое превысил выручку подписки (~193 ₽), а принцип владельца -
+     *  подписка должна окупать максимальный вывод, который открывает в этом же месяце. +10 000 EXC ≈ 36 ₽ при фонде 36% (1 EXC = 0,0036 ₽); при росте фонда
+     *  цена прибавки растёт пропорционально (при 76% - уже 76 ₽): пересматривать при заметном росте курса. */
     public long getMonthlyLimit(AppUser user) {
         long base = getMonthlyLimit(user.getXp());
-        return isEgcPassActive(user) ? base * PASS_WITHDRAWAL_LIMIT_MULTIPLIER : base;
+        if (!isEgcPassActive(user)) return base;
+        long limit = base + PASS_WITHDRAWAL_LIMIT_BONUS_EXC;
+        // Подписчики, оплатившие Pass до смены условий, сохраняют прежнее обещание (×5) до конца оплаченного срока; при продлении срок уходит за дату - действует новое правило
+        LocalDateTime until = user.getEgcPassActiveUntil();
+        if (until != null && until.isBefore(PASS_LEGACY_LIMIT_UNTIL)) {
+            limit = Math.max(limit, base * PASS_LEGACY_LIMIT_MULTIPLIER);
+        }
+        return limit;
     }
 
-    public static final int PASS_WITHDRAWAL_LIMIT_MULTIPLIER = 5;
+    /** Прибавка к лимиту вывода/трат владельцу EGC Pass, EXC в месяц (любой ранг). */
+    public static final long PASS_WITHDRAWAL_LIMIT_BONUS_EXC = 10_000;
+    /** Прежний множитель (до 25.10.2026) - только для подписок, истекающих раньше PASS_LEGACY_LIMIT_UNTIL. Чтобы отключить сразу, поставить дату в прошлом. */
+    public static final int PASS_LEGACY_LIMIT_MULTIPLIER = 5;
+    private static final LocalDateTime PASS_LEGACY_LIMIT_UNTIL = LocalDateTime.of(2026, 11, 24, 0, 0);
 
     public long getRemainingWithdrawalLimit(AppUser user) {
         refreshWithdrawalMonthIfNeeded(user);
