@@ -1045,6 +1045,70 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Правка на месте: если навигационная кнопка нажата на нашем экране, а первый показанный обработчиком экран такого же вида
+     *  (текст -> текст, картинка -> картинка), он переписывает то же сообщение: лента не засоряется, картинка не пропадает из кэша клиента.
+     *  Возвращает id сообщения-источника или null (нельзя: другой вид экрана, чужое сообщение, не первая отправка). */
+    private Integer takeEditableSource(Long chatId, boolean wantPhoto) {
+        NavCtx ctx = navCtx.get();
+        if (ctx == null || !ctx.chatId.equals(chatId) || ctx.sourceMessageId == null || ctx.firstSendDone) return null;
+        ctx.firstSendDone = true;
+        if (ctx.pendingPhoto != null) return null; // перед текстом уже отправлен баннер без кнопок - это экран «баннер + текст», на месте его не правим
+        if (ctx.sourcePhoto != wantPhoto) return null;
+        LinkedHashMap<Integer, Integer> screens = navScreens.get(chatId);
+        if (screens == null) return null;
+        Integer companion;
+        synchronized (screens) {
+            companion = screens.get(ctx.sourceMessageId);
+        }
+        if (companion == null || companion.intValue() != (wantPhoto ? NAV_KEEP_PHOTO : 0)) return null;
+        return ctx.sourceMessageId;
+    }
+
+    private void navEdited() {
+        NavCtx ctx = navCtx.get();
+        if (ctx != null) ctx.sourceUsed = true;
+    }
+
+    private boolean editTextMessage(Long chatId, Integer messageId, String text, InlineKeyboardMarkup keyboard, boolean disablePreview) {
+        try {
+            EditMessageText edit = new EditMessageText();
+            edit.setChatId(chatId.toString());
+            edit.setMessageId(messageId);
+            edit.setText(text);
+            edit.setParseMode("HTML");
+            edit.setReplyMarkup(keyboard);
+            edit.setDisableWebPagePreview(disablePreview);
+            execute(edit);
+            return true;
+        } catch (TelegramApiException e) {
+            if (e.getMessage() != null && e.getMessage().contains("message is not modified")) return true;
+            log.warn("Failed to edit text message {} in chat {}", messageId, chatId, e);
+            return false;
+        }
+    }
+
+    private boolean editPhotoByFileId(Long chatId, Integer messageId, String fileId, String caption, InlineKeyboardMarkup keyboard) {
+        if (messageId == null || caption.length() > 1000) return false;
+        try {
+            org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto media = new org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto();
+            media.setMedia(fileId);
+            media.setCaption(caption);
+            media.setParseMode("HTML");
+            org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageMedia edit =
+                    new org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageMedia();
+            edit.setChatId(chatId.toString());
+            edit.setMessageId(messageId);
+            edit.setMedia(media);
+            edit.setReplyMarkup(keyboard);
+            execute(edit);
+            return true;
+        } catch (TelegramApiException e) {
+            if (e.getMessage() != null && e.getMessage().contains("message is not modified")) return true;
+            log.warn("Failed to edit photo message {} in chat {}", messageId, chatId, e);
+            return false;
+        }
+    }
+
     /** Любое сообщение игрока (команда, ввод текста, фото): экраны, которые бот показывает в ответ, запоминаются, чтобы кнопки на них
      *  потом правили сообщение на месте. Сами сообщения игрока бот не трогает; рассылки и уведомления сюда не попадают (они не в ответ на ввод). */
     private void handleMessageTrackingMenu(Message message) {
