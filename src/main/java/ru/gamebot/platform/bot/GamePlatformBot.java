@@ -10669,6 +10669,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private static final class NavCtx {
         final Long chatId;
         int sent;
+        /** Картинка без кнопок, отправленная перед текстом экрана (баннер списка квестов): следующий текст берёт её в пару и удаляется вместе с ней. */
+        Integer pendingPhoto;
         NavCtx(Long chatId) { this.chatId = chatId; }
     }
 
@@ -10689,6 +10691,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (data.startsWith("menu:")) {
             return !NAV_CLEANUP_MENU_EXCLUDED.contains(data.substring("menu:".length()));
         }
+        // Квесты: только просмотр (взять/отменить/отчёт/проверка подписки - действия, их экраны не трогаем)
+        if (data.startsWith("quests:section:") || data.startsWith("quests:game:") || data.startsWith("quests:list:")
+                || data.startsWith("quests:cat:") || data.startsWith("quest:card:") || data.startsWith("quest:view:")
+                || data.startsWith("quest:suggest:") || data.equals("quest:recommend") || data.startsWith("myquest:view:")
+                || data.startsWith("social:view:") || data.equals("ads:money") || data.equals("wallet:section:ads")) {
+            return true;
+        }
         // Каталог магазина: только просмотр (покупка shop:buy, «скоро», шаги заявки на вывод - не трогаем)
         return data.startsWith("shop:view:") || data.startsWith("shop:group:") || data.startsWith("shop:excgroup:")
                 || data.startsWith("shop:gamecat:") || data.startsWith("shop:passgroup:") || data.startsWith("shop:donate:")
@@ -10699,6 +10708,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void navRecord(Long chatId, Integer messageId, Integer companionId) {
         NavCtx ctx = navCtx.get();
         if (ctx == null || messageId == null || !ctx.chatId.equals(chatId)) return;
+        if (companionId == null && ctx.pendingPhoto != null) {
+            companionId = ctx.pendingPhoto;
+        }
+        ctx.pendingPhoto = null;
         ctx.sent++;
         LinkedHashMap<Integer, Integer> screens = navScreens.computeIfAbsent(chatId, k -> new LinkedHashMap<>());
         synchronized (screens) {
@@ -26828,7 +26841,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             message.setParseMode("HTML");
             message.setReplyMarkup(keyboard);
             Message sentPhoto = execute(message);
-            navRecord(chatId, sentPhoto == null ? null : sentPhoto.getMessageId(), null);
+            NavCtx navContext = navCtx.get();
+            if (keyboard == null && navContext != null && navContext.chatId.equals(chatId) && sentPhoto != null) {
+                navContext.pendingPhoto = sentPhoto.getMessageId(); // баннер без кнопок: удалим вместе со следующим текстом экрана
+            } else {
+                navRecord(chatId, sentPhoto == null ? null : sentPhoto.getMessageId(), null);
+            }
         } catch (TelegramApiException exception) {
             log.warn("Failed to send photo message to {}", chatId, exception);
             sendText(chatId, caption, keyboard);
