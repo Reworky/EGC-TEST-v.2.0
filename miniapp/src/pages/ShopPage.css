@@ -343,3 +343,58 @@
   line-height: 1.7;
   color: rgba(255,255,255,0.75);
 }
+
+/* ── Карточки игр на первом экране магазина ── */
+.sg-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.sg-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  overflow: hidden;
+  padding: 0;
+  border: 0.5px solid rgba(255,255,255,0.12);
+  border-radius: 14px;
+  background: #121220;
+  color: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sg-card-img {
+  display: block;
+  flex: none;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.sg-card-noimg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 38px;
+  background: linear-gradient(135deg, #251a45, #121220);
+}
+
+.sg-card-info {
+  padding: 8px 10px 10px;
+}
+
+.sg-card-name {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.sg-card-sub {
+  font-size: 11px;
+  color: rgba(255,255,255,0.55);
+  margin-top: 2px;
+}

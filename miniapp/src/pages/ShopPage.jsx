@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getCs2Cases, getWallet, getShopItems, getShopStats, purchaseItem, getMyRewards, getProfile, getPerksState, purchasePerk, sendGiftBoost, sendExcTransfer, cancelReward, equipFrame, getStarsInvoiceLink, getStarsPrices } from '../api/client';
 import { openStarsInvoice } from '../utils/stars';
 import BackButton from '../components/BackButton';
@@ -45,6 +45,19 @@ const DONATE_GAMES = {
   'Brawl Stars': 'brawl_stars',
   'Clash Royale': 'clash_royale',
   'Clash of Clans': 'clash_of_clans',
+  'CS2': 'steam_topup',
+};
+
+// Карточки игр на первом экране «Товаров»: картинка (из баннеров бота) или значок на градиенте.
+// Ключ - название категории товара. CS2 содержит два раздела: пополнение Steam и кейсы.
+const GAME_META = {
+  'Brawl Stars': { img: 'brawl_stars', icon: '⭐' },
+  'Clash Royale': { img: 'clash_royale', icon: '👑' },
+  'Clash of Clans': { img: 'clash_of_clans', icon: '🏰' },
+  'CS2': { img: 'cs2', icon: '🎮', subtitle: 'Пополнение Steam · Кейсы' },
+  'PUBG Mobile': { icon: '🔫' },
+  'PUBG PC': { icon: '🔫' },
+  'Mobile Legends': { icon: '⚔️' },
 };
 
 const STATUS_LABELS = {
@@ -207,6 +220,19 @@ function ShopItemsView({ expanded, onToggle }) {
   const [error, setError] = useState(null);
   const [showFundInfo, setShowFundInfo] = useState(false);
   const [donateGame, setDonateGame] = useState(null);
+  const [activeGame, setActiveGame] = useState(null);
+  const [cs2Tab, setCs2Tab] = useState('steam');
+
+  function openGame(cat) {
+    setActiveGame(cat);
+    setCs2Tab('steam');
+    window.scrollTo(0, 0);
+  }
+
+  function closeGame() {
+    setActiveGame(null);
+    window.scrollTo(0, 0);
+  }
 
   function reload() {
     setError(null);
@@ -228,23 +254,23 @@ function ShopItemsView({ expanded, onToggle }) {
     return <DonateView gameKey={donateGame} onBack={() => setDonateGame(null)} />;
   }
 
-  // Кастомизация (рамки аватара) объединена с титулами в разделе «Предметы» — здесь не дублируем.
+  // Кастомизация (рамки аватара) объединена с титулами в разделе «Предметы» — здесь не дублируем;
+  // кейсы CS2 показываем отдельными плитками (Cs2CasesSection), а не обычным списком.
   const groupedRaw = items.filter(item => item.category !== 'Кастомизация' && item.category !== 'CS2 кейсы').reduce((acc, item) => {
     const cat = item.category || 'Другое';
     (acc[cat] = acc[cat] || []).push(item);
     return acc;
   }, {});
-  // Донат-игры закреплены наверху в фиксированном порядке (как в боте), остальные — как раньше.
+  // Порядок игр: донат-игры закреплены наверху (как в боте), затем CS2 (всегда есть: кейсы), остальные — как раньше.
   const grouped = {};
-  Object.keys(DONATE_GAMES).forEach(cat => { if (groupedRaw[cat]) grouped[cat] = groupedRaw[cat]; });
+  ['Brawl Stars', 'Clash Royale', 'Clash of Clans'].forEach(cat => { if (groupedRaw[cat]) grouped[cat] = groupedRaw[cat]; });
+  grouped['CS2'] = groupedRaw['CS2'] || [];
   Object.keys(groupedRaw).forEach(cat => { if (!grouped[cat]) grouped[cat] = groupedRaw[cat]; });
 
-  return (
-    <>
-      <div style={{ padding: '12px 16px 0' }}><BackButton label="Назад" /></div>
-      <div className="shop-header">
-        {profile && <div className="shop-balance"><i className="ti ti-coin"></i> {profile.coins.toLocaleString()} EXC</div>}
-        {stats && (
+  const header = (
+    <div className="shop-header">
+      {profile && <div className="shop-balance"><i className="ti ti-coin"></i> {profile.coins.toLocaleString()} EXC</div>}
+      {stats && (
         <>
           <div className="shop-ratio" onClick={() => setShowFundInfo(true)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
             📊 Состояние фонда: {stats.healthRatioPercent}% <span style={{ fontSize: '11px', opacity: 0.6 }}>ⓘ</span>
@@ -271,40 +297,89 @@ function ShopItemsView({ expanded, onToggle }) {
           )}
         </>
       )}
-      </div>
+    </div>
+  );
 
-      <div style={{ margin: '12px 16px 0' }}>
-        <AdBanner
-          img="https://aflink.ru/b/vgbqo405hfe999950e957b456b25e2/"
-          link="https://heqgr.com/g/vgbqo405hfe999950e957b456b25e2/?i=4&erid=2bL9aMPo2e49hMef4rqyCwDQyf"
-          alt="Zaka-zaka [CPS] RU + CIS"
-          erid="2bL9aMPo2e49hMef4rqyCwDQyf"
-        />
-      </div>
+  // ── Первый экран: карточки игр ──
+  if (activeGame === null || !grouped[activeGame]) {
+    return (
+      <>
+        <div style={{ padding: '12px 16px 0' }}><BackButton label="Назад" /></div>
+        {header}
 
-      {Object.entries(grouped).map(([cat, list]) => (
-        <Fragment key={cat}>
-        <div className="category-section">
-          <div className="category-header">{cat}</div>
-          {DONATE_GAMES[cat] && (
-            <button className="quest-btn" style={{ marginBottom: 12 }} onClick={() => setDonateGame(DONATE_GAMES[cat])}>
-              💰 Купить за Telegram Stars/GRAM
-            </button>
-          )}
-          {list.map(item => (
-            <ShopItemCard
-              key={item.id}
-              item={item}
-              expanded={expanded === item.id}
-              onToggle={onToggle}
-              onPurchased={reload}
-            />
-          ))}
+        <div style={{ margin: '12px 16px 0' }}>
+          <AdBanner
+            img="https://aflink.ru/b/vgbqo405hfe999950e957b456b25e2/"
+            link="https://heqgr.com/g/vgbqo405hfe999950e957b456b25e2/?i=4&erid=2bL9aMPo2e49hMef4rqyCwDQyf"
+            alt="Zaka-zaka [CPS] RU + CIS"
+            erid="2bL9aMPo2e49hMef4rqyCwDQyf"
+          />
         </div>
-        {cat === 'CS2' && <Cs2CasesSection shopItems={items} onPurchased={reload} />}
-        </Fragment>
-      ))}
-      {!grouped.CS2 && <Cs2CasesSection shopItems={items} onPurchased={reload} />}
+
+        <div className="category-section">
+          <div className="category-header">Игры</div>
+          <div className="sg-grid">
+            {Object.entries(grouped).map(([cat, list]) => {
+              const meta = GAME_META[cat] || {};
+              const subtitle = meta.subtitle || (list.length ? `Товаров: ${list.length}` : '');
+              return (
+                <button key={cat} type="button" className="sg-card" onClick={() => openGame(cat)}>
+                  {meta.img
+                    ? <img className="sg-card-img" src={`${import.meta.env.BASE_URL}games/${meta.img}.jpg`} alt={cat} loading="lazy" />
+                    : <div className="sg-card-img sg-card-noimg">{meta.icon || '🎁'}</div>}
+                  <div className="sg-card-info">
+                    <div className="sg-card-name">{cat}</div>
+                    {subtitle && <div className="sg-card-sub">{subtitle}</div>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ── Экран игры: внутри разделение на товары ──
+  const gameItems = grouped[activeGame];
+  const isCs2 = activeGame === 'CS2';
+  const donateButton = DONATE_GAMES[activeGame] && (
+    <button className="quest-btn" style={{ marginBottom: 12 }} onClick={() => setDonateGame(DONATE_GAMES[activeGame])}>
+      {isCs2 ? '💰 Пополнить за Telegram Stars/GRAM' : '💰 Купить за Telegram Stars/GRAM'}
+    </button>
+  );
+  const itemsList = gameItems.map(item => (
+    <ShopItemCard key={item.id} item={item} expanded={expanded === item.id} onToggle={onToggle} onPurchased={reload} />
+  ));
+
+  return (
+    <>
+      <div style={{ padding: '12px 16px 0' }}><BackButton label="К играм" onClick={closeGame} /></div>
+      {header}
+
+      {isCs2 ? (
+        <>
+          <div className="view-toggle" style={{ margin: '12px 16px 0' }}>
+            <button className={`view-tab ${cs2Tab === 'steam' ? 'active' : ''}`} onClick={() => setCs2Tab('steam')}>💳 Пополнение Steam</button>
+            <button className={`view-tab ${cs2Tab === 'cases' ? 'active' : ''}`} onClick={() => setCs2Tab('cases')}>📦 Кейсы</button>
+          </div>
+          {cs2Tab === 'steam' ? (
+            <div className="category-section" style={{ marginTop: 12 }}>
+              <div className="category-header">Пополнение Steam</div>
+              {donateButton}
+              {itemsList}
+            </div>
+          ) : (
+            <Cs2CasesSection shopItems={items} onPurchased={reload} />
+          )}
+        </>
+      ) : (
+        <div className="category-section" style={{ marginTop: 12 }}>
+          <div className="category-header">{activeGame}</div>
+          {donateButton}
+          {itemsList}
+        </div>
+      )}
     </>
   );
 }
