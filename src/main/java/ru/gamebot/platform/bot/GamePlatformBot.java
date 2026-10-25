@@ -330,7 +330,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             } else if (update.hasPreCheckoutQuery()) {
                 handlePreCheckoutQuery(update.getPreCheckoutQuery());
             } else if (update.hasMessage()) {
-                handleMessage(update.getMessage());
+                handleMessageTrackingMenu(update.getMessage());
             } else if (update.hasChatJoinRequest()) {
                 handleChatJoinRequest(update.getChatJoinRequest());
             } else if (update.hasChatMember()) {
@@ -1014,7 +1014,48 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendMainMenu(user, intro);
     }
 
+    /** Чистка ленты: на навигационных кнопках (меню, каталог магазина) после показа нового экрана удаляем экран, с которого нажали.
+     *  Удаляются только экраны, которые сам бот показал в ответ на такие кнопки (см. navRecord): рассылки, уведомления, чеки и т.п. остаются. */
     private void handleCallback(CallbackQuery callbackQuery) {
+        boolean nav = callbackQuery.getMessage() != null && isNavCleanupCallback(callbackQuery.getData());
+        if (!nav) {
+            handleCallbackInner(callbackQuery);
+            return;
+        }
+        Long chatId = callbackQuery.getMessage().getChatId();
+        Integer sourceMessageId = callbackQuery.getMessage().getMessageId();
+        NavCtx ctx = new NavCtx(chatId);
+        navCtx.set(ctx);
+        try {
+            handleCallbackInner(callbackQuery);
+        } finally {
+            navCtx.remove();
+        }
+        // Старый экран убираем, только если обработчик действительно показал новый (иначе игрок остался бы с пустым чатом)
+        if (ctx.sent > 0) {
+            navCleanup(chatId, sourceMessageId);
+        }
+    }
+
+    /** Команды /menu и /start показывают главное меню: запоминаем такой экран, чтобы первая же навигационная кнопка на нём тоже чистила ленту.
+     *  Сами команды ничего не удаляют. */
+    private void handleMessageTrackingMenu(Message message) {
+        String text = message.getText();
+        boolean menuCommand = text != null && message.getChatId() != null
+                && ("/menu".equals(text.trim()) || "/start".equals(text.trim()));
+        if (!menuCommand) {
+            handleMessage(message);
+            return;
+        }
+        navCtx.set(new NavCtx(message.getChatId()));
+        try {
+            handleMessage(message);
+        } finally {
+            navCtx.remove();
+        }
+    }
+
+    private void handleCallbackInner(CallbackQuery callbackQuery) {
         Long telegramId = callbackQuery.getFrom().getId();
         AppUser user = userService.getOrCreate(callbackQuery.getFrom(), null);
         UserSession session = sessionService.get(telegramId);
@@ -10569,8 +10610,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (cached == null && sent.getPhoto() != null && !sent.getPhoto().isEmpty()) {
                 resourceBannerFileIds.put(resource, sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId());
             }
-            if (!captionFits) {
-                sendText(chatId, text, keyboard);
+            if (captionFits) {
+                navRecord(chatId, sent.getMessageId(), null);
+            } else {
+                sendTextTracked(chatId, text, keyboard, false, sent.getMessageId());
             }
         } catch (Exception e) {
             log.warn("Failed to send banner {}", resource, e);
@@ -10621,6 +10664,62 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("⬅️ Назад", "menu:shop"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendResourceBanner(user.getTelegramId(), "cs2_banner.jpg", "🎁 <b>CS2</b>\n\nВыберите раздел:", keyboardFactory.rowsLayout(rows));
+    }
+
+    private static final class NavCtx {
+        final Long chatId;
+        int sent;
+        NavCtx(Long chatId) { this.chatId = chatId; }
+    }
+
+    /** Контекст текущей навигационной кнопки (только пока обработчик выполняется в этом потоке). */
+    private final ThreadLocal<NavCtx> navCtx = new ThreadLocal<>();
+
+    /** chatId -> (id экрана -> id сопутствующей картинки или 0): экраны, показанные в ответ на навигационные кнопки. Только в памяти:
+     *  после рестарта бота прежние экраны просто остаются в ленте. */
+    private final Map<Long, LinkedHashMap<Integer, Integer>> navScreens = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final int NAV_SCREENS_PER_CHAT = 60;
+
+    /** Меню-кнопки, где экран правится на месте, приходит счёт/файл/анимация или это админские экраны: старое сообщение не трогаем. */
+    private static final java.util.Set<String> NAV_CLEANUP_MENU_EXCLUDED = java.util.Set.of(
+            "daily", "dtasks", "chestopen", "chestgo", "chestreroll", "watchad", "faqfile", "admin", "moderation");
+
+    private static boolean isNavCleanupCallback(String data) {
+        if (data == null) return false;
+        if (data.startsWith("menu:")) {
+            return !NAV_CLEANUP_MENU_EXCLUDED.contains(data.substring("menu:".length()));
+        }
+        // Каталог магазина: только просмотр (покупка shop:buy, «скоро», шаги заявки на вывод - не трогаем)
+        return data.startsWith("shop:view:") || data.startsWith("shop:group:") || data.startsWith("shop:excgroup:")
+                || data.startsWith("shop:gamecat:") || data.startsWith("shop:passgroup:") || data.startsWith("shop:donate:")
+                || data.equals("shop:cs2") || data.equals("shop:ranks")
+                || data.equals("shop:withdraw") || data.equals("shop:withdraw:feed");
+    }
+
+    private void navRecord(Long chatId, Integer messageId, Integer companionId) {
+        NavCtx ctx = navCtx.get();
+        if (ctx == null || messageId == null || !ctx.chatId.equals(chatId)) return;
+        ctx.sent++;
+        LinkedHashMap<Integer, Integer> screens = navScreens.computeIfAbsent(chatId, k -> new LinkedHashMap<>());
+        synchronized (screens) {
+            screens.put(messageId, companionId == null ? 0 : companionId);
+            while (screens.size() > NAV_SCREENS_PER_CHAT) {
+                Integer eldest = screens.keySet().iterator().next();
+                screens.remove(eldest);
+            }
+        }
+    }
+
+    private void navCleanup(Long chatId, Integer messageId) {
+        LinkedHashMap<Integer, Integer> screens = navScreens.get(chatId);
+        if (screens == null || messageId == null) return;
+        Integer companion;
+        synchronized (screens) {
+            companion = screens.remove(messageId);
+        }
+        if (companion == null) return; // не наш экран (рассылка, уведомление, первый экран после /start) - оставляем
+        deleteMessageQuietly(chatId, messageId);
+        if (companion > 0) deleteMessageQuietly(chatId, companion);
     }
 
     private void deleteMessageQuietly(Long chatId, Integer messageId) {
@@ -26606,6 +26705,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * под сообщением) — например, ссылка на канал отзывов в приветствии новичка выглядела как отдельный
      * вылетающий баннер, отвлекающий от инструкции (запрошено 2026-09-14). */
     private void sendText(Long chatId, String text, InlineKeyboardMarkup keyboard, boolean disablePreview) {
+        sendTextTracked(chatId, text, keyboard, disablePreview, null);
+    }
+
+    /** companionPhotoId - id картинки, отправленной прямо перед этим текстом (длинный текст под баннером): удаляются вместе. */
+    private void sendTextTracked(Long chatId, String text, InlineKeyboardMarkup keyboard, boolean disablePreview, Integer companionPhotoId) {
         redirectAdminBackToGroup(chatId, keyboard);
         SendMessage message = new SendMessage();
         message.setChatId(chatId.toString());
@@ -26614,7 +26718,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         message.setReplyMarkup(keyboard);
         message.setDisableWebPagePreview(disablePreview);
         try {
-            execute(message);
+            Message sentMessage = execute(message);
+            navRecord(chatId, sentMessage == null ? null : sentMessage.getMessageId(), companionPhotoId);
         } catch (TelegramApiException exception) {
             throw new IllegalStateException("Failed to send message to " + chatId, exception);
         }
@@ -26722,7 +26827,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             message.setCaption(caption);
             message.setParseMode("HTML");
             message.setReplyMarkup(keyboard);
-            execute(message);
+            Message sentPhoto = execute(message);
+            navRecord(chatId, sentPhoto == null ? null : sentPhoto.getMessageId(), null);
         } catch (TelegramApiException exception) {
             log.warn("Failed to send photo message to {}", chatId, exception);
             sendText(chatId, caption, keyboard);
