@@ -133,7 +133,7 @@ public class ChannelContentService {
     /** «Популярное в магазине» не формируется, если за 14 дней заказов каталога меньше. */
     private static final long MIN_SHOP_ORDERS = 10;
     /** Цена EGC Pass в Stars: держать в синхроне с EGC_PASS_STARS_PRICE в GamePlatformBot. */
-    private static final int EGC_PASS_STARS = 65;
+    private static final int EGC_PASS_STARS = 99;
     private static final int MAX_SHOP_ITEMS_IN_POST = 5;
     /** «Топ рефереров недели» не создаём, если призёров меньше (слабая неделя). */
     private static final int MIN_REFERRAL_WINNERS = 3;
@@ -1310,7 +1310,7 @@ public class ChannelContentService {
     /** «EGC Pass: что даёт» (раз в 4 недели): один перк на пост по очереди. Факты сверены с sendEgcPassScreen/кодом; без цифр подписчиков и без обещаний заработка. */
     public Optional<ChannelPostDraft> createEgcPassDraft() {
         String[][] perks = {
-                {"✨ <b>EGC Pass: больше EXC за квесты!</b>", "С EGC Pass за каждый квест начисляется на 10% больше EXC (бонус до 10 000 EXC в месяц) и на 5% больше XP."},
+                {"✨ <b>EGC Pass: больше EXC за квесты!</b>", "С EGC Pass за каждый квест начисляется на 10% больше EXC (бонус до 5 000 EXC в месяц) и на 5% больше XP."},
                 {"🎁 <b>EGC Pass: сундук дня без реролла!</b>", "Подписчикам EGC Pass каждый день доступен бесплатный улучшенный сундук: призы в нём щедрее обычного, а докупать реролл за Stars не нужно."},
                 {"⚡ <b>EGC Pass: приоритет на вывод!</b>", "Заявки подписчиков EGC Pass на вывод EXC обрабатываются в очереди первыми."},
                 {"📂 <b>EGC Pass: третий слот квеста!</b>", "За EXC можно докупить второй слот квеста, а третий открывается только с EGC Pass: больше квестов одновременно, пока подписка активна."},

@@ -9747,7 +9747,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * 150⭐/мес ≈ 210₽ по ориентировочному курсу ~1,4₽/⭐ — дешевле, чем купить разово всё входящее
      * (рамка+слот+реролл на 30 дней ≈ 35+75+450 ⭐), но не бесплатно, чтобы не обесценивать разовые
      * покупки тех, кто уже их сделал. Лимит Telegram — не больше 10 000⭐ за подписку, с запасом. */
-    private static final int EGC_PASS_STARS_PRICE = 65;
+    /** Цена EGC Pass: 99 ⭐ в месяц с 25.10.2026 (была 65; при 65 маржа ≈ +13 ₽, при 99 ≈ +54 ₽ с типичной подписки). Действующие подписки идут по прежней цене. */
+    private static final int EGC_PASS_STARS_PRICE = 99;
     /** Подарок EGC Pass другу: 30 дней по полной цене, без автопродления; бонус обоим в EXC. */
     private static final int EGC_PASS_GIFT_STARS_PRICE = EGC_PASS_STARS_PRICE;
     private static final long PASS_GIFT_SENDER_BONUS_EXC = 1_000;
@@ -9919,7 +9920,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (active || showAll) {
             sb.append("<b>Что входит:</b>\n")
                 .append("📤 Лимит вывода +").append(String.format("%,d", SinkShopService.PASS_WITHDRAWAL_LIMIT_BONUS_EXC).replace(',', ' ')).append(" EXC в месяц (например, 10 000 → 20 000 EXC)\n")
-                .append("✨ +10% к EXC за все квесты (до 10 000 EXC бонуса в месяц)\n")
+                .append("✨ +10% к EXC за все квесты (до 5 000 EXC бонуса в месяц)\n")
                 .append("📈 +5% к XP за все квесты, а купленный XP-буст даёт +40% вместо +20%\n")
                 .append("📂 3-й слот квеста (за EXC доступен только 2-й)\n")
                 .append("🔀 Выше дневные лимиты: снятие кулдауна 4 вместо 2, бустов 5 вместо 3\n")
