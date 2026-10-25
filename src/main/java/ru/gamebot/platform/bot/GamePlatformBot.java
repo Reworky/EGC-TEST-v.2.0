@@ -1016,32 +1016,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Чистка ленты: на навигационных кнопках (меню, каталог магазина) после показа нового экрана удаляем экран, с которого нажали.
      *  Удаляются только экраны, которые сам бот показал в ответ на такие кнопки (см. navRecord): рассылки, уведомления, чеки и т.п. остаются. */
-    /** Чистка ленты и правка экранов на месте при навигации (коммиты 12b8041f ... b7bf32b4). ВЫКЛЮЧЕНО 25.10.2026 по решению владельца: кнопка
-     *  оставляет старое сообщение, новый экран приходит ниже, как раньше. Код сохранён: чтобы вернуть, поставить true. Каталог кейсов CS2 и меню CS2
-     *  листаются правкой на месте независимо от этого флага (handleCaseCallback). */
-    private static final boolean NAV_FEED_CLEANUP_ENABLED = false;
+    /** Правка экранов на месте при навигации (коммиты 12b8041f ... b7bf32b4): нажатие кнопки на нашем экране переписывает то же сообщение, если новый
+     *  экран такого же вида (текст -> текст, картинка -> картинка). Включено 25.10.2026 по решению владельца. Выключить совсем - false. */
+    private static final boolean NAV_FEED_CLEANUP_ENABLED = true;
+    /** Удалять ли старый экран, когда правка на месте невозможна (другой вид экрана). Выключено 25.10.2026: старое сообщение остаётся, новый экран
+     *  приходит ниже, как раньше. Каталог кейсов CS2 и меню CS2 правятся на месте независимо от этих флагов (handleCaseCallback). */
+    private static final boolean NAV_DELETE_OLD_SCREENS = false;
 
     private void handleCallback(CallbackQuery callbackQuery) {
-        if (!NAV_FEED_CLEANUP_ENABLED) {
-            handleCallbackInner(callbackQuery);
-            return;
-        }
-        boolean nav = callbackQuery.getMessage() != null && isNavCleanupCallback(callbackQuery.getData());
-        if (!nav && callbackQuery.getMessage() != null && isEditInPlaceActionCallback(callbackQuery.getData())) {
-            // Кнопка-действие: результат показываем в том же сообщении, если оно наш экран такого же вида; ничего не удаляем
-            NavCtx actionCtx = new NavCtx(callbackQuery.getMessage().getChatId());
-            actionCtx.editOnly = true;
-            actionCtx.sourceMessageId = callbackQuery.getMessage().getMessageId();
-            actionCtx.sourcePhoto = callbackQuery.getMessage() instanceof Message actionMsg && actionMsg.hasPhoto();
-            navCtx.set(actionCtx);
-            try {
-                handleCallbackInner(callbackQuery);
-            } finally {
-                navCtx.remove();
-            }
-            return;
-        }
-        if (!nav) {
+        if (!NAV_FEED_CLEANUP_ENABLED || callbackQuery.getMessage() == null || isEditExcludedCallback(callbackQuery.getData())) {
             handleCallbackInner(callbackQuery);
             return;
         }
@@ -1056,87 +1039,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } finally {
             navCtx.remove();
         }
-        // Старый экран убираем, только если обработчик действительно показал новый (иначе игрок остался бы с пустым чатом)
-        if (ctx.sent > 0 && !ctx.sourceUsed) {
+        // Старый экран убирается только если включено удаление (по умолчанию нет): иначе он остаётся в ленте
+        if (NAV_DELETE_OLD_SCREENS && ctx.sent > 0 && !ctx.sourceUsed) {
             navCleanup(chatId, sourceMessageId);
         }
     }
 
-    /** Правка на месте: если навигационная кнопка нажата на нашем экране, а первый показанный обработчиком экран такого же вида
-     *  (текст -> текст, картинка -> картинка), он переписывает то же сообщение: лента не засоряется, картинка не пропадает из кэша клиента.
-     *  Возвращает id сообщения-источника или null (нельзя: другой вид экрана, чужое сообщение, не первая отправка). */
-    private Integer takeEditableSource(Long chatId, boolean wantPhoto) {
-        NavCtx ctx = navCtx.get();
-        if (ctx == null || !ctx.chatId.equals(chatId) || ctx.sourceMessageId == null || ctx.firstSendDone) return null;
-        ctx.firstSendDone = true;
-        if (ctx.pendingPhoto != null) return null; // перед текстом уже отправлен баннер без кнопок - это экран «баннер + текст», на месте его не правим
-        if (ctx.sourcePhoto != wantPhoto) return null;
-        LinkedHashMap<Integer, Integer> screens = navScreens.get(chatId);
-        if (screens == null) return null;
-        Integer companion;
-        synchronized (screens) {
-            companion = screens.get(ctx.sourceMessageId);
-        }
-        if (companion == null || companion.intValue() != (wantPhoto ? NAV_KEEP_PHOTO : 0)) return null;
-        return ctx.sourceMessageId;
-    }
-
-    private void navEdited() {
-        NavCtx ctx = navCtx.get();
-        if (ctx != null) ctx.sourceUsed = true;
-    }
-
-    private boolean editTextMessage(Long chatId, Integer messageId, String text, InlineKeyboardMarkup keyboard, boolean disablePreview) {
-        try {
-            EditMessageText edit = new EditMessageText();
-            edit.setChatId(chatId.toString());
-            edit.setMessageId(messageId);
-            edit.setText(text);
-            edit.setParseMode("HTML");
-            edit.setReplyMarkup(keyboard);
-            edit.setDisableWebPagePreview(disablePreview);
-            execute(edit);
-            return true;
-        } catch (TelegramApiException e) {
-            if (e.getMessage() != null && e.getMessage().contains("message is not modified")) return true;
-            log.warn("Failed to edit text message {} in chat {}", messageId, chatId, e);
-            return false;
-        }
-    }
-
-    private boolean editPhotoByFileId(Long chatId, Integer messageId, String fileId, String caption, InlineKeyboardMarkup keyboard) {
-        if (messageId == null || caption.length() > 1000) return false;
-        try {
-            org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto media = new org.telegram.telegrambots.meta.api.objects.media.InputMediaPhoto();
-            media.setMedia(fileId);
-            media.setCaption(caption);
-            media.setParseMode("HTML");
-            org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageMedia edit =
-                    new org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageMedia();
-            edit.setChatId(chatId.toString());
-            edit.setMessageId(messageId);
-            edit.setMedia(media);
-            edit.setReplyMarkup(keyboard);
-            execute(edit);
-            return true;
-        } catch (TelegramApiException e) {
-            if (e.getMessage() != null && e.getMessage().contains("message is not modified")) return true;
-            log.warn("Failed to edit photo message {} in chat {}", messageId, chatId, e);
-            return false;
-        }
-    }
-
-    /** Команды /menu и /start показывают главное меню: запоминаем такой экран, чтобы первая же навигационная кнопка на нём тоже чистила ленту.
-     *  Сами команды ничего не удаляют. */
+    /** Любое сообщение игрока (команда, ввод текста, фото): экраны, которые бот показывает в ответ, запоминаются, чтобы кнопки на них
+     *  потом правили сообщение на месте. Сами сообщения игрока бот не трогает; рассылки и уведомления сюда не попадают (они не в ответ на ввод). */
     private void handleMessageTrackingMenu(Message message) {
-        if (!NAV_FEED_CLEANUP_ENABLED) {
-            handleMessage(message);
-            return;
-        }
-        String text = message.getText();
-        boolean menuCommand = text != null && message.getChatId() != null
-                && ("/menu".equals(text.trim()) || "/start".equals(text.trim()));
-        if (!menuCommand) {
+        if (!NAV_FEED_CLEANUP_ENABLED || message.getChatId() == null) {
             handleMessage(message);
             return;
         }
@@ -10799,8 +10711,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean firstSendDone;
         /** Экран-источник переписан на месте: удалять его чисткой не нужно. */
         boolean sourceUsed;
-        /** Кнопка-действие (взять квест, отменить заявку и т.п.): экран переписывается на месте, но результат не попадает в чистку ленты. */
-        boolean editOnly;
         NavCtx(Long chatId) { this.chatId = chatId; }
     }
 
@@ -10816,59 +10726,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private static final java.util.Set<String> NAV_CLEANUP_MENU_EXCLUDED = java.util.Set.of(
             "daily", "dtasks", "chestopen", "chestgo", "chestreroll", "watchad", "faqfile", "admin", "moderation");
 
-    /** Кнопки-действия, результат которых безопасно показать правкой того же сообщения (первый экран обработчика). Платежи и счета,
-     *  файлы, анимации, админские и модераторские экраны, ввод данных сюда НЕ входят. */
-    private static boolean isEditInPlaceActionCallback(String data) {
-        if (data == null) return false;
-        return data.startsWith("quest:take:") || data.startsWith("quest:takepartner:") || data.startsWith("myquest:cancel:")
-                || data.startsWith("reward:cancel:") || data.startsWith("poll:vote:") || data.startsWith("tournament:join:")
-                || data.startsWith("social:check:") || data.startsWith("qchan:check:") || data.startsWith("refnudge:")
-                || data.startsWith("shop:buy:") || data.startsWith("gemcancel:");
-    }
-
-    private static boolean isNavCleanupCallback(String data) {
-        if (data == null) return false;
+    /** Кнопки, где правка сообщения на месте НЕ нужна: админские и модераторские экраны, оплата и счета, анимации и файлы, создание квестов и
+     *  турниров, регистрация, обработчики, которые сами правят сообщение (красная кнопка, сундук), каталог кейсов (правит себя сам). Все остальные
+     *  кнопки бота показывают новый экран правкой того же сообщения, если он такого же вида (текст -> текст, картинка -> картинка). */
+    private static boolean isEditExcludedCallback(String data) {
+        if (data == null) return true;
         if (data.startsWith("menu:")) {
-            return !NAV_CLEANUP_MENU_EXCLUDED.contains(data.substring("menu:".length()));
+            return NAV_CLEANUP_MENU_EXCLUDED.contains(data.substring("menu:".length()));
         }
-        // Предметы клуба (экраны и справочные карточки), колесо, справка и выбор пакета/способа оплаты доната, «Мои обращения»,
-        // выбор способа вывода EXC. Покупки и платные кнопки sink:*, ввод данных, чеки и подтверждения сюда НЕ входят
-        if (data.startsWith("sink:cat:") || data.equals("sink:egc_pass") || data.equals("sink:egc_pass_all")
-                || data.equals("sink:myitems") || data.equals("sink:titles") || data.equals("sink:soon")
-                || data.equals("sink:boost_info") || data.equals("sink:xpboost_info") || data.equals("sink:excboost_info")
-                || data.equals("sink:slot_info") || data.equals("sink:cooldown_info") || data.equals("sink:insurance_info")
-                || data.equals("wheel:menu") || data.equals("wheel:spin")
-                || data.startsWith("gemfaq:") || data.startsWith("gemdonate:pkg:") || data.startsWith("gemdonate:method:")
-                || data.equals("support:list")
-                || data.equals("shop:withdraw:rub") || data.equals("shop:withdraw:ton")
-                || data.equals("shop:withdraw:ton:has_wallet") || data.equals("shop:withdraw:ton:no_wallet")) {
-            return true;
-        }
-        // Профиль, рейтинг, клуб, отряды, турниры: только просмотры и обновления экранов; ввод данных (ник, теги, возраст, флаг, поиск),
-        // выход/роспуск/исключение, приглашения и заявки - действия или ввод с состоянием, их экраны не трогаем
-        if (data.startsWith("rate:") || data.startsWith("myexc:") || data.startsWith("weekly:")
-                || data.equals("profile:balance") || data.equals("profile:edit") || data.equals("profile:ranks")
-                || data.equals("profile:edit_platforms") || data.equals("profile:edit_genres")
-                || data.equals("club:code") || data.equals("club:goal") || data.startsWith("club:quest:") || data.startsWith("club:claim:")
-                || data.equals("squad:leaderboard") || data.equals("squad:leaderboard_overall") || data.equals("squad:reqs")
-                || data.equals("squad:kick_list") || data.equals("squad:recruit_toggle") || data.equals("squad:leave_confirm")
-                || data.equals("squad:disband_confirm") || data.startsWith("squad:catalog:") || data.startsWith("squad:view:")
-                || data.startsWith("tournament:view:") || data.startsWith("tournament:rules:") || data.startsWith("tournament:leaderboard:")
-                || data.startsWith("poll:view:")) {
-            return true;
-        }
-        // Квесты: только просмотр (взять/отменить/отчёт/проверка подписки - действия, их экраны не трогаем)
-        if (data.startsWith("quests:section:") || data.startsWith("quests:game:") || data.startsWith("quests:list:")
-                || data.startsWith("quests:cat:") || data.startsWith("quest:card:") || data.startsWith("quest:view:")
-                || data.startsWith("quest:suggest:") || data.equals("quest:recommend") || data.startsWith("myquest:view:")
-                || data.startsWith("social:view:") || data.equals("ads:money") || data.equals("wallet:section:ads")) {
-            return true;
-        }
-        // Каталог магазина: только просмотр (покупка shop:buy, «скоро», шаги заявки на вывод - не трогаем)
-        return data.startsWith("shop:view:") || data.startsWith("shop:group:") || data.startsWith("shop:excgroup:")
-                || data.startsWith("shop:gamecat:") || data.startsWith("shop:passgroup:") || data.startsWith("shop:donate:")
-                || data.equals("shop:cs2") || data.equals("shop:ranks")
-                || data.equals("shop:withdraw") || data.equals("shop:withdraw:feed");
+        return data.startsWith("admin") || data.startsWith("mod:") || data.startsWith("revmod:") || data.startsWith("brawl:")
+                || data.startsWith("reward_create") || data.startsWith("tournament_create") || data.startsWith("qc:") || data.startsWith("qe:")
+                || data.startsWith("quest_type") || data.startsWith("onboarding:")
+                || data.startsWith("dtasks:go") || data.startsWith("battlepass:buy:") || data.startsWith("redbtn:") || data.startsWith("nudgefb:")
+                || data.startsWith("report:submit:") || data.startsWith("review:") || data.startsWith("gemdonate:confirmton:")
+                || data.startsWith("council:") || data.startsWith("case:") || data.equals("noop");
     }
 
     /** Метка в navScreens: экран с картинкой. Такие сообщения чистка ленты НЕ удаляет: после удаления клиент Telegram сбрасывает кэш картинки,
@@ -10878,7 +10749,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void navRecord(Long chatId, Integer messageId, Integer companionId) {
         NavCtx ctx = navCtx.get();
         if (ctx == null || messageId == null || !ctx.chatId.equals(chatId)) return;
-        if (ctx.editOnly) return; // кнопки-действия: новые сообщения в чистку не попадают (чеки, подтверждения остаются в ленте)
         if (companionId == null && ctx.pendingPhoto != null) {
             companionId = ctx.pendingPhoto;
         }
