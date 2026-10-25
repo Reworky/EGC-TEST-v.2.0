@@ -1,0 +1,17 @@
+{
+  "_comment": "Каталог кейсов CS2 для магазина наград. costRub - ОРИЕНТИР закупки (кейс + ключ), перед открытием игрокам сверить с реальной закупкой. Цена в EXC считается как у игровой валюты: закупка x 1.18 x 100 x 1.2, вверх до сотен. Картинка кейса: src/main/resources/cases/<key>.jpg (нет файла - карточка без картинки). tags: popular, new.",
+  "cases": [
+    { "key": "kilowatt", "name": "Kilowatt Case", "series": "Новые", "costRub": 300, "tags": ["new", "popular"], "blurb": "Свежий кейс с ножами-кастетами и нашумевшими скинами Kilowatt." },
+    { "key": "revolution", "name": "Revolution Case", "series": "Новые", "costRub": 300, "tags": ["popular"], "blurb": "Один из самых популярных кейсов последних лет: яркие скины и перчатки." },
+    { "key": "recoil", "name": "Recoil Case", "series": "Новые", "costRub": 300, "tags": ["popular"], "blurb": "Кейс с оружием в стиле уличного граффити и редкими ножами." },
+    { "key": "dreams_nightmares", "name": "Dreams & Nightmares Case", "series": "Новые", "costRub": 300, "tags": ["popular"], "blurb": "Мрачная эстетика и узнаваемые скины, любимый кейс коллекционеров." },
+    { "key": "fever", "name": "Fever Case", "series": "Новые", "costRub": 300, "tags": ["new"], "blurb": "Новинка с яркими скинами и ножами." },
+    { "key": "fracture", "name": "Fracture Case", "series": "Классика", "costRub": 300, "tags": [], "blurb": "Скины с эффектом трещин и ломаных линий." },
+    { "key": "snakebite", "name": "Snakebite Case", "series": "Классика", "costRub": 300, "tags": [], "blurb": "Кейс про змей: скины с яркой окраской." },
+    { "key": "prisma2", "name": "Prisma 2 Case", "series": "Классика", "costRub": 300, "tags": [], "blurb": "Радужные переливы и неоновые цвета." },
+    { "key": "clutch", "name": "Clutch Case", "series": "Классика", "costRub": 300, "tags": [], "blurb": "Кейс с перчатками и ножами для любителей клатчей." },
+    { "key": "gallery", "name": "Gallery Case", "series": "Классика", "costRub": 300, "tags": [], "blurb": "Скины в стиле художественной галереи." },
+    { "key": "danger_zone", "name": "Danger Zone Case", "series": "Классика", "costRub": 300, "tags": [], "blurb": "Скины из режима Danger Zone." },
+    { "key": "cs20", "name": "CS20 Case", "series": "Классика", "costRub": 300, "tags": [], "blurb": "Юбилейный кейс к 20-летию Counter-Strike." }
+  ]
+}

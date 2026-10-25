@@ -137,6 +137,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final RewardService rewardService;
     private final NewsService newsService;
     private final AdminService adminService;
+    private final ru.gamebot.platform.service.Cs2CaseCatalog cs2CaseCatalog;
     private final SessionService sessionService;
     private final SupportService supportService;
     private final ru.gamebot.platform.service.SupportHoursService supportHoursService;
@@ -1443,6 +1444,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (data.startsWith("shop:passgroup:")) {
             sendPassDonateList(user, data.substring("shop:passgroup:".length()));
             answerSilently(callbackQuery.getId());
+            return;
+        }
+        if (data.startsWith("case:")) {
+            handleCaseCallback(callbackQuery, user, data.substring("case:".length()));
             return;
         }
         if (data.startsWith("shop:soon:")) {
@@ -8744,7 +8749,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
                 for (Map.Entry<String, List<RewardItem>> groupEntry : byGroup.entrySet()) {
                     List<RewardItem> groupItems = groupEntry.getValue();
-                    if (groupItems.size() > 1) {
+                    if (ru.gamebot.platform.service.Cs2CaseCatalog.GROUP.equals(groupEntry.getKey())) {
+                        rows.add(List.of(keyboardFactory.callback("📦 CS2 кейсы (" + groupItems.size() + ")", "case:home")));
+                    } else if (groupItems.size() > 1) {
                         // Show as single entry leading to denomination picker — если в категории
                         // (игре) всего одна группа валюты, на верхнем уровне показываем просто
                         // название игры (entry.getKey(), = category), а название валюты/номинал —
@@ -8784,6 +8791,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         }
 
+        if (!cs2CaseCatalog.isEnabled() && adminService.isAdmin(user.getTelegramId())) {
+            rows.add(List.of(keyboardFactory.callback("📦 CS2 кейсы (превью админа)", "case:home")));
+        }
         rows.add(List.of(keyboardFactory.callback("📋 Мои заявки", "menu:my-rewards")));
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", "menu:cat:shop"),
@@ -10562,6 +10572,115 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private String groupItemLabel(String title) {
         // "CS2 - Пополнение Steam 150 ₽" → "CS2 - Пополнение Steam"
         return title.replaceAll("\\s+\\d+\\s*[₽$€¥]?\\s*$", "").trim();
+    }
+
+    // ── Каталог кейсов CS2: главная с фильтрами и карусель карточек ◀ ▶ (MVP, 2026-10-25) ──────────────────
+
+    private static final String CASE_FILTER_ALL = "all";
+
+    /** case:home - главная каталога, case:v:&lt;фильтр&gt;:&lt;номер&gt; - карточка кейса. Предыдущее сообщение каталога удаляется,
+     *  чтобы карусель оставалась одним окном (сообщение с картинкой нельзя править в текстовое и наоборот). */
+    private void handleCaseCallback(CallbackQuery callbackQuery, AppUser user, String arg) {
+        answerSilently(callbackQuery.getId());
+        if (!cs2CaseCatalog.isEnabled() && !adminService.isAdmin(user.getTelegramId())) {
+            sendShop(user);
+            return;
+        }
+        Integer messageId = callbackQuery.getMessage() != null ? callbackQuery.getMessage().getMessageId() : null;
+        String[] parts = arg.split(":");
+        if ("home".equals(parts[0])) {
+            deleteMessageQuietly(user.getTelegramId(), messageId);
+            sendCaseHome(user);
+            return;
+        }
+        if ("v".equals(parts[0]) && parts.length == 3) {
+            int index;
+            try {
+                index = Integer.parseInt(parts[2]);
+            } catch (NumberFormatException e) {
+                index = 0;
+            }
+            deleteMessageQuietly(user.getTelegramId(), messageId);
+            sendCaseCard(user, parts[1], index);
+        }
+    }
+
+    private void deleteMessageQuietly(Long chatId, Integer messageId) {
+        if (messageId == null) return;
+        try {
+            execute(new org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage(chatId.toString(), messageId));
+        } catch (Exception ignored) {
+            // сообщение могло быть удалено или устареть - карусель работает и без этого
+        }
+    }
+
+    private void sendCaseHome(AppUser user) {
+        List<ru.gamebot.platform.service.Cs2CaseCatalog.CaseDef> all = cs2CaseCatalog.all();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        int popular = cs2CaseCatalog.filter("pop").size();
+        int fresh = cs2CaseCatalog.filter("new").size();
+        int cheap = cs2CaseCatalog.filter("cheap").size();
+        if (popular > 0) rows.add(List.of(keyboardFactory.callback("🔥 Популярные (" + popular + ")", "case:v:pop:0")));
+        if (fresh > 0) rows.add(List.of(keyboardFactory.callback("🆕 Новые (" + fresh + ")", "case:v:new:0")));
+        if (cheap > 0) rows.add(List.of(keyboardFactory.callback("💰 Самые доступные (" + cheap + ")", "case:v:cheap:0")));
+        rows.add(List.of(keyboardFactory.callback("📚 Все кейсы (" + all.size() + ")", "case:v:" + CASE_FILTER_ALL + ":0")));
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Магазин", "menu:shop"),
+                keyboardFactory.callback("🏠 Меню", "menu:main")));
+        String preview = cs2CaseCatalog.isEnabled() ? ""
+                : "\n\n🛠 <i>Превью для админов: игрокам каталог пока не виден, обмен выключен.</i>";
+        sendText(user.getTelegramId(),
+                "📦 <b>CS2 кейсы</b>\n\n"
+                        + "Кейсы Counter-Strike 2 за EXC: листай карточки и обменивай понравившийся. В комплекте кейс и ключ.\n"
+                        + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>" + preview,
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendCaseCard(AppUser user, String filter, int index) {
+        List<ru.gamebot.platform.service.Cs2CaseCatalog.CaseDef> list = cs2CaseCatalog.filter(filter);
+        if (list.isEmpty()) {
+            sendCaseHome(user);
+            return;
+        }
+        int n = list.size();
+        int idx = ((index % n) + n) % n;
+        ru.gamebot.platform.service.Cs2CaseCatalog.CaseDef c = list.get(idx);
+        RewardItem item = cs2CaseCatalog.isEnabled()
+                ? rewardService.findByPurchaseGroup(ru.gamebot.platform.service.Cs2CaseCatalog.GROUP).stream()
+                        .filter(r -> r.getTitle().equals(c.title())).findFirst().orElse(null)
+                : null;
+        long price = item != null ? rewardService.effectivePrice(item) : c.priceExc();
+        String text = "📦 <b>" + escape(c.name()) + "</b>\n"
+                + "🗂 " + escape(c.series()) + "\n\n"
+                + escape(c.blurb()) + "\n\n"
+                + "🪙 Стоимость: <b>" + price + " EXC</b> (кейс + ключ)\n"
+                + "<i>" + (idx + 1) + " из " + n + "</i>";
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (n > 1) {
+            rows.add(List.of(
+                    keyboardFactory.callback("◀️", "case:v:" + filter + ":" + (idx - 1)),
+                    keyboardFactory.callback((idx + 1) + " / " + n, "noop"),
+                    keyboardFactory.callback("▶️", "case:v:" + filter + ":" + (idx + 1))));
+        }
+        if (n > 10) {
+            rows.add(List.of(
+                    keyboardFactory.callback("⏪ −10", "case:v:" + filter + ":" + (idx - 10)),
+                    keyboardFactory.callback("+10 ⏩", "case:v:" + filter + ":" + (idx + 10))));
+        }
+        rows.add(List.of(item != null
+                ? keyboardFactory.callback("🛒 Обменять", "shop:buy:" + item.getId())
+                : keyboardFactory.callback("🔒 Обмен пока выключен", "noop")));
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", "case:home"),
+                keyboardFactory.callback("🏠 Меню", "menu:main")));
+
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
+        if (getClass().getResource("/" + c.imageResource()) != null) {
+            sendResourceBanner(user.getTelegramId(), c.imageResource(), text, keyboard);
+        } else {
+            sendText(user.getTelegramId(), text, keyboard);
+        }
     }
 
     private void sendRewardCard(AppUser user, Long rewardId) {
