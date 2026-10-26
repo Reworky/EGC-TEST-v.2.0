@@ -5194,9 +5194,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         int onboardingLeft = Math.max(0, QuestService.ONBOARDING_QUEST_THRESHOLD - user.getCompletedQuests());
         String onboardingLine = onboardingLeft > 0
-                ? "🌱 <b>Новичковый темп:</b> первые " + QuestService.ONBOARDING_QUEST_THRESHOLD + " квестов — кулдауны в разы короче.\n"
-                        + "Берите чаще, зарабатывайте быстрее, пока действует бонус.\n"
-                        + "Осталось: <b>" + onboardingLeft + " " + pluralQuests(onboardingLeft) + "</b> до конца льготного периода.\n\n"
+                ? "🌱 <b>Новичковый темп:</b> осталось <b>" + onboardingLeft + " " + pluralQuests(onboardingLeft) + "</b> с короткими кулдаунами.\n"
+                : "";
+        String onboardingDetails = onboardingLeft > 0
+                ? "🌱 Первые " + QuestService.ONBOARDING_QUEST_THRESHOLD + " квестов — кулдауны в разы короче. "
+                        + "Берите чаще, зарабатывайте быстрее, пока действует бонус.\n\n"
                 : "";
 
         String profileText = "🎮 <b>" + escape(user.getNickname()) + "</b>\n"
@@ -5213,13 +5215,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "✅ Квестов: <b>" + user.getCompletedQuests() + "</b>"
                 + " · 🔥 Серия: <b>" + user.getStreakDays() + " дней</b>"
                 + " · 🎟️ Билеты: <b>" + user.getTickets() + "</b>\n\n"
+                + "<blockquote expandable>" + onboardingDetails
                 + "🎮 Платформы: <b>" + escape(displayValue(user.getPlatformsCsv(), "не указаны")) + "</b>\n"
                 + "🎯 Жанры: <b>" + escape(displayValue(user.getInterestsCsv(), "не указаны")) + "</b>\n"
                 + "🎂 Возраст: <b>" + (user.getAge() != null ? user.getAge() : "не указан") + "</b>\n"
                 + "🌍 Страна: <b>" + escape(displayValue(user.getCountry(), "не указана")) + "</b>\n\n"
                 + "🏆 Достижения: " + escape(achievements) + "\n"
                 + "👥 Приглашено друзей: <b>" + user.getInvitedFriends() + "</b>\n\n"
-                + buildGameTagsBlock(user)
+                + buildGameTagsBlock(user).stripTrailing() + "</blockquote>"
                 + incompleteHint;
 
         String avatarBtn = user.getAvatarFileId() != null ? "📷 Сменить аватар" : "📷 Загрузить аватар";
@@ -5976,11 +5979,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "💰 <b>Баланс</b>\n\n"
                         + "🪙 <b>" + fmtExc(user.getCoins()) + " EXC</b>\n\n"
                         + equivalent
-                        + "💠 Бонус к EXC: <b>+" + userService.getExcBonusPercent(user.getXp()) + "%</b>\n"
+                        + "<blockquote expandable>💠 Бонус к EXC: <b>+" + userService.getExcBonusPercent(user.getXp()) + "%</b>\n"
                         + "🎟️ Билеты сезона: <b>" + user.getTickets() + "</b>\n"
                         + "✨ XP: <b>" + user.getXp() + "</b> · за неделю: <b>" + user.getWeeklyXp() + "</b>\n\n"
                         + "📊 Фонд клуба: <b>" + ratioPercent + "%</b>\n"
-                        + hrExplanationLine(ratioPercent, effectiveQuestReward)
+                        + hrExplanationLine(ratioPercent, effectiveQuestReward).stripTrailing() + "</blockquote>\n"
                         + withdrawalProgressBlock(user),
                 keyboardFactory.rowsLayout(List.of(
                         List.of(
@@ -8762,11 +8765,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🔗 Твоя ссылка:\n" + escape(referralLink) + "\n\n"
                         + "👥 Друзей: <b>" + user.getInvitedFriends() + "</b> · 💎 Заработано: <b>" + earned + " EXC</b>\n"
                         + friendBadgeProgress
-                        + "<b>Как это работает</b>\n"
+                        + "<blockquote expandable><b>Как это работает</b>\n"
                         + "1. Друг вступает в клуб: тебе <b>+300 EXC</b>, ему <b>+500 EXC</b>.\n"
                         + "2. Друг выполняет 3 квеста, и проходит 3 дня в клубе: тебе <b>+2 500 EXC</b>, ему <b>+3 000 EXC</b>.\n"
-                        + "3. Дальше ты получаешь <b>10% от его EXC</b>, пока он играет (квест хотя бы раз в 14 дней).\n\n"
-                        + "Скопируй ссылку и отправь другу, остальное система сделает сама.",
+                        + "3. Дальше ты получаешь <b>10% от его EXC</b>, пока он играет (квест хотя бы раз в 14 дней).\n"
+                        + "Скопируй ссылку и отправь другу, остальное система сделает сама.</blockquote>",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.url("🔗 Поделиться", userService.buildShareUrl(user))),
                         List.of(keyboardFactory.callback("🏆 Рейтинг недели", "menu:referral-rating")),
@@ -11333,7 +11336,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         StringBuilder sb = new StringBuilder();
         sb.append("⚔️ <b>Отряд «").append(escape(squad.getName())).append("»</b>").append(eventBannerLine()).append(eventSquadPoolLine()).append("\n\n");
-        sb.append("👥 Состав (").append(members.size()).append(" участников):\n");
+        sb.append("👥 Участников: <b>").append(members.size()).append("</b> · 📊 Рейтинг за неделю: <b>")
+                .append(String.format("%,d", weeklyXp).replace(',', ' ')).append("</b>\n\n");
+        sb.append("<blockquote expandable>");
         for (int i = 0; i < shown; i++) {
             ru.gamebot.platform.domain.model.AppUser m = sortedMembers.get(i);
             String crown = m.getTelegramId().equals(squad.getCaptainTelegramId()) ? " 👑" : "";
@@ -11348,11 +11353,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (squad.getWeeklyBonusPoints() > 0) {
             sb.append("🎉 Бонус за рефералов: <b>+").append(squad.getWeeklyBonusPoints()).append(" очков</b>\n");
         }
-        sb.append("\n📊 Рейтинг отряда за неделю: <b>")
-                .append(String.format("%,d", weeklyXp).replace(',', ' ')).append("</b>\n");
+        sb.append("🎁 Топ-отряд каждую неделю получает <b>10 000 EXC</b></blockquote>\n");
         sb.append(squadGoalLines(squad, members.size()));
-        sb.append("\n");
-        sb.append("🎁 Топ-отряд каждую неделю получает <b>10 000 EXC</b>\n");
         sb.append(squadMilestoneProgressLine(squad, members.size()));
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
