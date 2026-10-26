@@ -6033,9 +6033,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     public void onGoldenHourPush(ru.gamebot.platform.event.GoldenHourPushEvent event) {
         try {
             sendText(event.getTelegramId(),
-                    "⚡ <b>Золотой час сегодня с " + String.format("%02d:00", event.getStartHourMsk()) + " до " + String.format("%02d:00", event.getEndHourMsk()) + " по Москве</b>\n\n"
-                            + "В это время награда за квесты выше на <b>" + event.getPercent() + "%</b>: это работает на первые " + event.getMaxQuests()
-                            + " засчитанных квеста. Возьми квест заранее и закрой его в этот час.",
+                    "⚡ <b>Золотой час: " + String.format("%02d:00", event.getStartHourMsk()) + "–" + String.format("%02d:00", event.getEndHourMsk()) + " по Москве</b>\n\n"
+                            + "Награда за квесты <b>+" + event.getPercent() + "%</b> на первые " + event.getMaxQuests()
+                            + " засчитанных. Возьми квест заранее и закрой его в этот час.",
                     keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🎯 Квесты", "menu:quests")))));
         } catch (Exception e) {
             log.warn("Failed to send golden hour push to {}", event.getTelegramId(), e);
@@ -19422,13 +19422,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     && !e.isDisqualified() && e.getTrophiesStart() != null && e.getTrophiesEnd() != null);
             if (e.getPrizeExc() > 0) {
                 try {
-                    String delta = isBrawl && scored ? "\n📈 Прирост трофеев: <b>+" + (e.getTrophiesEnd() - e.getTrophiesStart()) + "</b>" : "";
+                    String delta = isBrawl && scored ? "\nПрирост трофеев <b>+" + (e.getTrophiesEnd() - e.getTrophiesStart()) + "</b>" : "";
                     String prizeNote = e.isPayoutHeld()
-                            ? "\n⏳ Приз временно удержан (идёт проверка), будет зачислен после."
-                            : "\n💰 Приз зачислен: <b>+" + e.getPrizeExc() + " EXC</b>";
+                            ? "\nПриз удержан на проверке, зачислим после."
+                            : "\nПриз <b>+" + e.getPrizeExc() + " EXC</b> уже на балансе.";
                     sendText(e.getUser().getTelegramId(),
-                            "🏆 <b>Турнир завершён!</b>\n\n"
-                            + "Вы заняли <b>" + e.getRank() + " место</b> в турнире «" + escape(t.getName()) + "»"
+                            "🏆 <b>«" + escape(t.getName()) + "»: ты на " + e.getRank() + " месте</b>\n"
                             + delta + prizeNote,
                             backMenuKeyboard("menu:main"));
                     if (e.getRank() == 1) {
@@ -19441,10 +19440,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 try {
                     int delta = e.getTrophiesEnd() - e.getTrophiesStart();
                     sendText(e.getUser().getTelegramId(),
-                            "🏆 <b>Турнир завершён!</b>\n\n"
-                            + "Вы заняли <b>" + e.getRank() + " место</b> в турнире «" + escape(t.getName()) + "»\n"
-                            + "📈 Прирост трофеев: <b>" + (delta >= 0 ? "+" : "") + delta + "</b>\n"
-                            + "Приза в этот раз нет — попробуйте в следующем турнире!",
+                            "🏆 <b>«" + escape(t.getName()) + "»: ты на " + e.getRank() + " месте</b>\n\n"
+                            + "Прирост трофеев <b>" + (delta >= 0 ? "+" : "") + delta + "</b>. Приза в этот раз нет, до встречи в следующем турнире.",
                             backMenuKeyboard("menu:main"));
                 } catch (Exception ex) {
                     log.warn("Failed to notify user {} about tournament result", e.getUser().getTelegramId());
