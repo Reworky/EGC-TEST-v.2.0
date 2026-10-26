@@ -2214,7 +2214,7 @@ public class QuestSeeder implements CommandLineRunner {
             mobideaInstall.setDescription("Установи и запусти приложение по своей персональной ссылке. Засчитывается ТОЛЬКО для игроков из России и ТОЛЬКО на телефонах с Android: "
                     + "на iPhone и из других стран установка не засчитается.");
             mobideaInstall.setInstruction("🔗 Открой ссылку на Android-телефоне (из России, без VPN), установи приложение из Google Play и запусти его:\n"
-                    + "https://www.ubelivablebridge.study/click?offer_id=37030&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=37030\n\n"
+                    + "https://www.ubelivablestrange.work/click?offer_id=37030&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=37030\n\n"
                     + "⚠️ Только Android и только Россия: на iPhone, при VPN или из другой страны установка не засчитается.");
             mobideaInstall.setRequirements("Подтверждение приходит от партнёра автоматически, обычно в течение нескольких часов или дней. "
                     + "Отчёт отправлять не нужно, EXC начислится сам.");
@@ -2230,9 +2230,12 @@ public class QuestSeeder implements CommandLineRunner {
         }
         // Глобальный постбек Mobidea получает ID оффера из pub_sub_id ссылки ({{PLACEMENT}}): в уже созданном квесте 37030 заменяем «quest» на ID оффера.
         questRepository.findFirstByTitleAndGameName("Установи приложение (только Android, только РФ)", "Партнёрские приложения")
-                .filter(q -> q.getInstruction() != null && q.getInstruction().contains("offer_id=37030") && q.getInstruction().contains("pub_sub_id=quest"))
+                .filter(q -> q.getInstruction() != null && q.getInstruction().contains("offer_id=37030")
+                        && (q.getInstruction().contains("pub_sub_id=quest") || q.getInstruction().contains("ubelivablebridge.study")))
                 .ifPresent(q -> {
-                    q.setInstruction(q.getInstruction().replace("pub_sub_id=quest", "pub_sub_id=37030"));
+                    // Домен трекинга в кабинете Mobidea теперь ubelivablestrange.work (как у остальных офферов); ID оффера - в pub_sub_id для глобального постбека
+                    q.setInstruction(q.getInstruction().replace("pub_sub_id=quest", "pub_sub_id=37030")
+                            .replace("ubelivablebridge.study", "ubelivablestrange.work"));
                     questRepository.save(q);
                 });
         // ── Внешний квест Mobidea 37863 (MegaPrognoze, Мегафон «1 click», подписка оператора), 2026-10-26 ──
