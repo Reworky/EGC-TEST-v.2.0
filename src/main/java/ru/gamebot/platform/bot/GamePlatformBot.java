@@ -8775,24 +8775,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long earned = user.getReferralEarnedExc();
 
         String boostBanner = referralBoostService.findActiveBoost()
-                .map(b -> "🚀 <b>Буст-уикенд ×" + b.getMultiplier() + " активен!</b>\n" + formatDeadlineLine(b.getEndAt()) + "\n")
+                .map(b -> "🚀 <b>Буст-уикенд ×" + b.getMultiplier() + "</b> " + formatDeadlineLine(b.getEndAt()).trim() + "\n")
                 .orElse("");
 
         Integer nextFriendMilestone = userService.nextInvitedFriendsMilestone(user.getInvitedFriends());
         String friendBadgeProgress = nextFriendMilestone == null
-                ? "🏆 Все бейджи за друзей получены!\n\n"
-                : "🎖️ До бейджа «" + userService.invitedFriendsBadgeName(nextFriendMilestone) + "»: "
-                        + user.getInvitedFriends() + " из " + nextFriendMilestone + " друзей\n\n";
+                ? " · 🏆 все бейджи"
+                : " · 🎖 до бейджа «" + userService.invitedFriendsBadgeName(nextFriendMilestone) + "»: "
+                        + user.getInvitedFriends() + " из " + nextFriendMilestone;
 
         // Баннер «Рефералы» (Экси у портала-приглашения); если подпись длиннее лимита Telegram,
         // sendResourceBanner сам пришлёт картинку без подписи и текст отдельным сообщением.
         sendResourceBanner(user.getTelegramId(), "referrals_banner.jpg",
-                "🤝 <b>Рефералы EGC</b>\n\n"
+                "🤝 <b>Рефералы EGC</b>\n"
                         + boostBanner
                         + referralGoalBlock(user)
-                        + "🔗 Твоя ссылка:\n" + escape(referralLink) + "\n\n"
-                        + "👥 Друзей: <b>" + user.getInvitedFriends() + "</b> · 💎 Заработано: <b>" + earned + " EXC</b>\n"
-                        + friendBadgeProgress
+                        + "🔗 " + escape(referralLink) + "\n\n"
+                        + "👥 Друзей: <b>" + user.getInvitedFriends() + "</b> · 💎 <b>" + earned + " EXC</b>"
+                        + friendBadgeProgress + "\n\n"
                         + "<blockquote expandable><b>Как это работает</b>\n"
                         + "1. Друг вступает в клуб: тебе <b>+300 EXC</b>, ему <b>+500 EXC</b>.\n"
                         + "2. Друг выполняет 3 квеста, и проходит 3 дня в клубе: тебе <b>+2 500 EXC</b>, ему <b>+3 000 EXC</b>.\n"
@@ -24746,11 +24746,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!userService.referralGoalOpen(user)) return "";
         String reward = "<b>+2 500 EXC</b>";
         if (user.getInvitedFriends() > 0) {
-            return "🎯 <b>Друг в клубе</b>\n"
-                    + "Как только он выполнит 3 квеста и проведёт 3 дня в клубе, ты получишь " + reward + ".\n\n";
+            return "🎯 Друг в клубе: " + reward + " после 3 квестов и 3 дней\n";
         }
-        return "🎯 <b>Позови друга</b> (0/1)\n"
-                + "Друг выполнит 3 квеста и проведёт 3 дня в клубе, и ты получишь " + reward + ". Другу тоже достанется: до <b>+3 500 EXC</b>.\n\n";
+        return "🎯 Позови друга: " + reward + " тебе, до <b>+3 500 EXC</b> ему\n";
     }
 
     /** Кнопка-подсказка «позови друга» под сообщением в удачный момент (moment: quest, payout, streak3, streak7) или null: не подходит по правилам
