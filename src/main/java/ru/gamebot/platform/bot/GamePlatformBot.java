@@ -21747,8 +21747,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private static String channelPostTitle(String type) {
         return switch (type) {
             case ru.gamebot.platform.service.ChannelContentService.NEW_QUESTS -> "Новые квесты";
-            case ru.gamebot.platform.service.ChannelContentService.TOP_QUESTS_WEEK -> "Топ квестов недели";
-            case ru.gamebot.platform.service.ChannelContentService.SQUAD_MIDWEEK -> "Гонка отрядов - экватор недели";
+            case ru.gamebot.platform.service.ChannelContentService.TOP_QUESTS_WEEK -> "Топы недели: квесты и рефереры";
+            case ru.gamebot.platform.service.ChannelContentService.SQUAD_MIDWEEK -> "Гонка недели: отряды и игроки";
             case ru.gamebot.platform.service.ChannelContentService.SQUAD_RESULTS -> "Итоги недели у отрядов";
             case ru.gamebot.platform.service.ChannelContentService.SQUAD_STATS -> "Отряды в цифрах";
             case ru.gamebot.platform.service.ChannelContentService.TOURNEY_REG_CLOSING -> "Турнир: регистрация скоро закроется";
@@ -21758,7 +21758,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_MILESTONE -> "Веха выплат";
             case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_HOWTO -> "Как вывести EXC";
             case ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF -> "Пруф: выплата или выдача награды";
-            case ru.gamebot.platform.service.ChannelContentService.HALL_OF_FAME -> "Зал славы недели";
+            case ru.gamebot.platform.service.ChannelContentService.HALL_OF_FAME -> "Итоги недели: игроки";
             case ru.gamebot.platform.service.ChannelContentService.WEEKLY_RACE -> "Гонка за Зал славы";
             case ru.gamebot.platform.service.ChannelContentService.LEAGUES_WEEK -> "Лиги недели";
             case ru.gamebot.platform.service.ChannelContentService.SHOP_NEW -> "Новое в магазине";
