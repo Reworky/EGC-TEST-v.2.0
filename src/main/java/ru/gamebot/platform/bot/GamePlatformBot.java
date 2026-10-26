@@ -7830,8 +7830,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // инструкцию - только если описания нет.
             String description = quest.getDescription() == null ? "" : quest.getDescription().trim();
             String text = description.isBlank() ? simplifyAutoInstruction(personalizedInstruction) : description;
-            body = escape(text) + (text.isBlank() ? "" : " ")
-                    + "Прогресс засчитывается сам, ничего отправлять не нужно.";
+            String lowText = text.toLowerCase(java.util.Locale.ROOT);
+            boolean saysAuto = lowText.contains("автоматическ") || lowText.contains("засчитывается сам") || lowText.contains("ничего отправлять");
+            body = escape(text) + (saysAuto ? "" : (text.isBlank() ? "" : " ") + "Прогресс засчитывается сам, ничего отправлять не нужно.");
         } else if (quest.isSponsored()) {
             // Спонсорские: ссылки - само действие, остаются на виду
             body = escape(quest.getDescription())
@@ -7851,8 +7852,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             details = d.toString();
         }
-        String rewardExtras = questRewardExtras(user, quest);
-        if (!rewardExtras.isBlank()) details = details.isBlank() ? rewardExtras : details + "\n\n" + rewardExtras;
         if (!details.isBlank()) body += "\n\n<blockquote expandable>" + details + "</blockquote>";
         sendText(user.getTelegramId(),
                 (notice == null ? "" : notice + "\n\n")
@@ -7912,26 +7911,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + rewardNote + egcPassRewardNote(user, quest);
     }
 
-    /** Награда на карточке квеста (макет 26.10.2026): только EXC и XP; снижение по недельному лимиту остаётся на виду, остальное - в questRewardExtras. */
+    /** Награда на карточке квеста (макет 26.10.2026): EXC с эквивалентом в звёздах, XP, билет Колеса, пометки про недельный лимит и EGC Pass - всё на виду рядом; в цитате остаются только условия. */
     private String questRewardLineCompact(AppUser user, Quest quest) {
         long coins = displayRewardCoins(user, quest);
         String rewardNote = quest.isRepeatableNoCooldownEligible()
                 ? " (за 1-е сегодня, дальше меньше)"
                 : weeklyLimitNote(questService.weeklyLimitStatus(user, quest));
-        return "🏆 <b>+" + fmtExc(coins) + " EXC</b> · +" + quest.getRewardXp() + " XP" + rewardNote;
-    }
-
-    /** Второстепенные детали награды для цитаты «Подробнее»: эквивалент в звёздах, билеты для Колеса, надбавка EGC Pass. Пусто, если нечего показать. */
-    private String questRewardExtras(AppUser user, Quest quest) {
-        List<String> lines = new ArrayList<>();
-        String stars = healthRatioService.starsApprox(displayRewardCoins(user, quest));
-        if (!stars.isEmpty()) lines.add("Эквивалент: " + stars);
-        if (!quest.isSponsored() && !"UGC".equalsIgnoreCase(quest.getGameName()) && quest.getTicketReward() > 0) {
-            lines.add("🎟 +" + quest.getTicketReward() + " " + ticketsWord(quest.getTicketReward()) + " для Колеса");
-        }
-        String pass = egcPassRewardNote(user, quest).trim();
-        if (!pass.isEmpty()) lines.add(pass);
-        return String.join("\n", lines);
+        boolean tickets = !quest.isSponsored() && !"UGC".equalsIgnoreCase(quest.getGameName()) && quest.getTicketReward() > 0;
+        return "🏆 <b>+" + fmtExc(coins) + " EXC</b>" + starsNote(coins) + " · +" + quest.getRewardXp() + " XP"
+                + (tickets ? " · 🎟 +" + quest.getTicketReward() + " " + ticketsWord(quest.getTicketReward()) : "")
+                + rewardNote + egcPassRewardNote(user, quest);
     }
 
     /** Убирает из инструкции квеста с автопроверкой фразы про автоматический учёт (их заменяет одна общая строка в конце карточки). */
