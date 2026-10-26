@@ -12,5 +12,9 @@ FROM quest_submissions s JOIN quests q ON q.id = s.quest_id JOIN app_users u ON 
 WHERE u.telegram_id = 8852272498 ORDER BY s.created_at;
 -- 3) Заявки на вывод и покупки игрока: даты (до/после запуска правила 3 квеста + 3 дня, 2026-10-03)
 SELECT r.display_id, r.status, r.created_at, r.paid_at, r.paid_price_coins, i.title, i.category
-FROM reward_requests r JOIN reward_items i ON i.id = r.reward_item_id JOIN app_users u ON u.id = r.user_id
+FROM reward_requests r JOIN reward_items i ON i.id = r.reward_id JOIN app_users u ON u.id = r.user_id
 WHERE u.telegram_id = 8852272498 ORDER BY r.created_at;
+-- 4) Журнал начислений за квесты: сколько квестов реально засчитано (в отличие от quest_submissions, журнал не стирается при удалении квестов)
+SELECT t.created_at, t.type, t.amount, t.description
+FROM exc_transactions t JOIN app_users u ON u.id = t.user_id
+WHERE u.telegram_id = 8852272498 AND t.type = 'QUEST' ORDER BY t.created_at;
