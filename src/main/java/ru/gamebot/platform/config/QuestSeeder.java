@@ -28,6 +28,13 @@ import ru.gamebot.platform.service.GameCatalogService;
 @RequiredArgsConstructor
 public class QuestSeeder implements CommandLineRunner {
 
+    /** Квест Mobidea 37863: на карточке видна только суть, остальное бот прячет в раскрывающуюся цитату. */
+    private static final String MOBIDEA_37863_DESCRIPTION = "Подключи MegaPrognoze (прогнозы на футбол) по своей персональной ссылке. В конце тебя ждёт платная подписка Мегафона.";
+    private static final String MOBIDEA_37863_INSTRUCTION = "Засчитывается ТОЛЬКО если открыть ссылку через мобильный интернет Мегафона в России и без VPN: "
+            + "через Wi-Fi, с VPN или из другой страны переход не засчитается. Перед переходом выключи Wi-Fi и VPN.\n\n"
+            + "🔗 https://www.ubelivablestrange.work/click?offer_id=37863&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=37863\n\n"
+            + "Подписка оператора: деньги списываются с баланса телефона, пока ты её не отключишь.";
+
     private final QuestRepository questRepository;
     private final QuestSubmissionRepository questSubmissionRepository;
     private final GameCatalogService gameCatalogService;
@@ -2230,12 +2237,8 @@ public class QuestSeeder implements CommandLineRunner {
             mobidea37863.setDurationText("30 дней");
             mobidea37863.setRewardXp(0);
             mobidea37863.setRewardCoins(500);
-            mobidea37863.setDescription("Подключи сервис MegaPrognoze (прогнозы на футбол) по своей персональной ссылке. Засчитывается ТОЛЬКО если открыть ссылку "
-                    + "через мобильный интернет Мегафона в России и без VPN: через Wi-Fi, с VPN или из другой страны переход не засчитается.");
-            mobidea37863.setInstruction("🔗 Открой ссылку с телефона через мобильный интернет Мегафона (выключи Wi-Fi и VPN, находись в России):\n"
-                    + "https://www.ubelivablestrange.work/click?offer_id=37863&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=37863\n\n"
-                    + "⚠️ Только Россия, только мобильная сеть, без VPN: иначе переход не засчитается.\n"
-                    + "ℹ️ В конце тебя ждёт платная подписка оператора: деньги списываются с баланса телефона, пока ты её не отключишь.");
+            mobidea37863.setDescription(MOBIDEA_37863_DESCRIPTION);
+            mobidea37863.setInstruction(MOBIDEA_37863_INSTRUCTION);
             mobidea37863.setRequirements("Подтверждение приходит от партнёра автоматически, обычно в течение нескольких часов или дней. "
                     + "Отчёт отправлять не нужно, EXC начислится сам.");
             mobidea37863.setParticipantLimit(250);
@@ -2248,6 +2251,14 @@ public class QuestSeeder implements CommandLineRunner {
             questRepository.save(mobidea37863);
             log.info("[QuestSeeder] Created external quest (inactive): Mobidea 37863 MegaPrognoze");
         }
+        // Уже созданный квест 37863: текст до сокращения карточки (описание начиналось «Подключи сервис MegaPrognoze») заменяем новым.
+        questRepository.findFirstByTitleAndGameName("Подключи MegaPrognoze (Мегафон, только Россия)", "Партнёрские приложения")
+                .filter(q -> q.getDescription() != null && q.getDescription().startsWith("Подключи сервис MegaPrognoze"))
+                .ifPresent(q -> {
+                    q.setDescription(MOBIDEA_37863_DESCRIPTION);
+                    q.setInstruction(MOBIDEA_37863_INSTRUCTION);
+                    questRepository.save(q);
+                });
         // ── Антифрод: разовые квесты (проверка текущего состояния аккаунта, а не свежего действия) ──
         // Баланс/ранг/лига не сбрасываются между попытками — без этого флага такие квесты фармились
         // повторно каждый кулдаун без единого нового действия (жалоба игрока, скриншот с 4.25М золота

@@ -7831,6 +7831,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String text = description.isBlank() ? simplifyAutoInstruction(personalizedInstruction) : description;
             body = escape(text) + (text.isBlank() ? "" : " ")
                     + "Прогресс засчитывается сам, ничего отправлять не нужно.";
+        } else if ("mobidea".equals(quest.getExternalNetwork()) && !quest.isSponsored()) {
+            // Партнёрские офферы Mobidea: на виду только суть (описание), условия, ссылка и нюансы свёрнуты в раскрывающуюся цитату.
+            // Сама ссылка снова показывается обычным текстом в сообщении после «Взять».
+            String details = (personalizedInstruction == null ? "" : personalizedInstruction.trim())
+                    + (quest.getRequirements() == null || quest.getRequirements().isBlank() ? "" : "\n\nℹ️ " + quest.getRequirements().trim());
+            body = escape(quest.getDescription())
+                    + (details.isBlank() ? "" : "\n\n<blockquote expandable>" + escape(details.trim()) + "</blockquote>");
         } else {
             body = escape(quest.getDescription()) + "\n\n"
                     + (personalizedInstruction != null && !personalizedInstruction.isBlank()
