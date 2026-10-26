@@ -21678,23 +21678,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 return;
             }
             String game = questService.mostPopularActiveGame().orElse(null);
-            String popular = game == null ? ""
-                    : "\n\nСейчас чаще всего выполняют квесты по игре <b>" + escape(game) + "</b>.";
             String inviterNick = null;
             if (event.getNotificationNumber() == 1 && user.getReferredByTelegramId() != null) {
                 inviterNick = userService.findByTelegramId(user.getReferredByTelegramId()).map(this::displayUserName).orElse(null);
             }
             String msg = inviterNick != null
                     ? "🎁 <b>Тебя пригласил " + escape(inviterNick) + "</b>\n\n"
-                            + "За 3 выполненных квеста и 3 дня в клубе тебе начислят <b>+3 000 EXC</b>" + starsNote(3_000) + (user.isRegistrationCompleted() ? "" : " (после подписки на канал)") + ". Самый простой старт — квесты по Brawl Stars: прогресс засчитывается сам, ничего отправлять не нужно." + popular
+                            + "Выполни 3 квеста и проведи 3 дня в клубе — получишь <b>+3 000 EXC</b>.\n"
+                            + "Проще всего начать с Brawl Stars: прогресс засчитывается сам."
                     : switch (event.getNotificationNumber()) {
                 case 1 -> "🎮 <b>У тебя уже 200 EXC</b>\n\n"
-                        + "Первый квест занимает около 5 минут, а дальше EXC копятся на вывод (минимум 5 000 EXC)." + popular;
-                case 2 -> "💡 <b>Часть квестов не требует скриншотов</b>\n\n"
-                        + "Для игр с привязкой аккаунта (Brawl Stars, Clash Royale, Clash of Clans и другие) прогресс засчитывается сам: "
-                        + "привязал тег, сыграл, получил EXC." + popular;
+                        + "Первый квест займёт около 5 минут." + (game == null ? "" : " Сейчас чаще всего берут <b>" + escape(game) + "</b>.");
+                case 2 -> "💡 <b>Скриншоты нужны не всегда</b>\n\n"
+                        + "В Brawl Stars, Clash Royale, Clash of Clans и других играх прогресс считается сам: привяжи тег, сыграй и получи EXC.";
                 default -> "🔔 <b>Последнее напоминание</b>\n\n"
-                        + "Квесты не пропадут, но новичку проще начать, пока свежи правила. Выбери игру и возьми первый квест." + popular;
+                        + "Квесты никуда не денутся, но проще начать сразу. Выбери игру и возьми первый квест.";
             };
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
             if (game != null) {
