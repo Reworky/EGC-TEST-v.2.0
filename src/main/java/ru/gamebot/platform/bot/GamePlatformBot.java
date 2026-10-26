@@ -5844,17 +5844,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     public void onQuestNoPlayNudge(ru.gamebot.platform.event.QuestNoPlayNudgeEvent event) {
         try {
             String game = event.getGameName() == null ? "игру" : escape(event.getGameName());
-            String condition = event.getDescription() == null || event.getDescription().isBlank()
-                    ? "" : "\n📋 " + escape(trim(event.getDescription(), 220));
             String left = "";
             if (event.getMinutesLeft() >= 0) {
                 long hours = event.getMinutesLeft() / 60;
-                left = "\n⏳ Осталось времени: <b>" + (hours >= 48 ? (hours / 24) + " дн." : Math.max(1, hours) + " ч") + "</b>";
+                left = ", осталось <b>" + (hours >= 48 ? (hours / 24) + " дн." : Math.max(1, hours) + " ч") + "</b>";
             }
             sendText(event.getTelegramId(),
-                    "🎮 <b>Квест ждёт тебя</b>\n\n«" + escape(event.getQuestTitle()) + "»\n"
-                            + "Ты взял его, но прогресса пока нет." + condition + left + "\n\n"
-                            + "Зайди в " + game + " — прогресс засчитается сам, ничего отправлять не нужно.",
+                    "🎮 <b>«" + escape(event.getQuestTitle()) + "»</b>\n\n"
+                            + "Прогресса пока нет" + left + ".\n"
+                            + "Зайди в " + game + ": прогресс засчитается сам.",
                     keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("📂 Мои квесты", "menu:myquests")))));
         } catch (Exception e) {
             log.warn("Failed to send no-play nudge to {}", event.getTelegramId(), e);
@@ -5867,13 +5865,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             long remaining = event.getTarget() - event.getProgress();
             String head = event.getLevel() >= 2
-                    ? (remaining == 1 ? "🔥 <b>Остался один шаг!</b>" : "🔥 <b>Почти у цели!</b>")
-                    : "🎯 <b>Половина пути!</b>";
-            String tail = event.getLevel() >= 2
-                    ? "Осталось: <b>" + fmtExc(remaining) + "</b>. Ещё чуть-чуть, и награда твоя."
-                    : "Осталось ещё <b>" + fmtExc(remaining) + "</b>. Так держать!";
+                    ? (remaining == 1 ? "🔥 <b>Остался один шаг</b>" : "🔥 <b>Почти у цели</b>")
+                    : "🎯 <b>Половина пути</b>";
             sendText(event.getTelegramId(),
-                    head + "\n\n«" + escape(event.getQuestTitle()) + "» — <b>" + fmtExc(event.getProgress()) + " / " + fmtExc(event.getTarget()) + "</b>\n" + tail,
+                    head + "\n\n«" + escape(event.getQuestTitle()) + "» — <b>" + fmtExc(event.getProgress()) + " / " + fmtExc(event.getTarget()) + "</b>",
                     keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("📂 Мои квесты", "menu:myquests")))));
         } catch (Exception e) {
             log.warn("Failed to send quest progress milestone to {}", event.getTelegramId(), e);
@@ -21329,10 +21324,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  первого — чтобы не выглядело багом/дублем в переписке с ботом. */
     @org.springframework.context.event.EventListener
     public void onCooldownReminder(ru.gamebot.platform.event.CooldownReminderEvent event) {
-        String msg = "⏰ <b>Напоминание</b>\n\n"
-                + "Квест <b>«" + escape(event.getQuestTitle()) + "»</b> в игре <b>"
-                + escape(event.getGameName()) + "</b> всё ещё ждёт — кулдаун давно снят.\n\n"
-                + "Награда никуда не денется, но почему бы не забрать её сейчас? 👇";
+        String msg = "⏰ <b>Квест «" + escape(event.getQuestTitle()) + "» снова доступен</b>\n\n"
+                + escape(event.getGameName()) + ", кулдаун снят.";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("🗺️ Перейти к квестам", "menu:quests"))
         ));
@@ -21346,8 +21339,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     @org.springframework.context.event.EventListener
     public void onQuestExpired(ru.gamebot.platform.event.QuestExpiredEvent event) {
         String msg = "⏰ <b>Время вышло</b>\n\n"
-                + "Квест «" + escape(event.getQuestTitle()) + "» просрочен — EXC не начислены.\n\n"
-                + "Можешь взять его снова и выполнить в срок 👇";
+                + "Квест «" + escape(event.getQuestTitle()) + "» просрочен, EXC не начислены. Можно взять его снова.";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("🗺️ К квестам", "menu:quests"))
         ));
@@ -21641,9 +21633,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("🗺️ Смотреть квесты", "menu:quests"))
         ));
-        String msg = "👀 <b>Ты заходишь, а квесты не берёшь</b>\n\n"
-                + "Последний квест был " + event.getDaysSinceLastQuest() + " дн. назад — а EXC за это время так и не капало.\n\n"
-                + "Загляни в раздел квестов, там наверняка найдётся что-то на 5-10 минут."
+        String msg = "👀 <b>Квесты ждут</b>\n\n"
+                + "Последний квест был " + event.getDaysSinceLastQuest() + " " + dayWord((int) event.getDaysSinceLastQuest()) + " назад. Найдётся что-то на 5–10 минут."
                 + returnHookLine(event.getTelegramId());
         try {
             sendText(event.getTelegramId(), msg, keyboard);
