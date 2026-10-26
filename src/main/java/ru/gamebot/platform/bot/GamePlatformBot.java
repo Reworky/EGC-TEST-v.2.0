@@ -12182,10 +12182,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendSupport(AppUser user) {
         sendText(user.getTelegramId(),
-                "🆘 <b>Поддержка</b>\n\n"
-                        + "Вопрос, проблема, предложение: нажми «Написать в поддержку», и ты окажешься в личном чате с менеджером.\n"
-                        + "Прошлые обращения лежат в «Истории диалогов».\n\n"
-                        + "🕘 Часы работы: " + supportHoursService.scheduleText() + "."
+                "🆘 <b>Поддержка</b>\n"
+                        + "Вопрос или проблема? Нажми «Написать в поддержку».\n\n"
+                        + "🕘 " + supportHoursService.scheduleText()
                         + (supportHoursService.isOpen() ? "" : "\n\n" + supportHoursService.afterHoursNotice()),
                 keyboardFactory.verticalLayout(List.of(
                         keyboardFactory.callback("✍️ Написать в поддержку", "support:new"),
