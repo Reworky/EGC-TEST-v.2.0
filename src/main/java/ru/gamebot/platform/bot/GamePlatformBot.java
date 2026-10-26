@@ -12792,9 +12792,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String firstQuestBonus = firstQuestReferralLine(submission.getUser(), isFirstQuest);
         try {
             notifyUser(submission.getUser().getTelegramId(),
-                    "🎉 Ваш отчёт по квесту <b>" + escape(submission.getQuest().getTitle()) + "</b> одобрен!\n\n"
-                            + "✨ XP: <b>+" + rewardGrant.xp() + "</b>\n"
-                            + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>" + starsNote(rewardGrant.totalExc()) + "\n"
+                    "✅ <b>Квест засчитан</b>\n\n"
+                            + "<b>" + escape(submission.getQuest().getTitle()) + "</b>, одобрено модератором\n"
+                            + "🪙 <b>+" + rewardGrant.totalExc() + " EXC</b> · ✨ +" + rewardGrant.xp() + " XP\n"
                             + formatExcBonusLine(rewardGrant)
                             + egcPassBonusLine(submission)
                             + firstQuestBonus, watchAdForBonusButton(submission.getUser()), referralNudgeButton(submission.getUser(), "quest"), nextQuestSuggestionButton(submission.getUser()), sinkShopSuggestionButton(submission.getUser()),
@@ -14489,10 +14489,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void notifyUserRewardRejected(RewardRequest req) {
         String comment = req.getAdminComment() != null ? req.getAdminComment() : "—";
         sendText(req.getUser().getTelegramId(),
-                "❌ <b>Заявка на награду отклонена</b>\n\n"
-                        + "🎁 <b>" + escape(req.getRewardItem().getTitle()) + "</b>\n\n"
-                        + "📝 Причина: " + escape(comment) + "\n\n"
-                        + "EXC возвращены на ваш баланс.",
+                "❌ <b>Заявка на «" + escape(req.getRewardItem().getTitle()) + "» отклонена</b>\n\n"
+                        + "Причина: " + escape(comment) + "\n"
+                        + "EXC вернулись на баланс.",
                 null);
     }
 
@@ -15601,10 +15600,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void notifyUserWithdrawalRejected(RewardRequest req) {
         String comment = req.getAdminComment() != null ? req.getAdminComment() : "—";
         sendText(req.getUser().getTelegramId(),
-                "❌ <b>Заявка на вывод отклонена</b>\n\n"
-                        + "🪙 Сумма: <b>" + rewardService.actualPaidPrice(req) + " EXC</b>\n"
-                        + "📝 Причина: " + escape(comment) + "\n\n"
-                        + "EXC возвращены на ваш баланс.",
+                "❌ <b>Заявка на вывод " + rewardService.actualPaidPrice(req) + " EXC отклонена</b>\n\n"
+                        + "Причина: " + escape(comment) + "\n"
+                        + "EXC вернулись на баланс.",
                 null);
     }
 
@@ -23525,10 +23523,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             log.info("AI auto-approved submission {} (confidence={})", submission.getId(), aiResult.confidence());
             try {
                 notifyUser(approved.getUser().getTelegramId(),
-                        "🤖 <b>Автопроверка пройдена!</b>\n\n"
-                        + "Ваш отчёт по квесту <b>" + escape(approved.getQuest().getTitle()) + "</b> одобрен AI-модератором (" + pct + "%).\n\n"
-                        + "✨ XP: <b>+" + rewardGrant.xp() + "</b>\n"
-                        + "🪙 EXC: <b>+" + rewardGrant.totalExc() + "</b>" + starsNote(rewardGrant.totalExc()) + "\n"
+                        "✅ <b>Квест засчитан</b>\n\n"
+                        + "<b>" + escape(approved.getQuest().getTitle()) + "</b>, одобрено автопроверкой\n"
+                        + "🪙 <b>+" + rewardGrant.totalExc() + " EXC</b> · ✨ +" + rewardGrant.xp() + " XP\n"
                         + formatExcBonusLine(rewardGrant)
                         + egcPassBonusLine(approved)
                         + firstQuestBonus, watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()),
@@ -23547,10 +23544,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             questService.rejectSubmission(submission.getId(), rejectComment);
             int pct = (int) Math.round(aiResult.confidence() * 100);
             notifyUser(submission.getUser().getTelegramId(),
-                    "🤖 <b>Автопроверка</b>\n\n"
-                    + "Ваш отчёт по квесту <b>" + escape(submission.getQuest().getTitle()) + "</b> не прошёл автоматическую проверку (" + pct + "%).\n\n"
-                    + "❌ Причина: " + escape(aiResult.reason()) + "\n\n"
-                    + "Вы можете подать повторный отчёт через 1 час с более чёткими доказательствами.");
+                    "❌ <b>Отчёт по «" + escape(submission.getQuest().getTitle()) + "» не принят</b>\n\n"
+                    + "Причина: " + escape(aiResult.reason()) + "\n"
+                    + "Повторить можно через 1 час, приложи более чёткие доказательства.");
             log.info("AI auto-rejected submission {} (confidence={}): {}", submission.getId(), aiResult.confidence(), aiResult.reason());
         } catch (Exception e) {
             log.error("Failed to auto-reject submission {}: {}", submission.getId(), e.getMessage(), e);
