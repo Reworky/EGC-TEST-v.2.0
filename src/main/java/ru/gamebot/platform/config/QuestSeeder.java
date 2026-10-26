@@ -2195,7 +2195,7 @@ public class QuestSeeder implements CommandLineRunner {
             mobideaInstall.setDescription("Установи и запусти приложение по своей персональной ссылке. Засчитывается ТОЛЬКО для игроков из России и ТОЛЬКО на телефонах с Android: "
                     + "на iPhone и из других стран установка не засчитается.");
             mobideaInstall.setInstruction("🔗 Открой ссылку на Android-телефоне (из России, без VPN), установи приложение из Google Play и запусти его:\n"
-                    + "https://www.ubelivablebridge.study/click?offer_id=37030&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=quest\n\n"
+                    + "https://www.ubelivablebridge.study/click?offer_id=37030&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=37030\n\n"
                     + "⚠️ Только Android и только Россия: на iPhone, при VPN или из другой страны установка не засчитается.");
             mobideaInstall.setRequirements("Подтверждение приходит от партнёра автоматически, обычно в течение нескольких часов или дней. "
                     + "Отчёт отправлять не нужно, EXC начислится сам.");
@@ -2209,6 +2209,13 @@ public class QuestSeeder implements CommandLineRunner {
             questRepository.save(mobideaInstall);
             log.info("[QuestSeeder] Created external quest (inactive): Mobidea 37030 install, Android/RU");
         }
+        // Глобальный постбек Mobidea получает ID оффера из pub_sub_id ссылки ({{PLACEMENT}}): в уже созданном квесте 37030 заменяем «quest» на ID оффера.
+        questRepository.findFirstByTitleAndGameName("Установи приложение (только Android, только РФ)", "Партнёрские приложения")
+                .filter(q -> q.getInstruction() != null && q.getInstruction().contains("offer_id=37030") && q.getInstruction().contains("pub_sub_id=quest"))
+                .ifPresent(q -> {
+                    q.setInstruction(q.getInstruction().replace("pub_sub_id=quest", "pub_sub_id=37030"));
+                    questRepository.save(q);
+                });
         // ── Внешний квест Mobidea 37863 (MegaPrognoze, Мегафон «1 click», подписка оператора), 2026-10-26 ──
         // Мотивированный трафик по офферу разрешён (подтвердил владелец). Группа и награда общие с квестом 37030 («Партнёрские приложения», FLAT 500 -
         // заглушка, выставить по выплате: ≤ ~половины 73 ₽). Создаётся НЕАКТИВНЫМ: награда приходит только постбеком, поэтому включать после того,
@@ -2226,7 +2233,7 @@ public class QuestSeeder implements CommandLineRunner {
             mobidea37863.setDescription("Подключи сервис MegaPrognoze (прогнозы на футбол) по своей персональной ссылке. Засчитывается ТОЛЬКО если открыть ссылку "
                     + "через мобильный интернет Мегафона в России и без VPN: через Wi-Fi, с VPN или из другой страны переход не засчитается.");
             mobidea37863.setInstruction("🔗 Открой ссылку с телефона через мобильный интернет Мегафона (выключи Wi-Fi и VPN, находись в России):\n"
-                    + "https://www.ubelivablestrange.work/click?offer_id=37863&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=quest\n\n"
+                    + "https://www.ubelivablestrange.work/click?offer_id=37863&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=37863\n\n"
                     + "⚠️ Только Россия, только мобильная сеть, без VPN: иначе переход не засчитается.\n"
                     + "ℹ️ В конце тебя ждёт платная подписка оператора: деньги списываются с баланса телефона, пока ты её не отключишь.");
             mobidea37863.setRequirements("Подтверждение приходит от партнёра автоматически, обычно в течение нескольких часов или дней. "
