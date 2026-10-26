@@ -7142,20 +7142,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long min = ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC;
         if (!p.unlocked()) {
             if (p.questsLeft() == 0) {
-                return "\n\n🔓 Квесты уже выполнены, осталось подождать <b>" + p.waitText() + "</b>. Вывод откроется автоматически.";
+                return "\n\n🔓 Осталось подождать <b>" + p.waitText() + "</b>, вывод откроется сам.";
             }
             String left = "ещё " + p.questsLeft() + " " + ru.gamebot.platform.service.RewardService.questsWordRu(p.questsLeft());
             if (p.daysLeft() > 0) {
                 left += " и " + p.waitText() + " в клубе";
             }
-            return "\n\n🔓 <b>До вывода осталось:</b> " + left + ".\nУ тебя уже <b>" + fmtExc(coins) + " EXC</b>. Минимум для вывода "
-                    + fmtExc(min) + " EXC.";
+            return "\n\n🔓 <b>До вывода:</b> " + left;
         }
         if (coins < min) {
             long quests = (min - coins + WITHDRAWAL_HINT_AVG_QUEST_EXC - 1) / WITHDRAWAL_HINT_AVG_QUEST_EXC;
-            return "\n\n🔓 Вывод открыт. До минимума " + fmtExc(min) + " EXC осталось <b>" + fmtExc(min - coins)
-                    + " EXC</b>, это примерно " + quests + " "
-                    + ru.gamebot.platform.service.RewardService.questsWordRu((int) Math.min(quests, Integer.MAX_VALUE)) + ".";
+            return "\n\n🔓 Вывод открыт. До минимума ещё <b>" + fmtExc(min - coins)
+                    + " EXC</b> (≈ " + quests + " "
+                    + ru.gamebot.platform.service.RewardService.questsWordRu((int) Math.min(quests, Integer.MAX_VALUE)) + ")";
         }
         return "";
     }
@@ -8991,13 +8990,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
         int ratioPercent = (int) Math.round(healthRatioService.getCurrentRatio() * 100);
-        String text = "💸 <b>Вывод EXC</b>\n\n"
-                + "🪙 Баланс: <b>" + user.getCoins() + " EXC</b>\n"
-                + "📤 Остаток лимита: <b>" + remaining + " EXC (из " + sinkShopService.getMonthlyLimit(user) + "/мес)</b>\n"
-                + "💱 Курс: <b>" + rateString(ratioPercent) + "</b>\n"
-                + "⚠️ Минимум: <b>5 000 EXC</b>\n"
-                + withdrawalLevelHint(user) + "\n\n"
-                + withdrawalLastPayoutLine()
+        String lastPayout = withdrawalLastPayoutLine().trim();
+        String text = "💸 <b>Вывод EXC</b>\n"
+                + "🪙 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b> · минимум 5 000\n"
+                + "💱 <b>" + rateString(ratioPercent) + "</b>\n\n"
+                + "<blockquote expandable>📤 Остаток лимита: <b>" + remaining + " из " + sinkShopService.getMonthlyLimit(user) + " EXC/мес</b>"
+                + withdrawalLevelHint(user)
+                + (lastPayout.isEmpty() ? "" : "\n" + lastPayout) + "</blockquote>\n\n"
                 + "Выберите способ получения:";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("💸 В рублях (Сбербанк / СБП)", "shop:withdraw:rub")));
