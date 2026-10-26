@@ -7901,14 +7901,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Награда одной строкой: «🏆 +3 000 EXC (≈ 7,2 ⭐) · +50 XP · 🎟 +1 билет для Колеса» + пометки про недельный лимит и EGC Pass. */
     private String questRewardLine(AppUser user, Quest quest) {
-        long coins = displayRewardCoins(user, quest);
-        String rewardNote = quest.isRepeatableNoCooldownEligible()
-                ? " (за 1-е сегодня, дальше меньше)"
-                : weeklyLimitNote(questService.weeklyLimitStatus(user, quest));
-        boolean tickets = !quest.isSponsored() && !"UGC".equalsIgnoreCase(quest.getGameName()) && quest.getTicketReward() > 0;
-        return "🏆 <b>+" + fmtExc(coins) + " EXC</b>" + starsNote(coins) + " · +" + quest.getRewardXp() + " XP"
-                + (tickets ? " · 🎟 +" + quest.getTicketReward() + " " + ticketsWord(quest.getTicketReward()) + " для Колеса" : "")
-                + rewardNote + egcPassRewardNote(user, quest);
+        return questRewardLineCompact(user, quest);
     }
 
     /** Награда на карточке квеста (макет 26.10.2026): EXC с эквивалентом в звёздах, XP, билет Колеса, пометки про недельный лимит и EGC Pass - всё на виду рядом; в цитате остаются только условия. */
@@ -8627,16 +8620,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (activeSubmission) {
             weeklyNote += egcPassRewardNote(user, quest);
         }
+        // Тот же вид, что у карточки квеста: название, статус, награда одной строкой, затем суть (макет 26.10.2026, утверждён владельцем).
         sendText(user.getTelegramId(),
-                "📂 <b>Мой квест</b>\n\n"
-                        + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n"
-                        + "📌 Статус: <b>" + escape(humanStatus(submission.getStatus())) + "</b>\n"
-                        + "🕒 Обновлено: <b>" + escape(submission.getUpdatedAt().format(DATE_TIME_FORMATTER)) + "</b>\n"
-                        + "✨ XP: <b>+" + quest.getRewardXp() + "</b>\n"
-                        + "🪙 EXC: <b>+" + shownCoins + "</b>" + starsNote(shownCoins) + weeklyNote + "\n"
-                        + (quest.getTicketReward() > 0 ? "🎟 Билеты: <b>+" + quest.getTicketReward() + "</b>\n" : "")
-                        + (heldNote)
-                        + "\n📝 <b>Суть задания</b>\n" + escape(quest.getDescription()) + moderatorComment,
+                "🎯 <b>" + escape(quest.getTitle()) + "</b>\n"
+                        + "📌 Статус: <b>" + escape(humanStatus(submission.getStatus())) + "</b> · "
+                        + escape(submission.getUpdatedAt().format(DATE_TIME_FORMATTER)) + "\n\n"
+                        + "🏆 <b>+" + fmtExc(shownCoins) + " EXC</b>" + starsNote(shownCoins) + " · +" + quest.getRewardXp() + " XP"
+                        + (quest.getTicketReward() > 0 ? " · 🎟 +" + quest.getTicketReward() + " " + ticketsWord(quest.getTicketReward()) : "")
+                        + weeklyNote + "\n"
+                        + (heldNote.isEmpty() ? "" : heldNote)
+                        + "\n" + escape(quest.getDescription()) + moderatorComment,
                 verticalWithBackMenu(buttons, "⬅️ Назад", "menu:myquests"));
     }
 
