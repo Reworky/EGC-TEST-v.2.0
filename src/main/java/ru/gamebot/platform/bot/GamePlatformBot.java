@@ -5184,9 +5184,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (user.getWeeklyXp() > 0) {
             long weeklyRank = userService.getWeeklyRankFast(user);
             long weeklyTotal = userService.countActiveThisWeek();
-            leagueLine = "🏆 Лига: <b>" + league + "</b> · 📊 Место: <b>#" + weeklyRank + " из " + weeklyTotal + "</b>\n";
+            leagueLine = "🏆 <b>" + league + "</b> · место <b>#" + weeklyRank + " из " + weeklyTotal + "</b>\n";
         } else {
-            leagueLine = "🏆 Лига: <b>" + league + "</b> · Заработай XP, чтобы войти в рейтинг\n";
+            leagueLine = "🏆 <b>" + league + "</b> · заработай XP, чтобы войти в рейтинг\n";
         }
 
         boolean profileIncomplete = user.getAge() == null || user.getCountry() == null;
@@ -5194,27 +5194,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         int onboardingLeft = Math.max(0, QuestService.ONBOARDING_QUEST_THRESHOLD - user.getCompletedQuests());
         String onboardingLine = onboardingLeft > 0
-                ? "🌱 <b>Новичковый темп:</b> осталось <b>" + onboardingLeft + " " + pluralQuests(onboardingLeft) + "</b> с короткими кулдаунами.\n"
+                ? "\n🌱 <b>Новичковый темп:</b> осталось <b>" + onboardingLeft + " " + pluralQuests(onboardingLeft) + "</b>\n"
                 : "";
         String onboardingDetails = onboardingLeft > 0
                 ? "🌱 Первые " + QuestService.ONBOARDING_QUEST_THRESHOLD + " квестов — кулдауны в разы короче. "
                         + "Берите чаще, зарабатывайте быстрее, пока действует бонус.\n\n"
                 : "";
 
+        // Макет профиля (26.10.2026, утверждён владельцем): без заголовка «Эта неделя» (число квестов общее), подписи сокращены.
         String profileText = "🎮 <b>" + escape(user.getNickname()) + "</b>\n"
-                + onboardingLine
                 + badgeLine
                 + titleLine
                 + egcPassLine
-                + "\nУровень " + levelNum + ": <b>" + levelName + "</b>\n"
+                + "Ур. " + levelNum + " «" + levelName + "»\n"
                 + levelProgressBar(user) + "\n\n"
                 + "💰 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>"
-                + " (+" + excBonus + "% к награде" + boostNote + ")\n"
-                + leagueLine + "\n"
-                + "📊 <b>Эта неделя</b>\n"
-                + "✅ Квестов: <b>" + user.getCompletedQuests() + "</b>"
-                + " · 🔥 Серия: <b>" + user.getStreakDays() + " дней</b>"
-                + " · 🎟️ Билеты: <b>" + user.getTickets() + "</b>\n\n"
+                + " (+" + excBonus + "% к наградам" + boostNote + ")\n"
+                + leagueLine
+                + "✅ <b>" + user.getCompletedQuests() + "</b> " + pluralQuests(user.getCompletedQuests())
+                + " · 🔥 серия <b>" + user.getStreakDays() + "</b> дн."
+                + " · 🎟 <b>" + user.getTickets() + "</b>\n"
+                + onboardingLine + "\n"
                 + "<blockquote expandable>" + onboardingDetails
                 + "🎮 Платформы: <b>" + escape(displayValue(user.getPlatformsCsv(), "не указаны")) + "</b>\n"
                 + "🎯 Жанры: <b>" + escape(displayValue(user.getInterestsCsv(), "не указаны")) + "</b>\n"
