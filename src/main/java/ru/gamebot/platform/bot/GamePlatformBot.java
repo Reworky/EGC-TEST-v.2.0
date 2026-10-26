@@ -11363,8 +11363,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         StringBuilder sb = new StringBuilder();
         sb.append("⚔️ <b>Отряд «").append(escape(squad.getName())).append("»</b>").append(eventBannerLine()).append(eventSquadPoolLine()).append("\n\n");
-        sb.append("👥 Участников: <b>").append(members.size()).append("</b> · 📊 Рейтинг за неделю: <b>")
-                .append(String.format("%,d", weeklyXp).replace(',', ' ')).append("</b>\n\n");
+        // Макет карточки отряда (26.10.2026, утверждён владельцем): статистика одной строкой, цель недели, состав и подсказки в цитате.
+        int squadStreak = squadService.streakDays(squad);
+        sb.append("👥 <b>").append(members.size()).append("</b> · 📊 <b>")
+                .append(String.format("%,d", weeklyXp).replace(',', ' ')).append(" XP</b> за неделю")
+                .append(squadStreak > 0 ? " · 🔥 серия <b>" + squadStreak + "</b> дн." : "").append("\n\n");
+        sb.append(squadGoalLines(squad, members.size())).append("\n");
         sb.append("<blockquote expandable>");
         for (int i = 0; i < shown; i++) {
             ru.gamebot.platform.domain.model.AppUser m = sortedMembers.get(i);
@@ -11380,9 +11384,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (squad.getWeeklyBonusPoints() > 0) {
             sb.append("🎉 Бонус за рефералов: <b>+").append(squad.getWeeklyBonusPoints()).append(" очков</b>\n");
         }
-        sb.append("🎁 Топ-отряд каждую неделю получает <b>10 000 EXC</b></blockquote>\n");
-        sb.append(squadGoalLines(squad, members.size()));
-        sb.append(squadMilestoneProgressLine(squad, members.size()));
+        sb.append("🎁 Топ-отряд каждую неделю делит <b>10 000 EXC</b>\n");
+        sb.append(squadMilestoneProgressLine(squad, members.size()).stripTrailing()).append("</blockquote>\n");
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (isCaptain) {
@@ -11853,20 +11856,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ru.gamebot.platform.service.SquadService.GoalProgress goal = squadService.goalProgress(squad);
         if (!goal.eligible()) {
             int left = ru.gamebot.platform.service.SquadService.GOAL_MIN_MEMBERS - memberCount;
-            sb.append("🎯 Командная цель недели откроется при ").append(ru.gamebot.platform.service.SquadService.GOAL_MIN_MEMBERS)
-                    .append(" участниках — ещё ").append(left).append(" ").append(pluralPeople(left)).append("\n");
+            sb.append("🎯 Цель недели откроется при ").append(ru.gamebot.platform.service.SquadService.GOAL_MIN_MEMBERS)
+                    .append(" участниках: ещё ").append(left).append(" ").append(pluralPeople(left)).append("\n");
         } else {
             int filled = (int) Math.min(10, goal.target() == 0 ? 0 : goal.done() * 10 / goal.target());
-            sb.append("🎯 Цель недели: <b>").append(goal.done()).append(" / ").append(goal.target()).append("</b> квестов  ")
+            sb.append("🎯 Цель недели: <b>").append(goal.done()).append(" / ").append(goal.target()).append("</b>  ")
                     .append("▰".repeat(filled)).append("▱".repeat(10 - filled)).append("\n");
             sb.append(goal.reached()
-                    ? "✅ Цель выполнена! В понедельник каждый участник с квестом получит <b>+" + goal.bonusPerMember() + " EXC</b>\n"
-                    : "🎁 Выполните цель — каждый участник с квестом получит <b>+" + goal.bonusPerMember() + " EXC</b> в понедельник\n");
-        }
-        int streak = squadService.streakDays(squad);
-        if (streak > 0) {
-            sb.append("🔥 Серия отряда: <b>").append(streak).append(" ").append(streak == 1 ? "день" : streak < 5 ? "дня" : "дней")
-                    .append("</b> подряд — кто-то из вас выполнял квест каждый день\n");
+                    ? "✅ Цель выполнена: в понедельник каждому с квестом <b>+" + goal.bonusPerMember() + " EXC</b>\n"
+                    : "🎁 <b>+" + goal.bonusPerMember() + " EXC</b> каждому, кто выполнит квест\n");
         }
         return sb.toString();
     }
