@@ -8966,12 +8966,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ));
 
         sendText(user.getTelegramId(),
-                "🛍️ <b>Магазин наград</b>\n\n"
-                        + "🪙 Ваш баланс: <b>" + user.getCoins() + " EXC</b>\n"
-                        + "📊 Состояние фонда: <b>" + ratioPercent + "%</b>\n"
-                        + "📤 Лимит вывода: <b>" + sinkShopService.getMonthlyLimit(user) + " EXC/мес</b> (осталось: " + remaining + " EXC)\n"
+                "🛍️ <b>Магазин наград</b>\n"
+                        + "🪙 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>\n\n"
+                        + "<blockquote expandable>📊 Состояние фонда: <b>" + ratioPercent + "%</b>\n"
                         + "💱 Курс вывода: <b>" + rateString(ratioPercent) + "</b>\n"
-                        + withdrawalLevelHint(user),
+                        + "📤 Лимит вывода: <b>" + sinkShopService.getMonthlyLimit(user) + " EXC/мес</b> (осталось: " + remaining + " EXC)\n"
+                        + withdrawalLevelHint(user).stripTrailing() + "</blockquote>",
                 keyboardFactory.rowsLayout(rows));
     }
 
@@ -9326,7 +9326,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String titleLine = user.getProfileTitle() != null ? "🏅 Текущий титул: <b>" + escape(user.getProfileTitle()) + "</b>\n" : "";
         StringBuilder info = new StringBuilder();
         info.append("⚡ <b>Предметы клуба</b>\n\n");
-        info.append("🪙 Баланс: <b>").append(user.getCoins()).append(" EXC</b>\n");
         if (!titleLine.isEmpty()) info.append(titleLine);
 
         // EGC Pass отсюда убран (2026-09-24, по решению владельца) — подписка живёт в своём разделе магазина
