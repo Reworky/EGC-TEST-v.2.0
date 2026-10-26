@@ -5667,7 +5667,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     public void onReferralWelcomeBonusPaid(ru.gamebot.platform.event.ReferralWelcomeBonusPaidEvent event) {
         try {
             notifyUser(event.getInvitedTelegramId(),
-                    "🎁 <b>+" + String.format("%,d", event.getBonusExc()).replace(',', ' ') + " EXC</b> за приглашение уже на балансе: ты выполнил 3 квеста и провёл в клубе 3 дня. Спасибо, что с нами!");
+                    "🎁 <b>+" + String.format("%,d", event.getBonusExc()).replace(',', ' ') + " EXC</b> за приглашение уже на балансе: 3 квеста и 3 дня в клубе выполнены.");
         } catch (Exception e) {
             log.error("[Referral] Failed to notify invited {} about welcome bonus", event.getInvitedTelegramId(), e);
         }
@@ -5907,10 +5907,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     List.of(keyboardFactory.callback("🗺️ К квестам", "menu:quests"))
             );
             notifyUser(event.getTelegramId(),
-                    "👋 <b>Первый квест был отличным началом!</b>\n\n"
-                            + "Второй пока не взял — а зря, там всё только начинается. Держи <b>+"
-                            + event.getExcGranted() + " EXC</b>, чтобы было проще решиться. 🎁\n\n"
-                            + "Если не секрет — что помешало? Один тап, без опроса:",
+                    "👋 <b>Первый квест позади</b>\n\n"
+                            + "Держи <b>+" + event.getExcGranted() + " EXC</b>, чтобы второй дался легче. Что помешало его взять?",
                     rows);
         } catch (Exception e) {
             log.warn("Failed to send second-quest nudge to {}", event.getTelegramId(), e);
@@ -21249,9 +21247,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     @org.springframework.context.event.EventListener
     public void onSquadReferralBonus(ru.gamebot.platform.event.SquadReferralBonusEvent event) {
         String invitedName = escape(displayUserName(event.getInvitedUser()));
-        String msg = "🎉 <b>Отряд получил бонус!</b>\n\n"
-                + invitedName + " вступил(а) в отряд «" + escape(event.getSquad().getName()) + "» по приглашению — "
-                + "<b>+" + event.getBonusPoints() + " очков</b> к недельному рейтингу отряда!";
+        String msg = "🎉 <b>" + invitedName + " в отряде «" + escape(event.getSquad().getName()) + "»</b>\n\n"
+                + "По приглашению: <b>+" + event.getBonusPoints() + " очков</b> к рейтингу отряда за неделю.";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("⚔️ Мой отряд", "menu:squads"))
         ));
@@ -21266,8 +21263,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     @org.springframework.context.event.EventListener
     public void onSquadMilestoneReached(ru.gamebot.platform.event.SquadMilestoneReachedEvent event) {
-        String msg = "🎉 <b>Отряд «" + escape(event.getSquad().getName()) + "» дорос до " + event.getSize() + " человек!</b>\n\n"
-                + "Каждому участнику: <b>+" + event.getBonusPerMember() + " EXC</b> 🪙";
+        String msg = "🎉 <b>В отряде «" + escape(event.getSquad().getName()) + "» уже " + event.getSize() + " " + pluralPeople(event.getSize()) + "</b>\n\n"
+                + "Каждому <b>+" + event.getBonusPerMember() + " EXC</b>.";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("⚔️ Мой отряд", "menu:squads"))
         ));
