@@ -5656,10 +5656,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     public void onReferralFriendInactive(ru.gamebot.platform.event.ReferralFriendInactiveEvent event) {
         try {
             notifyUser(event.getReferrerTelegramId(),
-                    "😴 <b>" + escape(event.getFriendNickname()) + "</b> давно не выполнял квесты — "
-                            + "комиссия с рефералов по этому другу приостановлена.\n\n"
-                            + "Напомни другу вернуться к квестам — как только он выполнит хотя бы один, "
-                            + "комиссия возобновится автоматически.");
+                    "😴 <b>" + escape(event.getFriendNickname()) + "</b> давно не играл\n\n"
+                            + "Комиссия с него приостановлена, возобновится после первого же квеста.");
         } catch (Exception e) {
             log.error("[Referral] Failed to notify referrer {} about inactive friend", event.getReferrerTelegramId(), e);
         }
@@ -5679,12 +5677,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     public void onReferrerFirstQuestBonus(ru.gamebot.platform.event.ReferrerFirstQuestBonusEvent event) {
         try {
             notifyUser(event.getReferrerTelegramId(),
-                    "🎉 <b>+" + event.getBonusExc() + " EXC</b> — твой друг <b>" + escape(event.getFriendNickname())
-                            + "</b> выполнил 3 квеста и прошёл проверку клуба!\n\n"
+                    "🎉 <b>+" + event.getBonusExc() + " EXC</b>: друг <b>" + escape(event.getFriendNickname())
+                            + "</b> выполнил 3 квеста\n\n"
                             + (event.getPassDaysGranted() > 0
-                                ? "🎁 И <b>" + event.getPassDaysGranted() + " дня EGC Pass</b> в подарок за первого друга. Загляни в раздел Pass, чтобы увидеть бонусы.\n\n"
+                                ? "🎁 И <b>" + event.getPassDaysGranted() + " " + dayWord(event.getPassDaysGranted()) + " EGC Pass</b> за первого друга.\n"
                                 : "")
-                            + "Это разовый бонус за приглашение, реферальные 10% с его квестов продолжат поступать как обычно.");
+                            + "Бонус разовый, 10% с его квестов продолжат приходить.");
         } catch (Exception e) {
             log.error("[Referral] Failed to notify referrer {} about first-quest bonus", event.getReferrerTelegramId(), e);
         }
@@ -5889,8 +5887,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.url("📣 Позвать ещё друга", userService.buildShareUrl(referrer))));
             rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
             sendText(referrer.getTelegramId(),
-                    "👋 Твой друг <b>" + escape(friend) + "</b> зашёл в EGC, но ещё не взял первый квест.\n\n"
-                            + "Напомни ему: за 3 квеста ему <b>+3 000 EXC</b>" + starsNote(3_000) + ", тебе <b>+2 500 EXC</b>.",
+                    "👋 <b>" + escape(friend) + "</b> зашёл в EGC, но не взял первый квест\n\n"
+                            + "Напомни ему: за 3 квеста ему <b>+3 000 EXC</b>, тебе <b>+2 500 EXC</b>.",
                     keyboardFactory.rowsLayout(rows));
         } catch (Exception e) {
             log.warn("[Referral] Failed to notify referrer {} about stalled friend", event.getReferrerTelegramId(), e);
@@ -12044,8 +12042,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     @org.springframework.context.event.EventListener
     public void onSquadJoinDecision(ru.gamebot.platform.event.SquadJoinDecisionEvent event) {
         String msg = event.isApproved()
-                ? "✅ <b>Заявка принята!</b>\n\nВы в отряде «" + escape(event.getSquad().getName()) + "». Выполняйте квесты вместе — командная цель недели ждёт 🎯"
-                : "❌ Капитан отряда «" + escape(event.getSquad().getName()) + "» отклонил вашу заявку. Загляните в каталог — отрядов много 🔎";
+                ? "✅ <b>Ты в отряде «" + escape(event.getSquad().getName()) + "»</b>\n\nВыполняйте квесты вместе: ждёт командная цель недели."
+                : "❌ Капитан отряда «" + escape(event.getSquad().getName()) + "» отклонил заявку. В каталоге есть другие отряды.";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback(event.isApproved() ? "⚔️ Мой отряд" : "🔎 Найти отряд",
                         event.isApproved() ? "menu:squads" : "squad:catalog:0"))));
@@ -12080,10 +12078,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     @org.springframework.context.event.EventListener
     public void onSquadGoalReached(ru.gamebot.platform.event.SquadGoalReachedEvent event) {
-        String msg = "🎯 <b>Командная цель выполнена!</b>\n\n"
-                + "Отряд «" + escape(event.getSquad().getName()) + "» за неделю выполнил <b>" + event.getDone() + "</b> квестов "
-                + "(цель была " + event.getTarget() + ").\n\n"
-                + "🎁 Вам начислено: <b>+" + event.getBonusPerMember() + " EXC</b>. Новая цель — уже на этой неделе!";
+        String msg = "🎯 <b>Цель отряда выполнена</b>\n\n"
+                + "«" + escape(event.getSquad().getName()) + "»: <b>" + event.getDone() + "</b> квестов при цели " + event.getTarget()
+                + ". Тебе <b>+" + event.getBonusPerMember() + " EXC</b>.";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("⚔️ Мой отряд", "menu:squads"))
         ));
@@ -21250,10 +21247,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     @org.springframework.context.event.EventListener
     public void onSquadPrize(ru.gamebot.platform.event.SquadPrizeEvent event) {
-        String msg = "⚔️ <b>Ваш отряд победил в еженедельном рейтинге!</b>\n\n"
-                + "🏆 Отряд <b>«" + escape(event.getSquad().getName()) + "»</b> занял первое место.\n"
-                + "📊 Суммарный XP за неделю: <b>" + String.format("%,d", event.getTotalWeeklyXp()).replace(',', ' ') + "</b>\n\n"
-                + "🎁 Вам начислено: <b>+" + String.format("%,d", event.getPrizePerMember()).replace(',', ' ') + " EXC</b>";
+        String msg = "🏆 <b>«" + escape(event.getSquad().getName()) + "» — первое место недели</b>\n\n"
+                + "📊 " + String.format("%,d", event.getTotalWeeklyXp()).replace(',', ' ') + " XP на отряд. Тебе <b>+"
+                + String.format("%,d", event.getPrizePerMember()).replace(',', ' ') + " EXC</b>.";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("⚔️ Мой отряд", "menu:squads"))
         ));
@@ -21649,11 +21645,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("🤝 Рефералы", "menu:referrals"))
         ));
         for (ru.gamebot.platform.service.UserService.ReferralRankEntry entry : event.getWinners()) {
-            String msg = "🤝 <b>Топ рефереров недели!</b>\n\n"
-                    + "Ты занял <b>#" + entry.rank() + "</b> место по реферальным доходам за неделю "
-                    + "(+" + entry.weeklyReferralExc() + " EXC от рефералов).\n\n"
-                    + "🎁 Бонус за место в топе: <b>+" + entry.prizeExc() + " EXC</b>!\n\n"
-                    + "Приглашай друзей и зарабатывай ещё больше 👇";
+            String msg = "🤝 <b>Ты #" + entry.rank() + " среди рефереров недели</b>\n\n"
+                    + "От рефералов за неделю: +" + entry.weeklyReferralExc() + " EXC. Бонус за место: <b>+" + entry.prizeExc() + " EXC</b>.";
             try {
                 sendText(entry.user().getTelegramId(), msg, keyboard);
             } catch (Exception e) {
