@@ -6100,7 +6100,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (user.isRegistrationCompleted()) {
                 if (weeklyGoalService.claimableWeek(user).isPresent()) {
                     claimable = true;
-                    parts.add("🎁 Забери награду недели!");
                 } else {
                     ru.gamebot.platform.service.WeeklyGoalService.Progress p = weeklyGoalService.progress(user);
                     parts.add("📅 Цель недели: " + weeklyDots(p.days()) + " " + Math.min(p.days(), ru.gamebot.platform.service.WeeklyGoalService.TARGET_DAYS)
@@ -6111,12 +6110,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (!gh.isEmpty()) parts.add(gh);
             String eventLine = eventBannerLine();
             if (!eventLine.isEmpty()) parts.add(eventLine.trim());
-            StringBuilder sb = new StringBuilder();
-            for (String part : parts) sb.append("\n").append(part);
             if (!claimable && user.isRegistrationCompleted() && userService.referralGoalOpen(user)
                     && user.getInvitedFriends() == 0 && user.getCompletedQuests() >= 1) {
-                sb.append("\n🤝 Позови друга: +2 500 EXC");
+                parts.add("🤝 Позови друга: +2 500 EXC");
             }
+            StringBuilder sb = new StringBuilder();
+            if (claimable) sb.append("\n\n<b>🎁 Забери награду недели!</b>");
+            if (!parts.isEmpty()) sb.append("\n\n<blockquote expandable>").append(String.join("\n", parts)).append("</blockquote>");
             return sb.toString();
         } catch (Exception e) {
             log.warn("Main menu status lines failed for user {}", user.getTelegramId(), e);
@@ -25662,14 +25662,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private String firstWithdrawalProgressLine(AppUser user) {
         long coins = user.getCoins();
         if (coins >= FIRST_WITHDRAWAL_EXC) return "";
-        return "\n🎯 До вывода: " + progressBar(coins, FIRST_WITHDRAWAL_EXC) + " "
+        return "\nДо вывода: " + progressBar(coins, FIRST_WITHDRAWAL_EXC) + " "
                 + fmtExc(Math.max(coins, 0)) + " / " + fmtExc(FIRST_WITHDRAWAL_EXC);
     }
 
     private String mainMenuText(AppUser user) {
         String role = resolveMenuRole(user, sessionService.get(user.getTelegramId()));
         if (ROLE_USER.equals(role)) {
-            return "Никнейм: " + escape(user.getNickname()) + "\n\n" + userBalanceLine(user) + firstWithdrawalProgressLine(user) + mainMenuStatusLines(user);
+            // Макет главного меню (26.10.2026, утверждён владельцем): ник и уровень строкой, баланс отдельно, «До вывода» на виду,
+            // остальное («Сегодня») в раскрывающейся цитате; «Забери награду недели» остаётся на виду, это действие.
+            return "<b>" + escape(user.getNickname()) + "</b> · Ур. " + userService.getLevelNumber(user.getXp())
+                    + " «" + escape(userService.getLevelName(user.getXp())) + "»\n"
+                    + "💰 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>"
+                    + firstWithdrawalProgressLine(user) + mainMenuStatusLines(user);
         }
         String title = switch (role) {
             case ROLE_ADMIN -> "🛠️ <b>Административный контур активен</b>";
