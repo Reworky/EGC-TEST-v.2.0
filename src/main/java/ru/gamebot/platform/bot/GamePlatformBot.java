@@ -21440,15 +21440,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     public void onDormancyReengagement(ru.gamebot.platform.event.DormancyReengagementEvent event) {
         // Бонус НЕ начислен: он придёт после возвращения и первого одобренного квеста (UserService.claimDormancyReturnBonus)
         String msg = switch (event.getTier()) {
-            case 1 -> "👋 <b>Давно не заходил!</b>\n\n"
-                    + "Прошло уже " + event.getDaysSinceActive() + " дней. Мы соскучились. Вернись и выполни любой квест, "
-                    + "и на баланс придёт бонус за возвращение: <b>+" + event.getExcOffered() + " EXC</b> 🎁";
-            case 2 -> "🔥 <b>Месяц без тебя - это долго!</b>\n\n"
-                    + "За это время появилось много новых квестов и турниров. Выполни любой квест, и мы добавим "
-                    + "<b>+" + event.getExcOffered() + " EXC</b> за возвращение. Заходи и посмотри, что нового! 🚀";
-            default -> "🎉 <b>Мы скучаем по тебе!</b>\n\n"
-                    + "Тебя не было " + event.getDaysSinceActive() + " дней. Выполни любой квест, и мы добавим "
-                    + "<b>+" + event.getExcOffered() + " EXC</b> за возвращение. Загляни, что изменилось на платформе.";
+            case 1 -> "👋 <b>Давно не виделись</b>\n\n"
+                    + "Прошло " + event.getDaysSinceActive() + " дней. Выполни любой квест и получи <b>+" + event.getExcOffered() + " EXC</b> бонусом за возвращение.";
+            case 2 -> "🔥 <b>Целый месяц без тебя</b>\n\n"
+                    + "Появились новые квесты и турниры. Вернись, выполни любой квест и получи <b>+" + event.getExcOffered() + " EXC</b> сверху.";
+            default -> "🎉 <b>Мы скучаем</b>\n\n"
+                    + "Тебя не было " + event.getDaysSinceActive() + " дней. Выполни любой квест и забери <b>+" + event.getExcOffered() + " EXC</b> бонусом.";
         };
         msg += returnHookLine(event.getTelegramId());
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
