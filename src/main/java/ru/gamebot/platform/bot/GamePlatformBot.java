@@ -5448,18 +5448,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean available = userService.isChestAvailable(user);
         StringBuilder text = new StringBuilder();
         if (available) {
-            text.append("🎁 <b>Сундук дня</b>\n\n");
-            if (egcPass) text.append("⭐ <i>Улучшенный сундук — бесплатно по подписке EGC Pass</i>\n\n");
-            text.append("<b>Что может выпасть:</b>\n").append(chestPoolLines(egcPass)).append("\n\n");
-            text.append("Один бесплатный сундук в сутки. Нажми «Открыть»!");
+            text.append("🎁 <b>Сундук дня</b>\n");
+            if (egcPass) text.append("⭐ Улучшенный сундук бесплатно по подписке EGC Pass\n");
+            text.append("Один бесплатный сундук в сутки, нажми «Открыть».\n\n");
+            text.append("<blockquote expandable><b>Что может выпасть:</b>\n").append(chestPoolLines(egcPass));
         } else {
-            text.append("✅ <b>Сундук сегодня уже открыт</b>\n\nНовый бесплатный сундук будет завтра.\n\n");
-            text.append("<b>Призы бесплатного сундука:</b>\n").append(chestPoolLines(egcPass));
+            text.append("✅ <b>Сундук сегодня открыт</b>\nНовый бесплатный сундук будет завтра.\n\n");
+            text.append("<blockquote expandable><b>Призы бесплатного сундука:</b>\n").append(chestPoolLines(egcPass));
         }
         if (!egcPass) {
             text.append("\n\n🔁 <b>Улучшенный сундук за ").append(CHEST_REROLL_STARS_PRICE).append(" ⭐</b> щедрее (можно сколько угодно раз):\n")
                     .append(chestPoolLines(true));
         }
+        text.append("</blockquote>");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (available) rows.add(List.of(keyboardFactory.callback("🎁 Открыть сундук", "menu:chestgo")));
         rows.add(List.of(keyboardFactory.callback("🔁 " + (egcPass ? "Ещё один улучшенный сундук — " : "Улучшенный сундук — ")
@@ -5561,10 +5562,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendChestPrizeList(AppUser user) {
         sendText(user.getTelegramId(),
                 "📋 <b>Призы сундука дня</b>\n\n"
-                        + "<b>Бесплатно (раз в сутки):</b>\n"
+                        + "<blockquote expandable><b>Бесплатно (раз в сутки):</b>\n"
                         + chestPoolLines(false) + "\n\n"
                         + "<b>Реролл за " + CHEST_REROLL_STARS_PRICE + " ⭐ (можно сколько угодно раз):</b>\n"
-                        + chestPoolLines(true),
+                        + chestPoolLines(true) + "</blockquote>",
                 backMenuKeyboard("menu:cat:wallet"));
     }
 
@@ -11527,9 +11528,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendWheelMenu(AppUser user) {
         int tickets = (int) user.getTickets();
-        String text = "🎡 <b>Колесо фортуны</b>\n\n"
-                + "У вас: 🎟 <b>" + tickets + " билет(ов)</b>\n\n"
-                + "Призы:\n"
+        String text = "🎡 <b>Колесо фортуны</b>\n"
+                + "🎟 Билетов: <b>" + tickets + "</b>\n\n"
+                + "<blockquote expandable>Призы:\n"
                 + "🥉 50 EXC — 30%\n"
                 + "🥉 100 EXC — 25%\n"
                 + "🥈 300 EXC — 20%\n"
@@ -11538,8 +11539,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🥇 2 000 EXC — 3%\n"
                 + "💎 XP-буст 24ч — 1.5%\n"
                 + "👑 Рамка аватара — 0.5%\n\n"
-                + "<i>Билеты получаешь за выполнение квестов и серию входов в бот.</i>\n"
-                + "<i>Лимит: " + ru.gamebot.platform.service.WheelService.MAX_SPINS_PER_DAY + " кручений в сутки.</i>";
+                + "Билеты — за выполнение квестов и серию входов в бот. Лимит: " + ru.gamebot.platform.service.WheelService.MAX_SPINS_PER_DAY + " кручений в сутки.</blockquote>";
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (tickets > 0) {
