@@ -14437,20 +14437,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void notifyUserRewardInProgress(RewardRequest req) {
         sendText(req.getUser().getTelegramId(),
-                "🔄 <b>Ваша заявка взята в разработку!</b>\n\n"
-                        + "🎁 <b>" + escape(req.getRewardItem().getTitle()) + "</b>\n\n"
-                        + "Администратор взял заявку в разработку. Отменить её теперь можно только через поддержку.",
+                "🔄 <b>Заявка на «" + escape(req.getRewardItem().getTitle()) + "» в работе</b>\n\n"
+                        + "Отменить её теперь можно только через поддержку.",
                 null);
     }
 
     /** Выдача награды магазина с подтверждением: игроку (с фото, если есть), черновик пруфа для @egc_payouts на согласование, просьба оценить выдачу.
      *  Тот же путь, что у выплат (notifyUserWithdrawalApprovedMain), отличается только текстами. */
     private void notifyUserRewardIssued(RewardRequest req, String receiptFileId, String receiptCaption) {
-        String caption = "✅ <b>Ваша награда выдана!</b>\n\n"
-                + "🔢 Номер заявки: <b>М-" + reqDisplayId(req) + "</b>\n"
-                + "🎁 Награда: <b>" + escape(req.getRewardItem().getTitle()) + "</b>\n"
-                + "🪙 Стоимость: <b>" + rewardService.actualPaidPrice(req) + " EXC</b>\n\n"
-                + "Если что-то не пришло - напишите в поддержку.";
+        String caption = "✅ <b>Награда выдана</b>\n\n"
+                + "<b>" + escape(req.getRewardItem().getTitle()) + "</b> · <b>" + rewardService.actualPaidPrice(req) + " EXC</b>\n"
+                + "Заявка <b>М-" + reqDisplayId(req) + "</b>. Если что-то не пришло, напишите в поддержку.";
         try {
             if (receiptFileId != null) {
                 SendPhoto photo = new SendPhoto();
@@ -15058,11 +15055,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Было: isUsdt = payoutDetails != null — ловило и рублёвые реквизиты тоже, не только крипту. Исправлено.
         String method = isStarsWithdrawal(req) ? "Telegram Stars (@" + starsUsername(req) + ")"
                 : isCryptoWithdrawal(req) ? cryptoMethodLabel(req.getPayoutDetails()) : "рубли (СБП / Сбербанк)";
-        String caption = "✅ <b>Ваш вывод EXC выполнен!</b>\n\n"
-                + "🔢 Номер заявки: <b>В-" + reqDisplayId(req) + "</b>\n"
-                + "🪙 Сумма: <b>" + rewardService.actualPaidPrice(req) + " EXC</b>\n"
-                + "💵 Способ: <b>" + method + "</b>\n\n"
-                + "Средства отправлены. Если не получили — напишите в поддержку.";
+        String caption = "✅ <b>Вывод выполнен</b>\n\n"
+                + "<b>" + rewardService.actualPaidPrice(req) + " EXC</b> · " + method + "\n"
+                + "Заявка <b>В-" + reqDisplayId(req) + "</b>. Если не получили, напишите в поддержку.";
         if (receiptFileId != null) {
             SendPhoto photo = new SendPhoto();
             photo.setChatId(req.getUser().getTelegramId().toString());
@@ -24377,9 +24372,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String gameName = req.getGameName() != null && !req.getGameName().isBlank() ? req.getGameName() : "Brawl Stars";
         String itemTitle = req.getItemLabel() != null ? req.displayLabel() : req.displayLabel() + " (" + escape(gameName) + ")";
         sendText(req.getUser().getTelegramId(),
-                "✅ <b>Покупка зачислена!</b>\n\n"
-                        + itemTitle + " на тег " + escape(req.getGameTag()) + "\n"
-                        + "🎁 Бонус: +" + req.getXpBonus() + " XP",
+                "✅ <b>Покупка зачислена</b>\n\n"
+                        + itemTitle + " на тег " + escape(req.getGameTag()) + " · бонус +" + req.getXpBonus() + " XP",
                 backMenuKeyboard("menu:main"));
         long passPrice = Math.round(req.getPriceRub() / ru.gamebot.platform.service.GemPurchaseService.MARKUP_MULTIPLIER);
         long saving = req.getPriceRub() - passPrice;
@@ -24445,10 +24439,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void notifyUserGemPurchaseRejected(GemPurchaseRequest req, String refundNote) {
         sendText(req.getUser().getTelegramId(),
-                "❌ Заявка на донат Д-" + req.getDisplayId() + " отклонена.\n\n"
+                "❌ <b>Заявка Д-" + req.getDisplayId() + " отклонена</b>\n\n"
                         + "Причина: " + escape(req.getRejectReason() != null ? req.getRejectReason() : "не указана")
                         + refundNote
-                        + "\n\nЕсли считаете это ошибкой — напишите в поддержку.",
+                        + "\n\nЕсли это ошибка, напишите в поддержку.",
                 backMenuKeyboard("menu:main"));
     }
 
