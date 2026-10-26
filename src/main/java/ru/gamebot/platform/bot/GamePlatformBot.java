@@ -18101,6 +18101,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         };
     }
 
+    /** «8 новых квестов»: числительное считает вызывающий, здесь только «новый квест» в нужной форме. */
+    private String newQuestsWord(long n) {
+        return pluralNew(n) + " " + pluralQuests(n);
+    }
+
+    private String pluralNew(long n) {
+        if (n % 100 >= 11 && n % 100 <= 14) return "новых";
+        return switch ((int) (n % 10)) {
+            case 1 -> "новый";
+            case 2, 3, 4 -> "новых";
+            default -> "новых";
+        };
+    }
+
     private String pluralQuests(long n) {
         if (n % 100 >= 11 && n % 100 <= 14) return "квестов";
         return switch ((int) (n % 10)) {
@@ -21503,9 +21517,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.url("🔥 Сохранить серию", "https://t.me/" + getBotUsername() + "?start=streak"))
         ));
-        String msg = "🔥 <b>Серия из " + event.getStreakDays() + " дней под угрозой!</b>\n\n"
-                + "Ты не заходил сегодня. Дни считаются по UTC: серия сгорит в <b>00:00 UTC</b> (это 03:00 по Москве).\n\n"
-                + "Нажми кнопку ниже до этого времени — серия сохранится, и сразу сможешь забрать ежедневный бонус. Если не успеешь, я тоже напишу.";
+        String msg = "🔥 <b>Серия из " + event.getStreakDays() + " " + dayWord(event.getStreakDays()) + " под угрозой</b>\n\n"
+                + "Зайди до <b>03:00 по Москве</b>, и серия сохранится. Ежедневный бонус заберёшь сразу.";
         try {
             sendText(event.getTelegramId(), msg, keyboard);
         } catch (Exception e) {
@@ -21541,8 +21554,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     public void onStreakSaveHint(ru.gamebot.platform.event.StreakSaveHintEvent event) {
         try {
             sendText(event.getTelegramId(),
-                    "🛡 <b>Серия в " + event.getStreakDays() + " " + dayWord(event.getStreakDays()) + " под угрозой, но Pass её спасёт</b>\n\n"
-                            + "Ты не заходил вчера. Загляни сегодня: EGC Pass бесплатно сохранит серию (раз в месяц), и она продолжится.",
+                    "🛡 <b>Серия из " + event.getStreakDays() + " " + dayWord(event.getStreakDays()) + " под угрозой</b>\n\n"
+                            + "Зайди сегодня: EGC Pass бесплатно сохранит её (раз в месяц).",
                     keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🏠 Открыть меню", "menu:main")))));
         } catch (Exception e) {
             log.warn("Failed to send streak-save hint to {}", event.getTelegramId(), e);
@@ -21555,9 +21568,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         int price = streakRestorePriceStars(lostDays);
         sendText(telegramId,
                 "💔 <b>Серия из " + lostDays + " " + dayWord(lostDays) + " прервалась</b>\n\n"
-                        + "Ты не зашёл вчера (дни считаются по UTC: серия сгорела в 00:00 UTC, это 03:00 по Москве).\n\n"
-                        + "Можно восстановить за " + price + " ⭐ в течение двух дней и продолжить с " + (lostDays + 1)
-                        + "-го дня как ни в чём не бывало (плюс бонус за сегодня), либо начать заново.",
+                        + "Можно восстановить за <b>" + price + " ⭐</b> в течение двух дней и продолжить с " + (lostDays + 1)
+                        + "-го дня, либо начать заново.",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("💫 Восстановить за " + price + " ⭐", "streak:restore")),
                         List.of(keyboardFactory.callback("🔄 Начать заново и забрать бонус", "streak:reset"))
@@ -21598,10 +21610,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Разовое предложение EGC Pass после 10+ квестов (WeeklyResetScheduler.checkEgcPassTeaser). Перки - как на экране пасса. */
     @org.springframework.context.event.EventListener
     public void onEgcPassTeaser(ru.gamebot.platform.event.EgcPassTeaserEvent event) {
-        String msg = "⭐ <b>Ты уже выполнил " + event.getCompletedQuests() + " квестов</b>\n\n"
-                + "С EGC Pass лимит вывода <b>больше на 10 000 EXC в месяц</b>, награды за квесты растут: <b>+10% EXC</b> и <b>+5% XP</b>, плюс доп. слот квеста, бесплатный улучшенный "
-                + "сундук каждый день и приоритет в очереди на вывод. Подписка " + EGC_PASS_STARS_PRICE + " ⭐ в месяц.\n\n"
-                + "Подробности по кнопке 👇";
+        String msg = "⭐ <b>" + event.getCompletedQuests() + " " + pluralQuests(event.getCompletedQuests()) + " уже за плечами</b>\n\n"
+                + "С EGC Pass: <b>+10% EXC</b> и <b>+5% XP</b> к наградам, лимит вывода <b>+10 000 EXC</b> в месяц, доп. слот квеста, "
+                + "бесплатный улучшенный сундук каждый день и приоритет в выплатах. <b>" + EGC_PASS_STARS_PRICE + " ⭐ в месяц.</b>";
         try {
             sendText(event.getTelegramId(), msg, keyboardFactory.rowsLayout(List.of(
                     List.of(keyboardFactory.callback("⭐ Про EGC Pass", "sink:egc_pass")))));
@@ -21614,9 +21625,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Затих на 4-13 дней (WeeklyResetScheduler.checkSilentGap): одно сообщение на человека, без EXC. */
     @org.springframework.context.event.EventListener
     public void onSilentGapNudge(ru.gamebot.platform.event.SilentGapNudgeEvent event) {
-        String msg = "👀 <b>Есть что-то новое</b>\n\n"
-                + "Пока тебя не было, в клубе появились новые квесты: <b>" + event.getNewQuestsCount() + "</b>.\n\n"
-                + "Загляни, вдруг найдётся что-то по душе 👇"
+        String msg = "👀 <b>В клубе " + event.getNewQuestsCount() + " " + newQuestsWord(event.getNewQuestsCount()) + "</b>\n\n"
+                + "Загляни, вдруг найдётся что-то по душе."
                 + returnHookLine(event.getTelegramId());
         try {
             sendText(event.getTelegramId(), msg, keyboardFactory.rowsLayout(List.of(
