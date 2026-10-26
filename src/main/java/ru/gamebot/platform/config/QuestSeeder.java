@@ -40,6 +40,12 @@ public class QuestSeeder implements CommandLineRunner {
             + "через Wi-Fi, с VPN или из другой страны переход не засчитается. Перед переходом выключи Wi-Fi и VPN.\n\n"
             + "🔗 https://www.ubelivablestrange.work/click?offer_id=37909&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=37909\n\n"
             + "Подписка оператора: деньги списываются с баланса телефона, пока ты её не отключишь.";
+    /** Квест Mobidea 37862 (MegaCity): та же схема, что у 37863. */
+    private static final String MOBIDEA_37862_DESCRIPTION = "Подключи MegaCity по своей персональной ссылке. В конце тебя ждёт платная подписка Мегафона.";
+    private static final String MOBIDEA_37862_INSTRUCTION = "Засчитывается ТОЛЬКО если открыть ссылку через мобильный интернет Мегафона в России и без VPN: "
+            + "через Wi-Fi, с VPN или из другой страны переход не засчитается. Перед переходом выключи Wi-Fi и VPN.\n\n"
+            + "🔗 https://www.ubelivablestrange.work/click?offer_id=37862&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=37862\n\n"
+            + "Подписка оператора: деньги списываются с баланса телефона, пока ты её не отключишь.";
 
     private final QuestRepository questRepository;
     private final QuestSubmissionRepository questSubmissionRepository;
@@ -2289,6 +2295,31 @@ public class QuestSeeder implements CommandLineRunner {
             mobidea37909.setCreatedAt(LocalDateTime.now());
             questRepository.save(mobidea37909);
             log.info("[QuestSeeder] Created external quest (inactive): Mobidea 37909 MegaClicker");
+        }
+        // ── Внешний квест Mobidea 37862 (MegaCity, Мегафон «1 click»), 2026-10-26: та же схема, что у 37863; постбек глобальный (offer_id={{PLACEMENT}}) ──
+        // Создаётся НЕАКТИВНЫМ, включение - scripts/activate-mobidea-37862.sql. Группа и награда общие («Партнёрские приложения», FLAT 500).
+        if (questRepository.findFirstByTitleAndGameName("Подключи MegaCity (Мегафон, только Россия)", "Партнёрские приложения").isEmpty()) {
+            Quest mobidea37862 = new Quest();
+            mobidea37862.setTitle("Подключи MegaCity (Мегафон, только Россия)");
+            mobidea37862.setGameName("Партнёрские приложения");
+            mobidea37862.setPlatform("Онлайн");
+            mobidea37862.setDurationDays(30);
+            mobidea37862.setDurationText("30 дней");
+            mobidea37862.setRewardXp(0);
+            mobidea37862.setRewardCoins(500);
+            mobidea37862.setDescription(MOBIDEA_37862_DESCRIPTION);
+            mobidea37862.setInstruction(MOBIDEA_37862_INSTRUCTION);
+            mobidea37862.setRequirements("Подтверждение приходит от партнёра автоматически, обычно в течение нескольких часов или дней. "
+                    + "Отчёт отправлять не нужно, EXC начислится сам.");
+            mobidea37862.setParticipantLimit(250);
+            mobidea37862.setActive(false);
+            mobidea37862.setExternalAutoApprove(true);
+            mobidea37862.setExternalOfferId("37862");
+            mobidea37862.setExternalNetwork("mobidea");
+            mobidea37862.setExternalTargetType("INSTALL");
+            mobidea37862.setCreatedAt(LocalDateTime.now());
+            questRepository.save(mobidea37862);
+            log.info("[QuestSeeder] Created external quest (inactive): Mobidea 37862 MegaCity");
         }
         // ── Антифрод: разовые квесты (проверка текущего состояния аккаунта, а не свежего действия) ──
         // Баланс/ранг/лига не сбрасываются между попытками — без этого флага такие квесты фармились
