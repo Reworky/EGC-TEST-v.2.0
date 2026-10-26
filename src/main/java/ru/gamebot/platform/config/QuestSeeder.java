@@ -34,6 +34,12 @@ public class QuestSeeder implements CommandLineRunner {
             + "через Wi-Fi, с VPN или из другой страны переход не засчитается. Перед переходом выключи Wi-Fi и VPN.\n\n"
             + "🔗 https://www.ubelivablestrange.work/click?offer_id=37863&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=37863\n\n"
             + "Подписка оператора: деньги списываются с баланса телефона, пока ты её не отключишь.";
+    /** Квест Mobidea 37909 (MegaClicker): та же схема, что у 37863. */
+    private static final String MOBIDEA_37909_DESCRIPTION = "Подключи MegaClicker по своей персональной ссылке. В конце тебя ждёт платная подписка Мегафона.";
+    private static final String MOBIDEA_37909_INSTRUCTION = "Засчитывается ТОЛЬКО если открыть ссылку через мобильный интернет Мегафона в России и без VPN: "
+            + "через Wi-Fi, с VPN или из другой страны переход не засчитается. Перед переходом выключи Wi-Fi и VPN.\n\n"
+            + "🔗 https://www.ubelivablestrange.work/click?offer_id=37909&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=37909\n\n"
+            + "Подписка оператора: деньги списываются с баланса телефона, пока ты её не отключишь.";
 
     private final QuestRepository questRepository;
     private final QuestSubmissionRepository questSubmissionRepository;
@@ -2259,6 +2265,31 @@ public class QuestSeeder implements CommandLineRunner {
                     q.setInstruction(MOBIDEA_37863_INSTRUCTION);
                     questRepository.save(q);
                 });
+        // ── Внешний квест Mobidea 37909 (MegaClicker, Мегафон «1 click»), 2026-10-26: та же схема, что у 37863; постбек глобальный (offer_id={{PLACEMENT}}) ──
+        // Создаётся НЕАКТИВНЫМ, включение - scripts/activate-mobidea-37909.sql. Группа и награда общие («Партнёрские приложения», FLAT 500).
+        if (questRepository.findFirstByTitleAndGameName("Подключи MegaClicker (Мегафон, только Россия)", "Партнёрские приложения").isEmpty()) {
+            Quest mobidea37909 = new Quest();
+            mobidea37909.setTitle("Подключи MegaClicker (Мегафон, только Россия)");
+            mobidea37909.setGameName("Партнёрские приложения");
+            mobidea37909.setPlatform("Онлайн");
+            mobidea37909.setDurationDays(30);
+            mobidea37909.setDurationText("30 дней");
+            mobidea37909.setRewardXp(0);
+            mobidea37909.setRewardCoins(500);
+            mobidea37909.setDescription(MOBIDEA_37909_DESCRIPTION);
+            mobidea37909.setInstruction(MOBIDEA_37909_INSTRUCTION);
+            mobidea37909.setRequirements("Подтверждение приходит от партнёра автоматически, обычно в течение нескольких часов или дней. "
+                    + "Отчёт отправлять не нужно, EXC начислится сам.");
+            mobidea37909.setParticipantLimit(250);
+            mobidea37909.setActive(false);
+            mobidea37909.setExternalAutoApprove(true);
+            mobidea37909.setExternalOfferId("37909");
+            mobidea37909.setExternalNetwork("mobidea");
+            mobidea37909.setExternalTargetType("INSTALL");
+            mobidea37909.setCreatedAt(LocalDateTime.now());
+            questRepository.save(mobidea37909);
+            log.info("[QuestSeeder] Created external quest (inactive): Mobidea 37909 MegaClicker");
+        }
         // ── Антифрод: разовые квесты (проверка текущего состояния аккаунта, а не свежего действия) ──
         // Баланс/ранг/лига не сбрасываются между попытками — без этого флага такие квесты фармились
         // повторно каждый кулдаун без единого нового действия (жалоба игрока, скриншот с 4.25М золота
