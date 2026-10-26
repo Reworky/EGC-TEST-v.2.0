@@ -5639,11 +5639,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String text;
             if (event.getExcGranted() == event.getMilestoneBonus()) {
                 // Просмотр для рекламного колеса: плоских 30 EXC нет (награда — спин), приходит только бонус за прогресс
-                text = "🎯 <b>+" + event.getExcGranted() + " EXC</b> — бонус за прогресс по рекламе!";
+                text = "🎯 <b>+" + event.getExcGranted() + " EXC</b> за прогресс по рекламе";
             } else {
-                text = "✅ <b>+" + event.getExcGranted() + " EXC</b> начислено за просмотр рекламы!";
+                text = "✅ <b>+" + event.getExcGranted() + " EXC</b> за просмотр рекламы";
                 if (event.getMilestoneBonus() > 0) {
-                    text += "\n🎯 Включая бонус за прогресс: +" + event.getMilestoneBonus() + " EXC";
+                    text += "\n🎯 включая +" + event.getMilestoneBonus() + " EXC за прогресс";
                 }
             }
             notifyUser(player.getTelegramId(), text);
@@ -5829,8 +5829,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     public void onDailyTasksCompleted(ru.gamebot.platform.event.DailyTasksCompletedEvent event) {
         try {
             sendText(event.getTelegramId(),
-                    "🎉 <b>Все задания дня выполнены!</b>\n\nЗабери Сундук заданий: +" + UserService.DAILY_TASKS_CHEST_EXC
-                            + " EXC и 🎟️ " + UserService.DAILY_TASKS_CHEST_TICKETS + " билет колеса.",
+                    "🎉 <b>Задания дня выполнены</b>\n\nВ сундуке <b>+" + UserService.DAILY_TASKS_CHEST_EXC
+                            + " EXC</b> и 🎟 " + UserService.DAILY_TASKS_CHEST_TICKETS + " билет.",
                     keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🎁 Забрать сундук заданий", "dtasks:claim")))));
         } catch (Exception e) {
             log.warn("Failed to send daily tasks completed message to {}", event.getTelegramId(), e);
@@ -12023,9 +12023,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     @org.springframework.context.event.EventListener
     public void onSquadJoinRequest(ru.gamebot.platform.event.SquadJoinRequestEvent event) {
         AppUser applicant = event.getApplicant();
-        String msg = "📨 <b>Новая заявка в отряд «" + escape(event.getSquad().getName()) + "»</b>\n\n"
-                + "Игрок <b>" + escape(applicant.getNickname()) + "</b> — " + escape(userService.getLevelName(applicant.getXp()))
-                + ", " + String.format("%,d", applicant.getXp()).replace(',', ' ') + " XP хочет вступить в ваш отряд.";
+        String msg = "📨 <b>Заявка в отряд «" + escape(event.getSquad().getName()) + "»</b>\n\n"
+                + "<b>" + escape(applicant.getNickname()) + "</b>, " + escape(userService.getLevelName(applicant.getXp()))
+                + ", " + String.format("%,d", applicant.getXp()).replace(',', ' ') + " XP.";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("✅ Принять", "squad:req_ok:" + event.getRequestId()),
                         keyboardFactory.callback("❌ Отклонить", "squad:req_no:" + event.getRequestId())),
@@ -21121,9 +21121,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             QuestSubmission approved = questService.getSubmission(event.getSubmissionId());
             notifyUser(approved.getUser().getTelegramId(),
-                    "✅ <b>Партнёр подтвердил выполнение!</b>\n\n"
-                    + "Квест <b>" + escape(approved.getQuest().getTitle()) + "</b> засчитан.\n\n"
-                    + "🪙 EXC: <b>+" + awardedCoinsOf(approved) + "</b>" + starsNote(awardedCoinsOf(approved))
+                    "✅ <b>Квест засчитан</b>\n\n"
+                    + "<b>" + escape(approved.getQuest().getTitle()) + "</b>, подтверждено партнёром\n"
+                    + "🪙 <b>+" + awardedCoinsOf(approved) + " EXC</b>"
                     + (egcPassBonusLine(approved).isEmpty() ? "" : "\n" + egcPassBonusLine(approved).trim()), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "подтверждено партнёрской сетью");
         } catch (Exception e) {
@@ -21279,10 +21279,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     @org.springframework.context.event.EventListener
     public void onCooldownExpired(ru.gamebot.platform.event.CooldownExpiredEvent event) {
-        String msg = "🎮 <b>Кулдаун снят!</b>\n\n"
-                + "Квест <b>«" + escape(event.getQuestTitle()) + "»</b> в игре <b>"
-                + escape(event.getGameName()) + "</b> снова доступен.\n\n"
-                + "Заходи и продолжай прогресс 👇";
+        String msg = "🎮 <b>Квест «" + escape(event.getQuestTitle()) + "» снова доступен</b>\n\n"
+                + escape(event.getGameName()) + ", кулдаун снят.";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("🗺️ Перейти к квестам", "menu:quests"))
         ));
@@ -21330,9 +21328,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long h = event.getMinutesLeft() / 60;
         long m = event.getMinutesLeft() % 60;
         String timeStr = h > 0 ? h + " ч " + m + " мин" : m + " мин";
-        String msg = "⚠️ <b>Квест истекает через " + timeStr + "!</b>\n\n"
-                + "«" + escape(event.getQuestTitle()) + "»\n\n"
-                + (event.isChannelCheck() ? "Успей подписаться на канал и нажать «✅ Я подписался» 👇" : "Успей отправить доказательство 👇");
+        String msg = "⚠️ <b>«" + escape(event.getQuestTitle()) + "» истекает через " + timeStr + "</b>\n\n"
+                + (event.isChannelCheck() ? "Успей подписаться на канал и нажать «✅ Я подписался»." : "Успей отправить доказательство.");
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback(event.isChannelCheck() ? "📂 Мои квесты" : "📤 Мои квесты", "menu:myquests"))
         ));
@@ -21508,8 +21505,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     public void onStreakSaved(ru.gamebot.platform.event.StreakSavedEvent event) {
         try {
             sendText(event.getTelegramId(),
-                    "🛡 <b>EGC Pass сохранил твою серию!</b>\n\nТы пропустил вчера, но подписка бесплатно сохранила серию: теперь она "
-                            + event.getStreakDays() + " " + dayWord(event.getStreakDays()) + ". Такое сохранение доступно раз в месяц.",
+                    "🛡 <b>EGC Pass сохранил серию</b>\n\nСерия " + event.getStreakDays() + " " + dayWord(event.getStreakDays())
+                            + " продолжается. Такое сохранение доступно раз в месяц.",
                     null);
         } catch (Exception e) {
             log.warn("Failed to send streak-saved message to {}", event.getTelegramId(), e);
@@ -22639,9 +22636,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (AppUser winner : event.getWinners()) {
             try {
                 sendText(winner.getTelegramId(),
-                        "🎟 <b>Тебе повезло!</b>\n\n"
-                                + "Сегодняшний розыгрыш билетов колеса фортуны — просто за то, что зашёл сегодня.\n"
-                                + "Начислен <b>+1 билет</b> 🎡",
+                        "🎟 <b>Тебе повезло: +1 билет</b>\n\n"
+                                + "Колесо фортуны разыграло билет за заход сегодня.",
                         keyboardFactory.rowsLayout(List.of(
                                 List.of(keyboardFactory.callback("🎡 Крутить колесо", "wheel:menu"))
                         )));
@@ -22709,14 +22705,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendAchievementCard(Long telegramId, ru.gamebot.platform.domain.enums.AchievementType type, String detail) {
         userService.findByTelegramId(telegramId).ifPresent(user -> {
             String text = switch (type) {
-                case TOURNAMENT_WIN -> "🏆 <b>Достижение разблокировано!</b>\n\nТы выиграл турнир «" + escape(detail) + "»! Расскажи друзьям — пусть тоже попробуют:";
-                case RANK_UP -> "⭐ <b>Новый ранг!</b>\n\nТы достиг звания «" + escape(detail) + "»! Похвастайся друзьям:";
-                case EXC_MILESTONE -> "💰 <b>Круглая сумма!</b>\n\nТы заработал уже " + detail + " EXC в EGC! Позови друзей за компанию:";
+                case TOURNAMENT_WIN -> "🏆 <b>Ты выиграл турнир «" + escape(detail) + "»</b>";
+                case RANK_UP -> "⭐ <b>Новый ранг: " + escape(detail) + "</b>";
+                case EXC_MILESTONE -> "💰 <b>Заработано уже " + detail + " EXC</b>";
                 case INVITED_FRIENDS_MILESTONE -> {
                     int threshold = Integer.parseInt(detail);
                     String badgeName = userService.invitedFriendsBadgeName(threshold);
-                    yield "🎖️ <b>Новый бейдж!</b>\n\nТы пригласил " + threshold + " друзей и получил бейдж «"
-                            + escape(badgeName) + "»! Похвастайся друзьям:";
+                    yield "🎖 <b>Новый бейдж «" + escape(badgeName) + "»</b>\n\nПриглашено друзей: " + threshold + ".";
                 }
             };
             sendText(telegramId, text, keyboardFactory.rowsLayout(List.of(
