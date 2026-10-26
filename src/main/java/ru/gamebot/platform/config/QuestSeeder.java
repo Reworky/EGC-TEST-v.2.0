@@ -2209,34 +2209,36 @@ public class QuestSeeder implements CommandLineRunner {
             questRepository.save(mobideaInstall);
             log.info("[QuestSeeder] Created external quest (inactive): Mobidea 37030 install, Android/RU");
         }
-        // ── ТЕСТ цепочки клик → постбек: Mobidea 37863 (MegaPrognoze, Мегафон «1 click», carrier billing), 2026-10-26 ──
-        // Категория «1 click» с подпиской оператора была отклонена владельцем 09.09; сейчас - только тест клика и постбека на самом владельце.
-        // Квест НЕАКТИВЕН и ограничен 5 участниками; отдельная «игра» (FLAT 500 - символическая награда), чтобы не трогать награду квеста 37030.
-        // Перед любым показом игрокам: проверка вкладки «Разрешённый трафик», решение владельца, актуальный текст предупреждения.
-        gameCatalogService.setDifficultyMode("Партнёрские тесты", "FLAT", 500L, 0);
-        if (questRepository.findFirstByTitleAndGameName("ТЕСТ: оффер Mobidea 37863 (подписка оператора)", "Партнёрские тесты").isEmpty()) {
-            Quest mobideaTest = new Quest();
-            mobideaTest.setTitle("ТЕСТ: оффер Mobidea 37863 (подписка оператора)");
-            mobideaTest.setGameName("Партнёрские тесты");
-            mobideaTest.setPlatform("Android");
-            mobideaTest.setDurationDays(30);
-            mobideaTest.setDurationText("30 дней");
-            mobideaTest.setRewardXp(0);
-            mobideaTest.setRewardCoins(500);
-            mobideaTest.setDescription("Тест партнёрской цепочки. ВНИМАНИЕ: по ссылке подключается платная подписка мобильного оператора Мегафон (только Россия), "
-                    + "деньги будут списываться со счёта телефона. Не проходи, если не готов платить.");
-            mobideaTest.setInstruction("⚠️ Это платная подписка оператора: после перехода по ссылке с твоего телефона регулярно списываются деньги, пока не отключишь.\n"
-                    + "https://www.ubelivablestrange.work/click?offer_id=37863&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=quest_test");
-            mobideaTest.setRequirements("Подтверждение приходит от партнёра автоматически. Отчёт отправлять не нужно.");
-            mobideaTest.setParticipantLimit(5);
-            mobideaTest.setActive(false);
-            mobideaTest.setExternalAutoApprove(true);
-            mobideaTest.setExternalOfferId("37863");
-            mobideaTest.setExternalNetwork("mobidea");
-            mobideaTest.setExternalTargetType("INSTALL");
-            mobideaTest.setCreatedAt(LocalDateTime.now());
-            questRepository.save(mobideaTest);
-            log.info("[QuestSeeder] Created external quest (inactive, TEST): Mobidea 37863 MegaPrognoze");
+        // ── Внешний квест Mobidea 37863 (MegaPrognoze, Мегафон «1 click», подписка оператора), 2026-10-26 ──
+        // Мотивированный трафик по офферу разрешён (подтвердил владелец). Группа и награда общие с квестом 37030 («Партнёрские приложения», FLAT 500 -
+        // заглушка, выставить по выплате: ≤ ~половины 73 ₽). Создаётся НЕАКТИВНЫМ: награда приходит только постбеком, поэтому включать после того,
+        // как в Mobidea прописан Postback URL /api/postback/mobidea?token=...&pub_click_id={click_id}&offer_id=37863&payout={payout}&status={status}
+        // и токен MOBIDEA_POSTBACK_TOKEN есть в окружении бота; иначе игрок получит платную подписку без награды.
+        if (questRepository.findFirstByTitleAndGameName("Подключи MegaPrognoze (Мегафон, только Россия)", "Партнёрские приложения").isEmpty()) {
+            Quest mobidea37863 = new Quest();
+            mobidea37863.setTitle("Подключи MegaPrognoze (Мегафон, только Россия)");
+            mobidea37863.setGameName("Партнёрские приложения");
+            mobidea37863.setPlatform("Онлайн");
+            mobidea37863.setDurationDays(30);
+            mobidea37863.setDurationText("30 дней");
+            mobidea37863.setRewardXp(0);
+            mobidea37863.setRewardCoins(500);
+            mobidea37863.setDescription("Подключи сервис MegaPrognoze (прогнозы на футбол) по своей персональной ссылке. Засчитывается только для абонентов Мегафона из России "
+                    + "при открытии ссылки через мобильный интернет.");
+            mobidea37863.setInstruction("🔗 Открой ссылку с телефона через мобильный интернет Мегафона:\n"
+                    + "https://www.ubelivablestrange.work/click?offer_id=37863&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=quest\n\n"
+                    + "ℹ️ В конце тебя ждёт платная подписка оператора: деньги списываются с баланса телефона, пока ты её не отключишь.");
+            mobidea37863.setRequirements("Подтверждение приходит от партнёра автоматически, обычно в течение нескольких часов или дней. "
+                    + "Отчёт отправлять не нужно, EXC начислится сам.");
+            mobidea37863.setParticipantLimit(250);
+            mobidea37863.setActive(false);
+            mobidea37863.setExternalAutoApprove(true);
+            mobidea37863.setExternalOfferId("37863");
+            mobidea37863.setExternalNetwork("mobidea");
+            mobidea37863.setExternalTargetType("INSTALL");
+            mobidea37863.setCreatedAt(LocalDateTime.now());
+            questRepository.save(mobidea37863);
+            log.info("[QuestSeeder] Created external quest (inactive): Mobidea 37863 MegaPrognoze");
         }
         // ── Антифрод: разовые квесты (проверка текущего состояния аккаунта, а не свежего действия) ──
         // Баланс/ранг/лига не сбрасываются между попытками — без этого флага такие квесты фармились
