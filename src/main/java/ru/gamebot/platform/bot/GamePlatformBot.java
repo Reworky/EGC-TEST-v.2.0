@@ -21365,17 +21365,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     @org.springframework.context.event.EventListener
     public void onWeeklyDigestActive(ru.gamebot.platform.event.WeeklyDigestActiveEvent event) {
         String rankLine = event.getWeeklyRank() > 0 ? "#" + event.getWeeklyRank() : "—";
-        String msg = "📊 <b>Итоги твоей недели в EGC</b>\n\n"
-                + "✅ Квестов выполнено: <b>" + event.getCompletedQuests() + "</b>\n"
-                + "💰 EXC заработано: <b>" + String.format("%,d", event.getEarnedExc()).replace(',', ' ') + "</b>\n"
-                + "🏆 Место в лиге: <b>" + escape(event.getLeagueName()) + " · " + rankLine + "</b>\n"
-                + "⭐ XP за неделю: <b>" + event.getWeeklyXp() + "</b>\n"
-                + "📈 До следующего уровня: <b>" + event.getXpToNextLevel() + " XP</b>\n\n"
+        String msg = "📊 <b>Твоя неделя</b>\n\n"
+                + "✅ " + event.getCompletedQuests() + " " + pluralQuests(event.getCompletedQuests())
+                + " · 💰 <b>" + String.format("%,d", event.getEarnedExc()).replace(',', ' ') + " EXC</b>"
+                + " · ⭐ " + event.getWeeklyXp() + " XP\n"
+                + "🏆 " + escape(event.getLeagueName()) + ", место <b>" + rankLine + "</b>\n"
+                + "До следующего уровня <b>" + event.getXpToNextLevel() + " XP</b>"
                 + (event.getPassBonusExc() >= 100
-                        ? "⭐ С EGC Pass за эту неделю было бы примерно на <b>+" + event.getPassBonusExc() + " EXC</b> и <b>+"
-                                + event.getPassBonusXp() + " XP</b> больше.\n\n"
-                        : "")
-                + "Новые квесты уже ждут! 👇";
+                        ? "\n\nС EGC Pass было бы <b>+" + event.getPassBonusExc() + " EXC</b> и <b>+"
+                                + event.getPassBonusXp() + " XP</b> больше."
+                        : "");
         List<List<InlineKeyboardButton>> digestRows = new ArrayList<>();
         digestRows.add(List.of(keyboardFactory.callback("🗺️ Перейти к квестам", "menu:quests")));
         if (event.getPassBonusExc() >= 100) {
@@ -21392,11 +21391,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     @org.springframework.context.event.EventListener
     public void onWeeklyDigestInactive(ru.gamebot.platform.event.WeeklyDigestInactiveEvent event) {
-        String msg = "👋 <b>Давно не виделись!</b>\n\n"
-                + "На прошлой неделе ты пропустил:\n"
-                + (event.getNewQuestsCount() > 0 ? "— <b>" + event.getNewQuestsCount() + "</b> новых квестов\n" : "")
-                + "— Колесо фортуны крутили <b>" + event.getTotalSpinsCount() + "</b> раз\n\n"
-                + "Возвращайся — квесты ждут! 👇";
+        String msg = "👋 <b>Давно не виделись</b>\n\n"
+                + (event.getNewQuestsCount() > 0
+                        ? "За неделю в клубе появилось <b>" + event.getNewQuestsCount() + "</b> новых квестов, а колесо фортуны крутили <b>"
+                                + event.getTotalSpinsCount() + "</b> раз."
+                        : "За неделю колесо фортуны крутили <b>" + event.getTotalSpinsCount() + "</b> раз.");
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("🗺️ К квестам", "menu:quests"))
         ));
