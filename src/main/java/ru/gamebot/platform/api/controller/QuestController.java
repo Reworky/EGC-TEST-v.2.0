@@ -646,6 +646,14 @@ public class QuestController {
                     .status("ERROR")
                     .message(e.getMessage())
                     .build());
+        } catch (Exception e) {
+            // Раньше любая другая ошибка уходила как безымянные 500 без записи в лог: игрок видел «ничего не происходит» (разбор 27.10.2026, заявка 8014)
+            org.slf4j.LoggerFactory.getLogger(QuestController.class).error("Cancel of submission {} failed for telegramId {}", submissionId, telegramId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(QuestActionResponseDto.builder()
+                    .success(false)
+                    .status("ERROR")
+                    .message("Не удалось отменить квест. Попробуйте ещё раз или напишите в поддержку.")
+                    .build());
         }
     }
 

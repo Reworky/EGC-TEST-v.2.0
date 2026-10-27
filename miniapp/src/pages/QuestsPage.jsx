@@ -812,9 +812,13 @@ function MyQuestsView({ expanded, details, onToggle, onDetailChanged }) {
     setCancelBusy(submissionId);
     try {
       await cancelMyQuest(submissionId);
-      reload();
+    } catch (err) {
+      // Раньше ошибка глотала молча: игрок жал «Отменить», ничего не менялось и непонятно почему
+      const msg = err?.response?.data?.message || 'Не удалось отменить квест. Попробуйте ещё раз.';
+      window.alert(msg);
     } finally {
       setCancelBusy(null);
+      reload();
     }
   }
 
