@@ -32,19 +32,19 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String MOBIDEA_37863_DESCRIPTION = "Подключи MegaPrognoze (прогнозы на футбол) по своей персональной ссылке. В конце тебя ждёт платная подписка Мегафона.";
     private static final String MOBIDEA_37863_INSTRUCTION = "Засчитывается ТОЛЬКО если открыть ссылку через мобильный интернет Мегафона в России и без VPN: "
             + "через Wi-Fi, с VPN или из другой страны переход не засчитается. Перед переходом выключи Wi-Fi и VPN.\n\n"
-            + "🔗 https://www.ubelivablestrange.work/click?offer_id=37863&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=37863\n\n"
+            + "🔗 https://www.frictionstrange.wiki/click?offer_id=37863&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=37863\n\n"
             + "Подписка оператора: деньги списываются с баланса телефона, пока ты её не отключишь.";
     /** Квест Mobidea 37909 (MegaClicker): та же схема, что у 37863. */
     private static final String MOBIDEA_37909_DESCRIPTION = "Подключи MegaClicker по своей персональной ссылке. В конце тебя ждёт платная подписка Мегафона.";
     private static final String MOBIDEA_37909_INSTRUCTION = "Засчитывается ТОЛЬКО если открыть ссылку через мобильный интернет Мегафона в России и без VPN: "
             + "через Wi-Fi, с VPN или из другой страны переход не засчитается. Перед переходом выключи Wi-Fi и VPN.\n\n"
-            + "🔗 https://www.ubelivablestrange.work/click?offer_id=37909&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=37909\n\n"
+            + "🔗 https://www.frictionstrange.wiki/click?offer_id=37909&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=37909\n\n"
             + "Подписка оператора: деньги списываются с баланса телефона, пока ты её не отключишь.";
     /** Квест Mobidea 37862 (MegaCity): та же схема, что у 37863. */
     private static final String MOBIDEA_37862_DESCRIPTION = "Подключи MegaCity по своей персональной ссылке. В конце тебя ждёт платная подписка Мегафона.";
     private static final String MOBIDEA_37862_INSTRUCTION = "Засчитывается ТОЛЬКО если открыть ссылку через мобильный интернет Мегафона в России и без VPN: "
             + "через Wi-Fi, с VPN или из другой страны переход не засчитается. Перед переходом выключи Wi-Fi и VPN.\n\n"
-            + "🔗 https://www.ubelivablestrange.work/click?offer_id=37862&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=37862\n\n"
+            + "🔗 https://www.frictionstrange.wiki/click?offer_id=37862&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=37862\n\n"
             + "Подписка оператора: деньги списываются с баланса телефона, пока ты её не отключишь.";
 
     private final QuestRepository questRepository;
@@ -2214,7 +2214,7 @@ public class QuestSeeder implements CommandLineRunner {
             mobideaInstall.setDescription("Установи и запусти приложение по своей персональной ссылке. Засчитывается ТОЛЬКО для игроков из России и ТОЛЬКО на телефонах с Android: "
                     + "на iPhone и из других стран установка не засчитается.");
             mobideaInstall.setInstruction("🔗 Открой ссылку на Android-телефоне (из России, без VPN), установи приложение из Google Play и запусти его:\n"
-                    + "https://www.ubelivablestrange.work/click?offer_id=37030&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=37030\n\n"
+                    + "https://www.frictionstrange.wiki/click?offer_id=37030&pub_id=295948&pub_click_id={TG_ID}&site=egc_bot&pub_sub_id=37030\n\n"
                     + "⚠️ Только Android и только Россия: на iPhone, при VPN или из другой страны установка не засчитается.");
             mobideaInstall.setRequirements("Подтверждение приходит от партнёра автоматически, обычно в течение нескольких часов или дней. "
                     + "Отчёт отправлять не нужно, EXC начислится сам.");
@@ -2228,6 +2228,16 @@ public class QuestSeeder implements CommandLineRunner {
             questRepository.save(mobideaInstall);
             log.info("[QuestSeeder] Created external quest (inactive): Mobidea 37030 install, Android/RU");
         }
+        // 27.10.2026: Mobidea сообщил, что домен трекинга ubelivablestrange.work удалён и заменён на frictionstrange.wiki: во всех уже созданных квестах Mobidea
+        // меняем домен в ссылке (ubelivablebridge.study - ещё более старый). Идемпотентно: после замены старых доменов в тексте нет.
+        for (Quest mq : questRepository.findAll()) {
+            if (!"mobidea".equals(mq.getExternalNetwork()) || mq.getInstruction() == null) continue;
+            String ins = mq.getInstruction();
+            if (!ins.contains("ubelivablestrange.work") && !ins.contains("ubelivablebridge.study")) continue;
+            mq.setInstruction(ins.replace("ubelivablestrange.work", "frictionstrange.wiki").replace("ubelivablebridge.study", "frictionstrange.wiki"));
+            questRepository.save(mq);
+            log.info("[QuestSeeder] Mobidea tracking domain updated in quest '{}'", mq.getTitle());
+        }
         // Глобальный постбек Mobidea получает ID оффера из pub_sub_id ссылки ({{PLACEMENT}}): в уже созданном квесте 37030 заменяем «quest» на ID оффера.
         questRepository.findFirstByTitleAndGameName("Установи приложение (только Android, только РФ)", "Партнёрские приложения")
                 .filter(q -> q.getInstruction() != null && q.getInstruction().contains("offer_id=37030")
@@ -2235,7 +2245,7 @@ public class QuestSeeder implements CommandLineRunner {
                 .ifPresent(q -> {
                     // Домен трекинга в кабинете Mobidea теперь ubelivablestrange.work (как у остальных офферов); ID оффера - в pub_sub_id для глобального постбека
                     q.setInstruction(q.getInstruction().replace("pub_sub_id=quest", "pub_sub_id=37030")
-                            .replace("ubelivablebridge.study", "ubelivablestrange.work"));
+                            .replace("ubelivablebridge.study", "frictionstrange.wiki"));
                     questRepository.save(q);
                 });
         // ── Внешний квест Mobidea 37863 (MegaPrognoze, Мегафон «1 click», подписка оператора), 2026-10-26 ──
