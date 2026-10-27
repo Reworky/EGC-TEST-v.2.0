@@ -380,6 +380,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if ("1".equals(session.getData().get("ccdraftWait")) && isEffectiveAdmin(user) && handleDraftChannelConnect(user, session, message)) {
+            return;
+        }
+
         if (text != null && handleClearMeCommand(user, session, text.trim())) {
             return;
         }
@@ -22210,6 +22214,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🔁 Ежедневно и по событию", "admin:cc:day:0")));
         rows.add(List.of(keyboardFactory.callback("🗓 Расписание на 14 дней + очередь ручных", "admin:cc:sched:14")));
         rows.add(List.of(keyboardFactory.callback("📋 Все посты списком", "admin:cc:all")));
+        rows.add(List.of(keyboardFactory.callback("📤 Канал-черновик", "admin:cc:draft")));
         rows.add(List.of(keyboardFactory.callback("📆 Календарь", "admin:cc"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(),
                 "📰 <b>Контент канала</b>\n\n"
@@ -22407,8 +22412,307 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
 
+    // ===== Канал-черновик контент-плана (27.10.2026) =====
+    // Закрытый канал, куда бот зеркалит расписание: у каждого поста шапка (дата, время UTC+7, рубрика, статус) и готовый текст с картинкой.
+    // Автопосты, у которых текста ещё нет (формируется за час до выхода), идут короткой строкой-плейсхолдером. Состояние зеркала - в app_settings
+    // (ключи ccd.m.*: хэш картинки | хэш содержимого | id сообщения | id второго сообщения), поэтому повторная синхронизация правит, а не дублирует.
+
+    private static final String CCD_CHANNEL_KEY = "ccdraft.channel";
+    private static final String CCD_MSG_PREFIX = "ccd.m.";
+    private static final long CCD_SEND_PAUSE_MS = 3100; // лимит Telegram ~20 сообщений в минуту в один чат
+    private final java.util.concurrent.atomic.AtomicBoolean draftChannelSyncRunning = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    private record DraftMirrorItem(String key, LocalDateTime atUtc, String header, String body, String photoFileId) { }
+
+    private Long draftChannelId() {
+        return appSettingRepository.findById(CCD_CHANNEL_KEY).map(AppSetting::getValue).filter(v -> !v.isBlank()).map(v -> {
+            try {
+                return Long.valueOf(v.trim());
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }).orElse(null);
+    }
+
+    private int draftChannelMirroredCount() {
+        int n = 0;
+        for (AppSetting st : appSettingRepository.findAll()) {
+            if (st.getKey() != null && st.getKey().startsWith(CCD_MSG_PREFIX)) n++;
+        }
+        return n;
+    }
+
+    private void sendDraftChannelPanel(AppUser user) {
+        Long channelId = draftChannelId();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        StringBuilder sb = new StringBuilder("📤 <b>Канал-черновик</b>\n\n");
+        if (channelId == null) {
+            sb.append("Канал ещё не подключён. Нажмите «Подключить» и перешлите боту любой пост из закрытого канала, куда бот добавлен администратором.");
+            rows.add(List.of(keyboardFactory.callback("🔗 Подключить канал", "admin:cc:draft:connect")));
+        } else {
+            sb.append("Канал подключён: <code>").append(channelId).append("</code>\n")
+                    .append("Постов в зеркале: <b>").append(draftChannelMirroredCount()).append("</b>\n\n")
+                    .append("«Синхронизировать» отправит в канал новые посты на 14 дней вперёд (ручные с текстом и картинкой, автопосты строкой) и обновит уже отправленные: правки текста, статус, срок. Дублей не будет.\n\n")
+                    .append("«Пересобрать» удалит все посты бота в канале и отправит заново по порядку дат.");
+            rows.add(List.of(keyboardFactory.callback("🔄 Синхронизировать", "admin:cc:draft:sync")));
+            rows.add(List.of(keyboardFactory.callback("♻️ Пересобрать с нуля", "admin:cc:draft:rebuild")));
+            rows.add(List.of(keyboardFactory.callback("🔗 Подключить другой канал", "admin:cc:draft:connect")));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:cc:week"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Админ нажал «Подключить» и переслал пост из канала (или прислал его номер -100…): запоминаем канал после пробной отправки. true - сообщение обработано. */
+    private boolean handleDraftChannelConnect(AppUser user, UserSession session, Message message) {
+        Long chatId = null;
+        if (message.getForwardFromChat() != null && "channel".equals(message.getForwardFromChat().getType())) {
+            chatId = message.getForwardFromChat().getId();
+        } else if (message.getText() != null && message.getText().trim().matches("-100\\d{6,}")) {
+            chatId = Long.valueOf(message.getText().trim());
+        }
+        if (chatId == null) return false;
+        session.getData().remove("ccdraftWait");
+        try {
+            SendMessage test = new SendMessage();
+            test.setChatId(chatId.toString());
+            test.setText("✅ Канал-черновик подключён. Сюда бот будет отправлять контент-план: шапка с датой и готовый пост.");
+            execute(test);
+        } catch (TelegramApiException e) {
+            sendText(user.getTelegramId(), "❌ Бот не смог написать в этот канал: " + escape(String.valueOf(e.getMessage()))
+                    + "\n\nПроверьте, что бот добавлен в канал администратором с правом публиковать сообщения, и повторите.",
+                    backMenuKeyboard("admin:cc:draft"));
+            return true;
+        }
+        saveAppSetting(CCD_CHANNEL_KEY, chatId.toString());
+        sendText(user.getTelegramId(), "✅ Канал подключён: <code>" + chatId + "</code>. Теперь нажмите «Синхронизировать».", backMenuKeyboard("admin:cc:draft"));
+        return true;
+    }
+
+    private String draftStatusLabel(ru.gamebot.platform.domain.model.ChannelPostDraft d) {
+        if (ru.gamebot.platform.domain.model.ChannelPostDraft.PUBLISHED.equals(d.getStatus())) return "✅ вышел в канале";
+        if (ru.gamebot.platform.domain.model.ChannelPostDraft.REJECTED.equals(d.getStatus())) return "❌ отклонён";
+        return d.getCardSentAt() != null ? "📨 карточка у админа, ждёт одобрения" : "⏳ в очереди";
+    }
+
+    private static String draftMirrorWhen(LocalDateTime atUtc) {
+        LocalDateTime local = atUtc.plusHours(7);
+        return DAY_SHORT[local.getDayOfWeek().getValue()] + " " + String.format("%02d.%02d", local.getDayOfMonth(), local.getMonthValue())
+                + " · " + String.format("%02d:%02d", local.getHour(), local.getMinute());
+    }
+
+    private List<DraftMirrorItem> buildDraftMirrorItems() {
+        LocalDateTime now = LocalDateTime.now();
+        List<DraftMirrorItem> out = new ArrayList<>();
+        for (ru.gamebot.platform.domain.model.ChannelPostDraft d : channelContentService.manualDraftsForMirror()) {
+            if (d.getSendAfter() == null || d.getPostText() == null) continue;
+            String key = "d" + d.getId();
+            boolean tracked = appSettingRepository.existsById(CCD_MSG_PREFIX + key);
+            boolean inWindow = d.getSendAfter().isAfter(now.minusDays(2)) && d.getSendAfter().isBefore(now.plusDays(14));
+            boolean pending = ru.gamebot.platform.domain.model.ChannelPostDraft.PENDING.equals(d.getStatus());
+            if (!tracked && !(inWindow && pending)) continue;
+            String[] m = d.getMeta() == null ? new String[0] : d.getMeta().split("\\|", 3);
+            String rubric = m.length > 1 ? m[1] : "Пост из плана";
+            String header = "📅 <b>" + draftMirrorWhen(d.getSendAfter()) + "</b> <i>(UTC+7)</i>\n🏷 " + escape(rubric) + " · " + draftStatusLabel(d);
+            out.add(new DraftMirrorItem(key, d.getSendAfter(), header, d.getPostText(), d.getPhotoFileId()));
+        }
+        for (ru.gamebot.platform.service.ChannelContentService.ScheduleEntry e : channelContentService.upcomingSchedule(14, GamePlatformBot::channelPostTitle)) {
+            if (e.manual()) continue;
+            String key = "a" + Integer.toHexString((e.title() + "|" + e.atUtc()).hashCode());
+            String header = "📅 <b>" + draftMirrorWhen(e.atUtc()) + "</b> <i>(UTC+7)</i>\n🤖 Автопост · " + escape(e.title());
+            out.add(new DraftMirrorItem(key, e.atUtc(), header,
+                    "Текст сформируется автоматически за час до выхода и придёт админу карточкой на согласование.", null));
+        }
+        out.sort(java.util.Comparator.comparing(DraftMirrorItem::atUtc));
+        return out;
+    }
+
+    private static String draftMirrorHash(String s) {
+        return Integer.toHexString(s == null ? 0 : s.hashCode());
+    }
+
+    /** Один пост зеркала: шапка и текст одним сообщением, а с картинкой - фото с шапкой в подписи и текст следом. Возвращает id сообщений. */
+    private long[] sendDraftMirrorItem(Long channelId, DraftMirrorItem item) throws Exception {
+        if (item.photoFileId() != null && !item.photoFileId().isBlank()) {
+            SendPhoto photo = new SendPhoto();
+            photo.setChatId(channelId.toString());
+            photo.setPhoto(new InputFile(item.photoFileId()));
+            photo.setCaption(item.header());
+            photo.setParseMode("HTML");
+            Message sentPhoto = execute(photo);
+            Thread.sleep(CCD_SEND_PAUSE_MS);
+            Message sentText = sendDraftMirrorText(channelId, item.body());
+            return new long[]{sentPhoto.getMessageId(), sentText.getMessageId()};
+        }
+        Message sent = sendDraftMirrorText(channelId, item.header() + "\n\n" + item.body());
+        return new long[]{sent.getMessageId(), 0};
+    }
+
+    private Message sendDraftMirrorText(Long channelId, String text) throws Exception {
+        String limited = text.length() > 4000 ? text.substring(0, 4000) + "…" : text;
+        SendMessage msg = new SendMessage();
+        msg.setChatId(channelId.toString());
+        msg.setText(limited);
+        msg.setParseMode("HTML");
+        msg.setDisableWebPagePreview(true);
+        try {
+            return execute(msg);
+        } catch (TelegramApiException e) {
+            if (e.getMessage() != null && e.getMessage().contains("parse entities")) {
+                msg.setParseMode(null); // сломанная HTML-разметка в тексте - отправляем как есть, лишь бы пост был виден
+                return execute(msg);
+            }
+            throw e;
+        }
+    }
+
+    private void deleteDraftMirrorMessages(Long channelId, int id1, int id2) {
+        deleteMessageQuietly(channelId, id1);
+        if (id2 > 0) deleteMessageQuietly(channelId, id2);
+    }
+
+    /** Синхронизация зеркала: в фоне, с паузами из-за лимита Telegram. rebuild - сначала удалить всё, что бот отправил в канал. Итог придёт админу сообщением. */
+    private void startDraftChannelSync(AppUser user, boolean rebuild) {
+        Long channelId = draftChannelId();
+        if (channelId == null) {
+            sendText(user.getTelegramId(), "Сначала подключите канал-черновик.", backMenuKeyboard("admin:cc:draft"));
+            return;
+        }
+        if (!draftChannelSyncRunning.compareAndSet(false, true)) {
+            sendText(user.getTelegramId(), "⏳ Синхронизация уже идёт, дождитесь итога.", backMenuKeyboard("admin:cc:draft"));
+            return;
+        }
+        Long adminId = user.getTelegramId();
+        List<DraftMirrorItem> items = buildDraftMirrorItems();
+        sendText(adminId, "🔄 " + (rebuild ? "Пересобираю" : "Синхронизирую") + " канал-черновик: постов " + items.size()
+                + ". Это займёт около " + Math.max(1, items.size() * 4 / 60 + 1) + " мин, пришлю итог.", null);
+        Thread worker = new Thread(() -> {
+            int added = 0;
+            int edited = 0;
+            int same = 0;
+            int failed = 0;
+            try {
+                if (rebuild) {
+                    for (AppSetting st : new ArrayList<>(appSettingRepository.findAll())) {
+                        if (st.getKey() == null || !st.getKey().startsWith(CCD_MSG_PREFIX) || st.getValue() == null) continue;
+                        String[] v = st.getValue().split("\\|");
+                        if (v.length >= 4) {
+                            try {
+                                deleteDraftMirrorMessages(channelId, Integer.parseInt(v[2]), Integer.parseInt(v[3]));
+                                Thread.sleep(400);
+                            } catch (Exception ignored) {
+                                // сообщение уже удалено вручную - пропускаем
+                            }
+                        }
+                        appSettingRepository.deleteById(st.getKey());
+                    }
+                }
+                for (DraftMirrorItem item : items) {
+                    String key = CCD_MSG_PREFIX + item.key();
+                    String photoHash = draftMirrorHash(item.photoFileId());
+                    String contentHash = draftMirrorHash(item.header() + "\n" + item.body());
+                    try {
+                        String[] prev = appSettingRepository.findById(key).map(AppSetting::getValue).map(v -> v.split("\\|")).orElse(null);
+                        if (prev != null && prev.length >= 4 && prev[0].equals(photoHash) && prev[1].equals(contentHash)) {
+                            same++;
+                            continue;
+                        }
+                        if (prev != null && prev.length >= 4) {
+                            int id1 = Integer.parseInt(prev[2]);
+                            int id2 = Integer.parseInt(prev[3]);
+                            if (prev[0].equals(photoHash)) {
+                                // Картинка та же - правим текст на месте
+                                try {
+                                    if (id2 > 0) {
+                                        org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageCaption cap =
+                                                new org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageCaption();
+                                        cap.setChatId(channelId.toString());
+                                        cap.setMessageId(id1);
+                                        cap.setCaption(item.header());
+                                        cap.setParseMode("HTML");
+                                        execute(cap);
+                                        Thread.sleep(CCD_SEND_PAUSE_MS);
+                                        EditMessageText et = new EditMessageText();
+                                        et.setChatId(channelId.toString());
+                                        et.setMessageId(id2);
+                                        et.setText(item.body().length() > 4000 ? item.body().substring(0, 4000) : item.body());
+                                        et.setParseMode("HTML");
+                                        et.setDisableWebPagePreview(true);
+                                        execute(et);
+                                    } else {
+                                        EditMessageText et = new EditMessageText();
+                                        et.setChatId(channelId.toString());
+                                        et.setMessageId(id1);
+                                        String full = item.header() + "\n\n" + item.body();
+                                        et.setText(full.length() > 4000 ? full.substring(0, 4000) : full);
+                                        et.setParseMode("HTML");
+                                        et.setDisableWebPagePreview(true);
+                                        execute(et);
+                                    }
+                                    saveAppSetting(key, photoHash + "|" + contentHash + "|" + id1 + "|" + id2);
+                                    edited++;
+                                    Thread.sleep(CCD_SEND_PAUSE_MS);
+                                    continue;
+                                } catch (TelegramApiException e) {
+                                    log.warn("[DraftChannel] edit {} failed, resending: {}", item.key(), e.getMessage());
+                                }
+                            }
+                            deleteDraftMirrorMessages(channelId, id1, id2);
+                            Thread.sleep(400);
+                        }
+                        long[] ids = sendDraftMirrorItem(channelId, item);
+                        saveAppSetting(key, photoHash + "|" + contentHash + "|" + ids[0] + "|" + ids[1]);
+                        if (prev == null) added++; else edited++;
+                        Thread.sleep(CCD_SEND_PAUSE_MS);
+                    } catch (org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException e) {
+                        failed++;
+                        log.error("[DraftChannel] item {} failed", item.key(), e);
+                        Integer wait = e.getParameters() != null ? e.getParameters().getRetryAfter() : null;
+                        try {
+                            Thread.sleep(wait != null ? wait * 1000L + 500 : CCD_SEND_PAUSE_MS);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                    } catch (Exception e) {
+                        failed++;
+                        log.error("[DraftChannel] item {} failed", item.key(), e);
+                    }
+                }
+            } catch (Exception e) {
+                log.error("[DraftChannel] sync failed", e);
+                failed++;
+            } finally {
+                draftChannelSyncRunning.set(false);
+            }
+            try {
+                sendText(adminId, "📤 <b>Канал-черновик обновлён</b>\n\nДобавлено: <b>" + added + "</b>\nОбновлено: <b>" + edited
+                        + "</b>\nБез изменений: <b>" + same + "</b>" + (failed > 0 ? "\n⚠️ С ошибкой: <b>" + failed + "</b> (подробности в логе)" : ""),
+                        backMenuKeyboard("admin:cc:draft"));
+            } catch (Exception e) {
+                log.warn("[DraftChannel] failed to report result", e);
+            }
+        }, "ccdraft-sync");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
     private void handleChannelContentAction(CallbackQuery callbackQuery, AppUser user, String action) {
         String[] p = action.split(":");
+        if (p.length >= 2 && "draft".equals(p[1])) {
+            answerSilently(callbackQuery.getId());
+            String sub = p.length > 2 ? p[2] : "";
+            switch (sub) {
+                case "connect" -> {
+                    sessionService.get(user.getTelegramId()).getData().put("ccdraftWait", "1");
+                    sendText(user.getTelegramId(), "🔗 Перешлите мне любой пост из закрытого канала-черновика (бот должен быть в нём администратором). "
+                            + "Если пересылка не работает, пришлите номер канала в виде <code>-100…</code>.", cancelKeyboard());
+                }
+                case "sync" -> startDraftChannelSync(user, false);
+                case "rebuild" -> startDraftChannelSync(user, true);
+                default -> sendDraftChannelPanel(user);
+            }
+            return;
+        }
         if (p.length == 2 && "week".equals(p[1])) {
             answerSilently(callbackQuery.getId());
             sendChannelContentWeekPanel(user);

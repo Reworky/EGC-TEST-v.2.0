@@ -526,6 +526,11 @@ public class ChannelContentService {
     /** Ручной пост из очереди плана с любым статусом (для экрана «Контент канала» по дням): время карточки (UTC), рубрика, статус черновика, ушла ли карточка админам. */
     public record ManualQueueEntry(Long draftId, LocalDateTime atUtc, String rubric, String status, boolean cardSent) { }
 
+    /** Все ручные посты плана (любого статуса) целиком - для зеркала в канал-черновик (текст, картинка, срок, статус). */
+    public List<ChannelPostDraft> manualDraftsForMirror() {
+        return draftRepository.findAllByType(MANUAL_POST);
+    }
+
     public List<ManualQueueEntry> manualQueue() {
         List<ManualQueueEntry> out = new java.util.ArrayList<>();
         for (ChannelPostDraft d : draftRepository.findAllByType(MANUAL_POST)) {
