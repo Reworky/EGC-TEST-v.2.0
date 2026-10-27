@@ -40,6 +40,10 @@ public class QuestController {
 
     private static final DateTimeFormatter ISO_FMT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
+    /** Обложки игр в памяти: file_id -> байты (десяток картинок по ~100 КБ). */
+    private static final java.util.concurrent.ConcurrentHashMap<String, byte[]> GAME_PHOTO_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final int GAME_PHOTO_CACHE_MAX = 64;
+
     private final QuestService questService;
     private final AppUserRepository appUserRepository;
     private final TelegramFileService telegramFileService;
@@ -198,8 +202,21 @@ public class QuestController {
         if (fileId.isEmpty()) {
             return org.springframework.http.ResponseEntity.notFound().build();
         }
+        // Кэш в памяти по file_id (27.10.2026): без него каждый запрос заново ходил в Telegram дважды (getFile + скачивание),
+        // обложка грузилась 1-4 с. Новая загрузка фото даёт новый file_id, поэтому устаревания нет.
+        byte[] cachedImage = GAME_PHOTO_CACHE.get(fileId.get());
+        if (cachedImage != null) {
+            return org.springframework.http.ResponseEntity.ok()
+                    .contentType(org.springframework.http.MediaType.IMAGE_JPEG)
+                    .cacheControl(org.springframework.http.CacheControl.maxAge(java.time.Duration.ofHours(24)))
+                    .body(cachedImage);
+        }
         try {
             byte[] image = telegramFileService.downloadFile(fileId.get());
+            if (image != null && image.length > 0) {
+                if (GAME_PHOTO_CACHE.size() >= GAME_PHOTO_CACHE_MAX) GAME_PHOTO_CACHE.clear();
+                GAME_PHOTO_CACHE.put(fileId.get(), image);
+            }
             return org.springframework.http.ResponseEntity.ok()
                     .contentType(org.springframework.http.MediaType.IMAGE_JPEG)
                     .cacheControl(org.springframework.http.CacheControl.maxAge(java.time.Duration.ofHours(24)))
