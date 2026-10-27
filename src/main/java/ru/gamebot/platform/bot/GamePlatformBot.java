@@ -1386,8 +1386,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (data.startsWith("myquest:cancel:")) {
             long submissionId = parseLong(data.substring("myquest:cancel:".length()));
             answerSilently(callbackQuery.getId());
+            log.info("[QuestCancel] request: telegramId={}, submission={}", user.getTelegramId(), submissionId);
             try {
-                questService.cancelSubmission(submissionId, user);
+                QuestSubmission cancelled = questService.cancelSubmission(submissionId, user);
+                log.info("[QuestCancel] done: submission={}, status now={}", submissionId, cancelled.getStatus());
                 sendMySubmissions(user);
                 sendText(user.getTelegramId(), "✅ Квест отменён.", null);
             } catch (Exception e) {
