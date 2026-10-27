@@ -87,6 +87,10 @@ public class QuestSubmission {
      *  него отдельного флага нет (не нужен, окно само не повторяется). */
     private LocalDateTime cooldownReminderSentAt;
 
+    /** Ступень просмотров UGC-квеста, выбранная модератором при одобрении (0..4, см. QuestService.UGC_VIEW_TIER_COINS). null - не UGC или старые записи. */
+    @Column(nullable = true)
+    private Integer viewsTier;
+
     /** Фактически начисленные EXC/XP на момент одобрения (с учётом diminishing returns и бустов) — null = старые записи. */
     @Column(nullable = true)
     private Long awardedCoins;

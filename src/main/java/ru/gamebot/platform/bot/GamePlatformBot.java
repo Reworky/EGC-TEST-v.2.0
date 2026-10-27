@@ -2105,6 +2105,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleModerationApprove(callbackQuery, parseLong(data.substring("mod:ok:".length())));
             return;
         }
+        // UGC-квест: одобрение со ступенью просмотров, mod:okv:<id>:<ступень>
+        if (data.startsWith("mod:okv:") && isEffectiveModerator(user)) {
+            String[] okv = data.substring("mod:okv:".length()).split(":");
+            handleModerationApprove(callbackQuery, parseLong(okv[0]), okv.length > 1 ? Integer.valueOf(parseLong(okv[1]).intValue()) : null);
+            return;
+        }
         if (data.startsWith("mod:no:") && isEffectiveModerator(user)) {
             handleModerationReject(callbackQuery, user, parseLong(data.substring("mod:no:".length())));
             return;
@@ -12592,7 +12598,33 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.smartLayout(buttons));
     }
 
+    /** Кнопки одобрения для карточки модератора: у UGC-квеста по одной на ступень просмотров, у остальных обычная «Одобрить». */
+    private List<InlineKeyboardButton> moderationApproveButtons(QuestSubmission submission) {
+        if (!QuestService.isUgcQuest(submission.getQuest())) {
+            return List.of(keyboardFactory.callback("✅ Одобрить", "mod:ok:" + submission.getId()));
+        }
+        List<InlineKeyboardButton> buttons = new ArrayList<>();
+        for (int tier = 0; tier < QuestService.UGC_VIEW_TIER_LABELS.length; tier++) {
+            long coins = QuestService.ugcTierCoins(submission.getQuest(), tier);
+            buttons.add(keyboardFactory.callback("✅ " + QuestService.UGC_VIEW_TIER_LABELS[tier] + " просм. · " + String.format(java.util.Locale.US, "%,d", coins).replace(',', ' ') + " EXC",
+                    "mod:okv:" + submission.getId() + ":" + tier));
+        }
+        return buttons;
+    }
+
+    private List<InlineKeyboardButton> moderationCardButtons(QuestSubmission submission) {
+        List<InlineKeyboardButton> buttons = new ArrayList<>(moderationApproveButtons(submission));
+        buttons.add(keyboardFactory.callback("❌ Отклонить", "mod:no:" + submission.getId()));
+        buttons.add(keyboardFactory.callback("❓ Уточнить", "mod:more:" + submission.getId()));
+        return buttons;
+    }
+
     private String rewardPreviewLine(QuestSubmission submission) {
+        if (QuestService.isUgcQuest(submission.getQuest())) {
+            return "💰 Награда по просмотрам: <b>от " + QuestService.ugcTierCoins(submission.getQuest(), 0) + " до "
+                    + QuestService.UGC_VIEW_TIER_COINS[QuestService.UGC_VIEW_TIER_COINS.length - 1] + " EXC</b>\n"
+                    + "👁 Посмотри счётчик просмотров в ролике и выбери ступень кнопкой ниже";
+        }
         QuestService.RewardPreview reward = questService.computeReward(submission.getUser(), submission.getQuest());
         StringBuilder sb = new StringBuilder("💰 К начислению: <b>")
                 .append(reward.xp()).append(" XP, ")
@@ -12720,11 +12752,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         InlineKeyboardMarkup markup = readOnly
                 ? backOnlyKeyboard(backRoute != null ? backRoute : "mod:support:quests")
-                : verticalWithBackMenu(List.of(
-                        keyboardFactory.callback("✅ Одобрить", "mod:ok:" + submissionId),
-                        keyboardFactory.callback("❌ Отклонить", "mod:no:" + submissionId),
-                        keyboardFactory.callback("❓ Уточнить", "mod:more:" + submissionId)
-                ), "⬅️ Назад", "mod:support:quests");
+                : verticalWithBackMenu(moderationCardButtons(submission), "⬅️ Назад", "mod:support:quests");
 
         String mediaFileId = submission.getMediaFileId();
         String mediaType = submission.getMediaType();
@@ -12776,9 +12804,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void handleModerationApprove(CallbackQuery callbackQuery, Long submissionId) {
+        handleModerationApprove(callbackQuery, submissionId, null);
+    }
+
+    /** viewsTier - ступень просмотров UGC-квеста (QuestService.UGC_VIEW_TIER_COINS), null - обычное одобрение. */
+    private void handleModerationApprove(CallbackQuery callbackQuery, Long submissionId, Integer viewsTier) {
         QuestSubmission currentSubmission = questService.getSubmission(submissionId);
         // Используем computeReward (с учётом снижения) — то же что применит approveSubmission
-        QuestService.RewardPreview computed = questService.computeReward(currentSubmission.getUser(), currentSubmission.getQuest());
+        QuestService.RewardPreview computed = questService.computeReward(currentSubmission.getUser(), currentSubmission.getQuest(),
+                QuestService.ugcTierCoins(currentSubmission.getQuest(), viewsTier));
         UserService.RewardGrant rewardGrant = userService.previewReward(
                 currentSubmission.getUser(),
                 computed.xp(),
@@ -12786,12 +12820,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 0
         );
         boolean isFirstQuest = currentSubmission.getUser().getCompletedQuests() == 0;
-        QuestSubmission submission = questService.approveSubmission(submissionId);
+        QuestSubmission submission = questService.approveSubmission(submissionId, viewsTier);
         String firstQuestBonus = firstQuestReferralLine(submission.getUser(), isFirstQuest);
+        String viewsLine = viewsTier != null && QuestService.isUgcQuest(submission.getQuest()) && viewsTier >= 0 && viewsTier < QuestService.UGC_VIEW_TIER_LABELS.length
+                ? "👁 Просмотры: <b>" + QuestService.UGC_VIEW_TIER_LABELS[viewsTier] + "</b>, награда по ступени\n" : "";
         try {
             notifyUser(submission.getUser().getTelegramId(),
                     "✅ <b>Квест засчитан</b>\n\n"
                             + "<b>" + escape(submission.getQuest().getTitle()) + "</b>, одобрено модератором\n"
+                            + viewsLine
                             + "🪙 <b>+" + rewardGrant.totalExc() + " EXC</b> · ✨ +" + rewardGrant.xp() + " XP\n"
                             + formatExcBonusLine(rewardGrant)
                             + egcPassBonusLine(submission)
@@ -23713,7 +23750,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         // AI verification for photo submissions
         String aiNote = "";
-        if (claudeVisionService.isEnabled() && "photo".equals(submission.getMediaType())) {
+        if (claudeVisionService.isEnabled() && "photo".equals(submission.getMediaType()) && !QuestService.isUgcQuest(submission.getQuest())) {
             try {
                 ru.gamebot.platform.service.AiVerificationResult aiResult =
                         claudeVisionService.verify(submission);
@@ -23749,12 +23786,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "💬 Комментарий: " + escape(submission.getUserComment())
                 + aiNote;
 
-        InlineKeyboardMarkup markup = keyboardFactory.smartLayout(List.of(
-                keyboardFactory.callback("✅ Одобрить", "mod:ok:" + submissionId),
-                keyboardFactory.callback("❌ Отклонить", "mod:no:" + submissionId),
-                keyboardFactory.callback("❓ Уточнить", "mod:more:" + submissionId),
-                keyboardFactory.callback("🏠 Меню", "menu:main")
-        ));
+        List<InlineKeyboardButton> newCardButtons = new ArrayList<>(moderationCardButtons(submission));
+        newCardButtons.add(keyboardFactory.callback("🏠 Меню", "menu:main"));
+        InlineKeyboardMarkup markup = keyboardFactory.smartLayout(newCardButtons);
 
         // Только модераторы, без админов — по явному запросу пользователя.
         Set<Long> recipients = adminService.strictModeratorIds();

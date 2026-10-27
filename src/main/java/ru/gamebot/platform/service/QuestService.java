@@ -1034,8 +1034,30 @@ public class QuestService {
         return baseCoins / 2;
     }
 
+    /** Ступени награды UGC-квеста по просмотрам (27.10.2026): модератор смотрит счётчик ролика и выбирает ступень при одобрении.
+     *  Ступень 0 - базовая награда самого квеста (порог квеста .. 499 просмотров), остальные фиксированные; потолок 25 000 EXC. */
+    public static final long[] UGC_VIEW_TIER_COINS = {0, 5_000, 8_000, 15_000, 25_000};
+    /** Подписи ступеней для кнопок модератора и текстов игроку (по числу просмотров). */
+    public static final String[] UGC_VIEW_TIER_LABELS = {"до 500", "500+", "2 000+", "10 000+", "50 000+"};
+
+    public static boolean isUgcQuest(Quest quest) {
+        return quest != null && "UGC".equalsIgnoreCase(quest.getGameName());
+    }
+
+    /** Базовая награда за ступень: для не-UGC квеста, пустой или неизвестной ступени - обычная награда квеста; для UGC не ниже неё. */
+    public static long ugcTierCoins(Quest quest, Integer tier) {
+        if (!isUgcQuest(quest) || tier == null || tier <= 0 || tier >= UGC_VIEW_TIER_COINS.length) {
+            return quest.getRewardCoins();
+        }
+        return Math.max(quest.getRewardCoins(), UGC_VIEW_TIER_COINS[tier]);
+    }
+
     public RewardPreview computeReward(AppUser user, Quest quest) {
-        long baseCoins = quest.getRewardCoins();
+        return computeReward(user, quest, quest.getRewardCoins());
+    }
+
+    /** То же, но с подменой базовой награды (ступень просмотров UGC-квеста); все надбавки и недельное снижение считаются от неё. */
+    public RewardPreview computeReward(AppUser user, Quest quest, long baseCoins) {
         long adjustedCoins = baseCoins;
 
         // repeatableNoCooldownEligible-квесты (пилот "квесты без стен"): кулдауна нет, цену вместо
@@ -1293,6 +1315,12 @@ public class QuestService {
 
     @Transactional
     public QuestSubmission approveSubmission(Long submissionId) {
+        return approveSubmission(submissionId, null);
+    }
+
+    /** viewsTier - ступень просмотров UGC-квеста (см. UGC_VIEW_TIER_COINS); null = обычная награда квеста. */
+    @Transactional
+    public QuestSubmission approveSubmission(Long submissionId, Integer viewsTier) {
         QuestSubmission submission = getSubmission(submissionId);
         if (submission.getStatus() == SubmissionStatus.APPROVED) {
             return submission;
@@ -1303,7 +1331,7 @@ public class QuestService {
 
         // Считаем награду ДО смены статуса на APPROVED, чтобы Hibernate-flush не включил
         // текущую заявку в COUNT-запрос и не сбил счётчик недельного лимита
-        RewardPreview reward = computeReward(user, quest);
+        RewardPreview reward = computeReward(user, quest, ugcTierCoins(quest, viewsTier));
         long adjustedCoins = reward.coins();
         long adjustedXp = reward.xp();
         // Подписка на канал спонсора: часть EXC удерживается до проверки «остался в канале» (см. releaseHeldReward / forfeitHeldReward).
@@ -1321,6 +1349,9 @@ public class QuestService {
         // это бы задвоило счётчик).
         userService.recordEgcPassBoost(user, reward.egcPassBonusCoins());
 
+        if (isUgcQuest(quest) && viewsTier != null) {
+            submission.setViewsTier(viewsTier);
+        }
         submission.setStatus(SubmissionStatus.APPROVED);
         submission.setModeratorComment("Принято. Отличная работа!");
         submission.setUpdatedAt(LocalDateTime.now());

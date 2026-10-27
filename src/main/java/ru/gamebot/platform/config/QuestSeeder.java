@@ -1871,6 +1871,11 @@ public class QuestSeeder implements CommandLineRunner {
         // Telegram Stories убран из UGC-квестов по решению пользователя (2026-09-12).
         deactivateQuests("UGC", Set.of("Telegram Stories про EGC"));
 
+        // Оплата по просмотрам (27.10.2026): шкала в описании и инструкции. seed() существующие квесты не обновляет, поэтому дописываем здесь.
+        for (String ugcTitle : List.of("Instagram Reels про EGC", "TikTok видео про EGC", "YouTube Shorts про EGC")) {
+            appendUgcViewsScale(ugcTitle);
+        }
+
         // ── Dota 2: FLAT-режим — единый список без выбора категории, по образцу Brawl Stars/Clash of Clans/Clash Royale ──
         gameCatalogService.setDifficultyMode("Dota 2", "FLAT", 2000L, 50);
 
@@ -2977,6 +2982,23 @@ public class QuestSeeder implements CommandLineRunner {
     }
 
     /** Короткая подпись для кнопки в списке квестов (см. Quest.shortLabel / sendQuestList). */
+    private static final String UGC_SCALE_MARKER = "Чем больше просмотров";
+
+    /** Дописывает в описание и инструкцию UGC-квеста шкалу награды по просмотрам (один раз: повторный старт ничего не меняет). */
+    private void appendUgcViewsScale(String title) {
+        questRepository.findFirstByTitleAndGameName(title, "UGC").ifPresent(q -> {
+            String description = q.getDescription() == null ? "" : q.getDescription();
+            if (description.contains(UGC_SCALE_MARKER)) return;
+            q.setDescription(description + " Чем больше просмотров, тем выше награда: от 3 000 до 25 000 EXC.");
+            String instruction = q.getInstruction() == null ? "" : q.getInstruction();
+            q.setInstruction(instruction + " Награда зависит от просмотров: до 500 просмотров - 3 000 EXC, от 500 - 5 000, от 2 000 - 8 000, "
+                    + "от 10 000 - 15 000, от 50 000 - 25 000 EXC. Просмотры считаются один раз, когда модератор проверяет ссылку, "
+                    + "поэтому отправляй её, когда ролик уже набрал нужное число.");
+            questRepository.save(q);
+            log.info("[QuestSeeder] UGC views scale added: '{}'", title);
+        });
+    }
+
     private void setShortLabel(String title, String gameName, String label) {
         questRepository.findFirstByTitleAndGameName(title, gameName).ifPresentOrElse(q -> {
             q.setShortLabel(label);
