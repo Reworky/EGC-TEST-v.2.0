@@ -7536,7 +7536,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return "quests:game:" + encodeGameToken(gameName);
     }
 
-    /** page - номер страницы с нуля; withPhoto=false - не слать баннер игры заново (листание страниц и переключение игры). */
+    /** page - номер страницы с нуля; withPhoto=false - вообще без баннера игры. */
     private void sendQuestList(AppUser user, String gameName, String category, String backData, int page, boolean withPhoto) {
         if (gameName == null || gameName.isBlank()) {
             sendQuestGames(user);
@@ -7635,25 +7635,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("🏠 Меню", "menu:main")));
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(keyboardRows);
 
-        // Photo caption has a 1024-char Telegram limit that a long quest list easily exceeds —
-        // send the banner on its own (short caption, no keyboard) and the full list as a separate message.
-        boolean wantsPhoto = withPhoto && currentPage == 0 && category == null && !"UGC".equalsIgnoreCase(gameName);
+        // Баннер игры и список - одно сообщение (фото с подписью и кнопками), на каждой странице: листание правит его на месте.
+        // Подпись фото ограничена 1024 символами: если список с легендой не влезает, баннер уходит отдельно, как раньше.
+        boolean wantsPhoto = withPhoto && category == null && !"UGC".equalsIgnoreCase(gameName);
         java.util.Optional<String> photoFileId = wantsPhoto ? gameCatalogService.getPhotoFileId(gameName) : java.util.Optional.empty();
-        if (totalPages > 1 && photoFileId.isEmpty()) {
+        if (totalPages > 1) {
             title = title + " · стр. " + (currentPage + 1) + "/" + totalPages;
         }
-        String listText;
+        String body = useLabels
+                ? "Нажмите на квест, чтобы увидеть награду и условия прохождения." + legend
+                : "Откройте карточку по номеру, чтобы увидеть награду и условия прохождения.\n\n" + listBuilder + legend;
+        String listText = "<b>" + escape(title) + "</b>\n\n" + body;
         if (photoFileId.isPresent()) {
+            if (listText.length() <= 1000) {
+                sendPhotoCaption(user.getTelegramId(), photoFileId.get(), listText, keyboard);
+                return;
+            }
             sendPhotoCaption(user.getTelegramId(), photoFileId.get(), "<b>" + escape(title) + "</b>", null);
-            listText = useLabels
-                    ? "Нажмите на квест, чтобы увидеть награду и условия прохождения." + legend
-                    : "Откройте карточку по номеру, чтобы увидеть награду и условия прохождения.\n\n" + listBuilder + legend;
-        } else {
-            listText = useLabels
-                    ? "<b>" + escape(title) + "</b>\n\nНажмите на квест, чтобы увидеть награду и условия прохождения." + legend
-                    : "<b>" + escape(title) + "</b>\n\n"
-                        + "Откройте карточку по номеру, чтобы увидеть награду и условия прохождения.\n\n"
-                        + listBuilder + legend;
+            listText = body;
         }
         sendText(user.getTelegramId(), listText, keyboard);
     }
@@ -7671,16 +7670,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if (parts.length == 3) {
-            // Листание страниц: баннер игры заново не шлём
+            // Листание страниц: баннер и список - одно сообщение, правится на месте
             Long page = parseLong(parts[2]);
-            sendQuestList(user, gameName, category, questListBackData(gameName, category), page == null ? 0 : page.intValue(), false);
+            sendQuestList(user, gameName, category, questListBackData(gameName, category), page == null ? 0 : page.intValue(), true);
         } else {
             sendQuestList(user, gameName, category);
         }
         answerSilently(callbackQuery.getId());
     }
 
-    /** Переключение на соседнюю игру из списка квестов: игры без деления на сложность открываются сразу списком (без нового баннера), остальные - экраном категорий. */
+    /** Переключение на соседнюю игру из списка квестов: игры без деления на сложность открываются сразу списком, остальные - экраном категорий. */
     private void handleQuestGameFlip(CallbackQuery callbackQuery, AppUser user, String gameToken) {
         String gameName = decodeGameToken(gameToken);
         if (gameName == null || gameName.isBlank()) {
@@ -7688,7 +7687,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if (gameCatalogService.isFlat(gameName)) {
-            sendQuestList(user, gameName, null, "quests:section:gaming", 0, false);
+            sendQuestList(user, gameName, null, "quests:section:gaming", 0, true);
         } else {
             sendQuestCategories(user, gameName);
         }
