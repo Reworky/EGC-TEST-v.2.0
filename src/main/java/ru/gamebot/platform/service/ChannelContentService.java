@@ -373,6 +373,21 @@ public class ChannelContentService {
         return true;
     }
 
+    /** Снимает ручной пост с согласования (поле disabled в channel_manual_posts.json): ещё не отправленные админам карточки с этим ключом
+     *  получают статус REJECTED, уже отправленные и опубликованные не трогаются. Возвращает число отклонённых черновиков. */
+    public int cancelManualPost(String key) {
+        int cancelled = 0;
+        for (ChannelPostDraft d : draftRepository.findAllByType(MANUAL_POST)) {
+            if (d.getMeta() != null && d.getMeta().startsWith(key + "|") && ChannelPostDraft.PENDING.equals(d.getStatus())
+                    && d.getCardSentAt() == null) {
+                d.setStatus(ChannelPostDraft.REJECTED);
+                draftRepository.save(d);
+                cancelled++;
+            }
+        }
+        return cancelled;
+    }
+
     // ───────────────────────── черновики ─────────────────────────
 
     public Optional<ChannelPostDraft> findDraft(Long id) {

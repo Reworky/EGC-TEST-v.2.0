@@ -20,6 +20,7 @@ import ru.gamebot.platform.service.ChannelContentService;
  * Идемпотентно: пост с тем же key повторно не создаётся (даже опубликованный или отклонённый), поэтому сидер безопасно выполнять на
  * каждом старте. Бэклог: если час уже прошёл меньше чем 48 часов назад (деплой позже срока), пост не теряется, а уходит карточкой
  * через 15 минут, следующие просроченные - с шагом 4 часа; старше 48 часов - пропускается с записью в лог.
+ * Снять пост с плана: оставить запись в JSON и добавить "disabled": true (удаление записи не отменит уже созданный черновик).
  */
 @Slf4j
 @Component
@@ -48,6 +49,12 @@ public class ChannelManualPostSeeder implements CommandLineRunner {
                 String key = n.path("key").asText("");
                 String text = n.path("text").asText("");
                 if (key.isBlank() || text.isBlank()) continue;
+                // "disabled": true - пост снят с плана: новый не создаём, а ещё не отправленную админам карточку отклоняем
+                if (n.path("disabled").asBoolean(false)) {
+                    int cancelled = channelContentService.cancelManualPost(key);
+                    if (cancelled > 0) log.info("[ManualPosts] {} disabled: cancelled {} pending draft(s)", key, cancelled);
+                    continue;
+                }
                 try {
                     LocalDateTime at = LocalDateTime.parse(n.path("at").asText());
                     if (at.isBefore(now)) {
