@@ -1718,7 +1718,26 @@ public class QuestService {
         // so a deactivated quest won't be re-created on next deploy.
         quest.setActive(false);
         questRepository.save(quest);
+        // Спонсорский/партнёрский квест исчезает у игроков сразу: открытые (DRAFT) заявки закрываем, чтобы они не занимали слот невидимыми (см. getUserSubmissions)
+        if (quest.isSponsored() || quest.isExternalAutoApprove()) cancelOpenDrafts(quest);
         return submissions;
+    }
+
+    /** Отменяет ещё не сданные (DRAFT) заявки по квесту: игрок не остаётся с невидимым занятым слотом. Статус PENDING (отчёт на проверке) не трогаем. */
+    @Transactional
+    public int cancelOpenDrafts(Quest quest) {
+        List<QuestSubmission> drafts = questSubmissionRepository.findAllByQuestAndStatusOrderByUpdatedAtAsc(quest, SubmissionStatus.DRAFT);
+        for (QuestSubmission d : drafts) {
+            d.setStatus(SubmissionStatus.CANCELLED);
+            d.setUpdatedAt(LocalDateTime.now());
+            questSubmissionRepository.save(d);
+            AppUser u = d.getUser();
+            if (u != null && u.getLastQuestTakenAt() != null) { // снимаем часовой лимит «1 квест в час», как при ручной отмене
+                u.setLastQuestTakenAt(null);
+                appUserRepository.save(u);
+            }
+        }
+        return drafts.size();
     }
 
     @Transactional
@@ -1737,6 +1756,8 @@ public class QuestService {
     public long countActiveDrafts(AppUser user) {
         return questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user).stream()
                 .filter(s -> (s.getStatus() == SubmissionStatus.DRAFT || s.getStatus() == SubmissionStatus.PENDING) && !isExpired(s))
+                // Завершённый/удалённый спонсорский квест игрок уже не видит в «Мои квесты» (getUserSubmissions) - слот он тоже не занимает
+                .filter(s -> s.getQuest() == null || s.getQuest().isActive() || !(s.getQuest().isSponsored() || s.getQuest().isExternalAutoApprove()))
                 .count();
     }
 

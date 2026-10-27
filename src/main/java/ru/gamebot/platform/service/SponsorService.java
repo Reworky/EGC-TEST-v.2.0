@@ -165,8 +165,17 @@ public class SponsorService {
             sponsorRepository.save(s);
             questRepository.findAll().stream()
                     .filter(q -> id.equals(q.getSponsorId()))
-                    .forEach(q -> { q.setActive(false); questRepository.save(q); });
+                    .forEach(q -> { q.setActive(false); questRepository.save(q); cancelOpenDrafts(q); });
         });
+    }
+
+    /** Кампания завершена или удалена: ещё не сданные (DRAFT) заявки игроков по её квестам отменяем, чтобы они не занимали слот невидимыми. */
+    private void cancelOpenDrafts(Quest quest) {
+        for (var d : questSubmissionRepository.findAllByQuestAndStatusOrderByUpdatedAtAsc(quest, ru.gamebot.platform.domain.enums.SubmissionStatus.DRAFT)) {
+            d.setStatus(ru.gamebot.platform.domain.enums.SubmissionStatus.CANCELLED);
+            d.setUpdatedAt(java.time.LocalDateTime.now());
+            questSubmissionRepository.save(d);
+        }
     }
 
     @Transactional
@@ -175,6 +184,7 @@ public class SponsorService {
             questRepository.findAll().stream()
                     .filter(q -> id.equals(q.getSponsorId()))
                     .forEach(q -> {
+                        cancelOpenDrafts(q);
                         q.setActive(false);
                         q.setSponsored(false);
                         q.setSponsorId(null);

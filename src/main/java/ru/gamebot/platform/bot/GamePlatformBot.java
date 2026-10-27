@@ -27613,6 +27613,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendQuestCard(user, questId, back, "⬅️ Назад", "⚠️ Квест сейчас нельзя сдать. Откройте «Мои квесты».");
                 return;
             }
+            if (!quest.isActive() && !questService.isChannelCampaignClosed(quest)) {
+                // Квест удалён или выключен админом: награду по старой кнопке «Я подписался» не начисляем
+                answerSilently(callbackQuery.getId());
+                sendQuestCard(user, questId, back, "⬅️ Назад", "😔 <b>Квест больше недоступен.</b>");
+                return;
+            }
             if (questService.isChannelCampaignClosed(quest)) {
                 answerSilently(callbackQuery.getId());
                 sendQuestCard(user, questId, back, "⬅️ Назад",
