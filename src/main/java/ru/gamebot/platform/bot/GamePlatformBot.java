@@ -1342,6 +1342,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleQuestListAction(callbackQuery, user, data.substring("quests:list:".length()));
             return;
         }
+        if (data.startsWith("quests:flip:")) {
+            handleQuestGameFlip(callbackQuery, user, data.substring("quests:flip:".length()));
+            return;
+        }
         if (data.startsWith("quests:cat:")) {
             sendQuestGames(user);
             answer(callbackQuery.getId(), "Раздел обновлен");
@@ -7518,7 +7522,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendQuestList(user, gameName, category, "quests:game:" + encodeGameToken(gameName));
     }
 
+    /** Квестов на странице списка игры (27.10.2026): длинные списки Brawl Stars и др. не помещались на экран. */
+    private static final int QUEST_LIST_PAGE_SIZE = 5;
+
     private void sendQuestList(AppUser user, String gameName, String category, String backData) {
+        sendQuestList(user, gameName, category, backData, 0, true);
+    }
+
+    /** Кнопка «Назад» списка квестов игры: зависит только от игры и категории, поэтому её можно восстановить из callback листания. */
+    private String questListBackData(String gameName, String category) {
+        if ("UGC".equalsIgnoreCase(gameName)) return "menu:quests";
+        if (category == null && gameCatalogService.isFlat(gameName)) return "quests:section:gaming";
+        return "quests:game:" + encodeGameToken(gameName);
+    }
+
+    /** page - номер страницы с нуля; withPhoto=false - не слать баннер игры заново (листание страниц и переключение игры). */
+    private void sendQuestList(AppUser user, String gameName, String category, String backData, int page, boolean withPhoto) {
         if (gameName == null || gameName.isBlank()) {
             sendQuestGames(user);
             return;
@@ -7555,7 +7574,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String title = category == null ? gameName : gameName + " • " + category;
         StringBuilder listBuilder = new StringBuilder();
         List<InlineKeyboardButton> openButtons = new ArrayList<>();
-        for (int i = 0; i < quests.size(); i++) {
+        int totalPages = Math.max(1, (quests.size() + QUEST_LIST_PAGE_SIZE - 1) / QUEST_LIST_PAGE_SIZE);
+        int currentPage = Math.max(0, Math.min(page, totalPages - 1));
+        int fromIndex = currentPage * QUEST_LIST_PAGE_SIZE;
+        int toIndex = Math.min(quests.size(), fromIndex + QUEST_LIST_PAGE_SIZE);
+        for (int i = fromIndex; i < toIndex; i++) {
             Quest quest = quests.get(i);
             String callback = "quest:view:" + encodeGameToken(gameName) + ":" + categoryToken(category) + ":" + quest.getId();
             QuestService.QuestListState state = questService.previewListState(user, quest, activeSlots, maxSlots);
@@ -7577,14 +7600,48 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!legend.isEmpty()) legend = "\n\n<blockquote expandable>Что значат значки:" + legend + "</blockquote>";
         // С короткими подписями кнопки самодостаточны (видно суть квеста сразу) — раскладываем
         // по одной в ряд для читаемости вместо тесной цифровой сетки.
-        InlineKeyboardMarkup keyboard = useLabels
-                ? verticalWithBackMenu(openButtons, "⬅️ Назад", backData)
-                : numberedGridWithBackMenu(openButtons, "⬅️ Назад", backData);
+        List<List<InlineKeyboardButton>> keyboardRows = new ArrayList<>();
+        if (useLabels) {
+            for (InlineKeyboardButton button : openButtons) keyboardRows.add(List.of(button));
+        } else {
+            for (int i = 0; i < openButtons.size(); i += NUMBERED_GRID_COLUMNS) {
+                keyboardRows.add(new ArrayList<>(openButtons.subList(i, Math.min(i + NUMBERED_GRID_COLUMNS, openButtons.size()))));
+            }
+        }
+        String gameToken = encodeGameToken(gameName);
+        String catToken = categoryToken(category);
+        // Листание страниц квестов: ◀️ | Стр. N/M | ▶️
+        if (totalPages > 1) {
+            List<InlineKeyboardButton> pager = new ArrayList<>();
+            if (currentPage > 0) pager.add(keyboardFactory.callback("◀️", "quests:list:" + gameToken + ":" + catToken + ":" + (currentPage - 1)));
+            pager.add(keyboardFactory.callback("Стр. " + (currentPage + 1) + "/" + totalPages, "noop"));
+            if (currentPage < totalPages - 1) pager.add(keyboardFactory.callback("▶️", "quests:list:" + gameToken + ":" + catToken + ":" + (currentPage + 1)));
+            keyboardRows.add(pager);
+        }
+        // Переключение игры: предыдущая / следующая по порядку списка игр (по кругу)
+        if (!"UGC".equalsIgnoreCase(gameName)) {
+            List<String> allGames = questService.sortGamesByInterest(user, questService.findActiveGameNames());
+            int gameIndex = allGames.indexOf(gameName);
+            if (gameIndex >= 0 && allGames.size() > 1) {
+                String prevGame = allGames.get((gameIndex - 1 + allGames.size()) % allGames.size());
+                String nextGame = allGames.get((gameIndex + 1) % allGames.size());
+                keyboardRows.add(List.of(
+                        keyboardFactory.callback("◀️ " + trim(prevGame, 16), "quests:flip:" + encodeGameToken(prevGame)),
+                        keyboardFactory.callback(trim(nextGame, 16) + " ▶️", "quests:flip:" + encodeGameToken(nextGame))));
+            }
+        }
+        keyboardRows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", backData),
+                keyboardFactory.callback("🏠 Меню", "menu:main")));
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(keyboardRows);
 
         // Photo caption has a 1024-char Telegram limit that a long quest list easily exceeds —
         // send the banner on its own (short caption, no keyboard) and the full list as a separate message.
-        boolean wantsPhoto = category == null && !"UGC".equalsIgnoreCase(gameName);
+        boolean wantsPhoto = withPhoto && currentPage == 0 && category == null && !"UGC".equalsIgnoreCase(gameName);
         java.util.Optional<String> photoFileId = wantsPhoto ? gameCatalogService.getPhotoFileId(gameName) : java.util.Optional.empty();
+        if (totalPages > 1 && photoFileId.isEmpty()) {
+            title = title + " · стр. " + (currentPage + 1) + "/" + totalPages;
+        }
         String listText;
         if (photoFileId.isPresent()) {
             sendPhotoCaption(user.getTelegramId(), photoFileId.get(), "<b>" + escape(title) + "</b>", null);
@@ -7603,7 +7660,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleQuestListAction(CallbackQuery callbackQuery, AppUser user, String payload) {
         String[] parts = payload.split(":");
-        if (parts.length != 2) {
+        if (parts.length != 2 && parts.length != 3) {
             answer(callbackQuery.getId(), "Список квестов недоступен");
             return;
         }
@@ -7613,7 +7670,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "Список квестов недоступен");
             return;
         }
-        sendQuestList(user, gameName, category);
+        if (parts.length == 3) {
+            // Листание страниц: баннер игры заново не шлём
+            Long page = parseLong(parts[2]);
+            sendQuestList(user, gameName, category, questListBackData(gameName, category), page == null ? 0 : page.intValue(), false);
+        } else {
+            sendQuestList(user, gameName, category);
+        }
+        answerSilently(callbackQuery.getId());
+    }
+
+    /** Переключение на соседнюю игру из списка квестов: игры без деления на сложность открываются сразу списком (без нового баннера), остальные - экраном категорий. */
+    private void handleQuestGameFlip(CallbackQuery callbackQuery, AppUser user, String gameToken) {
+        String gameName = decodeGameToken(gameToken);
+        if (gameName == null || gameName.isBlank()) {
+            answer(callbackQuery.getId(), "Игра недоступна");
+            return;
+        }
+        if (gameCatalogService.isFlat(gameName)) {
+            sendQuestList(user, gameName, null, "quests:section:gaming", 0, false);
+        } else {
+            sendQuestCategories(user, gameName);
+        }
         answerSilently(callbackQuery.getId());
     }
 
