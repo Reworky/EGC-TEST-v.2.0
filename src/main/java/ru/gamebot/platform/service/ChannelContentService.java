@@ -218,6 +218,17 @@ public class ChannelContentService {
     /** Разовая миграция настроек (17.10.2026): раз и навсегда выключает автопосты, убранные владельцем, даже если раньше они были включены явно.
      *  Маркер cc.migr.20261017 - чтобы после этого владелец мог включить любой из них обратно и перезапуск бота не выключал его снова. */
     private void applyChannelPlanMigration() {
+        if (get("cc.migr.20261027") == null) {
+            // 27.10.2026 (решение владельца): итоги отрядов - понедельник 19 UTC (зазор 4 ч от смены пачки в 15 UTC); код дня выходит раз в неделю,
+            // вторник 09 UTC (во вторник это окно свободно на все недели плана; K-напоминания идут по средам).
+            put(prefix(SQUAD_RESULTS) + "dow", "1");
+            put(prefix(SQUAD_RESULTS) + "hour", "19");
+            put("cc.dcode.enabled", "1");
+            put("cc.dcode.hour", "9");
+            put("cc.dcode.dow", "2");
+            put("cc.migr.20261027", "1");
+            log.info("[ChannelContent] 27.10.2026 plan applied: SQUAD_RESULTS Mon 19 UTC, DAILY_CODE weekly Tue 09 UTC (enabled)");
+        }
         if (get("cc.migr.20261026") == null) {
             // 26.10.2026: объединение еженедельных автопостов (см. ALL_TYPES). Сдвиги из базы перекрывают дефолты, поэтому прописываем явно.
             put(prefix(HALL_OF_FAME) + "dow", "1");
@@ -270,7 +281,7 @@ public class ChannelContentService {
         int defHour = switch (type) {
             case SQUAD_MIDWEEK, WITHDRAW_HOWTO, SQUAD_STATS, SHOP_POPULAR, TOP_QUESTS_WEEK, WEEKLY_RACE, SHOP_ITEMS -> 5;
             case WITHDRAW_SUMMARY, REFERRAL_STATS, HALL_OF_FAME -> 9; // HALL_OF_FAME: 26.10.2026 «Итоги недели: игроки» в понедельник 09 UTC
-            case SQUAD_RESULTS -> 16; // 26.10.2026: понедельник 16 UTC - не совпадает со сменой пачки квестов (15 UTC); приз отряда уже выплачен в 00:00 UTC // SQUAD_RESULTS: 21.10.2026 с вторника на понедельник (день расчёта недели)
+            case SQUAD_RESULTS -> 19; // 27.10.2026: понедельник 19 UTC - зазор 4 часа от смены пачки квестов (15 UTC); приз отряда уже выплачен в 00:00 UTC // SQUAD_RESULTS: 21.10.2026 с вторника на понедельник (день расчёта недели)
             case LEAGUES_WEEK, REFERRAL_TOP, REFERRAL_HOWTO, EGCPASS_PERK -> 13;
             case NEW_QUESTS, SHOP_NEW -> 17;
             default -> 12;
@@ -612,6 +623,17 @@ public class ChannelContentService {
         return Math.max(0, Math.min(23, parseInt(get("cc.dcode.hour"), 9)));
     }
 
+    /** День недели автопоста «Код дня» (1 = понедельник ... 7 = воскресенье, UTC); по умолчанию вторник: пост выходит раз в неделю (27.10.2026). */
+    public int dailyCodeDow() {
+        return Math.max(1, Math.min(7, parseInt(get("cc.dcode.dow"), 2)));
+    }
+
+    public int setDailyCodeDow(int dow) {
+        int d = Math.max(1, Math.min(7, dow));
+        put("cc.dcode.dow", String.valueOf(d));
+        return d;
+    }
+
     public int setDailyCodeHour(int hourUtc) {
         int h = Math.max(0, Math.min(23, hourUtc));
         put("cc.dcode.hour", String.valueOf(h));
@@ -620,7 +642,7 @@ public class ChannelContentService {
 
     /** Раз в сутки в заданный час (UTC) создаёт черновик поста с кодом; публикация - только после одобрения админом. */
     private void dailyCodeTick(LocalDateTime now) {
-        if (!isDailyCodeEnabled() || now.getHour() != dailyCodeHour()) return;
+        if (!isDailyCodeEnabled() || now.getHour() != dailyCodeHour() || now.getDayOfWeek().getValue() != dailyCodeDow()) return;
         String today = LocalDate.now().toString();
         if (today.equals(get("cc.dcode.last"))) return;
         put("cc.dcode.last", today);

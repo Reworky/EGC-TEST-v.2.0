@@ -6750,11 +6750,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         ? "✅ Черновик поста с кодом дня создан, карточка на согласование придёт сообщением." : "Черновик создать не вышло.", null);
                 case "on" -> {
                     channelContentService.setDailyCodeEnabled(true);
-                    sendText(admin.getTelegramId(), "🔔 Ежедневный пост с кодом дня включён.", null);
+                    sendText(admin.getTelegramId(), "🔔 Пост с кодом дня включён: выходит раз в неделю (день и час: /dailycode dow, /dailycode hour).", null);
                 }
                 case "off" -> {
                     channelContentService.setDailyCodeEnabled(false);
-                    sendText(admin.getTelegramId(), "🔕 Ежедневный пост с кодом дня выключен.", null);
+                    sendText(admin.getTelegramId(), "🔕 Пост с кодом дня выключен.", null);
+                }
+                case "dow" -> {
+                    Long d = p.length > 2 ? parseLong(p[2]) : null;
+                    if (d == null) {
+                        sendText(admin.getTelegramId(), "Формат: <code>/dailycode dow 2</code> - день недели (1 - понедельник ... 7 - воскресенье, по UTC).", null);
+                        return;
+                    }
+                    int set = channelContentService.setDailyCodeDow(d.intValue());
+                    sendText(admin.getTelegramId(), "📅 Пост с кодом дня будет выходить по дню недели №" + set + " (1 - понедельник).", null);
                 }
                 case "hour" -> {
                     Long h = p.length > 2 ? parseLong(p[2]) : null;
@@ -6769,7 +6778,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     StringBuilder sb = new StringBuilder("🔑 <b>Код дня: состояние</b>\n\n");
                     int hour = channelContentService.dailyCodeHour();
                     sb.append("Автопост: ").append(channelContentService.isDailyCodeEnabled() ? "🔔 включён" : "🔕 выключен").append(", ")
-                            .append(String.format("%02d:00", hour)).append(" UTC (").append(String.format("%02d:00", (hour + 3) % 24)).append(" по Москве)\n");
+                            .append(String.format("%02d:00", hour)).append(" UTC (").append(String.format("%02d:00", (hour + 3) % 24)).append(" по Москве), день недели №")
+                            .append(channelContentService.dailyCodeDow()).append(" (1 - понедельник)\n");
                     java.util.Optional<ru.gamebot.platform.domain.model.DailyCode> latest = clubActivityService.latestCode();
                     if (latest.isEmpty()) {
                         sb.append("Кодов ещё не было. Создать сейчас: <code>/dailycode now</code>.");
@@ -6918,7 +6928,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("🔑 <b>Код дня</b>\nАвтопост: ").append(channelContentService.isDailyCodeEnabled() ? "🔔 включён" : "🔕 выключен")
                 .append(", ").append(String.format("%02d:00", hour)).append(" UTC (").append(String.format("%02d:00", (hour + 3) % 24)).append(" по Москве).\n")
                 .append(channelContentService.isDailyCodeEnabled()
-                        ? "Каждый день в это время бот сам готовит пост с кодом и присылает вам карточку на согласование. Код заработает после того, как вы нажмёте «✅ Опубликовать».\n"
+                        ? "Раз в неделю (день недели №" + channelContentService.dailyCodeDow() + ", 1 - понедельник) в это время бот сам готовит пост с кодом и присылает вам карточку на согласование. Код заработает после того, как вы нажмёте «✅ Опубликовать».\n"
                         : "Автопост выключен: код дня запускается вручную кнопками ниже. Код заработает после того, как вы нажмёте «✅ Опубликовать» в карточке.\n");
         clubActivityService.latestCode().ifPresentOrElse(c -> sb.append("Последний код: <code>").append(c.getCode()).append("</code>, действует до ")
                         .append(c.getValidUntil()).append(", ввели: ").append(clubActivityService.codeClaimsCount(c.getId())).append(".\n"),
@@ -6994,7 +7004,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("wdnudge", "test|send|stats", "Рассылка «вывод открыт» (A/B)"),
             new AdminCommand("push", "status|on NAME|off NAME", "Короткие рассылки игрокам: буст выходных, новые квесты по игре, гонка отрядов, гонка за Зал славы"),
             new AdminCommand("goldenhour", "status|on|off|hour N|percent N|max N|push on|off|pushtest", "Золотой час: окно, бонус, лимит квестов, напоминание игрокам"),
-            new AdminCommand("dailycode", "now|on|off|status", "Пост «Код дня»: создать сейчас, включить, выключить, состояние"),
+            new AdminCommand("dailycode", "now|on|off|hour|dow|status", "Пост «Код дня»: создать сейчас, включить, выключить, состояние"),
             new AdminCommand("redbutton", "status|on|off|now [%]|plan|cancel ID|set КЛЮЧ ЗНАЧЕНИЕ|text post|teaser ТЕКСТ", "«Красная кнопка»: редкий крупный бонус к курсу вывода (расписание, предупреждение, закрытие)"),
             new AdminCommand("course", "status|on|off|now [%]|set КЛЮЧ ЗНАЧЕНИЕ", "«Курс дня»: бонус к курсу вывода (пост с кнопкой, проценты, потолок, бюджет)"),
             new AdminCommand("clubgoal", "status|link ID текст|off", "Цель клуба: состояние, кнопка-портал в квест, выключить портал"),
