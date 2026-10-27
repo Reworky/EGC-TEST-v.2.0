@@ -22141,6 +22141,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("📋 По дням недели", "admin:cc:week")));
         rows.add(List.of(keyboardFactory.callback("🔁 Ежедневно и по событию", "admin:cc:day:0"),
                 keyboardFactory.callback("🗓 14 дней", "admin:cc:sched:14")));
+        rows.add(List.of(keyboardFactory.callback("📤 Канал-черновик", "admin:cc:draft")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:comm"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(),
                 "📰 <b>Контент канала: календарь</b>\n\n"
