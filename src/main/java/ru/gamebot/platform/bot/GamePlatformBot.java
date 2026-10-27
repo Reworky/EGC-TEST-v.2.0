@@ -7551,7 +7551,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             QuestService.QuestListState state = questService.previewListState(user, quest, activeSlots, maxSlots);
             String statusTag;
             switch (state) {
-                case IN_PROGRESS -> { statusTag = "📝 "; anyInProgress = true; }
+                case IN_PROGRESS -> { statusTag = "⏳ "; anyInProgress = true; }
                 case BLOCKED -> { statusTag = "🔒 "; anyBlocked = true; }
                 default -> statusTag = quest.isEffectivelyNew() ? "🆕 " : "";
             }
@@ -7562,7 +7562,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 openButtons.add(keyboardFactory.callback(String.valueOf(i + 1), callback));
             }
         }
-        String legend = (anyInProgress ? "\n📝 — уже взят, откройте карточку для отчёта" : "")
+        String legend = (anyInProgress ? "\n⏳ — уже взят, откройте карточку для отчёта" : "")
                 + (anyBlocked ? "\n🔒 — сейчас нельзя взять: занят слот активного квеста, действует лимит «1 квест в час» или кулдаун по игре — причина в карточке" : "");
         if (!legend.isEmpty()) legend = "\n\n<blockquote expandable>Что значат значки:" + legend + "</blockquote>";
         // С короткими подписями кнопки самодостаточны (видно суть квеста сразу) — раскладываем
