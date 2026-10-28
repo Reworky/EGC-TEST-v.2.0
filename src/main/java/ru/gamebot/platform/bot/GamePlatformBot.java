@@ -15224,7 +15224,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // С 2026-09-26 пруф - черновик в БД (переживает рестарт) и БЕЗ ника игрока: согласие у игроков не запрашиваем (решение владельца),
         // поэтому публикуем сумму и способ, а имя админ при желании добавляет сам через «Изменить».
         String method = isStarsWithdrawal(req) ? "звёздами Telegram" : isCryptoWithdrawal(req) ? "криптовалютой (GRAM, TON)" : "по СБП";
-        String text = "💸 <b>Ещё одна выплата!</b>\n\nИгрок вывел <b>" + payoutAmountText(req) + "</b> " + method + " 🔥";
+        // 28.10.2026 по решению владельца: ник игрока со ссылкой на его Telegram (доверие к выплатам). Без @username ссылку не ставим: tg://user?id публике не открывается.
+        AppUser player = req.getUser();
+        String nick = escape(ru.gamebot.platform.service.ChannelContentService.publicNick(player.getNickname()));
+        String username = player.getTelegramUsername();
+        boolean hasLink = username != null && username.matches("[A-Za-z0-9_]{4,32}");
+        String who = hasLink ? "<a href=\"https://t.me/" + username + "\">" + nick + "</a>" : nick;
+        String text = "💸 <b>Ещё одна выплата!</b>\n\nИгрок <b>" + who + "</b> вывел <b>" + payoutAmountText(req) + "</b> " + method + " 🔥";
         if (receiptCaption != null && !receiptCaption.isBlank()) {
             text += "\n\n" + escape(receiptCaption.trim());
         }

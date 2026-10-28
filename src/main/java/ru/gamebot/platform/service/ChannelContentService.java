@@ -1219,7 +1219,7 @@ public class ChannelContentService {
     // ───────────────────────── рейтинг и Зал славы ─────────────────────────
 
     /** Ник игрока для публичного поста: без @username, ссылок и брани; без публичного ника - нейтральная подпись. */
-    private static String publicNick(String nickname) {
+    public static String publicNick(String nickname) {
         String n = safeName(nickname);
         return n != null ? n : "игрок без публичного ника";
     }
