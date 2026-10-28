@@ -1499,6 +1499,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendWithdrawalMethodChoice(user);
             return;
         }
+        if (data.equals("shop:withdraw:back")) {
+            answerSilently(callbackQuery.getId());
+            // Сбрасываем ожидание суммы, но помним, откуда открыли вывод (баланс или лента): от этого зависит «Отмена» на экране выбора способа
+            String withdrawalOrigin = session.getData().get(WITHDRAWAL_ORIGIN_KEY);
+            session.reset();
+            if (withdrawalOrigin != null) session.getData().put(WITHDRAWAL_ORIGIN_KEY, withdrawalOrigin);
+            sendWithdrawalMethodChoice(user);
+            return;
+        }
         if (data.equals("shop:withdraw:rub")) {
             answerSilently(callbackQuery.getId());
             if (user.getPhoneNumber() == null) {
@@ -9069,7 +9078,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendWithdrawalTonAmountScreen(AppUser user) {
         sendText(user.getTelegramId(),
                 "💎 <b>Вывод в TON</b>\n\n" + withdrawalAmountInfo(user) + "Введите сумму в EXC, которую хотите вывести.",
-                cancelKeyboard());
+                withdrawalAmountBackKeyboard());
     }
 
     private void handleWithdrawalTonAmount(AppUser user, UserSession session, String text) {
@@ -9179,7 +9188,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendWithdrawalScreen(AppUser user) {
         sendText(user.getTelegramId(),
                 "💸 <b>Вывод в рублях</b>\n\n" + withdrawalAmountInfo(user) + "Введите сумму в EXC, которую хотите вывести.",
-                cancelKeyboard());
+                withdrawalAmountBackKeyboard());
+    }
+
+    /** «Назад» с ввода суммы вывода ведёт на выбор способа получения (жалоба владельца 2026-10-28: «Отмена» уводила в главное меню). */
+    private InlineKeyboardMarkup withdrawalAmountBackKeyboard() {
+        return keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw:back"))));
     }
 
     /** Блок над вводом суммы вывода: баланс, сколько можно вывести сейчас (меньшее из баланса и остатка месячного лимита), минимум. */
