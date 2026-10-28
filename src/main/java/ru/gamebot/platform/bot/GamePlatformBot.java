@@ -21911,6 +21911,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     public void onChannelPostDraft(ru.gamebot.platform.event.ChannelPostDraftEvent event) {
         try {
             if (tryAutoPublishQuestRotation(event.getDraftId())) return;
+            if (tryAutoPublishProof(event.getDraftId())) return;
             attachHallBanner(event.getDraftId());
             sendChannelPostCard(event.getDraftId());
         } catch (Exception e) {
@@ -21947,6 +21948,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } catch (Exception e) {
             // публикация не удалась - пост остаётся PENDING и уйдёт обычной карточкой на согласование
             log.error("Auto-publish of quest rotation post {} failed, falling back to approval card", draftId, e);
+            return false;
+        }
+    }
+
+    /** Пруф по выплате или выданной награде публикуется в канал выплат сразу при закрытии заявки модератором, без карточки на согласование.
+     *  Админам уходит копия опубликованного поста; если публикация не удалась, черновик остаётся PENDING и уходит обычной карточкой. */
+    private boolean tryAutoPublishProof(Long draftId) {
+        try {
+            java.util.Optional<ru.gamebot.platform.domain.model.ChannelPostDraft> opt = channelContentService.findDraft(draftId);
+            if (opt.isEmpty()) return false;
+            ru.gamebot.platform.domain.model.ChannelPostDraft d = opt.get();
+            if (!ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF.equals(d.getType())
+                    || !ru.gamebot.platform.domain.model.ChannelPostDraft.PENDING.equals(d.getStatus())) {
+                return false;
+            }
+            sendBannerAndText(channelTargetFor(d.getType()), d.getPhotoFileId(), d.getPostText(), null);
+            channelContentService.markPublished(draftId);
+            String notice = "📣 <b>Пруф выплаты опубликован в канале автоматически</b>\n"
+                    + "⚠️ Без согласования: реквизиты на чеке закрывает модератор, при необходимости удалите пост в канале выплат.\n\n" + d.getPostText();
+            for (Long adminId : adminService.resolvedAdminIds()) {
+                try {
+                    sendBannerAndText(adminId.toString(), d.getPhotoFileId(), notice, null);
+                } catch (Exception e) {
+                    log.warn("Failed to send proof auto-publish notice to admin {}", adminId, e);
+                }
+            }
+            return true;
+        } catch (Exception e) {
+            log.error("Auto-publish of proof post {} failed, falling back to approval card", draftId, e);
             return false;
         }
     }
@@ -22442,7 +22472,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_ACTIVE.equals(type)) when = "за 24 часа до финиша турнира";
         else if (ru.gamebot.platform.service.ChannelContentService.TOURNEY_CANCELLED.equals(type)) when = "сразу при отмене турнира";
         else if (ru.gamebot.platform.service.ChannelContentService.WITHDRAW_MILESTONE.equals(type)) when = "при пересечении круглого порога выплат";
-        else if (ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF.equals(type)) when = "после закрытия заявки на вывод или на награду (уходит в канал выплат, без ника)";
+        else if (ru.gamebot.platform.service.ChannelContentService.WITHDRAW_PROOF.equals(type)) when = "сразу при закрытии заявки на вывод или на награду (публикуется в канал выплат без согласования, без ника)";
         else if (daily) when = "каждый день в " + String.format("%02d:00", st.hour()) + " UTC";
         else when = (every > 7 ? "раз в " + (every / 7) + " нед., по " : "каждую неделю, по ") + weekdayNomRu(st.dayOfWeek()).toLowerCase() + "м в " + String.format("%02d:00", st.hour()) + " UTC";
 
