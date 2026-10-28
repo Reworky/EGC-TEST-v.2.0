@@ -9068,7 +9068,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendWithdrawalTonAmountScreen(AppUser user) {
         sendText(user.getTelegramId(),
-                "💎 <b>Вывод в TON</b>\n\nВведите сумму в EXC, которую хотите вывести.",
+                "💎 <b>Вывод в TON</b>\n\n" + withdrawalAmountInfo(user) + "Введите сумму в EXC, которую хотите вывести.",
                 cancelKeyboard());
     }
 
@@ -9178,8 +9178,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendWithdrawalScreen(AppUser user) {
         sendText(user.getTelegramId(),
-                "💸 <b>Вывод в рублях</b>\n\nВведите сумму в EXC, которую хотите вывести.",
+                "💸 <b>Вывод в рублях</b>\n\n" + withdrawalAmountInfo(user) + "Введите сумму в EXC, которую хотите вывести.",
                 cancelKeyboard());
+    }
+
+    /** Блок над вводом суммы вывода: баланс, сколько можно вывести сейчас (меньшее из баланса и остатка месячного лимита), минимум. */
+    private String withdrawalAmountInfo(AppUser user) {
+        long balance = user.getCoins();
+        long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
+        long available = Math.max(0, Math.min(balance, remaining));
+        return "🪙 Ваш баланс: <b>" + fmtExc(balance) + " EXC</b>\n"
+                + "✅ Доступно для вывода сейчас: <b>" + fmtExc(available) + " EXC</b>\n"
+                + "📤 Остаток лимита: " + fmtExc(remaining) + " из " + fmtExc(sinkShopService.getMonthlyLimit(user)) + " EXC/мес · минимум "
+                + fmtExc(ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) + " EXC\n\n";
     }
 
     private String withdrawalLevelHint(AppUser user) {
