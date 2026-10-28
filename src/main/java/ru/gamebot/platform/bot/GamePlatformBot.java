@@ -1188,13 +1188,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
-        if ("wdquick:region".equals(data)) {
+        if ("wdquick:region".equals(data) || "wdquick:requisite".equals(data)) {
             if ((isEffectiveAdmin(user) || isEffectiveModerator(user))
                     && session.getState() == SessionState.REWARD_REJECT_COMMENT
                     && "withdrawal".equals(session.getData().get("rejectType"))) {
                 clearInlineKeyboard(callbackQuery);
                 answer(callbackQuery.getId(), "Заявка отклонена");
-                handleStateInput(user, session, QUICK_REJECT_REGION);
+                handleStateInput(user, session, "wdquick:requisite".equals(data) ? QUICK_REJECT_REQUISITE : QUICK_REJECT_REGION);
             } else {
                 answer(callbackQuery.getId(), "Заявка уже обработана или действие устарело");
             }
@@ -26010,9 +26010,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private static final String QUICK_REJECT_REGION =
             "Отправка в ваш регион временно недоступна. Ожидайте, мы сообщим, как только появится возможность.";
 
+    private static final String QUICK_REJECT_REQUISITE =
+            "Не удалось отправить выплату на указанные реквизиты: они не работают или на них нельзя сделать перевод. "
+                    + "Укажите другие реквизиты и отправьте заявку на вывод заново, EXC вернулись на ваш баланс.";
+
     private InlineKeyboardMarkup withdrawalRejectKeyboard() {
         return keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("⚡ Регион временно недоступен", "wdquick:region")),
+                List.of(keyboardFactory.callback("⚡ Некорректный реквизит", "wdquick:requisite")),
                 List.of(keyboardFactory.callback("❌ Отмена", "common:cancel"))));
     }
 
