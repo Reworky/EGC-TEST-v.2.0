@@ -2235,7 +2235,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "chestreroll" -> { answerSilently(callbackQuery.getId()); sendChestRerollStarsInvoice(user); return; }
             case "watchad" -> { sendWatchAdOffer(callbackQuery, user); return; }
             case "cat:quests" -> sendQuestsCategory(user);
-            case "cat:wallet" -> sendWalletCategory(user);
+            case "cat:wallet" -> sendBalance(user);
             case "cat:shop" -> sendShopCategory(user);
             case "gemdonate" -> sendGemPackageList(user, "brawl_stars"); // обратная совместимость со старыми сообщениями (см. "shop:donate:" — актуальный путь)
             case "cat:club" -> sendClubCategory(user);
@@ -4080,54 +4080,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    private volatile String walletBannerFileId = null;
-
     private String dailyBonusWalletLabel(AppUser user) {
         return userService.isDailyBonusAvailable(user) ? "🎁 Забрать ежедневный бонус 🔔" : "✅ Бонус за вход получен";
     }
 
     /** Куда вести «Назад» с экрана ежедневного бонуса: в «Задания дня» (единственное место, где его забирают), а если задания выключены - в кошелёк. */
     private String dailyBonusBack() {
-        return userService.dailyTasksEnabled() ? "menu:dtasks" : "menu:cat:wallet";
-    }
-
-    private void sendWalletCategory(AppUser user) {
-        // Ежедневный бонус забирается только в «Заданиях дня»; в кошельке он остаётся лишь пока задания выключены (app_settings).
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")));
-        if (!userService.dailyTasksEnabled()) {
-            rows.add(List.of(keyboardFactory.callback(dailyBonusWalletLabel(user), "menu:daily")));
-        }
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
-        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
-        if (walletBannerFileId != null) {
-            sendPhotoCaption(user.getTelegramId(), walletBannerFileId, "💰 <b>Кошелёк</b>", keyboard);
-            return;
-        }
-        try {
-            try (java.io.InputStream is = getClass().getResourceAsStream("/wallet_banner.png")) {
-                if (is == null) throw new java.io.IOException("wallet_banner.png not found");
-                byte[] img = is.readAllBytes();
-                SendPhoto sendPhoto = new SendPhoto();
-                sendPhoto.setChatId(user.getTelegramId().toString());
-                sendPhoto.setPhoto(new InputFile(new java.io.ByteArrayInputStream(img), "wallet_banner.png"));
-                sendPhoto.setCaption("💰 <b>Кошелёк</b>");
-                sendPhoto.setParseMode("HTML");
-                sendPhoto.setReplyMarkup(keyboard);
-                org.telegram.telegrambots.meta.api.objects.Message sent = execute(sendPhoto);
-                if (sent.getPhoto() != null && !sent.getPhoto().isEmpty()) {
-                    walletBannerFileId = sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId();
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to send wallet banner", e);
-            List<List<InlineKeyboardButton>> fallbackRows = new ArrayList<>();
-            fallbackRows.add(List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")));
-            if (!userService.dailyTasksEnabled()) {
-                fallbackRows.add(List.of(keyboardFactory.callback(dailyBonusWalletLabel(user), "menu:daily")));
-            }
-            sendMenuCategory(user, "💰 <b>Кошелёк</b>", fallbackRows);
-        }
+        return userService.dailyTasksEnabled() ? "menu:dtasks" : "menu:balance";
     }
 
     private void sendShopCategory(AppUser user) {
@@ -5580,7 +5539,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + chestPoolLines(false) + "\n\n"
                         + "<b>Реролл за " + CHEST_REROLL_STARS_PRICE + " ⭐ (можно сколько угодно раз):</b>\n"
                         + chestPoolLines(true) + "</blockquote>",
-                backMenuKeyboard("menu:cat:wallet"));
+                backMenuKeyboard("menu:balance"));
     }
 
     private void sendWatchAdOffer(CallbackQuery callbackQuery, AppUser user) {
@@ -5641,7 +5600,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         } catch (Exception e) {
             log.warn("Failed to send AdsGram bot ad to {}", user.getTelegramId(), e);
-            sendText(user.getTelegramId(), "⚠️ Не получилось показать рекламу, попробуй ещё раз позже.", backMenuKeyboard("menu:cat:wallet"));
+            sendText(user.getTelegramId(), "⚠️ Не получилось показать рекламу, попробуй ещё раз позже.", backMenuKeyboard("menu:balance"));
         }
     }
 
@@ -5970,7 +5929,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendBalance(AppUser user) {
-        sendBalance(user, "menu:cat:wallet");
+        sendBalance(user, "menu:main");
     }
 
     private void sendBalance(AppUser user, String backData) {
@@ -5981,6 +5940,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String equivalent = user.getCoins() > 0
                 ? healthRatioService.starsApprox(user.getCoins()) + " · ≈ " + fmtExc(rub) + " ₽ (курс фонда " + ratioPercent + "%)\n\n"
                 : "";
+        // Ежедневный бонус забирается в «Заданиях дня»; на балансе он появляется лишь пока задания выключены (app_settings).
+        List<List<InlineKeyboardButton>> balanceRows = new ArrayList<>();
+        balanceRows.add(List.of(
+                keyboardFactory.callback("💸 Вывести EXC", "shop:withdraw"),
+                keyboardFactory.callback("📜 История операций", "myexc:0")));
+        if (!userService.dailyTasksEnabled()) {
+            balanceRows.add(List.of(keyboardFactory.callback(dailyBonusWalletLabel(user), "menu:daily")));
+        }
+        balanceRows.add(List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads")));
+        balanceRows.add(List.of(keyboardFactory.callback("⬅️ Назад", backData)));
         sendText(user.getTelegramId(),
                 "💰 <b>Баланс</b>\n\n"
                         + "🪙 <b>" + fmtExc(user.getCoins()) + " EXC</b>\n\n"
@@ -5991,14 +5960,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📊 Фонд клуба: <b>" + ratioPercent + "%</b>\n"
                         + hrExplanationLine(ratioPercent, effectiveQuestReward).stripTrailing() + "</blockquote>\n"
                         + withdrawalProgressBlock(user),
-                keyboardFactory.rowsLayout(List.of(
-                        List.of(
-                                keyboardFactory.callback("💸 Вывести EXC", "shop:withdraw"),
-                                keyboardFactory.callback("📜 История операций", "myexc:0")
-                        ),
-                        List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads")),
-                        List.of(keyboardFactory.callback("⬅️ Назад", backData))
-                )));
+                keyboardFactory.rowsLayout(balanceRows));
     }
 
     // ───────────────────────── «Золотой час» (2026-10-17) ─────────────────────────
@@ -25299,7 +25261,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // 🔔 про ежедневный бонус теперь на «Заданиях дня»; в кошельке он лишь когда задания выключены.
         String walletLabel = !userService.dailyTasksEnabled() && userService.isDailyBonusAvailable(user) ? "💰 Кошелёк 🔔" : "💰 Кошелёк";
         rows.add(List.of(
-                keyboardFactory.callback(walletLabel, "menu:cat:wallet"),
+                keyboardFactory.callback(walletLabel, "menu:balance"),
                 keyboardFactory.callback("🛍️ Магазин", "menu:cat:shop")
         ));
         rows.add(List.of(
