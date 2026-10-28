@@ -10624,6 +10624,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendResourceBanner(user.getTelegramId(), "pubg_pc_gcoin_banner.jpg", payMethodText, keyboardFactory.rowsLayout(rows));
                 return;
             }
+            if ("pubg_mobile".equals(purchaseGroup)) {
+                sendResourceBanner(user.getTelegramId(), "pubg_mobile_uc_banner.jpg", payMethodText, keyboardFactory.rowsLayout(rows));
+                return;
+            }
             if ("steam_topup".equals(purchaseGroup)) {
                 sendResourceBanner(user.getTelegramId(), "steam_balance_banner.jpg", payMethodText, keyboardFactory.rowsLayout(rows));
                 return;
