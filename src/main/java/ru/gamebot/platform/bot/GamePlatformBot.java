@@ -14583,7 +14583,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Пруф по выданной награде: черновик на согласование (тот же тип WITHDRAW_PROOF и тот же канал выплат), без ника игрока. */
     private void postRewardToActivityFeed(RewardRequest req, String receiptFileId, String receiptCaption) {
-        String text = "🎁 <b>Награда выдана!</b>\n\nИгрок получил <b>" + escape(req.getRewardItem().getTitle()) + "</b> за <b>"
+        AppUser player = req.getUser();
+        String nick = escape(ru.gamebot.platform.service.ChannelContentService.publicNick(player.getNickname()));
+        String username = player.getTelegramUsername();
+        String who = username != null && username.matches("[A-Za-z0-9_]{4,32}")
+                ? "<a href=\"https://t.me/" + username + "\">" + nick + "</a>" : nick;
+        String text = "🎁 <b>Награда выдана!</b>\n\nИгрок <b>" + who + "</b> получил <b>" + escape(req.getRewardItem().getTitle()) + "</b> за <b>"
                 + rewardService.actualPaidPrice(req) + " EXC</b> 🔥";
         if (receiptCaption != null && !receiptCaption.isBlank()) {
             text += "\n\n" + escape(receiptCaption.trim());
