@@ -1329,7 +1329,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if ("wallet:section:ads".equals(data)) {
-            sendAdsList(user, "menu:cat:wallet");
+            sendAdsList(user, "menu:balance");
             answerSilently(callbackQuery.getId());
             return;
         }
@@ -4098,7 +4098,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!userService.dailyTasksEnabled()) {
             rows.add(List.of(keyboardFactory.callback(dailyBonusWalletLabel(user), "menu:daily")));
         }
-        rows.add(List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")));
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
         if (walletBannerFileId != null) {
@@ -4127,7 +4126,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (!userService.dailyTasksEnabled()) {
                 fallbackRows.add(List.of(keyboardFactory.callback(dailyBonusWalletLabel(user), "menu:daily")));
             }
-            fallbackRows.add(List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads")));
             sendMenuCategory(user, "💰 <b>Кошелёк</b>", fallbackRows);
         }
     }
@@ -5998,6 +5996,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 keyboardFactory.callback("💸 Вывести EXC", "shop:withdraw"),
                                 keyboardFactory.callback("📜 История операций", "myexc:0")
                         ),
+                        List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads")),
                         List.of(keyboardFactory.callback("⬅️ Назад", backData))
                 )));
     }
