@@ -154,6 +154,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.QuestPoolHealthService questPoolHealthService;
     private final ru.gamebot.platform.service.AnalyticsService analyticsService;
     private final ru.gamebot.platform.service.RetentionService retentionService;
+    private final ru.gamebot.platform.service.PulseService pulseService;
     private final ru.gamebot.platform.service.EngagementCeilingService engagementCeilingService;
     private final ru.gamebot.platform.service.ChannelContentService channelContentService;
     private final ru.gamebot.platform.service.BonusCourseService bonusCourseService;
@@ -525,6 +526,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (text != null && (text.equals("/course") || text.startsWith("/course ")) && isEffectiveAdmin(user)) {
             handleCourseCommand(user, text.trim());
+            return;
+        }
+
+        if (text != null && (text.equals("/pulsethr") || text.startsWith("/pulsethr ")) && isEffectiveAdmin(user)) {
+            handlePulseThresholdCommand(user, text.trim());
             return;
         }
 
@@ -6988,6 +6994,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("user", "", "Посмотреть бота глазами игрока"),
             new AdminCommand("commands", "", "Список админ-команд"),
             new AdminCommand("wdnudge", "test|send|stats", "Рассылка «вывод открыт» (A/B)"),
+            new AdminCommand("pulsethr", "reset|log|КЛЮЧ ЗЕЛЁНЫЙ КРАСНЫЙ", "Пороги вкладки «Пульс проекта»: список, изменить, вернуть стартовые, журнал"),
             new AdminCommand("push", "status|on NAME|off NAME", "Короткие рассылки игрокам: буст выходных, новые квесты по игре, гонка отрядов, гонка за Зал славы"),
             new AdminCommand("goldenhour", "status|on|off|hour N|percent N|max N|push on|off|pushtest", "Золотой час: окно, бонус, лимит квестов, напоминание игрокам"),
             new AdminCommand("dailycode", "now|on|off|hour|dow|status", "Пост «Код дня»: создать сейчас, включить, выключить, состояние"),
@@ -17111,6 +17118,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case ENGAGEMENT -> rows.add(List.of(keyboardFactory.callback("🧪 Отряды: диагностика (рефералка)", "admin:squadretention")));
             case SQUADS -> rows.add(List.of(keyboardFactory.callback("⚔️ Состав отряда", "admin:squads:search")));
             case FRAUD -> rows.add(List.of(keyboardFactory.callback("🕵️ Повторы разовых квестов", "admin:onetimeabuse")));
+            case PULSE -> {
+                rows.add(List.of(keyboardFactory.callback("⚙️ Пороги пульса", "admin:an:pulsethr"), keyboardFactory.callback("📜 История (CSV)", "admin:an:pulsehist")));
+            }
             case COURSE -> rows.add(List.of(keyboardFactory.callback("⚙️ Управление: курс дня и красная кнопка", "admin:course")));
             case TOURNAMENTS -> rows.add(List.of(keyboardFactory.callback("🏆 Управление турнирами", "admin:tournaments")));
             default -> { }
@@ -17147,6 +17157,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.getData().put("an_seg", ru.gamebot.platform.service.RetentionService.SEGMENT_KEYS.contains(key) ? key : "src");
                 sendAnalyticsTab(user, session, ru.gamebot.platform.service.AnalyticsService.Tab.RETENTION);
             }
+            case "pulsethr" -> sendText(user.getTelegramId(), pulseService.thresholdsText(),
+                    backMenuKeyboard("admin:an:tab:PULSE"));
+            case "pulsehist" -> sendCsvDocument(user.getTelegramId(), pulseService.historyCsv(),
+                    "egc_pulse_history_" + java.time.LocalDate.now() + ".csv", "📜 История пульса: дата;сигнал;метрика;значение;статус");
             case "retrefresh" -> {
                 retentionService.invalidate();
                 sendAnalyticsTab(user, session, ru.gamebot.platform.service.AnalyticsService.Tab.RETENTION);
@@ -17192,6 +17206,37 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Единый пакет для отдела аналитики: HTML со всеми вкладками (сравнение с прошлым периодом + тренд 30 дн.), пулом квестов и
      *  состоянием «сейчас», плюс один CSV со всеми метриками. Каждый блок считается отдельно - сбой одного не срывает отчёт. */
+    /** /pulsethr: без аргументов - список порогов; «reset» - стартовые значения; «log» - журнал; «ключ зелёный красный» - изменить. */
+    private void handlePulseThresholdCommand(AppUser user, String text) {
+        String[] parts = text.split("\\s+");
+        if (parts.length == 1) {
+            sendText(user.getTelegramId(), pulseService.thresholdsText(), null);
+            return;
+        }
+        if (parts.length == 2 && parts[1].equalsIgnoreCase("reset")) {
+            pulseService.resetThresholds(user.getTelegramId());
+            sendText(user.getTelegramId(), "✅ Пороги пульса вернулись к стартовым значениям. Изменения записаны в журнал.", null);
+            return;
+        }
+        if (parts.length == 2 && parts[1].equalsIgnoreCase("log")) {
+            sendText(user.getTelegramId(), pulseService.thresholdLogText(), null);
+            return;
+        }
+        if (parts.length == 4) {
+            try {
+                double green = Double.parseDouble(parts[2].replace(',', '.'));
+                double red = Double.parseDouble(parts[3].replace(',', '.'));
+                String err = pulseService.setThreshold(parts[1], green, red, user.getTelegramId());
+                sendText(user.getTelegramId(), err == null ? "✅ Порог обновлён. Статусы пересчитаются при следующем открытии вкладки «Пульс проекта»."
+                        : "⚠️ " + escape(err), null);
+            } catch (NumberFormatException e) {
+                sendText(user.getTelegramId(), "⚠️ Границы должны быть числами. Пример: <code>/pulsethr d1 40 30</code>", null);
+            }
+            return;
+        }
+        sendText(user.getTelegramId(), "Формат: <code>/pulsethr</code> (список), <code>/pulsethr КЛЮЧ ЗЕЛЁНЫЙ КРАСНЫЙ</code>, <code>/pulsethr reset</code>, <code>/pulsethr log</code>", null);
+    }
+
     private void sendAnalyticsFullReport(AppUser user, UserSession session, String periodKey) {
         ru.gamebot.platform.service.AnalyticsService.Period period = switch (periodKey) {
             case "today" -> ru.gamebot.platform.service.AnalyticsService.Period.today();

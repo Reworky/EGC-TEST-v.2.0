@@ -338,6 +338,13 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND (u.blocked = true OR u.fraudSuspect = true)")
     long countFraudOrBlocked();
 
+    /** «Ядро» для «Пульса проекта»: игроки с минимум minQuests выполненных квестов и аккаунтом не моложе maxCreatedAt, заходившие с since (бот или мини-апп). */
+    @Query("SELECT COUNT(u) FROM AppUser u WHERE u.completedQuests >= :minQuests AND u.createdAt <= :maxCreatedAt "
+            + "AND (u.registrationCompleted = true OR u.completedQuests > 0) "
+            + "AND (u.lastBotActivityAt >= :since OR u.lastMiniAppOpenAt >= :since)")
+    long countCoreActiveSince(@Param("since") LocalDateTime since, @Param("minQuests") int minQuests,
+                              @Param("maxCreatedAt") LocalDateTime maxCreatedAt);
+
     @Query("SELECT COUNT(u) FROM AppUser u WHERE u.registrationCompleted = true AND u.fraudSuspect = true")
     long countFraudSuspects();
 

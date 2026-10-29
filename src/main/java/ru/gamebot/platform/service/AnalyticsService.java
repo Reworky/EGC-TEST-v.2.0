@@ -41,6 +41,7 @@ import ru.gamebot.platform.domain.repository.TournamentRepository;
 public class AnalyticsService {
 
     public enum Tab {
+        PULSE("🫀", "Пульс проекта"),
         USERS("👥", "Пользователи и приток"),
         ACTIVITY("📈", "Активность"),
         ENGAGEMENT("🔥", "Вовлечённость"),
@@ -99,7 +100,11 @@ public class AnalyticsService {
     }
 
     /** Одна строка вкладки. prev = null - сравнивать не с чем («—»); lowerIsBetter - рост плохой (красная стрелка не нужна, но подсказка есть). */
-    public record Line(String key, String label, String unit, Double value, Double prev, String note, boolean lowerIsBetter) {}
+    public record Line(String key, String label, String unit, Double value, Double prev, String note, boolean lowerIsBetter, String text) {
+        public Line(String key, String label, String unit, Double value, Double prev, String note, boolean lowerIsBetter) {
+            this(key, label, unit, value, prev, note, lowerIsBetter, null);
+        }
+    }
 
     public record TabData(Tab tab, Period period, List<Line> lines, List<String> extras) {}
 
@@ -126,6 +131,7 @@ public class AnalyticsService {
     private final RetentionService retentionService;
     private final CourseAnalyticsService courseAnalytics;
     private final EgcPassFunnelService egcPassFunnel;
+    private final PulseService pulseService;
 
     // ───────────────────────── снимок: дополнительные поля для трендов ─────────────────────────
 
@@ -221,6 +227,7 @@ public class AnalyticsService {
         List<String> extras = new ArrayList<>();
         try {
             switch (tab) {
+                case PULSE -> pulseTab(lines, extras);
                 case USERS -> usersTab(p, pv, fromDate, lines);
                 case ACTIVITY -> activityTab(fromDate, lines);
                 case ENGAGEMENT -> engagementTab(fromDate, lines);
@@ -520,6 +527,19 @@ public class AnalyticsService {
         long rejectedPrev = submissionRepo.countRejectedBetween(pv.from(), pv.to());
         out.add(L("approve_rate", "Доля одобренных заявок", "%", pct(done, done + rejected), pct(donePrev, donePrev + rejectedPrev),
                 "одобрено / (одобрено + отклонено) за период", false));
+    }
+
+    /** Вкладка «Пульс проекта» (ТЗ 29.10.2026): строки метрик и отдельные строки «Статус: <метрика>» для CSV; готовый текст с цветами - в extras. Период вкладки не используется. */
+    private void pulseTab(List<Line> out, List<String> extras) {
+        PulseService.Result r = pulseService.compute();
+        for (PulseService.SignalResult s : r.signals()) {
+            for (PulseService.Metric m : s.metrics()) {
+                out.add(new Line("pulse_" + m.def().key(), m.def().label(), m.def().unit(), m.value(), m.prev(), m.note(), !m.def().higherIsBetter()));
+                out.add(new Line("pulse_st_" + m.def().key(), "Статус: " + m.def().label(), "", null, null, null, false, m.shown().code));
+            }
+        }
+        out.add(new Line("pulse_project", "Статус проекта", "", null, null, null, false, r.project().code));
+        extras.add(pulseService.formatHtml(r));
     }
 
     private void economyTab(Period p, Period pv, LocalDate fromDate, List<Line> out) {
@@ -1072,6 +1092,7 @@ public class AnalyticsService {
     // ───────────────────────── форматирование ─────────────────────────
 
     public String format(TabData d, boolean compare) {
+        if (d.tab() == Tab.PULSE) return String.join("\n", d.extras());
         StringBuilder sb = new StringBuilder();
         sb.append(d.tab().icon).append(" <b>").append(d.tab().title).append("</b>\n");
         DateTimeFormatter f = DateTimeFormatter.ofPattern("dd.MM HH:mm");
@@ -1136,7 +1157,7 @@ public class AnalyticsService {
         StringBuilder sb = new StringBuilder("﻿");
         sb.append("Метрика;Единица;Текущий период;Предыдущий период;Изменение\n");
         for (Line l : d.lines()) {
-            String cur = l.value() == null ? "" : String.valueOf(l.value());
+            String cur = l.text() != null ? l.text() : l.value() == null ? "" : String.valueOf(l.value());
             String prev = l.prev() == null ? "" : String.valueOf(l.prev());
             String diff = (l.value() == null || l.prev() == null) ? "" : String.valueOf(Math.round((l.value() - l.prev()) * 100) / 100.0);
             sb.append(csvCell(l.label().trim())).append(';').append(csvCell(l.unit())).append(';').append(cur).append(';').append(prev).append(';').append(diff).append('\n');
@@ -1150,7 +1171,7 @@ public class AnalyticsService {
         sb.append("Вкладка;Метрика;Единица;Текущий период;Предыдущий период;Изменение\n");
         for (TabData d : all) {
             for (Line l : d.lines()) {
-                String cur = l.value() == null ? "" : String.valueOf(l.value());
+                String cur = l.text() != null ? l.text() : l.value() == null ? "" : String.valueOf(l.value());
                 String prev = l.prev() == null ? "" : String.valueOf(l.prev());
                 String diff = (l.value() == null || l.prev() == null) ? "" : String.valueOf(Math.round((l.value() - l.prev()) * 100) / 100.0);
                 sb.append(csvCell(d.tab().title)).append(';').append(csvCell(l.label().trim())).append(';').append(csvCell(l.unit())).append(';')

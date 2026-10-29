@@ -7,4 +7,7 @@ import ru.gamebot.platform.domain.model.HealthRatioSnapshot;
 public interface HealthRatioSnapshotRepository extends JpaRepository<HealthRatioSnapshot, Long> {
 
     Optional<HealthRatioSnapshot> findTopByOrderByCalculatedAtDesc();
+
+    /** Снимок курса не позже указанного момента (для сравнения «30 суток назад»). */
+    Optional<HealthRatioSnapshot> findFirstByCalculatedAtLessThanEqualOrderByCalculatedAtDesc(java.time.LocalDateTime at);
 }
