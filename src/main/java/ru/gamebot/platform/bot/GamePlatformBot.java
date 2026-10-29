@@ -1500,7 +1500,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "⚠️ <b>Лимит: 1 заявка на вывод в сутки.</b>\n\n"
                         + "Следующую заявку можно создать через 24 часа после предыдущей.\n\n"
                         + "Если нужно изменить сумму или реквизиты, откройте «Мои заявки на вывод» и отмените текущую (пока она в статусе «⏳ Ожидает»): EXC вернутся на баланс, и можно подать новую.",
-                    withdrawalRequestsKeyboard());
+                    withdrawalRequestsKeyboard(lockedBack));
                 return;
             }
             sendWithdrawalMethodChoice(user);
@@ -9189,7 +9189,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "⚠️ <b>Лимит: 1 заявка на вывод в сутки.</b>\n\n"
                     + "Следующую заявку можно создать через 24 часа после предыдущей.\n\n"
                     + "Если нужно изменить сумму или реквизиты, откройте «Мои заявки на вывод» и отмените текущую (пока она в статусе «⏳ Ожидает»): EXC вернутся на баланс, и можно подать новую.",
-                withdrawalRequestsKeyboard());
+                withdrawalRequestsKeyboard("menu:balance"));
             return;
         }
         if (withdrawalQuoteExpired(session.getData().get("ton_quote_at"))) {
@@ -9299,9 +9299,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Кнопки под экранами вывода: быстрый путь к списку своих заявок (там же отмена) и в меню. */
     private InlineKeyboardMarkup withdrawalRequestsKeyboard() {
+        return withdrawalRequestsKeyboard(null);
+    }
+
+    /** backData != null - добавляет «Назад» рядом с «Меню» (экран лимита: назад туда, откуда открыли вывод). */
+    private InlineKeyboardMarkup withdrawalRequestsKeyboard(String backData) {
+        List<InlineKeyboardButton> last = new ArrayList<>();
+        if (backData != null) last.add(keyboardFactory.callback("⬅️ Назад", backData));
+        last.add(keyboardFactory.callback("🏠 Меню", "menu:main"));
         return keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("📋 Мои заявки на вывод", "menu:my-withdrawals")),
-                List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))));
+                last));
     }
 
     private void sendUserWithdrawalRequests(AppUser user) {
@@ -23516,7 +23524,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "⚠️ <b>Лимит: 1 заявка на вывод в сутки.</b>\n\n"
                     + "Следующую заявку можно создать через 24 часа после предыдущей.\n\n"
                     + "Если нужно изменить сумму или реквизиты, откройте «Мои заявки на вывод» и отмените текущую (пока она в статусе «⏳ Ожидает»): EXC вернутся на баланс, и можно подать новую.",
-                withdrawalRequestsKeyboard());
+                withdrawalRequestsKeyboard("menu:balance"));
             return;
         }
         // Котировка в рублях зафиксирована на шаге ввода суммы; если с тех пор прошло больше WITHDRAWAL_QUOTE_TTL_MS, курс
