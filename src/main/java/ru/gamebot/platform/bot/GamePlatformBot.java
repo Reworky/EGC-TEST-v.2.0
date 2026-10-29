@@ -4815,10 +4815,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         clearOnboardingBrowseBack(user);
         long coins = fresh ? WELCOME_BONUS_EXC : user.getCoins();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        for (StarterGame g : STARTER_GAMES) {
-            rows.add(List.of(keyboardFactory.callback(g.button(), "onboarding:game:" + g.code())));
+        // Все игры с активными квестами сразу на первом экране, без эмодзи; три стартовые идут первыми и ведут на карточку первого квеста.
+        List<String> active = new ArrayList<>(questService.findActiveGameNames());
+        if (active.isEmpty()) {
+            for (StarterGame g : STARTER_GAMES) {
+                rows.add(List.of(keyboardFactory.callback(g.game(), "onboarding:game:" + g.code())));
+            }
+        } else {
+            for (StarterGame g : STARTER_GAMES) {
+                if (active.removeIf(a -> a.equalsIgnoreCase(g.game()))) {
+                    rows.add(List.of(keyboardFactory.callback(g.game(), "onboarding:game:" + g.code())));
+                }
+            }
+            for (String game : questService.sortGamesByInterest(user, active)) {
+                String data = "onboarding:pick:" + encodeGameToken(game);
+                if (data.length() > 64) data = "quests:game:" + encodeGameToken(game);
+                rows.add(List.of(keyboardFactory.callback(trim(game, 28), data)));
+            }
         }
-        rows.add(List.of(keyboardFactory.callback("🎲 Другие игры", "onboarding:browse_all")));
         rows.add(List.of(keyboardFactory.callback("❓ Как это работает", "onboarding:guide")));
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
         String head = fresh
@@ -4829,7 +4843,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 head
                         + "🎯 <b>Цель — первый вывод: " + fmtExc(FIRST_WITHDRAWAL_EXC) + " EXC</b>\n"
                         + progressBar(coins, FIRST_WITHDRAWAL_EXC) + " " + fmtExc(Math.min(coins, FIRST_WITHDRAWAL_EXC)) + " / " + fmtExc(FIRST_WITHDRAWAL_EXC) + "\n\n"
-                        + "Первый квест простой, награда придёт сама. Во что играешь?",
+                        + "Первый квест простой, награда придёт сама. Выбери игру:",
                 keyboardFactory.rowsLayout(rows));
     }
 
@@ -5083,6 +5097,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else if (sub.startsWith("game:")) {
             answerSilently(callbackQuery.getId());
             handleStarterGamePick(user, sub.substring("game:".length()));
+        } else if (sub.startsWith("pick:")) {
+            completeOnboarding(user);
+            answerSilently(callbackQuery.getId());
+            String game = decodeGameToken(sub.substring("pick:".length()));
+            if (game == null) {
+                sendGamingQuestGames(user);
+            } else {
+                sendQuestCategories(user, game);
+            }
         } else if (sub.startsWith("browse_all")) {
             completeOnboarding(user);
             answerSilently(callbackQuery.getId());
