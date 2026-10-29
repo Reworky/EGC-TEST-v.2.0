@@ -609,10 +609,10 @@ function WithdrawRubForm({ wallet, onDone }) {
 
   return (
     <div className="ref-link-card">
-      <div className="ref-link-label">Вывод в рублях (СБП)</div>
+      <div className="ref-link-label">Вывод в рублях (СБП, любой банк)</div>
       <p className="shop-desc">Минимум 5 000 EXC. Курс: 1 000 EXC = {+(10 * wallet.healthRatioPercent / 100).toFixed(1)} ₽ (фонд {wallet.healthRatioPercent}%). Доступно: {wallet.remainingWithdrawalLimit.toLocaleString()} EXC.</p>
       <input type="number" className="quest-text-input" placeholder="Сумма в EXC" value={amount} onChange={e => setAmount(e.target.value)} style={{ marginTop: 16 }} />
-      <input type="text" className="quest-text-input" placeholder="Банк и номер телефона (СБП)" value={requisites} onChange={e => setRequisites(e.target.value)} style={{ marginTop: 8 }} />
+      <input type="text" className="quest-text-input" placeholder="Банк и номер телефона (СБП, любой банк)" value={requisites} onChange={e => setRequisites(e.target.value)} style={{ marginTop: 8 }} />
       <button className="quest-btn" disabled={busy} onClick={handleSubmit} style={{ marginTop: 16 }}>{busy ? 'Секунду...' : 'Отправить заявку'}</button>
       {message && <div className="quest-message">{message}</div>}
     </div>
