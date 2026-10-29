@@ -1498,8 +1498,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (rewardService.hasWithdrawalTodayOrPending(user)) {
                 sendText(user.getTelegramId(),
                     "⚠️ <b>Лимит: 1 заявка на вывод в сутки.</b>\n\n"
-                        + "Следующую заявку можно создать через 24 часа после предыдущей.\n\n"
-                        + "Если нужно изменить сумму или реквизиты, откройте «Мои заявки на вывод» и отмените текущую (пока она в статусе «⏳ Ожидает»): EXC вернутся на баланс, и можно подать новую.",
+                        + "Следующую заявку можно создать через 24 часа после предыдущей.",
                     withdrawalRequestsKeyboard(lockedBack));
                 return;
             }
@@ -9187,8 +9186,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.reset();
             sendText(user.getTelegramId(),
                 "⚠️ <b>Лимит: 1 заявка на вывод в сутки.</b>\n\n"
-                    + "Следующую заявку можно создать через 24 часа после предыдущей.\n\n"
-                    + "Если нужно изменить сумму или реквизиты, откройте «Мои заявки на вывод» и отмените текущую (пока она в статусе «⏳ Ожидает»): EXC вернутся на баланс, и можно подать новую.",
+                    + "Следующую заявку можно создать через 24 часа после предыдущей.",
                 withdrawalRequestsKeyboard("menu:balance"));
             return;
         }
@@ -23522,8 +23520,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.reset();
             sendText(user.getTelegramId(),
                 "⚠️ <b>Лимит: 1 заявка на вывод в сутки.</b>\n\n"
-                    + "Следующую заявку можно создать через 24 часа после предыдущей.\n\n"
-                    + "Если нужно изменить сумму или реквизиты, откройте «Мои заявки на вывод» и отмените текущую (пока она в статусе «⏳ Ожидает»): EXC вернутся на баланс, и можно подать новую.",
+                    + "Следующую заявку можно создать через 24 часа после предыдущей.",
                 withdrawalRequestsKeyboard("menu:balance"));
             return;
         }
