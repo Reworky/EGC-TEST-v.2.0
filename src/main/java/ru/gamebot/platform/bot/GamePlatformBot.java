@@ -4815,23 +4815,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         clearOnboardingBrowseBack(user);
         long coins = fresh ? WELCOME_BONUS_EXC : user.getCoins();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        // Все игры с активными квестами сразу на первом экране, без эмодзи; три стартовые идут первыми и ведут на карточку первого квеста.
+        // Все игры с активными квестами сразу на первом экране, без эмодзи; три стартовые идут первыми.
+        // Нажатие на любую игру открывает первую страницу списка её квестов (игрок выбирает сам, случайный стартовый квест не выдаётся).
         List<String> active = new ArrayList<>(questService.findActiveGameNames());
-        if (active.isEmpty()) {
-            for (StarterGame g : STARTER_GAMES) {
-                rows.add(List.of(keyboardFactory.callback(g.game(), "onboarding:game:" + g.code())));
-            }
-        } else {
-            for (StarterGame g : STARTER_GAMES) {
-                if (active.removeIf(a -> a.equalsIgnoreCase(g.game()))) {
-                    rows.add(List.of(keyboardFactory.callback(g.game(), "onboarding:game:" + g.code())));
-                }
-            }
-            for (String game : questService.sortGamesByInterest(user, active)) {
-                String data = "onboarding:pick:" + encodeGameToken(game);
-                if (data.length() > 64) data = "quests:game:" + encodeGameToken(game);
-                rows.add(List.of(keyboardFactory.callback(trim(game, 28), data)));
-            }
+        List<String> ordered = new ArrayList<>();
+        for (StarterGame g : STARTER_GAMES) {
+            if (active.removeIf(a -> a.equalsIgnoreCase(g.game()))) ordered.add(g.game());
+        }
+        ordered.addAll(questService.sortGamesByInterest(user, active));
+        if (ordered.isEmpty()) {
+            for (StarterGame g : STARTER_GAMES) ordered.add(g.game());
+        }
+        for (String game : ordered) {
+            String data = "onboarding:pick:" + encodeGameToken(game);
+            if (data.length() > 64) data = "quests:game:" + encodeGameToken(game);
+            rows.add(List.of(keyboardFactory.callback(trim(game, 28), data)));
         }
         rows.add(List.of(keyboardFactory.callback("❓ Как это работает", "onboarding:guide")));
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
@@ -5104,7 +5102,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (game == null) {
                 sendGamingQuestGames(user);
             } else {
-                sendQuestCategories(user, game);
+                sendQuestList(user, game, null, "onboarding:back");
             }
         } else if (sub.startsWith("browse_all")) {
             completeOnboarding(user);
