@@ -4836,14 +4836,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("❓ Как это работает", "onboarding:guide")));
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
         String head = fresh
-                ? "🎮 <b>Добро пожаловать в EGC!</b>\n\n"
+                ? "<b>Добро пожаловать в EGC!</b>\n\n"
                         + "✅ Тебе начислено <b>" + WELCOME_BONUS_EXC + " EXC</b> — это твой стартовый капитал.\n\n"
                 : "🎮 <b>Давай начнём с первого квеста</b>\n\n";
         sendText(user.getTelegramId(),
                 head
                         + "🎯 <b>Цель — первый вывод: " + fmtExc(FIRST_WITHDRAWAL_EXC) + " EXC</b>\n"
                         + progressBar(coins, FIRST_WITHDRAWAL_EXC) + " " + fmtExc(Math.min(coins, FIRST_WITHDRAWAL_EXC)) + " / " + fmtExc(FIRST_WITHDRAWAL_EXC) + "\n\n"
-                        + "Первый квест простой, награда придёт сама. Выбери игру:",
+                        + "<b>Для какой игры хочешь взять квест?👇</b>",
                 keyboardFactory.rowsLayout(rows));
     }
 
