@@ -1498,8 +1498,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (rewardService.hasWithdrawalTodayOrPending(user)) {
                 sendText(user.getTelegramId(),
                     "⚠️ <b>Лимит: 1 заявка на вывод в сутки.</b>\n\n"
-                        + "Следующую заявку можно создать через 24 часа после предыдущей.",
-                    backMenuKeyboard("menu:main"));
+                        + "Следующую заявку можно создать через 24 часа после предыдущей.\n\n"
+                        + "Если нужно изменить сумму или реквизиты, откройте «Мои заявки на вывод» и отмените текущую (пока она в статусе «⏳ Ожидает»): EXC вернутся на баланс, и можно подать новую.",
+                    withdrawalRequestsKeyboard());
                 return;
             }
             sendWithdrawalMethodChoice(user);
@@ -9186,8 +9187,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.reset();
             sendText(user.getTelegramId(),
                 "⚠️ <b>Лимит: 1 заявка на вывод в сутки.</b>\n\n"
-                    + "Следующую заявку можно создать через 24 часа после предыдущей.",
-                backMenuKeyboard("menu:main"));
+                    + "Следующую заявку можно создать через 24 часа после предыдущей.\n\n"
+                    + "Если нужно изменить сумму или реквизиты, откройте «Мои заявки на вывод» и отмените текущую (пока она в статусе «⏳ Ожидает»): EXC вернутся на баланс, и можно подать новую.",
+                withdrawalRequestsKeyboard());
             return;
         }
         if (withdrawalQuoteExpired(session.getData().get("ton_quote_at"))) {
@@ -9206,15 +9208,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.reset();
             sendText(user.getTelegramId(),
                     "✅ <b>Заявка на вывод в TON принята!</b>\n\n"
-                    + "🔢 Номер заявки: <b>В-" + tonReq.getId() + "</b>\n"
+                    + "🔢 Номер заявки: <b>В-" + reqDisplayId(tonReq) + "</b>\n"
                     + "💸 Сумма: <b>" + excAmount + " EXC</b>\n"
                     + "💵 Эквивалент: <b>" + tonReq.getFixedRubValue() + " ₽</b>" + bonusNote(tonReq) + " → ~<b>" + exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(tonReq.getFixedRubValue())) + " TON</b>\n"
                     + "📈 Курс: 1 TON = " + tonRate2.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽\n"
                     + "💎 Способ: <b>GRAM (TON)</b>\n"
                     + "📬 Кошелёк: <code>" + escape(wallet) + "</code>\n\n"
                     + "⚠️ Комиссия сети (~0.01 TON) вычитается из суммы — на кошелёк придёт чуть меньше.\n\n"
-                    + "Администратор обработает заявку в течение 24 часов.",
-                    backMenuKeyboard("menu:main"));
+                    + "Администратор обработает заявку в течение 24 часов.\n\n"
+                    + "↩️ Пока заявка в статусе «⏳ Ожидает», её можно отменить в «Мои заявки на вывод»: EXC вернутся на баланс.",
+                    withdrawalRequestsKeyboard());
             notifyAdminsAboutWithdrawal(user, tonReq);
         } catch (IllegalArgumentException e) {
             sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), cancelKeyboard());
@@ -9294,6 +9297,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
+    /** Кнопки под экранами вывода: быстрый путь к списку своих заявок (там же отмена) и в меню. */
+    private InlineKeyboardMarkup withdrawalRequestsKeyboard() {
+        return keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("📋 Мои заявки на вывод", "menu:my-withdrawals")),
+                List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))));
+    }
+
     private void sendUserWithdrawalRequests(AppUser user) {
         List<RewardRequest> requests = rewardService.findUserRequests(user).stream()
                 .filter(r -> "Вывод".equals(r.getRewardItem().getCategory()))
@@ -9323,6 +9333,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback("❌ Отменить заявку В-" + reqDisplayId(req), "reward:cancel:" + req.getId())));
             }
         }
+        sb.append("\n💡 <i>Отменить заявку можно, пока она в статусе ⏳ Ожидает: нажмите «Отменить» под нужной заявкой, EXC вернутся на баланс. Когда заявку взяли в обработку (🔄), отмена доступна только через поддержку.</i>");
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
@@ -23503,8 +23514,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.reset();
             sendText(user.getTelegramId(),
                 "⚠️ <b>Лимит: 1 заявка на вывод в сутки.</b>\n\n"
-                    + "Следующую заявку можно создать через 24 часа после предыдущей.",
-                backMenuKeyboard("menu:main"));
+                    + "Следующую заявку можно создать через 24 часа после предыдущей.\n\n"
+                    + "Если нужно изменить сумму или реквизиты, откройте «Мои заявки на вывод» и отмените текущую (пока она в статусе «⏳ Ожидает»): EXC вернутся на баланс, и можно подать новую.",
+                withdrawalRequestsKeyboard());
             return;
         }
         // Котировка в рублях зафиксирована на шаге ввода суммы; если с тех пор прошло больше WITHDRAWAL_QUOTE_TTL_MS, курс
@@ -23524,12 +23536,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.reset();
             sendText(user.getTelegramId(),
                 "✅ <b>Заявка на вывод принята!</b>\n\n"
-                    + "🔢 Номер заявки: <b>В-" + withdrawalReq.getId() + "</b>\n"
+                    + "🔢 Номер заявки: <b>В-" + reqDisplayId(withdrawalReq) + "</b>\n"
                     + "💸 Сумма: <b>" + amount + " EXC</b>\n"
                     + "💵 К выплате: <b>~" + withdrawalReq.getFixedRubValue() + " ₽</b>" + bonusNote(withdrawalReq) + "\n\n"
-                    + "Ожидайте, в течение 24 часов администратор выполнит перевод!"
+                    + "Ожидайте, в течение 24 часов администратор выполнит перевод!\n\n"
+                    + "↩️ Пока заявка в статусе «⏳ Ожидает», её можно отменить в «Мои заявки на вывод»: EXC вернутся на баланс."
                     + (rewardService.withdrawalPriorityNote(user).isEmpty() ? "" : "\n\n" + rewardService.withdrawalPriorityNote(user).trim()),
-                backMenuKeyboard("menu:main"));
+                withdrawalRequestsKeyboard());
             notifyAdminsAboutWithdrawal(user, withdrawalReq);
         } catch (IllegalArgumentException e) {
             sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), cancelKeyboard());
