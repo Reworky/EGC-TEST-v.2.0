@@ -5102,7 +5102,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (game == null) {
                 sendGamingQuestGames(user);
             } else {
-                sendQuestList(user, game, null, "onboarding:back");
+                // Кнопки onboarding:* исключены из учёта экранов (isEditExcludedCallback), поэтому без своего контекста первая страница списка не
+                // запоминается и листание (◀️ ▶️) присылало бы новое сообщение вместо правки на месте. Источник не задаём: экран выбора игры
+                // (текст) в картинку не переписать, первая страница уходит новым сообщением, а дальше листание правит именно его.
+                navCtx.set(new NavCtx(user.getTelegramId()));
+                try {
+                    sendQuestList(user, game, null, "onboarding:back");
+                } finally {
+                    navCtx.remove();
+                }
             }
         } else if (sub.startsWith("browse_all")) {
             completeOnboarding(user);
