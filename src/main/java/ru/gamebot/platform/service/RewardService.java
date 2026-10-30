@@ -424,6 +424,23 @@ public class RewardService {
         return rewardRequestRepository.findApprovedWithdrawalsWithPayoutDetailsContaining("%" + key + "%", req.getUser());
     }
 
+    /** Другие аккаунты с живой заявкой на те же реквизиты (рубли/кошелёк по нормализованному ключу, Stars - по юзернейму): тот же критерий, что у алерта
+     *  «Вывод на чужие реквизиты» (checkDestinationNotShared), чтобы модератор видел это прямо в карточке заявки и в проверке игрока. */
+    public List<AppUser> findOtherAccountsSharingDestination(RewardRequest req) {
+        String pd = req.getPayoutDetails();
+        if (pd == null || pd.isBlank() || req.getUser() == null) return List.of();
+        boolean stars = req.getRewardItem() != null && "telegram_stars".equals(req.getRewardItem().getPurchaseGroup());
+        String key = stars ? starsUsernameKey(pd) : destinationKey(pd);
+        if (key == null) return List.of();
+        return rewardRequestRepository.findActiveWithdrawalsWithDetailsOfOtherUsers(req.getUser().getId()).stream()
+                .filter(o -> stars
+                        ? "telegram_stars".equals(o.getRewardItem().getPurchaseGroup()) && key.equals(starsUsernameKey(o.getPayoutDetails()))
+                        : key.equals(destinationKey(o.getPayoutDetails())))
+                .map(RewardRequest::getUser)
+                .distinct()
+                .toList();
+    }
+
     public List<RewardRequest> findUserRequests(AppUser user) {
         return rewardRequestRepository.findAllByUserOrderByCreatedAtDesc(user);
     }

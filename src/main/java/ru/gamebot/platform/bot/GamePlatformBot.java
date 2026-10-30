@@ -15351,6 +15351,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String destDupWarning = destDups.isEmpty() ? "" : "\n\n🚨 <b>МУЛЬТИАККАУНТ!</b> Этот реквизит уже получил выплату другой аккаунт: <b>"
                 + escape(destDups.get(0).getUser().getNickname()) + "</b> (В-" + reqDisplayId(destDups.get(0)) + ", "
                 + destDups.get(0).getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + ")";
+        java.util.List<AppUser> sharedOthers = rewardService.findOtherAccountsSharingDestination(req);
+        destDupWarning += sharedDestinationWarning(sharedOthers);
         String phoneLine = requester.getPhoneNumber() != null
                 ? "\n📱 Телефон: <code>" + escape(requester.getPhoneNumber()) + "</code>"
                 : "\n📱 Телефон: <b>не подтверждён</b>";
@@ -15358,9 +15360,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String phoneDupWarning = phoneDupUser.isPresent()
                 ? "\n\n🚨 <b>МУЛЬТИАККАУНТ!</b> Этот номер телефона уже зарегистрирован на аккаунте: <b>" + escape(phoneDupUser.get().getNickname()) + "</b>"
                 : "";
-        java.util.Optional<AppUser> multiblockTarget = destDups.isEmpty()
-                ? phoneDupUser
-                : java.util.Optional.of(destDups.get(0).getUser());
+        java.util.Optional<AppUser> multiblockTarget = !destDups.isEmpty()
+                ? java.util.Optional.of(destDups.get(0).getUser())
+                : (phoneDupUser.isPresent() ? phoneDupUser
+                    : (sharedOthers.isEmpty() ? java.util.Optional.<AppUser>empty() : java.util.Optional.of(sharedOthers.get(0))));
         List<List<InlineKeyboardButton>> adminWdRows = new ArrayList<>();
         adminWdRows.add(List.of(
                 keyboardFactory.callback("✅ Выплачено", "admin:withdrawal:approve:" + req.getId()),
@@ -15453,6 +15456,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (p.isFraudSuspect()) red.add("помечен как подозрительный");
         if (p.isWithdrawalFrozen()) red.add("вывод заморожен на проверку");
         if (!destDups.isEmpty()) red.add("реквизит уже получал другой аккаунт");
+        java.util.List<AppUser> sharedOthersCheck = rewardService.findOtherAccountsSharingDestination(req);
+        if (!sharedOthersCheck.isEmpty()) {
+            red.add("вывод на чужие реквизиты: те же реквизиты у "
+                    + sharedOthersCheck.stream().limit(3).map(o -> escape(displayUserName(o)) + " (" + o.getTelegramId() + ")").collect(java.util.stream.Collectors.joining(", ")));
+        }
         if (phoneDup.isPresent()) red.add("номер телефона уже на другом аккаунте");
         if (reach.code().equals("NO_CHAT") || reach.code().equals("UNKNOWN")) yellow.add("не удалось убедиться, что бот достучится до игрока");
         if (p.getPhoneNumber() == null) yellow.add("телефон не подтверждён");
@@ -25438,6 +25446,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String destDupWarningMod = destDupsMod.isEmpty() ? "" : "\n\n🚨 <b>МУЛЬТИАККАУНТ!</b> Этот реквизит уже получил выплату другой аккаунт: <b>"
                 + escape(destDupsMod.get(0).getUser().getNickname()) + "</b> (В-" + reqDisplayId(destDupsMod.get(0)) + ", "
                 + destDupsMod.get(0).getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + ")";
+        destDupWarningMod += sharedDestinationWarning(rewardService.findOtherAccountsSharingDestination(req));
         String phoneLineMod = requester.getPhoneNumber() != null
                 ? "\n📱 Телефон: <code>" + escape(requester.getPhoneNumber()) + "</code>"
                 : "\n📱 Телефон: <b>не подтверждён</b>";
@@ -27369,6 +27378,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return ROLE_MODER;
         }
         return ROLE_USER;
+    }
+
+    /** Короткая строка для карточки заявки: те же реквизиты уже у другого(их) аккаунта(ов). Пусто, если таких нет. */
+    private String sharedDestinationWarning(List<AppUser> others) {
+        if (others.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder("\n\n🚨 <b>Вывод на чужие реквизиты:</b> те же реквизиты у ");
+        for (int i = 0; i < Math.min(3, others.size()); i++) {
+            AppUser o = others.get(i);
+            sb.append(i > 0 ? ", " : "").append("<b>").append(escape(displayUserName(o))).append("</b> (<code>").append(o.getTelegramId()).append("</code>)");
+        }
+        if (others.size() > 3) sb.append(" и ещё ").append(others.size() - 3);
+        return sb.toString();
     }
 
     private long reqDisplayId(ru.gamebot.platform.domain.model.RewardRequest req) {
