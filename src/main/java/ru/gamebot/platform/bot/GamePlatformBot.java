@@ -8166,7 +8166,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private String partnerQuestCardText(Quest quest, String instruction, String notice, String activeDeadline, String statusLine) {
         StringBuilder sb = new StringBuilder();
         if (notice != null && !notice.isBlank()) sb.append(notice).append("\n\n");
-        sb.append("💎 <b>").append(escape(quest.getTitle())).append("</b>\n");
+        sb.append("💎 <b>").append(escape(quest.getTitle())).append("</b>\n\n");
         // «Срок с момента старта» до взятия квеста не показываем (место в подписи под баннером дороже); после взятия - реальный дедлайн
         sb.append(placesLeftLine(quest)).append(activeDeadline.contains("с момента старта") ? "" : activeDeadline).append(statusLine);
         if (quest.getDescription() != null && !quest.getDescription().isBlank()) {
