@@ -1380,6 +1380,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleQuestView(callbackQuery, user, session, data.substring("quest:view:".length()));
             return;
         }
+        if (data.startsWith("quest:steps:")) {
+            answerSilently(callbackQuery.getId());
+            Long stepsQuestId = parseLong(data.substring("quest:steps:".length()));
+            Quest stepsQuest = stepsQuestId == null ? null : questService.findAll().stream().filter(x -> stepsQuestId.equals(x.getId())).findFirst().orElse(null);
+            if (stepsQuest != null && isManualPartnerSponsored(stepsQuest) && stepsQuest.getInstruction() != null) {
+                sendText(user.getTelegramId(),
+                        partnerQuestStepsText(stepsQuest, questService.personalizeInstruction(stepsQuest.getInstruction(), user.getTelegramId()),
+                                "📖 <b>Как выполнить квест</b>", ""),
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("⬅️ К квесту", "quest:view:sponsored:all:" + stepsQuest.getId())),
+                                List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
+            }
+            return;
+        }
         if (data.startsWith("quest:suggest:")) {
             answerSilently(callbackQuery.getId());
             Long suggestedId = parseLong(data.substring("quest:suggest:".length()));
@@ -8049,6 +8063,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (quest.getChannelCheckUrl() != null && quest.getChannelCheckChatId() != null && hasActiveSubmission && !questClosed) {
             buttons.add(keyboardFactory.url("📢 Открыть канал", quest.getChannelCheckUrl()));
         }
+        if (isManualPartnerSponsored(quest) && quest.getInstruction() != null && !quest.getInstruction().isBlank()) {
+            buttons.add(keyboardFactory.callback("📖 Подробные шаги", "quest:steps:" + questId));
+        }
         if (nextQuestData != null) {
             buttons.add(keyboardFactory.callback("➡️ Следующий квест", nextQuestData));
         }
@@ -8133,9 +8150,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    /** Карточка партнёрского спонсорского квеста: заголовок про выгоду, места и срок, короткое описание и каждый блок инструкции и условий отдельной
-     *  раскрывающейся цитатой (первая строка блока - жирный заголовок). Без бейджей «Спонсорский»/«Разовый» (условия внизу, в цитате) - чтобы
-     *  вся карточка вместе с баннером помещалась в подпись одного фото. */
+    /** Блоки текста через пустую строку; у каждого первая строка - заголовок. */
+    private static List<String[]> splitQuestBlocks(String text) {
+        List<String[]> out = new ArrayList<>();
+        if (text == null || text.isBlank()) return out;
+        for (String block : text.split("\\n\\s*\\n")) {
+            if (block.isBlank()) continue;
+            out.add(block.trim().split("\n", 2));
+        }
+        return out;
+    }
+
+    /** Карточка партнёрского спонсорского квеста (под баннером, подпись фото до 1024 символов): заголовок про выгоду, места, короткое описание, заголовки шагов
+     *  (кратко и с акцентом на выгоду) и «Условия» в свёрнутой цитате. Подробные шаги - отдельным сообщением после «Взять» (partnerQuestStepsText). */
     private String partnerQuestCardText(Quest quest, String instruction, String notice, String activeDeadline, String statusLine) {
         StringBuilder sb = new StringBuilder();
         if (notice != null && !notice.isBlank()) sb.append(notice).append("\n\n");
@@ -8145,17 +8172,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (quest.getDescription() != null && !quest.getDescription().isBlank()) {
             sb.append("\n").append(escape(quest.getDescription())).append("\n");
         }
-        for (String text : new String[]{instruction, quest.getRequirements()}) {
-            if (text == null || text.isBlank()) continue;
-            for (String block : text.split("\\n\\s*\\n")) {
-                if (block.isBlank()) continue;
-                String[] parts = block.trim().split("\n", 2);
-                sb.append("<blockquote expandable><b>").append(escape(parts[0])).append("</b>");
-                if (parts.length > 1) sb.append("\n").append(escape(parts[1]));
-                sb.append("</blockquote>\n");
-            }
+        List<String[]> steps = splitQuestBlocks(instruction);
+        if (!steps.isEmpty()) sb.append("\n");
+        for (String[] step : steps) sb.append("<b>").append(escape(step[0])).append("</b>\n");
+        for (String[] cond : splitQuestBlocks(quest.getRequirements())) {
+            sb.append("\n<blockquote expandable><b>").append(escape(cond[0])).append("</b>");
+            if (cond.length > 1) sb.append("\n").append(escape(cond[1]));
+            sb.append("</blockquote>");
         }
         return sb.toString().trim();
+    }
+
+    /** Подробные шаги партнёрского квеста: каждый шаг отдельной раскрывающейся цитатой (заголовок жирным, дальше пояснение). Приходит после «Взять» и по кнопке «📖 Подробные шаги». */
+    private String partnerQuestStepsText(Quest quest, String instruction, String intro, String deadlineLine) {
+        StringBuilder sb = new StringBuilder(intro);
+        if (deadlineLine != null && !deadlineLine.isBlank()) sb.append("\n").append(deadlineLine.trim());
+        sb.append("\n");
+        for (String[] step : splitQuestBlocks(instruction)) {
+            sb.append("\n<blockquote expandable><b>").append(escape(step[0])).append("</b>");
+            if (step.length > 1) sb.append("\n").append(escape(step[1]));
+            sb.append("</blockquote>");
+        }
+        return sb.toString();
     }
 
     /** Ручной спонсорский квест без привязки к кампании и без проверки канала (партнёрская акция вроде «ОТП Карта»): карточка как у обычного
@@ -8571,6 +8609,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     : "🚀 <b>Квест активен! Теперь заходите " + goToGame + " и выполняйте задание.</b>\n\n"
                         + "Когда закончите, вернитесь сюда и нажмите «📤 Отчёт»: отправьте скриншот, как описано в условиях квеста.\n\n";
 
+        if (isManualPartnerSponsored(freshQuest) && freshQuest.getInstruction() != null && !freshQuest.getInstruction().isBlank()) {
+            // Партнёрский квест (ОТП Карта): вместо общего «заходите в игру» - подробные шаги, каждый отдельной цитатой
+            sendText(user.getTelegramId(),
+                    partnerQuestStepsText(freshQuest, questService.personalizeInstruction(freshQuest.getInstruction(), user.getTelegramId()),
+                            "🚀 <b>Квест взят! Вот что делать:</b>", deadlineLine),
+                    keyboardFactory.smartLayout(buttons));
+            return;
+        }
         sendText(user.getTelegramId(),
                 (notice.isEmpty() ? "" : notice + "\n\n")
                         + nextStep
