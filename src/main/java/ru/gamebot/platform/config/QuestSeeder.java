@@ -2259,15 +2259,13 @@ public class QuestSeeder implements CommandLineRunner {
         // (с 25-го числа следующего месяца, п. 3.4 правил акции). Акция банка до 01.02.2027; код категории donatov.net = 5816 (не в списке исключений).
         // 30.10.2026 карточку переделали (название про выгоду, шаги короткими блоками, каждый в своей цитате): если квест уже создан под прежним названием,
         // переименовываем и обновляем тексты один раз (после переименования старого названия в базе нет, повторов не будет).
-        // Тексты обновляем один раз: квест с прежним названием или с новым, но со старой инструкцией (в новой есть заголовок шага «Закажи бесплатную карту»).
-        for (String otpTitle : new String[]{OTP_CARD_OLD_TITLE, OTP_CARD_TITLE}) {
-            questRepository.findFirstByTitleAndGameName(otpTitle, "ОТП Банк")
-                    .filter(q -> q.getInstruction() == null || !q.getInstruction().contains("Закажи бесплатную карту"))
-                    .ifPresent(q -> {
-                        applyOtpCardContent(q);
-                        questRepository.save(q);
-                        log.info("[QuestSeeder] Updated sponsored quest texts: ОТП Карта");
-                    });
+        // Переименование и новые тексты один раз: квест под любым из прежних названий (после переименования старых названий в базе нет, повторов не будет).
+        for (String otpTitle : new String[]{OTP_CARD_OLD_TITLE, OTP_CARD_PREV_TITLE}) {
+            questRepository.findFirstByTitleAndGameName(otpTitle, "ОТП Банк").ifPresent(q -> {
+                applyOtpCardContent(q);
+                questRepository.save(q);
+                log.info("[QuestSeeder] Renamed and updated sponsored quest: ОТП Карта");
+            });
         }
         if (questRepository.findFirstByTitleAndGameName(OTP_CARD_TITLE, "ОТП Банк").isEmpty()) {
             Quest otpCard = new Quest();
@@ -2631,14 +2629,15 @@ public class QuestSeeder implements CommandLineRunner {
     }
 
     private static final String OTP_CARD_OLD_TITLE = "ОТП Карта: оформи и получи 500 ₽ от банка";
-    private static final String OTP_CARD_TITLE = "Потрать 500 ₽ — вернутся + 40 000 EXC";
+    private static final String OTP_CARD_PREV_TITLE = "Потрать 500 ₽ — вернутся + 40 000 EXC";
+    private static final String OTP_CARD_TITLE = "Потрать 500 ₽ в своей любимой игре — получи их назад + 40 000 EXC 🎁";
 
     /** Тексты квеста «ОТП Карта». Инструкция - блоки через пустую строку (первая строка блока = короткий заголовок шага с акцентом на выгоду): на карточке под баннером
      *  показываются только заголовки (подпись фото до 1024 символов), а после «Взять» бот присылает подробную инструкцию, каждый шаг отдельной цитатой.
      *  В «условиях» - блок «Условия», на карточке он в свёрнутой цитате. */
     private void applyOtpCardContent(Quest q) {
         q.setTitle(OTP_CARD_TITLE);
-        q.setDescription("Купи себе донат на 500 ₽: банк вернёт деньги, а мы добавим 40 000 EXC 🎁");
+        q.setDescription(""); // всё содержание - в названии, заголовках шагов и инструкции (колонка description не допускает null)
         q.setInstruction("1️⃣ Закажи бесплатную карту\n"
                 + "Оформи дебетовую ОТП Карту по ссылке: https://r.otpbank.ru/cc/HOkSwg\n"
                 + "Оформление, обслуживание и доставка бесплатные. Подходит, если тебе 18+, ты живёшь в России и у тебя ещё нет карты ОТП Банка. Нужен паспорт РФ.\n\n"

@@ -7449,7 +7449,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String tag = sponsoredQuestTag(user, q);
             if ("✅ ".equals(tag)) anyDone = true;
             if ("⏳ ".equals(tag)) anyInProgress = true;
-            buttons.add(keyboardFactory.callback(tag + trim(q.getTitle(), 44), "quest:view:sponsored:all:" + q.getId()));
+            buttons.add(keyboardFactory.callback(tag + trim(q.getTitle(), 60), "quest:view:sponsored:all:" + q.getId()));
         }
         String legend = (anyInProgress || anyDone)
                 ? "\n\n" + (anyDone ? "✅ — выполнен" : "") + (anyDone && anyInProgress ? " · " : "") + (anyInProgress ? "⏳ — в процессе" : "")
@@ -8203,7 +8203,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Баннер карточки квеста (картинка в ресурсах бота) - пока только у партнёрского квеста «ОТП Карта». */
-    private static final String OTP_CARD_QUEST_TITLE = "Потрать 500 ₽ — вернутся + 40 000 EXC";
+    private static final String OTP_CARD_QUEST_TITLE = "Потрать 500 ₽ в своей любимой игре — получи их назад + 40 000 EXC 🎁";
 
     private String questCardBanner(Quest quest) {
         return OTP_CARD_QUEST_TITLE.equals(quest.getTitle()) && getClass().getResource("/otp_card_banner.jpg") != null ? "otp_card_banner.jpg" : null;
