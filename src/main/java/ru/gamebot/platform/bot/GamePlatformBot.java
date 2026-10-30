@@ -7435,7 +7435,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String tag = sponsoredQuestTag(user, q);
             if ("✅ ".equals(tag)) anyDone = true;
             if ("⏳ ".equals(tag)) anyInProgress = true;
-            buttons.add(keyboardFactory.callback(tag + trim(q.getTitle(), 32), "quest:view:sponsored:all:" + q.getId()));
+            buttons.add(keyboardFactory.callback(tag + trim(q.getTitle(), 44), "quest:view:sponsored:all:" + q.getId()));
         }
         String legend = (anyInProgress || anyDone)
                 ? "\n\n" + (anyDone ? "✅ — выполнен" : "") + (anyDone && anyInProgress ? " · " : "") + (anyInProgress ? "⏳ — в процессе" : "")
@@ -8111,7 +8111,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             details = d.toString();
         }
         if (!details.isBlank()) body += "\n\n<blockquote expandable>" + details + "</blockquote>";
-        String cardText = (notice == null ? "" : notice + "\n\n")
+        String cardText = isManualPartnerSponsored(quest)
+                ? partnerQuestCardText(quest, personalizedInstruction, notice, activeDeadline, statusLine)
+                : (notice == null ? "" : notice + "\n\n")
                 + sponsorBadge
                 + oneTimeBadge
                 + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n"
@@ -8131,6 +8133,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Карточка партнёрского спонсорского квеста: заголовок про выгоду, места и срок, короткое описание и каждый блок инструкции и условий отдельной
+     *  раскрывающейся цитатой (первая строка блока - жирный заголовок). Без бейджей «Спонсорский»/«Разовый» (условия внизу, в цитате) - чтобы
+     *  вся карточка вместе с баннером помещалась в подпись одного фото. */
+    private String partnerQuestCardText(Quest quest, String instruction, String notice, String activeDeadline, String statusLine) {
+        StringBuilder sb = new StringBuilder();
+        if (notice != null && !notice.isBlank()) sb.append(notice).append("\n\n");
+        sb.append("💎 <b>").append(escape(quest.getTitle())).append("</b>\n");
+        // «Срок с момента старта» до взятия квеста не показываем (место в подписи под баннером дороже); после взятия - реальный дедлайн
+        sb.append(placesLeftLine(quest)).append(activeDeadline.contains("с момента старта") ? "" : activeDeadline).append(statusLine);
+        if (quest.getDescription() != null && !quest.getDescription().isBlank()) {
+            sb.append("\n").append(escape(quest.getDescription())).append("\n");
+        }
+        for (String text : new String[]{instruction, quest.getRequirements()}) {
+            if (text == null || text.isBlank()) continue;
+            for (String block : text.split("\\n\\s*\\n")) {
+                if (block.isBlank()) continue;
+                String[] parts = block.trim().split("\n", 2);
+                sb.append("<blockquote expandable><b>").append(escape(parts[0])).append("</b>");
+                if (parts.length > 1) sb.append("\n").append(escape(parts[1]));
+                sb.append("</blockquote>\n");
+            }
+        }
+        return sb.toString().trim();
+    }
+
     /** Ручной спонсорский квест без привязки к кампании и без проверки канала (партнёрская акция вроде «ОТП Карта»): карточка как у обычного
      *  квеста (суть на виду, инструкция и условия в раскрывающейся цитате), без подписи «Канал». */
     private boolean isManualPartnerSponsored(Quest quest) {
@@ -8138,7 +8165,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Баннер карточки квеста (картинка в ресурсах бота) - пока только у партнёрского квеста «ОТП Карта». */
-    private static final String OTP_CARD_QUEST_TITLE = "ОТП Карта: оформи и получи 500 ₽ от банка";
+    private static final String OTP_CARD_QUEST_TITLE = "Потрать 500 ₽ — вернутся + 40 000 EXC";
 
     private String questCardBanner(Quest quest) {
         return OTP_CARD_QUEST_TITLE.equals(quest.getTitle()) && getClass().getResource("/otp_card_banner.jpg") != null ? "otp_card_banner.jpg" : null;
@@ -10970,7 +10997,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Сообщение с картинкой из ресурсов бота; при сбое (нет файла, ошибка Telegram) - тот же текст без картинки.
      *  Подпись к фото в Telegram ограничена 1024 символами: если текст длиннее, картинка уходит отдельно, а текст с кнопками - следом. */
     private void sendResourceBanner(Long chatId, String resource, String text, InlineKeyboardMarkup keyboard) {
-        boolean captionFits = text.length() <= 1000;
+        // Лимит подписи фото (1024) считается по видимому тексту, без HTML-тегов
+        boolean captionFits = text.replaceAll("<[^>]+>", "").length() <= 1000;
         String cached = resourceBannerFileIds.get(resource);
         if (captionFits) {
             Integer editId = takeEditableSource(chatId, true);
