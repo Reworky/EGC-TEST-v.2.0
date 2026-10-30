@@ -2260,7 +2260,7 @@ public class QuestSeeder implements CommandLineRunner {
         // 30.10.2026 карточку переделали (название про выгоду, шаги короткими блоками, каждый в своей цитате): если квест уже создан под прежним названием,
         // переименовываем и обновляем тексты один раз (после переименования старого названия в базе нет, повторов не будет).
         // Переименование и новые тексты один раз: квест под любым из прежних названий (после переименования старых названий в базе нет, повторов не будет).
-        for (String otpTitle : new String[]{OTP_CARD_OLD_TITLE, OTP_CARD_PREV_TITLE}) {
+        for (String otpTitle : new String[]{OTP_CARD_OLD_TITLE, OTP_CARD_PREV_TITLE, OTP_CARD_PREV2_TITLE}) {
             questRepository.findFirstByTitleAndGameName(otpTitle, "ОТП Банк").ifPresent(q -> {
                 applyOtpCardContent(q);
                 questRepository.save(q);
@@ -2638,7 +2638,8 @@ public class QuestSeeder implements CommandLineRunner {
 
     private static final String OTP_CARD_OLD_TITLE = "ОТП Карта: оформи и получи 500 ₽ от банка";
     private static final String OTP_CARD_PREV_TITLE = "Потрать 500 ₽ — вернутся + 40 000 EXC";
-    private static final String OTP_CARD_TITLE = "Потрать 500 ₽ в своей любимой игре — получи их назад + 40 000 EXC 🎁";
+    private static final String OTP_CARD_PREV2_TITLE = "Потрать 500 ₽ в своей любимой игре — получи их назад + 40 000 EXC 🎁";
+    private static final String OTP_CARD_TITLE = "Получи 500 ₽, донат для своей любимой игры + 40 000 EXC 🎁";
 
     /** Тексты квеста «ОТП Карта». Инструкция - блоки через пустую строку (первая строка блока = короткий заголовок шага с акцентом на выгоду): на карточке под баннером
      *  показываются только заголовки (подпись фото до 1024 символов), а после «Взять» бот присылает подробную инструкцию, каждый шаг отдельной цитатой.
