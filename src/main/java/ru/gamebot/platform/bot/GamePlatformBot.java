@@ -7362,7 +7362,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else {
             rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
         }
-        // Одна сжатая строка про событие и золотой час: «🎃 Хэллоуин в EGC: осталось 2д 05:04 · ⚡ Золотой час в 19:00 МСК»
+        // Событие и золотой час - каждый с новой строки: «🎃 Хэллоуин в EGC: осталось 2д 05:04» / «⚡ Золотой час в 19:00 МСК»
         List<String> info = new ArrayList<>();
         String ev = eventCompactLine();
         if (!ev.isEmpty()) info.add(ev);
@@ -7374,7 +7374,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         // Баннер «Квесты» (Экси у доски заданий) — тот же файл, что на экране «Квесты и рейтинг».
         sendResourceBanner(user.getTelegramId(), "quest_banner.png",
-                "🗺️ <b>Квесты</b>" + (info.isEmpty() ? "" : "\n\n" + String.join(" · ", info)),
+                "🗺️ <b>Квесты</b>" + (info.isEmpty() ? "" : "\n\n" + String.join("\n", info)),
                 keyboardFactory.rowsLayout(rows));
     }
 
