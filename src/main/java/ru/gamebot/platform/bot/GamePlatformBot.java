@@ -4944,14 +4944,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .toList();
         String invite = "💎 <b>Уникальный квест для своих</b>\n\n"
                 + "Ты в числе самых активных игроков клуба на этой неделе, поэтому предлагаем тебе первым. Мест всего <b>20</b>.\n\n"
-                + "<b>Что нужно сделать:</b>\n"
-                + "1️⃣ Оформить дебетовую ОТП Карту по ссылке из квеста\n"
-                + "2️⃣ Купить донат в свою игру на donatov.net от 500 ₽\n"
-                + "3️⃣ Отправить два скриншота\n\n"
-                + "<b>Что получаешь:</b>\n"
-                + "💳 500 ₽ от банка. Придут на карту по условиям акции, обычно с 25-го числа следующего месяца\n"
-                + "🪙 До <b>43 000 EXC</b> от нас: 3 000 после проверки отчёта и 40 000 после выплаты банка. Эту сумму можно будет вывести сразу, одним разом\n\n"
-                + "⚠️ Подходит, если тебе 18+, ты резидент РФ и у тебя ещё нет карты ОТП Банка. Решение о выплате бонуса принимает банк.";
+                + "Такого у нас ещё не было: награда заметно больше обычной, а выполнить квест можно не выходя из дома.\n\n"
+                + "Подойдёт не всем, поэтому все условия и шаги смотри в карточке 👇";
         boolean send = text.matches("(?i)/otppilot\\s+send");
         if (!send) {
             StringBuilder sb = new StringBuilder("💳 <b>Пилот «ОТП Карта»</b>\n\n");
@@ -4979,7 +4973,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String id = String.valueOf(u.getTelegramId());
             if (alreadySent.contains(id)) { skipped++; continue; }
             try {
-                sendText(u.getTelegramId(), invite, kb);
+                if (questCardBanner(quest) != null) {
+                    sendResourceBanner(u.getTelegramId(), questCardBanner(quest), invite, kb);
+                } else {
+                    sendText(u.getTelegramId(), invite, kb);
+                }
                 alreadySent.add(id);
                 delivered++;
             } catch (Exception e) {
