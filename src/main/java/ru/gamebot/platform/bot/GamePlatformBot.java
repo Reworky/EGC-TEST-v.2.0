@@ -1394,17 +1394,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if ("quest:recommend".equals(data)) {
             answerSilently(callbackQuery.getId());
-            if (offerSponsorQuestInPlay(user)) {
-                return;
-            }
-            questService.recommendQuest(user).ifPresentOrElse(
-                    quest -> sendQuestCard(user, quest.getId(), "menu:main", "⬅️ Назад", "🎯 Подобрали специально для тебя!", null, true),
-                    () -> sendText(user.getTelegramId(),
-                            "🎯 Сейчас нечего предложить — либо всё уже взято, либо кулдауны. Загляни в полный список квестов.",
-                            keyboardFactory.rowsLayout(List.of(
-                                    List.of(keyboardFactory.callback("🗺️ Все квесты", "menu:quests")),
-                                    List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
-                            ))));
+            // «🎯 Играть» ведёт сразу в раздел «Квесты» (игровые, спонсорские, UGC...): случайную подборку «подобрали специально для тебя» убрали
+            // по решению владельца 30.10.2026 - игрок сам выбирает квест. Старые кнопки с этим callback продолжают работать.
+            sendQuestGames(user);
             return;
         }
         if (data.startsWith("myquest:cancel:")) {
