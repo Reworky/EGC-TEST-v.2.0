@@ -26582,6 +26582,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private String backDataFromQuestViewToken(String[] parts) {
+        // Карточка открыта из списка спонсорских квестов (quest:view:sponsored:all:ID) - «Назад» возвращает в этот список
+        if (parts.length > 0 && "sponsored".equals(parts[0])) {
+            return "quests:section:sponsored";
+        }
         if (parts.length == 3) {
             String gameName = decodeGameToken(parts[0]);
             String category = categoryFromToken(parts[1]);
