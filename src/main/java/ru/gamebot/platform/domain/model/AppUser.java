@@ -275,6 +275,11 @@ public class AppUser {
     @Column(columnDefinition = "bigint default 0")
     private long monthlyWithdrawnExc;
 
+    /** Разовый партнёрский запас вывода (EXC) сверх месячного лимита: выдаётся админом вместе с партнёрской выплатой (/otpbonus), расходуется выводом и
+     *  возвращается в 0 после него; при отмене/отклонении заявки возвращается. */
+    @Column(columnDefinition = "bigint default 0")
+    private long partnerWithdrawalAllowanceExc;
+
     @Column(columnDefinition = "integer default 0")
     private int withdrawalMonth;
 

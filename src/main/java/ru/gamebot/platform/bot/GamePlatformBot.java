@@ -494,6 +494,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (text != null && (text.equals("/otpbonus") || text.startsWith("/otpbonus ")) && isEffectiveAdmin(user)) {
+            handleOtpBonusCommand(user, text.trim());
+            return;
+        }
+
         if (text != null && (text.equals("/otppilot") || text.startsWith("/otppilot ")) && isEffectiveAdmin(user)) {
             handleOtpPilotCommand(user, text.trim());
             return;
@@ -4881,6 +4886,47 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendStarterQuestCard(user, quest);
     }
 
+    private static final long OTP_BONUS_DEFAULT_EXC = 40_000;
+
+    /** Админ после выплаты банка: /otpbonus ID [сумма] - начисляет EXC игроку и один раз расширяет ему лимит вывода на эту сумму (запас расходуется выводом
+     *  и обнуляется, см. SinkShopService.recordWithdrawal). Заявка на вывод идёт обычным путём («Вывод EXC»), админ выплачивает её как обычно. */
+    private void handleOtpBonusCommand(AppUser admin, String text) {
+        String[] p = text.split("\\s+");
+        Long targetId = p.length > 1 ? parseLong(p[1]) : null;
+        Long amountArg = p.length > 2 ? parseLong(p[2].replace("_", "")) : null;
+        long amount = amountArg == null ? OTP_BONUS_DEFAULT_EXC : amountArg;
+        if (targetId == null || amount <= 0) {
+            sendText(admin.getTelegramId(), "⚠️ Формат: <code>/otpbonus ID [сумма EXC]</code>, по умолчанию " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC.", null);
+            return;
+        }
+        AppUser target = userService.findByTelegramId(targetId).orElse(null);
+        if (target == null) {
+            sendText(admin.getTelegramId(), "⚠️ Игрок с таким ID не найден.", null);
+            return;
+        }
+        try {
+            userService.addReward(target, 0, amount, ru.gamebot.platform.service.ExcTransactionService.BONUS, "Партнёрская выплата: ОТП Карта");
+            sinkShopService.grantPartnerWithdrawalAllowance(target, amount);
+        } catch (Exception e) {
+            log.warn("OTP bonus failed for {}", targetId, e);
+            sendText(admin.getTelegramId(), "⚠️ Не получилось: " + escape(String.valueOf(e.getMessage())), null);
+            return;
+        }
+        try {
+            sendText(target.getTelegramId(),
+                    "💳 <b>Банк выплатил бонус по акции</b>\n\n"
+                            + "Мы начислили тебе <b>" + fmtExc(amount) + " EXC</b>.\n"
+                            + "Вывод этой суммы открыт <b>разово</b>, сверх обычного месячного лимита: «Кошелёк» → «Вывод EXC». После вывода лимит вернётся к обычному.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("💸 Вывести", "shop:withdraw")),
+                            List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
+        } catch (Exception e) {
+            log.warn("OTP bonus notice failed for {}", targetId, e);
+        }
+        sendText(admin.getTelegramId(), "✅ Игроку " + escape(String.valueOf(target.getNickname())) + " (" + targetId + ") начислено " + fmtExc(amount)
+                + " EXC и разово открыт вывод на эту сумму.", null);
+    }
+
     private static final String OTP_PILOT_SENT_KEY = "otp.pilot.sent";
     private static final int OTP_PILOT_SIZE = 20;
 
@@ -4904,7 +4950,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "3️⃣ Отправить два скриншота\n\n"
                 + "<b>Что получаешь:</b>\n"
                 + "💳 500 ₽ от банка. Придут на карту по условиям акции, обычно с 25-го числа следующего месяца\n"
-                + "🪙 До <b>10 000 EXC</b> от нас: 3 000 после проверки отчёта и 7 000 после выплаты банка\n\n"
+                + "🪙 До <b>43 000 EXC</b> от нас: 3 000 после проверки отчёта и 40 000 после выплаты банка. Эту сумму можно будет вывести сразу, одним разом\n\n"
                 + "⚠️ Подходит, если тебе 18+, ты резидент РФ и у тебя ещё нет карты ОТП Банка. Решение о выплате бонуса принимает банк.\n\n"
                 + "Реклама. АО «ОТП Банк».";
         boolean send = text.matches("(?i)/otppilot\\s+send");
@@ -7104,6 +7150,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("course", "status|on|off|now [%]|set КЛЮЧ ЗНАЧЕНИЕ", "«Курс дня»: бонус к курсу вывода (пост с кнопкой, проценты, потолок, бюджет)"),
             new AdminCommand("clubgoal", "status|link ID текст|off", "Цель клуба: состояние, кнопка-портал в квест, выключить портал"),
             new AdminCommand("wdfreeze", "ID on|off", "Заморозить или разморозить вывод игрока"),
+            new AdminCommand("otpbonus", "ID [сумма EXC]", "Партнёрская выплата ОТП Карта: начислить EXC (по умолчанию 40 000) и один раз открыть вывод на всю сумму"),
             new AdminCommand("otppilot", "[send]", "Пилот «ОТП Карта»: показать топ-20 активных за неделю и текст приглашения; send - разослать им (один раз каждому)"),
             new AdminCommand("event", "[halloween|on|off]", "Сезонное событие (Хэллоуин): состояние, включить пресет или выключить, затраты на квесты и надбавка отрядам"),
             new AdminCommand("firstquest", "[bs|cr|coc название1;название2|default]", "Стартовые квесты новичков: показать списки, задать для игры или вернуть по умолчанию"),
@@ -9139,7 +9186,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🪙 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>\n\n"
                         + "<blockquote expandable>📊 Состояние фонда: <b>" + ratioPercent + "%</b>\n"
                         + "💱 Курс вывода: <b>" + rateString(ratioPercent) + "</b>\n"
-                        + "📤 Лимит вывода: <b>" + sinkShopService.getMonthlyLimit(user) + " EXC/мес</b> (осталось: " + remaining + " EXC)\n"
+                        + "📤 Лимит вывода: <b>" + sinkShopService.getMonthlyLimitShown(user) + " EXC/мес</b> (осталось: " + remaining + " EXC)\n"
                         + withdrawalLevelHint(user).stripTrailing() + "</blockquote>",
                 keyboardFactory.rowsLayout(rows));
     }
@@ -9164,7 +9211,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String text = "💸 <b>Вывод EXC</b>\n"
                 + "🪙 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b> · минимум 5 000\n"
                 + "💱 <b>" + rateString(ratioPercent) + "</b>\n\n"
-                + "<blockquote expandable>📤 Остаток лимита: <b>" + remaining + " из " + sinkShopService.getMonthlyLimit(user) + " EXC/мес</b>"
+                + "<blockquote expandable>📤 Остаток лимита: <b>" + remaining + " из " + sinkShopService.getMonthlyLimitShown(user) + " EXC/мес</b>"
                 + withdrawalLevelHint(user)
                 + (lastPayout.isEmpty() ? "" : "\n" + lastPayout) + "</blockquote>\n\n"
                 + "Выберите способ получения:";
@@ -9332,7 +9379,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long available = Math.max(0, Math.min(balance, remaining));
         return "🪙 Ваш баланс: <b>" + fmtExc(balance) + " EXC</b>\n"
                 + "✅ Доступно для вывода сейчас: <b>" + fmtExc(available) + " EXC</b>\n"
-                + "📤 Остаток лимита: " + fmtExc(remaining) + " из " + fmtExc(sinkShopService.getMonthlyLimit(user)) + " EXC/мес · минимум "
+                + "📤 Остаток лимита: " + fmtExc(remaining) + " из " + fmtExc(sinkShopService.getMonthlyLimitShown(user)) + " EXC/мес · минимум "
                 + fmtExc(ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) + " EXC\n\n";
     }
 

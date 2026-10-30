@@ -384,25 +384,52 @@ public class SinkShopService {
     public static final int PASS_LEGACY_LIMIT_MULTIPLIER = 5;
     private static final LocalDateTime PASS_LEGACY_LIMIT_UNTIL = LocalDateTime.of(2026, 11, 24, 0, 0);
 
+    /** Остаток лимита = остаток месячного лимита + разовый партнёрский запас (см. AppUser.partnerWithdrawalAllowanceExc). */
     public long getRemainingWithdrawalLimit(AppUser user) {
         refreshWithdrawalMonthIfNeeded(user);
-        return Math.max(0, getMonthlyLimit(user) - user.getMonthlyWithdrawnExc());
+        return Math.max(0, getMonthlyLimit(user) - user.getMonthlyWithdrawnExc()) + Math.max(0, user.getPartnerWithdrawalAllowanceExc());
     }
 
+    /** Знаменатель «осталось из» на экранах вывода: при действующем разовом запасе остаток может быть больше месячного лимита - тогда показываем его же. */
+    public long getMonthlyLimitShown(AppUser user) {
+        return Math.max(getMonthlyLimit(user), getRemainingWithdrawalLimit(user));
+    }
+
+    /** Выдать разовый партнёрский запас вывода (admin: /otpbonus). Месячный счётчик не трогаем. */
+    @Transactional
+    public void grantPartnerWithdrawalAllowance(AppUser user, long amount) {
+        user.setPartnerWithdrawalAllowanceExc(Math.max(0, user.getPartnerWithdrawalAllowanceExc()) + amount);
+        appUserRepository.save(user);
+    }
+
+    /** Вывод сначала тратит месячный лимит, а то, что сверх него, - разовый запас: счётчик месяца растёт на всю сумму, запас уменьшается на превышение. */
     @Transactional
     public void recordWithdrawal(AppUser user, long amount) {
         refreshWithdrawalMonthIfNeeded(user);
         if (amount > getRemainingWithdrawalLimit(user)) {
             throw new IllegalArgumentException("Превышен месячный лимит вывода.");
         }
-        user.setMonthlyWithdrawnExc(user.getMonthlyWithdrawnExc() + amount);
+        long limit = getMonthlyLimit(user);
+        long before = user.getMonthlyWithdrawnExc();
+        long extra = Math.max(0, before + amount - limit) - Math.max(0, before - limit);
+        user.setMonthlyWithdrawnExc(before + amount);
+        if (extra > 0) {
+            user.setPartnerWithdrawalAllowanceExc(Math.max(0, user.getPartnerWithdrawalAllowanceExc() - extra));
+        }
         appUserRepository.save(user);
     }
 
     @Transactional
     public void reverseWithdrawal(AppUser user, long amount) {
         refreshWithdrawalMonthIfNeeded(user);
-        user.setMonthlyWithdrawnExc(Math.max(0, user.getMonthlyWithdrawnExc() - amount));
+        long limit = getMonthlyLimit(user);
+        long before = user.getMonthlyWithdrawnExc();
+        long after = Math.max(0, before - amount);
+        long extraBack = Math.max(0, before - limit) - Math.max(0, after - limit);
+        user.setMonthlyWithdrawnExc(after);
+        if (extraBack > 0) {
+            user.setPartnerWithdrawalAllowanceExc(Math.max(0, user.getPartnerWithdrawalAllowanceExc()) + extraBack);
+        }
         appUserRepository.save(user);
     }
 
