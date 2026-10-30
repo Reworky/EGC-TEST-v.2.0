@@ -78,6 +78,10 @@ public class Quest {
     @Column(length = 4000)
     private String instruction;
 
+    /** Памятка модератору: что именно проверять в отчёте этого квеста (показывается в карточке заявки). Пусто - памятки нет. */
+    @Column(length = 2000)
+    private String moderatorChecklist;
+
     private long rewardXp;
     private long rewardCoins;
     @jakarta.persistence.Column(columnDefinition = "INT DEFAULT 0")

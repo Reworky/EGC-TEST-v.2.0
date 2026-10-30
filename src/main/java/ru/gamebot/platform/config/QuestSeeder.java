@@ -2275,6 +2275,14 @@ public class QuestSeeder implements CommandLineRunner {
                     questRepository.save(q);
                     log.info("[QuestSeeder] Updated sponsored quest steps: ОТП Карта");
                 });
+        // Памятка модератору (что проверять в отчёте) - квесту, созданному до её появления, ставим один раз
+        questRepository.findFirstByTitleAndGameName(OTP_CARD_TITLE, "ОТП Банк")
+                .filter(q -> q.getModeratorChecklist() == null || q.getModeratorChecklist().isBlank())
+                .ifPresent(q -> {
+                    q.setModeratorChecklist(OTP_CARD_CHECKLIST);
+                    questRepository.save(q);
+                    log.info("[QuestSeeder] Set moderator checklist: ОТП Карта");
+                });
         if (questRepository.findFirstByTitleAndGameName(OTP_CARD_TITLE, "ОТП Банк").isEmpty()) {
             Quest otpCard = new Quest();
             otpCard.setGameName("ОТП Банк");
@@ -2639,6 +2647,11 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String OTP_CARD_OLD_TITLE = "ОТП Карта: оформи и получи 500 ₽ от банка";
     private static final String OTP_CARD_PREV_TITLE = "Потрать 500 ₽ — вернутся + 40 000 EXC";
     private static final String OTP_CARD_PREV2_TITLE = "Потрать 500 ₽ в своей любимой игре — получи их назад + 40 000 EXC 🎁";
+    private static final String OTP_CARD_CHECKLIST = "1️⃣ Скриншот 1: карта в приложении ОТП Банка, новая и активная.\n"
+            + "2️⃣ Скриншот 2: «Детали операции»: продавец PAW*donatov.net, сумма от 500 ₽, категория «Цифровые товары» (МСС 5816), статус не «В обработке».\n"
+            + "3️⃣ Дата покупки: после активации карты, не позже 30 дней.\n"
+            + "4️⃣ Номер счёта и карты закрыты.\n"
+            + "Скриншот не по делу - «Уточнить» и объяснить, что нужно прислать.";
     private static final String OTP_CARD_TITLE = "Получи 500 ₽, донат для своей любимой игры + 40 000 EXC 🎁";
 
     /** Тексты квеста «ОТП Карта». Инструкция - блоки через пустую строку (первая строка блока = короткий заголовок шага с акцентом на выгоду): на карточке под баннером
@@ -2646,6 +2659,7 @@ public class QuestSeeder implements CommandLineRunner {
      *  В «условиях» - блок «Условия», на карточке он в свёрнутой цитате. */
     private void applyOtpCardContent(Quest q) {
         q.setTitle(OTP_CARD_TITLE);
+        q.setModeratorChecklist(OTP_CARD_CHECKLIST);
         q.setDescription(""); // всё содержание - в названии, заголовках шагов и инструкции (колонка description не допускает null)
         q.setInstruction("1️⃣ Закажи бесплатную карту\n"
                 + "Оформи дебетовую ОТП Карту по ссылке: https://r.otpbank.ru/cc/HOkSwg\n"

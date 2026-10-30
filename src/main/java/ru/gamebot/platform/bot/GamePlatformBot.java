@@ -13163,6 +13163,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendSubmissionCard(chatId, submissionId, false, null);
     }
 
+    /** Для карточки модератора: этап игрока в «миссии» (на каком шаге, когда взял, сколько скриншотов) и памятка квеста «что проверить». Пусто у обычных квестов. */
+    private String moderatorQuestHint(QuestSubmission submission) {
+        Quest quest = submission.getQuest();
+        StringBuilder sb = new StringBuilder();
+        if (isMissionQuest(quest)) {
+            int shots = (submission.getMediaFileId() == null ? 0 : 1)
+                    + (submission.getExtraMediaFileIds() == null || submission.getExtraMediaFileIds().isBlank() ? 0 : submission.getExtraMediaFileIds().split("\\|\\|").length);
+            sb.append("📍 Этап: игрок дошёл до шага <b>").append(Math.max(1, Math.min(3, submission.getMissionStep()))).append(" из 4</b> (отчёт), скриншотов: <b>")
+                    .append(shots).append("</b>");
+            if (submission.getCreatedAt() != null) {
+                sb.append(" · квест взят ").append(escape(submission.getCreatedAt().format(DATE_TIME_FORMATTER)));
+            }
+            sb.append("\n");
+        }
+        if (quest.getModeratorChecklist() != null && !quest.getModeratorChecklist().isBlank()) {
+            sb.append("✅ <b>Что проверить:</b>\n").append(escape(quest.getModeratorChecklist())).append("\n");
+        }
+        return sb.length() == 0 ? "" : sb + "\n";
+    }
+
     /** readOnly=true — карточка без кнопок модерации (Одобрить/Отклонить/Уточнить), только просмотр
      *  файла(ов) прошлой заявки (например при разборе фрода по истории игрока). backRoute переопределяет
      *  кнопку "Назад" для этого случая — иначе используется обычный переход в очередь модерации. */
@@ -13185,6 +13205,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🎮 Игра: <b>" + escape(submission.getQuest().getGameName()) + "</b>\n"
                 + statusLine
                 + rewardPreviewLine(submission) + "\n"
+                + moderatorQuestHint(submission)
                 + "📅 Отправлено: <b>" + escape(submission.getUpdatedAt().format(DATE_TIME_FORMATTER)) + "</b>\n"
                 + "💬 Комментарий: " + escape(submission.getUserComment()) + "\n"
                 + (submission.getExternalLink() == null ? "" : "🔗 Ссылка: " + escape(submission.getExternalLink()) + "\n")
@@ -24303,6 +24324,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🎯 Квест: <b>" + escape(submission.getQuest().getTitle()) + "</b>\n"
                 + "🎮 Игра: <b>" + escape(submission.getQuest().getGameName()) + "</b>\n"
                 + rewardPreviewLine(submission) + "\n"
+                + moderatorQuestHint(submission)
                 + "📅 Отправлено: <b>" + submission.getUpdatedAt().format(DATE_TIME_FORMATTER) + "</b>\n"
                 + "💬 Комментарий: " + escape(submission.getUserComment())
                 + aiNote;
