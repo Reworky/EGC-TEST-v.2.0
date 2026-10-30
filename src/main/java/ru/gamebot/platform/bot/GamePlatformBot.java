@@ -8259,7 +8259,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (st == SubmissionStatus.DRAFT || st == SubmissionStatus.PENDING) {
             rows.add(List.of(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + sub.getId())));
         }
-        rows.add(List.of(keyboardFactory.callback("📂 Мои квесты", "menu:myquests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        // «Назад» - туда, откуда открыли квест (список спонсорских, «Мои квесты» или раздел «Квесты»); без неё с шага нельзя было выйти к списку
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", currentQuestBackData(user)),
+                keyboardFactory.callback("📂 Мои", "menu:myquests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows), true);
     }
 
@@ -8982,6 +8984,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         QuestSubmission submission = questService.getSubmission(submissionId);
         Quest quest = submission.getQuest();
         if (isMissionQuest(quest) && !questService.isExpired(submission) && isMissionActiveStatus(submission.getStatus())) {
+            sessionService.get(user.getTelegramId()).getData().put("quest_back_data", "menu:myquests");
             sendMissionStep(user, quest, submission, null, null);
             return;
         }
