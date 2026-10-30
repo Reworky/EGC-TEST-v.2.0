@@ -2256,7 +2256,7 @@ public class QuestSeeder implements CommandLineRunner {
         // ── Спонсорский квест «ОТП Карта» (акция банка «Приведи друга», пилот 20 человек), 2026-10-30 ──
         // Реферальная ссылка ОДНА на всех (метки игрока нет), постбека нет: проверка ручная, по скриншотам; награда в два приёма:
         // 3 000 EXC квестом после проверки скриншотов, ещё 7 000 EXC вручную («🎁 Бонус» на карточке игрока) после выплаты банком (с 25-го числа
-        // следующего месяца, см. п. 3.4 правил акции). Создаётся НЕАКТИВНЫМ: включить в админке («Управление квестами»), когда владелец одобрит карточку.
+        // следующего месяца, см. п. 3.4 правил акции). Создаётся активным: приглашение топ-20 игрокам уходит командой /otppilot send.
         // Акция банка идёт до 01.02.2027; код категории donatov.net = 5816 (не в списке исключений, проверено владельцем 30.10.2026).
         if (questRepository.findFirstByTitleAndGameName("ОТП Карта: оформи и получи 500 ₽ от банка", "ОТП Банк").isEmpty()) {
             Quest otpCard = new Quest();
@@ -2283,11 +2283,11 @@ public class QuestSeeder implements CommandLineRunner {
             otpCard.setParticipantLimit(20);
             otpCard.setOneTimePerAccount(true);
             otpCard.setSponsored(true);
-            otpCard.setActive(false);
+            otpCard.setActive(true);
             otpCard.setCouncilOnly(false);
             otpCard.setCreatedAt(LocalDateTime.now());
             questRepository.save(otpCard);
-            log.info("[QuestSeeder] Created sponsored quest (inactive): ОТП Карта, pilot 20");
+            log.info("[QuestSeeder] Created sponsored quest: ОТП Карта, pilot 20");
         }
         // ── Внешний квест Mobidea 37863 (MegaPrognoze, Мегафон «1 click», подписка оператора), 2026-10-26 ──
         // Мотивированный трафик по офферу разрешён (подтвердил владелец). Группа и награда общие с квестом 37030 («Партнёрские приложения», FLAT 500 -

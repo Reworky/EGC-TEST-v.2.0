@@ -494,6 +494,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (text != null && (text.equals("/otppilot") || text.startsWith("/otppilot ")) && isEffectiveAdmin(user)) {
+            handleOtpPilotCommand(user, text.trim());
+            return;
+        }
+
         if (text != null && text.equals("/commands") && isEffectiveAdmin(user)) {
             sendAdminCommands(user);
             return;
@@ -4876,6 +4881,74 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendStarterQuestCard(user, quest);
     }
 
+    private static final String OTP_PILOT_SENT_KEY = "otp.pilot.sent";
+    private static final int OTP_PILOT_SIZE = 20;
+
+    /** Приглашение в пилот «ОТП Карта»: топ-20 самых активных за неделю (по недельному XP). /otppilot - предпросмотр списка и текста; /otppilot send - разослать
+     *  (каждому игроку один раз: уже получившие запоминаются в app_settings, поэтому повторный запуск не задваивает рассылку). */
+    private void handleOtpPilotCommand(AppUser admin, String text) {
+        Quest quest = questService.findAll().stream().filter(q -> OTP_CARD_QUEST_TITLE.equals(q.getTitle())).findFirst().orElse(null);
+        java.util.Set<String> alreadySent = new java.util.HashSet<>();
+        appSettingRepository.findById(OTP_PILOT_SENT_KEY).map(AppSetting::getValue).filter(v -> !v.isBlank())
+                .ifPresent(v -> alreadySent.addAll(java.util.Arrays.asList(v.split(","))));
+        List<AppUser> top = userService.allRegisteredUsers().stream()
+                .filter(u -> !u.isBlocked() && !adminService.isAdmin(u.getTelegramId()) && u.getWeeklyXp() > 0)
+                .sorted(java.util.Comparator.comparingLong(AppUser::getWeeklyXp).reversed())
+                .limit(OTP_PILOT_SIZE)
+                .toList();
+        String invite = "💎 <b>Уникальный квест для своих</b>\n\n"
+                + "Ты в числе самых активных игроков клуба на этой неделе, поэтому предлагаем тебе первым. Мест всего <b>20</b>.\n\n"
+                + "<b>Что нужно сделать:</b>\n"
+                + "1️⃣ Оформить дебетовую ОТП Карту по ссылке из квеста\n"
+                + "2️⃣ Купить донат в свою игру на donatov.net от 500 ₽\n"
+                + "3️⃣ Отправить два скриншота\n\n"
+                + "<b>Что получаешь:</b>\n"
+                + "💳 500 ₽ от банка. Придут на карту по условиям акции, обычно с 25-го числа следующего месяца\n"
+                + "🪙 До <b>10 000 EXC</b> от нас: 3 000 после проверки отчёта и 7 000 после выплаты банка\n\n"
+                + "⚠️ Подходит, если тебе 18+, ты резидент РФ и у тебя ещё нет карты ОТП Банка. Решение о выплате бонуса принимает банк.\n\n"
+                + "Реклама. АО «ОТП Банк».";
+        boolean send = text.matches("(?i)/otppilot\\s+send");
+        if (!send) {
+            StringBuilder sb = new StringBuilder("💳 <b>Пилот «ОТП Карта»</b>\n\n");
+            sb.append(quest == null ? "⚠️ Квест ещё не создан (после деплоя он появится сам).\n\n"
+                    : (quest.isActive() ? "✅ Квест активен.\n\n" : "⚠️ Квест выключен: включите в «Управление квестами», иначе рассылку не отправить.\n\n"));
+            sb.append("<b>Топ-").append(top.size()).append(" по XP за неделю:</b>\n");
+            int i = 1;
+            for (AppUser u : top) {
+                sb.append(i++).append(". ").append(escape(String.valueOf(u.getNickname()))).append(" (").append(u.getTelegramId()).append(") - ")
+                        .append(u.getWeeklyXp()).append(" XP").append(alreadySent.contains(String.valueOf(u.getTelegramId())) ? " ✅ уже получал" : "").append("\n");
+            }
+            sb.append("\n<b>Текст приглашения:</b>\n\n").append(invite).append("\n\nРазослать: <code>/otppilot send</code>");
+            sendText(admin.getTelegramId(), sb.toString(), null);
+            return;
+        }
+        if (quest == null || !quest.isActive()) {
+            sendText(admin.getTelegramId(), "⚠️ Квест «ОТП Карта» не создан или выключен: рассылка не отправлена.", null);
+            return;
+        }
+        InlineKeyboardMarkup kb = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("🎯 Открыть квест", "quest:view:sponsored:all:" + quest.getId())),
+                List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))));
+        int delivered = 0, skipped = 0, failed = 0;
+        for (AppUser u : top) {
+            String id = String.valueOf(u.getTelegramId());
+            if (alreadySent.contains(id)) { skipped++; continue; }
+            try {
+                sendText(u.getTelegramId(), invite, kb);
+                alreadySent.add(id);
+                delivered++;
+            } catch (Exception e) {
+                failed++;
+                log.warn("OTP pilot invite failed for {}", id, e);
+            }
+        }
+        AppSetting setting = new AppSetting();
+        setting.setKey(OTP_PILOT_SENT_KEY);
+        setting.setValue(String.join(",", alreadySent));
+        appSettingRepository.save(setting);
+        sendText(admin.getTelegramId(), "✅ Приглашение отправлено: " + delivered + ", пропущено (уже получали): " + skipped + ", ошибок: " + failed + ".", null);
+    }
+
     /** Админ: /event - состояние; /event halloween - записать пресет Хэллоуина-2026 и включить; /event on|off - рубильник. */
     private void handleEventCommand(AppUser admin, String text) {
         String[] p = text.split("\\s+");
@@ -7031,6 +7104,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("course", "status|on|off|now [%]|set КЛЮЧ ЗНАЧЕНИЕ", "«Курс дня»: бонус к курсу вывода (пост с кнопкой, проценты, потолок, бюджет)"),
             new AdminCommand("clubgoal", "status|link ID текст|off", "Цель клуба: состояние, кнопка-портал в квест, выключить портал"),
             new AdminCommand("wdfreeze", "ID on|off", "Заморозить или разморозить вывод игрока"),
+            new AdminCommand("otppilot", "[send]", "Пилот «ОТП Карта»: показать топ-20 активных за неделю и текст приглашения; send - разослать им (один раз каждому)"),
             new AdminCommand("event", "[halloween|on|off]", "Сезонное событие (Хэллоуин): состояние, включить пресет или выключить, затраты на квесты и надбавка отрядам"),
             new AdminCommand("firstquest", "[bs|cr|coc название1;название2|default]", "Стартовые квесты новичков: показать списки, задать для игры или вернуть по умолчанию"),
             new AdminCommand("resetuser", "ID", "Сбросить игрока до «только что создан» (с подтверждением)"),
@@ -7938,7 +8012,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String lowText = text.toLowerCase(java.util.Locale.ROOT);
             boolean saysAuto = lowText.contains("автоматическ") || lowText.contains("засчитывается сам") || lowText.contains("ничего отправлять");
             body = escape(text) + (saysAuto ? "" : (text.isBlank() ? "" : " ") + "Прогресс засчитывается сам, ничего отправлять не нужно.");
-        } else if (quest.isSponsored()) {
+        } else if (quest.isSponsored() && !isManualPartnerSponsored(quest)) {
             // Спонсорские: ссылки - само действие, остаются на виду
             body = escape(quest.getDescription())
                     + (personalizedInstruction != null && !personalizedInstruction.isBlank() ? "\n\n📎 <b>Ссылки:</b>\n" + escape(personalizedInstruction) : "");
@@ -7958,19 +8032,37 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             details = d.toString();
         }
         if (!details.isBlank()) body += "\n\n<blockquote expandable>" + details + "</blockquote>";
-        sendText(user.getTelegramId(),
-                (notice == null ? "" : notice + "\n\n")
-                        + sponsorBadge
-                        + oneTimeBadge
-                        + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n"
-                        + metaLine + "\n"
-                        + placesLeftLine(quest)
-                        + activeDeadline
-                        + statusLine
-                        + "\n"
-                        + questRewardLineCompact(user, quest) + "\n\n"
-                        + body,
-                verticalWithBackMenu(buttons, backText, backData));
+        String cardText = (notice == null ? "" : notice + "\n\n")
+                + sponsorBadge
+                + oneTimeBadge
+                + "🎯 <b>" + escape(quest.getTitle()) + "</b>\n"
+                + metaLine + "\n"
+                + placesLeftLine(quest)
+                + activeDeadline
+                + statusLine
+                + "\n"
+                + questRewardLineCompact(user, quest) + "\n\n"
+                + body;
+        InlineKeyboardMarkup cardKeyboard = verticalWithBackMenu(buttons, backText, backData);
+        String cardBanner = questCardBanner(quest);
+        if (cardBanner != null) {
+            sendResourceBanner(user.getTelegramId(), cardBanner, cardText, cardKeyboard);
+        } else {
+            sendText(user.getTelegramId(), cardText, cardKeyboard);
+        }
+    }
+
+    /** Ручной спонсорский квест без привязки к кампании и без проверки канала (партнёрская акция вроде «ОТП Карта»): карточка как у обычного
+     *  квеста (суть на виду, инструкция и условия в раскрывающейся цитате), без подписи «Канал». */
+    private boolean isManualPartnerSponsored(Quest quest) {
+        return quest.isSponsored() && quest.getSponsorId() == null && quest.getChannelCheckChatId() == null && !quest.isExternalAutoApprove();
+    }
+
+    /** Баннер карточки квеста (картинка в ресурсах бота) - пока только у партнёрского квеста «ОТП Карта». */
+    private static final String OTP_CARD_QUEST_TITLE = "ОТП Карта: оформи и получи 500 ₽ от банка";
+
+    private String questCardBanner(Quest quest) {
+        return OTP_CARD_QUEST_TITLE.equals(quest.getTitle()) && getClass().getResource("/otp_card_banner.jpg") != null ? "otp_card_banner.jpg" : null;
     }
 
     /** «👥 Осталось мест: N из M» для спонсорской подписки: спонсор оплатил ограниченное число подписчиков на ВЕСЬ проект (лимит кампании),
@@ -7990,7 +8082,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** «Игра · формат · платформа» (для спонсорских квестов - название канала). Без перевода строки. */
     private String questMetaLine(Quest quest) {
-        if (quest.isSponsored()) return "📢 Канал: <b>" + escape(quest.getGameName()) + "</b>";
+        if (quest.isSponsored() && !isManualPartnerSponsored(quest)) return "📢 Канал: <b>" + escape(quest.getGameName()) + "</b>";
         StringBuilder sb = new StringBuilder(escape(quest.getGameName()));
         if (!"UGC".equalsIgnoreCase(quest.getGameName())) {
             if (quest.getPlatform() != null && !quest.getPlatform().isBlank()) sb.append(" · ").append(escape(quest.getPlatform()));
