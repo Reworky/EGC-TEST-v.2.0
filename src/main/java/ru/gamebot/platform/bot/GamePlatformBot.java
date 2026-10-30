@@ -7342,7 +7342,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         int gamesCount = questService.findActiveGameNames().size();
         List<Quest> sponsored = questService.findAllSponsored().stream().filter(Quest::isActive).toList();
         long sponsoredNew = sponsored.stream().filter(Quest::isEffectivelyNew).count();
-        long inProgress = questService.countActiveDrafts(user);
+        long inProgress = questService.countAllActiveDrafts(user);
         String gamesLabel = "🎮  ИГРОВЫЕ КВЕСТЫ" + (gamesCount > 0 ? " · " + gamesCount : "");
         String sponsoredLabel = "💎  СПОНСОРСКИЕ КВЕСТЫ"
                 + (sponsoredNew > 0 ? " · 🆕 " + sponsoredNew : (sponsored.isEmpty() ? "" : " · " + sponsored.size()));
@@ -8199,7 +8199,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Ручной спонсорский квест без привязки к кампании и без проверки канала (партнёрская акция вроде «ОТП Карта»): карточка как у обычного
      *  квеста (суть на виду, инструкция и условия в раскрывающейся цитате), без подписи «Канал». */
     private boolean isManualPartnerSponsored(Quest quest) {
-        return quest.isSponsored() && quest.getSponsorId() == null && quest.getChannelCheckChatId() == null && !quest.isExternalAutoApprove();
+        return QuestService.isPartnerSponsored(quest);
     }
 
     /** Баннер карточки квеста (картинка в ресурсах бота) - пока только у партнёрского квеста «ОТП Карта». */

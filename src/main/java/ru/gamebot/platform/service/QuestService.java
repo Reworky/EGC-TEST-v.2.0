@@ -1784,12 +1784,28 @@ public class QuestService {
         });
     }
 
-    public long countActiveDrafts(AppUser user) {
+    /** Партнёрский спонсорский квест (ручной, без кампании и без проверки канала, вроде «ОТП Карта»): выполняется неделями, поэтому слот квеста игрока не занимает. */
+    public static boolean isPartnerSponsored(Quest quest) {
+        return quest.isSponsored() && quest.getSponsorId() == null && quest.getChannelCheckChatId() == null && !quest.isExternalAutoApprove();
+    }
+
+    private java.util.stream.Stream<QuestSubmission> activeDraftSubmissions(AppUser user) {
         return questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user).stream()
                 .filter(s -> (s.getStatus() == SubmissionStatus.DRAFT || s.getStatus() == SubmissionStatus.PENDING) && !isExpired(s))
                 // Завершённый/удалённый спонсорский квест игрок уже не видит в «Мои квесты» (getUserSubmissions) - слот он тоже не занимает
-                .filter(s -> s.getQuest() == null || s.getQuest().isActive() || !(s.getQuest().isSponsored() || s.getQuest().isExternalAutoApprove()))
+                .filter(s -> s.getQuest() == null || s.getQuest().isActive() || !(s.getQuest().isSponsored() || s.getQuest().isExternalAutoApprove()));
+    }
+
+    /** Занятые слоты квестов: партнёрские долгие квесты (isPartnerSponsored) не считаются, иначе открытый на недели квест блокировал бы игроку обычные. */
+    public long countActiveDrafts(AppUser user) {
+        return activeDraftSubmissions(user)
+                .filter(s -> s.getQuest() == null || !isPartnerSponsored(s.getQuest()))
                 .count();
+    }
+
+    /** Все квесты игрока в работе (и партнёрские): для счётчика «Мои». */
+    public long countAllActiveDrafts(AppUser user) {
+        return activeDraftSubmissions(user).count();
     }
 
     private boolean sameGame(String left, String right) {
