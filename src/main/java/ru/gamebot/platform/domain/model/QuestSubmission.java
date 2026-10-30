@@ -171,6 +171,10 @@ public class QuestSubmission {
     @Column(columnDefinition = "integer default 0")
     private int brawlProgressCount;
 
+    /** Шаг «миссии» (партнёрские квесты вроде «ОТП Карта»): до какого шага игрок дошёл (0 или 1 - первый). Возврат в квест открывает этот шаг. */
+    @Column(columnDefinition = "integer default 0")
+    private int missionStep;
+
     /** Последняя отправленная игроку ступень прогресса автоквеста: 0 - ничего, 1 - «половина пути», 2 - «последний шаг»
      *  (см. QuestProgressNotifier). Нужна, чтобы не слать одно и то же при каждом опросе API. */
     @Column(columnDefinition = "integer default 0")

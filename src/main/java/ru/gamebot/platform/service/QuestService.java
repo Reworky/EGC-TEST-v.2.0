@@ -983,6 +983,21 @@ public class QuestService {
         }
     }
 
+    /** Шаг «миссии» вперёд (кнопка «Готово»): только с шага fromStep, на котором игрок сейчас (защита от двойного нажатия), и не дальше третьего. */
+    @Transactional
+    public QuestSubmission advanceMissionStep(Long submissionId, Long telegramId, int fromStep) {
+        QuestSubmission sub = getSubmission(submissionId);
+        if (sub.getUser() == null || !sub.getUser().getTelegramId().equals(telegramId)) {
+            throw new IllegalArgumentException("Это не ваш квест.");
+        }
+        int effective = Math.max(1, sub.getMissionStep());
+        if (sub.getStatus() == SubmissionStatus.DRAFT && effective == fromStep && effective < 3) {
+            sub.setMissionStep(effective + 1);
+            questSubmissionRepository.save(sub);
+        }
+        return sub;
+    }
+
     public QuestSubmission getSubmission(Long submissionId) {
         return questSubmissionRepository.findWithUserAndQuestById(submissionId)
                 .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена."));

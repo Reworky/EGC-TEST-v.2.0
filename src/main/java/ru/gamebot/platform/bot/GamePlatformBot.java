@@ -1381,17 +1381,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if (data.startsWith("quest:steps:")) {
+            // Старая кнопка «Подробные шаги»: теперь шаги - миссия, открываем карточку (если квест взят, она покажет текущий шаг)
             answerSilently(callbackQuery.getId());
             Long stepsQuestId = parseLong(data.substring("quest:steps:".length()));
-            Quest stepsQuest = stepsQuestId == null ? null : questService.findAll().stream().filter(x -> stepsQuestId.equals(x.getId())).findFirst().orElse(null);
-            if (stepsQuest != null && isManualPartnerSponsored(stepsQuest) && stepsQuest.getInstruction() != null) {
-                sendText(user.getTelegramId(),
-                        partnerQuestStepsText(stepsQuest, questService.personalizeInstruction(stepsQuest.getInstruction(), user.getTelegramId()),
-                                "📖 <b>Как выполнить квест</b>", ""),
-                        keyboardFactory.rowsLayout(List.of(
-                                List.of(keyboardFactory.callback("⬅️ К квесту", "quest:view:sponsored:all:" + stepsQuest.getId())),
-                                List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
-            }
+            if (stepsQuestId != null) sendQuestCard(user, stepsQuestId, "menu:quests", "⬅️ Назад", null);
+            return;
+        }
+        if (data.startsWith("mission:")) {
+            answerSilently(callbackQuery.getId());
+            handleMissionCallback(user, data.substring("mission:".length()));
             return;
         }
         if (data.startsWith("quest:suggest:")) {
@@ -7985,6 +7983,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         QuestSubmission latest = questService.getLatestSubmission(user, quest);
         boolean latestExpired = latest != null && questService.isExpired(latest);
+        // Партнёрская «миссия» (ОТП Карта): взятый квест открывается на том шаге, где игрок остановился
+        if (isMissionQuest(quest) && latest != null && !latestExpired && isMissionActiveStatus(latest.getStatus())) {
+            sendMissionStep(user, quest, latest, null, notice);
+            return;
+        }
         String statusText = latest == null ? "Не начат"
                 : (latestExpired ? "Истёк срок" : humanStatus(latest.getStatus()));
 
@@ -8062,9 +8065,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Ссылка на канал спонсора - только после «Взять»: иначе игрок успевает подписаться заранее и взять квест уже «не новым»
         if (quest.getChannelCheckUrl() != null && quest.getChannelCheckChatId() != null && hasActiveSubmission && !questClosed) {
             buttons.add(keyboardFactory.url("📢 Открыть канал", quest.getChannelCheckUrl()));
-        }
-        if (isManualPartnerSponsored(quest) && quest.getInstruction() != null && !quest.getInstruction().isBlank()) {
-            buttons.add(keyboardFactory.callback("📖 Подробные шаги", "quest:steps:" + questId));
         }
         if (nextQuestData != null) {
             buttons.add(keyboardFactory.callback("➡️ Следующий квест", nextQuestData));
@@ -8162,7 +8162,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Карточка партнёрского спонсорского квеста (под баннером, подпись фото до 1024 символов): заголовок про выгоду, места, короткое описание, заголовки шагов
-     *  (кратко и с акцентом на выгоду) и «Условия» в свёрнутой цитате. Подробные шаги - отдельным сообщением после «Взять» (partnerQuestStepsText). */
+     *  (кратко и с акцентом на выгоду) и «Условия» в свёрнутой цитате. Шаги по одному - «миссия» после «Взять» (sendMissionStep). */
     private String partnerQuestCardText(Quest quest, String instruction, String notice, String activeDeadline, String statusLine) {
         StringBuilder sb = new StringBuilder();
         if (notice != null && !notice.isBlank()) sb.append(notice).append("\n\n");
@@ -8183,17 +8183,84 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return sb.toString().trim();
     }
 
-    /** Подробные шаги партнёрского квеста: каждый шаг отдельной раскрывающейся цитатой (заголовок жирным, дальше пояснение). Приходит после «Взять» и по кнопке «📖 Подробные шаги». */
-    private String partnerQuestStepsText(Quest quest, String instruction, String intro, String deadlineLine) {
-        StringBuilder sb = new StringBuilder(intro);
-        if (deadlineLine != null && !deadlineLine.isBlank()) sb.append("\n").append(deadlineLine.trim());
-        sb.append("\n");
-        for (String[] step : splitQuestBlocks(instruction)) {
-            sb.append("\n<blockquote expandable><b>").append(escape(step[0])).append("</b>");
-            if (step.length > 1) sb.append("\n").append(escape(step[1]));
-            sb.append("</blockquote>");
+    private boolean isMissionQuest(Quest quest) {
+        return isManualPartnerSponsored(quest) && quest.getInstruction() != null && !quest.getInstruction().isBlank();
+    }
+
+    private boolean isMissionActiveStatus(SubmissionStatus status) {
+        return status == SubmissionStatus.DRAFT || status == SubmissionStatus.PENDING || status == SubmissionStatus.APPROVED;
+    }
+
+    /** Нажатия «миссии»: mission:view:ЗАЯВКА:ШАГ - показать шаг (не дальше достигнутого), mission:next:ЗАЯВКА:ШАГ - «Готово», перейти к следующему шагу. */
+    private void handleMissionCallback(AppUser user, String payload) {
+        String[] p = payload.split(":");
+        if (p.length != 3) return;
+        Long submissionId = parseLong(p[1]);
+        Long stepArg = parseLong(p[2]);
+        if (submissionId == null || stepArg == null) return;
+        try {
+            QuestSubmission sub = "next".equals(p[0])
+                    ? questService.advanceMissionStep(submissionId, user.getTelegramId(), stepArg.intValue())
+                    : questService.getSubmission(submissionId);
+            if (sub.getUser() == null || !sub.getUser().getTelegramId().equals(user.getTelegramId())) return;
+            Quest quest = sub.getQuest();
+            if (!isMissionQuest(quest)) return;
+            sendMissionStep(user, quest, sub, "next".equals(p[0]) ? null : Integer.valueOf(stepArg.intValue()), null);
+        } catch (IllegalArgumentException e) {
+            log.warn("Mission callback failed: {}", e.getMessage());
         }
-        return sb.toString();
+    }
+
+    /** Экран «миссии»: один шаг инструкции целиком, прогресс, кнопки «Готово - дальше» / «Отправить отчёт», переходы между пройденными шагами. Шаги 1-3 игрок
+     *  подтверждает сам (кнопка «Готово»), на третьем отправляет отчёт, четвёртый - ожидание банка (показывается после одобрения отчёта). Возврат в квест
+     *  из «Спонсорских» или «Моих квестов» открывает шаг, на котором остановились. */
+    private void sendMissionStep(AppUser user, Quest quest, QuestSubmission sub, Integer viewStep, String notice) {
+        List<String[]> steps = splitQuestBlocks(questService.personalizeInstruction(quest.getInstruction(), user.getTelegramId()));
+        int total = steps.size();
+        if (total == 0) {
+            sendText(user.getTelegramId(), "🎯 <b>" + escape(quest.getTitle()) + "</b>", backMenuKeyboard("menu:myquests"));
+            return;
+        }
+        SubmissionStatus st = sub.getStatus();
+        int reached = st == SubmissionStatus.APPROVED ? total
+                : st == SubmissionStatus.PENDING ? Math.min(3, total)
+                : Math.min(Math.max(1, sub.getMissionStep()), Math.min(3, total));
+        int view = viewStep == null ? reached : Math.max(1, Math.min(viewStep, reached));
+        String[] step = steps.get(view - 1);
+
+        StringBuilder sb = new StringBuilder();
+        if (notice != null && !notice.isBlank()) sb.append(notice).append("\n\n");
+        sb.append("💎 <b>Миссия</b> · шаг ").append(view).append(" из ").append(total).append("\n")
+                .append("▰".repeat(view)).append("▱".repeat(total - view)).append("\n\n");
+        if (st == SubmissionStatus.PENDING && view == reached) {
+            sb.append("⏳ <b>Отчёт на проверке.</b> Модератор ответит сообщением, 3 000 EXC придут после одобрения.\n\n");
+        } else if (st == SubmissionStatus.APPROVED && view == total) {
+            sb.append("✅ <b>Отчёт принят, 3 000 EXC начислены.</b>\n\n");
+        }
+        sb.append("<b>").append(escape(step[0])).append("</b>");
+        if (step.length > 1) sb.append("\n").append(escape(step[1]));
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (st == SubmissionStatus.DRAFT && view == reached) {
+            if (view < 3) {
+                rows.add(List.of(keyboardFactory.callback("✅ Готово — к шагу " + (view + 1), "mission:next:" + sub.getId() + ":" + view)));
+            } else {
+                rows.add(List.of(questReportOrCheckButton(quest)));
+            }
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("https?://\\S+").matcher(step.length > 1 ? step[1] : "");
+        if (m.find()) {
+            rows.add(List.of(keyboardFactory.url(view == 1 ? "🔗 Оформить карту" : "🔗 Открыть donatov.net", m.group())));
+        }
+        List<InlineKeyboardButton> nav = new ArrayList<>();
+        if (view > 1) nav.add(keyboardFactory.callback("◀️ Шаг " + (view - 1), "mission:view:" + sub.getId() + ":" + (view - 1)));
+        if (view < reached) nav.add(keyboardFactory.callback("Шаг " + (view + 1) + " ▶️", "mission:view:" + sub.getId() + ":" + (view + 1)));
+        if (!nav.isEmpty()) rows.add(nav);
+        if (st == SubmissionStatus.DRAFT || st == SubmissionStatus.PENDING) {
+            rows.add(List.of(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + sub.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("📂 Мои квесты", "menu:myquests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows), true);
     }
 
     /** Ручной спонсорский квест без привязки к кампании и без проверки канала (партнёрская акция вроде «ОТП Карта»): карточка как у обычного
@@ -8611,10 +8678,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (isManualPartnerSponsored(freshQuest) && freshQuest.getInstruction() != null && !freshQuest.getInstruction().isBlank()) {
             // Партнёрский квест (ОТП Карта): вместо общего «заходите в игру» - подробные шаги, каждый отдельной цитатой
-            sendText(user.getTelegramId(),
-                    partnerQuestStepsText(freshQuest, questService.personalizeInstruction(freshQuest.getInstruction(), user.getTelegramId()),
-                            "🚀 <b>Квест взят! Вот что делать:</b>", deadlineLine),
-                    keyboardFactory.smartLayout(buttons));
+            sendMissionStep(user, freshQuest, submission, 1, "🚀 <b>Квест взят!</b>");
             return;
         }
         sendText(user.getTelegramId(),
@@ -8917,6 +8981,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendMyQuestCard(AppUser user, Long submissionId) {
         QuestSubmission submission = questService.getSubmission(submissionId);
         Quest quest = submission.getQuest();
+        if (isMissionQuest(quest) && !questService.isExpired(submission) && isMissionActiveStatus(submission.getStatus())) {
+            sendMissionStep(user, quest, submission, null, null);
+            return;
+        }
         String moderatorComment = submission.getModeratorComment() == null || submission.getModeratorComment().isBlank()
                 ? ""
                 : "\n\n💬 Комментарий модератора:\n" + escape(submission.getModeratorComment());
