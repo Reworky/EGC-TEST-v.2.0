@@ -864,9 +864,12 @@ public class QuestService {
 
     /** true, если у пользователя уже есть ДРУГОЙ отчёт на проверке (статус PENDING) по любому квесту. */
     public boolean hasOtherPendingSubmission(AppUser user, Quest excludeQuest) {
+        // Лимит «2 отчёта на проверке» - защита очереди модерации обычных квестов; спонсорские в нём не участвуют ни как сдаваемые, ни как ожидающие
+        if (ignoresQuestLimits(excludeQuest)) return false;
         long pendingCount = questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user).stream()
                 .filter(s -> s.getStatus() == SubmissionStatus.PENDING
-                        && !s.getQuest().getId().equals(excludeQuest.getId()))
+                        && !s.getQuest().getId().equals(excludeQuest.getId())
+                        && !ignoresQuestLimits(s.getQuest()))
                 .count();
         return pendingCount >= 2;
     }
@@ -1796,10 +1799,15 @@ public class QuestService {
                 .filter(s -> s.getQuest() == null || s.getQuest().isActive() || !(s.getQuest().isSponsored() || s.getQuest().isExternalAutoApprove()));
     }
 
-    /** Занятые слоты квестов: партнёрские долгие квесты (isPartnerSponsored) не считаются, иначе открытый на недели квест блокировал бы игроку обычные. */
+    /** Спонсорские и партнёрские (внешние) квесты слотов не занимают и в лимитах не участвуют (решение владельца 30.10.2026): берутся и выполняются в любом количестве. */
+    public static boolean ignoresQuestLimits(Quest quest) {
+        return quest.isSponsored() || quest.isExternalAutoApprove();
+    }
+
+    /** Занятые слоты квестов: спонсорские и партнёрские квесты (ignoresQuestLimits) не считаются, иначе открытый на недели квест блокировал бы игроку обычные. */
     public long countActiveDrafts(AppUser user) {
         return activeDraftSubmissions(user)
-                .filter(s -> s.getQuest() == null || !isPartnerSponsored(s.getQuest()))
+                .filter(s -> s.getQuest() == null || !ignoresQuestLimits(s.getQuest()))
                 .count();
     }
 
