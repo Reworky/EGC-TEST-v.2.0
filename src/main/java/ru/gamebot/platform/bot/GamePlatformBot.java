@@ -1528,6 +1528,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendWithdrawalMethodChoice(user);
             return;
         }
+        if (data.equals("shop:withdraw:otp")) {
+            answerSilently(callbackQuery.getId());
+            sendOtpWithdrawalOffer(user);
+            return;
+        }
         if (data.equals("shop:withdraw:rub")) {
             answerSilently(callbackQuery.getId());
             if (user.getPhoneNumber() == null) {
@@ -4891,6 +4896,45 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private static final long OTP_BONUS_DEFAULT_EXC = 40_000;
+
+    /** Квест «ОТП Карта», если он активен и в нём ещё есть места; иначе null (тогда предложение в выводе не показываем). */
+    private Quest otpPartnerQuestOrNull() {
+        try {
+            Quest q = questService.findAll().stream().filter(x -> OTP_CARD_QUEST_TITLE.equals(x.getTitle())).findFirst().orElse(null);
+            if (q == null || !q.isActive()) return null;
+            if (q.getParticipantLimit() != null && q.getParticipantLimit() > 0 && questService.countApprovedByQuest(q) >= q.getParticipantLimit()) return null;
+            return q;
+        } catch (Exception e) {
+            log.warn("OTP partner quest lookup failed", e);
+            return null;
+        }
+    }
+
+    /** Экран «Вывод на карту ОТП»: наглядно сравнивает лимит обычного вывода и вывода на карту партнёра, дальше - в квест. */
+    private void sendOtpWithdrawalOffer(AppUser user) {
+        Quest quest = otpPartnerQuestOrNull();
+        if (quest == null) {
+            sendWithdrawalMethodChoice(user);
+            return;
+        }
+        long monthly = sinkShopService.getMonthlyLimit(user);
+        long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("🚀 Открыть квест", "quest:view:sponsored:all:" + quest.getId())));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")));
+        sendText(user.getTelegramId(),
+                "💳 <b>Вывод на карту ОТП: лимит сильно выше</b>\n\n"
+                        + "Обычный вывод: лимит <b>" + fmtExc(monthly) + " EXC/мес</b> (осталось " + fmtExc(remaining) + ")\n"
+                        + "С картой ОТП: <b>до " + fmtExc(remaining + OTP_BONUS_DEFAULT_EXC) + " EXC разом</b>, одной заявкой. На это время лимит вывода расширяется на "
+                        + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC.\n\n"
+                        + "<b>Как получить:</b>\n"
+                        + "1️⃣ Закажи бесплатную карту ОТП\n"
+                        + "2️⃣ Купи себе донат на 500 ₽: банк вернёт эти деньги\n"
+                        + "3️⃣ Пришли скриншоты и получи 3 000 EXC\n"
+                        + "4️⃣ Дождись банка: +" + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC и вывод всей суммы разом\n\n"
+                        + "Мест в квесте: " + Math.max(0, (quest.getParticipantLimit() == null ? 0 : quest.getParticipantLimit()) - questService.countApprovedByQuest(quest)),
+                keyboardFactory.rowsLayout(rows));
+    }
 
     /** Админ после выплаты банка: /otpbonus ID [сумма] - начисляет EXC игроку и один раз расширяет ему лимит вывода на эту сумму (запас расходуется выводом
      *  и обнуляется, см. SinkShopService.recordWithdrawal). Заявка на вывод идёт обычным путём («Вывод EXC»), админ выплачивает её как обычно. */
@@ -9390,8 +9434,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "<blockquote expandable>📤 Остаток лимита: <b>" + remaining + " из " + sinkShopService.getMonthlyLimitShown(user) + " EXC/мес</b>"
                 + withdrawalLevelHint(user)
                 + (lastPayout.isEmpty() ? "" : "\n" + lastPayout) + "</blockquote>\n\n"
+                + (otpPartnerQuestOrNull() == null ? ""
+                    : "🔥 <b>На карту ОТП лимит вывода выше на " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC</b>, всю накопленную сумму можно вывести разом\n\n")
                 + "Выберите способ получения:";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (otpPartnerQuestOrNull() != null) {
+            rows.add(List.of(keyboardFactory.callback("💳 На карту ОТП: лимит +" + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC 🔥", "shop:withdraw:otp")));
+        }
         rows.add(List.of(keyboardFactory.callback("💸 В рублях (СБП, любой банк)", "shop:withdraw:rub")));
         rows.add(List.of(keyboardFactory.callback("💎 В TON (Telegram Wallet)", "shop:withdraw:ton")));
         rows.add(List.of(keyboardFactory.callback("⭐ В звёздах Telegram", "shop:group:telegram_stars")));
