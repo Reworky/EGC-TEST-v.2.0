@@ -149,6 +149,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.CouncilService councilService;
     private final ru.gamebot.platform.service.ShopLimitService shopLimitService;
     private final GameCatalogService gameCatalogService;
+    private final ru.gamebot.platform.service.GameCoverService gameCoverService;
     private final ru.gamebot.platform.service.TrafficSourceService trafficSourceService;
     private final ru.gamebot.platform.service.TrafficFunnelService trafficFunnelService;
     private final ru.gamebot.platform.service.QuestPoolHealthService questPoolHealthService;
@@ -7749,7 +7750,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String caption = "🎮 <b>" + escape(gameName) + "</b>\n\nВыберите нужную категорию и откройте подборку квестов именно по этой игре.";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
 
-        gameCatalogService.getPhotoFileId(gameName).ifPresentOrElse(
+        gameCoverPhoto(gameName).ifPresentOrElse(
                 photoFileId -> sendPhotoCaption(user.getTelegramId(), photoFileId, caption, keyboard),
                 () -> sendText(user.getTelegramId(), caption, keyboard)
         );
@@ -7883,7 +7884,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Баннер игры и список - одно сообщение (фото с подписью и кнопками), на каждой странице: листание правит его на месте.
         // Подпись фото ограничена 1024 символами: если список с легендой не влезает, баннер уходит отдельно, как раньше.
         boolean wantsPhoto = withPhoto && category == null && !"UGC".equalsIgnoreCase(gameName);
-        java.util.Optional<String> photoFileId = wantsPhoto ? gameCatalogService.getPhotoFileId(gameName) : java.util.Optional.empty();
+        java.util.Optional<String> photoFileId = wantsPhoto ? gameCoverPhoto(gameName) : java.util.Optional.empty();
         if (totalPages > 1) {
             title = title + " · стр. " + (currentPage + 1) + "/" + totalPages;
         }
@@ -27932,7 +27933,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return gameName != null && gameName.toLowerCase().contains("brawl");
     }
 
+    /** Обложка игры для карточки в боте: своя 16:9 из ресурсов (GameCoverService), иначе фото из админки. Своя до первой отправки
+     *  возвращается как «res:путь» (sendPhotoCaption зальёт её в Telegram и запомнит file_id), после - обычным file_id. */
+    private java.util.Optional<String> gameCoverPhoto(String gameName) {
+        java.util.Optional<String> resource = gameCoverService.resourceFor(gameName);
+        if (resource.isPresent()) {
+            String cached = resourceBannerFileIds.get(resource.get());
+            return java.util.Optional.of(cached != null ? cached : "res:" + resource.get());
+        }
+        return gameCatalogService.getPhotoFileId(gameName);
+    }
+
     private void sendPhotoCaption(Long chatId, String photoFileId, String caption, InlineKeyboardMarkup keyboard) {
+        if (photoFileId.startsWith("res:")) {
+            sendResourceBanner(chatId, photoFileId.substring(4), caption, keyboard);
+            return;
+        }
         if (keyboard != null) {
             Integer editId = takeEditableSource(chatId, true);
             if (editId != null && editPhotoByFileId(chatId, editId, photoFileId, caption, keyboard)) {

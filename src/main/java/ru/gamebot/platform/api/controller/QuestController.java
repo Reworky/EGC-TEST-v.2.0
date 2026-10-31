@@ -52,6 +52,7 @@ public class QuestController {
     private final ru.gamebot.platform.service.ClashRoyaleQuestVerificationService clashRoyaleQuestVerificationService;
     private final ru.gamebot.platform.service.QuestRewardBoostService questRewardBoostService;
     private final ru.gamebot.platform.service.GameCatalogService gameCatalogService;
+    private final ru.gamebot.platform.service.GameCoverService gameCoverService;
     private final ru.gamebot.platform.service.UserService userService;
 
     /** Награда для списка «Мои квесты» — там вперемешку активные и уже закрытые заявки, поэтому недельное
@@ -198,6 +199,14 @@ public class QuestController {
         // Прямые return из тела метода (не лямбда в Optional.map) — return-выражение получает
         // целевой тип из объявленного ResponseEntity<byte[]> метода, а внутри лямбды Java не может
         // так же вывести тип для ResponseEntity.notFound().build() (wildcard-захват, не компилируется).
+        // Своя обложка 16:9 из ресурсов (GameCoverService) важнее фото из админки: ровно встаёт в карточки мини-аппа и сайта.
+        java.util.Optional<byte[]> ownCover = gameCoverService.bytesFor(name);
+        if (ownCover.isPresent()) {
+            return org.springframework.http.ResponseEntity.ok()
+                    .contentType(org.springframework.http.MediaType.IMAGE_JPEG)
+                    .cacheControl(org.springframework.http.CacheControl.maxAge(java.time.Duration.ofHours(1)))
+                    .body(ownCover.get());
+        }
         java.util.Optional<String> fileId = gameCatalogService.getPhotoFileId(name);
         if (fileId.isEmpty()) {
             return org.springframework.http.ResponseEntity.notFound().build();
