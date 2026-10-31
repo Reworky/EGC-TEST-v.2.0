@@ -1438,8 +1438,37 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "Мой квест");
             return;
         }
+        if (data.startsWith("quest:take18:")) {
+            // «Да, мне 18+» подтверждено - дальше обычное взятие квеста
+            handleTakeQuest(callbackQuery, user, session, parseLong(data.substring("quest:take18:".length())));
+            return;
+        }
+        if (data.startsWith("quest:card:")) {
+            answerSilently(callbackQuery.getId());
+            Long cardQuestId = parseLong(data.substring("quest:card:".length()));
+            if (cardQuestId != null) sendQuestCard(user, cardQuestId, currentQuestBackData(user), "⬅️ Назад", null);
+            return;
+        }
         if (data.startsWith("quest:take:")) {
-            handleTakeQuest(callbackQuery, user, session, parseLong(data.substring("quest:take:".length())));
+            Long takeQuestId = parseLong(data.substring("quest:take:".length()));
+            Quest takeQuest = null;
+            try {
+                takeQuest = takeQuestId == null ? null : questService.getQuest(takeQuestId);
+            } catch (IllegalArgumentException ignored) {
+                // квеста нет - дальше обычная обработка скажет об этом
+            }
+            if (takeQuest != null && isMissionQuest(takeQuest)) {
+                // Партнёрский квест с банком: сначала подтверждение «мне 18+ и я живу в РФ» (условие акции банка и защита от случайного взятия)
+                answerSilently(callbackQuery.getId());
+                sendText(user.getTelegramId(),
+                        "🔞 <b>Квест для тех, кому 18+ и кто живёт в РФ</b>\n\n"
+                                + "Нужен паспорт РФ, и у тебя ещё не должно быть карты ОТП Банка. Подтверди, что это про тебя.",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("✅ Да, мне 18+", "quest:take18:" + takeQuest.getId())),
+                                List.of(keyboardFactory.callback("⬅️ Назад", "quest:card:" + takeQuest.getId())))));
+                return;
+            }
+            handleTakeQuest(callbackQuery, user, session, takeQuestId);
             return;
         }
         if (data.startsWith("quest:takepartner:")) {
