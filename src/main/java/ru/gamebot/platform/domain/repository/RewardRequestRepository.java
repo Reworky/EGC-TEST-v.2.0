@@ -34,7 +34,7 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
     long countPaidWithdrawalsByUser(@Param("user") AppUser user);
 
     /** Живые заявки на вывод ДРУГИХ игроков с реквизитами — для проверки «реквизиты уже используются другим аккаунтом». */
-    @Query("SELECT r FROM RewardRequest r JOIN FETCH r.user WHERE r.rewardItem.category = 'Вывод' AND r.payoutDetails IS NOT NULL "
+    @Query("SELECT r FROM RewardRequest r JOIN FETCH r.user JOIN FETCH r.rewardItem ri WHERE ri.category = 'Вывод' AND r.payoutDetails IS NOT NULL "
             + "AND r.user.id <> :userId AND r.status IN ('PENDING', 'IN_PROGRESS', 'APPROVED')")
     List<RewardRequest> findActiveWithdrawalsWithDetailsOfOtherUsers(@Param("userId") Long userId);
 
