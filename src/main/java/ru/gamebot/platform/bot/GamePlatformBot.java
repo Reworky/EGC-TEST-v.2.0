@@ -4920,7 +4920,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(target.getTelegramId(),
                     "💳 <b>Банк выплатил бонус по акции</b>\n\n"
                             + "Мы начислили тебе <b>" + fmtExc(amount) + " EXC</b>.\n"
-                            + "Вывод этой суммы открыт <b>разово</b>, сверх обычного месячного лимита: «Кошелёк» → «Вывод EXC». После вывода лимит вернётся к обычному.",
+                            + "Вывод открыт <b>разово</b>: всю накопленную сумму можно вывести разом, одной заявкой, сверх обычного месячного лимита («Кошелёк» → «Вывод EXC»). После вывода лимит вернётся к обычному.",
                     keyboardFactory.rowsLayout(List.of(
                             List.of(keyboardFactory.callback("💸 Вывести", "shop:withdraw")),
                             List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
