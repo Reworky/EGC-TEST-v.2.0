@@ -1380,6 +1380,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleQuestView(callbackQuery, user, session, data.substring("quest:view:".length()));
             return;
         }
+        if (data.startsWith("quest:viewwd:")) {
+            // Квест открыт из экрана «Вывод на карту ОТП» (Кошелёк → Вывод EXC): «Назад» возвращает на этот экран, а не в общий список квестов
+            answerSilently(callbackQuery.getId());
+            Long wdQuestId = parseLong(data.substring("quest:viewwd:".length()));
+            if (wdQuestId != null) sendQuestCard(user, wdQuestId, "shop:withdraw:otp", "⬅️ Назад", null);
+            return;
+        }
         if (data.startsWith("quest:steps:")) {
             // Старая кнопка «Подробные шаги»: теперь шаги - миссия, открываем карточку (если квест взят, она покажет текущий шаг)
             answerSilently(callbackQuery.getId());
@@ -4920,7 +4927,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long monthly = sinkShopService.getMonthlyLimit(user);
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.callback("🚀 Открыть квест", "quest:view:sponsored:all:" + quest.getId())));
+        rows.add(List.of(keyboardFactory.callback("🚀 Открыть квест", "quest:viewwd:" + quest.getId())));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")));
         sendText(user.getTelegramId(),
                 "💳 <b>Вывод на карту ОТП: лимит сильно выше</b>\n\n"
