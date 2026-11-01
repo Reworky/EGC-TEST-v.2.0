@@ -5019,7 +5019,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** v2: после смены оффера 01.11.2026 приглашение уходит и тем 20 игрокам, что получили прежнее (оно было слабым). */
     private static final String OTP_PILOT_SENT_KEY = "otp.pilot.sent.v2";
     private static final int OTP_PILOT_SIZE = 20;
-    private static final int OTP_PILOT_MAX_SIZE = 300;
+    private static final int OTP_PILOT_MAX_SIZE = 1000;
 
     /** Приглашение в «ОТП Карта»: самые активные за неделю игроки из России (по недельному XP), по умолчанию топ-20, число можно задать: /otppilot [N] - предпросмотр списка и текста;
      *  /otppilot send [N] - разослать (каждому игроку один раз: уже получившие запоминаются в app_settings, поэтому повторный запуск не задваивает рассылку, а следующие N берутся из тех, кто ещё не получал). */
@@ -5033,10 +5033,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (pilotArgs.matches() && pilotArgs.group(1) != null) {
             pilotSize = Math.max(1, Math.min(OTP_PILOT_MAX_SIZE, Integer.parseInt(pilotArgs.group(1))));
         }
+        // Сначала те, кому уже выплачивался вывод (деньги им нужны - откликнутся лучше всего), даже без активности на этой неделе; затем остальные активные за неделю.
+        java.util.Set<Long> withdrew = rewardService.userIdsWithPaidWithdrawals();
         List<AppUser> top = userService.allRegisteredUsers().stream()
-                .filter(u -> !u.isBlocked() && !adminService.isAdmin(u.getTelegramId()) && u.getWeeklyXp() > 0
+                .filter(u -> !u.isBlocked() && !adminService.isAdmin(u.getTelegramId())
+                        && (u.getWeeklyXp() > 0 || withdrew.contains(u.getId()))
                         && "Россия".equals(u.getCountry()) && !alreadySent.contains(String.valueOf(u.getTelegramId())))
-                .sorted(java.util.Comparator.comparingLong(AppUser::getWeeklyXp).reversed())
+                .sorted(java.util.Comparator.<AppUser, Boolean>comparing(u -> !withdrew.contains(u.getId()))
+                        .thenComparing(java.util.Comparator.comparingLong(AppUser::getWeeklyXp).reversed()))
                 .limit(pilotSize)
                 .toList();
         String invite = "💎 <b>Бесплатный донат в твою игру + " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC</b>\n\n"
@@ -5049,14 +5053,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             StringBuilder sb = new StringBuilder("💳 <b>Пилот «ОТП Карта»</b>\n\n");
             sb.append(quest == null ? "⚠️ Квест ещё не создан (после деплоя он появится сам).\n\n"
                     : (quest.isActive() ? "✅ Квест активен.\n\n" : "⚠️ Квест выключен: включите в «Управление квестами», иначе рассылку не отправить.\n\n"));
-            sb.append("<b>Получат приглашение: ").append(top.size()).append(" (Россия, по XP за неделю, ещё не получали)</b>\n");
+            sb.append("<b>Получат приглашение: ").append(top.size()).append(" (Россия, сначала кто уже выводил, затем по XP за неделю; ещё не получали)</b>\n");
             int i = 1;
             for (AppUser u : top) {
                 if (i > 30) { sb.append("…и ещё ").append(top.size() - 30).append("\n"); break; }
                 sb.append(i++).append(". ").append(escape(String.valueOf(u.getNickname()))).append(" (").append(u.getTelegramId()).append(") - ")
-                        .append(u.getWeeklyXp()).append(" XP").append(alreadySent.contains(String.valueOf(u.getTelegramId())) ? " ✅ уже получал" : "").append("\n");
+                        .append(u.getWeeklyXp()).append(" XP").append(withdrew.contains(u.getId()) ? " 💸 выводил" : "").append(alreadySent.contains(String.valueOf(u.getTelegramId())) ? " ✅ уже получал" : "").append("\n");
             }
-            sb.append("\n<b>Текст приглашения:</b>\n\n").append(invite).append("\n\nРазослать: <code>/otppilot send</code> (по умолчанию 20) или <code>/otppilot send 100</code> (до " + OTP_PILOT_MAX_SIZE + ").");
+            sb.append("\n<b>Текст приглашения:</b>\n\n").append(invite).append("\n\nРазослать: <code>/otppilot send</code> (по умолчанию 20), <code>/otppilot send 100</code> или <code>/otppilot send 1000</code> - всем подходящим (до " + OTP_PILOT_MAX_SIZE + ").");
             sendText(admin.getTelegramId(), sb.toString(), null);
             return;
         }
@@ -5079,6 +5083,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
                 alreadySent.add(id);
                 delivered++;
+                Thread.sleep(60); // не упираться в лимит Telegram на частоту сообщений
             } catch (Exception e) {
                 failed++;
                 log.warn("OTP pilot invite failed for {}", id, e);
@@ -7247,7 +7252,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("clubgoal", "status|link ID текст|off", "Цель клуба: состояние, кнопка-портал в квест, выключить портал"),
             new AdminCommand("wdfreeze", "ID on|off", "Заморозить или разморозить вывод игрока"),
             new AdminCommand("otpbonus", "ID [сумма EXC]", "Партнёрская выплата ОТП Карта: начислить EXC (по умолчанию 100 000) и один раз открыть вывод на всю сумму"),
-            new AdminCommand("otppilot", "[send] [N]", "«ОТП Карта»: показать активных за неделю игроков из России (по умолчанию 20, до 300) и текст приглашения; send - разослать им (один раз каждому)"),
+            new AdminCommand("otppilot", "[send] [N]", "«ОТП Карта»: показать игроков из России: сначала выводившие, затем активные за неделю (по умолчанию 20, до 1000) и текст приглашения; send - разослать им (один раз каждому)"),
             new AdminCommand("event", "[halloween|on|off]", "Сезонное событие (Хэллоуин): состояние, включить пресет или выключить, затраты на квесты и надбавка отрядам"),
             new AdminCommand("firstquest", "[bs|cr|coc название1;название2|default]", "Стартовые квесты новичков: показать списки, задать для игры или вернуть по умолчанию"),
             new AdminCommand("resetuser", "ID", "Сбросить игрока до «только что создан» (с подтверждением)"),

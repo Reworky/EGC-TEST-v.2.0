@@ -56,6 +56,10 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
 
     void deleteAllByRewardItem(RewardItem rewardItem);
 
+    /** Игроки, у которых хотя бы один вывод уже выплачен (для приглашения в партнёрский квест в первую очередь). */
+    @Query("SELECT DISTINCT r.user.id FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED'")
+    List<Long> findUserIdsWithPaidWithdrawals();
+
     @Query("SELECT COUNT(r) FROM RewardRequest r WHERE r.user = :user AND r.rewardItem.category = 'Вывод' AND r.status = 'PENDING'")
     long countPendingWithdrawalsByUser(@Param("user") AppUser user);
 

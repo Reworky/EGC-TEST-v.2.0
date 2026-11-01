@@ -365,6 +365,11 @@ public class RewardService {
         return rewardRequestRepository.countPendingWithdrawalsByUser(user) > 0;
     }
 
+    /** id игроков, которым уже выплачивался вывод. */
+    public java.util.Set<Long> userIdsWithPaidWithdrawals() {
+        return new java.util.HashSet<>(rewardRequestRepository.findUserIdsWithPaidWithdrawals());
+    }
+
     public boolean hasWithdrawalTodayOrPending(AppUser user) {
         LocalDateTime since = LocalDateTime.now().minusHours(24);
         return rewardRequestRepository.countWithdrawalsByUserSince(user, since) > 0
