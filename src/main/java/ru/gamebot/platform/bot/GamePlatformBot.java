@@ -25119,6 +25119,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return "<a href=\"" + href + "\">" + escape(name) + "</a>";
     }
 
+    /** Ссылка модератора на личку игрока с готовым текстом «подскажите, актуальна ли заявка» (t.me/<user>?text=..., текст только
+     *  подставляется в поле ввода, модератор жмёт «Отправить» сам). Без юзернейма подставить текст нельзя: ссылка tg://user?id= просто открывает диалог. */
+    private String playerActualityDmLink(GemPurchaseRequest req) {
+        AppUser player = req.getUser();
+        String username = player.getTelegramUsername();
+        if (username == null || username.isBlank()) return "tg://user?id=" + player.getTelegramId();
+        String text = "Здравствуйте! Пишу вам по заявке Д-" + req.getDisplayId()
+                + " (" + req.getGameName() + ", " + req.displayLabel() + ", тег " + req.getGameTag() + ", " + req.getPriceRub() + "₽). "
+                + "Подскажите, пожалуйста, актуальна ли заявка?";
+        String encoded = java.net.URLEncoder.encode(text, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
+        return "https://t.me/" + username + "?text=" + encoded;
+    }
+
     private void notifyAdminsAboutGemPurchase(GemPurchaseRequest req) {
         AppUser player = req.getUser();
         String username = player.getTelegramUsername();
@@ -25187,6 +25200,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ));
             }
             rows.add(List.of(keyboardFactory.callback("📋 Тексты для игрока", "admin:gempurchase:texts:" + id)));
+            rows.add(List.of(keyboardFactory.url("💬 Написать игроку: актуальна ли заявка?", playerActualityDmLink(req))));
             rows.add(List.of(keyboardFactory.callback("⬅️ К списку", "admin:gempurchase")));
             InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(rows);
             if (req.getPaymentProofFileId() != null) {
