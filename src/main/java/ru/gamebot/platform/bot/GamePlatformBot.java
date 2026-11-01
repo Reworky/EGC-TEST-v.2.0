@@ -1574,8 +1574,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (data.equals("shop:withdraw:rub")) {
             answerSilently(callbackQuery.getId());
             Quest otpOffer = otpPartnerQuestOrNull();
-            if (otpOffer != null && "🎯 ".equals(sponsoredQuestTag(user, otpOffer))) {
-                // Сначала предложение вывести на карту партнёра (квест ещё не брали); «Пропустить» идёт в обычный вывод рублями
+            if (otpOffer != null && !"✅ ".equals(sponsoredQuestTag(user, otpOffer))) {
+                // Сначала предложение вывести на карту партнёра (кроме тех, кто квест уже выполнил: у взявших, но не закончивших оно тоже полезно); «Пропустить» идёт в обычный вывод рублями
                 sendText(user.getTelegramId(),
                         "💳 <b>Есть способ вывести гораздо больше</b>\n\n"
                                 + "У нас есть способ вывести гораздо большую сумму, чем ты можешь себе позволить сейчас.\n\n"
