@@ -2273,7 +2273,7 @@ public class QuestSeeder implements CommandLineRunner {
         }
         // Уточнение шагов 1-2 (30.10.2026: новая карта по ссылке, пополнить на 500 ₽, платить именно ею): квест уже с новым названием, но со старой инструкцией - обновляем один раз.
         questRepository.findFirstByTitleAndGameName(OTP_CARD_TITLE, "ОТП Банк")
-                .filter(q -> q.getDescription() == null || !q.getDescription().endsWith("Как это работает:"))
+                .filter(q -> q.getDescription() == null || !q.getDescription().contains("✅ 500 ₽ от банка за новую карту"))
                 .ifPresent(q -> {
                     applyOtpCardContent(q);
                     questRepository.save(q);
@@ -2673,7 +2673,7 @@ public class QuestSeeder implements CommandLineRunner {
         q.setModeratorChecklist(OTP_CARD_CHECKLIST);
         // 01.11.2026: первое касание для новичка - сначала что человек получает (три плюса), потом короткий список «Как это работает» (заголовки шагов ниже)
         q.setDescription("Что ты получаешь:\n"
-                + "✅ Донат в любимую игру: потраченные на него 500 ₽ вернёт банк\n"
+                + "✅ 500 ₽ от банка за новую карту\n"
                 + "✅ 1 000 EXC сразу после проверки скриншотов\n"
                 + "✅ 100 000 EXC, когда банк выплатит бонус, их можно вывести\n\n"
                 + "Карта бесплатная, ничего не теряешь.\n\n"
