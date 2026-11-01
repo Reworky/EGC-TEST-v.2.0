@@ -5044,10 +5044,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .limit(pilotSize)
                 .toList();
         String invite = "💎 <b>Забери донат в свою игру бесплатно + " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC</b>\n\n"
-                + "Закажи бесплатную карту ОТП Банка, купи на неё донат на 500 ₽, и банк вернёт тебе эти 500 ₽. Донат остаётся у тебя в игре.\n\n"
-                + "А ещё " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC сразу после проверки скриншотов и <b>" + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC</b> после выплаты банка.\n\n"
-                + "Подойдёт, если тебе 18+, ты живёшь в России и у тебя ещё нет карты ОТП Банка. Мест " + (quest != null && quest.getParticipantLimit() != null ? quest.getParticipantLimit() : 50)
-                + ", все условия и шаги смотри в карточке 👇";
+                + "Мы нашли способ, как это сделать, и заодно получить крупную награду в EXC.\n\n"
+                + "Мест мало, и они быстро заканчиваются.\n\n"
+                + "Открой карточку, и мы покажем, как 👇";
         boolean send = text.matches("(?i)/otppilot\\s+send(?:\\s+\\d{1,4})?");
         if (!send) {
             StringBuilder sb = new StringBuilder("💳 <b>Пилот «ОТП Карта»</b>\n\n");
