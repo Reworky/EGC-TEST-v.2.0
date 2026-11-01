@@ -4933,7 +4933,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendStarterQuestCard(user, quest);
     }
 
-    private static final long OTP_BONUS_DEFAULT_EXC = 40_000;
+    /** Выплата игроку после платежа банка (/otpbonus): ≈ 430 ₽ реальных при курсе вывода ~43% против 2 000 ₽ от банка (с 01.11.2026 вместо 40 000). */
+    private static final long OTP_BONUS_DEFAULT_EXC = 100_000;
+    /** Награда квестом после проверки скриншотов (должна совпадать с QuestSeeder.OTP_CARD_REWARD_EXC). */
+    private static final long OTP_QUEST_REWARD_EXC = 1_000;
 
     /** Квест «ОТП Карта», если он активен и в нём ещё есть места; иначе null (тогда предложение в выводе не показываем). */
     private Quest otpPartnerQuestOrNull() {
@@ -4968,7 +4971,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "<b>Как получить:</b>\n"
                         + "1️⃣ Закажи бесплатную карту ОТП\n"
                         + "2️⃣ Купи себе донат на 500 ₽: банк вернёт эти деньги\n"
-                        + "3️⃣ Пришли скриншоты и получи 3 000 EXC\n"
+                        + "3️⃣ Пришли скриншоты и получи " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC\n"
                         + "4️⃣ Дождись банка: +" + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC и вывод всей суммы разом\n\n"
                         + "Мест в квесте: " + Math.max(0, (quest.getParticipantLimit() == null ? 0 : quest.getParticipantLimit()) - questService.countApprovedByQuest(quest)),
                 keyboardFactory.rowsLayout(rows));
@@ -5013,37 +5016,47 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + " EXC и разово открыт вывод на эту сумму.", null);
     }
 
-    private static final String OTP_PILOT_SENT_KEY = "otp.pilot.sent";
+    /** v2: после смены оффера 01.11.2026 приглашение уходит и тем 20 игрокам, что получили прежнее (оно было слабым). */
+    private static final String OTP_PILOT_SENT_KEY = "otp.pilot.sent.v2";
     private static final int OTP_PILOT_SIZE = 20;
+    private static final int OTP_PILOT_MAX_SIZE = 300;
 
-    /** Приглашение в пилот «ОТП Карта»: топ-20 самых активных за неделю (по недельному XP). /otppilot - предпросмотр списка и текста; /otppilot send - разослать
-     *  (каждому игроку один раз: уже получившие запоминаются в app_settings, поэтому повторный запуск не задваивает рассылку). */
+    /** Приглашение в «ОТП Карта»: самые активные за неделю игроки из России (по недельному XP), по умолчанию топ-20, число можно задать: /otppilot [N] - предпросмотр списка и текста;
+     *  /otppilot send [N] - разослать (каждому игроку один раз: уже получившие запоминаются в app_settings, поэтому повторный запуск не задваивает рассылку, а следующие N берутся из тех, кто ещё не получал). */
     private void handleOtpPilotCommand(AppUser admin, String text) {
         Quest quest = questService.findAll().stream().filter(q -> OTP_CARD_QUEST_TITLE.equals(q.getTitle())).findFirst().orElse(null);
         java.util.Set<String> alreadySent = new java.util.HashSet<>();
         appSettingRepository.findById(OTP_PILOT_SENT_KEY).map(AppSetting::getValue).filter(v -> !v.isBlank())
                 .ifPresent(v -> alreadySent.addAll(java.util.Arrays.asList(v.split(","))));
+        java.util.regex.Matcher pilotArgs = java.util.regex.Pattern.compile("(?i)/otppilot(?:\\s+send)?(?:\\s+(\\d{1,4}))?").matcher(text);
+        int pilotSize = OTP_PILOT_SIZE;
+        if (pilotArgs.matches() && pilotArgs.group(1) != null) {
+            pilotSize = Math.max(1, Math.min(OTP_PILOT_MAX_SIZE, Integer.parseInt(pilotArgs.group(1))));
+        }
         List<AppUser> top = userService.allRegisteredUsers().stream()
-                .filter(u -> !u.isBlocked() && !adminService.isAdmin(u.getTelegramId()) && u.getWeeklyXp() > 0)
+                .filter(u -> !u.isBlocked() && !adminService.isAdmin(u.getTelegramId()) && u.getWeeklyXp() > 0
+                        && "Россия".equals(u.getCountry()) && !alreadySent.contains(String.valueOf(u.getTelegramId())))
                 .sorted(java.util.Comparator.comparingLong(AppUser::getWeeklyXp).reversed())
-                .limit(OTP_PILOT_SIZE)
+                .limit(pilotSize)
                 .toList();
-        String invite = "💎 <b>Уникальный квест для своих</b>\n\n"
-                + "Ты в числе самых активных игроков клуба на этой неделе, поэтому предлагаем тебе первым. Мест всего <b>20</b>.\n\n"
-                + "Такого у нас ещё не было: награда заметно больше обычной, а выполнить квест можно не выходя из дома.\n\n"
-                + "Подойдёт не всем, поэтому все условия и шаги смотри в карточке 👇";
-        boolean send = text.matches("(?i)/otppilot\\s+send");
+        String invite = "💎 <b>Бесплатный донат в твою игру + " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC</b>\n\n"
+                + "Закажи бесплатную карту ОТП Банка, купи на неё донат на 500 ₽, и банк вернёт тебе эти 500 ₽. Донат остаётся у тебя в игре.\n\n"
+                + "А ещё " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC сразу после проверки скриншотов и <b>" + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC</b> после выплаты банка.\n\n"
+                + "Подойдёт, если тебе 18+, ты живёшь в России и у тебя ещё нет карты ОТП Банка. Мест " + (quest != null && quest.getParticipantLimit() != null ? quest.getParticipantLimit() : 50)
+                + ", все условия и шаги смотри в карточке 👇";
+        boolean send = text.matches("(?i)/otppilot\\s+send(?:\\s+\\d{1,4})?");
         if (!send) {
             StringBuilder sb = new StringBuilder("💳 <b>Пилот «ОТП Карта»</b>\n\n");
             sb.append(quest == null ? "⚠️ Квест ещё не создан (после деплоя он появится сам).\n\n"
                     : (quest.isActive() ? "✅ Квест активен.\n\n" : "⚠️ Квест выключен: включите в «Управление квестами», иначе рассылку не отправить.\n\n"));
-            sb.append("<b>Топ-").append(top.size()).append(" по XP за неделю:</b>\n");
+            sb.append("<b>Получат приглашение: ").append(top.size()).append(" (Россия, по XP за неделю, ещё не получали)</b>\n");
             int i = 1;
             for (AppUser u : top) {
+                if (i > 30) { sb.append("…и ещё ").append(top.size() - 30).append("\n"); break; }
                 sb.append(i++).append(". ").append(escape(String.valueOf(u.getNickname()))).append(" (").append(u.getTelegramId()).append(") - ")
                         .append(u.getWeeklyXp()).append(" XP").append(alreadySent.contains(String.valueOf(u.getTelegramId())) ? " ✅ уже получал" : "").append("\n");
             }
-            sb.append("\n<b>Текст приглашения:</b>\n\n").append(invite).append("\n\nРазослать: <code>/otppilot send</code>");
+            sb.append("\n<b>Текст приглашения:</b>\n\n").append(invite).append("\n\nРазослать: <code>/otppilot send</code> (по умолчанию 20) или <code>/otppilot send 100</code> (до " + OTP_PILOT_MAX_SIZE + ").");
             sendText(admin.getTelegramId(), sb.toString(), null);
             return;
         }
@@ -7233,8 +7246,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("course", "status|on|off|now [%]|set КЛЮЧ ЗНАЧЕНИЕ", "«Курс дня»: бонус к курсу вывода (пост с кнопкой, проценты, потолок, бюджет)"),
             new AdminCommand("clubgoal", "status|link ID текст|off", "Цель клуба: состояние, кнопка-портал в квест, выключить портал"),
             new AdminCommand("wdfreeze", "ID on|off", "Заморозить или разморозить вывод игрока"),
-            new AdminCommand("otpbonus", "ID [сумма EXC]", "Партнёрская выплата ОТП Карта: начислить EXC (по умолчанию 40 000) и один раз открыть вывод на всю сумму"),
-            new AdminCommand("otppilot", "[send]", "Пилот «ОТП Карта»: показать топ-20 активных за неделю и текст приглашения; send - разослать им (один раз каждому)"),
+            new AdminCommand("otpbonus", "ID [сумма EXC]", "Партнёрская выплата ОТП Карта: начислить EXC (по умолчанию 100 000) и один раз открыть вывод на всю сумму"),
+            new AdminCommand("otppilot", "[send] [N]", "«ОТП Карта»: показать активных за неделю игроков из России (по умолчанию 20, до 300) и текст приглашения; send - разослать им (один раз каждому)"),
             new AdminCommand("event", "[halloween|on|off]", "Сезонное событие (Хэллоуин): состояние, включить пресет или выключить, затраты на квесты и надбавка отрядам"),
             new AdminCommand("firstquest", "[bs|cr|coc название1;название2|default]", "Стартовые квесты новичков: показать списки, задать для игры или вернуть по умолчанию"),
             new AdminCommand("resetuser", "ID", "Сбросить игрока до «только что создан» (с подтверждением)"),
@@ -8315,9 +8328,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("💎 <b>Миссия</b> · шаг ").append(view).append(" из ").append(total).append("\n")
                 .append("▰".repeat(view)).append("▱".repeat(total - view)).append("\n\n");
         if (st == SubmissionStatus.PENDING && view == reached) {
-            sb.append("⏳ <b>Отчёт на проверке.</b> Модератор ответит сообщением, 3 000 EXC придут после одобрения.\n\n");
+            sb.append("⏳ <b>Отчёт на проверке.</b> Модератор ответит сообщением, " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC придут после одобрения.\n\n");
         } else if (st == SubmissionStatus.APPROVED && view == total) {
-            sb.append("✅ <b>Отчёт принят, 3 000 EXC начислены.</b>\n\n");
+            sb.append("✅ <b>Отчёт принят, " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC начислены.</b>\n\n");
         }
         sb.append("<b>").append(escape(step[0])).append("</b>");
         if (step.length > 1) sb.append("\n").append(escape(step[1]));
@@ -8354,7 +8367,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Баннер карточки квеста (картинка в ресурсах бота) - пока только у партнёрского квеста «ОТП Карта». */
-    private static final String OTP_CARD_QUEST_TITLE = "Получи 500 ₽, донат для своей любимой игры + 40 000 EXC 🎁";
+    private static final String OTP_CARD_QUEST_TITLE = "Бесплатный донат: 500 ₽ вернёт банк + 100 000 EXC 🎁";
 
     private String questCardBanner(Quest quest) {
         return OTP_CARD_QUEST_TITLE.equals(quest.getTitle()) && getClass().getResource("/otp_card_banner.jpg") != null ? "otp_card_banner.jpg" : null;
