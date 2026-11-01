@@ -2262,7 +2262,7 @@ public class QuestSeeder implements CommandLineRunner {
         // Переименование и новые тексты один раз: квест под любым из прежних названий (после переименования старых названий в базе нет, повторов не будет).
         // 01.11.2026 (первый замер: из 20 приглашённых квест взяли 2): подача «бесплатный донат», награда частями (1 000 EXC за проверенные скриншоты, 100 000 EXC
         // после выплаты банка), мест 50. Квест под прежним названием переименовывается и получает новую награду/лимит один раз.
-        for (String otpTitle : new String[]{OTP_CARD_OLD_TITLE, OTP_CARD_PREV_TITLE, OTP_CARD_PREV2_TITLE, OTP_CARD_PREV3_TITLE, OTP_CARD_PREV4_TITLE}) {
+        for (String otpTitle : new String[]{OTP_CARD_OLD_TITLE, OTP_CARD_PREV_TITLE, OTP_CARD_PREV2_TITLE, OTP_CARD_PREV3_TITLE, OTP_CARD_PREV4_TITLE, OTP_CARD_PREV5_TITLE}) {
             questRepository.findFirstByTitleAndGameName(otpTitle, "ОТП Банк").ifPresent(q -> {
                 applyOtpCardContent(q);
                 q.setRewardCoins(OTP_CARD_REWARD_EXC);
@@ -2662,7 +2662,8 @@ public class QuestSeeder implements CommandLineRunner {
             + "Скриншот не по делу - «Уточнить» и объяснить, что нужно прислать.\n"
             + "Случайные, чужие или не относящиеся к карте картинки - «Отклонить»: награду получают только за настоящие скриншоты.";
     private static final String OTP_CARD_PREV4_TITLE = "Бесплатный донат: 500 ₽ вернёт банк + 100 000 EXC 🎁";
-    private static final String OTP_CARD_TITLE = "Забери бесплатный донат в свою игру + 500 ₽ на карту + 100 000 EXC 🎁";
+    private static final String OTP_CARD_PREV5_TITLE = "Забери бесплатный донат в свою игру + 500 ₽ на карту + 100 000 EXC 🎁";
+    private static final String OTP_CARD_TITLE = "Забери донат в свою игру бесплатно: банк вернёт 500 ₽ + 100 000 EXC 🎁";
 
     /** Тексты квеста «ОТП Карта». Инструкция - блоки через пустую строку (первая строка блока = короткий заголовок шага с акцентом на выгоду): на карточке под баннером
      *  показываются только заголовки (подпись фото до 1024 символов), а после «Взять» бот присылает подробную инструкцию, каждый шаг отдельной цитатой.
