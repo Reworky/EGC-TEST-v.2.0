@@ -29,12 +29,12 @@ GROUP BY s.mission_step
 ORDER BY s.mission_step;
 
 -- 5) По дням: сколько взяло квест (создана запись).
-SELECT CAST(s.created_at AS DATE) AS day, COUNT(*) AS taken, COUNT(DISTINCT s.user_id) AS players
+SELECT CAST(s.created_at AS DATE) AS taken_on, COUNT(*) AS taken, COUNT(DISTINCT s.user_id) AS players
 FROM quest_submissions s
 JOIN quests q ON q.id = s.quest_id
 WHERE q.game_name = 'ОТП Банк'
 GROUP BY CAST(s.created_at AS DATE)
-ORDER BY day;
+ORDER BY taken_on;
 
 -- 6) Список заявок: кто, статус, шаг, когда, комментарий модератора (для разбора отказов).
 SELECT s.id, u.nickname, u.telegram_username, s.status, s.mission_step, s.created_at, s.updated_at, s.moderator_comment
