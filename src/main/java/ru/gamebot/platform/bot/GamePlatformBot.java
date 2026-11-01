@@ -5045,7 +5045,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .toList();
         String invite = "💎 <b>Забери донат в свою игру бесплатно + " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC</b>\n\n"
                 + "Мы нашли способ, как это сделать, и заодно получить крупную награду в EXC.\n\n"
-                + "Мест мало, и они быстро заканчиваются.\n\n"
+                + "Мест ограниченное число.\n\n"
                 + "Открой карточку, и мы покажем, как 👇";
         boolean send = text.matches("(?i)/otppilot\\s+send(?:\\s+\\d{1,4})?");
         if (!send) {
