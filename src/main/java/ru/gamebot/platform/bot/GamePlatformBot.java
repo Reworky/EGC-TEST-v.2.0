@@ -22520,7 +22520,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Пруф по выплате или выданной награде публикуется в канал выплат сразу при закрытии заявки модератором, без карточки на согласование.
-     *  Админам уходит копия опубликованного поста; если публикация не удалась, черновик остаётся PENDING и уходит обычной карточкой. */
+     *  Копия админам не отправляется; если публикация не удалась, черновик остаётся PENDING и уходит обычной карточкой. */
     private boolean tryAutoPublishProof(Long draftId) {
         try {
             java.util.Optional<ru.gamebot.platform.domain.model.ChannelPostDraft> opt = channelContentService.findDraft(draftId);
@@ -22532,15 +22532,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             sendBannerAndText(channelTargetFor(d.getType()), d.getPhotoFileId(), d.getPostText(), null);
             channelContentService.markPublished(draftId);
-            String notice = "📣 <b>Пруф выплаты опубликован в канале автоматически</b>\n"
-                    + "⚠️ Без согласования: реквизиты на чеке закрывает модератор, при необходимости удалите пост в канале выплат.\n\n" + d.getPostText();
-            for (Long adminId : adminService.resolvedAdminIds()) {
-                try {
-                    sendBannerAndText(adminId.toString(), d.getPhotoFileId(), notice, null);
-                } catch (Exception e) {
-                    log.warn("Failed to send proof auto-publish notice to admin {}", adminId, e);
-                }
-            }
+            // Копию опубликованного пруфа админам больше не шлём (01.11.2026, по запросу владельца: лишние сообщения в админке)
             return true;
         } catch (Exception e) {
             log.error("Auto-publish of proof post {} failed, falling back to approval card", draftId, e);
