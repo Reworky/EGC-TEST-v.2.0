@@ -8283,9 +8283,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (quest.getDescription() != null && !quest.getDescription().isBlank()) {
             sb.append("\n").append(escape(quest.getDescription())).append("\n");
         }
-        // Если у квеста есть описание-питч (плюсы для игрока), шаги на карточке не показываем: до «Взять» человек думает о результате, шаги приходят миссией
-        boolean pitch = quest.getDescription() != null && !quest.getDescription().isBlank();
-        List<String[]> steps = pitch ? List.of() : splitQuestBlocks(instruction);
+        List<String[]> steps = splitQuestBlocks(instruction);
         if (!steps.isEmpty()) sb.append("\n");
         for (String[] step : steps) sb.append("<b>").append(escape(step[0])).append("</b>\n");
         for (String[] cond : splitQuestBlocks(quest.getRequirements())) {
