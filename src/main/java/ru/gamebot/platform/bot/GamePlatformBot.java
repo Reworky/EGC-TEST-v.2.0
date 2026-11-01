@@ -1573,14 +1573,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.equals("shop:withdraw:rub")) {
             answerSilently(callbackQuery.getId());
-            if (user.getPhoneNumber() == null) {
-                session.setState(SessionState.AWAITING_PHONE_SHARE);
-                session.getData().put("pendingWithdrawal", "rub");
-                sendPhoneShareRequest(user.getTelegramId());
-            } else {
-                session.setState(SessionState.WITHDRAWAL_INPUT);
-                sendWithdrawalScreen(user);
+            Quest otpOffer = otpPartnerQuestOrNull();
+            if (otpOffer != null && "🎯 ".equals(sponsoredQuestTag(user, otpOffer))) {
+                // Сначала предложение вывести на карту партнёра (квест ещё не брали); «Пропустить» идёт в обычный вывод рублями
+                sendText(user.getTelegramId(),
+                        "💳 <b>Есть способ вывести гораздо больше</b>\n\n"
+                                + "У нас есть способ вывести гораздо большую сумму, чем ты можешь себе позволить сейчас.\n\n"
+                                + "Хочешь узнать как?",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("👀 Узнать как", "shop:withdraw:otp")),
+                                List.of(keyboardFactory.callback("⏭️ Пропустить, вывести в рублях", "shop:withdraw:rubgo")),
+                                List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")))));
+                return;
             }
+            startRubWithdrawal(user, session);
+            return;
+        }
+        if (data.equals("shop:withdraw:rubgo")) {
+            answerSilently(callbackQuery.getId());
+            startRubWithdrawal(user, session);
             return;
         }
         if (data.equals("shop:withdraw:ton")) {
@@ -4961,8 +4972,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long monthly = sinkShopService.getMonthlyLimit(user);
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.callback("🚀 Открыть квест", "quest:viewwd:" + quest.getId())));
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")));
+        rows.add(List.of(keyboardFactory.callback("🚀 Выбрать вывод на карту ОТП", "quest:viewwd:" + quest.getId())));
+        rows.add(List.of(keyboardFactory.callback("⏭️ Пропустить, вывести в рублях", "shop:withdraw:rubgo")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw:rub")));
         sendText(user.getTelegramId(),
                 "💳 <b>Вывод на карту ОТП: лимит сильно выше</b>\n\n"
                         + "Обычный вывод: лимит <b>" + fmtExc(monthly) + " EXC/мес</b> (осталось " + fmtExc(remaining) + ")\n"
@@ -9466,6 +9478,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.rowsLayout(rows));
     }
 
+    /** Обычный вывод рублями (СБП): запрос номера телефона, если его нет, иначе экран суммы. */
+    private void startRubWithdrawal(AppUser user, UserSession session) {
+        if (user.getPhoneNumber() == null) {
+            session.setState(SessionState.AWAITING_PHONE_SHARE);
+            session.getData().put("pendingWithdrawal", "rub");
+            sendPhoneShareRequest(user.getTelegramId());
+        } else {
+            session.setState(SessionState.WITHDRAWAL_INPUT);
+            sendWithdrawalScreen(user);
+        }
+    }
+
     private void sendWithdrawalMethodChoice(AppUser user) {
         boolean noCountry = user.getCountry() == null || user.getCountry().isBlank();
         boolean noAge = user.getAge() == null;
@@ -9489,13 +9513,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "<blockquote expandable>📤 Остаток лимита: <b>" + remaining + " из " + sinkShopService.getMonthlyLimitShown(user) + " EXC/мес</b>"
                 + withdrawalLevelHint(user)
                 + (lastPayout.isEmpty() ? "" : "\n" + lastPayout) + "</blockquote>\n\n"
-                + (otpPartnerQuestOrNull() == null ? ""
-                    : "🔥 <b>На карту ОТП лимит вывода выше на " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC</b>, всю накопленную сумму можно вывести разом\n\n")
                 + "Выберите способ получения:";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        if (otpPartnerQuestOrNull() != null) {
-            rows.add(List.of(keyboardFactory.callback("💳 На карту ОТП: лимит +" + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC 🔥", "shop:withdraw:otp")));
-        }
         rows.add(List.of(keyboardFactory.callback("💸 В рублях (СБП, любой банк)", "shop:withdraw:rub")));
         rows.add(List.of(keyboardFactory.callback("💎 В TON (Telegram Wallet)", "shop:withdraw:ton")));
         rows.add(List.of(keyboardFactory.callback("⭐ В звёздах Telegram", "shop:group:telegram_stars")));
