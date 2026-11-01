@@ -7558,7 +7558,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String tag = sponsoredQuestTag(user, q);
             if ("✅ ".equals(tag)) anyDone = true;
             if ("⏳ ".equals(tag)) anyInProgress = true;
-            buttons.add(keyboardFactory.callback(tag + trim(q.getTitle(), 60), "quest:view:sponsored:all:" + q.getId()));
+            // У партнёрского квеста «ОТП Карта» в списке своя подпись кнопки (как в рекламе банка: «получи 500 ₽»), название квеста длиннее и обрезалось на 60 символах
+            String listLabel = OTP_CARD_QUEST_TITLE.equals(q.getTitle()) ? OTP_CARD_LIST_LABEL : trim(q.getTitle(), 60);
+            buttons.add(keyboardFactory.callback(tag + listLabel, "quest:view:sponsored:all:" + q.getId()));
         }
         String legend = (anyInProgress || anyDone)
                 ? "\n\n" + (anyDone ? "✅ — выполнен" : "") + (anyDone && anyInProgress ? " · " : "") + (anyInProgress ? "⏳ — в процессе" : "")
@@ -8383,6 +8385,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Баннер карточки квеста (картинка в ресурсах бота) - пока только у партнёрского квеста «ОТП Карта». */
+    private static final String OTP_CARD_LIST_LABEL = "Получи 500 ₽ + 100 000 EXC сверху за карту ОТП";
     private static final String OTP_CARD_QUEST_TITLE = "Забери донат в свою игру бесплатно: банк вернёт 500 ₽ + 100 000 EXC 🎁";
 
     private String questCardBanner(Quest quest) {
