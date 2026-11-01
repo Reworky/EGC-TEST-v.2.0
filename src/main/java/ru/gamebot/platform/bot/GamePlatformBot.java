@@ -5043,7 +5043,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         .thenComparing(java.util.Comparator.comparingLong(AppUser::getWeeklyXp).reversed()))
                 .limit(pilotSize)
                 .toList();
-        String invite = "💎 <b>Бесплатный донат в твою игру + " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC</b>\n\n"
+        String invite = "💎 <b>Забери донат в свою игру бесплатно + " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC</b>\n\n"
                 + "Закажи бесплатную карту ОТП Банка, купи на неё донат на 500 ₽, и банк вернёт тебе эти 500 ₽. Донат остаётся у тебя в игре.\n\n"
                 + "А ещё " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC сразу после проверки скриншотов и <b>" + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC</b> после выплаты банка.\n\n"
                 + "Подойдёт, если тебе 18+, ты живёшь в России и у тебя ещё нет карты ОТП Банка. Мест " + (quest != null && quest.getParticipantLimit() != null ? quest.getParticipantLimit() : 50)
