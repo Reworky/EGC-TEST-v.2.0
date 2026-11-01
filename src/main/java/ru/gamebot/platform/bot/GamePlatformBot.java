@@ -1205,13 +1205,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
-        if ("wdquick:region".equals(data) || "wdquick:requisite".equals(data)) {
+        if ("wdquick:region".equals(data) || "wdquick:requisite".equals(data) || "wdquick:unsupported".equals(data)) {
             if ((isEffectiveAdmin(user) || isEffectiveModerator(user))
                     && session.getState() == SessionState.REWARD_REJECT_COMMENT
                     && "withdrawal".equals(session.getData().get("rejectType"))) {
                 clearInlineKeyboard(callbackQuery);
                 answer(callbackQuery.getId(), "Заявка отклонена");
-                handleStateInput(user, session, "wdquick:requisite".equals(data) ? QUICK_REJECT_REQUISITE : QUICK_REJECT_REGION);
+                handleStateInput(user, session, "wdquick:requisite".equals(data) ? QUICK_REJECT_REQUISITE
+                        : "wdquick:unsupported".equals(data) ? QUICK_REJECT_UNSUPPORTED : QUICK_REJECT_REGION);
             } else {
                 answer(callbackQuery.getId(), "Заявка уже обработана или действие устарело");
             }
@@ -26545,10 +26546,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             "Не удалось отправить выплату на указанные реквизиты: они не работают или на них нельзя сделать перевод. "
                     + "Укажите другие реквизиты и отправьте заявку на вывод заново, EXC вернулись на ваш баланс.";
 
+    /** Игрок указал реквизиты способа, с которым мы не работаем (иностранный банк, карта, номер телефона не из РФ и т.п.). */
+    private static final String QUICK_REJECT_UNSUPPORTED =
+            "Мы не работаем с указанным способом вывода (например, банки и номера телефонов других стран). "
+                    + "Сейчас доступны: рубли по СБП на номер телефона российского банка, криптовалюта (GRAM, TON) и звёзды Telegram. "
+                    + "Отправьте заявку на вывод заново одним из этих способов, EXC вернулись на ваш баланс.";
+
     private InlineKeyboardMarkup withdrawalRejectKeyboard() {
         return keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("⚡ Регион временно недоступен", "wdquick:region")),
                 List.of(keyboardFactory.callback("⚡ Некорректный реквизит", "wdquick:requisite")),
+                List.of(keyboardFactory.callback("⚡ Способ не поддерживается", "wdquick:unsupported")),
                 List.of(keyboardFactory.callback("❌ Отмена", "common:cancel"))));
     }
 
