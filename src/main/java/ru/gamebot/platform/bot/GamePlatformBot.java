@@ -8367,7 +8367,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Баннер карточки квеста (картинка в ресурсах бота) - пока только у партнёрского квеста «ОТП Карта». */
-    private static final String OTP_CARD_QUEST_TITLE = "Бесплатный донат: 500 ₽ вернёт банк + 100 000 EXC 🎁";
+    private static final String OTP_CARD_QUEST_TITLE = "Забери бесплатный донат в свою игру + 500 ₽ на карту + 100 000 EXC 🎁";
 
     private String questCardBanner(Quest quest) {
         return OTP_CARD_QUEST_TITLE.equals(quest.getTitle()) && getClass().getResource("/otp_card_banner.jpg") != null ? "otp_card_banner.jpg" : null;
