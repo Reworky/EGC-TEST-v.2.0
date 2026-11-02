@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
 /** Клиент API панели 3x-ui (inbound hysteria, клиенты EGC VPN). Новая версия панели: вход с CSRF-токеном из meta страницы,
  *  клиенты - отдельный раздел /panel/api/clients/*. Сессия живёт в cookie; при ответе не-JSON/не-200 перелогиниваемся и повторяем один раз.
  *  TLS проверяется штатно (у панели сертификат Let's Encrypt на IP; если он перестанет обновляться, запросы начнут падать с алертом админам).
- *  Формат тела update проверен не на живой панели: перед включением VPN_ENABLED прогнать scripts/vpn_3xui_probe.py ext/off. */
+ *  Форматы update/del проверены на живой панели 02.11 (scripts/vpn_3xui_probe.py ext/off). */
 @Slf4j
 @Component
 public class VpnPanelClient {
@@ -94,36 +94,31 @@ public class VpnPanelClient {
             requireSuccess(api("/panel/api/clients/add", body.toString()), "добавление клиента");
             return;
         }
+        // Проверено на живой панели 02.11: клиент адресуется по email (числовой id даёт «record not found»),
+        // тело update - поля клиента плоско, БЕЗ id (id в теле - строка, числовой ломает разбор) + inboundIds
         ObjectNode merged = existing.get().deepCopy();
-        long id = merged.path("id").asLong();
+        merged.remove("id");
         merged.remove("traffic");
         merged.remove("createdAt");
         merged.remove("updatedAt");
-        merged.remove("inboundIds");
         merged.put("totalGB", spec.totalBytes());
         merged.put("expiryTime", spec.expiryMs());
         merged.put("limitIp", spec.limitIp());
         merged.put("enable", spec.enable());
-        ObjectNode wrapped = objectMapper.createObjectNode();
-        wrapped.set("client", merged);
-        wrapped.putArray("inboundIds").add(inboundId);
-        JsonNode res = api("/panel/api/clients/update/" + id, wrapped.toString());
-        if (res.path("success").asBoolean(false)) {
-            return;
-        }
-        // запасной формат тела: поля клиента плоско + inboundIds
-        ObjectNode flat = merged.deepCopy();
-        flat.putArray("inboundIds").add(inboundId);
-        requireSuccess(api("/panel/api/clients/update/" + id, flat.toString()), "обновление клиента");
+        merged.putArray("inboundIds").add(inboundId);
+        requireSuccess(api("/panel/api/clients/update/" + pathKey(spec.email()), merged.toString()), "обновление клиента");
     }
 
     /** Удаляет клиента по метке; если его уже нет - ничего не делает. */
     public synchronized void deleteClient(String email) throws PanelException {
-        Optional<JsonNode> existing = findClient(email);
-        if (existing.isEmpty()) {
+        if (findClient(email).isEmpty()) {
             return;
         }
-        requireSuccess(api("/panel/api/clients/del/" + existing.get().path("id").asLong(), "{}"), "удаление клиента");
+        requireSuccess(api("/panel/api/clients/del/" + pathKey(email), "{}"), "удаление клиента");
+    }
+
+    private static String pathKey(String email) {
+        return URLEncoder.encode(email, StandardCharsets.UTF_8);
     }
 
     private ObjectNode clientNode(ClientSpec s) {

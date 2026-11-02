@@ -150,6 +150,170 @@ def main():
     elif cmd == "ips":
         print(call(f"/panel/api/inbounds/clientIps/{sys.argv[2]}"))
     elif cmd in ("ext", "off"):
+        # ext - продлить на N дней (update), off - удалить клиента по метке. Ответ панели ненадёжен (бывает «record not found» при
+        # реально выполненном действии), поэтому после каждой попытки перечитываем список и сверяем факт.
+        email = sys.argv[2]
+
+        def fetch():
+            return next((c for c in call("/panel/api/clients/list")["obj"] if c.get("email") == email), None)
+
+        item = fetch()
+        if not item:
+            sys.exit(f"клиент {email} не найден")
+        keys = [("email", urllib.parse.quote(email)), ("id", str(item["id"])), ("uuid", item.get("uuid", ""))]
+        if cmd == "off":
+            for name, key in keys:
+                res = call_json(f"/panel/api/clients/del/{key}", {})
+                gone = fetch() is None
+                print("del по", name, json.dumps(res, ensure_ascii=False)[:120], "| реально удалён:", gone)
+                if gone:
+                    break
+            return
+        days = int(sys.argv[3]) if len(sys.argv) > 3 else 30
+        want = int((time.time() + days * 86400) * 1000)
+        merged = {k: v for k, v in item.items() if k not in ("id", "traffic", "createdAt", "updatedAt", "inboundIds")}
+        merged["expiryTime"] = want
+        merged["enable"] = True
+        bodies = [("wrapped без id", {"client": merged, "inboundIds": [INBOUND_ID]}),
+                  ("flat без id", {**merged, "inboundIds": [INBOUND_ID]}),
+                  ("wrapped id=uuid", {"client": {**merged, "id": item.get("uuid", "")}, "inboundIds": [INBOUND_ID]})]
+        done = False
+        for kname, key in keys:
+            for bname, body in bodies:
+                res = call_json(f"/panel/api/clients/update/{key}", body)
+                now = fetch()
+                ok = bool(now) and abs(now.get("expiryTime", 0) - want) < 60000
+                print("update по", kname, "/", bname, json.dumps(res, ensure_ascii=False)[:120], "| реально продлён:", ok)
+                if ok:
+                    done = True
+                    break
+            if done:
+                break
+    elif cmd == "routes":
+        # новая версия панели: ищем пути API клиентов/inbound в JS-бандлах (после логина)
+        def get(path):
+            with opener.open(urllib.request.Request(base + path), timeout=20) as r:
+                return r.read().decode("utf-8", "replace")
+        seen, queue, found = set(), re.findall(r'/assets/[\w.-]+\.js', get("/panel/") + get("/panel/inbounds")), set()
+        while queue and len(seen) < 60:
+            a = queue.pop()
+            if a in seen:
+                continue
+            seen.add(a)
+            js = get(a.replace("/assets", "/assets", 1)) if a.startswith("/assets") else ""
+            found |= set(re.findall(r'["`](/?(?:panel/)?api/[\w/${}.-]*(?:client|inbound)[\w/${}.-]*)["`]', js, re.I))
+            found |= {"CTX: " + m for m in re.findall(r'.{60}api/clients/(?:add|create|update|del|bulk)[^;]{0,80}', js)}
+            queue += ["/assets/" + n for n in re.findall(r'\./([\w.-]+\.js)', js) if "/assets/" + n not in seen]
+        print("\n".join(sorted(found)))
+    elif cmd == "probe":
+        # какие адреса отвечают (404 = нет такого, 400/200/405 = есть)
+        for path in ["/panel/api/clients/add", "/panel/api/clients/create", "/panel/api/clients/list", "/panel/api/clients/update/x", "/panel/api/clients/del/x", "/panel/api/inbounds/addClient", "/panel/inbound/addClient",
+                     "/panel/api/client/add", "/panel/api/clients/create", "/panel/api/clients/addClient",
+                     f"/panel/api/inbounds/{INBOUND_ID}/addClient", "/panel/api/clients/list", "/panel/api/clients",
+                     "/panel/api/inbounds/list", f"/panel/api/inbounds/get/{INBOUND_ID}", "/panel/api/server/status"]:
+            for method in ("GET", "POST"):
+                req = urllib.request.Request(base + path, data=b"" if method == "POST" else None,
+                                             headers={"X-CSRF-Token": csrf, "X-Requested-With": "XMLHttpRequest"})
+                try:
+                    with opener.open(req, timeout=20) as r:
+                        code, body = r.status, r.read(200).decode("utf-8", "replace")
+                except urllib.error.HTTPError as e:
+                    code, body = e.code, ""
+                print(method, path, code, body.replace("\n", " ")[:120])
+    elif cmd == "schema":
+        # только названия полей и типы, без значений (в списке чужие клиенты)
+        lst = call("/panel/api/clients/list")["obj"]
+        print("clients/list: всего", len(lst))
+        print({k: type(v).__name__ for k, v in lst[0].items()})
+        ib = call(f"/panel/api/inbounds/get/{INBOUND_ID}")["obj"]
+        print("inbound:", {k: type(v).__name__ for k, v in ib.items()})
+        st = ib["settings"]
+        st = json.loads(st) if isinstance(st, str) else st
+        print("inbound.settings:", {k: type(v).__name__ for k, v in st.items()})
+        if st.get("clients"):
+            print("inbound.settings.clients[0]:", {k: type(v).__name__ for k, v in st["clients"][0].items()})
+        print("inbound.clientStats?", "clientStats" in ib)
+    elif cmd == "ips":
+        print(call(f"/panel/api/inbounds/clientIps/{sys.argv[2]}"))
+    elif cmd in ("ext", "off"):
+        # то же, что делает бот: ext - продлить на N дней (update клиента), off - удалить клиента по метке.
+        # Ключ в адресе (email / числовой id / uuid) и вид тела подбираем перебором: печатаем, какой вариант сработал.
+        email = sys.argv[2]
+        item = next((c for c in call("/panel/api/clients/list")["obj"] if c.get("email") == email), None)
+        if not item:
+            sys.exit(f"клиент {email} не найден")
+        keys = [("email", urllib.parse.quote(email)), ("id", str(item["id"])), ("uuid", item.get("uuid", ""))]
+        if cmd == "off":
+            for name, key in keys:
+                res = call_json(f"/panel/api/clients/del/{key}", {})
+                print("del по", name, json.dumps(res, ensure_ascii=False)[:160])
+                if res.get("success"):
+                    break
+            return
+        days = int(sys.argv[3]) if len(sys.argv) > 3 else 30
+        merged = {k: v for k, v in item.items() if k not in ("id", "traffic", "createdAt", "updatedAt", "inboundIds")}
+        merged["expiryTime"] = int((time.time() + days * 86400) * 1000)
+        merged["enable"] = True
+        bodies = [("wrapped без id", {"client": merged, "inboundIds": [INBOUND_ID]}),
+                  ("flat без id", {**merged, "inboundIds": [INBOUND_ID]}),
+                  ("wrapped id=uuid", {"client": {**merged, "id": item.get("uuid", "")}, "inboundIds": [INBOUND_ID]})]
+        done = False
+        for kname, key in keys:
+            for bname, body in bodies:
+                res = call_json(f"/panel/api/clients/update/{key}", body)
+                print("update по", kname, "/", bname, json.dumps(res, ensure_ascii=False)[:160])
+                if res.get("success"):
+                    done = True
+                    break
+            if done:
+                break
+    elif cmd == "routes":
+        # новая версия панели: ищем пути API клиентов/inbound в JS-бандлах (после логина)
+        def get(path):
+            with opener.open(urllib.request.Request(base + path), timeout=20) as r:
+                return r.read().decode("utf-8", "replace")
+        seen, queue, found = set(), re.findall(r'/assets/[\w.-]+\.js', get("/panel/") + get("/panel/inbounds")), set()
+        while queue and len(seen) < 60:
+            a = queue.pop()
+            if a in seen:
+                continue
+            seen.add(a)
+            js = get(a.replace("/assets", "/assets", 1)) if a.startswith("/assets") else ""
+            found |= set(re.findall(r'["`](/?(?:panel/)?api/[\w/${}.-]*(?:client|inbound)[\w/${}.-]*)["`]', js, re.I))
+            found |= {"CTX: " + m for m in re.findall(r'.{60}api/clients/(?:add|create|update|del|bulk)[^;]{0,80}', js)}
+            queue += ["/assets/" + n for n in re.findall(r'\./([\w.-]+\.js)', js) if "/assets/" + n not in seen]
+        print("\n".join(sorted(found)))
+    elif cmd == "probe":
+        # какие адреса отвечают (404 = нет такого, 400/200/405 = есть)
+        for path in ["/panel/api/clients/add", "/panel/api/clients/create", "/panel/api/clients/list", "/panel/api/clients/update/x", "/panel/api/clients/del/x", "/panel/api/inbounds/addClient", "/panel/inbound/addClient",
+                     "/panel/api/client/add", "/panel/api/clients/create", "/panel/api/clients/addClient",
+                     f"/panel/api/inbounds/{INBOUND_ID}/addClient", "/panel/api/clients/list", "/panel/api/clients",
+                     "/panel/api/inbounds/list", f"/panel/api/inbounds/get/{INBOUND_ID}", "/panel/api/server/status"]:
+            for method in ("GET", "POST"):
+                req = urllib.request.Request(base + path, data=b"" if method == "POST" else None,
+                                             headers={"X-CSRF-Token": csrf, "X-Requested-With": "XMLHttpRequest"})
+                try:
+                    with opener.open(req, timeout=20) as r:
+                        code, body = r.status, r.read(200).decode("utf-8", "replace")
+                except urllib.error.HTTPError as e:
+                    code, body = e.code, ""
+                print(method, path, code, body.replace("\n", " ")[:120])
+    elif cmd == "schema":
+        # только названия полей и типы, без значений (в списке чужие клиенты)
+        lst = call("/panel/api/clients/list")["obj"]
+        print("clients/list: всего", len(lst))
+        print({k: type(v).__name__ for k, v in lst[0].items()})
+        ib = call(f"/panel/api/inbounds/get/{INBOUND_ID}")["obj"]
+        print("inbound:", {k: type(v).__name__ for k, v in ib.items()})
+        st = ib["settings"]
+        st = json.loads(st) if isinstance(st, str) else st
+        print("inbound.settings:", {k: type(v).__name__ for k, v in st.items()})
+        if st.get("clients"):
+            print("inbound.settings.clients[0]:", {k: type(v).__name__ for k, v in st["clients"][0].items()})
+        print("inbound.clientStats?", "clientStats" in ib)
+    elif cmd == "ips":
+        print(call(f"/panel/api/inbounds/clientIps/{sys.argv[2]}"))
+    elif cmd in ("ext", "off"):
         # то же, что делает бот: ext - продлить на N дней (update клиента), off - удалить клиента по метке
         email = sys.argv[2]
         item = next((c for c in call("/panel/api/clients/list")["obj"] if c.get("email") == email), None)
