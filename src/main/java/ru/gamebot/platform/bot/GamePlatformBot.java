@@ -156,6 +156,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.AnalyticsService analyticsService;
     private final ru.gamebot.platform.service.RetentionService retentionService;
     private final ru.gamebot.platform.service.PulseService pulseService;
+    private final ru.gamebot.platform.service.VpnService vpnService;
     private final ru.gamebot.platform.service.EngagementCeilingService engagementCeilingService;
     private final ru.gamebot.platform.service.ChannelContentService channelContentService;
     private final ru.gamebot.platform.service.BonusCourseService bonusCourseService;
@@ -542,6 +543,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (text != null && (text.equals("/pulsethr") || text.startsWith("/pulsethr ")) && isEffectiveAdmin(user)) {
             handlePulseThresholdCommand(user, text.trim());
+            return;
+        }
+
+        if (text != null && (text.equals("/vpn") || text.startsWith("/vpn ")) && isEffectiveAdmin(user)) {
+            handleVpnCommand(user, text.trim());
             return;
         }
 
@@ -7308,6 +7314,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("commands", "", "Список админ-команд"),
             new AdminCommand("wdnudge", "test|send|stats", "Рассылка «вывод открыт» (A/B)"),
             new AdminCommand("pulsethr", "reset|log|КЛЮЧ ЗЕЛЁНЫЙ КРАСНЫЙ", "Пороги вкладки «Пульс проекта»: список, изменить, вернуть стартовые, журнал"),
+            new AdminCommand("vpn", "ID [trial|paid|off]", "EGC VPN (пока без экранов игрока): статус игрока, выдать пробный/оплаченный месяц, отключить"),
             new AdminCommand("push", "status|on NAME|off NAME", "Короткие рассылки игрокам: буст выходных, новые квесты по игре, гонка отрядов, гонка за Зал славы"),
             new AdminCommand("goldenhour", "status|on|off|hour N|percent N|max N|push on|off|pushtest", "Золотой час: окно, бонус, лимит квестов, напоминание игрокам"),
             new AdminCommand("dailycode", "now|on|off|hour|dow|status", "Пост «Код дня»: создать сейчас, включить, выключить, состояние"),
@@ -17797,6 +17804,53 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Единый пакет для отдела аналитики: HTML со всеми вкладками (сравнение с прошлым периодом + тренд 30 дн.), пулом квестов и
      *  состоянием «сейчас», плюс один CSV со всеми метриками. Каждый блок считается отдельно - сбой одного не срывает отчёт. */
+    /** /vpn ID [trial|paid|off]: служебная проверка EGC VPN (этап 1, экранов игрока ещё нет). Без действия - статус аккаунта. */
+    private void handleVpnCommand(AppUser admin, String text) {
+        Long chatId = admin.getTelegramId();
+        String[] parts = text.split("\\s+");
+        if (parts.length < 2) {
+            sendText(chatId, "Формат: <code>/vpn ID</code> (статус), <code>/vpn ID trial</code>, <code>/vpn ID paid</code> (+30 дней), <code>/vpn ID off</code>.\n"
+                    + "Состояние: " + (vpnService.isEnabled() ? "включён" : "выключен (VPN_ENABLED и настройки панели)"), null);
+            return;
+        }
+        long targetId;
+        try {
+            targetId = Long.parseLong(parts[1]);
+        } catch (NumberFormatException e) {
+            sendText(chatId, "⚠️ ID должен быть числом. Пример: <code>/vpn 123456789 trial</code>", null);
+            return;
+        }
+        String action = parts.length > 2 ? parts[2].toLowerCase() : "";
+        try {
+            switch (action) {
+                case "trial" -> vpnService.startTrial(targetId);
+                case "paid" -> vpnService.activatePaid(targetId, "admin:" + admin.getTelegramId() + ":" + System.currentTimeMillis());
+                case "off" -> vpnService.disable(targetId);
+                case "" -> { }
+                default -> {
+                    sendText(chatId, "⚠️ Действие: trial, paid или off.", null);
+                    return;
+                }
+            }
+        } catch (ru.gamebot.platform.service.VpnService.VpnException e) {
+            sendText(chatId, "⚠️ VPN: " + escape(e.getMessage()) + " (" + e.getCode() + ")", null);
+            return;
+        } catch (Exception e) {
+            log.warn("VPN admin command failed", e);
+            sendText(chatId, "⚠️ VPN: непредвиденная ошибка, подробности в логе.", null);
+            return;
+        }
+        var account = vpnService.find(targetId);
+        if (account.isEmpty()) {
+            sendText(chatId, "У игрока " + targetId + " нет VPN-аккаунта.", null);
+            return;
+        }
+        var a = account.get();
+        sendText(chatId, "🔐 <b>VPN игрока " + targetId + "</b>\nТариф: " + a.getPlanType() + ", статус: " + a.getStatus()
+                + "\nДо: " + (a.getExpiresAt() == null ? "-" : DATE_TIME_FORMATTER.format(a.getExpiresAt()))
+                + "\nПодписка: " + escape(vpnService.subscriptionUrl(a)), null);
+    }
+
     /** /pulsethr: без аргументов - список порогов; «reset» - стартовые значения; «log» - журнал; «ключ зелёный красный» - изменить. */
     private void handlePulseThresholdCommand(AppUser user, String text) {
         String[] parts = text.split("\\s+");

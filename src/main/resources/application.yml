@@ -53,6 +53,17 @@ app:
   payout-channel-username: ${PAYOUT_CHANNEL_USERNAME:@egc_payouts}
   # Кейсы CS2 в магазине наград: каталог виден всем; обмен включается только при true (пока false - кнопка «Обмен скоро откроется»)
   cs2-cases-enabled: ${CS2_CASES_ENABLED:false}
+  # EGC VPN: выключен, пока VPN_ENABLED не true. Панель 3x-ui (inbound hysteria), клиенты создаются через её API; адрес, логин и пароль только из окружения
+  vpn-enabled: ${VPN_ENABLED:false}
+  vpn-xui-url: ${VPN_XUI_URL:}
+  vpn-xui-user: ${VPN_XUI_USER:}
+  vpn-xui-pass: ${VPN_XUI_PASS:}
+  vpn-xui-inbound-id: ${VPN_XUI_INBOUND_ID:9}
+  vpn-sub-base: ${VPN_SUB_BASE:}
+  vpn-trial-days: ${VPN_TRIAL_DAYS:3}
+  vpn-trial-gb: ${VPN_TRIAL_GB:5}
+  vpn-paid-days: ${VPN_PAID_DAYS:30}
+  vpn-paid-gb: ${VPN_PAID_GB:0}
 
 claude:
   api-key: ${CLAUDE_API_KEY:}
