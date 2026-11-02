@@ -40,7 +40,7 @@ public class ClubActivityService {
     /** «Охота за кодами»: сколько кодов за месяц нужно поймать, чтобы получить бонус к лимиту вывода (10 из ~15 постов). */
     public static final int MONTHLY_CODES_TARGET = 10;
     /** Бонус к лимиту вывода: процент от месячного лимита игрока, но не меньше минимума. Выдаётся как разовый запас вывода (не копится). */
-    public static final int MONTHLY_BONUS_PERCENT = 20;
+    public static final int MONTHLY_BONUS_PERCENT = 10;
     public static final long MONTHLY_BONUS_MIN_EXC = 5_000;
     /** Первый месяц, за который считается бонус (за прошлые месяцы ничего не выдаём). */
     public static final java.time.YearMonth MONTHLY_BONUS_FROM = java.time.YearMonth.of(2026, 11);
