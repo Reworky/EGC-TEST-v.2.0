@@ -59,6 +59,10 @@ public class VpnAccount {
     @Column(length = 512)
     private String lastPaymentRef;
 
+    /** Какие напоминания о сроке уже отправлены для текущего expiresAt: 0 - никаких, 1 - «осталось 2 дня», 2 - «срок истёк». Сбрасывается при выдаче/продлении. */
+    @Column(nullable = false, columnDefinition = "int default 0")
+    private int reminderStage = 0;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 

@@ -82,6 +82,18 @@ public class VpnService {
         return repository.findByTelegramId(telegramId);
     }
 
+    public int getTrialDays() { return trialDays; }
+
+    public int getTrialGb() { return trialGb; }
+
+    public int getPaidDays() { return paidDays; }
+
+    /** Ключ работает сейчас: выдан и срок не истёк. */
+    public boolean isRunning(VpnAccount account) {
+        return VpnAccount.STATUS_ACTIVE.equals(account.getStatus())
+                && account.getExpiresAt() != null && account.getExpiresAt().isAfter(LocalDateTime.now());
+    }
+
     public String subscriptionUrl(VpnAccount account) {
         return subBase + "/" + account.getSubId();
     }
@@ -101,6 +113,7 @@ public class VpnService {
             account.setTrialUsedAt(now);
         }
         account.setExpiresAt(now.plusDays(trialDays));
+        account.setReminderStage(0);
         account.setUpdatedAt(now);
         account = repository.save(account);
         try {
@@ -134,6 +147,7 @@ public class VpnService {
         LocalDateTime base = running ? account.getExpiresAt() : now;
         account.setPlanType(VpnAccount.PLAN_PAID);
         account.setExpiresAt(base.plusDays(paidDays));
+        account.setReminderStage(0);
         account.setLastPaymentRef(paymentRef);
         account.setUpdatedAt(now);
         account = repository.save(account);

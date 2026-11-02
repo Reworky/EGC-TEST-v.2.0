@@ -66,6 +66,7 @@ import ru.gamebot.platform.domain.enums.RewardRequestStatus;
 import ru.gamebot.platform.domain.enums.SubmissionStatus;
 import ru.gamebot.platform.domain.model.AppSetting;
 import ru.gamebot.platform.domain.model.AppUser;
+import ru.gamebot.platform.domain.model.VpnAccount;
 import ru.gamebot.platform.domain.model.QuestPack;
 import ru.gamebot.platform.domain.model.BotReview;
 import ru.gamebot.platform.domain.model.ChannelJoinRequest;
@@ -1688,6 +1689,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleRewardPurchase(callbackQuery, user, parseLong(data.substring("shop:buy:".length())));
             return;
         }
+        if (data.startsWith("vpn:")) {
+            answerSilently(callbackQuery.getId());
+            handleVpnAction(user, data.substring("vpn:".length()));
+            return;
+        }
         if (data.startsWith("sink:")) {
             handleSinkAction(callbackQuery, user, data.substring("sink:".length()));
             return;
@@ -2315,6 +2321,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "news" -> sendNews(user);
             case "polls" -> sendPollList(user);
             case "battlepass" -> sendEgcPassScreen(user); // callback-ключ остался прежним ради старых кнопок
+            case "vpn" -> sendVpnScreen(user);
             case "accelerator" -> sendAcceleratorTeaser(user);
             case "support" -> sendSupport(user);
             case "rules" -> sendRulesMessage(user, backMenuKeyboard("menu:cat:help"));
@@ -4197,6 +4204,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback(passLabel, "menu:battlepass")),
                 List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
+        if (vpnService.isEnabled()) {
+            rows.add(rows.size() - 1, List.of(keyboardFactory.callback("🔐 VPN", "menu:vpn")));
+        }
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
         if (shopBannerFileId != null) {
             sendPhotoCaption(user.getTelegramId(), shopBannerFileId, "🛍️ <b>Магазин</b>", keyboard);
@@ -4216,12 +4226,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         } catch (Exception e) {
             log.warn("Failed to send shop banner", e);
-            sendMenuCategory(user, "🛍️ <b>Магазин</b>", List.of(
+            List<List<InlineKeyboardButton>> fallbackRows = new ArrayList<>(List.of(
                     List.of(keyboardFactory.callback("🛍️ Магазин наград", "menu:shop")),
                     List.of(keyboardFactory.callback("⚡ Предметы", "menu:sink")),
                     List.of(keyboardFactory.callback("🚀 Ускоритель (скоро)", "menu:accelerator")),
                     List.of(keyboardFactory.callback(passLabel, "menu:battlepass"))
             ));
+            if (vpnService.isEnabled()) {
+                fallbackRows.add(List.of(keyboardFactory.callback("🔐 VPN", "menu:vpn")));
+            }
+            sendMenuCategory(user, "🛍️ <b>Магазин</b>", fallbackRows);
             // "Донат по играм" сюда намеренно не добавлен — см. комментарий в основной ветке выше.
         }
     }
@@ -10403,6 +10417,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      * покупки тех, кто уже их сделал. Лимит Telegram — не больше 10 000⭐ за подписку, с запасом. */
     /** Цена EGC Pass: 99 ⭐ в месяц с 25.10.2026 (была 65; при 65 маржа ≈ +13 ₽, при 99 ≈ +54 ₽ с типичной подписки). Действующие подписки идут по прежней цене. */
     private static final int EGC_PASS_STARS_PRICE = 99;
+    /** EGC VPN: 150 ₽ в месяц (89 ⭐); со скидкой 50 ₽ за 18 000 EXC - 100 ₽ (59 ⭐). EXC списываются после успешной оплаты Stars. */
+    private static final int VPN_STARS_PRICE = 89;
+    private static final int VPN_EXC_STARS_PRICE = 59;
+    private static final long VPN_EXC_DISCOUNT = 18_000;
     /** Подарок EGC Pass другу: 30 дней по полной цене, без автопродления; бонус обоим в EXC. */
     private static final int EGC_PASS_GIFT_STARS_PRICE = EGC_PASS_STARS_PRICE;
     private static final long PASS_GIFT_SENDER_BONUS_EXC = 1_000;
@@ -10461,6 +10479,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "EGC Pass — подписка на 30 дней",
                     "Лимит вывода +10 000 EXC, +10% EXC и +5% XP, 3-й слот, XP-буст +40%, сохранение серии, ранний доступ к квестам, вывод за 12 ч, донат дешевле. Автопродление, отмена в настройках Telegram.",
                     "EGC Pass (30 дней)", EGC_PASS_STARS_PRICE, EGC_PASS_SUBSCRIPTION_PERIOD_SECONDS),
+            "starsitem:VPN_MONTH", new StarsItemSpec(
+                    "EGC VPN — 30 дней",
+                    "Личный ключ VPN на 30 дней, до 2 устройств. Ключ придёт в бота сразу после оплаты.",
+                    "EGC VPN (30 дней)", VPN_STARS_PRICE),
+            "starsitem:VPN_MONTH_EXC", new StarsItemSpec(
+                    "EGC VPN — 30 дней со скидкой за EXC",
+                    "Личный ключ VPN на 30 дней, до 2 устройств. 18 000 EXC спишутся с баланса после оплаты.",
+                    "EGC VPN со скидкой за EXC", VPN_EXC_STARS_PRICE),
             "starsitem:STREAK_RESTORE", new StarsItemSpec(
                     "Восстановление серии входов",
                     "Продолжить прерванную серию ежедневных входов вместо начала с первого дня — плюс бонус за сегодня.",
@@ -10854,6 +10880,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 return "Некорректный получатель подарка.";
             }
         }
+        if ("starsitem:VPN_MONTH".equals(payload) || "starsitem:VPN_MONTH_EXC".equals(payload)) {
+            if (!vpnService.isEnabled()) {
+                return "VPN сейчас недоступен. Попробуйте позже.";
+            }
+            if ("starsitem:VPN_MONTH_EXC".equals(payload) && user.getCoins() < VPN_EXC_DISCOUNT) {
+                return "Для скидки нужно " + formatExc(VPN_EXC_DISCOUNT) + " EXC на балансе, не хватает " + formatExc(VPN_EXC_DISCOUNT - user.getCoins()) + ". Оплатите без скидки или заработайте EXC.";
+            }
+        }
         if ("starsitem:STREAK_RESTORE".equals(payload) && !userService.hasRestorableStreak(user)) {
             return "Восстанавливать нечего — предложение уже неактуально (истекло или бонус за сегодня уже получен).";
         }
@@ -10984,6 +11018,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>EGC Pass активирован!</b>\n\nДействует до <b>" + until + "</b>, дальше продлится автоматически.\n\n"
                             + "+10% к EXC и +5% к XP за квесты, доп. слот, бесплатный улучшенный сундук каждый день и приоритет на вывод уже включены — спасибо, что поддержали проект.",
                     backMenuKeyboard("menu:main"));
+        } else if ("starsitem:VPN_MONTH".equals(payload) || "starsitem:VPN_MONTH_EXC".equals(payload)) {
+            grantVpnPurchase(user, telegramId, payload, payment);
         } else if ("starsitem:EGC_PASS_TRIAL".equals(payload)) {
             // Пробный период снят с продажи, pre-checkout такие платежи отклоняет. Если оплата всё же прошла (гонка) -
             // не теряем деньги молча: исключение уходит в общий catch handleSuccessfulPayment (сообщение игроку + алерт админам)
@@ -17804,6 +17840,188 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Единый пакет для отдела аналитики: HTML со всеми вкладками (сравнение с прошлым периодом + тренд 30 дн.), пулом квестов и
      *  состоянием «сейчас», плюс один CSV со всеми метриками. Каждый блок считается отдельно - сбой одного не срывает отчёт. */
+    private String formatExc(long amount) {
+        return String.format("%,d", amount).replace(',', ' ');
+    }
+
+    /** Ссылки на установку Hiddify (приложение с поддержкой Hysteria2) - строка кнопок под экраном ключа. */
+    private List<InlineKeyboardButton> vpnInstallRow() {
+        return List.of(
+                keyboardFactory.url("📱 Android", "https://play.google.com/store/apps/details?id=app.hiddify.com"),
+                keyboardFactory.url("🍏 iPhone", "https://apps.apple.com/app/hiddify-proxy-vpn/id6596777532"),
+                keyboardFactory.url("💻 ПК / Mac", "https://github.com/hiddify/hiddify-app/releases/latest"));
+    }
+
+    /** Кнопки оплаты: за Stars целиком и со скидкой за EXC (если EXC хватает; иначе неактивная подсказка, сколько не хватает). */
+    private void addVpnPayRows(List<List<InlineKeyboardButton>> rows, AppUser user, boolean renew) {
+        String full = createStarsInvoiceLink("starsitem:VPN_MONTH");
+        if (full != null) {
+            rows.add(List.of(keyboardFactory.url((renew ? "💳 Продлить на месяц: 150 ₽ (" : "💳 Оплатить 150 ₽ (") + VPN_STARS_PRICE + " ⭐)", full)));
+        }
+        if (user.getCoins() >= VPN_EXC_DISCOUNT) {
+            String withExc = createStarsInvoiceLink("starsitem:VPN_MONTH_EXC");
+            if (withExc != null) {
+                rows.add(List.of(keyboardFactory.url("🪙 Списать " + formatExc(VPN_EXC_DISCOUNT) + " EXC и заплатить 100 ₽ (" + VPN_EXC_STARS_PRICE + " ⭐)", withExc)));
+            }
+        } else {
+            rows.add(List.of(keyboardFactory.callback("🪙 Скидка 50 ₽: нужно " + formatExc(VPN_EXC_DISCOUNT) + " EXC, у вас " + formatExc(user.getCoins()), "noop")));
+        }
+        if (full == null) {
+            log.warn("VPN: failed to create Stars invoice link for {}", user.getTelegramId());
+        }
+    }
+
+    private void handleVpnAction(AppUser user, String action) {
+        switch (action) {
+            case "trial" -> startVpnTrial(user);
+            case "terms" -> sendVpnTerms(user);
+            default -> sendVpnScreen(user);
+        }
+    }
+
+    /** Вход из «🛍️ Магазин → 🔐 VPN»: ключ работает - экран «Мой VPN», нет ключа или он истёк - предложение. */
+    private void sendVpnScreen(AppUser user) {
+        Long chatId = user.getTelegramId();
+        if (!vpnService.isEnabled()) {
+            sendText(chatId, "🔐 <b>EGC VPN</b>\n\nСкоро в клубе.", backMenuKeyboard("menu:cat:shop"));
+            return;
+        }
+        java.util.Optional<VpnAccount> found = vpnService.find(chatId);
+        if (found.isPresent()) {
+            VpnAccount a = found.get();
+            if (vpnService.isRunning(a)) {
+                sendVpnKeyScreen(user, a, null);
+                return;
+            }
+            if (VpnAccount.STATUS_PENDING.equals(a.getStatus()) && VpnAccount.PLAN_PAID.equals(a.getPlanType())) {
+                sendText(chatId, "💳 <b>Оплата получена</b>\n\nКлюч VPN выдаём вручную, это займёт немного времени. Мы уже знаем и пришлём его сюда.", backMenuKeyboard("menu:cat:shop"));
+                return;
+            }
+        }
+        sendVpnOfferScreen(user, found.orElse(null));
+    }
+
+    private void sendVpnOfferScreen(AppUser user, VpnAccount account) {
+        boolean trialAvailable = account == null
+                || (VpnAccount.STATUS_PENDING.equals(account.getStatus()) && VpnAccount.PLAN_TRIAL.equals(account.getPlanType()));
+        StringBuilder sb = new StringBuilder("🔐 <b>EGC VPN</b>\n");
+        if (!trialAvailable) {
+            sb.append("<i>Срок вашего ключа истёк</i>\n");
+        }
+        sb.append("\nБыстрый VPN для телефона и компьютера.\n")
+          .append("• До 2 устройств, подключение за минуту\n")
+          .append("• Личный ключ: он только ваш\n")
+          .append("• Работает в России и за границей\n\n")
+          .append("<b>Цена: 150 ₽ в месяц</b>");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (trialAvailable) {
+            rows.add(List.of(keyboardFactory.callback("🎁 " + vpnService.getTrialDays() + " дня бесплатно", "vpn:trial")));
+        }
+        addVpnPayRows(rows, user, false);
+        rows.add(List.of(keyboardFactory.callback("ℹ️ Условия", "vpn:terms")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:cat:shop"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    /** «Мой VPN»: срок, лимиты, инструкция и личная ссылка подписки. headline - своя первая строка (после оплаты). */
+    private void sendVpnKeyScreen(AppUser user, VpnAccount a, String headline) {
+        boolean trial = VpnAccount.PLAN_TRIAL.equals(a.getPlanType());
+        StringBuilder sb = new StringBuilder();
+        sb.append(headline != null ? headline : (trial ? "✅ <b>Пробный VPN включён</b>" : "✅ <b>EGC VPN активен</b>")).append("\n\n")
+          .append("До: <b>").append(DATE_TIME_FORMATTER.format(a.getExpiresAt())).append("</b> · ")
+          .append(trial ? "лимит " + vpnService.getTrialGb() + " ГБ · 1 устройство" : "до 2 устройств").append("\n\n")
+          .append("<b>Как подключить (1 минута)</b>\n")
+          .append("1. Установите приложение Hiddify (кнопки ниже)\n")
+          .append("2. Нажмите на ссылку ниже, она скопируется\n")
+          .append("3. В приложении: «Новый профиль» → «Из буфера обмена» → «Подключиться»\n\n")
+          .append("Ваша личная ссылка (никому не показывайте):\n<code>").append(escape(vpnService.subscriptionUrl(a))).append("</code>");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(vpnInstallRow());
+        addVpnPayRows(rows, user, !trial);
+        rows.add(List.of(keyboardFactory.callback("ℹ️ Условия", "vpn:terms")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:cat:shop"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void sendVpnTerms(AppUser user) {
+        sendText(user.getTelegramId(), "ℹ️ <b>Условия EGC VPN</b>\n\n"
+                + "Мы сохраняем технические данные подключения (время, IP и объём трафика) 90 дней для безопасности и поддержки. "
+                + "Адреса посещаемых сайтов мы не сохраняем.\n\n"
+                + "Один ключ на аккаунт, передавать его другим нельзя. Пробный период выдаётся один раз.",
+                backMenuKeyboard("menu:vpn"));
+    }
+
+    /** Пробный период: нужна подписка на канал; один раз на аккаунт (проверяет VpnService). */
+    private void startVpnTrial(AppUser user) {
+        Long chatId = user.getTelegramId();
+        if (!vpnService.isEnabled()) {
+            sendVpnScreen(user);
+            return;
+        }
+        String channel = requiredChannelChatId();
+        if (channel != null && !channel.isBlank()) {
+            try {
+                if (!isChannelMember(channel, chatId)) {
+                    List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+                    String channelUrl = requiredChannelUrl();
+                    if (channelUrl != null && !channelUrl.isBlank()) rows.add(List.of(keyboardFactory.url("📢 Подписаться", channelUrl)));
+                    rows.add(List.of(keyboardFactory.callback("✅ Я подписался", "vpn:trial")));
+                    rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:vpn")));
+                    sendText(chatId, "🎁 <b>Пробный VPN на " + vpnService.getTrialDays() + " дня, бесплатно</b>\n\nЧтобы получить ключ, подпишитесь на наш канал.", keyboardFactory.rowsLayout(rows));
+                    return;
+                }
+            } catch (Exception e) {
+                log.warn("VPN trial: channel membership check failed for {}", chatId, e); // проверить не вышло - не блокируем игрока
+            }
+        }
+        try {
+            sendVpnKeyScreen(user, vpnService.startTrial(chatId), null);
+        } catch (ru.gamebot.platform.service.VpnService.VpnException e) {
+            if ("TRIAL_USED".equals(e.getCode())) {
+                sendVpnScreen(user);
+            } else {
+                sendText(chatId, "⚠️ Не получилось выдать ключ. Попробуйте через несколько минут, мы уже знаем о проблеме.", backMenuKeyboard("menu:vpn"));
+            }
+        }
+    }
+
+    /** Выдача оплаченного месяца. Деньги Telegram уже списал: сбой выдачи уходит в общий catch handleSuccessfulPayment (игроку «оплата прошла,
+     *  выдадим вручную», админам алерт). EXC списываются только после успешной выдачи; не хватило или сбой - алерт админам, ключ остаётся у игрока. */
+    private void grantVpnPurchase(AppUser user, Long telegramId, String payload,
+            org.telegram.telegrambots.meta.api.objects.payments.SuccessfulPayment payment) {
+        VpnAccount account;
+        try {
+            account = vpnService.activatePaid(telegramId, payment.getTelegramPaymentChargeId());
+        } catch (ru.gamebot.platform.service.VpnService.VpnException e) {
+            throw new IllegalStateException("VPN не выдан после оплаты (" + e.getCode() + "), user " + telegramId);
+        }
+        boolean withExc = "starsitem:VPN_MONTH_EXC".equals(payload);
+        String excNote = "";
+        if (withExc) {
+            try {
+                excTransactionService.refreshCoins(user);
+                if (user.getCoins() >= VPN_EXC_DISCOUNT) {
+                    excTransactionService.creditExc(user, -VPN_EXC_DISCOUNT, ru.gamebot.platform.service.ExcTransactionService.SHOP_BUY, "EGC VPN: скидка за EXC");
+                    excNote = ", списано " + formatExc(VPN_EXC_DISCOUNT) + " EXC";
+                } else {
+                    excNote = ", EXC НЕ списаны (не хватило на момент оплаты)";
+                }
+            } catch (Exception e) {
+                log.error("VPN: failed to debit EXC after Stars payment, user {}", telegramId, e);
+                excNote = ", EXC НЕ списаны (ошибка)";
+            }
+        }
+        try {
+            for (Long adminId : adminService.allAdminIds()) {
+                sendText(adminId, "🔐 <b>Покупка VPN</b>: " + escape(displayUserName(user)) + " (<code>" + telegramId + "</code>), "
+                        + payment.getTotalAmount() + " ⭐" + escape(excNote), null);
+            }
+        } catch (Exception e) {
+            log.warn("VPN: failed to notify admins about purchase", e);
+        }
+        sendVpnKeyScreen(user, account, "✅ <b>Оплачено!</b> VPN работает до " + DATE_TIME_FORMATTER.format(account.getExpiresAt()));
+    }
+
     /** /vpn ID [trial|paid|off]: служебная проверка EGC VPN (этап 1, экранов игрока ещё нет). Без действия - статус аккаунта. */
     private void handleVpnCommand(AppUser admin, String text) {
         Long chatId = admin.getTelegramId();
