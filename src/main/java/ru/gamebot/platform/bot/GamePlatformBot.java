@@ -15521,7 +15521,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             photo.setCaption(READY_BC_VPN_HTML);
             photo.setParseMode("HTML");
-            photo.setReplyMarkup(singleMenuKeyboard());
+            photo.setReplyMarkup(keyboardFactory.rowsLayout(List.of(
+                    List.of(keyboardFactory.callback("🔐 Открыть VPN", "menu:vpn")),
+                    List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
             org.telegram.telegrambots.meta.api.objects.Message sent = execute(photo);
             if (cached == null && sent.getPhoto() != null && !sent.getPhoto().isEmpty()) {
                 resourceBannerFileIds.put(READY_BC_VPN_IMAGE, sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId());
