@@ -86,6 +86,9 @@ public class ChannelContentService {
     /** Пост о смене пачки квестов (создаётся при смене пачки, см. QuestPackScheduleService); в ALL_TYPES не входит —
      *  расписания и ручной кнопки у него нет, карточка на согласование уходит сразу после смены. */
     public static final String QUEST_ROTATION = "QUEST_ROTATION";
+    /** Баннер поста «Код дня» (Экси от первого лица, телефон с экраном «Код дня», ряд билетов, 02.11.2026, согласован владельцем); лежит в ресурсах бота и показывается и в разделе «Код дня» бота. */
+    private static final String DAILY_CODE_BANNER = "resource:code_day_banner.jpg";
+
     /** «Код дня» (2026-10-17): ежедневный пост с кодом для бота, идёт админу на согласование как все остальные. Намеренно НЕ в ALL_TYPES
      *  (расписание и ручная кнопка - своя: /dailycode on|off|now и час в настройках cc.dcode.hour), чтобы не трогать экран «Контент канала». */
     public static final String DAILY_CODE = "DAILY_CODE";
@@ -690,7 +693,7 @@ public class ChannelContentService {
         sb.append("Нажмите на код, чтобы скопировать, затем кнопку «Ввести код» под постом и вставьте его в боте. Получите билет и XP, а за каждый седьмой код подряд ещё и EXC 🔥\n\n");
         sb.append("<code>").append(code).append("</code>\n\n");
         sb.append("<b>Поймайте ").append(ClubActivityService.MONTHLY_CODES_TARGET).append(" кодов за месяц, и в начале следующего ваш лимит вывода вырастет.</b>");
-        return Optional.of(saveDraft(DAILY_CODE, sb.toString(), code));
+        return Optional.of(saveDraft(DAILY_CODE, sb.toString(), code, DAILY_CODE_BANNER));
     }
 
     // ───────────────────────── «новые квесты» ─────────────────────────

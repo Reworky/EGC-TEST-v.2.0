@@ -6538,7 +6538,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Кнопка ввода есть всегда (даже пока код не опубликован: игрок сразу видит, куда его вставлять); если кода нет, бот ответит об этом при вводе
         if (!claimed) rows.add(List.of(keyboardFactory.callback("✍️ Ввести код", "club:code:enter")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:quests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
-        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+        sendResourceBanner(user.getTelegramId(), "code_day_banner.jpg", sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     private static String codesWordRu(int n) {
