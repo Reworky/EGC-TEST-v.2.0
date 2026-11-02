@@ -1217,6 +1217,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if ("rwquick:region".equals(data)) {
+            if ((isEffectiveAdmin(user) || isEffectiveModerator(user))
+                    && session.getState() == SessionState.REWARD_REJECT_COMMENT
+                    && !"withdrawal".equals(session.getData().get("rejectType"))) {
+                clearInlineKeyboard(callbackQuery);
+                answer(callbackQuery.getId(), "Заявка отклонена");
+                handleStateInput(user, session, QUICK_REJECT_REGION);
+            } else {
+                answer(callbackQuery.getId(), "Заявка уже обработана или действие устарело");
+            }
+            return;
+        }
         if ("wdquick:region".equals(data) || "wdquick:requisite".equals(data) || "wdquick:unsupported".equals(data)) {
             if ((isEffectiveAdmin(user) || isEffectiveModerator(user))
                     && session.getState() == SessionState.REWARD_REJECT_COMMENT
@@ -15101,7 +15113,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             session.setQuestId(parseLong(action.substring("reject:".length())));
             session.setState(SessionState.REWARD_REJECT_COMMENT);
             answer(callbackQuery.getId(), "Введите причину отклонения");
-            sendText(user.getTelegramId(), "❌ <b>Отклонение заявки</b>\n\nНапишите причину отклонения, она будет отправлена пользователю:", cancelKeyboard());
+            sendText(user.getTelegramId(), "❌ <b>Отклонение заявки</b>\n\nНапишите причину отклонения, она будет отправлена пользователю, или выберите быстрый ответ:", rewardRejectKeyboard());
             return;
         }
         answerSilently(callbackQuery.getId());
@@ -26975,6 +26987,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Игрок указал реквизиты способа, с которым мы не работаем (иностранный банк, номер телефона не из РФ и т.п.). Причина пишется в reward_requests.admin_comment (varchar(255)): текст держать короче 255 символов (290 символов уже ломали отклонение). */
     private static final String QUICK_REJECT_UNSUPPORTED =
             "Мы не работаем с этим способом вывода (например, с банками и номерами других стран). Доступны: рубли по СБП на номер российского банка, криптовалюта (GRAM, TON) и звёзды Telegram. Подайте заявку заново, EXC вернулись на баланс.";
+
+    /** Быстрый ответ при отказе в заявке на награду (не вывод): тот же текст про регион, что и у вывода. */
+    private InlineKeyboardMarkup rewardRejectKeyboard() {
+        return keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("⚡ Регион временно недоступен", "rwquick:region")),
+                List.of(keyboardFactory.callback("❌ Отмена", "common:cancel"))));
+    }
 
     private InlineKeyboardMarkup withdrawalRejectKeyboard() {
         return keyboardFactory.rowsLayout(List.of(
