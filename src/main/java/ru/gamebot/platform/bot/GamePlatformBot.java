@@ -934,6 +934,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             promptGeneralReview(user);
             return;
         }
+        // «Код дня»: кнопка «Ввести код» под постом в канале ведёт сразу на ввод кода
+        if (startPayload.equals("code") && user.isRegistrationCompleted()) {
+            startDailyCodeEntry(user, session);
+            return;
+        }
         // «Курс дня»: кнопка под постом в канале ведёт сюда (start=btn_<id записи daily_bonus>)
         if (startPayload.startsWith("btn_") && user.isRegistrationCompleted()) {
             handleBonusButton(user, parseLong(startPayload.substring("btn_".length())));
@@ -6516,28 +6521,79 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendDailyCodeScreen(AppUser user) {
         java.util.Optional<ru.gamebot.platform.domain.model.DailyCode> active = clubActivityService.activeCode();
         int streak = clubActivityService.currentStreak(user.getId());
-        boolean claimed = clubActivityService.claimedToday(user.getId());
-        StringBuilder sb = new StringBuilder("🔑 <b>Код дня</b>\n<i>Найди спрятанный в посте канала код, введи его здесь и получай награду каждый день.</i>\n\n");
+        boolean claimed = clubActivityService.claimedToday(user.getId()) || clubActivityService.activeCodeClaimed(user.getId());
+        StringBuilder sb = new StringBuilder("🔑 <b>Код дня</b>\n<i>Скопируй код из поста в канале, введи его здесь и получи награду. Коды выходят примерно раз в 2 дня.</i>\n\n");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (active.isEmpty()) {
             sb.append("Сегодня код ещё не опубликован. Он появится в посте канала, загляните позже.");
         } else {
             sb.append("Награда: <b>+").append(ru.gamebot.platform.service.ClubActivityService.CODE_TICKETS).append(" 🎟 и +")
                     .append(ru.gamebot.platform.service.ClubActivityService.CODE_XP).append(" XP</b>. За каждый ")
-                    .append(ru.gamebot.platform.service.ClubActivityService.STREAK_BONUS_EVERY_DAYS).append("-й день подряд ещё <b>+")
+                    .append(ru.gamebot.platform.service.ClubActivityService.STREAK_BONUS_EVERY_DAYS).append("-й код подряд ещё <b>+")
                     .append(ru.gamebot.platform.service.ClubActivityService.STREAK_BONUS_EXC).append(" EXC</b>.\n");
             sb.append(claimed ? "\n✅ Сегодня код уже введён." : "");
             String url = channelPostUrl(active.get().getChannelMessageId());
             if (url != null) rows.add(List.of(keyboardFactory.url("📢 Открыть пост дня", url)));
             if (!claimed) rows.add(List.of(keyboardFactory.callback("✍️ Ввести код", "club:code:enter")));
         }
-        if (streak > 0) sb.append("\n🔥 Серия: <b>").append(streak).append("</b> ").append(ru.gamebot.platform.service.RewardService.daysWordRu(streak)).append(" подряд");
+        if (streak > 0) sb.append("\n🔥 Серия: <b>").append(streak).append("</b> ").append(codesWordRu(streak)).append(" подряд");
+        sb.append(codeHuntProgressText(user));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:quests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
+    private static String codesWordRu(int n) {
+        int m = n % 100;
+        if (m >= 11 && m <= 14) return "кодов";
+        return switch (n % 10) {
+            case 1 -> "код";
+            case 2, 3, 4 -> "кода";
+            default -> "кодов";
+        };
+    }
+
+    /** «Охота за кодами»: прогресс игрока за месяц и условие бонуса к лимиту вывода (для экрана кода и ответа после ввода). */
+    private String codeHuntProgressText(AppUser user) {
+        int target = ru.gamebot.platform.service.ClubActivityService.MONTHLY_CODES_TARGET;
+        int caught = clubActivityService.monthlyCount(user.getId());
+        int shown = Math.min(caught, target);
+        return "\n\n📅 <b>Охота за кодами</b>: " + caught + " из " + target + " в этом месяце\n" + "▰".repeat(shown) + "▱".repeat(target - shown)
+                + "\nПоймай " + target + " кодов за месяц - и в начале следующего лимит вывода вырастет на "
+                + ru.gamebot.platform.service.ClubActivityService.MONTHLY_BONUS_PERCENT + "% (не меньше "
+                + fmtExc(ru.gamebot.platform.service.ClubActivityService.MONTHLY_BONUS_MIN_EXC) + " EXC).";
+    }
+
+    /** Кнопка «Ввести код» под постом канала (start=code): сразу поле ввода кода, а если код сегодня уже введён или кода нет - экран «Код дня». */
+    private void startDailyCodeEntry(AppUser user, UserSession session) {
+        session.reset();
+        boolean noCode = clubActivityService.activeCode().isEmpty();
+        boolean claimed = clubActivityService.claimedToday(user.getId()) || clubActivityService.activeCodeClaimed(user.getId());
+        if (noCode || claimed) {
+            sendDailyCodeScreen(user);
+            return;
+        }
+        session.setState(SessionState.DAILY_CODE_INPUT);
+        sendText(user.getTelegramId(), "✍️ <b>Код дня</b>\n\nВставьте код из поста в канале одним сообщением." + codeHuntProgressText(user), cancelKeyboard());
+    }
+
     private void handleDailyCodeInput(AppUser user, UserSession session, String text) {
         if (text == null || text.isBlank()) return;
+        // Отметка засчитывается только подписанным на канал (иначе код из публичного поста вводил бы любой)
+        String codeChannel = requiredChannelChatId();
+        if (codeChannel != null && !codeChannel.isBlank()) {
+            try {
+                if (!isChannelMember(codeChannel, user.getTelegramId())) {
+                    List<List<InlineKeyboardButton>> subRows = new ArrayList<>();
+                    String channelUrl = requiredChannelUrl();
+                    if (channelUrl != null && !channelUrl.isBlank()) subRows.add(List.of(keyboardFactory.url("📢 Открыть канал", channelUrl)));
+                    subRows.add(List.of(keyboardFactory.callback("❌ Отмена", "common:cancel")));
+                    sendText(user.getTelegramId(), "📢 Чтобы отметиться, нужно быть подписанным на канал. Подпишитесь и отправьте код ещё раз.", keyboardFactory.rowsLayout(subRows));
+                    return;
+                }
+            } catch (Exception e) {
+                log.warn("Daily code: channel membership check failed for {}", user.getTelegramId(), e); // проверить не вышло - не блокируем игрока
+            }
+        }
         ru.gamebot.platform.service.ClubActivityService.CodeResult r;
         try {
             r = clubActivityService.claimCode(user, text.trim());
@@ -6555,12 +6611,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 session.setState(SessionState.NONE);
                 sendText(user.getTelegramId(), "✅ <b>Код принят!</b>\n+" + ru.gamebot.platform.service.ClubActivityService.CODE_XP + " XP и +"
                         + ru.gamebot.platform.service.ClubActivityService.CODE_TICKETS + " 🎟"
-                        + (r.bonusExc() > 0 ? "\n🔥 " + r.streak() + " дней подряд: +" + r.bonusExc() + " EXC" : "")
-                        + "\nСерия: <b>" + r.streak() + "</b> " + ru.gamebot.platform.service.RewardService.daysWordRu(r.streak()) + " подряд.", after);
+                        + (r.bonusExc() > 0 ? "\n🔥 " + r.streak() + " " + codesWordRu(r.streak()) + " подряд: +" + r.bonusExc() + " EXC" : "")
+                        + "\nСерия: <b>" + r.streak() + "</b> " + codesWordRu(r.streak()) + " подряд." + codeHuntProgressText(user), after);
             }
             case ALREADY_TODAY -> {
                 session.setState(SessionState.NONE);
-                sendText(user.getTelegramId(), "Сегодня вы уже ввели код. Завтра в канале будет новый.", after);
+                sendText(user.getTelegramId(), "Этот код вы уже вводили. Следующий выйдет в канале примерно через день-два.", after);
             }
             case NO_ACTIVE_CODE -> {
                 session.setState(SessionState.NONE);
@@ -7002,7 +7058,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         ? "✅ Черновик поста с кодом дня создан, карточка на согласование придёт сообщением." : "Черновик создать не вышло.", null);
                 case "on" -> {
                     channelContentService.setDailyCodeEnabled(true);
-                    sendText(admin.getTelegramId(), "🔔 Пост с кодом дня включён: выходит раз в неделю (день и час: /dailycode dow, /dailycode hour).", null);
+                    sendText(admin.getTelegramId(), "🔔 Пост с кодом дня включён: готовится раз в 2 дня (час: /dailycode hour).", null);
                 }
                 case "off" -> {
                     channelContentService.setDailyCodeEnabled(false);
@@ -7014,8 +7070,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         sendText(admin.getTelegramId(), "Формат: <code>/dailycode dow 2</code> - день недели (1 - понедельник ... 7 - воскресенье, по UTC).", null);
                         return;
                     }
-                    int set = channelContentService.setDailyCodeDow(d.intValue());
-                    sendText(admin.getTelegramId(), "📅 Пост с кодом дня будет выходить по дню недели №" + set + " (1 - понедельник).", null);
+                    sendText(admin.getTelegramId(), "ℹ️ День недели больше не используется: пост с кодом готовится каждые 2 дня, час задаёт /dailycode hour.", null);
                 }
                 case "hour" -> {
                     Long h = p.length > 2 ? parseLong(p[2]) : null;
@@ -7030,8 +7085,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     StringBuilder sb = new StringBuilder("🔑 <b>Код дня: состояние</b>\n\n");
                     int hour = channelContentService.dailyCodeHour();
                     sb.append("Автопост: ").append(channelContentService.isDailyCodeEnabled() ? "🔔 включён" : "🔕 выключен").append(", ")
-                            .append(String.format("%02d:00", hour)).append(" UTC (").append(String.format("%02d:00", (hour + 3) % 24)).append(" по Москве), день недели №")
-                            .append(channelContentService.dailyCodeDow()).append(" (1 - понедельник)\n");
+                            .append(String.format("%02d:00", hour)).append(" UTC (").append(String.format("%02d:00", (hour + 3) % 24)).append(" по Москве), каждые 2 дня\n");
                     java.util.Optional<ru.gamebot.platform.domain.model.DailyCode> latest = clubActivityService.latestCode();
                     if (latest.isEmpty()) {
                         sb.append("Кодов ещё не было. Создать сейчас: <code>/dailycode now</code>.");
@@ -7180,7 +7234,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("🔑 <b>Код дня</b>\nАвтопост: ").append(channelContentService.isDailyCodeEnabled() ? "🔔 включён" : "🔕 выключен")
                 .append(", ").append(String.format("%02d:00", hour)).append(" UTC (").append(String.format("%02d:00", (hour + 3) % 24)).append(" по Москве).\n")
                 .append(channelContentService.isDailyCodeEnabled()
-                        ? "Раз в неделю (день недели №" + channelContentService.dailyCodeDow() + ", 1 - понедельник) в это время бот сам готовит пост с кодом и присылает вам карточку на согласование. Код заработает после того, как вы нажмёте «✅ Опубликовать».\n"
+                        ? "Раз в 2 дня в это время бот сам готовит пост с кодом и присылает вам карточку на согласование. Код заработает после того, как вы нажмёте «✅ Опубликовать».\n"
                         : "Автопост выключен: код дня запускается вручную кнопками ниже. Код заработает после того, как вы нажмёте «✅ Опубликовать» в карточке.\n");
         clubActivityService.latestCode().ifPresentOrElse(c -> sb.append("Последний код: <code>").append(c.getCode()).append("</code>, действует до ")
                         .append(c.getValidUntil()).append(", ввели: ").append(clubActivityService.codeClaimsCount(c.getId())).append(".\n"),
@@ -12641,6 +12695,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             } catch (Exception e) {
                 log.warn("Failed to alert admin {} about shared withdrawal destination", adminId, e);
             }
+        }
+    }
+
+    @org.springframework.context.event.EventListener
+    public void onCodeHuntBonus(ru.gamebot.platform.event.CodeHuntBonusEvent event) {
+        String month = event.getMonth().getMonth().getDisplayName(java.time.format.TextStyle.FULL_STANDALONE, java.util.Locale.forLanguageTag("ru"));
+        String msg = "🔑 <b>Охота за кодами: бонус за " + escape(month) + "</b>\n\n"
+                + "Ты поймал <b>" + event.getCaught() + "</b> кодов дня (нужно было " + event.getRequired() + "). "
+                + "Твой лимит вывода увеличен на <b>" + fmtExc(event.getBonusExc()) + " EXC</b>: их можно вывести сверх обычного месячного лимита («Кошелёк» → «Вывод EXC»).";
+        try {
+            sendText(event.getUser().getTelegramId(), msg, keyboardFactory.rowsLayout(List.of(
+                    List.of(keyboardFactory.callback("💸 Вывести", "shop:withdraw")),
+                    List.of(keyboardFactory.callback("🔑 Код дня", "club:code")))));
+        } catch (Exception e) {
+            log.warn("Failed to notify {} about code hunt bonus", event.getUser().getTelegramId(), e);
         }
     }
 
@@ -22637,6 +22706,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     }
                     boolean isCourseButton = ru.gamebot.platform.service.ChannelContentService.DAILY_BUTTON.equals(d.getType());
                     InlineKeyboardMarkup postKeyboard = null;
+                    if (isCodePost) {
+                        // Кнопка под постом с кодом открывает в боте ввод кода сразу (start=code), чтобы игрок не искал раздел сам
+                        postKeyboard = keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.url("✍️ Ввести код", "https://t.me/" + getBotUsername() + "?start=code"))));
+                    }
                     Long courseBonusId = isCourseButton ? parseLong(d.getMeta()) : null;
                     if (isCourseButton) {
                         if (courseBonusId == null || bonusCourseService.findBonus(courseBonusId).isEmpty()) {

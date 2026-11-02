@@ -402,6 +402,14 @@ public class SinkShopService {
         appUserRepository.save(user);
     }
 
+    /** Поднять разовый запас вывода до amount, если он меньше (не складывается: бонус «охоты за кодами» не копится от месяца к месяцу). */
+    @Transactional
+    public void ensurePartnerWithdrawalAllowance(AppUser user, long amount) {
+        if (Math.max(0, user.getPartnerWithdrawalAllowanceExc()) >= amount) return;
+        user.setPartnerWithdrawalAllowanceExc(amount);
+        appUserRepository.save(user);
+    }
+
     /** Вывод сначала тратит месячный лимит, а то, что сверх него, - разовый запас: счётчик месяца растёт на всю сумму, запас уменьшается на превышение. */
     @Transactional
     public void recordWithdrawal(AppUser user, long amount) {

@@ -35,6 +35,15 @@ public class ClubActivityService {
     public static final int STREAK_BONUS_EVERY_DAYS = 7;
     public static final long STREAK_BONUS_EXC = 100;
     public static final int CODE_TTL_HOURS = 24;
+    /** Раз в сколько дней готовится пост с кодом (01.11.2026: было раз в неделю). */
+    public static final int CODE_EVERY_DAYS = 2;
+    /** «Охота за кодами»: сколько кодов за месяц нужно поймать, чтобы получить бонус к лимиту вывода (10 из ~15 постов). */
+    public static final int MONTHLY_CODES_TARGET = 10;
+    /** Бонус к лимиту вывода: процент от месячного лимита игрока, но не меньше минимума. Выдаётся как разовый запас вывода (не копится). */
+    public static final int MONTHLY_BONUS_PERCENT = 20;
+    public static final long MONTHLY_BONUS_MIN_EXC = 5_000;
+    /** Первый месяц, за который считается бонус (за прошлые месяцы ничего не выдаём). */
+    public static final java.time.YearMonth MONTHLY_BONUS_FROM = java.time.YearMonth.of(2026, 11);
 
     public static final int GOAL_TARGET_REACTIONS = 30;
     public static final long GOAL_REWARD_EXC = 100;
@@ -127,18 +136,42 @@ public class ClubActivityService {
         return codeRepository.findFirstByOrderByIdDesc();
     }
 
-    /** Серия дней подряд с введённым кодом: считается до сегодня (если сегодня уже вводил) или до вчера (если ещё нет); 0 - серии нет. */
+    /** Бонус к лимиту вывода за месяц: процент от месячного лимита, но не меньше минимума. */
+    public static long monthlyBonusExc(long monthlyLimit) {
+        return Math.max(MONTHLY_BONUS_MIN_EXC, monthlyLimit * MONTHLY_BONUS_PERCENT / 100);
+    }
+
+    /** Сколько кодов игрок поймал в текущем месяце. */
+    public int monthlyCount(Long userId) {
+        java.time.YearMonth ym = java.time.YearMonth.now();
+        return (int) codeClaimRepository.countByUserIdAndClaimDateBetween(userId, ym.atDay(1), ym.atEndOfMonth());
+    }
+
+    /** Сколько кодов нужно поймать за месяц: 10, но не больше двух третей реально вышедших постов (в неполный месяц порог не жёстче, чем показан игроку). */
+    public int requiredForMonth(java.time.YearMonth ym) {
+        long published = codeRepository.countByPublishedAtGreaterThanEqualAndPublishedAtLessThan(
+                ym.atDay(1).atStartOfDay(), ym.plusMonths(1).atDay(1).atStartOfDay());
+        return (int) Math.min(MONTHLY_CODES_TARGET, Math.max(1, Math.ceil(published * 2.0 / 3.0)));
+    }
+
+    /** Введён ли игроком уже действующий код (один код - один раз, даже если сутки сменились). */
+    public boolean activeCodeClaimed(Long userId) {
+        return activeCode().map(c -> codeClaimRepository.existsByUserIdAndCodeId(userId, c.getId())).orElse(false);
+    }
+
+    /** Серия кодов подряд (с 01.11.2026 код выходит раз в 2 дня, поэтому серия считается по кодам, а не по календарным дням):
+     *  сколько последних кодов подряд игрок ввёл; ещё не истекший и не введённый сегодняшний код серию не обрывает. */
     public int currentStreak(Long userId) {
-        List<DailyCodeClaim> claims = codeClaimRepository.findTop30ByUserIdOrderByClaimDateDesc(userId);
-        if (claims.isEmpty()) return 0;
-        LocalDate today = LocalDate.now();
-        LocalDate expected = claims.get(0).getClaimDate();
-        if (!expected.equals(today) && !expected.equals(today.minusDays(1))) return 0;
+        List<DailyCode> codes = codeRepository.findTop30ByOrderByIdDesc();
+        if (codes.isEmpty()) return 0;
+        java.util.Set<Long> claimed = new java.util.HashSet<>();
+        for (DailyCodeClaim c : codeClaimRepository.findTop30ByUserIdOrderByClaimDateDesc(userId)) claimed.add(c.getCodeId());
+        DailyCode newest = codes.get(0);
+        int i = (!claimed.contains(newest.getId()) && newest.getValidUntil() != null && newest.getValidUntil().isAfter(LocalDateTime.now())) ? 1 : 0;
         int streak = 0;
-        for (DailyCodeClaim c : claims) {
-            if (!c.getClaimDate().equals(expected)) break;
+        for (; i < codes.size(); i++) {
+            if (!claimed.contains(codes.get(i).getId())) break;
             streak++;
-            expected = expected.minusDays(1);
         }
         return streak;
     }
@@ -160,6 +193,9 @@ public class ClubActivityService {
             return new CodeResult(CodeStatus.ALREADY_TODAY, currentStreak(user.getId()), 0);
         }
         DailyCode code = active.get();
+        if (codeClaimRepository.existsByUserIdAndCodeId(user.getId(), code.getId())) {
+            return new CodeResult(CodeStatus.ALREADY_TODAY, currentStreak(user.getId()), 0);
+        }
         if (!normalize(code.getCode()).equals(normalize(input))) return new CodeResult(CodeStatus.WRONG, 0, 0);
 
         int streak = currentStreak(user.getId()) + 1;

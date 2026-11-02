@@ -660,12 +660,21 @@ public class ChannelContentService {
         return h;
     }
 
-    /** Раз в сутки в заданный час (UTC) создаёт черновик поста с кодом; публикация - только после одобрения админом. */
+    /** Раз в ClubActivityService.CODE_EVERY_DAYS дня в заданный час (UTC) создаёт черновик поста с кодом; публикация - только после одобрения админом
+     *  (с 01.11.2026 расписание по дням недели не используется: раньше пост был раз в неделю). */
     private void dailyCodeTick(LocalDateTime now) {
-        if (!isDailyCodeEnabled() || now.getHour() != dailyCodeHour() || now.getDayOfWeek().getValue() != dailyCodeDow()) return;
-        String today = LocalDate.now().toString();
-        if (today.equals(get("cc.dcode.last"))) return;
-        put("cc.dcode.last", today);
+        if (!isDailyCodeEnabled() || now.getHour() != dailyCodeHour()) return;
+        LocalDate today = LocalDate.now();
+        String last = get("cc.dcode.last");
+        if (today.toString().equals(last)) return;
+        if (last != null) {
+            try {
+                if (LocalDate.parse(last).plusDays(ClubActivityService.CODE_EVERY_DAYS).isAfter(today)) return;
+            } catch (Exception ignored) {
+                // непонятная дата в настройке - считаем, что пора
+            }
+        }
+        put("cc.dcode.last", today.toString());
         createDailyCodeDraft(false);
     }
 
@@ -677,9 +686,10 @@ public class ChannelContentService {
             return Optional.empty();
         }
         String code = clubActivityService.generateCode();
-        StringBuilder sb = new StringBuilder("🔑 <b>код дня</b>\n\n");
-        sb.append("Спрятал для вас код. Введите его в боте и получите билет и XP, а за каждый седьмой день подряд ещё и EXC.\n\n");
-        sb.append("<b>Код дня: ").append(code).append("</b>\n\n");
+        StringBuilder sb = new StringBuilder("🔑 <b>Код дня</b>\n\n");
+        sb.append("Нажмите на код, чтобы скопировать, затем кнопку «Ввести код» под постом и вставьте его в боте. Получите билет и XP, а за каждый седьмой код подряд ещё и EXC.\n\n");
+        sb.append("<code>").append(code).append("</code>\n\n");
+        sb.append("Поймайте ").append(ClubActivityService.MONTHLY_CODES_TARGET).append(" кодов за месяц, и в начале следующего ваш лимит вывода вырастет.\n\n");
         if (botUsername != null && !botUsername.isBlank()) {
             sb.append("Где вводить: <a href=\"https://t.me/").append(botUsername).append("\">@").append(botUsername).append("</a> → Квесты → 🔑 Код дня.\n\n");
         }
