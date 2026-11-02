@@ -1217,13 +1217,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
-        if ("rwquick:region".equals(data)) {
+        if ("rwquick:region".equals(data) || "rwquick:stock".equals(data)) {
             if ((isEffectiveAdmin(user) || isEffectiveModerator(user))
                     && session.getState() == SessionState.REWARD_REJECT_COMMENT
                     && !"withdrawal".equals(session.getData().get("rejectType"))) {
                 clearInlineKeyboard(callbackQuery);
                 answer(callbackQuery.getId(), "Заявка отклонена");
-                handleStateInput(user, session, QUICK_REJECT_REGION);
+                handleStateInput(user, session, "rwquick:stock".equals(data) ? QUICK_REJECT_OUT_OF_STOCK : QUICK_REJECT_REGION);
             } else {
                 answer(callbackQuery.getId(), "Заявка уже обработана или действие устарело");
             }
@@ -26980,6 +26980,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private static final String QUICK_REJECT_REGION =
             "Отправка в ваш регион временно недоступна. Ожидайте, мы сообщим, как только появится возможность.";
 
+    /** Быстрый ответ при отказе в заявке на награду (не вывод): товара нет в наличии (EXC возвращаются). */
+    private static final String QUICK_REJECT_OUT_OF_STOCK =
+            "Данного товара пока что нет в наличии.";
+
     private static final String QUICK_REJECT_REQUISITE =
             "Не удалось отправить выплату на указанные реквизиты: они не работают или на них нельзя сделать перевод. "
                     + "Укажите другие реквизиты и отправьте заявку на вывод заново, EXC вернулись на ваш баланс.";
@@ -26992,6 +26996,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private InlineKeyboardMarkup rewardRejectKeyboard() {
         return keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("⚡ Регион временно недоступен", "rwquick:region")),
+                List.of(keyboardFactory.callback("⚡ Нет в наличии", "rwquick:stock")),
                 List.of(keyboardFactory.callback("❌ Отмена", "common:cancel"))));
     }
 
