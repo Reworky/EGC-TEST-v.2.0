@@ -59,7 +59,8 @@ public class AnalyticsService {
         FRAUD("🕵️", "Фрод и злоупотребления"),
         COURSE("📈", "Курс дня и красная кнопка"),
         KPI("🏪", "Витрина проекта"),
-        EGC_PASS("⭐", "EGC Pass: продажи");
+        EGC_PASS("⭐", "EGC Pass: продажи"),
+        VPN("🔐", "EGC VPN");
 
         public final String icon;
         public final String title;
@@ -131,6 +132,7 @@ public class AnalyticsService {
     private final RetentionService retentionService;
     private final CourseAnalyticsService courseAnalytics;
     private final EgcPassFunnelService egcPassFunnel;
+    private final VpnStatsService vpnStats;
     private final PulseService pulseService;
 
     // ───────────────────────── снимок: дополнительные поля для трендов ─────────────────────────
@@ -246,6 +248,7 @@ public class AnalyticsService {
                 case COURSE -> courseTab(p, pv, lines, extras);
                 case KPI -> kpiTab(p, pv, fromDate, lines, extras);
                 case EGC_PASS -> egcPassTab(p, pv, lines, extras);
+                case VPN -> vpnTab(p, pv, lines, extras);
             }
         } catch (Exception e) {
             log.error("Analytics tab {} failed", tab, e);
@@ -896,6 +899,22 @@ public class AnalyticsService {
         for (Object[] r : f.bySource()) sb.append("• ").append(escape(String.valueOf(r[0]))).append(": ").append(r[1]).append(" (игроков ").append(r[2]).append(")\n");
         extras.add(sb.toString());
         extras.add("<i>Показы и открытия считаются с момента добавления вкладки (23.10.2026); покупки и продления берутся из журнала Stars за весь период.</i>");
+    }
+
+    /** Вкладка «EGC VPN» (03.11.2026): ключи сейчас, пробные, оплаты по журналу Stars, продления и переход пробный → платный. */
+    private void vpnTab(Period p, Period pv, List<Line> out, List<String> extras) {
+        VpnStatsService.Stats s = vpnStats.stats(p.from(), p.to(), pv.from(), pv.to());
+        out.add(L("v_active", "Рабочих ключей сейчас", "", (double) s.activeNow(), null, "пробных " + s.activeTrial() + ", платных " + s.activePaid(), false));
+        out.add(L("v_expiring", "Срок истекает в ближайшие 3 дня", "", (double) s.expiringSoon(), null, "кому уйдёт напоминание о продлении", false));
+        out.add(L("v_trials", "Взяли пробный период", "", (double) s.trialsStarted(), (double) s.trialsStartedPrev(), null, false));
+        out.add(L("v_buys", "Оплат за период", "", (double) s.purchases(), (double) s.purchasesPrev(), "из них со скидкой за EXC: " + s.purchasesWithExc(), false));
+        out.add(L("v_renew", "Из них продлений", "", (double) s.renewals(), null, "покупают ли второй месяц", false));
+        out.add(L("v_stars", "Выручка за период", "⭐", (double) s.starsRevenue(), (double) s.starsRevenuePrev(), null, false));
+        out.add(L("v_conv", "Пробный → платный (за всё время)", "%", s.trialUsersAll() == 0 ? null : s.trialUsersPaid() * 100.0 / s.trialUsersAll(), null,
+                s.trialUsersPaid() + " из " + s.trialUsersAll() + " взявших пробный купили месяц", false));
+        out.add(L("v_pending", "Требуют внимания (оплачено, ключ не выдан)", "", (double) s.pending(), null,
+                "если больше 0, смотрите алерты и повторите /vpn ID paid", true));
+        extras.add("<i>Покупки считаются по журналу Stars: ключи, выданные вручную командой /vpn, в оплаты не входят. Ключей выдано всего: " + s.totalKeys() + ".</i>");
     }
 
     private void tournamentsTab(List<Line> out, List<String> extras) {
