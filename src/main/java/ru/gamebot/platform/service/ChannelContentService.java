@@ -687,14 +687,9 @@ public class ChannelContentService {
         }
         String code = clubActivityService.generateCode();
         StringBuilder sb = new StringBuilder("🔑 <b>Код дня</b>\n\n");
-        sb.append("Нажмите на код, чтобы скопировать, затем кнопку «Ввести код» под постом и вставьте его в боте. Получите билет и XP, а за каждый седьмой код подряд ещё и EXC.\n\n");
+        sb.append("Нажмите на код, чтобы скопировать, затем кнопку «Ввести код» под постом и вставьте его в боте. Получите билет и XP, а за каждый седьмой код подряд ещё и EXC 🔥\n\n");
         sb.append("<code>").append(code).append("</code>\n\n");
-        sb.append("Поймайте ").append(ClubActivityService.MONTHLY_CODES_TARGET).append(" кодов за месяц, и в начале следующего ваш лимит вывода вырастет.\n\n");
-        if (botUsername != null && !botUsername.isBlank()) {
-            sb.append("Где вводить: <a href=\"https://t.me/").append(botUsername).append("\">@").append(botUsername).append("</a> → Квесты → 🔑 Код дня.\n\n");
-        }
-        sb.append("И поставьте реакцию под этим постом 🔥 Если клуб наберёт ").append(ClubActivityService.GOAL_TARGET_REACTIONS)
-                .append(" реакций, всем, кто ввёл код, достанется бонус.");
+        sb.append("<b>Поймайте ").append(ClubActivityService.MONTHLY_CODES_TARGET).append(" кодов за месяц, и в начале следующего ваш лимит вывода вырастет.</b>");
         return Optional.of(saveDraft(DAILY_CODE, sb.toString(), code));
     }
 
