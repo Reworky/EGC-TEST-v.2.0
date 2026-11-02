@@ -16,7 +16,7 @@ import ru.gamebot.platform.domain.repository.DailyCodeClaimRepository;
 import ru.gamebot.platform.event.CodeHuntBonusEvent;
 
 /** «Охота за кодами» (01.11.2026): кто за месяц поймал нужное число кодов дня (ClubActivityService.requiredForMonth, до 10), тому в начале следующего месяца
- *  разовый запас вывода сверх лимита: процент от его месячного лимита, но не меньше 5 000 EXC (ClubActivityService.monthlyBonusExc). Запас не копится от месяца к месяцу
+ *  разовый запас вывода сверх лимита: процент от его месячного лимита, но не меньше 7 000 EXC (ClubActivityService.monthlyBonusExc). Запас не копится от месяца к месяцу
  *  (SinkShopService.ensurePartnerWithdrawalAllowance). Месяц обрабатывается один раз (ключ в app_settings); за месяцы до MONTHLY_BONUS_FROM ничего не выдаётся,
  *  поэтому первый запуск после деплоя ничего не начислит «задним числом». */
 @Slf4j
