@@ -4204,9 +4204,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback(passLabel, "menu:battlepass")),
                 List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
-        if (vpnService.isEnabled()) {
-            rows.add(rows.size() - 1, List.of(keyboardFactory.callback("🔐 VPN", "menu:vpn")));
-        }
+        rows.add(rows.size() - 1, List.of(keyboardFactory.callback(vpnService.isEnabled() ? "🔐 VPN" : "🔐 VPN (скоро)", "menu:vpn")));
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
         if (shopBannerFileId != null) {
             sendPhotoCaption(user.getTelegramId(), shopBannerFileId, "🛍️ <b>Магазин</b>", keyboard);
@@ -4232,9 +4230,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     List.of(keyboardFactory.callback("🚀 Ускоритель (скоро)", "menu:accelerator")),
                     List.of(keyboardFactory.callback(passLabel, "menu:battlepass"))
             ));
-            if (vpnService.isEnabled()) {
-                fallbackRows.add(List.of(keyboardFactory.callback("🔐 VPN", "menu:vpn")));
-            }
+            fallbackRows.add(List.of(keyboardFactory.callback(vpnService.isEnabled() ? "🔐 VPN" : "🔐 VPN (скоро)", "menu:vpn")));
             sendMenuCategory(user, "🛍️ <b>Магазин</b>", fallbackRows);
             // "Донат по играм" сюда намеренно не добавлен — см. комментарий в основной ветке выше.
         }
