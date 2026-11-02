@@ -6480,8 +6480,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 return;
             }
             session.reset();
+            if (clubActivityService.activeCode().isEmpty()) {
+                sendText(user.getTelegramId(), "Сегодня код ещё не опубликован. Он появится в посте канала, загляните позже.", backMenuKeyboard("club:code"));
+                return;
+            }
             session.setState(SessionState.DAILY_CODE_INPUT);
-            sendText(user.getTelegramId(), "✍️ Введите код дня из поста в канале.", cancelKeyboard());
+            sendText(user.getTelegramId(), "✍️ Вставьте код дня из поста в канале.", cancelKeyboard());
         } else if ("goal".equals(action)) {
             answerSilently(callbackQuery.getId());
             sendClubGoalScreen(user);
@@ -6522,22 +6526,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         java.util.Optional<ru.gamebot.platform.domain.model.DailyCode> active = clubActivityService.activeCode();
         int streak = clubActivityService.currentStreak(user.getId());
         boolean claimed = clubActivityService.claimedToday(user.getId()) || clubActivityService.activeCodeClaimed(user.getId());
-        StringBuilder sb = new StringBuilder("🔑 <b>Код дня</b>\n<i>Скопируй код из поста в канале, введи его здесь и получи награду. Коды выходят примерно раз в 2 дня.</i>\n\n");
+        StringBuilder sb = new StringBuilder("🔑 <b>Код дня</b>\n\nСкопируй код из поста в канале, введи его здесь и получи награду.\nКоды выходят примерно раз в 2 дня.");
+        sb.append(codeHuntProgressText(user));
+        if (streak > 0) sb.append("\n\n🔥 Серия: <b>").append(streak).append("</b> ").append(codesWordRu(streak)).append(" подряд");
+        if (claimed) sb.append("\n\n✅ Сегодня код уже введён.");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        if (active.isEmpty()) {
-            sb.append("Сегодня код ещё не опубликован. Он появится в посте канала, загляните позже.");
-        } else {
-            sb.append("Награда: <b>+").append(ru.gamebot.platform.service.ClubActivityService.CODE_TICKETS).append(" 🎟 и +")
-                    .append(ru.gamebot.platform.service.ClubActivityService.CODE_XP).append(" XP</b>. За каждый ")
-                    .append(ru.gamebot.platform.service.ClubActivityService.STREAK_BONUS_EVERY_DAYS).append("-й код подряд ещё <b>+")
-                    .append(ru.gamebot.platform.service.ClubActivityService.STREAK_BONUS_EXC).append(" EXC</b>.\n");
-            sb.append(claimed ? "\n✅ Сегодня код уже введён." : "");
+        if (active.isPresent()) {
             String url = channelPostUrl(active.get().getChannelMessageId());
             if (url != null) rows.add(List.of(keyboardFactory.url("📢 Открыть пост дня", url)));
-            if (!claimed) rows.add(List.of(keyboardFactory.callback("✍️ Ввести код", "club:code:enter")));
         }
-        if (streak > 0) sb.append("\n🔥 Серия: <b>").append(streak).append("</b> ").append(codesWordRu(streak)).append(" подряд");
-        sb.append(codeHuntProgressText(user));
+        // Кнопка ввода есть всегда (даже пока код не опубликован: игрок сразу видит, куда его вставлять); если кода нет, бот ответит об этом при вводе
+        if (!claimed) rows.add(List.of(keyboardFactory.callback("✍️ Ввести код", "club:code:enter")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:quests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
@@ -6558,7 +6557,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         int caught = clubActivityService.monthlyCount(user.getId());
         int shown = Math.min(caught, target);
         return "\n\n📅 <b>Охота за кодами</b>: " + caught + " из " + target + " в этом месяце\n" + "▰".repeat(shown) + "▱".repeat(target - shown)
-                + "\nПоймай " + target + " кодов за месяц - и в начале следующего лимит вывода вырастет на "
+                + "\n\nПоймай " + target + " кодов за месяц - и в начале следующего лимит вывода вырастет на "
                 + ru.gamebot.platform.service.ClubActivityService.MONTHLY_BONUS_PERCENT + "% (не меньше "
                 + fmtExc(ru.gamebot.platform.service.ClubActivityService.MONTHLY_BONUS_MIN_EXC) + " EXC).";
     }
