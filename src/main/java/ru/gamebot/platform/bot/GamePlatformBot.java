@@ -12688,9 +12688,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("• ").append(escape(displayUserName(other))).append(" (<code>").append(other.getTelegramId()).append("</code>)\n");
         }
         sb.append("\nЗаявка СОЗДАНА как обычная, игрок о подозрении не знает (иначе он сменил бы реквизит). Аккаунт помечен подозрительным. Возможен мультиаккаунт — проверьте и решите вручную: перед выплатой откройте заявку и нажмите «🔎 Проверить игрока перед выплатой».");
+        List<List<InlineKeyboardButton>> conflictRows = new ArrayList<>();
+        for (AppUser other : event.getOtherUsers().stream().limit(3).toList()) {
+            conflictRows.add(List.of(keyboardFactory.callback("🚫 Заблокировать обоих: " + trim(displayUserName(other), 22),
+                    "admin:user:multipair:" + event.getUser().getTelegramId() + ":0:" + other.getTelegramId())));
+        }
+        InlineKeyboardMarkup conflictKeyboard = conflictRows.isEmpty() ? null : keyboardFactory.rowsLayout(conflictRows);
         for (Long adminId : adminService.resolvedAdminIds()) {
             try {
-                sendText(adminId, sb.toString(), null);
+                sendText(adminId, sb.toString(), conflictKeyboard);
             } catch (Exception e) {
                 log.warn("Failed to alert admin {} about shared withdrawal destination", adminId, e);
             }
@@ -20772,6 +20778,38 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (("multipair".equals(action) || "multipairgo".equals(action)) && parts.length >= 4) {
+            AppUser first = userService.findByTelegramId(telegramId).orElse(null);
+            AppUser second = userService.findByTelegramId(parseLong(parts[3])).orElse(null);
+            if (first == null || second == null) {
+                sendText(admin.getTelegramId(), "⚠️ Один из аккаунтов не найден.", backMenuKeyboard("menu:admin"));
+                return;
+            }
+            if ("multipair".equals(action)) {
+                sendText(admin.getTelegramId(),
+                        "🚫 <b>Заблокировать оба аккаунта?</b>\n\n"
+                                + "• " + escape(displayUserName(first)) + " (<code>" + first.getTelegramId() + "</code>)\n"
+                                + "• " + escape(displayUserName(second)) + " (<code>" + second.getTelegramId() + "</code>)\n\n"
+                                + "EXC на обоих будет конфискован. Перед этим проверьте заявки на вывод и карточки игроков.",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("🚫 Да, заблокировать обоих", "admin:user:multipairgo:" + telegramId + ":0:" + second.getTelegramId())),
+                                List.of(keyboardFactory.callback("⬅️ К заявкам", "admin:withdrawals")))));
+                return;
+            }
+            String pairReason = "Мультиаккаунт — нарушение п. 6 Правил EGC";
+            userService.blockAndConfiscate(first.getTelegramId(), pairReason);
+            userService.blockAndConfiscate(second.getTelegramId(), pairReason);
+            String pairNotice = "🚫 <b>Ваш аккаунт заблокирован</b>\n\nПричина: <i>" + pairReason
+                    + "</i>\n\nЕсли считаете это ошибкой — обратитесь в поддержку клуба.";
+            sendText(first.getTelegramId(), pairNotice, null);
+            sendText(second.getTelegramId(), pairNotice, null);
+            sendText(admin.getTelegramId(),
+                    "🚫 <b>Готово</b>\n\nЗаблокированы: " + escape(displayUserName(first)) + " и " + escape(displayUserName(second))
+                            + ". Живые заявки на вывод этих аккаунтов проверьте в «Заявки на вывод».",
+                    keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("⬅️ К заявкам", "admin:withdrawals")))));
+            return;
+        }
+
         if ("multiacc".equals(action)) {
             AppUser target = userService.findByTelegramId(telegramId).orElse(null);
             if (target == null) {
@@ -25659,9 +25697,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String phoneDupWarningMod = phoneDupMod.isPresent()
                 ? "\n\n🚨 <b>МУЛЬТИАККАУНТ!</b> Этот номер телефона уже зарегистрирован на аккаунте: <b>" + escape(phoneDupMod.get().getNickname()) + "</b>"
                 : "";
-        java.util.Optional<AppUser> multiblockTargetMod = destDupsMod.isEmpty()
-                ? phoneDupMod
-                : java.util.Optional.of(destDupsMod.get(0).getUser());
+        java.util.List<AppUser> sharedOthersMod = rewardService.findOtherAccountsSharingDestination(req);
+        java.util.Optional<AppUser> multiblockTargetMod = !destDupsMod.isEmpty()
+                ? java.util.Optional.of(destDupsMod.get(0).getUser())
+                : (phoneDupMod.isPresent() ? phoneDupMod
+                    : (sharedOthersMod.isEmpty() ? java.util.Optional.<AppUser>empty() : java.util.Optional.of(sharedOthersMod.get(0))));
         List<List<InlineKeyboardButton>> modWdRows = new ArrayList<>();
         modWdRows.add(List.of(
                 keyboardFactory.callback("✅ Выплачено", "mod:withdrawal:approve:" + req.getId()),
