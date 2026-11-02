@@ -51,4 +51,10 @@ public class UserProfileDto {
     /** Сколько ещё одобренных квестов до конца новичкового темпа (короче кулдауны/лимиты).
      * 0 = новичковый темп уже закончился, обычные лимиты. */
     private int onboardingQuestsLeft;
+    /** Дата регистрации (ISO yyyy-MM-dd) — «С нами N дн.» в профиле на сайте. null у старых записей без даты. */
+    private String joinedAt;
+    /** Заработано EXC за всё время (положительные начисления без возвратов/переводов). */
+    private long totalEarnedExc;
+    /** Заработано EXC за последние 30 дней. */
+    private long earnedLast30DaysExc;
 }

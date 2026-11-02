@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import ru.gamebot.platform.api.dto.ReferralDto;
+import ru.gamebot.platform.api.dto.ReferralFriendDto;
 import ru.gamebot.platform.api.dto.ReferralRankingDto;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
@@ -68,6 +69,29 @@ public class ReferralController {
                 .goalOpen(userService.referralGoalOpen(user))
                 .goalFriendJoined(user.getInvitedFriends() > 0)
                 .build());
+    }
+
+    /** Список приглашённых друзей — вкладка «Рефералы» в профиле на сайте. */
+    @GetMapping("/list")
+    public ResponseEntity<List<ReferralFriendDto>> friends(@AuthenticationPrincipal Long telegramId) {
+        if (appUserRepository.findByTelegramId(telegramId).isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
+        List<ReferralFriendDto> list = appUserRepository.findAllByReferredByTelegramId(telegramId).stream()
+                .filter(AppUser::isProfileCompleted)
+                .sorted((a, b) -> {
+                    if (a.getCreatedAt() == null) return b.getCreatedAt() == null ? 0 : 1;
+                    if (b.getCreatedAt() == null) return -1;
+                    return b.getCreatedAt().compareTo(a.getCreatedAt());
+                })
+                .map(f -> ReferralFriendDto.builder()
+                        .nickname(f.getNickname())
+                        .joinedAt(f.getCreatedAt() != null ? f.getCreatedAt().format(fmt) : null)
+                        .completedQuests(f.getCompletedQuests())
+                        .build())
+                .toList();
+        return ResponseEntity.ok(list);
     }
 
     @GetMapping("/ranking")

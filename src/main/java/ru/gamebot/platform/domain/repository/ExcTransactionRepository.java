@@ -51,6 +51,11 @@ public interface ExcTransactionRepository extends JpaRepository<ExcTransaction, 
             + "WHERE t.createdAt >= :from AND t.createdAt < :to ORDER BY t.createdAt ASC")
     List<Object[]> findRowsBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
+    /** Заработано игроком с момента since (профиль на сайте): только положительные начисления, без возвратов за покупки, переводов и возвратов вывода. */
+    @Query("SELECT COALESCE(SUM(t.amount), 0) FROM ExcTransaction t WHERE t.user = :user AND t.amount > 0 "
+            + "AND t.createdAt >= :since AND t.type NOT IN ('SHOP_REFUND', 'TRANSFER', 'WITHDRAWAL')")
+    long sumEarnedByUserSince(@Param("user") AppUser user, @Param("since") LocalDateTime since);
+
     /** Сумма отрицательных операций EXC внутри платформы с момента since (магазин, предметы, взносы и т.п.; результат ≤ 0): выводы,
      *  списания админом и конфискации не считаются. Для «потрачено» берите модуль. */
     @Query("SELECT COALESCE(SUM(t.amount), 0) FROM ExcTransaction t WHERE t.amount < 0 AND t.createdAt >= :since "

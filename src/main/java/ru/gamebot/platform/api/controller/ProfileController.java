@@ -36,6 +36,7 @@ public class ProfileController {
     private final SinkShopService sinkShopService;
     private final TelegramFileService telegramFileService;
     private final RewardService rewardService;
+    private final ru.gamebot.platform.domain.repository.ExcTransactionRepository excTransactionRepository;
 
     @GetMapping
     public ResponseEntity<?> getProfile(@AuthenticationPrincipal Long telegramId) {
@@ -75,6 +76,9 @@ public class ProfileController {
                             .friendBadgeName(userService.currentInvitedFriendsBadge(user.getInvitedFriends()).orElse(null))
                             .inSquad(user.getSquadId() != null)
                             .onboardingQuestsLeft(Math.max(0, QuestService.ONBOARDING_QUEST_THRESHOLD - user.getCompletedQuests()))
+                            .joinedAt(user.getCreatedAt() != null ? user.getCreatedAt().toLocalDate().toString() : null)
+                            .totalEarnedExc(excTransactionRepository.sumEarnedByUserSince(user, java.time.LocalDateTime.of(2000, 1, 1, 0, 0)))
+                            .earnedLast30DaysExc(excTransactionRepository.sumEarnedByUserSince(user, java.time.LocalDateTime.now().minusDays(30)))
                             .build()))
                 .orElse(ResponseEntity.notFound().build());
     }
