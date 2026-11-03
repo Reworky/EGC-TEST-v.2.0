@@ -262,6 +262,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         log.info("Resolved admin IDs: {}", adminService.resolvedAdminIds());
         log.info("Resolved moderator IDs: {}", adminService.resolvedModeratorIds());
         setupMenuButton();
+        setupPlayerCommandMenu();
         setupAdminCommandMenus();
         drainNewsQueue();
         notifyAdminsStartup();
@@ -376,6 +377,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (user.isBlocked() && !adminService.isAdmin(user.getTelegramId())) {
             sendBlockedNotice(user);
+            return;
+        }
+
+        // /menu - выход в главное меню из любого шага (отчёт, аватар, флаг отряда, обращение в поддержку и т.д.); пока анкета не заполнена,
+        // команду разбирает ветка регистрации ниже
+        if (text != null && "/menu".equalsIgnoreCase(text.trim()) && user.isProfileCompleted() && session.getState() != SessionState.NONE) {
+            session.reset();
+            sendMainMenu(user, roleWelcomeText(user, null));
             return;
         }
 
@@ -7359,10 +7368,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("clearme", "", "Стереть мой прогресс (тест регистрации с нуля)"),
             new AdminCommand("resetreqid", "", "ОПАСНО: удалить все заявки на вывод и сбросить счётчик ID"));
 
+    /** Меню «/» для всех игроков (область по умолчанию): /menu открывает главное меню, /start то же самое. Чаты админов получают свой список
+     *  (см. setupAdminCommandMenus), он перекрывает этот. Перезаписывает список, заданный в BotFather. */
+    private void setupPlayerCommandMenu() {
+        try {
+            execute(org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands.builder()
+                    .commands(List.of(
+                            org.telegram.telegrambots.meta.api.objects.commands.BotCommand.builder().command("menu").description("Главное меню").build(),
+                            org.telegram.telegrambots.meta.api.objects.commands.BotCommand.builder().command("start").description("Запустить бота").build()))
+                    .scope(org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeDefault.builder().build())
+                    .build());
+        } catch (Exception e) {
+            log.warn("Player command menu not set: {}", e.getMessage());
+        }
+    }
+
     /** Меню «/» с админ-командами только в чатах админов (у остальных остаётся общее меню из BotFather). Если чата с админом ещё нет
      *  (не нажимал /start), Telegram вернёт ошибку - пропускаем, меню появится после перезапуска бота. */
     private void setupAdminCommandMenus() {
         List<org.telegram.telegrambots.meta.api.objects.commands.BotCommand> commands = new ArrayList<>();
+        commands.add(org.telegram.telegrambots.meta.api.objects.commands.BotCommand.builder().command("menu").description("Главное меню").build());
         commands.add(org.telegram.telegrambots.meta.api.objects.commands.BotCommand.builder().command("start").description("Меню").build());
         for (AdminCommand c : ADMIN_COMMANDS) {
             String description = c.args().isEmpty() ? c.description() : c.description() + " (" + c.args() + ")";
