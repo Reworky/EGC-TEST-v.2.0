@@ -9287,6 +9287,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         session.getData().put("report_photos", "");
         session.getData().put("report_comment", "");
 
+        if (isOtpMissionQuest(quest)) {
+            // Миссия «ОТП Карта»: два скриншота по очереди, а не общее «пришлите что-нибудь» (04.11.2026)
+            sendText(user.getTelegramId(),
+                    "📸 <b>Отчёт: скриншот 1 из 2</b>\n\n"
+                            + "Карта в приложении ОТП Банка: видно, что она новая и активная.\n"
+                            + "🔒 Номер карты и счёта закрой (закрась или обрежь).",
+                    keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("❌ Отмена", "menu:myquests")))));
+            answer(callbackQuery.getId(), "Жду скриншот 1");
+            return;
+        }
         sendText(user.getTelegramId(),
                 "📤 <b>Отчёт по квесту</b>\n\n"
                         + "Отправьте скриншот(ы), видео, файл или ссылку.\n"
@@ -9337,6 +9347,34 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 backMenuKeyboard("menu:myquests"));
     }
 
+    /** Ответ на очередное фото отчёта. Для миссии «ОТП Карта» - по шагам (скриншот 1 принят, просим второй; оба на месте - «Отправить» или «Начать заново»), для остальных - общий текст. */
+    private void sendReportPhotoProgress(Long telegramId, Long submissionId, UserSession session, int count, String defaultText) {
+        Long questId = session.getQuestId();
+        boolean otp = false;
+        try {
+            otp = questId != null && isOtpMissionQuest(questService.getQuest(questId));
+        } catch (Exception e) {
+            log.warn("OTP report session check failed for quest {}", questId, e);
+        }
+        if (!otp) {
+            sendText(telegramId, defaultText, keyboardFactory.rowsLayout(List.of(
+                    List.of(keyboardFactory.callback("📤 Отправить отчёт", "report:submit:" + submissionId)),
+                    List.of(keyboardFactory.callback("❌ Отмена", "menu:myquests")))));
+        } else if (count < 2) {
+            sendText(telegramId,
+                    "✅ Скриншот 1 принят.\n\n"
+                            + "📸 <b>Скриншот 2 из 2:</b> «Детали операции» покупки. Открой её в истории операций: должны быть видны продавец, сумма (от 500 ₽), дата и статус не «В обработке».",
+                    keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("❌ Отмена", "menu:myquests")))));
+        } else {
+            sendText(telegramId,
+                    "✅ <b>Оба скриншота на месте.</b> Всё верно?",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("📤 Отправить отчёт", "report:submit:" + submissionId)),
+                            List.of(keyboardFactory.callback("🔄 Начать заново", "quest:report:" + questId)),
+                            List.of(keyboardFactory.callback("❌ Отмена", "menu:myquests")))));
+        }
+    }
+
     private void handleReportCollecting(AppUser user, UserSession session, Message message) {
         String photos = session.getData().getOrDefault("report_photos", "");
         String uniqueIds = session.getData().getOrDefault("report_photo_unique_ids", "");
@@ -9369,22 +9407,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     String currentPhotos = session.getData().getOrDefault("report_photos", "");
                     int count = currentPhotos.isBlank() ? 0
                             : (int) currentPhotos.chars().filter(c -> c == '|').count() / 2 + 1;
-                    sendText(telegramId,
-                            "🖼 Добавлено фото: <b>" + count + " шт.</b> Можете прислать ещё или нажмите «Отправить отчёт».",
-                            keyboardFactory.rowsLayout(List.of(
-                                    List.of(keyboardFactory.callback("📤 Отправить отчёт", "report:submit:" + submissionId)),
-                                    List.of(keyboardFactory.callback("❌ Отмена", "menu:myquests"))
-                            )));
+                    sendReportPhotoProgress(telegramId, submissionId, session, count,
+                            "🖼 Добавлено фото: <b>" + count + " шт.</b> Можете прислать ещё или нажмите «Отправить отчёт».");
                 }, 1500, TimeUnit.MILLISECONDS);
                 albumTimers.put(mediaGroupId, timer);
             } else {
                 int count = photos.isBlank() ? 0 : (int) photos.chars().filter(c -> c == '|').count() / 2 + 1;
-                sendText(telegramId,
-                        "🖼 Фото добавлено (" + count + " шт.). Можете прислать ещё или нажмите «Отправить отчёт».",
-                        keyboardFactory.rowsLayout(List.of(
-                                List.of(keyboardFactory.callback("📤 Отправить отчёт", "report:submit:" + submissionId)),
-                                List.of(keyboardFactory.callback("❌ Отмена", "menu:myquests"))
-                        )));
+                sendReportPhotoProgress(telegramId, submissionId, session, count,
+                        "🖼 Фото добавлено (" + count + " шт.). Можете прислать ещё или нажмите «Отправить отчёт».");
             }
         } else if (message.hasVideo()) {
             String fileId = message.getVideo().getFileId();
