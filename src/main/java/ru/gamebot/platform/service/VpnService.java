@@ -50,6 +50,7 @@ public class VpnService {
     private final int trialGb;
     private final int paidDays;
     private final int paidGb;
+    private final String clientApp;
 
     public VpnService(VpnPanelClient panel, VpnAccountRepository repository, ApplicationEventPublisher eventPublisher,
                       @Value("${app.vpn-enabled:false}") boolean enabled,
@@ -57,7 +58,8 @@ public class VpnService {
                       @Value("${app.vpn-trial-days:3}") int trialDays,
                       @Value("${app.vpn-trial-gb:5}") int trialGb,
                       @Value("${app.vpn-paid-days:30}") int paidDays,
-                      @Value("${app.vpn-paid-gb:0}") int paidGb) {
+                      @Value("${app.vpn-paid-gb:0}") int paidGb,
+                      @Value("${app.vpn-client-app:hiddify}") String clientApp) {
         this.panel = panel;
         this.repository = repository;
         this.eventPublisher = eventPublisher;
@@ -67,6 +69,7 @@ public class VpnService {
         this.trialGb = trialGb;
         this.paidDays = paidDays;
         this.paidGb = paidGb;
+        this.clientApp = clientApp == null ? "hiddify" : clientApp.trim().toLowerCase();
         if (!enabled) {
             log.warn("VpnService disabled: VPN_ENABLED is not true");
         } else if (!panel.isConfigured() || this.subBase.isBlank()) {
@@ -87,6 +90,9 @@ public class VpnService {
     public int getTrialGb() { return trialGb; }
 
     public int getPaidDays() { return paidDays; }
+
+    /** Какие приложения показываем игроку: «v2box» (V2Box / v2rayTun / v2rayN, для VLESS Reality) или «hiddify» (по умолчанию, для Hysteria2 на сервере Влада). */
+    public boolean isV2boxClientApp() { return "v2box".equals(clientApp); }
 
     /** Ключ работает сейчас: выдан и срок не истёк. */
     public boolean isRunning(VpnAccount account) {

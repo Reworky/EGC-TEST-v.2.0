@@ -18020,12 +18020,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return String.format("%,d", amount).replace(',', ' ');
     }
 
-    /** Ссылки на установку Hiddify (приложение с поддержкой Hysteria2) - строка кнопок под экраном ключа. */
-    private List<InlineKeyboardButton> vpnInstallRow() {
-        return List.of(
+    /** Кнопки установки приложения под экраном ключа. По умолчанию Hiddify (Hysteria2 на сервере Влада); VPN_CLIENT_APP=v2box - V2Box / v2rayTun / v2rayN
+     *  (VLESS Reality: Hiddify iOS 4.0.0 dev Reality-авторизацию не проходит, V2Box проверен на iPhone 03.11.2026; Android и ПК не проверялись). */
+    private List<List<InlineKeyboardButton>> vpnInstallRows() {
+        if (vpnService.isV2boxClientApp()) {
+            return List.of(
+                    List.of(keyboardFactory.url("🍏 iPhone: V2Box", "https://apps.apple.com/app/v2box-v2ray-client/id6446814690"),
+                            keyboardFactory.url("📱 Android: v2rayTun", "https://play.google.com/store/apps/details?id=com.v2raytun.android")),
+                    List.of(keyboardFactory.url("💻 Windows: v2rayN", "https://github.com/2dust/v2rayN/releases/latest"),
+                            keyboardFactory.url("🍎 Mac: V2Box", "https://apps.apple.com/app/v2box-v2ray-client/id6446814690")));
+        }
+        return List.of(List.of(
                 keyboardFactory.url("📱 Android", "https://play.google.com/store/apps/details?id=app.hiddify.com"),
                 keyboardFactory.url("🍏 iPhone", "https://apps.apple.com/app/hiddify-proxy-vpn/id6596777532"),
-                keyboardFactory.url("💻 ПК / Mac", "https://github.com/hiddify/hiddify-app/releases/latest"));
+                keyboardFactory.url("💻 ПК / Mac", "https://github.com/hiddify/hiddify-app/releases/latest")));
     }
 
     /** Кнопки оплаты: за Stars целиком и со скидкой за EXC (если EXC хватает; иначе неактивная подсказка, сколько не хватает). */
@@ -18106,13 +18114,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append(headline != null ? headline : (trial ? "✅ <b>Пробный VPN включён</b>" : "✅ <b>EGC VPN активен</b>")).append("\n\n")
           .append("До: <b>").append(DATE_TIME_FORMATTER.format(a.getExpiresAt())).append("</b> · ")
           .append(trial ? "лимит " + vpnService.getTrialGb() + " ГБ · 1 устройство" : "до 2 устройств").append("\n\n")
-          .append("<b>Как подключить (1 минута)</b>\n")
-          .append("1. Установите приложение Hiddify (кнопки ниже)\n")
-          .append("2. Нажмите на ссылку ниже, она скопируется\n")
-          .append("3. В приложении: «Новый профиль» → «Из буфера обмена» → «Подключиться»\n\n")
+          .append(vpnService.isV2boxClientApp()
+                  ? "<b>Как подключить (2 минуты)</b>\n"
+                    + "1. Установите приложение: iPhone — V2Box, Android — v2rayTun (кнопки ниже)\n"
+                    + "2. Нажмите на ссылку ниже, она скопируется\n"
+                    + "3. В приложении добавьте подписку по этой ссылке, обновите её и нажмите «Подключить»\n\n"
+                  : "<b>Как подключить (1 минута)</b>\n"
+                    + "1. Установите приложение Hiddify (кнопки ниже)\n"
+                    + "2. Нажмите на ссылку ниже, она скопируется\n"
+                    + "3. В приложении: «Новый профиль» → «Из буфера обмена» → «Подключиться»\n\n")
           .append("Ваша личная ссылка (никому не показывайте):\n<code>").append(escape(vpnService.subscriptionUrl(a))).append("</code>");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(vpnInstallRow());
+        rows.addAll(vpnInstallRows());
         addVpnPayRows(rows, user, !trial);
         rows.add(List.of(keyboardFactory.callback("ℹ️ Условия", "vpn:terms")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:cat:shop"), keyboardFactory.callback("🏠 Меню", "menu:main")));
