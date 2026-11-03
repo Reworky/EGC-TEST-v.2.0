@@ -6264,7 +6264,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
                 case ru.gamebot.platform.event.OtpMissionReminderEvent.KIND_BANK_DAY -> {
                     text = "💰 <b>Банк мог уже выплатить бонус.</b> Проверь карту.\n\nКогда банк заплатит клубу, мы начислим " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC и напишем тебе.";
-                    keyboard = null;
+                    keyboard = keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("💰 Банк вернул мне 500 ₽", "mission:bankpaid:" + event.getSubmissionId() + ":4"))));
                 }
                 default -> text = "🎮 <b>Карта ОТП ждёт тебя:</b> два шага до " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC. Продолжим?";
             }
@@ -8604,6 +8605,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         Long submissionId = parseLong(p[1]);
         Long stepArg = parseLong(p[2]);
         if (submissionId == null || stepArg == null) return;
+        if ("bankpaid".equals(p[0])) {
+            handleOtpBankClaim(user, submissionId);
+            return;
+        }
         try {
             QuestSubmission sub = switch (p[0]) {
                 case "next" -> questService.advanceMissionStep(submissionId, user.getTelegramId(), stepArg.intValue());
@@ -8704,8 +8709,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(questReportOrCheckButton(quest)));
         } else {
             sb.append("✅ <b>Отчёт принят, " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC начислены.</b>\n\n"
-                    + "Банк вернёт 500 ₽ на твою карту с " + ruDayMonth(bankDate) + ". Когда банк заплатит клубу, мы начислим " + fmtExc(OTP_BONUS_DEFAULT_EXC)
-                    + " EXC и откроем вывод всей суммы разом, одной заявкой: лимит вывода для этого расширяется.");
+                    + "<b>Что дальше:</b>\n"
+                    + "1️⃣ С " + ruDayMonth(bankDate) + " банк вернёт тебе 500 ₽ на карту.\n"
+                    + "2️⃣ Когда банк заплатит клубу, мы начислим " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC и откроем вывод всей суммы разом.\n"
+                    + "3️⃣ Мы напишем тебе сами. Если до " + ruDayMonth(bankDate.plusDays(7)) + " ничего нет, напиши менеджеру.");
+            boolean claimed = (sub.getMissionRemindersSent() & ru.gamebot.platform.service.OtpMissionReminderService.BIT_BANK_CLAIMED) != 0;
+            rows.add(List.of(claimed ? keyboardFactory.callback("✅ Мы проверяем выплату банка", "noop")
+                    : keyboardFactory.callback("💰 Банк вернул мне 500 ₽", "mission:bankpaid:" + sub.getId() + ":4")));
+            rows.add(List.of(keyboardFactory.callback("🎯 Пока ждёшь: другие квесты", "menu:quests"), otpManagerButton(sub, 4)));
         }
         if (st == SubmissionStatus.DRAFT || st == SubmissionStatus.PENDING || returned) {
             rows.add(List.of(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + sub.getId())));
@@ -8713,6 +8724,34 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", currentQuestBackData(user)),
                 keyboardFactory.callback("📂 Мои", "menu:myquests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows), true);
+    }
+
+    /** «Банк вернул мне 500 ₽»: один раз на заявку шлём админам ID игрока и готовую команду /otpbonus (начисление остаётся ручным, после проверки выплаты в кабинете банка). */
+    private void handleOtpBankClaim(AppUser user, Long submissionId) {
+        try {
+            QuestSubmission sub = questService.getSubmission(submissionId);
+            if (sub.getUser() == null || !sub.getUser().getTelegramId().equals(user.getTelegramId()) || !isOtpMissionQuest(sub.getQuest())) return;
+            boolean first = questService.markBankPaidClaimed(submissionId, user.getTelegramId());
+            if (first) {
+                String alert = "💰 <b>ОТП Карта: игрок сообщает о выплате банка</b>\n\n"
+                        + "👤 " + escape(displayUserName(user)) + " · ID <code>" + user.getTelegramId() + "</code>\n"
+                        + "Заявка К-" + (sub.getDisplayId() != null ? sub.getDisplayId() : sub.getId()) + "\n\n"
+                        + "Проверьте выплату в кабинете банка и начислите: <code>/otpbonus " + user.getTelegramId() + "</code>";
+                for (Long adminId : adminService.resolvedAdminIds()) {
+                    try {
+                        sendText(adminId, alert, null);
+                    } catch (Exception e) {
+                        log.warn("Failed to alert admin {} about OTP bank claim", adminId, e);
+                    }
+                }
+            }
+            sendText(user.getTelegramId(),
+                    first ? "✅ <b>Спасибо!</b> Проверим выплату банка и начислим " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC. Мы напишем тебе."
+                            : "✅ Мы уже проверяем выплату банка. Напишем, как только начислим " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC.",
+                    keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("▶️ Открыть миссию", "myquest:view:" + submissionId)))));
+        } catch (Exception e) {
+            log.warn("OTP bank claim failed for submission {}", submissionId, e);
+        }
     }
 
     /** Кнопка «💬 Написать менеджеру» на экране миссии: личные сообщения менеджера (APP_SUPPORT_USERNAME) с заранее вписанным текстом - номер заявки и этап, менеджеру не надо переспрашивать. */

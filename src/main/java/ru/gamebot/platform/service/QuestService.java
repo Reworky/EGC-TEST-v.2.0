@@ -1634,6 +1634,22 @@ public class QuestService {
         return questSubmissionRepository.save(submission);
     }
 
+    /** Партнёрская миссия: игрок нажал «Банк вернул мне 500 ₽». true - отметили первый раз (админам шлём уведомление), false - уже нажимал или заявка не одобрена. */
+    @Transactional
+    public boolean markBankPaidClaimed(Long submissionId, Long telegramId) {
+        QuestSubmission sub = getSubmission(submissionId);
+        if (sub.getUser() == null || !sub.getUser().getTelegramId().equals(telegramId)) {
+            throw new IllegalArgumentException("Это не ваш квест.");
+        }
+        int mask = sub.getMissionRemindersSent();
+        if (sub.getStatus() != SubmissionStatus.APPROVED || (mask & OtpMissionReminderService.BIT_BANK_CLAIMED) != 0) {
+            return false;
+        }
+        sub.setMissionRemindersSent(mask | OtpMissionReminderService.BIT_BANK_CLAIMED);
+        questSubmissionRepository.save(sub);
+        return true;
+    }
+
     /** «Вернуть на доработку» с конкретной причиной (миссия «ОТП Карта»): статус NEEDS_INFO, комментарий модератора - готовая или своя причина. */
     @Transactional
     public QuestSubmission requestClarification(Long submissionId, String comment) {

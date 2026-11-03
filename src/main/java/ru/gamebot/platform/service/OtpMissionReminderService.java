@@ -33,6 +33,8 @@ public class OtpMissionReminderService {
     static final int BIT_WAITING = 1;
     static final int BIT_DEADLINE = 2;
     static final int BIT_BANK_DAY = 4;
+    /** Игрок нажал «Банк вернул мне 500 ₽» (админам ушло уведомление; повторно не шлём). */
+    public static final int BIT_BANK_CLAIMED = 8;
     private static final int SEND_FROM_HOUR = 9;
     private static final int SEND_UNTIL_HOUR = 21;
 
