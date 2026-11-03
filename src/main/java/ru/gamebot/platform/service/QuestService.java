@@ -1634,6 +1634,16 @@ public class QuestService {
         return questSubmissionRepository.save(submission);
     }
 
+    /** «Вернуть на доработку» с конкретной причиной (миссия «ОТП Карта»): статус NEEDS_INFO, комментарий модератора - готовая или своя причина. */
+    @Transactional
+    public QuestSubmission requestClarification(Long submissionId, String comment) {
+        QuestSubmission submission = getSubmission(submissionId);
+        submission.setStatus(SubmissionStatus.NEEDS_INFO);
+        submission.setModeratorComment(comment);
+        submission.setUpdatedAt(LocalDateTime.now());
+        return questSubmissionRepository.save(submission);
+    }
+
     @Transactional
     public QuestSubmission cancelSubmission(Long submissionId, AppUser user) {
         QuestSubmission submission = getSubmission(submissionId);

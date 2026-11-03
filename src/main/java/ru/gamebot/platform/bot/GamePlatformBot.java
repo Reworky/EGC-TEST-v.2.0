@@ -2276,7 +2276,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if (data.startsWith("mod:more:") && isEffectiveModerator(user)) {
-            handleModerationClarify(callbackQuery, parseLong(data.substring("mod:more:".length())));
+            handleModerationClarify(callbackQuery, user, parseLong(data.substring("mod:more:".length())));
+            return;
+        }
+        if ((data.startsWith("mod:otpret:") || data.startsWith("mod:otpfin:")) && isEffectiveModerator(user)) {
+            boolean finalReject = data.startsWith("mod:otpfin:");
+            String[] otpParts = data.substring("mod:otpret:".length()).split(":", 2);
+            handleOtpReason(callbackQuery, user, Integer.parseInt(otpParts[0]), parseLong(otpParts[1]), finalReject);
+            return;
+        }
+        if (data.startsWith("mod:more-custom:") && isEffectiveModerator(user)) {
+            Long customSubmissionId = parseLong(data.substring("mod:more-custom:".length()));
+            session.reset();
+            session.setState(SessionState.QUEST_REJECT_COMMENT);
+            session.setQuestId(customSubmissionId);
+            session.getData().put("reject_mode", "return");
+            answer(callbackQuery.getId(), "Укажите, что исправить");
+            sendText(user.getTelegramId(),
+                    "↩️ <b>Вернуть на доработку</b>\n\nНапишите игроку, что именно исправить: текст уйдёт ему вместе с кнопкой «Исправить и отправить заново».",
+                    cancelKeyboard());
             return;
         }
         if (data.startsWith("mod:support:") && isEffectiveModerator(user)) {
@@ -3982,14 +4000,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case QUEST_REJECT_COMMENT -> {
                 Long submissionId = session.getQuestId();
+                boolean returnMode = "return".equals(session.getData().get("reject_mode"));
                 session.reset();
-                QuestSubmission submission = questService.rejectSubmission(
-                        submissionId, text.trim(), RejectionReasonCode.OTHER, user.getTelegramId());
-                notifyUser(submission.getUser().getTelegramId(),
-                        "⚠️ Отчёт по квесту <b>" + escape(submission.getQuest().getTitle()) + "</b> отклонён.\n\n"
-                                + escape(submission.getModeratorComment()));
-                sendText(user.getTelegramId(), "✅ Заявка отклонена, игрок уведомлён с указанной причиной.", null);
-                sendModerationQueue(user.getTelegramId());
+                if (returnMode) {
+                    // Миссия «ОТП Карта»: «Вернуть на доработку» со своим текстом
+                    QuestSubmission returned = questService.requestClarification(submissionId, text.trim());
+                    notifyOtpReportDecision(returned, false);
+                    sendText(user.getTelegramId(), "✅ Отчёт возвращён на доработку, игрок уведомлён.", null);
+                    sendModerationQueue(user.getTelegramId());
+                } else {
+                    QuestSubmission submission = questService.rejectSubmission(
+                            submissionId, text.trim(), RejectionReasonCode.OTHER, user.getTelegramId());
+                    if (isOtpMissionQuest(submission.getQuest())) {
+                        notifyOtpReportDecision(submission, true);
+                    } else {
+                        notifyUser(submission.getUser().getTelegramId(),
+                                "⚠️ Отчёт по квесту <b>" + escape(submission.getQuest().getTitle()) + "</b> отклонён.\n\n"
+                                        + escape(submission.getModeratorComment()));
+                    }
+                    sendText(user.getTelegramId(), "✅ Заявка отклонена, игрок уведомлён с указанной причиной.", null);
+                    sendModerationQueue(user.getTelegramId());
+                }
             }
             case QUEST_TEMPLATE_TITLE -> {
                 session.getData().put("title", text.trim());
@@ -8561,7 +8592,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private boolean isMissionActiveStatus(SubmissionStatus status) {
-        return status == SubmissionStatus.DRAFT || status == SubmissionStatus.PENDING || status == SubmissionStatus.APPROVED;
+        // NEEDS_INFO и REJECTED - экран миссии показывает причину и «Исправить» / «Поддержка» (04.11.2026)
+        return status == SubmissionStatus.DRAFT || status == SubmissionStatus.PENDING || status == SubmissionStatus.APPROVED
+                || status == SubmissionStatus.NEEDS_INFO || status == SubmissionStatus.REJECTED;
     }
 
     /** Нажатия «миссии»: mission:view:ЗАЯВКА:ШАГ - показать шаг (не дальше достигнутого), mission:next:ЗАЯВКА:ШАГ - «Готово», перейти к следующему шагу. */
@@ -8609,7 +8642,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendOtpMission(AppUser user, Quest quest, QuestSubmission sub, String notice) {
         List<String[]> steps = splitQuestBlocks(questService.personalizeInstruction(quest.getInstruction(), user.getTelegramId()));
         SubmissionStatus st = sub.getStatus();
-        int stage = st == SubmissionStatus.APPROVED ? 4 : st == SubmissionStatus.PENDING ? 3 : Math.min(3, Math.max(1, sub.getMissionStep()));
+        boolean returned = st == SubmissionStatus.NEEDS_INFO;
+        boolean rejectedFinal = st == SubmissionStatus.REJECTED;
+        int stage = st == SubmissionStatus.APPROVED ? 4 : (st == SubmissionStatus.PENDING || returned || rejectedFinal) ? 3 : Math.min(3, Math.max(1, sub.getMissionStep()));
         java.time.LocalDate today = java.time.LocalDate.now();
         java.time.LocalDate activated = sub.getCardActivatedOn();
         java.time.LocalDate windowEnd = activated == null ? null : activated.plusDays(ru.gamebot.platform.service.OtpMissionReminderService.PURCHASE_WINDOW_DAYS);
@@ -8623,7 +8658,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("🎮 <b>Миссия: карта ОТП Банка</b>\n")
                 .append("▰".repeat(stage)).append("▱".repeat(5 - stage)).append(" этап ").append(stage).append(" из 5\n\n");
         for (int i = 1; i <= 4; i++) {
-            sb.append(i < stage ? "✅" : i == stage ? "🔸" : "⬜").append(" Этап ").append(i).append(". ").append(names[i - 1]);
+            sb.append(i < stage ? "✅" : i == stage ? (rejectedFinal ? "❌" : "🔸") : "⬜").append(" Этап ").append(i).append(". ").append(names[i - 1]);
             if (i == 2 && stage == 2 && windowEnd != null) {
                 long daysLeft = java.time.temporal.ChronoUnit.DAYS.between(today, windowEnd);
                 sb.append(daysLeft >= 0 ? ": осталось <b>" + daysLeft + " дн</b> (до " + windowEnd.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM")) + ")"
@@ -8651,6 +8686,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             java.util.regex.Matcher m = urlPattern.matcher(steps.size() > 1 && steps.get(1).length > 1 ? steps.get(1)[1] : "");
             if (m.find()) rows.add(List.of(keyboardFactory.url("🔗 Донат в игру (совет)", m.group())));
             rows.add(List.of(keyboardFactory.callback("✅ Я заплатил(а)", "mission:paid:" + sub.getId() + ":2")));
+            rows.add(List.of(otpManagerButton(sub, 2))); // здесь чаще всего путаются: какая покупка подойдёт, что не засчитывается
+        } else if (returned) {
+            sb.append("⚠️ <b>Отчёт вернули на доработку</b>\n")
+                    .append(escape(sub.getModeratorComment() == null ? "" : sub.getModeratorComment()));
+            rows.add(List.of(keyboardFactory.callback("📸 Исправить и отправить заново", "quest:report:" + quest.getId())));
+            rows.add(List.of(otpManagerButton(sub, 3)));
+        } else if (rejectedFinal) {
+            sb.append("❌ <b>Отчёт отклонён</b>\n")
+                    .append(escape(sub.getModeratorComment() == null ? "" : sub.getModeratorComment()))
+                    .append("\n\nНаграда не начисляется. Если считаешь это ошибкой, напиши менеджеру.");
+            rows.add(List.of(otpManagerButton(sub, 3)));
         } else if (stage == 3 && st == SubmissionStatus.PENDING) {
             sb.append("⏳ <b>Отчёт на проверке.</b> Модератор ответит сообщением, " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC придут после одобрения.");
         } else if (stage == 3) {
@@ -8661,12 +8707,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "Банк вернёт 500 ₽ на твою карту с " + ruDayMonth(bankDate) + ". Когда банк заплатит клубу, мы начислим " + fmtExc(OTP_BONUS_DEFAULT_EXC)
                     + " EXC и откроем вывод всей суммы разом, одной заявкой: лимит вывода для этого расширяется.");
         }
-        if (st == SubmissionStatus.DRAFT || st == SubmissionStatus.PENDING) {
+        if (st == SubmissionStatus.DRAFT || st == SubmissionStatus.PENDING || returned) {
             rows.add(List.of(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + sub.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", currentQuestBackData(user)),
                 keyboardFactory.callback("📂 Мои", "menu:myquests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows), true);
+    }
+
+    /** Кнопка «💬 Написать менеджеру» на экране миссии: личные сообщения менеджера (APP_SUPPORT_USERNAME) с заранее вписанным текстом - номер заявки и этап, менеджеру не надо переспрашивать. */
+    private InlineKeyboardButton otpManagerButton(QuestSubmission sub, int stage) {
+        String text = "Здравствуйте! Нужна помощь по квесту «ОТП Карта» (заявка К-" + (sub.getDisplayId() != null ? sub.getDisplayId() : sub.getId()) + ", этап " + stage + ")";
+        String encoded = java.net.URLEncoder.encode(text, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
+        return keyboardFactory.url("💬 Написать менеджеру", "https://t.me/" + appProperties.getSupportUsername() + "?text=" + encoded);
     }
 
     /** «Когда ты активировал(а) карту?»: сегодня / вчера / 2-3 дня назад (считаем 3) / больше недели назад (считаем 8): неточные ответы дают срок с запасом. */
@@ -9248,9 +9301,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>Этот квест уже одобрен и оплачен.</b>\n\nПовторная сдача отчёта по нему невозможна.");
             return;
         } else if (latest.getStatus() == SubmissionStatus.REJECTED || latest.getStatus() == SubmissionStatus.NEEDS_INFO) {
-            // Fix 4: cooldown 1h after rejection to prevent instant resubmit spam
+            if (isOtpMissionQuest(quest) && latest.getStatus() == SubmissionStatus.REJECTED) {
+                // Миссия «ОТП Карта»: окончательное отклонение - повторной сдачи нет, показываем причину и «Поддержка»
+                answerSilently(callbackQuery.getId());
+                sendMissionStep(user, quest, latest, null, null);
+                return;
+            }
+            // Fix 4: cooldown 1h after rejection to prevent instant resubmit spam (у миссии «ОТП Карта» после «вернули на доработку» ожидания нет)
             LocalDateTime rejectedAt = latest.getUpdatedAt();
-            if (rejectedAt != null && LocalDateTime.now().isBefore(rejectedAt.plusHours(1))) {
+            if (rejectedAt != null && LocalDateTime.now().isBefore(rejectedAt.plusHours(1)) && !isOtpMissionQuest(quest)) {
                 if (user.isRetryInsuranceActive()) {
                     // Купленная/бесплатная по EGC Pass «Страховка провала»: снимает ожидание после отклонения (в Mini App это работало, в боте - нет)
                     sinkShopService.consumeInsurance(user);
@@ -13858,7 +13917,64 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         answer(callbackQuery.getId(), "Заявка одобрена");
     }
 
+    /** Готовые причины «вернуть на доработку» и «отклонить окончательно» для миссии «ОТП Карта»: {подпись кнопки, текст игроку}. */
+    private static final String[][] OTP_RETURN_REASONS = {
+            {"📷 Нет скриншота карты", "Не вижу скриншот карты в приложении ОТП Банка. Пришли скриншот, где видно новую активную карту (номер и счёт закрой)."},
+            {"🧾 Нет «Детали операции»", "Не вижу «Детали операции». Открой покупку в истории и пришли скриншот: продавец, сумма от 500 ₽, дата, статус."},
+            {"⏳ Статус «В обработке»", "Покупка ещё «В обработке». Дождись, когда статус изменится (1–3 дня), и пришли отчёт заново."},
+            {"🔒 Виден номер карты/счёта", "На скриншоте виден номер карты или счёта. Закрой его и пришли заново."},
+            {"💵 Сумма меньше 500 ₽", "Сумма меньше 500 ₽: банк её не засчитает. Нужна одна покупка от 500 ₽ этой картой."},
+            {"🚫 Покупка из исключений", "Такие покупки банк не засчитывает (переводы, снятие наличных, связь, ЖКХ и т. д.). Сделай другую покупку от 500 ₽ этой картой в течение 30 дней после активации."},
+            {"🌫 Нечёткий скриншот", "Скриншот нечёткий, ничего не разобрать. Пришли ещё раз."}
+    };
+    private static final String[][] OTP_FINAL_REASONS = {
+            {"🕵️ Скриншоты не подтверждают", "Скриншоты не подтверждают выполнение условий квеста."},
+            {"📛 Условия акции не выполнены", "Условия акции банка не выполнены: карта не новая или оформлена не по ссылке, либо покупка сделана вне 30 дней после активации."}
+    };
+
+    private void sendOtpReasonList(CallbackQuery callbackQuery, AppUser user, Long submissionId, boolean finalReject) {
+        String[][] reasons = finalReject ? OTP_FINAL_REASONS : OTP_RETURN_REASONS;
+        List<InlineKeyboardButton> buttons = new ArrayList<>();
+        for (int i = 0; i < reasons.length; i++) {
+            buttons.add(keyboardFactory.callback(reasons[i][0], (finalReject ? "mod:otpfin:" : "mod:otpret:") + i + ":" + submissionId));
+        }
+        buttons.add(keyboardFactory.callback("✏️ Своя причина", (finalReject ? "mod:no-custom:" : "mod:more-custom:") + submissionId));
+        answer(callbackQuery.getId(), "Выберите причину");
+        sendText(user.getTelegramId(),
+                finalReject ? "❌ <b>Отклонить окончательно</b>\n\nИгрок не сможет отправить отчёт заново. Выберите причину или укажите свою:"
+                        : "↩️ <b>Вернуть на доработку</b>\n\nИгрок сразу сможет отправить отчёт заново. Выберите, что ему исправить, или укажите своё:",
+                verticalWithBackMenu(buttons, "⬅️ Назад", "mod:no-back:" + submissionId));
+    }
+
+    /** Игроку по миссии «ОТП Карта»: «вернули на доработку» (можно исправить) или «отклонён» (окончательно), с кнопкой на экран миссии. */
+    private void notifyOtpReportDecision(QuestSubmission submission, boolean finalReject) {
+        InlineKeyboardButton open = keyboardFactory.callback("▶️ Открыть миссию", "myquest:view:" + submission.getId());
+        String comment = escape(submission.getModeratorComment() == null ? "" : submission.getModeratorComment());
+        notifyUser(submission.getUser().getTelegramId(),
+                finalReject ? "❌ <b>Отчёт отклонён</b>\n\n" + comment + "\n\nНаграда не начисляется. Если считаешь это ошибкой, напиши менеджеру."
+                        : "⚠️ <b>Отчёт вернули на доработку</b>\n\n" + comment,
+                open);
+    }
+
+    private void handleOtpReason(CallbackQuery callbackQuery, AppUser moderator, int index, Long submissionId, boolean finalReject) {
+        String[][] reasons = finalReject ? OTP_FINAL_REASONS : OTP_RETURN_REASONS;
+        if (index < 0 || index >= reasons.length) {
+            answer(callbackQuery.getId(), "Неизвестная причина");
+            return;
+        }
+        QuestSubmission submission = finalReject
+                ? questService.rejectSubmission(submissionId, reasons[index][1], RejectionReasonCode.OTHER, moderator.getTelegramId())
+                : questService.requestClarification(submissionId, reasons[index][1]);
+        notifyOtpReportDecision(submission, finalReject);
+        sendModerationQueue(callbackQuery.getFrom().getId());
+        answer(callbackQuery.getId(), finalReject ? "Отклонено окончательно" : "Возвращено на доработку");
+    }
+
     private void handleModerationReject(CallbackQuery callbackQuery, AppUser user, Long submissionId) {
+        if (isOtpMissionQuest(questService.getSubmission(submissionId).getQuest())) {
+            sendOtpReasonList(callbackQuery, user, submissionId, true);
+            return;
+        }
         List<InlineKeyboardButton> reasonButtons = new ArrayList<>(quickRejectButtons(submissionId));
         reasonButtons.add(keyboardFactory.callback("✏️ Своя причина", "mod:no-custom:" + submissionId));
         InlineKeyboardMarkup markup = verticalWithBackMenu(reasonButtons, "⬅️ Назад", "mod:no-back:" + submissionId);
@@ -13883,7 +13999,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendSubmissionCard(callbackQuery.getFrom().getId(), submissionId);
     }
 
-    private void handleModerationClarify(CallbackQuery callbackQuery, Long submissionId) {
+    private void handleModerationClarify(CallbackQuery callbackQuery, AppUser moderator, Long submissionId) {
+        if (isOtpMissionQuest(questService.getSubmission(submissionId).getQuest())) {
+            sendOtpReasonList(callbackQuery, moderator, submissionId, false);
+            return;
+        }
         QuestSubmission submission = questService.requestClarification(submissionId);
         notifyUser(submission.getUser().getTelegramId(),
                 "❓ По вашему отчёту по квесту <b>" + escape(submission.getQuest().getTitle()) + "</b> нужны уточнения.\n\n"
@@ -25305,7 +25425,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         // AI verification for photo submissions
         String aiNote = "";
-        if (claudeVisionService.isEnabled() && "photo".equals(submission.getMediaType()) && !QuestService.isUgcQuest(submission.getQuest())) {
+        // Миссия «ОТП Карта» проверяется только человеком (по памятке): AI-автоотклонение у неё окончательное, а автоодобрение платит EXC без проверки
+        if (claudeVisionService.isEnabled() && "photo".equals(submission.getMediaType()) && !QuestService.isUgcQuest(submission.getQuest())
+                && !isOtpMissionQuest(submission.getQuest())) {
             try {
                 ru.gamebot.platform.service.AiVerificationResult aiResult =
                         claudeVisionService.verify(submission);
