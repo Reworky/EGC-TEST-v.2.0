@@ -8390,7 +8390,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else if (gameCooldown && !cooldownBypassed) {
             buttons.add(keyboardFactory.callback("⏳ Кулдаун по этой игре", "noop"));
         } else if (!hasActiveSubmission) {
-            buttons.add(keyboardFactory.callback(cooldownBypassed ? "🚀 Взять — кулдаун будет снят" : "🚀 Взять", "quest:take:" + questId));
+            if (isMissionQuest(quest)) {
+                // Партнёрский квест с банком: подтверждение «18+ и РФ» прямо на кнопке (раньше - отдельный экран), одно нажатие вместо двух
+                buttons.add(keyboardFactory.callback("🚀 Взять: мне 18+, я из РФ", "quest:take18:" + questId));
+            } else {
+                buttons.add(keyboardFactory.callback(cooldownBypassed ? "🚀 Взять — кулдаун будет снят" : "🚀 Взять", "quest:take:" + questId));
+            }
         }
         // Самая частая покупка в «Предметах» (95 за 90 дн., разбор 2026-10-07): предлагаем снятие кулдауна там, где игрок реально упёрся в паузу.
         if ((cooldownLeft > 0 || gameCooldown) && !hasActiveSubmission && user.getCooldownBypassGame() == null

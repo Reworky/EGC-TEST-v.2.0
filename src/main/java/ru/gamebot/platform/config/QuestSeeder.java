@@ -2288,6 +2288,14 @@ public class QuestSeeder implements CommandLineRunner {
                     questRepository.save(q);
                     log.info("[QuestSeeder] Updated sponsored quest step 2 (any purchase): ОТП Карта");
                 });
+        // 04.11.2026: новая карточка (строка про безопасность, «Взять» с подтверждением 18+ на кнопке): обновляем тексты один раз
+        questRepository.findFirstByTitleAndGameName(OTP_CARD_TITLE, "ОТП Банк")
+                .filter(q -> q.getDescription() == null || !q.getDescription().contains("Паспорт, коды из СМС"))
+                .ifPresent(q -> {
+                    applyOtpCardContent(q);
+                    questRepository.save(q);
+                    log.info("[QuestSeeder] Updated sponsored quest card text: ОТП Карта");
+                });
         // Памятка модератору (что проверять в отчёте) - квесту, созданному до её появления, ставим один раз
         questRepository.findFirstByTitleAndGameName(OTP_CARD_TITLE, "ОТП Банк")
                 .filter(q -> q.getModeratorChecklist() == null || q.getModeratorChecklist().isBlank())
@@ -2683,10 +2691,11 @@ public class QuestSeeder implements CommandLineRunner {
         q.setModeratorChecklist(OTP_CARD_CHECKLIST);
         // 01.11.2026: первое касание для новичка - сначала что человек получает (три плюса), потом короткий список «Как это работает» (заголовки шагов ниже)
         q.setDescription("Что ты получаешь:\n"
-                + "✅ 500 ₽ от банка за новую карту\n"
-                + "✅ 1 000 EXC сразу после проверки выполнения квеста\n"
-                + "✅ 100 000 EXC, когда банк выплатит бонус, их можно вывести сразу\n\n"
-                + "Карта бесплатная. Нужно один раз потратить 500 ₽ на любую покупку (лучше донат в свою игру: он останется у тебя).\n\n"
+                + "✅ 500 ₽ от банка на твою карту\n"
+                + "✅ 1 000 EXC после проверки\n"
+                + "✅ 100 000 EXC, когда банк выплатит бонус: вывод всей суммы разом\n\n"
+                + "Карта бесплатная. Нужно один раз потратить 500 ₽ на любую покупку.\n"
+                + "🔒 Паспорт, коды из СМС и номер карты нам не нужны.\n\n"
                 + "Как это работает:");
         q.setInstruction("1️⃣ Закажи бесплатную карту ОТП Банка\n"
                 + "Оформи дебетовую ОТП Карту по ссылке: https://r.otpbank.ru/cc/HOkSwg\n"
