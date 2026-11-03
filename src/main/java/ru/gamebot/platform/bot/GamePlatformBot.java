@@ -1613,20 +1613,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.equals("shop:withdraw:rub")) {
             answerSilently(callbackQuery.getId());
-            Quest otpOffer = otpPartnerQuestOrNull();
-            if (otpOffer != null && !"✅ ".equals(sponsoredQuestTag(user, otpOffer))) {
-                // Сначала предложение вывести на карту партнёра (кроме тех, кто квест уже выполнил: у взявших, но не закончивших оно тоже полезно); «Пропустить» идёт в обычный вывод рублями
+            // Предложение вывести на карту партнёра - только тем, у кого баланс больше остатка лимита (иначе карта им ничего не даёт) и кто квест ещё не выполнил
+            long overLimit = withdrawalOverLimitExc(user);
+            if (overLimit > 0 && cardOfferQuestFor(user) != null) {
+                long remainingLimit = sinkShopService.getRemainingWithdrawalLimit(user);
+                List<List<InlineKeyboardButton>> offerRows = new ArrayList<>();
+                offerRows.add(List.of(keyboardFactory.callback("👀 Как", "shop:withdraw:otp")));
+                if (remainingLimit >= ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) {
+                    offerRows.add(List.of(keyboardFactory.callback("⏭️ Вывести " + fmtExc(remainingLimit) + " EXC в рублях", "shop:withdraw:rubgo")));
+                }
+                offerRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")));
                 sendText(user.getTelegramId(),
-                        "💳 <b>Есть способ вывести гораздо больше</b>\n\n"
-                                + "У нас есть способ вывести гораздо большую сумму, чем ты можешь себе позволить сейчас.\n\n"
-                                + "Хочешь узнать как?",
-                        keyboardFactory.rowsLayout(List.of(
-                                List.of(keyboardFactory.callback("👀 Узнать как", "shop:withdraw:otp")),
-                                List.of(keyboardFactory.callback("⏭️ Пропустить, вывести в рублях", "shop:withdraw:rubgo")),
-                                List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")))));
+                        "💳 <b>На балансе " + fmtExc(user.getCoins()) + " EXC, по лимиту сейчас можно " + fmtExc(remainingLimit) + ".</b>\n\n"
+                                + "Остальные <b>" + fmtExc(overLimit) + " EXC</b> можно будет вывести разом, не дожидаясь следующего месяца.",
+                        keyboardFactory.rowsLayout(offerRows));
                 return;
             }
             startRubWithdrawal(user, session);
+            return;
+        }
+        if (data.startsWith("shop:withdraw:retry:")) {
+            // «Ввести другую сумму» с экрана «лимит превышен»: снова экран ввода суммы (рубли или TON)
+            answerSilently(callbackQuery.getId());
+            if (data.endsWith(":ton")) {
+                session.setState(SessionState.WITHDRAWAL_TON_AMOUNT);
+                sendWithdrawalTonAmountScreen(user);
+            } else {
+                session.setState(SessionState.WITHDRAWAL_INPUT);
+                sendWithdrawalScreen(user);
+            }
             return;
         }
         if (data.equals("shop:withdraw:rubgo")) {
@@ -5038,6 +5053,54 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "4️⃣ Дождись банка: +" + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC и вывод всей суммы разом\n\n"
                         + "Мест в квесте: " + Math.max(0, (quest.getParticipantLimit() == null ? 0 : quest.getParticipantLimit()) - questService.countApprovedByQuest(quest)),
                 keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Сколько EXC на балансе не помещается в остаток месячного лимита вывода (0 - всё помещается или баланса не хватает даже на минимальный вывод). */
+    private long withdrawalOverLimitExc(AppUser user) {
+        long coins = user.getCoins();
+        if (coins < ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) return 0;
+        return Math.max(0, coins - sinkShopService.getRemainingWithdrawalLimit(user));
+    }
+
+    /** Партнёрский квест с картой для предложения в выводе: активный, с местами и ещё не выполненный этим игроком; иначе null. */
+    private Quest cardOfferQuestFor(AppUser user) {
+        Quest quest = otpPartnerQuestOrNull();
+        return quest != null && !"✅ ".equals(sponsoredQuestTag(user, quest)) ? quest : null;
+    }
+
+    /** Введённая сумма больше остатка лимита: тем, у кого баланс выше лимита и кто картой ещё не пользовался, вместо сухого отказа - предложение вывести всё разом. */
+    private void sendWithdrawalOverLimit(AppUser user, long remaining, String kind) {
+        if (withdrawalOverLimitExc(user) <= 0 || cardOfferQuestFor(user) == null) {
+            sendText(user.getTelegramId(), "⚠️ Превышен месячный лимит. Доступно: <b>" + remaining + " EXC</b>.", cancelKeyboard());
+            return;
+        }
+        sendText(user.getTelegramId(),
+                "⚠️ <b>Лимит этого месяца: доступно " + fmtExc(remaining) + " EXC.</b>\n"
+                        + "У тебя на балансе <b>" + fmtExc(user.getCoins()) + " EXC</b>.\n\n"
+                        + "Разом можно вывести всю сумму: с картой партнёра лимит расширяется на <b>" + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC</b>.",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("💳 Как вывести всё разом", "shop:withdraw:otp")),
+                        List.of(keyboardFactory.callback("✏️ Ввести другую сумму", "shop:withdraw:retry:" + kind)),
+                        List.of(keyboardFactory.callback("❌ Отмена", "common:cancel")))));
+    }
+
+    private static final String PAYOUT_CARD_HINT_KEY_PREFIX = "wd.cardhint.";
+
+    /** После выплаты: показывать ли подсказку про карту партнёра. Да один раз на игрока и только если баланс выше остатка лимита (и карту он ещё не делал); показ запоминается. */
+    private boolean claimPayoutCardHint(AppUser user) {
+        try {
+            if (withdrawalOverLimitExc(user) <= 0 || cardOfferQuestFor(user) == null) return false;
+            String key = PAYOUT_CARD_HINT_KEY_PREFIX + user.getTelegramId();
+            if (appSettingRepository.findById(key).isPresent()) return false;
+            AppSetting mark = new AppSetting();
+            mark.setKey(key);
+            mark.setValue("1");
+            appSettingRepository.save(mark);
+            return true;
+        } catch (Exception e) {
+            log.warn("Payout card hint check failed for {}", user.getTelegramId(), e);
+            return false;
+        }
     }
 
     /** Админ после выплаты банка: /otpbonus ID [сумма] - начисляет EXC игроку и один раз расширяет ему лимит вывода на эту сумму (запас расходуется выводом
@@ -9738,7 +9801,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
         if (amount > remaining) {
-            sendText(user.getTelegramId(), "⚠️ Превышен месячный лимит. Доступно: <b>" + remaining + " EXC</b>.", cancelKeyboard());
+            sendWithdrawalOverLimit(user, remaining, "ton");
             return;
         }
         if (amount > user.getCoins()) {
@@ -16069,6 +16132,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String caption = "✅ <b>Вывод выполнен</b>\n\n"
                 + "<b>" + rewardService.actualPaidPrice(req) + " EXC</b> · " + method + "\n"
                 + "Заявка <b>В-" + reqDisplayId(req) + "</b>. Если не получили, напишите в поддержку.";
+        // Один раз: баланс остался выше лимита - подсказка, как в следующий раз вывести больше лимита (картой партнёра)
+        boolean cardHint = claimPayoutCardHint(req.getUser());
+        if (cardHint) caption += "\n\nВ следующий раз можно вывести больше лимита.";
         if (receiptFileId != null) {
             SendPhoto photo = new SendPhoto();
             photo.setChatId(req.getUser().getTelegramId().toString());
@@ -16076,15 +16142,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             photo.setCaption(caption);
             photo.setParseMode("HTML");
             InlineKeyboardButton payoutNudge = referralNudgeButton(req.getUser(), "payout");
-            if (payoutNudge != null) photo.setReplyMarkup(keyboardFactory.rowsLayout(List.of(List.of(payoutNudge))));
+            List<List<InlineKeyboardButton>> payoutRows = new ArrayList<>();
+            if (cardHint) payoutRows.add(List.of(keyboardFactory.callback("💳 Как", "shop:withdraw:otp")));
+            if (payoutNudge != null) payoutRows.add(List.of(payoutNudge));
+            if (!payoutRows.isEmpty()) photo.setReplyMarkup(keyboardFactory.rowsLayout(payoutRows));
             try { execute(photo); } catch (TelegramApiException e) { log.error("Failed to send receipt", e); }
         } else {
             // Та же защита, что и в promptWithdrawalReview ниже: недоступный игрок не должен ронять
             // остаток флоу (пост в ленту активности, приглашение оценить вывод) с ошибкой у админа.
             try {
                 InlineKeyboardButton payoutNudge = referralNudgeButton(req.getUser(), "payout");
+                List<List<InlineKeyboardButton>> payoutRows = new ArrayList<>();
+                if (cardHint) payoutRows.add(List.of(keyboardFactory.callback("💳 Как", "shop:withdraw:otp")));
+                if (payoutNudge != null) payoutRows.add(List.of(payoutNudge));
                 sendText(req.getUser().getTelegramId(), caption,
-                        payoutNudge == null ? null : keyboardFactory.rowsLayout(List.of(List.of(payoutNudge))));
+                        payoutRows.isEmpty() ? null : keyboardFactory.rowsLayout(payoutRows));
             } catch (Exception e) {
                 log.warn("Failed to notify user {} about withdrawal approval", req.getUser().getTelegramId(), e);
             }
@@ -24554,7 +24626,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
         if (amount > remaining) {
-            sendText(user.getTelegramId(), "⚠️ Превышен месячный лимит. Доступно: <b>" + remaining + " EXC</b>.", cancelKeyboard());
+            sendWithdrawalOverLimit(user, remaining, "rub");
             return;
         }
         if (amount > user.getCoins()) {
