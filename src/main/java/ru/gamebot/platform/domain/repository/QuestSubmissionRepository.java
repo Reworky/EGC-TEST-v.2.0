@@ -275,6 +275,11 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
            "WHERE s.quest.gameName = :gameName AND s.status = 'APPROVED' AND s.updatedAt >= :since")
     long countApprovedByGameSince(@Param("gameName") String gameName, @Param("since") LocalDateTime since);
 
+    /** Открытые заявки партнёрской миссии игры gameName (черновики и одобренные), взятые не раньше after: для напоминаний OtpMissionReminderService. */
+    @EntityGraph(attributePaths = {"user", "quest"})
+    @Query("SELECT s FROM QuestSubmission s WHERE s.quest.gameName = :gameName AND s.status IN ('DRAFT', 'APPROVED') AND s.createdAt >= :after")
+    List<QuestSubmission> findPartnerMissionOpen(@Param("gameName") String gameName, @Param("after") LocalDateTime after);
+
     /** Заявки на Brawl-квесты «сыграй/выиграй N боёв» (N от 2), взятые между after и before, по которым прогресс всё ещё 0 и напоминание «не играл» не отправлялось. */
     @EntityGraph(attributePaths = {"user", "quest"})
     @Query("SELECT s FROM QuestSubmission s WHERE s.status = 'DRAFT' AND s.noPlayNudgeSentAt IS NULL AND s.brawlProgressCount = 0 " +

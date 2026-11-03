@@ -175,6 +175,16 @@ public class QuestSubmission {
     @Column(columnDefinition = "integer default 0")
     private int missionStep;
 
+    /** Партнёрская миссия «ОТП Карта»: когда игрок активировал карту (от этой даты 30 дней на покупку). null - ещё не указал. */
+    private java.time.LocalDate cardActivatedOn;
+
+    /** Партнёрская миссия «ОТП Карта»: когда игрок нажал «Я заплатил(а)» (от этой даты считается 25-е число выплаты банка). null - ещё не нажимал. */
+    private java.time.LocalDate purchaseReportedOn;
+
+    /** Какие напоминания миссии уже отправлены (битовая маска OtpMissionReminderService: 1 - «ждёт тебя», 2 - «3 дня до конца окна», 4 - «банк мог заплатить»). */
+    @Column(columnDefinition = "integer default 0")
+    private int missionRemindersSent;
+
     /** Последняя отправленная игроку ступень прогресса автоквеста: 0 - ничего, 1 - «половина пути», 2 - «последний шаг»
      *  (см. QuestProgressNotifier). Нужна, чтобы не слать одно и то же при каждом опросе API. */
     @Column(columnDefinition = "integer default 0")

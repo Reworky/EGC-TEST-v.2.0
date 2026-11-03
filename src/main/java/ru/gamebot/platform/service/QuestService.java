@@ -998,6 +998,36 @@ public class QuestService {
         return sub;
     }
 
+    /** Партнёрская миссия: игрок указал, когда активировал карту (сегодня минус daysAgo). Ставится один раз (повторное нажатие срок не продлевает), ведёт на этап 2. */
+    @Transactional
+    public QuestSubmission setMissionCardActivated(Long submissionId, Long telegramId, int daysAgo) {
+        QuestSubmission sub = getSubmission(submissionId);
+        if (sub.getUser() == null || !sub.getUser().getTelegramId().equals(telegramId)) {
+            throw new IllegalArgumentException("Это не ваш квест.");
+        }
+        if (sub.getStatus() == SubmissionStatus.DRAFT && sub.getCardActivatedOn() == null) {
+            sub.setCardActivatedOn(java.time.LocalDate.now().minusDays(Math.max(0, Math.min(60, daysAgo))));
+            if (sub.getMissionStep() < 2) sub.setMissionStep(2);
+            questSubmissionRepository.save(sub);
+        }
+        return sub;
+    }
+
+    /** Партнёрская миссия: «Я заплатил(а)» - с этапа 2 на этап 3 (отчёт), запоминаем дату для расчёта выплаты банка. */
+    @Transactional
+    public QuestSubmission confirmMissionPayment(Long submissionId, Long telegramId) {
+        QuestSubmission sub = getSubmission(submissionId);
+        if (sub.getUser() == null || !sub.getUser().getTelegramId().equals(telegramId)) {
+            throw new IllegalArgumentException("Это не ваш квест.");
+        }
+        if (sub.getStatus() == SubmissionStatus.DRAFT && Math.max(1, sub.getMissionStep()) == 2) {
+            sub.setMissionStep(3);
+            sub.setPurchaseReportedOn(java.time.LocalDate.now());
+            questSubmissionRepository.save(sub);
+        }
+        return sub;
+    }
+
     public QuestSubmission getSubmission(Long submissionId) {
         return questSubmissionRepository.findWithUserAndQuestById(submissionId)
                 .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена."));
