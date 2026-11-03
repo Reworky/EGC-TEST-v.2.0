@@ -275,6 +275,15 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
            "WHERE s.quest.gameName = :gameName AND s.status = 'APPROVED' AND s.updatedAt >= :since")
     long countApprovedByGameSince(@Param("gameName") String gameName, @Param("since") LocalDateTime since);
 
+    /** Сколько заявок игрока по партнёрской миссии игры gameName уже с начисленным бонусом (bonusPaidAt): больше нуля - бейдж, финал и защита от повторной выплаты. */
+    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.user.id = :userId AND s.quest.gameName = :gameName AND s.bonusPaidAt IS NOT NULL")
+    long countBonusPaid(@Param("userId") Long userId, @Param("gameName") String gameName);
+
+    /** Одобренные заявки игрока по партнёрской миссии игры gameName, новые первыми (для отметки «бонус выплачен»). */
+    @EntityGraph(attributePaths = {"user", "quest"})
+    @Query("SELECT s FROM QuestSubmission s WHERE s.user.id = :userId AND s.quest.gameName = :gameName AND s.status = 'APPROVED' ORDER BY s.updatedAt DESC")
+    List<QuestSubmission> findApprovedByUserAndGame(@Param("userId") Long userId, @Param("gameName") String gameName);
+
     /** Открытые заявки партнёрской миссии игры gameName (черновики и одобренные), взятые не раньше after: для напоминаний OtpMissionReminderService. */
     @EntityGraph(attributePaths = {"user", "quest"})
     @Query("SELECT s FROM QuestSubmission s WHERE s.quest.gameName = :gameName AND s.status IN ('DRAFT', 'APPROVED') AND s.createdAt >= :after")

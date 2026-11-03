@@ -72,7 +72,7 @@ public class OtpMissionReminderService {
                     if (step <= 2 && ageDays >= 2 && ageDays <= 4 && (sent & BIT_WAITING) == 0) {
                         deliver(s, NudgeType.OTP_MISSION, BIT_WAITING, OtpMissionReminderEvent.KIND_WAITING, null);
                     }
-                } else if (s.getStatus() == SubmissionStatus.APPROVED && (sent & BIT_BANK_DAY) == 0) {
+                } else if (s.getStatus() == SubmissionStatus.APPROVED && s.getBonusPaidAt() == null && (sent & BIT_BANK_DAY) == 0) {
                     LocalDate base = s.getPurchaseReportedOn() != null ? s.getPurchaseReportedOn()
                             : (s.getUpdatedAt() != null ? s.getUpdatedAt().toLocalDate() : null);
                     if (base == null) continue;

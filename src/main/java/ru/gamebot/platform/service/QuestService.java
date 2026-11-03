@@ -1634,6 +1634,22 @@ public class QuestService {
         return questSubmissionRepository.save(submission);
     }
 
+    /** Бонус по партнёрской миссии игры gameName этому игроку уже начислялся (бейдж, защита от двойной выплаты). */
+    public boolean isPartnerBonusPaid(Long userId, String gameName) {
+        return questSubmissionRepository.countBonusPaid(userId, gameName) > 0;
+    }
+
+    /** Отмечает «бонус выплачен» на последней одобренной заявке игрока по миссии игры gameName. false - одобренной заявки нет (бонус начислен вручную без миссии). */
+    @Transactional
+    public boolean markPartnerBonusPaid(Long userId, String gameName) {
+        List<QuestSubmission> approved = questSubmissionRepository.findApprovedByUserAndGame(userId, gameName);
+        if (approved.isEmpty()) return false;
+        QuestSubmission sub = approved.get(0);
+        sub.setBonusPaidAt(LocalDateTime.now());
+        questSubmissionRepository.save(sub);
+        return true;
+    }
+
     /** Партнёрская миссия: игрок нажал «Банк вернул мне 500 ₽». true - отметили первый раз (админам шлём уведомление), false - уже нажимал или заявка не одобрена. */
     @Transactional
     public boolean markBankPaidClaimed(Long submissionId, Long telegramId) {

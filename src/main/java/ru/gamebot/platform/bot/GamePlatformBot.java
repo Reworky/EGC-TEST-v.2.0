@@ -5141,6 +5141,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         Long targetId = p.length > 1 ? parseLong(p[1]) : null;
         Long amountArg = p.length > 2 ? parseLong(p[2].replace("_", "")) : null;
         long amount = amountArg == null ? OTP_BONUS_DEFAULT_EXC : amountArg;
+        boolean repeatPayout = java.util.Arrays.stream(p).skip(2).anyMatch(w -> w.equalsIgnoreCase("повтор"));
         if (targetId == null || amount <= 0) {
             sendText(admin.getTelegramId(), "⚠️ Формат: <code>/otpbonus ID [сумма EXC]</code>, по умолчанию " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC.", null);
             return;
@@ -5150,9 +5151,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(admin.getTelegramId(), "⚠️ Игрок с таким ID не найден.", null);
             return;
         }
+        // Защита от двойной выплаты: по заявке игрока бонус уже начислялся - повтор только словом «повтор» в конце команды
+        if (!repeatPayout && questService.isPartnerBonusPaid(target.getId(), ru.gamebot.platform.service.OtpMissionReminderService.GAME_NAME)) {
+            sendText(admin.getTelegramId(), "⚠️ Игроку " + escape(String.valueOf(target.getNickname())) + " (" + targetId + ") бонус по ОТП уже начислялся. "
+                    + "Если нужна повторная выплата: <code>/otpbonus " + targetId + " " + amount + " повтор</code>", null);
+            return;
+        }
+        boolean missionMarked;
         try {
             userService.addReward(target, 0, amount, ru.gamebot.platform.service.ExcTransactionService.BONUS, "Партнёрская выплата: ОТП Карта");
             sinkShopService.grantPartnerWithdrawalAllowance(target, amount);
+            missionMarked = questService.markPartnerBonusPaid(target.getId(), ru.gamebot.platform.service.OtpMissionReminderService.GAME_NAME);
         } catch (Exception e) {
             log.warn("OTP bonus failed for {}", targetId, e);
             sendText(admin.getTelegramId(), "⚠️ Не получилось: " + escape(String.valueOf(e.getMessage())), null);
@@ -5160,9 +5169,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         try {
             sendText(target.getTelegramId(),
-                    "💳 <b>Банк выплатил бонус по акции</b>\n\n"
-                            + "Мы начислили тебе <b>" + fmtExc(amount) + " EXC</b>.\n"
-                            + "Вывод открыт <b>разово</b>: всю накопленную сумму можно вывести разом, одной заявкой, сверх обычного месячного лимита («Кошелёк» → «Вывод EXC»). После вывода лимит вернётся к обычному.",
+                    "🏆 <b>Миссия выполнена!</b>\n\n"
+                            + "Банк выплатил бонус, мы начислили тебе <b>" + fmtExc(amount) + " EXC</b>. "
+                            + "Вывод открыт разово: всю накопленную сумму можно вывести одной заявкой, сверх обычного месячного лимита.\n"
+                            + (missionMarked ? "🏦 Бейдж «Банкир EGC» уже в твоём профиле." : ""),
                     keyboardFactory.rowsLayout(List.of(
                             List.of(keyboardFactory.callback("💸 Вывести", "shop:withdraw")),
                             List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
@@ -5170,7 +5180,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             log.warn("OTP bonus notice failed for {}", targetId, e);
         }
         sendText(admin.getTelegramId(), "✅ Игроку " + escape(String.valueOf(target.getNickname())) + " (" + targetId + ") начислено " + fmtExc(amount)
-                + " EXC и разово открыт вывод на эту сумму.", null);
+                + " EXC и разово открыт вывод на эту сумму."
+                + (missionMarked ? "" : "\n⚠️ Одобренной заявки по ОТП у игрока нет: бейдж и «финал» миссии не отмечены."), null);
     }
 
     /** v2: после смены оффера 01.11.2026 приглашение уходит и тем 20 игрокам, что получили прежнее (оно было слабым). */
@@ -5553,6 +5564,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (seasonService.hasActivePass(user)) badges += "🎫 Battle Pass  ";
         java.util.Optional<String> friendBadge = userService.currentInvitedFriendsBadge(user.getInvitedFriends());
         if (friendBadge.isPresent()) badges += friendBadge.get() + "  ";
+        if (questService.isPartnerBonusPaid(user.getId(), ru.gamebot.platform.service.OtpMissionReminderService.GAME_NAME)) badges += "🏦 Банкир EGC  ";
         String badgeLine = badges.isEmpty() ? "" : badges.trim() + "\n";
 
         int excBonus = userService.getExcBonusPercent(user.getXp());
@@ -7481,7 +7493,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("course", "status|on|off|now [%]|set КЛЮЧ ЗНАЧЕНИЕ", "«Курс дня»: бонус к курсу вывода (пост с кнопкой, проценты, потолок, бюджет)"),
             new AdminCommand("clubgoal", "status|link ID текст|off", "Цель клуба: состояние, кнопка-портал в квест, выключить портал"),
             new AdminCommand("wdfreeze", "ID on|off", "Заморозить или разморозить вывод игрока"),
-            new AdminCommand("otpbonus", "ID [сумма EXC]", "Партнёрская выплата ОТП Карта: начислить EXC (по умолчанию 100 000) и один раз открыть вывод на всю сумму"),
+            new AdminCommand("otpbonus", "ID [сумма EXC] [повтор]", "Партнёрская выплата ОТП Карта: начислить EXC (по умолчанию 100 000), один раз открыть вывод на всю сумму, отметить миссию выполненной (бейдж). Повторно только со словом «повтор»"),
             new AdminCommand("otppilot", "[send] [N]", "«ОТП Карта»: показать игроков из России: сначала выводившие, затем активные за неделю (по умолчанию 20, до 1000) и текст приглашения; send - разослать им (один раз каждому)"),
             new AdminCommand("event", "[halloween|on|off]", "Сезонное событие (Хэллоуин): состояние, включить пресет или выключить, затраты на квесты и надбавка отрядам"),
             new AdminCommand("firstquest", "[bs|cr|coc название1;название2|default]", "Стартовые квесты новичков: показать списки, задать для игры или вернуть по умолчанию"),
@@ -8649,7 +8661,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         SubmissionStatus st = sub.getStatus();
         boolean returned = st == SubmissionStatus.NEEDS_INFO;
         boolean rejectedFinal = st == SubmissionStatus.REJECTED;
-        int stage = st == SubmissionStatus.APPROVED ? 4 : (st == SubmissionStatus.PENDING || returned || rejectedFinal) ? 3 : Math.min(3, Math.max(1, sub.getMissionStep()));
+        boolean bonusPaid = st == SubmissionStatus.APPROVED && sub.getBonusPaidAt() != null;
+        int stage = bonusPaid ? 5 : st == SubmissionStatus.APPROVED ? 4 : (st == SubmissionStatus.PENDING || returned || rejectedFinal) ? 3 : Math.min(3, Math.max(1, sub.getMissionStep()));
         java.time.LocalDate today = java.time.LocalDate.now();
         java.time.LocalDate activated = sub.getCardActivatedOn();
         java.time.LocalDate windowEnd = activated == null ? null : activated.plusDays(ru.gamebot.platform.service.OtpMissionReminderService.PURCHASE_WINDOW_DAYS);
@@ -8661,7 +8674,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         StringBuilder sb = new StringBuilder();
         if (notice != null && !notice.isBlank()) sb.append(notice).append("\n\n");
         sb.append("🎮 <b>Миссия: карта ОТП Банка</b>\n")
-                .append("▰".repeat(stage)).append("▱".repeat(5 - stage)).append(" этап ").append(stage).append(" из 5\n\n");
+                .append("▰".repeat(stage)).append("▱".repeat(5 - stage)).append(bonusPaid ? " пройдена 🏆" : " этап " + stage + " из 5").append("\n\n");
         for (int i = 1; i <= 4; i++) {
             sb.append(i < stage ? "✅" : i == stage ? (rejectedFinal ? "❌" : "🔸") : "⬜").append(" Этап ").append(i).append(". ").append(names[i - 1]);
             if (i == 2 && stage == 2 && windowEnd != null) {
@@ -8672,7 +8685,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (i == 4 && stage == 4) sb.append(": с ").append(ruDayMonth(bankDate));
             sb.append("\n");
         }
-        sb.append("🏆 Финал: ").append(fmtExc(OTP_BONUS_DEFAULT_EXC)).append(" EXC\n\n");
+        sb.append("🏆 Финал: ").append(fmtExc(OTP_BONUS_DEFAULT_EXC)).append(bonusPaid ? " EXC получены" : " EXC").append("\n\n");
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         java.util.regex.Pattern urlPattern = java.util.regex.Pattern.compile("https?://\\S+");
@@ -8707,6 +8720,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else if (stage == 3) {
             sb.append("Покупка может висеть «В обработке» 1–3 дня. Когда статус изменится, пришли отчёт.");
             rows.add(List.of(questReportOrCheckButton(quest)));
+        } else if (bonusPaid) {
+            sb.append("🏆 <b>Миссия выполнена!</b>\n"
+                    + "Банк выплатил бонус, мы начислили " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC. Вывод открыт разово: всю накопленную сумму можно вывести одной заявкой, сверх месячного лимита.\n"
+                    + "🏦 В профиле у тебя теперь бейдж «Банкир EGC».");
+            rows.add(List.of(keyboardFactory.callback("💸 Вывести", "shop:withdraw"), keyboardFactory.callback("🎯 Ещё квесты", "menu:quests"),
+                    keyboardFactory.callback("👥 Позвать друга", "menu:referrals")));
         } else {
             sb.append("✅ <b>Отчёт принят, " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC начислены.</b>\n\n"
                     + "<b>Что дальше:</b>\n"
@@ -8731,6 +8750,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             QuestSubmission sub = questService.getSubmission(submissionId);
             if (sub.getUser() == null || !sub.getUser().getTelegramId().equals(user.getTelegramId()) || !isOtpMissionQuest(sub.getQuest())) return;
+            if (sub.getBonusPaidAt() != null) {
+                sendOtpMission(user, sub.getQuest(), sub, null); // бонус уже начислен: показываем финал
+                return;
+            }
             boolean first = questService.markBankPaidClaimed(submissionId, user.getTelegramId());
             if (first) {
                 String alert = "💰 <b>ОТП Карта: игрок сообщает о выплате банка</b>\n\n"

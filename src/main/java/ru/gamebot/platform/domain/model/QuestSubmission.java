@@ -181,6 +181,9 @@ public class QuestSubmission {
     /** Партнёрская миссия «ОТП Карта»: когда игрок нажал «Я заплатил(а)» (от этой даты считается 25-е число выплаты банка). null - ещё не нажимал. */
     private java.time.LocalDate purchaseReportedOn;
 
+    /** Партнёрская миссия «ОТП Карта»: когда админ начислил бонус после выплаты банка (/otpbonus). null - ещё не начислен. По нему экран миссии показывает финал, ставится бейдж и блокируется двойная выплата. */
+    private java.time.LocalDateTime bonusPaidAt;
+
     /** Какие напоминания миссии уже отправлены (битовая маска OtpMissionReminderService: 1 - «ждёт тебя», 2 - «3 дня до конца окна», 4 - «банк мог заплатить»). */
     @Column(columnDefinition = "integer default 0")
     private int missionRemindersSent;
