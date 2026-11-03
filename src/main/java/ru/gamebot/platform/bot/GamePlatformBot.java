@@ -5048,7 +5048,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC.\n\n"
                         + "<b>Как получить:</b>\n"
                         + "1️⃣ Закажи бесплатную карту ОТП\n"
-                        + "2️⃣ Купи себе донат на 500 ₽: банк вернёт эти деньги\n"
+                        + "2️⃣ Потрать 500 ₽ картой на любую покупку: банк вернёт эти деньги\n"
                         + "3️⃣ Пришли скриншоты и получи " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC\n"
                         + "4️⃣ Дождись банка: +" + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC и вывод всей суммы разом\n\n"
                         + "Мест в квесте: " + Math.max(0, (quest.getParticipantLimit() == null ? 0 : quest.getParticipantLimit()) - questService.countApprovedByQuest(quest)),
@@ -5169,8 +5169,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         .thenComparing(java.util.Comparator.comparingLong(AppUser::getWeeklyXp).reversed()))
                 .limit(pilotSize)
                 .toList();
-        String invite = "💎 <b>Забери донат в свою игру бесплатно + " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC</b>\n\n"
-                + "Мы нашли способ, как это сделать, и заодно получить крупную награду в EXC.\n\n"
+        String invite = "💎 <b>Получи 500 ₽ от банка + " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC</b>\n\n"
+                + "Мы нашли способ, как это сделать: 500 ₽ вернутся, тратить их можно куда хочешь, и ты заодно получишь крупную награду в EXC.\n\n"
                 + "Мест ограниченное число.\n\n"
                 + "Открой карточку, и мы покажем, как 👇";
         boolean send = text.matches("(?i)/otppilot\\s+send(?:\\s+\\d{1,4})?");
@@ -8492,11 +8492,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    /** Блоки текста через пустую строку; у каждого первая строка - заголовок. */
+    /** Блоки текста через пустую строку; у каждого первая строка - заголовок. Если текст начинается с номера шага (1️⃣), блок начинается только с номера: пустые строки
+     *  внутри шага (абзацы) его не разрывают. */
     private static List<String[]> splitQuestBlocks(String text) {
         List<String[]> out = new ArrayList<>();
         if (text == null || text.isBlank()) return out;
-        for (String block : text.split("\\n\\s*\\n")) {
+        boolean numbered = text.trim().matches("(?s)^\\d\\uFE0F?\\u20E3.*");
+        for (String block : text.split(numbered ? "\\n\\s*\\n(?=\\d\\uFE0F?\\u20E3)" : "\\n\\s*\\n")) {
             if (block.isBlank()) continue;
             out.add(block.trim().split("\n", 2));
         }
@@ -8592,7 +8594,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         java.util.regex.Matcher m = java.util.regex.Pattern.compile("https?://\\S+").matcher(step.length > 1 ? step[1] : "");
         if (m.find()) {
-            rows.add(List.of(keyboardFactory.url(view == 1 ? "🔗 Оформить карту" : "🔗 Открыть donatov.net", m.group())));
+            rows.add(List.of(keyboardFactory.url(view == 1 ? "🔗 Оформить карту" : "🔗 Донат в игру (совет)", m.group())));
         }
         List<InlineKeyboardButton> nav = new ArrayList<>();
         if (view > 1) nav.add(keyboardFactory.callback("◀️ Шаг " + (view - 1), "mission:view:" + sub.getId() + ":" + (view - 1)));
