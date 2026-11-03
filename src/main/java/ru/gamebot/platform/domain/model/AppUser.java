@@ -155,6 +155,11 @@ public class AppUser {
     @Column(columnDefinition = "boolean default false")
     private boolean fraudSuspect;
 
+    /** Нижняя клавиатура бота («Квесты / Кошелёк / …») уже отправлена игроку: она остаётся у него в чате, второй раз не шлём.
+     *  Сбрасывается, когда клавиатуру убирает другой сценарий (подтверждение телефона). */
+    @Column(columnDefinition = "boolean default false")
+    private boolean quickKeyboardShown;
+
     /** Вывод заморожен на проверку (2026-10-16, мультиаккаунты с общим игровым тегом): заявки на вывод любым способом не принимаются. Админ: /wdfreeze ID on|off. */
     @Column(columnDefinition = "boolean default false")
     private boolean withdrawalFrozen;

@@ -388,6 +388,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        // Кнопки нижней клавиатуры (см. ensureQuickKeyboard): работают из любого шага, как /menu
+        if (text != null && user.isProfileCompleted() && QUICK_KEYBOARD_BUTTONS.contains(text.trim())) {
+            session.reset();
+            handleQuickKeyboardButton(user, text.trim());
+            return;
+        }
+
         if (message.hasContact() && session.getState() == SessionState.AWAITING_PHONE_SHARE) {
             handlePhoneShare(user, session, message.getContact());
             return;
@@ -4137,9 +4144,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (text.length() > 1000 || user.getAvatarFileId() == null) {
             sendText(user.getTelegramId(), text, keyboard);
+            ensureQuickKeyboard(user);
             return;
         }
         sendPhotoCaption(user.getTelegramId(), user.getAvatarFileId(), text, keyboard);
+        ensureQuickKeyboard(user);
     }
 
     private void sendMenuCategory(AppUser user, String title, List<List<InlineKeyboardButton>> items) {
@@ -7367,6 +7376,56 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("squadretention", "", "Диагностика удержания отрядов"),
             new AdminCommand("clearme", "", "Стереть мой прогресс (тест регистрации с нуля)"),
             new AdminCommand("resetreqid", "", "ОПАСНО: удалить все заявки на вывод и сбросить счётчик ID"));
+
+    private static final String QK_QUESTS = "🗺️ Квесты";
+    private static final String QK_WALLET = "💰 Кошелёк";
+    private static final String QK_SHOP = "🛍️ Магазин";
+    private static final String QK_FRIENDS = "🤝 Друзья";
+    private static final String QK_HELP = "❓ Помощь";
+    private static final String QK_MAIN = "🏠 Главное меню";
+    private static final java.util.Set<String> QUICK_KEYBOARD_BUTTONS = java.util.Set.of(QK_QUESTS, QK_WALLET, QK_SHOP, QK_FRIENDS, QK_HELP, QK_MAIN);
+
+    /** Нижняя клавиатура игрока: значок-квадратик рядом с полем ввода раскрывает кнопки. Каждая ведёт на тот же экран, что и кнопка главного меню. */
+    private ReplyKeyboardMarkup quickKeyboard() {
+        KeyboardRow r1 = new KeyboardRow();
+        r1.add(new KeyboardButton(QK_QUESTS));
+        r1.add(new KeyboardButton(QK_WALLET));
+        KeyboardRow r2 = new KeyboardRow();
+        r2.add(new KeyboardButton(QK_SHOP));
+        r2.add(new KeyboardButton(QK_FRIENDS));
+        KeyboardRow r3 = new KeyboardRow();
+        r3.add(new KeyboardButton(QK_HELP));
+        r3.add(new KeyboardButton(QK_MAIN));
+        return ReplyKeyboardMarkup.builder().keyboardRow(r1).keyboardRow(r2).keyboardRow(r3).resizeKeyboard(true).build();
+    }
+
+    /** Один раз за жизнь аккаунта шлёт игроку короткое сообщение с нижней клавиатурой (Telegram не умеет подставлять её молча). Только игрокам:
+     *  у админов и менеджеров свои меню. Ошибка отправки не должна ломать главное меню. */
+    private void ensureQuickKeyboard(AppUser user) {
+        if (user.isQuickKeyboardShown() || !user.isProfileCompleted() || isEffectiveAdmin(user) || isEffectiveModerator(user)) return;
+        try {
+            SendMessage message = new SendMessage();
+            message.setChatId(user.getTelegramId().toString());
+            message.setText("⌨️ Быстрые кнопки включены: нажми на значок рядом с полем ввода, чтобы открыть Квесты, Кошелёк, Магазин, Друзей или Помощь.");
+            message.setReplyMarkup(quickKeyboard());
+            execute(message);
+            user.setQuickKeyboardShown(true);
+            userService.save(user);
+        } catch (Exception e) {
+            log.warn("Quick keyboard not sent to {}: {}", user.getTelegramId(), e.getMessage());
+        }
+    }
+
+    private void handleQuickKeyboardButton(AppUser user, String label) {
+        switch (label) {
+            case QK_QUESTS -> sendQuestGames(user, "menu:main");
+            case QK_WALLET -> sendBalance(user);
+            case QK_SHOP -> sendShopCategory(user);
+            case QK_FRIENDS -> sendReferrals(user);
+            case QK_HELP -> sendHelpCategory(user);
+            default -> sendMainMenu(user, mainMenuText(user));
+        }
+    }
 
     /** Меню «/» для всех игроков (область по умолчанию): /menu открывает главное меню, /start то же самое. Чаты админов получают свой список
      *  (см. setupAdminCommandMenus), он перекрывает этот. Перезаписывает список, заданный в BotFather. */
@@ -24460,6 +24519,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String pendingWithdrawal = session.getData().get("pendingWithdrawal");
         session.reset();
         user.setPhoneNumber(phone);
+        user.setQuickKeyboardShown(false); // removeReplyKeyboard убирает и нижнюю клавиатуру: при следующем главном меню пришлём заново
         userService.save(user);
         userService.applyPhoneCountry(user);
         removeReplyKeyboard(user.getTelegramId());
@@ -28524,6 +28584,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendPhoneShareRequest(Long chatId) {
+        // запрос номера подменяет нижнюю клавиатуру игрока: после подтверждения телефона главное меню пришлёт её заново
+        userService.findByTelegramId(chatId).ifPresent(u -> {
+            if (u.isQuickKeyboardShown()) {
+                u.setQuickKeyboardShown(false);
+                userService.save(u);
+            }
+        });
         KeyboardButton btn = new KeyboardButton("📱 Поделиться номером телефона");
         btn.setRequestContact(true);
         KeyboardRow row = new KeyboardRow();
