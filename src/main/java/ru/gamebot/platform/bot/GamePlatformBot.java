@@ -13895,53 +13895,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? backOnlyKeyboard(backRoute != null ? backRoute : "mod:support:quests")
                 : verticalWithBackMenu(moderationCardButtons(submission), "⬅️ Назад", "mod:support:quests");
 
-        String mediaFileId = submission.getMediaFileId();
-        String mediaType = submission.getMediaType();
-
-        if (mediaFileId != null && "photo".equals(mediaType)) {
-            try {
-                SendPhoto msg = new SendPhoto();
-                msg.setChatId(chatId.toString());
-                msg.setPhoto(new InputFile(mediaFileId));
-                msg.setCaption(caption);
-                msg.setParseMode("HTML");
-                msg.setReplyMarkup(markup);
-                execute(msg);
-                // Send extra photos if any
-                String extra = submission.getExtraMediaFileIds();
-                if (extra != null && !extra.isBlank()) {
-                    String[] extraIds = extra.split("\\|\\|");
-                    for (int ei = 0; ei < extraIds.length; ei++) {
-                        try {
-                            SendPhoto ep = new SendPhoto();
-                            ep.setChatId(chatId.toString());
-                            ep.setPhoto(new InputFile(extraIds[ei]));
-                            ep.setCaption("📎 Доп. фото " + (ei + 2) + "/" + (extraIds.length + 1));
-                            execute(ep);
-                        } catch (TelegramApiException ex) {
-                            log.error("Failed to send extra photo {} for submission {}", ei, submissionId, ex);
-                        }
-                    }
-                }
-                return;
-            } catch (TelegramApiException e) {
-                log.error("Failed to send submission photo for {}", submissionId, e);
-            }
-        } else if (mediaFileId != null && "video".equals(mediaType)) {
-            try {
-                SendVideo msg = new SendVideo();
-                msg.setChatId(chatId.toString());
-                msg.setVideo(new InputFile(mediaFileId));
-                msg.setCaption(caption);
-                msg.setParseMode("HTML");
-                msg.setReplyMarkup(markup);
-                execute(msg);
-                return;
-            } catch (TelegramApiException e) {
-                log.error("Failed to send submission video for {}", submissionId, e);
-            }
-        }
-        sendText(chatId, caption, markup);
+        sendSubmissionWithMedia(chatId, submission, caption, markup);
     }
 
     private void handleModerationApprove(CallbackQuery callbackQuery, Long submissionId) {
@@ -25538,39 +25492,79 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         for (Long recipient : recipients) {
             try {
-                switch (submission.getMediaType()) {
-                    case "photo" -> {
-                        SendPhoto sendPhoto = new SendPhoto();
-                        sendPhoto.setChatId(recipient.toString());
-                        sendPhoto.setPhoto(new InputFile(submission.getMediaFileId()));
-                        sendPhoto.setCaption(caption);
-                        sendPhoto.setParseMode("HTML");
-                        sendPhoto.setReplyMarkup(markup);
-                        execute(sendPhoto);
-                    }
-                    case "video" -> {
-                        SendVideo sendVideo = new SendVideo();
-                        sendVideo.setChatId(recipient.toString());
-                        sendVideo.setVideo(new InputFile(submission.getMediaFileId()));
-                        sendVideo.setCaption(caption);
-                        sendVideo.setParseMode("HTML");
-                        sendVideo.setReplyMarkup(markup);
-                        execute(sendVideo);
-                    }
-                    case "document" -> {
-                        SendDocument sendDocument = new SendDocument();
-                        sendDocument.setChatId(recipient.toString());
-                        sendDocument.setDocument(new InputFile(submission.getMediaFileId()));
-                        sendDocument.setCaption(caption);
-                        sendDocument.setParseMode("HTML");
-                        sendDocument.setReplyMarkup(markup);
-                        execute(sendDocument);
-                    }
-                    default -> sendText(recipient, caption, markup);
-                }
-            } catch (TelegramApiException exception) {
+                sendSubmissionWithMedia(recipient, submission, caption, markup);
+            } catch (Exception exception) {
                 log.warn("Failed to notify moderator {}", recipient, exception);
             }
+        }
+    }
+
+    /** Заявка модератору: вложение (фото, видео, файл) и карточка с кнопками. Подпись у вложения ограничена 1024 видимыми символами: если карточка длиннее
+     *  (памятка «что проверить» у квеста «ОТП Карта»), вложение уходит с короткой подписью, а полная карточка с кнопками - следующим сообщением (раньше
+     *  Telegram отклонял всё сообщение, ошибка тихо глоталась, и модератор не получал ни уведомления, ни скриншотов). Все фото заявки (не только первое) приходят
+     *  модератору. Если вложение не отправилось, карточка всё равно приходит текстом. */
+    private void sendSubmissionWithMedia(Long chatId, QuestSubmission submission, String caption, InlineKeyboardMarkup markup) {
+        String type = submission.getMediaType();
+        String fileId = submission.getMediaFileId();
+        if (fileId == null || type == null || !(type.equals("photo") || type.equals("video") || type.equals("document"))) {
+            sendText(chatId, caption, markup);
+            return;
+        }
+        boolean longCaption = caption.replaceAll("<[^>]+>", "").length() > 1000;
+        String mediaCaption = longCaption
+                ? "🧾 <b>Заявка К-" + (submission.getDisplayId() != null ? submission.getDisplayId() : submission.getId()) + " на проверку</b>\n🎯 "
+                        + escape(submission.getQuest().getTitle()) + "\n⬇️ Детали и кнопки в следующем сообщении"
+                : caption;
+        InlineKeyboardMarkup mediaMarkup = longCaption ? null : markup;
+        try {
+            switch (type) {
+                case "photo" -> {
+                    SendPhoto msg = new SendPhoto();
+                    msg.setChatId(chatId.toString());
+                    msg.setPhoto(new InputFile(fileId));
+                    msg.setCaption(mediaCaption);
+                    msg.setParseMode("HTML");
+                    msg.setReplyMarkup(mediaMarkup);
+                    execute(msg);
+                }
+                case "video" -> {
+                    SendVideo msg = new SendVideo();
+                    msg.setChatId(chatId.toString());
+                    msg.setVideo(new InputFile(fileId));
+                    msg.setCaption(mediaCaption);
+                    msg.setParseMode("HTML");
+                    msg.setReplyMarkup(mediaMarkup);
+                    execute(msg);
+                }
+                default -> {
+                    SendDocument msg = new SendDocument();
+                    msg.setChatId(chatId.toString());
+                    msg.setDocument(new InputFile(fileId));
+                    msg.setCaption(mediaCaption);
+                    msg.setParseMode("HTML");
+                    msg.setReplyMarkup(mediaMarkup);
+                    execute(msg);
+                }
+            }
+            String extra = submission.getExtraMediaFileIds();
+            if ("photo".equals(type) && extra != null && !extra.isBlank()) {
+                String[] extraIds = extra.split("\\|\\|");
+                for (int ei = 0; ei < extraIds.length; ei++) {
+                    try {
+                        SendPhoto ep = new SendPhoto();
+                        ep.setChatId(chatId.toString());
+                        ep.setPhoto(new InputFile(extraIds[ei]));
+                        ep.setCaption("📎 Доп. фото " + (ei + 2) + "/" + (extraIds.length + 1));
+                        execute(ep);
+                    } catch (TelegramApiException ex) {
+                        log.error("Failed to send extra photo {} for submission {}", ei, submission.getId(), ex);
+                    }
+                }
+            }
+            if (longCaption) sendText(chatId, caption, markup);
+        } catch (TelegramApiException e) {
+            log.warn("Failed to send submission {} media to {}, sending text card", submission.getId(), chatId, e);
+            sendText(chatId, caption + "\n\n⚠️ Вложение не удалось отправить", markup);
         }
     }
 
