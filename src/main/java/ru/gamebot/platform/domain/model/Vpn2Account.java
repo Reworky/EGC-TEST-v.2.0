@@ -63,6 +63,10 @@ public class Vpn2Account {
     @Column(nullable = false, columnDefinition = "int default 0")
     private int reminderStage = 0;
 
+    /** Какие опросы уже отправлены: 0 - никаких, 1 - оценка в конце пробного, 2 - оценка через 7 дней у платного, 3 - «почему не продлили». */
+    @Column(nullable = false, columnDefinition = "int default 0")
+    private int feedbackStage = 0;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 

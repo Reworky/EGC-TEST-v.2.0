@@ -98,6 +98,7 @@ public class Vpn2Service {
     private final String subBase;
     private final int trialDays;
     private final int trialGb;
+    private final String reviewsChannel;
 
     public Vpn2Service(ObjectMapper objectMapper, Vpn2AccountRepository accounts, Vpn2UserRepository users,
                        Vpn2PaymentRepository payments, ApplicationEventPublisher eventPublisher,
@@ -112,7 +113,8 @@ public class Vpn2Service {
                        @Value("${app.vpn2-xui-inbound-id:2}") int inboundId,
                        @Value("${app.vpn2-sub-base:}") String subBase,
                        @Value("${app.vpn2-trial-days:3}") int trialDays,
-                       @Value("${app.vpn2-trial-gb:5}") int trialGb) {
+                       @Value("${app.vpn2-trial-gb:5}") int trialGb,
+                       @Value("${app.vpn2-reviews-channel:}") String reviewsChannel) {
         this.panel = new VpnPanelClient(objectMapper, xuiUrl, xuiUser, xuiPass, inboundId);
         this.accounts = accounts;
         this.users = users;
@@ -126,6 +128,7 @@ public class Vpn2Service {
         this.subBase = subBase == null ? "" : subBase.trim().replaceAll("/+$", "");
         this.trialDays = trialDays;
         this.trialGb = trialGb;
+        this.reviewsChannel = reviewsChannel == null ? "" : reviewsChannel.trim();
         if (!enabled) {
             log.warn("Vpn2Service disabled: VPN2_ENABLED is not true");
         } else if (!panel.isConfigured() || this.subBase.isBlank()) {
@@ -166,6 +169,9 @@ public class Vpn2Service {
     public int getTrialDays() { return trialDays; }
 
     public int getTrialGb() { return trialGb; }
+
+    /** Канал отзывов (@username или id): сюда бот публикует одобренные карточки; пусто - публикация выключена. */
+    public String getReviewsChannel() { return reviewsChannel; }
 
     public Optional<Vpn2Account> find(Long telegramId) {
         return accounts.findByTelegramId(telegramId);

@@ -79,6 +79,7 @@ app:
   vpn2-sub-base: ${VPN2_SUB_BASE:}
   vpn2-trial-days: ${VPN2_TRIAL_DAYS:3}
   vpn2-trial-gb: ${VPN2_TRIAL_GB:5}
+  vpn2-reviews-channel: ${VPN2_REVIEWS_CHANNEL:}
 
 claude:
   api-key: ${CLAUDE_API_KEY:}

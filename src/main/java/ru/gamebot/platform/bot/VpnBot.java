@@ -38,7 +38,9 @@ import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 import ru.gamebot.platform.config.AppProperties;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Vpn2Account;
+import ru.gamebot.platform.domain.model.Vpn2Feedback;
 import ru.gamebot.platform.domain.repository.Vpn2AccountRepository;
+import ru.gamebot.platform.domain.repository.Vpn2FeedbackRepository;
 import ru.gamebot.platform.event.AnalyticsAlertEvent;
 import ru.gamebot.platform.service.AdminService;
 import ru.gamebot.platform.service.ExcTransactionService;
@@ -74,12 +76,15 @@ public class VpnBot extends TelegramLongPollingBot {
     private final GamePlatformBot egcBot;
     private final TrafficSourceService trafficSourceService;
     private final Vpn2AccountRepository accountRepository;
+    private final Vpn2FeedbackRepository feedbackRepository;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final java.net.http.HttpClient http = java.net.http.HttpClient.newHttpClient();
     /** Ссылки на инвойс не зависят от человека (товар и цена те же), поэтому кэшируем: экран тарифов не ходит в Telegram за каждой ссылкой. */
     private final Map<String, String> invoiceLinks = new ConcurrentHashMap<>();
     private volatile boolean registered = false;
+    /** Кто сейчас пишет текст отзыва: telegramId -> id записи отзыва (в памяти, при перезапуске теряется - человек просто нажмёт кнопку заново). */
+    private final Map<Long, Long> awaitingReviewText = new ConcurrentHashMap<>();
 
     @EventListener(ApplicationReadyEvent.class)
     public void registerBot() {
@@ -151,11 +156,16 @@ public class VpnBot extends TelegramLongPollingBot {
         Long uid = from.getId();
         String text = message.getText() == null ? "" : message.getText().trim();
         if (isAdmin(uid) && text.startsWith("/stats")) {
-            sendHtml(uid, vpn.statsHtml(), null);
+            sendHtml(uid, vpn.statsHtml() + "\n\n" + feedbackStatsHtml(), null);
             return;
         }
         if (isAdmin(uid) && text.startsWith("/vpn2")) {
             handleAdminCommand(uid, text);
+            return;
+        }
+        Long awaitingFeedbackId = awaitingReviewText.remove(uid);
+        if (awaitingFeedbackId != null && !text.startsWith("/") && !text.isBlank()) {
+            saveReviewText(uid, awaitingFeedbackId, text);
             return;
         }
         Long referrer = null;
@@ -202,6 +212,17 @@ public class VpnBot extends TelegramLongPollingBot {
         vpn.registerUser(uid, from.getFirstName(), from.getUserName(), null, null);
         if (!allowed(uid)) {
             showClosed(uid, oldMsgId);
+            return;
+        }
+        if (!cq.getData().startsWith("fb:")) {
+            awaitingReviewText.remove(uid); // ушёл в другой раздел: следующее сообщение не считаем текстом отзыва
+        }
+        if (cq.getData().startsWith("fbadm:")) {
+            handleFeedbackModeration(uid, oldMsgId, cq.getData());
+            return;
+        }
+        if (cq.getData().startsWith("fb:")) {
+            handleFeedbackCallback(uid, oldMsgId, cq.getData());
             return;
         }
         switch (cq.getData()) {
@@ -693,6 +714,332 @@ public class VpnBot extends TelegramLongPollingBot {
         } catch (Exception e) {
             log.warn("VPN bot reminder failed for {}", a.getTelegramId(), e);
         }
+    }
+
+    // ---------------------------------------------------------------- отзывы
+
+    private static final Map<String, String> LOW_REASONS = new LinkedHashMap<>();
+    private static final Map<String, String> CHURN_REASONS = new LinkedHashMap<>();
+
+    static {
+        LOW_REASONS.put("speed", "Скорость");
+        LOW_REASONS.put("conn", "Не подключается");
+        LOW_REASONS.put("app", "Неудобное приложение");
+        LOW_REASONS.put("price", "Цена");
+        LOW_REASONS.put("other", "Другое");
+        CHURN_REASONS.put("price", "Дорого");
+        CHURN_REASONS.put("slow", "Медленно");
+        CHURN_REASONS.put("broken", "Не работает");
+        CHURN_REASONS.put("notneeded", "Больше не нужен");
+        CHURN_REASONS.put("other", "Другое");
+    }
+
+    /** Опросы раз в час: оценка за сутки до конца пробного, оценка через 7 дней у платного, «почему не продлили» через 2 дня после конца срока.
+     *  У каждого аккаунта свой этап (feedbackStage), поэтому повторов нет; окна по времени ограничены, чтобы не писать про давно прошедшее. */
+    @Scheduled(initialDelay = 10 * 60_000L, fixedDelay = 60 * 60_000L)
+    public void askFeedback() {
+        if (!registered || !vpn.isEnabled()) {
+            return;
+        }
+        try {
+            LocalDateTime now = LocalDateTime.now();
+            for (Vpn2Account a : accountRepository.findByPlanTypeAndStatusAndFeedbackStageLessThanAndExpiresAtBetween(
+                    Vpn2Account.PLAN_TRIAL, Vpn2Account.STATUS_ACTIVE, 1, now, now.plusDays(1))) {
+                askRating(a, 1, Vpn2Feedback.KIND_TRIAL, "🔐 <b>Как вам EGC VPN?</b>\nОцените, это займёт 5 секунд.");
+            }
+            for (Vpn2Account a : accountRepository.findByPlanTypeAndStatusAndFeedbackStageLessThanAndCreatedAtBefore(
+                    Vpn2Account.PLAN_PAID, Vpn2Account.STATUS_ACTIVE, 2, now.minusDays(7))) {
+                if (vpn.isRunning(a)) {
+                    askRating(a, 2, Vpn2Feedback.KIND_WEEK, "🔐 <b>Вы с нами неделю. Как вам EGC VPN?</b>\nОцените, это займёт 5 секунд.");
+                }
+            }
+            for (Vpn2Account a : accountRepository.findByStatusAndFeedbackStageLessThanAndExpiresAtBetween(
+                    Vpn2Account.STATUS_ACTIVE, 3, now.minusDays(4), now.minusDays(2))) {
+                askChurn(a);
+            }
+        } catch (Exception e) {
+            log.warn("VPN bot feedback surveys failed", e);
+        }
+    }
+
+    private void askRating(Vpn2Account a, int stage, String kind, String html) {
+        try {
+            a.setFeedbackStage(stage);
+            accountRepository.save(a); // сначала отметка: при сбое отправки лучше пропустить опрос, чем слать его каждый час
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            rows.add(List.of(keyboardFactory.callback("😍 Отлично", "fb:r:" + kind + ":5"), keyboardFactory.callback("🙂 Нормально", "fb:r:" + kind + ":4")));
+            rows.add(List.of(keyboardFactory.callback("😐 Так себе", "fb:r:" + kind + ":3"), keyboardFactory.callback("😕 Плохо", "fb:r:" + kind + ":2")));
+            sendHtml(a.getTelegramId(), html, rows);
+        } catch (Exception e) {
+            log.warn("VPN bot rating survey failed for {}", a.getTelegramId(), e);
+        }
+    }
+
+    private void askChurn(Vpn2Account a) {
+        try {
+            a.setFeedbackStage(3);
+            accountRepository.save(a);
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            rows.add(List.of(keyboardFactory.callback("Дорого", "fb:ch:price"), keyboardFactory.callback("Медленно", "fb:ch:slow")));
+            rows.add(List.of(keyboardFactory.callback("Не работает", "fb:ch:broken"), keyboardFactory.callback("Больше не нужен", "fb:ch:notneeded")));
+            rows.add(List.of(keyboardFactory.callback("Другое", "fb:ch:other")));
+            sendHtml(a.getTelegramId(), "🔐 <b>Почему не продлили EGC VPN?</b>\nНам важно знать.", rows);
+        } catch (Exception e) {
+            log.warn("VPN bot churn survey failed for {}", a.getTelegramId(), e);
+        }
+    }
+
+    private void handleFeedbackCallback(Long uid, Integer oldMsgId, String data) {
+        String[] p = data.split(":");
+        if (p.length < 2) {
+            return;
+        }
+        try {
+            switch (p[1]) {
+                case "r" -> {
+                    if (p.length < 4 || !(Vpn2Feedback.KIND_TRIAL.equals(p[2]) || Vpn2Feedback.KIND_WEEK.equals(p[2]))) {
+                        return;
+                    }
+                    int rating = Integer.parseInt(p[3]);
+                    if (rating < 2 || rating > 5) {
+                        return;
+                    }
+                    Vpn2Feedback f = new Vpn2Feedback();
+                    f.setTelegramId(uid);
+                    f.setKind(p[2]);
+                    f.setRating(rating);
+                    f.setCreatedAt(LocalDateTime.now());
+                    f = feedbackRepository.save(f);
+                    List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+                    if (rating >= 4) {
+                        rows.add(List.of(keyboardFactory.callback("✍️ Написать отзыв", "fb:w:" + f.getId()), keyboardFactory.callback("Пропустить", "fb:s")));
+                        show(uid, oldMsgId, "🙏 <b>Спасибо!</b>\nНапишете пару слов? Это поможет другим.", rows);
+                    } else {
+                        List<InlineKeyboardButton> row = new ArrayList<>();
+                        for (Map.Entry<String, String> e : LOW_REASONS.entrySet()) {
+                            row.add(keyboardFactory.callback(e.getValue(), "fb:c:" + f.getId() + ":" + e.getKey()));
+                            if (row.size() == 2) {
+                                rows.add(row);
+                                row = new ArrayList<>();
+                            }
+                        }
+                        if (!row.isEmpty()) {
+                            rows.add(row);
+                        }
+                        show(uid, oldMsgId, "😕 <b>Жаль.</b> Что не так?", rows);
+                    }
+                }
+                case "c" -> {
+                    Vpn2Feedback f = ownedFeedback(uid, p.length > 2 ? p[2] : null);
+                    if (f == null || p.length < 4 || !LOW_REASONS.containsKey(p[3])) {
+                        return;
+                    }
+                    f.setReason(p[3]);
+                    feedbackRepository.save(f);
+                    alertAdmins("😕 <b>Плохая оценка EGC VPN</b>: " + f.getRating() + "/5, причина: " + escape(LOW_REASONS.get(p[3]))
+                            + ". Игрок <a href=\"tg://user?id=" + uid + "\">написать</a> (<code>" + uid + "</code>)");
+                    List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+                    rows.add(List.of(keyboardFactory.url("🆘 Поддержка", "https://t.me/" + appProperties.getSupportUsername())));
+                    rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
+                    show(uid, oldMsgId, "🙏 <b>Спасибо, учтём.</b> Если нужна помощь с подключением, напишите в поддержку, поможем.", rows);
+                }
+                case "ch" -> {
+                    if (p.length < 3 || !CHURN_REASONS.containsKey(p[2])) {
+                        return;
+                    }
+                    Vpn2Feedback f = new Vpn2Feedback();
+                    f.setTelegramId(uid);
+                    f.setKind(Vpn2Feedback.KIND_CHURN);
+                    f.setReason(p[2]);
+                    f.setCreatedAt(LocalDateTime.now());
+                    feedbackRepository.save(f);
+                    List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+                    if ("price".equals(p[2])) {
+                        rows.add(List.of(keyboardFactory.callback("💳 Тарифы", "m:tariffs"), keyboardFactory.url("🎮 Копить EXC", egcUrl())));
+                    }
+                    rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
+                    show(uid, oldMsgId, "🙏 <b>Спасибо!</b> Это помогает нам стать лучше."
+                            + ("price".equals(p[2]) ? "\nЗа EXC можно платить на 50 ₽ меньше." : ""), rows);
+                }
+                case "w" -> {
+                    Vpn2Feedback f = ownedFeedback(uid, p.length > 2 ? p[2] : null);
+                    if (f == null) {
+                        return;
+                    }
+                    awaitingReviewText.put(uid, f.getId());
+                    List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+                    rows.add(List.of(keyboardFactory.callback("Отмена", "fb:s")));
+                    show(uid, oldMsgId, "✍️ <b>Напишите отзыв</b> одним сообщением (до 500 символов).", rows);
+                }
+                case "s" -> {
+                    awaitingReviewText.remove(uid);
+                    List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+                    rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
+                    show(uid, oldMsgId, "🙌 Спасибо за оценку!", rows);
+                }
+                case "p" -> {
+                    Vpn2Feedback f = ownedFeedback(uid, p.length > 2 ? p[2] : null);
+                    if (f == null || p.length < 4 || f.getReviewText() == null) {
+                        return;
+                    }
+                    boolean yes = "1".equals(p[3]);
+                    f.setPublishConsent(yes);
+                    if (yes) {
+                        f.setStatus(Vpn2Feedback.STATUS_PENDING);
+                    }
+                    feedbackRepository.save(f);
+                    List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+                    rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
+                    show(uid, oldMsgId, yes ? "🙌 <b>Спасибо!</b> Отзыв уйдёт на проверку и появится в канале анонимно." : "🙌 Спасибо за отзыв!", rows);
+                    if (yes) {
+                        sendModerationRequest(f);
+                    }
+                }
+                default -> { }
+            }
+        } catch (NumberFormatException e) {
+            log.debug("VPN bot: bad feedback callback {}", data);
+        }
+    }
+
+    /** Отзыв принадлежит этому человеку; null - нет такого или чужой. */
+    private Vpn2Feedback ownedFeedback(Long uid, String idText) {
+        if (idText == null) {
+            return null;
+        }
+        try {
+            Vpn2Feedback f = feedbackRepository.findById(Long.parseLong(idText)).orElse(null);
+            return f != null && uid.equals(f.getTelegramId()) ? f : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /** Текст отзыва после «✍️ Написать отзыв»: сохраняем, при оценке 4-5 и тексте от 20 символов спрашиваем согласие на публикацию. */
+    private void saveReviewText(Long uid, Long feedbackId, String text) {
+        Vpn2Feedback f = ownedFeedback(uid, String.valueOf(feedbackId));
+        if (f == null) {
+            showMain(uid, null);
+            return;
+        }
+        String clean = text.trim();
+        if (clean.length() > 500) {
+            clean = clean.substring(0, 500);
+        }
+        f.setReviewText(clean);
+        feedbackRepository.save(f);
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (f.getRating() != null && f.getRating() >= 4 && clean.length() >= 20) {
+            rows.add(List.of(keyboardFactory.callback("✅ Да, анонимно", "fb:p:" + f.getId() + ":1"), keyboardFactory.callback("Нет, спасибо", "fb:p:" + f.getId() + ":0")));
+            sendHtml(uid, "🙏 <b>Спасибо за отзыв!</b>\nМожно опубликовать его в канале анонимно?", rows);
+        } else {
+            rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
+            sendHtml(uid, "🙏 <b>Спасибо за отзыв!</b> Он нам очень помогает.", rows);
+        }
+    }
+
+    private void sendModerationRequest(Vpn2Feedback f) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("✅ Опубликовать", "fbadm:pub:" + f.getId()), keyboardFactory.callback("❌ Отклонить", "fbadm:no:" + f.getId())));
+        String html = "📝 <b>Отзыв на модерацию</b>\n" + stars(f.getRating()) + "\n«" + escape(f.getReviewText()) + "»\nИгрок <code>" + f.getTelegramId() + "</code>"
+                + (vpn.getReviewsChannel().isBlank() ? "\n\n⚠️ Канал отзывов не задан (VPN2_REVIEWS_CHANNEL), опубликовать пока нельзя." : "");
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            sendHtml(adminId, html, rows);
+        }
+    }
+
+    /** Кнопки модерации «✅ Опубликовать» / «❌ Отклонить» у админа. */
+    private void handleFeedbackModeration(Long adminId, Integer oldMsgId, String data) {
+        if (!isAdmin(adminId)) {
+            return;
+        }
+        String[] p = data.split(":");
+        if (p.length < 3) {
+            return;
+        }
+        Vpn2Feedback f;
+        try {
+            f = feedbackRepository.findById(Long.parseLong(p[2])).orElse(null);
+        } catch (NumberFormatException e) {
+            return;
+        }
+        if (f == null || !Vpn2Feedback.STATUS_PENDING.equals(f.getStatus())) {
+            show(adminId, oldMsgId, "Этот отзыв уже обработан.", null);
+            return;
+        }
+        if ("no".equals(p[1])) {
+            f.setStatus(Vpn2Feedback.STATUS_REJECTED);
+            feedbackRepository.save(f);
+            show(adminId, oldMsgId, "❌ Отзыв отклонён.", null);
+            return;
+        }
+        if (vpn.getReviewsChannel().isBlank()) {
+            show(adminId, oldMsgId, "⚠️ Канал отзывов не задан (VPN2_REVIEWS_CHANNEL в .env), опубликовать нельзя.", null);
+            return;
+        }
+        try {
+            publishCard(f);
+            f.setStatus(Vpn2Feedback.STATUS_PUBLISHED);
+            f.setPublishedAt(LocalDateTime.now());
+            feedbackRepository.save(f);
+            show(adminId, oldMsgId, "✅ Опубликовано в канале.", null);
+        } catch (TelegramApiException e) {
+            log.warn("VPN bot: failed to publish review {}", f.getId(), e);
+            show(adminId, oldMsgId, "⚠️ Не получилось опубликовать: проверьте, что бот добавлен в канал админом с правом публикации.", null);
+        }
+    }
+
+    /** Карточка отзыва в канале: звёзды, цитата, срок пользования, кнопка «Попробовать» (ведёт в VPN-бот). Без имени и ника. */
+    private void publishCard(Vpn2Feedback f) throws TelegramApiException {
+        String usage = "Только подключился";
+        Optional<Vpn2Account> account = vpn.find(f.getTelegramId());
+        if (account.isPresent() && account.get().getCreatedAt() != null) {
+            long days = java.time.temporal.ChronoUnit.DAYS.between(account.get().getCreatedAt(), LocalDateTime.now());
+            if (days >= 1) {
+                usage = "Пользуется " + days + " дн.";
+            }
+        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.url("🔐 Попробовать " + vpn.getTrialDays() + " дня бесплатно", "https://t.me/" + vpn.getBotUsername())));
+        SendMessage m = new SendMessage();
+        m.setChatId(vpn.getReviewsChannel());
+        m.setText(stars(f.getRating()) + "\n\n«" + escape(f.getReviewText()) + "»\n\n" + usage);
+        m.setParseMode("HTML");
+        m.setDisableWebPagePreview(true);
+        m.setReplyMarkup(keyboardFactory.rowsLayout(rows));
+        execute(m);
+    }
+
+    private static String stars(Integer rating) {
+        int n = rating == null ? 0 : Math.max(0, Math.min(5, rating));
+        return "⭐".repeat(n);
+    }
+
+    /** Сводка по отзывам для /stats: средняя оценка, распределение, причины отказов, очередь модерации. */
+    private String feedbackStatsHtml() {
+        StringBuilder sb = new StringBuilder("📝 <b>Отзывы</b>\n");
+        Double avg = feedbackRepository.averageRating();
+        if (avg == null) {
+            sb.append("Оценок пока нет.");
+        } else {
+            sb.append("Средняя оценка: <b>").append(String.format(java.util.Locale.ROOT, "%.1f", avg)).append("</b>\nОценки:");
+            for (Object[] row : feedbackRepository.ratingDistribution()) {
+                sb.append(" ").append(row[0]).append("⭐ ").append(row[1]).append(" ·");
+            }
+            sb.setLength(sb.length() - 2);
+        }
+        List<Object[]> reasons = feedbackRepository.reasonCounts();
+        if (!reasons.isEmpty()) {
+            sb.append("\nПричины:");
+            for (Object[] row : reasons) {
+                String key = String.valueOf(row[0]);
+                sb.append(" ").append(escape(LOW_REASONS.getOrDefault(key, CHURN_REASONS.getOrDefault(key, key)))).append(" ").append(row[1]).append(" ·");
+            }
+            sb.setLength(sb.length() - 2);
+        }
+        sb.append("\nНа модерации: <b>").append(feedbackRepository.countByStatus(Vpn2Feedback.STATUS_PENDING))
+          .append("</b>, опубликовано: <b>").append(feedbackRepository.countByStatus(Vpn2Feedback.STATUS_PUBLISHED)).append("</b>");
+        return sb.toString();
     }
 
     // ---------------------------------------------------------------- отправка
