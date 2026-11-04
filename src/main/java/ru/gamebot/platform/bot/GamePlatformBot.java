@@ -5176,9 +5176,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             sendText(target.getTelegramId(),
                     "🏆 <b>Миссия выполнена!</b>\n\n"
-                            + "Банк выплатил бонус, мы начислили тебе <b>" + fmtExc(amount) + " EXC</b>. "
-                            + "Вывод открыт разово: всю накопленную сумму можно вывести одной заявкой, сверх обычного месячного лимита.\n"
-                            + (missionMarked ? "🏦 Бейдж «Банкир EGC» уже в твоём профиле." : ""),
+                            + "Банк выплатил бонус, мы начислили тебе <b>" + fmtExc(amount) + " EXC</b>.\n\n"
+                            + "Вывод открыт разово: всю накопленную сумму можно вывести одной заявкой, сверх обычного месячного лимита."
+                            + (missionMarked ? "\n\n🏦 Бейдж «Банкир EGC» уже в твоём профиле." : ""),
                     keyboardFactory.rowsLayout(List.of(
                             List.of(keyboardFactory.callback("💸 Вывести", "shop:withdraw")),
                             List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
@@ -8730,9 +8730,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("Покупка может висеть «В обработке» 1–3 дня. Когда статус изменится, пришли отчёт.");
             rows.add(List.of(questReportOrCheckButton(quest)));
         } else if (bonusPaid) {
-            sb.append("🏆 <b>Миссия выполнена!</b>\n"
-                    + "Банк выплатил бонус, мы начислили " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC. Вывод открыт разово: всю накопленную сумму можно вывести одной заявкой, сверх месячного лимита.\n"
-                    + "🏦 В профиле у тебя теперь бейдж «Банкир EGC».");
+            sb.append("🏆 <b>Миссия выполнена!</b>\n\n"
+                    + "Банк выплатил бонус, мы начислили тебе " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC.\n\n"
+                    + "Вывод открыт разово: всю накопленную сумму можно вывести одной заявкой, сверх обычного месячного лимита.\n\n"
+                    + "🏦 Бейдж «Банкир EGC» уже в твоём профиле.");
             rows.add(List.of(keyboardFactory.callback("💸 Вывести", "shop:withdraw"), keyboardFactory.callback("🎯 Ещё квесты", "menu:quests"),
                     keyboardFactory.callback("👥 Позвать друга", "menu:referrals")));
         } else {
