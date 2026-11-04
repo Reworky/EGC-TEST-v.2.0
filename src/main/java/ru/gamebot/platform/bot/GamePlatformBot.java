@@ -6810,7 +6810,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         session.setState(SessionState.DAILY_CODE_INPUT);
-        sendText(user.getTelegramId(), "✍️ <b>Код дня</b>\n\nВставьте код из поста в канале одним сообщением." + codeHuntProgressText(user), cancelKeyboard());
+        // с баннером «Код дня», как на экране раздела и в посте канала (04.11.2026)
+        sendResourceBanner(user.getTelegramId(), "code_day_banner.jpg", "✍️ <b>Код дня</b>\n\nВставьте код из поста в канале одним сообщением." + codeHuntProgressText(user), cancelKeyboard());
     }
 
     private void handleDailyCodeInput(AppUser user, UserSession session, String text) {
