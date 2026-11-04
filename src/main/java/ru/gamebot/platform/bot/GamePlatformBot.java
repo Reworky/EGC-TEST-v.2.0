@@ -8751,7 +8751,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", currentQuestBackData(user)),
                 keyboardFactory.callback("📂 Мои", "menu:myquests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
-        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows), true);
+        // Этап 1 «Закажи карту»: с картинкой (Экси звонит в банк, дизайн карты), остальные этапы - только текст
+        if (stage == 1 && getClass().getResource("/otp_step1_banner.jpg") != null) {
+            sendResourceBanner(user.getTelegramId(), "otp_step1_banner.jpg", sb.toString(), keyboardFactory.rowsLayout(rows));
+        } else {
+            sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows), true);
+        }
     }
 
     /** «Банк вернул мне 500 ₽»: один раз на заявку шлём админам ID игрока и готовую команду /otpbonus (начисление остаётся ручным, после проверки выплаты в кабинете банка). */
