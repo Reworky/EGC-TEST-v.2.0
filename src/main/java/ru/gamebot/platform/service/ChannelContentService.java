@@ -875,7 +875,8 @@ public class ChannelContentService {
                 .limit(3).toList();
         if (top.isEmpty() || (!force && top.size() < 2)) return Optional.empty();
         String[] marks = {"🥇", "🥈", "🥉"};
-        StringBuilder sb = new StringBuilder("🏁 <b>Гонка недели</b>\n\n");
+        // 04.11.2026: пост выходит в среду (экватор недели), а читался как итоги: заголовок «экватор», «Неделя в разгаре», «сейчас», сколько дней до финиша
+        StringBuilder sb = new StringBuilder("🏁 <b>Гонка недели: экватор</b>\n\nНеделя в разгаре, вот кто впереди сейчас:\n\n");
         for (int i = 0; i < top.size(); i++) {
             SquadService.SquadRankEntry e = top.get(i);
             sb.append(marks[i]).append(" <b>").append(esc(safeName(e.squad().getName()))).append("</b>\n")
@@ -883,21 +884,27 @@ public class ChannelContentService {
         }
         if (top.size() >= 2) {
             long gap = top.get(0).weeklyXp() - top.get(1).weeklyXp();
-            sb.append("До лидера второму отряду не хватает <b>").append(num(gap)).append(" XP</b>.\n\n");
+            // «Можно отыграть» - только когда отставание небольшое (до трети XP лидера), иначе обещание было бы неправдой
+            sb.append("Второму отряду до лидера <b>").append(num(gap)).append(" XP</b>")
+              .append(gap * 3 <= top.get(0).weeklyXp() ? ": это можно отыграть за пару дней.\n\n" : ".\n\n");
         }
         // 26.10.2026: сюда влита «Гонка за Зал славы» - топ-3 игроков по XP на этот момент (при 10+ активных игроков или ручном запуске)
         List<AppUser> topPlayers = appUserRepository.findTop20ByRegistrationCompletedTrueAndWeeklyXpGreaterThanOrderByWeeklyXpDescTelegramIdAsc(0)
                 .stream().limit(3).toList();
         if (!topPlayers.isEmpty() && (force || appUserRepository.countActiveThisWeek() >= MIN_ACTIVE_FOR_WEEK_POSTS)) {
-            sb.append("👤 <b>Игроки недели по XP</b>\n");
+            sb.append("👤 <b>Лидеры среди игроков сейчас</b>\n");
             for (int i = 0; i < topPlayers.size(); i++) {
                 sb.append(marks[i]).append(" <b>").append(esc(publicNick(topPlayers.get(i).getNickname()))).append("</b>: ")
                   .append(num(topPlayers.get(i).getWeeklyXp())).append(" XP\n");
             }
             sb.append("\n");
         }
+        // Сколько полных суток до финиша (понедельник 00:00 UTC): в среду 4, в четверг 3 и т. д.
+        LocalDateTime nowUtc = LocalDateTime.now(java.time.ZoneOffset.UTC);
+        long daysLeft = Duration.between(nowUtc, nowUtc.toLocalDate().with(java.time.temporal.TemporalAdjusters.next(DayOfWeek.MONDAY)).atStartOfDay()).toDays();
         sb.append("🏆 Приз победителю - <b>").append(num(seasonalEventService.squadPoolNow())).append(" EXC</b>: их делят лучшие по опыту участники отряда. ")
-          .append("Неделя закончится в понедельник в 00:00 UTC.\n\n");
+          .append(daysLeft >= 1 ? "До финиша ещё <b>" + daysLeft + " дн.</b>: итоги подведём в понедельник в 00:00 UTC.\n\n"
+                  : "Финиш уже скоро: итоги подведём в понедельник в 00:00 UTC.\n\n");
         sb.append(squadLink());
         sb.append("\n\n").append(ending(top.get(0).weeklyXp(), "Кто успеет подтянуться?", "Ставь ⚔️, если твой отряд в гонке.", "Ещё есть время подняться выше."));
         return Optional.of(saveDraft(SQUAD_MIDWEEK, sb.toString(), null, SQUAD_MIDWEEK_BANNER));
