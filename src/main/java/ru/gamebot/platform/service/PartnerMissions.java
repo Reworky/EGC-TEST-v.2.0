@@ -121,6 +121,7 @@ public final class PartnerMissions {
             .report1Prompt("Карта в приложении Т-Банка: видно, что это Black, оформленная недавно.\n🔒 Номер карты и счёта закрой (закрась или обрежь).")
             .report2Prompt(COMMON_REPORT2)
             // этапы 3, 4 и финал - те же картинки, что у ОТП (владелец 04.11.2026: экраны похожи, не уникализировать); картинки этапов 1-2 - позже, по дизайну карты/SIM
+            .stage1Banner("tblack_step1_banner.jpg")
             .stage3Banner("otp_step3_banner.jpg")
             .stage4Banner("otp_step4_banner.jpg")
             .finalBanner("otp_step5_banner.jpg")
