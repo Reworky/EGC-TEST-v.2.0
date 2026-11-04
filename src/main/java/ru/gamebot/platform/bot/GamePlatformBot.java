@@ -8734,8 +8734,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "Банк выплатил бонус, мы начислили тебе " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC.\n\n"
                     + "Вывод открыт разово: всю накопленную сумму можно вывести одной заявкой, сверх обычного месячного лимита.\n\n"
                     + "🏦 Бейдж «Банкир EGC» уже в твоём профиле.");
-            rows.add(List.of(keyboardFactory.callback("💸 Вывести", "shop:withdraw"), keyboardFactory.callback("🎯 Ещё квесты", "menu:quests"),
-                    keyboardFactory.callback("👥 Позвать друга", "menu:referrals")));
+            rows.add(List.of(keyboardFactory.callback("💸 Вывести", "shop:withdraw"), keyboardFactory.callback("🎯 Ещё квесты", "menu:quests")));
+            rows.add(List.of(keyboardFactory.callback("👥 Позвать друга", "menu:referrals")));
         } else {
             sb.append("✅ <b>Отчёт принят, " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC начислены.</b>\n\n"
                     + "⏳ <b>Квест ещё не закончен: остался финал за " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC.</b> Теперь нужно дождаться выплаты банка.\n\n"
@@ -8747,7 +8747,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             boolean claimed = (sub.getMissionRemindersSent() & ru.gamebot.platform.service.OtpMissionReminderService.BIT_BANK_CLAIMED) != 0;
             rows.add(List.of(claimed ? keyboardFactory.callback("✅ Мы проверяем выплату банка", "noop")
                     : keyboardFactory.callback("💰 Банк вернул мне 500 ₽", "mission:bankpaid:" + sub.getId() + ":4")));
-            rows.add(List.of(keyboardFactory.callback("🎯 Пока ждёшь: другие квесты", "menu:quests"), otpManagerButton(sub, 4)));
+            // каждая кнопка в своей строке: в паре длинные подписи обрезались («Пока ж…гие квесты»)
+            rows.add(List.of(keyboardFactory.callback("🎯 Пока ждёшь: другие квесты", "menu:quests")));
+            rows.add(List.of(otpManagerButton(sub, 4)));
         }
         if (st == SubmissionStatus.DRAFT || st == SubmissionStatus.PENDING || returned) {
             rows.add(List.of(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + sub.getId())));
@@ -8811,7 +8813,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "📅 <b>Когда ты активировал(а) карту?</b>\n\nНужно, чтобы посчитать срок: на покупку 500 ₽ у тебя 30 дней с активации.",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("Сегодня", "mission:actd:" + id + ":0"), keyboardFactory.callback("Вчера", "mission:actd:" + id + ":1")),
-                        List.of(keyboardFactory.callback("2–3 дня назад", "mission:actd:" + id + ":3"), keyboardFactory.callback("Больше недели назад", "mission:actd:" + id + ":8")),
+                        List.of(keyboardFactory.callback("2–3 дня назад", "mission:actd:" + id + ":3"), keyboardFactory.callback("7+ дней назад", "mission:actd:" + id + ":8")),
                         List.of(keyboardFactory.callback("⬅️ Назад", "mission:view:" + id + ":2")))), true);
     }
 
