@@ -25,6 +25,9 @@ public interface Vpn2AccountRepository extends JpaRepository<Vpn2Account, Long> 
     /** Пробные, которые работают сейчас и о лимите трафика которым ещё не сообщали. */
     List<Vpn2Account> findByPlanTypeAndStatusAndLimitNotifiedAtIsNullAndExpiresAtAfter(String planType, String status, LocalDateTime after);
 
+    /** Ключи, выданные в окне, по которым ещё не проверяли, подключился ли игрок. */
+    List<Vpn2Account> findByStatusAndHelpNudgedAtIsNullAndCreatedAtBetween(String status, LocalDateTime from, LocalDateTime to);
+
     long countByStatusAndPlanTypeAndExpiresAtAfter(String status, String planType, LocalDateTime after);
 
     long countByStatusAndExpiresAtBetween(String status, LocalDateTime from, LocalDateTime to);

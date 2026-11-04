@@ -70,6 +70,9 @@ public class Vpn2Account {
     /** Когда игроку сообщили, что лимит трафика пробного исчерпан (один раз на аккаунт); null - не сообщали. */
     private LocalDateTime limitNotifiedAt;
 
+    /** Когда проверили, подключился ли игрок после выдачи ключа (через час после выдачи, один раз): null - ещё не проверяли. */
+    private LocalDateTime helpNudgedAt;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 

@@ -25,8 +25,10 @@ import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.AnswerPreCheckoutQuery;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
+import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.User;
@@ -48,6 +50,7 @@ import ru.gamebot.platform.service.TrafficSourceService;
 import ru.gamebot.platform.service.UserService;
 import ru.gamebot.platform.service.Vpn2Service;
 import ru.gamebot.platform.service.Vpn2Service.Tariff;
+import ru.gamebot.platform.service.VpnPanelClient;
 import ru.gamebot.platform.service.VpnService.VpnException;
 
 /** Отдельный бот EGC VPN под общим брендом: тарифы, ключ, установка, рефералка, оплата Telegram Stars. Живёт в том же приложении, но со своим токеном
@@ -233,6 +236,9 @@ public class VpnBot extends TelegramLongPollingBot {
             case "m:ref" -> showReferral(uid, oldMsgId);
             case "m:terms" -> showTerms(uid, oldMsgId);
             case "m:trial" -> startTrial(uid, oldMsgId);
+            case "h:diag" -> showDiagnosis(uid, oldMsgId);
+            case "h:qr" -> sendQr(uid);
+            case "h:ok" -> showHelpOk(uid, oldMsgId);
             default -> { }
         }
     }
@@ -298,6 +304,7 @@ public class VpnBot extends TelegramLongPollingBot {
           .append("Ваша личная ссылка (никому не показывайте):\n<code>").append(escape(vpn.subscriptionUrl(a))).append("</code>\n\n")
           .append("🎮 <i>Играйте в EGC, копите EXC и платите за VPN дешевле: ").append(formatExc(Vpn2Service.EXC_DISCOUNT)).append(" EXC = −50 ₽.</i>");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(installRows());
+        rows.add(List.of(keyboardFactory.callback("🛠 Не подключается?", "h:diag"), keyboardFactory.callback("📷 QR-код", "h:qr")));
         rows.add(List.of(keyboardFactory.callback(trial ? "💳 Оформить тариф" : "💳 Продлить", "m:tariffs"),
                 keyboardFactory.url("🎮 Копить EXC", egcUrl())));
         rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
@@ -319,6 +326,7 @@ public class VpnBot extends TelegramLongPollingBot {
 
     private void showHowto(Long uid, Integer oldMsgId) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(installRows());
+        rows.add(List.of(keyboardFactory.callback("🛠 Не подключается?", "h:diag"), keyboardFactory.callback("📷 QR-код", "h:qr")));
         rows.add(List.of(keyboardFactory.callback("🔑 Моё подключение", "m:my")));
         rows.add(List.of(keyboardFactory.url("🆘 Поддержка", "https://t.me/" + appProperties.getSupportUsername())));
         rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
@@ -717,6 +725,131 @@ public class VpnBot extends TelegramLongPollingBot {
         }
     }
 
+    // ---------------------------------------------------------------- помощь с подключением
+
+    /** «🛠 Не подключается?»: по данным панели (загружало ли приложение подписку, были ли подключения и трафик) говорит, на каком шаге человек застрял. */
+    private void showDiagnosis(Long uid, Integer oldMsgId) {
+        Optional<Vpn2Account> found = vpn.find(uid);
+        if (found.isEmpty() || !vpn.isRunning(found.get())) {
+            showMy(uid, oldMsgId);
+            return;
+        }
+        Vpn2Account a = found.get();
+        Optional<VpnPanelClient.ClientStat> stat = vpn.clientStat(a);
+        StringBuilder sb = new StringBuilder("🛠 <b>Проверка подключения</b>\n\n");
+        if (stat.isEmpty()) {
+            sb.append("Не удалось проверить сервер прямо сейчас. Попробуйте через пару минут или напишите в поддержку.");
+        } else {
+            VpnPanelClient.ClientStat st = stat.get();
+            long now = System.currentTimeMillis();
+            if (!st.enable()) {
+                sb.append(Vpn2Account.PLAN_TRIAL.equals(a.getPlanType())
+                        ? "Пробный лимит трафика исчерпан, поэтому ключ приостановлен. Оформите тариф, и всё заработает сразу."
+                        : "Ключ сейчас отключён. Напишите в поддержку, разберёмся.");
+            } else if (st.lastSubFetchMs() <= 0 && st.lastOnlineMs() <= 0) {
+                sb.append("Приложение пока ни разу не загружало вашу ссылку. Проверьте:\n")
+                  .append("1. Установлено ли приложение Happ (кнопки ниже).\n")
+                  .append("2. Скопирована ли ссылка полностью: откройте «Моё подключение» и нажмите на ссылку.\n")
+                  .append("3. В Happ добавьте подписку из буфера обмена и нажмите «Обновить».\n\n")
+                  .append("Не получается вставить? Нажмите «📷 QR-код» и отсканируйте его с другого устройства.");
+            } else if (st.lastOnlineMs() <= 0) {
+                sb.append("Ссылка в приложении есть, но подключений к серверу ещё не было. Проверьте:\n")
+                  .append("1. В Happ выбран ваш профиль, нажмите «Подключить».\n")
+                  .append("2. iPhone при первом подключении спросит разрешение добавить VPN-конфигурацию: нажмите «Разрешить».\n")
+                  .append("3. Обновите подписку в приложении и попробуйте снова.\n\n")
+                  .append("Если ошибка осталась, напишите в поддержку и приложите скриншот.");
+            } else {
+                sb.append("✅ Ключ работает: последнее подключение ").append(ago(now - st.lastOnlineMs())).append(" назад, использовано ")
+                  .append(String.format(java.util.Locale.ROOT, "%.2f", st.used() / (1024.0 * 1024 * 1024))).append(" ГБ.\n\n")
+                  .append("Если сайты не открываются: выключите и снова включите VPN, обновите подписку в приложении, попробуйте другую сеть (Wi-Fi или мобильный интернет).");
+            }
+        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>(installRows());
+        rows.add(List.of(keyboardFactory.callback("📷 QR-код", "h:qr"), keyboardFactory.callback("🔑 Моё подключение", "m:my")));
+        rows.add(List.of(keyboardFactory.url("🆘 Поддержка", "https://t.me/" + appProperties.getSupportUsername())));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
+        show(uid, oldMsgId, sb.toString(), rows);
+    }
+
+    private static String ago(long millis) {
+        long minutes = Math.max(0, millis / 60_000);
+        if (minutes < 60) {
+            return Math.max(1, minutes) + " мин";
+        }
+        long hours = minutes / 60;
+        return hours < 48 ? hours + " ч" : (hours / 24) + " дн.";
+    }
+
+    private void showHelpOk(Long uid, Integer oldMsgId) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
+        show(uid, oldMsgId, "🙌 Отлично! Приятного пользования.", rows);
+    }
+
+    /** «📷 QR-код»: картинка со ссылкой подписки, чтобы добавить её в приложение другим устройством (ПК → телефон). Ссылка личная: в подписи просим не показывать. */
+    private void sendQr(Long uid) {
+        Optional<Vpn2Account> found = vpn.find(uid);
+        if (found.isEmpty() || !vpn.isRunning(found.get())) {
+            showMy(uid, null);
+            return;
+        }
+        try {
+            com.google.zxing.common.BitMatrix matrix = new com.google.zxing.qrcode.QRCodeWriter()
+                    .encode(vpn.subscriptionUrl(found.get()), com.google.zxing.BarcodeFormat.QR_CODE, 480, 480);
+            java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(matrix.getWidth(), matrix.getHeight(), java.awt.image.BufferedImage.TYPE_INT_RGB);
+            for (int x = 0; x < matrix.getWidth(); x++) {
+                for (int y = 0; y < matrix.getHeight(); y++) {
+                    image.setRGB(x, y, matrix.get(x, y) ? 0x000000 : 0xFFFFFF);
+                }
+            }
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(image, "png", out);
+            SendPhoto photo = new SendPhoto();
+            photo.setChatId(uid.toString());
+            photo.setPhoto(new InputFile(new java.io.ByteArrayInputStream(out.toByteArray()), "egc-vpn-qr.png"));
+            photo.setCaption("📷 QR-код вашей ссылки. Отсканируйте его камерой другого устройства или в приложении Happ. Это личная ссылка, никому её не показывайте.");
+            execute(photo);
+        } catch (Exception e) {
+            log.warn("VPN bot: QR generation failed for {}", uid, e);
+            sendHtml(uid, "⚠️ Не получилось сделать QR-код. Скопируйте ссылку из «Моё подключение» или напишите в поддержку.", null);
+        }
+    }
+
+    /** Через час после выдачи ключа смотрим панель: если приложение так и не подключилось, предлагаем помощь (один раз на аккаунт). Окно «выдан от 1 до 24 часов назад»
+     *  не даёт писать про старые ключи; отметка helpNudgedAt ставится до отправки. */
+    @Scheduled(initialDelay = 4 * 60_000L, fixedDelay = 10 * 60_000L)
+    public void nudgeNotConnected() {
+        if (!registered || !vpn.isEnabled()) {
+            return;
+        }
+        try {
+            LocalDateTime now = LocalDateTime.now();
+            List<Vpn2Account> pending = new ArrayList<>();
+            for (Vpn2Account a : accountRepository.findByStatusAndHelpNudgedAtIsNullAndCreatedAtBetween(
+                    Vpn2Account.STATUS_ACTIVE, now.minusHours(24), now.minusHours(1))) {
+                if (vpn.isRunning(a)) {
+                    pending.add(a);
+                }
+            }
+            if (pending.isEmpty()) {
+                return;
+            }
+            Map<String, VpnPanelClient.ClientStat> stats = vpn.allClientStats();
+            for (Vpn2Account a : pending) {
+                a.setHelpNudgedAt(now);
+                accountRepository.save(a);
+                VpnPanelClient.ClientStat st = stats.get(a.getPanelEmail());
+                if (st != null && st.used() == 0 && st.lastOnlineMs() <= 0) {
+                    List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+                    rows.add(List.of(keyboardFactory.callback("✅ Да, работает", "h:ok"), keyboardFactory.callback("🛠 Нет, помогите", "h:diag")));
+                    sendHtml(a.getTelegramId(), "🔐 <b>Получилось подключиться?</b>\n\nВидим, что VPN пока не заработал. Давайте поможем.", rows);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("VPN bot connection nudge failed", e);
+        }
+    }
+
     // ---------------------------------------------------------------- лимит пробного
 
     /** Раз в 15 минут: у пробных, которые работают сейчас, смотрим расход в панели; когда лимит исчерпан (панель отключает ключ), один раз пишем игроку
@@ -732,10 +865,10 @@ public class VpnBot extends TelegramLongPollingBot {
             if (candidates.isEmpty()) {
                 return;
             }
-            Map<String, long[]> usage = vpn.panelTrafficUsage();
+            Map<String, VpnPanelClient.ClientStat> usage = vpn.allClientStats();
             for (Vpn2Account a : candidates) {
-                long[] u = usage.get(a.getPanelEmail());
-                if (u != null && u[1] > 0 && u[0] >= u[1] * 0.99) {
+                VpnPanelClient.ClientStat u = usage.get(a.getPanelEmail());
+                if (u != null && u.total() > 0 && u.used() >= u.total() * 0.99) {
                     notifyLimitReached(a);
                 }
             }

@@ -173,9 +173,19 @@ public class Vpn2Service {
     /** Канал отзывов (@username или id): сюда бот публикует одобренные карточки; пусто - публикация выключена. */
     public String getReviewsChannel() { return reviewsChannel; }
 
-    /** Расход трафика клиентов во второй панели (метка -> {использовано, лимит, включён}); для уведомления об исчерпании лимита пробного. */
-    public java.util.Map<String, long[]> panelTrafficUsage() throws PanelException {
-        return panel.trafficUsage();
+    /** Состояние всех клиентов второй панели одним запросом (метка -> расход, лимит, последний онлайн, загрузка подписки). */
+    public java.util.Map<String, VpnPanelClient.ClientStat> allClientStats() throws PanelException {
+        return panel.clientStats();
+    }
+
+    /** Состояние ключа игрока в панели; пусто - панель не ответила или клиента там нет. */
+    public Optional<VpnPanelClient.ClientStat> clientStat(Vpn2Account account) {
+        try {
+            return Optional.ofNullable(panel.clientStats().get(account.getPanelEmail()));
+        } catch (PanelException e) {
+            log.warn("VPN2: client stat for {} failed: {}", account.getTelegramId(), e.getMessage());
+            return Optional.empty();
+        }
     }
 
     public Optional<Vpn2Account> find(Long telegramId) {

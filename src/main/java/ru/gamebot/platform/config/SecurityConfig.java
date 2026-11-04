@@ -45,6 +45,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/payouts/feed").permitAll()
                         // Отзывы игроков для сайта: только опубликованные в @egc_payouts, ники замаскированы
                         .requestMatchers(HttpMethod.GET, "/api/public/reviews").permitAll()
+                        // Сигналы от скрипта проверки EGC VPN (heartbeat и копия базы панели): доступ по секрету в заголовке, проверяется в контроллере
+                        .requestMatchers(HttpMethod.POST, "/api/public/vpn2/heartbeat", "/api/public/vpn2/panel-backup").permitAll()
                         // Личный кабинет — нужен JWT
                         .requestMatchers("/api/profile/**").authenticated()
                         .anyRequest().authenticated()

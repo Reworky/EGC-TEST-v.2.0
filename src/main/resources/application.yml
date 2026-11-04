@@ -80,6 +80,9 @@ app:
   vpn2-trial-days: ${VPN2_TRIAL_DAYS:3}
   vpn2-trial-gb: ${VPN2_TRIAL_GB:5}
   vpn2-reviews-channel: ${VPN2_REVIEWS_CHANNEL:}
+  # Секрет скрипта проверки на сервере входа (heartbeat и копии базы панели); без него приём сигналов выключен, алертов о пропаже сигнала нет
+  vpn2-health-secret: ${VPN2_HEALTH_SECRET:}
+  vpn2-backup-dir: ${VPN2_BACKUP_DIR:/data/vpn2-panel-backups}
 
 claude:
   api-key: ${CLAUDE_API_KEY:}

@@ -86,17 +86,20 @@ public class VpnPanelClient {
         return Optional.empty();
     }
 
-    /** Расход трафика всех клиентов одним запросом: метка -> {использовано байт, лимит байт (0 - без лимита), включён (1/0)}. */
-    public synchronized Map<String, long[]> trafficUsage() throws PanelException {
+    /** Состояние клиента в панели: расход и лимит трафика (байты), включён ли, последнее подключение и последняя загрузка подписки приложением (мс, 0 - не было). */
+    public record ClientStat(long used, long total, boolean enable, long lastOnlineMs, long lastSubFetchMs) {}
+
+    /** Состояние всех клиентов одним запросом: метка -> ClientStat. */
+    public synchronized Map<String, ClientStat> clientStats() throws PanelException {
         JsonNode res = api("/panel/api/clients/list", null);
         if (!res.path("success").asBoolean(false)) {
             throw new PanelException("список клиентов: " + res.path("msg").asText());
         }
-        Map<String, long[]> out = new HashMap<>();
+        Map<String, ClientStat> out = new HashMap<>();
         for (JsonNode n : res.path("obj")) {
             JsonNode t = n.path("traffic");
-            long used = t.path("up").asLong(0) + t.path("down").asLong(0);
-            out.put(n.path("email").asText(), new long[] {used, n.path("totalGB").asLong(0), n.path("enable").asBoolean(true) ? 1 : 0});
+            out.put(n.path("email").asText(), new ClientStat(t.path("up").asLong(0) + t.path("down").asLong(0), n.path("totalGB").asLong(0),
+                    n.path("enable").asBoolean(true), t.path("lastOnline").asLong(0), t.path("lastSubFetch").asLong(0)));
         }
         return out;
     }
