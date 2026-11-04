@@ -8751,8 +8751,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", currentQuestBackData(user)),
                 keyboardFactory.callback("📂 Мои", "menu:myquests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
-        // Этап 1 «Закажи карту» (Экси звонит в банк) и этап 2 «Получи карту» (Экси распечатывает конверт; оба экрана этапа: до и после активации) - с картинкой, остальные этапы - только текст
-        String stageBanner = stage == 1 ? "otp_step1_banner.jpg" : stage == 2 ? "otp_step2_banner.jpg" : null;
+        // Этап 1 «Закажи карту» (Экси звонит в банк) и этап 2 «Получи карту» (до активации: Экси распечатывает конверт; после активации, экран с таймером: Экси платит картой на кассе) - с картинкой, остальные этапы - только текст
+        String stageBanner = stage == 1 ? "otp_step1_banner.jpg" : stage == 2 ? (activated == null ? "otp_step2_banner.jpg" : "otp_step2_pay_banner.jpg") : null;
         if (stageBanner != null && getClass().getResource("/" + stageBanner) != null) {
             sendResourceBanner(user.getTelegramId(), stageBanner, sb.toString(), keyboardFactory.rowsLayout(rows));
         } else {
