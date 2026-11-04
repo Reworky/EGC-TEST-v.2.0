@@ -423,7 +423,9 @@ public class VpnBot extends TelegramLongPollingBot {
             log.warn("VPN bot: failed to create Stars invoice link for tariffs screen, user {}", uid);
             sb.append("\n\n⚠️ Часть кнопок оплаты временно недоступна, попробуйте через минуту.");
         }
-        rows.add(List.of(keyboardFactory.callback("💳 Другие способы оплаты", "m:pay")));
+        if (hasExtraPayMethods()) {
+            rows.add(List.of(keyboardFactory.callback("💳 Другие способы оплаты", "m:pay")));
+        }
         rows.add(List.of(keyboardFactory.callback("ℹ️ Условия", "m:terms")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
         show(uid, oldMsgId, sb.toString(), rows);
@@ -822,13 +824,24 @@ public class VpnBot extends TelegramLongPollingBot {
         return true;
     }
 
-    /** «Другие способы оплаты»: Stars всегда; EXC, карта/СБП и крипта - кнопка рабочая, если способ включён, иначе «(скоро)» (видно, но закрыто). */
+    /** Есть ли хоть один способ оплаты кроме Stars, который реально включён (EXC, перевод по реквизитам, CryptoBot). Недоделанные способы игроку не показываем вовсе. */
+    private boolean hasExtraPayMethods() {
+        return vpn.isExcPayEnabled() || vpn.isCardPayEnabled() || vpn.isCryptoPayEnabled();
+    }
+
+    /** «Другие способы оплаты»: Stars всегда; EXC, карта/СБП и крипта - только те, что включены (остальные скрыты до запуска). */
     private void showPayMethods(Long uid, Integer oldMsgId) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("⭐ Звёзды Telegram", "m:tariffs")));
-        rows.add(List.of(vpn.isExcPayEnabled() ? keyboardFactory.callback("🪙 Оплатить EXC", "m:exc") : keyboardFactory.callback("🪙 Оплатить EXC (скоро)", "m:soon:exc")));
-        rows.add(List.of(vpn.isCardPayEnabled() ? keyboardFactory.callback("🏦 Карта / СБП (рубли)", "m:card") : keyboardFactory.callback("🏦 Карта / СБП (скоро)", "m:soon:card")));
-        rows.add(List.of(vpn.isCryptoPayEnabled() ? keyboardFactory.callback("₿ Крипта (TON, USDT)", "m:crypto") : keyboardFactory.callback("₿ Крипта (скоро)", "m:soon:crypto")));
+        if (vpn.isExcPayEnabled()) {
+            rows.add(List.of(keyboardFactory.callback("🪙 Оплатить EXC", "m:exc")));
+        }
+        if (vpn.isCardPayEnabled()) {
+            rows.add(List.of(keyboardFactory.callback("🏦 Карта / СБП (рубли)", "m:card")));
+        }
+        if (vpn.isCryptoPayEnabled()) {
+            rows.add(List.of(keyboardFactory.callback("₿ Крипта (TON, USDT)", "m:crypto")));
+        }
         rows.add(List.of(keyboardFactory.callback("⬅️ Тарифы", "m:tariffs"), keyboardFactory.callback("🏠 Меню", "m:main")));
         show(uid, oldMsgId, "💳 <b>Способы оплаты</b>\n\nВыберите, как удобнее заплатить. Ключ приходит сюда сразу после оплаты, а при переводе по реквизитам после проверки перевода.", rows);
     }
