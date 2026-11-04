@@ -40,12 +40,17 @@ import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 import ru.gamebot.platform.config.AppProperties;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Vpn2Account;
+import ru.gamebot.platform.domain.model.Vpn2CryptoInvoice;
 import ru.gamebot.platform.domain.model.Vpn2Feedback;
+import ru.gamebot.platform.domain.model.Vpn2ManualPayment;
 import ru.gamebot.platform.domain.model.Vpn2Payment;
 import ru.gamebot.platform.domain.repository.Vpn2AccountRepository;
+import ru.gamebot.platform.domain.repository.Vpn2CryptoInvoiceRepository;
 import ru.gamebot.platform.domain.repository.Vpn2FeedbackRepository;
+import ru.gamebot.platform.domain.repository.Vpn2ManualPaymentRepository;
 import ru.gamebot.platform.event.AnalyticsAlertEvent;
 import ru.gamebot.platform.service.AdminService;
+import ru.gamebot.platform.service.CryptoPayClient;
 import ru.gamebot.platform.service.ExcTransactionService;
 import ru.gamebot.platform.service.TrafficSourceService;
 import ru.gamebot.platform.service.UserService;
@@ -81,6 +86,9 @@ public class VpnBot extends TelegramLongPollingBot {
     private final TrafficSourceService trafficSourceService;
     private final Vpn2AccountRepository accountRepository;
     private final Vpn2FeedbackRepository feedbackRepository;
+    private final Vpn2ManualPaymentRepository manualPaymentRepository;
+    private final Vpn2CryptoInvoiceRepository cryptoInvoiceRepository;
+    private final CryptoPayClient cryptoPay;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final java.net.http.HttpClient http = java.net.http.HttpClient.newHttpClient();
@@ -89,6 +97,9 @@ public class VpnBot extends TelegramLongPollingBot {
     private volatile boolean registered = false;
     /** Кто сейчас пишет текст отзыва: telegramId -> id записи отзыва (в памяти, при перезапуске теряется - человек просто нажмёт кнопку заново). */
     private final Map<Long, Long> awaitingReviewText = new ConcurrentHashMap<>();
+    /** Кто сейчас платит EXC: защита от двойного нажатия «Оплатить» (двойное списание). */
+    private final java.util.Set<Long> excPayInProgress = ConcurrentHashMap.newKeySet();
+    private final Object cryptoLock = new Object();
 
     @EventListener(ApplicationReadyEvent.class)
     public void registerBot() {
@@ -174,6 +185,10 @@ public class VpnBot extends TelegramLongPollingBot {
         }
         User from = message.getFrom();
         Long uid = from.getId();
+        if (message.hasPhoto() || message.hasDocument()) {
+            handleProof(uid, message);
+            return;
+        }
         String text = message.getText() == null ? "" : message.getText().trim();
         if (text.startsWith("/paysupport")) {
             showPaySupport(uid);
@@ -188,7 +203,8 @@ public class VpnBot extends TelegramLongPollingBot {
             return;
         }
         if (isAdmin(uid) && text.startsWith("/stats")) {
-            sendHtml(uid, vpn.statsHtml() + "\n\n" + feedbackStatsHtml(), null);
+            sendHtml(uid, vpn.statsHtml() + "\n\n" + vpn.paymentMethodsHtml() + "\nПереводы ждут подтверждения: <b>"
+                    + manualPaymentRepository.countByStatus(Vpn2ManualPayment.STATUS_PENDING) + "</b>\n\n" + feedbackStatsHtml(), null);
             return;
         }
         if (isAdmin(uid) && text.startsWith("/vpn2")) {
@@ -248,6 +264,9 @@ public class VpnBot extends TelegramLongPollingBot {
         }
         if (!cq.getData().startsWith("fb:")) {
             awaitingReviewText.remove(uid); // ушёл в другой раздел: следующее сообщение не считаем текстом отзыва
+        }
+        if (cq.getData().startsWith("m:") && handlePayCallback(uid, from, oldMsgId, cq.getData())) {
+            return;
         }
         if (cq.getData().startsWith("adm:")) {
             handleAdminCallback(uid, oldMsgId, cq.getData());
@@ -404,6 +423,7 @@ public class VpnBot extends TelegramLongPollingBot {
             log.warn("VPN bot: failed to create Stars invoice link for tariffs screen, user {}", uid);
             sb.append("\n\n⚠️ Часть кнопок оплаты временно недоступна, попробуйте через минуту.");
         }
+        rows.add(List.of(keyboardFactory.callback("💳 Другие способы оплаты", "m:pay")));
         rows.add(List.of(keyboardFactory.callback("ℹ️ Условия", "m:terms")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
         show(uid, oldMsgId, sb.toString(), rows);
@@ -770,6 +790,463 @@ public class VpnBot extends TelegramLongPollingBot {
         }
     }
 
+    // ---------------------------------------------------------------- другие способы оплаты
+
+    /** Маршрутизация кнопок способов оплаты; true - кнопка обработана здесь. */
+    private boolean handlePayCallback(Long uid, User from, Integer oldMsgId, String data) {
+        if (data.equals("m:pay")) {
+            showPayMethods(uid, oldMsgId);
+        } else if (data.startsWith("m:soon:")) {
+            showMethodSoon(uid, oldMsgId, data.substring("m:soon:".length()));
+        } else if (data.equals("m:exc")) {
+            showExcPay(uid, oldMsgId);
+        } else if (data.startsWith("m:excok:")) {
+            confirmExcPay(uid, oldMsgId, data.substring("m:excok:".length()));
+        } else if (data.startsWith("m:excgo:")) {
+            payWithExc(uid, from, oldMsgId, data.substring("m:excgo:".length()));
+        } else if (data.equals("m:card")) {
+            showCardPay(uid, oldMsgId);
+        } else if (data.startsWith("m:cardt:")) {
+            startCardPayment(uid, oldMsgId, data.substring("m:cardt:".length()));
+        } else if (data.equals("m:cardcancel")) {
+            cancelCardPayment(uid, oldMsgId);
+        } else if (data.equals("m:crypto")) {
+            showCryptoPay(uid, oldMsgId);
+        } else if (data.startsWith("m:cryt:")) {
+            startCryptoPayment(uid, oldMsgId, data.substring("m:cryt:".length()));
+        } else if (data.startsWith("m:cryc:")) {
+            checkCryptoPayment(uid, oldMsgId, data.substring("m:cryc:".length()));
+        } else {
+            return false;
+        }
+        return true;
+    }
+
+    /** «Другие способы оплаты»: Stars всегда; EXC, карта/СБП и крипта - кнопка рабочая, если способ включён, иначе «(скоро)» (видно, но закрыто). */
+    private void showPayMethods(Long uid, Integer oldMsgId) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("⭐ Звёзды Telegram", "m:tariffs")));
+        rows.add(List.of(vpn.isExcPayEnabled() ? keyboardFactory.callback("🪙 Оплатить EXC", "m:exc") : keyboardFactory.callback("🪙 Оплатить EXC (скоро)", "m:soon:exc")));
+        rows.add(List.of(vpn.isCardPayEnabled() ? keyboardFactory.callback("🏦 Карта / СБП (рубли)", "m:card") : keyboardFactory.callback("🏦 Карта / СБП (скоро)", "m:soon:card")));
+        rows.add(List.of(vpn.isCryptoPayEnabled() ? keyboardFactory.callback("₿ Крипта (TON, USDT)", "m:crypto") : keyboardFactory.callback("₿ Крипта (скоро)", "m:soon:crypto")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Тарифы", "m:tariffs"), keyboardFactory.callback("🏠 Меню", "m:main")));
+        show(uid, oldMsgId, "💳 <b>Способы оплаты</b>\n\nВыберите, как удобнее заплатить. Ключ приходит сюда сразу после оплаты, а при переводе по реквизитам после проверки перевода.", rows);
+    }
+
+    private void showMethodSoon(Long uid, Integer oldMsgId, String method) {
+        StringBuilder sb = new StringBuilder();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        switch (method) {
+            case "exc" -> {
+                sb.append("🪙 <b>Оплата EXC</b>\n\nСкоро откроется: можно будет оплатить тариф целиком монетами EXC, без звёзд и карты.\n\nПланируемые цены:\n");
+                for (Tariff t : Tariff.values()) {
+                    sb.append("• ").append(t.getTitle()).append(": ").append(formatExc(t.getExcOnlyPrice())).append(" EXC\n");
+                }
+                sb.append("\nКопите EXC за игры и задания в EGC.");
+                rows.add(List.of(keyboardFactory.url("🎮 Копить EXC", egcUrl())));
+            }
+            case "card" -> sb.append("🏦 <b>Карта / СБП</b>\n\nОплата рублями переводом скоро откроется.");
+            case "crypto" -> sb.append("₿ <b>Крипта</b>\n\nОплата в TON и USDT через CryptoBot скоро откроется.");
+            default -> sb.append("Этот способ оплаты скоро откроется.");
+        }
+        if (!"exc".equals(method)) {
+            sb.append("\n\nПока можно оплатить звёздами Telegram.");
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Способы оплаты", "m:pay"), keyboardFactory.callback("⭐ Звёзды", "m:tariffs")));
+        show(uid, oldMsgId, sb.toString(), rows);
+    }
+
+    // ---- EXC целиком
+
+    private void showExcPay(Long uid, Integer oldMsgId) {
+        if (!vpn.isExcPayEnabled()) {
+            showMethodSoon(uid, oldMsgId, "exc");
+            return;
+        }
+        long coins = excBalance(uid);
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        StringBuilder sb = new StringBuilder("🪙 <b>Оплата EXC</b>\n\n");
+        if (coins < 0) {
+            sb.append("Для оплаты EXC нужен профиль в игровом боте EGC: там вы копите монеты за игры и задания.");
+            rows.add(List.of(keyboardFactory.url("🎮 Открыть EGC", egcUrl())));
+        } else {
+            sb.append("Ваш баланс: <b>").append(formatExc(coins)).append(" EXC</b>\nВыберите срок:");
+            for (Tariff t : Tariff.values()) {
+                boolean enough = coins >= t.getExcOnlyPrice();
+                rows.add(List.of(keyboardFactory.callback((enough ? "🪙 " : "🔒 ") + t.getTitle() + ": " + formatExc(t.getExcOnlyPrice()) + " EXC",
+                        enough ? "m:excok:" + t.getKey() : "m:noop")));
+            }
+            rows.add(List.of(keyboardFactory.url("🎮 Копить EXC", egcUrl())));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Способы оплаты", "m:pay")));
+        show(uid, oldMsgId, sb.toString(), rows);
+    }
+
+    private void confirmExcPay(Long uid, Integer oldMsgId, String key) {
+        Optional<Tariff> tariff = Tariff.byKey(key);
+        if (!vpn.isExcPayEnabled() || tariff.isEmpty()) {
+            showPayMethods(uid, oldMsgId);
+            return;
+        }
+        Tariff t = tariff.get();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("✅ Оплатить", "m:excgo:" + t.getKey()), keyboardFactory.callback("Отмена", "m:exc")));
+        show(uid, oldMsgId, "🪙 <b>Подтвердите оплату</b>\n\n" + t.getTitle() + ": списать <b>" + formatExc(t.getExcOnlyPrice()) + " EXC</b>. Ключ заработает сразу.", rows);
+    }
+
+    /** Оплата тарифа целиком за EXC: сначала списываем (под блокировкой строки игрока), затем выдаём ключ; если выдача не удалась - возвращаем EXC и зовём админов. Повторный тап блокируется. */
+    private void payWithExc(Long uid, User from, Integer oldMsgId, String key) {
+        Optional<Tariff> tariff = Tariff.byKey(key);
+        if (!vpn.isExcPayEnabled() || tariff.isEmpty()) {
+            showPayMethods(uid, oldMsgId);
+            return;
+        }
+        if (!excPayInProgress.add(uid)) {
+            return;
+        }
+        Tariff t = tariff.get();
+        long price = t.getExcOnlyPrice();
+        try {
+            Optional<AppUser> appUser = userService.findByTelegramId(uid);
+            if (appUser.isEmpty()) {
+                showExcPay(uid, oldMsgId);
+                return;
+            }
+            AppUser u = appUser.get();
+            excTransactionService.refreshCoins(u);
+            if (u.getCoins() < price) {
+                showExcPay(uid, oldMsgId);
+                return;
+            }
+            excTransactionService.creditExc(u, -price, ExcTransactionService.SHOP_BUY, "EGC VPN (бот): оплата EXC, " + t.getTitle());
+            Vpn2Account account;
+            String ref = "exc:" + uid + ":" + System.currentTimeMillis();
+            try {
+                account = vpn.activatePaid(uid, t, ref);
+            } catch (VpnException e) {
+                excTransactionService.creditExc(u, price, ExcTransactionService.SHOP_REFUND, "EGC VPN (бот): возврат EXC, ключ не выдан");
+                alertAdmins("🚨 <b>VPN-бот: оплата EXC не удалась</b>\nИгрок <code>" + uid + "</code>, " + escape(t.getTitle()) + ": ключ не выдан, EXC (" + formatExc(price) + ") возвращены.");
+                List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+                rows.add(List.of(keyboardFactory.callback("⬅️ Способы оплаты", "m:pay")));
+                show(uid, oldMsgId, "⚠️ Не получилось выдать ключ. EXC возвращены на баланс, попробуйте через несколько минут.", rows);
+                return;
+            }
+            finishAltPurchase(uid, from == null ? null : from.getFirstName(), t, account, "EXC", 0, price, ref, " (" + formatExc(price) + " EXC)");
+        } catch (Exception e) {
+            log.error("VPN bot: EXC payment failed, user {}", uid, e);
+            alertAdmins("🚨 <b>VPN-бот: сбой оплаты EXC</b>\nИгрок <code>" + uid + "</code>, " + escape(t.getTitle()) + ". Проверьте баланс EXC и ключ вручную.\n" + escape(String.valueOf(e.getMessage())));
+            sendHtml(uid, "⚠️ Что-то пошло не так при оплате. Мы уже знаем и всё проверим, напишите в поддержку, если ключ не пришёл: /paysupport.", null);
+        } finally {
+            excPayInProgress.remove(uid);
+        }
+    }
+
+    /** Общий финал для способов оплаты кроме Stars (EXC, перевод, крипта): журнал, рефералка, уведомление админам, экран ключа. Ключ уже выдан. */
+    private void finishAltPurchase(Long uid, String firstName, Tariff tariff, Vpn2Account account, String method, int rubAmount, long excSpent, String ref, String amountNote) {
+        try {
+            vpn.recordPayment(uid, tariff, 0, excSpent, ref, method, rubAmount);
+        } catch (Exception e) {
+            log.error("VPN bot: failed to record {} payment {}", method, ref, e); // журнал вторичен: ключ уже выдан
+        }
+        String bonusNote = "";
+        Vpn2Account shown = account;
+        try {
+            Long referrer = vpn.rewardReferral(uid);
+            if (referrer != null) {
+                bonusNote = "\n🎁 За приглашение вам начислено +" + Vpn2Service.REFERRAL_BONUS_DAYS + " дней.";
+                sendHtml(referrer, "🎁 <b>Ваш друг оформил VPN</b>\n\nВам начислено +" + Vpn2Service.REFERRAL_BONUS_DAYS + " дней к вашему ключу.", null);
+                shown = vpn.find(uid).orElse(account);
+            }
+        } catch (Exception e) {
+            log.error("VPN bot: referral reward failed for buyer {}", uid, e);
+        }
+        alertAdmins("🔐 <b>Покупка в VPN-боте (" + escape(method) + ")</b>: " + escape(firstName == null ? "" : firstName) + " (<code>" + uid + "</code>), "
+                + escape(tariff.getTitle()) + escape(amountNote));
+        showKey(uid, null, shown, "✅ <b>Оплачено!</b> VPN работает до " + DATE_TIME.format(shown.getExpiresAt()) + bonusNote);
+    }
+
+    // ---- перевод рублями (карта / СБП по реквизитам), подтверждает админ
+
+    private void showCardPay(Long uid, Integer oldMsgId) {
+        if (!vpn.isCardPayEnabled()) {
+            showMethodSoon(uid, oldMsgId, "card");
+            return;
+        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (Tariff t : Tariff.values()) {
+            rows.add(List.of(keyboardFactory.callback("🏦 " + t.getTitle() + ": " + t.getPriceRub() + " ₽", "m:cardt:" + t.getKey())));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Способы оплаты", "m:pay")));
+        show(uid, oldMsgId, "🏦 <b>Перевод рублями (карта / СБП)</b>\n\nВыберите срок, мы покажем реквизиты. После перевода пришлите чек, и ключ придёт после проверки.", rows);
+    }
+
+    private void startCardPayment(Long uid, Integer oldMsgId, String key) {
+        Optional<Tariff> tariff = Tariff.byKey(key);
+        if (!vpn.isCardPayEnabled() || tariff.isEmpty()) {
+            showPayMethods(uid, oldMsgId);
+            return;
+        }
+        if (manualPaymentRepository.findFirstByTelegramIdAndStatusOrderByCreatedAtDesc(uid, Vpn2ManualPayment.STATUS_PENDING).isPresent()) {
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            rows.add(List.of(keyboardFactory.url("🆘 Поддержка", "https://t.me/" + appProperties.getSupportUsername())));
+            rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
+            show(uid, oldMsgId, "⏳ Ваш предыдущий перевод ещё проверяется. Дождитесь ответа или напишите в поддержку.", rows);
+            return;
+        }
+        manualPaymentRepository.findFirstByTelegramIdAndStatusOrderByCreatedAtDesc(uid, Vpn2ManualPayment.STATUS_AWAITING_PROOF).ifPresent(old -> {
+            old.setStatus(Vpn2ManualPayment.STATUS_REJECTED);
+            old.setDecidedAt(LocalDateTime.now());
+            manualPaymentRepository.save(old);
+        });
+        Tariff t = tariff.get();
+        Vpn2ManualPayment m = new Vpn2ManualPayment();
+        m.setTelegramId(uid);
+        m.setTariff(t.getKey());
+        m.setAmountRub(t.getPriceRub());
+        m.setCreatedAt(LocalDateTime.now());
+        m = manualPaymentRepository.save(m);
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("❌ Отмена", "m:cardcancel")));
+        show(uid, oldMsgId, "🏦 <b>Оплата " + escape(t.getTitle()) + ": " + t.getPriceRub() + " ₽</b>\n\n"
+                + "Переведите <b>" + t.getPriceRub() + " ₽</b> по реквизитам:\n<code>" + escape(vpn.getCardDetails()) + "</code>\n\n"
+                + "В комментарии к переводу укажите ваш ID: <code>" + uid + "</code>.\n\n"
+                + "После перевода пришлите сюда <b>скриншот или файл чека</b> одним сообщением. Мы проверим перевод и пришлём ключ (обычно в течение нескольких часов).", rows);
+    }
+
+    private void cancelCardPayment(Long uid, Integer oldMsgId) {
+        manualPaymentRepository.findFirstByTelegramIdAndStatusOrderByCreatedAtDesc(uid, Vpn2ManualPayment.STATUS_AWAITING_PROOF).ifPresent(m -> {
+            m.setStatus(Vpn2ManualPayment.STATUS_REJECTED);
+            m.setDecidedAt(LocalDateTime.now());
+            manualPaymentRepository.save(m);
+        });
+        showPayMethods(uid, oldMsgId);
+    }
+
+    /** Фото или файл от игрока: если ждём чек, прикрепляем к заявке и отправляем админам с кнопками подтверждения. Вне ожидания чека молчим. */
+    private void handleProof(Long uid, Message message) {
+        Optional<Vpn2ManualPayment> found = manualPaymentRepository.findFirstByTelegramIdAndStatusOrderByCreatedAtDesc(uid, Vpn2ManualPayment.STATUS_AWAITING_PROOF);
+        if (found.isEmpty()) {
+            return;
+        }
+        Vpn2ManualPayment m = found.get();
+        boolean isPhoto = message.hasPhoto() && !message.getPhoto().isEmpty();
+        String fileId = isPhoto ? message.getPhoto().get(message.getPhoto().size() - 1).getFileId()
+                : message.getDocument() != null ? message.getDocument().getFileId() : null;
+        if (fileId == null) {
+            return;
+        }
+        m.setProofFileId(fileId);
+        m.setProofIsPhoto(isPhoto);
+        m.setStatus(Vpn2ManualPayment.STATUS_PENDING);
+        manualPaymentRepository.save(m);
+        List<List<InlineKeyboardButton>> userRows = new ArrayList<>();
+        userRows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
+        sendHtml(uid, "✅ <b>Чек получен.</b> Проверим перевод и пришлём ключ сюда. Обычно это занимает несколько часов.", userRows);
+        String caption = "🏦 <b>Оплата переводом</b> #" + m.getId() + "\nИгрок <a href=\"tg://user?id=" + uid + "\">" + uid + "</a>, тариф " + escape(m.getTariff())
+                + ", сумма <b>" + m.getAmountRub() + " ₽</b>.\nПроверьте поступление и подтвердите.";
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("✅ Подтвердить", "adm:cok:" + m.getId()), keyboardFactory.callback("❌ Отклонить", "adm:cno:" + m.getId())));
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                if (isPhoto) {
+                    SendPhoto photo = new SendPhoto();
+                    photo.setChatId(adminId.toString());
+                    photo.setPhoto(new InputFile(fileId));
+                    photo.setCaption(caption);
+                    photo.setParseMode("HTML");
+                    photo.setReplyMarkup(keyboardFactory.rowsLayout(rows));
+                    execute(photo);
+                } else {
+                    org.telegram.telegrambots.meta.api.methods.send.SendDocument doc = new org.telegram.telegrambots.meta.api.methods.send.SendDocument();
+                    doc.setChatId(adminId.toString());
+                    doc.setDocument(new InputFile(fileId));
+                    doc.setCaption(caption);
+                    doc.setParseMode("HTML");
+                    doc.setReplyMarkup(keyboardFactory.rowsLayout(rows));
+                    execute(doc);
+                }
+            } catch (TelegramApiException e) {
+                log.warn("VPN bot: failed to send proof to admin {}", adminId, e);
+            }
+        }
+        alertAdmins("🏦 <b>Новая оплата переводом</b> #" + m.getId() + " от <code>" + uid + "</code>, " + m.getAmountRub() + " ₽. Подтвердите в VPN-боте (чек отправлен туда).");
+    }
+
+    /** Подтверждение или отклонение перевода админом (кнопки под чеком). */
+    private void handleCardDecision(Long adminId, Integer oldMsgId, String action, String idText) {
+        Optional<Vpn2ManualPayment> found = manualPaymentRepository.findById(Long.parseLong(idText));
+        if (found.isEmpty() || !Vpn2ManualPayment.STATUS_PENDING.equals(found.get().getStatus())) {
+            show(adminId, oldMsgId, "Эта заявка не найдена или уже обработана.", null);
+            return;
+        }
+        Vpn2ManualPayment m = found.get();
+        Optional<Tariff> tariff = Tariff.byKey(m.getTariff());
+        if ("cno".equals(action) || tariff.isEmpty()) {
+            m.setStatus(Vpn2ManualPayment.STATUS_REJECTED);
+            m.setDecidedAt(LocalDateTime.now());
+            manualPaymentRepository.save(m);
+            show(adminId, oldMsgId, "❌ Заявка #" + m.getId() + " отклонена.", null);
+            sendHtml(m.getTelegramId(), "❌ <b>Перевод не подтверждён</b>\n\nНе нашли поступление. Если вы оплатили, напишите в поддержку: /paysupport.", null);
+            return;
+        }
+        Vpn2Account account;
+        String ref = "card:" + m.getId();
+        try {
+            account = vpn.activatePaid(m.getTelegramId(), tariff.get(), ref);
+        } catch (VpnException e) {
+            show(adminId, oldMsgId, "⚠️ Не удалось выдать ключ (" + escape(e.getCode()) + "). Заявка #" + m.getId() + " осталась на проверке, попробуйте позже.", null);
+            return;
+        }
+        m.setStatus(Vpn2ManualPayment.STATUS_APPROVED);
+        m.setDecidedAt(LocalDateTime.now());
+        manualPaymentRepository.save(m);
+        show(adminId, oldMsgId, "✅ Заявка #" + m.getId() + " подтверждена, ключ выдан игроку <code>" + m.getTelegramId() + "</code>.", null);
+        finishAltPurchase(m.getTelegramId(), null, tariff.get(), account, "CARD", m.getAmountRub(), 0, ref, ", " + m.getAmountRub() + " ₽");
+    }
+
+    // ---- крипта (CryptoBot)
+
+    private void showCryptoPay(Long uid, Integer oldMsgId) {
+        if (!vpn.isCryptoPayEnabled()) {
+            showMethodSoon(uid, oldMsgId, "crypto");
+            return;
+        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (Tariff t : Tariff.values()) {
+            rows.add(List.of(keyboardFactory.callback("₿ " + t.getTitle() + ": " + t.getPriceRub() + " ₽", "m:cryt:" + t.getKey())));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Способы оплаты", "m:pay")));
+        show(uid, oldMsgId, "₿ <b>Оплата криптой</b>\n\nВыберите срок: мы выставим счёт в @CryptoBot, оплатить можно TON или USDT. Сумма пересчитывается из рублей по курсу.", rows);
+    }
+
+    private void startCryptoPayment(Long uid, Integer oldMsgId, String key) {
+        Optional<Tariff> tariff = Tariff.byKey(key);
+        if (!vpn.isCryptoPayEnabled() || tariff.isEmpty()) {
+            showPayMethods(uid, oldMsgId);
+            return;
+        }
+        Tariff t = tariff.get();
+        try {
+            CryptoPayClient.Invoice invoice = cryptoPay.createInvoice(t.getPriceRub(), "EGC VPN: " + t.getTitle(), "vpn2:" + uid + ":" + t.getKey(), 3600);
+            if (invoice.invoiceId() == 0 || invoice.payUrl().isBlank()) {
+                throw new IllegalStateException("пустой ответ Crypto Pay");
+            }
+            Vpn2CryptoInvoice row = new Vpn2CryptoInvoice();
+            row.setTelegramId(uid);
+            row.setTariff(t.getKey());
+            row.setAmountRub(t.getPriceRub());
+            row.setCryptoInvoiceId(invoice.invoiceId());
+            row.setPayUrl(invoice.payUrl());
+            row.setCreatedAt(LocalDateTime.now());
+            row = cryptoInvoiceRepository.save(row);
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            rows.add(List.of(keyboardFactory.url("₿ Оплатить в CryptoBot", invoice.payUrl())));
+            rows.add(List.of(keyboardFactory.callback("🔄 Проверить оплату", "m:cryc:" + row.getId())));
+            rows.add(List.of(keyboardFactory.callback("⬅️ Способы оплаты", "m:pay")));
+            show(uid, oldMsgId, "₿ <b>Счёт на " + escape(t.getTitle()) + ": " + t.getPriceRub() + " ₽</b>\n\nОплатите его в @CryptoBot (TON или USDT) в течение часа. "
+                    + "После оплаты ключ придёт сюда сам, обычно за 1-2 минуты.", rows);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            log.error("VPN bot: crypto invoice failed for {}", uid, e);
+            alertAdmins("🚨 <b>VPN-бот: не удалось создать крипто-счёт</b> для <code>" + uid + "</code>: " + escape(String.valueOf(e.getMessage())));
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            rows.add(List.of(keyboardFactory.callback("⬅️ Способы оплаты", "m:pay")));
+            show(uid, oldMsgId, "⚠️ Не получилось выставить счёт. Попробуйте через несколько минут или выберите другой способ оплаты.", rows);
+        }
+    }
+
+    private void checkCryptoPayment(Long uid, Integer oldMsgId, String idText) {
+        try {
+            Optional<Vpn2CryptoInvoice> found = cryptoInvoiceRepository.findById(Long.parseLong(idText));
+            if (found.isEmpty() || !uid.equals(found.get().getTelegramId())) {
+                return;
+            }
+            Vpn2CryptoInvoice inv = found.get();
+            if (Vpn2CryptoInvoice.STATUS_PENDING.equals(inv.getStatus())) {
+                processCryptoInvoices(List.of(inv));
+                inv = cryptoInvoiceRepository.findById(inv.getId()).orElse(inv);
+            }
+            if (Vpn2CryptoInvoice.STATUS_PAID.equals(inv.getStatus())) {
+                return; // ключ уже отправлен processCryptoInvoices
+            }
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            if (Vpn2CryptoInvoice.STATUS_PENDING.equals(inv.getStatus())) {
+                rows.add(List.of(keyboardFactory.url("₿ Оплатить в CryptoBot", inv.getPayUrl())));
+                rows.add(List.of(keyboardFactory.callback("🔄 Проверить ещё раз", "m:cryc:" + inv.getId())));
+                show(uid, oldMsgId, "⏳ Оплата пока не найдена. После оплаты это занимает до пары минут, нажмите «Проверить ещё раз».", rows);
+            } else {
+                rows.add(List.of(keyboardFactory.callback("₿ Выставить новый счёт", "m:crypto")));
+                show(uid, oldMsgId, "⌛ Счёт истёк. Если вы всё же оплатили, напишите в поддержку: /paysupport. Иначе выставьте новый.", rows);
+            }
+        } catch (NumberFormatException e) {
+            log.debug("VPN bot: bad crypto check callback {}", idText);
+        }
+    }
+
+    /** Раз в минуту: неоплаченные крипто-счета последних 3 часов. Оплата найдена - ключ выдаётся и отправляется сам. */
+    @Scheduled(initialDelay = 2 * 60_000L, fixedDelay = 60_000L)
+    public void pollCryptoInvoices() {
+        if (!registered || !cryptoPay.isConfigured()) {
+            return;
+        }
+        try {
+            List<Vpn2CryptoInvoice> pending = cryptoInvoiceRepository.findByStatusAndCreatedAtAfter(Vpn2CryptoInvoice.STATUS_PENDING, LocalDateTime.now().minusHours(3));
+            if (!pending.isEmpty()) {
+                processCryptoInvoices(pending);
+            }
+        } catch (Exception e) {
+            log.warn("VPN bot crypto poll failed", e);
+        }
+    }
+
+    private void processCryptoInvoices(List<Vpn2CryptoInvoice> invoices) {
+        synchronized (cryptoLock) {
+            try {
+                Map<Long, String> statuses = cryptoPay.statuses(invoices.stream().map(Vpn2CryptoInvoice::getCryptoInvoiceId).toList());
+                for (Vpn2CryptoInvoice inv : invoices) {
+                    Vpn2CryptoInvoice fresh = cryptoInvoiceRepository.findById(inv.getId()).orElse(inv);
+                    if (!Vpn2CryptoInvoice.STATUS_PENDING.equals(fresh.getStatus())) {
+                        continue;
+                    }
+                    String status = statuses.get(fresh.getCryptoInvoiceId());
+                    if ("paid".equals(status)) {
+                        completeCryptoPayment(fresh);
+                    } else if ("expired".equals(status)) {
+                        fresh.setStatus(Vpn2CryptoInvoice.STATUS_EXPIRED);
+                        cryptoInvoiceRepository.save(fresh);
+                    }
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (Exception e) {
+                log.warn("VPN bot: crypto status check failed", e);
+            }
+        }
+    }
+
+    /** Счёт оплачен: сначала отметка PAID (чтобы не выдать дважды), затем ключ. Сбой выдачи - алерт админам и честное сообщение игроку (деньги не теряются). */
+    private void completeCryptoPayment(Vpn2CryptoInvoice inv) {
+        inv.setStatus(Vpn2CryptoInvoice.STATUS_PAID);
+        inv.setPaidAt(LocalDateTime.now());
+        cryptoInvoiceRepository.save(inv);
+        Long uid = inv.getTelegramId();
+        Optional<Tariff> tariff = Tariff.byKey(inv.getTariff());
+        String ref = "crypto:" + inv.getCryptoInvoiceId();
+        try {
+            if (tariff.isEmpty()) {
+                throw new IllegalStateException("неизвестный тариф " + inv.getTariff());
+            }
+            Vpn2Account account = vpn.activatePaid(uid, tariff.get(), ref);
+            finishAltPurchase(uid, null, tariff.get(), account, "CRYPTO", inv.getAmountRub(), 0, ref, ", " + inv.getAmountRub() + " ₽");
+        } catch (Exception e) {
+            log.error("VPN bot: crypto payment grant failed, user {}, invoice {}", uid, inv.getCryptoInvoiceId(), e);
+            alertAdmins("🚨 <b>ОПЛАТА КРИПТОЙ в VPN-боте не обработана</b>\nИгрок <code>" + uid + "</code>, тариф <code>" + escape(inv.getTariff()) + "</code>, счёт <code>"
+                    + inv.getCryptoInvoiceId() + "</code>. Выдать: <code>/vpn2 " + uid + " " + escape(inv.getTariff().toLowerCase()) + "</code>");
+            sendHtml(uid, "💳 <b>Оплата получена</b>\n\nКлюч выдаём вручную, это займёт немного времени. Мы уже знаем и пришлём его сюда.", null);
+        }
+    }
+
     // ---------------------------------------------------------------- возврат Stars
 
     /** /vpn2refund ID: последние оплаты игрока с кнопками «↩️ Вернуть». Возврат - только по кнопке и после подтверждения. */
@@ -849,6 +1326,7 @@ public class VpnBot extends TelegramLongPollingBot {
                         show(adminId, oldMsgId, "⚠️ Не получилось отключить ключ: " + escape(e.getMessage()) + " (" + e.getCode() + ")", null);
                     }
                 }
+                case "cok", "cno" -> handleCardDecision(adminId, oldMsgId, p[1], p[2]);
                 case "no" -> show(adminId, oldMsgId, "Отменено.", null);
                 default -> { }
             }

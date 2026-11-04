@@ -34,9 +34,9 @@ public class Vpn2Service {
 
     /** Тарифы: цена в рублях и в Stars (курс как у месячного: 150 ₽ = 89 ⭐), со скидкой за EXC (−50 ₽) - отдельная цена. */
     public enum Tariff {
-        M1("M1", "1 месяц", 30, 150, 89, 100, 59),
-        M3("M3", "3 месяца", 90, 400, 237, 350, 208),
-        M12("M12", "12 месяцев", 365, 1350, 801, 1300, 771);
+        M1("M1", "1 месяц", 30, 150, 89, 100, 59, 54_000),
+        M3("M3", "3 месяца", 90, 400, 237, 350, 208, 144_000),
+        M12("M12", "12 месяцев", 365, 1350, 801, 1300, 771, 486_000);
 
         private final String key;
         private final String title;
@@ -45,8 +45,10 @@ public class Vpn2Service {
         private final int stars;
         private final int excPriceRub;
         private final int excStars;
+        /** Полная оплата EXC без Stars: по курсу скидки (18 000 EXC = 50 ₽, то есть 360 EXC за рубль). Цифры ждут утверждения владельцем до включения оплаты EXC. */
+        private final long excOnlyPrice;
 
-        Tariff(String key, String title, int days, int priceRub, int stars, int excPriceRub, int excStars) {
+        Tariff(String key, String title, int days, int priceRub, int stars, int excPriceRub, int excStars, long excOnlyPrice) {
             this.key = key;
             this.title = title;
             this.days = days;
@@ -54,6 +56,7 @@ public class Vpn2Service {
             this.stars = stars;
             this.excPriceRub = excPriceRub;
             this.excStars = excStars;
+            this.excOnlyPrice = excOnlyPrice;
         }
 
         public String getKey() { return key; }
@@ -69,6 +72,8 @@ public class Vpn2Service {
         public int getExcPriceRub() { return excPriceRub; }
 
         public int getExcStars() { return excStars; }
+
+        public long getExcOnlyPrice() { return excOnlyPrice; }
 
         public static Optional<Tariff> byKey(String key) {
             return Arrays.stream(values()).filter(t -> t.key.equalsIgnoreCase(key)).findFirst();
@@ -99,6 +104,9 @@ public class Vpn2Service {
     private final int trialDays;
     private final int trialGb;
     private final String reviewsChannel;
+    private final boolean excPayEnabled;
+    private final String cardDetails;
+    private final String cryptoToken;
 
     public Vpn2Service(ObjectMapper objectMapper, Vpn2AccountRepository accounts, Vpn2UserRepository users,
                        Vpn2PaymentRepository payments, ApplicationEventPublisher eventPublisher,
@@ -114,7 +122,10 @@ public class Vpn2Service {
                        @Value("${app.vpn2-sub-base:}") String subBase,
                        @Value("${app.vpn2-trial-days:3}") int trialDays,
                        @Value("${app.vpn2-trial-gb:5}") int trialGb,
-                       @Value("${app.vpn2-reviews-channel:}") String reviewsChannel) {
+                       @Value("${app.vpn2-reviews-channel:}") String reviewsChannel,
+                       @Value("${app.vpn2-exc-pay-enabled:false}") boolean excPayEnabled,
+                       @Value("${app.vpn2-card-details:}") String cardDetails,
+                       @Value("${app.vpn2-cryptobot-token:}") String cryptoToken) {
         this.panel = new VpnPanelClient(objectMapper, xuiUrl, xuiUser, xuiPass, inboundId);
         this.accounts = accounts;
         this.users = users;
@@ -129,6 +140,9 @@ public class Vpn2Service {
         this.trialDays = trialDays;
         this.trialGb = trialGb;
         this.reviewsChannel = reviewsChannel == null ? "" : reviewsChannel.trim();
+        this.excPayEnabled = excPayEnabled;
+        this.cardDetails = cardDetails == null ? "" : cardDetails.trim();
+        this.cryptoToken = cryptoToken == null ? "" : cryptoToken.trim();
         if (!enabled) {
             log.warn("Vpn2Service disabled: VPN2_ENABLED is not true");
         } else if (!panel.isConfigured() || this.subBase.isBlank()) {
@@ -172,6 +186,19 @@ public class Vpn2Service {
 
     /** Канал отзывов (@username или id): сюда бот публикует одобренные карточки; пусто - публикация выключена. */
     public String getReviewsChannel() { return reviewsChannel; }
+
+    /** Оплата тарифа целиком за EXC: показывается всегда, но кнопки работают только при VPN2_EXC_PAY_ENABLED=true («видно, но закрыто» до решения владельца). */
+    public boolean isExcPayEnabled() { return excPayEnabled; }
+
+    /** Реквизиты для перевода рублями (карта/СБП), текст как его надо показать игроку; пусто - способ закрыт. */
+    public String getCardDetails() { return cardDetails; }
+
+    public boolean isCardPayEnabled() { return !cardDetails.isBlank(); }
+
+    /** Токен CryptoBot (Crypto Pay API); пусто - крипто-оплата закрыта. */
+    public String getCryptoToken() { return cryptoToken; }
+
+    public boolean isCryptoPayEnabled() { return !cryptoToken.isBlank(); }
 
     /** Состояние всех клиентов второй панели одним запросом (метка -> расход, лимит, последний онлайн, загрузка подписки). */
     public java.util.Map<String, VpnPanelClient.ClientStat> allClientStats() throws PanelException {
@@ -313,7 +340,14 @@ public class Vpn2Service {
 
     /** Журнал оплаты (для статистики). Сбой записи не должен ломать выдачу: вызывающий ловит исключение. */
     public void recordPayment(Long telegramId, Tariff tariff, int starsAmount, long excSpent, String chargeId) {
+        recordPayment(telegramId, tariff, starsAmount, excSpent, chargeId, "STARS", 0);
+    }
+
+    /** То же с указанием способа (STARS, EXC, CARD, CRYPTO) и рублёвой суммы для CARD и CRYPTO. */
+    public void recordPayment(Long telegramId, Tariff tariff, int starsAmount, long excSpent, String chargeId, String method, int rubAmount) {
         Vpn2Payment p = new Vpn2Payment();
+        p.setMethod(method);
+        p.setRubAmount(rubAmount);
         p.setTelegramId(telegramId);
         p.setTariff(tariff.getKey());
         p.setStarsAmount(starsAmount);
@@ -411,6 +445,29 @@ public class Vpn2Service {
         account.setStatus(Vpn2Account.STATUS_DISABLED);
         account.setUpdatedAt(LocalDateTime.now());
         accounts.save(account);
+    }
+
+    /** Оплаты по способам (HTML-блок для /stats): число, Stars, рубли, EXC. */
+    public String paymentMethodsHtml() {
+        StringBuilder sb = new StringBuilder("💳 <b>Оплаты по способам</b>\n");
+        java.util.List<Object[]> rows = payments.summaryByMethod();
+        if (rows.isEmpty()) {
+            return sb.append("Оплат пока нет.").toString();
+        }
+        for (Object[] r : rows) {
+            sb.append(r[0]).append(": ").append(r[1]).append(" шт.");
+            if (((Number) r[2]).longValue() > 0) {
+                sb.append(", ").append(r[2]).append(" ⭐");
+            }
+            if (((Number) r[3]).longValue() > 0) {
+                sb.append(", ").append(r[3]).append(" ₽");
+            }
+            if (((Number) r[4]).longValue() > 0) {
+                sb.append(", ").append(r[4]).append(" EXC");
+            }
+            sb.append("\n");
+        }
+        return sb.toString().stripTrailing();
     }
 
     /** Сводка для админа (HTML): люди, ключи, оплаты и рефералы. */

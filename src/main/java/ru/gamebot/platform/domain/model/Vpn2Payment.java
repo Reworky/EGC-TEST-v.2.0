@@ -39,6 +39,14 @@ public class Vpn2Payment {
     @Column(length = 512)
     private String telegramPaymentChargeId;
 
+    /** Способ оплаты: STARS, EXC, CARD (перевод по реквизитам), CRYPTO (CryptoBot). */
+    @Column(nullable = false, length = 16, columnDefinition = "varchar(16) default 'STARS'")
+    private String method = "STARS";
+
+    /** Сумма в рублях для CARD и CRYPTO (цена тарифа); для STARS и EXC - 0. */
+    @Column(nullable = false, columnDefinition = "int default 0")
+    private int rubAmount = 0;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
