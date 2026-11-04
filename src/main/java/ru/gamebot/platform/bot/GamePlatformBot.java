@@ -8737,10 +8737,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback("👥 Позвать друга", "menu:referrals")));
         } else {
             sb.append("✅ <b>Отчёт принят, " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC начислены.</b>\n\n"
+                    + "⏳ <b>Квест ещё не закончен: остался финал за " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC.</b> Теперь нужно дождаться выплаты банка.\n\n"
                     + "<b>Что дальше:</b>\n"
-                    + "1️⃣ С " + ruDayMonth(bankDate) + " банк вернёт тебе 500 ₽ на карту.\n"
-                    + "2️⃣ Когда банк заплатит клубу, мы начислим " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC и откроем вывод всей суммы разом.\n"
-                    + "3️⃣ Мы напишем тебе сами. Если до " + ruDayMonth(bankDate.plusDays(7)) + " ничего нет, напиши менеджеру.");
+                    + "1️⃣ С " + ruDayMonth(bankDate) + " банк вернёт тебе 500 ₽ на карту. Раньше денег не будет.\n"
+                    + "2️⃣ Когда деньги придут, вернись сюда и нажми <b>«💰 Банк вернул мне 500 ₽»</b>. Мы напомним об этом сами.\n"
+                    + "3️⃣ Мы проверим выплату, начислим " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC и откроем вывод всей суммы разом.\n"
+                    + "Если до " + ruDayMonth(bankDate.plusDays(7)) + " денег нет, напиши менеджеру.");
             boolean claimed = (sub.getMissionRemindersSent() & ru.gamebot.platform.service.OtpMissionReminderService.BIT_BANK_CLAIMED) != 0;
             rows.add(List.of(claimed ? keyboardFactory.callback("✅ Мы проверяем выплату банка", "noop")
                     : keyboardFactory.callback("💰 Банк вернул мне 500 ₽", "mission:bankpaid:" + sub.getId() + ":4")));
@@ -13933,6 +13935,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String firstQuestBonus = firstQuestReferralLine(submission.getUser(), isFirstQuest);
         String viewsLine = viewsTier != null && QuestService.isUgcQuest(submission.getQuest()) && viewsTier >= 0 && viewsTier < QuestService.UGC_VIEW_TIER_LABELS.length
                 ? "👁 Просмотры: <b>" + QuestService.UGC_VIEW_TIER_LABELS[viewsTier] + "</b>, награда по ступени\n" : "";
+        // Миссия «ОТП Карта» после одобрения отчёта не закончена: игроку нужен экран этапа 4 «Банк платит» (ждать выплату банка и нажать «Банк вернул мне 500 ₽»), а не общее «Квест засчитан»
+        if (isOtpMissionQuest(submission.getQuest())) {
+            try {
+                sendOtpMission(submission.getUser(), submission.getQuest(), submission,
+                        "🪙 <b>+" + rewardGrant.totalExc() + " EXC</b> · ✨ +" + rewardGrant.xp() + " XP");
+                sendModerationQueue(callbackQuery.getFrom().getId());
+                answer(callbackQuery.getId(), "Заявка одобрена");
+                return;
+            } catch (Exception e) {
+                log.warn("Could not send OTP mission stage 4 to user {}, falling back to generic notice: {}", submission.getUser().getTelegramId(), e.getMessage());
+            }
+        }
         try {
             notifyUser(submission.getUser().getTelegramId(),
                     "✅ <b>Квест засчитан</b>\n\n"
