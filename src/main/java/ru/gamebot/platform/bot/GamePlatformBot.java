@@ -8698,11 +8698,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("Когда карта придёт, активируй её в приложении ОТП Банка и пополни на 500 ₽.");
             rows.add(List.of(keyboardFactory.callback("💳 Я активировал(а) карту", "mission:act:" + sub.getId() + ":2")));
         } else if (stage == 2) {
-            sb.append("Оплати этой картой любую покупку от 500 ₽ одной операцией: игра, магазин, подписка.\n")
-                    .append("Совет: донат в свою игру на donatov.net, он останется у тебя.\n")
-                    .append("Не засчитывается банком: переводы, снятие наличных, связь, ЖКХ, страховки, налоги, благотворительность, азартные игры, брокеры, ломбарды.");
             java.util.regex.Matcher m = urlPattern.matcher(steps.size() > 1 && steps.get(1).length > 1 ? steps.get(1)[1] : "");
-            if (m.find()) rows.add(List.of(keyboardFactory.url("🔗 Донат в игру (совет)", m.group())));
+            String donateUrl = m.find() ? m.group() : null;
+            // «donatov.net» в тексте - ссылка с нашей реферальной (иначе Telegram сам делает из слова ссылку на сайт без неё)
+            String donateWord = donateUrl == null ? "donatov.net" : "<a href=\"" + donateUrl.replace("&", "&amp;") + "\">donatov.net</a>";
+            sb.append("Оплати этой картой любую покупку от 500 ₽ одной операцией: игра, магазин, подписка.\n")
+                    .append("Совет: донат в свою игру на " + donateWord + ", он останется у тебя.\n")
+                    .append("Не засчитывается банком: переводы, снятие наличных, связь, ЖКХ, страховки, налоги, благотворительность, азартные игры, брокеры, ломбарды.");
+            if (donateUrl != null) rows.add(List.of(keyboardFactory.url("🔗 Донат в игру (совет)", donateUrl)));
             rows.add(List.of(keyboardFactory.callback("✅ Я заплатил(а)", "mission:paid:" + sub.getId() + ":2")));
             rows.add(List.of(otpManagerButton(sub, 2))); // здесь чаще всего путаются: какая покупка подойдёт, что не засчитывается
         } else if (returned) {
