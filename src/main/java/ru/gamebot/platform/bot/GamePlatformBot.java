@@ -513,9 +513,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        if (text != null && (text.equals("/otpbonus") || text.startsWith("/otpbonus ")) && isEffectiveAdmin(user)) {
-            handleOtpBonusCommand(user, text.trim());
-            return;
+        if (text != null && isEffectiveAdmin(user)) {
+            // /otpbonus, /tbbonus, /tmbonus: начисление бонуса партнёрской миссии (команда у каждого партнёра своя, PartnerMission.bonusCommand)
+            for (ru.gamebot.platform.service.PartnerMission bonusPm : ru.gamebot.platform.service.PartnerMissions.ALL) {
+                String bonusCmd = "/" + bonusPm.bonusCommand();
+                if (text.equals(bonusCmd) || text.startsWith(bonusCmd + " ")) {
+                    handleOtpBonusCommand(user, text.trim(), bonusPm);
+                    return;
+                }
+            }
         }
 
         if (text != null && text.trim().equalsIgnoreCase("/otpwait") && isEffectiveModerator(user)) {
@@ -5047,9 +5053,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Выплата игроку после платежа банка (/otpbonus): ≈ 430 ₽ реальных при курсе вывода ~43% против 2 000 ₽ от банка (с 01.11.2026 вместо 40 000). */
-    private static final long OTP_BONUS_DEFAULT_EXC = 100_000;
+    private static final long OTP_BONUS_DEFAULT_EXC = ru.gamebot.platform.service.PartnerMissions.OTP.bonusExc();
     /** Награда квестом после проверки скриншотов (должна совпадать с QuestSeeder.OTP_CARD_REWARD_EXC). */
-    private static final long OTP_QUEST_REWARD_EXC = 1_000;
+    private static final long OTP_QUEST_REWARD_EXC = ru.gamebot.platform.service.PartnerMissions.OTP.rewardExc();
 
     /** Квест «ОТП Карта», если он активен и в нём ещё есть места; иначе null (тогда предложение в выводе не показываем). */
     private Quest otpPartnerQuestOrNull() {
@@ -5147,14 +5153,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Админ после выплаты банка: /otpbonus ID [сумма] - начисляет EXC игроку и один раз расширяет ему лимит вывода на эту сумму (запас расходуется выводом
      *  и обнуляется, см. SinkShopService.recordWithdrawal). Заявка на вывод идёт обычным путём («Вывод EXC»), админ выплачивает её как обычно. */
-    private void handleOtpBonusCommand(AppUser admin, String text) {
+    private void handleOtpBonusCommand(AppUser admin, String text, ru.gamebot.platform.service.PartnerMission pm) {
         String[] p = text.split("\\s+");
         Long targetId = p.length > 1 ? parseLong(p[1]) : null;
         Long amountArg = p.length > 2 ? parseLong(p[2].replace("_", "")) : null;
-        long amount = amountArg == null ? OTP_BONUS_DEFAULT_EXC : amountArg;
+        long amount = amountArg == null ? pm.bonusExc() : amountArg;
         boolean repeatPayout = java.util.Arrays.stream(p).skip(2).anyMatch(w -> w.equalsIgnoreCase("повтор"));
         if (targetId == null || amount <= 0) {
-            sendText(admin.getTelegramId(), "⚠️ Формат: <code>/otpbonus ID [сумма EXC]</code>, по умолчанию " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC.", null);
+            sendText(admin.getTelegramId(), "⚠️ Формат: <code>/" + pm.bonusCommand() + " ID [сумма EXC]</code>, по умолчанию " + fmtExc(pm.bonusExc()) + " EXC.", null);
             return;
         }
         AppUser target = userService.findByTelegramId(targetId).orElse(null);
@@ -5163,18 +5169,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         // Защита от двойной выплаты: по заявке игрока бонус уже начислялся - повтор только словом «повтор» в конце команды
-        if (!repeatPayout && questService.isPartnerBonusPaid(target.getId(), ru.gamebot.platform.service.OtpMissionReminderService.GAME_NAME)) {
-            sendText(admin.getTelegramId(), "⚠️ Игроку " + escape(String.valueOf(target.getNickname())) + " (" + targetId + ") бонус по ОТП уже начислялся. "
-                    + "Если нужна повторная выплата: <code>/otpbonus " + targetId + " " + amount + " повтор</code>", null);
+        if (!repeatPayout && questService.isPartnerBonusPaid(target.getId(), pm.gameName())) {
+            sendText(admin.getTelegramId(), "⚠️ Игроку " + escape(String.valueOf(target.getNickname())) + " (" + targetId + ") бонус по «" + escape(pm.shortTitle()) + "» уже начислялся. "
+                    + "Если нужна повторная выплата: <code>/" + pm.bonusCommand() + " " + targetId + " " + amount + " повтор</code>", null);
             return;
         }
         boolean missionMarked;
         try {
-            userService.addReward(target, 0, amount, ru.gamebot.platform.service.ExcTransactionService.BONUS, "Партнёрская выплата: ОТП Карта");
+            userService.addReward(target, 0, amount, ru.gamebot.platform.service.ExcTransactionService.BONUS, "Партнёрская выплата: " + pm.shortTitle());
             sinkShopService.grantPartnerWithdrawalAllowance(target, amount);
-            missionMarked = questService.markPartnerBonusPaid(target.getId(), ru.gamebot.platform.service.OtpMissionReminderService.GAME_NAME);
+            missionMarked = questService.markPartnerBonusPaid(target.getId(), pm.gameName());
         } catch (Exception e) {
-            log.warn("OTP bonus failed for {}", targetId, e);
+            log.warn("Partner bonus ({}) failed for {}", pm.key(), targetId, e);
             sendText(admin.getTelegramId(), "⚠️ Не получилось: " + escape(String.valueOf(e.getMessage())), null);
             return;
         }
@@ -5188,11 +5194,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             List.of(keyboardFactory.callback("💸 Вывести", "shop:withdraw")),
                             List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
         } catch (Exception e) {
-            log.warn("OTP bonus notice failed for {}", targetId, e);
+            log.warn("Partner bonus ({}) notice failed for {}", pm.key(), targetId, e);
         }
         sendText(admin.getTelegramId(), "✅ Игроку " + escape(String.valueOf(target.getNickname())) + " (" + targetId + ") начислено " + fmtExc(amount)
                 + " EXC и разово открыт вывод на эту сумму."
-                + (missionMarked ? "" : "\n⚠️ Одобренной заявки по ОТП у игрока нет: бейдж и «финал» миссии не отмечены."), null);
+                + (missionMarked ? "" : "\n⚠️ Одобренной заявки по «" + escape(pm.shortTitle()) + "» у игрока нет: бейдж и «финал» миссии не отмечены."), null);
     }
 
     /** v2: после смены оффера 01.11.2026 приглашение уходит и тем 20 игрокам, что получили прежнее (оно было слабым). */
@@ -5575,7 +5581,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (seasonService.hasActivePass(user)) badges += "🎫 Battle Pass  ";
         java.util.Optional<String> friendBadge = userService.currentInvitedFriendsBadge(user.getInvitedFriends());
         if (friendBadge.isPresent()) badges += friendBadge.get() + "  ";
-        if (questService.isPartnerBonusPaid(user.getId(), ru.gamebot.platform.service.OtpMissionReminderService.GAME_NAME)) badges += "🏦 Банкир EGC  ";
+        if (ru.gamebot.platform.service.PartnerMissions.ALL.stream().anyMatch(pmb -> questService.isPartnerBonusPaid(user.getId(), pmb.gameName()))) badges += "🏦 Банкир EGC  ";
         String badgeLine = badges.isEmpty() ? "" : badges.trim() + "\n";
 
         int excBonus = userService.getExcBonusPercent(user.getXp());
@@ -6277,24 +6283,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     @org.springframework.context.event.EventListener
     public void onOtpMissionReminder(ru.gamebot.platform.event.OtpMissionReminderEvent event) {
         try {
+            ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(
+                    questService.getSubmission(event.getSubmissionId()).getQuest());
+            if (pm == null) return;
             String text;
             InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                     List.of(keyboardFactory.callback("▶️ Открыть миссию", "myquest:view:" + event.getSubmissionId()))));
             switch (event.getKind()) {
                 case ru.gamebot.platform.event.OtpMissionReminderEvent.KIND_DEADLINE -> {
                     long days = Math.max(1, java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), event.getDate()));
-                    text = "⏰ <b>Осталось " + days + " дн., чтобы оплатить картой 500 ₽</b> (до " + ruDayMonth(event.getDate()) + ").\n\nПотом банк не засчитает покупку.";
+                    text = pm.deadlineReminder().replace("{days}", String.valueOf(days)).replace("{win}", ruDayMonth(event.getDate()));
                 }
                 case ru.gamebot.platform.event.OtpMissionReminderEvent.KIND_BANK_DAY -> {
-                    text = "💰 <b>Банк мог уже выплатить бонус.</b> Проверь карту.\n\nКогда банк заплатит клубу, мы начислим " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC и напишем тебе.";
+                    text = "💰 <b>Банк мог уже выплатить бонус.</b> " + pm.bankDayCheck() + "\n\nКогда банк заплатит клубу, мы начислим " + fmtExc(pm.bonusExc()) + " EXC и напишем тебе.";
                     keyboard = keyboardFactory.rowsLayout(List.of(
-                            List.of(keyboardFactory.callback("💰 Банк вернул мне 500 ₽", "mission:bankpaid:" + event.getSubmissionId() + ":4"))));
+                            List.of(keyboardFactory.callback(pm.bankClaimButton(), "mission:bankpaid:" + event.getSubmissionId() + ":4"))));
                 }
-                default -> text = "🎮 <b>Карта ОТП ждёт тебя:</b> два шага до " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC. Продолжим?";
+                default -> text = "🎮 <b>" + escape(pm.waitingName()) + " ждёт тебя:</b> два шага до " + fmtExc(pm.bonusExc()) + " EXC. Продолжим?";
             }
             sendText(event.getTelegramId(), text, keyboard);
         } catch (Exception e) {
-            log.warn("Failed to send OTP mission reminder to {}", event.getTelegramId(), e);
+            log.warn("Failed to send partner mission reminder to {}", event.getTelegramId(), e);
         }
     }
 
@@ -7505,6 +7514,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("clubgoal", "status|link ID текст|off", "Цель клуба: состояние, кнопка-портал в квест, выключить портал"),
             new AdminCommand("wdfreeze", "ID on|off", "Заморозить или разморозить вывод игрока"),
             new AdminCommand("otpbonus", "ID [сумма EXC] [повтор]", "Партнёрская выплата ОТП Карта: начислить EXC (по умолчанию 100 000), один раз открыть вывод на всю сумму, отметить миссию выполненной (бейдж). Повторно только со словом «повтор»"),
+            new AdminCommand("tbbonus", "ID [сумма EXC] [повтор]", "Партнёрская выплата Т-Банк Black: начислить EXC (по умолчанию 25 000), открыть вывод на сумму, отметить миссию выполненной (бейдж). Повторно только со словом «повтор»"),
+            new AdminCommand("tmbonus", "ID [сумма EXC] [повтор]", "Партнёрская выплата Т-Мобайл SIM: начислить EXC (по умолчанию 100 000), открыть вывод на сумму, отметить миссию выполненной (бейдж). Повторно только со словом «повтор»"),
             new AdminCommand("otppilot", "[send] [N]", "«ОТП Карта»: показать игроков из России: сначала выводившие, затем активные за неделю (по умолчанию 20, до 1000) и текст приглашения; send - разослать им (один раз каждому)"),
             new AdminCommand("otpwait", "", "ОТП Карта: кто ждёт выплаты банка и кто нажал «Банк вернул мне 500 ₽» (видят и модераторы)"),
             new AdminCommand("event", "[halloween|on|off]", "Сезонное событие (Хэллоуин): состояние, включить пресет или выключить, затраты на квесты и надбавка отрядам"),
@@ -7868,7 +7879,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if ("✅ ".equals(tag)) anyDone = true;
             if ("⏳ ".equals(tag)) anyInProgress = true;
             // У партнёрского квеста «ОТП Карта» в списке своя подпись кнопки (как в рекламе банка: «получи 500 ₽»), название квеста длиннее и обрезалось на 60 символах
-            String listLabel = OTP_CARD_QUEST_TITLE.equals(q.getTitle()) ? OTP_CARD_LIST_LABEL : trim(q.getTitle(), 60);
+            ru.gamebot.platform.service.PartnerMission listPm = ru.gamebot.platform.service.PartnerMissions.forQuest(q);
+            String listLabel = listPm != null ? listPm.listLabel() : trim(q.getTitle(), 60);
             buttons.add(keyboardFactory.callback(tag + listLabel, "quest:view:sponsored:all:" + q.getId()));
         }
         String legend = (anyInProgress || anyDone)
@@ -8656,8 +8668,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Экран «миссии»: один шаг инструкции целиком, прогресс, кнопки «Готово - дальше» / «Отправить отчёт», переходы между пройденными шагами. Шаги 1-3 игрок
      *  подтверждает сам (кнопка «Готово»), на третьем отправляет отчёт, четвёртый - ожидание банка (показывается после одобрения отчёта). Возврат в квест
      *  из «Спонсорских» или «Моих квестов» открывает шаг, на котором остановились. */
+    /** Квест - партнёрская миссия (ОТП Карта, Т-Банк Black, Т-Мобайл SIM): см. PartnerMissions. */
     private boolean isOtpMissionQuest(Quest quest) {
-        return OTP_CARD_QUEST_TITLE.equals(quest.getTitle());
+        return ru.gamebot.platform.service.PartnerMissions.forQuest(quest) != null;
     }
 
     private static final String[] RU_MONTHS_GENITIVE = {"января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"};
@@ -8666,9 +8679,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return d.getDayOfMonth() + " " + RU_MONTHS_GENITIVE[d.getMonthValue() - 1];
     }
 
-    /** Экран миссии «ОТП Карта» (04.11.2026): список этапов с прогрессом и одно следующее действие. Этапы: 1 карта, 2 первый платёж (сначала активация карты и её дата, потом таймер 30 дней),
-     *  3 отчёт (на проверке - ожидание), 4 банк платит (после одобрения отчёта). Дата выплаты банка - 25-е число месяца после нажатия «Я заплатил(а)». */
+    /** Экран партнёрской миссии (ОТП Карта, Т-Банк Black, Т-Мобайл SIM; тексты и числа - в {@link ru.gamebot.platform.service.PartnerMissions}): список этапов с прогрессом и одно следующее действие.
+     *  Этапы: 1 карта/SIM, 2 первый платёж (сначала дата активации/заявки, потом таймер), 3 отчёт (на проверке - ожидание), 4 банк платит (после одобрения отчёта),
+     *  5 финал (после начисления бонуса админом). Дата выплаты банка - по правилу партнёра от нажатия «Я заплатил(а)». Картинки по этапам - из конфига (нет файла - только текст). */
     private void sendOtpMission(AppUser user, Quest quest, QuestSubmission sub, String notice) {
+        ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(quest);
+        if (pm == null) return;
         List<String[]> steps = splitQuestBlocks(questService.personalizeInstruction(quest.getInstruction(), user.getTelegramId()));
         SubmissionStatus st = sub.getStatus();
         boolean returned = st == SubmissionStatus.NEEDS_INFO;
@@ -8677,15 +8693,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         int stage = bonusPaid ? 5 : st == SubmissionStatus.APPROVED ? 4 : (st == SubmissionStatus.PENDING || returned || rejectedFinal) ? 3 : Math.min(3, Math.max(1, sub.getMissionStep()));
         java.time.LocalDate today = java.time.LocalDate.now();
         java.time.LocalDate activated = sub.getCardActivatedOn();
-        java.time.LocalDate windowEnd = activated == null ? null : activated.plusDays(ru.gamebot.platform.service.OtpMissionReminderService.PURCHASE_WINDOW_DAYS);
-        java.time.LocalDate bankDate = ru.gamebot.platform.service.OtpMissionReminderService.bankPayoutDate(
+        java.time.LocalDate windowEnd = activated == null ? null : activated.plusDays(pm.windowDays());
+        java.time.LocalDate bankDate = pm.bankDate(
                 sub.getPurchaseReportedOn() != null ? sub.getPurchaseReportedOn()
                         : (st == SubmissionStatus.APPROVED && sub.getUpdatedAt() != null ? sub.getUpdatedAt().toLocalDate() : today));
 
-        String[] names = {"Закажи карту", "Первый платёж", "Докажи", "Банк платит"};
+        String[] names = pm.stageNames();
         StringBuilder sb = new StringBuilder();
         if (notice != null && !notice.isBlank()) sb.append(notice).append("\n\n");
-        sb.append("🎮 <b>Миссия: карта ОТП Банка</b>\n")
+        sb.append("🎮 <b>Миссия: ").append(pm.missionTitle()).append("</b>\n")
                 .append("▰".repeat(stage)).append("▱".repeat(5 - stage)).append(bonusPaid ? " пройдена 🏆" : " этап " + stage + " из 5").append("\n\n");
         for (int i = 1; i <= 4; i++) {
             sb.append(i < stage ? "✅" : i == stage ? (rejectedFinal ? "❌" : "🔸") : "⬜").append(" Этап ").append(i).append(". ").append(names[i - 1]);
@@ -8694,78 +8710,71 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sb.append(daysLeft >= 0 ? ": осталось <b>" + daysLeft + " дн</b> (до " + windowEnd.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM")) + ")"
                         : ": срок вышел (был до " + windowEnd.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM")) + ")");
             }
-            if (i == 4 && stage == 4) sb.append(": с ").append(ruDayMonth(bankDate));
+            if (i == 4 && stage == 4) sb.append(": ").append(pm.bankDateWord()).append(" ").append(ruDayMonth(bankDate));
             sb.append("\n");
         }
-        sb.append("🏆 Финал: ").append(fmtExc(OTP_BONUS_DEFAULT_EXC)).append(bonusPaid ? " EXC получены" : " EXC").append("\n\n");
+        sb.append("🏆 Финал: ").append(fmtExc(pm.bonusExc())).append(bonusPaid ? " EXC получены" : " EXC").append("\n\n");
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         java.util.regex.Pattern urlPattern = java.util.regex.Pattern.compile("https?://\\S+");
         if (stage == 1) {
-            sb.append("Оформи бесплатную карту по нашей ссылке. Именно по ней, иначе банк не выплатит бонус. Нужен паспорт РФ.");
+            sb.append(pm.stage1Text());
             java.util.regex.Matcher m = urlPattern.matcher(steps.size() > 0 && steps.get(0).length > 1 ? steps.get(0)[1] : "");
             if (m.find()) rows.add(List.of(keyboardFactory.url("🔗 Оформить карту", m.group())));
             rows.add(List.of(keyboardFactory.callback("✅ Я оформил(а) карту", "mission:next:" + sub.getId() + ":1")));
         } else if (stage == 2 && activated == null) {
-            sb.append("Когда карта придёт, активируй её в приложении ОТП Банка и пополни на 500 ₽.");
-            rows.add(List.of(keyboardFactory.callback("💳 Я активировал(а) карту", "mission:act:" + sub.getId() + ":2")));
+            sb.append(pm.stage2WaitText());
+            rows.add(List.of(keyboardFactory.callback(pm.stage2WaitButton(), "mission:act:" + sub.getId() + ":2")));
         } else if (stage == 2) {
-            java.util.regex.Matcher m = urlPattern.matcher(steps.size() > 1 && steps.get(1).length > 1 ? steps.get(1)[1] : "");
-            String donateUrl = m.find() ? m.group() : null;
+            String linkUrl = null;
+            if (pm.stage2LinkLabel() != null) {
+                java.util.regex.Matcher m = urlPattern.matcher(steps.size() > 1 && steps.get(1).length > 1 ? steps.get(1)[1] : "");
+                linkUrl = m.find() ? m.group() : null;
+            }
             // «donatov.net» в тексте - ссылка с нашей реферальной (иначе Telegram сам делает из слова ссылку на сайт без неё)
-            String donateWord = donateUrl == null ? "donatov.net" : "<a href=\"" + donateUrl.replace("&", "&amp;") + "\">donatov.net</a>";
-            sb.append("Оплати этой картой любую покупку от 500 ₽ одной операцией: игра, магазин, подписка.\n")
-                    .append("Совет: донат в свою игру на " + donateWord + ", он останется у тебя.\n")
-                    .append("Не засчитывается банком: переводы, снятие наличных, связь, ЖКХ, страховки, налоги, благотворительность, азартные игры, брокеры, ломбарды.");
-            if (donateUrl != null) rows.add(List.of(keyboardFactory.url("🔗 Донат в игру (совет)", donateUrl)));
-            rows.add(List.of(keyboardFactory.callback("✅ Я заплатил(а)", "mission:paid:" + sub.getId() + ":2")));
-            rows.add(List.of(otpManagerButton(sub, 2))); // здесь чаще всего путаются: какая покупка подойдёт, что не засчитывается
+            String donateWord = linkUrl == null ? "donatov.net" : "<a href=\"" + linkUrl.replace("&", "&amp;") + "\">donatov.net</a>";
+            sb.append(pm.stage2Text().replace("{DONATE}", donateWord));
+            if (linkUrl != null) rows.add(List.of(keyboardFactory.url(pm.stage2LinkLabel(), linkUrl)));
+            rows.add(List.of(keyboardFactory.callback(pm.paidButton(), "mission:paid:" + sub.getId() + ":2")));
+            rows.add(List.of(otpManagerButton(pm, sub, 2))); // здесь чаще всего путаются: какая покупка подойдёт, что не засчитывается
         } else if (returned) {
             sb.append("⚠️ <b>Отчёт вернули на доработку</b>\n")
                     .append(escape(sub.getModeratorComment() == null ? "" : sub.getModeratorComment()));
             rows.add(List.of(keyboardFactory.callback("📸 Исправить и отправить заново", "quest:report:" + quest.getId())));
-            rows.add(List.of(otpManagerButton(sub, 3)));
+            rows.add(List.of(otpManagerButton(pm, sub, 3)));
         } else if (rejectedFinal) {
             sb.append("❌ <b>Отчёт отклонён</b>\n")
                     .append(escape(sub.getModeratorComment() == null ? "" : sub.getModeratorComment()))
                     .append("\n\nНаграда не начисляется. Если считаешь это ошибкой, напиши менеджеру.");
-            rows.add(List.of(otpManagerButton(sub, 3)));
+            rows.add(List.of(otpManagerButton(pm, sub, 3)));
         } else if (stage == 3 && st == SubmissionStatus.PENDING) {
-            sb.append("⏳ <b>Отчёт на проверке.</b> Модератор ответит сообщением, " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC придут после одобрения.");
+            sb.append("⏳ <b>Отчёт на проверке.</b> Модератор ответит сообщением, " + fmtExc(pm.rewardExc()) + " EXC придут после одобрения.");
         } else if (stage == 3) {
-            sb.append("Покупка может висеть «В обработке» 1–3 дня. Когда статус изменится, пришли отчёт.");
+            sb.append(pm.stage3Text());
             rows.add(List.of(questReportOrCheckButton(quest)));
         } else if (bonusPaid) {
-            sb.append("🏆 <b>Миссия выполнена!</b>\n\n"
-                    + "Банк выплатил бонус, мы начислили тебе " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC.\n\n"
-                    + "Вывод открыт разово: всю накопленную сумму можно вывести одной заявкой, сверх обычного месячного лимита.\n\n"
-                    + "🏦 Бейдж «Банкир EGC» уже в твоём профиле.");
+            sb.append(pm.finalText().replace("{bonus}", fmtExc(pm.bonusExc())));
             rows.add(List.of(keyboardFactory.callback("💸 Вывести", "shop:withdraw"), keyboardFactory.callback("🎯 Ещё квесты", "menu:quests")));
             rows.add(List.of(keyboardFactory.callback("👥 Позвать друга", "menu:referrals")));
         } else {
-            sb.append("✅ <b>Отчёт принят, " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC начислены.</b>\n\n"
-                    + "⏳ <b>Квест ещё не закончен: остался финал за " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC.</b> Теперь нужно дождаться выплаты банка.\n\n"
-                    + "<b>Что дальше:</b>\n"
-                    + "1️⃣ С " + ruDayMonth(bankDate) + " банк вернёт тебе 500 ₽ на карту. Раньше денег не будет.\n"
-                    + "2️⃣ Когда деньги придут, вернись сюда и нажми <b>«💰 Банк вернул мне 500 ₽»</b>. Мы напомним об этом сами.\n"
-                    + "3️⃣ Мы проверим выплату, начислим " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC и откроем вывод всей суммы разом.\n"
-                    + "Если до " + ruDayMonth(bankDate.plusDays(7)) + " денег нет, напиши менеджеру.");
+            sb.append(pm.stage4Text().replace("{reward}", fmtExc(pm.rewardExc())).replace("{bonus}", fmtExc(pm.bonusExc()))
+                    .replace("{date}", ruDayMonth(bankDate)).replace("{date7}", ruDayMonth(bankDate.plusDays(7))));
             boolean claimed = (sub.getMissionRemindersSent() & ru.gamebot.platform.service.OtpMissionReminderService.BIT_BANK_CLAIMED) != 0;
             rows.add(List.of(claimed ? keyboardFactory.callback("✅ Мы проверяем выплату банка", "noop")
-                    : keyboardFactory.callback("💰 Банк вернул мне 500 ₽", "mission:bankpaid:" + sub.getId() + ":4")));
+                    : keyboardFactory.callback(pm.bankClaimButton(), "mission:bankpaid:" + sub.getId() + ":4")));
             // каждая кнопка в своей строке: в паре длинные подписи обрезались («Пока ж…гие квесты»)
             rows.add(List.of(keyboardFactory.callback("🎯 Пока ждёшь: другие квесты", "menu:quests")));
-            rows.add(List.of(otpManagerButton(sub, 4)));
+            rows.add(List.of(otpManagerButton(pm, sub, 4)));
         }
         if (st == SubmissionStatus.DRAFT || st == SubmissionStatus.PENDING || returned) {
             rows.add(List.of(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + sub.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", currentQuestBackData(user)),
                 keyboardFactory.callback("📂 Мои", "menu:myquests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
-        // Этап 1 «Закажи карту» (Экси звонит в банк) и этап 2 «Получи карту» (до активации: Экси распечатывает конверт; после активации, экран с таймером: Экси платит картой на кассе) - с картинкой, остальные этапы - только текст
-        boolean sendReportScreen = stage == 3 && !returned && !rejectedFinal && st != SubmissionStatus.PENDING; // экран «пора слать отчёт» (без проверки и возврата); этап 4 «Банк платит» (после одобрения отчёта, до выплаты банка) - Экси смотрит на часы; финал (stage 5, бонус выплачен) - Экси показывает экран «Миссия выполнена»
-        String stageBanner = stage == 1 ? "otp_step1_banner.jpg" : stage == 2 ? (activated == null ? "otp_step2_banner.jpg" : "otp_step2_pay_banner.jpg")
-                : sendReportScreen ? "otp_step3_banner.jpg" : stage == 4 ? "otp_step4_banner.jpg" : stage == 5 ? "otp_step5_banner.jpg" : null;
+        // Картинка этапа (если задана в конфиге и файл есть): 1 заказ; 2 до даты / покупка; 3 пора слать отчёт (без проверки и возврата); 4 банк платит; 5 финал
+        boolean sendReportScreen = stage == 3 && !returned && !rejectedFinal && st != SubmissionStatus.PENDING;
+        String stageBanner = stage == 1 ? pm.stage1Banner() : stage == 2 ? (activated == null ? pm.stage2WaitBanner() : pm.stage2PayBanner())
+                : sendReportScreen ? pm.stage3Banner() : stage == 4 ? pm.stage4Banner() : stage == 5 ? pm.finalBanner() : null;
         if (stageBanner != null && getClass().getResource("/" + stageBanner) != null) {
             sendResourceBanner(user.getTelegramId(), stageBanner, sb.toString(), keyboardFactory.rowsLayout(rows));
         } else {
@@ -8773,21 +8782,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    /** «Банк вернул мне 500 ₽»: один раз на заявку шлём админам ID игрока и готовую команду /otpbonus (начисление остаётся ручным, после проверки выплаты в кабинете банка). */
+    /** «Банк заплатил»: один раз на заявку шлём админам и модераторам ID игрока и готовую команду начисления (начисление остаётся ручным, после проверки выплаты в кабинете банка). */
     private void handleOtpBankClaim(AppUser user, Long submissionId) {
         try {
             QuestSubmission sub = questService.getSubmission(submissionId);
-            if (sub.getUser() == null || !sub.getUser().getTelegramId().equals(user.getTelegramId()) || !isOtpMissionQuest(sub.getQuest())) return;
+            ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(sub.getQuest());
+            if (sub.getUser() == null || !sub.getUser().getTelegramId().equals(user.getTelegramId()) || pm == null) return;
             if (sub.getBonusPaidAt() != null) {
                 sendOtpMission(user, sub.getQuest(), sub, null); // бонус уже начислен: показываем финал
                 return;
             }
             boolean first = questService.markBankPaidClaimed(submissionId, user.getTelegramId());
             if (first) {
-                String alertHead = "💰 <b>ОТП Карта: игрок сообщает о выплате банка</b>\n\n"
+                String alertHead = "💰 <b>" + escape(pm.shortTitle()) + ": игрок сообщает о выплате банка</b>\n\n"
                         + "👤 " + escape(displayUserName(user)) + " · ID <code>" + user.getTelegramId() + "</code>\n"
                         + "Заявка К-" + (sub.getDisplayId() != null ? sub.getDisplayId() : sub.getId()) + "\n\n";
-                String adminAlert = alertHead + "Проверьте выплату в кабинете банка и начислите: <code>/otpbonus " + user.getTelegramId() + "</code>";
+                String adminAlert = alertHead + "Проверьте выплату в кабинете банка и начислите: <code>/" + pm.bonusCommand() + " " + user.getTelegramId() + "</code>";
                 String moderatorAlert = alertHead + "Начисляет бонус администратор. Все ожидающие: /otpwait";
                 java.util.Set<Long> adminRecipients = adminService.allAdminIds();
                 // админы и модераторы: модератор раньше не видел это сообщение (оно уходило только админам)
@@ -8795,56 +8805,57 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     try {
                         sendText(staffId, adminRecipients.contains(staffId) ? adminAlert : moderatorAlert, null);
                     } catch (Exception e) {
-                        log.warn("Failed to alert staff {} about OTP bank claim", staffId, e);
+                        log.warn("Failed to alert staff {} about partner bank claim", staffId, e);
                     }
                 }
             }
             sendText(user.getTelegramId(),
-                    first ? "✅ <b>Спасибо!</b> Проверим выплату банка и начислим " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC. Мы напишем тебе."
-                            : "✅ Мы уже проверяем выплату банка. Напишем, как только начислим " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC.",
+                    first ? "✅ <b>Спасибо!</b> Проверим выплату банка и начислим " + fmtExc(pm.bonusExc()) + " EXC. Мы напишем тебе."
+                            : "✅ Мы уже проверяем выплату банка. Напишем, как только начислим " + fmtExc(pm.bonusExc()) + " EXC.",
                     keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("▶️ Открыть миссию", "myquest:view:" + submissionId)))));
         } catch (Exception e) {
-            log.warn("OTP bank claim failed for submission {}", submissionId, e);
+            log.warn("Partner bank claim failed for submission {}", submissionId, e);
         }
     }
 
-    /** /otpwait (модератор и админ): кто прошёл миссию ОТП, но ещё не получил бонус, когда банк платит и кто нажал «Банк вернул мне 500 ₽». */
+    /** /otpwait (модератор и админ): кто прошёл любую партнёрскую миссию (ОТП, Т-Банк, Т-Мобайл), но ещё не получил бонус, когда банк платит и кто нажал кнопку «банк заплатил». */
     private void sendOtpWaitingList(AppUser viewer) {
-        List<QuestSubmission> waiting = questService.findAwaitingPartnerBonus("ОТП Банк");
-        StringBuilder sb = new StringBuilder("💰 <b>ОТП Карта: ждут выплаты банка</b> (" + waiting.size() + ")\n\n");
-        if (waiting.isEmpty()) {
-            sb.append("Никого: все прошедшие отчёт уже получили бонус.");
-        }
-        int shown = 0;
-        for (QuestSubmission w : waiting) {
-            if (shown++ >= 40) {
-                sb.append("\n… и ещё ").append(waiting.size() - 40);
-                break;
+        StringBuilder sb = new StringBuilder("💰 <b>Партнёрские миссии: ждут выплаты банка</b>\n");
+        int total = 0;
+        for (ru.gamebot.platform.service.PartnerMission pm : ru.gamebot.platform.service.PartnerMissions.ALL) {
+            List<QuestSubmission> waiting = questService.findAwaitingPartnerBonus(pm.gameName());
+            if (waiting.isEmpty()) continue;
+            sb.append("\n<b>").append(escape(pm.shortTitle())).append("</b> (").append(waiting.size()).append("), начисление: <code>/").append(pm.bonusCommand()).append(" ID</code>\n");
+            for (QuestSubmission w : waiting) {
+                if (total++ >= 40) break;
+                java.time.LocalDate base = w.getPurchaseReportedOn() != null ? w.getPurchaseReportedOn()
+                        : (w.getUpdatedAt() != null ? w.getUpdatedAt().toLocalDate() : java.time.LocalDate.now());
+                boolean claimed = (w.getMissionRemindersSent() & ru.gamebot.platform.service.OtpMissionReminderService.BIT_BANK_CLAIMED) != 0;
+                sb.append(claimed ? "💰 " : "⏳ ")
+                        .append(escape(displayUserName(w.getUser()))).append(" · <code>").append(w.getUser().getTelegramId()).append("</code> · банк ")
+                        .append(pm.bankDateWord()).append(" ").append(ruDayMonth(pm.bankDate(base)))
+                        .append(claimed ? " · нажал кнопку «банк заплатил»" : "").append("\n");
             }
-            java.time.LocalDate base = w.getPurchaseReportedOn() != null ? w.getPurchaseReportedOn()
-                    : (w.getUpdatedAt() != null ? w.getUpdatedAt().toLocalDate() : java.time.LocalDate.now());
-            boolean claimed = (w.getMissionRemindersSent() & ru.gamebot.platform.service.OtpMissionReminderService.BIT_BANK_CLAIMED) != 0;
-            sb.append(claimed ? "💰 " : "⏳ ")
-                    .append(escape(displayUserName(w.getUser()))).append(" · <code>").append(w.getUser().getTelegramId()).append("</code> · банк с ")
-                    .append(ruDayMonth(ru.gamebot.platform.service.OtpMissionReminderService.bankPayoutDate(base)))
-                    .append(claimed ? " · нажал «Банк вернул мне 500 ₽»" : "").append("\n");
         }
-        sb.append("\n💰 - игрок сообщил, что банк вернул 500 ₽ (проверить и начислить). ⏳ - ещё ждёт. Начисление: админ командой /otpbonus ID.");
+        if (total == 0) sb.append("\nНикого: все прошедшие отчёт уже получили бонус.");
+        sb.append("\n💰 - игрок сообщил, что банк заплатил (проверить и начислить). ⏳ - ещё ждёт. Начислять может только админ.");
         sendText(viewer.getTelegramId(), sb.toString(), null);
     }
 
     /** Кнопка «💬 Написать менеджеру» на экране миссии: личные сообщения менеджера (APP_SUPPORT_USERNAME) с заранее вписанным текстом - номер заявки и этап, менеджеру не надо переспрашивать. */
-    private InlineKeyboardButton otpManagerButton(QuestSubmission sub, int stage) {
-        String text = "Здравствуйте! Нужна помощь по квесту «ОТП Карта» (заявка К-" + (sub.getDisplayId() != null ? sub.getDisplayId() : sub.getId()) + ", этап " + stage + ")";
+    private InlineKeyboardButton otpManagerButton(ru.gamebot.platform.service.PartnerMission pm, QuestSubmission sub, int stage) {
+        String text = "Здравствуйте! Нужна помощь по квесту «" + pm.shortTitle() + "» (заявка К-" + (sub.getDisplayId() != null ? sub.getDisplayId() : sub.getId()) + ", этап " + stage + ")";
         String encoded = java.net.URLEncoder.encode(text, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
         return keyboardFactory.url("💬 Написать менеджеру", "https://t.me/" + appProperties.getSupportUsername() + "?text=" + encoded);
     }
 
-    /** «Когда ты активировал(а) карту?»: сегодня / вчера / 2-3 дня назад (считаем 3) / больше недели назад (считаем 8): неточные ответы дают срок с запасом. */
+    /** Вопрос про дату (активации или подачи заявки, по конфигу партнёра): сегодня / вчера / 2-3 дня назад (считаем 3) / 7+ дней назад (считаем 8): неточные ответы дают срок с запасом. */
     private void sendOtpActivationQuestion(AppUser user, QuestSubmission sub) {
+        ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(sub.getQuest());
+        if (pm == null) return;
         String id = String.valueOf(sub.getId());
         sendText(user.getTelegramId(),
-                "📅 <b>Когда ты активировал(а) карту?</b>\n\nНужно, чтобы посчитать срок: на покупку 500 ₽ у тебя 30 дней с активации.",
+                pm.dateQuestion() + "\n\n" + pm.dateHint(),
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("Сегодня", "mission:actd:" + id + ":0"), keyboardFactory.callback("Вчера", "mission:actd:" + id + ":1")),
                         List.of(keyboardFactory.callback("2–3 дня назад", "mission:actd:" + id + ":3"), keyboardFactory.callback("7+ дней назад", "mission:actd:" + id + ":8")),
@@ -8913,11 +8924,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Баннер карточки квеста (картинка в ресурсах бота) - пока только у партнёрского квеста «ОТП Карта». */
-    private static final String OTP_CARD_LIST_LABEL = "Получи 500 ₽ + 100 000 EXC сверху за карту ОТП";
-    private static final String OTP_CARD_QUEST_TITLE = "Получи 500 ₽ себе на карту + 100 000 EXC 🎁";
+    private static final String OTP_CARD_QUEST_TITLE = ru.gamebot.platform.service.PartnerMissions.OTP.questTitle();
 
     private String questCardBanner(Quest quest) {
-        return OTP_CARD_QUEST_TITLE.equals(quest.getTitle()) && getClass().getResource("/otp_card_banner.jpg") != null ? "otp_card_banner.jpg" : null;
+        ru.gamebot.platform.service.PartnerMission bannerPm = ru.gamebot.platform.service.PartnerMissions.forQuest(quest);
+        return bannerPm != null && bannerPm.bannerResource() != null && getClass().getResource("/" + bannerPm.bannerResource()) != null ? bannerPm.bannerResource() : null;
     }
 
     /** «👥 Осталось мест: N из M» для спонсорской подписки: спонсор оплатил ограниченное число подписчиков на ВЕСЬ проект (лимит кампании),
@@ -9467,9 +9478,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (isOtpMissionQuest(quest)) {
             // Миссия «ОТП Карта»: два скриншота по очереди, а не общее «пришлите что-нибудь» (04.11.2026)
             sendText(user.getTelegramId(),
-                    "📸 <b>Отчёт: скриншот 1 из 2</b>\n\n"
-                            + "Карта в приложении ОТП Банка: видно, что она новая и активная.\n"
-                            + "🔒 Номер карты и счёта закрой (закрась или обрежь).",
+                    "📸 <b>Отчёт: скриншот 1 из 2</b>\n\n" + ru.gamebot.platform.service.PartnerMissions.forQuest(quest).report1Prompt(),
                     keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("❌ Отмена", "menu:myquests")))));
             answer(callbackQuery.getId(), "Жду скриншот 1");
             return;
@@ -9540,7 +9549,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else if (count < 2) {
             sendText(telegramId,
                     "✅ Скриншот 1 принят.\n\n"
-                            + "📸 <b>Скриншот 2 из 2:</b> «Детали операции» покупки. Открой её в истории операций: должны быть видны продавец, сумма (от 500 ₽), дата и статус не «В обработке».",
+                            + "📸 <b>Скриншот 2 из 2:</b> " + ru.gamebot.platform.service.PartnerMissions.forQuest(questService.getQuest(questId)).report2Prompt(),
                     keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("❌ Отмена", "menu:myquests")))));
         } else {
             sendText(telegramId,
@@ -14001,23 +14010,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         answer(callbackQuery.getId(), "Заявка одобрена");
     }
 
-    /** Готовые причины «вернуть на доработку» и «отклонить окончательно» для миссии «ОТП Карта»: {подпись кнопки, текст игроку}. */
-    private static final String[][] OTP_RETURN_REASONS = {
-            {"📷 Нет скриншота карты", "Не вижу скриншот карты в приложении ОТП Банка. Пришли скриншот, где видно новую активную карту (номер и счёт закрой)."},
-            {"🧾 Нет «Детали операции»", "Не вижу «Детали операции». Открой покупку в истории и пришли скриншот: продавец, сумма от 500 ₽, дата, статус."},
-            {"⏳ Статус «В обработке»", "Покупка ещё «В обработке». Дождись, когда статус изменится (1–3 дня), и пришли отчёт заново."},
-            {"🔒 Виден номер карты/счёта", "На скриншоте виден номер карты или счёта. Закрой его и пришли заново."},
-            {"💵 Сумма меньше 500 ₽", "Сумма меньше 500 ₽: банк её не засчитает. Нужна одна покупка от 500 ₽ этой картой."},
-            {"🚫 Покупка из исключений", "Такие покупки банк не засчитывает (переводы, снятие наличных, связь, ЖКХ и т. д.). Сделай другую покупку от 500 ₽ этой картой в течение 30 дней после активации."},
-            {"🌫 Нечёткий скриншот", "Скриншот нечёткий, ничего не разобрать. Пришли ещё раз."}
-    };
-    private static final String[][] OTP_FINAL_REASONS = {
-            {"🕵️ Скриншоты не подтверждают", "Скриншоты не подтверждают выполнение условий квеста."},
-            {"📛 Условия акции не выполнены", "Условия акции банка не выполнены: карта не новая или оформлена не по ссылке, либо покупка сделана вне 30 дней после активации."}
-    };
-
+    /** Готовые причины «вернуть на доработку» и «отклонить окончательно» у модератора берутся из конфига партнёра (PartnerMission.returnReasons / finalReasons). */
     private void sendOtpReasonList(CallbackQuery callbackQuery, AppUser user, Long submissionId, boolean finalReject) {
-        String[][] reasons = finalReject ? OTP_FINAL_REASONS : OTP_RETURN_REASONS;
+        ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(questService.getSubmission(submissionId).getQuest());
+        if (pm == null) return;
+        String[][] reasons = finalReject ? pm.finalReasons() : pm.returnReasons();
         List<InlineKeyboardButton> buttons = new ArrayList<>();
         for (int i = 0; i < reasons.length; i++) {
             buttons.add(keyboardFactory.callback(reasons[i][0], (finalReject ? "mod:otpfin:" : "mod:otpret:") + i + ":" + submissionId));
@@ -14041,7 +14038,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void handleOtpReason(CallbackQuery callbackQuery, AppUser moderator, int index, Long submissionId, boolean finalReject) {
-        String[][] reasons = finalReject ? OTP_FINAL_REASONS : OTP_RETURN_REASONS;
+        ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(questService.getSubmission(submissionId).getQuest());
+        if (pm == null) return;
+        String[][] reasons = finalReject ? pm.finalReasons() : pm.returnReasons();
         if (index < 0 || index >= reasons.length) {
             answer(callbackQuery.getId(), "Неизвестная причина");
             return;
