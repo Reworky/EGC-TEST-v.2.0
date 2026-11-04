@@ -339,8 +339,10 @@ public class VpnBot extends TelegramLongPollingBot {
 
     private void showReferral(Long uid, Integer oldMsgId) {
         String link = "https://t.me/" + vpn.getBotUsername() + "?start=ref_" + uid;
-        String share = "https://t.me/share/url?url=" + URLEncoder.encode(link, StandardCharsets.UTF_8)
-                + "&text=" + URLEncoder.encode("EGC VPN: быстрый VPN, первые дни бесплатно", StandardCharsets.UTF_8);
+        // URLEncoder кодирует пробел как «+», а в t.me/share/url плюс остаётся плюсом: заменяем на %20
+        String share = "https://t.me/share/url?url=" + URLEncoder.encode(link, StandardCharsets.UTF_8).replace("+", "%20")
+                + "&text=" + URLEncoder.encode("EGC VPN: быстрый VPN для телефона и компьютера. Первые " + vpn.getTrialDays() + " дня бесплатно!",
+                        StandardCharsets.UTF_8).replace("+", "%20");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.url("📤 Отправить другу", share)));
         rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
