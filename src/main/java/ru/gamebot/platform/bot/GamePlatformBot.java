@@ -29971,7 +29971,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Для отдельного бота EGC VPN (он не админ канала, проверяет через этот бот): состоит ли человек в обязательном канале EGC.
      *  null - проверить не вышло (сбой Telegram): вызывающий не блокирует игрока. Канал не задан - true. */
-    public Boolean isRequiredChannelMember(Long telegramId) {
+    public Boolean checkRequiredChannelForVpnBot(Long telegramId) {
         String channel = requiredChannelChatId();
         if (channel == null || channel.isBlank()) {
             return true;

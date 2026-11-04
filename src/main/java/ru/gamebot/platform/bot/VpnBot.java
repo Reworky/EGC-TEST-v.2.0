@@ -351,7 +351,7 @@ public class VpnBot extends TelegramLongPollingBot {
 
     /** Пробный период: нужна подписка на канал EGC (проверяет основной бот, он админ канала); один раз на аккаунт (проверяет Vpn2Service). */
     private void startTrial(Long uid, Integer oldMsgId) {
-        Boolean member = egcBot.isRequiredChannelMember(uid);
+        Boolean member = egcBot.checkRequiredChannelForVpnBot(uid);
         if (Boolean.FALSE.equals(member)) {
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
             String channelUrl = egcBot.requiredChannelJoinUrl();
