@@ -518,6 +518,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (text != null && text.trim().equalsIgnoreCase("/otpwait") && isEffectiveModerator(user)) {
+            sendOtpWaitingList(user);
+            return;
+        }
+
         if (text != null && (text.equals("/otppilot") || text.startsWith("/otppilot ")) && isEffectiveAdmin(user)) {
             handleOtpPilotCommand(user, text.trim());
             return;
@@ -7501,6 +7506,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("wdfreeze", "ID on|off", "Заморозить или разморозить вывод игрока"),
             new AdminCommand("otpbonus", "ID [сумма EXC] [повтор]", "Партнёрская выплата ОТП Карта: начислить EXC (по умолчанию 100 000), один раз открыть вывод на всю сумму, отметить миссию выполненной (бейдж). Повторно только со словом «повтор»"),
             new AdminCommand("otppilot", "[send] [N]", "«ОТП Карта»: показать игроков из России: сначала выводившие, затем активные за неделю (по умолчанию 20, до 1000) и текст приглашения; send - разослать им (один раз каждому)"),
+            new AdminCommand("otpwait", "", "ОТП Карта: кто ждёт выплаты банка и кто нажал «Банк вернул мне 500 ₽» (видят и модераторы)"),
             new AdminCommand("event", "[halloween|on|off]", "Сезонное событие (Хэллоуин): состояние, включить пресет или выключить, затраты на квесты и надбавка отрядам"),
             new AdminCommand("firstquest", "[bs|cr|coc название1;название2|default]", "Стартовые квесты новичков: показать списки, задать для игры или вернуть по умолчанию"),
             new AdminCommand("resetuser", "ID", "Сбросить игрока до «только что создан» (с подтверждением)"),
@@ -8778,15 +8784,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             boolean first = questService.markBankPaidClaimed(submissionId, user.getTelegramId());
             if (first) {
-                String alert = "💰 <b>ОТП Карта: игрок сообщает о выплате банка</b>\n\n"
+                String alertHead = "💰 <b>ОТП Карта: игрок сообщает о выплате банка</b>\n\n"
                         + "👤 " + escape(displayUserName(user)) + " · ID <code>" + user.getTelegramId() + "</code>\n"
-                        + "Заявка К-" + (sub.getDisplayId() != null ? sub.getDisplayId() : sub.getId()) + "\n\n"
-                        + "Проверьте выплату в кабинете банка и начислите: <code>/otpbonus " + user.getTelegramId() + "</code>";
-                for (Long adminId : adminService.resolvedAdminIds()) {
+                        + "Заявка К-" + (sub.getDisplayId() != null ? sub.getDisplayId() : sub.getId()) + "\n\n";
+                String adminAlert = alertHead + "Проверьте выплату в кабинете банка и начислите: <code>/otpbonus " + user.getTelegramId() + "</code>";
+                String moderatorAlert = alertHead + "Начисляет бонус администратор. Все ожидающие: /otpwait";
+                java.util.Set<Long> adminRecipients = adminService.allAdminIds();
+                // админы и модераторы: модератор раньше не видел это сообщение (оно уходило только админам)
+                for (Long staffId : adminService.allModeratorIds()) {
                     try {
-                        sendText(adminId, alert, null);
+                        sendText(staffId, adminRecipients.contains(staffId) ? adminAlert : moderatorAlert, null);
                     } catch (Exception e) {
-                        log.warn("Failed to alert admin {} about OTP bank claim", adminId, e);
+                        log.warn("Failed to alert staff {} about OTP bank claim", staffId, e);
                     }
                 }
             }
@@ -8797,6 +8806,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } catch (Exception e) {
             log.warn("OTP bank claim failed for submission {}", submissionId, e);
         }
+    }
+
+    /** /otpwait (модератор и админ): кто прошёл миссию ОТП, но ещё не получил бонус, когда банк платит и кто нажал «Банк вернул мне 500 ₽». */
+    private void sendOtpWaitingList(AppUser viewer) {
+        List<QuestSubmission> waiting = questService.findAwaitingPartnerBonus("ОТП Банк");
+        StringBuilder sb = new StringBuilder("💰 <b>ОТП Карта: ждут выплаты банка</b> (" + waiting.size() + ")\n\n");
+        if (waiting.isEmpty()) {
+            sb.append("Никого: все прошедшие отчёт уже получили бонус.");
+        }
+        int shown = 0;
+        for (QuestSubmission w : waiting) {
+            if (shown++ >= 40) {
+                sb.append("\n… и ещё ").append(waiting.size() - 40);
+                break;
+            }
+            java.time.LocalDate base = w.getPurchaseReportedOn() != null ? w.getPurchaseReportedOn()
+                    : (w.getUpdatedAt() != null ? w.getUpdatedAt().toLocalDate() : java.time.LocalDate.now());
+            boolean claimed = (w.getMissionRemindersSent() & ru.gamebot.platform.service.OtpMissionReminderService.BIT_BANK_CLAIMED) != 0;
+            sb.append(claimed ? "💰 " : "⏳ ")
+                    .append(escape(displayUserName(w.getUser()))).append(" · <code>").append(w.getUser().getTelegramId()).append("</code> · банк с ")
+                    .append(ruDayMonth(ru.gamebot.platform.service.OtpMissionReminderService.bankPayoutDate(base)))
+                    .append(claimed ? " · нажал «Банк вернул мне 500 ₽»" : "").append("\n");
+        }
+        sb.append("\n💰 - игрок сообщил, что банк вернул 500 ₽ (проверить и начислить). ⏳ - ещё ждёт. Начисление: админ командой /otpbonus ID.");
+        sendText(viewer.getTelegramId(), sb.toString(), null);
     }
 
     /** Кнопка «💬 Написать менеджеру» на экране миссии: личные сообщения менеджера (APP_SUPPORT_USERNAME) с заранее вписанным текстом - номер заявки и этап, менеджеру не надо переспрашивать. */

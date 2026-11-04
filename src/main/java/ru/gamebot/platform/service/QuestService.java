@@ -1650,6 +1650,14 @@ public class QuestService {
         return true;
     }
 
+    /** Заявки по партнёрской миссии игры gameName, которые одобрены, но бонус ещё не начислен (кто ждёт выплаты банка), старые первыми. */
+    public List<QuestSubmission> findAwaitingPartnerBonus(String gameName) {
+        return questSubmissionRepository.findPartnerMissionOpen(gameName, LocalDateTime.now().minusDays(180)).stream()
+                .filter(s -> s.getStatus() == SubmissionStatus.APPROVED && s.getBonusPaidAt() == null)
+                .sorted(Comparator.comparing(s -> s.getUpdatedAt() == null ? LocalDateTime.MIN : s.getUpdatedAt()))
+                .toList();
+    }
+
     /** Партнёрская миссия: игрок нажал «Банк вернул мне 500 ₽». true - отметили первый раз (админам шлём уведомление), false - уже нажимал или заявка не одобрена. */
     @Transactional
     public boolean markBankPaidClaimed(Long submissionId, Long telegramId) {
