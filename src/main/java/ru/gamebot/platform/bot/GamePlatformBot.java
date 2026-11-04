@@ -5069,20 +5069,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long monthly = sinkShopService.getMonthlyLimit(user);
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.callback("🚀 Выбрать вывод на карту ОТП", "quest:viewwd:" + quest.getId())));
-        rows.add(List.of(keyboardFactory.callback("⏭️ Пропустить, вывести в рублях", "shop:withdraw:rubgo")));
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw:rub")));
+        rows.add(List.of(keyboardFactory.callback("🚀 Хочу карту", "quest:viewwd:" + quest.getId())));
+        if (remaining >= ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) {
+            rows.add(List.of(keyboardFactory.callback("⏭️ Вывести " + fmtExc(remaining) + " EXC в рублях", "shop:withdraw:rubgo")));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")));
         sendText(user.getTelegramId(),
-                "💳 <b>Вывод на карту ОТП: лимит сильно выше</b>\n\n"
-                        + "Обычный вывод: лимит <b>" + fmtExc(monthly) + " EXC/мес</b> (осталось " + fmtExc(remaining) + ")\n"
-                        + "С картой ОТП: <b>до " + fmtExc(remaining + OTP_BONUS_DEFAULT_EXC) + " EXC разом</b>, одной заявкой. На это время лимит вывода расширяется на "
-                        + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC.\n\n"
-                        + "<b>Как получить:</b>\n"
-                        + "1️⃣ Закажи бесплатную карту ОТП\n"
-                        + "2️⃣ Потрать 500 ₽ картой на любую покупку: банк вернёт эти деньги\n"
-                        + "3️⃣ Пришли скриншоты и получи " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC\n"
-                        + "4️⃣ Дождись банка: +" + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC и вывод всей суммы разом\n\n"
-                        + "Мест в квесте: " + Math.max(0, (quest.getParticipantLimit() == null ? 0 : quest.getParticipantLimit()) - questService.countApprovedByQuest(quest)),
+                "💳 <b>Вывести больше лимита: карта ОТП Банка</b>\n\n"
+                        + "Сейчас: лимит <b>" + fmtExc(monthly) + " EXC/мес</b>, осталось <b>" + fmtExc(remaining) + "</b>.\n"
+                        + "С картой: <b>до " + fmtExc(remaining + OTP_BONUS_DEFAULT_EXC) + " EXC</b> одной заявкой.\n\n"
+                        + "<b>Что ты получаешь:</b>\n"
+                        + "✅ 500 ₽ от банка на твою карту\n"
+                        + "✅ " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC после проверки\n"
+                        + "✅ " + fmtExc(OTP_BONUS_DEFAULT_EXC) + " EXC, когда банк выплатит бонус, и вывод всей суммы разом\n\n"
+                        + "<b>Что нужно сделать:</b>\n"
+                        + "1️⃣ Оформить бесплатную карту по нашей ссылке\n"
+                        + "2️⃣ Потратить 500 ₽ этой картой на любую покупку\n"
+                        + "3️⃣ Прислать два скриншота\n\n"
+                        + "⏳ Банк платит с 25-го числа месяца, следующего за покупкой. Потом мы начислим EXC.\n"
+                        + "🔒 Паспорт, коды из СМС и номер карты нам не нужны. Подходит, если тебе 18+, ты живёшь в РФ и карты ОТП у тебя ещё нет.\n\n"
+                        + "Мест: " + Math.max(0, (quest.getParticipantLimit() == null ? 0 : quest.getParticipantLimit()) - questService.countApprovedByQuest(quest)),
                 keyboardFactory.rowsLayout(rows));
     }
 
