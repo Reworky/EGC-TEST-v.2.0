@@ -22,6 +22,9 @@ public interface Vpn2AccountRepository extends JpaRepository<Vpn2Account, Long> 
     /** Опрос «почему не продлили»: срок истёк в окне, этот опрос ещё не слали. */
     List<Vpn2Account> findByStatusAndFeedbackStageLessThanAndExpiresAtBetween(String status, int stage, LocalDateTime from, LocalDateTime to);
 
+    /** Пробные, которые работают сейчас и о лимите трафика которым ещё не сообщали. */
+    List<Vpn2Account> findByPlanTypeAndStatusAndLimitNotifiedAtIsNullAndExpiresAtAfter(String planType, String status, LocalDateTime after);
+
     long countByStatusAndPlanTypeAndExpiresAtAfter(String status, String planType, LocalDateTime after);
 
     long countByStatusAndExpiresAtBetween(String status, LocalDateTime from, LocalDateTime to);

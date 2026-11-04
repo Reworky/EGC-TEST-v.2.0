@@ -12,6 +12,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -82,6 +84,21 @@ public class VpnPanelClient {
             }
         }
         return Optional.empty();
+    }
+
+    /** Расход трафика всех клиентов одним запросом: метка -> {использовано байт, лимит байт (0 - без лимита), включён (1/0)}. */
+    public synchronized Map<String, long[]> trafficUsage() throws PanelException {
+        JsonNode res = api("/panel/api/clients/list", null);
+        if (!res.path("success").asBoolean(false)) {
+            throw new PanelException("список клиентов: " + res.path("msg").asText());
+        }
+        Map<String, long[]> out = new HashMap<>();
+        for (JsonNode n : res.path("obj")) {
+            JsonNode t = n.path("traffic");
+            long used = t.path("up").asLong(0) + t.path("down").asLong(0);
+            out.put(n.path("email").asText(), new long[] {used, n.path("totalGB").asLong(0), n.path("enable").asBoolean(true) ? 1 : 0});
+        }
+        return out;
     }
 
     /** Создаёт клиента или, если такая метка уже есть, обновляет срок/лимиты (повторный вызов безопасен). */

@@ -293,6 +293,7 @@ public class VpnBot extends TelegramLongPollingBot {
         sb.append(headline != null ? headline : (trial ? "✅ <b>Пробный VPN включён</b>" : "✅ <b>EGC VPN активен</b>")).append("\n\n")
           .append("До: <b>").append(DATE_TIME.format(a.getExpiresAt())).append("</b> · ")
           .append(trial ? "лимит " + vpn.getTrialGb() + " ГБ · 1 устройство" : "безлимит · до 2 устройств").append("\n\n")
+          .append(trial && a.getLimitNotifiedAt() != null ? "⚠️ Пробный лимит трафика <b>исчерпан</b>: оформите тариф, чтобы продолжить.\n\n" : "")
           .append(connectSteps()).append("\n\n")
           .append("Ваша личная ссылка (никому не показывайте):\n<code>").append(escape(vpn.subscriptionUrl(a))).append("</code>\n\n")
           .append("🎮 <i>Играйте в EGC, копите EXC и платите за VPN дешевле: ").append(formatExc(Vpn2Service.EXC_DISCOUNT)).append(" EXC = −50 ₽.</i>");
@@ -713,6 +714,46 @@ public class VpnBot extends TelegramLongPollingBot {
             sendHtml(a.getTelegramId(), html + excLine, rows);
         } catch (Exception e) {
             log.warn("VPN bot reminder failed for {}", a.getTelegramId(), e);
+        }
+    }
+
+    // ---------------------------------------------------------------- лимит пробного
+
+    /** Раз в 15 минут: у пробных, которые работают сейчас, смотрим расход в панели; когда лимит исчерпан (панель отключает ключ), один раз пишем игроку
+     *  с предложением оформить тариф - самый тёплый момент для продажи. Бэклог: аккаунтов мало, повторов нет (отметка limitNotifiedAt ставится до отправки). */
+    @Scheduled(initialDelay = 3 * 60_000L, fixedDelay = 15 * 60_000L)
+    public void notifyTrialLimitReached() {
+        if (!registered || !vpn.isEnabled()) {
+            return;
+        }
+        try {
+            List<Vpn2Account> candidates = accountRepository.findByPlanTypeAndStatusAndLimitNotifiedAtIsNullAndExpiresAtAfter(
+                    Vpn2Account.PLAN_TRIAL, Vpn2Account.STATUS_ACTIVE, LocalDateTime.now());
+            if (candidates.isEmpty()) {
+                return;
+            }
+            Map<String, long[]> usage = vpn.panelTrafficUsage();
+            for (Vpn2Account a : candidates) {
+                long[] u = usage.get(a.getPanelEmail());
+                if (u != null && u[1] > 0 && u[0] >= u[1] * 0.99) {
+                    notifyLimitReached(a);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("VPN bot trial limit check failed", e);
+        }
+    }
+
+    private void notifyLimitReached(Vpn2Account a) {
+        try {
+            a.setLimitNotifiedAt(LocalDateTime.now());
+            accountRepository.save(a); // сначала отметка: при сбое отправки лучше промолчать, чем слать каждые 15 минут
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            rows.add(List.of(keyboardFactory.callback("💳 Тарифы", "m:tariffs"), keyboardFactory.url("🎮 Копить EXC", egcUrl())));
+            sendHtml(a.getTelegramId(), "🔐 <b>Пробный лимит исчерпан</b>\n\nВы использовали все " + vpn.getTrialGb()
+                    + " ГБ. Оформите тариф, чтобы продолжить: безлимитный трафик, до 2 устройств.", rows);
+        } catch (Exception e) {
+            log.warn("VPN bot limit notice failed for {}", a.getTelegramId(), e);
         }
     }
 

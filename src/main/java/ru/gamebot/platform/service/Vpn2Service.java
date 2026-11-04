@@ -173,6 +173,11 @@ public class Vpn2Service {
     /** Канал отзывов (@username или id): сюда бот публикует одобренные карточки; пусто - публикация выключена. */
     public String getReviewsChannel() { return reviewsChannel; }
 
+    /** Расход трафика клиентов во второй панели (метка -> {использовано, лимит, включён}); для уведомления об исчерпании лимита пробного. */
+    public java.util.Map<String, long[]> panelTrafficUsage() throws PanelException {
+        return panel.trafficUsage();
+    }
+
     public Optional<Vpn2Account> find(Long telegramId) {
         return accounts.findByTelegramId(telegramId);
     }

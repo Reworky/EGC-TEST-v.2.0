@@ -67,6 +67,9 @@ public class Vpn2Account {
     @Column(nullable = false, columnDefinition = "int default 0")
     private int feedbackStage = 0;
 
+    /** Когда игроку сообщили, что лимит трафика пробного исчерпан (один раз на аккаунт); null - не сообщали. */
+    private LocalDateTime limitNotifiedAt;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
