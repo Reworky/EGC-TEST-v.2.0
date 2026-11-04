@@ -65,6 +65,20 @@ app:
   vpn-paid-days: ${VPN_PAID_DAYS:30}
   vpn-paid-gb: ${VPN_PAID_GB:0}
   vpn-client-app: ${VPN_CLIENT_APP:hiddify}
+  # Отдельный бот EGC VPN (вторая панель, не пилот): выключен, пока VPN2_ENABLED не true; без VPN2_BOT_TOKEN бот не регистрируется.
+  # Закрыт для всех, кроме админов и VPN2_TEST_IDS (через запятую), пока VPN2_OPEN не true
+  vpn2-enabled: ${VPN2_ENABLED:false}
+  vpn2-open: ${VPN2_OPEN:false}
+  vpn2-test-ids: ${VPN2_TEST_IDS:}
+  vpn2-bot-token: ${VPN2_BOT_TOKEN:}
+  vpn2-bot-username: ${VPN2_BOT_USERNAME:}
+  vpn2-xui-url: ${VPN2_XUI_URL:}
+  vpn2-xui-user: ${VPN2_XUI_USER:}
+  vpn2-xui-pass: ${VPN2_XUI_PASS:}
+  vpn2-xui-inbound-id: ${VPN2_XUI_INBOUND_ID:2}
+  vpn2-sub-base: ${VPN2_SUB_BASE:}
+  vpn2-trial-days: ${VPN2_TRIAL_DAYS:3}
+  vpn2-trial-gb: ${VPN2_TRIAL_GB:5}
 
 claude:
   api-key: ${CLAUDE_API_KEY:}

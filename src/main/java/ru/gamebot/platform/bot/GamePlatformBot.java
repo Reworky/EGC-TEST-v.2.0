@@ -29969,6 +29969,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return status != null && !"left".equalsIgnoreCase(status) && !"kicked".equalsIgnoreCase(status);
     }
 
+    /** Для отдельного бота EGC VPN (он не админ канала, проверяет через этот бот): состоит ли человек в обязательном канале EGC.
+     *  null - проверить не вышло (сбой Telegram): вызывающий не блокирует игрока. Канал не задан - true. */
+    public Boolean isRequiredChannelMember(Long telegramId) {
+        String channel = requiredChannelChatId();
+        if (channel == null || channel.isBlank()) {
+            return true;
+        }
+        try {
+            return isChannelMember(channel, telegramId);
+        } catch (Exception e) {
+            log.warn("Required channel membership check failed for {}", telegramId, e);
+            return null;
+        }
+    }
+
+    /** Ссылка «Подписаться» на обязательный канал EGC (для отдельного бота EGC VPN). */
+    public String requiredChannelJoinUrl() {
+        return requiredChannelUrl();
+    }
+
     /** Для мини-аппа (QuestController): состоит ли игрок в канале спонсорского квеста. true/false - ответ Telegram;
      *  null - проверить не удалось (нет доступа к каналу и т.п.): при взятии квеста это не блокирует, при сдаче просим повторить позже.
      *  alertAdmins - при сбое предупредить админов (как при проверке в боте; у алерта свой лимит частоты). */
