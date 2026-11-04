@@ -41,6 +41,7 @@ import ru.gamebot.platform.config.AppProperties;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.Vpn2Account;
 import ru.gamebot.platform.domain.model.Vpn2Feedback;
+import ru.gamebot.platform.domain.model.Vpn2Payment;
 import ru.gamebot.platform.domain.repository.Vpn2AccountRepository;
 import ru.gamebot.platform.domain.repository.Vpn2FeedbackRepository;
 import ru.gamebot.platform.event.AnalyticsAlertEvent;
@@ -101,8 +102,24 @@ public class VpnBot extends TelegramLongPollingBot {
             registered = true;
             log.info("EGC VPN bot registered: {}", getBotUsername());
             ensureTrafficSource();
+            setupCommandMenu();
         } catch (Exception e) {
             log.error("EGC VPN bot registration failed (main bot is not affected)", e);
+        }
+    }
+
+    /** Меню «/»: главное меню, вопросы по оплате и условия (Telegram требует /paysupport и /terms у ботов с платежами). */
+    private void setupCommandMenu() {
+        try {
+            execute(org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands.builder()
+                    .commands(List.of(
+                            org.telegram.telegrambots.meta.api.objects.commands.BotCommand.builder().command("start").description("Главное меню").build(),
+                            org.telegram.telegrambots.meta.api.objects.commands.BotCommand.builder().command("paysupport").description("Вопросы по оплате и возврат").build(),
+                            org.telegram.telegrambots.meta.api.objects.commands.BotCommand.builder().command("terms").description("Условия сервиса").build()))
+                    .scope(org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeDefault.builder().build())
+                    .build());
+        } catch (Exception e) {
+            log.warn("VPN bot command menu not set: {}", e.getMessage());
         }
     }
 
@@ -158,6 +175,18 @@ public class VpnBot extends TelegramLongPollingBot {
         User from = message.getFrom();
         Long uid = from.getId();
         String text = message.getText() == null ? "" : message.getText().trim();
+        if (text.startsWith("/paysupport")) {
+            showPaySupport(uid);
+            return;
+        }
+        if (text.startsWith("/terms")) {
+            showTerms(uid, null);
+            return;
+        }
+        if (isAdmin(uid) && text.startsWith("/vpn2refund")) {
+            handleRefundCommand(uid, text);
+            return;
+        }
         if (isAdmin(uid) && text.startsWith("/stats")) {
             sendHtml(uid, vpn.statsHtml() + "\n\n" + feedbackStatsHtml(), null);
             return;
@@ -219,6 +248,10 @@ public class VpnBot extends TelegramLongPollingBot {
         }
         if (!cq.getData().startsWith("fb:")) {
             awaitingReviewText.remove(uid); // ушёл в другой раздел: следующее сообщение не считаем текстом отзыва
+        }
+        if (cq.getData().startsWith("adm:")) {
+            handleAdminCallback(uid, oldMsgId, cq.getData());
+            return;
         }
         if (cq.getData().startsWith("fbadm:")) {
             handleFeedbackModeration(uid, oldMsgId, cq.getData());
@@ -398,11 +431,23 @@ public class VpnBot extends TelegramLongPollingBot {
 
     private void showTerms(Long uid, Integer oldMsgId) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.url("🆘 Поддержка", "https://t.me/" + appProperties.getSupportUsername())));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "m:tariffs"), keyboardFactory.callback("🏠 Меню", "m:main")));
         show(uid, oldMsgId, "ℹ️ <b>Условия EGC VPN</b>\n\n"
                 + "Мы сохраняем технические данные подключения (время, IP и объём трафика) 90 дней для безопасности и поддержки. "
                 + "Адреса посещаемых сайтов мы не сохраняем.\n\n"
-                + "Один ключ на аккаунт, передавать его другим нельзя. Пробный период выдаётся один раз.", rows);
+                + "Один ключ на аккаунт, передавать его другим нельзя. Пробный период выдаётся один раз.\n\n"
+                + "Оплата: звёзды Telegram, списываются один раз за выбранный срок. Автопродления нет, о конце срока мы напомним.\n"
+                + "Возврат и вопросы по оплате: /paysupport.", rows);
+    }
+
+    /** /paysupport: Telegram требует от ботов с платежами ответ, куда писать по вопросам оплаты. */
+    private void showPaySupport(Long uid) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.url("🆘 Написать в поддержку", "https://t.me/" + appProperties.getSupportUsername())));
+        sendHtml(uid, "💳 <b>Вопросы по оплате</b>\n\n"
+                + "Если платёж прошёл, а ключ не выдан, или нужен возврат, напишите в поддержку и укажите ваш ID <code>" + uid + "</code>, дату и тариф. "
+                + "Мы всё проверим и вернём звёзды, если вы получили не то, что оплатили.", rows);
     }
 
     private void showReferral(Long uid, Integer oldMsgId) {
@@ -722,6 +767,120 @@ public class VpnBot extends TelegramLongPollingBot {
             sendHtml(a.getTelegramId(), html + excLine, rows);
         } catch (Exception e) {
             log.warn("VPN bot reminder failed for {}", a.getTelegramId(), e);
+        }
+    }
+
+    // ---------------------------------------------------------------- возврат Stars
+
+    /** /vpn2refund ID: последние оплаты игрока с кнопками «↩️ Вернуть». Возврат - только по кнопке и после подтверждения. */
+    private void handleRefundCommand(Long adminId, String text) {
+        String[] parts = text.split("\\s+");
+        long target;
+        try {
+            target = Long.parseLong(parts.length > 1 ? parts[1] : "");
+        } catch (NumberFormatException e) {
+            sendHtml(adminId, "Формат: <code>/vpn2refund ID</code> (Telegram ID игрока). Покажу его последние оплаты с кнопками возврата.", null);
+            return;
+        }
+        List<Vpn2Payment> list = vpn.recentPayments(target);
+        if (list.isEmpty()) {
+            sendHtml(adminId, "У игрока " + target + " нет оплат в VPN-боте.", null);
+            return;
+        }
+        StringBuilder sb = new StringBuilder("↩️ <b>Оплаты игрока " + target + "</b>\n\n");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (Vpn2Payment p : list) {
+            sb.append("#").append(p.getId()).append(" · ").append(p.getCreatedAt().format(DATE_TIME)).append(" · ").append(escape(p.getTariff()))
+              .append(" · ").append(p.getStarsAmount()).append(" ⭐").append(p.getRefundedAt() != null ? " · ↩️ возвращено" : "").append("\n");
+            if (p.getRefundedAt() == null) {
+                rows.add(List.of(keyboardFactory.callback("↩️ Вернуть #" + p.getId() + " (" + p.getStarsAmount() + " ⭐)", "adm:rf:" + p.getId())));
+            }
+        }
+        sendHtml(adminId, sb.toString(), rows.isEmpty() ? null : rows);
+    }
+
+    /** Кнопки админа: adm:rf:ID - подтверждение возврата, adm:rfy:ID - вернуть, adm:off:TELEGRAM_ID - отключить ключ, adm:no - отмена. */
+    private void handleAdminCallback(Long adminId, Integer oldMsgId, String data) {
+        if (!isAdmin(adminId)) {
+            return;
+        }
+        String[] p = data.split(":");
+        if (p.length < 2) {
+            return;
+        }
+        try {
+            switch (p[1]) {
+                case "rf" -> {
+                    Optional<Vpn2Payment> payment = vpn.findPayment(Long.parseLong(p[2]));
+                    if (payment.isEmpty() || payment.get().getRefundedAt() != null) {
+                        show(adminId, oldMsgId, "Эта оплата не найдена или уже возвращена.", null);
+                        return;
+                    }
+                    Vpn2Payment pay = payment.get();
+                    List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+                    rows.add(List.of(keyboardFactory.callback("✅ Да, вернуть", "adm:rfy:" + pay.getId()), keyboardFactory.callback("Отмена", "adm:no")));
+                    show(adminId, oldMsgId, "↩️ <b>Вернуть " + pay.getStarsAmount() + " ⭐</b> игроку <code>" + pay.getTelegramId() + "</code> за тариф "
+                            + escape(pay.getTariff()) + "?\n\nКлюч автоматически не отключится: после возврата появится кнопка «Отключить ключ».", rows);
+                }
+                case "rfy" -> {
+                    Optional<Vpn2Payment> payment = vpn.findPayment(Long.parseLong(p[2]));
+                    if (payment.isEmpty() || payment.get().getRefundedAt() != null) {
+                        show(adminId, oldMsgId, "Эта оплата не найдена или уже возвращена.", null);
+                        return;
+                    }
+                    Vpn2Payment pay = payment.get();
+                    if (pay.getTelegramPaymentChargeId() == null || pay.getTelegramPaymentChargeId().isBlank()
+                            || !refundStars(pay.getTelegramId(), pay.getTelegramPaymentChargeId())) {
+                        show(adminId, oldMsgId, "⚠️ Telegram не принял возврат (возможно, он уже сделан или платёж слишком старый). Подробности в логе.", null);
+                        return;
+                    }
+                    vpn.markRefunded(pay);
+                    List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+                    rows.add(List.of(keyboardFactory.callback("🔒 Отключить ключ", "adm:off:" + pay.getTelegramId())));
+                    show(adminId, oldMsgId, "✅ Возвращено " + pay.getStarsAmount() + " ⭐ игроку <code>" + pay.getTelegramId() + "</code>.", rows);
+                    sendHtml(pay.getTelegramId(), "💳 <b>Мы вернули вам " + pay.getStarsAmount() + " ⭐ за EGC VPN</b>\n\nЕсли остались вопросы, напишите в поддержку: /paysupport.", null);
+                }
+                case "off" -> {
+                    long target = Long.parseLong(p[2]);
+                    try {
+                        vpn.disable(target);
+                        show(adminId, oldMsgId, "🔒 Ключ игрока <code>" + target + "</code> отключён.", null);
+                    } catch (VpnException e) {
+                        show(adminId, oldMsgId, "⚠️ Не получилось отключить ключ: " + escape(e.getMessage()) + " (" + e.getCode() + ")", null);
+                    }
+                }
+                case "no" -> show(adminId, oldMsgId, "Отменено.", null);
+                default -> { }
+            }
+        } catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
+            log.debug("VPN bot: bad admin callback {}", data);
+        }
+    }
+
+    /** refundStarPayment токеном ЭТОГО бота (платёж прошёл через него). true - Telegram принял возврат. */
+    private boolean refundStars(Long uid, String chargeId) {
+        try {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("user_id", uid);
+            body.put("telegram_payment_charge_id", chargeId);
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create("https://api.telegram.org/bot" + vpn.getBotToken() + "/refundStarPayment"))
+                    .header("Content-Type", "application/json")
+                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)))
+                    .build();
+            java.net.http.HttpResponse<String> response = http.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+            JsonNode root = objectMapper.readTree(response.body());
+            if (response.statusCode() == 200 && root.path("ok").asBoolean(false)) {
+                return true;
+            }
+            log.error("VPN bot: refundStarPayment failed for {}: HTTP {} {}", uid, response.statusCode(), response.body());
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (Exception e) {
+            log.error("VPN bot: refundStarPayment failed for {}", uid, e);
+            return false;
         }
     }
 

@@ -41,4 +41,7 @@ public class Vpn2Payment {
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
+
+    /** Когда админ вернул эти звёзды (refundStarPayment); null - не возвращали. */
+    private LocalDateTime refundedAt;
 }

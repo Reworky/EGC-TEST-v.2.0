@@ -323,6 +323,21 @@ public class Vpn2Service {
         payments.save(p);
     }
 
+    /** Последние 5 оплат человека (для возврата админом). */
+    public java.util.List<Vpn2Payment> recentPayments(Long telegramId) {
+        return payments.findTop5ByTelegramIdOrderByCreatedAtDesc(telegramId);
+    }
+
+    public Optional<Vpn2Payment> findPayment(Long paymentId) {
+        return payments.findById(paymentId);
+    }
+
+    /** Отметка «звёзды возвращены» (после успешного refundStarPayment). */
+    public void markRefunded(Vpn2Payment payment) {
+        payment.setRefundedAt(LocalDateTime.now());
+        payments.save(payment);
+    }
+
     /** Рефералка после ПЕРВОЙ оплаты приглашённого: +7 дней и ему, и пригласившему. Возвращает id пригласившего или null, если награды нет.
      *  Награда за оплату, а не за вход: пустые аккаунты не дают бесплатных дней. */
     public synchronized Long rewardReferral(Long buyerId) {
