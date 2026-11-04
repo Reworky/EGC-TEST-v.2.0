@@ -122,6 +122,8 @@ public final class PartnerMissions {
             .report2Prompt(COMMON_REPORT2)
             // этапы 3, 4 и финал - те же картинки, что у ОТП (владелец 04.11.2026: экраны похожи, не уникализировать); картинки этапов 1-2 - позже, по дизайну карты/SIM
             .stage1Banner("tblack_step1_banner.jpg")
+            .stage2WaitBanner("tblack_step2_banner.jpg")
+            .stage2PayBanner("tblack_step2_pay_banner.jpg")
             .stage3Banner("otp_step3_banner.jpg")
             .stage4Banner("otp_step4_banner.jpg")
             .finalBanner("otp_step5_banner.jpg")
@@ -177,6 +179,9 @@ public final class PartnerMissions {
             .report1Prompt("Баланс SIM в приложении «Т-Мобайл»: видно пополнение на 500 ₽ и дату.\n🔒 Паспортные данные и номера карт закрой.")
             .report2Prompt("Оплата тарифа в приложении «Т-Мобайл»: история платежей, где видна оплата тарифа и дата.")
             // этапы 3, 4 и финал - те же картинки, что у ОТП (владелец 04.11.2026: экраны похожи, не уникализировать); картинки этапов 1-2 - позже, по дизайну карты/SIM
+            .stage1Banner("tmobile_step1_banner.jpg")
+            .stage2WaitBanner("tmobile_step2_banner.jpg")
+            .stage2PayBanner("tmobile_step2_pay_banner.jpg")
             .stage3Banner("otp_step3_banner.jpg")
             .stage4Banner("otp_step4_banner.jpg")
             .finalBanner("otp_step5_banner.jpg")
