@@ -40,6 +40,10 @@ public class Vpn2User {
     @Column(length = 64)
     private String username;
 
+    /** Откуда пришёл человек (метка из ?start=...): egc - из игрового бота. Пусто - обычный заход. */
+    @Column(length = 32)
+    private String sourceCode;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 }

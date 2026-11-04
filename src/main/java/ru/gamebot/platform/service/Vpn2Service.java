@@ -187,8 +187,13 @@ public class Vpn2Service {
         return subBase + "/" + account.getSubId();
     }
 
-    /** Запись пользователя при /start; реферер учитывается только при первом заходе и только если он сам уже пользователь бота. */
-    public synchronized Vpn2User registerUser(Long telegramId, String firstName, String username, Long referredBy) {
+    /** Бот включён и виден этому человеку: всем (VPN2_OPEN), тестерам (VPN2_TEST_IDS) или админам. Основной бот по этому признаку решает, показывать ли ссылку на VPN-бот. */
+    public boolean isVisibleFor(Long telegramId, boolean admin) {
+        return isEnabled() && (open || admin || testIds.contains(telegramId));
+    }
+
+    /** Запись пользователя при /start; реферер и источник (например «egc») учитываются только при первом заходе; реферер - только если он сам уже пользователь бота. */
+    public synchronized Vpn2User registerUser(Long telegramId, String firstName, String username, Long referredBy, String sourceCode) {
         Optional<Vpn2User> found = users.findByTelegramId(telegramId);
         if (found.isPresent()) {
             return found.get();
@@ -197,6 +202,7 @@ public class Vpn2Service {
         u.setTelegramId(telegramId);
         u.setFirstName(cut(firstName, 128));
         u.setUsername(cut(username, 64));
+        u.setSourceCode(cut(sourceCode, 32));
         u.setCreatedAt(LocalDateTime.now());
         if (referredBy != null && !referredBy.equals(telegramId) && users.findByTelegramId(referredBy).isPresent()) {
             u.setReferredBy(referredBy);
@@ -384,6 +390,7 @@ public class Vpn2Service {
         sb.append("Истекают за 3 дня: <b>").append(accounts.countByStatusAndExpiresAtBetween(Vpn2Account.STATUS_ACTIVE, now, now.plusDays(3))).append("</b>\n\n");
         sb.append("Оплат за 7 дн.: <b>").append(payments.countByCreatedAtAfter(d7)).append("</b> на <b>").append(payments.sumStarsSince(d7)).append(" ⭐</b>\n");
         sb.append("Оплат за 30 дн.: <b>").append(payments.countByCreatedAtAfter(d30)).append("</b> на <b>").append(payments.sumStarsSince(d30)).append(" ⭐</b>\n\n");
+        sb.append("Пришли из игрового бота EGC: <b>").append(users.countBySourceCode("egc")).append("</b>\n");
         sb.append("Пришли по приглашению: <b>").append(users.countByReferredByIsNotNull()).append("</b>, наград выдано: <b>").append(users.countByReferralRewardedTrue()).append("</b>");
         return sb.toString();
     }

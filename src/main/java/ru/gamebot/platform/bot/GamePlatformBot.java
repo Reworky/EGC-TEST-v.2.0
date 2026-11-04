@@ -158,6 +158,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.RetentionService retentionService;
     private final ru.gamebot.platform.service.PulseService pulseService;
     private final ru.gamebot.platform.service.VpnService vpnService;
+    private final ru.gamebot.platform.service.Vpn2Service vpn2Service;
     private final ru.gamebot.platform.service.EngagementCeilingService engagementCeilingService;
     private final ru.gamebot.platform.service.ChannelContentService channelContentService;
     private final ru.gamebot.platform.service.BonusCourseService bonusCourseService;
@@ -4291,7 +4292,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback(passLabel, "menu:battlepass")),
                 List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
         ));
-        rows.add(rows.size() - 1, List.of(keyboardFactory.callback(vpnService.isEnabled() ? "🔐 VPN" : "🔐 VPN (скоро)", "menu:vpn")));
+        rows.add(rows.size() - 1, List.of(vpnShopButton(user)));
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
         if (shopBannerFileId != null) {
             sendPhotoCaption(user.getTelegramId(), shopBannerFileId, "🛍️ <b>Магазин</b>", keyboard);
@@ -4317,7 +4318,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     List.of(keyboardFactory.callback("🚀 Ускоритель (скоро)", "menu:accelerator")),
                     List.of(keyboardFactory.callback(passLabel, "menu:battlepass"))
             ));
-            fallbackRows.add(List.of(keyboardFactory.callback(vpnService.isEnabled() ? "🔐 VPN" : "🔐 VPN (скоро)", "menu:vpn")));
+            fallbackRows.add(List.of(vpnShopButton(user)));
             sendMenuCategory(user, "🛍️ <b>Магазин</b>", fallbackRows);
             // "Донат по играм" сюда намеренно не добавлен — см. комментарий в основной ветке выше.
         }
@@ -5636,6 +5637,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "✅ <b>" + user.getCompletedQuests() + "</b> " + pluralQuests(user.getCompletedQuests())
                 + " · 🔥 серия <b>" + user.getStreakDays() + "</b> дн."
                 + " · 🎟 <b>" + user.getTickets() + "</b>\n"
+                + vpnProfileLine(user)
                 + onboardingLine + "\n"
                 + "<blockquote expandable>" + onboardingDetails
                 + "🎮 Платформы: <b>" + escape(displayValue(user.getPlatformsCsv(), "не указаны")) + "</b>\n"
@@ -5660,6 +5662,40 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else {
             sendText(user.getTelegramId(), profileText, profileKeyboard);
         }
+    }
+
+    /** Ссылка на отдельный бот EGC VPN (с меткой from_egc) для этого игрока; null - бот ему пока не показываем (выключен или закрыт: видят только админы и тестеры). */
+    private String vpnBotLinkFor(AppUser user) {
+        if (!vpn2Service.isVisibleFor(user.getTelegramId(), adminService.isAdmin(user.getTelegramId()))) {
+            return null;
+        }
+        return "https://t.me/" + vpn2Service.getBotUsername() + "?start=from_egc";
+    }
+
+    /** Кнопка VPN в магазине: ведёт в отдельный бот EGC VPN, когда он виден игроку; иначе прежний экран VPN в этом боте. */
+    private InlineKeyboardButton vpnShopButton(AppUser user) {
+        String link = vpnBotLinkFor(user);
+        if (link != null) {
+            return keyboardFactory.url("🔐 EGC VPN: скидка за EXC", link);
+        }
+        return keyboardFactory.callback(vpnService.isEnabled() ? "🔐 VPN" : "🔐 VPN (скоро)", "menu:vpn");
+    }
+
+    /** Строка про VPN в профиле (с переводом строки в конце): срок ключа или приглашение попробовать; пусто, пока отдельный бот игроку не виден. */
+    private String vpnProfileLine(AppUser user) {
+        String link = vpnBotLinkFor(user);
+        if (link == null) {
+            return "";
+        }
+        try {
+            java.util.Optional<ru.gamebot.platform.domain.model.Vpn2Account> account = vpn2Service.find(user.getTelegramId());
+            if (account.isPresent() && vpn2Service.isRunning(account.get())) {
+                return "🔐 EGC VPN до <b>" + account.get().getExpiresAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) + "</b>\n";
+            }
+        } catch (Exception e) {
+            log.warn("Failed to read VPN status for profile of {}", user.getTelegramId(), e);
+        }
+        return "🔐 <a href=\"" + link + "\">EGC VPN</a>: " + vpn2Service.getTrialDays() + " дня бесплатно, скидка за EXC\n";
     }
 
     private void sendRanksTable(AppUser user, String backCallback) {
@@ -6426,6 +6462,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             balanceRows.add(List.of(keyboardFactory.callback(dailyBonusWalletLabel(user), "menu:daily")));
         }
         balanceRows.add(List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads")));
+        String vpnBotLink = vpnBotLinkFor(user);
+        if (vpnBotLink != null) {
+            balanceRows.add(List.of(keyboardFactory.url(user.getCoins() >= ru.gamebot.platform.service.Vpn2Service.EXC_DISCOUNT
+                    ? "🔐 Скидка на VPN за EXC: хватает!" : "🔐 Потратить EXC на скидку VPN", vpnBotLink)));
+        }
         balanceRows.add(List.of(keyboardFactory.callback("⬅️ Назад", backData)));
         sendText(user.getTelegramId(),
                 "💰 <b>Баланс</b>\n\n"

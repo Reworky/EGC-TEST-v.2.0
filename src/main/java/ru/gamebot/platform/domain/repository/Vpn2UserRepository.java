@@ -14,4 +14,6 @@ public interface Vpn2UserRepository extends JpaRepository<Vpn2User, Long> {
     long countByReferredByIsNotNull();
 
     long countByReferralRewardedTrue();
+
+    long countBySourceCode(String sourceCode);
 }

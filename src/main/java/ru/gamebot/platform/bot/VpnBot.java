@@ -42,6 +42,7 @@ import ru.gamebot.platform.domain.repository.Vpn2AccountRepository;
 import ru.gamebot.platform.event.AnalyticsAlertEvent;
 import ru.gamebot.platform.service.AdminService;
 import ru.gamebot.platform.service.ExcTransactionService;
+import ru.gamebot.platform.service.TrafficSourceService;
 import ru.gamebot.platform.service.UserService;
 import ru.gamebot.platform.service.Vpn2Service;
 import ru.gamebot.platform.service.Vpn2Service.Tariff;
@@ -57,6 +58,7 @@ public class VpnBot extends TelegramLongPollingBot {
 
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
     private static final DateTimeFormatter DATE_SHORT = DateTimeFormatter.ofPattern("dd.MM HH:mm");
+    private static final String TRAFFIC_SOURCE_CODE = "vpnbot";
     private static final int REMIND_SOON_DAYS = 2;
     private static final int REMIND_EXPIRED_WINDOW_DAYS = 3;
     private static final String APP_IOS = "https://apps.apple.com/app/happ-proxy-utility/id6504287215";
@@ -70,6 +72,7 @@ public class VpnBot extends TelegramLongPollingBot {
     private final ExcTransactionService excTransactionService;
     private final KeyboardFactory keyboardFactory;
     private final GamePlatformBot egcBot;
+    private final TrafficSourceService trafficSourceService;
     private final Vpn2AccountRepository accountRepository;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
@@ -89,8 +92,20 @@ public class VpnBot extends TelegramLongPollingBot {
             new TelegramBotsApi(DefaultBotSession.class).registerBot(this);
             registered = true;
             log.info("EGC VPN bot registered: {}", getBotUsername());
+            ensureTrafficSource();
         } catch (Exception e) {
             log.error("EGC VPN bot registration failed (main bot is not affected)", e);
+        }
+    }
+
+    /** Источник трафика «vpnbot» для ссылок из VPN-бота в игровой (?start=src_vpnbot): клики и новые игроки видны в разделе трафика основного бота. */
+    private void ensureTrafficSource() {
+        try {
+            if (trafficSourceService.findByCode(TRAFFIC_SOURCE_CODE).isEmpty()) {
+                trafficSourceService.create("EGC VPN бот", TRAFFIC_SOURCE_CODE);
+            }
+        } catch (Exception e) {
+            log.warn("VPN bot: failed to ensure traffic source {}", TRAFFIC_SOURCE_CODE, e);
         }
     }
 
@@ -144,6 +159,7 @@ public class VpnBot extends TelegramLongPollingBot {
             return;
         }
         Long referrer = null;
+        String source = null;
         if (text.startsWith("/start")) {
             String[] parts = text.split("\\s+");
             if (parts.length > 1 && parts[1].startsWith("ref_")) {
@@ -152,9 +168,11 @@ public class VpnBot extends TelegramLongPollingBot {
                 } catch (NumberFormatException ignored) {
                     // битая ссылка: просто без реферера
                 }
+            } else if (parts.length > 1 && "from_egc".equals(parts[1])) {
+                source = "egc"; // пришёл из игрового бота EGC
             }
         }
-        vpn.registerUser(uid, from.getFirstName(), from.getUserName(), referrer);
+        vpn.registerUser(uid, from.getFirstName(), from.getUserName(), referrer, source);
         if (!allowed(uid)) {
             showClosed(uid, null);
             return;
@@ -181,7 +199,7 @@ public class VpnBot extends TelegramLongPollingBot {
         User from = cq.getFrom();
         Long uid = from.getId();
         Integer oldMsgId = cq.getMessage() == null ? null : cq.getMessage().getMessageId();
-        vpn.registerUser(uid, from.getFirstName(), from.getUserName(), null);
+        vpn.registerUser(uid, from.getFirstName(), from.getUserName(), null, null);
         if (!allowed(uid)) {
             showClosed(uid, oldMsgId);
             return;
@@ -209,7 +227,7 @@ public class VpnBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🔑 Моё подключение", "m:my"), keyboardFactory.callback("💳 Тарифы", "m:tariffs")));
         rows.add(List.of(keyboardFactory.callback("📲 Как подключить", "m:howto"), keyboardFactory.callback("🎁 Пригласить друга", "m:ref")));
         rows.add(List.of(keyboardFactory.url("🆘 Поддержка", "https://t.me/" + appProperties.getSupportUsername())));
-        rows.add(List.of(keyboardFactory.url("🎮 Играть и получать EXC", egcUrl())));
+        rows.add(List.of(keyboardFactory.url("🎮 Играть и копить EXC на скидку", egcUrl())));
         show(uid, oldMsgId, "🔐 <b>EGC VPN</b>\n\n"
                 + "Быстрый VPN для телефона и компьютера от клуба EGC.\n"
                 + "• До 2 устройств, подключение за минуту\n"
@@ -255,9 +273,11 @@ public class VpnBot extends TelegramLongPollingBot {
           .append("До: <b>").append(DATE_TIME.format(a.getExpiresAt())).append("</b> · ")
           .append(trial ? "лимит " + vpn.getTrialGb() + " ГБ · 1 устройство" : "безлимит · до 2 устройств").append("\n\n")
           .append(connectSteps()).append("\n\n")
-          .append("Ваша личная ссылка (никому не показывайте):\n<code>").append(escape(vpn.subscriptionUrl(a))).append("</code>");
+          .append("Ваша личная ссылка (никому не показывайте):\n<code>").append(escape(vpn.subscriptionUrl(a))).append("</code>\n\n")
+          .append("🎮 <i>Играйте в EGC, копите EXC и платите за VPN дешевле: ").append(formatExc(Vpn2Service.EXC_DISCOUNT)).append(" EXC = −50 ₽.</i>");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(installRows());
-        rows.add(List.of(keyboardFactory.callback(trial ? "💳 Оформить тариф" : "💳 Продлить", "m:tariffs")));
+        rows.add(List.of(keyboardFactory.callback(trial ? "💳 Оформить тариф" : "💳 Продлить", "m:tariffs"),
+                keyboardFactory.url("🎮 Копить EXC", egcUrl())));
         rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
         show(uid, oldMsgId, sb.toString(), rows);
     }
@@ -294,8 +314,9 @@ public class VpnBot extends TelegramLongPollingBot {
             }
             sb.append("\n");
         }
-        sb.append("\nБезлимитный трафик, до 2 устройств. Оплата звёздами Telegram ⭐.\n")
-          .append("За ").append(formatExc(Vpn2Service.EXC_DISCOUNT)).append(" EXC скидка 50 ₽ на любой срок.");
+        sb.append("\nБезлимитный трафик, до 2 устройств. Оплата звёздами Telegram ⭐.");
+        long coins = excBalance(uid);
+        sb.append("\n\n").append(excCard(coins));
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         boolean linkFailed = false;
         for (Tariff t : Tariff.values()) {
@@ -306,7 +327,6 @@ public class VpnBot extends TelegramLongPollingBot {
             }
             rows.add(List.of(keyboardFactory.url("💳 " + t.getTitle() + ": " + t.getStars() + " ⭐", link)));
         }
-        long coins = excBalance(uid);
         if (coins >= Vpn2Service.EXC_DISCOUNT) {
             for (Tariff t : Tariff.values()) {
                 String link = invoiceLink(t, true);
@@ -314,10 +334,8 @@ public class VpnBot extends TelegramLongPollingBot {
                     rows.add(List.of(keyboardFactory.url("🪙 −50 ₽ за EXC: " + t.getTitle() + ", " + t.getExcStars() + " ⭐", link)));
                 }
             }
-        } else if (coins >= 0) {
-            rows.add(List.of(keyboardFactory.callback("🪙 Скидка 50 ₽: нужно " + formatExc(Vpn2Service.EXC_DISCOUNT) + " EXC, у вас " + formatExc(coins), "m:noop")));
         } else {
-            rows.add(List.of(keyboardFactory.url("🪙 Скидка за EXC: заработайте их в EGC", egcUrl())));
+            rows.add(List.of(keyboardFactory.url("🎮 Заработать EXC в EGC", egcUrl())));
         }
         if (linkFailed) {
             log.warn("VPN bot: failed to create Stars invoice link for tariffs screen, user {}", uid);
@@ -326,6 +344,26 @@ public class VpnBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("ℹ️ Условия", "m:terms")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
         show(uid, oldMsgId, sb.toString(), rows);
+    }
+
+    /** Карточка скидки за EXC: прогресс до 18 000 EXC у игрока EGC, «скидка доступна» или объяснение для тех, у кого профиля EGC ещё нет. */
+    private static String excCard(long coins) {
+        long goal = Vpn2Service.EXC_DISCOUNT;
+        if (coins >= goal) {
+            return "🪙 <b>Скидка за EXC доступна</b>\nУ вас " + formatExc(coins) + " EXC: платите на 50 ₽ меньше за любой срок (кнопки ниже).";
+        }
+        if (coins >= 0) {
+            long pct = Math.min(100, coins * 100 / goal);
+            return "🪙 <b>Скидка за EXC</b>\nУ вас " + formatExc(coins) + " из " + formatExc(goal) + " EXC\n"
+                    + progressBar(coins, goal) + " " + pct + "%\n"
+                    + "Ещё " + formatExc(goal - coins) + " EXC, и −50 ₽ на любой срок.";
+        }
+        return "🪙 <b>Скидка за EXC</b>\nEXC копятся за игры и задания в EGC: " + formatExc(goal) + " EXC = −50 ₽ на любой срок.";
+    }
+
+    private static String progressBar(long current, long goal) {
+        int filled = (int) Math.max(0, Math.min(10, current * 10 / goal));
+        return "▰".repeat(filled) + "▱".repeat(10 - filled);
     }
 
     private void showTerms(Long uid, Integer oldMsgId) {
@@ -640,9 +678,18 @@ public class VpnBot extends TelegramLongPollingBot {
         try {
             a.setReminderStage(stage);
             accountRepository.save(a); // сначала отметка: при сбое отправки лучше пропустить напоминание, чем слать его каждый час
+            long coins = excBalance(a.getTelegramId());
+            String excLine = coins >= Vpn2Service.EXC_DISCOUNT
+                    ? "\n\n🪙 У вас " + formatExc(coins) + " EXC: продлите со скидкой 50 ₽."
+                    : coins >= 0
+                            ? "\n\n🪙 До скидки 50 ₽ не хватает " + formatExc(Vpn2Service.EXC_DISCOUNT - coins) + " EXC."
+                            : "";
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
             rows.add(List.of(keyboardFactory.callback(button, "m:tariffs")));
-            sendHtml(a.getTelegramId(), html, rows);
+            if (coins >= 0 && coins < Vpn2Service.EXC_DISCOUNT) {
+                rows.add(List.of(keyboardFactory.url("🎮 Заработать EXC", egcUrl())));
+            }
+            sendHtml(a.getTelegramId(), html + excLine, rows);
         } catch (Exception e) {
             log.warn("VPN bot reminder failed for {}", a.getTelegramId(), e);
         }
@@ -699,8 +746,9 @@ public class VpnBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Ссылка в игровой бот с меткой источника: новые игроки оттуда попадают в трафик «vpnbot». */
     private String egcUrl() {
-        return "https://t.me/" + appProperties.getBotUsername();
+        return "https://t.me/" + appProperties.getBotUsername() + "?start=src_" + TRAFFIC_SOURCE_CODE;
     }
 
     private static String formatExc(long amount) {
