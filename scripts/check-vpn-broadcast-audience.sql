@@ -25,14 +25,14 @@ UNION ALL SELECT '6. то же, за 90 дн.', COUNT(*) FROM aud WHERE reg = 1 
 UNION ALL SELECT '7. с пилотным VPN-аккаунтом', COUNT(*) FROM aud WHERE has_vpn = 1
 ORDER BY 1;
 
-SELECT 'давность активности (регистрация, не бан)' AS grp,
-  CASE WHEN last_act >= DATEADD('DAY', -1, CURRENT_DATE) THEN 'a. 0-1 дн'
-       WHEN last_act >= DATEADD('DAY', -7, CURRENT_DATE) THEN 'b. 2-7 дн'
-       WHEN last_act >= DATEADD('DAY', -14, CURRENT_DATE) THEN 'c. 8-14 дн'
-       WHEN last_act >= DATEADD('DAY', -30, CURRENT_DATE) THEN 'd. 15-30 дн'
-       WHEN last_act >= DATEADD('DAY', -90, CURRENT_DATE) THEN 'e. 31-90 дн'
-       ELSE 'f. больше 90 дн' END AS bucket, COUNT(*) AS n
-FROM aud WHERE reg = 1 AND banned = 0 GROUP BY 2 ORDER BY 2;
+SELECT 'давность активности (регистрация, не бан)' AS grp, bucket, COUNT(*) AS n FROM (
+  SELECT CASE WHEN last_act >= DATEADD('DAY', -1, CURRENT_DATE) THEN 'a. 0-1 дн'
+              WHEN last_act >= DATEADD('DAY', -7, CURRENT_DATE) THEN 'b. 2-7 дн'
+              WHEN last_act >= DATEADD('DAY', -14, CURRENT_DATE) THEN 'c. 8-14 дн'
+              WHEN last_act >= DATEADD('DAY', -30, CURRENT_DATE) THEN 'd. 15-30 дн'
+              WHEN last_act >= DATEADD('DAY', -90, CURRENT_DATE) THEN 'e. 31-90 дн'
+              ELSE 'f. больше 90 дн' END AS bucket
+  FROM aud WHERE reg = 1 AND banned = 0) x GROUP BY bucket ORDER BY bucket;
 
 SELECT 'страна, активны 30 дн.' AS grp, country, COUNT(*) AS n
 FROM aud WHERE reg = 1 AND banned = 0 AND last_act >= DATEADD('DAY', -30, CURRENT_DATE)
@@ -45,10 +45,9 @@ SELECT 'платформы (в списке), активны 30 дн.' AS grp,
   SUM(CASE WHEN platforms = '' THEN 1 ELSE 0 END) AS not_set
 FROM aud WHERE reg = 1 AND banned = 0 AND last_act >= DATEADD('DAY', -30, CURRENT_DATE);
 
-SELECT 'по числу квестов, активны 30 дн.' AS grp,
-  CASE WHEN quests = 0 THEN 'a. 0' WHEN quests <= 2 THEN 'b. 1-2' WHEN quests <= 9 THEN 'c. 3-9' WHEN quests <= 29 THEN 'd. 10-29' ELSE 'e. 30+' END AS bucket,
-  COUNT(*) AS n
-FROM aud WHERE reg = 1 AND banned = 0 AND last_act >= DATEADD('DAY', -30, CURRENT_DATE) GROUP BY 2 ORDER BY 2;
+SELECT 'по числу квестов, активны 30 дн.' AS grp, bucket, COUNT(*) AS n FROM (
+  SELECT CASE WHEN quests = 0 THEN 'a. 0' WHEN quests <= 2 THEN 'b. 1-2' WHEN quests <= 9 THEN 'c. 3-9' WHEN quests <= 29 THEN 'd. 10-29' ELSE 'e. 30+' END AS bucket
+  FROM aud WHERE reg = 1 AND banned = 0 AND last_act >= DATEADD('DAY', -30, CURRENT_DATE)) x GROUP BY bucket ORDER BY bucket;
 
 SELECT 'EXC на балансе, активны 30 дн. (кому подойдёт скидка)' AS grp,
   SUM(CASE WHEN coins >= 18000 THEN 1 ELSE 0 END) AS enough_18000,
