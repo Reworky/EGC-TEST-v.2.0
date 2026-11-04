@@ -16,10 +16,10 @@ import ru.gamebot.platform.domain.repository.AppSettingRepository;
 import ru.gamebot.platform.domain.repository.QuestSubmissionRepository;
 import ru.gamebot.platform.event.OtpMissionReminderEvent;
 
-/** Напоминания по партнёрской миссии «ОТП Карта» (2026-11-04), каждое не больше одного раза на заявку (битовая маска QuestSubmission.missionRemindersSent):
+/** Напоминания по партнёрским миссиям (ОТП Карта, Т-Банк Black и др. из PartnerMissions; 2026-11-04), каждое не больше одного раза на заявку (битовая маска QuestSubmission.missionRemindersSent):
  *  1) «миссия ждёт тебя» - игрок на этапе 1-2, прошло от 2 до 4 суток после «Взять»;
  *  2) «3 дня до конца окна» - карта активирована, до конца 30 дней на покупку осталось 1-3 дня, игрок ещё не нажал «Я заплатил(а)»;
- *  3) «банк мог заплатить» - отчёт одобрен, наступило 25-е число месяца после покупки (и ещё два дня после него).
+ *  3) «банк мог заплатить» - отчёт одобрен, наступила дата выплаты банка по правилу партнёра (и ещё два дня после неё).
  *  Окна отправки узкие нарочно (бэклог): заявка, у которой окно уже прошло, напоминания не получит. Шлюз частоты (NotificationGateService) спрашивается до отметки.
  *  Не шлём ночью (часы по времени JVM). Откат без деплоя: app_settings 'otp.mission.reminders.enabled' = false. */
 @Slf4j
@@ -28,8 +28,6 @@ import ru.gamebot.platform.event.OtpMissionReminderEvent;
 public class OtpMissionReminderService {
 
     public static final String SETTING_KEY = "otp.mission.reminders.enabled";
-    public static final String GAME_NAME = "ОТП Банк";
-    public static final int PURCHASE_WINDOW_DAYS = 30;
     static final int BIT_WAITING = 1;
     static final int BIT_DEADLINE = 2;
     static final int BIT_BANK_DAY = 4;
@@ -43,11 +41,6 @@ public class OtpMissionReminderService {
     private final NotificationGateService notificationGate;
     private final ApplicationEventPublisher eventPublisher;
 
-    /** 25-е число месяца, следующего за днём покупки (правила акции банка: бонус с 25-го числа следующего месяца). */
-    public static LocalDate bankPayoutDate(LocalDate purchaseDay) {
-        return purchaseDay.plusMonths(1).withDayOfMonth(25);
-    }
-
     @Scheduled(fixedDelay = 1_800_000, initialDelay = 180_000)
     public void sendReminders() {
         LocalDateTime now = LocalDateTime.now();
@@ -55,14 +48,20 @@ public class OtpMissionReminderService {
             return;
         }
         LocalDate today = now.toLocalDate();
-        List<QuestSubmission> open = questSubmissionRepository.findPartnerMissionOpen(GAME_NAME, now.minusDays(120));
+        for (PartnerMission pm : PartnerMissions.ALL) {
+            processMission(pm, today, now);
+        }
+    }
+
+    private void processMission(PartnerMission pm, LocalDate today, LocalDateTime now) {
+        List<QuestSubmission> open = questSubmissionRepository.findPartnerMissionOpen(pm.gameName(), now.minusDays(120));
         for (QuestSubmission s : open) {
             try {
                 if (s.getUser().isBlocked()) continue;
                 int sent = s.getMissionRemindersSent();
                 if (s.getStatus() == SubmissionStatus.DRAFT) {
                     int step = Math.max(1, s.getMissionStep());
-                    LocalDate deadline = s.getCardActivatedOn() == null ? null : s.getCardActivatedOn().plusDays(PURCHASE_WINDOW_DAYS);
+                    LocalDate deadline = s.getCardActivatedOn() == null ? null : s.getCardActivatedOn().plusDays(pm.windowDays());
                     long daysLeft = deadline == null ? -1 : ChronoUnit.DAYS.between(today, deadline);
                     if (step == 2 && deadline != null && daysLeft >= 1 && daysLeft <= 3 && (sent & BIT_DEADLINE) == 0) {
                         deliver(s, NudgeType.QUEST_DEADLINE, BIT_DEADLINE, OtpMissionReminderEvent.KIND_DEADLINE, deadline);
@@ -76,7 +75,7 @@ public class OtpMissionReminderService {
                     LocalDate base = s.getPurchaseReportedOn() != null ? s.getPurchaseReportedOn()
                             : (s.getUpdatedAt() != null ? s.getUpdatedAt().toLocalDate() : null);
                     if (base == null) continue;
-                    LocalDate payout = bankPayoutDate(base);
+                    LocalDate payout = pm.bankDate(base);
                     long sincePayout = ChronoUnit.DAYS.between(payout, today);
                     if (sincePayout >= 0 && sincePayout <= 2) {
                         deliver(s, NudgeType.OTP_MISSION, BIT_BANK_DAY, OtpMissionReminderEvent.KIND_BANK_DAY, payout);
