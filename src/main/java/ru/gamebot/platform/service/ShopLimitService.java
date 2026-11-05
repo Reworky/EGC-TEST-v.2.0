@@ -15,9 +15,30 @@ public class ShopLimitService {
 
     private static final long COOLDOWN_SMALL_THRESHOLD = 15_000L;
     private static final long COOLDOWN_MEDIUM_THRESHOLD = 55_000L;
-    private static final int COOLDOWN_SMALL_DAYS = 5;
-    private static final int COOLDOWN_MEDIUM_DAYS = 14;
-    private static final int COOLDOWN_LARGE_DAYS = 30;
+    // 05.11.2026 (решение владельца): кулдауны сокращены с 5/14/30 до 2/5/10 дней, чтобы EXC можно было тратить чаще
+    private static final int COOLDOWN_SMALL_DAYS = 2;
+    private static final int COOLDOWN_MEDIUM_DAYS = 5;
+    private static final int COOLDOWN_LARGE_DAYS = 10;
+    /** Покупок игровой валюты на одну игру в месяц (было 1). */
+    private static final int GAME_PURCHASES_PER_MONTH = 3;
+    /** Защита вместо ранга: подтверждённый телефон, 3 квеста и 3 дня с регистрации (как для вывода). */
+    private static final int SHOP_MIN_QUESTS = 3;
+    private static final int SHOP_MIN_ACCOUNT_AGE_DAYS = 3;
+    private static final String WITHDRAWAL_CATEGORY = "Вывод";
+
+    /** Текст отказа, если покупатель не прошёл базовую защиту магазина; null - можно. Звёзды (категория «Вывод») проверяются как вывод и сюда не попадают. */
+    public String shopEligibilityBlock(AppUser user) {
+        if (user.isBlocked()) return "🔒 Аккаунт заблокирован. Напишите в поддержку.";
+        if (user.isWithdrawalFrozen()) return "🔒 Покупки временно приостановлены на проверку. Напишите в поддержку.";
+        if (user.getPhoneNumber() == null || user.getPhoneNumber().isBlank()) {
+            return "🔒 Для покупки нужно подтвердить номер телефона: откройте «Вывод EXC» и поделитесь контактом.";
+        }
+        boolean tooYoung = user.getCreatedAt() != null && user.getCreatedAt().plusDays(SHOP_MIN_ACCOUNT_AGE_DAYS).isAfter(LocalDateTime.now());
+        if (user.getCompletedQuests() < SHOP_MIN_QUESTS || tooYoung) {
+            return "🔒 Для покупки нужно выполнить " + SHOP_MIN_QUESTS + " квеста и подождать " + SHOP_MIN_ACCOUNT_AGE_DAYS + " дня после регистрации.";
+        }
+        return null;
+    }
 
     private final RewardRequestRepository rewardRequestRepository;
     private final AppUserRepository appUserRepository;
@@ -34,6 +55,12 @@ public class ShopLimitService {
             return;
         }
         checkLevelAccess(user, item);
+        if (!WITHDRAWAL_CATEGORY.equals(item.getCategory())) {
+            String eligibility = shopEligibilityBlock(user);
+            if (eligibility != null) {
+                throw new IllegalArgumentException(eligibility);
+            }
+        }
         // Вывод в звёздах — это ВЫВОД, а не товар магазина (как рубли/TON, которые вообще не проходят
         // через ShopLimitService). Частоту уже ограничивает отдельная проверка "1 заявка на вывод в
         // сутки" на входе в меню способа вывода — количественный лимит "1 в группу в месяц" и общий
@@ -100,9 +127,9 @@ public class ShopLimitService {
             default -> {
                 // Игровые валюты: 1 покупка на игру в месяц
                 long count = rewardRequestRepository.countActiveByUserAndGroupSince(user, group, monthStart);
-                if (count > 0) {
+                if (count >= GAME_PURCHASES_PER_MONTH) {
                     throw new IllegalArgumentException(
-                            "🚫 Лимит: 1 покупка на эту игру в месяц уже использован. Доступно с 1-го числа следующего месяца.");
+                            "🚫 Лимит: " + GAME_PURCHASES_PER_MONTH + " покупки на эту игру в месяц уже использованы. Доступно с 1-го числа следующего месяца.");
                 }
             }
         }
@@ -113,7 +140,9 @@ public class ShopLimitService {
      *  пре-проверка (и getItemStatus ниже) молча пропускают то, что реальное списание в
      *  RewardService.createRewardRequest потом всё равно заблокирует по той же самой причине. */
     public void checkMonthlySpendsLimit(AppUser user, RewardItem item) {
-        long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
+        // Товары магазина считаются в отдельный лимит трат (5 x лимит вывода), звёзды (категория «Вывод») - в лимит вывода
+        long remaining = WITHDRAWAL_CATEGORY.equals(item.getCategory())
+                ? sinkShopService.getRemainingWithdrawalLimit(user) : sinkShopService.getRemainingShopLimit(user);
         long price = healthRatioService.effectivePriceFor(user, item);
         if (price > remaining) {
             throw new IllegalArgumentException(
@@ -186,6 +215,10 @@ public class ShopLimitService {
             long needed = item.getMinLevelXp() - user.getXp();
             return "🔒 Заблокировано до уровня " + requiredLevel + " — нужно ещё " + needed + " XP";
         }
+        if (!WITHDRAWAL_CATEGORY.equals(item.getCategory())) {
+            String eligibility = shopEligibilityBlock(user);
+            if (eligibility != null) return eligibility;
+        }
 
         boolean isStarsWithdrawal = "telegram_stars".equals(item.getPurchaseGroup());
         LocalDateTime now = LocalDateTime.now();
@@ -213,7 +246,7 @@ public class ShopLimitService {
                 case "badge_egc" -> rewardRequestRepository.countActiveByUserAndGroupAllTime(user, "badge_egc") > 0;
                 case "tshirt_egc" -> rewardRequestRepository.countActiveByUserAndGroupAllTime(user, "tshirt_egc") > 0;
                 case "council_egc" -> rewardRequestRepository.countActiveCouncilSince(user, now.minusDays(30)) > 0;
-                default -> rewardRequestRepository.countActiveByUserAndGroupSince(user, group, monthStart) > 0;
+                default -> rewardRequestRepository.countActiveByUserAndGroupSince(user, group, monthStart) >= GAME_PURCHASES_PER_MONTH;
             };
             if (blocked) {
                 if ("badge_egc".equals(group) || "tshirt_egc".equals(group)) {
@@ -224,7 +257,8 @@ public class ShopLimitService {
         }
 
         // Слой 3 — сравнивать с effectivePrice (Health Ratio), не с базовой ценой, см. checkMonthlySpendsLimit.
-        long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
+        long remaining = WITHDRAWAL_CATEGORY.equals(item.getCategory())
+                ? sinkShopService.getRemainingWithdrawalLimit(user) : sinkShopService.getRemainingShopLimit(user);
         long effectivePrice = healthRatioService.effectivePriceFor(user, item);
         if (effectivePrice > remaining) {
             return "🚫 Недоступно — достигнут месячный лимит трат (" + remaining + " EXC осталось)";

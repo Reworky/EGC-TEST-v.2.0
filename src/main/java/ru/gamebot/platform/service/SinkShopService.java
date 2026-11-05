@@ -441,6 +441,35 @@ public class SinkShopService {
         appUserRepository.save(user);
     }
 
+    /** Лимит трат в магазине наград = множитель x месячный лимит вывода (владелец 05.11.2026: чтобы EXC можно было тратить, а не только выводить). */
+    public static final int SHOP_SPEND_LIMIT_MULTIPLIER = 5;
+
+    public long getShopSpendLimit(AppUser user) {
+        return getMonthlyLimit(user) * SHOP_SPEND_LIMIT_MULTIPLIER;
+    }
+
+    public long getRemainingShopLimit(AppUser user) {
+        refreshWithdrawalMonthIfNeeded(user);
+        return Math.max(0, getShopSpendLimit(user) - user.getMonthlyShopSpentExc());
+    }
+
+    @Transactional
+    public void recordShopSpend(AppUser user, long amount) {
+        refreshWithdrawalMonthIfNeeded(user);
+        if (amount > getRemainingShopLimit(user)) {
+            throw new IllegalArgumentException("Превышен месячный лимит трат в магазине.");
+        }
+        user.setMonthlyShopSpentExc(user.getMonthlyShopSpentExc() + amount);
+        appUserRepository.save(user);
+    }
+
+    @Transactional
+    public void reverseShopSpend(AppUser user, long amount) {
+        refreshWithdrawalMonthIfNeeded(user);
+        user.setMonthlyShopSpentExc(Math.max(0, user.getMonthlyShopSpentExc() - amount));
+        appUserRepository.save(user);
+    }
+
     @Transactional
     public void resetWithdrawalLimit(AppUser user) {
         user.setMonthlyWithdrawnExc(0);
@@ -451,6 +480,7 @@ public class SinkShopService {
         YearMonth now = YearMonth.now();
         if (user.getWithdrawalYear() != now.getYear() || user.getWithdrawalMonth() != now.getMonthValue()) {
             user.setMonthlyWithdrawnExc(0);
+            user.setMonthlyShopSpentExc(0);
             user.setWithdrawalMonth(now.getMonthValue());
             user.setWithdrawalYear(now.getYear());
             appUserRepository.save(user);

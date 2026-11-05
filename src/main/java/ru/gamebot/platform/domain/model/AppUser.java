@@ -285,6 +285,10 @@ public class AppUser {
     @Column(columnDefinition = "bigint default 0")
     private long partnerWithdrawalAllowanceExc;
 
+    /** Потрачено в магазине наград в текущем месяце (EXC), отдельно от лимита вывода (05.11.2026): лимит трат = 5 x лимит вывода, сбрасывается вместе с monthlyWithdrawnExc при смене месяца. */
+    @Column(columnDefinition = "bigint default 0")
+    private long monthlyShopSpentExc;
+
     @Column(columnDefinition = "integer default 0")
     private int withdrawalMonth;
 

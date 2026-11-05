@@ -498,8 +498,13 @@ public class RewardSeeder implements CommandLineRunner {
                 });
     }
 
+    /** Ранг (minLevelXp) снят у позиций с базовой ценой до 75 000 EXC (решение владельца 05.11.2026); остаются ранговые только дорогие позиции и «престижные»: значок, футболка, Council. */
+    private static final long RANK_GATE_REMOVED_MAX_PRICE = 75_000L;
+
     private void seed(String title, String description, String category, long priceCoins,
-                      String userDataPrompt, int minLevelXp, String purchaseGroup) {
+                      String userDataPrompt, int minLevelXpSeed, String purchaseGroup) {
+        boolean prestige = "badge_egc".equals(purchaseGroup) || "tshirt_egc".equals(purchaseGroup) || "council_egc".equals(purchaseGroup);
+        int minLevelXp = !prestige && priceCoins <= RANK_GATE_REMOVED_MAX_PRICE ? 0 : minLevelXpSeed;
         rewardItemRepository.findByTitle(title).ifPresentOrElse(
                 existing -> {
                     boolean changed = existing.getPriceCoins() != priceCoins;

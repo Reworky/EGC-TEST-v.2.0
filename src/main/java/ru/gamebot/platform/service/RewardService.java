@@ -281,11 +281,13 @@ public class RewardService {
             throw new IllegalArgumentException("Недостаточно EXC. Нужно " + price + " EXC.");
         }
 
+        boolean isWithdrawalItem = WITHDRAWAL_CATEGORY.equals(rewardItem.getCategory());
         if (!isAvatarFrame) {
-            long remaining = sinkShopService.getRemainingWithdrawalLimit(lockedUser);
+            // Звёзды (категория «Вывод») идут в лимит вывода, остальные товары - в отдельный лимит трат в магазине (5 x лимит вывода)
+            long remaining = isWithdrawalItem ? sinkShopService.getRemainingWithdrawalLimit(lockedUser) : sinkShopService.getRemainingShopLimit(lockedUser);
             if (price > remaining) {
-                throw new IllegalArgumentException(
-                        "Превышен месячный лимит вывода. Доступно ещё: " + remaining + " EXC.");
+                throw new IllegalArgumentException((isWithdrawalItem ? "Превышен месячный лимит вывода. Доступно ещё: " : "Превышен месячный лимит трат в магазине. Доступно ещё: ")
+                        + remaining + " EXC.");
             }
         }
 
@@ -293,7 +295,11 @@ public class RewardService {
         if (!isAvatarFrame) {
             // Рамки не учитываются в месячном лимите трат и не ставят cooldown — по требованию пользователя,
             // они полностью без ограничений и не должны мешать другим покупкам в магазине.
-            sinkShopService.recordWithdrawal(lockedUser, price);
+            if (isWithdrawalItem) {
+                sinkShopService.recordWithdrawal(lockedUser, price);
+            } else {
+                sinkShopService.recordShopSpend(lockedUser, price);
+            }
             // Вывод в звёздах не должен ставить общий ценовой cooldown — иначе он блокировал бы
             // покупку несвязанных товаров магазина в том же ценовом диапазоне (см. ShopLimitService.checkAllLimits).
             if (!"telegram_stars".equals(rewardItem.getPurchaseGroup())) {
@@ -634,8 +640,12 @@ public class RewardService {
         req.setStatus(RewardRequestStatus.CANCELLED);
         long price = actualPaidPrice(req);
         excTx.creditExc(requester, price, ExcTransactionService.SHOP_REFUND, "Отмена заявки: " + req.getRewardItem().getTitle());
-        // reverseWithdrawal for ALL items since recordWithdrawal is called for all in createRewardRequest
-        sinkShopService.reverseWithdrawal(requester, price);
+        // звёзды (категория «Вывод») возвращаются в лимит вывода, остальные товары - в лимит трат магазина (с 05.11.2026)
+        if (WITHDRAWAL_CATEGORY.equals(req.getRewardItem().getCategory())) {
+            sinkShopService.reverseWithdrawal(requester, price);
+        } else {
+            sinkShopService.reverseShopSpend(requester, price);
+        }
         bonusCourseService.releaseBudget(req);
         return rewardRequestRepository.save(req);
     }
@@ -652,7 +662,11 @@ public class RewardService {
         boolean isWithdrawal = "Вывод".equals(req.getRewardItem().getCategory());
         long price = actualPaidPrice(req);
         excTx.creditExc(user, price, ExcTransactionService.SHOP_REFUND, "Возврат (отклонение): " + req.getRewardItem().getTitle());
-        sinkShopService.reverseWithdrawal(user, price);
+        if (isWithdrawal) {
+            sinkShopService.reverseWithdrawal(user, price);
+        } else {
+            sinkShopService.reverseShopSpend(user, price);
+        }
         bonusCourseService.releaseBudget(req);
         // Отклонение — не вина игрока, поэтому снимаем cooldown по ценовому диапазону товара (Layer 4)
         if (!isWithdrawal) {
