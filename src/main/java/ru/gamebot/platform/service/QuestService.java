@@ -1636,10 +1636,15 @@ public class QuestService {
 
     /** У игрока есть одобренный партнёрский квест (ОТП, Т-Банк Black, Т-Мобайл SIM): открывает рублёвый вывод сверх порога без карты. */
     public boolean hasApprovedPartnerQuest(Long userId) {
-        for (PartnerMission pm : PartnerMissions.ALL) {
-            if (!questSubmissionRepository.findApprovedByUserAndGame(userId, pm.gameName()).isEmpty()) return true;
+        for (WithdrawalPartners.Bank bank : WithdrawalPartners.ALL) {
+            if (hasApprovedPartnerQuest(userId, bank.mission().gameName())) return true;
         }
         return false;
+    }
+
+    /** Одобренный партнёрский квест игрока по конкретной миссии (игра gameName): он реферал именно этого банка. */
+    public boolean hasApprovedPartnerQuest(Long userId, String gameName) {
+        return !questSubmissionRepository.findApprovedByUserAndGame(userId, gameName).isEmpty();
     }
 
     /** Бонус по партнёрской миссии игры gameName этому игроку уже начислялся (бейдж, защита от двойной выплаты). */

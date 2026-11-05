@@ -241,9 +241,8 @@ public class WalletController {
         }
         ShopActionResponseDto validation = validateAmount(user, body.getAmount());
         if (validation != null) return ResponseEntity.ok(validation);
-        long gateRoom = gamePlatformBot.withdrawalGateRoomExc(user);
-        if (gateRoom >= 0 && body.getAmount() > gateRoom) {
-            return errorResponse("Первые 10 000 EXC выводятся любым способом, дальше вывод открывается после карты банка-партнёра: откройте «Вывод EXC» в боте.");
+        if (gamePlatformBot.rubDestinationBlocked(user, body.getAmount(), requisites)) {
+            return errorResponse("Вы уже вывели максимум, доступный без карты (10 000 EXC). Дальше вывод только в банк, где вы наш реферал: откройте «Вывод EXC» в боте и выберите банк.");
         }
         if (rewardService.hasWithdrawalTodayOrPending(user)) {
             return errorResponse("Лимит: 1 заявка на вывод в сутки. Следующую можно создать через 24 часа после предыдущей.");

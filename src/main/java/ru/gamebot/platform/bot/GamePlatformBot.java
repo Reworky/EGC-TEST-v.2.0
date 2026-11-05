@@ -1630,11 +1630,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.equals("shop:withdraw:rub")) {
             answerSilently(callbackQuery.getId());
-            long gateRoom = withdrawalGateRoomExc(user);
-            if (gateRoom >= 0 && gateRoom < ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) {
-                sendWithdrawalPartnerGate(user, gateRoom, "rub");
-                return;
-            }
             // Предложение вывести на карту партнёра - только тем, у кого баланс больше остатка лимита (иначе карта им ничего не даёт) и кто квест ещё не выполнил
             long overLimit = withdrawalOverLimitExc(user);
             if (overLimit > 0 && cardOfferQuestFor(user) != null) {
@@ -1710,6 +1705,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.startsWith("shop:group:")) {
             // Вывод звёздами, как рубли и TON, требует подтверждённого номера телефона (иначе обход защиты от мультиаккаунтов)
+            if ("telegram_stars".equals(data.substring("shop:group:".length())) && !isStarsWithdrawalOpen()) {
+                answerSilently(callbackQuery.getId());
+                sendStarsWithdrawalClosed(user);
+                return;
+            }
             if ("telegram_stars".equals(data.substring("shop:group:".length()))) {
                 long starsRoom = withdrawalGateRoomExc(user);
                 if (starsRoom >= 0 && starsRoom < minStarsPriceExc()) {
@@ -10163,7 +10163,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("💸 В рублях (СБП, любой банк)", "shop:withdraw:rub")));
         rows.add(List.of(keyboardFactory.callback("💎 В TON (Telegram Wallet)", "shop:withdraw:ton")));
-        rows.add(List.of(keyboardFactory.callback("⭐ В звёздах Telegram", "shop:group:telegram_stars")));
+        rows.add(List.of(keyboardFactory.callback(isStarsWithdrawalOpen() ? "⭐ В звёздах Telegram" : "⭐ В звёздах (временно недоступно)", "shop:group:telegram_stars")));
         rows.add(List.of(keyboardFactory.callback("🆘 Нет подходящего способа?", "shop:withdraw:nobank")));
         rows.add(List.of(keyboardFactory.callback("📋 Мои заявки на вывод", "menu:my-withdrawals")));
         rows.add(List.of(keyboardFactory.callback("📊 Лимиты по всем рангам", "shop:ranks")));
@@ -10206,6 +10206,62 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private static final long RUB_FREE_WITHDRAWAL_EXC = 10_000L;
+
+    private static long parseLongSafe(String s) {
+        try {
+            return s == null ? 0 : Long.parseLong(s.trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /** Рублёвый вывод amount EXC в банк bank запрещён: сверх порога 10 000 EXC (за всё время, все способы) можно только в банк-партнёр, где игрок наш реферал (одобрен квест этого банка). Публичный: им пользуется и мини-апп. */
+    public boolean rubDestinationBlocked(AppUser user, long amount, String bankText) {
+        if (rewardService.totalWithdrawnExc(user) + amount <= RUB_FREE_WITHDRAWAL_EXC) return false;
+        java.util.Optional<ru.gamebot.platform.service.WithdrawalPartners.Bank> bank = ru.gamebot.platform.service.WithdrawalPartners.matchBank(bankText);
+        return bank.isEmpty() || !questService.hasApprovedPartnerQuest(user.getId(), bank.get().mission().gameName());
+    }
+
+    /** Экран после ввода суммы и банка: сверх порога выводить можно только в банк, где игрок наш реферал; список банков-офферов, из которых можно взять карту. */
+    private void sendWithdrawalDestinationGate(AppUser user, String bankText) {
+        java.util.Optional<ru.gamebot.platform.service.WithdrawalPartners.Bank> typed = ru.gamebot.platform.service.WithdrawalPartners.matchBank(bankText);
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        List<ru.gamebot.platform.service.WithdrawalPartners.Bank> offers = new ArrayList<>();
+        typed.ifPresent(offers::add);
+        for (ru.gamebot.platform.service.WithdrawalPartners.Bank b : ru.gamebot.platform.service.WithdrawalPartners.ALL) {
+            if (!offers.contains(b)) offers.add(b);
+        }
+        for (ru.gamebot.platform.service.WithdrawalPartners.Bank b : offers) {
+            if (questService.hasApprovedPartnerQuest(user.getId(), b.mission().gameName())) continue;
+            Quest q = questService.findAll().stream().filter(x -> b.mission().questTitle().equals(x.getTitle()) && x.isActive()).findFirst().orElse(null);
+            if (q == null) continue;
+            rows.add(List.of(keyboardFactory.callback("🏦 " + b.title() + ": заказать карту", "quest:viewwd:" + q.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("🤷 У меня уже есть эти банки", "shop:withdraw:nobank")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")));
+        sendText(user.getTelegramId(),
+                "💳 <b>Нужно быть нашим рефералом в этом банке</b>\n\n"
+                        + "Вы уже вывели максимум, доступный без карты (" + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC). "
+                        + "Чтобы вывести дальше, нужно быть нашим рефералом в банке, на который вы хотите получить перевод"
+                        + (bankText == null || bankText.isBlank() ? "" : ": <b>" + escape(bankText) + "</b>") + ".\n\n"
+                        + "Если этот банк у вас уже есть, закажите карту другого банка по нашей ссылке и выводите на неё. Выберите банк:",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Вывод звёздами временно закрыт (05.11.2026, решение владельца): открыть - app_settings 'wd.stars.enabled' = true (scripts/wd-stars-open.sql). Публичный: мини-апп проверяет то же. */
+    public boolean isStarsWithdrawalOpen() {
+        return appSettingRepository.findById("wd.stars.enabled")
+                .map(ru.gamebot.platform.domain.model.AppSetting::getValue)
+                .map(v -> "true".equalsIgnoreCase(v.trim()))
+                .orElse(false);
+    }
+
+    private void sendStarsWithdrawalClosed(AppUser user) {
+        sendText(user.getTelegramId(),
+                "⭐ <b>Вывод звёздами временно недоступен</b>\n\n"
+                        + "Направление не закрыто: мы проводим технические работы. Ожидайте новостей.",
+                keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")))));
+    }
 
     /** Экран «дальше после карты партнёра»: вывод любым способом выше порога 10 000 EXC (рубли, TON, звёзды); kind - rub | ton | stars, для кнопки «вывести до N». */
     private void sendWithdrawalPartnerGate(AppUser user, long room, String kind) {
@@ -11844,6 +11900,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendGroupPicker(AppUser user, String purchaseGroup) {
+        if ("telegram_stars".equals(purchaseGroup) && !isStarsWithdrawalOpen()) {
+            sendStarsWithdrawalClosed(user);
+            return;
+        }
         // "Донат по играм" (покупка гемов за реальные деньги — GRAM/Stars) объединён с обычным
         // магазином наград (покупка за EXC) в одной "папке" по игре (2026-09-20). Сначала показываем
         // выбор способа оплаты (EXC-токены / реальные деньги) и только потом — сами номиналы, а не
@@ -12297,6 +12357,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleRewardPurchase(CallbackQuery callbackQuery, AppUser user, Long rewardId) {
         RewardItem reward = rewardService.getRewardItem(rewardId);
+        if ("telegram_stars".equals(reward.getPurchaseGroup()) && !isStarsWithdrawalOpen()) {
+            answerSilently(callbackQuery.getId());
+            sendStarsWithdrawalClosed(user);
+            return;
+        }
         if ("telegram_stars".equals(reward.getPurchaseGroup())) {
             long starsRoom = withdrawalGateRoomExc(user);
             if (starsRoom >= 0 && rewardService.effectivePrice(reward) > starsRoom) {
@@ -25141,11 +25206,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), "⚠️ Минимальная сумма вывода — <b>5 000 EXC</b>.", cancelKeyboard());
             return;
         }
-        long gateRoom = withdrawalGateRoomExc(user);
-        if (gateRoom >= 0 && amount > gateRoom) {
-            sendWithdrawalPartnerGate(user, gateRoom, "rub");
-            return;
-        }
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
         if (amount > remaining) {
             sendWithdrawalOverLimit(user, remaining, "rub");
@@ -25180,6 +25240,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(),
                     "⚠️ Здесь нужно только <b>название банка</b> (например: <code>Т-Банк</code>). Номер телефона — на следующем шаге.",
                     cancelKeyboard());
+            return;
+        }
+        long bankAmount = parseLongSafe(session.getData().get("withdrawAmount"));
+        if (rubDestinationBlocked(user, bankAmount, bank)) {
+            String origin = session.getData().get(WITHDRAWAL_ORIGIN_KEY);
+            session.reset();
+            if (origin != null) session.getData().put(WITHDRAWAL_ORIGIN_KEY, origin);
+            sendWithdrawalDestinationGate(user, bank);
             return;
         }
         session.getData().put("withdrawBank", bank);
@@ -25250,6 +25318,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         long amount = Long.parseLong(session.getData().get("withdrawAmount"));
         long rubles = Long.parseLong(session.getData().get("withdrawRubles"));
+        if (rubDestinationBlocked(user, amount, bank)) {
+            session.reset();
+            sendWithdrawalDestinationGate(user, bank);
+            return;
+        }
         try {
             RewardRequest withdrawalReq = rewardService.createWithdrawalRequestWithDetails(user, amount, rubles, 0, details);
             session.reset();

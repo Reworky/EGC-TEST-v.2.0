@@ -112,6 +112,12 @@ public class ShopController {
             return ResponseEntity.notFound().build();
         }
 
+        if ("telegram_stars".equals(item.getPurchaseGroup()) && !gamePlatformBot.isStarsWithdrawalOpen()) {
+            return ResponseEntity.ok(ShopActionResponseDto.builder()
+                    .success(false)
+                    .message("Вывод звёздами временно недоступен. Ожидайте новостей.")
+                    .build());
+        }
         if ("telegram_stars".equals(item.getPurchaseGroup())) {
             long starsRoom = gamePlatformBot.withdrawalGateRoomExc(user);
             if (starsRoom >= 0 && rewardService.effectivePrice(item) > starsRoom) {
