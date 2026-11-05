@@ -10241,14 +10241,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!referralIn.isEmpty() && single) {
             rows.add(List.of(keyboardFactory.callback("🔁 Начать вывод заново", "shop:withdraw")));
             text = "💳 <b>Вывод — только на карту " + escape(namesGen) + "</b>\n\n"
-                    + "Вы уже наш реферал в банке «" + escape(names) + "». Для вывода введите банк «" + escape(names)
+                    + "Вы уже оформили карту " + escape(namesGen) + " по нашей ссылке. Для вывода введите банк «" + escape(names)
                     + "» и номер телефона, привязанный к вашей карте.";
         } else if (single) {
+            long freeLeft = Math.max(0, RUB_FREE_WITHDRAWAL_EXC - rewardService.totalWithdrawnExc(user));
+            if (freeLeft >= ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) {
+                rows.add(List.of(keyboardFactory.callback("⏭️ Вывести до " + fmtExc(freeLeft) + " EXC без карты", "shop:withdraw:rubgo")));
+            }
             rows.add(List.of(keyboardFactory.callback("🤷 У меня уже есть " + names, "shop:withdraw:nobank")));
+            String intro = freeLeft > 0
+                    ? "Без карты можно вывести в сумме до " + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC, у вас осталось <b>" + fmtExc(freeLeft) + " EXC</b>. "
+                            + "Эта заявка больше остатка. Вы можете вывести до " + fmtExc(freeLeft) + " EXC в любой банк, а всё, что сверх этого, "
+                            + "выводится только на карту " + escape(namesGen) + ": оформите её по нашей ссылке и получайте деньги на неё.\n\n"
+                    : "Вы уже вывели максимум, доступный без карты (" + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC). "
+                            + "Дальше мы выводим деньги только на вашу карту " + escape(namesGen) + ": оформите её по нашей ссылке и получайте деньги на неё.\n\n";
             text = "💳 <b>Вывод этой суммы — только на карту " + escape(namesGen) + "</b>\n\n"
-                    + "Вы уже вывели максимум, доступный без карты (" + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC). "
-                    + "Дальше мы выводим деньги только на вашу карту " + escape(namesGen) + ": для этого нужно стать нашим рефералом в банке, "
-                    + "заказать карту по нашей ссылке и принимать деньги на неё.\n\n"
+                    + intro
                     + "Скоро добавим больше банков, чтобы у вас был выбор.";
         } else {
             rows.add(List.of(keyboardFactory.callback("🤷 У меня уже есть эти банки", "shop:withdraw:nobank")));
@@ -25243,11 +25251,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String partnerExample = partnerBanks.get(0).title();
         String bankIntro = partnerOnly
                 ? "Перевод идёт по <b>СБП</b>. Эта сумма выводится <b>только на карту " + escape(partnerNames) + "</b>: сверх "
-                        + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC мы переводим только в банк, где вы наш реферал.\n\n"
+                        + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC мы переводим только на карту банка, оформленную по нашей ссылке.\n\n"
                 : "Перевод идёт по <b>СБП</b>, поэтому подойдёт <b>любой банк</b> (Т-Банк, Сбербанк, Альфа-Банк, ВТБ и другие).\n\n";
         sendText(user.getTelegramId(),
                 "🏦 <b>Шаг 1 из 2: банк</b>\n\n"
-                        + "💸 Сумма: <b>" + amount + " EXC → ~" + rubles + " ₽</b>\n"
+                        + "💸 Сумма: <b>" + fmtExc(amount) + " EXC → ~" + rubles + " ₽</b>\n"
                         + "💱 Курс: <b>" + rateString(ratioPercent) + "</b>\n\n"
                         + bankIntro
                         + "Напишите <b>название " + (partnerOnly ? "банка" : "вашего банка") + "</b>.\n\n"
