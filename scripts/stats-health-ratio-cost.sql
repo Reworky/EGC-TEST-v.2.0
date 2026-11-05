@@ -8,9 +8,11 @@ SELECT ratio, payout_pool_rub AS pool_rub, total_debt_exc AS debt_exc, (total_de
 FROM health_ratio_snapshots ORDER BY calculated_at DESC LIMIT 1;
 
 -- Куда реально уходит EXC: балансы по группам (активные за 30 дней и остальные), чтобы понять, сколько долга «живого»
-SELECT CASE WHEN GREATEST(COALESCE(last_activity_date, DATE '2000-01-01'),
-                           CAST(COALESCE(last_bot_activity_at, TIMESTAMP '2000-01-01 00:00:00') AS DATE),
-                           CAST(COALESCE(last_mini_app_open_at, TIMESTAMP '2000-01-01 00:00:00') AS DATE)) >= DATEADD('DAY', -30, CURRENT_DATE)
-            THEN 'активны 30 дн.' ELSE 'неактивны' END AS grp,
-       COUNT(*) AS players, SUM(coins) AS exc_total, ROUND(SUM(coins) / 100) AS exc_rub_nominal
-FROM app_users WHERE coins > 0 GROUP BY 1;
+SELECT grp, COUNT(*) AS players, SUM(coins) AS exc_total, ROUND(SUM(coins) / 100) AS exc_rub_nominal FROM (
+  SELECT coins,
+    CASE WHEN GREATEST(COALESCE(last_activity_date, DATE '2000-01-01'),
+                       CAST(COALESCE(last_bot_activity_at, TIMESTAMP '2000-01-01 00:00:00') AS DATE),
+                       CAST(COALESCE(last_mini_app_open_at, TIMESTAMP '2000-01-01 00:00:00') AS DATE)) >= DATEADD('DAY', -30, CURRENT_DATE)
+         THEN 'активны 30 дн.' ELSE 'неактивны' END AS grp
+  FROM app_users WHERE coins > 0
+) x GROUP BY grp;
