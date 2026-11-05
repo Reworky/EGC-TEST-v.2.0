@@ -2,6 +2,7 @@ package ru.gamebot.platform.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.net.CookieManager;
@@ -121,6 +122,16 @@ public class VpnPanelClient {
         merged.remove("traffic");
         merged.remove("createdAt");
         merged.remove("updatedAt");
+        // 05.11: список клиентов отдаёт allowedIPs строкой, а update ждёт массив строк («cannot unmarshal string into ... allowedIPs of type []string») - приводим к массиву
+        JsonNode allowed = merged.get("allowedIPs");
+        if (allowed != null && !allowed.isArray()) {
+            ArrayNode allowedArr = merged.putArray("allowedIPs");
+            if (allowed.isTextual()) {
+                for (String ip : allowed.asText().split(",")) {
+                    if (!ip.isBlank()) allowedArr.add(ip.trim());
+                }
+            }
+        }
         merged.put("totalGB", spec.totalBytes());
         merged.put("expiryTime", spec.expiryMs());
         merged.put("limitIp", spec.limitIp());
