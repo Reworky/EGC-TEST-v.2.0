@@ -241,6 +241,10 @@ public class WalletController {
         }
         ShopActionResponseDto validation = validateAmount(user, body.getAmount());
         if (validation != null) return ResponseEntity.ok(validation);
+        long gateRoom = gamePlatformBot.rubGateRoomExc(user);
+        if (gateRoom >= 0 && body.getAmount() > gateRoom) {
+            return errorResponse("Рубли сверх первых 10 000 EXC выводятся на карту банка-партнёра: откройте «Вывод EXC → В рублях» в боте. TON и звёзды доступны без ограничения.");
+        }
         if (rewardService.hasWithdrawalTodayOrPending(user)) {
             return errorResponse("Лимит: 1 заявка на вывод в сутки. Следующую можно создать через 24 часа после предыдущей.");
         }

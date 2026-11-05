@@ -20,6 +20,8 @@ public class AppProperties {
 
     private String clubName = "Game Quest Club";
     private String supportUsername = "support_manager";
+    /** Username VPN-бота (VPN2_BOT_USERNAME) для кнопки «потратить звёзды на VPN» в выводе; пусто - кнопки нет. */
+    private String vpn2BotUsername = "";
     private Set<Long> adminIds = new HashSet<>();
     private Set<Long> moderatorIds = new HashSet<>();
     private String adminIdsRaw = "";

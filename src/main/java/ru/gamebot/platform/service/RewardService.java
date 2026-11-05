@@ -370,6 +370,11 @@ public class RewardService {
         return new java.util.HashSet<>(rewardRequestRepository.findUserIdsWithPaidWithdrawals());
     }
 
+    /** EXC, выведенные игроком за всё время любым способом (без отклонённых и отменённых заявок). */
+    public long totalWithdrawnExc(AppUser user) {
+        return rewardRequestRepository.sumActiveWithdrawalExcByUser(user);
+    }
+
     public boolean hasWithdrawalTodayOrPending(AppUser user) {
         LocalDateTime since = LocalDateTime.now().minusHours(24);
         return rewardRequestRepository.countWithdrawalsByUserSince(user, since) > 0

@@ -1623,8 +1623,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendOtpWithdrawalOffer(user);
             return;
         }
+        if (data.equals("shop:withdraw:nobank")) {
+            answerSilently(callbackQuery.getId());
+            sendWithdrawalNoBankHelp(user);
+            return;
+        }
         if (data.equals("shop:withdraw:rub")) {
             answerSilently(callbackQuery.getId());
+            long gateRoom = rubGateRoomExc(user);
+            if (gateRoom >= 0 && gateRoom < ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) {
+                sendRubPartnerGate(user, gateRoom);
+                return;
+            }
             // Предложение вывести на карту партнёра - только тем, у кого баланс больше остатка лимита (иначе карта им ничего не даёт) и кто квест ещё не выполнил
             long overLimit = withdrawalOverLimitExc(user);
             if (overLimit > 0 && cardOfferQuestFor(user) != null) {
@@ -1678,9 +1688,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendWithdrawalTonAmountScreen(user);
             return;
         }
-        if (data.equals("shop:withdraw:ton:no_wallet")) {
+        if (data.equals("shop:withdraw:ton:no_wallet") || data.equals("shop:withdraw:ton:w:wallet")) {
             answerSilently(callbackQuery.getId());
             sendWithdrawalTonNoWalletGuide(user);
+            return;
+        }
+        if (data.equals("shop:withdraw:ton:w:cb")) {
+            answerSilently(callbackQuery.getId());
+            sendWithdrawalTonCryptoBotGuide(user);
             return;
         }
         if (data.startsWith("shop:view:")) {
@@ -10136,6 +10151,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("💸 В рублях (СБП, любой банк)", "shop:withdraw:rub")));
         rows.add(List.of(keyboardFactory.callback("💎 В TON (Telegram Wallet)", "shop:withdraw:ton")));
         rows.add(List.of(keyboardFactory.callback("⭐ В звёздах Telegram", "shop:group:telegram_stars")));
+        rows.add(List.of(keyboardFactory.callback("🆘 Нет подходящего способа?", "shop:withdraw:nobank")));
         rows.add(List.of(keyboardFactory.callback("📋 Мои заявки на вывод", "menu:my-withdrawals")));
         rows.add(List.of(keyboardFactory.callback("📊 Лимиты по всем рангам", "shop:ranks")));
         rows.add(List.of(keyboardFactory.callback("💸 Лента выплат", "menu:payouts")));
@@ -10146,10 +10162,69 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendWithdrawalTonWalletQuestion(AppUser user) {
         sendText(user.getTelegramId(),
-                "💎 <b>Вывод в TON</b>\n\nЕсть ли у вас кошелёк в Telegram Wallet (@wallet)?",
+                "💎 <b>Вывод в TON</b>\n\nКуда будете получать TON?",
                 keyboardFactory.rowsLayout(List.of(
-                        List.of(keyboardFactory.callback("✅ Да, есть кошелёк", "shop:withdraw:ton:has_wallet")),
-                        List.of(keyboardFactory.callback("❌ Нет кошелька", "shop:withdraw:ton:no_wallet")),
+                        List.of(keyboardFactory.callback("👛 Telegram Wallet", "shop:withdraw:ton:w:wallet")),
+                        List.of(keyboardFactory.callback("🤖 CryptoBot", "shop:withdraw:ton:w:cb")),
+                        List.of(keyboardFactory.callback("✅ У меня уже есть адрес", "shop:withdraw:ton:has_wallet")),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw"))
+                )));
+    }
+
+    /** Гайд для CryptoBot (реферальная ссылка владельца, 05.11.2026): так же, как для Telegram Wallet, но другой кошелёк. */
+    private void sendWithdrawalTonCryptoBotGuide(AppUser user) {
+        sendText(user.getTelegramId(),
+                "🤖 <b>Как открыть CryptoBot</b>\n\n"
+                        + "1. Нажми кнопку ниже, откроется <b>@CryptoBot</b>\n"
+                        + "2. Нажми Start и пройди короткую регистрацию\n"
+                        + "3. Открой «Кошелёк» → TON → «Пополнить» и скопируй адрес для пополнения\n"
+                        + "4. Вернись сюда и нажми <b>«У меня есть кошелёк»</b>",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.url("🚀 Открыть CryptoBot", "https://t.me/send?start=r-rh397")),
+                        List.of(keyboardFactory.callback("✅ У меня есть кошелёк", "shop:withdraw:ton:has_wallet")),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw"))
+                )));
+    }
+
+    /** Свободный остаток порога вывода рублями (EXC) до обязательной карты партнёра: -1 - порога нет (есть одобренный партнёрский квест). Порог считает выводы любым способом. */
+    public long rubGateRoomExc(AppUser user) {
+        if (questService.hasApprovedPartnerQuest(user.getId())) return -1;
+        return Math.max(0, RUB_FREE_WITHDRAWAL_EXC - rewardService.totalWithdrawnExc(user));
+    }
+
+    private static final long RUB_FREE_WITHDRAWAL_EXC = 10_000L;
+
+    /** Экран «дальше только на карту партнёра» (рублёвый вывод выше порога 10 000 EXC). */
+    private void sendRubPartnerGate(AppUser user, long room) {
+        Quest quest = cardOfferQuestFor(user);
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (quest != null) {
+            rows.add(List.of(keyboardFactory.callback("🚀 Хочу карту ОТП", "quest:viewwd:" + quest.getId())));
+        }
+        if (room >= ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) {
+            rows.add(List.of(keyboardFactory.callback("⏭️ Вывести до " + fmtExc(room) + " EXC в рублях", "shop:withdraw:rubgo")));
+        }
+        rows.add(List.of(keyboardFactory.callback("💎 Вывести в TON", "shop:withdraw:ton")));
+        rows.add(List.of(keyboardFactory.callback("🤷 У меня уже есть эти банки", "shop:withdraw:nobank")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")));
+        sendText(user.getTelegramId(),
+                "💳 <b>Дальше — на карту нашего банка-партнёра</b>\n\n"
+                        + "Первые " + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC можно выводить куда угодно"
+                        + (room > 0 ? ", у тебя осталось <b>" + fmtExc(room) + " EXC</b>" : "") + ". "
+                        + "Дальше рубли выводятся на карту банка, оформленную по нашей ссылке: это бесплатно, и за квест ты получаешь награду.\n\n"
+                        + "TON и звёзды без этого ограничения.",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    /** «Нет подходящего способа / эти банки уже есть»: письмо менеджеру с ID и балансом, он подберёт другой банк или способ вывода. */
+    private void sendWithdrawalNoBankHelp(AppUser user) {
+        String text = "Здравствуйте! У меня уже есть эти банки, помогите подобрать способ вывода. Мой ID: " + user.getTelegramId() + ", баланс " + user.getCoins() + " EXC";
+        String encoded = java.net.URLEncoder.encode(text, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
+        sendText(user.getTelegramId(),
+                "🤝 <b>Подберём способ именно для вас</b>\n\n"
+                        + "Если нужные банки у вас уже есть, напишите менеджеру: подскажем другой банк или удобный способ вывода.",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.url("💬 Написать менеджеру", "https://t.me/" + appProperties.getSupportUsername() + "?text=" + encoded)),
                         List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw"))
                 )));
     }
@@ -11862,8 +11937,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String backTarget = !GemPurchaseService.packagesFor(purchaseGroup).isEmpty() ? "shop:group:" + purchaseGroup
                 : "telegram_stars".equals(purchaseGroup) ? "shop:withdraw"
                 : "Кастомизация".equals(items.get(0).getCategory()) ? "sink:cat:customization" : "menu:shop";
+        String vpnBot = appProperties.getVpn2BotUsername() == null ? "" : appProperties.getVpn2BotUsername().trim().replaceFirst("^@", "");
+        boolean vpnHint = "telegram_stars".equals(purchaseGroup) && !vpnBot.isEmpty();
+        if (vpnHint) {
+            rows.add(List.of(keyboardFactory.url("🔐 Открыть EGC VPN", "https://t.me/" + vpnBot + "?start=from_egc")));
+        }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", backTarget), keyboardFactory.callback("🏠 Меню", "menu:main")));
-        String denominationText = "🎁 <b>" + escape(groupLabel) + "</b>\n\nВыберите номинал:";
+        String denominationText = "🎁 <b>" + escape(groupLabel) + "</b>\n\nВыберите номинал:"
+                + (vpnHint ? "\n\n⭐ Выведенные звёзды можно сразу потратить на EGC VPN: месяц — 89 ⭐." : "");
         if ("telegram_stars".equals(purchaseGroup)) {
             sendStarsBanner(user.getTelegramId(), denominationText, keyboardFactory.rowsLayout(rows));
             return;
@@ -25025,6 +25106,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (amount < 5000) {
             sendText(user.getTelegramId(), "⚠️ Минимальная сумма вывода — <b>5 000 EXC</b>.", cancelKeyboard());
+            return;
+        }
+        long gateRoom = rubGateRoomExc(user);
+        if (gateRoom >= 0 && amount > gateRoom) {
+            sendRubPartnerGate(user, gateRoom);
             return;
         }
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);

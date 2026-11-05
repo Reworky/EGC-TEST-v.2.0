@@ -33,6 +33,10 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
     @Query("SELECT COUNT(r) FROM RewardRequest r WHERE r.user = :user AND r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED'")
     long countPaidWithdrawalsByUser(@Param("user") AppUser user);
 
+    /** Сколько EXC игрок вывел за всё время любым способом (рубли, TON, звёзды): заявки на вывод, кроме отклонённых и отменённых. Порог 10 000 EXC для рублей на карту партнёра (05.11.2026). */
+    @Query("SELECT COALESCE(SUM(COALESCE(r.paidPriceCoins, r.rewardItem.priceCoins)), 0) FROM RewardRequest r WHERE r.user = :user AND r.rewardItem.category = 'Вывод' AND r.status <> 'REJECTED' AND r.status <> 'CANCELLED'")
+    long sumActiveWithdrawalExcByUser(@Param("user") AppUser user);
+
     /** Живые заявки на вывод ДРУГИХ игроков с реквизитами — для проверки «реквизиты уже используются другим аккаунтом». */
     @Query("SELECT r FROM RewardRequest r JOIN FETCH r.user JOIN FETCH r.rewardItem ri WHERE ri.category = 'Вывод' AND r.payoutDetails IS NOT NULL "
             + "AND r.user.id <> :userId AND r.status IN ('PENDING', 'IN_PROGRESS', 'APPROVED')")
