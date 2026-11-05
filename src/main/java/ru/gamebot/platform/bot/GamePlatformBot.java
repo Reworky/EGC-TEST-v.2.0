@@ -25236,13 +25236,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         session.getData().put("withdrawRubles", String.valueOf(rubles));
         session.getData().put("withdrawQuoteAt", String.valueOf(System.currentTimeMillis()));
         session.setState(SessionState.WITHDRAWAL_BANK);
+        // Сверх порога 10 000 EXC выводим только в банк-партнёр (сейчас ОТП Банк): предупреждаем до ввода банка, а не после
+        boolean partnerOnly = rewardService.totalWithdrawnExc(user) + amount > RUB_FREE_WITHDRAWAL_EXC;
+        java.util.List<ru.gamebot.platform.service.WithdrawalPartners.Bank> partnerBanks = ru.gamebot.platform.service.WithdrawalPartners.ALL;
+        String partnerNames = partnerBanks.stream().map(ru.gamebot.platform.service.WithdrawalPartners.Bank::genitive).collect(java.util.stream.Collectors.joining(", "));
+        String partnerExample = partnerBanks.get(0).title();
+        String bankIntro = partnerOnly
+                ? "Перевод идёт по <b>СБП</b>. Эта сумма выводится <b>только на карту " + escape(partnerNames) + "</b>: сверх "
+                        + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC мы переводим только в банк, где вы наш реферал.\n\n"
+                : "Перевод идёт по <b>СБП</b>, поэтому подойдёт <b>любой банк</b> (Т-Банк, Сбербанк, Альфа-Банк, ВТБ и другие).\n\n";
         sendText(user.getTelegramId(),
                 "🏦 <b>Шаг 1 из 2: банк</b>\n\n"
                         + "💸 Сумма: <b>" + amount + " EXC → ~" + rubles + " ₽</b>\n"
                         + "💱 Курс: <b>" + rateString(ratioPercent) + "</b>\n\n"
-                        + "Перевод идёт по <b>СБП</b>, поэтому подойдёт <b>любой банк</b> (Т-Банк, Сбербанк, Альфа-Банк, ВТБ и другие).\n\n"
-                        + "Напишите <b>название вашего банка</b>.\n\n"
-                        + "Пример: <code>Т-Банк</code>\n\n"
+                        + bankIntro
+                        + "Напишите <b>название " + (partnerOnly ? "банка" : "вашего банка") + "</b>.\n\n"
+                        + "Пример: <code>" + escape(partnerOnly ? partnerExample : "Т-Банк") + "</code>\n\n"
                         + "<i>*Важно: номер телефона на следующем шаге должен быть привязан к этому банку в СБП.</i>",
                 cancelKeyboard());
     }
