@@ -1623,26 +1623,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendOtpWithdrawalOffer(user);
             return;
         }
-        if (data.equals("shop:withdraw:haveotp")) {
-            answerSilently(callbackQuery.getId());
-            if (session.getData().get("withdrawAmount") == null || session.getData().get("withdrawRubles") == null
-                    || session.getData().get("withdrawQuoteAt") == null) {
-                session.reset();
-                sendText(user.getTelegramId(), "⚠️ Начните вывод заново.", backMenuKeyboard("shop:withdraw"));
-                return;
-            }
-            String otpTitle = ru.gamebot.platform.service.WithdrawalPartners.OTP.title();
-            session.getData().put("withdrawBank", otpTitle);
-            session.getData().put("withdrawOtpOverride", "1");
-            session.setState(SessionState.WITHDRAWAL_DETAILS);
-            sendText(user.getTelegramId(),
-                    "📱 <b>Шаг 2 из 2: номер телефона</b>\n\n"
-                            + "🏦 Банк: <b>" + escape(otpTitle) + "</b>\n\n"
-                            + "Введите <b>номер телефона</b>, к которому привязана ваша карта " + escape(ru.gamebot.platform.service.WithdrawalPartners.OTP.genitive()) + " по СБП.\n\n"
-                            + "Пример: <code>+7 900 123 45 67</code>",
-                    cancelKeyboard());
-            return;
-        }
         if (data.equals("shop:withdraw:nobank")) {
             answerSilently(callbackQuery.getId());
             sendWithdrawalNoBankHelp(user);
@@ -10264,7 +10244,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "Вы уже наш реферал в банке «" + escape(names) + "». Для вывода введите банк «" + escape(names)
                     + "» и номер телефона, привязанный к вашей карте.";
         } else if (single) {
-            rows.add(List.of(keyboardFactory.callback("✅ У меня уже есть " + names, "shop:withdraw:haveotp")));
+            rows.add(List.of(keyboardFactory.callback("🤷 У меня уже есть " + names, "shop:withdraw:nobank")));
             text = "💳 <b>Вывод этой суммы — только на карту " + escape(namesGen) + "</b>\n\n"
                     + "Вы уже вывели максимум, доступный без карты (" + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC). "
                     + "Дальше мы выводим деньги только на вашу карту " + escape(namesGen) + ": для этого нужно стать нашим рефералом в банке, "
@@ -25287,18 +25267,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         long bankAmount = parseLongSafe(session.getData().get("withdrawAmount"));
         if (rubDestinationBlocked(user, bankAmount, bank)) {
-            // сумма и котировка сохраняются: кнопка «У меня уже есть ОТП Банк» продолжает вывод с этого места
             String origin = session.getData().get(WITHDRAWAL_ORIGIN_KEY);
-            String keepAmount = session.getData().get("withdrawAmount");
-            String keepRubles = session.getData().get("withdrawRubles");
-            String keepQuote = session.getData().get("withdrawQuoteAt");
             session.reset();
             if (origin != null) session.getData().put(WITHDRAWAL_ORIGIN_KEY, origin);
-            if (keepAmount != null && keepRubles != null && keepQuote != null) {
-                session.getData().put("withdrawAmount", keepAmount);
-                session.getData().put("withdrawRubles", keepRubles);
-                session.getData().put("withdrawQuoteAt", keepQuote);
-            }
             sendWithdrawalDestinationGate(user, bank);
             return;
         }
@@ -25370,8 +25341,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         long amount = Long.parseLong(session.getData().get("withdrawAmount"));
         long rubles = Long.parseLong(session.getData().get("withdrawRubles"));
-        boolean haveOtpOverride = "1".equals(session.getData().get("withdrawOtpOverride"));
-        if (!haveOtpOverride && rubDestinationBlocked(user, amount, bank)) {
+        if (rubDestinationBlocked(user, amount, bank)) {
             session.reset();
             sendWithdrawalDestinationGate(user, bank);
             return;
@@ -25379,18 +25349,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             RewardRequest withdrawalReq = rewardService.createWithdrawalRequestWithDetails(user, amount, rubles, 0, details);
             session.reset();
-            if (haveOtpOverride) {
-                // игрок сам заявил, что уже клиент ОТП Банка (не реферал по квесту): модератору видно, что проверка реферала пропущена
-                String note = "⚠️ <b>Вывод В-" + reqDisplayId(withdrawalReq) + "</b>: игрок <code>" + user.getTelegramId()
-                        + "</code> заявил, что уже клиент ОТП Банка (квест не выполнял), сумма " + amount + " EXC сверх порога. Проверка реферала пропущена по его слову.";
-                for (Long modId : adminService.allModeratorIds()) {
-                    try {
-                        sendText(modId, note, null);
-                    } catch (Exception e) {
-                        log.warn("Failed to notify moderator {} about override withdrawal", modId, e);
-                    }
-                }
-            }
             sendText(user.getTelegramId(),
                 "✅ <b>Заявка на вывод принята!</b>\n\n"
                     + "🔢 Номер заявки: <b>В-" + reqDisplayId(withdrawalReq) + "</b>\n"
