@@ -12130,6 +12130,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendStarsBanner(user.getTelegramId(), denominationText, keyboardFactory.rowsLayout(rows));
             return;
         }
+        // Тот же баннер, что на экране выбора способа оплаты (05.11.2026, просьба владельца)
+        if ("brawl_stars".equals(purchaseGroup)) {
+            sendResourceBanner(user.getTelegramId(), "brawl_gems_banner.png", denominationText, keyboardFactory.rowsLayout(rows));
+            return;
+        }
         sendText(user.getTelegramId(), denominationText, keyboardFactory.rowsLayout(rows));
     }
 
