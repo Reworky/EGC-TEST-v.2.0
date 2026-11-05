@@ -12002,44 +12002,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // мешаем денежный и токен-пикер в одном списке — пользователь запутывался (2026-09-20, второй
         // раунд правки). Генерализовано под любую игру с донат-каталогом (GemPurchaseService.packagesFor),
         // не только Brawl Stars (был хардкод, снят при добавлении Clash Royale тем же вечером).
+        // Игры с донатом: один список номиналов с ценами в EXC и в рублях (06.11.2026, владелец), способ оплаты - уже в карточке пакета
         if (!GemPurchaseService.packagesFor(purchaseGroup).isEmpty()) {
-            List<RewardItem> items = rewardService.findByPurchaseGroup(purchaseGroup);
-            if (items.isEmpty()) { sendShop(user); return; }
-            String groupLabel = groupItemLabel(items.get(0).getTitle());
-            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-            rows.add(List.of(keyboardFactory.callback("🪙 Купить за токены EXC — выбор номинала", "shop:excgroup:" + purchaseGroup)));
-            rows.add(List.of(keyboardFactory.callback("💰 Купить за Telegram Stars/GRAM", "shop:donate:" + purchaseGroup)));
-            // "Назад" ведёт в выбор ТИПА товара (Гемы/Пропуски), если он есть у этой игры — иначе сразу
-            // в общий Магазин наград (см. sendGameCategoryPicker/hasMultipleDonationProductTypes).
-            String backTarget = hasMultipleDonationProductTypes(purchaseGroup) ? "shop:gamecat:" + purchaseGroup
-                    : "steam_topup".equals(purchaseGroup) ? "shop:cs2" : "menu:shop";
-            rows.add(List.of(keyboardFactory.callback("⬅️ Назад", backTarget), keyboardFactory.callback("🏠 Меню", "menu:main")));
-            String payMethodText = "🎁 <b>" + escape(groupLabel) + "</b>\n\nВыберите способ оплаты:";
-            if ("brawl_stars".equals(purchaseGroup)) {
-                sendResourceBanner(user.getTelegramId(), "brawl_gems_banner.png", payMethodText, keyboardFactory.rowsLayout(rows));
-                return;
-            }
-            if ("clash_royale".equals(purchaseGroup)) {
-                sendResourceBanner(user.getTelegramId(), "cr_gems_banner.jpg", payMethodText, keyboardFactory.rowsLayout(rows));
-                return;
-            }
-            if ("clash_of_clans".equals(purchaseGroup)) {
-                sendResourceBanner(user.getTelegramId(), "coc_gems_banner.jpg", payMethodText, keyboardFactory.rowsLayout(rows));
-                return;
-            }
-            if ("pubg_pc".equals(purchaseGroup)) {
-                sendResourceBanner(user.getTelegramId(), "pubg_pc_gcoin_banner.jpg", payMethodText, keyboardFactory.rowsLayout(rows));
-                return;
-            }
-            if ("pubg_mobile".equals(purchaseGroup)) {
-                sendResourceBanner(user.getTelegramId(), "pubg_mobile_uc_banner.jpg", payMethodText, keyboardFactory.rowsLayout(rows));
-                return;
-            }
-            if ("steam_topup".equals(purchaseGroup)) {
-                sendResourceBanner(user.getTelegramId(), "steam_balance_banner.jpg", payMethodText, keyboardFactory.rowsLayout(rows));
-                return;
-            }
-            sendText(user.getTelegramId(), payMethodText, keyboardFactory.rowsLayout(rows));
+            sendGemPackageList(user, purchaseGroup);
             return;
         }
         sendExcDenominationPicker(user, purchaseGroup);
@@ -26157,12 +26122,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (GemPurchaseService.GemPackage pkg : currency) {
             long price = gemPurchasePriceFor(user, pkg);
             String priceLabel = passActive ? price + "₽ (закупка, EGC Pass)" : price + "₽";
+            RewardItem excItem = findExcItemForPackage(gameKey, pkg);
+            String excPart = excItem != null ? fmtExc(healthRatioService.effectivePriceFor(user, excItem)) + " EXC · " : "";
             rows.add(List.of(keyboardFactory.callback(
-                    pkg.displayLabel() + " — " + priceLabel + " (+" + pkg.xpBonus() + " XP)",
+                    pkg.displayLabel() + " — " + excPart + priceLabel,
                     "gemdonate:pkg:" + gameKey + ":" + pkg.key())));
         }
         rows.add(List.of(
-                keyboardFactory.callback("⬅️ Назад", "shop:group:" + gameKey),
+                keyboardFactory.callback("⬅️ Назад", hasMultipleDonationProductTypes(gameKey) ? "shop:gamecat:" + gameKey
+                        : "steam_topup".equals(gameKey) ? "shop:cs2" : "menu:shop"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
         String tag = gemPurchaseGameTag(user, gameKey);
@@ -26175,13 +26143,40 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String passNote = passActive
                 ? "\n⭐ Вы EGC Pass — цены ниже, без наценки клуба.\n"
                 : "";
-        sendText(user.getTelegramId(),
-                "💎 <b>Донат " + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\n"
+        String listText = "🎁 <b>" + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\n"
                         + (steam ? "Выберите сумму пополнения баланса Steam" : "Выберите пакет " + ("pubg_pc".equals(gameKey) ? "G-Coins" : pubg ? "UC" : "гемов")) + accountLine + passNote + "\n\n"
-                        + "К каждой покупке — бонус XP\n\n"
+                        + "В каждой строке цена в EXC и в рублях. За рубли к покупке — бонус XP.\n\n"
                         + "⚠️ Заявка обрабатывается вручную, зачисление может занять время.\n\n"
-                        + gemPurchaseWarning(gameKey),
-                keyboardFactory.rowsLayout(rows));
+                        + gemPurchaseWarning(gameKey);
+        String listBanner = gameBannerResource(gameKey);
+        if (listBanner != null) {
+            sendResourceBanner(user.getTelegramId(), listBanner, listText, keyboardFactory.rowsLayout(rows));
+        } else {
+            sendText(user.getTelegramId(), listText, keyboardFactory.rowsLayout(rows));
+        }
+    }
+
+    /** Баннер раздела игры (тот же, что на экранах выбора номинала); null - у игры баннера нет. */
+    private String gameBannerResource(String gameKey) {
+        return switch (gameKey) {
+            case "brawl_stars" -> "brawl_gems_banner.png";
+            case "clash_royale" -> "cr_gems_banner.jpg";
+            case "clash_of_clans" -> "coc_gems_banner.jpg";
+            case "pubg_pc" -> "pubg_pc_gcoin_banner.jpg";
+            case "pubg_mobile" -> "pubg_mobile_uc_banner.jpg";
+            case "steam_topup" -> "steam_balance_banner.jpg";
+            default -> null;
+        };
+    }
+
+    /** Позиция магазина за EXC, соответствующая донат-пакету (по числу в конце названия: «Brawl Stars - Gems 30» = пакет на 30); null - EXC-варианта нет. */
+    private RewardItem findExcItemForPackage(String gameKey, GemPurchaseService.GemPackage pkg) {
+        if (pkg.gems() <= 0) return null;
+        for (RewardItem item : rewardService.findByPurchaseGroup(gameKey)) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)\\s*$").matcher(item.getTitle() == null ? "" : item.getTitle());
+            if (m.find() && Long.parseLong(m.group(1)) == pkg.gems()) return item;
+        }
+        return null;
     }
 
     private void startGemPurchase(AppUser user, UserSession session, String gameKey, String packageKey) {
@@ -26316,6 +26311,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("💎 GRAM (TON) — ~" + tonAmount + " TON (через менеджера)", "gemdonate:method:TON:" + gameKey + ":" + pkg.key())),
                 List.of(keyboardFactory.callback("❌ Отмена", gemDonateBackTarget(gameKey, pkg)))
         ));
+        // Оплата EXC первой строкой, если у пакета есть EXC-позиция; недоступная (лимит, ранг) ведёт в карточку со статусом
+        RewardItem excPayItem = findExcItemForPackage(gameKey, pkg);
+        if (excPayItem != null) {
+            long excPayPrice = healthRatioService.effectivePriceFor(user, excPayItem);
+            boolean excAvailable = shopLimitService.getItemStatus(user, excPayItem).startsWith("✅");
+            rows.add(0, List.of(keyboardFactory.callback(
+                    excAvailable ? "🪙 Заплатить " + fmtExc(excPayPrice) + " EXC" : "🪙 " + fmtExc(excPayPrice) + " EXC — недоступно",
+                    (excAvailable ? "shop:buy:" : "shop:view:") + excPayItem.getId())));
+        }
         String passNote = price < pkg.priceRub() ? " <i>(закупочная цена, EGC Pass)</i>" : "";
         // Продажа EGC Pass тем, у кого его нет: честная экономия на ЭТОЙ покупке (цифры реальные: закупка поставщика без наценки клуба)
         long passSaving = pkg.priceRub() - pkg.costRub();
