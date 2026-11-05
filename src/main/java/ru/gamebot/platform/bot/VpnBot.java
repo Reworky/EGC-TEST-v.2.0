@@ -990,13 +990,75 @@ public class VpnBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("🏦 " + t.getTitle() + ": " + t.getPriceRub() + " ₽", "m:cardt:" + t.getKey())));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Способы оплаты", "m:pay")));
+        if (vpn.isCardManagerMode()) {
+            show(uid, oldMsgId, "🏦 <b>Оплата рублями (карта / СБП)</b>\n\nРеквизиты вам пришлёт менеджер лично. Выберите срок:", rows);
+            return;
+        }
         show(uid, oldMsgId, "🏦 <b>Перевод рублями (карта / СБП)</b>\n\nВыберите срок, мы покажем реквизиты. После перевода пришлите чек, и ключ придёт после проверки.", rows);
+    }
+
+    private String cardManagerUsername() {
+        return vpn.getManagerUsername().isBlank() ? appProperties.getSupportUsername() : vpn.getManagerUsername();
+    }
+
+    /** Экран оплаты рублями через менеджера: четыре шага и кнопка «Написать менеджеру» с готовым текстом. */
+    private void showCardManagerScreen(Long uid, Integer oldMsgId, Tariff t) {
+        String manager = cardManagerUsername();
+        String text = "Здравствуйте! Хочу оплатить VPN на " + t.getTitle().toLowerCase() + " (" + t.getPriceRub() + " ₽) переводом. Мой ID: " + uid + ". Пришлите, пожалуйста, реквизиты.";
+        String encoded = URLEncoder.encode(text, StandardCharsets.UTF_8).replace("+", "%20");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.url("💬 Написать менеджеру", "https://t.me/" + manager + "?text=" + encoded)));
+        rows.add(List.of(keyboardFactory.callback("❌ Отмена", "m:cardcancel")));
+        show(uid, oldMsgId, "🏦 <b>Оплата рублями: " + escape(t.getTitle()) + ", " + t.getPriceRub() + " ₽</b>\n\n"
+                + "1️⃣ Нажмите «Написать менеджеру», сообщение уже готово, останется отправить.\n"
+                + "2️⃣ Менеджер пришлёт реквизиты (карта или СБП).\n"
+                + "3️⃣ Переведите и отправьте менеджеру чек.\n"
+                + "4️⃣ Ключ придёт сюда, в этот бот, обычно в течение нескольких часов.\n\n"
+                + "⚠️ Реквизиты присылает только менеджер @" + escape(manager) + ". Если пишет кто-то другой, не переводите.", rows);
+    }
+
+    /** Заявка на оплату через менеджера: одна открытая на игрока (до 24 часов), админам уходит уведомление с кнопками подтверждения. */
+    private void startCardManagerPayment(Long uid, Integer oldMsgId, Tariff t) {
+        Optional<Vpn2ManualPayment> open = manualPaymentRepository.findFirstByTelegramIdAndStatusOrderByCreatedAtDesc(uid, Vpn2ManualPayment.STATUS_PENDING);
+        if (open.isPresent()) {
+            Vpn2ManualPayment old = open.get();
+            if (old.getCreatedAt() != null && old.getCreatedAt().isAfter(LocalDateTime.now().minusHours(24))) {
+                showCardManagerScreen(uid, oldMsgId, Tariff.byKey(old.getTariff()).orElse(t));
+                return;
+            }
+            old.setStatus(Vpn2ManualPayment.STATUS_REJECTED);
+            old.setDecidedAt(LocalDateTime.now());
+            manualPaymentRepository.save(old);
+        }
+        Vpn2ManualPayment m = new Vpn2ManualPayment();
+        m.setTelegramId(uid);
+        m.setTariff(t.getKey());
+        m.setAmountRub(t.getPriceRub());
+        m.setCreatedAt(LocalDateTime.now());
+        m.setStatus(Vpn2ManualPayment.STATUS_PENDING);
+        m = manualPaymentRepository.save(m);
+        showCardManagerScreen(uid, oldMsgId, t);
+        List<List<InlineKeyboardButton>> adminRows = new ArrayList<>();
+        adminRows.add(List.of(keyboardFactory.callback("✅ Подтвердить оплату", "adm:cok:" + m.getId()), keyboardFactory.callback("❌ Отклонить", "adm:cno:" + m.getId())));
+        String note = "🏦 <b>Оплата рублями #" + m.getId() + "</b>\nИгрок <a href=\"tg://user?id=" + uid + "\">" + uid + "</a>, " + escape(t.getTitle()) + ", <b>" + t.getPriceRub()
+                + " ₽</b>. Ему предложено написать менеджеру @" + escape(cardManagerUsername()) + ". Пришлите реквизиты, а когда деньги придут, нажмите «Подтвердить»: ключ уйдёт игроку сам.";
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            try {
+                sendHtml(adminId, note, adminRows);
+            } catch (Exception e) {
+                log.warn("VPN bot: failed to notify admin {} about manager payment", adminId, e);
+            }
+        }
     }
 
     private void startCardPayment(Long uid, Integer oldMsgId, String key) {
         Optional<Tariff> tariff = Tariff.byKey(key);
         if (!vpn.isCardPayEnabled() || tariff.isEmpty()) {
             showPayMethods(uid, oldMsgId);
+            return;
+        }
+        if (vpn.isCardManagerMode()) {
+            startCardManagerPayment(uid, oldMsgId, tariff.get());
             return;
         }
         if (manualPaymentRepository.findFirstByTelegramIdAndStatusOrderByCreatedAtDesc(uid, Vpn2ManualPayment.STATUS_PENDING).isPresent()) {
@@ -1027,6 +1089,13 @@ public class VpnBot extends TelegramLongPollingBot {
     }
 
     private void cancelCardPayment(Long uid, Integer oldMsgId) {
+        if (vpn.isCardManagerMode()) {
+            manualPaymentRepository.findFirstByTelegramIdAndStatusOrderByCreatedAtDesc(uid, Vpn2ManualPayment.STATUS_PENDING).ifPresent(m -> {
+                m.setStatus(Vpn2ManualPayment.STATUS_REJECTED);
+                m.setDecidedAt(LocalDateTime.now());
+                manualPaymentRepository.save(m);
+            });
+        }
         manualPaymentRepository.findFirstByTelegramIdAndStatusOrderByCreatedAtDesc(uid, Vpn2ManualPayment.STATUS_AWAITING_PROOF).ifPresent(m -> {
             m.setStatus(Vpn2ManualPayment.STATUS_REJECTED);
             m.setDecidedAt(LocalDateTime.now());

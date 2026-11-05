@@ -86,6 +86,9 @@ app:
   # Способы оплаты кроме Stars: EXC целиком (кнопки видны всегда, работают при true), перевод рублями по реквизитам (способ открыт, когда текст задан), CryptoBot (открыт, когда задан токен Crypto Pay)
   vpn2-exc-pay-enabled: ${VPN2_EXC_PAY_ENABLED:false}
   vpn2-card-details: ${VPN2_CARD_DETAILS:}
+  # Перевод рублями через менеджера: реквизиты присылает менеджер лично (true), аккаунт менеджера - VPN2_MANAGER_USERNAME (пусто - общая поддержка)
+  vpn2-card-manager: ${VPN2_CARD_MANAGER:false}
+  vpn2-manager-username: ${VPN2_MANAGER_USERNAME:}
   vpn2-cryptobot-token: ${VPN2_CRYPTOBOT_TOKEN:}
   vpn2-cryptobot-url: ${VPN2_CRYPTOBOT_URL:https://pay.crypt.bot/api}
 

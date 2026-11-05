@@ -107,6 +107,8 @@ public class Vpn2Service {
     private final boolean excPayEnabled;
     private final String cardDetails;
     private final String cryptoToken;
+    private final boolean cardManager;
+    private final String managerUsername;
 
     public Vpn2Service(ObjectMapper objectMapper, Vpn2AccountRepository accounts, Vpn2UserRepository users,
                        Vpn2PaymentRepository payments, ApplicationEventPublisher eventPublisher,
@@ -125,7 +127,9 @@ public class Vpn2Service {
                        @Value("${app.vpn2-reviews-channel:}") String reviewsChannel,
                        @Value("${app.vpn2-exc-pay-enabled:false}") boolean excPayEnabled,
                        @Value("${app.vpn2-card-details:}") String cardDetails,
-                       @Value("${app.vpn2-cryptobot-token:}") String cryptoToken) {
+                       @Value("${app.vpn2-cryptobot-token:}") String cryptoToken,
+                       @Value("${app.vpn2-card-manager:false}") boolean cardManager,
+                       @Value("${app.vpn2-manager-username:}") String managerUsername) {
         this.panel = new VpnPanelClient(objectMapper, xuiUrl, xuiUser, xuiPass, inboundId);
         this.accounts = accounts;
         this.users = users;
@@ -143,6 +147,8 @@ public class Vpn2Service {
         this.excPayEnabled = excPayEnabled;
         this.cardDetails = cardDetails == null ? "" : cardDetails.trim();
         this.cryptoToken = cryptoToken == null ? "" : cryptoToken.trim();
+        this.cardManager = cardManager;
+        this.managerUsername = managerUsername == null ? "" : managerUsername.trim().replaceFirst("^@", "");
         if (!enabled) {
             log.warn("Vpn2Service disabled: VPN2_ENABLED is not true");
         } else if (!panel.isConfigured() || this.subBase.isBlank()) {
@@ -193,7 +199,13 @@ public class Vpn2Service {
     /** Реквизиты для перевода рублями (карта/СБП), текст как его надо показать игроку; пусто - способ закрыт. */
     public String getCardDetails() { return cardDetails; }
 
-    public boolean isCardPayEnabled() { return !cardDetails.isBlank(); }
+    public boolean isCardPayEnabled() { return !cardDetails.isBlank() || cardManager; }
+
+    /** Перевод рублями через менеджера (05.11): реквизиты игроку присылает менеджер лично, VPN2_CARD_MANAGER=true; если задан и VPN2_CARD_DETAILS, работает старая схема с реквизитами в боте. */
+    public boolean isCardManagerMode() { return cardManager && cardDetails.isBlank(); }
+
+    /** Менеджер по оплатам VPN (VPN2_MANAGER_USERNAME без @); пусто - берётся общий аккаунт поддержки. */
+    public String getManagerUsername() { return managerUsername; }
 
     /** Токен CryptoBot (Crypto Pay API); пусто - крипто-оплата закрыта. */
     public String getCryptoToken() { return cryptoToken; }
