@@ -16,7 +16,8 @@ public final class WithdrawalPartners {
     public static final Bank T_BANK = new Bank(PartnerMissions.T_BLACK, "Т-Банк",
             List.of("т-банк", "т банк", "тбанк", "т-банка", "тинькофф", "тиньков", "tinkoff", "t-bank", "tbank", "t bank"));
 
-    public static final List<Bank> ALL = List.of(OTP, T_BANK);
+    /** Места назначения вывода сверх порога. Сейчас ТОЛЬКО ОТП Банк (решение владельца 05.11.2026: единственный основной банк проекта); Т-Банк добавить сюда, когда появится выбор банков. */
+    public static final List<Bank> ALL = List.of(OTP);
 
     private WithdrawalPartners() {}
 

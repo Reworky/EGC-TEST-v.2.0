@@ -10222,30 +10222,43 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return bank.isEmpty() || !questService.hasApprovedPartnerQuest(user.getId(), bank.get().mission().gameName());
     }
 
-    /** Экран после ввода суммы и банка: сверх порога выводить можно только в банк, где игрок наш реферал; список банков-офферов, из которых можно взять карту. */
+    /** Экран после ввода суммы и банка: сверх порога выводить можно только в банк-партнёр, где игрок наш реферал (сейчас один - ОТП Банк); с кнопками заказа карты. */
     private void sendWithdrawalDestinationGate(AppUser user, String bankText) {
-        java.util.Optional<ru.gamebot.platform.service.WithdrawalPartners.Bank> typed = ru.gamebot.platform.service.WithdrawalPartners.matchBank(bankText);
+        List<ru.gamebot.platform.service.WithdrawalPartners.Bank> banks = ru.gamebot.platform.service.WithdrawalPartners.ALL;
+        List<ru.gamebot.platform.service.WithdrawalPartners.Bank> referralIn = banks.stream()
+                .filter(b -> questService.hasApprovedPartnerQuest(user.getId(), b.mission().gameName())).toList();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        List<ru.gamebot.platform.service.WithdrawalPartners.Bank> offers = new ArrayList<>();
-        typed.ifPresent(offers::add);
-        for (ru.gamebot.platform.service.WithdrawalPartners.Bank b : ru.gamebot.platform.service.WithdrawalPartners.ALL) {
-            if (!offers.contains(b)) offers.add(b);
-        }
-        for (ru.gamebot.platform.service.WithdrawalPartners.Bank b : offers) {
-            if (questService.hasApprovedPartnerQuest(user.getId(), b.mission().gameName())) continue;
+        for (ru.gamebot.platform.service.WithdrawalPartners.Bank b : banks) {
+            if (referralIn.contains(b)) continue;
             Quest q = questService.findAll().stream().filter(x -> b.mission().questTitle().equals(x.getTitle()) && x.isActive()).findFirst().orElse(null);
             if (q == null) continue;
-            rows.add(List.of(keyboardFactory.callback("🏦 " + b.title() + ": заказать карту", "quest:viewwd:" + q.getId())));
+            rows.add(List.of(keyboardFactory.callback("🏦 Заказать карту " + b.title(), "quest:viewwd:" + q.getId())));
         }
-        rows.add(List.of(keyboardFactory.callback("🤷 У меня уже есть эти банки", "shop:withdraw:nobank")));
+        boolean single = banks.size() == 1;
+        String names = banks.stream().map(ru.gamebot.platform.service.WithdrawalPartners.Bank::title).collect(java.util.stream.Collectors.joining(", "));
+        String text;
+        if (!referralIn.isEmpty() && single) {
+            rows.add(List.of(keyboardFactory.callback("🔁 Начать вывод заново", "shop:withdraw")));
+            text = "💳 <b>Вывод — только на карту " + escape(names) + "</b>\n\n"
+                    + "Вы уже наш реферал в банке «" + escape(names) + "». Для вывода введите банк «" + escape(names)
+                    + "» и номер телефона, привязанный к вашей карте.";
+        } else if (single) {
+            rows.add(List.of(keyboardFactory.callback("🤷 У меня уже есть " + names, "shop:withdraw:nobank")));
+            text = "💳 <b>Вывод этой суммы — только на карту " + escape(names) + "</b>\n\n"
+                    + "Вы уже вывели максимум, доступный без карты (" + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC). "
+                    + "Дальше мы выводим деньги только на вашу карту " + escape(names) + ": для этого нужно стать нашим рефералом в банке, "
+                    + "заказать карту по нашей ссылке и принимать деньги на неё.\n\n"
+                    + "Скоро добавим больше банков, чтобы у вас был выбор.";
+        } else {
+            rows.add(List.of(keyboardFactory.callback("🤷 У меня уже есть эти банки", "shop:withdraw:nobank")));
+            text = "💳 <b>Нужно быть нашим рефералом в этом банке</b>\n\n"
+                    + "Вы уже вывели максимум, доступный без карты (" + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC). "
+                    + "Чтобы вывести дальше, нужно быть нашим рефералом в банке, на который вы хотите получить перевод"
+                    + (bankText == null || bankText.isBlank() ? "" : ": <b>" + escape(bankText) + "</b>") + ".\n\n"
+                    + "Если этот банк у вас уже есть, закажите карту другого банка по нашей ссылке и выводите на неё. Выберите банк:";
+        }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")));
-        sendText(user.getTelegramId(),
-                "💳 <b>Нужно быть нашим рефералом в этом банке</b>\n\n"
-                        + "Вы уже вывели максимум, доступный без карты (" + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC). "
-                        + "Чтобы вывести дальше, нужно быть нашим рефералом в банке, на который вы хотите получить перевод"
-                        + (bankText == null || bankText.isBlank() ? "" : ": <b>" + escape(bankText) + "</b>") + ".\n\n"
-                        + "Если этот банк у вас уже есть, закажите карту другого банка по нашей ссылке и выводите на неё. Выберите банк:",
-                keyboardFactory.rowsLayout(rows));
+        sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
 
     /** Вывод звёздами временно закрыт (05.11.2026, решение владельца): открыть - app_settings 'wd.stars.enabled' = true (scripts/wd-stars-open.sql). Публичный: мини-апп проверяет то же. */
