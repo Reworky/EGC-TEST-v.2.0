@@ -281,9 +281,8 @@ public class WalletController {
         }
         ShopActionResponseDto validation = validateAmount(user, body.getAmount());
         if (validation != null) return ResponseEntity.ok(validation);
-        long tonGateRoom = gamePlatformBot.withdrawalGateRoomExc(user);
-        if (tonGateRoom >= 0 && body.getAmount() > tonGateRoom) {
-            return errorResponse("Первые 10 000 EXC выводятся любым способом, дальше вывод открывается после карты банка-партнёра: откройте «Вывод EXC» в боте.");
+        if (gamePlatformBot.cryptoPionexRequired(user, body.getAmount())) {
+            return errorResponse("Сверх первых 10 000 EXC вывод в крипте идёт только на биржу Pionex для наших рефералов: откройте «Вывод EXC» в боте.");
         }
         if (rewardService.hasWithdrawalTodayOrPending(user)) {
             return errorResponse("Лимит: 1 заявка на вывод в сутки. Следующую можно создать через 24 часа после предыдущей.");
