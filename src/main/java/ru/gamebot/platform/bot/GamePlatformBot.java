@@ -12130,9 +12130,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendStarsBanner(user.getTelegramId(), denominationText, keyboardFactory.rowsLayout(rows));
             return;
         }
-        // Тот же баннер, что на экране выбора способа оплаты (05.11.2026, просьба владельца)
-        if ("brawl_stars".equals(purchaseGroup)) {
-            sendResourceBanner(user.getTelegramId(), "brawl_gems_banner.png", denominationText, keyboardFactory.rowsLayout(rows));
+        // Тот же баннер, что на экране выбора способа оплаты (05.11.2026, просьба владельца): у игр, для которых он есть
+        String denominationBanner = switch (purchaseGroup) {
+            case "brawl_stars" -> "brawl_gems_banner.png";
+            case "clash_royale" -> "cr_gems_banner.jpg";
+            case "clash_of_clans" -> "coc_gems_banner.jpg";
+            case "pubg_pc" -> "pubg_pc_gcoin_banner.jpg";
+            case "pubg_mobile" -> "pubg_mobile_uc_banner.jpg";
+            case "steam_topup" -> "steam_balance_banner.jpg";
+            default -> null;
+        };
+        if (denominationBanner != null) {
+            sendResourceBanner(user.getTelegramId(), denominationBanner, denominationText, keyboardFactory.rowsLayout(rows));
             return;
         }
         sendText(user.getTelegramId(), denominationText, keyboardFactory.rowsLayout(rows));
