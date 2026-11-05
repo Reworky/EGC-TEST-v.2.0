@@ -1685,6 +1685,33 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendWithdrawalTonAmountScreen(user);
             return;
         }
+        if (data.startsWith("shop:withdraw:xch:")) {
+            answerSilently(callbackQuery.getId());
+            ru.gamebot.platform.service.CryptoExchanges.Exchange xchChosen = ru.gamebot.platform.service.CryptoExchanges.byKey(data.substring("shop:withdraw:xch:".length())).orElse(null);
+            String xchExcS = session.getData().get("ton_exc_amount");
+            String xchRubS = session.getData().get("ton_rubles");
+            if (xchChosen == null || xchExcS == null || xchRubS == null || !"1".equals(session.getData().get("ton_pionex"))) {
+                session.reset();
+                sendText(user.getTelegramId(), "⚠️ Начните вывод заново.", backMenuKeyboard("shop:withdraw"));
+                return;
+            }
+            session.getData().put("ton_exchange", xchChosen.key());
+            session.setState(SessionState.WITHDRAWAL_TON_ADDRESS);
+            sendExchangeUidScreen(user, xchChosen, parseLongSafe(xchExcS), parseLongSafe(xchRubS));
+            return;
+        }
+        if (data.equals("shop:withdraw:xchback")) {
+            answerSilently(callbackQuery.getId());
+            session.getData().remove("ton_exchange");
+            session.getData().put("ton_pionex", "1");
+            List<List<InlineKeyboardButton>> xchBackRows = new ArrayList<>();
+            for (ru.gamebot.platform.service.CryptoExchanges.Exchange xchItem : ru.gamebot.platform.service.CryptoExchanges.ALL) {
+                xchBackRows.add(List.of(keyboardFactory.callback("🏦 " + xchItem.title(), "shop:withdraw:xch:" + xchItem.key())));
+            }
+            xchBackRows.add(List.of(keyboardFactory.callback("❌ Отмена", "common:cancel")));
+            sendText(user.getTelegramId(), "💎 <b>Куда выводим?</b>\n\nВыберите биржу:", keyboardFactory.rowsLayout(xchBackRows));
+            return;
+        }
         if (data.equals("shop:withdraw:ton:no_wallet")) {
             answerSilently(callbackQuery.getId());
             sendWithdrawalTonNoWalletGuide(user);
@@ -10173,7 +10200,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private static final long RUB_FREE_WITHDRAWAL_EXC = 10_000L;
 
-    /** Крипта на amount EXC выходит за бесплатный порог 10 000 EXC (все способы суммой): тогда только Pionex по UID через бота. Публичный: им пользуется мини-апп. */
+    /** Крипта на amount EXC выходит за бесплатный порог 10 000 EXC (все способы суммой): тогда только биржи-партнёры (Pionex, Bybit) по UID через бота. Публичный: им пользуется мини-апп. */
     public boolean cryptoPionexRequired(AppUser user, long amount) {
         return rewardService.totalWithdrawnExc(user) + amount > RUB_FREE_WITHDRAWAL_EXC;
     }
@@ -10353,24 +10380,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean pionexOnly = rewardService.totalWithdrawnExc(user) + amount > RUB_FREE_WITHDRAWAL_EXC;
         session.getData().put("ton_pionex", pionexOnly ? "1" : "0");
         if (pionexOnly) {
-            String pionexMsg = "💎 <b>Шаг 2 из 2: ваш UID на Pionex</b>\n\n"
-                    + "💸 " + fmtExc(amount) + " EXC → <b>" + rubles + " ₽</b> → ~<b>" + tonAmount + " TON</b>\n"
-                    + rateNote + "\n\n"
-                    + "Сверх " + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC вывод в крипте идёт <b>только на биржу Pionex</b> и <b>только для наших рефералов</b>:\n"
-                    + "1️⃣ Зарегистрируйтесь на Pionex по нашей ссылке (кнопка ниже)\n"
-                    + "2️⃣ Создайте аккаунт\n"
-                    + "3️⃣ Скопируйте свой UID в профиле биржи (8 цифр)\n"
-                    + "4️⃣ Пришлите UID сюда одним сообщением\n\n"
-                    + "Модератор проверит, что вы наш реферал, и переведёт деньги на ваш аккаунт Pionex по UID. "
-                    + "Если вы уже были на Pionex до нас, перевод не пройдёт: вывод в крипте сверх этой суммы доступен только нашим рефералам.\n\n"
-                    + "Введите ваш UID:";
-            String helpText = "Здравствуйте! Мне нужна помощь с регистрацией на Pionex для вывода. Мой ID: " + user.getTelegramId();
-            String helpEnc = java.net.URLEncoder.encode(helpText, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
-            List<List<InlineKeyboardButton>> pionexRows = new ArrayList<>();
-            pionexRows.add(List.of(keyboardFactory.url("🚀 Зарегистрироваться на Pionex", PIONEX_REF_LINK)));
-            pionexRows.add(List.of(keyboardFactory.url("💬 Нужна помощь с регистрацией", "https://t.me/" + appProperties.getSupportUsername() + "?text=" + helpEnc)));
-            pionexRows.add(List.of(keyboardFactory.callback("❌ Отмена", "common:cancel")));
-            sendText(user.getTelegramId(), pionexMsg, keyboardFactory.rowsLayout(pionexRows));
+            List<List<InlineKeyboardButton>> xchRows = new ArrayList<>();
+            for (ru.gamebot.platform.service.CryptoExchanges.Exchange xchOpt : ru.gamebot.platform.service.CryptoExchanges.ALL) {
+                xchRows.add(List.of(keyboardFactory.callback("🏦 " + xchOpt.title(), "shop:withdraw:xch:" + xchOpt.key())));
+            }
+            xchRows.add(List.of(keyboardFactory.callback("❌ Отмена", "common:cancel")));
+            sendText(user.getTelegramId(),
+                    "💎 <b>Куда выводим?</b>\n\n"
+                            + "💸 " + fmtExc(amount) + " EXC → <b>" + rubles + " ₽</b> → ~<b>" + tonAmount + " TON</b>\n"
+                            + rateNote + "\n\n"
+                            + "Сверх " + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC вывод в крипте идёт только на биржи-партнёры и только для наших рефералов. Выберите биржу:",
+                    keyboardFactory.rowsLayout(xchRows));
             return;
         }
         String msg = "💎 <b>Сумма принята</b>\n\n"
@@ -10394,20 +10414,46 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), msg, keyboardFactory.rowsLayout(rows));
     }
 
-    /** Реферальная ссылка Pionex (владелец 05.11.2026): сверх порога крипта выводится только сюда, реферала проверяет модератор по UID в кабинете биржи. */
-    private static final String PIONEX_REF_LINK = "https://www.pionex.com/signUp?r=experiencegamingclub";
+    /** Экран «Шаг 2 из 2: ваш UID на бирже» (сверх порога 10 000 EXC): ссылка регистрации по нашей реферальной ссылке, помощь менеджера; реферала проверяет модератор по UID в кабинете биржи. */
+    private void sendExchangeUidScreen(AppUser user, ru.gamebot.platform.service.CryptoExchanges.Exchange ex, long excAmount, long rubles) {
+        java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(rubles));
+        String msg = "💎 <b>Шаг 2 из 2: ваш UID на " + escape(ex.title()) + "</b>\n\n"
+                + "💸 " + fmtExc(excAmount) + " EXC → <b>" + rubles + " ₽</b> → ~<b>" + tonAmount + " TON</b>\n\n"
+                + "Сверх " + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC вывод в крипте идёт <b>только на биржу " + escape(ex.title()) + "</b> и <b>только для наших рефералов</b>:\n"
+                + "1️⃣ Зарегистрируйтесь на " + escape(ex.title()) + " по нашей ссылке (кнопка ниже)\n"
+                + "2️⃣ Создайте аккаунт\n"
+                + "3️⃣ Скопируйте свой UID в профиле биржи (" + escape(ex.uidHint()) + ")\n"
+                + "4️⃣ Пришлите UID сюда одним сообщением\n\n"
+                + "Модератор проверит, что вы наш реферал, и переведёт деньги на ваш аккаунт " + escape(ex.title()) + " по UID. "
+                + "Если вы уже были на " + escape(ex.title()) + " до нас, перевод не пройдёт: вывод в крипте сверх этой суммы доступен только нашим рефералам.\n\n"
+                + "Введите ваш UID:";
+        String helpText = "Здравствуйте! Мне нужна помощь с регистрацией на " + ex.title() + " для вывода. Мой ID: " + user.getTelegramId();
+        String helpEnc = java.net.URLEncoder.encode(helpText, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.url("🚀 Зарегистрироваться на " + ex.title(), ex.refLink())));
+        rows.add(List.of(keyboardFactory.url("💬 Нужна помощь с регистрацией", "https://t.me/" + appProperties.getSupportUsername() + "?text=" + helpEnc)));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Выбрать другую биржу", "shop:withdraw:xchback")));
+        rows.add(List.of(keyboardFactory.callback("❌ Отмена", "common:cancel")));
+        sendText(user.getTelegramId(), msg, keyboardFactory.rowsLayout(rows));
+    }
 
     private void handleWithdrawalTonAddress(AppUser user, UserSession session, String text) {
         boolean pionex = "1".equals(session.getData().get("ton_pionex"));
+        ru.gamebot.platform.service.CryptoExchanges.Exchange exch = pionex
+                ? ru.gamebot.platform.service.CryptoExchanges.byKey(session.getData().get("ton_exchange")).orElse(null) : null;
         String wallet = text.trim();
         if (pionex) {
-            if (!wallet.matches("\\d{8}")) {
+            if (exch == null) {
+                sendText(user.getTelegramId(), "⚠️ Сначала выберите биржу кнопкой выше.", cancelKeyboard());
+                return;
+            }
+            if (!wallet.matches(exch.uidRegex())) {
                 sendText(user.getTelegramId(),
-                        "⚠️ <b>UID на Pionex — это 8 цифр</b>, без букв и пробелов.\n\nСкопируйте UID в профиле биржи и пришлите его ещё раз:",
+                        "⚠️ <b>UID на " + escape(exch.title()) + " — это " + escape(exch.uidHint()) + "</b>, без букв и пробелов.\n\nСкопируйте UID в профиле биржи и пришлите его ещё раз:",
                         cancelKeyboard());
                 return;
             }
-            wallet = "Pionex UID " + wallet;
+            wallet = exch.title() + " UID " + wallet;
         } else if (wallet.length() < 20 || wallet.contains(" ")) {
             sendText(user.getTelegramId(),
                     "⚠️ <b>Некорректный адрес кошелька</b>\n\n"
@@ -10444,19 +10490,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         "✅ <b>Заявка на вывод принята!</b>\n\n"
                                 + "🔢 Номер заявки: <b>В-" + reqDisplayId(tonReq) + "</b>\n"
                                 + "💸 Сумма: <b>" + fmtExc(excAmount) + " EXC</b>\n"
-                                + "💵 К выплате: <b>" + tonReq.getFixedRubValue() + " ₽</b>" + bonusNote(tonReq) + " → ~<b>" + exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(tonReq.getFixedRubValue())) + " TON</b> на Pionex\n"
+                                + "💵 К выплате: <b>" + tonReq.getFixedRubValue() + " ₽</b>" + bonusNote(tonReq) + " → ~<b>" + exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(tonReq.getFixedRubValue())) + " TON</b> на " + escape(exch.title()) + "\n"
                                 + "🆔 " + escape(wallet) + "\n\n"
                                 + "Модератор проверит, что вы наш реферал, и переведёт деньги по UID в течение 24 часов. Если аккаунт не наш реферал, заявка будет отклонена, EXC вернутся.\n\n"
                                 + "↩️ Пока заявка в статусе «⏳ Ожидает», её можно отменить в «Мои заявки на вывод»: EXC вернутся на баланс.",
                         withdrawalRequestsKeyboard());
                 notifyAdminsAboutWithdrawal(user, tonReq);
-                String pionexNote = "💎 <b>Вывод В-" + reqDisplayId(tonReq) + " на Pionex</b>: " + escape(wallet) + ", игрок <code>" + user.getTelegramId()
-                        + "</code>. Проверьте в реферальном кабинете Pionex, что этот UID наш реферал, и переводите только на этот аккаунт; если нет, отклоните кнопкой «Не реферал Pionex».";
+                String pionexNote = "💎 <b>Вывод В-" + reqDisplayId(tonReq) + " на " + escape(exch.title()) + "</b>: " + escape(wallet) + ", игрок <code>" + user.getTelegramId()
+                        + "</code>. Проверьте в реферальном кабинете " + escape(exch.title()) + ", что этот UID наш реферал, и переводите только на этот аккаунт; если нет, отклоните кнопкой «Не реферал биржи».";
                 for (Long modId : adminService.allModeratorIds()) {
                     try {
                         sendText(modId, pionexNote, null);
                     } catch (Exception e) {
-                        log.warn("Failed to notify moderator {} about Pionex withdrawal", modId, e);
+                        log.warn("Failed to notify moderator {} about exchange withdrawal", modId, e);
                     }
                 }
                 return;
@@ -28023,7 +28069,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Игрок указал реквизиты способа, с которым мы не работаем (иностранный банк, номер телефона не из РФ и т.п.). Причина пишется в reward_requests.admin_comment (varchar(255)): текст держать короче 255 символов (290 символов уже ломали отклонение). */
     private static final String QUICK_REJECT_PIONEX =
-            "Аккаунт с этим UID не найден среди наших рефералов на Pionex.\n\nЗарегистрируйтесь на Pionex по нашей ссылке, создайте аккаунт и подайте заявку заново с вашим UID.";
+            "Аккаунт с этим UID не найден среди наших рефералов на бирже.\n\nЗарегистрируйтесь на бирже по нашей ссылке, создайте аккаунт и подайте заявку заново с вашим UID.";
 
     private static final String QUICK_REJECT_UNSUPPORTED =
             "Мы не работаем с этим способом вывода (например, с банками и номерами других стран). Доступны: рубли по СБП на номер российского банка, криптовалюта (GRAM, TON) и звёзды Telegram. Подайте заявку заново.";
@@ -28041,7 +28087,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("⚡ Регион временно недоступен", "wdquick:region")),
                 List.of(keyboardFactory.callback("⚡ Некорректный реквизит", "wdquick:requisite")),
                 List.of(keyboardFactory.callback("⚡ Способ не поддерживается", "wdquick:unsupported")),
-                List.of(keyboardFactory.callback("⚡ Не реферал Pionex", "wdquick:pionex")),
+                List.of(keyboardFactory.callback("⚡ Не реферал биржи", "wdquick:pionex")),
                 List.of(keyboardFactory.callback("❌ Отмена", "common:cancel"))));
     }
 
