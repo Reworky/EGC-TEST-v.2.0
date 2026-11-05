@@ -26270,9 +26270,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             steamLoginLine = "🎮 Логин Steam: <code>" + escape(steamLogin == null ? "" : steamLogin) + "</code>\n\n";
             rows.add(rows.size() - 1, List.of(keyboardFactory.callback("✏️ Изменить логин", "gemdonate:steamlogin:" + pkg.key())));
         }
-        if (passUpsell) {
-            rows.add(rows.size() - 1, List.of(keyboardFactory.callback("⭐ Как получить цену " + pkg.costRub() + "₽ (EGC Pass)", "sink:egc_pass")));
-        }
         String methodText = "💎 <b>" + pkg.displayLabel() + " — " + price + "₽</b>" + passNote + "\n\n"
                 + steamLoginLine
                 + "Выберите способ оплаты:\n\n"
