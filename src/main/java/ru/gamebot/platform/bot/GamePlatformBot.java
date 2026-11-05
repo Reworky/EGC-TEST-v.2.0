@@ -10165,6 +10165,138 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
 
+    /** Свободный остаток порога вывода (EXC) до обязательной карты партнёра: -1 - порога нет (есть одобренный партнёрский квест). Порог считает выводы любым способом и действует на рубли, TON и звёзды (с 05.11.2026). */
+    public long withdrawalGateRoomExc(AppUser user) {
+        if (questService.hasApprovedPartnerQuest(user.getId())) return -1;
+        return Math.max(0, RUB_FREE_WITHDRAWAL_EXC - rewardService.totalWithdrawnExc(user));
+    }
+
+    private static final long RUB_FREE_WITHDRAWAL_EXC = 10_000L;
+
+    /** Крипта на amount EXC выходит за бесплатный порог 10 000 EXC (все способы суммой): тогда только Pionex по UID через бота. Публичный: им пользуется мини-апп. */
+    public boolean cryptoPionexRequired(AppUser user, long amount) {
+        return rewardService.totalWithdrawnExc(user) + amount > RUB_FREE_WITHDRAWAL_EXC;
+    }
+
+    private static long parseLongSafe(String s) {
+        try {
+            return s == null ? 0 : Long.parseLong(s.trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /** Рублёвый вывод amount EXC в банк bank запрещён: сверх порога 10 000 EXC (за всё время, все способы) можно только в банк-партнёр, где игрок наш реферал (одобрен квест этого банка). Публичный: им пользуется и мини-апп. */
+    public boolean rubDestinationBlocked(AppUser user, long amount, String bankText) {
+        if (rewardService.totalWithdrawnExc(user) + amount <= RUB_FREE_WITHDRAWAL_EXC) return false;
+        java.util.Optional<ru.gamebot.platform.service.WithdrawalPartners.Bank> bank = ru.gamebot.platform.service.WithdrawalPartners.matchBank(bankText);
+        return bank.isEmpty() || !questService.hasApprovedPartnerQuest(user.getId(), bank.get().mission().gameName());
+    }
+
+    /** Экран после ввода суммы и банка: сверх порога выводить можно только в банк-партнёр, где игрок наш реферал (сейчас один - ОТП Банк); с кнопками заказа карты. */
+    private void sendWithdrawalDestinationGate(AppUser user, String bankText) {
+        List<ru.gamebot.platform.service.WithdrawalPartners.Bank> banks = ru.gamebot.platform.service.WithdrawalPartners.ALL;
+        List<ru.gamebot.platform.service.WithdrawalPartners.Bank> referralIn = banks.stream()
+                .filter(b -> questService.hasApprovedPartnerQuest(user.getId(), b.mission().gameName())).toList();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (ru.gamebot.platform.service.WithdrawalPartners.Bank b : banks) {
+            if (referralIn.contains(b)) continue;
+            Quest q = questService.findAll().stream().filter(x -> b.mission().questTitle().equals(x.getTitle()) && x.isActive()).findFirst().orElse(null);
+            if (q == null) continue;
+            rows.add(List.of(keyboardFactory.callback("🏦 Заказать карту " + b.genitive(), "quest:viewwd:" + q.getId())));
+        }
+        boolean single = banks.size() == 1;
+        String names = banks.stream().map(ru.gamebot.platform.service.WithdrawalPartners.Bank::title).collect(java.util.stream.Collectors.joining(", "));
+        String namesGen = banks.stream().map(ru.gamebot.platform.service.WithdrawalPartners.Bank::genitive).collect(java.util.stream.Collectors.joining(", "));
+        String text;
+        if (!referralIn.isEmpty() && single) {
+            rows.add(List.of(keyboardFactory.callback("🔁 Начать вывод заново", "shop:withdraw")));
+            text = "💳 <b>Вывод — только на карту " + escape(namesGen) + "</b>\n\n"
+                    + "Вы уже оформили карту " + escape(namesGen) + " по нашей ссылке. Для вывода введите банк «" + escape(names)
+                    + "» и номер телефона, привязанный к вашей карте.";
+        } else if (single) {
+            long freeLeft = Math.max(0, RUB_FREE_WITHDRAWAL_EXC - rewardService.totalWithdrawnExc(user));
+            if (freeLeft >= ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) {
+                rows.add(List.of(keyboardFactory.callback("⏭️ Вывести до " + fmtExc(freeLeft) + " EXC без карты", "shop:withdraw:rubgo")));
+            }
+            rows.add(List.of(keyboardFactory.callback("🤷 У меня уже есть " + names, "shop:withdraw:nobank")));
+            String intro = freeLeft > 0
+                    ? "Без карты можно вывести в сумме до " + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC, у вас осталось <b>" + fmtExc(freeLeft) + " EXC</b>. "
+                            + "Эта заявка больше остатка. Вы можете вывести до " + fmtExc(freeLeft) + " EXC в любой банк, а всё, что сверх этого, "
+                            + "выводится только на карту " + escape(namesGen) + ": оформите её по нашей ссылке и получайте деньги на неё.\n\n"
+                    : "Вы уже вывели максимум, доступный без карты (" + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC). "
+                            + "Дальше мы выводим деньги только на вашу карту " + escape(namesGen) + ": оформите её по нашей ссылке и получайте деньги на неё.\n\n";
+            text = "💳 <b>Вывод этой суммы — только на карту " + escape(namesGen) + "</b>\n\n"
+                    + intro
+                    + "Скоро добавим больше банков, чтобы у вас был выбор.";
+        } else {
+            rows.add(List.of(keyboardFactory.callback("🤷 У меня уже есть эти банки", "shop:withdraw:nobank")));
+            text = "💳 <b>Нужно быть нашим рефералом в этом банке</b>\n\n"
+                    + "Вы уже вывели максимум, доступный без карты (" + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC). "
+                    + "Чтобы вывести дальше, нужно быть нашим рефералом в банке, на который вы хотите получить перевод"
+                    + (bankText == null || bankText.isBlank() ? "" : ": <b>" + escape(bankText) + "</b>") + ".\n\n"
+                    + "Если этот банк у вас уже есть, закажите карту другого банка по нашей ссылке и выводите на неё. Выберите банк:";
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")));
+        sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Вывод звёздами временно закрыт (05.11.2026, решение владельца): открыть - app_settings 'wd.stars.enabled' = true (scripts/wd-stars-open.sql). Публичный: мини-апп проверяет то же. */
+    public boolean isStarsWithdrawalOpen() {
+        return appSettingRepository.findById("wd.stars.enabled")
+                .map(ru.gamebot.platform.domain.model.AppSetting::getValue)
+                .map(v -> "true".equalsIgnoreCase(v.trim()))
+                .orElse(false);
+    }
+
+    private void sendStarsWithdrawalClosed(AppUser user) {
+        sendText(user.getTelegramId(),
+                "⭐ <b>Вывод звёздами временно недоступен</b>\n\n"
+                        + "Направление не закрыто: мы проводим технические работы. Ожидайте новостей.",
+                keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")))));
+    }
+
+    /** Экран «дальше после карты партнёра»: вывод любым способом выше порога 10 000 EXC (рубли, TON, звёзды); kind - rub | ton | stars, для кнопки «вывести до N». */
+    private void sendWithdrawalPartnerGate(AppUser user, long room, String kind) {
+        Quest quest = cardOfferQuestFor(user);
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (quest != null) {
+            rows.add(List.of(keyboardFactory.callback("🚀 Хочу карту ОТП", "quest:viewwd:" + quest.getId())));
+        }
+        long needExc = "stars".equals(kind) ? minStarsPriceExc() : ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC;
+        if (room >= needExc) {
+            String go = "ton".equals(kind) ? "shop:withdraw:ton" : "stars".equals(kind) ? "shop:group:telegram_stars" : "shop:withdraw:rubgo";
+            rows.add(List.of(keyboardFactory.callback("⏭️ Вывести до " + fmtExc(room) + " EXC", go)));
+        }
+        rows.add(List.of(keyboardFactory.callback("🤷 У меня уже есть эти банки", "shop:withdraw:nobank")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")));
+        sendText(user.getTelegramId(),
+                "💳 <b>Дальше — после карты нашего банка-партнёра</b>\n\n"
+                        + "Первые " + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC можно выводить любым способом"
+                        + (room > 0 ? ", у тебя осталось <b>" + fmtExc(room) + " EXC</b>" : "") + ". "
+                        + "Дальше вывод открывается после карты банка, оформленной по нашей ссылке: это бесплатно, и за квест ты получаешь награду.",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Самая дешёвая позиция вывода звёздами в EXC по текущему курсу: меньше этого остатка порога звёзды выбрать нельзя. */
+    private long minStarsPriceExc() {
+        return rewardService.findByPurchaseGroup("telegram_stars").stream()
+                .mapToLong(rewardService::effectivePrice).min().orElse(ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC);
+    }
+
+    /** «Нет подходящего способа / эти банки уже есть»: письмо менеджеру с ID и балансом, он подберёт другой банк или способ вывода. */
+    private void sendWithdrawalNoBankHelp(AppUser user) {
+        String text = "Здравствуйте! У меня уже есть эти банки, помогите подобрать способ вывода. Мой ID: " + user.getTelegramId() + ", баланс " + user.getCoins() + " EXC";
+        String encoded = java.net.URLEncoder.encode(text, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
+        sendText(user.getTelegramId(),
+                "🤝 <b>Подберём способ именно для вас</b>\n\n"
+                        + "Если нужные банки у вас уже есть, напишите менеджеру: подскажем другой банк или удобный способ вывода.",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.url("💬 Написать менеджеру", "https://t.me/" + appProperties.getSupportUsername() + "?text=" + encoded)),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw"))
+                )));
+    }
+
     private void sendWithdrawalTonNoWalletGuide(AppUser user) {
         sendText(user.getTelegramId(),
                 "💎 <b>Как создать кошелёк</b>\n\n"
