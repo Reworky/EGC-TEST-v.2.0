@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.model.HealthRatioSnapshot;
 import ru.gamebot.platform.domain.model.PayoutPoolEntry;
+import ru.gamebot.platform.domain.repository.AppSettingRepository;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.HealthRatioSnapshotRepository;
 import ru.gamebot.platform.domain.repository.PayoutPoolEntryRepository;
@@ -24,6 +25,11 @@ public class HealthRatioService {
     private final PayoutPoolEntryRepository payoutPoolEntryRepository;
     private final HealthRatioSnapshotRepository healthRatioSnapshotRepository;
     private final AppUserRepository appUserRepository;
+    private final AppSettingRepository appSettingRepository;
+
+    /** Курс считается от EXC активных игроков (не заходили 30+ дней - не в знаменателе). Откат без деплоя: app_settings 'hr.active.only' = false (применится при следующем пересчёте, каждые 4 ч или при пополнении фонда). */
+    public static final String ACTIVE_ONLY_SETTING = "hr.active.only";
+    public static final int ACTIVE_DAYS = 30;
 
     @PostConstruct
     @Transactional
@@ -62,12 +68,14 @@ public class HealthRatioService {
     public HealthRatioSnapshot recalculate() {
         long payoutPoolRub = payoutPoolEntryRepository.sumAllAmounts();
         long totalDebtExc = appUserRepository.sumAllCoins();
+        // Знаменатель курса: «живой» долг (активные за ACTIVE_DAYS дн.); в снимок по-прежнему пишется ВЕСЬ долг, чтобы метрики Пульса и история были сопоставимы
+        long ratioDebtExc = activeOnly() ? getActiveDebtExc() : totalDebtExc;
 
         double ratio;
-        if (totalDebtExc == 0) {
+        if (ratioDebtExc == 0) {
             ratio = MAX_RATIO;
         } else {
-            long totalDebtRub = totalDebtExc / 100;
+            long totalDebtRub = ratioDebtExc / 100;
             if (totalDebtRub == 0) {
                 ratio = MAX_RATIO;
             } else {
@@ -84,7 +92,7 @@ public class HealthRatioService {
         snapshot.setCalculatedAt(LocalDateTime.now());
         healthRatioSnapshotRepository.save(snapshot);
 
-        log.info("Health Ratio recalculated: {} (pool={}₽, debt={} EXC)", ratio, payoutPoolRub, totalDebtExc);
+        log.info("Health Ratio recalculated: {} (pool={}₽, debt={} EXC, debt in ratio={} EXC)", ratio, payoutPoolRub, totalDebtExc, ratioDebtExc);
         return snapshot;
     }
 
@@ -136,6 +144,19 @@ public class HealthRatioService {
 
     public long getTotalDebtExc() {
         return appUserRepository.sumAllCoins();
+    }
+
+    /** EXC на балансах игроков, активных за ACTIVE_DAYS дней: знаменатель курса фонда. */
+    public long getActiveDebtExc() {
+        LocalDateTime since = LocalDateTime.now().minusDays(ACTIVE_DAYS);
+        return appUserRepository.sumCoinsActiveSince(since.toLocalDate(), since);
+    }
+
+    private boolean activeOnly() {
+        return appSettingRepository.findById(ACTIVE_ONLY_SETTING)
+                .map(ru.gamebot.platform.domain.model.AppSetting::getValue)
+                .map(v -> !"false".equalsIgnoreCase(v.trim()))
+                .orElse(true);
     }
 
     public long applyRatio(long baseCoins) {

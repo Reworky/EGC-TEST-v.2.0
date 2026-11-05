@@ -14593,7 +14593,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         "💳 <b>Пополнение Payout Pool</b>\n\n"
                                 + "📊 Текущий Состояние фонда: <b>" + (int) Math.round(ratio * 100) + "%</b>\n"
                                 + "💰 Payout Pool: <b>" + pool + " ₽</b>\n"
-                                + "📉 Общий долг EXC: <b>" + debt + " EXC (" + (debt / 100) + " ₽)</b>\n\n"
+                                + "📉 Общий долг EXC: <b>" + debt + " EXC (" + (debt / 100) + " ₽)</b>\n"
+                                + "🟢 Из них у активных за " + ru.gamebot.platform.service.HealthRatioService.ACTIVE_DAYS + " дн. (по ним считается курс): <b>" + healthRatioService.getActiveDebtExc() + " EXC</b>\n\n"
                                 + "Введите сумму пополнения в рублях:",
                         backOrCancelKeyboard("admin:fin:add:" + finOrigin));
             }

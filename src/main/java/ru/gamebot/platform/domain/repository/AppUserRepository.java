@@ -123,6 +123,10 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
     @Query("SELECT COALESCE(SUM(u.coins), 0) FROM AppUser u")
     long sumAllCoins();
 
+    /** EXC на балансах игроков, которые были активны (бот, мини-апп или любое действие) не раньше since: «живой» долг для курса фонда (05.11.2026). Пустая дата активности = не активен. */
+    @Query("SELECT COALESCE(SUM(u.coins), 0) FROM AppUser u WHERE u.lastActivityDate >= :sinceDate OR u.lastBotActivityAt >= :sinceTime OR u.lastMiniAppOpenAt >= :sinceTime")
+    long sumCoinsActiveSince(@Param("sinceDate") java.time.LocalDate sinceDate, @Param("sinceTime") java.time.LocalDateTime sinceTime);
+
     @Query("SELECT COALESCE(SUM(u.tickets), 0) FROM AppUser u")
     long sumAllTickets();
 
