@@ -374,6 +374,13 @@ public class RewardService {
         return new java.util.HashSet<>(rewardRequestRepository.findUserIdsWithPaidWithdrawals());
     }
 
+    /** Последние данные для выдачи (email/ID), которые игрок указывал в заявках этой группы наград; null - не указывал. */
+    public String lastPayoutDetails(AppUser user, String purchaseGroup) {
+        if (purchaseGroup == null || purchaseGroup.isBlank()) return null;
+        List<String> found = rewardRequestRepository.findRecentPayoutDetails(user, purchaseGroup, org.springframework.data.domain.PageRequest.of(0, 1));
+        return found.isEmpty() ? null : found.get(0);
+    }
+
     /** EXC, выведенные игроком за всё время любым способом (без отклонённых и отменённых заявок). */
     public long totalWithdrawnExc(AppUser user) {
         return rewardRequestRepository.sumActiveWithdrawalExcByUser(user);

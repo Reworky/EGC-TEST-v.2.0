@@ -1787,6 +1787,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleUserRewardCancel(callbackQuery, user, parseLong(data.substring("reward:cancel:".length())));
             return;
         }
+        if (data.startsWith("shop:buyto:") || data.startsWith("shop:buyother:")) {
+            boolean sameData = data.startsWith("shop:buyto:");
+            Long buyRewardId = parseLong(data.substring((sameData ? "shop:buyto:" : "shop:buyother:").length()));
+            RewardItem buyReward = rewardService.getRewardItem(buyRewardId);
+            String lastDetails = sameData ? rewardService.lastPayoutDetails(user, buyReward.getPurchaseGroup()) : null;
+            if (lastDetails != null) {
+                completePurchase(callbackQuery, user, buyReward, lastDetails);
+            } else {
+                askRewardUserData(callbackQuery, user, buyReward);
+            }
+            return;
+        }
         if (data.startsWith("shop:buy:")) {
             handleRewardPurchase(callbackQuery, user, parseLong(data.substring("shop:buy:".length())));
             return;
@@ -12431,6 +12443,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), text, keyboard);
     }
 
+    /** Просит игрока ввести данные для выдачи (email/ID) и ждёт текст (SHOP_GAME_DATA_INPUT). */
+    private void askRewardUserData(CallbackQuery callbackQuery, AppUser user, RewardItem reward) {
+        UserSession session = sessionService.get(user.getTelegramId());
+        session.reset();
+        session.setState(SessionState.SHOP_GAME_DATA_INPUT);
+        session.getData().put("pendingRewardId", String.valueOf(reward.getId()));
+        sendText(user.getTelegramId(),
+                "📋 <b>Для оформления заявки нужны ваши данные</b>\n\n"
+                        + escape(reward.getUserDataPrompt()),
+                cancelKeyboard());
+        answerSilently(callbackQuery.getId());
+    }
+
     private void handleRewardPurchase(CallbackQuery callbackQuery, AppUser user, Long rewardId) {
         RewardItem reward = rewardService.getRewardItem(rewardId);
         if ("telegram_stars".equals(reward.getPurchaseGroup()) && !isStarsWithdrawalOpen()) {
@@ -12447,15 +12472,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         }
         if (reward.getUserDataPrompt() != null && !reward.getUserDataPrompt().isBlank()) {
-            UserSession session = sessionService.get(user.getTelegramId());
-            session.reset();
-            session.setState(SessionState.SHOP_GAME_DATA_INPUT);
-            session.getData().put("pendingRewardId", String.valueOf(rewardId));
-            sendText(user.getTelegramId(),
-                    "📋 <b>Для оформления заявки нужны ваши данные</b>\n\n"
-                            + escape(reward.getUserDataPrompt()),
-                    cancelKeyboard());
-            answerSilently(callbackQuery.getId());
+            // Игрок уже указывал данные для выдачи в этой игре: предлагаем те же одним нажатием (06.11.2026)
+            String lastDetails = rewardService.lastPayoutDetails(user, reward.getPurchaseGroup());
+            if (lastDetails != null) {
+                sendText(user.getTelegramId(),
+                        "📋 <b>Выдать на те же данные?</b>\n\n"
+                                + "🎁 " + escape(reward.getTitle()) + "\n"
+                                + "В прошлый раз вы указывали: <code>" + escape(lastDetails) + "</code>",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("✅ Да, выдать на эти данные", "shop:buyto:" + rewardId)),
+                                List.of(keyboardFactory.callback("✏️ Указать другие", "shop:buyother:" + rewardId)),
+                                List.of(keyboardFactory.callback("⬅️ Назад", "shop:view:" + rewardId)))));
+                answerSilently(callbackQuery.getId());
+                return;
+            }
+            askRewardUserData(callbackQuery, user, reward);
             return;
         }
         completePurchase(callbackQuery, user, reward, null);
