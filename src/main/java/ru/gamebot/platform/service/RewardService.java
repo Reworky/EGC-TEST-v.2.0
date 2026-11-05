@@ -270,7 +270,7 @@ public class RewardService {
             throw new IllegalArgumentException("Эта рамка уже в вашей коллекции. Переключитесь бесплатно в профиле.");
         }
 
-        long price = effectivePrice(rewardItem);
+        long price = healthRatioService.effectivePriceFor(lockedUser, rewardItem);
 
         // 3.3 Withdrawal limit check (min 5000 EXC per model)
         if (price < 5_000) {

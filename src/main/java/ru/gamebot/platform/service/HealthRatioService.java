@@ -120,6 +120,25 @@ public class HealthRatioService {
         return Math.round(item.getPriceCoins() / ratio);
     }
 
+    /** Наценка на вывод звёздами для игроков без активного EGC Pass (05.11.2026): с Pass звёзды по обычной цене, то есть скидка Pass = отмена наценки (на 20% дешевле). */
+    public static final double STARS_NON_PASS_MARKUP = 1.25;
+
+    /** Цена позиции для конкретного игрока: для звёзд без активного EGC Pass - с наценкой (округление до сотен), для остального как effectivePrice. Показ, лимиты и списание должны брать цену отсюда. */
+    public long effectivePriceFor(ru.gamebot.platform.domain.model.AppUser user, ru.gamebot.platform.domain.model.RewardItem item) {
+        long price = effectivePrice(item);
+        if (starsMarkupApplies(user, item)) {
+            return Math.round(price * STARS_NON_PASS_MARKUP / 100.0) * 100;
+        }
+        return price;
+    }
+
+    /** Наценка на звёзды действует: позиция - звёзды и у игрока нет активного EGC Pass. */
+    public boolean starsMarkupApplies(ru.gamebot.platform.domain.model.AppUser user, ru.gamebot.platform.domain.model.RewardItem item) {
+        if (user == null || item == null || !"telegram_stars".equals(item.getPurchaseGroup())) return false;
+        LocalDateTime passUntil = user.getEgcPassActiveUntil();
+        return passUntil == null || !LocalDateTime.now().isBefore(passUntil);
+    }
+
     /** Реальная стоимость одной звезды Telegram у реселлера в рублях (RewardSeeder откалиброван так же: 50 ⭐ = 79 ₽). Только для показа эквивалента игроку. */
     public static final double STAR_RUB = 1.58;
 

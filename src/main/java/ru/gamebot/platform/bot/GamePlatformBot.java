@@ -10081,7 +10081,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         rows.add(List.of(keyboardFactory.callback(icon + " " + groupLabel + label, callback)));
                     } else {
                         RewardItem reward = groupItems.get(0);
-                        long price = rewardService.effectivePrice(reward);
+                        long price = healthRatioService.effectivePriceFor(user, reward);
                         String status = shopLimitService.getItemStatus(user, reward);
                         String icon = status.startsWith("🔒") ? "🔒"
                                 : status.startsWith("⏳") ? "⏳"
@@ -10678,7 +10678,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             "shop:group:" + groupEntry.getKey())));
                 } else {
                     RewardItem reward = groupItems.get(0);
-                    long price = rewardService.effectivePrice(reward);
+                    long price = healthRatioService.effectivePriceFor(user, reward);
                     String status = shopLimitService.getItemStatus(user, reward);
                     String icon = status.startsWith("🔒") ? "🔒"
                             : status.startsWith("⏳") ? "⏳"
@@ -12062,7 +12062,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String groupLabel = groupItemLabel(items.get(0).getTitle());
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (RewardItem item : items) {
-            long price = rewardService.effectivePrice(item);
+            long price = healthRatioService.effectivePriceFor(user, item);
             String status = shopLimitService.getItemStatus(user, item);
             String icon = status.startsWith("🔒") ? "🔒" : status.startsWith("⏳") ? "⏳" : "🎁";
             // Extract denomination part: everything after last space-dash-space
@@ -12078,12 +12078,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "Кастомизация".equals(items.get(0).getCategory()) ? "sink:cat:customization" : "menu:shop";
         String vpnBot = appProperties.getVpn2BotUsername() == null ? "" : appProperties.getVpn2BotUsername().trim().replaceFirst("^@", "");
         boolean vpnHint = "telegram_stars".equals(purchaseGroup) && !vpnBot.isEmpty();
+        boolean starsPassHint = "telegram_stars".equals(purchaseGroup) && healthRatioService.starsMarkupApplies(user, items.get(0));
+        if (starsPassHint) {
+            rows.add(List.of(keyboardFactory.callback("🎫 Оформить EGC Pass", "sink:egc_pass")));
+        }
         if (vpnHint) {
             rows.add(List.of(keyboardFactory.url("🔐 Открыть EGC VPN", "https://t.me/" + vpnBot + "?start=from_egc")));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", backTarget), keyboardFactory.callback("🏠 Меню", "menu:main")));
         String denominationText = "🎁 <b>" + escape(groupLabel) + "</b>\n\nВыберите номинал:"
-                + (vpnHint ? "\n\n⭐ Выведенные звёзды можно сразу потратить на EGC VPN: месяц — 89 ⭐." : "");
+                + (vpnHint ? "\n\n⭐ Выведенные звёзды можно сразу потратить на EGC VPN: месяц — 89 ⭐." : "")
+                + (starsPassHint ? "\n\n🎫 С EGC Pass звёзды дешевле на 20%." : "");
         if ("telegram_stars".equals(purchaseGroup)) {
             sendStarsBanner(user.getTelegramId(), denominationText, keyboardFactory.rowsLayout(rows));
             return;
@@ -12382,7 +12387,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendRewardCard(AppUser user, Long rewardId, String notice) {
         RewardItem reward = rewardService.getRewardItem(rewardId);
-        long effectivePrice = rewardService.effectivePrice(reward);
+        long effectivePrice = healthRatioService.effectivePriceFor(user, reward);
         String priceNote = effectivePrice != reward.getPriceCoins()
                 ? " (при Health Ratio 100%: " + reward.getPriceCoins() + " EXC)"
                 : "";
@@ -12419,7 +12424,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if ("telegram_stars".equals(reward.getPurchaseGroup())) {
             long starsRoom = withdrawalGateRoomExc(user);
-            if (starsRoom >= 0 && rewardService.effectivePrice(reward) > starsRoom) {
+            if (starsRoom >= 0 && healthRatioService.effectivePriceFor(user, reward) > starsRoom) {
                 answerSilently(callbackQuery.getId());
                 sendWithdrawalPartnerGate(user, starsRoom, "stars");
                 return;
@@ -12507,7 +12512,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void completePurchase(CallbackQuery callbackQuery, AppUser user, RewardItem reward, String userGameData) {
-        long effectivePrice = rewardService.effectivePrice(reward);
+        long effectivePrice = healthRatioService.effectivePriceFor(user, reward);
         RewardRequest req;
         try {
             req = rewardService.createRewardRequest(user, reward, userGameData);

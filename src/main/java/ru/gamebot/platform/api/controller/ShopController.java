@@ -75,7 +75,7 @@ public class ShopController {
                 .description(item.getDescription())
                 .category(item.getCategory())
                 .priceCoins(item.getPriceCoins())
-                .effectivePrice(rewardService.effectivePrice(item))
+                .effectivePrice(healthRatioService.effectivePriceFor(user, item))
                 .statusNote(statusNote)
                 .locked(locked)
                 .userDataPrompt(item.getUserDataPrompt())
@@ -120,7 +120,7 @@ public class ShopController {
         }
         if ("telegram_stars".equals(item.getPurchaseGroup())) {
             long starsRoom = gamePlatformBot.withdrawalGateRoomExc(user);
-            if (starsRoom >= 0 && rewardService.effectivePrice(item) > starsRoom) {
+            if (starsRoom >= 0 && healthRatioService.effectivePriceFor(user, item) > starsRoom) {
                 return ResponseEntity.ok(ShopActionResponseDto.builder()
                         .success(false)
                         .message("Первые 10 000 EXC выводятся любым способом, дальше вывод открывается после карты банка-партнёра: откройте «Вывод EXC» в боте.")

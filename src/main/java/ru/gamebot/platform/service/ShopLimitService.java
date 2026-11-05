@@ -114,7 +114,7 @@ public class ShopLimitService {
      *  RewardService.createRewardRequest потом всё равно заблокирует по той же самой причине. */
     public void checkMonthlySpendsLimit(AppUser user, RewardItem item) {
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
-        long price = healthRatioService.effectivePrice(item);
+        long price = healthRatioService.effectivePriceFor(user, item);
         if (price > remaining) {
             throw new IllegalArgumentException(
                     "📊 Достигнут месячный лимит трат в магазине. Доступно ещё: " + remaining + " EXC. Сбрасывается 1-го числа каждого месяца.");
@@ -225,7 +225,7 @@ public class ShopLimitService {
 
         // Слой 3 — сравнивать с effectivePrice (Health Ratio), не с базовой ценой, см. checkMonthlySpendsLimit.
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
-        long effectivePrice = healthRatioService.effectivePrice(item);
+        long effectivePrice = healthRatioService.effectivePriceFor(user, item);
         if (effectivePrice > remaining) {
             return "🚫 Недоступно — достигнут месячный лимит трат (" + remaining + " EXC осталось)";
         }
