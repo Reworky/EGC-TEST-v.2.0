@@ -1630,9 +1630,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.equals("shop:withdraw:rub")) {
             answerSilently(callbackQuery.getId());
-            long gateRoom = rubGateRoomExc(user);
+            long gateRoom = withdrawalGateRoomExc(user);
             if (gateRoom >= 0 && gateRoom < ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) {
-                sendRubPartnerGate(user, gateRoom);
+                sendWithdrawalPartnerGate(user, gateRoom, "rub");
                 return;
             }
             // Предложение вывести на карту партнёра - только тем, у кого баланс больше остатка лимита (иначе карта им ничего не даёт) и кто квест ещё не выполнил
@@ -1673,6 +1673,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.equals("shop:withdraw:ton")) {
             answerSilently(callbackQuery.getId());
+            long tonGateRoom = withdrawalGateRoomExc(user);
+            if (tonGateRoom >= 0 && tonGateRoom < ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) {
+                sendWithdrawalPartnerGate(user, tonGateRoom, "ton");
+                return;
+            }
             if (user.getPhoneNumber() == null) {
                 session.setState(SessionState.AWAITING_PHONE_SHARE);
                 session.getData().put("pendingWithdrawal", "ton");
@@ -1705,6 +1710,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.startsWith("shop:group:")) {
             // Вывод звёздами, как рубли и TON, требует подтверждённого номера телефона (иначе обход защиты от мультиаккаунтов)
+            if ("telegram_stars".equals(data.substring("shop:group:".length()))) {
+                long starsRoom = withdrawalGateRoomExc(user);
+                if (starsRoom >= 0 && starsRoom < minStarsPriceExc()) {
+                    answerSilently(callbackQuery.getId());
+                    sendWithdrawalPartnerGate(user, starsRoom, "stars");
+                    return;
+                }
+            }
             if ("telegram_stars".equals(data.substring("shop:group:".length())) && user.getPhoneNumber() == null) {
                 answerSilently(callbackQuery.getId());
                 session.setState(SessionState.AWAITING_PHONE_SHARE);
@@ -10186,34 +10199,40 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 )));
     }
 
-    /** Свободный остаток порога вывода рублями (EXC) до обязательной карты партнёра: -1 - порога нет (есть одобренный партнёрский квест). Порог считает выводы любым способом. */
-    public long rubGateRoomExc(AppUser user) {
+    /** Свободный остаток порога вывода (EXC) до обязательной карты партнёра: -1 - порога нет (есть одобренный партнёрский квест). Порог считает выводы любым способом и действует на рубли, TON и звёзды (с 05.11.2026). */
+    public long withdrawalGateRoomExc(AppUser user) {
         if (questService.hasApprovedPartnerQuest(user.getId())) return -1;
         return Math.max(0, RUB_FREE_WITHDRAWAL_EXC - rewardService.totalWithdrawnExc(user));
     }
 
     private static final long RUB_FREE_WITHDRAWAL_EXC = 10_000L;
 
-    /** Экран «дальше только на карту партнёра» (рублёвый вывод выше порога 10 000 EXC). */
-    private void sendRubPartnerGate(AppUser user, long room) {
+    /** Экран «дальше после карты партнёра»: вывод любым способом выше порога 10 000 EXC (рубли, TON, звёзды); kind - rub | ton | stars, для кнопки «вывести до N». */
+    private void sendWithdrawalPartnerGate(AppUser user, long room, String kind) {
         Quest quest = cardOfferQuestFor(user);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (quest != null) {
             rows.add(List.of(keyboardFactory.callback("🚀 Хочу карту ОТП", "quest:viewwd:" + quest.getId())));
         }
-        if (room >= ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) {
-            rows.add(List.of(keyboardFactory.callback("⏭️ Вывести до " + fmtExc(room) + " EXC в рублях", "shop:withdraw:rubgo")));
+        long needExc = "stars".equals(kind) ? minStarsPriceExc() : ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC;
+        if (room >= needExc) {
+            String go = "ton".equals(kind) ? "shop:withdraw:ton" : "stars".equals(kind) ? "shop:group:telegram_stars" : "shop:withdraw:rubgo";
+            rows.add(List.of(keyboardFactory.callback("⏭️ Вывести до " + fmtExc(room) + " EXC", go)));
         }
-        rows.add(List.of(keyboardFactory.callback("💎 Вывести в TON", "shop:withdraw:ton")));
         rows.add(List.of(keyboardFactory.callback("🤷 У меня уже есть эти банки", "shop:withdraw:nobank")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")));
         sendText(user.getTelegramId(),
-                "💳 <b>Дальше — на карту нашего банка-партнёра</b>\n\n"
-                        + "Первые " + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC можно выводить куда угодно"
+                "💳 <b>Дальше — после карты нашего банка-партнёра</b>\n\n"
+                        + "Первые " + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC можно выводить любым способом"
                         + (room > 0 ? ", у тебя осталось <b>" + fmtExc(room) + " EXC</b>" : "") + ". "
-                        + "Дальше рубли выводятся на карту банка, оформленную по нашей ссылке: это бесплатно, и за квест ты получаешь награду.\n\n"
-                        + "TON и звёзды без этого ограничения.",
+                        + "Дальше вывод открывается после карты банка, оформленной по нашей ссылке: это бесплатно, и за квест ты получаешь награду.",
                 keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Самая дешёвая позиция вывода звёздами в EXC по текущему курсу: меньше этого остатка порога звёзды выбрать нельзя. */
+    private long minStarsPriceExc() {
+        return rewardService.findByPurchaseGroup("telegram_stars").stream()
+                .mapToLong(rewardService::effectivePrice).min().orElse(ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC);
     }
 
     /** «Нет подходящего способа / эти банки уже есть»: письмо менеджеру с ID и балансом, он подберёт другой банк или способ вывода. */
@@ -10258,6 +10277,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (amount < 5000) {
             sendText(user.getTelegramId(), "⚠️ Минимальная сумма вывода — <b>5 000 EXC</b>.", cancelKeyboard());
+            return;
+        }
+        long tonRoom = withdrawalGateRoomExc(user);
+        if (tonRoom >= 0 && amount > tonRoom) {
+            sendWithdrawalPartnerGate(user, tonRoom, "ton");
             return;
         }
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
@@ -12273,6 +12297,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleRewardPurchase(CallbackQuery callbackQuery, AppUser user, Long rewardId) {
         RewardItem reward = rewardService.getRewardItem(rewardId);
+        if ("telegram_stars".equals(reward.getPurchaseGroup())) {
+            long starsRoom = withdrawalGateRoomExc(user);
+            if (starsRoom >= 0 && rewardService.effectivePrice(reward) > starsRoom) {
+                answerSilently(callbackQuery.getId());
+                sendWithdrawalPartnerGate(user, starsRoom, "stars");
+                return;
+            }
+        }
         if (reward.getUserDataPrompt() != null && !reward.getUserDataPrompt().isBlank()) {
             UserSession session = sessionService.get(user.getTelegramId());
             session.reset();
@@ -25109,9 +25141,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), "⚠️ Минимальная сумма вывода — <b>5 000 EXC</b>.", cancelKeyboard());
             return;
         }
-        long gateRoom = rubGateRoomExc(user);
+        long gateRoom = withdrawalGateRoomExc(user);
         if (gateRoom >= 0 && amount > gateRoom) {
-            sendRubPartnerGate(user, gateRoom);
+            sendWithdrawalPartnerGate(user, gateRoom, "rub");
             return;
         }
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);

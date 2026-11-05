@@ -112,6 +112,16 @@ public class ShopController {
             return ResponseEntity.notFound().build();
         }
 
+        if ("telegram_stars".equals(item.getPurchaseGroup())) {
+            long starsRoom = gamePlatformBot.withdrawalGateRoomExc(user);
+            if (starsRoom >= 0 && rewardService.effectivePrice(item) > starsRoom) {
+                return ResponseEntity.ok(ShopActionResponseDto.builder()
+                        .success(false)
+                        .message("Первые 10 000 EXC выводятся любым способом, дальше вывод открывается после карты банка-партнёра: откройте «Вывод EXC» в боте.")
+                        .build());
+            }
+        }
+
         String userData = body != null ? body.getUserData() : null;
         if (item.getUserDataPrompt() != null && !item.getUserDataPrompt().isBlank()
                 && (userData == null || userData.isBlank())) {
