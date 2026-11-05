@@ -69,7 +69,7 @@ public class VpnBot extends TelegramLongPollingBot {
 
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm");
     private static final DateTimeFormatter DATE_SHORT = DateTimeFormatter.ofPattern("dd.MM HH:mm");
-    private static final String TRAFFIC_SOURCE_CODE = "vpnbot";
+    private static final String TRAFFIC_SOURCE_CODE = "egc_vpn";
     private static final int REMIND_SOON_DAYS = 2;
     private static final int REMIND_EXPIRED_WINDOW_DAYS = 3;
     private static final String APP_IOS = "https://apps.apple.com/app/happ-proxy-utility/id6504287215";
@@ -134,7 +134,7 @@ public class VpnBot extends TelegramLongPollingBot {
         }
     }
 
-    /** Источник трафика «vpnbot» для ссылок из VPN-бота в игровой (?start=src_vpnbot): клики и новые игроки видны в разделе трафика основного бота. */
+    /** Источник трафика «egc_vpn» для ссылок из VPN-бота в игровой (?start=src_egc_vpn; до 05.11 был код vpnbot, его статистика осталась в разделе трафика): клики и новые игроки видны в разделе трафика основного бота. */
     private void ensureTrafficSource() {
         try {
             if (trafficSourceService.findByCode(TRAFFIC_SOURCE_CODE).isEmpty()) {
