@@ -10232,21 +10232,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (referralIn.contains(b)) continue;
             Quest q = questService.findAll().stream().filter(x -> b.mission().questTitle().equals(x.getTitle()) && x.isActive()).findFirst().orElse(null);
             if (q == null) continue;
-            rows.add(List.of(keyboardFactory.callback("🏦 Заказать карту " + b.title(), "quest:viewwd:" + q.getId())));
+            rows.add(List.of(keyboardFactory.callback("🏦 Заказать карту " + b.genitive(), "quest:viewwd:" + q.getId())));
         }
         boolean single = banks.size() == 1;
         String names = banks.stream().map(ru.gamebot.platform.service.WithdrawalPartners.Bank::title).collect(java.util.stream.Collectors.joining(", "));
+        String namesGen = banks.stream().map(ru.gamebot.platform.service.WithdrawalPartners.Bank::genitive).collect(java.util.stream.Collectors.joining(", "));
         String text;
         if (!referralIn.isEmpty() && single) {
             rows.add(List.of(keyboardFactory.callback("🔁 Начать вывод заново", "shop:withdraw")));
-            text = "💳 <b>Вывод — только на карту " + escape(names) + "</b>\n\n"
+            text = "💳 <b>Вывод — только на карту " + escape(namesGen) + "</b>\n\n"
                     + "Вы уже наш реферал в банке «" + escape(names) + "». Для вывода введите банк «" + escape(names)
                     + "» и номер телефона, привязанный к вашей карте.";
         } else if (single) {
             rows.add(List.of(keyboardFactory.callback("🤷 У меня уже есть " + names, "shop:withdraw:nobank")));
-            text = "💳 <b>Вывод этой суммы — только на карту " + escape(names) + "</b>\n\n"
+            text = "💳 <b>Вывод этой суммы — только на карту " + escape(namesGen) + "</b>\n\n"
                     + "Вы уже вывели максимум, доступный без карты (" + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC). "
-                    + "Дальше мы выводим деньги только на вашу карту " + escape(names) + ": для этого нужно стать нашим рефералом в банке, "
+                    + "Дальше мы выводим деньги только на вашу карту " + escape(namesGen) + ": для этого нужно стать нашим рефералом в банке, "
                     + "заказать карту по нашей ссылке и принимать деньги на неё.\n\n"
                     + "Скоро добавим больше банков, чтобы у вас был выбор.";
         } else {
