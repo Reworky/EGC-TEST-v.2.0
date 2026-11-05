@@ -19,8 +19,6 @@ public class ShopLimitService {
     private static final int COOLDOWN_SMALL_DAYS = 2;
     private static final int COOLDOWN_MEDIUM_DAYS = 5;
     private static final int COOLDOWN_LARGE_DAYS = 10;
-    /** Покупок игровой валюты на одну игру в месяц (было 1). */
-    private static final int GAME_PURCHASES_PER_MONTH = 3;
     /** Защита вместо ранга: подтверждённый телефон, 3 квеста и 3 дня с регистрации (как для вывода). */
     private static final int SHOP_MIN_QUESTS = 3;
     private static final int SHOP_MIN_ACCOUNT_AGE_DAYS = 3;
@@ -71,9 +69,7 @@ public class ShopLimitService {
             checkItemQuantityLimit(user, item);
         }
         checkMonthlySpendsLimit(user, item);
-        if (!isStarsWithdrawal) {
-            checkCooldown(user, item);
-        }
+        // Кулдаун между покупками (слой 4) отменён 06.11.2026: лимит трат в месяц и базовая защита уже ограничивают объём
     }
 
     /** Слой 1: уровень доступа */
@@ -125,12 +121,7 @@ public class ShopLimitService {
                 // Лимита количества нет — рамки можно покупать/менять сколько угодно раз, по требованию пользователя.
             }
             default -> {
-                // Игровые валюты: 1 покупка на игру в месяц
-                long count = rewardRequestRepository.countActiveByUserAndGroupSince(user, group, monthStart);
-                if (count >= GAME_PURCHASES_PER_MONTH) {
-                    throw new IllegalArgumentException(
-                            "🚫 Лимит: " + GAME_PURCHASES_PER_MONTH + " покупки на эту игру в месяц уже использованы. Доступно с 1-го числа следующего месяца.");
-                }
+                // Игровые валюты: лимита количества нет (отменён 06.11.2026) - объём ограничивает лимит трат в месяц
             }
         }
     }
@@ -223,19 +214,7 @@ public class ShopLimitService {
         boolean isStarsWithdrawal = "telegram_stars".equals(item.getPurchaseGroup());
         LocalDateTime now = LocalDateTime.now();
 
-        // Слой 4 — не применяется к выводу в звёздах, см. checkAllLimits.
-        if (!isStarsWithdrawal) {
-            long price = item.getPriceCoins();
-            LocalDateTime cooldownUntil;
-            if (price <= COOLDOWN_SMALL_THRESHOLD) cooldownUntil = user.getShopCooldownSmallUntil();
-            else if (price <= COOLDOWN_MEDIUM_THRESHOLD) cooldownUntil = user.getShopCooldownMediumUntil();
-            else cooldownUntil = user.getShopCooldownLargeUntil();
-
-            if (cooldownUntil != null && now.isBefore(cooldownUntil)) {
-                long daysLeft = java.time.temporal.ChronoUnit.DAYS.between(now, cooldownUntil) + 1;
-                return "⏳ Cooldown — следующая покупка через " + daysLeft + " дн.";
-            }
-        }
+        // Слой 4 (кулдаун) отменён 06.11.2026.
 
         // Слой 2 — не применяется к выводу в звёздах, см. checkAllLimits.
         String group = item.getPurchaseGroup();
@@ -246,7 +225,7 @@ public class ShopLimitService {
                 case "badge_egc" -> rewardRequestRepository.countActiveByUserAndGroupAllTime(user, "badge_egc") > 0;
                 case "tshirt_egc" -> rewardRequestRepository.countActiveByUserAndGroupAllTime(user, "tshirt_egc") > 0;
                 case "council_egc" -> rewardRequestRepository.countActiveCouncilSince(user, now.minusDays(30)) > 0;
-                default -> rewardRequestRepository.countActiveByUserAndGroupSince(user, group, monthStart) >= GAME_PURCHASES_PER_MONTH;
+                default -> false;
             };
             if (blocked) {
                 if ("badge_egc".equals(group) || "tshirt_egc".equals(group)) {

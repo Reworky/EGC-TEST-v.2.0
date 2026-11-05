@@ -302,9 +302,7 @@ public class RewardService {
             }
             // Вывод в звёздах не должен ставить общий ценовой cooldown — иначе он блокировал бы
             // покупку несвязанных товаров магазина в том же ценовом диапазоне (см. ShopLimitService.checkAllLimits).
-            if (!"telegram_stars".equals(rewardItem.getPurchaseGroup())) {
-                shopLimitService.recordPurchaseCooldown(lockedUser, rewardItem.getPriceCoins());
-            }
+            // кулдаун между покупками отменён 06.11.2026 (recordPurchaseCooldown больше не вызывается)
         }
 
         RewardRequest request = new RewardRequest();
