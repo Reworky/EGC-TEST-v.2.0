@@ -13858,6 +13858,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 )));
     }
 
+    /** Кнопка быстрой связи с игроком: личный аккаунт по нику или по ID (tg://user?id). */
+    private InlineKeyboardButton writeToPlayerButton(AppUser p) {
+        String uname = p.getTelegramUsername();
+        String url = uname != null && !uname.isBlank() ? "https://t.me/" + uname : "tg://user?id=" + p.getTelegramId();
+        return keyboardFactory.url("✉️ Написать игроку", url);
+    }
+
     /** Единая шапка игрока для всех карточек модерации: ник и кликабельные ссылки на личный аккаунт, ID, страна, возраст, телефон, стаж, квесты, ранг, Pass. */
     private String playerHeader(AppUser p) {
         String uname = p.getTelegramUsername();
@@ -14261,6 +14268,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(chatId, history.toString(),
                 verticalWithBackMenu(List.of(
                         keyboardFactory.callback("✍️ Ответить", "mod:support:reply:" + ticketId),
+                        writeToPlayerButton(ticket.getUser()),
                         keyboardFactory.callback("✅ Закрыть", "mod:support:close:" + ticketId)
                 ), "⬅️ Назад", "mod:support:list"));
 
@@ -16293,6 +16301,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             ));
         }
         cardRows.add(List.of(keyboardFactory.callback("🔎 Проверить игрока перед выдачей", "admin:reward:check:" + req.getId())));
+        cardRows.add(List.of(writeToPlayerButton(requester)));
         cardRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:reward:requests")));
         sendText(user.getTelegramId(),
                 rewardRequestInfo(req, requester) + statusLine,
@@ -16907,6 +16916,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "🚫 Отклонить + заблокировать оба аккаунта",
                     "admin:withdrawal:multiblock:" + req.getId() + ":" + multiblockTarget.get().getTelegramId())));
         }
+        adminWdRows.add(List.of(writeToPlayerButton(requester)));
         adminWdRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:withdrawals")));
         String passBadge = sinkShopService.isEgcPassActive(requester) ? " ⭐️<b>EGC Pass — приоритет</b>" : "";
         sendText(user.getTelegramId(),
@@ -26387,11 +26397,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             details = "\n💎 Реквизиты: <code>" + escape(payoutDetails) + "</code>";
         }
 
-        String text = "💸 <b>Новая заявка на вывод EXC</b>\n\n"
-                + "👤 Игрок: <b>" + escape(user.getNickname()) + "</b>\n"
-                + "🆔 Telegram ID: <b>" + user.getTelegramId() + "</b>"
-                + userLink + "\n"
-                + "🌍 Страна: <b>" + escape(user.getCountry() != null ? user.getCountry() : "Не указана") + "</b>\n"
+        String text = "💸 <b>Новая заявка на вывод EXC В-" + reqDisplayId(req) + "</b>\n\n"
+                + playerHeader(user) + "\n"
                 + "🪙 Сумма: <b>" + rewardService.actualPaidPrice(req) + " EXC</b>\n"
                 + "📦 Тип: <b>" + escape(req.getRewardItem().getTitle()) + "</b>"
                 + (req.getBonusAmountRub() > 0
@@ -26402,8 +26409,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         Set<Long> adminIds = adminService.allAdminIds();
         for (Long recipientId : adminService.allModeratorIds()) {
             String callbackData = adminIds.contains(recipientId) ? "admin:withdrawals" : "mod:withdrawals";
+            String cardData = (adminIds.contains(recipientId) ? "admin:withdrawal:req:" : "mod:withdrawal:req:") + req.getId();
             InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
-                    List.of(keyboardFactory.callback("💸 Открыть заявки на вывод", callbackData))
+                    List.of(keyboardFactory.callback("📥 Открыть заявку", cardData)),
+                    List.of(writeToPlayerButton(user)),
+                    List.of(keyboardFactory.callback("💸 Все заявки на вывод", callbackData))
             ));
             sendText(recipientId, text, markup);
         }
@@ -26557,9 +26567,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String adminText = "💸 <b>Оплата доната «токены + рубли» #" + order.getId() + "</b>\nИгрок <a href=\"tg://user?id=" + user.getTelegramId() + "\">"
                     + escape(displayUserName(user)) + "</a> (<code>" + user.getTelegramId() + "</code>): " + escape(gemLabelWithGame(pkg, gameKey))
                     + ", <b>" + quote.rub() + " ₽ + " + fmtExc(quote.exc()) + " EXC</b>. Ему предложено написать менеджеру. Пришлите реквизиты; когда деньги придут, нажмите «Деньги получены»: EXC спишутся, заявка на выдачу создастся сама.";
-            InlineKeyboardMarkup adminMarkup = keyboardFactory.rowsLayout(List.of(List.of(
-                    keyboardFactory.callback("✅ Деньги получены", "admin:shoprub:ok:" + order.getId()),
-                    keyboardFactory.callback("❌ Отклонить", "admin:shoprub:no:" + order.getId()))));
+            InlineKeyboardMarkup adminMarkup = keyboardFactory.rowsLayout(List.of(
+                    List.of(
+                            keyboardFactory.callback("✅ Деньги получены", "admin:shoprub:ok:" + order.getId()),
+                            keyboardFactory.callback("❌ Отклонить", "admin:shoprub:no:" + order.getId())),
+                    List.of(keyboardFactory.callback("📥 Открыть карточку", "admin:shoprub:view:" + order.getId())),
+                    List.of(writeToPlayerButton(user))));
             for (Long adminId : adminService.allModeratorIds()) {
                 try {
                     sendText(adminId, adminText, adminMarkup);
@@ -27182,7 +27195,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? "\n✉️ Написать: <a href=\"https://t.me/" + username + "\">@" + username + "</a>"
                 : "\n✉️ Telegram ID: <code>" + player.getTelegramId() + "</code>";
         String text = "💎 <b>Новая заявка на донат</b>\n\n"
-                + "👤 Игрок: <b>" + playerDmLink(player) + "</b>" + userLink + "\n"
+                + playerHeader(player) + "\n"
                 + "🎮 Игра: <b>" + escape(req.getGameName()) + "</b>\n"
                 + "🏷️ Тег: <code>" + escape(req.getGameTag()) + "</code>\n"
                 + "📦 Пакет: <b>" + req.displayLabel() + "</b>\n"
@@ -27192,6 +27205,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🎁 XP-бонус при выполнении: <b>" + req.getXpBonus() + "</b>";
         InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("👀 Открыть заявку", "admin:gempurchase:view:" + req.getId())),
+                List.of(writeToPlayerButton(player)),
                 List.of(keyboardFactory.callback("📋 Тексты для игрока", "admin:gempurchase:texts:" + req.getId()))
         ));
         for (Long adminId : adminService.allModeratorIds()) {
@@ -27247,6 +27261,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback("✅ Деньги получены", "admin:shoprub:ok:" + order.getId()),
                     keyboardFactory.callback("❌ Отклонить", "admin:shoprub:no:" + order.getId())));
         }
+        if (buyer != null) rows.add(List.of(writeToPlayerButton(buyer)));
         rows.add(List.of(keyboardFactory.callback("⬅️ К списку", "admin:gempurchase")));
         sendText(viewer.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
@@ -27686,6 +27701,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "🚫 Отклонить + заблокировать оба аккаунта",
                     "mod:withdrawal:multiblock:" + req.getId() + ":" + multiblockTargetMod.get().getTelegramId())));
         }
+        modWdRows.add(List.of(writeToPlayerButton(requester)));
         modWdRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "mod:withdrawals")));
         String passBadgeMod = sinkShopService.isEgcPassActive(requester) ? " ⭐️<b>EGC Pass — приоритет</b>" : "";
         sendText(user.getTelegramId(),
@@ -27711,7 +27727,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         InlineKeyboardMarkup richMarkup = keyboardFactory.rowsLayout(List.of(
-                List.of(keyboardFactory.callback("📥 Открыть заявку", "admin:reward:req:" + req.getId()))
+                List.of(keyboardFactory.callback("📥 Открыть заявку", "admin:reward:req:" + req.getId())),
+                List.of(writeToPlayerButton(user))
         ));
         String rich = "🛍️ <b>Новая заявка на выдачу награды</b>\n\n" + rewardRequestInfo(req, user);
         for (Long adminId : adminService.allModeratorIds()) {
@@ -29908,6 +29925,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         InlineKeyboardMarkup markup = keyboardFactory.verticalLayout(List.of(
                 keyboardFactory.callback("👁️ Открыть", "mod:support:view:" + ticket.getId()),
                 keyboardFactory.callback("✍️ Ответить", "mod:support:reply:" + ticket.getId()),
+                writeToPlayerButton(ticket.getUser()),
                 keyboardFactory.callback("✅ Закрыть", "mod:support:close:" + ticket.getId()),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
