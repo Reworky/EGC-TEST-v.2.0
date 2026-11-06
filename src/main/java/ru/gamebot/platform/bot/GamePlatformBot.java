@@ -26922,7 +26922,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (pkg.gems() <= 0) return null;
         for (RewardItem item : rewardService.findByPurchaseGroup(gameKey)) {
             java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)\\s*$").matcher(item.getTitle() == null ? "" : item.getTitle());
-            if (m.find() && Long.parseLong(m.group(1)) == pkg.gems()) return item;
+            if (!m.find()) continue;
+            long itemNumber = Long.parseLong(m.group(1));
+            // у пакетов с бонусом (PUBG UC «300 + 25») gems = 325, а в названии позиции - номинал 300 = ключ пакета
+            if (itemNumber == pkg.gems() || String.valueOf(itemNumber).equals(pkg.key())) return item;
         }
         return null;
     }

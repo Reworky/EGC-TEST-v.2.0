@@ -141,6 +141,11 @@ public class RewardSeeder implements CommandLineRunner {
                 "Пополнение 660 UC (600 + 60 бонусных) на аккаунт PUBG Mobile. Зачисляется по Player ID без входа в аккаунт. Срок доставки — до 24 ч.",
                 "PUBG Mobile", 127_400, pubgMobilePrompt, 15_000, "pubg_mobile");
 
+        // 07.11.2026: у пакета «1500 + 300 UC» (2 654 ₽) не было позиции за EXC, поэтому в списке у него не показывалась оплата токенами + рублями; цена по правилу доната: 2 654 × 100 × 1,2 = 318 480, вверх до сотен
+        seed("PUBG Mobile - UC 1500",
+                "Пополнение 1800 UC (1500 + 300 бонусных) на аккаунт PUBG Mobile. Зачисляется по Player ID без входа в аккаунт. Срок доставки — до 24 ч.",
+                "PUBG Mobile", 318_500, pubgMobilePrompt, 15_000, "pubg_mobile");
+
         // EA FC 26 — coming soon (visible but not purchasable)
         rewardItemRepository.findByTitle("EA FC 26 — 500 FC Points").ifPresent(item -> {
             boolean changed = false;
