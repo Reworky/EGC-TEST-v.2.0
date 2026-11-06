@@ -1624,6 +1624,38 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendOtpWithdrawalOffer(user);
             return;
         }
+        if (data.equals("about:start") || data.startsWith("about:age:") || data.startsWith("about:c:")) {
+            answerSilently(callbackQuery.getId());
+            if (data.startsWith("about:age:")) {
+                long abtAge = parseLongSafe(data.substring("about:age:".length()));
+                if (abtAge >= 10 && abtAge <= 99) {
+                    user.setAge((int) abtAge);
+                    userService.save(user);
+                }
+            } else if (data.startsWith("about:c:")) {
+                String abtCode = data.substring("about:c:".length());
+                String abtCountry = switch (abtCode) {
+                    case "ru" -> "Россия";
+                    case "ua" -> "Украина";
+                    case "kz" -> "Казахстан";
+                    case "by" -> "Беларусь";
+                    case "uz" -> "Узбекистан";
+                    case "kg" -> "Кыргызстан";
+                    default -> null;
+                };
+                if (abtCountry != null && user.getPhoneNumber() == null) {
+                    user.setCountry(abtCountry);
+                    userService.save(user);
+                } else if ("other".equals(abtCode) && user.getPhoneNumber() == null) {
+                    session.reset();
+                    session.setState(SessionState.EDIT_COUNTRY);
+                    sendText(user.getTelegramId(), "🌍 <b>Напиши страну, из которой играешь:</b>", backOnlyKeyboard("menu:main"));
+                    return;
+                }
+            }
+            sendAboutStep(user);
+            return;
+        }
         if (data.equals("shop:withdraw:nobank")) {
             answerSilently(callbackQuery.getId());
             sendWithdrawalNoBankHelp(user);
@@ -2703,6 +2735,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 user.setAge(newAge);
                 userService.save(user);
                 session.setState(SessionState.NONE);
+                grantAboutRewardIfDone(user);
                 sendProfileEdit(user);
             }
             case EDIT_COUNTRY -> {
@@ -2730,6 +2763,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 user.setCountry(ru.gamebot.platform.service.CountryNormalizer.canonical(newCountry));
                 userService.save(user);
                 session.setState(SessionState.NONE);
+                grantAboutRewardIfDone(user);
                 sendProfileEdit(user);
             }
             case ADV_INPUT -> {
@@ -27426,6 +27460,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         // 🔔 про ежедневный бонус теперь на «Заданиях дня»; в кошельке он лишь когда задания выключены.
         String walletLabel = !userService.dailyTasksEnabled() && userService.isDailyBonusAvailable(user) ? "💰 Кошелёк 🔔" : "💰 Кошелёк";
+        if (user.getAge() == null || ((user.getCountry() == null || user.getCountry().isBlank()) && user.getPhoneNumber() == null)) {
+            rows.add(List.of(keyboardFactory.callback("🎁 Расскажи о себе (+" + ABOUT_REWARD_EXC + " EXC)", "about:start")));
+        }
         rows.add(List.of(
                 keyboardFactory.callback(walletLabel, "menu:balance"),
                 keyboardFactory.callback("🛍️ Магазин", "menu:cat:shop")
@@ -28107,6 +28144,46 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         keyboardFactory.callback("🏠 Меню", "menu:main")
                 )
         ));
+    }
+
+    /** Анкета «Расскажи о себе» (06.11.2026): возраст и страна кнопками, +100 EXC один раз за ответ. Страна по телефону (если он есть) определяется отдельно и перезаписывает ответ. */
+    private void sendAboutStep(AppUser user) {
+        if (user.getAge() == null) {
+            sendText(user.getTelegramId(),
+                    "🎁 <b>Расскажи о себе</b>\n\nСколько тебе лет? Это нужно, чтобы показывать подходящие задания. За ответ на оба вопроса: <b>+" + ABOUT_REWARD_EXC + " EXC</b>.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("до 14", "about:age:13"), keyboardFactory.callback("14–15", "about:age:14")),
+                            List.of(keyboardFactory.callback("16–17", "about:age:16"), keyboardFactory.callback("18–24", "about:age:18")),
+                            List.of(keyboardFactory.callback("25 и старше", "about:age:25")),
+                            List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")))));
+            return;
+        }
+        if ((user.getCountry() == null || user.getCountry().isBlank()) && user.getPhoneNumber() == null) {
+            sendText(user.getTelegramId(),
+                    "🌍 <b>Из какой ты страны?</b>",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("🇷🇺 Россия", "about:c:ru"), keyboardFactory.callback("🇺🇦 Украина", "about:c:ua")),
+                            List.of(keyboardFactory.callback("🇰🇿 Казахстан", "about:c:kz"), keyboardFactory.callback("🇧🇾 Беларусь", "about:c:by")),
+                            List.of(keyboardFactory.callback("🇺🇿 Узбекистан", "about:c:uz"), keyboardFactory.callback("🇰🇬 Кыргызстан", "about:c:kg")),
+                            List.of(keyboardFactory.callback("🌍 Другая страна", "about:c:other")),
+                            List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")))));
+            return;
+        }
+        grantAboutRewardIfDone(user);
+        sendText(user.getTelegramId(), "✅ <b>Спасибо!</b> Теперь мы сможем показывать тебе подходящие задания.",
+                keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
+    }
+
+    private static final long ABOUT_REWARD_EXC = 100;
+
+    /** +100 EXC один раз, когда у игрока заполнены и возраст, и страна (маркер в app_settings, чтобы не начислить дважды). */
+    private void grantAboutRewardIfDone(AppUser user) {
+        if (user.getAge() == null || user.getCountry() == null || user.getCountry().isBlank()) return;
+        String key = "about.rewarded." + user.getTelegramId();
+        if (appSettingValue(key) != null) return;
+        saveAppSetting(key, "1");
+        userService.addReward(user, 0, ABOUT_REWARD_EXC, ru.gamebot.platform.service.ExcTransactionService.BONUS, "Анкета: возраст и страна");
+        sendText(user.getTelegramId(), "🎁 +" + ABOUT_REWARD_EXC + " EXC за ответ. Спасибо!", null);
     }
 
     private InlineKeyboardMarkup backOnlyKeyboard(String backData) {
