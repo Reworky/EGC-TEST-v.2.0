@@ -14047,10 +14047,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private record InboxItem(LocalDateTime at, String icon, String label, String callback) {}
 
-    /** Папка «Выдача»: заявки на донат (игровая валюта, оплата деньгами или токены + рубли/звёзды), оплаты «токены + рубли» и награды магазина (оплата токенами) в одном списке с метками типа. */
+    /** Папка «Выдача»: две подгруппы-заголовка, как в заявках на вывод: «🎮 ДОНАТ» (заявки на донат и оплаты «токены + рубли») и «🎁 НАГРАДЫ» (оплата токенами). Внутри группы старые сверху, слова «Донат»/«Награда» в кнопках не пишем. */
     private void sendModIssueFolder(AppUser viewer) {
-        List<InboxItem> items = new ArrayList<>();
-        long donats = 0, rewards = 0, orders = 0;
+        List<InboxItem> donatItems = new ArrayList<>();
+        List<InboxItem> rewardItems = new ArrayList<>();
+        long orders = 0;
         try {
             for (GemPurchaseRequest g : gemPurchaseService.findPending()) {
                 String method = g.getPaymentMethod() == null ? "RUB" : g.getPaymentMethod();
@@ -14059,45 +14060,57 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     case "TON" -> "GRAM";
                     default -> (g.getExcPaid() > 0 ? "EXC + " : "") + "₽";
                 };
-                items.add(new InboxItem(g.getCreatedAt(), "🎮", "Донат Д-" + g.getDisplayId() + " " + trim(g.getUser().getNickname(), 14) + " — " + g.displayLabel() + " · " + pay,
+                donatItems.add(new InboxItem(g.getCreatedAt(), "🎮", "Д-" + g.getDisplayId() + " " + trim(g.getUser().getNickname(), 14) + " — " + g.displayLabel() + " · " + pay,
                         "admin:gempurchase:view:" + g.getId()));
-                donats++;
             }
             for (ru.gamebot.platform.domain.model.ShopRubleOrder o : pendingRubleOrders()) {
                 AppUser buyer = userService.findByTelegramId(o.getTelegramId()).orElse(null);
-                items.add(new InboxItem(o.getCreatedAt(), "🧾", "Оплата ждёт #" + o.getId() + " " + trim(buyer == null ? String.valueOf(o.getTelegramId()) : buyer.getNickname(), 14) + " — " + o.getRubAmount() + " ₽ + EXC",
+                donatItems.add(new InboxItem(o.getCreatedAt(), "🧾", "Оплата ждёт #" + o.getId() + " " + trim(buyer == null ? String.valueOf(o.getTelegramId()) : buyer.getNickname(), 14) + " — " + o.getRubAmount() + " ₽ + EXC",
                         "admin:shoprub:view:" + o.getId()));
                 orders++;
             }
             for (RewardRequest r : rewardService.findPendingRequests()) {
-                items.add(new InboxItem(r.getCreatedAt(), r.getStatus() == RewardRequestStatus.IN_PROGRESS ? "🔄" : "🎁",
-                        "Награда М-" + reqDisplayId(r) + " " + trim(r.getUser().getNickname(), 14) + " — " + trim(r.getRewardItem().getTitle(), 16) + " · EXC",
+                rewardItems.add(new InboxItem(r.getCreatedAt(), r.getStatus() == RewardRequestStatus.IN_PROGRESS ? "🔄" : "🎁",
+                        "М-" + reqDisplayId(r) + " " + trim(r.getUser().getNickname(), 14) + " — " + trim(r.getRewardItem().getTitle(), 16) + " · EXC",
                         "admin:reward:req:" + r.getId()));
-                rewards++;
             }
         } catch (Exception e) {
             log.warn("Failed to build issue folder", e);
         }
-        items.sort(java.util.Comparator.comparing((InboxItem i) -> i.at() == null ? LocalDateTime.MIN : i.at()));
+        java.util.Comparator<InboxItem> oldestFirst = java.util.Comparator.comparing((InboxItem i) -> i.at() == null ? LocalDateTime.MIN : i.at());
+        donatItems.sort(oldestFirst);
+        rewardItems.sort(oldestFirst);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         LocalDateTime now = LocalDateTime.now();
+        addIssueGroupRows(rows, "🎮 ДОНАТ", donatItems, now);
+        addIssueGroupRows(rows, "🎁 НАГРАДЫ", rewardItems, now);
+        rows.add(List.of(keyboardFactory.callback("⬅️ Центр модерации", "menu:moderation")));
+        int total = donatItems.size() + rewardItems.size();
+        sendText(viewer.getTelegramId(),
+                total == 0
+                        ? "🎮 <b>Выдача: донат и награды</b>\n\nОткрытых заявок нет."
+                        : "🎮 <b>Выдача: донат и награды (" + total + ")</b>\n"
+                                + "🎮 Донат (игровая валюта; оплата деньгами или токены + рубли/звёзды): " + donatItems.size()
+                                + (orders > 0 ? ", из них оплат «токены + рубли» ждут подтверждения: " + orders : "") + "\n"
+                                + "🎁 Награды магазина (оплата токенами): " + rewardItems.size() + "\n"
+                                + "⏰ — ждёт больше 12 часов. Старые сверху.",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Заголовок-разделитель подгруппы «— ЗАГОЛОВОК (N) —» и под ним кнопки заявок (до 25 на группу). */
+    private void addIssueGroupRows(List<List<InlineKeyboardButton>> rows, String title, List<InboxItem> items, LocalDateTime now) {
+        if (items.isEmpty()) return;
+        rows.add(List.of(keyboardFactory.callback("— " + title + " (" + items.size() + ") —", "noop")));
         int shown = 0;
         for (InboxItem item : items) {
-            if (shown++ >= 40) break;
+            if (shown++ >= 25) break;
             boolean old = item.at() != null && item.at().isBefore(now.minusHours(12));
             String when = item.at() == null ? "" : item.at().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm")) + " ";
             rows.add(List.of(keyboardFactory.callback((old ? "⏰ " : "") + item.icon() + " " + when + item.label(), item.callback())));
         }
-        rows.add(List.of(keyboardFactory.callback("⬅️ Центр модерации", "menu:moderation")));
-        sendText(viewer.getTelegramId(),
-                items.isEmpty()
-                        ? "🎮 <b>Выдача: донат и награды</b>\n\nОткрытых заявок нет."
-                        : "🎮 <b>Выдача: донат и награды (" + items.size() + ")</b>\n"
-                                + "🎮 Донат (игровая валюта, оплата деньгами или токены + рубли/звёзды): " + donats + "\n"
-                                + "🧾 Оплаты «токены + рубли», ждут подтверждения: " + orders + "\n"
-                                + "🎁 Награды магазина (оплата токенами): " + rewards + "\n"
-                                + "⏰ — ждёт больше 12 часов. Старые сверху.",
-                keyboardFactory.rowsLayout(rows));
+        if (items.size() > 25) {
+            rows.add(List.of(keyboardFactory.callback("… ещё " + (items.size() - 25) + ": закройте старые, и они появятся", "noop")));
+        }
     }
 
     /** «Всё ожидающее»: одним списком все открытые заявки и обращения (старые сверху), чтобы ничего не терялось после разового уведомления. */
