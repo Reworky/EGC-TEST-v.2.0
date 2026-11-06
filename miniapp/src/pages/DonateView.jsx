@@ -96,12 +96,9 @@ function PackageCard({ pkg, egcPass, tagLinked, expanded, onToggle, onDone }) {
           ) : (
             <>
               <p className="shop-desc">
-                Выберите способ оплаты. ⭐ Stars списываются сразу автоматически; 💎 GRAM (TON) — перевод вручную, проверка займёт время.
+                Оплата токенами + рублями — в боте (раздел «Магазин» → донат). Здесь доступен 💎 GRAM (TON): перевод вручную, проверка займёт время.
               </p>
-              <button className="quest-btn" disabled={busy} onClick={() => buy('STARS')}>
-                {busy ? 'Секунду...' : `⭐ Telegram Stars — ${pkg.starsPrice} ⭐`}
-              </button>
-              <button className="quest-btn quest-btn-secondary" style={{ marginTop: 8 }} disabled={busy} onClick={() => setConfirmTon(true)}>
+              <button className="quest-btn" disabled={busy} onClick={() => setConfirmTon(true)}>
                 💎 GRAM (TON) — ~{pkg.tonAmount}
               </button>
             </>

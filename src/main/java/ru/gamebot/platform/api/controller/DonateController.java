@@ -171,14 +171,8 @@ public class DonateController {
         try {
             switch (body.getMethod()) {
                 case "STARS" -> {
-                    String url = gamePlatformBot.createGemStarsInvoiceLink(user, body.getGameKey(), pkg);
-                    if (url == null) {
-                        return ResponseEntity.ok(PurchaseResponse.error("Не удалось создать счёт. Попробуйте ещё раз позже."));
-                    }
-                    PurchaseResponse r = new PurchaseResponse();
-                    r.setSuccess(true);
-                    r.setInvoiceUrl(url);
-                    return ResponseEntity.ok(r);
+                    // оплата полностью звёздами убрана (07.11.2026, владелец): токены + рубли или звёзды - в боте
+                    return ResponseEntity.ok(PurchaseResponse.error("Оплата полностью звёздами недоступна. Оформите покупку в боте: токены + рубли."));
                 }
                 case "TON" -> {
                     GemPurchaseRequest req = gamePlatformBot.createGemTonRequestForMiniApp(user, body.getGameKey(), pkg);

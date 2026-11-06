@@ -1682,19 +1682,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             HybridQuote gsQuote = hybridQuote(user, gsParts[0], gsPkg);
             long gsPrice = gemPurchasePriceFor(user, gsPkg);
-            int gsFullStars = gemPurchaseStarsPrice(gsPrice);
             java.math.BigDecimal gsTon = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(gsPrice));
             List<List<InlineKeyboardButton>> gsRows = new ArrayList<>();
             if (gsQuote != null) {
                 gsRows.add(List.of(keyboardFactory.callback(fmtExc(gsQuote.exc()) + " EXC + " + gsQuote.stars() + " ⭐", "gemhyb:" + gsParts[0] + ":" + gsParts[1])));
             }
-            gsRows.add(List.of(keyboardFactory.callback("Без токенов: " + gsFullStars + " ⭐", "gemdonate:method:STARS:" + gsParts[0] + ":" + gsParts[1])));
             gsRows.add(List.of(keyboardFactory.callback("GRAM (TON), через менеджера", "gemdonate:method:TON:" + gsParts[0] + ":" + gsParts[1])));
             gsRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "gemdonate:pkg:" + gsParts[0] + ":" + gsParts[1])));
             sendText(user.getTelegramId(),
                     "⭐ <b>Оплата звёздами</b>\n" + escape(gsPkg.displayLabel()) + " · " + gsPrice + " ₽\n\n"
                             + (gsQuote != null ? "Со скидкой: <b>" + fmtExc(gsQuote.exc()) + " EXC и " + gsQuote.stars() + " ⭐</b>\n" : "")
-                            + "Или без токенов: <b>" + gsFullStars + " ⭐</b>. GRAM (TON) ~" + gsTon + " TON: менеджер пришлёт реквизиты.",
+                            + "Полностью звёздами оплатить нельзя. GRAM (TON) ~" + gsTon + " TON: менеджер пришлёт реквизиты.",
                     keyboardFactory.rowsLayout(gsRows));
             return;
         }
@@ -27057,11 +27055,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendGemPaymentMethodChoice(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg) {
         long price = gemPurchasePriceFor(user, pkg);
         java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(price));
-        int starsPrice = gemPurchaseStarsPrice(price);
         // Stars первыми (2026-09-25): оплата в один тап, подтверждается автоматически, без переписки с менеджером и
         // проверки перевода - самый быстрый путь и для игрока, и для менеджера. TON - вторым, через личную переписку.
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
-                List.of(keyboardFactory.callback("⭐ Telegram Stars — " + starsPrice + " ⭐ (быстрее всего)", "gemdonate:method:STARS:" + gameKey + ":" + pkg.key())),
                 List.of(keyboardFactory.callback("💎 GRAM (TON) — ~" + tonAmount + " TON (через менеджера)", "gemdonate:method:TON:" + gameKey + ":" + pkg.key())),
                 List.of(keyboardFactory.callback("❌ Отмена", gemDonateBackTarget(gameKey, pkg)))
         ));
@@ -27098,8 +27094,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + (hybrid != null
                         ? "Выберите способ оплаты. Нет возможности платить рублями или звёздами — напишите менеджеру, обсудим другой вариант.\n\n"
                         : "Выберите способ оплаты:\n\n"
-                                + "⭐ <b>Telegram Stars</b> — рекомендуем: оплата в один тап, подтверждается автоматически, без переписки и проверки перевода.\n"
-                                + "💎 <b>GRAM (TON)</b> — перевод вручную: менеджер напишет вам в личные сообщения и пришлёт реквизиты, это дольше.\n\n")
+                                + "💎 <b>GRAM (TON)</b> — перевод вручную: менеджер напишет вам в личные сообщения и пришлёт реквизиты.\n\n")
                 + gemPurchaseWarning(gameKey);
         if ("brawl_stars".equals(gameKey) && ("brawlpass".equals(pkg.key()) || "brawlpassplus".equals(pkg.key()))) {
             sendResourceBanner(user.getTelegramId(),
@@ -27130,27 +27125,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         GemPurchaseService.GemPackage pkg = pkgOpt.get();
         switch (method) {
-            case "STARS" -> sendGemStarsConfirm(user, gameKey, pkg);
-            case "STARSOK" -> sendGemStarsInvoice(user, gameKey, pkg);
+            // оплата полностью звёздами убрана (07.11.2026, владелец): старые кнопки возвращают к выбору способа
+            case "STARS", "STARSOK" -> sendGemPaymentMethodChoice(user, gameKey, pkg);
             case "TON" -> sendGemPurchaseTonConfirm(user, gameKey, pkg);
             default -> sendGemPaymentMethodChoice(user, gameKey, pkg);
         }
-    }
-
-    /** Окно подтверждения перед счётом на звёзды (06.11.2026): игрок видит пакет, цену и тег, счёт придёт после «Оформить заявку». */
-    private void sendGemStarsConfirm(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg) {
-        String tag = gemPurchaseGameTag(user, gameKey);
-        long price = gemPurchasePriceFor(user, pkg);
-        int stars = gemPurchaseStarsPrice(price);
-        sendText(user.getTelegramId(),
-                "📝 <b>Проверьте заявку</b>\n\n"
-                        + "🎮 " + escape(pkg.displayLabel()) + "\n"
-                        + "💸 К оплате: <b>" + stars + " ⭐</b>\n"
-                        + (tag == null || tag.isBlank() ? "" : "🏷 Тег: <code>" + escape(tag) + "</code>\n")
-                        + "\nПосле нажатия «Оформить заявку» вам придёт счёт на звёзды. После оплаты заявка уйдёт модератору на выдачу.",
-                keyboardFactory.rowsLayout(List.of(
-                        List.of(keyboardFactory.callback("✅ Оформить заявку", "gemdonate:method:STARSOK:" + gameKey + ":" + pkg.key())),
-                        List.of(keyboardFactory.callback("⬅️ Назад", "gemstars:" + gameKey + ":" + pkg.key())))));
     }
 
     /** Промежуточное подтверждение перед созданием заявки на GRAM (TON) (2026-09-20, по запросу
@@ -27270,7 +27249,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "на нужную сумму. Подойдёт и любой другой TON-кошелёк или биржа.\n\n"
                         + "Дальше менеджер пришлёт адрес и точную сумму: нажмите «Отправить», вставьте адрес, выберите сеть TON и "
                         + "в комментарии укажите номер заявки.\n\n"
-                        + "Не хочется возиться с TON? Оплатите Stars: Магазин наград → ваша игра → «Купить за реальные деньги» → тот же пакет → «Telegram Stars». Это быстрее."
+                        + "Не хочется возиться с TON? Выберите оплату токенами + рублями: Магазин наград → ваша игра → тот же пакет → «EXC + ₽». Менеджер пришлёт реквизиты."
                 : "🔐 <b>Про доступ к аккаунту</b>\n\n"
                         + "Для зачисления поставщик просит email вашего Supercell ID и одноразовый код из письма. Пароль не нужен. "
                         + "Это требование поставщика, а не бота.\n\n"
