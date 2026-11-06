@@ -13863,7 +13863,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String wLabelMod = pendingWithdrawalsMod > 0
                 ? "💸 Заявки на вывод (" + pendingWithdrawalsMod + ")"
                 : "💸 Заявки на вывод";
-        long pendingGemPurchasesMod = gemPurchaseService.findPending().size();
+        long pendingGemPurchasesMod = gemPurchaseService.findPending().size() + pendingRubleOrders().size();
         String gLabelMod = pendingGemPurchasesMod > 0
                 ? "💎 Заявки на донат (" + pendingGemPurchasesMod + ")"
                 : "💎 Заявки на донат";
@@ -26481,7 +26481,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             order.setCreatedAt(LocalDateTime.now());
             order = shopRubleOrderRepository.save(order);
             String adminText = "💸 <b>Оплата доната «токены + рубли» #" + order.getId() + "</b>\nИгрок <a href=\"tg://user?id=" + user.getTelegramId() + "\">"
-                    + escape(displayUserName(user)) + "</a> (<code>" + user.getTelegramId() + "</code>): " + escape(pkg.displayLabel()) + " " + escape(GemPurchaseService.gameName(gameKey))
+                    + escape(displayUserName(user)) + "</a> (<code>" + user.getTelegramId() + "</code>): " + escape(gemLabelWithGame(pkg, gameKey))
                     + ", <b>" + quote.rub() + " ₽ + " + fmtExc(quote.exc()) + " EXC</b>. Ему предложено написать менеджеру. Пришлите реквизиты; когда деньги придут, нажмите «Деньги получены»: EXC спишутся, заявка на выдачу создастся сама.";
             InlineKeyboardMarkup adminMarkup = keyboardFactory.rowsLayout(List.of(List.of(
                     keyboardFactory.callback("✅ Деньги получены", "admin:shoprub:ok:" + order.getId()),
@@ -26499,7 +26499,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String encoded = java.net.URLEncoder.encode(text, StandardCharsets.UTF_8).replace("+", "%20");
         sendText(user.getTelegramId(),
                 "🧾 <b>Оплата: " + quote.rub() + " ₽ и " + fmtExc(quote.exc()) + " EXC</b>\n"
-                        + escape(pkg.displayLabel()) + " " + escape(GemPurchaseService.gameName(gameKey)) + "\n\n"
+                        + escape(gemLabelWithGame(pkg, gameKey)) + "\n\n"
                         + "1️⃣ Нажмите «Написать менеджеру», сообщение уже готово.\n"
                         + "2️⃣ Менеджер пришлёт реквизиты (карта или СБП).\n"
                         + "3️⃣ Переведите " + quote.rub() + " ₽ и отправьте чек менеджеру.\n"
@@ -26512,6 +26512,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Подтверждение или отклонение оплаты «токены + рубли» админом/модератором: при подтверждении списываются EXC и создаётся заявка на донат (платёжный код: сбой - алерт админам). */
     private void handleShopRubleAction(CallbackQuery callbackQuery, AppUser admin, String action) {
+        if (action.startsWith("view:")) {
+            answerSilently(callbackQuery.getId());
+            sendShopRubleOrderCard(admin, parseLong(action.substring("view:".length())));
+            return;
+        }
         boolean approve = action.startsWith("ok:");
         Long orderId = parseLong(action.substring(action.indexOf(':') + 1));
         ru.gamebot.platform.domain.model.ShopRubleOrder order = orderId == null ? null : shopRubleOrderRepository.findById(orderId).orElse(null);
@@ -26553,7 +26558,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(admin.getTelegramId(), "⚠️ Оплату #" + order.getId() + " нельзя подтвердить: " + escape(block) + " Свяжитесь с игроком.", null);
                 return;
             }
-            rewardService.chargeHybridExc(buyer, order.getExcAmount(), "Донат: " + pkg.displayLabel() + " " + GemPurchaseService.gameName(order.getGameKey()) + " (EXC + рубли)");
+            rewardService.chargeHybridExc(buyer, order.getExcAmount(), "Донат: " + gemLabelWithGame(pkg, order.getGameKey()) + " (EXC + рубли)");
             GemPurchaseRequest req = gemPurchaseService.createHybridRubRequest(buyer, order.getGameKey(), pkg, gemPurchasePriceFor(buyer, pkg), tag, order.getRubAmount(), order.getExcAmount());
             order.setStatus(ru.gamebot.platform.domain.model.ShopRubleOrder.STATUS_APPROVED);
             order.setDecidedAt(LocalDateTime.now());
@@ -27124,13 +27129,70 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Открытые оплаты доната «токены + рубли», ждущие подтверждения менеджером (до 24 часов); просроченные закрываются при чтении. */
+    private List<ru.gamebot.platform.domain.model.ShopRubleOrder> pendingRubleOrders() {
+        List<ru.gamebot.platform.domain.model.ShopRubleOrder> fresh = new ArrayList<>();
+        for (ru.gamebot.platform.domain.model.ShopRubleOrder order : shopRubleOrderRepository.findAllByStatusOrderByCreatedAtAsc(ru.gamebot.platform.domain.model.ShopRubleOrder.STATUS_PENDING)) {
+            if (order.getCreatedAt() != null && order.getCreatedAt().isBefore(LocalDateTime.now().minusHours(24))) {
+                order.setStatus(ru.gamebot.platform.domain.model.ShopRubleOrder.STATUS_EXPIRED);
+                order.setDecidedAt(LocalDateTime.now());
+                shopRubleOrderRepository.save(order);
+            } else {
+                fresh.add(order);
+            }
+        }
+        return fresh;
+    }
+
+    /** Название пакета с игрой без дублей («Пополнение Steam 200 ₽» + «Steam» -> одно). */
+    private String gemLabelWithGame(GemPurchaseService.GemPackage pkg, String gameKey) {
+        String game = GemPurchaseService.gameName(gameKey);
+        return pkg.displayLabel().toLowerCase().contains(game.toLowerCase()) ? pkg.displayLabel() : pkg.displayLabel() + " " + game;
+    }
+
+    /** Карточка оплаты «токены + рубли» с кнопками подтверждения (для списка заявок на донат). */
+    private void sendShopRubleOrderCard(AppUser viewer, Long orderId) {
+        ru.gamebot.platform.domain.model.ShopRubleOrder order = orderId == null ? null : shopRubleOrderRepository.findById(orderId).orElse(null);
+        if (order == null) {
+            sendText(viewer.getTelegramId(), "❌ Оплата не найдена.", backMenuKeyboard("admin:gempurchase"));
+            return;
+        }
+        AppUser buyer = userService.findByTelegramId(order.getTelegramId()).orElse(null);
+        GemPurchaseService.GemPackage pkg = gemPurchaseService.findPackage(order.getGameKey(), order.getPackageKey()).orElse(null);
+        String text = "💸 <b>Оплата доната «токены + рубли» #" + order.getId() + "</b>\n\n"
+                + "👤 Игрок: <b>" + (buyer == null ? "<code>" + order.getTelegramId() + "</code>" : playerDmLink(buyer)) + "</b> (<code>" + order.getTelegramId() + "</code>)\n"
+                + "📦 Пакет: <b>" + escape(pkg == null ? order.getPackageKey() : gemLabelWithGame(pkg, order.getGameKey())) + "</b>\n"
+                + "💸 Рублей: <b>" + order.getRubAmount() + " ₽</b>\n"
+                + "🪙 EXC: <b>" + fmtExc(order.getExcAmount()) + "</b> (спишутся при подтверждении)\n"
+                + "📅 Создана: <b>" + order.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")) + "</b>\n"
+                + "Статус: <b>" + escape(order.getStatus()) + "</b>\n\n"
+                + "Пришлите игроку реквизиты, а когда деньги придут, нажмите «Деньги получены».";
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (ru.gamebot.platform.domain.model.ShopRubleOrder.STATUS_PENDING.equals(order.getStatus())) {
+            rows.add(List.of(
+                    keyboardFactory.callback("✅ Деньги получены", "admin:shoprub:ok:" + order.getId()),
+                    keyboardFactory.callback("❌ Отклонить", "admin:shoprub:no:" + order.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ К списку", "admin:gempurchase")));
+        sendText(viewer.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
+    }
+
     private void sendAdminGemPurchaseRequests(AppUser user) {
         List<GemPurchaseRequest> pending = gemPurchaseService.findPending();
-        if (pending.isEmpty()) {
+        List<ru.gamebot.platform.domain.model.ShopRubleOrder> rubleOrders = pendingRubleOrders();
+        if (pending.isEmpty() && rubleOrders.isEmpty()) {
             sendText(user.getTelegramId(), "📭 Нет заявок на донат в ожидании.", backMenuKeyboard("menu:main"));
             return;
         }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (ru.gamebot.platform.domain.model.ShopRubleOrder order : rubleOrders) {
+            GemPurchaseService.GemPackage orderPkg = gemPurchaseService.findPackage(order.getGameKey(), order.getPackageKey()).orElse(null);
+            AppUser orderBuyer = userService.findByTelegramId(order.getTelegramId()).orElse(null);
+            rows.add(List.of(keyboardFactory.callback(
+                    "⏳ Оплата #" + order.getId() + " — " + (orderBuyer == null ? order.getTelegramId() : escape(orderBuyer.getNickname())) + " — "
+                            + (orderPkg == null ? order.getPackageKey() : orderPkg.displayLabel()) + " · " + order.getRubAmount() + " ₽",
+                    "admin:shoprub:view:" + order.getId())));
+        }
         for (GemPurchaseRequest req : pending) {
             String methodIcon = switch (req.getPaymentMethod() != null ? req.getPaymentMethod() : "RUB") {
                 case "STARS" -> "⭐";
@@ -27142,7 +27204,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "admin:gempurchase:view:" + req.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
-        sendText(user.getTelegramId(), "💎 <b>Заявки на донат (" + pending.size() + ")</b>", keyboardFactory.rowsLayout(rows));
+        sendText(user.getTelegramId(), "💎 <b>Заявки на донат (" + pending.size() + ")</b>"
+                + (rubleOrders.isEmpty() ? "" : "\n⏳ Ждут подтверждения оплаты «токены + рубли»: <b>" + rubleOrders.size() + "</b>"), keyboardFactory.rowsLayout(rows));
     }
 
     private void sendAdminGemPurchaseCard(AppUser user, Long id) {
@@ -27802,7 +27865,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     ? "💸 Заявки на вывод (" + pendingWithdrawalsMod + ")"
                     : "💸 Заявки на вывод";
             rows.add(List.of(keyboardFactory.callback(wLabelMod, "mod:withdrawals")));
-            long pendingGemPurchasesMod = gemPurchaseService.findPending().size();
+            long pendingGemPurchasesMod = gemPurchaseService.findPending().size() + pendingRubleOrders().size();
             String gLabelMod = pendingGemPurchasesMod > 0
                     ? "💎 Заявки на донат (" + pendingGemPurchasesMod + ")"
                     : "💎 Заявки на донат";
