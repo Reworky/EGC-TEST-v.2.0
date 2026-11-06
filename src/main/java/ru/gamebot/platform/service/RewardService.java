@@ -134,6 +134,8 @@ public class RewardService {
         if (d.regionMatches(true, 0, "TON:", 0, 4) || d.startsWith("USDT")) {
             String after = d.contains(":") ? d.substring(d.indexOf(':') + 1) : d;
             String addr = after.split(":rubles=")[0].trim();
+            // UID биржи («Pionex UID 12345678»): короче 20 символов, но это реквизит - сравниваем целиком (06.11.2026)
+            if (addr.matches("(?i)(pionex|bybit) uid \\d+")) return "x:" + addr.toLowerCase();
             return addr.length() < 20 ? null : "w:" + addr.toLowerCase();
         }
         String digits = d.replaceAll("\\D", "");
@@ -478,8 +480,13 @@ public class RewardService {
         String key;
         if (pd.startsWith("TON:")) {
             String after = pd.substring(4);
-            int space = after.indexOf(' ');
-            key = (space > 0 ? after.substring(0, space) : after).trim();
+            String exchangeAddr = after.split(":rubles=")[0].trim();
+            if (exchangeAddr.matches("(?i)(pionex|bybit) uid \\d+")) {
+                key = exchangeAddr; // UID биржи целиком: иначе ключом становилось бы слово «Pionex» и ловились бы все чужие заявки
+            } else {
+                int space = after.indexOf(' ');
+                key = (space > 0 ? after.substring(0, space) : after).trim();
+            }
         } else {
             String[] rub = splitRubDetails(pd);
             key = rub != null ? rub[1] : pd.trim();
