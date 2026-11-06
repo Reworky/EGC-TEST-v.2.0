@@ -254,6 +254,32 @@ public class GemPurchaseService {
     private final SinkShopService sinkShopService;
     private final HealthRatioService healthRatioService;
 
+    /** Выполненные заявки на донат для ленты выплат (последние limit штук, новые первыми). */
+    public List<GemPurchaseRequest> recentCompleted(int limit) {
+        return repository.findRecentByStatus(GemPurchaseStatus.APPROVED, org.springframework.data.domain.PageRequest.of(0, Math.max(1, limit)));
+    }
+
+    /** Выполненные заявки на донат, закрытые не раньше since (итоги ленты). */
+    public List<GemPurchaseRequest> completedSince(java.time.LocalDateTime since) {
+        return repository.findByStatusSince(GemPurchaseStatus.APPROVED, since);
+    }
+
+    /** Закупочная стоимость выполненного доната в рублях для ленты выплат (что клуб заплатил поставщику); нет пакета в каталоге - цена заявки. */
+    public long purchaseCostRub(GemPurchaseRequest req) {
+        for (Map.Entry<String, String> game : GAME_NAMES.entrySet()) {
+            if (game.getValue().equals(req.getGameName())) {
+                Optional<GemPackage> pkg = findPackage(game.getKey(), req.getPackageKey());
+                if (pkg.isPresent()) return Math.min(req.getPriceRub(), pkg.get().costRub());
+            }
+        }
+        return req.getPriceRub();
+    }
+
+    /** Подпись выполненного доната для ленты: «Brawl Stars 30 гемов». */
+    public String feedLabel(GemPurchaseRequest req) {
+        return req.getGameName() + " " + req.displayLabel();
+    }
+
     public Optional<GemPackage> findPackage(String gameKey, String packageKey) {
         return packagesFor(gameKey).stream().filter(p -> p.key().equals(packageKey)).findFirst();
     }

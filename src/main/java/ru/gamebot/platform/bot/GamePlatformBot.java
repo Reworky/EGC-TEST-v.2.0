@@ -28437,47 +28437,72 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return new String(cps, 0, 2) + "…" + new String(cps, cps.length - 1, 1);
     }
 
+    /** Строка ленты выплат: момент, сумма/название, подпись способа (пусто - не показываем), замаскированный ник, рублёвый эквивалент для итогов. */
+    private record PayoutFeedLine(LocalDateTime at, String title, String method, String nick, long rub) {}
+
     private String payoutFeedText() {
         StringBuilder sb = new StringBuilder("💸 <b>Лента выплат</b>\n\nРеальные выплаты игрокам проекта:\n\n");
-        // Выводы и выданные награды магазина одной лентой по времени; итоги ниже - только по выводам (в рублях).
+        // Выводы, выданные награды магазина и выполненный донат одной лентой по времени; в итогах - всё в рублях.
         List<ru.gamebot.platform.domain.model.RewardRequest> recent = new ArrayList<>(rewardService.recentApprovedWithdrawals(8));
         try {
             recent.addAll(rewardService.recentIssuedRewards(8));
         } catch (Exception e) {
             log.warn("Failed to load issued rewards for payout feed", e);
         }
-        recent.sort((a, b) -> {
-            LocalDateTime ta = payoutMoment(a), tb = payoutMoment(b);
-            if (ta == null) return tb == null ? 0 : 1;
-            if (tb == null) return -1;
-            return tb.compareTo(ta);
-        });
-        if (recent.size() > 8) recent = new ArrayList<>(recent.subList(0, 8));
-        if (recent.isEmpty()) {
-            sb.append("Пока выплат нет — первые скоро появятся здесь.\n");
-        }
+        List<PayoutFeedLine> lines = new ArrayList<>();
         for (ru.gamebot.platform.domain.model.RewardRequest r : recent) {
             boolean shopReward = !"Вывод".equals(r.getRewardItem().getCategory());
-            String method = shopReward ? "🎁 Награда" : isStarsWithdrawal(r) ? "⭐ Stars" : isCryptoWithdrawal(r) ? "GRAM" : "СБП";
-            LocalDateTime when = payoutMoment(r);
-            sb.append("• <b>").append(shopReward ? escape(r.getRewardItem().getTitle()) : payoutAmountText(r)).append("</b> · ").append(method)
-                    .append(when != null ? " · " + agoText(when) : "")
-                    .append(" · ").append(escape(maskNickname(r.getUser() == null ? null : r.getUser().getNickname()))).append("\n");
+            String method = shopReward ? "" : isStarsWithdrawal(r) ? "⭐ Stars" : isCryptoWithdrawal(r) ? "GRAM" : "СБП";
+            lines.add(new PayoutFeedLine(payoutMoment(r), shopReward ? escape(r.getRewardItem().getTitle()) : payoutAmountText(r), method,
+                    maskNickname(r.getUser() == null ? null : r.getUser().getNickname()), 0));
+        }
+        try {
+            for (GemPurchaseRequest g : gemPurchaseService.recentCompleted(8)) {
+                lines.add(new PayoutFeedLine(g.getUpdatedAt() != null ? g.getUpdatedAt() : g.getCreatedAt(), escape(gemPurchaseService.feedLabel(g)), "",
+                        maskNickname(g.getUser() == null ? null : g.getUser().getNickname()), 0));
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load completed donats for payout feed", e);
+        }
+        lines.sort((a, b) -> {
+            if (a.at() == null) return b.at() == null ? 0 : 1;
+            if (b.at() == null) return -1;
+            return b.at().compareTo(a.at());
+        });
+        if (lines.size() > 8) lines = new ArrayList<>(lines.subList(0, 8));
+        if (lines.isEmpty()) {
+            sb.append("Пока выплат нет — первые скоро появятся здесь.\n");
+        }
+        for (PayoutFeedLine line : lines) {
+            sb.append("• <b>").append(line.title()).append("</b>")
+                    .append(line.method().isEmpty() ? "" : " · " + line.method())
+                    .append(line.at() != null ? " · " + agoText(line.at()) : "")
+                    .append(" · ").append(escape(line.nick())).append("\n");
         }
         LocalDateTime now = LocalDateTime.now();
-        List<ru.gamebot.platform.domain.model.RewardRequest> week = new ArrayList<>(rewardService.approvedWithdrawalsSince(now.minusDays(7)));
+        List<PayoutFeedLine> week = new ArrayList<>();
+        for (ru.gamebot.platform.domain.model.RewardRequest r : rewardService.approvedWithdrawalsSince(now.minusDays(7))) {
+            week.add(new PayoutFeedLine(payoutMoment(r), "", "", "", fixedOrCurrentRub(r)));
+        }
         try {
-            week.addAll(rewardService.issuedRewardsSince(now.minusDays(7)));
+            for (ru.gamebot.platform.domain.model.RewardRequest r : rewardService.issuedRewardsSince(now.minusDays(7))) {
+                week.add(new PayoutFeedLine(payoutMoment(r), "", "", "", rewardService.shopRewardRub(r)));
+            }
         } catch (Exception e) {
             log.warn("Failed to load issued rewards for payout feed totals", e);
         }
+        try {
+            for (GemPurchaseRequest g : gemPurchaseService.completedSince(now.minusDays(7))) {
+                week.add(new PayoutFeedLine(g.getUpdatedAt() != null ? g.getUpdatedAt() : g.getCreatedAt(), "", "", "", gemPurchaseService.purchaseCostRub(g)));
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load completed donats for payout feed totals", e);
+        }
         long dayRub = 0, dayCount = 0, weekRub = 0;
-        for (ru.gamebot.platform.domain.model.RewardRequest r : week) {
-            long rub = "Вывод".equals(r.getRewardItem().getCategory()) ? fixedOrCurrentRub(r) : rewardService.shopRewardRub(r);
-            weekRub += rub;
-            LocalDateTime when = payoutMoment(r);
-            if (when != null && when.isAfter(now.minusHours(24))) {
-                dayRub += rub;
+        for (PayoutFeedLine w : week) {
+            weekRub += w.rub();
+            if (w.at() != null && w.at().isAfter(now.minusHours(24))) {
+                dayRub += w.rub();
                 dayCount++;
             }
         }

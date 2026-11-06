@@ -6,8 +6,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import ru.gamebot.platform.api.dto.PayoutFeedDto;
+import ru.gamebot.platform.domain.model.GemPurchaseRequest;
 import ru.gamebot.platform.domain.model.RewardRequest;
 import ru.gamebot.platform.service.ExchangeRateService;
+import ru.gamebot.platform.service.GemPurchaseService;
 import ru.gamebot.platform.service.HealthRatioService;
 import ru.gamebot.platform.service.RewardService;
 
@@ -32,6 +34,7 @@ public class PayoutFeedController {
     private static final String REVIEWS_URL = "https://t.me/egc_payouts";
 
     private final RewardService rewardService;
+    private final GemPurchaseService gemPurchaseService;
     private final HealthRatioService healthRatioService;
     private final ExchangeRateService exchangeRateService;
 
@@ -54,17 +57,42 @@ public class PayoutFeedController {
             if (tb == null) return -1;
             return tb.compareTo(ta);
         });
-        List<PayoutFeedDto.Item> items = new ArrayList<>();
+        // (момент, строка ленты): выводы, награды и выполненный донат сортируем вместе
+        List<Object[]> entries = new ArrayList<>();
         for (RewardRequest r : recent.subList(0, Math.min(FEED_SIZE, recent.size()))) {
             LocalDateTime when = payoutMoment(r);
             boolean reward = isShopReward(r);
-            items.add(PayoutFeedDto.Item.builder()
+            entries.add(new Object[]{when, PayoutFeedDto.Item.builder()
                     .rub(reward ? rewardService.shopRewardRub(r) : rub(r))
                     .amountText(reward ? r.getRewardItem().getTitle() : amountText(r))
                     .method(reward ? "reward" : method(r))
                     .minutesAgo(when == null ? -1 : Math.max(0, Duration.between(when, now).toMinutes()))
                     .name(maskNickname(r.getUser() == null ? null : r.getUser().getNickname()))
-                    .build());
+                    .build()});
+        }
+        try {
+            for (GemPurchaseRequest g : gemPurchaseService.recentCompleted(FEED_SIZE)) {
+                LocalDateTime when = g.getUpdatedAt() != null ? g.getUpdatedAt() : g.getCreatedAt();
+                entries.add(new Object[]{when, PayoutFeedDto.Item.builder()
+                        .rub(gemPurchaseService.purchaseCostRub(g))
+                        .amountText(gemPurchaseService.feedLabel(g))
+                        .method("donat")
+                        .minutesAgo(when == null ? -1 : Math.max(0, Duration.between(when, now).toMinutes()))
+                        .name(maskNickname(g.getUser() == null ? null : g.getUser().getNickname()))
+                        .build()});
+            }
+        } catch (Exception e) {
+            // донат - дополнение к ленте, сбой его выборки не должен ломать выплаты
+        }
+        entries.sort((x, y) -> {
+            LocalDateTime tx = (LocalDateTime) x[0], ty = (LocalDateTime) y[0];
+            if (tx == null) return ty == null ? 0 : 1;
+            if (ty == null) return -1;
+            return ty.compareTo(tx);
+        });
+        List<PayoutFeedDto.Item> items = new ArrayList<>();
+        for (Object[] entry : entries.subList(0, Math.min(FEED_SIZE, entries.size()))) {
+            items.add((PayoutFeedDto.Item) entry[1]);
         }
 
         // Итоги: выводы и выданные награды магазина (по рублёвому эквиваленту на момент выдачи).
@@ -84,6 +112,21 @@ public class PayoutFeedController {
                 dayCount++;
             }
         }
+        long donatWeekCount = 0;
+        try {
+            for (GemPurchaseRequest g : gemPurchaseService.completedSince(now.minusDays(7))) {
+                long rub = gemPurchaseService.purchaseCostRub(g);
+                weekRub += rub;
+                donatWeekCount++;
+                LocalDateTime when = g.getUpdatedAt() != null ? g.getUpdatedAt() : g.getCreatedAt();
+                if (when != null && when.isAfter(now.minusHours(24))) {
+                    dayRub += rub;
+                    dayCount++;
+                }
+            }
+        } catch (Exception e) {
+            // итог без доната лучше, чем сломанная лента
+        }
 
         long[] totals = totalsCached(now);
 
@@ -92,7 +135,7 @@ public class PayoutFeedController {
                 .dayRub(dayRub)
                 .dayCount(dayCount)
                 .weekRub(weekRub)
-                .weekCount(week.size())
+                .weekCount(week.size() + donatWeekCount)
                 .totalRub(totals[0])
                 .totalCount(totals[1])
                 .reviewsUrl(REVIEWS_URL)
@@ -107,7 +150,12 @@ public class PayoutFeedController {
             all.addAll(rewardService.issuedRewardsSince(LocalDateTime.of(2000, 1, 1, 0, 0)));
             long sum = 0;
             for (RewardRequest r : all) sum += isShopReward(r) ? rewardService.shopRewardRub(r) : rub(r);
-            cachedTotals = new long[]{sum, all.size()};
+            long count = all.size();
+            for (GemPurchaseRequest g : gemPurchaseService.completedSince(LocalDateTime.of(2000, 1, 1, 0, 0))) {
+                sum += gemPurchaseService.purchaseCostRub(g);
+                count++;
+            }
+            cachedTotals = new long[]{sum, count};
             cachedAt = now;
         } catch (Exception e) {
             // лента важнее итога: отдаём прошлое значение или нули

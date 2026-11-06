@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getPayoutFeed } from '../api/client';
 
-const METHOD_LABEL = { stars: '⭐ Stars', ton: 'GRAM', sbp: 'СБП', reward: '🎁 Награда' };
+const METHOD_LABEL = { stars: '⭐ Stars', ton: 'GRAM', sbp: 'СБП' };
 
 function agoText(minutes) {
   if (minutes == null || minutes < 0) return '';
@@ -47,7 +47,7 @@ export default function PayoutFeedCard() {
           {items.map((it, i) => (
             <div key={i} className="pf-row">
               <span className="pf-amount">{it.amountText || rub(it.rub)}</span>
-              <span className="pf-method">{METHOD_LABEL[it.method] || it.method}</span>
+              {METHOD_LABEL[it.method] && <span className="pf-method">{METHOD_LABEL[it.method]}</span>}
               <span className="pf-meta">{[agoText(it.minutesAgo), it.name].filter(Boolean).join(' · ')}</span>
             </div>
           ))}
