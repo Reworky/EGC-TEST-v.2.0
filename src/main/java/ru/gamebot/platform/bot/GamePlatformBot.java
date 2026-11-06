@@ -26278,10 +26278,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (GemPurchaseService.GemPackage pkg : currency) {
             long price = gemPurchasePriceFor(user, pkg);
             String priceLabel = passActive ? price + "₽ (закупка, EGC Pass)" : price + "₽";
+            // Где есть гибридная оплата: «токены + звёзды» без рублёвого эквивалента (06.11.2026); у позиций без EXC-варианта (крупные пакеты) остаётся цена в рублях
             HybridQuote listQuote = hybridQuote(user, gameKey, pkg);
-            String excPart = listQuote != null ? fmtExc(listQuote.exc()) + " EXC + " + listQuote.stars() + " ⭐ · " : "";
+            String listPrice = listQuote != null ? fmtExc(listQuote.exc()) + " EXC + " + listQuote.stars() + " ⭐" : priceLabel;
             rows.add(List.of(keyboardFactory.callback(
-                    pkg.displayLabel() + " — " + excPart + priceLabel,
+                    pkg.displayLabel() + " — " + listPrice,
                     "gemdonate:pkg:" + gameKey + ":" + pkg.key())));
         }
         rows.add(List.of(
