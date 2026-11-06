@@ -1649,7 +1649,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 } else if ("other".equals(abtCode) && user.getPhoneNumber() == null) {
                     session.reset();
                     session.setState(SessionState.EDIT_COUNTRY);
-                    sendText(user.getTelegramId(), "🌍 <b>Напиши страну, из которой играешь:</b>", backOnlyKeyboard("menu:main"));
+                    sendText(user.getTelegramId(), "🌍 <b>Напиши страну, из которой играешь:</b>", backOnlyKeyboard("menu:profile"));
                     return;
                 }
             }
@@ -5743,12 +5743,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + incompleteHint;
 
         String avatarBtn = user.getAvatarFileId() != null ? "📷 Сменить аватар" : "📷 Загрузить аватар";
-        InlineKeyboardMarkup profileKeyboard = keyboardFactory.rowsLayout(List.of(
-                List.of(keyboardFactory.callback("📊 Все ранги", "profile:ranks")),
-                List.of(keyboardFactory.callback(avatarBtn, "profile:avatar")),
-                List.of(keyboardFactory.callback("✏️ Редактировать профиль", "profile:edit")),
-                backRow("menu:main")
-        ));
+        List<List<InlineKeyboardButton>> profileRows = new ArrayList<>();
+        // Анкета «Расскажи о себе»: только в профиле, пока нет возраста или (страны и телефона) (владелец 06.11.2026)
+        if (user.getAge() == null || ((user.getCountry() == null || user.getCountry().isBlank()) && user.getPhoneNumber() == null)) {
+            profileRows.add(List.of(keyboardFactory.callback("🎁 Расскажи о себе (+" + ABOUT_REWARD_EXC + " EXC)", "about:start")));
+        }
+        profileRows.add(List.of(keyboardFactory.callback("📊 Все ранги", "profile:ranks")));
+        profileRows.add(List.of(keyboardFactory.callback(avatarBtn, "profile:avatar")));
+        profileRows.add(List.of(keyboardFactory.callback("✏️ Редактировать профиль", "profile:edit")));
+        profileRows.add(backRow("menu:main"));
+        InlineKeyboardMarkup profileKeyboard = keyboardFactory.rowsLayout(profileRows);
 
         if (user.getAvatarFileId() != null) {
             sendPhotoCaption(user.getTelegramId(), user.getAvatarFileId(), profileText, profileKeyboard);
@@ -27460,9 +27464,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         // 🔔 про ежедневный бонус теперь на «Заданиях дня»; в кошельке он лишь когда задания выключены.
         String walletLabel = !userService.dailyTasksEnabled() && userService.isDailyBonusAvailable(user) ? "💰 Кошелёк 🔔" : "💰 Кошелёк";
-        if (user.getAge() == null || ((user.getCountry() == null || user.getCountry().isBlank()) && user.getPhoneNumber() == null)) {
-            rows.add(List.of(keyboardFactory.callback("🎁 Расскажи о себе (+" + ABOUT_REWARD_EXC + " EXC)", "about:start")));
-        }
         rows.add(List.of(
                 keyboardFactory.callback(walletLabel, "menu:balance"),
                 keyboardFactory.callback("🛍️ Магазин", "menu:cat:shop")
@@ -28155,7 +28156,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             List.of(keyboardFactory.callback("до 14", "about:age:13"), keyboardFactory.callback("14–15", "about:age:14")),
                             List.of(keyboardFactory.callback("16–17", "about:age:16"), keyboardFactory.callback("18–24", "about:age:18")),
                             List.of(keyboardFactory.callback("25 и старше", "about:age:25")),
-                            List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")))));
+                            List.of(keyboardFactory.callback("⬅️ Назад", "menu:profile")))));
             return;
         }
         if ((user.getCountry() == null || user.getCountry().isBlank()) && user.getPhoneNumber() == null) {
@@ -28166,12 +28167,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             List.of(keyboardFactory.callback("🇰🇿 Казахстан", "about:c:kz"), keyboardFactory.callback("🇧🇾 Беларусь", "about:c:by")),
                             List.of(keyboardFactory.callback("🇺🇿 Узбекистан", "about:c:uz"), keyboardFactory.callback("🇰🇬 Кыргызстан", "about:c:kg")),
                             List.of(keyboardFactory.callback("🌍 Другая страна", "about:c:other")),
-                            List.of(keyboardFactory.callback("⬅️ Назад", "menu:main")))));
+                            List.of(keyboardFactory.callback("⬅️ Назад", "menu:profile")))));
             return;
         }
         grantAboutRewardIfDone(user);
         sendText(user.getTelegramId(), "✅ <b>Спасибо!</b> Теперь мы сможем показывать тебе подходящие задания.",
-                keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
+                keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("👤 Профиль", "menu:profile")))));
     }
 
     private static final long ABOUT_REWARD_EXC = 100;
