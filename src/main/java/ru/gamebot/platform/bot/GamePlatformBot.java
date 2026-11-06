@@ -1749,9 +1749,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendShopRubleOrderScreen(user, grParts[0], grPkg, grQuote);
             return;
         }
-        if (data.startsWith("gemhyb:")) {
+        if (data.startsWith("gemhyb:") || data.startsWith("gemhybok:")) {
             answerSilently(callbackQuery.getId());
-            String[] hybParts = data.substring("gemhyb:".length()).split(":", 2);
+            boolean hybConfirmed = data.startsWith("gemhybok:");
+            String[] hybParts = data.substring((hybConfirmed ? "gemhybok:" : "gemhyb:").length()).split(":", 2);
             GemPurchaseService.GemPackage hybPkg = hybParts.length == 2 ? gemPurchaseService.findPackage(hybParts[0], hybParts[1]).orElse(null) : null;
             HybridQuote hybQuote = hybPkg == null ? null : hybridQuote(user, hybParts[0], hybPkg);
             if (hybQuote == null) {
@@ -1766,6 +1767,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String hybTag = gemPurchaseGameTag(user, hybParts[0]);
             if (hybTag == null || hybTag.isBlank()) {
                 startGemPurchase(user, session, hybParts[0], hybParts[1]);
+                return;
+            }
+            if (!hybConfirmed) {
+                sendText(user.getTelegramId(),
+                        "📝 <b>Проверьте заявку</b>\n\n"
+                                + "🎮 " + escape(hybPkg.displayLabel()) + "\n"
+                                + "💸 К оплате: <b>" + fmtExc(hybQuote.exc()) + " EXC + " + hybQuote.stars() + " ⭐</b>\n"
+                                + "🏷 Тег: <code>" + escape(hybTag) + "</code>\n\n"
+                                + "После нажатия «Оформить заявку» вам придёт счёт на звёзды. EXC спишутся только после оплаты звёзд, затем заявка уйдёт модератору на выдачу.",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("✅ Оформить заявку", "gemhybok:" + hybParts[0] + ":" + hybParts[1])),
+                                List.of(keyboardFactory.callback("⬅️ Назад", "gemstars:" + hybParts[0] + ":" + hybParts[1])))));
                 return;
             }
             sendText(user.getTelegramId(),
@@ -27102,10 +27115,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         GemPurchaseService.GemPackage pkg = pkgOpt.get();
         switch (method) {
-            case "STARS" -> sendGemStarsInvoice(user, gameKey, pkg);
+            case "STARS" -> sendGemStarsConfirm(user, gameKey, pkg);
+            case "STARSOK" -> sendGemStarsInvoice(user, gameKey, pkg);
             case "TON" -> sendGemPurchaseTonConfirm(user, gameKey, pkg);
             default -> sendGemPaymentMethodChoice(user, gameKey, pkg);
         }
+    }
+
+    /** Окно подтверждения перед счётом на звёзды (06.11.2026): игрок видит пакет, цену и тег, счёт придёт после «Оформить заявку». */
+    private void sendGemStarsConfirm(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg) {
+        String tag = gemPurchaseGameTag(user, gameKey);
+        long price = gemPurchasePriceFor(user, pkg);
+        int stars = gemPurchaseStarsPrice(price);
+        sendText(user.getTelegramId(),
+                "📝 <b>Проверьте заявку</b>\n\n"
+                        + "🎮 " + escape(pkg.displayLabel()) + "\n"
+                        + "💸 К оплате: <b>" + stars + " ⭐</b>\n"
+                        + (tag == null || tag.isBlank() ? "" : "🏷 Тег: <code>" + escape(tag) + "</code>\n")
+                        + "\nПосле нажатия «Оформить заявку» вам придёт счёт на звёзды. После оплаты заявка уйдёт модератору на выдачу.",
+                keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("✅ Оформить заявку", "gemdonate:method:STARSOK:" + gameKey + ":" + pkg.key())),
+                        List.of(keyboardFactory.callback("⬅️ Назад", "gemstars:" + gameKey + ":" + pkg.key())))));
     }
 
     /** Промежуточное подтверждение перед созданием заявки на GRAM (TON) (2026-09-20, по запросу
