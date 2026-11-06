@@ -382,7 +382,7 @@ public class SinkShopService {
     public static final long PASS_WITHDRAWAL_LIMIT_BONUS_EXC = 10_000;
     /** Прежний множитель (до 25.10.2026) - только для подписок, истекающих раньше PASS_LEGACY_LIMIT_UNTIL. Чтобы отключить сразу, поставить дату в прошлом. */
     public static final int PASS_LEGACY_LIMIT_MULTIPLIER = 5;
-    private static final LocalDateTime PASS_LEGACY_LIMIT_UNTIL = LocalDateTime.of(2026, 11, 24, 0, 0);
+    private static final LocalDateTime PASS_LEGACY_LIMIT_UNTIL = LocalDateTime.of(2026, 1, 1, 0, 0); // 06.11.2026 (решение владельца): прежний множитель x5 отключён у всех сразу (была 2026-11-24), у Pass единое правило: ранг + 10 000 EXC
 
     /** Остаток лимита = остаток месячного лимита + разовый партнёрский запас (см. AppUser.partnerWithdrawalAllowanceExc). */
     public long getRemainingWithdrawalLimit(AppUser user) {
