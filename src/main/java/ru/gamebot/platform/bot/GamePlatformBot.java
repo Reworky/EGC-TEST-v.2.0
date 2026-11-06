@@ -10343,9 +10343,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!cs2EntryAdded && !cs2CaseCatalog.all().isEmpty()) {
             rows.add(List.of(keyboardFactory.callback("🎁 CS2 — выбор раздела", "shop:cs2")));
         }
-        rows.add(List.of(
-                keyboardFactory.callback("📋 Мои заявки", "menu:my-rewards"),
-                keyboardFactory.callback("🗂 История заявок", "menu:my-rewards-history")));
+        rows.add(List.of(keyboardFactory.callback("📋 Мои заявки", "menu:my-rewards")));
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", "menu:cat:shop"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
