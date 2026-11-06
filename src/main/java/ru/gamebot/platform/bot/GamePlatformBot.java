@@ -26984,6 +26984,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  оплаты, подтверждение TON) — специально не один раз, чтобы точно увидели до списания денег. */
     /** Предупреждение перед донатом: для PUBG PC своё (там не Supercell ID), для остальных игр - общее про доступ к аккаунту. */
     private String gemPurchaseWarning(String gameKey) {
+        return "<blockquote expandable>" + gemPurchaseWarningText(gameKey) + "</blockquote>";
+    }
+
+    private String gemPurchaseWarningText(String gameKey) {
         if ("steam_topup".equals(gameKey)) {
             return "⚠️ <b>Важно перед покупкой:</b> сейчас пополнение работает только для аккаунтов Steam из стран: " + STEAM_TOPUP_COUNTRIES
                     + ". Нужен только логин Steam (не ник и не email), пароль и вход в аккаунт не требуются. Убедитесь, что логин указан верно: пополнение зачисляется именно на него.";
