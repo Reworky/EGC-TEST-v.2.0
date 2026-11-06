@@ -13935,6 +13935,59 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private record InboxItem(LocalDateTime at, String icon, String label, String callback) {}
 
+    /** Папка «Выдача»: заявки на донат (игровая валюта, оплата деньгами или токены + рубли/звёзды), оплаты «токены + рубли» и награды магазина (оплата токенами) в одном списке с метками типа. */
+    private void sendModIssueFolder(AppUser viewer) {
+        List<InboxItem> items = new ArrayList<>();
+        long donats = 0, rewards = 0, orders = 0;
+        try {
+            for (GemPurchaseRequest g : gemPurchaseService.findPending()) {
+                String method = g.getPaymentMethod() == null ? "RUB" : g.getPaymentMethod();
+                String pay = switch (method) {
+                    case "STARS" -> (g.getExcPaid() > 0 ? "EXC + " : "") + "⭐";
+                    case "TON" -> "GRAM";
+                    default -> (g.getExcPaid() > 0 ? "EXC + " : "") + "₽";
+                };
+                items.add(new InboxItem(g.getCreatedAt(), "🎮", "Донат Д-" + g.getDisplayId() + " " + trim(g.getUser().getNickname(), 14) + " — " + g.displayLabel() + " · " + pay,
+                        "admin:gempurchase:view:" + g.getId()));
+                donats++;
+            }
+            for (ru.gamebot.platform.domain.model.ShopRubleOrder o : pendingRubleOrders()) {
+                AppUser buyer = userService.findByTelegramId(o.getTelegramId()).orElse(null);
+                items.add(new InboxItem(o.getCreatedAt(), "🧾", "Оплата ждёт #" + o.getId() + " " + trim(buyer == null ? String.valueOf(o.getTelegramId()) : buyer.getNickname(), 14) + " — " + o.getRubAmount() + " ₽ + EXC",
+                        "admin:shoprub:view:" + o.getId()));
+                orders++;
+            }
+            for (RewardRequest r : rewardService.findPendingRequests()) {
+                items.add(new InboxItem(r.getCreatedAt(), r.getStatus() == RewardRequestStatus.IN_PROGRESS ? "🔄" : "🎁",
+                        "Награда М-" + reqDisplayId(r) + " " + trim(r.getUser().getNickname(), 14) + " — " + trim(r.getRewardItem().getTitle(), 16) + " · EXC",
+                        "admin:reward:req:" + r.getId()));
+                rewards++;
+            }
+        } catch (Exception e) {
+            log.warn("Failed to build issue folder", e);
+        }
+        items.sort(java.util.Comparator.comparing((InboxItem i) -> i.at() == null ? LocalDateTime.MIN : i.at()));
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
+        int shown = 0;
+        for (InboxItem item : items) {
+            if (shown++ >= 40) break;
+            boolean old = item.at() != null && item.at().isBefore(now.minusHours(12));
+            String when = item.at() == null ? "" : item.at().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm")) + " ";
+            rows.add(List.of(keyboardFactory.callback((old ? "⏰ " : "") + item.icon() + " " + when + item.label(), item.callback())));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Центр модерации", "menu:moderation")));
+        sendText(viewer.getTelegramId(),
+                items.isEmpty()
+                        ? "🎮 <b>Выдача: донат и награды</b>\n\nОткрытых заявок нет."
+                        : "🎮 <b>Выдача: донат и награды (" + items.size() + ")</b>\n"
+                                + "🎮 Донат (игровая валюта, оплата деньгами или токены + рубли/звёзды): " + donats + "\n"
+                                + "🧾 Оплаты «токены + рубли», ждут подтверждения: " + orders + "\n"
+                                + "🎁 Награды магазина (оплата токенами): " + rewards + "\n"
+                                + "⏰ — ждёт больше 12 часов. Старые сверху.",
+                keyboardFactory.rowsLayout(rows));
+    }
+
     /** «Всё ожидающее»: одним списком все открытые заявки и обращения (старые сверху), чтобы ничего не терялось после разового уведомления. */
     private void sendModPendingAll(AppUser viewer) {
         List<InboxItem> items = new ArrayList<>();
@@ -14004,20 +14057,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? "💸 Заявки на вывод (" + pendingWithdrawalsMod + ")"
                 : "💸 Заявки на вывод";
         long pendingGemPurchasesMod = gemPurchaseService.findPending().size() + pendingRubleOrders().size();
-        String gLabelMod = pendingGemPurchasesMod > 0
-                ? "💎 Заявки на донат (" + pendingGemPurchasesMod + ")"
-                : "💎 Заявки на донат";
         long pendingRewardsMod = rewardService.findPendingRequests().size();
-        String rLabelMod = pendingRewardsMod > 0
-                ? "🛍️ Заявки на награды (" + pendingRewardsMod + ")"
-                : "🛍️ Заявки на награды";
+        String iLabelMod = pendingGemPurchasesMod + pendingRewardsMod > 0
+                ? "🎮 Выдача: донат и награды (" + (pendingGemPurchasesMod + pendingRewardsMod) + ")"
+                : "🎮 Выдача: донат и награды";
         sendText(user.getTelegramId(),
                 "🛡️ <b>Центр модерации</b>\n\n"
                         + "📂 Отчёты по квестам: <b>" + questService.pendingCount() + "</b>\n"
                         + "🆘 Открытые заявки поддержки: <b>" + supportService.activeTicketCount() + "</b>\n"
                         + "💸 Заявки на вывод: <b>" + pendingWithdrawalsMod + "</b>\n"
-                        + "💎 Заявки на донат и оплаты: <b>" + pendingGemPurchasesMod + "</b>\n"
-                        + "🛍️ Заявки на награды: <b>" + pendingRewardsMod + "</b>\n\n"
+                        + "🎮 Выдача (донат и оплаты: " + pendingGemPurchasesMod + ", награды: " + pendingRewardsMod + "): <b>" + (pendingGemPurchasesMod + pendingRewardsMod) + "</b>\n\n"
                         + "Здесь собрана вся оперативная работа по платформе.",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("📥 Всё ожидающее", "mod:pending")),
@@ -14026,8 +14075,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                                 keyboardFactory.callback("🆘 Поддержка", "mod:support:list")
                         ),
                         List.of(keyboardFactory.callback(wLabelMod, "mod:withdrawals")),
-                        List.of(keyboardFactory.callback(gLabelMod, "admin:gempurchase")),
-                        List.of(keyboardFactory.callback(rLabelMod, "admin:reward:requests")),
+                        List.of(keyboardFactory.callback(iLabelMod, "mod:issue")),
                         List.of(keyboardFactory.callback("🔍 Поиск игрока", "mod:usersearch"),
                                 keyboardFactory.callback("🎁 Бонус игроку", "mod:bonus")),
                         List.of(keyboardFactory.callback("🏠 Главное меню", "menu:main"))
@@ -18998,8 +19046,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback("📥 Всё ожидающее", "mod:pending")));
                 long pendingW = rewardService.findPendingWithdrawals().size();
                 rows.add(List.of(keyboardFactory.callback(pendingW > 0 ? "💸 Заявки на вывод (" + pendingW + ")" : "💸 Заявки на вывод", "admin:withdrawals")));
-                long pendingR = rewardService.findPendingRequests().size();
-                rows.add(List.of(keyboardFactory.callback(pendingR > 0 ? "🛍️ Заявки на награды (" + pendingR + ")" : "🛍️ Заявки на награды", "admin:reward:requests")));
+                long pendingR = rewardService.findPendingRequests().size() + gemPurchaseService.findPending().size() + pendingRubleOrders().size();
+                rows.add(List.of(keyboardFactory.callback(pendingR > 0 ? "🎮 Выдача: донат и награды (" + pendingR + ")" : "🎮 Выдача: донат и награды", "mod:issue")));
                 rows.add(List.of(keyboardFactory.callback("🎁 Магазин наград", "admin:rewards")));
                 rows.add(List.of(keyboardFactory.callback("💼 Финансы: доходы, расходы, P&L", "admin:fin:home")));
                 rows.add(List.of(keyboardFactory.callback("💰 Экономика и выплаты", "admin:an:tab:ECONOMY")));
@@ -27611,6 +27659,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (data.equals("mod:pending")) {
             answerSilently(callbackQuery.getId());
             sendModPendingAll(user);
+        } else if (data.equals("mod:issue")) {
+            answerSilently(callbackQuery.getId());
+            sendModIssueFolder(user);
         } else if (data.equals("mod:withdrawals")) {
             sendModWithdrawals(user);
         } else if (data.startsWith("mod:withdrawal:check:")) {
@@ -28007,14 +28058,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     : "💸 Заявки на вывод";
             rows.add(0, List.of(keyboardFactory.callback("📥 Всё ожидающее", "mod:pending")));
             rows.add(List.of(keyboardFactory.callback(wLabelMod, "mod:withdrawals")));
-            long pendingGemPurchasesMod = gemPurchaseService.findPending().size() + pendingRubleOrders().size();
-            String gLabelMod = pendingGemPurchasesMod > 0
-                    ? "💎 Заявки на донат (" + pendingGemPurchasesMod + ")"
-                    : "💎 Заявки на донат";
-            rows.add(List.of(keyboardFactory.callback(gLabelMod, "admin:gempurchase")));
-            long pendingRewardsMod = rewardService.findPendingRequests().size();
-            rows.add(List.of(keyboardFactory.callback(pendingRewardsMod > 0
-                    ? "🛍️ Заявки на награды (" + pendingRewardsMod + ")" : "🛍️ Заявки на награды", "admin:reward:requests")));
+            long pendingIssueMod = gemPurchaseService.findPending().size() + pendingRubleOrders().size() + rewardService.findPendingRequests().size();
+            rows.add(List.of(keyboardFactory.callback(pendingIssueMod > 0
+                    ? "🎮 Выдача: донат и награды (" + pendingIssueMod + ")" : "🎮 Выдача: донат и награды", "mod:issue")));
             rows.add(List.of(keyboardFactory.callback("🔍 Поиск игрока", "mod:usersearch")));
             return keyboardFactory.rowsLayout(rows);
         }
