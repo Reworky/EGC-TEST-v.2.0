@@ -3,6 +3,7 @@ package ru.gamebot.platform.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.net.CookieManager;
@@ -122,6 +123,18 @@ public class VpnPanelClient {
         merged.remove("traffic");
         merged.remove("createdAt");
         merged.remove("updatedAt");
+        // панель 3.11 отдаёт allowedIPs строкой, а при обновлении ждёт массив (на панели 3.1 поля нет и ничего не меняется);
+        // без этого продление, бонусные дни и разблокировка ключа на новой панели падали бы с «cannot unmarshal string»
+        JsonNode allowedIps = merged.get("allowedIPs");
+        if (allowedIps != null && allowedIps.isTextual()) {
+            String raw = allowedIps.asText();
+            ArrayNode list = merged.putArray("allowedIPs");
+            for (String part : raw.split(",")) {
+                if (!part.isBlank()) {
+                    list.add(part.trim());
+                }
+            }
+        }
         // 05.11: список клиентов отдаёт allowedIPs строкой, а update ждёт массив строк («cannot unmarshal string into ... allowedIPs of type []string») - приводим к массиву
         JsonNode allowed = merged.get("allowedIPs");
         if (allowed != null && !allowed.isArray()) {
