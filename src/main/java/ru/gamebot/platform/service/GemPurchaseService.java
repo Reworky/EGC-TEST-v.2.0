@@ -250,6 +250,8 @@ public class GemPurchaseService {
 
     private final GemPurchaseRequestRepository repository;
     private final UserService userService;
+    private final ExcTransactionService excTx;
+    private final SinkShopService sinkShopService;
 
     public Optional<GemPackage> findPackage(String gameKey, String packageKey) {
         return packagesFor(gameKey).stream().filter(p -> p.key().equals(packageKey)).findFirst();
@@ -339,8 +341,22 @@ public class GemPurchaseService {
     public GemPurchaseRequest reject(Long requestId, String reason) {
         GemPurchaseRequest req = repository.findWithUserById(requestId)
                 .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена."));
+        boolean alreadyRejected = req.getStatus() == GemPurchaseStatus.REJECTED;
         req.setStatus(GemPurchaseStatus.REJECTED);
         req.setRejectReason(reason);
+        req.setUpdatedAt(LocalDateTime.now());
+        // Гибридная оплата «EXC + звёзды»: EXC-часть возвращается игроку при отклонении (один раз)
+        if (!alreadyRejected && req.getExcPaid() > 0) {
+            excTx.creditExc(req.getUser(), req.getExcPaid(), ExcTransactionService.SHOP_REFUND, "Возврат EXC (отклонение доната Д-" + req.getDisplayId() + ")");
+            sinkShopService.reverseShopSpend(req.getUser(), req.getExcPaid());
+        }
+        return repository.save(req);
+    }
+
+    /** Фиксирует EXC-часть гибридной оплаты в заявке на донат. */
+    @Transactional
+    public GemPurchaseRequest markExcPaid(GemPurchaseRequest req, long excPaid) {
+        req.setExcPaid(excPaid);
         req.setUpdatedAt(LocalDateTime.now());
         return repository.save(req);
     }

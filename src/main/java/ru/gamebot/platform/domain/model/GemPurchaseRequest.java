@@ -80,6 +80,10 @@ public class GemPurchaseRequest {
 
     private String rejectReason;
 
+    /** Сколько EXC списано при гибридной оплате «EXC + звёзды» (06.11.2026); 0 - оплата только деньгами. Возвращается игроку при отклонении заявки. */
+    @jakarta.persistence.Column(columnDefinition = "bigint default 0")
+    private long excPaid;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

@@ -1624,6 +1624,32 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendOtpWithdrawalOffer(user);
             return;
         }
+        if (data.startsWith("gemhyb:")) {
+            answerSilently(callbackQuery.getId());
+            String[] hybParts = data.substring("gemhyb:".length()).split(":", 2);
+            GemPurchaseService.GemPackage hybPkg = hybParts.length == 2 ? gemPurchaseService.findPackage(hybParts[0], hybParts[1]).orElse(null) : null;
+            HybridQuote hybQuote = hybPkg == null ? null : hybridQuote(user, hybParts[0], hybPkg);
+            if (hybQuote == null) {
+                sendText(user.getTelegramId(), "❌ Пакет не найден, попробуйте выбрать заново.", backMenuKeyboard("menu:shop"));
+                return;
+            }
+            String hybBlock = rewardService.hybridPurchaseBlock(user, hybQuote.item(), hybQuote.exc());
+            if (hybBlock != null) {
+                sendText(user.getTelegramId(), "⚠️ " + escape(hybBlock), backMenuKeyboard("shop:donate:" + hybParts[0]));
+                return;
+            }
+            String hybTag = gemPurchaseGameTag(user, hybParts[0]);
+            if (hybTag == null || hybTag.isBlank()) {
+                startGemPurchase(user, session, hybParts[0], hybParts[1]);
+                return;
+            }
+            sendText(user.getTelegramId(),
+                    "🧾 <b>Оплата доната</b>\n\n" + escape(hybPkg.displayLabel()) + ": <b>" + fmtExc(hybQuote.exc()) + " EXC + " + hybQuote.stars() + " ⭐</b>\n"
+                            + "Сначала оплатите звёзды, затем мы спишем EXC и оформим заявку на выдачу.",
+                    null);
+            sendGemHybridInvoice(user, hybParts[0], hybPkg, hybQuote);
+            return;
+        }
         if (data.equals("about:start") || data.startsWith("about:age:") || data.startsWith("about:c:")) {
             answerSilently(callbackQuery.getId());
             if (data.startsWith("about:age:")) {
@@ -11695,6 +11721,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return null;
         }
         String payload = query.getInvoicePayload();
+        if (payload != null && payload.startsWith("starsitem:GEMX:")) {
+            String[] gx = payload.substring("starsitem:GEMX:".length()).split(":");
+            if (gx.length != 3) return "Не удалось проверить платёж, попробуйте ещё раз.";
+            GemPurchaseService.GemPackage gxPkg = gemPurchaseService.findPackage(gx[0], gx[1]).orElse(null);
+            RewardItem gxItem = gxPkg == null ? null : findExcItemForPackage(gx[0], gxPkg);
+            if (gxItem == null) return "Пакет больше недоступен.";
+            String gxBlock = rewardService.hybridPurchaseBlock(user, gxItem, parseLongSafe(gx[2]));
+            if (gxBlock != null) return gxBlock.length() > 200 ? gxBlock.substring(0, 200) : gxBlock;
+        }
         if ("starsitem:AVATAR_FRAME".equals(payload) && user.getOwnedFramesCsv() != null
                 && Arrays.asList(user.getOwnedFramesCsv().split(",")).contains("egc")) {
             return "Рамка «EGC» уже куплена ранее — повторная покупка не нужна.";
@@ -11793,6 +11828,33 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void grantStarsPurchase(AppUser user, Long telegramId, String payload,
             org.telegram.telegrambots.meta.api.objects.payments.SuccessfulPayment payment) {
+        if (payload.startsWith("starsitem:GEMX:")) {
+            // Гибридная оплата «EXC + звёзды» (06.11.2026): "starsitem:GEMX:<gameKey>:<packageKey>:<exc>". Звёзды уже оплачены; EXC списываем здесь, при сбое - общий catch (алерт админам на ручной разбор)
+            String[] gx = payload.substring("starsitem:GEMX:".length()).split(":");
+            if (gx.length != 3) {
+                throw new IllegalStateException("Malformed GEMX payload: " + payload);
+            }
+            GemPurchaseService.GemPackage gxPkg = gemPurchaseService.findPackage(gx[0], gx[1])
+                    .orElseThrow(() -> new IllegalStateException("Unknown gem package in GEMX payload: " + payload));
+            String gxTag = gemPurchaseGameTag(user, gx[0]);
+            if (gxTag == null || gxTag.isBlank()) {
+                throw new IllegalStateException("GEMX purchase without linked " + gx[0] + " tag for user " + telegramId);
+            }
+            long gxExc = Long.parseLong(gx[2]);
+            rewardService.chargeHybridExc(user, gxExc, "Донат: " + gxPkg.displayLabel() + " " + GemPurchaseService.gameName(gx[0]) + " (EXC + звёзды)");
+            GemPurchaseRequest gxReq = gemPurchaseService.createStarsRequest(user, gx[0], gxPkg, gemPurchasePriceFor(user, gxPkg), gxTag,
+                    payment.getTotalAmount(), payment.getTelegramPaymentChargeId());
+            gemPurchaseService.markExcPaid(gxReq, gxExc);
+            notifyAdminsAboutGemPurchase(gxReq);
+            sendText(telegramId,
+                    "✅ <b>Оплата прошла!</b>\n\n"
+                            + "Списано: <b>" + fmtExc(gxExc) + " EXC + " + payment.getTotalAmount() + " ⭐</b>. Заявка Д-" + gxReq.getDisplayId() + " на <b>" + gxPkg.displayLabel()
+                            + "</b> создана, менеджер напишет вам в личные сообщения для выдачи.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("🔐 Про доступ к аккаунту", "gemfaq:access")),
+                            List.of(keyboardFactory.callback("⬅️ Назад", "menu:cat:shop"), keyboardFactory.callback("🏠 Меню", "menu:main")))));
+            return;
+        }
         if (payload.startsWith("starsitem:GEM:")) {
             // Формат: "starsitem:GEM:<gameKey>:<packageKey>" (до 2026-09-20 был только Brawl Stars,
             // "starsitem:GEM:<packageKey>" — gameKey не содержит двоеточий, поэтому первое вхождение
@@ -26216,8 +26278,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (GemPurchaseService.GemPackage pkg : currency) {
             long price = gemPurchasePriceFor(user, pkg);
             String priceLabel = passActive ? price + "₽ (закупка, EGC Pass)" : price + "₽";
-            RewardItem excItem = findExcItemForPackage(gameKey, pkg);
-            String excPart = excItem != null ? fmtExc(healthRatioService.effectivePriceFor(user, excItem)) + " EXC · " : "";
+            HybridQuote listQuote = hybridQuote(user, gameKey, pkg);
+            String excPart = listQuote != null ? fmtExc(listQuote.exc()) + " EXC + " + listQuote.stars() + " ⭐ · " : "";
             rows.add(List.of(keyboardFactory.callback(
                     pkg.displayLabel() + " — " + excPart + priceLabel,
                     "gemdonate:pkg:" + gameKey + ":" + pkg.key())));
@@ -26261,6 +26323,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "steam_topup" -> "steam_balance_banner.jpg";
             default -> null;
         };
+    }
+
+    /** Доля живых денег (звёзды) при гибридной оплате доната: 30% для обычных игроков, 20% для EGC Pass (решение владельца 06.11.2026). */
+    private static final double HYBRID_REAL_SHARE = 0.30;
+    private static final double HYBRID_REAL_SHARE_PASS = 0.20;
+
+    /** Котировка гибридной оплаты пакета: EXC-часть и звёзды. */
+    private record HybridQuote(RewardItem item, long exc, int stars) {}
+
+    /** EXC-часть = (1 - доля) x цена позиции в EXC (с поправкой на курс магазина); звёзды = доля x розничная цена в рублях (для Pass закупочная). null - у пакета нет EXC-позиции. */
+    private HybridQuote hybridQuote(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg) {
+        RewardItem item = findExcItemForPackage(gameKey, pkg);
+        if (item == null) return null;
+        double share = sinkShopService.isEgcPassActive(user) ? HYBRID_REAL_SHARE_PASS : HYBRID_REAL_SHARE;
+        long full = healthRatioService.effectivePriceFor(user, item);
+        long exc = Math.round(full * (1 - share) / 10.0) * 10;
+        long realRub = Math.round(gemPurchasePriceFor(user, pkg) * share);
+        int stars = Math.max(1, gemPurchaseStarsPrice(realRub));
+        return new HybridQuote(item, exc, stars);
+    }
+
+    /** Stars-инвойс на звёздную часть гибридной оплаты; EXC-часть зашита в payload и спишется после оплаты. */
+    private void sendGemHybridInvoice(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg, HybridQuote quote) {
+        String payload = "starsitem:GEMX:" + gameKey + ":" + pkg.key() + ":" + quote.exc();
+        StarsItemSpec base = gemStarsSpec(user, gameKey, pkg, quote.stars());
+        StarsItemSpec spec = new StarsItemSpec(base.title(),
+                "Звёзды: " + quote.stars() + " ⭐. Ещё " + fmtExc(quote.exc()) + " EXC спишем после оплаты. Выдачу оформит администратор вручную.",
+                base.priceLabel(), quote.stars());
+        sendStarsInvoice(user, payload, spec, quote.stars());
     }
 
     /** Позиция магазина за EXC, соответствующая донат-пакету (по числу в конце названия: «Brawl Stars - Gems 30» = пакет на 30); null - EXC-варианта нет. */
@@ -26406,13 +26497,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("❌ Отмена", gemDonateBackTarget(gameKey, pkg)))
         ));
         // Оплата EXC первой строкой, если у пакета есть EXC-позиция; недоступная (лимит, ранг) ведёт в карточку со статусом
-        RewardItem excPayItem = findExcItemForPackage(gameKey, pkg);
-        if (excPayItem != null) {
-            long excPayPrice = healthRatioService.effectivePriceFor(user, excPayItem);
-            boolean excAvailable = shopLimitService.getItemStatus(user, excPayItem).startsWith("✅");
-            rows.add(0, List.of(keyboardFactory.callback(
-                    excAvailable ? "🪙 Заплатить " + fmtExc(excPayPrice) + " EXC" : "🪙 " + fmtExc(excPayPrice) + " EXC — недоступно",
-                    (excAvailable ? "shop:buy:" : "shop:view:") + excPayItem.getId())));
+        HybridQuote hybrid = hybridQuote(user, gameKey, pkg);
+        String hybridLine = "";
+        if (hybrid != null) {
+            rows.add(0, List.of(keyboardFactory.callback("🪙+⭐ " + fmtExc(hybrid.exc()) + " EXC + " + hybrid.stars() + " ⭐", "gemhyb:" + gameKey + ":" + pkg.key())));
+            String noStars = "Здравствуйте! Хочу купить " + pkg.displayLabel() + " (" + GemPurchaseService.gameName(gameKey) + "), но не могу оплатить звёздами. Мой ID: " + user.getTelegramId();
+            String noStarsEnc = java.net.URLEncoder.encode(noStars, StandardCharsets.UTF_8).replace("+", "%20");
+            rows.add(rows.size() - 1, List.of(keyboardFactory.url("💬 Нет звёзд? Обсудить с менеджером", "https://t.me/" + appProperties.getSupportUsername() + "?text=" + noStarsEnc)));
+            int excPct = (int) Math.round((1 - (sinkShopService.isEgcPassActive(user) ? HYBRID_REAL_SHARE_PASS : HYBRID_REAL_SHARE)) * 100);
+            hybridLine = "🪙+⭐ <b>EXC + звёзды</b> — " + excPct + "% токенами, остальное звёздами. Нет возможности платить звёздами? Напишите менеджеру: другой вариант оплаты возможен.\n";
         }
         String passNote = price < pkg.priceRub() ? " <i>(закупочная цена, EGC Pass)</i>" : "";
         // Продажа EGC Pass тем, у кого его нет: честная экономия на ЭТОЙ покупке (цифры реальные: закупка поставщика без наценки клуба)
@@ -26431,6 +26524,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String methodText = "💎 <b>" + pkg.displayLabel() + " — " + price + "₽</b>" + passNote + "\n\n"
                 + steamLoginLine
                 + "Выберите способ оплаты:\n\n"
+                + hybridLine
                 + "⭐ <b>Telegram Stars</b> — рекомендуем: оплата в один тап, подтверждается автоматически, без переписки и проверки перевода.\n"
                 + "💎 <b>GRAM (TON)</b> — перевод вручную: менеджер напишет вам в личные сообщения и пришлёт реквизиты, это дольше.\n\n"
                 + gemPurchaseWarning(gameKey);
@@ -26757,6 +26851,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🏷️ Тег: <code>" + escape(req.getGameTag()) + "</code>\n"
                 + "📦 Пакет: <b>" + req.displayLabel() + "</b>\n"
                 + "💰 Цена: <b>" + req.getPriceRub() + "₽</b>\n"
+                + (req.getExcPaid() > 0 ? "🪙 Оплачено EXC: <b>" + fmtExc(req.getExcPaid()) + "</b> (остальное звёздами)\n" : "")
                 + gemPurchasePaymentLine(req) + gemPurchaseCodeLine(req) + "\n"
                 + "🎁 XP-бонус при выполнении: <b>" + req.getXpBonus() + "</b>";
         InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(

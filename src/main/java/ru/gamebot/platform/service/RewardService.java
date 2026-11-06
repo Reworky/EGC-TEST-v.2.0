@@ -266,6 +266,11 @@ public class RewardService {
 
         boolean isAvatarFrame = "avatar_frame".equals(rewardItem.getPurchaseGroup());
 
+        // Донат-игры (гемы, UC, G-Coin, Steam): только гибридная оплата «EXC + звёзды» (06.11.2026), 100% EXC закрыты
+        if (rewardItem.getPurchaseGroup() != null && !GemPurchaseService.packagesFor(rewardItem.getPurchaseGroup()).isEmpty()) {
+            throw new IllegalArgumentException("Этот товар оплачивается частично EXC, частично звёздами: откройте раздел игры в боте и выберите «🪙+⭐».");
+        }
+
         if (isAvatarFrame && isFrameOwned(lockedUser, rewardItem.getAvatarFrameImage())) {
             throw new IllegalArgumentException("Эта рамка уже в вашей коллекции. Переключитесь бесплатно в профиле.");
         }
@@ -376,6 +381,40 @@ public class RewardService {
 
     public long countIssuedShopRewards(AppUser user) {
         return rewardRequestRepository.countIssuedShopRewardsByUser(user);
+    }
+
+    /** Проверка гибридной оплаты доната: можно ли игроку заплатить excAmount EXC за позицию item (ранг, защита, лимит трат, баланс); null - можно, иначе текст отказа. */
+    public String hybridPurchaseBlock(AppUser user, RewardItem item, long excAmount) {
+        try {
+            shopLimitService.checkLevelAccess(user, item);
+        } catch (IllegalArgumentException e) {
+            return e.getMessage();
+        }
+        String eligibility = shopLimitService.shopEligibilityBlock(user);
+        if (eligibility != null) return eligibility;
+        if (user.getCoins() < excAmount) {
+            return "Недостаточно EXC: нужно " + excAmount + ", у вас " + user.getCoins() + ".";
+        }
+        long remaining = sinkShopService.getRemainingShopLimit(user);
+        if (excAmount > remaining) {
+            return "Достигнут лимит трат в магазине: осталось " + remaining + " EXC в этом месяце.";
+        }
+        return null;
+    }
+
+    /** Списывает EXC-часть гибридной оплаты (после успешной оплаты звёзд): баланс и лимит проверяются под блокировкой игрока. */
+    @Transactional
+    public void chargeHybridExc(AppUser user, long excAmount, String description) {
+        AppUser locked = appUserRepository.findByIdForUpdate(user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
+        if (locked.getCoins() < excAmount) {
+            throw new IllegalArgumentException("Недостаточно EXC для гибридной оплаты.");
+        }
+        if (excAmount > sinkShopService.getRemainingShopLimit(locked)) {
+            throw new IllegalArgumentException("Превышен лимит трат в магазине.");
+        }
+        excTx.creditExc(locked, -excAmount, ExcTransactionService.SHOP_BUY, description);
+        sinkShopService.recordShopSpend(locked, excAmount);
     }
 
     /** Последние данные для выдачи (email/ID), которые игрок указывал в заявках этой группы наград; null - не указывал. */
