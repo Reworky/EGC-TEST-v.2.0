@@ -10,4 +10,6 @@ public interface ShopRubleOrderRepository extends JpaRepository<ShopRubleOrder, 
     Optional<ShopRubleOrder> findFirstByTelegramIdAndStatusOrderByCreatedAtDesc(Long telegramId, String status);
 
     List<ShopRubleOrder> findAllByStatusOrderByCreatedAtAsc(String status);
+
+    List<ShopRubleOrder> findAllByTelegramIdOrderByCreatedAtDesc(Long telegramId);
 }

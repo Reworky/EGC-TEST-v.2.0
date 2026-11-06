@@ -1658,6 +1658,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             List.of(keyboardFactory.callback("⬅️ Назад", "menu:shop")))));
             return;
         }
+        if (data.startsWith("shop:confirm:")) {
+            answerSilently(callbackQuery.getId());
+            Long confirmId = parseLong(data.substring("shop:confirm:".length()));
+            String savedId = session.getData().get("confirmRewardId");
+            String savedData = session.getData().get("confirmRewardData");
+            if (confirmId == null || savedId == null || !savedId.equals(String.valueOf(confirmId))) {
+                if (confirmId != null) sendRewardCard(user, confirmId, "⚠️ Оформите заявку заново.");
+                return;
+            }
+            session.getData().remove("confirmRewardId");
+            session.getData().remove("confirmRewardData");
+            completePurchase(callbackQuery, user, rewardService.getRewardItem(confirmId), savedData == null || savedData.isBlank() ? null : savedData);
+            return;
+        }
         if (data.startsWith("gemstars:")) {
             answerSilently(callbackQuery.getId());
             String[] gsParts = data.substring("gemstars:".length()).split(":", 2);
@@ -1697,9 +1711,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), "Заявка на оплату отменена.", backMenuKeyboard("menu:shop"));
             return;
         }
-        if (data.startsWith("gemrub:")) {
+        if (data.startsWith("gemrub:") || data.startsWith("gemrubok:")) {
             answerSilently(callbackQuery.getId());
-            String[] grParts = data.substring("gemrub:".length()).split(":", 2);
+            boolean grConfirmed = data.startsWith("gemrubok:");
+            String[] grParts = data.substring((grConfirmed ? "gemrubok:" : "gemrub:").length()).split(":", 2);
             GemPurchaseService.GemPackage grPkg = grParts.length == 2 ? gemPurchaseService.findPackage(grParts[0], grParts[1]).orElse(null) : null;
             HybridQuote grQuote = grPkg == null ? null : hybridQuote(user, grParts[0], grPkg);
             if (grQuote == null) {
@@ -1714,6 +1729,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String grTag = gemPurchaseGameTag(user, grParts[0]);
             if (grTag == null || grTag.isBlank()) {
                 startGemPurchase(user, session, grParts[0], grParts[1]);
+                return;
+            }
+            java.util.Optional<ru.gamebot.platform.domain.model.ShopRubleOrder> grOpen = shopRubleOrderRepository
+                    .findFirstByTelegramIdAndStatusOrderByCreatedAtDesc(user.getTelegramId(), ru.gamebot.platform.domain.model.ShopRubleOrder.STATUS_PENDING);
+            boolean grSameOpen = grOpen.isPresent() && grParts[0].equals(grOpen.get().getGameKey()) && grPkg.key().equals(grOpen.get().getPackageKey())
+                    && grOpen.get().getExcAmount() == grQuote.exc() && grOpen.get().getRubAmount() == grQuote.rub();
+            if (!grConfirmed && !grSameOpen) {
+                sendText(user.getTelegramId(),
+                        "📝 <b>Проверьте заявку</b>\n\n"
+                                + "🎮 " + escape(gemLabelWithGame(grPkg, grParts[0])) + "\n"
+                                + "💸 К оплате: <b>" + grQuote.rub() + " ₽ + " + fmtExc(grQuote.exc()) + " EXC</b>\n\n"
+                                + "После нажатия «Оформить заявку» заявка уйдёт менеджеру, он пришлёт реквизиты. EXC спишутся только после того, как вы переведёте рубли и менеджер подтвердит оплату.",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("✅ Оформить заявку", "gemrubok:" + grParts[0] + ":" + grParts[1])),
+                                List.of(keyboardFactory.callback("⬅️ Назад", "gemdonate:pkg:" + grParts[0] + ":" + grParts[1])))));
                 return;
             }
             sendShopRubleOrderScreen(user, grParts[0], grPkg, grQuote);
@@ -1946,7 +1976,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             RewardItem buyReward = rewardService.getRewardItem(buyRewardId);
             String lastDetails = sameData ? rewardService.lastPayoutDetails(user, buyReward.getPurchaseGroup()) : null;
             if (lastDetails != null) {
-                completePurchase(callbackQuery, user, buyReward, lastDetails);
+                sendRewardPurchaseConfirm(user, buyReward, lastDetails);
             } else {
                 askRewardUserData(callbackQuery, user, buyReward);
             }
@@ -2601,6 +2631,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "shop" -> sendShop(user);
             case "sink" -> sendSinkShop(user);
             case "my-rewards" -> sendUserRewardRequests(user);
+            case "my-rewards-history" -> sendUserRewardRequests(user, true);
             case "my-withdrawals" -> sendUserWithdrawalRequests(user);
             case "council" -> sendCouncil(user);
             case "tournament" -> sendTournament(user);
@@ -10299,7 +10330,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!cs2EntryAdded && !cs2CaseCatalog.all().isEmpty()) {
             rows.add(List.of(keyboardFactory.callback("🎁 CS2 — выбор раздела", "shop:cs2")));
         }
-        rows.add(List.of(keyboardFactory.callback("📋 Мои заявки", "menu:my-rewards")));
+        rows.add(List.of(
+                keyboardFactory.callback("📋 Мои заявки", "menu:my-rewards"),
+                keyboardFactory.callback("🗂 История заявок", "menu:my-rewards-history")));
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", "menu:cat:shop"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
@@ -10735,18 +10768,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendUserRewardRequests(AppUser user) {
-        List<RewardRequest> requests = rewardService.findUserRequests(user).stream()
-                .filter(r -> !"Вывод".equals(r.getRewardItem().getCategory()))
-                .toList();
-        if (requests.isEmpty()) {
-            sendText(user.getTelegramId(),
-                    "📋 <b>Мои заявки</b>\n\nВы ещё не делали заявок на награды.",
-                    backMenuKeyboard("menu:shop"));
-            return;
-        }
-        StringBuilder sb = new StringBuilder("📋 <b>Мои заявки</b>\n\n");
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        for (RewardRequest req : requests) {
+        sendUserRewardRequests(user, false);
+    }
+
+    /** «Мои заявки» магазина: history=false - только текущие (ждут выдачи или подтверждения оплаты), history=true - завершённые (выдано, отклонено, отменено, просрочено). Включает награды (М-N), донат (Д-N) и оплаты «токены + рубли». */
+    private void sendUserRewardRequests(AppUser user, boolean history) {
+        record Line(LocalDateTime at, String text, String cancelLabel, String cancelData) {}
+        List<Line> lines = new ArrayList<>();
+        for (RewardRequest req : rewardService.findUserRequests(user)) {
+            if ("Вывод".equals(req.getRewardItem().getCategory())) continue;
+            boolean open = req.getStatus() == RewardRequestStatus.PENDING || req.getStatus() == RewardRequestStatus.IN_PROGRESS;
+            if (open == history) continue;
             String status = switch (req.getStatus()) {
                 case PENDING -> "⏳ Ожидает";
                 case IN_PROGRESS -> "🔄 В разработке";
@@ -10754,18 +10786,58 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 case REJECTED -> "❌ Отклонено";
                 case CANCELLED -> "🚫 Отменено";
             };
-            sb.append("• М-").append(reqDisplayId(req)).append(" <b>").append(escape(req.getRewardItem().getTitle())).append("</b> — ").append(status);
-            if (req.getStatus() == RewardRequestStatus.REJECTED && req.getAdminComment() != null) {
-                sb.append("\n  📝 ").append(escape(req.getAdminComment()));
-            }
-            sb.append("\n");
-            if (req.getStatus() == RewardRequestStatus.PENDING) {
-                rows.add(List.of(keyboardFactory.callback(
-                        "🚫 Отменить «" + trim(req.getRewardItem().getTitle(), 20) + "»",
-                        "reward:cancel:" + req.getId())));
-            }
+            String text = "• М-" + reqDisplayId(req) + " <b>" + escape(req.getRewardItem().getTitle()) + "</b> — " + status
+                    + (req.getStatus() == RewardRequestStatus.REJECTED && req.getAdminComment() != null ? "\n  📝 " + escape(req.getAdminComment()) : "");
+            lines.add(new Line(req.getCreatedAt(), text,
+                    req.getStatus() == RewardRequestStatus.PENDING ? "🚫 Отменить «" + trim(req.getRewardItem().getTitle(), 20) + "»" : null,
+                    req.getStatus() == RewardRequestStatus.PENDING ? "reward:cancel:" + req.getId() : null));
         }
-        sb.append("\n💡 <i>Отменить заявку можно только в статусе ⏳ Ожидает. После того как администратор возьмёт заявку в разработку (🔄 В разработке), отмена доступна только через поддержку.</i>");
+        for (GemPurchaseRequest g : gemPurchaseService.findByUser(user)) {
+            boolean open = g.getStatus() == ru.gamebot.platform.domain.enums.GemPurchaseStatus.PENDING;
+            if (open == history) continue;
+            String status = switch (g.getStatus()) {
+                case PENDING -> "⏳ Ждёт выдачи";
+                case APPROVED -> "✅ Выдано";
+                default -> "❌ Отклонено";
+            };
+            String pay = g.getExcPaid() > 0 ? " · " + fmtExc(g.getExcPaid()) + " EXC" + (g.getRubPaid() > 0 ? " + " + g.getRubPaid() + " ₽" : g.getStarsAmount() != null ? " + " + g.getStarsAmount() + " ⭐" : "") : "";
+            lines.add(new Line(g.getCreatedAt(), "• Д-" + g.getDisplayId() + " <b>" + escape(g.displayLabel() + " " + g.getGameName()) + "</b>" + pay + " — " + status
+                    + (g.getStatus() == ru.gamebot.platform.domain.enums.GemPurchaseStatus.REJECTED && g.getRejectReason() != null ? "\n  📝 " + escape(g.getRejectReason()) : ""), null, null));
+        }
+        for (ru.gamebot.platform.domain.model.ShopRubleOrder o : shopRubleOrderRepository.findAllByTelegramIdOrderByCreatedAtDesc(user.getTelegramId())) {
+            boolean open = ru.gamebot.platform.domain.model.ShopRubleOrder.STATUS_PENDING.equals(o.getStatus())
+                    && o.getCreatedAt() != null && o.getCreatedAt().isAfter(LocalDateTime.now().minusHours(24));
+            boolean approved = ru.gamebot.platform.domain.model.ShopRubleOrder.STATUS_APPROVED.equals(o.getStatus());
+            if (approved || open == history) continue; // подтверждённые видны как заявка на донат
+            String status = open ? "⏳ Ждёт подтверждения оплаты менеджером"
+                    : ru.gamebot.platform.domain.model.ShopRubleOrder.STATUS_REJECTED.equals(o.getStatus()) ? "❌ Не подтверждена" : "⌛ Истекла";
+            lines.add(new Line(o.getCreatedAt(), "• Оплата #" + o.getId() + ": " + o.getRubAmount() + " ₽ + " + fmtExc(o.getExcAmount()) + " EXC — " + status,
+                    open ? "🚫 Отменить оплату #" + o.getId() : null, open ? "gemrubcancel:" + o.getId() : null));
+        }
+        lines.sort(java.util.Comparator.comparing((Line l) -> l.at() == null ? LocalDateTime.MIN : l.at()).reversed());
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        String title = history ? "🗂 <b>История заявок</b>" : "📋 <b>Мои заявки</b>";
+        if (lines.isEmpty()) {
+            sendText(user.getTelegramId(),
+                    title + "\n\n" + (history ? "Завершённых заявок пока нет." : "Сейчас открытых заявок нет."),
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback(history ? "📋 Мои заявки" : "🗂 История заявок", history ? "menu:my-rewards" : "menu:my-rewards-history")),
+                            List.of(keyboardFactory.callback("⬅️ Назад", "menu:shop")))));
+            return;
+        }
+        StringBuilder sb = new StringBuilder(title).append("\n\n");
+        int shown = 0;
+        for (Line l : lines) {
+            if (shown++ >= (history ? 25 : 15)) break;
+            sb.append(l.text()).append("\n");
+            if (l.cancelData() != null) rows.add(List.of(keyboardFactory.callback(l.cancelLabel(), l.cancelData())));
+        }
+        if (!history) {
+            sb.append("\n💡 <i>Отменить заявку можно только в статусе ⏳ Ожидает. После того как администратор возьмёт её в работу, отмена возможна только через поддержку.</i>");
+        } else if (lines.size() > 25) {
+            sb.append("\nПоказаны последние 25.");
+        }
+        rows.add(List.of(keyboardFactory.callback(history ? "📋 Мои заявки" : "🗂 История заявок", history ? "menu:my-rewards" : "menu:my-rewards-history")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:shop")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
@@ -12637,6 +12709,32 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), text, keyboard);
     }
 
+    /** Окно подтверждения перед оформлением заявки на награду (06.11.2026): игрок видит товар, цену и данные выдачи и знает, что следующий шаг спишет EXC и отправит заявку модератору. Данные ждут в сессии до нажатия «Оформить». */
+    private void sendRewardPurchaseConfirm(AppUser user, RewardItem reward, String data) {
+        UserSession session = sessionService.get(user.getTelegramId());
+        session.reset();
+        session.getData().put("confirmRewardId", String.valueOf(reward.getId()));
+        session.getData().put("confirmRewardData", data == null ? "" : data);
+        long price = healthRatioService.effectivePriceFor(user, reward);
+        boolean instant = reward.getAvatarFrameColor() != null;
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback(instant ? "✅ Купить" : "✅ Оформить заявку", "shop:confirm:" + reward.getId())));
+        if (data != null && !data.isBlank()) {
+            rows.add(List.of(keyboardFactory.callback("✏️ Изменить данные", "shop:buyother:" + reward.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:view:" + reward.getId())));
+        sendText(user.getTelegramId(),
+                "📝 <b>Проверьте заявку</b>\n\n"
+                        + "🎁 " + escape(reward.getTitle()) + "\n"
+                        + "🪙 Цена: <b>" + fmtExc(price) + " EXC</b>\n"
+                        + (data != null && !data.isBlank() ? "📋 Данные для выдачи: <code>" + escape(data) + "</code>\n" : "")
+                        + "\n"
+                        + (instant
+                                ? "После нажатия «Купить» EXC спишутся, и покупка применится сразу."
+                                : "После нажатия «Оформить заявку» EXC спишутся и заявка уйдёт модератору. Выдача вручную, мы пришлём уведомление."),
+                keyboardFactory.rowsLayout(rows));
+    }
+
     /** Просит игрока ввести данные для выдачи (email/ID) и ждёт текст (SHOP_GAME_DATA_INPUT). */
     private void askRewardUserData(CallbackQuery callbackQuery, AppUser user, RewardItem reward) {
         UserSession session = sessionService.get(user.getTelegramId());
@@ -12683,7 +12781,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             askRewardUserData(callbackQuery, user, reward);
             return;
         }
-        completePurchase(callbackQuery, user, reward, null);
+        answerSilently(callbackQuery.getId());
+        sendRewardPurchaseConfirm(user, reward, null);
     }
 
     private void handleTransferRecipientInput(AppUser user, UserSession session, String text) {
@@ -12749,7 +12848,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         Long rewardId = parseLong(session.getData().getOrDefault("pendingRewardId", "0"));
         RewardItem reward = rewardService.getRewardItem(rewardId);
         session.reset();
-        completePurchase(null, user, reward, text.trim());
+        sendRewardPurchaseConfirm(user, reward, text.trim());
     }
 
     private void completePurchase(CallbackQuery callbackQuery, AppUser user, RewardItem reward, String userGameData) {
