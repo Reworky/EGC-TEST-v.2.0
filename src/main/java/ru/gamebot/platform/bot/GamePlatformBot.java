@@ -13858,6 +13858,86 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 )));
     }
 
+    /** Единая шапка игрока для всех карточек модерации: ник и кликабельные ссылки на личный аккаунт, ID, страна, возраст, телефон, стаж, квесты, ранг, Pass. */
+    private String playerHeader(AppUser p) {
+        String uname = p.getTelegramUsername();
+        String link = uname != null && !uname.isBlank()
+                ? "<a href=\"https://t.me/" + uname + "\">@" + escape(uname) + "</a>"
+                : "<a href=\"tg://user?id=" + p.getTelegramId() + "\">открыть профиль</a>";
+        String since = p.getCreatedAt() != null ? p.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) : "—";
+        return "👤 <b>" + escape(displayUserName(p)) + "</b> · " + link
+                + (sinkShopService.isEgcPassActive(p) ? " · ⭐ EGC Pass" : "") + "\n"
+                + "🆔 <code>" + p.getTelegramId() + "</code> · 🌍 " + escape(p.getCountry() != null && !p.getCountry().isBlank() ? p.getCountry() : "страна не указана")
+                + " · 🎂 " + (p.getAge() != null ? p.getAge() + " лет" : "возраст не указан") + "\n"
+                + "📱 " + (p.getPhoneNumber() != null ? "<code>" + escape(p.getPhoneNumber()) + "</code>" : "<b>не подтверждён</b>")
+                + " · 🎯 " + p.getCompletedQuests() + " квестов · " + escape(userService.getLevelName(p.getXp())) + " · в клубе с " + since;
+    }
+
+    private record InboxItem(LocalDateTime at, String icon, String label, String callback) {}
+
+    /** «Всё ожидающее»: одним списком все открытые заявки и обращения (старые сверху), чтобы ничего не терялось после разового уведомления. */
+    private void sendModPendingAll(AppUser viewer) {
+        List<InboxItem> items = new ArrayList<>();
+        long quests = 0, tickets = 0, withdrawals = 0, rewards = 0, donats = 0, orders = 0;
+        try {
+            for (QuestSubmission sub : questService.getPendingSubmissions()) {
+                boolean sponsored = sub.getQuest() != null && sub.getQuest().isSponsored();
+                items.add(new InboxItem(sub.getCreatedAt(), sponsored ? "💎" : "🔎",
+                        "К-" + (sub.getDisplayId() != null ? sub.getDisplayId() : sub.getId()) + " " + trim(sub.getUser().getNickname(), 14)
+                                + (sub.getQuest() != null ? " — " + trim(sub.getQuest().getTitle(), 18) : ""), "mod:view:" + sub.getId()));
+                quests++;
+            }
+            for (SupportTicket t : supportService.getActiveTickets()) {
+                items.add(new InboxItem(t.getCreatedAt(), "🆘", "Обращение #" + t.getId() + " " + trim(t.getUser().getNickname(), 14) + " — " + trim(t.getInitialMessage() == null ? "" : t.getInitialMessage(), 18),
+                        "mod:support:view:" + t.getId()));
+                tickets++;
+            }
+            for (RewardRequest r : rewardService.findPendingWithdrawals()) {
+                String icon = isStarsWithdrawal(r) ? "⭐" : isCryptoWithdrawal(r) ? "💎" : "💸";
+                items.add(new InboxItem(r.getCreatedAt(), icon, "Вывод В-" + reqDisplayId(r) + " " + trim(r.getUser().getNickname(), 14) + " — " + rewardService.actualPaidPrice(r) + " EXC",
+                        "mod:withdrawal:req:" + r.getId()));
+                withdrawals++;
+            }
+            for (RewardRequest r : rewardService.findPendingRequests()) {
+                items.add(new InboxItem(r.getCreatedAt(), "🛍️", "Награда М-" + reqDisplayId(r) + " " + trim(r.getUser().getNickname(), 14) + " — " + trim(r.getRewardItem().getTitle(), 16),
+                        "admin:reward:req:" + r.getId()));
+                rewards++;
+            }
+            for (GemPurchaseRequest g : gemPurchaseService.findPending()) {
+                items.add(new InboxItem(g.getCreatedAt(), "🎮", "Донат Д-" + g.getDisplayId() + " " + trim(g.getUser().getNickname(), 14) + " — " + g.displayLabel(),
+                        "admin:gempurchase:view:" + g.getId()));
+                donats++;
+            }
+            for (ru.gamebot.platform.domain.model.ShopRubleOrder o : pendingRubleOrders()) {
+                AppUser buyer = userService.findByTelegramId(o.getTelegramId()).orElse(null);
+                items.add(new InboxItem(o.getCreatedAt(), "🧾", "Оплата #" + o.getId() + " " + trim(buyer == null ? String.valueOf(o.getTelegramId()) : buyer.getNickname(), 14) + " — " + o.getRubAmount() + " ₽ + EXC",
+                        "admin:shoprub:view:" + o.getId()));
+                orders++;
+            }
+        } catch (Exception e) {
+            log.warn("Failed to build moderation inbox", e);
+        }
+        items.sort(java.util.Comparator.comparing((InboxItem i) -> i.at() == null ? LocalDateTime.MIN : i.at()));
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
+        int shown = 0;
+        for (InboxItem item : items) {
+            if (shown++ >= 40) break;
+            boolean old = item.at() != null && item.at().isBefore(now.minusHours(12));
+            String when = item.at() == null ? "" : item.at().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm")) + " ";
+            rows.add(List.of(keyboardFactory.callback((old ? "⏰ " : "") + item.icon() + " " + when + item.label(), item.callback())));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Центр модерации", "menu:moderation")));
+        sendText(viewer.getTelegramId(),
+                items.isEmpty()
+                        ? "📥 <b>Всё ожидающее</b>\n\nОткрытых заявок нет."
+                        : "📥 <b>Всё ожидающее (" + items.size() + ")</b>\n"
+                                + "📂 Квесты: " + quests + " · 🆘 Обращения: " + tickets + " · 💸 Вывод: " + withdrawals + "\n"
+                                + "🛍️ Награды: " + rewards + " · 🎮 Донат: " + donats + " · 🧾 Оплаты токены+рубли: " + orders + "\n"
+                                + "⏰ — ждёт больше 12 часов. Старые заявки сверху" + (items.size() > 40 ? " (показаны первые 40)." : "."),
+                keyboardFactory.rowsLayout(rows));
+    }
+
     private void sendModerationHub(AppUser user) {
         long pendingWithdrawalsMod = rewardService.findPendingWithdrawals().size();
         String wLabelMod = pendingWithdrawalsMod > 0
@@ -13876,10 +13956,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📂 Отчёты по квестам: <b>" + questService.pendingCount() + "</b>\n"
                         + "🆘 Открытые заявки поддержки: <b>" + supportService.activeTicketCount() + "</b>\n"
                         + "💸 Заявки на вывод: <b>" + pendingWithdrawalsMod + "</b>\n"
-                        + "💎 Заявки на донат: <b>" + pendingGemPurchasesMod + "</b>\n"
+                        + "💎 Заявки на донат и оплаты: <b>" + pendingGemPurchasesMod + "</b>\n"
                         + "🛍️ Заявки на награды: <b>" + pendingRewardsMod + "</b>\n\n"
                         + "Здесь собрана вся оперативная работа по платформе.",
                 keyboardFactory.rowsLayout(List.of(
+                        List.of(keyboardFactory.callback("📥 Всё ожидающее", "mod:pending")),
                         List.of(
                                 keyboardFactory.callback("📂 Квесты", "mod:support:quests"),
                                 keyboardFactory.callback("🆘 Поддержка", "mod:support:list")
@@ -14158,8 +14239,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Build conversation history
         StringBuilder history = new StringBuilder();
         history.append("🆘 <b>Диалог #").append(ticket.getId()).append("</b>\n\n")
-                .append("👤 Игрок: <b>").append(escape(ticket.getUser().getNickname())).append("</b>\n")
-                .append("🆔 ID: <b>").append(ticket.getUser().getTelegramId()).append("</b>\n")
+                .append(playerHeader(ticket.getUser())).append("\n")
                 .append("📌 Статус: <b>").append(escape(humanSupportStatus(ticket.getStatus().name()))).append("</b>\n")
                 .append("🕒 Создан: <b>").append(escape(ticket.getCreatedAt().format(DATE_TIME_FORMATTER))).append("</b>\n\n")
                 .append("─────────────────\n");
@@ -16181,11 +16261,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String since = requester.getCreatedAt() != null
                 ? requester.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) : "—";
         return "📋 <b>Заявка на награду М-" + reqDisplayId(req) + "</b>" + passBadge + "\n\n"
-                + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
-                + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
-                + "🌍 Страна: <b>" + escape(requester.getCountry() != null ? requester.getCountry() : "Не указана") + "</b>"
-                + phoneLine + "\n"
-                + "📆 В клубе с " + since + " · квестов: <b>" + requester.getCompletedQuests() + "</b> · ранг: <b>" + escape(userService.getLevelName(requester.getXp())) + "</b>\n"
+                + playerHeader(requester) + "\n"
                 + "🪙 Баланс сейчас: <b>" + fmtExc(requester.getCoins()) + " EXC</b>\n\n"
                 + "🎁 Награда: <b>" + escape(req.getRewardItem().getTitle()) + "</b> (" + escape(req.getRewardItem().getCategory() == null ? "—" : req.getRewardItem().getCategory()) + ")\n"
                 + "🪙 Цена: <b>" + fmtExc(rewardService.actualPaidPrice(req)) + " EXC</b>"
@@ -16835,10 +16911,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String passBadge = sinkShopService.isEgcPassActive(requester) ? " ⭐️<b>EGC Pass — приоритет</b>" : "";
         sendText(user.getTelegramId(),
                 "💸 <b>Заявка на вывод В-" + reqDisplayId(req) + "</b>" + passBadge + "\n\n"
-                        + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
-                        + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
-                        + "🌍 Страна: <b>" + escape(requester.getCountry() != null ? requester.getCountry() : "Не указана") + "</b>\n"
-                        + phoneLine + "\n"
+                        + playerHeader(requester) + "\n"
                         + "🪙 Сумма: <b>" + rewardService.actualPaidPrice(req) + " EXC</b>\n"
                         + "💵 К выплате: <b>~" + rubles + " ₽</b>" + payoutSuffix
                         + detailsLine + "\n"
@@ -18859,6 +18932,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             case "money" -> {
                 title = "💰 <b>Деньги</b>";
+                rows.add(List.of(keyboardFactory.callback("📥 Всё ожидающее", "mod:pending")));
                 long pendingW = rewardService.findPendingWithdrawals().size();
                 rows.add(List.of(keyboardFactory.callback(pendingW > 0 ? "💸 Заявки на вывод (" + pendingW + ")" : "💸 Заявки на вывод", "admin:withdrawals")));
                 long pendingR = rewardService.findPendingRequests().size();
@@ -27160,7 +27234,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         AppUser buyer = userService.findByTelegramId(order.getTelegramId()).orElse(null);
         GemPurchaseService.GemPackage pkg = gemPurchaseService.findPackage(order.getGameKey(), order.getPackageKey()).orElse(null);
         String text = "💸 <b>Оплата доната «токены + рубли» #" + order.getId() + "</b>\n\n"
-                + "👤 Игрок: <b>" + (buyer == null ? "<code>" + order.getTelegramId() + "</code>" : playerDmLink(buyer)) + "</b> (<code>" + order.getTelegramId() + "</code>)\n"
+                + (buyer == null ? "👤 Игрок: <code>" + order.getTelegramId() + "</code>" : playerHeader(buyer)) + "\n"
                 + "📦 Пакет: <b>" + escape(pkg == null ? order.getPackageKey() : gemLabelWithGame(pkg, order.getGameKey())) + "</b>\n"
                 + "💸 Рублей: <b>" + order.getRubAmount() + " ₽</b>\n"
                 + "🪙 EXC: <b>" + fmtExc(order.getExcAmount()) + "</b> (спишутся при подтверждении)\n"
@@ -27211,8 +27285,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendAdminGemPurchaseCard(AppUser user, Long id) {
         gemPurchaseService.findById(id).ifPresentOrElse(req -> {
             String text = "💎 <b>Заявка Д-" + req.getDisplayId() + "</b>\n\n"
-                    + "👤 Игрок: <b>" + playerDmLink(req.getUser()) + "</b>\n"
-                    + "🆔 Telegram ID: <code>" + req.getUser().getTelegramId() + "</code>\n"
+                    + playerHeader(req.getUser()) + "\n"
                     + "🏷️ Тег: <code>" + escape(req.getGameTag()) + "</code>\n"
                     + "📦 Пакет: <b>" + req.displayLabel() + "</b>\n"
                     + "💰 Цена: <b>" + req.getPriceRub() + "₽</b>\n"
@@ -27469,7 +27542,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleModWithdrawalAction(CallbackQuery callbackQuery, AppUser user, UserSession session, String data) {
         answerSilently(callbackQuery.getId());
-        if (data.equals("mod:withdrawals")) {
+        if (data.equals("mod:pending")) {
+            answerSilently(callbackQuery.getId());
+            sendModPendingAll(user);
+        } else if (data.equals("mod:withdrawals")) {
             sendModWithdrawals(user);
         } else if (data.startsWith("mod:withdrawal:check:")) {
             answerSilently(callbackQuery.getId());
@@ -27614,10 +27690,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String passBadgeMod = sinkShopService.isEgcPassActive(requester) ? " ⭐️<b>EGC Pass — приоритет</b>" : "";
         sendText(user.getTelegramId(),
                 "💸 <b>Заявка на вывод В-" + reqDisplayId(req) + "</b>" + passBadgeMod + "\n\n"
-                        + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
-                        + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
-                        + "🌍 Страна: <b>" + escape(requester.getCountry() != null ? requester.getCountry() : "Не указана") + "</b>\n"
-                        + phoneLineMod + "\n"
+                        + playerHeader(requester) + "\n"
                         + "🪙 Сумма: <b>" + rewardService.actualPaidPrice(req) + " EXC</b>\n"
                         + "💵 К выплате: <b>~" + rubles + " ₽</b>" + payoutSuffix
                         + detailsLine + "\n"
@@ -27864,6 +27937,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String wLabelMod = pendingWithdrawalsMod > 0
                     ? "💸 Заявки на вывод (" + pendingWithdrawalsMod + ")"
                     : "💸 Заявки на вывод";
+            rows.add(0, List.of(keyboardFactory.callback("📥 Всё ожидающее", "mod:pending")));
             rows.add(List.of(keyboardFactory.callback(wLabelMod, "mod:withdrawals")));
             long pendingGemPurchasesMod = gemPurchaseService.findPending().size() + pendingRubleOrders().size();
             String gLabelMod = pendingGemPurchasesMod > 0
