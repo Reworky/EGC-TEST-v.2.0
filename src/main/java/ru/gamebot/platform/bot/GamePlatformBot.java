@@ -1625,6 +1625,39 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendOtpWithdrawalOffer(user);
             return;
         }
+        if (data.startsWith("helpreg:") || data.startsWith("helpdon:") || data.equals("helpnb")) {
+            answerSilently(callbackQuery.getId());
+            String helpTopic;
+            String helpContext;
+            String helpMessage;
+            if (data.startsWith("helpreg:")) {
+                ru.gamebot.platform.service.CryptoExchanges.Exchange helpEx = ru.gamebot.platform.service.CryptoExchanges.byKey(data.substring("helpreg:".length())).orElse(null);
+                String exTitle = helpEx == null ? "биржа" : helpEx.title();
+                helpTopic = "Помощь с регистрацией на " + exTitle;
+                helpContext = "Игрок хочет вывести в крипте сверх 10 000 EXC: нужно зарегистрироваться на бирже по нашей ссылке и прислать UID. Сумма заявки: "
+                        + session.getData().getOrDefault("ton_exc_amount", "не введена") + " EXC.";
+                helpMessage = "Здравствуйте! Мне нужна помощь с регистрацией на " + exTitle + " для вывода. Мой ID: " + user.getTelegramId();
+            } else if (data.startsWith("helpdon:")) {
+                String[] hd = data.substring("helpdon:".length()).split(":", 2);
+                GemPurchaseService.GemPackage hdPkg = hd.length == 2 ? gemPurchaseService.findPackage(hd[0], hd[1]).orElse(null) : null;
+                String hdName = hdPkg == null ? "донат" : gemLabelWithGame(hdPkg, hd[0]);
+                helpTopic = "Вопрос по оплате доната: " + hdName;
+                helpContext = "Игрок смотрит оплату пакета и просит помощь менеджера (нет звёзд или другой вопрос по оплате).";
+                helpMessage = "Здравствуйте! Вопрос по оплате " + hdName + ". Мой ID: " + user.getTelegramId();
+            } else {
+                helpTopic = "Нет подходящего способа вывода";
+                helpContext = "Игрок выводил больше 10 000 EXC: банк ОТП и биржи ему не подходят (карта уже есть или другая причина). Просит подобрать другой банк или способ.";
+                helpMessage = "Здравствуйте! У меня уже есть эти банки, помогите подобрать способ вывода. Мой ID: " + user.getTelegramId() + ", баланс " + user.getCoins() + " EXC";
+            }
+            openContextSupportTicket(user, helpTopic, helpContext);
+            sendText(user.getTelegramId(),
+                    "📝 <b>Запрос записан</b>\n\nМы передали его менеджеру. Чтобы ответили быстрее, напишите менеджеру напрямую: сообщение уже готово.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.url("💬 Написать менеджеру", "https://t.me/" + appProperties.getSupportUsername() + "?text="
+                                    + java.net.URLEncoder.encode(helpMessage, StandardCharsets.UTF_8).replace("+", "%20"))),
+                            List.of(keyboardFactory.callback("⬅️ Назад", "menu:shop")))));
+            return;
+        }
         if (data.startsWith("gemstars:")) {
             answerSilently(callbackQuery.getId());
             String[] gsParts = data.substring("gemstars:".length()).split(":", 2);
@@ -10458,7 +10491,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "🤝 <b>Подберём способ именно для вас</b>\n\n"
                         + "Если нужные банки у вас уже есть, напишите менеджеру: подскажем другой банк или удобный способ вывода.",
                 keyboardFactory.rowsLayout(List.of(
-                        List.of(keyboardFactory.url("💬 Написать менеджеру", "https://t.me/" + appProperties.getSupportUsername() + "?text=" + encoded)),
+                        List.of(keyboardFactory.callback("💬 Написать менеджеру", "helpnb")),
                         List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw"))
                 )));
     }
@@ -10570,7 +10603,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String helpEnc = java.net.URLEncoder.encode(helpText, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.url("🚀 Зарегистрироваться на " + ex.title(), ex.refLink())));
-        rows.add(List.of(keyboardFactory.url("💬 Нужна помощь с регистрацией", "https://t.me/" + appProperties.getSupportUsername() + "?text=" + helpEnc)));
+        rows.add(List.of(keyboardFactory.callback("💬 Нужна помощь с регистрацией", "helpreg:" + ex.key())));
         rows.add(List.of(keyboardFactory.callback("⬅️ Выбрать другую биржу", "shop:withdraw:xchback")));
         rows.add(List.of(keyboardFactory.callback("❌ Отмена", "common:cancel")));
         sendText(user.getTelegramId(), msg, keyboardFactory.rowsLayout(rows));
@@ -13856,6 +13889,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         keyboardFactory.callback("⬅️ Назад", "menu:cat:help"),
                         keyboardFactory.callback("🏠 Меню", "menu:main")
                 )));
+    }
+
+    /** Обращение в поддержку с контекстом (тема, что хочет игрок, его заявки): попадает в папку «Обращения» и «Всё ожидающее» с обычным уведомлением модераторам. Одно открытое обращение на тему в течение 24 часов. */
+    private void openContextSupportTicket(AppUser user, String topic, String context) {
+        try {
+            String head = "🧭 " + topic;
+            for (SupportTicket t : supportService.getUserTickets(user)) {
+                if (t.getStatus() == ru.gamebot.platform.domain.enums.SupportTicketStatus.OPEN && t.getCreatedAt() != null
+                        && t.getCreatedAt().isAfter(LocalDateTime.now().minusHours(24))
+                        && t.getInitialMessage() != null && t.getInitialMessage().startsWith(head)) {
+                    return;
+                }
+            }
+            String details = head + "\n" + context + "\nБаланс: " + fmtExc(user.getCoins()) + " EXC · выведено за всё время: " + fmtExc(rewardService.totalWithdrawnExc(user))
+                    + " EXC · партнёрский квест ОТП: " + (questService.hasApprovedPartnerQuest(user.getId()) ? "выполнен" : "нет");
+            SupportTicket ticket = supportService.createTicket(user, details, null);
+            notifyModeratorsAboutSupportTicket(ticket, new IncomingContent("text", null, details), false);
+        } catch (Exception e) {
+            log.warn("Failed to open context support ticket '{}' for user {}", topic, user.getTelegramId(), e);
+        }
     }
 
     /** Кнопка быстрой связи с игроком: личный аккаунт по нику или по ID (tg://user?id). */
@@ -26845,9 +26898,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.clear();
             rows.add(List.of(keyboardFactory.callback(fmtExc(hybrid.exc()) + " EXC + " + hybrid.rub() + " ₽", "gemrub:" + gameKey + ":" + pkg.key())));
             rows.add(List.of(keyboardFactory.callback("⭐ Оплатить звёздами", "gemstars:" + gameKey + ":" + pkg.key())));
-            String askMgr = "Здравствуйте! Вопрос по оплате " + pkg.displayLabel() + " (" + GemPurchaseService.gameName(gameKey) + "). Мой ID: " + user.getTelegramId();
-            rows.add(List.of(keyboardFactory.url("💬 Вопрос менеджеру", "https://t.me/" + appProperties.getSupportUsername() + "?text="
-                    + java.net.URLEncoder.encode(askMgr, StandardCharsets.UTF_8).replace("+", "%20"))));
+            rows.add(List.of(keyboardFactory.callback("💬 Вопрос менеджеру", "helpdon:" + gameKey + ":" + pkg.key())));
             rows.add(List.of(keyboardFactory.callback("❌ Отмена", gemDonateBackTarget(gameKey, pkg))));
             int discPct = (int) Math.round((1 - (sinkShopService.isEgcPassActive(user) ? HYBRID_REAL_SHARE_PASS : HYBRID_REAL_SHARE)) * 100);
             hybridHeadline = "🔥 <b>Скидка " + discPct + "% при оплате токенами:</b> платите " + hybrid.rub() + " ₽ и " + fmtExc(hybrid.exc()) + " EXC\n\n";
