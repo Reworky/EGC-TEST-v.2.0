@@ -2568,7 +2568,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleModeratorSupportAction(callbackQuery, user, session, data.substring("mod:support:".length()));
             return;
         }
-        if (data.startsWith("mod:withdrawal") && isEffectiveModerator(user)) {
+        if ((data.startsWith("mod:withdrawal") || data.equals("mod:pending") || data.equals("mod:issue")) && isEffectiveModerator(user)) {
             handleModWithdrawalAction(callbackQuery, user, session, data);
             return;
         }
