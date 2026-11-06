@@ -444,8 +444,14 @@ public class SinkShopService {
     /** Лимит трат в магазине наград = множитель x месячный лимит вывода (владелец 05.11.2026: чтобы EXC можно было тратить, а не только выводить). */
     public static final int SHOP_SPEND_LIMIT_MULTIPLIER = 6;
 
+    /** Лимит по рангу и Pass БЕЗ прежнего множителя ×5 для подписок, оплаченных до 25.10.2026: для лимита трат в магазине берём его (владелец 06.11.2026: у Pass нет ×5). */
+    public long getMonthlyLimitWithoutLegacy(AppUser user) {
+        long base = getMonthlyLimit(user.getXp());
+        return isEgcPassActive(user) ? base + PASS_WITHDRAWAL_LIMIT_BONUS_EXC : base;
+    }
+
     public long getShopSpendLimit(AppUser user) {
-        return getMonthlyLimit(user) * SHOP_SPEND_LIMIT_MULTIPLIER;
+        return getMonthlyLimitWithoutLegacy(user) * SHOP_SPEND_LIMIT_MULTIPLIER;
     }
 
     public long getRemainingShopLimit(AppUser user) {
