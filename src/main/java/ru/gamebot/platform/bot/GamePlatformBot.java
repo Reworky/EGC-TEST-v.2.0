@@ -2467,7 +2467,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Заявки на награды магазина (не вывод) обрабатывает и менеджер - тот же общий пул, что и заявки на вывод. Только работа с заявками:
         // правка каталога наград (admin:reward:edit/delete/toggle и т.д.) остаётся у админа.
         if ((data.equals("admin:reward:requests") || data.startsWith("admin:reward:req:") || data.startsWith("admin:reward:inprogress:")
-                || data.startsWith("admin:reward:approve:") || data.startsWith("admin:reward:approveskip:") || data.startsWith("admin:reward:reject:")) && isEffectiveModerator(user)) {
+                || data.startsWith("admin:reward:approve:") || data.startsWith("admin:reward:approveskip:") || data.startsWith("admin:reward:reject:")
+                || data.startsWith("admin:reward:check:")) && isEffectiveModerator(user)) {
             handleAdminAction(callbackQuery, user, session, data.substring("admin:".length()));
             return;
         }
@@ -16000,6 +16001,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if (action.startsWith("check:")) {
+            sendRewardPlayerCheck(user, parseLong(action.substring("check:".length())));
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if (action.startsWith("inprogress:")) {
             Long reqId = parseLong(action.substring("inprogress:".length()));
             RewardRequest req;
@@ -16096,6 +16102,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String phoneDupWarning = phoneDup.isPresent()
                 ? "\n\n🚨 <b>МУЛЬТИАККАУНТ!</b> Этот номер телефона уже зарегистрирован на аккаунте: <b>" + escape(phoneDup.get().getNickname()) + "</b>"
                 : "";
+        java.util.List<AppUser> sharedRewardData = rewardService.findOtherAccountsSharingRewardData(req);
+        if (!sharedRewardData.isEmpty()) {
+            phoneDupWarning += "\n\n🚨 <b>МУЛЬТИАККАУНТ?</b> Те же данные для выдачи уже указывали: "
+                    + sharedRewardData.stream().limit(3).map(o -> escape(displayUserName(o)) + " (" + o.getTelegramId() + ")").collect(java.util.stream.Collectors.joining(", "));
+        }
         String passBadge = sinkShopService.isEgcPassActive(requester) ? " ⭐️<b>EGC Pass — приоритет</b>" : "";
         String dataLine = req.getPayoutDetails() != null && !req.getPayoutDetails().isBlank()
                 ? "\n📋 Данные для выдачи: <code>" + escape(req.getPayoutDetails()) + "</code>" : "";
@@ -16140,6 +16151,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback("❌ Отклонить", "admin:reward:reject:" + req.getId())
             ));
         }
+        cardRows.add(List.of(keyboardFactory.callback("🔎 Проверить игрока перед выдачей", "admin:reward:check:" + req.getId())));
         cardRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:reward:requests")));
         sendText(user.getTelegramId(),
                 rewardRequestInfo(req, requester) + statusLine,
@@ -16813,6 +16825,57 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Проверка игрока перед выплатой: доступность бота, показатели аккаунта и подсказка, стоит ли платить. Ничего не меняет в заявке. */
+    /** «Проверка игрока перед выдачей» для заявки на награду магазина (как у вывода): доступность бота, возраст аккаунта, квесты, дубли телефона и данных выдачи; вердикт красный / жёлтый / зелёный. */
+    private void sendRewardPlayerCheck(AppUser viewer, Long reqId) {
+        RewardRequest req = rewardService.getRequest(reqId);
+        AppUser p = req.getUser();
+        BotReach reach = checkBotReach(p.getTelegramId());
+        long ageDays = p.getCreatedAt() == null ? -1 : java.time.temporal.ChronoUnit.DAYS.between(p.getCreatedAt().toLocalDate(), LocalDate.now());
+        long quests = questService.countApprovedByUser(p);
+        long earned = questService.sumEarnedCoinsByUser(p);
+        long issuedBefore = rewardService.countIssuedShopRewards(p);
+        LocalDate lastSeen = UserService.lastSeenDate(p);
+        long daysSinceActive = lastSeen == null ? -1 : java.time.temporal.ChronoUnit.DAYS.between(lastSeen, LocalDate.now());
+        java.util.Optional<AppUser> phoneDup = userService.findDuplicatePhoneUser(p.getPhoneNumber(), p.getTelegramId());
+        java.util.List<AppUser> sharedData = rewardService.findOtherAccountsSharingRewardData(req);
+
+        List<String> red = new ArrayList<>();
+        List<String> yellow = new ArrayList<>();
+        if (reach.code().equals("BLOCKED") || reach.code().equals("DEACTIVATED")) red.add("бот недоступен игроку");
+        if (p.isBlocked()) red.add("игрок заблокирован админом");
+        if (p.isFraudSuspect()) red.add("помечен как подозрительный");
+        if (!sharedData.isEmpty()) {
+            red.add("те же данные выдачи у "
+                    + sharedData.stream().limit(3).map(o -> escape(displayUserName(o)) + " (" + o.getTelegramId() + ")").collect(java.util.stream.Collectors.joining(", ")));
+        }
+        if (phoneDup.isPresent()) red.add("номер телефона уже на другом аккаунте");
+        if (reach.code().equals("NO_CHAT") || reach.code().equals("UNKNOWN")) yellow.add("не удалось убедиться, что бот достучится до игрока");
+        if (p.getPhoneNumber() == null) yellow.add("телефон не подтверждён");
+        if (ageDays >= 0 && ageDays < 3) yellow.add("аккаунту меньше 3 дней");
+        if (quests < 3) yellow.add("меньше 3 выполненных квестов");
+        if (daysSinceActive > 30) yellow.add("не заходил больше 30 дней");
+        if (req.getPayoutDetails() == null || req.getPayoutDetails().isBlank()) yellow.add("данные для выдачи не указаны");
+
+        String verdict = !red.isEmpty()
+                ? "🚫 <b>Выдавать не стоит без дополнительной проверки:</b> " + String.join("; ", red) + "."
+                : !yellow.isEmpty()
+                    ? "⚠️ <b>Проверьте вручную:</b> " + String.join("; ", yellow) + "."
+                    : "✅ <b>Явных проблем нет, выдавать можно.</b>";
+        String text = "🔎 <b>Проверка игрока перед выдачей М-" + reqDisplayId(req) + "</b>\n\n"
+                + "👤 <b>" + escape(p.getNickname()) + "</b> (ID <code>" + p.getTelegramId() + "</code>)\n\n"
+                + "🤖 Бот: " + reach.label() + "\n"
+                + "📅 Аккаунт: " + (ageDays >= 0 ? ageDays + " дн." : "дата неизвестна") + ", последняя активность: "
+                + (daysSinceActive >= 0 ? daysSinceActive + " дн. назад" : "нет данных") + "\n"
+                + "🎯 Квестов выполнено: <b>" + quests + "</b>, заработано: <b>" + String.format("%,d", earned).replace(',', ' ') + " EXC</b>\n"
+                + "🎁 Наград выдано раньше: <b>" + issuedBefore + "</b>\n"
+                + "📋 Данные выдачи: " + (req.getPayoutDetails() == null || req.getPayoutDetails().isBlank() ? "<b>не указаны</b>" : "<code>" + escape(req.getPayoutDetails()) + "</code>") + "\n"
+                + "📱 Телефон: " + (p.getPhoneNumber() != null ? "подтверждён" : "<b>не подтверждён</b>") + "\n"
+                + (sinkShopService.isEgcPassActive(p) ? "⭐ Подписчик EGC Pass\n" : "")
+                + "\n" + verdict;
+        sendText(viewer.getTelegramId(), text, keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("⬅️ К заявке", "admin:reward:req:" + req.getId())))));
+    }
+
     private void sendWithdrawalPlayerCheck(AppUser viewer, Long reqId, boolean isMod) {
         RewardRequest req = rewardService.getRequest(reqId);
         AppUser p = req.getUser();

@@ -512,6 +512,18 @@ public class RewardService {
                 .toList();
     }
 
+    /** Другие аккаунты, у которых есть заявка на награду с теми же данными выдачи (email/ID): признак мультиаккаунта. Служебные подстановки («данные запросит модератор») не сравниваются. */
+    public List<AppUser> findOtherAccountsSharingRewardData(RewardRequest req) {
+        String pd = req.getPayoutDetails();
+        if (pd == null || pd.isBlank() || req.getUser() == null) return List.of();
+        String key = pd.trim().toLowerCase();
+        if (key.length() < 4 || key.contains("запросит модератор")) return List.of();
+        return rewardRequestRepository.findOtherUsersRewardRequestsWithData(key, req.getUser()).stream()
+                .map(RewardRequest::getUser)
+                .distinct()
+                .toList();
+    }
+
     public List<RewardRequest> findUserRequests(AppUser user) {
         return rewardRequestRepository.findAllByUserOrderByCreatedAtDesc(user);
     }

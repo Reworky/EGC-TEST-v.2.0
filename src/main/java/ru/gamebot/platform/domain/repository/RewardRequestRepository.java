@@ -90,6 +90,10 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
     @Query("SELECT COALESCE(MAX(r.displayId), 0) FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод'")
     long findMaxWithdrawalDisplayId();
 
+    /** Заявки на награды магазина (не вывод) ДРУГИХ игроков с теми же данными выдачи (email/ID, без учёта регистра и пробелов по краям), кроме отклонённых и отменённых: поиск мультиаккаунтов по данным выдачи (06.11.2026). */
+    @Query("SELECT r FROM RewardRequest r JOIN FETCH r.user JOIN FETCH r.rewardItem WHERE r.rewardItem.category <> 'Вывод' AND r.status <> 'REJECTED' AND r.status <> 'CANCELLED' AND r.payoutDetails IS NOT NULL AND LOWER(TRIM(r.payoutDetails)) = :key AND r.user <> :excludeUser")
+    List<RewardRequest> findOtherUsersRewardRequestsWithData(@Param("key") String key, @Param("excludeUser") AppUser excludeUser);
+
     @Query("SELECT r FROM RewardRequest r JOIN FETCH r.user JOIN FETCH r.rewardItem WHERE r.rewardItem.category = 'Вывод' AND r.status IN ('APPROVED','PENDING','IN_PROGRESS') AND r.payoutDetails LIKE :needle AND r.user <> :excludeUser")
     List<RewardRequest> findApprovedWithdrawalsWithPayoutDetailsContaining(@Param("needle") String needle, @Param("excludeUser") AppUser excludeUser);
 
