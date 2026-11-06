@@ -33,6 +33,10 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
     @Query("SELECT COUNT(r) FROM RewardRequest r WHERE r.user = :user AND r.rewardItem.category = 'Вывод' AND r.status = 'APPROVED'")
     long countPaidWithdrawalsByUser(@Param("user") AppUser user);
 
+    /** Сколько наград магазина (не вывод) уже выдано игроку: для карточки заявки модератору. */
+    @Query("SELECT COUNT(r) FROM RewardRequest r WHERE r.user = :user AND r.rewardItem.category <> 'Вывод' AND r.status = 'APPROVED'")
+    long countIssuedShopRewardsByUser(@Param("user") AppUser user);
+
     /** Что игрок указывал в прошлых заявках на награды этой группы (email/ID для выдачи), новые первыми: для предложения «выдать на те же данные» (06.11.2026). Передавать PageRequest.of(0, 1). */
     @Query("SELECT r.payoutDetails FROM RewardRequest r WHERE r.user = :user AND r.rewardItem.purchaseGroup = :group AND r.payoutDetails IS NOT NULL AND r.payoutDetails <> '' AND r.status <> 'REJECTED' AND r.status <> 'CANCELLED' ORDER BY r.createdAt DESC")
     List<String> findRecentPayoutDetails(@Param("user") AppUser user, @Param("group") String group, Pageable pageable);

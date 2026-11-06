@@ -374,6 +374,10 @@ public class RewardService {
         return new java.util.HashSet<>(rewardRequestRepository.findUserIdsWithPaidWithdrawals());
     }
 
+    public long countIssuedShopRewards(AppUser user) {
+        return rewardRequestRepository.countIssuedShopRewardsByUser(user);
+    }
+
     /** Последние данные для выдачи (email/ID), которые игрок указывал в заявках этой группы наград; null - не указывал. */
     public String lastPayoutDetails(AppUser user, String purchaseGroup) {
         if (purchaseGroup == null || purchaseGroup.isBlank()) return null;

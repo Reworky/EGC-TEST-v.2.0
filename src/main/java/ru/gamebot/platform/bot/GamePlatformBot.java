@@ -12589,7 +12589,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if ("Вывод".equals(reward.getCategory())) {
             notifyAdminsAboutWithdrawal(user, req);
         } else {
-            notifyAdminsAboutRewardRequest(user, reward, userGameData);
+            notifyAdminsAboutRewardRequest(user, reward, userGameData, req);
         }
         sendText(user.getTelegramId(),
                 "✅ <b>Заявка на награду отправлена</b>\n\n"
@@ -15986,6 +15986,42 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.rowsLayout(rows));
     }
 
+    /** Информативный блок заявки на награду для модератора (как у заявки на вывод): игрок, ссылка, страна, телефон и дубль телефона, стаж, ранг, баланс, награда, цена, данные выдачи, траты в магазине, выдано раньше, дата. */
+    private String rewardRequestInfo(RewardRequest req, AppUser requester) {
+        String uname = requester.getTelegramUsername();
+        String unameLink = uname != null && !uname.isBlank()
+                ? "<a href=\"https://t.me/" + uname + "\">@" + escape(uname) + "</a>" : "#" + requester.getTelegramId();
+        String phoneLine = requester.getPhoneNumber() != null
+                ? "\n📱 Телефон: <code>" + escape(requester.getPhoneNumber()) + "</code>"
+                : "\n📱 Телефон: <b>не подтверждён</b>";
+        java.util.Optional<AppUser> phoneDup = userService.findDuplicatePhoneUser(requester.getPhoneNumber(), requester.getTelegramId());
+        String phoneDupWarning = phoneDup.isPresent()
+                ? "\n\n🚨 <b>МУЛЬТИАККАУНТ!</b> Этот номер телефона уже зарегистрирован на аккаунте: <b>" + escape(phoneDup.get().getNickname()) + "</b>"
+                : "";
+        String passBadge = sinkShopService.isEgcPassActive(requester) ? " ⭐️<b>EGC Pass — приоритет</b>" : "";
+        String dataLine = req.getPayoutDetails() != null && !req.getPayoutDetails().isBlank()
+                ? "\n📋 Данные для выдачи: <code>" + escape(req.getPayoutDetails()) + "</code>" : "";
+        sinkShopService.getRemainingShopLimit(requester);
+        long shopSpent = requester.getMonthlyShopSpentExc();
+        long shopLimit = sinkShopService.getShopSpendLimit(requester);
+        String since = requester.getCreatedAt() != null
+                ? requester.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")) : "—";
+        return "📋 <b>Заявка на награду М-" + reqDisplayId(req) + "</b>" + passBadge + "\n\n"
+                + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + unameLink + ")\n"
+                + "🆔 Telegram ID: <b>" + requester.getTelegramId() + "</b>\n"
+                + "🌍 Страна: <b>" + escape(requester.getCountry() != null ? requester.getCountry() : "Не указана") + "</b>"
+                + phoneLine + "\n"
+                + "📆 В клубе с " + since + " · квестов: <b>" + requester.getCompletedQuests() + "</b> · ранг: <b>" + escape(userService.getLevelName(requester.getXp())) + "</b>\n"
+                + "🪙 Баланс сейчас: <b>" + fmtExc(requester.getCoins()) + " EXC</b>\n\n"
+                + "🎁 Награда: <b>" + escape(req.getRewardItem().getTitle()) + "</b> (" + escape(req.getRewardItem().getCategory() == null ? "—" : req.getRewardItem().getCategory()) + ")\n"
+                + "🪙 Цена: <b>" + fmtExc(rewardService.actualPaidPrice(req)) + " EXC</b>"
+                + dataLine + "\n"
+                + "🛍 Траты в магазине: <b>" + fmtExc(shopSpent) + " / " + fmtExc(shopLimit) + " EXC</b> в этом месяце\n"
+                + "📦 Выдано наград раньше: <b>" + rewardService.countIssuedShopRewards(requester) + "</b>\n"
+                + "📅 Дата: <b>" + req.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) + "</b>"
+                + phoneDupWarning;
+    }
+
     private void sendAdminRewardRequestCard(AppUser user, Long reqId) {
         RewardRequest req = rewardService.getRequest(reqId);
         AppUser requester = req.getUser();
@@ -16007,17 +16043,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             ));
         }
         cardRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:reward:requests")));
-        String userDataLine = req.getPayoutDetails() != null && !req.getPayoutDetails().isBlank()
-                ? "\n📋 Данные для выдачи: <code>" + escape(req.getPayoutDetails()) + "</code>"
-                : "";
         sendText(user.getTelegramId(),
-                "📋 <b>Заявка М-" + reqDisplayId(req) + "</b>\n\n"
-                        + "👤 Игрок: <b>" + escape(requester.getNickname()) + "</b> (" + usernameStr + ")\n"
-                        + "🎁 Награда: <b>" + escape(req.getRewardItem().getTitle()) + "</b>\n"
-                        + "🪙 Цена: <b>" + rewardService.actualPaidPrice(req) + " EXC</b>"
-                        + userDataLine + "\n"
-                        + "📅 Дата: <b>" + req.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")) + "</b>"
-                        + statusLine,
+                rewardRequestInfo(req, requester) + statusLine,
                 keyboardFactory.rowsLayout(cardRows));
     }
 
@@ -27140,6 +27167,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     public void notifyAdminsAboutRewardRequest(AppUser user, RewardItem reward) {
         notifyAdminsAboutRewardRequest(user, reward, null);
+    }
+
+    /** Уведомление модераторам о новой заявке на награду: полная карточка (как у вывода), если известна заявка. */
+    public void notifyAdminsAboutRewardRequest(AppUser user, RewardItem reward, String userGameData, RewardRequest req) {
+        if (req == null) {
+            notifyAdminsAboutRewardRequest(user, reward, userGameData);
+            return;
+        }
+        InlineKeyboardMarkup richMarkup = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("📥 Открыть заявку", "admin:reward:req:" + req.getId()))
+        ));
+        String rich = "🛍️ <b>Новая заявка на выдачу награды</b>\n\n" + rewardRequestInfo(req, user);
+        for (Long adminId : adminService.allModeratorIds()) {
+            sendText(adminId, rich, richMarkup);
+        }
     }
 
     public void notifyAdminsAboutRewardRequest(AppUser user, RewardItem reward, String userGameData) {

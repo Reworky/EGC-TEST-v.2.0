@@ -162,7 +162,7 @@ public class ShopController {
             message = "Заявка на вывод отправлена. Как только выплата будет выполнена, вы получите уведомление."
                     + rewardService.withdrawalPriorityNote(user);
         } else {
-            gamePlatformBot.notifyAdminsAboutRewardRequest(user, item, userData);
+            gamePlatformBot.notifyAdminsAboutRewardRequest(user, item, userData, req);
             message = "Заявка отправлена. Как только выдача будет подтверждена, вы получите уведомление.";
         }
         return ResponseEntity.ok(ShopActionResponseDto.builder().success(true).message(message).build());
