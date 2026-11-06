@@ -114,11 +114,18 @@ public class HealthRatioService {
             return item.getPriceCoins();
         }
         double ratio = getCurrentRatio();
+        // Товары магазина (не категория «Вывод») считаются по сниженному курсу: SHOP_PRICE_RATIO_FACTOR x курс фонда, чтобы магазин был вдвое менее выгоден, чем вывод (решение владельца 06.11.2026, курс фонда поднят до 90%). Звёзды (категория «Вывод») - по реальному курсу.
+        if (!"Вывод".equals(item.getCategory())) {
+            ratio = ratio * SHOP_PRICE_RATIO_FACTOR;
+        }
         if (ratio >= 1.0) {
             return item.getPriceCoins();
         }
         return Math.round(item.getPriceCoins() / ratio);
     }
+
+    /** Коэффициент курса для цен магазина: 0,6 = «магазин вдвое хуже вывода» (при k=1 покупка на 17% хуже вывода, при 0,6 - вдвое; от реального курса фонда соотношение не зависит). */
+    public static final double SHOP_PRICE_RATIO_FACTOR = 0.6;
 
     /** Наценка на вывод звёздами для игроков без активного EGC Pass (05.11.2026): с Pass звёзды по обычной цене, то есть скидка Pass = отмена наценки (на 20% дешевле). */
     public static final double STARS_NON_PASS_MARKUP = 1.25;

@@ -12416,9 +12416,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendRewardCard(AppUser user, Long rewardId, String notice) {
         RewardItem reward = rewardService.getRewardItem(rewardId);
         long effectivePrice = healthRatioService.effectivePriceFor(user, reward);
-        String priceNote = effectivePrice != reward.getPriceCoins()
-                ? " (при Health Ratio 100%: " + reward.getPriceCoins() + " EXC)"
-                : "";
+        String priceNote = "";
         String limitStatus = shopLimitService.getItemStatus(user, reward);
         String text = (notice == null ? "" : notice + "\n\n")
                 + "🎁 <b>" + escape(reward.getTitle()) + "</b>\n\n"

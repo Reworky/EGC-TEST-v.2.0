@@ -442,7 +442,7 @@ public class SinkShopService {
     }
 
     /** Лимит трат в магазине наград = множитель x месячный лимит вывода (владелец 05.11.2026: чтобы EXC можно было тратить, а не только выводить). */
-    public static final int SHOP_SPEND_LIMIT_MULTIPLIER = 5;
+    public static final int SHOP_SPEND_LIMIT_MULTIPLIER = 6;
 
     public long getShopSpendLimit(AppUser user) {
         return getMonthlyLimit(user) * SHOP_SPEND_LIMIT_MULTIPLIER;
