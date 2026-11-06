@@ -26944,7 +26944,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             } catch (Exception e) {
                 log.warn("Failed to notify user {} about gem purchase approval", req.getUser().getTelegramId(), e);
             }
-            sendText(user.getTelegramId(), "✅ Заявка Д-" + req.getDisplayId() + " отмечена выполненной, игроку начислен XP-бонус.", null);
+            // Гибридная покупка «EXC + звёзды»: реальные деньги за выдачу списываются из фонда выплат (владелец 06.11.2026); сбой - алерт админам, одобрение не откатываем
+            String fundNote = "";
+            try {
+                long fundRub = gemPurchaseService.chargeFundForHybrid(req.getId());
+                if (fundRub > 0) fundNote = " Из фонда выплат списано <b>" + fundRub + " ₽</b> (закупка минус доплата звёздами).";
+            } catch (Exception fundError) {
+                log.error("Failed to charge payout fund for hybrid gem purchase {}", req.getId(), fundError);
+                for (Long fundAdmin : adminService.allAdminIds()) {
+                    sendText(fundAdmin, "⚠️ Не удалось списать закупку из фонда выплат по заявке Д-" + req.getDisplayId() + ". Спишите вручную (закупка минус доплата звёздами).", null);
+                }
+            }
+            sendText(user.getTelegramId(), "✅ Заявка Д-" + req.getDisplayId() + " отмечена выполненной, игроку начислен XP-бонус." + fundNote, null);
             sendAdminGemPurchaseRequests(user);
         } else if (action.startsWith("rejectq:")) {
             // "rejectq:<код>:<id>"

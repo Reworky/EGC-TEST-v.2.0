@@ -84,6 +84,10 @@ public class GemPurchaseRequest {
     @jakarta.persistence.Column(columnDefinition = "bigint default 0")
     private long excPaid;
 
+    /** Сколько рублей списано из фонда выплат за эту гибридную покупку при выдаче (06.11.2026): закупка минус доплата звёздами; 0 - ещё не списывалось. Защита от двойного списания. */
+    @jakarta.persistence.Column(columnDefinition = "bigint default 0")
+    private long poolDeductedRub;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

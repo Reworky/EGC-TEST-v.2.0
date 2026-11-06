@@ -252,6 +252,7 @@ public class GemPurchaseService {
     private final UserService userService;
     private final ExcTransactionService excTx;
     private final SinkShopService sinkShopService;
+    private final HealthRatioService healthRatioService;
 
     public Optional<GemPackage> findPackage(String gameKey, String packageKey) {
         return packagesFor(gameKey).stream().filter(p -> p.key().equals(packageKey)).findFirst();
@@ -351,6 +352,34 @@ public class GemPurchaseService {
             sinkShopService.reverseShopSpend(req.getUser(), req.getExcPaid());
         }
         return repository.save(req);
+    }
+
+    /** Курс звезды в рублях для учёта доплаты (как GEM_PURCHASE_STARS_RUB_RATE в боте). */
+    private static final double STARS_RUB_RATE = 1.4;
+
+    /** Списывает из фонда выплат реальные деньги за выданную гибридную покупку («EXC + звёзды»): закупка пакета минус доплата звёздами. Одно списание на заявку; возвращает сумму в рублях (0 - нечего списывать или уже списано). Вызывать после approve(). */
+    @Transactional
+    public long chargeFundForHybrid(Long requestId) {
+        GemPurchaseRequest req = repository.findWithUserById(requestId)
+                .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена."));
+        if (req.getExcPaid() <= 0 || req.getPoolDeductedRub() > 0 || req.getStatus() != GemPurchaseStatus.APPROVED) {
+            return 0;
+        }
+        long cost = req.getPriceRub();
+        for (Map.Entry<String, String> game : GAME_NAMES.entrySet()) {
+            if (game.getValue().equals(req.getGameName())) {
+                cost = findPackage(game.getKey(), req.getPackageKey()).map(GemPackage::costRub).orElse(req.getPriceRub());
+                break;
+            }
+        }
+        long real = req.getStarsAmount() == null ? 0 : Math.round(req.getStarsAmount() * STARS_RUB_RATE);
+        long net = Math.max(0, cost - real);
+        if (net <= 0) return 0;
+        healthRatioService.deductFromPayoutPool(net);
+        req.setPoolDeductedRub(net);
+        req.setUpdatedAt(LocalDateTime.now());
+        repository.save(req);
+        return net;
     }
 
     /** Фиксирует EXC-часть гибридной оплаты в заявке на донат. */
