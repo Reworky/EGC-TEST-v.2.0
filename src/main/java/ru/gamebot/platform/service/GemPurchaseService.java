@@ -372,7 +372,7 @@ public class GemPurchaseService {
                 break;
             }
         }
-        long real = req.getStarsAmount() == null ? 0 : Math.round(req.getStarsAmount() * STARS_RUB_RATE);
+        long real = Math.max(req.getRubPaid(), req.getStarsAmount() == null ? 0 : Math.round(req.getStarsAmount() * STARS_RUB_RATE));
         long net = Math.max(0, cost - real);
         if (net <= 0) return 0;
         healthRatioService.deductFromPayoutPool(net);
@@ -380,6 +380,28 @@ public class GemPurchaseService {
         req.setUpdatedAt(LocalDateTime.now());
         repository.save(req);
         return net;
+    }
+
+    /** Заявка на донат при гибридной оплате «токены + рубли»: рублёвую часть подтвердил менеджер, EXC уже списаны. paymentMethod RUB (ручной перевод). */
+    @Transactional
+    public GemPurchaseRequest createHybridRubRequest(AppUser user, String gameKey, GemPackage pkg, long priceRub, String gameTag, long rubPaid, long excPaid) {
+        GemPurchaseRequest req = new GemPurchaseRequest();
+        req.setDisplayId(repository.findMaxDisplayId() + 1);
+        req.setUser(user);
+        req.setGameName(gameName(gameKey));
+        req.setPackageKey(pkg.key());
+        req.setGems(pkg.gems());
+        req.setPriceRub(priceRub);
+        req.setXpBonus(pkg.xpBonus());
+        req.setItemLabel(pkg.label());
+        req.setGameTag(gameTag);
+        req.setPaymentMethod("RUB");
+        req.setRubPaid(rubPaid);
+        req.setExcPaid(excPaid);
+        req.setStatus(GemPurchaseStatus.PENDING);
+        req.setCreatedAt(LocalDateTime.now());
+        req.setUpdatedAt(LocalDateTime.now());
+        return repository.save(req);
     }
 
     /** Фиксирует EXC-часть гибридной оплаты в заявке на донат. */

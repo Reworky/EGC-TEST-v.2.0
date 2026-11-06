@@ -88,6 +88,10 @@ public class GemPurchaseRequest {
     @jakarta.persistence.Column(columnDefinition = "bigint default 0")
     private long poolDeductedRub;
 
+    /** Рублёвая часть гибридной оплаты «токены + рубли» (06.11.2026), подтверждённая менеджером; 0 - оплата не рублями. */
+    @jakarta.persistence.Column(columnDefinition = "bigint default 0")
+    private long rubPaid;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
