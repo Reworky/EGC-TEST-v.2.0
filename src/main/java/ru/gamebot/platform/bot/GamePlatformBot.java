@@ -710,7 +710,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (isRewardReceipt) {
                 notifyUserRewardIssued(req, fileId, receiptCaption);
                 sendText(user.getTelegramId(), "✅ Награда М-" + reqDisplayId(req) + " выдана: игроку отправлено подтверждение, пост для канала выплат ушёл на согласование.", null);
-                sendAdminRewardRequests(user);
+                sendModIssueFolder(user);
                 return;
             }
             notifyUserWithdrawalApproved(req, fileId, receiptCaption);
@@ -4201,7 +4201,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 } else {
                     notifyUserRewardRejected(rejected);
                     sendText(user.getTelegramId(), "✅ Заявка отклонена. EXC возвращены на баланс пользователя.", null);
-                    sendAdminRewardRequests(user);
+                    sendModIssueFolder(user);
                 }
             }
             case BLOCK_USER_REASON -> {
@@ -15014,7 +15014,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "template" -> sendQuestTemplateGamePicker(user);
             case "rewards" -> sendAdminRewardList(user);
             case "withdrawals" -> { sendAdminWithdrawals(user); answerSilently(callbackQuery.getId()); return; }
-            case "gempurchase" -> { sendAdminGemPurchaseRequests(user); answerSilently(callbackQuery.getId()); return; }
+            case "gempurchase" -> { sendModIssueFolder(user); answerSilently(callbackQuery.getId()); return; }
             case "traffic" -> { sendAdminTrafficList(user); answerSilently(callbackQuery.getId()); return; }
             case "traffic:compare" -> { sendAdminTrafficCompare(user); answerSilently(callbackQuery.getId()); return; }
             case "polls" -> { sendAdminPollList(user); answerSilently(callbackQuery.getId()); return; }
@@ -16398,7 +16398,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 return;
             }
             notifyUserRewardIssued(req, null, null);
-            sendAdminRewardRequests(user);
+            sendModIssueFolder(user);
             answer(callbackQuery.getId(), "✅ Выдано");
             return;
         }
@@ -16515,7 +16515,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         cardRows.add(List.of(keyboardFactory.callback("🔎 Проверить игрока перед выдачей", "admin:reward:check:" + req.getId())));
         cardRows.add(List.of(writeToPlayerButton(requester)));
-        cardRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:reward:requests")));
+        cardRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "mod:issue")));
         sendText(user.getTelegramId(),
                 rewardRequestInfo(req, requester) + statusLine,
                 keyboardFactory.rowsLayout(cardRows));
@@ -27490,7 +27490,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback("❌ Отклонить", "admin:shoprub:no:" + order.getId())));
         }
         if (buyer != null) rows.add(List.of(writeToPlayerButton(buyer)));
-        rows.add(List.of(keyboardFactory.callback("⬅️ К списку", "admin:gempurchase")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ К списку", "mod:issue")));
         sendText(viewer.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
 
@@ -27545,7 +27545,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             rows.add(List.of(keyboardFactory.callback("📋 Тексты для игрока", "admin:gempurchase:texts:" + id)));
             rows.add(List.of(keyboardFactory.url("💬 Написать игроку: актуальна ли заявка?", playerActualityDmLink(req))));
-            rows.add(List.of(keyboardFactory.callback("⬅️ К списку", "admin:gempurchase")));
+            rows.add(List.of(keyboardFactory.callback("⬅️ К списку", "mod:issue")));
             InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(rows);
             if (req.getPaymentProofFileId() != null) {
                 sendPhotoCaption(user.getTelegramId(), req.getPaymentProofFileId(), text, markup);
@@ -27591,7 +27591,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
             }
             sendText(user.getTelegramId(), "✅ Заявка Д-" + req.getDisplayId() + " отмечена выполненной, игроку начислен XP-бонус." + fundNote, null);
-            sendAdminGemPurchaseRequests(user);
+            sendModIssueFolder(user);
         } else if (action.startsWith("rejectq:")) {
             // "rejectq:<код>:<id>"
             String[] parts = action.split(":");
