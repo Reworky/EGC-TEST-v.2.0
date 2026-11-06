@@ -26501,7 +26501,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         HybridQuote hybrid = hybridQuote(user, gameKey, pkg);
         String hybridLine = "";
         if (hybrid != null) {
-            rows.add(0, List.of(keyboardFactory.callback("🪙+⭐ " + fmtExc(hybrid.exc()) + " EXC + " + hybrid.stars() + " ⭐", "gemhyb:" + gameKey + ":" + pkg.key())));
+            rows.add(0, List.of(keyboardFactory.callback(fmtExc(hybrid.exc()) + " EXC + " + hybrid.stars() + " ⭐", "gemhyb:" + gameKey + ":" + pkg.key())));
             String noStars = "Здравствуйте! Хочу купить " + pkg.displayLabel() + " (" + GemPurchaseService.gameName(gameKey) + "), но не могу оплатить звёздами. Мой ID: " + user.getTelegramId();
             String noStarsEnc = java.net.URLEncoder.encode(noStars, StandardCharsets.UTF_8).replace("+", "%20");
             rows.add(rows.size() - 1, List.of(keyboardFactory.url("💬 Нет звёзд? Обсудить с менеджером", "https://t.me/" + appProperties.getSupportUsername() + "?text=" + noStarsEnc)));
