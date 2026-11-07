@@ -8099,6 +8099,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private String hrExplanationLine(int ratioPercent, long effectiveRewardPer100) {
+        if (withdrawalTiersEnabled()) {
+            // уровни вывода: курс не равен курсу фонда, поэтому объясняем курсы партнёра и остальных
+            int lowPercent = (int) Math.round(NONPARTNER_RATE * Math.min(1.0, ratioPercent / 100.0 / NONPARTNER_RATE_REF) * 100);
+            return "💡 Курс вывода: партнёр <b>" + tierRateString(100) + "</b>, без партнёра сверх " + fmtExc(RUB_FREE_WITHDRAWAL_EXC)
+                    + " EXC за всё время <b>" + tierRateString(lowPercent) + "</b>. EXC начисляются в полном объёме.";
+        }
         if (ratioPercent >= 100) {
             return "✅ Клуб работает на полную мощность — EXC выводятся по полному курсу.";
         }
