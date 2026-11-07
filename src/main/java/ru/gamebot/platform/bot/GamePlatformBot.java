@@ -14045,6 +14045,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Папка «Выдача»: две подгруппы-заголовка, как в заявках на вывод: «🎮 ДОНАТ» (заявки на донат и оплаты «токены + рубли») и «🎁 НАГРАДЫ» (оплата токенами). Внутри группы старые сверху, слова «Донат»/«Награда» в кнопках не пишем. */
     private void sendModIssueFolder(AppUser viewer) {
         List<InboxItem> donatItems = new ArrayList<>();
+        List<InboxItem> orderItems = new ArrayList<>();
         List<InboxItem> rewardItems = new ArrayList<>();
         long orders = 0;
         try {
@@ -14060,7 +14061,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             for (ru.gamebot.platform.domain.model.ShopRubleOrder o : pendingRubleOrders()) {
                 AppUser buyer = userService.findByTelegramId(o.getTelegramId()).orElse(null);
-                donatItems.add(new InboxItem(o.getCreatedAt(), "🧾", "Оплата ждёт #" + o.getId() + " " + trim(buyer == null ? String.valueOf(o.getTelegramId()) : buyer.getNickname(), 14) + " — " + o.getRubAmount() + " ₽ + EXC",
+                orderItems.add(new InboxItem(o.getCreatedAt(), "🧾", "Оплата ждёт #" + o.getId() + " " + trim(buyer == null ? String.valueOf(o.getTelegramId()) : buyer.getNickname(), 14) + " — " + o.getRubAmount() + " ₽ + EXC",
                         "admin:shoprub:view:" + o.getId()));
                 orders++;
             }
@@ -14074,6 +14075,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         java.util.Comparator<InboxItem> oldestFirst = java.util.Comparator.comparing((InboxItem i) -> i.at() == null ? LocalDateTime.MIN : i.at());
         donatItems.sort(oldestFirst);
+        orderItems.sort(oldestFirst);
+        // оплаты «токены + рубли» живут 24 часа и требуют ответа, поэтому идут первыми в подгруппе «Донат», а не теряются за накопленными старыми заявками (07.11.2026)
+        donatItems.addAll(0, orderItems);
         rewardItems.sort(oldestFirst);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         LocalDateTime now = LocalDateTime.now();
