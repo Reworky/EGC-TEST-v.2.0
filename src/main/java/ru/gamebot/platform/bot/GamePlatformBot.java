@@ -1855,6 +1855,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             return;
         }
+        if (data.startsWith("stars:pick:")) {
+            // нажатие на позицию в режиме «цены другого уровня»: подсказка, как выбрать позицию по этой цене
+            boolean pickPartnerPrice = data.endsWith(":p");
+            boolean ownPartner = healthRatioService.isPartner(user);
+            if (pickPartnerPrice && !ownPartner) {
+                AnswerCallbackQuery pickAlert = new AnswerCallbackQuery();
+                pickAlert.setCallbackQueryId(callbackQuery.getId());
+                pickAlert.setShowAlert(true);
+                pickAlert.setText("Чтобы выбрать эту позицию по цене партнёра, нужно стать нашим партнёром: закажите бесплатную карту банка по нашей ссылке.");
+                try { execute(pickAlert); } catch (TelegramApiException e) { log.warn("Failed to answer stars pick alert", e); }
+            } else {
+                AnswerCallbackQuery pickAlert = new AnswerCallbackQuery();
+                pickAlert.setCallbackQueryId(callbackQuery.getId());
+                pickAlert.setShowAlert(true);
+                pickAlert.setText("Вы партнёр: для вас эта позиция дешевле. Нажмите «⬅️ Мои цены», чтобы выбрать её по вашей цене.");
+                try { execute(pickAlert); } catch (TelegramApiException e) { log.warn("Failed to answer stars pick alert", e); }
+            }
+            return;
+        }
         if (data.equals("stars:tier:mine") || data.equals("stars:tier:other")) {
             answerSilently(callbackQuery.getId());
             if (!withdrawalTiersEnabled() || !isStarsWithdrawalOpen()) {
@@ -12628,17 +12647,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (items.isEmpty()) { sendShop(user); return; }
         boolean partner = healthRatioService.isPartner(user);
         boolean viewPartner = showOther ? !partner : partner;
-        StringBuilder prices = new StringBuilder();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (RewardItem item : items) {
             String denom = item.getTitle().replaceAll(".*- ", "");
             long price = healthRatioService.starsPriceFor(user, item, viewPartner);
-            prices.append(denom).append(" — ").append(fmtExc(price)).append(" EXC\n");
-            if (!showOther) {
-                String status = shopLimitService.getItemStatus(user, item);
-                String icon = status.startsWith("🔒") ? "🔒" : status.startsWith("⏳") ? "⏳" : "🎁";
-                rows.add(List.of(keyboardFactory.callback(icon + " " + denom + " — " + fmtExc(price) + " EXC", "shop:view:" + item.getId())));
-            }
+            String status = shopLimitService.getItemStatus(user, item);
+            String icon = status.startsWith("🔒") ? "🔒" : status.startsWith("⏳") ? "⏳" : "🎁";
+            // свои цены - кнопка ведёт в карточку позиции; цены другого уровня - кнопка с подсказкой (stars:pick), как выбрать позицию по этой цене
+            rows.add(List.of(keyboardFactory.callback(icon + " " + denom + " — " + fmtExc(price) + " EXC",
+                    showOther ? "stars:pick:" + item.getId() + ":" + (viewPartner ? "p" : "n") : "shop:view:" + item.getId())));
         }
         String header;
         if (!showOther) {
@@ -12647,14 +12664,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     : "⭐ <b>Вывод в звёздах</b>\n\nВаши цены (без партнёра)\n\n";
         } else {
             header = viewPartner
-                    ? "⭐ <b>Цены партнёра</b>\n\n"
-                    : "⭐ <b>Цены без партнёра</b>\n\n";
+                    ? "⭐ <b>Вывод в звёздах</b>\n\nЦены партнёра\n\n"
+                    : "⭐ <b>Вывод в звёздах</b>\n\nЦены без партнёра\n\n";
         }
         String footer;
         if (!showOther) {
             footer = partner ? "Выберите номинал👇" : "С картой банка-партнёра звёзды дешевле.\n\nВыберите номинал👇";
         } else {
-            footer = viewPartner ? "\nТакие цены получает игрок с картой банка-партнёра. Карта бесплатная, оформляется по нашей ссылке." : "\nТакие цены у игроков без партнёрства.";
+            footer = viewPartner ? "Это цены игроков с картой банка-партнёра.\n\nВыберите номинал👇" : "Это цены игроков без партнёрства.\n\nВыберите номинал👇";
         }
         rows.add(List.of(keyboardFactory.callback(showOther ? "⬅️ Мои цены" : (partner ? "Цены без партнёра" : "Цены партнёра"),
                 showOther ? "stars:tier:mine" : "stars:tier:other")));
@@ -12666,8 +12683,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("🎫 Оформить EGC Pass: звёзды дешевле", "sink:egc_pass")));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw"), keyboardFactory.callback("🏠 Меню", "menu:main")));
-        // в своём режиме цены уже на кнопках номиналов, в тексте их не дублируем; в режиме другого уровня кнопок номиналов нет, цены только в тексте
-        String text = header + (showOther ? prices : "") + footer;
+        String text = header + footer;
         InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(rows);
         if (callback == null || callback.getMessage() == null) {
             sendStarsBanner(user.getTelegramId(), text, markup);
