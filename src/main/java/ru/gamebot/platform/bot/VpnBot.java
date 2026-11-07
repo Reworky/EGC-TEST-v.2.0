@@ -49,11 +49,13 @@ import ru.gamebot.platform.domain.repository.Vpn2CryptoInvoiceRepository;
 import ru.gamebot.platform.domain.repository.Vpn2FeedbackRepository;
 import ru.gamebot.platform.domain.repository.Vpn2ManualPaymentRepository;
 import ru.gamebot.platform.event.AnalyticsAlertEvent;
+import ru.gamebot.platform.event.Vpn2TechAlertEvent;
 import ru.gamebot.platform.service.AdminService;
 import ru.gamebot.platform.service.CryptoPayClient;
 import ru.gamebot.platform.service.ExcTransactionService;
 import ru.gamebot.platform.service.TrafficSourceService;
 import ru.gamebot.platform.service.UserService;
+import ru.gamebot.platform.service.Vpn2HealthService;
 import ru.gamebot.platform.service.Vpn2Service;
 import ru.gamebot.platform.service.Vpn2Service.Tariff;
 import ru.gamebot.platform.service.VpnPanelClient;
@@ -89,6 +91,7 @@ public class VpnBot extends TelegramLongPollingBot {
     private final Vpn2ManualPaymentRepository manualPaymentRepository;
     private final Vpn2CryptoInvoiceRepository cryptoInvoiceRepository;
     private final CryptoPayClient cryptoPay;
+    private final Vpn2HealthService health;
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final java.net.http.HttpClient http = java.net.http.HttpClient.newHttpClient();
@@ -202,6 +205,10 @@ public class VpnBot extends TelegramLongPollingBot {
             handleRefundCommand(uid, text);
             return;
         }
+        if (isStaff(uid) && text.startsWith("/panel")) {
+            showPanel(uid, null);
+            return;
+        }
         if (isAdmin(uid) && text.startsWith("/stats")) {
             sendHtml(uid, vpn.statsHtml() + "\n\n" + vpn.paymentMethodsHtml() + "\nПереводы ждут подтверждения: <b>"
                     + manualPaymentRepository.countByStatus(Vpn2ManualPayment.STATUS_PENDING) + "</b>\n\n" + feedbackStatsHtml(), null);
@@ -244,7 +251,7 @@ public class VpnBot extends TelegramLongPollingBot {
 
     /** Бот включён и открыт для этого человека: всем (VPN2_OPEN), тестерам (VPN2_TEST_IDS) или админам. */
     private boolean allowed(Long uid) {
-        return vpn.isEnabled() && (vpn.isOpen() || vpn.isTester(uid) || isAdmin(uid));
+        return vpn.isEnabled() && (vpn.isOpen() || vpn.isTester(uid) || isAdmin(uid) || vpn.isTech(uid));
     }
 
     // ---------------------------------------------------------------- кнопки
@@ -266,6 +273,10 @@ public class VpnBot extends TelegramLongPollingBot {
             awaitingReviewText.remove(uid); // ушёл в другой раздел: следующее сообщение не считаем текстом отзыва
         }
         if (cq.getData().startsWith("m:") && handlePayCallback(uid, from, oldMsgId, cq.getData())) {
+            return;
+        }
+        if (cq.getData().startsWith("p:")) {
+            handlePanelCallback(uid, oldMsgId, cq.getData());
             return;
         }
         if (cq.getData().startsWith("adm:")) {
@@ -305,6 +316,9 @@ public class VpnBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("🔑 Моё подключение", "m:my"), keyboardFactory.callback("💳 Тарифы", "m:tariffs")));
         rows.add(List.of(keyboardFactory.callback("📲 Как подключить", "m:howto"), keyboardFactory.callback("🎁 Пригласить друга", "m:ref")));
+        if (isStaff(uid)) {
+            rows.add(List.of(keyboardFactory.callback("🛠 Панель", "p:menu")));
+        }
         rows.add(List.of(keyboardFactory.url("🆘 Поддержка", "https://t.me/" + appProperties.getSupportUsername())));
         rows.add(List.of(keyboardFactory.url("🎮 Играть и копить EXC на скидку", egcUrl())));
         show(uid, oldMsgId, "🔐 <b>EGC VPN</b>\n\n"
@@ -1331,6 +1345,144 @@ public class VpnBot extends TelegramLongPollingBot {
             alertAdmins("🚨 <b>ОПЛАТА КРИПТОЙ в VPN-боте не обработана</b>\nИгрок <code>" + uid + "</code>, тариф <code>" + escape(inv.getTariff()) + "</code>, счёт <code>"
                     + inv.getCryptoInvoiceId() + "</code>. Выдать: <code>/vpn2 " + uid + " " + escape(inv.getTariff().toLowerCase()) + "</code>");
             sendHtml(uid, "💳 <b>Оплата получена</b>\n\nКлюч выдаём вручную, это займёт немного времени. Мы уже знаем и пришлём его сюда.", null);
+        }
+    }
+
+    // ---------------------------------------------------------------- панель техника и админа
+
+    /** Роль «сотрудник»: админ (видит всё) или техник Влад (только просмотр, без денег, ID замаскированы). */
+    private boolean isStaff(Long uid) {
+        return isAdmin(uid) || vpn.isTech(uid);
+    }
+
+    /** Метка клиента без личных данных: техник видит «vpn_…4567», админ - полную. */
+    private String maskLabel(String email, boolean admin) {
+        if (admin) {
+            return email;
+        }
+        int us = email.indexOf('_');
+        String digits = us >= 0 ? email.substring(us + 1) : email;
+        return (us >= 0 ? email.substring(0, us + 1) : "") + "…" + (digits.length() > 4 ? digits.substring(digits.length() - 4) : digits);
+    }
+
+    private static String gbText(long bytes) {
+        double gb = bytes / (1024.0 * 1024 * 1024);
+        return gb >= 100 ? String.format(java.util.Locale.ROOT, "%,.0f", gb).replace(',', ' ') + " ГБ" : String.format(java.util.Locale.ROOT, "%.1f", gb) + " ГБ";
+    }
+
+    private void handlePanelCallback(Long uid, Integer oldMsgId, String data) {
+        if (!isStaff(uid)) {
+            return;
+        }
+        switch (data) {
+            case "p:node" -> showPanelNode(uid, oldMsgId);
+            case "p:load" -> showPanelLoad(uid, oldMsgId);
+            case "p:keys" -> showPanelKeys(uid, oldMsgId);
+            default -> showPanel(uid, oldMsgId);
+        }
+    }
+
+    private void showPanel(Long uid, Integer oldMsgId) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("📡 Состояние связки", "p:node")));
+        rows.add(List.of(keyboardFactory.callback("👥 Нагрузка", "p:load"), keyboardFactory.callback("🔑 Ключи", "p:keys")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
+        show(uid, oldMsgId, "🛠 <b>Панель EGC VPN</b>\n\n" + (isAdmin(uid) ? "Режим администратора: полные ID." : "Режим просмотра: ID замаскированы, оплат нет.")
+                + "\nТревоги о связке приходят сюда сами.", rows);
+    }
+
+    private List<List<InlineKeyboardButton>> panelBackRows(String refresh) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("🔄 Обновить", refresh), keyboardFactory.callback("⬅️ Панель", "p:menu")));
+        return rows;
+    }
+
+    /** «Состояние связки»: последняя проба из России (выход, задержка, скорость), сертификат узла и ответ панели. */
+    private void showPanelNode(Long uid, Integer oldMsgId) {
+        Vpn2HealthService.Status st = health.status();
+        long now = System.currentTimeMillis();
+        StringBuilder sb = new StringBuilder("📡 <b>Состояние связки</b>\n\n");
+        if (!st.heartbeatExpected()) {
+            sb.append("Проба из России сейчас не ждётся (VPN2_HEALTH_EXPECT_HEARTBEAT).\n");
+        } else if (now - st.lastBeatMs() > 15 * 60_000L) {
+            sb.append("⚠️ Сигнала от пробы нет уже ").append(ago(now - st.lastBeatMs())).append(".\n");
+        } else {
+            sb.append(st.ok() ? "✅ Проба из России: работает" : "❌ Проба из России: сбой").append(" (").append(ago(now - st.lastBeatMs())).append(" назад)\n");
+            if (!st.ok() && !st.details().isBlank()) {
+                sb.append(escape(st.details())).append("\n");
+            }
+            if (!st.exitIp().isBlank()) {
+                sb.append("Адрес выхода: <code>").append(escape(st.exitIp())).append("</code>");
+                if (st.latencyMs() != null) {
+                    sb.append(" · задержка ").append(st.latencyMs()).append(" мс");
+                }
+                sb.append("\n");
+            }
+            if (st.speedMbps() != null) {
+                sb.append("Скорость (раз в час): ").append(String.format(java.util.Locale.ROOT, "%.0f", st.speedMbps())).append(" Мбит/с, замер ")
+                  .append(ago(now - st.speedAtMs())).append(" назад\n");
+            } else {
+                sb.append("Скорость: замера пока нет (проба меряет раз в час)\n");
+            }
+            if (st.certHoursLeft() != null) {
+                sb.append("Сертификат узла входа: ").append(st.certHoursLeft()).append(" ч до конца").append(st.certHoursLeft() < 30 ? " ⚠️" : "").append("\n");
+            }
+        }
+        sb.append(st.panelFailures() == 0 ? "Панель отвечает с сервера бота: ✅" : "Панель не отвечает с сервера бота: ❌ (сбоев подряд: " + st.panelFailures() + ")");
+        show(uid, oldMsgId, sb.toString(), panelBackRows("p:node"));
+    }
+
+    /** «Нагрузка»: клиенты на inbound, онлайн сейчас, накопленный трафик и за сутки, топ-5 наших по расходу. Маскирование ID для техника. */
+    private void showPanelLoad(Long uid, Integer oldMsgId) {
+        StringBuilder sb = new StringBuilder("👥 <b>Нагрузка</b>\n\n");
+        try {
+            VpnPanelClient.NodeLoad load = vpn.nodeLoad();
+            sb.append("Клиентов на inbound: <b>").append(load.clients()).append("</b>, из них наших: <b>").append(load.ours()).append("</b>\n");
+            sb.append("Онлайн сейчас: <b>").append(load.online()).append("</b>\n");
+            sb.append("Трафик за всё время: ↓ ").append(gbText(load.downBytes())).append(" · ↑ ").append(gbText(load.upBytes())).append("\n");
+            Optional<long[]> delta = health.trafficDelta(load.downBytes(), load.upBytes());
+            if (delta.isPresent()) {
+                sb.append("За ~").append(delta.get()[2]).append(" ч: ↓ ").append(gbText(delta.get()[0])).append(" · ↑ ").append(gbText(delta.get()[1])).append("\n");
+            } else {
+                sb.append("За сутки: история копится (снимок раз в час, нужны сутки)\n");
+            }
+            if (!load.top().isEmpty()) {
+                sb.append("\n<b>Топ-5 наших по расходу</b> (за всё время жизни ключа):\n");
+                boolean admin = isAdmin(uid);
+                for (VpnPanelClient.TopClient t : load.top()) {
+                    sb.append("• <code>").append(escape(maskLabel(t.email(), admin))).append("</code> — ").append(gbText(t.used())).append("\n");
+                }
+            }
+        } catch (Exception e) {
+            log.warn("VPN bot: panel load failed", e);
+            sb.append("Не удалось получить данные из панели. Попробуйте через минуту.");
+        }
+        show(uid, oldMsgId, sb.toString().stripTrailing(), panelBackRows("p:load"));
+    }
+
+    /** «Ключи»: сводка по нашим ключам (без денег): работают, не подключались, кончаются, лимит. */
+    private void showPanelKeys(Long uid, Integer oldMsgId) {
+        Vpn2Service.KeysOverview k = vpn.keysOverview();
+        StringBuilder sb = new StringBuilder("🔑 <b>Ключи EGC VPN</b>\n\n");
+        sb.append("Работают сейчас: пробные <b>").append(k.trialRunning()).append("</b>, платные <b>").append(k.paidRunning()).append("</b>\n");
+        if (k.panelOk()) {
+            sb.append("Ни разу не подключались: <b>").append(k.neverConnected()).append("</b> (по данным панели)\n");
+        } else {
+            sb.append("Данные панели сейчас недоступны, часть сводки пропущена.\n");
+        }
+        sb.append("Срок кончается за 3 дня: <b>").append(k.expiring3d()).append("</b>\n");
+        sb.append("Пробный лимит трафика исчерпан: <b>").append(k.limitReached()).append("</b>");
+        show(uid, oldMsgId, sb.toString(), panelBackRows("p:keys"));
+    }
+
+    /** Тревоги о связке для техника (Влад): те же сообщения, что получают админы, но прямо в VPN-боте. */
+    @EventListener
+    public void onTechAlert(Vpn2TechAlertEvent event) {
+        if (!registered) {
+            return;
+        }
+        for (Long techId : vpn.getTechIds()) {
+            sendHtml(techId, event.getTextHtml(), null);
         }
     }
 

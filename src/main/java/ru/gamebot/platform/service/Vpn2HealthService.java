@@ -16,7 +16,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import ru.gamebot.platform.domain.model.Vpn2TrafficSnapshot;
+import ru.gamebot.platform.domain.repository.Vpn2TrafficSnapshotRepository;
 import ru.gamebot.platform.event.AnalyticsAlertEvent;
+import ru.gamebot.platform.event.Vpn2TechAlertEvent;
 
 /** Мониторинг цепочки EGC VPN. Сам бот цепочку не проверяет: на сервере входа (Москва) раз в 5 минут работает скрипт, который проверяет панель, сертификат
  *  и реальный проход трафика до выхода, и присылает результат сюда (POST /api/public/vpn2/heartbeat с секретом VPN2_HEALTH_SECRET). Если сигнал пропал
@@ -35,6 +38,7 @@ public class Vpn2HealthService {
 
     private final Vpn2Service vpn;
     private final ApplicationEventPublisher eventPublisher;
+    private final Vpn2TrafficSnapshotRepository snapshots;
     private final String secret;
     private final Path backupDir;
     private final boolean expectHeartbeat;
@@ -45,16 +49,21 @@ public class Vpn2HealthService {
     private volatile String lastDetails = "";
     private volatile Integer certDaysLeft = null;
     private volatile Integer certHoursLeft = null;
+    private volatile String lastExitIp = "";
+    private volatile Integer lastLatencyMs = null;
+    private volatile Double lastSpeedMbps = null;
+    private volatile long lastSpeedAtMs = 0;
     private volatile String openProblem = null;
     private volatile long lastAlertMs = 0;
     private volatile int panelFailures = 0;
 
-    public Vpn2HealthService(Vpn2Service vpn, ApplicationEventPublisher eventPublisher,
+    public Vpn2HealthService(Vpn2Service vpn, ApplicationEventPublisher eventPublisher, Vpn2TrafficSnapshotRepository snapshots,
                              @Value("${app.vpn2-health-secret:}") String secret,
                              @Value("${app.vpn2-backup-dir:/data/vpn2-panel-backups}") String backupDir,
                              @Value("${app.vpn2-health-expect-heartbeat:true}") boolean expectHeartbeat) {
         this.vpn = vpn;
         this.eventPublisher = eventPublisher;
+        this.snapshots = snapshots;
         this.secret = secret == null ? "" : secret.trim();
         this.expectHeartbeat = expectHeartbeat;
         this.backupDir = Path.of(backupDir == null || backupDir.isBlank() ? "/data/vpn2-panel-backups" : backupDir.trim());
@@ -83,6 +92,51 @@ public class Vpn2HealthService {
         certDaysLeft = days instanceof Number n ? n.intValue() : null;
         Object hours = body.get("certHoursLeft");
         certHoursLeft = hours instanceof Number h ? h.intValue() : null;
+        Object exitIp = body.get("exitIp");
+        lastExitIp = exitIp == null ? "" : String.valueOf(exitIp);
+        Object latency = body.get("latencyMs");
+        lastLatencyMs = latency instanceof Number l ? l.intValue() : null;
+        Object speed = body.get("speedMbps");
+        if (speed instanceof Number sp) {
+            lastSpeedMbps = sp.doubleValue();
+            lastSpeedAtMs = lastBeatMs;
+        }
+    }
+
+    /** Последние данные пробы для панели «🛠»: ok, подробности, часы до конца сертификата, выход, задержка, скорость (последний замер и когда), сбои панели подряд. */
+    public record Status(long lastBeatMs, boolean ok, String details, Integer certHoursLeft, String exitIp, Integer latencyMs,
+                         Double speedMbps, long speedAtMs, int panelFailures, boolean heartbeatExpected) {}
+
+    public Status status() {
+        return new Status(lastBeatMs, lastOk, lastDetails, certHoursLeft, lastExitIp, lastLatencyMs, lastSpeedMbps, lastSpeedAtMs, panelFailures,
+                expectHeartbeat && isConfigured());
+    }
+
+    /** Трафик inbound за последние сутки как разница текущих накопленных чисел и снимка не моложе 22 часов: {вниз байт, вверх байт, часов между}; пусто - истории ещё нет. */
+    public java.util.Optional<long[]> trafficDelta(long downNow, long upNow) {
+        LocalDateTime now = LocalDateTime.now();
+        return snapshots.findFirstByTakenAtBeforeOrderByTakenAtDesc(now.minusHours(22)).map(base -> new long[] {
+                Math.max(0, downNow - base.getDownBytes()), Math.max(0, upNow - base.getUpBytes()),
+                java.time.Duration.between(base.getTakenAt(), now).toHours()});
+    }
+
+    /** Раз в час: снимок накопленного трафика inbound (для расчёта суток), старше 14 дней удаляются (только эта таблица). */
+    @Scheduled(initialDelay = 3 * 60_000L, fixedDelay = 60 * 60_000L)
+    public void snapshotTraffic() {
+        if (!vpn.isEnabled()) {
+            return;
+        }
+        try {
+            VpnPanelClient.NodeLoad load = vpn.nodeLoad();
+            Vpn2TrafficSnapshot snap = new Vpn2TrafficSnapshot();
+            snap.setTakenAt(LocalDateTime.now());
+            snap.setDownBytes(load.downBytes());
+            snap.setUpBytes(load.upBytes());
+            snapshots.save(snap);
+            snapshots.deleteOlderThan(LocalDateTime.now().minusDays(14));
+        } catch (Exception e) {
+            log.warn("VPN2 traffic snapshot failed: {}", e.getMessage());
+        }
     }
 
     /** Копия базы панели от скрипта: проверяем, что это SQLite и размер разумный, кладём в каталог бэкапов и держим последние 14. Возвращает имя файла. */
@@ -148,7 +202,7 @@ public class Vpn2HealthService {
                 if (hours != null) {
                     // сертификат Let's Encrypt на IP живёт ~6,5 суток и обновляется за 2-3 суток до конца: меньше 30 часов значит обновление не сработало
                     if (hours < 30) {
-                        problems.add("сертификат узла входа заканчивается через " + hours + " ч: автообновление не сработало, нужно написать Владу");
+                        problems.add("сертификат узла входа заканчивается через " + hours + " ч: автообновление не сработало, проверьте его на узле входа");
                     }
                 } else if (days != null && days <= 2) {
                     problems.add("сертификат на IP заканчивается через " + days + " дн. (проверьте автообновление acme.sh на сервере входа)");
@@ -175,6 +229,7 @@ public class Vpn2HealthService {
     private void publish(String html) {
         try {
             eventPublisher.publishEvent(new AnalyticsAlertEvent(this, html));
+            eventPublisher.publishEvent(new Vpn2TechAlertEvent(this, html));
         } catch (Exception e) {
             log.warn("VPN2 health: failed to publish alert", e);
         }

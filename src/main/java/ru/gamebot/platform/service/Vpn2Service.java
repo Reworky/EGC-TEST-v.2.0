@@ -98,6 +98,8 @@ public class Vpn2Service {
     private final boolean enabled;
     private final boolean open;
     private final Set<Long> testIds;
+    private final Set<Long> techIds;
+    private final int inboundId;
     private final String botToken;
     private final String botUsername;
     private final String subBase;
@@ -115,6 +117,7 @@ public class Vpn2Service {
                        @Value("${app.vpn2-enabled:false}") boolean enabled,
                        @Value("${app.vpn2-open:false}") boolean open,
                        @Value("${app.vpn2-test-ids:}") String testIds,
+                       @Value("${app.vpn2-tech-ids:}") String techIds,
                        @Value("${app.vpn2-bot-token:}") String botToken,
                        @Value("${app.vpn2-bot-username:}") String botUsername,
                        @Value("${app.vpn2-xui-url:}") String xuiUrl,
@@ -138,6 +141,8 @@ public class Vpn2Service {
         this.enabled = enabled;
         this.open = open;
         this.testIds = parseIds(testIds);
+        this.techIds = parseIds(techIds);
+        this.inboundId = inboundId;
         this.botToken = botToken == null ? "" : botToken.trim();
         this.botUsername = botUsername == null ? "" : botUsername.trim().replaceFirst("^@", "");
         this.subBase = subBase == null ? "" : subBase.trim().replaceAll("/+$", "");
@@ -182,6 +187,11 @@ public class Vpn2Service {
 
     public boolean isTester(Long telegramId) { return testIds.contains(telegramId); }
 
+    /** Техник (Влад): видит панель «🛠 Панель» только на просмотр и получает тревоги о связке в VPN-боте; без денег и без полных ID. VPN2_TECH_IDS. */
+    public boolean isTech(Long telegramId) { return techIds.contains(telegramId); }
+
+    public Set<Long> getTechIds() { return techIds; }
+
     public String getBotToken() { return botToken; }
 
     public String getBotUsername() { return botUsername; }
@@ -215,6 +225,52 @@ public class Vpn2Service {
     /** Состояние всех клиентов второй панели одним запросом (метка -> расход, лимит, последний онлайн, загрузка подписки). */
     public java.util.Map<String, VpnPanelClient.ClientStat> allClientStats() throws PanelException {
         return panel.clientStats();
+    }
+
+    /** Нагрузка на inbound бота в панели (клиенты, онлайн, трафик, топ-5 наших). */
+    public VpnPanelClient.NodeLoad nodeLoad() throws PanelException {
+        return panel.nodeLoad(inboundId, System.currentTimeMillis());
+    }
+
+    /** Сводка по нашим ключам для панели: работающие пробные и платные, ни разу не подключавшиеся (по данным панели), кончаются за 3 дня, исчерпали лимит. */
+    public record KeysOverview(int trialRunning, int paidRunning, int neverConnected, int expiring3d, int limitReached, boolean panelOk) {}
+
+    public KeysOverview keysOverview() {
+        LocalDateTime now = LocalDateTime.now();
+        java.util.Map<String, VpnPanelClient.ClientStat> stats = null;
+        boolean panelOk = true;
+        try {
+            stats = panel.clientStats();
+        } catch (PanelException e) {
+            panelOk = false;
+        }
+        int trial = 0;
+        int paid = 0;
+        int never = 0;
+        int expiring = 0;
+        int limit = 0;
+        for (Vpn2Account a : accounts.findAll()) {
+            if (!isRunning(a)) {
+                continue;
+            }
+            boolean isTrial = Vpn2Account.PLAN_TRIAL.equals(a.getPlanType());
+            if (isTrial) {
+                trial++;
+                if (a.getLimitNotifiedAt() != null) {
+                    limit++;
+                }
+            } else {
+                paid++;
+            }
+            if (a.getExpiresAt().isBefore(now.plusDays(3))) {
+                expiring++;
+            }
+            VpnPanelClient.ClientStat st = stats == null ? null : stats.get(a.getPanelEmail());
+            if (st != null && st.used() == 0 && st.lastOnlineMs() <= 0) {
+                never++;
+            }
+        }
+        return new KeysOverview(trial, paid, never, expiring, limit, panelOk);
     }
 
     /** Состояние ключа игрока в панели; пусто - панель не ответила или клиента там нет. */

@@ -14,7 +14,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -90,6 +92,57 @@ public class VpnPanelClient {
 
     /** Состояние клиента в панели: расход и лимит трафика (байты), включён ли, последнее подключение и последняя загрузка подписки приложением (мс, 0 - не было). */
     public record ClientStat(long used, long total, boolean enable, long lastOnlineMs, long lastSubFetchMs) {}
+
+    /** Клиент для списка «топ по трафику» (метка и накопленный расход, байты). */
+    public record TopClient(String email, long used) {}
+
+    /** Нагрузка на inbound: клиентов всего и наших (метки vpn_ и egc_, без технической egc_probe), онлайн за последние 2 минуты, накопленный трафик inbound, топ-5 наших. */
+    public record NodeLoad(int clients, int ours, int online, long downBytes, long upBytes, List<TopClient> top) {}
+
+    /** Нагрузка на inbound targetInbound двумя запросами к панели (список клиентов и список inbound). nowMs - текущее время в миллисекундах. */
+    public synchronized NodeLoad nodeLoad(int targetInbound, long nowMs) throws PanelException {
+        JsonNode cl = api("/panel/api/clients/list", null);
+        if (!cl.path("success").asBoolean(false)) {
+            throw new PanelException("список клиентов: " + cl.path("msg").asText());
+        }
+        int clients = 0;
+        int ours = 0;
+        int online = 0;
+        List<TopClient> mine = new ArrayList<>();
+        for (JsonNode n : cl.path("obj")) {
+            boolean onInbound = false;
+            for (JsonNode id : n.path("inboundIds")) {
+                if (id.asInt() == targetInbound) {
+                    onInbound = true;
+                }
+            }
+            if (!onInbound) {
+                continue;
+            }
+            clients++;
+            String email = n.path("email").asText();
+            JsonNode t = n.path("traffic");
+            long lastOnline = t.path("lastOnline").asLong(0);
+            if (lastOnline > 0 && nowMs - lastOnline < 120_000L) {
+                online++;
+            }
+            if ((email.startsWith("vpn_") || email.startsWith("egc_")) && !"egc_probe".equals(email)) {
+                ours++;
+                mine.add(new TopClient(email, t.path("up").asLong(0) + t.path("down").asLong(0)));
+            }
+        }
+        mine.sort((a, b) -> Long.compare(b.used(), a.used()));
+        JsonNode inbounds = api("/panel/api/inbounds/list", null);
+        long down = 0;
+        long up = 0;
+        for (JsonNode i : inbounds.path("obj")) {
+            if (i.path("id").asInt() == targetInbound) {
+                down = i.path("down").asLong(0);
+                up = i.path("up").asLong(0);
+            }
+        }
+        return new NodeLoad(clients, ours, online, down, up, new ArrayList<>(mine.subList(0, Math.min(5, mine.size()))));
+    }
 
     /** Состояние всех клиентов одним запросом: метка -> ClientStat. */
     public synchronized Map<String, ClientStat> clientStats() throws PanelException {

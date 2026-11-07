@@ -70,6 +70,8 @@ app:
   vpn2-enabled: ${VPN2_ENABLED:false}
   vpn2-open: ${VPN2_OPEN:false}
   vpn2-test-ids: ${VPN2_TEST_IDS:}
+  # Техник (Влад): панель на просмотр без денег и с замаскированными ID, тревоги о связке в VPN-боте (Telegram ID через запятую)
+  vpn2-tech-ids: ${VPN2_TECH_IDS:}
   vpn2-bot-token: ${VPN2_BOT_TOKEN:}
   vpn2-bot-username: ${VPN2_BOT_USERNAME:}
   vpn2-xui-url: ${VPN2_XUI_URL:}
