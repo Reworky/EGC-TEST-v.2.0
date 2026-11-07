@@ -10490,13 +10490,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
 
-    /** Строки про курс вывода в меню «Вывод EXC» при включённых уровнях: партнёр - 100%, остальные - 100% до 10 000 EXC за всё время и дальше сниженный курс. */
+    /** Строки про курс вывода в меню «Вывод EXC» при включённых уровнях: партнёр - 100%, остальные - курс фонда на первые 10 000 EXC за всё время (с 08.11.2026) и дальше сниженный курс. */
     private String withdrawalTierRateBlock(AppUser user) {
         if (healthRatioService.isPartner(user)) {
             return "💱 Ваш курс: 100% (вы партнёр)\n\n";
         }
-        int lowPercent = (int) Math.round(NONPARTNER_RATE * Math.min(1.0, healthRatioService.getCurrentRatio() / NONPARTNER_RATE_REF) * 100);
-        return "💱 Ваш курс: " + lowPercent + "%  (с картой банка-партнёра курс всегда 100%)\n\n";
+        int lowPercent = nonPartnerPercent();
+        long freeLeft = Math.max(0, RUB_FREE_WITHDRAWAL_EXC - rewardService.totalWithdrawnExc(user));
+        String own = freeLeft > 0
+                ? freeTierPercent() + "% на первые " + fmtExc(freeLeft) + " EXC, дальше " + lowPercent + "%"
+                : lowPercent + "%";
+        return "💱 Ваш курс: " + own + "  (с картой банка-партнёра курс всегда 100%)\n\n";
     }
 
     /** Свободный остаток порога вывода (EXC) до обязательной карты партнёра: -1 - порога нет (есть одобренный партнёрский квест). Порог считает выводы любым способом и действует на рубли, TON и звёзды (с 05.11.2026). */
@@ -10507,10 +10511,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private static final long RUB_FREE_WITHDRAWAL_EXC = 10_000L;
 
-    /** Уровни вывода (07.11.2026, владелец): партнёры и первые 10 000 EXC за всё время - курс 100%, остальные - NONPARTNER_RATE x min(1, курс фонда / NONPARTNER_RATE_REF); лимиты ранга остаются.
+    /** Уровни вывода (07.11.2026, владелец): партнёры - курс 100%, остальные - первые 10 000 EXC за всё время по курсу фонда (с 08.11.2026), дальше NONPARTNER_RATE x min(1, курс фонда / NONPARTNER_RATE_REF); лимиты ранга остаются.
      *  Выключено по умолчанию (app_settings 'wd.tiers.enabled'): включать вместе с новыми текстами экранов вывода (scripts/wd-tiers-on.sql). */
     private static final double NONPARTNER_RATE = 0.45;
     private static final double NONPARTNER_RATE_REF = 0.9;
+
+    /** Курс первых 10 000 EXC за всё время для игрока без партнёра (с 08.11.2026 - курс фонда, не больше 100%), в процентах. */
+    private int freeTierPercent() {
+        return (int) Math.round(Math.min(1.0, healthRatioService.getCurrentRatio()) * 100);
+    }
+
+    /** Курс сверх первых 10 000 EXC для игрока без партнёра, в процентах. */
+    private int nonPartnerPercent() {
+        return (int) Math.round(NONPARTNER_RATE * Math.min(1.0, healthRatioService.getCurrentRatio() / NONPARTNER_RATE_REF) * 100);
+    }
 
     public boolean withdrawalTiersEnabled() {
         return appSettingRepository.findById("wd.tiers.enabled")
@@ -10526,7 +10540,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (partnerDestination || questService.hasApprovedPartnerQuest(user.getId())) return 1.0;
         double nonPartner = NONPARTNER_RATE * Math.min(1.0, fund / NONPARTNER_RATE_REF);
         long free = Math.min(amount, Math.max(0, RUB_FREE_WITHDRAWAL_EXC - rewardService.totalWithdrawnExc(user)));
-        return (free * 1.0 + (amount - free) * nonPartner) / amount;
+        // 08.11.2026 (владелец): первые 10 000 EXC больше не по 100% - курс фонда (раньше было 1.0)
+        return (free * Math.min(1.0, fund) + (amount - free) * nonPartner) / amount;
     }
 
     /** Крипта на amount EXC выходит за бесплатный порог 10 000 EXC (все способы суммой): тогда только биржи-партнёры (Pionex, Bybit) по UID через бота. Публичный: им пользуется мини-апп. */
@@ -10745,9 +10760,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendTonCardChoice(AppUser user, long amount, long rubles) {
         long partnerRub = Math.round(amount / 100.0);
         long freeLeft = Math.max(0, RUB_FREE_WITHDRAWAL_EXC - rewardService.totalWithdrawnExc(user));
-        int lowPercent = (int) Math.round(rubles * 10000.0 / Math.max(1, amount));
+        int lowPercent = nonPartnerPercent();
         String noCardRate = freeLeft > 0
-                ? "курс 100% на первые " + fmtExc(freeLeft) + " EXC, дальше " + lowPercent + "%"
+                ? "курс " + freeTierPercent() + "% на первые " + fmtExc(freeLeft) + " EXC, дальше " + lowPercent + "%"
                 : "курс " + lowPercent + "%";
         java.math.BigDecimal ownTon = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(rubles));
         java.math.BigDecimal partnerTon = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(partnerRub));
@@ -26117,9 +26132,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendWithdrawalCardChoice(AppUser user, long amount, long rubles, int ratioPercent) {
         long partnerRub = Math.round(amount / 100.0);
         long freeLeft = Math.max(0, RUB_FREE_WITHDRAWAL_EXC - rewardService.totalWithdrawnExc(user));
-        int lowPercent = (int) Math.round(NONPARTNER_RATE * Math.min(1.0, healthRatioService.getCurrentRatio() / NONPARTNER_RATE_REF) * 100);
+        int lowPercent = nonPartnerPercent();
         String noCardRate = freeLeft > 0
-                ? "курс 100% на первые " + fmtExc(freeLeft) + " EXC, дальше " + lowPercent + "%"
+                ? "курс " + freeTierPercent() + "% на первые " + fmtExc(freeLeft) + " EXC, дальше " + lowPercent + "%"
                 : "курс " + lowPercent + "%";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("Вывести " + fmtExc(rubles) + " ₽ без карты", "wd:nocard")));
