@@ -10437,9 +10437,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
         int ratioPercent = (int) Math.round(healthRatioService.getCurrentRatio() * 100);
         String lastPayout = withdrawalLastPayoutLine().trim();
-        String text = "💸 <b>Вывод EXC</b>\n"
+        String text = withdrawalTiersEnabled()
+                ? "<b>💸 Вывод EXC</b>\n\n"
+                        + "🪙 " + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC\n\n"
+                        + withdrawalTierRateBlock(user)
+                        + "📤 Остаток лимита: " + remaining + " из " + sinkShopService.getMonthlyLimitShown(user) + " EXC/мес"
+                        + withdrawalLevelHint(user)
+                        + (lastPayout.isEmpty() ? "" : "\n" + lastPayout) + "\n\n"
+                        + "Выберите способ получения:"
+                : "💸 <b>Вывод EXC</b>\n"
                 + "🪙 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b> · минимум 5 000\n"
-                + (withdrawalTiersEnabled() ? withdrawalTierRateBlock(user) : "💱 <b>" + rateString(ratioPercent) + "</b>\n\n")
+                + "💱 <b>" + rateString(ratioPercent) + "</b>\n\n"
                 + "<blockquote expandable>📤 Остаток лимита: <b>" + remaining + " из " + sinkShopService.getMonthlyLimitShown(user) + " EXC/мес</b>"
                 + withdrawalLevelHint(user)
                 + (lastPayout.isEmpty() ? "" : "\n" + lastPayout) + "</blockquote>\n\n"
@@ -10460,10 +10468,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Строки про курс вывода в меню «Вывод EXC» при включённых уровнях: партнёр - 100%, остальные - 100% до 10 000 EXC за всё время и дальше сниженный курс. */
     private String withdrawalTierRateBlock(AppUser user) {
         if (healthRatioService.isPartner(user)) {
-            return "💱 <b>Курс: 100%</b> (вы партнёр)\n\n";
+            return "💱 Ваш курс: 100% (вы партнёр)\n\n";
         }
         int lowPercent = (int) Math.round(NONPARTNER_RATE * Math.min(1.0, healthRatioService.getCurrentRatio() / NONPARTNER_RATE_REF) * 100);
-        return "💱 <b>Курс: 100% до " + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC за всё время, дальше " + lowPercent + "%</b>\n"
+        return "💱 Ваш курс: " + lowPercent + "%  (100% до " + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC за всё время)\n"
                 + "🤝 С картой банка-партнёра курс всегда 100%.\n\n";
     }
 
