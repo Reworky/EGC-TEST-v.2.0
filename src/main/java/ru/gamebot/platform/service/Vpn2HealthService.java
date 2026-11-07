@@ -37,6 +37,7 @@ public class Vpn2HealthService {
     private final ApplicationEventPublisher eventPublisher;
     private final String secret;
     private final Path backupDir;
+    private final boolean expectHeartbeat;
 
     // после перезапуска бота даём скрипту 15 минут прислать сигнал, а не поднимаем ложную тревогу
     private volatile long lastBeatMs = System.currentTimeMillis();
@@ -45,13 +46,16 @@ public class Vpn2HealthService {
     private volatile Integer certDaysLeft = null;
     private volatile String openProblem = null;
     private volatile long lastAlertMs = 0;
+    private volatile int panelFailures = 0;
 
     public Vpn2HealthService(Vpn2Service vpn, ApplicationEventPublisher eventPublisher,
                              @Value("${app.vpn2-health-secret:}") String secret,
-                             @Value("${app.vpn2-backup-dir:/data/vpn2-panel-backups}") String backupDir) {
+                             @Value("${app.vpn2-backup-dir:/data/vpn2-panel-backups}") String backupDir,
+                             @Value("${app.vpn2-health-expect-heartbeat:true}") boolean expectHeartbeat) {
         this.vpn = vpn;
         this.eventPublisher = eventPublisher;
         this.secret = secret == null ? "" : secret.trim();
+        this.expectHeartbeat = expectHeartbeat;
         this.backupDir = Path.of(backupDir == null || backupDir.isBlank() ? "/data/vpn2-panel-backups" : backupDir.trim());
         if (this.secret.isBlank()) {
             log.warn("Vpn2HealthService: VPN2_HEALTH_SECRET not set, monitoring endpoints are disabled");
@@ -112,21 +116,34 @@ public class Vpn2HealthService {
 
     @Scheduled(initialDelay = 5 * 60_000L, fixedDelay = 5 * 60_000L)
     public void monitor() {
-        if (!isConfigured() || !vpn.isEnabled()) {
+        if (!vpn.isEnabled()) {
             return;
         }
         try {
             long now = System.currentTimeMillis();
             List<String> problems = new ArrayList<>();
-            long ageMin = (now - lastBeatMs) / 60_000L;
-            if (now - lastBeatMs > STALE_MS) {
-                problems.add("нет сигнала от сервера проверки (Москва) уже " + ageMin + " мин: упал сервер, скрипт проверки или сеть");
-            } else if (!lastOk) {
-                problems.add("проверка цепочки не пройдена: " + (lastDetails.isBlank() ? "без подробностей" : lastDetails));
+            // 1) панель, которой пользуется бот, отвечает с сервера бота (две проверки подряд = 10 минут)
+            try {
+                vpn.allClientStats();
+                panelFailures = 0;
+            } catch (Exception e) {
+                panelFailures++;
+                if (panelFailures >= 2) {
+                    problems.add("панель VPN не отвечает с сервера бота (проверок подряд: " + panelFailures + "): выдача и продление ключей не работают");
+                }
             }
-            Integer days = certDaysLeft;
-            if (days != null && days <= 2) {
-                problems.add("сертификат на IP заканчивается через " + days + " дн. (проверьте автообновление acme.sh на сервере входа)");
+            // 2) сигналы скрипта проверки цепочки (сервер входа Москва); отключаются VPN2_HEALTH_EXPECT_HEARTBEAT=false, когда бот работает на чужих узлах
+            if (expectHeartbeat && isConfigured()) {
+                long ageMin = (now - lastBeatMs) / 60_000L;
+                if (now - lastBeatMs > STALE_MS) {
+                    problems.add("нет сигнала от сервера проверки (Москва) уже " + ageMin + " мин: упал сервер, скрипт проверки или сеть");
+                } else if (!lastOk) {
+                    problems.add("проверка цепочки не пройдена: " + (lastDetails.isBlank() ? "без подробностей" : lastDetails));
+                }
+                Integer days = certDaysLeft;
+                if (days != null && days <= 2) {
+                    problems.add("сертификат на IP заканчивается через " + days + " дн. (проверьте автообновление acme.sh на сервере входа)");
+                }
             }
             if (problems.isEmpty()) {
                 if (openProblem != null) {

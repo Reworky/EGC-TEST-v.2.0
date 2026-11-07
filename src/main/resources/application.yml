@@ -83,6 +83,8 @@ app:
   # Секрет скрипта проверки на сервере входа (heartbeat и копии базы панели); без него приём сигналов выключен, алертов о пропаже сигнала нет
   vpn2-health-secret: ${VPN2_HEALTH_SECRET:}
   vpn2-backup-dir: ${VPN2_BACKUP_DIR:/data/vpn2-panel-backups}
+  # false - не ждать heartbeat от скрипта на сервере входа (бот работает на чужой панели); проверка панели с сервера бота работает всегда
+  vpn2-health-expect-heartbeat: ${VPN2_HEALTH_EXPECT_HEARTBEAT:true}
   # Способы оплаты кроме Stars: EXC целиком (кнопки видны всегда, работают при true), перевод рублями по реквизитам (способ открыт, когда текст задан), CryptoBot (открыт, когда задан токен Crypto Pay)
   vpn2-exc-pay-enabled: ${VPN2_EXC_PAY_ENABLED:false}
   vpn2-card-details: ${VPN2_CARD_DETAILS:}

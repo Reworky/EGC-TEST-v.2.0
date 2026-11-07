@@ -440,6 +440,25 @@ public class Vpn2Service {
         });
     }
 
+    /** Перенос ключей на новую панель (после смены бэкенда VPN2_XUI_*): для всех работающих ключей создаёт или обновляет клиента с теми же subId и сроком.
+     *  Ссылка подписки у игроков меняется вместе с VPN2_SUB_BASE, поэтому после переноса им нужно заново добавить подписку. Возвращает число перенесённых. */
+    public synchronized int resyncAll() {
+        int done = 0;
+        LocalDateTime now = LocalDateTime.now();
+        for (Vpn2Account a : accounts.findAll()) {
+            if (!Vpn2Account.STATUS_ACTIVE.equals(a.getStatus()) || a.getExpiresAt() == null || !a.getExpiresAt().isAfter(now)) {
+                continue;
+            }
+            try {
+                panel.upsertClient(spec(a));
+                done++;
+            } catch (PanelException e) {
+                alert("Не удалось перенести ключ игрока " + a.getTelegramId() + " на новую панель", e);
+            }
+        }
+        return done;
+    }
+
     /** Отключение: клиент удаляется из панели, запись остаётся (признак «пробный брали» сохраняется). */
     public synchronized void disable(Long telegramId) throws VpnException {
         requireEnabled();

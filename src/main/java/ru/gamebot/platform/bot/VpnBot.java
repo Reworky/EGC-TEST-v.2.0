@@ -694,8 +694,13 @@ public class VpnBot extends TelegramLongPollingBot {
         String[] parts = text.split("\\s+");
         if (parts.length < 2) {
             sendHtml(adminId, "Формат: <code>/vpn2 ID</code> (статус), <code>/vpn2 ID trial</code>, <code>/vpn2 ID m1</code>, <code>m3</code>, <code>m12</code> (выдать срок), <code>/vpn2 ID off</code>.\n"
-                    + "Статистика: <code>/stats</code>. Состояние: " + (vpn.isEnabled() ? "включён" : "выключен (VPN2_ENABLED и настройки панели)")
+                    + "Перенос всех ключей в текущую панель после смены настроек: <code>/vpn2 sync</code>. Статистика: <code>/stats</code>. Состояние: " + (vpn.isEnabled() ? "включён" : "выключен (VPN2_ENABLED и настройки панели)")
                     + ", " + (vpn.isOpen() ? "открыт всем" : "закрыт (админы и тестеры)"), null);
+            return;
+        }
+        if ("sync".equalsIgnoreCase(parts[1])) {
+            int moved = vpn.resyncAll();
+            sendHtml(adminId, "🔄 Работающих ключей перенесено в панель: <b>" + moved + "</b>. Игрокам нужно заново добавить подписку по новой ссылке (она в «Моё подключение»).", null);
             return;
         }
         long targetId;
