@@ -12643,8 +12643,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String header;
         if (!showOther) {
             header = partner
-                    ? "⭐ <b>Вывод в звёздах</b>\n\nВаши цены партнёра:\n\n"
-                    : "⭐ <b>Вывод в звёздах</b>\n\nВаши цены (без партнёра):\n\n";
+                    ? "⭐ <b>Вывод в звёздах</b>\n\nВаши цены партнёра\n\n"
+                    : "⭐ <b>Вывод в звёздах</b>\n\nВаши цены (без партнёра)\n\n";
         } else {
             header = viewPartner
                     ? "⭐ <b>Цены партнёра</b>\n\n"
@@ -12652,7 +12652,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         String footer;
         if (!showOther) {
-            footer = partner ? "\nВыберите номинал." : "\nС картой банка-партнёра звёзды дешевле: нажмите «Цены партнёра».\n\nВыберите номинал.";
+            footer = partner ? "Выберите номинал👇" : "С картой банка-партнёра звёзды дешевле.\n\nВыберите номинал👇";
         } else {
             footer = viewPartner ? "\nТакие цены получает игрок с картой банка-партнёра. Карта бесплатная, оформляется по нашей ссылке." : "\nТакие цены у игроков без партнёрства.";
         }
@@ -12666,7 +12666,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("🎫 Оформить EGC Pass: звёзды дешевле", "sink:egc_pass")));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw"), keyboardFactory.callback("🏠 Меню", "menu:main")));
-        String text = header + prices + footer;
+        // в своём режиме цены уже на кнопках номиналов, в тексте их не дублируем; в режиме другого уровня кнопок номиналов нет, цены только в тексте
+        String text = header + (showOther ? prices : "") + footer;
         InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(rows);
         if (callback == null || callback.getMessage() == null) {
             sendStarsBanner(user.getTelegramId(), text, markup);
