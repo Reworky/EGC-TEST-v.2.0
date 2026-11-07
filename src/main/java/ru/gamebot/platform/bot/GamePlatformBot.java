@@ -1922,14 +1922,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendStarsWithdrawalClosed(user);
                 return;
             }
-            if ("telegram_stars".equals(data.substring("shop:group:".length()))) {
-                long starsRoom = withdrawalGateRoomExc(user);
-                if (starsRoom >= 0 && starsRoom < minStarsPriceExc()) {
-                    answerSilently(callbackQuery.getId());
-                    sendWithdrawalPartnerGate(user, starsRoom, "stars");
-                    return;
-                }
-            }
+            // 07.11.2026 (владелец): вывод звёздами без порога 10 000 EXC и партнёрского квеста - только баланс и месячный лимит ранга
             if ("telegram_stars".equals(data.substring("shop:group:".length())) && user.getPhoneNumber() == null) {
                 answerSilently(callbackQuery.getId());
                 session.setState(SessionState.AWAITING_PHONE_SHARE);
@@ -12771,14 +12764,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             sendStarsWithdrawalClosed(user);
             return;
-        }
-        if ("telegram_stars".equals(reward.getPurchaseGroup())) {
-            long starsRoom = withdrawalGateRoomExc(user);
-            if (starsRoom >= 0 && healthRatioService.effectivePriceFor(user, reward) > starsRoom) {
-                answerSilently(callbackQuery.getId());
-                sendWithdrawalPartnerGate(user, starsRoom, "stars");
-                return;
-            }
         }
         if (reward.getUserDataPrompt() != null && !reward.getUserDataPrompt().isBlank()) {
             // Игрок уже указывал данные для выдачи в этой игре: предлагаем те же одним нажатием (06.11.2026)

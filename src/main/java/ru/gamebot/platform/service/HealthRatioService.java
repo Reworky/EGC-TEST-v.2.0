@@ -118,11 +118,15 @@ public class HealthRatioService {
         if (!"Вывод".equals(item.getCategory())) {
             ratio = ratio * SHOP_PRICE_RATIO_FACTOR;
         }
-        if (ratio >= 1.0) {
-            return item.getPriceCoins();
+        long price = ratio >= 1.0 ? item.getPriceCoins() : Math.round(item.getPriceCoins() / ratio);
+        if ("telegram_stars".equals(item.getPurchaseGroup())) {
+            price = Math.round(price * STARS_PRICE_FACTOR);
         }
-        return Math.round(item.getPriceCoins() / ratio);
+        return price;
     }
+
+    /** Общий множитель цены вывода звёздами (07.11.2026, владелец): с Pass x1,12, без Pass x1,12 x 1,25 = x1,4 к базовой цене (базовая цена = закупка звезды 1,58 ₽, то есть выше прежней, но чуть выгоднее рублей при рыночной цене звезды). */
+    public static final double STARS_PRICE_FACTOR = 1.12;
 
     /** Коэффициент курса для цен магазина: 1,0 = изначальная формула (покупка в магазине на ~17% хуже вывода). С 06.11.2026 был 0,6 («вдвое хуже вывода»), по решению владельца возвращён к 1,0 после введения доплаты звёздами. Меньше 1 - дороже в токенах, больше - дешевле (1,2 = на уровне вывода). От реального курса фонда соотношение не зависит. */
     public static final double SHOP_PRICE_RATIO_FACTOR = 1.0;
