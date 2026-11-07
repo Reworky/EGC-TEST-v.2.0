@@ -7541,7 +7541,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 case CLOSED -> ru.gamebot.platform.domain.model.DailyBonus.RED.equals(a.type())
                         ? "🔴 Красная кнопка уже погасла. Следи за каналом: следующая выйдет внезапно."
                         : "⌛ Этот курс дня уже закончился. Следующий будет в одном из ближайших постов канала.";
-                case BUDGET_OVER -> "😔 Бонус на сегодня уже разобрали. Загляни в канал завтра.";
+                case BUDGET_OVER, NO_SLOTS -> ru.gamebot.platform.domain.model.DailyBonus.RED.equals(a.type())
+                        ? "😔 <b>Бонус этой кнопки уже разобрали.</b>\n\nТы нажал чуть позже, места закончились. Следующая красная кнопка выйдет внезапно, держи бота под рукой ⚡"
+                        : "😔 Бонус на сегодня уже разобрали. Загляни в канал завтра.";
+                case NO_BALANCE -> "🔴 <b>Бонус красной кнопки нужен для вывода</b>\n\nЧтобы его взять, на балансе должно быть не меньше "
+                        + String.format(java.util.Locale.forLanguageTag("ru"), "%,d", ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC)
+                        + " EXC (сейчас у тебя " + String.format(java.util.Locale.forLanguageTag("ru"), "%,d", user.getCoins())
+                        + "). Набери нужную сумму в квестах и лови следующую кнопку ⚡";
                 case NOT_STARTED -> "⏳ Этот курс дня ещё не открыт, попробуй чуть позже.";
                 case DENIED -> "Для этого аккаунта бонус недоступен. Если это ошибка, напиши в поддержку.";
                 case NOT_FOUND -> "Такого курса дня нет. Загляни в последний пост канала.";

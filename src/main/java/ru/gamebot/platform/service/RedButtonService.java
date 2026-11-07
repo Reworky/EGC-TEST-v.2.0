@@ -45,6 +45,13 @@ public class RedButtonService {
     private static final long DEFAULT_BUDGET_RUB = 70;
     private static final int DEFAULT_TEASER_HOURS = 24;
     private static final int DEFAULT_WARN_MIN = 10;
+    /** Места на бонус (07.11.2026): бонус успевает получить 30-40% нажавших (доля случайна на каждую кнопку), остальным «бонус разобрали».
+     *  Ожидаемая аудитория - среднее число нажавших на последних трёх кнопках, для самой первой - DEFAULT_EXPECTED. Мест не меньше 3 и не больше 200. */
+    private static final int DEFAULT_SHARE_MIN = 30;
+    private static final int DEFAULT_SHARE_MAX = 40;
+    private static final long DEFAULT_EXPECTED = 60;
+    private static final int MIN_SLOTS = 3;
+    private static final int MAX_SLOTS = 200;
     /** Кнопка, которую не удалось выпустить вовремя (бот был недоступен), позже этого срока уже не публикуется: окно нажатия 60 минут, опоздавший пост вводит в заблуждение. */
     private static final int MAX_LATE_MIN = 30;
     private static final int PUBLISHING_TIMEOUT_MIN = 5;
@@ -160,6 +167,22 @@ public class RedButtonService {
                 put("bcr.budget", String.valueOf(v));
                 yield "✅ Бюджет одной красной кнопки: " + v + " ₽.";
             }
+            case "sharemin" -> {
+                if (v < 1 || v > 100) yield "Минимальная доля нажавших, которым хватит места на бонус, в процентах: число от 1 до 100.";
+                put("bcr.sharemin", String.valueOf(v));
+                yield "✅ Минимальная доля успевших получить бонус: " + v + "% (со следующей кнопки).";
+            }
+            case "sharemax" -> {
+                if (v < 0 || v > 100) yield "Максимальная доля нажавших, которым хватит места на бонус, в процентах: число от 0 до 100 (0 - без ограничения мест).";
+                put("bcr.sharemax", String.valueOf(v));
+                yield v == 0 ? "✅ Ограничение мест выключено: бонус получают все, пока есть бюджет."
+                        : "✅ Максимальная доля успевших получить бонус: " + v + "% (со следующей кнопки).";
+            }
+            case "expect" -> {
+                if (v < 1 || v > 100000) yield "Стартовая оценка числа нажавших для первой кнопки: число от 1 до 100000 (потом бот считает сам по последним кнопкам).";
+                put("bcr.expect", String.valueOf(v));
+                yield "✅ Стартовая оценка числа нажавших: " + v + ".";
+            }
             case "teaser" -> {
                 if (v < 0 || v > 168) yield "За сколько часов до первой кнопки недели выходит тизер: число от 0 до 168 (0 - без тизера).";
                 put("bcr.teaserhours", String.valueOf(v));
@@ -170,7 +193,7 @@ public class RedButtonService {
                 put("bcr.warn", String.valueOf(v));
                 yield "✅ Админы получают предупреждение за " + v + " мин до кнопки.";
             }
-            default -> "Параметры: perweek, start, end, min, max, step, window, valid, budget, teaser, warn.";
+            default -> "Параметры: perweek, start, end, min, max, step, window, valid, budget, sharemin, sharemax, expect, teaser, warn.";
         };
     }
 
@@ -246,6 +269,35 @@ public class RedButtonService {
 
     private LocalDateTime slotHigh(LocalDate day) {
         return day.atStartOfDay().plusHours(endHour()).minusMinutes(5);
+    }
+
+    private int shareMax() { return (int) Math.max(0, Math.min(100, parseLong(get("bcr.sharemax"), DEFAULT_SHARE_MAX))); }
+
+    private int shareMin() { return (int) Math.max(1, Math.min(shareMax(), parseLong(get("bcr.sharemin"), DEFAULT_SHARE_MIN))); }
+
+    /** Ожидаемое число подходящих нажавших: среднее по последним трём кнопкам, где они были; пока кнопок не было, стартовая оценка (bcr.expect). */
+    private long expectedPressers() {
+        try {
+            List<DailyBonus> last = dailyBonusRepository.findTop3ByTypeAndAttemptsGreaterThanOrderByIdDesc(DailyBonus.RED, 0);
+            if (!last.isEmpty()) {
+                return Math.max(1, Math.round(last.stream().mapToInt(DailyBonus::getAttempts).average().orElse(DEFAULT_EXPECTED)));
+            }
+        } catch (Exception e) {
+            log.warn("[RedButton] expected pressers lookup failed, using the default", e);
+        }
+        return Math.max(1, parseLong(get("bcr.expect"), DEFAULT_EXPECTED));
+    }
+
+    /** Сколько мест на бонус у новой кнопки: случайная доля (shareMin..shareMax) от ожидаемого числа нажавших. 0 - ограничение мест выключено (sharemax = 0). */
+    private int computeSlots() {
+        int hi = shareMax();
+        if (hi <= 0) return 0;
+        int lo = Math.min(shareMin(), hi);
+        int share = lo + ThreadLocalRandom.current().nextInt(hi - lo + 1);
+        long expected = expectedPressers();
+        int slots = (int) Math.max(MIN_SLOTS, Math.min(MAX_SLOTS, Math.round(expected * share / 100.0)));
+        log.info("[RedButton] slots {} (share {}% of expected {} pressers)", slots, share, expected);
+        return slots;
     }
 
     private int randomPercent() {
@@ -366,6 +418,7 @@ public class RedButtonService {
             b.setBonusDate(LocalDate.now());
             b.setPercent(r.getPercent());
             b.setBudgetTotalRub(budgetRub());
+            b.setSlots(computeSlots());
             b = dailyBonusRepository.save(b);
             r.setBonusId(b.getId());
         }
@@ -415,6 +468,12 @@ public class RedButtonService {
     public String closedText(RedButtonSchedule r) {
         long pressed = r.getBonusId() == null ? 0 : userBonusRepository.countByBonusId(r.getBonusId());
         String base = r.getPostText() == null ? "🔴 <b>красная кнопка</b>" : r.getPostText();
+        DailyBonus b = r.getBonusId() == null ? null : dailyBonusRepository.findById(r.getBonusId()).orElse(null);
+        // С местами: «нажали» - все подходящие нажавшие, «успели» - те, кому хватило места (включают и нажавших раньше правила, у них attempts = 0)
+        if (b != null && b.getSlots() > 0 && b.getAttempts() >= pressed && b.getAttempts() > 0) {
+            return base + "\n\n⏱ Кнопка погасла. Нажали: <b>" + b.getAttempts() + "</b> " + playersWord(b.getAttempts())
+                    + ", бонус успели получить: <b>" + pressed + "</b>.";
+        }
         return base + "\n\n⏱ Кнопка погасла. Нажали: <b>" + pressed + "</b> " + playersWord(pressed) + ".";
     }
 
@@ -496,6 +555,12 @@ public class RedButtonService {
                 .append(" по UTC+7 (").append(String.format("%02d:00", (startHour() + 3) % 24)).append("-").append(String.format("%02d:00", (endHour() + 3) % 24)).append(" по Москве).\n");
         sb.append("Бонус: +").append(minPercent()).append("…+").append(maxPercent()).append("%, действует ").append(bonusCourseService.redValidHours()).append(" ч после нажатия.\n");
         sb.append("Кнопка активна: <b>").append(windowMin()).append(" мин</b>. Бюджет одной кнопки: <b>").append(budgetRub()).append(" ₽</b>.\n");
+        if (shareMax() > 0) {
+            sb.append("Места: бонус успевают получить <b>").append(shareMin()).append("-").append(shareMax()).append("%</b> нажавших (кто первый), остальным «бонус разобрали». Ожидаем нажавших: <b>")
+                    .append(expectedPressers()).append("</b>. Игроки с балансом меньше ").append(RewardService.MIN_WITHDRAWAL_EXC).append(" EXC место не занимают. Бюджет в рублях остаётся жёстким пределом: если деньги кончатся раньше, победят деньги.\n");
+        } else {
+            sb.append("Места: ограничение выключено, бонус получают все нажавшие, пока есть бюджет.\n");
+        }
         sb.append("Перед первой кнопкой недели выходит тизер за ").append(teaserHours()).append(" ч (через согласование), а за ").append(warnMin())
                 .append(" мин до каждой кнопки вам приходит предупреждение с кнопкой «Отменить».\n\n");
         List<RedButtonSchedule> planned = planned();

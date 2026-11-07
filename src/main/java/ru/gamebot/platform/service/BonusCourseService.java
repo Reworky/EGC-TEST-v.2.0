@@ -53,7 +53,12 @@ public class BonusCourseService {
     @Value("${app.bot-username:}")
     private String botUsername;
 
-    public enum ActivationStatus { OK, ALREADY, NOT_FOUND, NOT_STARTED, CLOSED, BUDGET_OVER, DENIED }
+    /** NO_BALANCE и NO_SLOTS - только красная кнопка с местами: на балансе меньше минимума вывода / места на бонус уже заняли другие. */
+    public enum ActivationStatus { OK, ALREADY, NOT_FOUND, NOT_STARTED, CLOSED, BUDGET_OVER, DENIED, NO_BALANCE, NO_SLOTS }
+
+    /** Игроки, которым не хватило места на красной кнопке (id бонуса -> id игроков): повторное нажатие того же игрока не считается новым нажавшим.
+     *  В памяти (теряется при рестарте - для оценки аудитории этого достаточно), хранятся последние несколько кнопок. */
+    private final java.util.Map<Long, java.util.Set<Long>> rejectedByBonus = new java.util.concurrent.ConcurrentHashMap<>();
 
     public record Activation(ActivationStatus status, int percent, LocalDateTime validUntil, String type) { }
 
@@ -267,7 +272,20 @@ public class BonusCourseService {
         if (userBonusRepository.existsByUserIdAndBonusId(user.getId(), b.getId())) {
             return new Activation(ActivationStatus.ALREADY, b.getPercent(), existingValidUntil(user, b), b.getType());
         }
-        if (b.getBudgetTotalRub() - b.getBudgetUsedRub() < 1) return new Activation(ActivationStatus.BUDGET_OVER, b.getPercent(), b.getEndsAt(), b.getType());
+        // Красная кнопка с местами (07.11.2026): на бонус хватает только части нажавших, кто первый успел. Игрок с балансом ниже минимума вывода
+        // место не занимает (бонус ему всё равно нечем использовать) и в число нажавших не входит.
+        boolean slotted = DailyBonus.RED.equals(b.getType()) && b.getSlots() > 0;
+        if (slotted && user.getCoins() < RewardService.MIN_WITHDRAWAL_EXC) {
+            return new Activation(ActivationStatus.NO_BALANCE, b.getPercent(), b.getEndsAt(), b.getType());
+        }
+        if (b.getBudgetTotalRub() - b.getBudgetUsedRub() < 1) {
+            if (slotted) recordRejected(b.getId(), user.getId());
+            return new Activation(ActivationStatus.BUDGET_OVER, b.getPercent(), b.getEndsAt(), b.getType());
+        }
+        if (slotted && dailyBonusRepository.takeSlot(b.getId()) == 0) {
+            recordRejected(b.getId(), user.getId());
+            return new Activation(ActivationStatus.NO_SLOTS, b.getPercent(), b.getEndsAt(), b.getType());
+        }
         UserBonus ub = new UserBonus();
         ub.setUserId(user.getId());
         ub.setBonusId(b.getId());
@@ -279,9 +297,35 @@ public class BonusCourseService {
         try {
             userBonusRepository.save(ub);
         } catch (DataIntegrityViolationException e) {
+            if (slotted) dailyBonusRepository.releaseSlot(b.getId());
             return new Activation(ActivationStatus.ALREADY, b.getPercent(), existingValidUntil(user, b), b.getType());
+        } catch (RuntimeException e) {
+            if (slotted) dailyBonusRepository.releaseSlot(b.getId());
+            throw e;
         }
+        if (slotted) countAttempt(b.getId());
         return new Activation(ActivationStatus.OK, b.getPercent(), validUntil, b.getType());
+    }
+
+    /** +1 к числу нажавших красную кнопку; сбой счётчика не должен мешать активации. */
+    private void countAttempt(Long bonusId) {
+        try {
+            dailyBonusRepository.addAttempt(bonusId);
+        } catch (Exception e) {
+            log.warn("[BonusCourse] attempt counter failed for bonus {}", bonusId, e);
+        }
+    }
+
+    /** Игроку не хватило места: в число нажавших он входит один раз, сколько бы раз ни нажимал. */
+    private void recordRejected(Long bonusId, Long userId) {
+        try {
+            if (rejectedByBonus.size() > 5) rejectedByBonus.keySet().stream().min(Long::compare).ifPresent(rejectedByBonus::remove);
+            if (rejectedByBonus.computeIfAbsent(bonusId, k -> java.util.concurrent.ConcurrentHashMap.newKeySet()).add(userId)) {
+                countAttempt(bonusId);
+            }
+        } catch (Exception e) {
+            log.warn("[BonusCourse] rejected-press tracking failed for bonus {}", bonusId, e);
+        }
     }
 
     /** Сколько часов после нажатия действует бонус красной кнопки. */

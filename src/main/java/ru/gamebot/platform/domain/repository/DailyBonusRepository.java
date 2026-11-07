@@ -27,4 +27,25 @@ public interface DailyBonusRepository extends JpaRepository<DailyBonus, Long> {
     @Modifying
     @Query("UPDATE DailyBonus b SET b.clicks = b.clicks + 1 WHERE b.id = :id")
     int addClick(@Param("id") Long id);
+
+    /** Занять место красной кнопки: атомарно, пока slotsUsed < slots. 0 - мест не осталось (параллельные нажатия не обгоняют лимит). */
+    @Transactional
+    @Modifying
+    @Query("UPDATE DailyBonus b SET b.slotsUsed = b.slotsUsed + 1 WHERE b.id = :id AND b.slotsUsed < b.slots")
+    int takeSlot(@Param("id") Long id);
+
+    /** Вернуть место, если активация после его занятия не удалась (двойное нажатие, сбой записи). */
+    @Transactional
+    @Modifying
+    @Query("UPDATE DailyBonus b SET b.slotsUsed = b.slotsUsed - 1 WHERE b.id = :id AND b.slotsUsed > 0")
+    int releaseSlot(@Param("id") Long id);
+
+    /** +1 подходящему игроку, нажавшему красную кнопку (получил место или не хватило). */
+    @Transactional
+    @Modifying
+    @Query("UPDATE DailyBonus b SET b.attempts = b.attempts + 1 WHERE b.id = :id")
+    int addAttempt(@Param("id") Long id);
+
+    /** Последние красные кнопки, на которых были подходящие нажавшие: по ним считается ожидаемая аудитория. */
+    java.util.List<DailyBonus> findTop3ByTypeAndAttemptsGreaterThanOrderByIdDesc(String type, int attempts);
 }

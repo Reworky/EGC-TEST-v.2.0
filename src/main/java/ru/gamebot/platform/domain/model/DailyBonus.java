@@ -53,6 +53,17 @@ public class DailyBonus {
     @Column(columnDefinition = "integer default 0")
     private int clicks;
 
+    /** Красная кнопка (07.11.2026): сколько мест на бонус (0 - без ограничения, как у «Курса дня» и старых кнопок), сколько уже занято
+     *  и сколько подходящих игроков нажало всего (получили место + не хватило места): по attempts бот оценивает аудиторию следующих кнопок. */
+    @Column(columnDefinition = "integer default 0")
+    private int slots;
+
+    @Column(columnDefinition = "integer default 0")
+    private int slotsUsed;
+
+    @Column(columnDefinition = "integer default 0")
+    private int attempts;
+
     @Column(nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 }
