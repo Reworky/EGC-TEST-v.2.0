@@ -209,6 +209,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.domain.repository.ShopRubleOrderRepository shopRubleOrderRepository;
     private final ru.gamebot.platform.domain.repository.TournamentEntryRepository tournamentEntryRepository;
     private final ru.gamebot.platform.domain.repository.BotReviewRepository botReviewRepository;
+    private final ru.gamebot.platform.domain.repository.RegistrationNoticeRepository registrationNoticeRepository;
     private final ru.gamebot.platform.domain.repository.NudgeFeedbackRepository nudgeFeedbackRepository;
     private final ru.gamebot.platform.domain.repository.FeatureInterestRepository featureInterestRepository;
     private final ru.gamebot.platform.domain.repository.StarsPurchaseRepository starsPurchaseRepository;
@@ -15233,6 +15234,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "commands" -> sendAdminCommands(user);
             case "ceiling" -> sendEngagementCeilingReport(user);
             case "adv" -> sendAdvertiserHome(user);
+            case "regs" -> sendAdminRegistrations(user);
+            case "regs:read" -> {
+                registrationNoticeRepository.markAllSeen();
+                sendAdminRegistrations(user);
+            }
             case "stats:reset_weekly" -> sendAdminResetWeeklyConfirm(user);
             case "stats:reset_weekly:confirm" -> doAdminResetWeeklyXp(user);
             case "live" -> sendAdminLiveStatus(user);
@@ -28261,21 +28267,52 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Новая регистрация больше не шлётся админам отдельным сообщением: запись копится в «🆕 Регистрации (N)»
+     *  на главной админки (см. sendAdminRegistrations). Сбой записи не должен ломать регистрацию игрока. */
     private void notifyAdminsNewRegistration(AppUser user) {
-        long totalUsers = userService.totalRegisteredUsers();
-        InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(
-                List.of(keyboardFactory.callback("👤 Профиль пользователя", "admin:user:view:" + user.getTelegramId() + ":0")),
-                List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))
-        ));
-        String text = "🎮 <b>Новая регистрация</b>\n\n"
-                + "👤 Никнейм: <b>" + escape(user.getNickname()) + "</b>\n"
-                + "🆔 Telegram ID: <b>" + user.getTelegramId() + "</b>\n"
-                + "🌍 Страна: <b>" + escape(user.getCountry() != null ? user.getCountry() : "—") + "</b>\n"
-                + "🎯 Интересы: <b>" + escape(user.getInterestsCsv() != null ? user.getInterestsCsv() : "—") + "</b>\n"
-                + "📊 Всего игроков: <b>" + totalUsers + "</b>";
-        for (Long adminId : adminService.allAdminIds()) {
-            sendText(adminId, text, markup);
+        try {
+            ru.gamebot.platform.domain.model.RegistrationNotice notice = new ru.gamebot.platform.domain.model.RegistrationNotice();
+            notice.setTelegramId(user.getTelegramId());
+            notice.setNickname(user.getNickname());
+            notice.setCountry(user.getCountry());
+            notice.setInterests(user.getInterestsCsv());
+            notice.setCreatedAt(java.time.LocalDateTime.now());
+            notice.setSeen(false);
+            registrationNoticeRepository.save(notice);
+        } catch (Exception e) {
+            log.warn("Failed to store registration notice for user {}", user.getTelegramId(), e);
         }
+    }
+
+    /** Раздел «🆕 Регистрации»: последние 30 регистраций, новые (непрочитанные) помечены 🆕. */
+    private void sendAdminRegistrations(AppUser admin) {
+        List<ru.gamebot.platform.domain.model.RegistrationNotice> notices =
+                registrationNoticeRepository.findTop30ByOrderByCreatedAtDescIdDesc();
+        long unseen = registrationNoticeRepository.countBySeenFalse();
+        StringBuilder sb = new StringBuilder("🆕 <b>Регистрации</b>\n");
+        sb.append("<i>Новых: ").append(unseen).append(" · всего игроков: ")
+                .append(userService.totalRegisteredUsers()).append("</i>\n\n");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (notices.isEmpty()) {
+            sb.append("Пока никто не регистрировался с момента включения этого раздела.");
+        }
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm");
+        for (ru.gamebot.platform.domain.model.RegistrationNotice n : notices) {
+            String nick = n.getNickname() != null ? n.getNickname() : ("ID:" + n.getTelegramId());
+            sb.append(n.isSeen() ? "▫️ " : "🆕 ")
+                    .append(n.getCreatedAt() != null ? n.getCreatedAt().format(fmt) : "—")
+                    .append(" · <b>").append(escape(nick)).append("</b>")
+                    .append(" · ").append(escape(n.getCountry() != null ? n.getCountry() : "—"))
+                    .append(" · ").append(escape(n.getInterests() != null ? trim(n.getInterests(), 40) : "—"))
+                    .append("\n");
+            rows.add(List.of(keyboardFactory.callback(
+                    "👤 " + trim(nick, 28), "admin:user:view:" + n.getTelegramId() + ":0")));
+        }
+        if (unseen > 0) {
+            rows.add(0, List.of(keyboardFactory.callback("✅ Отметить прочитанными (" + unseen + ")", "admin:regs:read")));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(admin.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     private void notifyUser(Long telegramId, String text) {
@@ -28435,6 +28472,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // разделы, все прежние кнопки лежат внутри (см. sendAdminGroup) с теми же callback'ами.
             rows.add(List.of(keyboardFactory.callback("📊 Аналитика", "admin:an")));
             rows.add(List.of(keyboardFactory.callback("📣 Рекламодателям", "admin:adv")));
+            long newRegs = registrationNoticeRepository.countBySeenFalse();
+            rows.add(List.of(keyboardFactory.callback(newRegs > 0 ? "🆕 Регистрации (" + newRegs + ")" : "🆕 Регистрации", "admin:regs")));
             rows.add(List.of(
                     keyboardFactory.callback("👥 Игроки", "admin:grp:players"),
                     keyboardFactory.callback("🎯 Квесты", "admin:grp:quests")
