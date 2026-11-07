@@ -59,13 +59,22 @@ public class BrawlQuestPackSeeder implements CommandLineRunner {
     /** Подпись в описании квестов «выиграй бой»: в Showdown (соло/дуэт) API не отдаёт победу/поражение, и победой считается только 1-е место
      *  (BrawlStarsApiService), а игроки привыкли считать успехом топ-4 (жалоба игрока 2026-10-14: «прогресс не обновляется»). QuestSeeder
      *  (Order 2) и сидер пачек на каждом старте заново пишут описания без этой фразы, поэтому дописываем её здесь, после них, - один раз на квест. */
-    private static final String SHOWDOWN_NOTE = " В режиме «Столкновение» (Showdown) победой считается только 1-е место.";
+    private static final String OLD_SHOWDOWN_NOTE = " В режиме «Столкновение» (Showdown) победой считается только 1-е место.";
+    /** 07.11.2026: уточнено про парное столкновение (на 20 человек): победа там пока не определяется (BrawlStarsApiService), игроки спрашивали. */
+    private static final String SHOWDOWN_NOTE = " В режиме «Столкновение» (Showdown) победа засчитывается за 1-е место в соло-режиме (10 игроков). Парное столкновение (20 игроков) пока не проверяется.";
 
     private void appendShowdownNote() {
         for (Quest q : questRepository.findAllByGameNameIgnoreCase(GAME)) {
             String d = q.getDescription();
-            if (!q.isBrawlRequireVictory() || d == null || d.contains("Showdown") || d.length() + SHOWDOWN_NOTE.length() > 4000) continue;
-            q.setDescription(d + SHOWDOWN_NOTE);
+            if (!q.isBrawlRequireVictory() || d == null) continue;
+            if (d.contains("Парное столкновение")) continue;
+            if (d.contains(OLD_SHOWDOWN_NOTE)) {
+                q.setDescription(d.replace(OLD_SHOWDOWN_NOTE, SHOWDOWN_NOTE));
+            } else if (d.contains("Showdown") || d.length() + SHOWDOWN_NOTE.length() > 4000) {
+                continue;
+            } else {
+                q.setDescription(d + SHOWDOWN_NOTE);
+            }
             questRepository.save(q);
         }
     }
