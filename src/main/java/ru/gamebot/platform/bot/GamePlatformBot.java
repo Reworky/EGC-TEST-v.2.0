@@ -1855,34 +1855,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             return;
         }
-        if (data.equals("wd:tonwallet") || data.equals("wd:tonexch")) {
-            answerSilently(callbackQuery.getId());
-            long tcAmount = parseLongSafe(session.getData().get("ton_exc_amount"));
-            long tcRubles = parseLongSafe(session.getData().get("ton_rubles"));
-            if (tcAmount <= 0 || tcRubles <= 0 || session.getState() != SessionState.WITHDRAWAL_TON_ADDRESS) {
-                sendWithdrawalMethodChoice(user);
-                return;
-            }
-            if (data.equals("wd:tonwallet")) {
-                session.getData().put("ton_pionex", "0");
-                sendTonWalletPrompt(user, tcAmount, tcRubles);
-                return;
-            }
-            // биржа-партнёр: курс 100% (реферала проверяет модератор по UID)
-            session.getData().put("ton_pionex", "1");
-            session.getData().remove("ton_exchange");
-            session.getData().put("ton_rubles", String.valueOf(Math.round(tcAmount / 100.0)));
-            List<List<InlineKeyboardButton>> teRows = new ArrayList<>();
-            for (ru.gamebot.platform.service.CryptoExchanges.Exchange teItem : ru.gamebot.platform.service.CryptoExchanges.ALL) {
-                teRows.add(List.of(keyboardFactory.callback("🏦 " + teItem.title(), "shop:withdraw:xch:" + teItem.key())));
-            }
-            teRows.add(List.of(keyboardFactory.callback("❌ Отмена", "common:cancel")));
-            sendText(user.getTelegramId(),
-                    "🏦 <b>Биржа-партнёр: курс 100%</b>\n\n"
-                            + "💸 " + fmtExc(tcAmount) + " EXC → <b>" + fmtExc(Math.round(tcAmount / 100.0)) + " ₽</b>\n\nВыберите биржу:",
-                    keyboardFactory.rowsLayout(teRows));
-            return;
-        }
         if (data.equals("wd:nocard")) {
             answerSilently(callbackQuery.getId());
             long ncAmount = parseLongSafe(session.getData().get("withdrawAmount"));
@@ -10486,7 +10458,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         int lowPercent = (int) Math.round(NONPARTNER_RATE * Math.min(1.0, healthRatioService.getCurrentRatio() / NONPARTNER_RATE_REF) * 100);
         return "💱 <b>Курс: 100% до " + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC за всё время, дальше " + lowPercent + "%</b>\n"
-                + "🤝 С картой банка или биржей-партнёром курс всегда 100%.\n\n";
+                + "🤝 С картой банка-партнёра курс всегда 100%.\n\n";
     }
 
     /** Свободный остаток порога вывода (EXC) до обязательной карты партнёра: -1 - порога нет (есть одобренный партнёрский квест). Порог считает выводы любым способом и действует на рубли, TON и звёзды (с 05.11.2026). */
@@ -10723,27 +10695,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.rowsLayout(xchRows));
             return;
         }
-        if (withdrawalTiersEnabled() && !healthRatioService.isPartner(user)
-                && rewardService.totalWithdrawnExc(user) + amount > RUB_FREE_WITHDRAWAL_EXC) {
-            sendCryptoChoice(user, amount, rubles);
-            return;
-        }
         sendTonWalletPrompt(user, amount, rubles);
-    }
-
-    /** Выбор для игрока без партнёра, чья крипта выходит за бесплатные 10 000 EXC: Telegram Wallet по сниженному курсу или биржа-партнёр по UID с курсом 100%. */
-    private void sendCryptoChoice(AppUser user, long amount, long rubles) {
-        long partnerRub = Math.round(amount / 100.0);
-        int lowPercent = (int) Math.round(rubles * 10000.0 / Math.max(1, amount));
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.callback("Telegram Wallet: " + fmtExc(rubles) + " ₽ (курс " + lowPercent + "%)", "wd:tonwallet")));
-        rows.add(List.of(keyboardFactory.callback("Биржа-партнёр, курс 100%: " + fmtExc(partnerRub) + " ₽", "wd:tonexch")));
-        rows.add(List.of(keyboardFactory.callback("❌ Отмена", "common:cancel")));
-        sendText(user.getTelegramId(),
-                "💎 <b>Вывод в крипте: " + fmtExc(amount) + " EXC</b>\n\n"
-                        + "Telegram Wallet / CryptoBot: курс " + lowPercent + "% (сверх " + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC за всё время)\n"
-                        + "Биржа-партнёр (Pionex, Bybit) по вашему UID: курс 100%",
-                keyboardFactory.rowsLayout(rows));
     }
 
     /** Запрос адреса TON-кошелька (сумма уже в сессии). */
@@ -10755,6 +10707,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "📈 Курс: 1 TON = " + tonRate.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽";
         String msg = "💎 <b>Сумма принята</b>\n\n"
                 + "💸 " + amount + " EXC → <b>" + rubles + " ₽</b> → ~<b>" + tonAmount + " TON</b>\n"
+                + (withdrawalTiersEnabled() ? "💱 Курс: <b>" + Math.round(rubles * 10000.0 / Math.max(1, amount)) + "%</b>\n" : "")
                 + rateNote + "\n"
                 + "⚠️ Комиссия сети (~0.01 TON) вычитается из суммы перевода — получишь чуть меньше.\n\n"
                 + "━━━━━━━━━━━━━━━\n"
