@@ -10426,9 +10426,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Игрок прошёл партнёрский путь целиком: квест банка одобрен, банк выплатил бонус и разовый партнёрский запас вывода уже потрачен (07.11.2026, владелец) - дальше рубли на карту любого банка. Публичный: им пользуется и мини-апп. */
+    public boolean anyCardUnlocked(AppUser user) {
+        boolean bonusPaid = ru.gamebot.platform.service.PartnerMissions.ALL.stream()
+                .anyMatch(pm -> questService.isPartnerBonusPaid(user.getId(), pm.gameName()));
+        return bonusPaid && user.getPartnerWithdrawalAllowanceExc() <= 0;
+    }
+
     /** Рублёвый вывод amount EXC в банк bank запрещён: сверх порога 10 000 EXC (за всё время, все способы) можно только в банк-партнёр, где игрок наш реферал (одобрен квест этого банка). Публичный: им пользуется и мини-апп. */
     public boolean rubDestinationBlocked(AppUser user, long amount, String bankText) {
         if (rewardService.totalWithdrawnExc(user) + amount <= RUB_FREE_WITHDRAWAL_EXC) return false;
+        if (anyCardUnlocked(user)) return false;
         java.util.Optional<ru.gamebot.platform.service.WithdrawalPartners.Bank> bank = ru.gamebot.platform.service.WithdrawalPartners.matchBank(bankText);
         return bank.isEmpty() || !questService.hasApprovedPartnerQuest(user.getId(), bank.get().mission().gameName());
     }
@@ -10453,7 +10461,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("🔁 Начать вывод заново", "shop:withdraw")));
             text = "💳 <b>Вывод — только на карту " + escape(namesGen) + "</b>\n\n"
                     + "Вы уже оформили карту " + escape(namesGen) + " по нашей ссылке. Для вывода введите банк «" + escape(names)
-                    + "» и номер телефона, привязанный к вашей карте.";
+                    + "» и номер телефона, привязанный к вашей карте.\n\n"
+                    + "Когда банк выплатит бонус и вы выведете разовую сумму, дальше можно будет выводить рубли на карту любого банка.";
         } else if (single) {
             long freeLeft = Math.max(0, RUB_FREE_WITHDRAWAL_EXC - rewardService.totalWithdrawnExc(user));
             if (freeLeft >= ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) {
@@ -10463,9 +10472,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String intro = freeLeft > 0
                     ? "Без карты можно вывести в сумме до " + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC, у вас осталось <b>" + fmtExc(freeLeft) + " EXC</b>. "
                             + "Эта заявка больше остатка. Вы можете вывести до " + fmtExc(freeLeft) + " EXC в любой банк, а всё, что сверх этого, "
-                            + "выводится только на карту " + escape(namesGen) + ": оформите её по нашей ссылке и получайте деньги на неё.\n\n"
+                            + "выводится на карту " + escape(namesGen) + ": оформите её по нашей ссылке и получайте деньги на неё. После выплаты банка и разового вывода откроется вывод на карту любого банка.\n\n"
                     : "Вы уже вывели максимум, доступный без карты (" + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC). "
-                            + "Дальше мы выводим деньги только на вашу карту " + escape(namesGen) + ": оформите её по нашей ссылке и получайте деньги на неё.\n\n";
+                            + "Дальше мы выводим деньги на вашу карту " + escape(namesGen) + ": оформите её по нашей ссылке и получайте деньги на неё. После выплаты банка и разового вывода откроется вывод на карту любого банка.\n\n";
             text = "💳 <b>Вывод этой суммы — только на карту " + escape(namesGen) + "</b>\n\n"
                     + intro
                     + "Скоро добавим больше банков, чтобы у вас был выбор.";
@@ -10514,7 +10523,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "💳 <b>Дальше — после карты нашего банка-партнёра</b>\n\n"
                         + "Первые " + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC можно выводить любым способом"
                         + (room > 0 ? ", у тебя осталось <b>" + fmtExc(room) + " EXC</b>" : "") + ". "
-                        + "Дальше вывод открывается после карты банка, оформленной по нашей ссылке: это бесплатно, и за квест ты получаешь награду.",
+                        + "Дальше вывод открывается после карты банка, оформленной по нашей ссылке: это бесплатно, и за квест ты получаешь награду. После выплаты банка и разового вывода рубли можно выводить на карту любого банка.",
                 keyboardFactory.rowsLayout(rows));
     }
 
@@ -25869,7 +25878,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         session.getData().put("withdrawQuoteAt", String.valueOf(System.currentTimeMillis()));
         session.setState(SessionState.WITHDRAWAL_BANK);
         // Сверх порога 10 000 EXC выводим только в банк-партнёр (сейчас ОТП Банк): предупреждаем до ввода банка, а не после
-        boolean partnerOnly = rewardService.totalWithdrawnExc(user) + amount > RUB_FREE_WITHDRAWAL_EXC;
+        boolean partnerOnly = rewardService.totalWithdrawnExc(user) + amount > RUB_FREE_WITHDRAWAL_EXC && !anyCardUnlocked(user);
         java.util.List<ru.gamebot.platform.service.WithdrawalPartners.Bank> partnerBanks = ru.gamebot.platform.service.WithdrawalPartners.ALL;
         String partnerNames = partnerBanks.stream().map(ru.gamebot.platform.service.WithdrawalPartners.Bank::genitive).collect(java.util.stream.Collectors.joining(", "));
         String partnerExample = partnerBanks.get(0).title();
