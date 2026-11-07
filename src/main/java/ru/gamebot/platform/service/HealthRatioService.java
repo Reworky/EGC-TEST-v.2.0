@@ -151,12 +151,21 @@ public class HealthRatioService {
             }
             return Math.round(base * mult / 100.0) * 100;
         }
+        if (user != null && item != null && !"telegram_stars".equals(item.getPurchaseGroup()) && !"avatar_frame".equals(item.getPurchaseGroup())
+                && !"Вывод".equals(item.getCategory()) && tiersEnabled() && isPartner(user)) {
+            // Партнёр (уровни вывода, 07.11.2026): товары магазина по коэффициенту PARTNER_SHOP_RATIO_FACTOR вместо SHOP_PRICE_RATIO_FACTOR - дешевле в токенах
+            double partnerRatio = getCurrentRatio() * PARTNER_SHOP_RATIO_FACTOR;
+            return partnerRatio >= 1.0 ? item.getPriceCoins() : Math.round(item.getPriceCoins() / partnerRatio);
+        }
         long price = effectivePrice(item);
         if (starsMarkupApplies(user, item)) {
             return Math.round(price * STARS_NON_PASS_MARKUP / 100.0) * 100;
         }
         return price;
     }
+
+    /** Коэффициент цен магазина для партнёра (режим уровней): 1,0 против 0,8 у остальных - токены партнёра в магазине ценятся ~75% против ~60%. */
+    public static final double PARTNER_SHOP_RATIO_FACTOR = 1.0;
 
     /** Включены уровни вывода (app_settings 'wd.tiers.enabled', scripts/wd-tiers-on.sql). */
     public boolean tiersEnabled() {
