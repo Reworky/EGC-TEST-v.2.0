@@ -393,7 +393,7 @@ public class WalletController {
     private record RubResolution(long rubles, long fixedRubUsed) {}
 
     private RubResolution resolveRubValue(AppUser user, long excAmount) {
-        double ratio = healthRatioService.getCurrentRatio();
+        double ratio = gamePlatformBot.withdrawalRatioFor(user, excAmount, false);
         long hrRub = Math.round(excAmount * ratio / 100.0);
         return new RubResolution(hrRub, 0);
     }

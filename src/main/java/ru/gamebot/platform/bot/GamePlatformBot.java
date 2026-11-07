@@ -10432,8 +10432,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private static final long RUB_FREE_WITHDRAWAL_EXC = 10_000L;
 
+    /** Уровни вывода (07.11.2026, владелец): партнёры и первые 10 000 EXC за всё время - курс 100%, остальные - NONPARTNER_RATE x min(1, курс фонда / NONPARTNER_RATE_REF); лимиты ранга остаются.
+     *  Выключено по умолчанию (app_settings 'wd.tiers.enabled'): включать вместе с новыми текстами экранов вывода (scripts/wd-tiers-on.sql). */
+    private static final double NONPARTNER_RATE = 0.45;
+    private static final double NONPARTNER_RATE_REF = 0.9;
+
+    public boolean withdrawalTiersEnabled() {
+        return appSettingRepository.findById("wd.tiers.enabled")
+                .map(ru.gamebot.platform.domain.model.AppSetting::getValue)
+                .map(v -> "true".equalsIgnoreCase(v.trim()))
+                .orElse(false);
+    }
+
+    /** Курс вывода для заявки на amount EXC: при выключенных уровнях - курс фонда (как раньше). partnerDestination - вывод идёт партнёру (например, на биржу по UID). Публичный: им пользуется и мини-апп. */
+    public double withdrawalRatioFor(AppUser user, long amount, boolean partnerDestination) {
+        double fund = healthRatioService.getCurrentRatio();
+        if (!withdrawalTiersEnabled() || amount <= 0) return fund;
+        if (partnerDestination || questService.hasApprovedPartnerQuest(user.getId())) return 1.0;
+        double nonPartner = NONPARTNER_RATE * Math.min(1.0, fund / NONPARTNER_RATE_REF);
+        long free = Math.min(amount, Math.max(0, RUB_FREE_WITHDRAWAL_EXC - rewardService.totalWithdrawnExc(user)));
+        return (free * 1.0 + (amount - free) * nonPartner) / amount;
+    }
+
     /** Крипта на amount EXC выходит за бесплатный порог 10 000 EXC (все способы суммой): тогда только биржи-партнёры (Pionex, Bybit) по UID через бота. Публичный: им пользуется мини-апп. */
     public boolean cryptoPionexRequired(AppUser user, long amount) {
+        if (withdrawalTiersEnabled()) return false;
         return rewardService.totalWithdrawnExc(user) + amount > RUB_FREE_WITHDRAWAL_EXC;
     }
 
@@ -10454,6 +10477,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Рублёвый вывод amount EXC в банк bank запрещён: сверх порога 10 000 EXC (за всё время, все способы) можно только в банк-партнёр, где игрок наш реферал (одобрен квест этого банка). Публичный: им пользуется и мини-апп. */
     public boolean rubDestinationBlocked(AppUser user, long amount, String bankText) {
+        if (withdrawalTiersEnabled()) return false;
         if (rewardService.totalWithdrawnExc(user) + amount <= RUB_FREE_WITHDRAWAL_EXC) return false;
         if (anyCardUnlocked(user)) return false;
         java.util.Optional<ru.gamebot.platform.service.WithdrawalPartners.Bank> bank = ru.gamebot.platform.service.WithdrawalPartners.matchBank(bankText);
@@ -10605,7 +10629,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), "⚠️ Недостаточно EXC. Баланс: <b>" + user.getCoins() + " EXC</b>.", cancelKeyboard());
             return;
         }
-        double ratio = healthRatioService.getCurrentRatio();
+        double ratio = withdrawalRatioFor(user, amount, false);
         long rubles = Math.round(amount * ratio / 100.0);
         java.math.BigDecimal rublesDecimal = java.math.BigDecimal.valueOf(rubles);
         java.math.BigDecimal tonRate = exchangeRateService.getTonRubRate();
@@ -10618,7 +10642,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         session.getData().put("ton_quote_at", String.valueOf(System.currentTimeMillis()));
         session.setState(SessionState.WITHDRAWAL_TON_ADDRESS);
         // Сверх порога 10 000 EXC (за всё время, все способы) крипта только на биржу Pionex по UID и только для наших рефералов (решение владельца 05.11.2026)
-        boolean pionexOnly = rewardService.totalWithdrawnExc(user) + amount > RUB_FREE_WITHDRAWAL_EXC;
+        boolean pionexOnly = !withdrawalTiersEnabled() && rewardService.totalWithdrawnExc(user) + amount > RUB_FREE_WITHDRAWAL_EXC;
         session.getData().put("ton_pionex", pionexOnly ? "1" : "0");
         if (pionexOnly) {
             List<List<InlineKeyboardButton>> xchRows = new ArrayList<>();
@@ -25894,7 +25918,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), "⚠️ Недостаточно EXC. Баланс: <b>" + user.getCoins() + " EXC</b>.", cancelKeyboard());
             return;
         }
-        double ratio = healthRatioService.getCurrentRatio();
+        double ratio = withdrawalRatioFor(user, amount, false);
         int ratioPercent = (int) Math.round(ratio * 100);
         long rubles = Math.round(amount * ratio / 100.0);
         session.getData().put("withdrawAmount", String.valueOf(amount));
@@ -25902,7 +25926,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         session.getData().put("withdrawQuoteAt", String.valueOf(System.currentTimeMillis()));
         session.setState(SessionState.WITHDRAWAL_BANK);
         // Сверх порога 10 000 EXC выводим только в банк-партнёр (сейчас ОТП Банк): предупреждаем до ввода банка, а не после
-        boolean partnerOnly = rewardService.totalWithdrawnExc(user) + amount > RUB_FREE_WITHDRAWAL_EXC && !anyCardUnlocked(user);
+        boolean partnerOnly = !withdrawalTiersEnabled() && rewardService.totalWithdrawnExc(user) + amount > RUB_FREE_WITHDRAWAL_EXC && !anyCardUnlocked(user);
         java.util.List<ru.gamebot.platform.service.WithdrawalPartners.Bank> partnerBanks = ru.gamebot.platform.service.WithdrawalPartners.ALL;
         String partnerNames = partnerBanks.stream().map(ru.gamebot.platform.service.WithdrawalPartners.Bank::genitive).collect(java.util.stream.Collectors.joining(", "));
         String partnerExample = partnerBanks.get(0).title();
