@@ -52,6 +52,11 @@ public class RedButtonService {
     private static final long DEFAULT_EXPECTED = 60;
     private static final int MIN_SLOTS = 3;
     private static final int MAX_SLOTS = 200;
+    /** Автобюджет (07.11.2026): бюджет кнопки = места × процент кнопки × типичная заявка в рублях (при курсе 0,9 около 55 ₽), чтобы денег хватало на ВСЕХ,
+     *  кто занял место (иначе игрок увидит «бонус включён», а при выводе получит меньше). Не меньше MIN_AUTO_BUDGET и не больше bcr.budgetmax. */
+    private static final long DEFAULT_AVG_BASE_RUB = 55;
+    private static final long DEFAULT_BUDGET_MAX_RUB = 1000;
+    private static final long MIN_AUTO_BUDGET_RUB = 30;
     /** Кнопка, которую не удалось выпустить вовремя (бот был недоступен), позже этого срока уже не публикуется: окно нажатия 60 минут, опоздавший пост вводит в заблуждение. */
     private static final int MAX_LATE_MIN = 30;
     private static final int PUBLISHING_TIMEOUT_MIN = 5;
@@ -167,6 +172,24 @@ public class RedButtonService {
                 put("bcr.budget", String.valueOf(v));
                 yield "✅ Бюджет одной красной кнопки: " + v + " ₽.";
             }
+            case "autobudget" -> {
+                String on = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+                if (!List.of("on", "off", "1", "0").contains(on)) yield "Автобюджет: <code>/redbutton set autobudget on</code> или <code>off</code>.";
+                put("bcr.autobudget", on.equals("on") || on.equals("1") ? "1" : "0");
+                yield on.equals("on") || on.equals("1")
+                        ? "✅ Автобюджет включён: бюджет кнопки = места × процент × типичная заявка (со следующей кнопки)."
+                        : "✅ Автобюджет выключен: у каждой кнопки фиксированный бюджет " + budgetRub() + " ₽.";
+            }
+            case "avgbase" -> {
+                if (v < 1 || v > 1000) yield "Типичная заявка на вывод в рублях для автобюджета: число от 1 до 1000.";
+                put("bcr.avgbase", String.valueOf(v));
+                yield "✅ Типичная заявка для автобюджета: " + v + " ₽.";
+            }
+            case "budgetmax" -> {
+                if (v < MIN_AUTO_BUDGET_RUB || v > 100000) yield "Потолок автобюджета одной кнопки в рублях: число от " + MIN_AUTO_BUDGET_RUB + " до 100000.";
+                put("bcr.budgetmax", String.valueOf(v));
+                yield "✅ Автобюджет одной кнопки не превысит " + v + " ₽.";
+            }
             case "sharemin" -> {
                 if (v < 1 || v > 100) yield "Минимальная доля нажавших, которым хватит места на бонус, в процентах: число от 1 до 100.";
                 put("bcr.sharemin", String.valueOf(v));
@@ -193,7 +216,7 @@ public class RedButtonService {
                 put("bcr.warn", String.valueOf(v));
                 yield "✅ Админы получают предупреждение за " + v + " мин до кнопки.";
             }
-            default -> "Параметры: perweek, start, end, min, max, step, window, valid, budget, sharemin, sharemax, expect, teaser, warn.";
+            default -> "Параметры: perweek, start, end, min, max, step, window, valid, budget, autobudget, avgbase, budgetmax, sharemin, sharemax, expect, teaser, warn.";
         };
     }
 
@@ -269,6 +292,22 @@ public class RedButtonService {
 
     private LocalDateTime slotHigh(LocalDate day) {
         return day.atStartOfDay().plusHours(endHour()).minusMinutes(5);
+    }
+
+    /** Автобюджет включён (по умолчанию да): он работает только при включённых местах, без мест действует фиксированный bcr.budget. */
+    public boolean autoBudget() { return !"0".equals(get("bcr.autobudget")); }
+
+    /** Автобюджет реально считает бюджет кнопок: включён и места не выключены. */
+    public boolean autoBudgetActive() { return autoBudget() && shareMax() > 0; }
+
+    /** Типичная заявка на вывод в рублях при текущем курсе, от неё считается автобюджет. */
+    public long avgBaseRub() { return Math.max(1, Math.min(1000, parseLong(get("bcr.avgbase"), DEFAULT_AVG_BASE_RUB))); }
+
+    private long budgetMaxRub() { return Math.max(MIN_AUTO_BUDGET_RUB, parseLong(get("bcr.budgetmax"), DEFAULT_BUDGET_MAX_RUB)); }
+
+    private long autoBudgetRub(int slots, int percent) {
+        long raw = Math.round(slots * (percent / 100.0) * avgBaseRub());
+        return Math.max(MIN_AUTO_BUDGET_RUB, Math.min(budgetMaxRub(), raw));
     }
 
     private int shareMax() { return (int) Math.max(0, Math.min(100, parseLong(get("bcr.sharemax"), DEFAULT_SHARE_MAX))); }
@@ -417,8 +456,11 @@ public class RedButtonService {
             b.setType(DailyBonus.RED);
             b.setBonusDate(LocalDate.now());
             b.setPercent(r.getPercent());
-            b.setBudgetTotalRub(budgetRub());
-            b.setSlots(computeSlots());
+            int slots = computeSlots();
+            b.setSlots(slots);
+            long budget = slots > 0 && autoBudget() ? autoBudgetRub(slots, r.getPercent()) : budgetRub();
+            b.setBudgetTotalRub(budget);
+            log.info("[RedButton] button {}: +{}%, slots {}, budget {} RUB ({})", scheduleId, r.getPercent(), slots, budget, slots > 0 && autoBudget() ? "auto" : "fixed");
             b = dailyBonusRepository.save(b);
             r.setBonusId(b.getId());
         }
@@ -554,7 +596,15 @@ public class RedButtonService {
                 .append(String.format("%02d:00", (startHour() + 7) % 24)).append(" до ").append(String.format("%02d:00", (endHour() + 7) % 24))
                 .append(" по UTC+7 (").append(String.format("%02d:00", (startHour() + 3) % 24)).append("-").append(String.format("%02d:00", (endHour() + 3) % 24)).append(" по Москве).\n");
         sb.append("Бонус: +").append(minPercent()).append("…+").append(maxPercent()).append("%, действует ").append(bonusCourseService.redValidHours()).append(" ч после нажатия.\n");
-        sb.append("Кнопка активна: <b>").append(windowMin()).append(" мин</b>. Бюджет одной кнопки: <b>").append(budgetRub()).append(" ₽</b>.\n");
+        sb.append("Кнопка активна: <b>").append(windowMin()).append(" мин</b>.\n");
+        if (autoBudgetActive()) {
+            int exSlots = (int) Math.max(MIN_SLOTS, Math.min(MAX_SLOTS, Math.round(expectedPressers() * (shareMin() + shareMax()) / 200.0)));
+            sb.append("Бюджет одной кнопки: <b>считается сам</b> = места × процент × типичная заявка (<b>").append(avgBaseRub()).append(" ₽</b>), от ")
+                    .append(MIN_AUTO_BUDGET_RUB).append(" до ").append(budgetMaxRub()).append(" ₽. Пример: ").append(exSlots).append(" мест при +")
+                    .append((minPercent() + maxPercent()) / 2).append("% - около <b>").append(autoBudgetRub(exSlots, (minPercent() + maxPercent()) / 2)).append(" ₽</b>.\n");
+        } else {
+            sb.append("Бюджет одной кнопки: <b>").append(budgetRub()).append(" ₽</b> (фиксированный).\n");
+        }
         if (shareMax() > 0) {
             sb.append("Места: бонус успевают получить <b>").append(shareMin()).append("-").append(shareMax()).append("%</b> нажавших (кто первый), остальным «бонус разобрали». Ожидаем нажавших: <b>")
                     .append(expectedPressers()).append("</b>. Игроки с балансом меньше ").append(RewardService.MIN_WITHDRAWAL_EXC).append(" EXC место не занимают. Бюджет в рублях остаётся жёстким пределом: если деньги кончатся раньше, победят деньги.\n");
@@ -593,7 +643,8 @@ public class RedButtonService {
                 .append(String.format("%02d:00", endHour() % 24)).append(" UTC; бонус +").append(minPercent()).append("…+").append(maxPercent())
                 .append("% (шаг ").append(stepPercent()).append(")\n");
         sb.append("Окно нажатия ").append(windowMin()).append(" мин; бонус живёт ").append(bonusCourseService.redValidHours()).append(" ч; бюджет кнопки ")
-                .append(budgetRub()).append(" ₽; тизер за ").append(teaserHours()).append(" ч; предупреждение за ").append(warnMin()).append(" мин\n\n");
+                .append(autoBudgetActive() ? "авто (типичная заявка " + avgBaseRub() + " ₽, не больше " + budgetMaxRub() + " ₽)" : budgetRub() + " ₽")
+                .append("; тизер за ").append(teaserHours()).append(" ч; предупреждение за ").append(warnMin()).append(" мин\n\n");
         List<RedButtonSchedule> last = scheduleRepository.findTop8ByOrderByPlannedAtDesc();
         if (last.isEmpty()) {
             sb.append("Кнопок ещё не было. Запустить сейчас: <code>/redbutton now</code>.");

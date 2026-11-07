@@ -7252,7 +7252,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback(redButtonService.isEnabled() ? "🔕 Выключить автоматические кнопки" : "🔔 Включить автоматические кнопки", "admin:course:rtog")));
         rows.add(courseParamRow("📅 В неделю: " + redButtonService.perWeek(), "−1", "admin:course:rweek:-1", "+1", "admin:course:rweek:1"));
         rows.add(courseParamRow("⏱ Кнопка активна: " + redButtonService.windowMin() + " мин", "−15", "admin:course:rwin:-15", "+15", "admin:course:rwin:15"));
-        rows.add(courseParamRow("🎯 Бюджет кнопки: " + redButtonService.budgetRub() + " ₽", "−10", "admin:course:rbud:-10", "+10", "admin:course:rbud:10"));
+        if (redButtonService.autoBudgetActive()) {
+            // Автобюджет: бюджет кнопки считается сам, правится только «типичная заявка» (от неё идёт расчёт)
+            rows.add(courseParamRow("🎯 Типичная заявка (для автобюджета): " + redButtonService.avgBaseRub() + " ₽", "−5", "admin:course:rbase:-5", "+5", "admin:course:rbase:5"));
+        } else {
+            rows.add(courseParamRow("🎯 Бюджет кнопки: " + redButtonService.budgetRub() + " ₽", "−10", "admin:course:rbud:-10", "+10", "admin:course:rbud:10"));
+        }
         rows.add(List.of(keyboardFactory.callback("🗓 Перепланировать эту неделю", "admin:course:rplan")));
         for (ru.gamebot.platform.domain.model.RedButtonSchedule r : redButtonService.planned()) {
             java.time.LocalDateTime t = r.getPlannedAt().plusHours(7);
@@ -7285,6 +7290,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 case "rtog" -> redButtonService.setEnabled(!redButtonService.isEnabled());
                 case "rplan" -> toast = "Неделя перепланирована, кнопок: " + redButtonService.replanWeek();
                 case "rbud" -> toast = redButtonService.setParam("budget", String.valueOf(Math.max(0, redButtonService.budgetRub() + (delta == null ? 0 : delta))));
+                case "rbase" -> toast = redButtonService.setParam("avgbase", String.valueOf(Math.max(1, redButtonService.avgBaseRub() + (delta == null ? 0 : delta))));
                 case "rweek" -> toast = redButtonService.setParam("perweek", String.valueOf(Math.max(0, Math.min(7, redButtonService.perWeek() + (delta == null ? 0 : delta.intValue())))));
                 case "rwin" -> toast = redButtonService.setParam("window", String.valueOf(Math.max(5, redButtonService.windowMin() + (delta == null ? 0 : delta.intValue()))));
                 case "rcancel" -> toast = delta != null && redButtonService.cancel(delta) ? "Красная кнопка отменена" : "Уже поздно или отменена";
