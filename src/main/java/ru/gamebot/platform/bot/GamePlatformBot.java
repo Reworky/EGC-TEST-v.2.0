@@ -1824,23 +1824,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.equals("shop:withdraw:rub")) {
             answerSilently(callbackQuery.getId());
-            // Предложение вывести на карту партнёра - только тем, у кого баланс больше остатка лимита (иначе карта им ничего не даёт) и кто квест ещё не выполнил
-            long overLimit = withdrawalOverLimitExc(user);
-            // при включённых уровнях вывода промежуточный экран не нужен (07.11.2026, владелец): сразу ввод суммы, а стоимость партнёра/не партнёра - после ввода
-            if (overLimit > 0 && cardOfferQuestFor(user) != null && !withdrawalTiersEnabled()) {
-                long remainingLimit = sinkShopService.getRemainingWithdrawalLimit(user);
-                List<List<InlineKeyboardButton>> offerRows = new ArrayList<>();
-                offerRows.add(List.of(keyboardFactory.callback("👀 Как", "shop:withdraw:otp")));
-                if (remainingLimit >= ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) {
-                    offerRows.add(List.of(keyboardFactory.callback("⏭️ Вывести " + fmtExc(remainingLimit) + " EXC в рублях", "shop:withdraw:rubgo")));
-                }
-                offerRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")));
-                sendText(user.getTelegramId(),
-                        "💳 <b>На балансе " + fmtExc(user.getCoins()) + " EXC, по лимиту сейчас можно " + fmtExc(remainingLimit) + ".</b>\n\n"
-                                + "Остальные <b>" + fmtExc(overLimit) + " EXC</b> можно будет вывести разом, не дожидаясь следующего месяца.",
-                        keyboardFactory.rowsLayout(offerRows));
-                return;
-            }
+            // Промежуточный экран «На балансе N EXC, по лимиту сейчас можно M» убран совсем (07.11.2026, владелец): сразу ввод суммы
             startRubWithdrawal(user, session);
             return;
         }
