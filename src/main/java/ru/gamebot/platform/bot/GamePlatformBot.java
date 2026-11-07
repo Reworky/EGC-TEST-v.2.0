@@ -27090,6 +27090,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("❌ Отмена", gemDonateBackTarget(gameKey, pkg))));
             int discPct = (int) Math.round((1 - (sinkShopService.isEgcPassActive(user) ? HYBRID_REAL_SHARE_PASS : HYBRID_REAL_SHARE)) * 100);
             hybridHeadline = "🔥 <b>Скидка " + discPct + "% при оплате токенами:</b> платите " + hybrid.rub() + " ₽ и " + fmtExc(hybrid.exc()) + " EXC\n\n";
+            if (!questService.hasApprovedPartnerQuest(user.getId())) {
+                hybridHeadline += "💡 Через карту банка-партнёра эти же токены принесут больше: вывод всей суммы разом и бонус сверху.\n\n";
+            }
         }
         String passNote = price < pkg.priceRub() ? " <i>(закупочная цена, EGC Pass)</i>" : "";
         // Продажа EGC Pass тем, у кого его нет: честная экономия на ЭТОЙ покупке (цифры реальные: закупка поставщика без наценки клуба)
