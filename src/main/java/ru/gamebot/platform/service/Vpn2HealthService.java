@@ -44,6 +44,7 @@ public class Vpn2HealthService {
     private volatile boolean lastOk = true;
     private volatile String lastDetails = "";
     private volatile Integer certDaysLeft = null;
+    private volatile Integer certHoursLeft = null;
     private volatile String openProblem = null;
     private volatile long lastAlertMs = 0;
     private volatile int panelFailures = 0;
@@ -80,6 +81,8 @@ public class Vpn2HealthService {
         lastDetails = details == null ? "" : (details instanceof List<?> list ? String.join("; ", list.stream().map(String::valueOf).toList()) : String.valueOf(details));
         Object days = body.get("certDaysLeft");
         certDaysLeft = days instanceof Number n ? n.intValue() : null;
+        Object hours = body.get("certHoursLeft");
+        certHoursLeft = hours instanceof Number h ? h.intValue() : null;
     }
 
     /** Копия базы панели от скрипта: проверяем, что это SQLite и размер разумный, кладём в каталог бэкапов и держим последние 14. Возвращает имя файла. */
@@ -140,8 +143,14 @@ public class Vpn2HealthService {
                 } else if (!lastOk) {
                     problems.add("проверка цепочки не пройдена: " + (lastDetails.isBlank() ? "без подробностей" : lastDetails));
                 }
+                Integer hours = certHoursLeft;
                 Integer days = certDaysLeft;
-                if (days != null && days <= 2) {
+                if (hours != null) {
+                    // сертификат Let's Encrypt на IP живёт ~6,5 суток и обновляется за 2-3 суток до конца: меньше 30 часов значит обновление не сработало
+                    if (hours < 30) {
+                        problems.add("сертификат узла входа заканчивается через " + hours + " ч: автообновление не сработало, нужно написать Владу");
+                    }
+                } else if (days != null && days <= 2) {
                     problems.add("сертификат на IP заканчивается через " + days + " дн. (проверьте автообновление acme.sh на сервере входа)");
                 }
             }
