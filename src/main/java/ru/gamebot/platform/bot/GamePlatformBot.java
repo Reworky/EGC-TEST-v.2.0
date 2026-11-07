@@ -14446,6 +14446,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .append("🕒 Создан: <b>").append(escape(ticket.getCreatedAt().format(DATE_TIME_FORMATTER))).append("</b>\n\n")
                 .append("─────────────────\n");
 
+        // Текст обращения хранится в самой заявке: у обращений с контекстом (кнопки «Нужна помощь...», 05-06.11.2026) вложений нет вовсе,
+        // и карточка раньше показывала пустое место между линиями - модератор не понимал, о чём речь.
+        String firstText = ticket.getInitialMessage();
+        boolean contextTicket = firstText != null && firstText.startsWith("🧭");
+        if (firstText != null && !firstText.isBlank() && (attachments.isEmpty() || contextTicket)) {
+            history.append("👤 Игрок · ").append(ticket.getCreatedAt().format(DATE_TIME_FORMATTER)).append("\n")
+                    .append(escape(trim(firstText, 1500))).append("\n");
+        }
+
         for (SupportAttachment att : attachments) {
             String who = att.isFromModerator() ? "🛡️ Модератор" : "👤 Игрок";
             String time = att.getCreatedAt().format(DATE_TIME_FORMATTER);
