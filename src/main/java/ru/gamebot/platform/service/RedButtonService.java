@@ -288,7 +288,8 @@ public class RedButtonService {
         if (r.isFirstOfWeek() && !r.isTeaserSent() && th > 0 && !now.isBefore(r.getPlannedAt().minusHours(th))) {
             r.setTeaserSent(true);
             scheduleRepository.save(r);
-            channelContentService.createExternalDraft(ChannelContentService.RED_BUTTON_TEASER, teaserText(), String.valueOf(r.getId()));
+            channelContentService.createExternalDraft(ChannelContentService.RED_BUTTON_TEASER, teaserText(), String.valueOf(r.getId()),
+                    ChannelContentService.RED_BUTTON_BANNER);
         }
         if (!r.isWarned() && !now.isBefore(r.getPlannedAt().minusMinutes(warnMin()))) {
             r.setWarned(true);
@@ -471,9 +472,14 @@ public class RedButtonService {
     private String teaserText() {
         String tpl = get("bcr.text.teaser");
         if (tpl == null || tpl.isBlank()) {
-            tpl = "🔴 <b>что-то красное на горизонте</b>\n\n"
-                    + "Экси заметил: в ближайшие дни в канале появится красная кнопка. Она живёт совсем недолго и даёт крупный бонус к курсу вывода. "
-                    + "Когда именно, не скажу 🤫 Следи за каналом и держи уведомления включёнными.";
+            // Текст владельца от 07.11.2026 (он поправил карточку на согласовании); картинка - RED_BUTTON_BANNER
+            tpl = "<b>🔴 Красная кнопка</b>\n\n"
+                    + "Время от времени в канале без предупреждения появляется красная кнопка 🔴\n\n"
+                    + "Она живёт совсем недолго и добавляет крупный бонус к курсу вывода.\n\n"
+                    + "<i>Схема такая: нажал кнопку вовремя, и бонус действует несколько часов с момента включения. "
+                    + "Он добавляется к заявке на вывод в рублях или TON. Чтобы вывод был доступен, нужно, чтобы на балансе набралось не меньше 5 000 EXC.</i>\n\n"
+                    + "Включи уведомления канала и держи бота под рукой: красная кнопка не любит ждать ⚡\n\n"
+                    + "<b>Ставь 🏆 если поймаешь эту кнопку первым</b>";
         }
         return tpl;
     }

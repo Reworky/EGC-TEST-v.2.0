@@ -350,6 +350,14 @@ public class ChannelContentService {
         return saveDraft(type, text, meta);
     }
 
+    /** Баннер поста «Красная кнопка» (рука Экси тянется к красной кнопке, 07.11.2026); лежит в ресурсах бота, как баннер «Код дня». */
+    public static final String RED_BUTTON_BANNER = "resource:red_button_banner.jpg";
+
+    /** То же, но с картинкой: photoFileId с префиксом resource: берётся из ресурсов бота (см. sendBannerAndTextReturningId). */
+    public ChannelPostDraft createExternalDraft(String type, String text, String meta, String photoFileId) {
+        return saveDraft(type, text, meta, photoFileId);
+    }
+
     /** Ставит в очередь ручной пост: карточка админам уйдёт в sendAfter (UTC) через deliverDueCards(). Повторно тот же ключ не создаётся
      *  (даже если пост уже опубликован или отклонён). Возвращает true, если черновик создан. */
     public boolean queueManualPost(String key, String rubric, String note, String text, LocalDateTime sendAfter) {
