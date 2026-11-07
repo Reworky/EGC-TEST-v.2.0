@@ -26,14 +26,14 @@ UNION ALL SELECT '4. у стены и баланс 10 000+ (ждут выход�
 UNION ALL SELECT '5. ещё не выводили ничего, баланс 10 000+', COUNT(*) FROM act WHERE withdrawn = 0 AND coins >= 10000
 ORDER BY 1;
 
-SELECT 'страна' AS grp, country AS value, COUNT(*) AS n FROM act GROUP BY country ORDER BY n DESC LIMIT 12;
-SELECT 'возраст' AS grp, age_grp AS value, COUNT(*) AS n FROM act GROUP BY age_grp ORDER BY n DESC;
-SELECT 'возраст x страна (РФ)' AS grp, age_grp AS value, COUNT(*) AS n FROM act WHERE country = 'Россия' GROUP BY age_grp ORDER BY n DESC;
+SELECT 'страна' AS grp, country AS val, COUNT(*) AS n FROM act GROUP BY country ORDER BY n DESC LIMIT 12;
+SELECT 'возраст' AS grp, age_grp AS val, COUNT(*) AS n FROM act GROUP BY age_grp ORDER BY n DESC;
+SELECT 'возраст x страна (РФ)' AS grp, age_grp AS val, COUNT(*) AS n FROM act WHERE country = 'Россия' GROUP BY age_grp ORDER BY n DESC;
 
-SELECT 'баланс' AS grp, bucket AS value, COUNT(*) AS n FROM (
+SELECT 'баланс' AS grp, bucket AS val, COUNT(*) AS n FROM (
   SELECT CASE WHEN coins < 5000 THEN 'a. до 5 000' WHEN coins < 10000 THEN 'b. 5-10 тыс' WHEN coins < 25000 THEN 'c. 10-25 тыс'
               WHEN coins < 50000 THEN 'd. 25-50 тыс' ELSE 'e. 50 тыс+' END AS bucket FROM act) x GROUP BY bucket ORDER BY bucket;
 
-SELECT 'у стены: баланс (вывели 10 000+)' AS grp, bucket AS value, COUNT(*) AS n FROM (
+SELECT 'у стены: баланс (вывели 10 000+)' AS grp, bucket AS val, COUNT(*) AS n FROM (
   SELECT CASE WHEN coins < 5000 THEN 'a. до 5 000' WHEN coins < 10000 THEN 'b. 5-10 тыс' WHEN coins < 25000 THEN 'c. 10-25 тыс'
               WHEN coins < 50000 THEN 'd. 25-50 тыс' ELSE 'e. 50 тыс+' END AS bucket FROM act WHERE withdrawn >= 10000) x GROUP BY bucket ORDER BY bucket;
