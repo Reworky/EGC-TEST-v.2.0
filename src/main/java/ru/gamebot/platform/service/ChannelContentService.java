@@ -797,19 +797,20 @@ public class ChannelContentService {
         }
         if (lines.isEmpty()) return Optional.empty();
         StringBuilder sb = new StringBuilder("🏆 <b>Топы недели!</b>\n\n");
-        sb.append("За неделю вы закрыли <b>").append(num(total)).append("</b> ").append(plural((int) Math.min(total, Integer.MAX_VALUE), "квест", "квеста", "квестов")).append(", красавчики 🔥 Вот что залетало чаще всего:\n\n");
+        sb.append("За неделю вы закрыли <b>").append(num(total)).append("</b> ").append(plural((int) Math.min(total, Integer.MAX_VALUE), "квест", "квеста", "квестов")).append(", красавчики 🤩\n\nВот что залетало чаще всего:\n\n");
         sb.append(String.join("\n\n", lines)).append("\n\n");
         sb.append(referralWeekBlock());
-        String link = botLink().stripLeading();
-        if (!link.isEmpty()) sb.append(link).append("\n\n");
-        sb.append(ending(total, "Ну что, а ты какой уже прошёл?", "Ставь 🔥, если был в этом списке", "Новая неделя уже началась, погнали"));
+        // Формулировка согласована владельцем 07.11.2026 (по его правке поста): без вопроса в конце, ссылка одной строкой
+        if (botUsername != null && !botUsername.isBlank()) {
+            sb.append("📲 Все квесты ждут в боте ➡️ <a href=\"https://t.me/").append(botUsername).append("\">@").append(botUsername).append("</a>");
+        }
         return Optional.of(saveDraft(TOP_QUESTS_WEEK, sb.toString(), null, TOP_QUESTS_BANNER));
     }
 
     // ───────────────────────── отряды ─────────────────────────
 
     /** Блок «Топ рефереров недели» для «Топов недели» (суббота): текущая неделя с понедельника 00:00 UTC, тот же рейтинг по EXC от рефералов, что показывает бот.
-     *  Призы недели выплачиваются в понедельник, поэтому здесь «пока лидируют», без слов «получили». Пусто, если никто ничего не заработал на рефералах. */
+     *  Призы недели выплачиваются в понедельник, поэтому без слов «получили». Пусто, если никто ничего не заработал на рефералах. */
     private String referralWeekBlock() {
         try {
             LocalDateTime weekStart = LocalDate.now().with(DayOfWeek.MONDAY).atStartOfDay();
@@ -827,7 +828,7 @@ public class ChannelContentService {
                 shown++;
             }
             if (shown == 0) return "";
-            return "🤝 <b>Топ рефереров недели</b>\nПока лидируют:\n" + sb + "Призы недели выплатят в понедельник.\n\n";
+            return "🤝 <b>Топ рефереров недели</b>\n\n" + sb + "Призы недели выплатят в понедельник.\n\n";
         } catch (Exception e) {
             log.warn("[ChannelContent] Referral block for weekly tops failed", e);
             return "";
