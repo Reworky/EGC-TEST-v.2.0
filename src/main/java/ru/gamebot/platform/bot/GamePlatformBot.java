@@ -7429,7 +7429,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                     List.of(keyboardFactory.url("🔴 Нажать красную кнопку", prepared.deepLink()))));
-            messageId = sendBannerAndTextReturningId(requiredChannelChatId(), null, prepared.text(), keyboard);
+            // С картинкой (07.11.2026); если фото не ушло, sendBannerAndTextReturningId сам отправит текст без неё, closeRedButton умеет оба случая
+            messageId = sendBannerAndTextReturningId(requiredChannelChatId(), ru.gamebot.platform.service.ChannelContentService.RED_BUTTON_BANNER,
+                    prepared.text(), keyboard);
         } catch (Exception e) {
             log.error("Failed to publish red button {}", id, e);
             boolean retry = redButtonService.onPublishFailed(id);
@@ -7450,13 +7452,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void closeRedButton(Long id) {
         ru.gamebot.platform.domain.model.RedButtonSchedule r = redButtonService.find(id).orElse(null);
         if (r == null || r.getChannelMessageId() == null) return;
-        EditMessageText edit = new EditMessageText();
-        edit.setChatId(requiredChannelChatId());
-        edit.setMessageId(r.getChannelMessageId().intValue());
-        edit.setText(redButtonService.closedText(r));
-        edit.setParseMode("HTML");
+        String closed = redButtonService.closedText(r);
         try {
-            execute(edit);
+            // Пост с картинкой правится как подпись; если картинки нет (старые кнопки или фото не ушло), падаем в правку текста
+            try {
+                org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageCaption cap =
+                        new org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageCaption();
+                cap.setChatId(requiredChannelChatId());
+                cap.setMessageId(r.getChannelMessageId().intValue());
+                cap.setCaption(closed);
+                cap.setParseMode("HTML");
+                execute(cap);
+            } catch (TelegramApiException capErr) {
+                EditMessageText edit = new EditMessageText();
+                edit.setChatId(requiredChannelChatId());
+                edit.setMessageId(r.getChannelMessageId().intValue());
+                edit.setText(closed);
+                edit.setParseMode("HTML");
+                execute(edit);
+            }
         } catch (TelegramApiException e) {
             log.error("Failed to close red button post {}", id, e);
             alertAdminsPlain("⚠️ Красная кнопка #" + id + ": не удалось отредактировать пост в канале (кнопка может остаться под постом, но бонус уже не выдаётся). Уберите её вручную.");
