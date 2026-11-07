@@ -10560,7 +10560,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (freeLeft >= ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) {
                 rows.add(List.of(keyboardFactory.callback("⏭️ Вывести до " + fmtExc(freeLeft) + " EXC без карты", "shop:withdraw:rubgo")));
             }
-            rows.add(List.of(keyboardFactory.callback("🤷 У меня уже есть " + names, "shop:withdraw:nobank")));
+            rows.add(List.of(keyboardFactory.callback("🏦 Я уже клиент банка-партнёра", "shop:withdraw:nobank")));
             String intro = freeLeft > 0
                     ? "Без карты можно вывести в сумме до " + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC, у вас осталось <b>" + fmtExc(freeLeft) + " EXC</b>. "
                             + "Эта заявка больше остатка. Вы можете вывести до " + fmtExc(freeLeft) + " EXC в любой банк, а всё, что сверх этого, "
@@ -10571,7 +10571,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + intro
                     + "Скоро добавим больше банков, чтобы у вас был выбор.";
         } else {
-            rows.add(List.of(keyboardFactory.callback("🤷 У меня уже есть эти банки", "shop:withdraw:nobank")));
+            rows.add(List.of(keyboardFactory.callback("🏦 Я уже клиент банка-партнёра", "shop:withdraw:nobank")));
             text = "💳 <b>Нужно быть нашим рефералом в этом банке</b>\n\n"
                     + "Вы уже вывели максимум, доступный без карты (" + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC). "
                     + "Чтобы вывести дальше, нужно быть нашим рефералом в банке, на который вы хотите получить перевод"
@@ -10609,7 +10609,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String go = "ton".equals(kind) ? "shop:withdraw:ton" : "stars".equals(kind) ? "shop:group:telegram_stars" : "shop:withdraw:rubgo";
             rows.add(List.of(keyboardFactory.callback("⏭️ Вывести до " + fmtExc(room) + " EXC", go)));
         }
-        rows.add(List.of(keyboardFactory.callback("🤷 У меня уже есть эти банки", "shop:withdraw:nobank")));
+        rows.add(List.of(keyboardFactory.callback("🏦 Я уже клиент банка-партнёра", "shop:withdraw:nobank")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")));
         sendText(user.getTelegramId(),
                 "💳 <b>Дальше — после карты нашего банка-партнёра</b>\n\n"
@@ -26011,13 +26011,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (cardQuest != null) {
             rows.add(List.of(keyboardFactory.callback("Заказать карту: " + fmtExc(partnerRub) + " ₽ и бонус", "quest:viewwd:" + cardQuest.getId())));
         }
-        rows.add(List.of(keyboardFactory.callback("🤷 У меня уже есть эти банки", "shop:withdraw:nobank")));
+        rows.add(List.of(keyboardFactory.callback("🏦 Я уже клиент банка-партнёра", "shop:withdraw:nobank")));
         rows.add(List.of(keyboardFactory.callback("❌ Отмена", "common:cancel")));
         sendText(user.getTelegramId(),
                 "💳 <b>Как вывести " + fmtExc(amount) + " EXC</b>\n\n"
                         + "Без партнёра: <b>" + fmtExc(rubles) + " ₽</b> (" + noCardRate + ")\n"
                         + "С картой банка-партнёра: <b>" + fmtExc(partnerRub) + " ₽</b> + бонус банка\n\n"
-                        + "Карта бесплатная, оформляется по нашей ссылке. После выплаты банка вы получаете всё по курсу 100% на любой банк.",
+                        + "Карта бесплатная, оформляется по нашей ссылке.\n\n"
+                        + "Став нашим партнёром, вы получаете всё по курсу 100% на любой банк.",
                 keyboardFactory.rowsLayout(rows));
     }
 
