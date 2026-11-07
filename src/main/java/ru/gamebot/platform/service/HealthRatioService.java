@@ -26,6 +26,7 @@ public class HealthRatioService {
     private final HealthRatioSnapshotRepository healthRatioSnapshotRepository;
     private final AppUserRepository appUserRepository;
     private final AppSettingRepository appSettingRepository;
+    private final ru.gamebot.platform.domain.repository.QuestSubmissionRepository questSubmissionRepository;
 
     /** Курс считается от EXC активных игроков (не заходили 30+ дней - не в знаменателе). Откат без деплоя: app_settings 'hr.active.only' = false (применится при следующем пересчёте, каждые 4 ч или при пополнении фонда). */
     public static final String ACTIVE_ONLY_SETTING = "hr.active.only";
@@ -137,11 +138,41 @@ public class HealthRatioService {
 
     /** Цена позиции для конкретного игрока: для звёзд без активного EGC Pass - с наценкой (округление до сотен), для остального как effectivePrice. Показ, лимиты и списание должны брать цену отсюда. */
     public long effectivePriceFor(ru.gamebot.platform.domain.model.AppUser user, ru.gamebot.platform.domain.model.RewardItem item) {
+        if (user != null && item != null && "telegram_stars".equals(item.getPurchaseGroup()) && tiersEnabled()) {
+            // Уровни вывода (07.11.2026): партнёр - база x1,12 (фиксированно, как его курс 100%); без партнёра - база x2 (с Pass x1,6), делённая на min(1, курс фонда / 0,9),
+            // чтобы звёзды не были выгоднее вывода в рубли по 45% (закупка звезды 1,58 ₽).
+            double mult;
+            double base = item.getPriceCoins();
+            if (isPartner(user)) {
+                mult = STARS_PRICE_FACTOR;
+            } else {
+                double fundScale = Math.min(1.0, getCurrentRatio() / 0.9);
+                mult = (starsMarkupApplies(user, item) ? 2.0 : 1.6) / Math.max(0.1, fundScale);
+            }
+            return Math.round(base * mult / 100.0) * 100;
+        }
         long price = effectivePrice(item);
         if (starsMarkupApplies(user, item)) {
             return Math.round(price * STARS_NON_PASS_MARKUP / 100.0) * 100;
         }
         return price;
+    }
+
+    /** Включены уровни вывода (app_settings 'wd.tiers.enabled', scripts/wd-tiers-on.sql). */
+    public boolean tiersEnabled() {
+        return appSettingRepository.findById("wd.tiers.enabled")
+                .map(ru.gamebot.platform.domain.model.AppSetting::getValue)
+                .map(v -> "true".equalsIgnoreCase(v.trim()))
+                .orElse(false);
+    }
+
+    /** Партнёр: у игрока одобренный квест банка-партнёра (WithdrawalPartners.ALL). */
+    public boolean isPartner(ru.gamebot.platform.domain.model.AppUser user) {
+        if (user == null || user.getId() == null) return false;
+        for (WithdrawalPartners.Bank bank : WithdrawalPartners.ALL) {
+            if (!questSubmissionRepository.findApprovedByUserAndGame(user.getId(), bank.mission().gameName()).isEmpty()) return true;
+        }
+        return false;
     }
 
     /** Наценка на звёзды действует: позиция - звёзды и у игрока нет активного EGC Pass. */

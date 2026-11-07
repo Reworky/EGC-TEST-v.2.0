@@ -69,7 +69,10 @@ public class WalletController {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
-        int ratioPercent = (int) Math.round(healthRatioService.getCurrentRatio() * 100);
+        // При включённых уровнях вывода показываем курс игрока для его баланса (100% у партнёра и до 10 000 EXC за всё время, дальше сниженный), иначе курс фонда
+        int ratioPercent = (int) Math.round((gamePlatformBot.withdrawalTiersEnabled()
+                ? gamePlatformBot.withdrawalRatioFor(user, Math.max(1, user.getCoins()), false)
+                : healthRatioService.getCurrentRatio()) * 100);
         boolean bonusAvailable = userService.isDailyBonusAvailable(user);
         // Пока бонус не забран - сумма СЕГОДНЯШНЕГО бонуса; после - завтрашнего (серия + 1)
         long nextDailyBonus = bonusAvailable ? userService.previewDailyBonusExc(user) : Math.min(150L + (long) user.getStreakDays() * 50, 500L);
