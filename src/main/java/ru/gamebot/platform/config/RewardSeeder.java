@@ -340,8 +340,10 @@ public class RewardSeeder implements CommandLineRunner {
         String starsPrompt = "Введите ваш Telegram username (без @) — на него будут отправлены звёзды.\n\n"
                 + "Убедитесь, что юзернейм указан верно — с ним свяжутся при выплате:";
 
-        seed("Telegram Stars - 50 ⭐", "Вывод EXC в 50 звёзд Telegram. Отправляется вручную администратором по юзернейму. Срок — до 24 ч.",
-                "Вывод", 7_900, starsPrompt, 0, "telegram_stars");
+        // 07.11.2026 (владелец): позиция «50 ⭐» убрана, минимальный вывод звёздами - 75 ⭐. Не удаляем (история заявок), деактивируем на каждом старте.
+        rewardItemRepository.findByTitle("Telegram Stars - 50 ⭐").ifPresent(item -> {
+            if (item.isActive()) { item.setActive(false); rewardItemRepository.save(item); }
+        });
         seed("Telegram Stars - 75 ⭐", "Вывод EXC в 75 звёзд Telegram. Отправляется вручную администратором по юзернейму. Срок — до 24 ч.",
                 "Вывод", 11_800, starsPrompt, 0, "telegram_stars");
         seed("Telegram Stars - 100 ⭐", "Вывод EXC в 100 звёзд Telegram. Отправляется вручную администратором по юзернейму. Срок — до 24 ч.",
