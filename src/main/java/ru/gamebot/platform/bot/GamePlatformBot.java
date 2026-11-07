@@ -1826,7 +1826,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             // Предложение вывести на карту партнёра - только тем, у кого баланс больше остатка лимита (иначе карта им ничего не даёт) и кто квест ещё не выполнил
             long overLimit = withdrawalOverLimitExc(user);
-            if (overLimit > 0 && cardOfferQuestFor(user) != null) {
+            // при включённых уровнях вывода промежуточный экран не нужен (07.11.2026, владелец): сразу ввод суммы, а стоимость партнёра/не партнёра - после ввода
+            if (overLimit > 0 && cardOfferQuestFor(user) != null && !withdrawalTiersEnabled()) {
                 long remainingLimit = sinkShopService.getRemainingWithdrawalLimit(user);
                 List<List<InlineKeyboardButton>> offerRows = new ArrayList<>();
                 offerRows.add(List.of(keyboardFactory.callback("👀 Как", "shop:withdraw:otp")));
