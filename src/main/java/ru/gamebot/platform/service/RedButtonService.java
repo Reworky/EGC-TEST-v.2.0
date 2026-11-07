@@ -457,10 +457,12 @@ public class RedButtonService {
         String until = String.format("%02d:%02d", end.getHour(), end.getMinute());
         String tpl = get("bcr.text.post");
         if (tpl == null || tpl.isBlank()) {
-            tpl = "🔴 <b>красная кнопка</b>\n\n"
-                    + "Редкий бонус: <b>+{p}%</b> к заявке на вывод в рублях или TON! Кнопка живёт всего {w} минут, до {until} по Москве. "
+            // Текст владельца от 07.11.2026
+            tpl = "<b>🔴 КРАСНАЯ КНОПКА 🔴</b>\n\n"
+                    + "Редкий бонус: +{p}% к заявке на вывод в рублях или TON!\n\n"
+                    + "Кнопка живёт всего {w} минут.\n\n"
                     + "Нажал вовремя, и бонус действует {v} ч с момента включения.\n\n"
-                    + "Бонус добавляется к заявке на вывод. Запас ограничен, жми, пока горит ⚡";
+                    + "<b>Бонус добавляется к заявке на вывод - запас ограничен, жми, пока горит ⚡</b>";
         }
         return tpl.replace("{p}", String.valueOf(r.getPercent()))
                 .replace("{w}", String.valueOf(windowMin()))
