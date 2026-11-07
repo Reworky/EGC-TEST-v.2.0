@@ -12685,6 +12685,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             cap.setReplyMarkup(markup);
             execute(cap);
         } catch (TelegramApiException captionError) {
+            if (captionError.getMessage() != null && captionError.getMessage().contains("message is not modified")) return;
             try {
                 EditMessageText et = new EditMessageText();
                 et.setChatId(chatId);
@@ -12694,6 +12695,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 et.setReplyMarkup(markup);
                 execute(et);
             } catch (TelegramApiException textError) {
+                if (textError.getMessage() != null && textError.getMessage().contains("message is not modified")) return;
                 log.warn("Failed to edit stars tier screen in place for {}", user.getTelegramId(), textError);
                 sendStarsBanner(user.getTelegramId(), text, markup);
             }
