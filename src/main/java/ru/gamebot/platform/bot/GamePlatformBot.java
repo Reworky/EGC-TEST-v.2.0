@@ -10471,8 +10471,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return "💱 Ваш курс: 100% (вы партнёр)\n\n";
         }
         int lowPercent = (int) Math.round(NONPARTNER_RATE * Math.min(1.0, healthRatioService.getCurrentRatio() / NONPARTNER_RATE_REF) * 100);
-        return "💱 Ваш курс: " + lowPercent + "%  (100% до " + fmtExc(RUB_FREE_WITHDRAWAL_EXC) + " EXC за всё время)\n"
-                + "🤝 С картой банка-партнёра курс всегда 100%.\n\n";
+        return "💱 Ваш курс: " + lowPercent + "%  (с картой банка-партнёра курс всегда 100%)\n\n";
     }
 
     /** Свободный остаток порога вывода (EXC) до обязательной карты партнёра: -1 - порога нет (есть одобренный партнёрский квест). Порог считает выводы любым способом и действует на рубли, TON и звёзды (с 05.11.2026). */
