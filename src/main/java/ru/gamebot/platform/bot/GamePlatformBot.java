@@ -10518,7 +10518,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Курс первых 10 000 EXC за всё время для игрока без партнёра (с 08.11.2026 - курс фонда, не больше 100%), в процентах. */
     private int freeTierPercent() {
-        return (int) Math.round(Math.min(1.0, healthRatioService.getCurrentRatio()) * 100);
+        return (int) Math.round(freeTierRate(healthRatioService.getCurrentRatio()) * 100);
+    }
+
+    /** Курс 100% только у партнёров (владелец, 08.11.2026): у остальных первые 10 000 EXC идут по курсу фонда, но не выше NONPARTNER_RATE_REF (90%), даже если фонд полный. */
+    private static double freeTierRate(double fund) {
+        return Math.min(NONPARTNER_RATE_REF, fund);
     }
 
     /** Курс сверх первых 10 000 EXC для игрока без партнёра, в процентах. */
@@ -10541,7 +10546,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         double nonPartner = NONPARTNER_RATE * Math.min(1.0, fund / NONPARTNER_RATE_REF);
         long free = Math.min(amount, Math.max(0, RUB_FREE_WITHDRAWAL_EXC - rewardService.totalWithdrawnExc(user)));
         // 08.11.2026 (владелец): первые 10 000 EXC больше не по 100% - курс фонда (раньше было 1.0)
-        return (free * Math.min(1.0, fund) + (amount - free) * nonPartner) / amount;
+        return (free * freeTierRate(fund) + (amount - free) * nonPartner) / amount;
     }
 
     /** Крипта на amount EXC выходит за бесплатный порог 10 000 EXC (все способы суммой): тогда только биржи-партнёры (Pionex, Bybit) по UID через бота. Публичный: им пользуется мини-апп. */
