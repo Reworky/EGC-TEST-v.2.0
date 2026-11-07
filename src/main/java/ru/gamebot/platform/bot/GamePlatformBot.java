@@ -1855,6 +1855,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             return;
         }
+        if (data.equals("stars:tier:mine") || data.equals("stars:tier:other")) {
+            answerSilently(callbackQuery.getId());
+            if (!withdrawalTiersEnabled() || !isStarsWithdrawalOpen()) {
+                sendStarsWithdrawalClosed(user);
+                return;
+            }
+            sendStarsTierScreen(user, data.equals("stars:tier:other"), callbackQuery);
+            return;
+        }
         if (data.equals("wd:tonwallet")) {
             answerSilently(callbackQuery.getId());
             long twAmount = parseLongSafe(session.getData().get("ton_exc_amount"));
@@ -12509,6 +12518,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendExcDenominationPicker(AppUser user, String purchaseGroup) {
         List<RewardItem> items = rewardService.findByPurchaseGroup(purchaseGroup);
         if (items.isEmpty()) { sendShop(user); return; }
+        if ("telegram_stars".equals(purchaseGroup) && withdrawalTiersEnabled()) {
+            sendStarsTierScreen(user, false, null);
+            return;
+        }
         String groupLabel = groupItemLabel(items.get(0).getTitle());
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (RewardItem item : items) {
@@ -12608,6 +12621,84 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Список номиналов Telegram Stars (вывод EXC в звёздах) - с картинкой-баннером. */
+    /** Экран «Вывод в звёздах» при включённых уровнях (07.11.2026, идея владельца): одна кнопка переключает цены «мои» и «другого уровня» правкой этого же сообщения.
+     *  showOther=false - цены игрока (с кнопками номиналов), true - цены другого уровня (только текст). callback != null - правим сообщение, иначе отправляем новое. */
+    private void sendStarsTierScreen(AppUser user, boolean showOther, CallbackQuery callback) {
+        List<RewardItem> items = rewardService.findByPurchaseGroup("telegram_stars");
+        if (items.isEmpty()) { sendShop(user); return; }
+        boolean partner = healthRatioService.isPartner(user);
+        boolean viewPartner = showOther ? !partner : partner;
+        StringBuilder prices = new StringBuilder();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (RewardItem item : items) {
+            String denom = item.getTitle().replaceAll(".*- ", "");
+            long price = healthRatioService.starsPriceFor(user, item, viewPartner);
+            prices.append(denom).append(" — ").append(fmtExc(price)).append(" EXC\n");
+            if (!showOther) {
+                String status = shopLimitService.getItemStatus(user, item);
+                String icon = status.startsWith("🔒") ? "🔒" : status.startsWith("⏳") ? "⏳" : "🎁";
+                rows.add(List.of(keyboardFactory.callback(icon + " " + denom + " — " + fmtExc(price) + " EXC", "shop:view:" + item.getId())));
+            }
+        }
+        String header;
+        if (!showOther) {
+            header = partner
+                    ? "⭐ <b>Вывод в звёздах</b>\n\nВаши цены партнёра:\n\n"
+                    : "⭐ <b>Вывод в звёздах</b>\n\nВаши цены (без партнёра):\n\n";
+        } else {
+            header = viewPartner
+                    ? "⭐ <b>Цены партнёра</b>\n\n"
+                    : "⭐ <b>Цены без партнёра</b>\n\n";
+        }
+        String footer;
+        if (!showOther) {
+            footer = partner ? "\nВыберите номинал." : "\nС картой банка-партнёра звёзды дешевле: нажмите «Цены партнёра».\n\nВыберите номинал.";
+        } else {
+            footer = viewPartner ? "\nТакие цены получает игрок с картой банка-партнёра. Карта бесплатная, оформляется по нашей ссылке." : "\nТакие цены у игроков без партнёрства.";
+        }
+        rows.add(List.of(keyboardFactory.callback(showOther ? "⬅️ Мои цены" : (partner ? "Цены без партнёра" : "Цены партнёра"),
+                showOther ? "stars:tier:mine" : "stars:tier:other")));
+        if (showOther && viewPartner) {
+            Quest cardQuest = cardOfferQuestFor(user);
+            if (cardQuest != null) rows.add(List.of(keyboardFactory.callback("🏦 Заказать карту партнёра", "quest:viewwd:" + cardQuest.getId())));
+        }
+        if (!showOther && !partner && healthRatioService.starsMarkupApplies(user, items.get(0))) {
+            rows.add(List.of(keyboardFactory.callback("🎫 Оформить EGC Pass: звёзды дешевле", "sink:egc_pass")));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        String text = header + prices + footer;
+        InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(rows);
+        if (callback == null || callback.getMessage() == null) {
+            sendStarsBanner(user.getTelegramId(), text, markup);
+            return;
+        }
+        Integer messageId = callback.getMessage().getMessageId();
+        Long chatId = callback.getMessage().getChatId();
+        try {
+            org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageCaption cap =
+                    new org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageCaption();
+            cap.setChatId(chatId);
+            cap.setMessageId(messageId);
+            cap.setCaption(text);
+            cap.setParseMode("HTML");
+            cap.setReplyMarkup(markup);
+            execute(cap);
+        } catch (TelegramApiException captionError) {
+            try {
+                EditMessageText et = new EditMessageText();
+                et.setChatId(chatId);
+                et.setMessageId(messageId);
+                et.setText(text);
+                et.setParseMode("HTML");
+                et.setReplyMarkup(markup);
+                execute(et);
+            } catch (TelegramApiException textError) {
+                log.warn("Failed to edit stars tier screen in place for {}", user.getTelegramId(), textError);
+                sendStarsBanner(user.getTelegramId(), text, markup);
+            }
+        }
+    }
+
     private void sendStarsBanner(Long chatId, String text, InlineKeyboardMarkup keyboard) {
         sendResourceBanner(chatId, "stars_banner.png", text, keyboard);
     }
