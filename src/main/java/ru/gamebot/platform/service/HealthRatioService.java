@@ -139,7 +139,7 @@ public class HealthRatioService {
     /** Цена позиции для конкретного игрока: для звёзд без активного EGC Pass - с наценкой (округление до сотен), для остального как effectivePrice. Показ, лимиты и списание должны брать цену отсюда. */
     public long effectivePriceFor(ru.gamebot.platform.domain.model.AppUser user, ru.gamebot.platform.domain.model.RewardItem item) {
         if (user != null && item != null && "telegram_stars".equals(item.getPurchaseGroup()) && tiersEnabled()) {
-            // Уровни вывода (07.11.2026): партнёр - база x1,12 (фиксированно, как его курс 100%); без партнёра - база x2 (с Pass x1,6), делённая на min(1, курс фонда / 0,9),
+            // Уровни вывода (07.11.2026): партнёр - база x1,12 (фиксированно, как его курс 100%); без партнёра - база x2,2 (с Pass x1,8), делённая на min(1, курс фонда / 0,9),
             // чтобы звёзды не были выгоднее вывода в рубли по 45% (закупка звезды 1,58 ₽).
             double mult;
             double base = item.getPriceCoins();
@@ -147,7 +147,7 @@ public class HealthRatioService {
                 mult = STARS_PRICE_FACTOR;
             } else {
                 double fundScale = Math.min(1.0, getCurrentRatio() / 0.9);
-                mult = (starsMarkupApplies(user, item) ? 2.0 : 1.6) / Math.max(0.1, fundScale);
+                mult = (starsMarkupApplies(user, item) ? 2.2 : 1.8) / Math.max(0.1, fundScale);
             }
             return Math.round(base * mult / 100.0) * 100;
         }
