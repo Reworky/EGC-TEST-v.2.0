@@ -210,6 +210,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.domain.repository.TournamentEntryRepository tournamentEntryRepository;
     private final ru.gamebot.platform.domain.repository.BotReviewRepository botReviewRepository;
     private final ru.gamebot.platform.domain.repository.RegistrationNoticeRepository registrationNoticeRepository;
+    private final ru.gamebot.platform.domain.repository.AutoApprovalNoticeRepository autoApprovalNoticeRepository;
     private final ru.gamebot.platform.domain.repository.NudgeFeedbackRepository nudgeFeedbackRepository;
     private final ru.gamebot.platform.domain.repository.FeatureInterestRepository featureInterestRepository;
     private final ru.gamebot.platform.domain.repository.StarsPurchaseRepository starsPurchaseRepository;
@@ -2593,6 +2594,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.startsWith("mod:support:") && isEffectiveModerator(user)) {
             handleModeratorSupportAction(callbackQuery, user, session, data.substring("mod:support:".length()));
+            return;
+        }
+        if (("mod:autoq".equals(data) || "mod:autoq:read".equals(data)) && isEffectiveModerator(user)) {
+            answerSilently(callbackQuery.getId());
+            if ("mod:autoq:read".equals(data)) {
+                autoApprovalNoticeRepository.markAllSeen();
+                autoApprovalNoticeRepository.deleteSeenBefore(java.time.LocalDateTime.now().minusDays(30));
+            }
+            sendModAutoApprovals(user);
             return;
         }
         if ((data.startsWith("mod:withdrawal") || data.equals("mod:pending") || data.equals("mod:issue")) && isEffectiveModerator(user)) {
@@ -14448,6 +14458,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         ),
                         List.of(keyboardFactory.callback(wLabelMod, "mod:withdrawals")),
                         List.of(keyboardFactory.callback(iLabelMod, "mod:issue")),
+                        List.of(keyboardFactory.callback(autoQLabel(), "mod:autoq")),
                         List.of(keyboardFactory.callback("🔍 Поиск игрока", "mod:usersearch"),
                                 keyboardFactory.callback("🎁 Бонус игроку", "mod:bonus")),
                         List.of(keyboardFactory.callback("🏠 Главное меню", "menu:main"))
@@ -24094,11 +24105,64 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return awarded != null ? awarded : submission.getQuest().getRewardXp();
     }
 
-    /** Уведомление модераторам об автоматически закрытом квесте ОТКЛЮЧЕНО (07.11.2026, по просьбе владельца): чисто
-     *  информационное, действия не требует, только засоряло ленту. Метод оставлен пустым ради вызовов; вернуть
-     *  рассылку - восстановить из git (коммит до этого изменения). */
+    /** Автоматически закрытый квест больше не шлётся модераторам отдельным сообщением (07.11.2026, владелец): запись
+     *  копится в разделе «✅ Автозакрытые квесты (N)» (см. sendModAutoApprovals). Сбой записи не должен ломать начисление. */
     private void notifyModeratorsAboutAutoApproval(QuestSubmission submission, String methodLabel) {
-        // намеренно ничего не отправляем
+        try {
+            AppUser player = submission.getUser();
+            Quest quest = submission.getQuest();
+            ru.gamebot.platform.domain.model.AutoApprovalNotice notice = new ru.gamebot.platform.domain.model.AutoApprovalNotice();
+            notice.setCompletionNumber(submission.getCompletionDisplayId() != null ? submission.getCompletionDisplayId() : submission.getId());
+            notice.setPlayerTelegramId(player.getTelegramId());
+            notice.setPlayerNickname(player.getNickname());
+            notice.setPlayerUsername(player.getTelegramUsername());
+            notice.setQuestTitle(quest.getTitle());
+            notice.setGameName(quest.getGameName());
+            notice.setMethod(methodLabel);
+            notice.setAwardedXp(awardedXpOf(submission));
+            notice.setAwardedExc(awardedCoinsOf(submission));
+            notice.setCreatedAt(java.time.LocalDateTime.now());
+            notice.setSeen(false);
+            autoApprovalNoticeRepository.save(notice);
+        } catch (Exception e) {
+            log.warn("Failed to store auto-approval notice for submission {}", submission.getId(), e);
+        }
+    }
+
+    /** Раздел модерации «✅ Автозакрытые квесты»: последние 30 записей, непрочитанные помечены 🆕. */
+    private String autoQLabel() {
+        long n = autoApprovalNoticeRepository.countBySeenFalse();
+        return n > 0 ? "✅ Автозакрытые квесты (" + n + ")" : "✅ Автозакрытые квесты";
+    }
+
+    private void sendModAutoApprovals(AppUser moderator) {
+        List<ru.gamebot.platform.domain.model.AutoApprovalNotice> notices =
+                autoApprovalNoticeRepository.findTop30ByOrderByCreatedAtDescIdDesc();
+        long unseen = autoApprovalNoticeRepository.countBySeenFalse();
+        StringBuilder sb = new StringBuilder("✅ <b>Автозакрытые квесты</b>\n");
+        sb.append("<i>Новых: ").append(unseen).append(". Действий не требуется, это только журнал.</i>\n\n");
+        if (notices.isEmpty()) {
+            sb.append("Пока ничего не закрывалось автоматически с момента включения этого раздела.");
+        }
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm");
+        // лимит Telegram 4096 символов на сообщение: показываем 20 последних (запись ~170 символов)
+        for (ru.gamebot.platform.domain.model.AutoApprovalNotice n : notices.subList(0, Math.min(20, notices.size()))) {
+            String nick = n.getPlayerNickname() != null ? n.getPlayerNickname() : ("ID:" + n.getPlayerTelegramId());
+            sb.append(n.isSeen() ? "▫️ " : "🆕 ")
+                    .append(n.getCreatedAt() != null ? n.getCreatedAt().format(fmt) : "—")
+                    .append(" · З-").append(n.getCompletionNumber())
+                    .append(" · <b>").append(escape(nick)).append("</b>")
+                    .append(" (ID ").append(n.getPlayerTelegramId()).append(")\n")
+                    .append("   ").append(escape(n.getGameName() != null ? n.getGameName() : "—"))
+                    .append(": ").append(escape(trim(n.getQuestTitle() != null ? n.getQuestTitle() : "—", 50)))
+                    .append(" · +").append(n.getAwardedXp()).append(" XP, +").append(n.getAwardedExc()).append(" EXC\n");
+        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (unseen > 0) {
+            rows.add(List.of(keyboardFactory.callback("✅ Отметить прочитанными (" + unseen + ")", "mod:autoq:read")));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(moderator.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     @org.springframework.context.event.EventListener
@@ -28495,6 +28559,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             long pendingIssueMod = gemPurchaseService.findPending().size() + pendingRubleOrders().size() + rewardService.findPendingRequests().size();
             rows.add(List.of(keyboardFactory.callback(pendingIssueMod > 0
                     ? "🎮 Выдача: донат и награды (" + pendingIssueMod + ")" : "🎮 Выдача: донат и награды", "mod:issue")));
+            rows.add(List.of(keyboardFactory.callback(autoQLabel(), "mod:autoq")));
             rows.add(List.of(keyboardFactory.callback("🔍 Поиск игрока", "mod:usersearch")));
             return keyboardFactory.rowsLayout(rows);
         }
