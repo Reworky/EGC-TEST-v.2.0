@@ -1855,6 +1855,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             return;
         }
+        if (data.equals("wd:tonwallet")) {
+            answerSilently(callbackQuery.getId());
+            long twAmount = parseLongSafe(session.getData().get("ton_exc_amount"));
+            long twRubles = parseLongSafe(session.getData().get("ton_rubles"));
+            if (twAmount <= 0 || twRubles <= 0 || session.getState() != SessionState.WITHDRAWAL_TON_ADDRESS) {
+                sendWithdrawalMethodChoice(user);
+                return;
+            }
+            session.getData().put("ton_pionex", "0");
+            sendTonWalletPrompt(user, twAmount, twRubles);
+            return;
+        }
         if (data.equals("wd:nocard")) {
             answerSilently(callbackQuery.getId());
             long ncAmount = parseLongSafe(session.getData().get("withdrawAmount"));
@@ -10707,7 +10719,39 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.rowsLayout(xchRows));
             return;
         }
+        if (withdrawalTiersEnabled() && !healthRatioService.isPartner(user)
+                && rewardService.totalWithdrawnExc(user) + amount > RUB_FREE_WITHDRAWAL_EXC) {
+            sendTonCardChoice(user, amount, rubles);
+            return;
+        }
         sendTonWalletPrompt(user, amount, rubles);
+    }
+
+    /** Крипта: экран выбора для игрока без партнёра, чья сумма выходит за бесплатные 10 000 EXC (то же, что для рублей): вывести без карты по сниженному курсу или заказать карту партнёра. */
+    private void sendTonCardChoice(AppUser user, long amount, long rubles) {
+        long partnerRub = Math.round(amount / 100.0);
+        long freeLeft = Math.max(0, RUB_FREE_WITHDRAWAL_EXC - rewardService.totalWithdrawnExc(user));
+        int lowPercent = (int) Math.round(rubles * 10000.0 / Math.max(1, amount));
+        String noCardRate = freeLeft > 0
+                ? "курс 100% на первые " + fmtExc(freeLeft) + " EXC, дальше " + lowPercent + "%"
+                : "курс " + lowPercent + "%";
+        java.math.BigDecimal ownTon = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(rubles));
+        java.math.BigDecimal partnerTon = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(partnerRub));
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("Вывести ~" + ownTon + " TON без карты", "wd:tonwallet")));
+        Quest cardQuest = cardOfferQuestFor(user);
+        if (cardQuest != null) {
+            rows.add(List.of(keyboardFactory.callback("Заказать карту: ~" + partnerTon + " TON и бонус", "quest:viewwd:" + cardQuest.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("🏦 Я уже клиент банка-партнёра", "shop:withdraw:nobank")));
+        rows.add(List.of(keyboardFactory.callback("❌ Отмена", "common:cancel")));
+        sendText(user.getTelegramId(),
+                "💎 <b>Как вывести " + fmtExc(amount) + " EXC в крипте</b>\n\n"
+                        + "Без партнёра: <b>" + fmtExc(rubles) + " ₽</b> ≈ ~" + ownTon + " TON (" + noCardRate + ")\n"
+                        + "С картой банка-партнёра: <b>" + fmtExc(partnerRub) + " ₽</b> ≈ ~" + partnerTon + " TON + бонус банка\n\n"
+                        + "Карта бесплатная, оформляется по нашей ссылке.\n\n"
+                        + "Став нашим партнёром, вы получаете всё по курсу 100%.",
+                keyboardFactory.rowsLayout(rows));
     }
 
     /** Запрос адреса TON-кошелька (сумма уже в сессии). */
