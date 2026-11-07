@@ -12,6 +12,8 @@ public class WalletDto {
     private long xp;
     private long weeklyXp;
     private int healthRatioPercent;
+    /** Курс вывода игрока при включённых уровнях (100% у партнёра и до 10 000 EXC за всё время, дальше сниженный); null - уровни выключены, курс = healthRatioPercent. */
+    private Integer withdrawalRatioPercent;
     private long monthlyWithdrawalLimit;
     private long remainingWithdrawalLimit;
     private boolean dailyBonusAvailable;

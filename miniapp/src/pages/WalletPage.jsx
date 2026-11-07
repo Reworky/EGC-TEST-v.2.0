@@ -387,7 +387,7 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest }) {
           </div>
         )}
         <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>
-          ≈ {+(wallet.coins * wallet.healthRatioPercent / 100 / 100).toFixed(1)} ₽ · фонд {wallet.healthRatioPercent}%
+          ≈ {+(wallet.coins * (wallet.withdrawalRatioPercent ?? wallet.healthRatioPercent) / 100 / 100).toFixed(1)} ₽ · {wallet.withdrawalRatioPercent != null ? `курс вывода ${wallet.withdrawalRatioPercent}%` : `фонд ${wallet.healthRatioPercent}%`}
         </div>
         <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
           Звёзды: приблизительный пересчёт по курсу фонда, зачисляется и выводится по нему.
@@ -610,7 +610,7 @@ function WithdrawRubForm({ wallet, onDone }) {
   return (
     <div className="ref-link-card">
       <div className="ref-link-label">Вывод в рублях (СБП, любой банк)</div>
-      <p className="shop-desc">Минимум 5 000 EXC. Курс: 1 000 EXC = {+(10 * wallet.healthRatioPercent / 100).toFixed(1)} ₽ (фонд {wallet.healthRatioPercent}%). Доступно: {wallet.remainingWithdrawalLimit.toLocaleString()} EXC.</p>
+      <p className="shop-desc">Минимум 5 000 EXC. Курс: 1 000 EXC = {+(10 * (wallet.withdrawalRatioPercent ?? wallet.healthRatioPercent) / 100).toFixed(1)} ₽ ({wallet.withdrawalRatioPercent != null ? `курс ${wallet.withdrawalRatioPercent}%` : `фонд ${wallet.healthRatioPercent}%`}). Доступно: {wallet.remainingWithdrawalLimit.toLocaleString()} EXC.</p>
       <input type="number" className="quest-text-input" placeholder="Сумма в EXC" value={amount} onChange={e => setAmount(e.target.value)} style={{ marginTop: 16 }} />
       <input type="text" className="quest-text-input" placeholder="Банк и номер телефона (СБП, любой банк)" value={requisites} onChange={e => setRequisites(e.target.value)} style={{ marginTop: 8 }} />
       <button className="quest-btn" disabled={busy} onClick={handleSubmit} style={{ marginTop: 16 }}>{busy ? 'Секунду...' : 'Отправить заявку'}</button>

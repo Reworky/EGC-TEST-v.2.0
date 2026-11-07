@@ -69,10 +69,11 @@ public class WalletController {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
-        // При включённых уровнях вывода показываем курс игрока для его баланса (100% у партнёра и до 10 000 EXC за всё время, дальше сниженный), иначе курс фонда
-        int ratioPercent = (int) Math.round((gamePlatformBot.withdrawalTiersEnabled()
-                ? gamePlatformBot.withdrawalRatioFor(user, Math.max(1, user.getCoins()), false)
-                : healthRatioService.getCurrentRatio()) * 100);
+        int ratioPercent = (int) Math.round(healthRatioService.getCurrentRatio() * 100);
+        // При включённых уровнях вывода отдельно отдаём курс вывода игрока для его баланса (100% у партнёра и до 10 000 EXC за всё время, дальше сниженный)
+        Integer withdrawalRatioPercent = gamePlatformBot.withdrawalTiersEnabled()
+                ? Integer.valueOf((int) Math.round(gamePlatformBot.withdrawalRatioFor(user, Math.max(1, user.getCoins()), false) * 100))
+                : null;
         boolean bonusAvailable = userService.isDailyBonusAvailable(user);
         // Пока бонус не забран - сумма СЕГОДНЯШНЕГО бонуса; после - завтрашнего (серия + 1)
         long nextDailyBonus = bonusAvailable ? userService.previewDailyBonusExc(user) : Math.min(150L + (long) user.getStreakDays() * 50, 500L);
@@ -95,6 +96,7 @@ public class WalletController {
                 .xp(user.getXp())
                 .weeklyXp(user.getWeeklyXp())
                 .healthRatioPercent(ratioPercent)
+                .withdrawalRatioPercent(withdrawalRatioPercent)
                 .monthlyWithdrawalLimit(sinkShopService.getMonthlyLimit(user))
                 .remainingWithdrawalLimit(sinkShopService.getRemainingWithdrawalLimit(user))
                 .dailyBonusAvailable(bonusAvailable)
