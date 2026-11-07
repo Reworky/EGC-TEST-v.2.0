@@ -19,5 +19,5 @@ FROM quest_submissions s JOIN quests q ON q.id = s.quest_id JOIN app_users u ON 
 WHERE q.game_name = 'ОТП Банк' AND LOWER(REPLACE(COALESCE(u.telegram_username, ''), '@', '')) = 'skvattt' ORDER BY s.created_at DESC;
 -- 3) его заявки на вывод и награды: «1 заявка в сутки», сумма за всё время для порога 10 000 EXC
 SELECT r.id, r.display_id, r.status, r.created_at, r.paid_at, i.title, i.category, COALESCE(r.paid_price_coins, i.price_coins) AS exc
-FROM reward_requests r JOIN reward_items i ON i.id = r.reward_item_id JOIN app_users u ON u.id = r.user_id
+FROM reward_requests r JOIN reward_items i ON i.id = r.reward_id JOIN app_users u ON u.id = r.user_id
 WHERE LOWER(REPLACE(COALESCE(u.telegram_username, ''), '@', '')) = 'skvattt' ORDER BY r.created_at DESC LIMIT 15;
