@@ -32,8 +32,9 @@ import ru.gamebot.platform.service.VpnService.VpnException;
 @Service
 public class Vpn2Service {
 
-    /** Тарифы: цена в рублях и в Stars (курс как у месячного: 150 ₽ = 89 ⭐), со скидкой за EXC (−50 ₽) - отдельная цена. */
+    /** Тарифы: цена в рублях и в Stars (курс как у месячного: 150 ₽ = 89 ⭐; неделя 50 ₽ = 30 ⭐), со скидкой за EXC (−50 ₽) - отдельная цена (на неделе скидки нет). */
     public enum Tariff {
+        W1("W1", "1 неделя", 7, 50, 30, 50, 30, 18_000),
         M1("M1", "1 месяц", 30, 150, 89, 100, 59, 54_000),
         M3("M3", "3 месяца", 90, 400, 237, 350, 208, 144_000),
         M12("M12", "12 месяцев", 365, 1350, 801, 1300, 771, 486_000);
@@ -74,6 +75,9 @@ public class Vpn2Service {
         public int getExcStars() { return excStars; }
 
         public long getExcOnlyPrice() { return excOnlyPrice; }
+
+        /** Скидка за EXC (−50 ₽) есть только там, где цена со скидкой ниже обычной: на недельном тарифе её нет. */
+        public boolean hasExcDiscount() { return excPriceRub < priceRub; }
 
         public static Optional<Tariff> byKey(String key) {
             return Arrays.stream(values()).filter(t -> t.key.equalsIgnoreCase(key)).findFirst();
@@ -125,8 +129,8 @@ public class Vpn2Service {
                        @Value("${app.vpn2-xui-pass:}") String xuiPass,
                        @Value("${app.vpn2-xui-inbound-id:2}") int inboundId,
                        @Value("${app.vpn2-sub-base:}") String subBase,
-                       @Value("${app.vpn2-trial-days:3}") int trialDays,
-                       @Value("${app.vpn2-trial-gb:5}") int trialGb,
+                       @Value("${app.vpn2-trial-days:7}") int trialDays,
+                       @Value("${app.vpn2-trial-gb:10}") int trialGb,
                        @Value("${app.vpn2-reviews-channel:}") String reviewsChannel,
                        @Value("${app.vpn2-exc-pay-enabled:false}") boolean excPayEnabled,
                        @Value("${app.vpn2-card-details:}") String cardDetails,

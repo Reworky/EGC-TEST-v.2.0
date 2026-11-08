@@ -79,8 +79,8 @@ app:
   vpn2-xui-pass: ${VPN2_XUI_PASS:}
   vpn2-xui-inbound-id: ${VPN2_XUI_INBOUND_ID:2}
   vpn2-sub-base: ${VPN2_SUB_BASE:}
-  vpn2-trial-days: ${VPN2_TRIAL_DAYS:3}
-  vpn2-trial-gb: ${VPN2_TRIAL_GB:5}
+  vpn2-trial-days: ${VPN2_TRIAL_DAYS:7}
+  vpn2-trial-gb: ${VPN2_TRIAL_GB:10}
   vpn2-reviews-channel: ${VPN2_REVIEWS_CHANNEL:}
   # Секрет скрипта проверки на сервере входа (heartbeat и копии базы панели); без него приём сигналов выключен, алертов о пропаже сигнала нет
   vpn2-health-secret: ${VPN2_HEALTH_SECRET:}

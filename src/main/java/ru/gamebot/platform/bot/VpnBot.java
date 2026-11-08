@@ -326,7 +326,7 @@ public class VpnBot extends TelegramLongPollingBot {
                 + "• До 2 устройств, подключение за минуту\n"
                 + "• Личный ключ: он только ваш\n"
                 + "• Работает в России и за границей\n\n"
-                + "<b>От 150 ₽ в месяц</b>, а первые " + vpn.getTrialDays() + " дня бесплатно.", rows);
+                + "<b>От 50 ₽ в неделю</b>, а первые " + daysText(vpn.getTrialDays()) + " бесплатно.", rows);
     }
 
     private void showMy(Long uid, Integer oldMsgId) {
@@ -348,8 +348,8 @@ public class VpnBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         StringBuilder sb = new StringBuilder("🔑 <b>Моё подключение</b>\n\n");
         if (vpn.isTrialAvailable(found)) {
-            sb.append("Ключа пока нет. Возьмите пробный на ").append(vpn.getTrialDays()).append(" дня бесплатно или оформите тариф.");
-            rows.add(List.of(keyboardFactory.callback("🎁 " + vpn.getTrialDays() + " дня бесплатно", "m:trial")));
+            sb.append("Ключа пока нет. Возьмите пробный на ").append(daysText(vpn.getTrialDays())).append(" бесплатно или оформите тариф.");
+            rows.add(List.of(keyboardFactory.callback("🎁 " + daysText(vpn.getTrialDays()) + " бесплатно", "m:trial")));
         } else {
             sb.append("Срок вашего ключа истёк. Оформите тариф, и ключ снова заработает.");
         }
@@ -400,12 +400,21 @@ public class VpnBot extends TelegramLongPollingBot {
                 + "\n\nСсылку подписки берите в разделе «Моё подключение». Если что-то не получается, напишите в поддержку, поможем.", rows);
     }
 
+    /** «7 дней», «1 день», «3 дня»: число с правильным склонением (срок пробного настраивается). */
+    private static String daysText(int n) {
+        int mod100 = n % 100;
+        int mod10 = n % 10;
+        String word = mod100 >= 11 && mod100 <= 14 ? "дней" : mod10 == 1 ? "день" : mod10 >= 2 && mod10 <= 4 ? "дня" : "дней";
+        return n + " " + word;
+    }
+
     private void showTariffs(Long uid, Integer oldMsgId) {
         StringBuilder sb = new StringBuilder("💳 <b>Тарифы EGC VPN</b>\n\n");
         for (Tariff t : Tariff.values()) {
             sb.append("• ").append(t.getTitle()).append(": <b>").append(t.getPriceRub()).append(" ₽</b> (").append(t.getStars()).append(" ⭐)");
-            if (t != Tariff.M1) {
-                int full = Tariff.M1.getPriceRub() * (t.getDays() / 30);
+            if (t != Tariff.W1) {
+                // выгода считается к цене недель за тот же срок (50 ₽ в неделю), а не к месячной цене
+                double full = Tariff.W1.getPriceRub() * (t.getDays() / 7.0);
                 sb.append(", выгода ").append(Math.round(100.0 * (full - t.getPriceRub()) / full)).append("%");
             }
             sb.append("\n");
@@ -425,6 +434,9 @@ public class VpnBot extends TelegramLongPollingBot {
         }
         if (coins >= Vpn2Service.EXC_DISCOUNT) {
             for (Tariff t : Tariff.values()) {
+                if (!t.hasExcDiscount()) {
+                    continue; // недельный тариф без скидки за EXC: −50 ₽ обнулила бы цену
+                }
                 String link = invoiceLink(t, true);
                 if (link != null) {
                     rows.add(List.of(keyboardFactory.url("🪙 −50 ₽ за EXC: " + t.getTitle() + ", " + t.getExcStars() + " ⭐", link)));
@@ -490,7 +502,7 @@ public class VpnBot extends TelegramLongPollingBot {
         String link = "https://t.me/" + vpn.getBotUsername() + "?start=ref_" + uid;
         // URLEncoder кодирует пробел как «+», а в t.me/share/url плюс остаётся плюсом: заменяем на %20
         String share = "https://t.me/share/url?url=" + URLEncoder.encode(link, StandardCharsets.UTF_8).replace("+", "%20")
-                + "&text=" + URLEncoder.encode("EGC VPN: быстрый VPN для телефона и компьютера. Первые " + vpn.getTrialDays() + " дня бесплатно!",
+                + "&text=" + URLEncoder.encode("EGC VPN: быстрый VPN для телефона и компьютера. Первые " + daysText(vpn.getTrialDays()) + " бесплатно!",
                         StandardCharsets.UTF_8).replace("+", "%20");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.url("📤 Отправить другу", share)));
@@ -511,7 +523,7 @@ public class VpnBot extends TelegramLongPollingBot {
             }
             rows.add(List.of(keyboardFactory.callback("✅ Я подписался", "m:trial")));
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "m:my")));
-            show(uid, oldMsgId, "🎁 <b>Пробный VPN на " + vpn.getTrialDays() + " дня, бесплатно</b>\n\nЧтобы получить ключ, подпишитесь на наш канал.", rows);
+            show(uid, oldMsgId, "🎁 <b>Пробный VPN на " + daysText(vpn.getTrialDays()) + ", бесплатно</b>\n\nЧтобы получить ключ, подпишитесь на наш канал.", rows);
             return;
         }
         try {
@@ -733,7 +745,7 @@ public class VpnBot extends TelegramLongPollingBot {
                 default -> {
                     Optional<Tariff> tariff = Tariff.byKey(action);
                     if (tariff.isEmpty()) {
-                        sendHtml(adminId, "⚠️ Действие: trial, m1, m3, m12 или off.", null);
+                        sendHtml(adminId, "⚠️ Действие: trial, w1, m1, m3, m12 или off.", null);
                         return;
                     }
                     vpn.activatePaid(targetId, tariff.get(), "admin:" + adminId + ":" + System.currentTimeMillis());
@@ -781,7 +793,7 @@ public class VpnBot extends TelegramLongPollingBot {
             for (Vpn2Account a : accountRepository.findByStatusAndReminderStageLessThanAndExpiresAtBetween(
                     Vpn2Account.STATUS_ACTIVE, 2, now.minusDays(REMIND_EXPIRED_WINDOW_DAYS), now)) {
                 remindOne(a, 2, Vpn2Account.PLAN_TRIAL.equals(a.getPlanType())
-                        ? "🔐 <b>Пробный период EGC VPN закончился</b>\nХотите продолжить? Месяц стоит 150 ₽, а за EXC дешевле."
+                        ? "🔐 <b>Пробный период EGC VPN закончился</b>\nХотите продолжить? Неделя стоит 50 ₽, месяц 150 ₽, а за EXC дешевле."
                         : "🔐 <b>Срок EGC VPN истёк</b>\nПродлите, и ключ снова заработает.",
                         "💳 Оформить");
             }
@@ -2050,7 +2062,7 @@ public class VpnBot extends TelegramLongPollingBot {
             }
         }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.url("🔐 Попробовать " + vpn.getTrialDays() + " дня бесплатно", "https://t.me/" + vpn.getBotUsername())));
+        rows.add(List.of(keyboardFactory.url("🔐 Попробовать " + daysText(vpn.getTrialDays()) + " бесплатно", "https://t.me/" + vpn.getBotUsername())));
         SendMessage m = new SendMessage();
         m.setChatId(vpn.getReviewsChannel());
         m.setText(stars(f.getRating()) + "\n\n«" + escape(f.getReviewText()) + "»\n\n" + usage);
