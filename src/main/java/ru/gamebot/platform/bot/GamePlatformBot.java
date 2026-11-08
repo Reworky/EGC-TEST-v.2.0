@@ -159,6 +159,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.PulseService pulseService;
     private final ru.gamebot.platform.service.VpnService vpnService;
     private final ru.gamebot.platform.service.Vpn2Service vpn2Service;
+    private final ru.gamebot.platform.service.Vpn2HealthService vpn2HealthService;
     private final ru.gamebot.platform.domain.repository.VpnAccountRepository vpnAccountRepository;
     private final ru.gamebot.platform.domain.repository.VpnBroadcastLogRepository vpnBroadcastLogRepository;
     private final ru.gamebot.platform.service.EngagementCeilingService engagementCeilingService;
@@ -17078,6 +17079,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleReadyBroadcastAction(CallbackQuery callbackQuery, AppUser user, String action) {
         String[] p = action.split(":");
+        if (p.length >= 2 && "auto".equals(p[1])) {
+            handleVpnAuto(callbackQuery, user, p);
+            return;
+        }
         if (p.length < 2 || !(READY_BC_W1.equals(p[1]) || READY_BC_W2.equals(p[1]))) {
             sendReadyBroadcastList(user);
             answerSilently(callbackQuery.getId());
@@ -17113,6 +17118,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback(READY_BC_W1_TITLE, "admin:readybc:" + READY_BC_W1)));
         rows.add(List.of(keyboardFactory.callback(READY_BC_W2_TITLE, "admin:readybc:" + READY_BC_W2)));
+        rows.add(List.of(keyboardFactory.callback("⏰ Авто-запуск", "admin:readybc:auto")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:comm")));
         StringBuilder sb = new StringBuilder("📦 <b>Готовые рассылки</b>\n\nЗаготовленные посты с картинкой: откройте, посмотрите, как увидит игрок, подтвердите и разошлите. "
                 + "Тем, кому рассылка про VPN уже дошла, повторно она не уйдёт.\n");
@@ -17275,16 +17281,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(admin.getTelegramId(), "⚠️ VPN-бот закрыт (VPN2_ENABLED/VPN2_OPEN), рассылка не отправлена: игроки пришли бы к «Скоро открытие».", backMenuKeyboard("admin:readybc"));
             return;
         }
-        if (!readyBroadcastRunning.compareAndSet(false, true)) {
+        if (!launchReadyBroadcast(wave, List.of(admin.getTelegramId()))) {
             answer(callbackQuery.getId(), "Рассылка уже идёт, дождитесь итога");
             return;
         }
         answer(callbackQuery.getId(), "📤 Рассылка пошла…");
+    }
+
+    /** Запуск рассылки в фоне (вручную или авто-режимом); false - другая рассылка уже идёт. Итоги получают notifyIds. */
+    private boolean launchReadyBroadcast(String wave, java.util.Collection<Long> notifyIds) {
         List<ReadyBcTarget> targets = readyBroadcastAudience(wave);
-        Long adminId = admin.getTelegramId();
+        if (!readyBroadcastRunning.compareAndSet(false, true)) {
+            return false;
+        }
         String title = readyBroadcastTitle(wave);
-        sendText(adminId, "📤 Рассылка «" + title + "» запущена: получателей " + targets.size()
-                + ". Это займёт около " + Math.max(1, targets.size() * 50 / 60000 + 1) + " мин, пришлю итог.", null);
+        for (Long id : notifyIds) {
+            sendText(id, "📤 Рассылка «" + title + "» запущена: получателей " + targets.size()
+                    + ". Это займёт около " + Math.max(1, targets.size() * 50 / 60000 + 1) + " мин, пришлю итог.", null);
+        }
         Thread worker = new Thread(() -> {
             int deliveredA = 0;
             int deliveredB = 0;
@@ -17321,23 +17335,227 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         break;
                     }
                 }
-                AppSetting setting = new AppSetting();
-                setting.setKey(READY_BC_LAST_PREFIX + wave);
-                setting.setValue(java.time.LocalDateTime.now().withNano(0) + "|" + delivered + "|" + failed);
-                appSettingRepository.save(setting);
+                vpnAutoPut(READY_BC_LAST_PREFIX + wave, java.time.LocalDateTime.now().withNano(0) + "|" + delivered + "|" + failed);
                 log.info("[ReadyBroadcast] {} -> delivered {}, failed {}", wave, delivered, failed);
-                sendText(adminId, "✅ Рассылка «" + title + "» завершена. Доставлено: <b>" + delivered + "</b>"
+                String summary = "✅ Рассылка «" + title + "» завершена. Доставлено: <b>" + delivered + "</b>"
                         + (READY_BC_W1.equals(wave) ? " (A: " + deliveredA + ", B: " + deliveredB + ")" : "") + ", не доставлено: " + failed
-                        + " (бот заблокирован игроком и т.п.). Кто и что получил, лежит в журнале vpn_broadcast_log.", backMenuKeyboard("admin:readybc"));
+                        + " (бот заблокирован игроком и т.п.). Кто и что получил, лежит в журнале vpn_broadcast_log.";
+                for (Long id : notifyIds) {
+                    sendText(id, summary, backMenuKeyboard("admin:readybc"));
+                }
             } catch (Exception e) {
                 log.error("[ReadyBroadcast] failed after {} sent", delivered, e);
-                sendText(adminId, "❌ Рассылка прервалась после " + delivered + " доставленных, смотрите лог. Повторный запуск дошлёт остальным.", backMenuKeyboard("admin:readybc"));
+                for (Long id : notifyIds) {
+                    sendText(id, "❌ Рассылка прервалась после " + delivered + " доставленных, смотрите лог. Повторный запуск дошлёт остальным.", backMenuKeyboard("admin:readybc"));
+                }
             } finally {
                 readyBroadcastRunning.set(false);
             }
         }, "ready-broadcast");
         worker.setDaemon(true);
         worker.start();
+        return true;
+    }
+
+    // ---- Авто-запуск рассылки про VPN (включается владельцем кнопкой): волна 1 в назначенное время, волна 2 через сутки.
+    // Правила: только 10:00-22:00 МСК, только при живой связке (проба из РФ), бот открывается сам перед волной 1, волна 2 только если у волны 1 доставка >= 70%, опоздание больше 12 ч - пропуск.
+    private static final String VPN_AUTO_AT_PREFIX = "vpnbc.auto.at.";
+    private static final String VPN_AUTO_DONE_PREFIX = "vpnbc.auto.done.";
+    private static final String VPN_AUTO_OPEN_KEY = "vpn2.open.override";
+    private static final java.time.ZoneId VPN_AUTO_ZONE = java.time.ZoneId.of("Europe/Moscow");
+    private final java.util.concurrent.ConcurrentHashMap<String, Long> vpnAutoAlertedAt = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private String vpnAutoGet(String key) {
+        return appSettingRepository.findById(key).map(AppSetting::getValue).orElse(null);
+    }
+
+    private void vpnAutoPut(String key, String value) {
+        AppSetting setting = new AppSetting();
+        setting.setKey(key);
+        setting.setValue(value);
+        appSettingRepository.save(setting);
+    }
+
+    private void vpnAutoDelete(String key) {
+        if (appSettingRepository.existsById(key)) {
+            appSettingRepository.deleteById(key);
+        }
+    }
+
+    /** Сообщение всем админам; throttle - не чаще раза в 3 часа на один ключ (проверка идёт каждую минуту). */
+    private void vpnAutoNotify(String key, String text, boolean throttle) {
+        long now = System.currentTimeMillis();
+        if (throttle) {
+            Long prev = vpnAutoAlertedAt.get(key);
+            if (prev != null && now - prev < 3 * 3_600_000L) {
+                return;
+            }
+            vpnAutoAlertedAt.put(key, now);
+        }
+        for (Long adminId : adminService.resolvedAdminIds()) {
+            sendText(adminId, text, null);
+        }
+    }
+
+    @org.springframework.scheduling.annotation.Scheduled(initialDelay = 30_000L, fixedDelay = 60_000L)
+    public void vpnAutoBroadcastTick() {
+        try {
+            if ("true".equals(vpnAutoGet(VPN_AUTO_OPEN_KEY))) {
+                vpn2Service.setOpenOverride(true); // после перезапуска бот остаётся открытым, пока владелец его не закроет
+            }
+            for (String wave : List.of(READY_BC_W1, READY_BC_W2)) {
+                runVpnAutoWave(wave);
+            }
+        } catch (Exception e) {
+            log.warn("[VpnAuto] tick failed", e);
+        }
+    }
+
+    private void runVpnAutoWave(String wave) {
+        String atRaw = vpnAutoGet(VPN_AUTO_AT_PREFIX + wave);
+        if (atRaw == null || atRaw.isBlank() || vpnAutoGet(VPN_AUTO_DONE_PREFIX + wave) != null) {
+            return;
+        }
+        java.time.Instant at = java.time.Instant.parse(atRaw);
+        java.time.Instant now = java.time.Instant.now();
+        String title = readyBroadcastTitle(wave);
+        if (now.isBefore(at)) {
+            return;
+        }
+        if (now.isAfter(at.plus(12, java.time.temporal.ChronoUnit.HOURS))) {
+            vpnAutoPut(VPN_AUTO_DONE_PREFIX + wave, "skipped|опоздание больше 12 ч|" + now);
+            vpnAutoNotify("late" + wave, "⏰ Авто-рассылка «" + title + "» пропущена: прошло больше 12 часов после назначенного времени (связка или бот были недоступны). Запустите вручную: Коммуникации → Готовые рассылки.", false);
+            return;
+        }
+        int hour = now.atZone(VPN_AUTO_ZONE).getHour();
+        if (hour < 10 || hour >= 22) {
+            return; // ночью не шлём: ждём окна
+        }
+        if (!vpn2Service.isEnabled()) {
+            vpnAutoNotify("off" + wave, "⏰ Авто-рассылка «" + title + "» ждёт: VPN-бот выключен (VPN2_ENABLED).", true);
+            return;
+        }
+        ru.gamebot.platform.service.Vpn2HealthService.Status st = vpn2HealthService.status();
+        if (st.panelFailures() > 0 || (st.heartbeatExpected() && (st.lastBeatMs() == 0 || !st.ok() || System.currentTimeMillis() - st.lastBeatMs() > 20 * 60_000L))) {
+            vpnAutoNotify("health" + wave, "⏰ Авто-рассылка «" + title + "» ждёт: связка Влада не в порядке или нет свежего сигнала пробы из РФ (" + st.details()
+                    + "). Отправлю сама, как только проверка пройдёт; до " + at.plus(12, java.time.temporal.ChronoUnit.HOURS).atZone(VPN_AUTO_ZONE).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm")) + " МСК.", true);
+            return;
+        }
+        if (READY_BC_W2.equals(wave)) {
+            String w1 = vpnAutoGet(VPN_AUTO_DONE_PREFIX + READY_BC_W1);
+            if (w1 == null || !w1.startsWith("sent")) {
+                vpnAutoPut(VPN_AUTO_DONE_PREFIX + wave, "skipped|волна 1 не запускалась авто-режимом|" + now);
+                vpnAutoNotify("w2skip", "⏰ Авто-рассылка «" + title + "» отменена: волна 1 не была запущена авто-режимом.", false);
+                return;
+            }
+            String last = vpnAutoGet(READY_BC_LAST_PREFIX + READY_BC_W1);
+            if (last == null) {
+                return; // волна 1 ещё досылается
+            }
+            String[] parts = last.split("\\|");
+            long ok = parts.length > 1 ? Long.parseLong(parts[1]) : 0;
+            long bad = parts.length > 2 ? Long.parseLong(parts[2]) : 0;
+            if (ok + bad > 0 && ok * 100 / (ok + bad) < 70) {
+                vpnAutoPut(VPN_AUTO_DONE_PREFIX + wave, "skipped|низкая доставка волны 1|" + now);
+                vpnAutoNotify("w2low", "⏰ Авто-рассылка «" + title + "» остановлена: у волны 1 доставлено только " + ok + " из " + (ok + bad)
+                        + ". Проверьте причину и запустите волну 2 вручную.", false);
+                return;
+            }
+            if (!vpn2Service.isOpen()) {
+                vpnAutoNotify("w2closed", "⏰ Авто-рассылка «" + title + "» ждёт: VPN-бот закрыт.", true);
+                return;
+            }
+        } else if (!vpn2Service.isOpen()) {
+            vpnAutoPut(VPN_AUTO_OPEN_KEY, "true");
+            vpn2Service.setOpenOverride(true);
+            vpnAutoNotify("opened", "🔓 VPN-бот открыт для всех авто-режимом (перед волной 1). Закрыть: Готовые рассылки → ⏰ Авто-запуск → «🔒 Закрыть VPN-бот».", false);
+        }
+        if (!launchReadyBroadcast(wave, adminService.resolvedAdminIds())) {
+            return; // другая рассылка ещё идёт: повторим через минуту
+        }
+        vpnAutoPut(VPN_AUTO_DONE_PREFIX + wave, "sent|" + now);
+        log.info("[VpnAuto] {} launched", wave);
+    }
+
+    private String vpnAutoWhen(String raw) {
+        try {
+            return java.time.Instant.parse(raw).atZone(VPN_AUTO_ZONE).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm")) + " МСК";
+        } catch (Exception e) {
+            return String.valueOf(raw);
+        }
+    }
+
+    private void sendVpnAutoScreen(AppUser user) {
+        StringBuilder sb = new StringBuilder("⏰ <b>Авто-запуск рассылки про VPN</b>\n\n");
+        boolean any = false;
+        for (String wave : List.of(READY_BC_W1, READY_BC_W2)) {
+            String at = vpnAutoGet(VPN_AUTO_AT_PREFIX + wave);
+            String done = vpnAutoGet(VPN_AUTO_DONE_PREFIX + wave);
+            sb.append("• ").append(readyBroadcastTitle(wave)).append(": ");
+            if (at == null) {
+                sb.append("не запланирована");
+            } else {
+                any = true;
+                sb.append(vpnAutoWhen(at)).append(done == null ? " (ожидает)" : " (" + done.split("\\|")[0] + ")");
+                if (done != null && done.startsWith("skipped") && done.split("\\|").length > 1) {
+                    sb.append(": ").append(done.split("\\|")[1]);
+                }
+            }
+            sb.append("\n");
+        }
+        sb.append("\nVPN-бот сейчас: <b>").append(vpn2Service.isOpen() ? "открыт" : "закрыт").append("</b>.\n\n")
+                .append("Как работает: волна 1 уходит в назначенное время (только 10:00-22:00 МСК и только если связка Влада жива), перед ней бот сам открывается для всех, "
+                        + "волна 2 уходит через сутки, если у волны 1 доставлено не меньше 70%. Опоздание больше 12 часов - пропуск. Итоги придут сюда.");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("✅ Волна 1 в ближайшие 19:00 МСК, волна 2 через сутки", "admin:readybc:auto:on:0")));
+        rows.add(List.of(keyboardFactory.callback("✅ То же, но начать завтра в 19:00 МСК", "admin:readybc:auto:on:1")));
+        if (any) {
+            rows.add(List.of(keyboardFactory.callback("⛔ Отменить авто-запуск", "admin:readybc:auto:off")));
+        }
+        rows.add(List.of(keyboardFactory.callback("🔒 Закрыть VPN-бот", "admin:readybc:auto:close")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:readybc")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleVpnAuto(CallbackQuery callbackQuery, AppUser user, String[] p) {
+        String step = p.length > 2 ? p[2] : "";
+        switch (step) {
+            case "on" -> {
+                int dayOffset = p.length > 3 && "1".equals(p[3]) ? 1 : 0;
+                java.time.Instant now = java.time.Instant.now();
+                java.time.ZonedDateTime start = now.atZone(VPN_AUTO_ZONE).withHour(19).withMinute(0).withSecond(0).withNano(0);
+                if (start.toInstant().isBefore(now.plus(20, java.time.temporal.ChronoUnit.MINUTES))) {
+                    start = start.plusDays(1);
+                }
+                start = start.plusDays(dayOffset);
+                for (String wave : List.of(READY_BC_W1, READY_BC_W2)) {
+                    vpnAutoDelete(VPN_AUTO_DONE_PREFIX + wave);
+                }
+                vpnAutoPut(VPN_AUTO_AT_PREFIX + READY_BC_W1, start.toInstant().toString());
+                vpnAutoPut(VPN_AUTO_AT_PREFIX + READY_BC_W2, start.plusDays(1).toInstant().toString());
+                answer(callbackQuery.getId(), "Авто-запуск включён");
+                sendText(user.getTelegramId(), "✅ Авто-запуск включён: волна 1 в <b>" + vpnAutoWhen(start.toInstant().toString()) + "</b>, волна 2 в <b>"
+                        + vpnAutoWhen(start.plusDays(1).toInstant().toString()) + "</b>. Отменить можно в любой момент до запуска.", null);
+            }
+            case "off" -> {
+                for (String wave : List.of(READY_BC_W1, READY_BC_W2)) {
+                    vpnAutoDelete(VPN_AUTO_AT_PREFIX + wave);
+                    vpnAutoDelete(VPN_AUTO_DONE_PREFIX + wave);
+                }
+                answer(callbackQuery.getId(), "Авто-запуск отменён");
+                sendText(user.getTelegramId(), "⛔ Авто-запуск отменён. То, что уже ушло, не отзывается.", null);
+            }
+            case "close" -> {
+                vpnAutoPut(VPN_AUTO_OPEN_KEY, "false");
+                vpn2Service.setOpenOverride(false);
+                answer(callbackQuery.getId(), "Закрыто");
+                sendText(user.getTelegramId(), vpn2Service.isOpen()
+                        ? "⚠️ Авто-открытие снято, но бот остаётся открытым: в окружении сервера VPN2_OPEN=true. Закрыть полностью можно только сменив его на false и перезапустив."
+                        : "🔒 VPN-бот закрыт для всех, кроме админов и тестеров.", null);
+            }
+            default -> answerSilently(callbackQuery.getId());
+        }
+        sendVpnAutoScreen(user);
     }
 
     private void sendAdminScheduledBroadcasts(AppUser user) {

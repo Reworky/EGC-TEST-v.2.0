@@ -101,6 +101,7 @@ public class Vpn2Service {
     private final ApplicationEventPublisher eventPublisher;
     private final boolean enabled;
     private final boolean open;
+    private volatile boolean openOverride;
     private final Set<Long> testIds;
     private final Set<Long> techIds;
     private final int inboundId;
@@ -187,7 +188,10 @@ public class Vpn2Service {
     }
 
     /** Открыт ли бот для всех; иначе только админы и VPN2_TEST_IDS. */
-    public boolean isOpen() { return open; }
+    /** Бот открыт для всех: VPN2_OPEN в окружении или открытие во время работы (авто-запуск рассылки; хранится в настройках и применяется заново после перезапуска). */
+    public boolean isOpen() { return open || openOverride; }
+
+    public void setOpenOverride(boolean value) { this.openOverride = value; }
 
     public boolean isTester(Long telegramId) { return testIds.contains(telegramId); }
 
@@ -322,7 +326,7 @@ public class Vpn2Service {
 
     /** Бот включён и виден этому человеку: всем (VPN2_OPEN), тестерам (VPN2_TEST_IDS) или админам. Основной бот по этому признаку решает, показывать ли ссылку на VPN-бот. */
     public boolean isVisibleFor(Long telegramId, boolean admin) {
-        return isEnabled() && (open || admin || testIds.contains(telegramId));
+        return isEnabled() && (isOpen() || admin || testIds.contains(telegramId));
     }
 
     /** Запись пользователя при /start; реферер и источник (например «egc») учитываются только при первом заходе; реферер - только если он сам уже пользователь бота. */
