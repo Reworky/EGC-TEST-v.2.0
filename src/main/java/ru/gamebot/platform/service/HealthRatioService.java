@@ -117,7 +117,13 @@ public class HealthRatioService {
         double ratio = getCurrentRatio();
         // Товары магазина (не категория «Вывод») считаются по сниженному курсу: SHOP_PRICE_RATIO_FACTOR x курс фонда, чтобы магазин был вдвое менее выгоден, чем вывод (решение владельца 06.11.2026, курс фонда поднят до 90%). Звёзды (категория «Вывод») - по реальному курсу.
         if (!"Вывод".equals(item.getCategory())) {
-            ratio = ratio * SHOP_PRICE_RATIO_FACTOR;
+            if (tiersEnabled()) {
+                // 08.11.2026 (владелец): цена магазина для не-партнёра равноценна для проекта выводу не-партнёра (себестоимость 1 EXC одинакова):
+                // базовая цена EXC = закупка x 1,18 x 1,2 x 100 = 141,6 x закупка, вывод = курс не-партнёра / 100 руб. за EXC, значит ratio = 1,416 x курс не-партнёра
+                ratio = SHOP_PARITY_FACTOR * Math.min(1.0, ratio / NONPARTNER_RATE_REF);
+            } else {
+                ratio = ratio * SHOP_PRICE_RATIO_FACTOR;
+            }
         }
         long price = ratio >= 1.0 ? item.getPriceCoins() : Math.round(item.getPriceCoins() / ratio);
         if ("telegram_stars".equals(item.getPurchaseGroup())) {
@@ -131,6 +137,10 @@ public class HealthRatioService {
 
     /** Коэффициент курса для цен магазина: 1,0 = изначальная формула (покупка в магазине на ~17% хуже вывода). С 06.11.2026 был 0,6 («вдвое хуже вывода»), по решению владельца возвращён к 1,0 после введения доплаты звёздами. Меньше 1 - дороже в токенах, больше - дешевле (1,2 = на уровне вывода). От реального курса фонда соотношение не зависит. */
     public static final double SHOP_PRICE_RATIO_FACTOR = 0.8;
+
+    /** Курс вывода не-партнёра (дублирует NONPARTNER_RATE / NONPARTNER_RATE_REF в GamePlatformBot: менять вместе) и коэффициент паритета магазина: 1,416 x 0,45. */
+    public static final double NONPARTNER_RATE_REF = 0.9;
+    public static final double SHOP_PARITY_FACTOR = 1.416 * 0.45;
     // 07.11.2026 (владелец): 0,8 вместо 1,0 - товары магазина на 25% дороже в токенах (игрок получает ~75% стоимости против 100% при выводе через партнёров), чтобы магазин оставался менее выгодным, чем вывод на карту банка-партнёра или биржу.
 
     /** Наценка на вывод звёздами для игроков без активного EGC Pass (05.11.2026): с Pass звёзды по обычной цене, то есть скидка Pass = отмена наценки (на 20% дешевле). */
