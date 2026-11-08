@@ -8138,6 +8138,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return "1 000 EXC = " + rubStr + " ₽ (курс " + percent + "%)";
     }
 
+    /** Курс вывода именно этого игрока: партнёр - 100%, остальные - свой (меньше); при выключенных уровнях - курс фонда. Для шапки магазина наград (09.11.2026:
+     *  там писали курс фонда, из-за чего не-партнёр видел 8,2 ₽ вместо своих 4,1 ₽). */
+    private String playerWithdrawalRateString(AppUser user, int fundPercent) {
+        if (!withdrawalTiersEnabled()) return rateString(fundPercent);
+        return tierRateString((int) Math.round(withdrawalRatioFor(user, 1, false) * 100));
+    }
+
     private String rateString(int ratioPercent) {
         double rubPer1000 = 10.0 * ratioPercent / 100.0;
         String rubStr = rubPer1000 == Math.floor(rubPer1000)
@@ -10449,7 +10456,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "🛍️ <b>Магазин наград</b>\n"
                         + "🪙 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>\n\n"
                         + "<blockquote expandable>📊 Состояние фонда: <b>" + ratioPercent + "%</b>\n"
-                        + "💱 Курс вывода: <b>" + rateString(ratioPercent) + "</b>\n"
+                        + "💱 Курс вывода: <b>" + playerWithdrawalRateString(user, ratioPercent) + "</b>\n"
                         + "📤 Лимит вывода: <b>" + sinkShopService.getMonthlyLimitShown(user) + " EXC/мес</b> (осталось: " + remaining + " EXC)\n"
                         + withdrawalLevelHint(user).stripTrailing() + "</blockquote>",
                 keyboardFactory.rowsLayout(rows));
