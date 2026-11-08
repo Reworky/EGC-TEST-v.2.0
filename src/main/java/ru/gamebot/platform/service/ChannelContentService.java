@@ -685,8 +685,10 @@ public class ChannelContentService {
                 // непонятная дата в настройке - считаем, что пора
             }
         }
-        put("cc.dcode.last", today.toString());
-        createDailyCodeDraft(false);
+        // Дату фиксируем только если черновик реально создан: пропуск из-за неодобренного прошлого черновика не должен сжигать слот на 2 дня.
+        if (createDailyCodeDraft(false).isPresent()) {
+            put("cc.dcode.last", today.toString());
+        }
     }
 
     /** force=true - ручной запуск админом (/dailycode now): создаёт новый черновик, даже если сегодня уже был. */
