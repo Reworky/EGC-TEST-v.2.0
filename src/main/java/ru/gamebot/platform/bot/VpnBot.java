@@ -235,6 +235,8 @@ public class VpnBot extends TelegramLongPollingBot {
                 }
             } else if (parts.length > 1 && "from_egc".equals(parts[1])) {
                 source = "egc"; // пришёл из игрового бота EGC
+            } else if (parts.length > 1 && parts[1].startsWith("from_bc_")) {
+                source = parts[1].substring(5); // рассылка про VPN: bc_a / bc_b (волна 1, варианты текста), bc_w2 (волна 2)
             }
         }
         vpn.registerUser(uid, from.getFirstName(), from.getUserName(), referrer, source);

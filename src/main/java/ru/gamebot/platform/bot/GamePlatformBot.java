@@ -159,6 +159,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.PulseService pulseService;
     private final ru.gamebot.platform.service.VpnService vpnService;
     private final ru.gamebot.platform.service.Vpn2Service vpn2Service;
+    private final ru.gamebot.platform.domain.repository.VpnAccountRepository vpnAccountRepository;
+    private final ru.gamebot.platform.domain.repository.VpnBroadcastLogRepository vpnBroadcastLogRepository;
     private final ru.gamebot.platform.service.EngagementCeilingService engagementCeilingService;
     private final ru.gamebot.platform.service.ChannelContentService channelContentService;
     private final ru.gamebot.platform.service.BonusCourseService bonusCourseService;
@@ -6000,7 +6002,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } catch (Exception e) {
             log.warn("Failed to read VPN status for profile of {}", user.getTelegramId(), e);
         }
-        return "🔐 <a href=\"" + link + "\">EGC VPN</a>: " + vpn2Service.getTrialDays() + " дня бесплатно, скидка за EXC\n";
+        return "🔐 <a href=\"" + link + "\">EGC VPN</a>: " + ru.gamebot.platform.service.Vpn2Service.daysText(vpn2Service.getTrialDays()) + " бесплатно, скидка за EXC\n";
     }
 
     private void sendRanksTable(AppUser user, String backCallback) {
@@ -17058,33 +17060,38 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     // ───────────────── Готовые рассылки (Коммуникации → Готовые рассылки) ─────────────────
     // Текст и картинка одобрены владельцем 03.11.2026. Рассылку можно открыть, увидеть пост как у игрока, подтвердить и разослать (повторно - тоже).
 
-    private static final String READY_BC_VPN = "vpn";
+    // ---- Готовые рассылки: EGC VPN по волнам (одобрено владельцем 08.11). Волна 1: 30 дн. + хотя бы один квест, поровну A/B; волна 2: 30 дн. без квестов. Кому уже дошло, тем повторно не шлём (vpn_broadcast_log).
+    private static final String READY_BC_W1 = "vpnw1";
+    private static final String READY_BC_W2 = "vpnw2";
     private static final String READY_BC_VPN_IMAGE = "vpn_broadcast.jpg";
-    private static final String READY_BC_VPN_TITLE = "🔐 EGC VPN: анонс";
+    private static final String READY_BC_W1_TITLE = "🔐 VPN: волна 1 (A/B)";
+    private static final String READY_BC_W2_TITLE = "🔐 VPN: волна 2";
     private static final String READY_BC_LAST_PREFIX = "readybc.last.";
-    private static final String READY_BC_VPN_HTML = "🔐 <b>EGC VPN: свой VPN в клубе</b>\n\n"
-            + "Быстрый VPN для телефона и компьютера: до 2 устройств, подключение за минуту.\n\n"
-            + "🎁 3 дня бесплатно для подписчиков канала\n"
-            + "💳 Дальше 150 ₽ в месяц, а с EXC дешевле: можно списать EXC и заплатить 100 ₽\n\n"
-            + "Где найти: 🛍️ Магазин → 🔐 VPN";
 
     private final java.util.concurrent.atomic.AtomicBoolean readyBroadcastRunning = new java.util.concurrent.atomic.AtomicBoolean(false);
 
+    private record ReadyBcTarget(AppUser user, String variant) { }
+
+    private static String readyBroadcastTitle(String wave) {
+        return READY_BC_W1.equals(wave) ? READY_BC_W1_TITLE : READY_BC_W2_TITLE;
+    }
+
     private void handleReadyBroadcastAction(CallbackQuery callbackQuery, AppUser user, String action) {
         String[] p = action.split(":");
-        if (p.length < 2 || !READY_BC_VPN.equals(p[1])) {
+        if (p.length < 2 || !(READY_BC_W1.equals(p[1]) || READY_BC_W2.equals(p[1]))) {
             sendReadyBroadcastList(user);
             answerSilently(callbackQuery.getId());
             return;
         }
+        String wave = p[1];
         String step = p.length > 2 ? p[2] : "";
         switch (step) {
-            case "ask" -> sendReadyBroadcastConfirm(user);
+            case "ask" -> sendReadyBroadcastConfirm(user, wave);
             case "go" -> {
-                startReadyBroadcast(callbackQuery, user);
+                startReadyBroadcast(callbackQuery, user, wave);
                 return;
             }
-            default -> sendReadyBroadcastPreview(user);
+            default -> sendReadyBroadcastPreview(user, wave);
         }
         answerSilently(callbackQuery.getId());
     }
@@ -17104,17 +17111,96 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendReadyBroadcastList(AppUser user) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.callback(READY_BC_VPN_TITLE, "admin:readybc:" + READY_BC_VPN)));
+        rows.add(List.of(keyboardFactory.callback(READY_BC_W1_TITLE, "admin:readybc:" + READY_BC_W1)));
+        rows.add(List.of(keyboardFactory.callback(READY_BC_W2_TITLE, "admin:readybc:" + READY_BC_W2)));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:grp:comm")));
-        String last = readyBroadcastLastLine(READY_BC_VPN);
-        sendText(user.getTelegramId(),
-                "📦 <b>Готовые рассылки</b>\n\nЗаготовленные посты с картинкой: откройте, посмотрите, как увидит игрок, подтвердите и разошлите. "
-                        + "Можно отправлять повторно.\n\n• " + READY_BC_VPN_TITLE + (last == null ? "" : "\n   " + last),
-                keyboardFactory.rowsLayout(rows));
+        StringBuilder sb = new StringBuilder("📦 <b>Готовые рассылки</b>\n\nЗаготовленные посты с картинкой: откройте, посмотрите, как увидит игрок, подтвердите и разошлите. "
+                + "Тем, кому рассылка про VPN уже дошла, повторно она не уйдёт.\n");
+        for (String wave : List.of(READY_BC_W1, READY_BC_W2)) {
+            String last = readyBroadcastLastLine(wave);
+            sb.append("\n• ").append(readyBroadcastTitle(wave)).append(last == null ? "" : "\n   " + last);
+        }
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
-    /** Картинка + подпись ровно как у игрока; file_id картинки кэшируется после первой отправки, дальше Telegram берёт её у себя. */
-    private boolean sendReadyBroadcastPhoto(Long chatId) {
+    /** Текст поста: вариант A «выгода», B «бесплатно» (волна 1) и мягкая волна 2; для игроков с EXC на неделю строка про EXC персональная. */
+    private String readyBroadcastCaption(String wave, String variant, long coins) {
+        String days = ru.gamebot.platform.service.Vpn2Service.daysText(vpn2Service.getTrialDays());
+        String head;
+        String tail;
+        if (READY_BC_W2.equals(wave)) {
+            head = "🔐 <b>В EGC появился свой VPN</b>\n\n"
+                    + "Подключение за минуту, до 2 устройств, первые " + days + " бесплатно, дальше от 50 ₽ в неделю.\n\n";
+            tail = "🪙 А платить за него можно EXC, которые вы получаете за квесты в EGC. Играете у нас, а VPN получаете в награду.";
+        } else if ("B".equals(variant)) {
+            head = "🎁 <b>" + days + " EGC VPN бесплатно</b>\n\n"
+                    + "Быстрый VPN для телефона и компьютера: подключение за минуту, до 2 устройств. Получите ключ на " + days + " без оплаты и проверьте сами.\n\n"
+                    + "Понравится: дальше всего 50 ₽ в неделю.\n\n";
+            tail = "🪙 Не хотите платить деньгами? Копите <b>EXC за квесты в EGC</b> и оплачивайте ими VPN: неделя стоит "
+                    + readyBroadcastExc(ru.gamebot.platform.service.Vpn2Service.Tariff.W1.getExcOnlyPrice()) + " EXC.";
+        } else {
+            head = "🔐 <b>EGC VPN: от 50 ₽ в неделю</b>\n\n"
+                    + "Быстрый VPN для телефона и компьютера от нашего клуба. Подключение за минуту, до 2 устройств, трафик без лимита.\n\n"
+                    + "🎁 Первые " + days + " бесплатно\n"
+                    + "💳 Дальше 50 ₽ в неделю или 150 ₽ в месяц\n\n";
+            tail = "🪙 А ещё платить за VPN можно <b>заработанными EXC</b>: играйте в EGC, выполняйте квесты и тратьте награды на свой же VPN.";
+        }
+        if (coins >= ru.gamebot.platform.service.Vpn2Service.Tariff.W1.getExcOnlyPrice()) {
+            tail = "🪙 У вас уже <b>" + readyBroadcastExc(coins) + "</b> EXC. Этого хватает на неделю VPN <b>без единого рубля</b>, а за месяц с вашими EXC будет 100 ₽ вместо 150.";
+        }
+        return head + tail;
+    }
+
+    private static String readyBroadcastExc(long value) {
+        return String.valueOf(value).replaceAll("\\B(?=(\\d{3})+(?!\\d))", " ");
+    }
+
+    private String readyBroadcastButtonText(String wave) {
+        return READY_BC_W2.equals(wave)
+                ? "🔐 Попробовать"
+                : "🔐 Получить " + ru.gamebot.platform.service.Vpn2Service.daysText(vpn2Service.getTrialDays());
+    }
+
+    /** Ссылка кнопки на VPN-бот с меткой источника: bc_a / bc_b / bc_w2 (видны в статистике VPN-бота). */
+    private String readyBroadcastButtonUrl(String wave, String variant) {
+        String mark = READY_BC_W2.equals(wave) ? "from_bc_w2" : "B".equals(variant) ? "from_bc_b" : "from_bc_a";
+        return "https://t.me/" + vpn2Service.getBotUsername() + "?start=" + mark;
+    }
+
+    private static java.time.LocalDate readyBroadcastLastActiveDay(AppUser u) {
+        java.time.LocalDate best = u.getLastActivityDate();
+        if (u.getLastBotActivityAt() != null && (best == null || u.getLastBotActivityAt().toLocalDate().isAfter(best))) {
+            best = u.getLastBotActivityAt().toLocalDate();
+        }
+        if (u.getLastMiniAppOpenAt() != null && (best == null || u.getLastMiniAppOpenAt().toLocalDate().isAfter(best))) {
+            best = u.getLastMiniAppOpenAt().toLocalDate();
+        }
+        return best;
+    }
+
+    /** Кому слать: зарегистрированные, без бана и заморозки вывода, активны за 30 дн., без ключа (пилотного или в VPN-боте), которым рассылка про VPN ещё не доходила. Волна 1 - с квестами, волна 2 - без. */
+    private List<ReadyBcTarget> readyBroadcastAudience(String wave) {
+        java.time.LocalDate since = java.time.LocalDate.now().minusDays(30);
+        java.util.Set<Long> delivered = vpnBroadcastLogRepository.findDeliveredTelegramIds();
+        java.util.Set<Long> holders = new java.util.HashSet<>(vpn2Service.keyHolderIds());
+        vpnAccountRepository.findAll().forEach(a -> holders.add(a.getTelegramId()));
+        boolean first = READY_BC_W1.equals(wave);
+        List<ReadyBcTarget> result = new ArrayList<>();
+        for (AppUser u : userService.allRegisteredUsers()) {
+            if (u.isBlocked() || u.isWithdrawalFrozen()) continue;
+            java.time.LocalDate last = readyBroadcastLastActiveDay(u);
+            if (last == null || last.isBefore(since)) continue;
+            if ((u.getCompletedQuests() >= 1) != first) continue;
+            Long tg = u.getTelegramId();
+            if (delivered.contains(tg) || holders.contains(tg)) continue;
+            String variant = first ? ((Long.hashCode(tg * 31L) & 1) == 0 ? "A" : "B") : "-";
+            result.add(new ReadyBcTarget(u, variant));
+        }
+        return result;
+    }
+
+    /** Картинка + подпись + кнопка на VPN-бот; file_id картинки кэшируется после первой отправки. null - отправлено, иначе причина сбоя (для журнала). */
+    private String sendReadyBroadcastPhoto(Long chatId, String caption, String buttonText, String buttonUrl) {
         try {
             String cached = resourceBannerFileIds.get(READY_BC_VPN_IMAGE);
             SendPhoto photo = new SendPhoto();
@@ -17127,56 +17213,66 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     photo.setPhoto(new InputFile(new java.io.ByteArrayInputStream(is.readAllBytes()), READY_BC_VPN_IMAGE));
                 }
             }
-            photo.setCaption(READY_BC_VPN_HTML);
+            photo.setCaption(caption);
             photo.setParseMode("HTML");
-            photo.setReplyMarkup(keyboardFactory.rowsLayout(List.of(
-                    List.of(keyboardFactory.callback("🔐 Открыть VPN", "menu:vpn")),
-                    List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
+            photo.setReplyMarkup(keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.url(buttonText, buttonUrl)))));
             org.telegram.telegrambots.meta.api.objects.Message sent = execute(photo);
             if (cached == null && sent.getPhoto() != null && !sent.getPhoto().isEmpty()) {
                 resourceBannerFileIds.put(READY_BC_VPN_IMAGE, sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId());
             }
-            return true;
+            return null;
         } catch (Exception e) {
             log.debug("Ready broadcast photo to {} failed: {}", chatId, e.getMessage());
-            return false;
+            String msg = String.valueOf(e.getMessage());
+            return msg.length() > 190 ? msg.substring(0, 190) : msg;
         }
     }
 
-    private void sendReadyBroadcastPreview(AppUser user) {
+    private void sendReadyBroadcastPreview(AppUser user, String wave) {
         Long chatId = user.getTelegramId();
-        if (!sendReadyBroadcastPhoto(chatId)) {
-            sendText(chatId, "❌ Не удалось показать пост (нет картинки или ошибка Telegram), смотрите лог.", backMenuKeyboard("admin:readybc"));
-            return;
+        List<String> variants = READY_BC_W1.equals(wave) ? List.of("A", "B") : List.of("-");
+        for (String variant : variants) {
+            String error = sendReadyBroadcastPhoto(chatId, readyBroadcastCaption(wave, variant, 0), readyBroadcastButtonText(wave), readyBroadcastButtonUrl(wave, variant));
+            if (error != null) {
+                sendText(chatId, "❌ Не удалось показать пост (нет картинки или ошибка Telegram), смотрите лог.", backMenuKeyboard("admin:readybc"));
+                return;
+            }
         }
-        String last = readyBroadcastLastLine(READY_BC_VPN);
+        // пример для игроков с EXC на неделю (в тексте строка про EXC персональная)
+        sendReadyBroadcastPhoto(chatId, readyBroadcastCaption(wave, variants.get(0), 24_000), readyBroadcastButtonText(wave), readyBroadcastButtonUrl(wave, variants.get(0)));
+        List<ReadyBcTarget> audience = readyBroadcastAudience(wave);
+        long a = audience.stream().filter(t -> "A".equals(t.variant())).count();
+        long b = audience.stream().filter(t -> "B".equals(t.variant())).count();
+        long withExc = audience.stream().filter(t -> t.user().getCoins() >= ru.gamebot.platform.service.Vpn2Service.Tariff.W1.getExcOnlyPrice()).count();
+        String last = readyBroadcastLastLine(wave);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.callback("📤 Разослать всем", "admin:readybc:" + READY_BC_VPN + ":ask")));
+        rows.add(List.of(keyboardFactory.callback("📤 Разослать: " + readyBroadcastTitle(wave), "admin:readybc:" + wave + ":ask")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:readybc")));
+        boolean ready = vpn2Service.isEnabled() && vpn2Service.isOpen();
         sendText(chatId,
-                "👆 <b>" + READY_BC_VPN_TITLE + "</b>: так это увидит игрок.\n"
-                        + "📊 Получателей: <b>" + userService.allRegisteredUsers().size() + "</b>\n"
+                "👆 <b>" + readyBroadcastTitle(wave) + "</b>: так это увидит игрок" + (READY_BC_W1.equals(wave) ? " (A, B и пример для игроков с EXC на неделю)" : " и пример для игроков с EXC на неделю") + ".\n"
+                        + "📊 Получателей: <b>" + audience.size() + "</b>" + (READY_BC_W1.equals(wave) ? " (A: " + a + ", B: " + b + ")" : "") + ", из них с EXC от 18 000: <b>" + withExc + "</b>\n"
                         + (last == null ? "" : last + "\n")
-                        + (vpnService.isEnabled() ? "" : "\n⚠️ VPN сейчас выключен (VPN_ENABLED), рассылку отправить нельзя, пока он не включён."),
+                        + (ready ? "" : "\n⚠️ VPN-бот закрыт (VPN2_OPEN не true), рассылку отправить нельзя: игроки пришли бы к «Скоро открытие»."),
                 keyboardFactory.rowsLayout(rows));
     }
 
-    private void sendReadyBroadcastConfirm(AppUser user) {
-        String last = readyBroadcastLastLine(READY_BC_VPN);
+    private void sendReadyBroadcastConfirm(AppUser user, String wave) {
+        String last = readyBroadcastLastLine(wave);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.callback("✅ Да, разослать всем", "admin:readybc:" + READY_BC_VPN + ":go")));
-        rows.add(List.of(keyboardFactory.callback("❌ Отмена", "admin:readybc:" + READY_BC_VPN)));
+        rows.add(List.of(keyboardFactory.callback("✅ Да, разослать", "admin:readybc:" + wave + ":go")));
+        rows.add(List.of(keyboardFactory.callback("❌ Отмена", "admin:readybc:" + wave)));
         sendText(user.getTelegramId(),
-                "⚠️ <b>Подтвердите рассылку</b>\n\n«" + READY_BC_VPN_TITLE + "» уйдёт <b>" + userService.allRegisteredUsers().size()
+                "⚠️ <b>Подтвердите рассылку</b>\n\n«" + readyBroadcastTitle(wave) + "» уйдёт <b>" + readyBroadcastAudience(wave).size()
                         + "</b> игрокам. После запуска остановить её нельзя.\n"
-                        + (last == null ? "" : "\n" + last + "\n<i>Рассылка уже отправлялась, это будет повтор.</i>"),
+                        + (last == null ? "" : "\n" + last + "\n<i>Рассылка уже отправлялась: повторно уйдёт только тем, кому ещё не доходила.</i>"),
                 keyboardFactory.rowsLayout(rows));
     }
 
-    private void startReadyBroadcast(CallbackQuery callbackQuery, AppUser admin) {
-        if (!vpnService.isEnabled()) {
-            answer(callbackQuery.getId(), "VPN выключен, рассылка не отправлена");
-            sendText(admin.getTelegramId(), "⚠️ VPN выключен (VPN_ENABLED), рассылка не отправлена: игроки пришли бы к кнопке «(скоро)».", backMenuKeyboard("admin:readybc"));
+    private void startReadyBroadcast(CallbackQuery callbackQuery, AppUser admin, String wave) {
+        if (!vpn2Service.isEnabled() || !vpn2Service.isOpen()) {
+            answer(callbackQuery.getId(), "VPN-бот закрыт, рассылка не отправлена");
+            sendText(admin.getTelegramId(), "⚠️ VPN-бот закрыт (VPN2_ENABLED/VPN2_OPEN), рассылка не отправлена: игроки пришли бы к «Скоро открытие».", backMenuKeyboard("admin:readybc"));
             return;
         }
         if (!readyBroadcastRunning.compareAndSet(false, true)) {
@@ -17184,16 +17280,40 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         answer(callbackQuery.getId(), "📤 Рассылка пошла…");
-        List<AppUser> players = new ArrayList<>(userService.allRegisteredUsers());
+        List<ReadyBcTarget> targets = readyBroadcastAudience(wave);
         Long adminId = admin.getTelegramId();
-        sendText(adminId, "📤 Рассылка «" + READY_BC_VPN_TITLE + "» запущена: получателей " + players.size()
-                + ". Это займёт около " + Math.max(1, players.size() * 50 / 60000 + 1) + " мин, пришлю итог.", null);
+        String title = readyBroadcastTitle(wave);
+        sendText(adminId, "📤 Рассылка «" + title + "» запущена: получателей " + targets.size()
+                + ". Это займёт около " + Math.max(1, targets.size() * 50 / 60000 + 1) + " мин, пришлю итог.", null);
         Thread worker = new Thread(() -> {
+            int deliveredA = 0;
+            int deliveredB = 0;
             int delivered = 0;
             int failed = 0;
             try {
-                for (AppUser player : players) {
-                    if (sendReadyBroadcastPhoto(player.getTelegramId())) delivered++; else failed++;
+                for (ReadyBcTarget target : targets) {
+                    AppUser player = target.user();
+                    String error = sendReadyBroadcastPhoto(player.getTelegramId(), readyBroadcastCaption(wave, target.variant(), player.getCoins()),
+                            readyBroadcastButtonText(wave), readyBroadcastButtonUrl(wave, target.variant()));
+                    if (error == null) {
+                        delivered++;
+                        if ("A".equals(target.variant())) deliveredA++;
+                        if ("B".equals(target.variant())) deliveredB++;
+                    } else {
+                        failed++;
+                    }
+                    try {
+                        ru.gamebot.platform.domain.model.VpnBroadcastLog row = new ru.gamebot.platform.domain.model.VpnBroadcastLog();
+                        row.setTelegramId(player.getTelegramId());
+                        row.setCampaign(wave);
+                        row.setVariant(target.variant());
+                        row.setDelivered(error == null);
+                        row.setError(error);
+                        row.setSentAt(java.time.LocalDateTime.now());
+                        vpnBroadcastLogRepository.save(row);
+                    } catch (Exception logError) {
+                        log.warn("[ReadyBroadcast] failed to write log for {}", player.getTelegramId(), logError); // журнал вторичен: рассылку не останавливаем
+                    }
                     try {
                         Thread.sleep(50); // не упираться в лимит Telegram (~30 сообщений в секунду)
                     } catch (InterruptedException ie) {
@@ -17202,15 +17322,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     }
                 }
                 AppSetting setting = new AppSetting();
-                setting.setKey(READY_BC_LAST_PREFIX + READY_BC_VPN);
+                setting.setKey(READY_BC_LAST_PREFIX + wave);
                 setting.setValue(java.time.LocalDateTime.now().withNano(0) + "|" + delivered + "|" + failed);
                 appSettingRepository.save(setting);
-                log.info("[ReadyBroadcast] {} -> delivered {}, failed {}", READY_BC_VPN, delivered, failed);
-                sendText(adminId, "✅ Рассылка «" + READY_BC_VPN_TITLE + "» завершена. Доставлено: <b>" + delivered + "</b>, не доставлено: " + failed
-                        + " (бот заблокирован игроком и т.п.).", backMenuKeyboard("admin:readybc"));
+                log.info("[ReadyBroadcast] {} -> delivered {}, failed {}", wave, delivered, failed);
+                sendText(adminId, "✅ Рассылка «" + title + "» завершена. Доставлено: <b>" + delivered + "</b>"
+                        + (READY_BC_W1.equals(wave) ? " (A: " + deliveredA + ", B: " + deliveredB + ")" : "") + ", не доставлено: " + failed
+                        + " (бот заблокирован игроком и т.п.). Кто и что получил, лежит в журнале vpn_broadcast_log.", backMenuKeyboard("admin:readybc"));
             } catch (Exception e) {
                 log.error("[ReadyBroadcast] failed after {} sent", delivered, e);
-                sendText(adminId, "❌ Рассылка прервалась после " + delivered + " доставленных, смотрите лог.", backMenuKeyboard("admin:readybc"));
+                sendText(adminId, "❌ Рассылка прервалась после " + delivered + " доставленных, смотрите лог. Повторный запуск дошлёт остальным.", backMenuKeyboard("admin:readybc"));
             } finally {
                 readyBroadcastRunning.set(false);
             }

@@ -287,6 +287,19 @@ public class Vpn2Service {
         }
     }
 
+    /** Склонение срока: «7 дней», «1 день», «3 дня». */
+    public static String daysText(int n) {
+        int mod100 = n % 100;
+        int mod10 = n % 10;
+        String word = mod100 >= 11 && mod100 <= 14 ? "дней" : mod10 == 1 ? "день" : mod10 >= 2 && mod10 <= 4 ? "дня" : "дней";
+        return n + " " + word;
+    }
+
+    /** Telegram ID всех, у кого в VPN-боте уже есть ключ: им рассылка «попробуйте VPN» не нужна. */
+    public java.util.Set<Long> keyHolderIds() {
+        return accounts.findAll().stream().map(Vpn2Account::getTelegramId).collect(java.util.stream.Collectors.toSet());
+    }
+
     public Optional<Vpn2Account> find(Long telegramId) {
         return accounts.findByTelegramId(telegramId);
     }
@@ -575,6 +588,8 @@ public class Vpn2Service {
         sb.append("Оплат за 7 дн.: <b>").append(payments.countByCreatedAtAfter(d7)).append("</b> на <b>").append(payments.sumStarsSince(d7)).append(" ⭐</b>\n");
         sb.append("Оплат за 30 дн.: <b>").append(payments.countByCreatedAtAfter(d30)).append("</b> на <b>").append(payments.sumStarsSince(d30)).append(" ⭐</b>\n\n");
         sb.append("Пришли из игрового бота EGC: <b>").append(users.countBySourceCode("egc")).append("</b>\n");
+        sb.append("Пришли из рассылки: вариант A <b>").append(users.countBySourceCode("bc_a")).append("</b>, вариант B <b>").append(users.countBySourceCode("bc_b"))
+          .append("</b>, волна 2 <b>").append(users.countBySourceCode("bc_w2")).append("</b>\n");
         sb.append("Пришли по приглашению: <b>").append(users.countByReferredByIsNotNull()).append("</b>, наград выдано: <b>").append(users.countByReferralRewardedTrue()).append("</b>");
         return sb.toString();
     }
