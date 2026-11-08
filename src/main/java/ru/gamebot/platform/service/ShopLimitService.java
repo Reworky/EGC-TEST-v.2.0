@@ -31,6 +31,13 @@ public class ShopLimitService {
         if (user.getPhoneNumber() == null || user.getPhoneNumber().isBlank()) {
             return "🔒 Для покупки нужно подтвердить номер телефона: откройте «Вывод EXC» и поделитесь контактом.";
         }
+        // 08.11.2026 (решение владельца): траты EXC на товары, как и вывод, только с указанными страной и возрастом (оплата деньгами не затрагивается)
+        boolean noCountry = user.getCountry() == null || user.getCountry().isBlank();
+        boolean noAge = user.getAge() == null;
+        if (noCountry || noAge) {
+            return "🔒 Для покупки за EXC нужно указать " + (noCountry && noAge ? "страну и возраст" : (noCountry ? "страну" : "возраст"))
+                    + " в профиле: «👤 Профиль» → «✏️ Редактировать профиль».";
+        }
         boolean tooYoung = user.getCreatedAt() != null && user.getCreatedAt().plusDays(SHOP_MIN_ACCOUNT_AGE_DAYS).isAfter(LocalDateTime.now());
         if (user.getCompletedQuests() < SHOP_MIN_QUESTS || tooYoung) {
             return "🔒 Для покупки нужно выполнить " + SHOP_MIN_QUESTS + " квеста и подождать " + SHOP_MIN_ACCOUNT_AGE_DAYS + " дня после регистрации.";

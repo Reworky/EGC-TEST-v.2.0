@@ -579,6 +579,10 @@ public class VpnBot extends TelegramLongPollingBot {
         if (exc && excBalance(uid) < Vpn2Service.EXC_DISCOUNT) {
             return "Не хватает EXC для скидки";
         }
+        if (exc) {
+            String profileBlock = userService.findByTelegramId(uid).map(ru.gamebot.platform.service.RewardService::spendProfileBlock).orElse(null);
+            if (profileBlock != null) return profileBlock + " Или оплатите без скидки за EXC.";
+        }
         return null;
     }
 
@@ -959,6 +963,14 @@ public class VpnBot extends TelegramLongPollingBot {
                 return;
             }
             AppUser u = appUser.get();
+            String profileBlock = ru.gamebot.platform.service.RewardService.spendProfileBlock(u);
+            if (profileBlock != null) {
+                List<List<InlineKeyboardButton>> blockRows = new ArrayList<>();
+                blockRows.add(List.of(keyboardFactory.url("🎮 Открыть EGC", egcUrl())));
+                blockRows.add(List.of(keyboardFactory.callback("⬅️ Способы оплаты", "m:pay")));
+                show(uid, oldMsgId, "🔒 " + escape(profileBlock), blockRows);
+                return;
+            }
             excTransactionService.refreshCoins(u);
             if (u.getCoins() < price) {
                 showExcPay(uid, oldMsgId);

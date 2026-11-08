@@ -12130,6 +12130,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (!vpnService.isEnabled()) {
                 return "VPN сейчас недоступен. Попробуйте позже.";
             }
+            if ("starsitem:VPN_MONTH_EXC".equals(payload)) {
+                String profileBlock = ru.gamebot.platform.service.RewardService.spendProfileBlock(user);
+                if (profileBlock != null) return profileBlock + " Или оплатите без скидки за EXC.";
+            }
             if ("starsitem:VPN_MONTH_EXC".equals(payload) && user.getCoins() < VPN_EXC_DISCOUNT) {
                 return "Для скидки нужно " + formatExc(VPN_EXC_DISCOUNT) + " EXC на балансе, не хватает " + formatExc(VPN_EXC_DISCOUNT - user.getCoins()) + ". Оплатите без скидки или заработайте EXC.";
             }
