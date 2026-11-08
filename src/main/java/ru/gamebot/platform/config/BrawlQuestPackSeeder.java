@@ -66,7 +66,18 @@ public class BrawlQuestPackSeeder implements CommandLineRunner {
     private void appendShowdownNote() {
         for (Quest q : questRepository.findAllByGameNameIgnoreCase(GAME)) {
             String d = q.getDescription();
-            if (!q.isBrawlRequireVictory() || d == null) continue;
+            if (d == null) continue;
+            // 08.11.2026: в ранговом режиме «Столкновения» нет (жалоба игрока), поэтому у ранговых квестов фразы быть не должно,
+            // а если она уже попала в описание, убираем (прежний код дописывал её всем квестам с победой, в том числе ранговым).
+            if (q.isBrawlRequireRanked()) {
+                String cleaned = d.replace(SHOWDOWN_NOTE, "").replace(OLD_SHOWDOWN_NOTE, "");
+                if (!cleaned.equals(d)) {
+                    q.setDescription(cleaned);
+                    questRepository.save(q);
+                }
+                continue;
+            }
+            if (!q.isBrawlRequireVictory()) continue;
             if (d.contains("Парное столкновение")) continue;
             if (d.contains(OLD_SHOWDOWN_NOTE)) {
                 q.setDescription(d.replace(OLD_SHOWDOWN_NOTE, SHOWDOWN_NOTE));
