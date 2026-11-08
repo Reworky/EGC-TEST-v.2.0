@@ -491,6 +491,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (text != null && (text.equals("/wdrecreate") || text.startsWith("/wdrecreate ")) && isEffectiveAdmin(user)) {
+            handleWdRecreateCommand(user, text.trim());
+            return;
+        }
+
         if (text != null && text.startsWith("/wdfreeze") && isEffectiveAdmin(user)) {
             String[] fz = text.trim().split("\\s+");
             if (fz.length != 3 || (!"on".equalsIgnoreCase(fz[2]) && !"off".equalsIgnoreCase(fz[2]))) {
@@ -7888,6 +7893,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("course", "status|on|off|now [%]|set КЛЮЧ ЗНАЧЕНИЕ", "«Курс дня»: бонус к курсу вывода (пост с кнопкой, проценты, потолок, бюджет)"),
             new AdminCommand("clubgoal", "status|link ID текст|off", "Цель клуба: состояние, кнопка-портал в квест, выключить портал"),
             new AdminCommand("wdfreeze", "ID on|off", "Заморозить или разморозить вывод игрока"),
+            new AdminCommand("wdrecreate", "[go]", "Вернуть EXC по всем висящим (ожидающим) заявкам на вывод и попросить игроков создать заявку заново (технический сбой). Без go - только предпросмотр"),
             new AdminCommand("otpbonus", "ID [сумма EXC] [повтор]", "Партнёрская выплата ОТП Карта: начислить EXC (по умолчанию 100 000), один раз открыть вывод на всю сумму, отметить миссию выполненной (бейдж). Повторно только со словом «повтор»"),
             new AdminCommand("tbbonus", "ID [сумма EXC] [повтор]", "Партнёрская выплата Т-Банк Black: начислить EXC (по умолчанию 25 000), открыть вывод на сумму, отметить миссию выполненной (бейдж). Повторно только со словом «повтор»"),
             new AdminCommand("tmbonus", "ID [сумма EXC] [повтор]", "Партнёрская выплата Т-Мобайл SIM: начислить EXC (по умолчанию 100 000), открыть вывод на сумму, отметить миссию выполненной (бейдж). Повторно только со словом «повтор»"),
@@ -18183,6 +18189,62 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } catch (Exception e) {
             log.error("Failed to publish review {} to channel", review.getId(), e);
         }
+    }
+
+    /** /wdrecreate [go] (08.11.2026, владелец): висящие заявки на вывод созданы по старому курсу. Без go - предпросмотр (сколько заявок и EXC),
+     *  с go - каждая PENDING-заявка отклоняется штатным rejectRequest (возврат EXC, лимит вывода и бюджет курса возвращаются) и игроку уходит просьба
+     *  создать заявку заново из-за технического сбоя. Заявки «в работе» (IN_PROGRESS) не трогаем. Ошибка по одной заявке не останавливает остальные. */
+    private void handleWdRecreateCommand(AppUser admin, String text) {
+        List<RewardRequest> pending = new ArrayList<>(rewardService.findPendingWithdrawals());
+        boolean go = text.matches("(?i)/wdrecreate\\s+go");
+        if (!go) {
+            long totalExc = 0;
+            StringBuilder sb = new StringBuilder("🔁 <b>Пересоздание висящих заявок на вывод</b>\n\n");
+            for (RewardRequest r : pending) {
+                totalExc += rewardService.actualPaidPrice(r);
+            }
+            sb.append("Ожидают: <b>").append(pending.size()).append("</b> заявок на <b>").append(totalExc).append(" EXC</b> (заявки «в работе» не затрагиваются).\n\n");
+            for (RewardRequest r : pending.subList(0, Math.min(15, pending.size()))) {
+                sb.append("• В-").append(reqDisplayId(r)).append(" · ").append(escape(r.getUser().getNickname()))
+                        .append(" · ").append(rewardService.actualPaidPrice(r)).append(" EXC\n");
+            }
+            if (pending.size() > 15) {
+                sb.append("…и ещё ").append(pending.size() - 15).append("\n");
+            }
+            sb.append("\nЧтобы вернуть EXC и разослать просьбу создать заявку заново: <code>/wdrecreate go</code>");
+            sendText(admin.getTelegramId(), sb.toString(), null);
+            return;
+        }
+        int done = 0;
+        int failed = 0;
+        long returned = 0;
+        for (RewardRequest r : pending) {
+            try {
+                long price = rewardService.actualPaidPrice(r);
+                RewardRequest rejected = rewardService.rejectRequest(r.getId(), "Технический сбой: создайте заявку заново");
+                returned += price;
+                done++;
+                try {
+                    sendText(rejected.getUser().getTelegramId(),
+                            "⚠️ <b>Заявка на вывод В-" + reqDisplayId(rejected) + " на " + price + " EXC возвращена</b>\n\n"
+                                    + "Из-за технического сбоя мы не смогли её обработать. EXC уже снова на вашем балансе.\n\n"
+                                    + "Пожалуйста, создайте заявку заново. Актуальный курс вы увидите на экране вывода. Приносим извинения за неудобства.",
+                            keyboardFactory.rowsLayout(List.of(
+                                    List.of(keyboardFactory.callback("💸 Вывести EXC", "shop:withdraw")),
+                                    List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
+                    Thread.sleep(50);
+                } catch (Exception e) {
+                    log.warn("Failed to notify user about recreated withdrawal {}", r.getId(), e);
+                }
+            } catch (Exception e) {
+                failed++;
+                log.warn("Failed to return pending withdrawal {}", r.getId(), e);
+            }
+        }
+        sendText(admin.getTelegramId(),
+                "✅ <b>Готово</b>\n\nВозвращено заявок: <b>" + done + "</b> (" + returned + " EXC на балансы)."
+                        + (failed > 0 ? "\n⚠️ Не удалось: <b>" + failed + "</b>, смотрите логи и очередь заявок." : ""),
+                null);
     }
 
     private void notifyUserWithdrawalRejected(RewardRequest req) {
