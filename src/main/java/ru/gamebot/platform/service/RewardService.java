@@ -187,8 +187,28 @@ public class RewardService {
         }
     }
 
+    /** 08.11.2026 (решение владельца): без страны, возраста и телефона из Telegram вывод закрыт для ЛЮБОГО способа (рубли, TON, звёзды).
+     *  null - профиль заполнен. Отдельно от {@link #withdrawalEligibilityBlock}: та проверка открывает экран вывода в боте, где страну, возраст
+     *  и телефон игрок как раз и заполняет, а эта стоит в точке создания заявки (бот, мини-апп и сайт приходят сюда одним путём). */
+    public String withdrawalProfileBlock(AppUser user) {
+        boolean noCountry = user.getCountry() == null || user.getCountry().isBlank();
+        boolean noAge = user.getAge() == null;
+        boolean noPhone = user.getPhoneNumber() == null || user.getPhoneNumber().isBlank();
+        if (!noCountry && !noAge && !noPhone) return null;
+        StringBuilder todo = new StringBuilder();
+        if (noCountry || noAge) {
+            todo.append("указать ").append(noCountry && noAge ? "страну и возраст" : (noCountry ? "страну" : "возраст")).append(" в профиле");
+        }
+        if (noPhone) {
+            if (todo.length() > 0) todo.append(" и ");
+            todo.append("подтвердить номер телефона кнопкой «Поделиться номером» в боте (вручную номер ввести нельзя: мы берём его только из Telegram)");
+        }
+        return "Для вывода нужно " + todo + ".";
+    }
+
     private void checkWithdrawalAllowed(AppUser lockedUser) {
         String block = withdrawalEligibilityBlock(lockedUser);
+        if (block == null) block = withdrawalProfileBlock(lockedUser);
         if (block != null) {
             throw new IllegalArgumentException(block);
         }

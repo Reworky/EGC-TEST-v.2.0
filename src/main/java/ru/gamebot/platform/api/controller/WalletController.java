@@ -319,21 +319,14 @@ public class WalletController {
         if (user == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
-        String phone = body.getPhone() != null ? body.getPhone().trim() : "";
-        if (phone.length() < 7) {
-            return errorResponse("Некорректный номер телефона.");
+        // 08.11.2026 (решение владельца): телефон берём ТОЛЬКО из Telegram, введённый или присланный через API вручную не принимаем.
+        // Мини-апп просит контакт через Telegram.WebApp.requestContact, Telegram присылает его боту, а бот сохраняет номер только если контакт
+        // игрока свой (handlePhoneShare). Здесь лишь сообщаем, дошёл ли номер до бота.
+        if (user.getPhoneNumber() != null && !user.getPhoneNumber().isBlank()) {
+            return ResponseEntity.ok(ShopActionResponseDto.builder().success(true).message("Телефон подтверждён.").build());
         }
-        if (user.getPhoneNumber() != null) {
-            return ResponseEntity.ok(ShopActionResponseDto.builder().success(true).message("Телефон уже подтверждён.").build());
-        }
-        user.setPhoneNumber(phone);
-        userService.save(user);
-        userService.applyPhoneCountry(user);
-        userService.findDuplicatePhoneUser(phone, user.getTelegramId()).ifPresent(dup -> {
-            user.setFraudSuspect(true);
-            userService.save(user);
-        });
-        return ResponseEntity.ok(ShopActionResponseDto.builder().success(true).message("Телефон подтверждён.").build());
+        return ResponseEntity.ok(ShopActionResponseDto.builder().success(false)
+                .message("Номер пока не получен от Telegram. Нажмите «Подтвердить номер» и разрешите поделиться контактом, либо сделайте это в боте кнопкой «Поделиться номером».").build());
     }
 
     @GetMapping("/withdrawals")

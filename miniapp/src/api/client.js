@@ -315,8 +315,9 @@ export async function withdrawTon(amount, walletAddress) {
   return data;
 }
 
-export async function confirmPhone(phone) {
-  const { data } = await api.post('/api/wallet/phone', { phone });
+// Номер вручную не отправляем (08.11.2026): сервер только проверяет, дошёл ли контакт до бота из Telegram (requestContact).
+export async function confirmPhone() {
+  const { data } = await api.post('/api/wallet/phone', {});
   invalidateCache('wallet');
   return data;
 }

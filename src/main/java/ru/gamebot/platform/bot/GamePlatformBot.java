@@ -402,7 +402,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        if (message.hasContact() && session.getState() == SessionState.AWAITING_PHONE_SHARE) {
+        // Контакт принимаем и вне шага «поделитесь номером»: мини-апп просит номер через Telegram.WebApp.requestContact, и Telegram присылает его боту
+        // отдельным сообщением (08.11.2026: телефон берём только из Telegram, вручную его ввести нельзя). Уже подтверждённый номер не перезаписываем.
+        if (message.hasContact() && (session.getState() == SessionState.AWAITING_PHONE_SHARE
+                || user.getPhoneNumber() == null || user.getPhoneNumber().isBlank())) {
             handlePhoneShare(user, session, message.getContact());
             return;
         }
@@ -26512,13 +26515,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handlePhoneShare(AppUser user, UserSession session, org.telegram.telegrambots.meta.api.objects.Contact contact) {
         String phone = contact.getPhoneNumber();
-        // Принимаем только СВОЙ номер: через «Прикрепить -> Контакт» можно прислать чужой, и страна определилась бы по нему.
-        if (contact.getUserId() != null && !contact.getUserId().equals(user.getTelegramId())) {
+        // Принимаем только СВОЙ номер, подтверждённый Telegram: через «Прикрепить -> Контакт» можно прислать чужой, и страна определилась бы по нему.
+        // Контакт без userId (запись из телефонной книги, набранная вручную) тоже отклоняем: Telegram сам номер не подтверждал (08.11.2026).
+        if (contact.getUserId() == null || !contact.getUserId().equals(user.getTelegramId())) {
             sendText(user.getTelegramId(),
                     "⚠️ Это не ваш номер. Нажмите кнопку «Поделиться номером» и отправьте именно свой контакт из Telegram.", null);
             return;
         }
         String pendingWithdrawal = session.getData().get("pendingWithdrawal");
+        boolean wasAwaitingShare = session.getState() == SessionState.AWAITING_PHONE_SHARE;
         session.reset();
         user.setPhoneNumber(phone);
         user.setQuickKeyboardShown(false); // removeReplyKeyboard убирает и нижнюю клавиатуру: при следующем главном меню пришлём заново
@@ -26538,8 +26543,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendWithdrawalTonAmountScreen(user);
         } else if ("stars".equals(pendingWithdrawal)) {
             sendGroupPicker(user, "telegram_stars");
-        } else {
+        } else if (wasAwaitingShare) {
             sendMainMenu(user, null);
+        } else {
+            // номер пришёл из мини-аппа (requestContact): возвращать в главное меню не нужно, игрок продолжает вывод в приложении
+            sendText(user.getTelegramId(), "✅ Номер телефона подтверждён. Вернитесь в приложение и продолжите вывод.", null);
         }
     }
 

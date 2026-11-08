@@ -759,19 +759,23 @@ function PhoneGate({ onConfirmed }) {
           setError('Вы отказались поделиться номером. Подтверждение телефона обязательно для вывода.');
           return;
         }
-        const phone = event?.responseUnsafe?.contact?.phone_number;
-        if (!phone) {
-          setBusy(false);
-          setError('Не удалось получить номер. Попробуйте ещё раз.');
-          return;
-        }
-        confirmPhone(phone)
-          .then(res => {
-            if (res.success) onConfirmed();
-            else setError(res.message);
-          })
-          .catch(() => setError('Ошибка сети. Попробуйте ещё раз.'))
-          .finally(() => setBusy(false));
+        // Номер приходит боту от самого Telegram; приложению его не передаём (сервер берёт только номер, сохранённый ботом).
+        // Бот получает контакт не мгновенно, поэтому проверяем несколько раз.
+        let tries = 0;
+        const check = () => {
+          tries += 1;
+          confirmPhone()
+            .then(res => {
+              if (res.success) { setBusy(false); onConfirmed(); }
+              else if (tries < 8) setTimeout(check, 1200);
+              else { setBusy(false); setError(res.message); }
+            })
+            .catch(() => {
+              if (tries < 8) setTimeout(check, 1200);
+              else { setBusy(false); setError('Ошибка сети. Попробуйте ещё раз.'); }
+            });
+        };
+        check();
       });
     } catch (e) {
       setBusy(false);
