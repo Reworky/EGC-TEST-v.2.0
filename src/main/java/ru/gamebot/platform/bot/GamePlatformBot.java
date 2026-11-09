@@ -10702,11 +10702,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String lastPayout = withdrawalLastPayoutLine().trim();
         String text = withdrawalTiersEnabled()
                 ? "<b>💸 Вывод EXC</b>\n\n"
-                        + "🪙 " + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC\n\n"
+                        + "🪙 " + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC ≈ "
+                        + fmtExc(Math.round(user.getCoins() * withdrawalRatioFor(user, user.getCoins(), false) / 100.0)) + " ₽\n\n"
                         + withdrawalTierRateBlock(user)
                         + "📤 Остаток лимита: " + remaining + " из " + sinkShopService.getMonthlyLimitShown(user) + " EXC/мес"
-                        + withdrawalLevelHint(user)
-                        + (lastPayout.isEmpty() ? "" : "\n" + lastPayout) + "\n\n"
+                        + withdrawalLevelHint(user) + "\n\n"
                         + "Выберите способ получения:"
                 : "💸 <b>Вывод EXC</b>\n"
                 + "🪙 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b> · минимум 5 000\n"
