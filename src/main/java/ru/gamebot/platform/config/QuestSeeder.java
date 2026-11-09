@@ -2273,7 +2273,9 @@ public class QuestSeeder implements CommandLineRunner {
         }
         // Уточнение шагов 1-2 (30.10.2026: новая карта по ссылке, пополнить на 500 ₽, платить именно ею): квест уже с новым названием, но со старой инструкцией - обновляем один раз.
         questRepository.findFirstByTitleAndGameName(OTP_CARD_TITLE, "ОТП Банк")
-                .filter(q -> q.getDescription() == null || !q.getDescription().contains("Нужно один раз потратить 500 ₽")
+                // 10.11.2026: строки «Карта бесплатная. Нужно один раз потратить 500 ₽…» в карточке больше нет - обновляем ровно один раз тех, у кого она ещё в базе (раньше условие
+                // было «не содержит» и после удаления строки текст перезаписывался бы на КАЖДОМ старте, затирая правки из админки)
+                .filter(q -> q.getDescription() == null || q.getDescription().contains("Нужно один раз потратить 500 ₽")
                         || (q.getInstruction() != null && q.getInstruction().contains("на donatov.net на 500 ₽")))
                 .ifPresent(q -> {
                     applyOtpCardContent(q);
