@@ -16773,6 +16773,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String passBadge = sinkShopService.isEgcPassActive(requester) ? " ⭐️<b>EGC Pass — приоритет</b>" : "";
         String dataLine = req.getPayoutDetails() != null && !req.getPayoutDetails().isBlank()
                 ? "\n📋 Данные для выдачи: <code>" + escape(req.getPayoutDetails()) + "</code>" : "";
+        // 09.11.2026 (владелец): каждая покупка дороже 20 000 EXC помечается для модератора - проверьте игрока и данные до выдачи
+        if (rewardService.actualPaidPrice(req) >= LARGE_PURCHASE_ALERT_EXC) {
+            phoneDupWarning += "\n\n⚠️ <b>Крупная покупка</b> (от " + fmtExc(LARGE_PURCHASE_ALERT_EXC) + " EXC): проверьте игрока, возраст и данные для выдачи перед выдачей.";
+        }
         sinkShopService.getRemainingShopLimit(requester);
         long shopSpent = requester.getMonthlyShopSpentExc();
         long shopLimit = sinkShopService.getShopSpendLimit(requester);
@@ -27627,6 +27631,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Доля живых денег (звёзды) при гибридной оплате доната: 30% для обычных игроков, 20% для EGC Pass (решение владельца 06.11.2026). */
+    /** Покупка в магазине от этой суммы в EXC помечается в карточке заявки как крупная (09.11.2026). */
+    private static final long LARGE_PURCHASE_ALERT_EXC = 20_000;
     private static final double HYBRID_REAL_SHARE = 0.30;
     private static final double HYBRID_REAL_SHARE_PASS = 0.20;
 
@@ -28280,7 +28286,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + gemPurchasePaymentLine(req) + gemPurchaseCodeLine(req) + "\n"
                     + "🎁 XP-бонус: <b>" + req.getXpBonus() + "</b>\n"
                     + "📌 Статус: <b>" + req.getStatus() + "</b>"
-                    + (req.getRejectReason() != null ? "\n💬 Причина отклонения: " + escape(req.getRejectReason()) : "");
+                    + (req.getRejectReason() != null ? "\n💬 Причина отклонения: " + escape(req.getRejectReason()) : "")
+                    // 09.11.2026: EXC-часть доната дороже 20 000 EXC - та же пометка «крупная покупка», что у заявок на награды
+                    + (req.getExcPaid() >= LARGE_PURCHASE_ALERT_EXC ? "\n\n⚠️ <b>Крупная покупка</b> (EXC-часть " + fmtExc(req.getExcPaid()) + "): проверьте игрока, возраст и тег перед выдачей." : "");
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
             if (req.getStatus() == GemPurchaseStatus.PENDING) {
                 rows.add(List.of(

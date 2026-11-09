@@ -427,6 +427,8 @@ public class RewardService {
         }
         String eligibility = shopLimitService.shopEligibilityBlock(user);
         if (eligibility != null) return eligibility;
+        String ageBlock = shopLimitService.realValueAgeBlock(user, item);
+        if (ageBlock != null) return ageBlock;
         if (user.getCoins() < excAmount) {
             return "Недостаточно EXC: нужно " + excAmount + ", у вас " + user.getCoins() + ".";
         }

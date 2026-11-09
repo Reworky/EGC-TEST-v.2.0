@@ -25,6 +25,21 @@ public class ShopLimitService {
     private static final String WITHDRAWAL_CATEGORY = "Вывод";
 
     /** Текст отказа, если покупатель не прошёл базовую защиту магазина; null - можно. Звёзды (категория «Вывод») проверяются как вывод и сюда не попадают. */
+    /** Возраст, с которого EXC можно тратить на товары с прямой денежной ценностью (карты Steam/PSN, пополнение Steam): младше - нельзя
+     *  (решение владельца 09.11.2026; Steam сам принимает аккаунты с 13 лет). Оплата своими деньгами сюда не относится. */
+    public static final int REAL_VALUE_MIN_AGE = 14;
+
+    private static final java.util.Set<String> REAL_VALUE_GROUPS = java.util.Set.of("gift_card", "steam_topup", "cs2");
+
+    /** null - можно; иначе текст отказа. Возраст не указан не блокирует здесь: профиль проверяет shopEligibilityBlock. */
+    public String realValueAgeBlock(AppUser user, RewardItem item) {
+        if (item == null || item.getPurchaseGroup() == null || !REAL_VALUE_GROUPS.contains(item.getPurchaseGroup())) return null;
+        if (user.getAge() != null && user.getAge() < REAL_VALUE_MIN_AGE) {
+            return "🔒 Эту покупку за EXC можно оформить с " + REAL_VALUE_MIN_AGE + " лет.";
+        }
+        return null;
+    }
+
     public String shopEligibilityBlock(AppUser user) {
         if (user.isBlocked()) return "🔒 Аккаунт заблокирован. Напишите в поддержку.";
         if (user.isWithdrawalFrozen()) return "🔒 Покупки временно приостановлены на проверку. Напишите в поддержку.";
@@ -64,6 +79,10 @@ public class ShopLimitService {
             String eligibility = shopEligibilityBlock(user);
             if (eligibility != null) {
                 throw new IllegalArgumentException(eligibility);
+            }
+            String ageBlock = realValueAgeBlock(user, item);
+            if (ageBlock != null) {
+                throw new IllegalArgumentException(ageBlock);
             }
         }
         // Вывод в звёздах — это ВЫВОД, а не товар магазина (как рубли/TON, которые вообще не проходят
@@ -216,6 +235,8 @@ public class ShopLimitService {
         if (!WITHDRAWAL_CATEGORY.equals(item.getCategory())) {
             String eligibility = shopEligibilityBlock(user);
             if (eligibility != null) return eligibility;
+            String ageBlock = realValueAgeBlock(user, item);
+            if (ageBlock != null) return ageBlock;
         }
 
         boolean isStarsWithdrawal = "telegram_stars".equals(item.getPurchaseGroup());

@@ -387,7 +387,8 @@ public class SinkShopService {
     /** Остаток лимита = остаток месячного лимита + разовый партнёрский запас (см. AppUser.partnerWithdrawalAllowanceExc). */
     public long getRemainingWithdrawalLimit(AppUser user) {
         refreshWithdrawalMonthIfNeeded(user);
-        return Math.max(0, getMonthlyLimit(user) - user.getMonthlyWithdrawnExc()) + Math.max(0, user.getPartnerWithdrawalAllowanceExc());
+        long used = user.getMonthlyWithdrawnExc() + (sharedPoolActive() ? user.getMonthlyShopSpentExc() : 0);
+        return Math.max(0, getMonthlyLimit(user) - used) + Math.max(0, user.getPartnerWithdrawalAllowanceExc());
     }
 
     /** Знаменатель «осталось из» на экранах вывода: при действующем разовом запасе остаток может быть больше месячного лимита - тогда показываем его же. */
@@ -419,7 +420,8 @@ public class SinkShopService {
         }
         long limit = getMonthlyLimit(user);
         long before = user.getMonthlyWithdrawnExc();
-        long extra = Math.max(0, before + amount - limit) - Math.max(0, before - limit);
+        long shopShare = sharedPoolActive() ? user.getMonthlyShopSpentExc() : 0; // траты в магазине занимают тот же месячный лимит
+        long extra = Math.max(0, before + shopShare + amount - limit) - Math.max(0, before + shopShare - limit);
         user.setMonthlyWithdrawnExc(before + amount);
         if (extra > 0) {
             user.setPartnerWithdrawalAllowanceExc(Math.max(0, user.getPartnerWithdrawalAllowanceExc() - extra));
@@ -433,7 +435,8 @@ public class SinkShopService {
         long limit = getMonthlyLimit(user);
         long before = user.getMonthlyWithdrawnExc();
         long after = Math.max(0, before - amount);
-        long extraBack = Math.max(0, before - limit) - Math.max(0, after - limit);
+        long shopShare = sharedPoolActive() ? user.getMonthlyShopSpentExc() : 0;
+        long extraBack = Math.max(0, before + shopShare - limit) - Math.max(0, after + shopShare - limit);
         user.setMonthlyWithdrawnExc(after);
         if (extraBack > 0) {
             user.setPartnerWithdrawalAllowanceExc(Math.max(0, user.getPartnerWithdrawalAllowanceExc()) + extraBack);
@@ -441,8 +444,16 @@ public class SinkShopService {
         appUserRepository.save(user);
     }
 
-    /** Лимит трат в магазине наград = множитель x месячный лимит вывода (владелец 05.11.2026: чтобы EXC можно было тратить, а не только выводить). */
-    public static final int SHOP_SPEND_LIMIT_MULTIPLIER = 6;
+    /** Лимит трат в магазине наград = множитель x месячный лимит вывода. Был x6 (05.11.2026), с 09.11.2026 x1 (решение владельца: магазин не должен давать вывести через товары больше, чем сам вывод), с 01.12.2026 общий пул с выводом. */
+    public static final int SHOP_SPEND_LIMIT_MULTIPLIER = 1; // 09.11.2026 (владелец): был 6, магазин не должен выводить больше, чем вывод; с 01.12.2026 пул общий с выводом
+
+    /** С этого месяца лимит вывода и трат в магазине - один общий пул (траты уменьшают остаток вывода и наоборот). До декабря 2026 пулы раздельные, чтобы
+     *  игроки, уже потратившие в магазине в ноябре под прежним лимитом x6, не потеряли вывод до конца месяца. */
+    private static final java.time.YearMonth SHARED_POOL_FROM = java.time.YearMonth.of(2026, 12);
+
+    private boolean sharedPoolActive() {
+        return !java.time.YearMonth.now().isBefore(SHARED_POOL_FROM);
+    }
 
     /** Лимит по рангу и Pass БЕЗ прежнего множителя ×5 для подписок, оплаченных до 25.10.2026: для лимита трат в магазине берём его (владелец 06.11.2026: у Pass нет ×5). */
     public long getMonthlyLimitWithoutLegacy(AppUser user) {
@@ -456,7 +467,8 @@ public class SinkShopService {
 
     public long getRemainingShopLimit(AppUser user) {
         refreshWithdrawalMonthIfNeeded(user);
-        return Math.max(0, getShopSpendLimit(user) - user.getMonthlyShopSpentExc());
+        long used = user.getMonthlyShopSpentExc() + (sharedPoolActive() ? user.getMonthlyWithdrawnExc() : 0);
+        return Math.max(0, getShopSpendLimit(user) - used);
     }
 
     @Transactional
