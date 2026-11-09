@@ -26,6 +26,10 @@ public final class PartnerMissions {
             + "Вывод открыт разово: всю накопленную сумму можно вывести одной заявкой, сверх обычного месячного лимита.\n\n"
             + "🏦 Бейдж «Банкир EGC» уже в твоём профиле.";
 
+    /** Финал для квестов, которые дают только награду и не открывают партнёрских привилегий (Т-Банк Black, Т-Мобайл): 09.11.2026, владелец. */
+    private static final String FINAL_TEXT_PLAIN = "🏆 <b>Миссия выполнена!</b>\n\n"
+            + "Банк выплатил бонус, мы начислили тебе {bonus} EXC.";
+
     public static final PartnerMission OTP = PartnerMission.builder()
             .key("otp")
             .gameName("ОТП Банк")
@@ -114,9 +118,9 @@ public final class PartnerMissions {
             .stage4Text(STAGE4_HEAD
                     + "1️⃣ Банк вернёт тебе 500 ₽ на карту в течение 30 дней после покупки (до {date}). Раньше денег может не быть.\n"
                     + "2️⃣ Когда деньги придут, вернись сюда и нажми <b>«💰 Банк вернул мне 500 ₽»</b>. Мы напомним об этом сами.\n"
-                    + "3️⃣ Мы проверим выплату, начислим {bonus} EXC и откроем вывод всей суммы разом.\n"
+                    + "3️⃣ Мы проверим выплату и начислим {bonus} EXC.\n"
                     + "Если до {date7} денег нет, напиши менеджеру.")
-            .finalText(FINAL_TEXT)
+            .finalText(FINAL_TEXT_PLAIN)
             .bankDateWord("до")
             .bankClaimButton("💰 Банк вернул мне 500 ₽")
             .bankDayCheck("Проверь карту.")
@@ -175,9 +179,9 @@ public final class PartnerMissions {
             .stage4Text(STAGE4_HEAD
                     + "1️⃣ Банк начислит 500 бонусов на связь: обычно в течение 8 дней, не позже {date}. До этого не выводи деньги с баланса и не закрывай счёт «Т-Мобайл».\n"
                     + "2️⃣ Когда бонус придёт, вернись сюда и нажми <b>«💰 Бонус от банка пришёл»</b>. Мы напомним об этом сами.\n"
-                    + "3️⃣ Мы проверим выплату, начислим {bonus} EXC и откроем вывод всей суммы разом.\n"
+                    + "3️⃣ Мы проверим выплату и начислим {bonus} EXC.\n"
                     + "Если до {date7} бонуса нет, напиши менеджеру.")
-            .finalText(FINAL_TEXT)
+            .finalText(FINAL_TEXT_PLAIN)
             .bankDateWord("до")
             .bankClaimButton("💰 Бонус от банка пришёл")
             .bankDayCheck("Проверь баланс SIM.")
@@ -207,6 +211,12 @@ public final class PartnerMissions {
             .build();
 
     public static final List<PartnerMission> ALL = List.of(OTP, T_BLACK, T_MOBILE);
+
+    /** Партнёрские привилегии (статус партнёра, курс вывода 100%, разовый запас вывода, бейдж «Банкир EGC») даёт только квест из WithdrawalPartners.ALL (сейчас ОТП, решение
+     *  владельца 09.11.2026); остальные квесты банков и операторов только платят награду. */
+    public static boolean grantsPartner(PartnerMission pm) {
+        return pm != null && WithdrawalPartners.ALL.stream().anyMatch(b -> b.mission().key().equals(pm.key()));
+    }
 
     /** Конфиг миссии квеста по его названию (null, если квест не партнёрская миссия). */
     public static PartnerMission forQuest(Quest quest) {
