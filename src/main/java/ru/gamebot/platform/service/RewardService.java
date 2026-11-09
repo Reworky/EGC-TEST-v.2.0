@@ -743,13 +743,22 @@ public class RewardService {
         long price = actualPaidPrice(req);
         excTx.creditExc(requester, price, ExcTransactionService.SHOP_REFUND, "Отмена заявки: " + req.getRewardItem().getTitle());
         // звёзды (категория «Вывод») возвращаются в лимит вывода, остальные товары - в лимит трат магазина (с 05.11.2026)
-        if (WITHDRAWAL_CATEGORY.equals(req.getRewardItem().getCategory())) {
-            sinkShopService.reverseWithdrawal(requester, price);
-        } else {
-            sinkShopService.reverseShopSpend(requester, price);
+        // 09.11.2026: лимит возвращаем только если заявка создана в ЭТОМ месяце. Заявка прошлого месяца уже не лежит в счётчике (он обнулился),
+        // и вычитание ломало бы лимит текущего месяца (игрок с живым выводом в новом месяце получал лишний лимит, отменяя старую заявку).
+        if (createdInCurrentMonth(req)) {
+            if (WITHDRAWAL_CATEGORY.equals(req.getRewardItem().getCategory())) {
+                sinkShopService.reverseWithdrawal(requester, price);
+            } else {
+                sinkShopService.reverseShopSpend(requester, price);
+            }
         }
         bonusCourseService.releaseBudget(req);
         return rewardRequestRepository.save(req);
+    }
+
+    /** Заявка создана в текущем календарном месяце (по часовому поясу сервера, тому же, что у месячных счётчиков вывода и трат). */
+    private static boolean createdInCurrentMonth(RewardRequest req) {
+        return req.getCreatedAt() == null || java.time.YearMonth.from(req.getCreatedAt()).equals(java.time.YearMonth.now());
     }
 
     @Transactional
@@ -764,10 +773,12 @@ public class RewardService {
         boolean isWithdrawal = "Вывод".equals(req.getRewardItem().getCategory());
         long price = actualPaidPrice(req);
         excTx.creditExc(user, price, ExcTransactionService.SHOP_REFUND, "Возврат (отклонение): " + req.getRewardItem().getTitle());
-        if (isWithdrawal) {
-            sinkShopService.reverseWithdrawal(user, price);
-        } else {
-            sinkShopService.reverseShopSpend(user, price);
+        if (createdInCurrentMonth(req)) { // см. cancelRequest: заявка прошлого месяца месячный счётчик не трогает
+            if (isWithdrawal) {
+                sinkShopService.reverseWithdrawal(user, price);
+            } else {
+                sinkShopService.reverseShopSpend(user, price);
+            }
         }
         bonusCourseService.releaseBudget(req);
         // Отклонение — не вина игрока, поэтому снимаем cooldown по ценовому диапазону товара (Layer 4)
