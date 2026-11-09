@@ -23,20 +23,30 @@ public final class ManagerMessage {
 
     /** Игрок из базы: ник, @username, ID и баланс EXC. */
     public static String build(AppUser user, String headline, String where, String need, String facts) {
+        return build(user, headline, where, need, facts, null);
+    }
+
+    /** То же, но с короткой ссылкой на заявку в боте (t.me/<бот>?start=rq_...): менеджер нажимает её прямо в личке и сразу попадает на карточку заявки. */
+    public static String build(AppUser user, String headline, String where, String need, String facts, String requestLink) {
         String nick = user.getNickname() == null || user.getNickname().isBlank() ? "без ника" : user.getNickname();
         String tg = user.getTelegramUsername() != null && !user.getTelegramUsername().isBlank() ? " @" + user.getTelegramUsername() : "";
         String player = "Игрок: " + nick + tg + " · ID " + user.getTelegramId() + " · " + user.getCoins() + " EXC";
-        return compose(player, headline, where, need, facts);
+        return compose(player, headline, where, need, facts, requestLink);
     }
 
     /** Игрок без записи в базе EGC (например, пришёл только в VPN-бот): имя из Telegram и ID. */
     public static String buildForId(Long telegramId, String name, String headline, String where, String need, String facts) {
-        String player = "Игрок: " + (name == null || name.isBlank() ? "без имени" : name) + " · ID " + telegramId;
-        return compose(player, headline, where, need, facts);
+        return buildForId(telegramId, name, headline, where, need, facts, null);
     }
 
-    private static String compose(String player, String headline, String where, String need, String facts) {
-        String head = "Здравствуйте! " + headline + ".\nОткуда: " + where;
+    public static String buildForId(Long telegramId, String name, String headline, String where, String need, String facts, String requestLink) {
+        String player = "Игрок: " + (name == null || name.isBlank() ? "без имени" : name) + " · ID " + telegramId;
+        return compose(player, headline, where, need, facts, requestLink);
+    }
+
+    private static String compose(String player, String headline, String where, String need, String facts, String requestLink) {
+        String refLine = requestLink == null || requestLink.isBlank() ? "" : "\nЗаявка: " + requestLink;
+        String head = "Здравствуйте! " + headline + ".\nОткуда: " + where + refLine;
         String needLine = need == null || need.isBlank() ? "" : "\nНужно: " + need;
         String factsLine = facts == null || facts.isBlank() ? "" : "\n" + facts;
         List<String> variants = new ArrayList<>();
@@ -46,7 +56,7 @@ public final class ManagerMessage {
         for (String v : variants) {
             if (encodedLength(v) <= MAX_ENCODED) return v;
         }
-        return "Здравствуйте! " + headline + ".\n" + player;
+        return "Здравствуйте! " + headline + "." + refLine + "\n" + player;
     }
 
     /** Ссылка на чат менеджера с готовым текстом; пробелы кодируем как %20 (Telegram не разворачивает «+» обратно). */

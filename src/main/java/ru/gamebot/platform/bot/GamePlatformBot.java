@@ -950,6 +950,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Сотрудники (модератор/admin) получают доступ к меню без прохождения регистрации
         boolean isStaff = isEffectiveModerator(user);
         if (isStaff) {
+            // Ссылка из сообщения игрока менеджеру (t.me/<бот>?start=rq_g123): сразу открываем карточку этой заявки
+            if (openRequestFromDeepLink(user, message.getText())) {
+                return;
+            }
             sendMainMenu(user, roleWelcomeText(user, streakMessage));
             return;
         }
@@ -1725,6 +1729,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 shopRubleOrderRepository.save(cancelOrder);
             }
             sendText(user.getTelegramId(), "Заявка на оплату отменена.", backMenuKeyboard("menu:shop"));
+            return;
+        }
+        if (data.startsWith("gemmgr:")) {
+            answerSilently(callbackQuery.getId());
+            String[] mgParts = data.substring("gemmgr:".length()).split(":", 2);
+            GemPurchaseService.GemPackage mgPkg = mgParts.length == 2 ? gemPurchaseService.findPackage(mgParts[0], mgParts[1]).orElse(null) : null;
+            if (mgPkg == null) {
+                sendText(user.getTelegramId(), "❌ Пакет не найден, попробуйте выбрать заново.", backMenuKeyboard("menu:shop"));
+                return;
+            }
+            String mgTag = gemPurchaseGameTag(user, mgParts[0]);
+            if (mgTag == null || mgTag.isBlank()) {
+                startGemPurchase(user, session, mgParts[0], mgParts[1]);
+                return;
+            }
+            requestGemPurchaseRubViaManager(user, mgParts[0], mgPkg, mgTag);
             return;
         }
         if (data.startsWith("gemrub:") || data.startsWith("gemrubok:")) {
@@ -9265,7 +9285,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String subNumber = String.valueOf(sub.getDisplayId() != null ? sub.getDisplayId() : sub.getId());
         String text = managerHelpMessage(sub.getUser(), "Нужна помощь по квесту «" + pm.shortTitle() + "»",
                 "бот → Квесты → " + pm.shortTitle() + " → этап " + stage, "помощь с этапом " + stage + " квеста банка, подскажите, что делать дальше",
-                "Заявка К-" + subNumber);
+                "Заявка К-" + subNumber,
+                requestDeepLink('s', sub.getId()));
         String encoded = java.net.URLEncoder.encode(text, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
         return keyboardFactory.url("💬 Написать менеджеру", "https://t.me/" + appProperties.getSupportUsername() + "?text=" + encoded);
     }
@@ -27563,7 +27584,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "бот → Магазин наград → Донат → оплата «EXC + ₽»", "пришлите реквизиты (карта или СБП), переведу " + quote.rub() + " ₽",
                 "Заказ: " + quote.rub() + " ₽ + " + fmtExc(quote.exc()) + " EXC"
                         + (order == null ? "" : " · оплата #" + order.getId())
-                        + (gemPurchaseGameTag(user, gameKey) == null ? "" : " · тег " + gemPurchaseGameTag(user, gameKey)));
+                        + (gemPurchaseGameTag(user, gameKey) == null ? "" : " · тег " + gemPurchaseGameTag(user, gameKey)),
+                order == null ? null : requestDeepLink('o', order.getId()));
         String encoded = java.net.URLEncoder.encode(text, StandardCharsets.UTF_8).replace("+", "%20");
         sendText(user.getTelegramId(),
                 "🧾 <b>Оплата: " + quote.rub() + " ₽ и " + fmtExc(quote.exc()) + " EXC</b>\n"
@@ -27820,13 +27842,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long price = gemPurchasePriceFor(user, pkg);
         // 09.11.2026 (владелец): оплата доната криптой (GRAM, TON) убрана - ею не пользуются, а модераторов она только путала.
         // Без EXC-позиции у пакета остаётся только вопрос менеджеру.
-        String helpNoExcText = managerHelpMessage(user, "Хочу купить " + gemLabelWithGame(pkg, gameKey) + " за рубли",
-                "бот → Магазин наград → Донат → " + gemLabelWithGame(pkg, gameKey),
-                "оплата рублями, пришлите реквизиты (карта или СБП)",
-                gemOrderFacts(user, gameKey, pkg));
+        // Заявка на оплату рублями создаётся по нажатию (gemmgr), чтобы сообщение менеджеру уже содержало ссылку на неё
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
-                List.of(keyboardFactory.url("💬 Оплатить рублями через менеджера", "https://t.me/" + appProperties.getSupportUsername() + "?text="
-                        + java.net.URLEncoder.encode(helpNoExcText, StandardCharsets.UTF_8).replace("+", "%20"))),
+                List.of(keyboardFactory.callback("💬 Оплатить рублями через менеджера", "gemmgr:" + gameKey + ":" + pkg.key())),
                 List.of(keyboardFactory.callback("❌ Отмена", gemDonateBackTarget(gameKey, pkg)))
         ));
         // Оплата EXC первой строкой, если у пакета есть EXC-позиция; недоступная (лимит, ранг) ведёт в карточку со статусом
@@ -27961,6 +27979,50 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 )));
     }
 
+    /** Оплата рублями через менеджера для пакетов без EXC-варианта (Brawl Pass и т.п., 09.11.2026): заявка создаётся сразу, чтобы в сообщении
+     *  менеджеру была ссылка на неё. Открытую заявку на тот же пакет за последние сутки переиспользуем, а не плодим дубли. Деньги тут не списываются. */
+    private void requestGemPurchaseRubViaManager(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg, String tag) {
+        try {
+            String gameName = GemPurchaseService.gameName(gameKey);
+            LocalDateTime dayAgo = LocalDateTime.now().minusHours(24);
+            GemPurchaseRequest req = gemPurchaseService.findByUser(user).stream()
+                    .filter(r -> r.getStatus() == ru.gamebot.platform.domain.enums.GemPurchaseStatus.PENDING)
+                    .filter(r -> gameName.equals(r.getGameName()) && pkg.key().equals(r.getPackageKey()))
+                    .filter(r -> r.getPaymentMethod() == null || "RUB".equals(r.getPaymentMethod()))
+                    .filter(r -> r.getRubPaid() == 0 && r.getExcPaid() == 0)
+                    .filter(r -> r.getCreatedAt() != null && r.getCreatedAt().isAfter(dayAgo))
+                    .findFirst().orElse(null);
+            boolean fresh = req == null;
+            if (fresh) {
+                long price = gemPurchasePriceFor(user, pkg);
+                req = gemPurchaseService.createManualRequest(user, gameKey, pkg, price, tag, "RUB");
+                notifyAdminsAboutGemPurchase(req);
+            }
+            sendText(user.getTelegramId(),
+                    "✅ <b>Заявка Д-" + req.getDisplayId() + (fresh ? " создана!" : " уже открыта.") + "</b>\n\n"
+                            + escape(gemLabelWithGame(pkg, gameKey)) + " на тег <code>" + escape(tag) + "</code>\n"
+                            + "💰 К оплате: <b>" + req.getPriceRub() + " ₽</b>\n\n"
+                            + "1️⃣ Нажмите «Написать менеджеру», сообщение уже готово.\n"
+                            + "2️⃣ Менеджер пришлёт реквизиты (карта или СБП).\n"
+                            + "3️⃣ Переведите деньги и отправьте чек менеджеру.\n\n"
+                            + "⚠️ Реквизиты присылает только менеджер @" + escape(appProperties.getSupportUsername()) + ".",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.url("💬 Написать менеджеру", managerDmLink(req, pkg, "оплата рублями, пришлите реквизиты (карта или СБП)"))),
+                            List.of(keyboardFactory.callback("❌ Отменить заявку", "gemcancel:ask:" + req.getId())),
+                            List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
+        } catch (Exception e) {
+            log.error("Failed to create RUB gem request via manager for user {} ({}:{})", user.getTelegramId(), gameKey, pkg.key(), e);
+            String alert = "🚨 <b>Ошибка заявки на донат рублями</b>\n\n"
+                    + "👤 Игрок: <b>" + escape(user.getNickname()) + "</b> (<code>" + user.getTelegramId() + "</code>)\n"
+                    + "📦 Пакет: <code>" + escape(gameKey + ":" + pkg.key()) + "</code>\n\n"
+                    + "Заявка не создана, игрок увидел ошибку. Деньги не списывались.";
+            for (Long adminId : adminService.allAdminIds()) {
+                sendText(adminId, alert, null);
+            }
+            sendText(user.getTelegramId(), "❌ Не получилось создать заявку. Попробуйте ещё раз или напишите в «Помощь».", backMenuKeyboard("menu:shop"));
+        }
+    }
+
     private static final java.util.Map<String, String> GEM_CANCEL_REASONS = new java.util.LinkedHashMap<>();
     static {
         GEM_CANCEL_REASONS.put("price", "дорого");
@@ -28046,9 +28108,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  URLEncoder кодирует пробел как '+', Telegram его не разворачивает обратно (та же проблема,
      *  что и в UserService.encodeUrlComponent для t.me/share/url) — докручиваем на %20 вручную. */
     private String managerDmLink(GemPurchaseRequest req, GemPurchaseService.GemPackage pkg) {
+        return managerDmLink(req, pkg, "оплата заявки, подскажите, как оплатить");
+    }
+
+    private String managerDmLink(GemPurchaseRequest req, GemPurchaseService.GemPackage pkg, String need) {
         String text = managerHelpMessage(req.getUser(), "Хочу оплатить заявку Д-" + req.getDisplayId(), "бот → Магазин наград → Донат → моя заявка",
-                "оплата заявки, подскажите, как оплатить",
-                "Заказ: " + pkg.displayLabel() + " (" + req.getGameName() + ") · тег " + req.getGameTag());
+                need,
+                "Заказ: " + pkg.displayLabel() + " (" + req.getGameName() + ") · тег " + req.getGameTag(),
+                requestDeepLink('g', req.getId()));
         String encoded = java.net.URLEncoder.encode(text, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
         return "https://t.me/" + appProperties.getSupportUsername() + "?text=" + encoded;
     }
@@ -28235,6 +28302,41 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Готовое сообщение менеджеру: заголовок, откуда игрок пришёл в боте, что нужно, заказ и данные игрока (общий построитель ManagerMessage, он же в VPN-боте и поддержке). */
+    private String managerHelpMessage(AppUser user, String headline, String where, String need, String facts, String requestLink) {
+        return ru.gamebot.platform.service.ManagerMessage.build(user, headline, where, need, facts, requestLink);
+    }
+
+    /** Короткая ссылка на заявку в боте для сообщения менеджеру (09.11.2026): kind g = донат, o = оплата «EXC + ₽», s = заявка на квест, w = вывод.
+     *  Менеджер нажимает её в личке с игроком и попадает в бота на карточку этой заявки (см. openRequestFromDeepLink). */
+    private String requestDeepLink(char kind, Long id) {
+        return "https://t.me/" + appProperties.getBotUsername() + "?start=rq_" + kind + id;
+    }
+
+    /** /start rq_<вид><id> от модератора или админа: открывает карточку заявки. Возвращает false, если это не такая ссылка (тогда /start идёт обычным путём). */
+    private boolean openRequestFromDeepLink(AppUser viewer, String text) {
+        if (text == null || !text.contains(" ")) return false;
+        String payload = text.substring(text.indexOf(' ') + 1).trim();
+        if (!payload.startsWith("rq_") || payload.length() < 5) return false;
+        char kind = payload.charAt(3);
+        Long id = parseLong(payload.substring(4));
+        if (id == null) return false;
+        try {
+            switch (kind) {
+                case 'g' -> sendAdminGemPurchaseCard(viewer, id);
+                case 'o' -> sendShopRubleOrderCard(viewer, id);
+                case 's' -> sendSubmissionCard(viewer.getTelegramId(), id);
+                case 'w' -> sendAdminRewardRequestCard(viewer, id);
+                default -> {
+                    return false;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to open request {} from deep link for {}", payload, viewer.getTelegramId(), e);
+            sendText(viewer.getTelegramId(), "❌ Не удалось открыть заявку (" + escape(payload) + "). Возможно, она удалена.", null);
+        }
+        return true;
+    }
+
     private String managerHelpMessage(AppUser user, String headline, String where, String need, String facts) {
         return ru.gamebot.platform.service.ManagerMessage.build(user, headline, where, need, facts);
     }

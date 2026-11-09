@@ -237,6 +237,10 @@ public class VpnBot extends TelegramLongPollingBot {
                 source = "egc"; // пришёл из игрового бота EGC
             } else if (parts.length > 1 && parts[1].startsWith("from_bc_")) {
                 source = parts[1].substring(5); // рассылка про VPN: bc_a / bc_b (волна 1, варианты текста), bc_w2 (волна 2)
+            } else if (parts.length > 1 && parts[1].startsWith("pay_") && isAdmin(uid)) {
+                // Ссылка из сообщения игрока менеджеру: открываем карточку его платежа с кнопками подтверждения
+                openManualPaymentCard(uid, parts[1].substring(4));
+                return;
             }
         }
         vpn.registerUser(uid, from.getFirstName(), from.getUserName(), referrer, source);
@@ -1049,14 +1053,18 @@ public class VpnBot extends TelegramLongPollingBot {
 
     /** Текст менеджеру в общем виде ManagerMessage: заголовок, откуда, что нужно, заказ и ключ (план, статус, срок), игрок (ник, ID, баланс EXC, если он есть в EGC). */
     private String vpnManagerText(Long uid, String headline, String where, String need, String facts) {
+        return vpnManagerText(uid, headline, where, need, facts, null);
+    }
+
+    private String vpnManagerText(Long uid, String headline, String where, String need, String facts, String requestLink) {
         String keyFacts = vpn.find(uid)
                 .map(a -> "Ключ: " + a.getPlanType() + ", " + a.getStatus() + (a.getExpiresAt() != null ? ", до " + a.getExpiresAt().format(DateTimeFormatter.ofPattern("dd.MM.yyyy")) : ""))
                 .orElse(null);
         String allFacts = (facts == null || facts.isBlank()) ? keyFacts : (keyFacts == null ? facts : facts + "\n" + keyFacts);
         AppUser u = userService.findByTelegramId(uid).orElse(null);
         return u != null
-                ? ru.gamebot.platform.service.ManagerMessage.build(u, headline, where, need, allFacts)
-                : ru.gamebot.platform.service.ManagerMessage.buildForId(uid, null, headline, where, need, allFacts);
+                ? ru.gamebot.platform.service.ManagerMessage.build(u, headline, where, need, allFacts, requestLink)
+                : ru.gamebot.platform.service.ManagerMessage.buildForId(uid, null, headline, where, need, allFacts, requestLink);
     }
 
     private String cardManagerUsername() {
@@ -1064,10 +1072,12 @@ public class VpnBot extends TelegramLongPollingBot {
     }
 
     /** Экран оплаты рублями через менеджера: четыре шага и кнопка «Написать менеджеру» с готовым текстом. */
-    private void showCardManagerScreen(Long uid, Integer oldMsgId, Tariff t) {
+    private void showCardManagerScreen(Long uid, Integer oldMsgId, Tariff t, Long paymentId) {
         String manager = cardManagerUsername();
+        // Ссылка в сообщении ведёт менеджера в этот бот на карточку платежа (/start pay_<id>, см. openManualPaymentCard)
+        String payLink = paymentId == null ? null : "https://t.me/" + vpn.getBotUsername() + "?start=pay_" + paymentId;
         String text = vpnManagerText(uid, "Хочу оплатить VPN на " + t.getTitle().toLowerCase() + " переводом", "VPN-бот → Оплата рублями (перевод)",
-                "пришлите реквизиты (карта или СБП)", "Заказ: " + t.getTitle() + ", " + t.getPriceRub() + " ₽");
+                "пришлите реквизиты (карта или СБП)", "Заказ: " + t.getTitle() + ", " + t.getPriceRub() + " ₽", payLink);
         String encoded = URLEncoder.encode(text, StandardCharsets.UTF_8).replace("+", "%20");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.url("💬 Написать менеджеру", "https://t.me/" + manager + "?text=" + encoded)));
@@ -1086,7 +1096,7 @@ public class VpnBot extends TelegramLongPollingBot {
         if (open.isPresent()) {
             Vpn2ManualPayment old = open.get();
             if (old.getCreatedAt() != null && old.getCreatedAt().isAfter(LocalDateTime.now().minusHours(24))) {
-                showCardManagerScreen(uid, oldMsgId, Tariff.byKey(old.getTariff()).orElse(t));
+                showCardManagerScreen(uid, oldMsgId, Tariff.byKey(old.getTariff()).orElse(t), old.getId());
                 return;
             }
             old.setStatus(Vpn2ManualPayment.STATUS_REJECTED);
@@ -1100,7 +1110,7 @@ public class VpnBot extends TelegramLongPollingBot {
         m.setCreatedAt(LocalDateTime.now());
         m.setStatus(Vpn2ManualPayment.STATUS_PENDING);
         m = manualPaymentRepository.save(m);
-        showCardManagerScreen(uid, oldMsgId, t);
+        showCardManagerScreen(uid, oldMsgId, t, m.getId());
         List<List<InlineKeyboardButton>> adminRows = new ArrayList<>();
         adminRows.add(List.of(keyboardFactory.callback("✅ Подтвердить оплату", "adm:cok:" + m.getId()), keyboardFactory.callback("❌ Отклонить", "adm:cno:" + m.getId())));
         String note = "🏦 <b>Оплата рублями #" + m.getId() + "</b>\nИгрок <a href=\"tg://user?id=" + uid + "\">" + uid + "</a>, " + escape(t.getTitle()) + ", <b>" + t.getPriceRub()
@@ -1112,6 +1122,29 @@ public class VpnBot extends TelegramLongPollingBot {
                 log.warn("VPN bot: failed to notify admin {} about manager payment", adminId, e);
             }
         }
+    }
+
+    /** Карточка перевода по ссылке /start pay_<id> (для админов): кто, тариф, сумма, статус и кнопки подтверждения. */
+    private void openManualPaymentCard(Long adminId, String idText) {
+        Optional<Vpn2ManualPayment> found;
+        try {
+            found = manualPaymentRepository.findById(Long.parseLong(idText));
+        } catch (NumberFormatException e) {
+            found = Optional.empty();
+        }
+        if (found.isEmpty()) {
+            sendHtml(adminId, "Платёж не найден.", null);
+            return;
+        }
+        Vpn2ManualPayment m = found.get();
+        boolean open = Vpn2ManualPayment.STATUS_PENDING.equals(m.getStatus());
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (open) {
+            rows.add(List.of(keyboardFactory.callback("✅ Подтвердить оплату", "adm:cok:" + m.getId()), keyboardFactory.callback("❌ Отклонить", "adm:cno:" + m.getId())));
+        }
+        sendHtml(adminId, "🏦 <b>Оплата рублями #" + m.getId() + "</b>\nИгрок <a href=\"tg://user?id=" + m.getTelegramId() + "\">" + m.getTelegramId() + "</a>, тариф "
+                + escape(String.valueOf(m.getTariff())) + ", <b>" + m.getAmountRub() + " ₽</b>\nСтатус: <b>" + escape(String.valueOf(m.getStatus()))
+                + "</b>" + (open ? "" : " (уже обработан)"), rows.isEmpty() ? null : rows);
     }
 
     private void startCardPayment(Long uid, Integer oldMsgId, String key) {
