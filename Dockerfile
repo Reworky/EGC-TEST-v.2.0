@@ -7,6 +7,8 @@ RUN mvn -q -DskipTests package
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
+# psmisc ставим ДО копирования jar: слой кэшируется и не пересобирается при каждом деплое (раньше сбой DNS у archive.ubuntu.com ронял деплой, хотя Java уже собралась)
+RUN apt-get update && apt-get install -y --no-install-recommends psmisc && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/target/game-platform-bot-1.0.0.jar app.jar
 ENV TELEGRAM_BOT_TOKEN=""
 ENV TELEGRAM_BOT_USERNAME=""
@@ -17,7 +19,6 @@ ENV APP_SUPPORT_USERNAME="support_manager"
 ENV APP_CLUB_NAME="Game Quest Club"
 ENV DB_PATH="/data/game-platform-bot"
 ENV JAVA_TOOL_OPTIONS="-Djava.net.preferIPv4Stack=true -Djava.net.preferIPv6Addresses=false"
-RUN apt-get update && apt-get install -y --no-install-recommends psmisc && rm -rf /var/lib/apt/lists/*
 VOLUME ["/data"]
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
