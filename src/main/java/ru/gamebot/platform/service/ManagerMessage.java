@@ -1,0 +1,65 @@
+package ru.gamebot.platform.service;
+
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import ru.gamebot.platform.domain.model.AppUser;
+
+/**
+ * Готовое сообщение менеджеру для кнопок «Написать менеджеру» (09.11.2026, владелец: менеджер должен сразу понимать, откуда пришёл человек и как с ним работать).
+ * Кнопка открывает личный чат менеджера со вписанным текстом (t.me/<менеджер>?text=): менеджер видит его как обычное сообщение игрока и больше ничего о нём не знает,
+ * поэтому в тексте всегда: о чём вопрос, откуда игрок пришёл в боте (путь по меню), что ему нужно, заказ (если есть) и кто он (ник, @username, ID).
+ *
+ * <p>Ссылка в кнопке ограничена по длине (~2 000 символов), а кириллица в ней раздувается примерно в 6 раз, поэтому при нехватке места по очереди отбрасываются
+ * «Нужно» и «Заказ», а заголовок, «Откуда» и строка игрока остаются всегда.
+ */
+public final class ManagerMessage {
+
+    private static final int MAX_ENCODED = 1750;
+
+    private ManagerMessage() {
+    }
+
+    /** Игрок из базы: ник, @username, ID и баланс EXC. */
+    public static String build(AppUser user, String headline, String where, String need, String facts) {
+        String nick = user.getNickname() == null || user.getNickname().isBlank() ? "без ника" : user.getNickname();
+        String tg = user.getTelegramUsername() != null && !user.getTelegramUsername().isBlank() ? " @" + user.getTelegramUsername() : "";
+        String player = "Игрок: " + nick + tg + " · ID " + user.getTelegramId() + " · " + user.getCoins() + " EXC";
+        return compose(player, headline, where, need, facts);
+    }
+
+    /** Игрок без записи в базе EGC (например, пришёл только в VPN-бот): имя из Telegram и ID. */
+    public static String buildForId(Long telegramId, String name, String headline, String where, String need, String facts) {
+        String player = "Игрок: " + (name == null || name.isBlank() ? "без имени" : name) + " · ID " + telegramId;
+        return compose(player, headline, where, need, facts);
+    }
+
+    private static String compose(String player, String headline, String where, String need, String facts) {
+        String head = "Здравствуйте! " + headline + ".\nОткуда: " + where;
+        String needLine = need == null || need.isBlank() ? "" : "\nНужно: " + need;
+        String factsLine = facts == null || facts.isBlank() ? "" : "\n" + facts;
+        List<String> variants = new ArrayList<>();
+        variants.add(head + needLine + factsLine + "\n" + player);
+        variants.add(head + factsLine + "\n" + player);
+        variants.add(head + "\n" + player);
+        for (String v : variants) {
+            if (encodedLength(v) <= MAX_ENCODED) return v;
+        }
+        return "Здравствуйте! " + headline + ".\n" + player;
+    }
+
+    /** Ссылка на чат менеджера с готовым текстом; пробелы кодируем как %20 (Telegram не разворачивает «+» обратно). */
+    public static String link(String managerUsername, String text) {
+        String name = managerUsername == null ? "" : managerUsername.replace("@", "");
+        return "https://t.me/" + name + "?text=" + encode(text);
+    }
+
+    private static String encode(String text) {
+        return URLEncoder.encode(text, StandardCharsets.UTF_8).replace("+", "%20");
+    }
+
+    private static int encodedLength(String text) {
+        return encode(text).length();
+    }
+}

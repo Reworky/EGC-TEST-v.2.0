@@ -1,7 +1,5 @@
 package ru.gamebot.platform.service;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import ru.gamebot.platform.config.AppProperties;
@@ -17,10 +15,8 @@ public class SupportManagerLinkService {
     private final AppProperties appProperties;
 
     public String linkFor(AppUser user) {
-        String nick = user.getNickname() == null || user.getNickname().isBlank() ? "без ника" : user.getNickname();
-        String text = "Здравствуйте! Пишу из бота EGC. Ник: " + nick + ", ID: " + user.getTelegramId() + ". Мой вопрос: ";
-        // URLEncoder кодирует пробел как '+', Telegram его не разворачивает обратно: заменяем на %20 вручную
-        String encoded = URLEncoder.encode(text, StandardCharsets.UTF_8).replace("+", "%20");
-        return "https://t.me/" + appProperties.getSupportUsername().replace("@", "") + "?text=" + encoded;
+        // тот же вид, что у остальных кнопок к менеджеру (ManagerMessage): откуда пришёл и кто это; вопрос игрок дописывает сам в конце
+        String text = ManagerMessage.build(user, "Пишу в поддержку", "бот → Помощь → Поддержка", null, null) + "\n\nМой вопрос: ";
+        return ManagerMessage.link(appProperties.getSupportUsername(), text);
     }
 }

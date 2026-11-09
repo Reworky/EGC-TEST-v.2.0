@@ -321,7 +321,7 @@ public class VpnBot extends TelegramLongPollingBot {
         if (isStaff(uid)) {
             rows.add(List.of(keyboardFactory.callback("🛠 Панель", "p:menu")));
         }
-        rows.add(List.of(keyboardFactory.url("🆘 Поддержка", "https://t.me/" + appProperties.getSupportUsername())));
+        rows.add(List.of(keyboardFactory.url("🆘 Поддержка", supportLink(uid, "VPN-бот → главное меню", "общий вопрос по VPN"))));
         rows.add(List.of(keyboardFactory.url("🎮 Играть и копить EXC на скидку", egcUrl())));
         show(uid, oldMsgId, "🔐 <b>EGC VPN</b>\n\n"
                 + "Быстрый VPN для телефона и компьютера от клуба EGC.\n"
@@ -341,7 +341,7 @@ public class VpnBot extends TelegramLongPollingBot {
             }
             if (Vpn2Account.STATUS_PENDING.equals(a.getStatus()) && Vpn2Account.PLAN_PAID.equals(a.getPlanType())) {
                 List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-                rows.add(List.of(keyboardFactory.url("🆘 Поддержка", "https://t.me/" + appProperties.getSupportUsername())));
+                rows.add(List.of(keyboardFactory.url("🆘 Поддержка", supportLink(uid, "VPN-бот → Моё подключение (оплата получена, ключ выдаётся вручную)", "оплата получена, а ключ ещё не выдан"))));
                 rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
                 show(uid, oldMsgId, "💳 <b>Оплата получена</b>\n\nКлюч VPN выдаём вручную, это займёт немного времени. Мы уже знаем и пришлём его сюда.", rows);
                 return;
@@ -396,7 +396,7 @@ public class VpnBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(installRows());
         rows.add(List.of(keyboardFactory.callback("🛠 Не подключается?", "h:diag"), keyboardFactory.callback("📷 QR-код", "h:qr")));
         rows.add(List.of(keyboardFactory.callback("🔑 Моё подключение", "m:my")));
-        rows.add(List.of(keyboardFactory.url("🆘 Поддержка", "https://t.me/" + appProperties.getSupportUsername())));
+        rows.add(List.of(keyboardFactory.url("🆘 Поддержка", supportLink(uid, "VPN-бот → Как подключить", "не получается подключить VPN"))));
         rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
         show(uid, oldMsgId, "📲 <b>Как подключить</b>\n\n" + connectSteps()
                 + "\n\nСсылку подписки берите в разделе «Моё подключение». Если что-то не получается, напишите в поддержку, поможем.", rows);
@@ -481,7 +481,7 @@ public class VpnBot extends TelegramLongPollingBot {
 
     private void showTerms(Long uid, Integer oldMsgId) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.url("🆘 Поддержка", "https://t.me/" + appProperties.getSupportUsername())));
+        rows.add(List.of(keyboardFactory.url("🆘 Поддержка", supportLink(uid, "VPN-бот → Тарифы → Условия", "вопрос по условиям VPN"))));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "m:tariffs"), keyboardFactory.callback("🏠 Меню", "m:main")));
         show(uid, oldMsgId, "ℹ️ <b>Условия EGC VPN</b>\n\n"
                 + "Мы сохраняем технические данные подключения (время, IP и объём трафика) 90 дней для безопасности и поддержки. "
@@ -494,7 +494,7 @@ public class VpnBot extends TelegramLongPollingBot {
     /** /paysupport: Telegram требует от ботов с платежами ответ, куда писать по вопросам оплаты. */
     private void showPaySupport(Long uid) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.url("🆘 Написать в поддержку", "https://t.me/" + appProperties.getSupportUsername())));
+        rows.add(List.of(keyboardFactory.url("🆘 Написать в поддержку", supportLink(uid, "VPN-бот → /paysupport (вопросы по оплате)", "платёж прошёл, а ключ не выдан, или нужен возврат"))));
         sendHtml(uid, "💳 <b>Вопросы по оплате</b>\n\n"
                 + "Если платёж прошёл, а ключ не выдан, или нужен возврат, напишите в поддержку и укажите ваш ID <code>" + uid + "</code>, дату и тариф. "
                 + "Мы всё проверим и вернём звёзды, если вы получили не то, что оплатили.", rows);
@@ -1042,6 +1042,23 @@ public class VpnBot extends TelegramLongPollingBot {
         show(uid, oldMsgId, "🏦 <b>Перевод рублями (карта / СБП)</b>\n\nВыберите срок, мы покажем реквизиты. После перевода пришлите чек, и ключ придёт после проверки.", rows);
     }
 
+    /** Ссылка «Поддержка» с готовым текстом (09.11.2026): менеджер видит, что человек пришёл из VPN-бота, с какого экрана, что ему нужно и какой у него ключ. */
+    private String supportLink(Long uid, String where, String need) {
+        return ru.gamebot.platform.service.ManagerMessage.link(appProperties.getSupportUsername(), vpnManagerText(uid, "Вопрос по EGC VPN", where, need, null));
+    }
+
+    /** Текст менеджеру в общем виде ManagerMessage: заголовок, откуда, что нужно, заказ и ключ (план, статус, срок), игрок (ник, ID, баланс EXC, если он есть в EGC). */
+    private String vpnManagerText(Long uid, String headline, String where, String need, String facts) {
+        String keyFacts = vpn.find(uid)
+                .map(a -> "Ключ: " + a.getPlanType() + ", " + a.getStatus() + (a.getExpiresAt() != null ? ", до " + a.getExpiresAt().format(DateTimeFormatter.ofPattern("dd.MM.yyyy")) : ""))
+                .orElse(null);
+        String allFacts = (facts == null || facts.isBlank()) ? keyFacts : (keyFacts == null ? facts : facts + "\n" + keyFacts);
+        AppUser u = userService.findByTelegramId(uid).orElse(null);
+        return u != null
+                ? ru.gamebot.platform.service.ManagerMessage.build(u, headline, where, need, allFacts)
+                : ru.gamebot.platform.service.ManagerMessage.buildForId(uid, null, headline, where, need, allFacts);
+    }
+
     private String cardManagerUsername() {
         return vpn.getManagerUsername().isBlank() ? appProperties.getSupportUsername() : vpn.getManagerUsername();
     }
@@ -1049,7 +1066,8 @@ public class VpnBot extends TelegramLongPollingBot {
     /** Экран оплаты рублями через менеджера: четыре шага и кнопка «Написать менеджеру» с готовым текстом. */
     private void showCardManagerScreen(Long uid, Integer oldMsgId, Tariff t) {
         String manager = cardManagerUsername();
-        String text = "Здравствуйте! Хочу оплатить VPN на " + t.getTitle().toLowerCase() + " (" + t.getPriceRub() + " ₽) переводом. Мой ID: " + uid + ". Пришлите, пожалуйста, реквизиты.";
+        String text = vpnManagerText(uid, "Хочу оплатить VPN на " + t.getTitle().toLowerCase() + " переводом", "VPN-бот → Оплата рублями (перевод)",
+                "пришлите реквизиты (карта или СБП)", "Заказ: " + t.getTitle() + ", " + t.getPriceRub() + " ₽");
         String encoded = URLEncoder.encode(text, StandardCharsets.UTF_8).replace("+", "%20");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.url("💬 Написать менеджеру", "https://t.me/" + manager + "?text=" + encoded)));
@@ -1108,7 +1126,7 @@ public class VpnBot extends TelegramLongPollingBot {
         }
         if (manualPaymentRepository.findFirstByTelegramIdAndStatusOrderByCreatedAtDesc(uid, Vpn2ManualPayment.STATUS_PENDING).isPresent()) {
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-            rows.add(List.of(keyboardFactory.url("🆘 Поддержка", "https://t.me/" + appProperties.getSupportUsername())));
+            rows.add(List.of(keyboardFactory.url("🆘 Поддержка", supportLink(uid, "VPN-бот → Оплата переводом (предыдущий перевод проверяется)", "мой предыдущий перевод ещё проверяется, подскажите статус"))));
             rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
             show(uid, oldMsgId, "⏳ Ваш предыдущий перевод ещё проверяется. Дождитесь ответа или напишите в поддержку.", rows);
             return;
@@ -1668,7 +1686,7 @@ public class VpnBot extends TelegramLongPollingBot {
         }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(installRows());
         rows.add(List.of(keyboardFactory.callback("📷 QR-код", "h:qr"), keyboardFactory.callback("🔑 Моё подключение", "m:my")));
-        rows.add(List.of(keyboardFactory.url("🆘 Поддержка", "https://t.me/" + appProperties.getSupportUsername())));
+        rows.add(List.of(keyboardFactory.url("🆘 Поддержка", supportLink(uid, "VPN-бот → Не подключается?", "VPN не подключается или сайты не открываются"))));
         rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
         show(uid, oldMsgId, sb.toString(), rows);
     }
@@ -1915,7 +1933,7 @@ public class VpnBot extends TelegramLongPollingBot {
                     alertAdmins("😕 <b>Плохая оценка EGC VPN</b>: " + f.getRating() + "/5, причина: " + escape(LOW_REASONS.get(p[3]))
                             + ". Игрок <a href=\"tg://user?id=" + uid + "\">написать</a> (<code>" + uid + "</code>)");
                     List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-                    rows.add(List.of(keyboardFactory.url("🆘 Поддержка", "https://t.me/" + appProperties.getSupportUsername())));
+                    rows.add(List.of(keyboardFactory.url("🆘 Поддержка", supportLink(uid, "VPN-бот → оценка VPN", "поставил низкую оценку VPN, нужна помощь с подключением"))));
                     rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
                     show(uid, oldMsgId, "🙏 <b>Спасибо, учтём.</b> Если нужна помощь с подключением, напишите в поддержку, поможем.", rows);
                 }

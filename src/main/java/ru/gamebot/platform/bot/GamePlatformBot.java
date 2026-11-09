@@ -9262,7 +9262,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Кнопка «💬 Написать менеджеру» на экране миссии: личные сообщения менеджера (APP_SUPPORT_USERNAME) с заранее вписанным текстом - номер заявки и этап, менеджеру не надо переспрашивать. */
     private InlineKeyboardButton otpManagerButton(ru.gamebot.platform.service.PartnerMission pm, QuestSubmission sub, int stage) {
-        String text = "Здравствуйте! Нужна помощь по квесту «" + pm.shortTitle() + "» (заявка К-" + (sub.getDisplayId() != null ? sub.getDisplayId() : sub.getId()) + ", этап " + stage + ")";
+        String subNumber = String.valueOf(sub.getDisplayId() != null ? sub.getDisplayId() : sub.getId());
+        String text = managerHelpMessage(sub.getUser(), "Нужна помощь по квесту «" + pm.shortTitle() + "»",
+                "бот → Квесты → " + pm.shortTitle() + " → этап " + stage, "помощь с этапом " + stage + " квеста банка, подскажите, что делать дальше",
+                "Заявка К-" + subNumber);
         String encoded = java.net.URLEncoder.encode(text, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
         return keyboardFactory.url("💬 Написать менеджеру", "https://t.me/" + appProperties.getSupportUsername() + "?text=" + encoded);
     }
@@ -10697,7 +10700,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** «Нет подходящего способа / эти банки уже есть»: письмо менеджеру с ID и балансом, он подберёт другой банк или способ вывода. */
     private void sendWithdrawalNoBankHelp(AppUser user) {
-        String text = "Здравствуйте! У меня уже есть эти банки, помогите подобрать способ вывода. Мой ID: " + user.getTelegramId() + ", баланс " + user.getCoins() + " EXC";
+        String text = managerHelpMessage(user, "У меня уже есть эти банки", "бот → Вывод EXC → нет подходящего способа",
+                "помогите подобрать другой банк или способ вывода", null);
         String encoded = java.net.URLEncoder.encode(text, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
         sendText(user.getTelegramId(),
                 "🤝 <b>Подберём способ именно для вас</b>\n\n"
@@ -10854,7 +10858,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         ? "Если вы уже были на " + escape(ex.title()) + " до нас, перевод по курсу 100% не пройдёт: тогда выберите Telegram Wallet по сниженному курсу.\n\n"
                         : "Если вы уже были на " + escape(ex.title()) + " до нас, перевод не пройдёт: вывод в крипте сверх этой суммы доступен только нашим рефералам.\n\n")
                 + "Введите ваш UID:";
-        String helpText = "Здравствуйте! Мне нужна помощь с регистрацией на " + ex.title() + " для вывода. Мой ID: " + user.getTelegramId();
+        String helpText = managerHelpMessage(user, "Нужна помощь с регистрацией на " + ex.title(), "бот → Вывод EXC → крипта сверх 10 000 EXC → " + ex.title(),
+                "помогите зарегистрироваться на бирже для вывода", null);
         String helpEnc = java.net.URLEncoder.encode(helpText, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.url("🚀 Зарегистрироваться на " + ex.title(), ex.refLink())));
@@ -27554,8 +27559,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
             }
         }
-        String text = "Здравствуйте! Хочу оплатить " + pkg.displayLabel() + " (" + GemPurchaseService.gameName(gameKey) + "): " + quote.rub() + " ₽ и " + quote.exc() + " EXC. Мой ID: "
-                + user.getTelegramId() + ". Пришлите, пожалуйста, реквизиты.";
+        String text = managerHelpMessage(user, "Хочу оплатить " + gemLabelWithGame(pkg, gameKey) + " по схеме «токены + рубли»",
+                "бот → Магазин наград → Донат → оплата «EXC + ₽»", "пришлите реквизиты (карта или СБП), переведу " + quote.rub() + " ₽",
+                "Заказ: " + quote.rub() + " ₽ + " + fmtExc(quote.exc()) + " EXC"
+                        + (order == null ? "" : " · оплата #" + order.getId())
+                        + (gemPurchaseGameTag(user, gameKey) == null ? "" : " · тег " + gemPurchaseGameTag(user, gameKey)));
         String encoded = java.net.URLEncoder.encode(text, StandardCharsets.UTF_8).replace("+", "%20");
         sendText(user.getTelegramId(),
                 "🧾 <b>Оплата: " + quote.rub() + " ₽ и " + fmtExc(quote.exc()) + " EXC</b>\n"
@@ -27812,12 +27820,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long price = gemPurchasePriceFor(user, pkg);
         // 09.11.2026 (владелец): оплата доната криптой (GRAM, TON) убрана - ею не пользуются, а модераторов она только путала.
         // Без EXC-позиции у пакета остаётся только вопрос менеджеру.
-        String helpNoExcText = managerHelpMessage(user, "Хочу купить " + gemLabelWithGame(pkg, gameKey) + ", но не вижу способа оплаты",
+        String helpNoExcText = managerHelpMessage(user, "Хочу купить " + gemLabelWithGame(pkg, gameKey) + " за рубли",
                 "бот → Магазин наград → Донат → " + gemLabelWithGame(pkg, gameKey),
-                "в боте нет способа оплаты этого товара, подскажите, как оплатить",
+                "оплата рублями, пришлите реквизиты (карта или СБП)",
                 gemOrderFacts(user, gameKey, pkg));
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
-                List.of(keyboardFactory.url("💬 Вопрос менеджеру", "https://t.me/" + appProperties.getSupportUsername() + "?text="
+                List.of(keyboardFactory.url("💬 Оплатить рублями через менеджера", "https://t.me/" + appProperties.getSupportUsername() + "?text="
                         + java.net.URLEncoder.encode(helpNoExcText, StandardCharsets.UTF_8).replace("+", "%20"))),
                 List.of(keyboardFactory.callback("❌ Отмена", gemDonateBackTarget(gameKey, pkg)))
         ));
@@ -27861,7 +27869,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + steamLoginLine
                 + (hybrid != null
                         ? "Выберите способ оплаты. Нет возможности платить рублями или звёздами — напишите менеджеру, обсудим другой вариант.\n\n"
-                        : "Оплата этого пакета сейчас идёт только через менеджера: напишите ему, и мы подберём вариант.\n\n")
+                        : "Этот товар оплачивается <b>рублями через менеджера</b> (карта или СБП). Нажмите «Оплатить рублями через менеджера»: сообщение уже готово, менеджер пришлёт реквизиты.\n\n")
                 + gemPurchaseWarning(gameKey);
         if ("brawl_stars".equals(gameKey) && ("brawlpass".equals(pkg.key()) || "brawlpassplus".equals(pkg.key()))) {
             sendResourceBanner(user.getTelegramId(),
@@ -28038,8 +28046,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  URLEncoder кодирует пробел как '+', Telegram его не разворачивает обратно (та же проблема,
      *  что и в UserService.encodeUrlComponent для t.me/share/url) — докручиваем на %20 вручную. */
     private String managerDmLink(GemPurchaseRequest req, GemPurchaseService.GemPackage pkg) {
-        String text = "Здравствуйте! Хочу оплатить заявку Д-" + req.getDisplayId()
-                + " (" + req.getGameName() + ", " + pkg.displayLabel() + ", тег " + req.getGameTag() + ")";
+        String text = managerHelpMessage(req.getUser(), "Хочу оплатить заявку Д-" + req.getDisplayId(), "бот → Магазин наград → Донат → моя заявка",
+                "оплата заявки, подскажите, как оплатить",
+                "Заказ: " + pkg.displayLabel() + " (" + req.getGameName() + ") · тег " + req.getGameTag());
         String encoded = java.net.URLEncoder.encode(text, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
         return "https://t.me/" + appProperties.getSupportUsername() + "?text=" + encoded;
     }
@@ -28225,23 +28234,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return fresh;
     }
 
-    /** Готовое сообщение менеджеру (открывается по ссылке t.me/<поддержка>?text=): менеджер видит его в личке как обычное сообщение игрока и ничего больше о нём не знает,
-     *  поэтому в тексте сразу: о чём вопрос, откуда игрок пришёл в боте, что ему нужно, заказ и кто он (ник, @username, ID, баланс).
-     *  Ссылка в кнопке ограничена по длине (~2 000 символов, кириллица в ней раздувается в 6 раз), поэтому при нехватке места по очереди отбрасываем
-     *  заказ и пожелание, а заголовок и строку игрока оставляем всегда. */
+    /** Готовое сообщение менеджеру: заголовок, откуда игрок пришёл в боте, что нужно, заказ и данные игрока (общий построитель ManagerMessage, он же в VPN-боте и поддержке). */
     private String managerHelpMessage(AppUser user, String headline, String where, String need, String facts) {
-        String player = "Игрок: " + (user.getNickname() == null ? "—" : user.getNickname())
-                + (user.getTelegramUsername() != null && !user.getTelegramUsername().isBlank() ? " @" + user.getTelegramUsername() : "")
-                + " · ID " + user.getTelegramId() + " · " + user.getCoins() + " EXC";
-        String head = "Здравствуйте! " + headline + ".\nОткуда: " + where;
-        List<String> variants = new ArrayList<>();
-        variants.add(head + (need == null || need.isBlank() ? "" : "\nНужно: " + need) + (facts == null || facts.isBlank() ? "" : "\n" + facts) + "\n" + player);
-        variants.add(head + (facts == null || facts.isBlank() ? "" : "\n" + facts) + "\n" + player);
-        variants.add(head + "\n" + player);
-        for (String v : variants) {
-            if (java.net.URLEncoder.encode(v, StandardCharsets.UTF_8).replace("+", "%20").length() <= 1750) return v;
-        }
-        return "Здравствуйте! " + headline + ".\n" + player;
+        return ru.gamebot.platform.service.ManagerMessage.build(user, headline, where, need, facts);
     }
 
     /** Строка про заказ доната для сообщения менеджеру: цена, вариант «токены + рубли», тег игры. */
