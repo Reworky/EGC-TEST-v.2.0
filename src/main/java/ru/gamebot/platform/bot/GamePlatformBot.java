@@ -9066,8 +9066,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // «Срок с момента старта» до взятия квеста не показываем (место в подписи под баннером дороже); после взятия - реальный дедлайн
         sb.append(placesLeftLine(quest)).append(activeDeadline.contains("с момента старта") ? "" : activeDeadline).append(statusLine);
         if (quest.getDescription() != null && !quest.getDescription().isBlank()) {
-            // жирными - только заголовки блоков «Что ты получаешь:» и «Как это работает:» (владелец, 09.11)
-            sb.append("\n").append(escape(quest.getDescription()).replaceAll("(?m)^(Что ты получаешь:|Как это работает:)$", "<b>$1</b>")).append("\n");
+            // Описание карточки (владелец, 09.11): после списка «✅» - бонус курса вывода и строка «Итого» (считаются из миссии), пустая строка после заголовка «Что ты получаешь:»,
+            // жирными - только заголовки блоков «Что ты получаешь:» и «Как это работает:»
+            String desc = escape(quest.getDescription());
+            ru.gamebot.platform.service.PartnerMission descMission = ru.gamebot.platform.service.PartnerMissions.forQuest(quest);
+            int listStart = desc.indexOf("Что ты получаешь:");
+            int listEnd = listStart < 0 ? -1 : desc.indexOf("\n\n", listStart);
+            if (descMission != null && listEnd > 0) {
+                StringBuilder extra = new StringBuilder();
+                if (withdrawalTiersEnabled()) {
+                    extra.append("\n✅ Бонус: все твои EXC выводятся по курсу 100% вместо обычных ~").append(nonPartnerPercent()).append("%.");
+                }
+                long totalRub = descMission.bankRewardRub() + (descMission.rewardExc() + descMission.bonusExc()) / 100;
+                extra.append("\n\n🏆 Итого ≈ ").append(fmtExc(totalRub)).append(" ₽ в конце выполнения квеста");
+                desc = desc.substring(0, listEnd) + extra + desc.substring(listEnd);
+            }
+            desc = desc.replace("Что ты получаешь:\n", "Что ты получаешь:\n\n")
+                    .replaceAll("(?m)^(Что ты получаешь:|Как это работает:)$", "<b>$1</b>");
+            sb.append("\n").append(desc).append("\n");
         }
         List<String[]> steps = splitQuestBlocks(instruction);
         if (!steps.isEmpty()) sb.append("\n");
