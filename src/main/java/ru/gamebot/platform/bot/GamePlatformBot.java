@@ -9185,20 +9185,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(partnerManagerButton(pm, sub, "💬 Написать менеджеру", "Вопрос по квесту «Миссия: " + pm.missionTitle() + "»", "почему квест не засчитан")));
             banner = null;
         } else {
+            // Короткий экран после «Взять» (владелец, 09.11): сумма и условия уже на карточке квеста, здесь только что делать дальше.
             sb.append("🚀 <b>Квест взят!</b>\n🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")
-                    .append("<b>Что ты получаешь?</b>\n")
-                    .append(pm.bankRewardLine()).append("\n")
-                    .append("🪙 ").append(fmtExc(totalExc)).append(" EXC ≈ ").append(fmtExc(excRub)).append(" ₽ (")
-                    .append(fmtExc(reward)).append(tomobile ? " после пополнения баланса, " : " после первой покупки, ")
-                    .append(fmtExc(bonus)).append(" после выплаты банка)\n\n")
-                    .append("<b>🏆 Итого ≈ ").append(fmtExc(totalRub)).append(" ₽ в конце выполнения квеста</b>\n\n");
-            if (withdrawalTiersEnabled()) {
-                sb.append(questService.hasApprovedPartnerQuest(user.getId())
-                        ? "💎 Ты уже партнёр: все твои EXC выводятся по курсу 100%.\n\n"
-                        : "💎 Бонус: все твои EXC выводятся по курсу 100% вместо обычных ~" + nonPartnerPercent() + "%.\n\n");
-            }
-            sb.append("⚠️ ").append(escape(pm.managerConditions())).append("\n\n")
-                    .append("Нажми «Начать выполнять квест»: менеджер проведёт по шагам в личке. Ссылки даёт только он, @").append(manager).append(".");
+                    .append("Нажми «Начать выполнять квест» - менеджер проведёт по шагам в личке\n\n")
+                    .append("Ссылки даёт только он, @").append(manager);
             rows.add(List.of(partnerManagerButton(pm, sub, "💬 Начать выполнять квест", missionHead, startNeed)));
             banner = pm.stage1Banner();
         }
