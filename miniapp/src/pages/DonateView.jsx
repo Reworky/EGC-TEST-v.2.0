@@ -6,7 +6,7 @@ import './QuestsPage.css';
 import './ShopPage.css';
 
 // Донат по играм (Купикод) — зеркало флоу из бота: список пакетов (гемы / пропуски) → способ оплаты
-// (Stars — сразу, GRAM (TON) — заявка + модератор пишет сам) → результат. Тег игры привязывается
+// (оплата идёт в боте: токены + рубли или звёзды; GRAM (TON) убран 09.11.2026) → результат. Тег игры привязывается
 // только в боте, как у квестов: без тега показываем кнопку «Открыть бота и привязать тег».
 
 function openBotForTag(startParam) {
@@ -24,7 +24,6 @@ function PackageCard({ pkg, egcPass, tagLinked, expanded, onToggle, onDone }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const [messageOk, setMessageOk] = useState(false);
-  const [confirmTon, setConfirmTon] = useState(false);
   const [managerUrl, setManagerUrl] = useState(null);
 
   async function buy(method) {
@@ -47,7 +46,6 @@ function PackageCard({ pkg, egcPass, tagLinked, expanded, onToggle, onDone }) {
           setMessage('Платёж не прошёл. Попробуйте ещё раз.');
         }
       } else {
-        setConfirmTon(false);
         setMessage(res.message);
         setMessageOk(true);
         setManagerUrl(res.managerUrl);
@@ -80,26 +78,13 @@ function PackageCard({ pkg, egcPass, tagLinked, expanded, onToggle, onDone }) {
         <div className="shop-detail" onClick={e => e.stopPropagation()}>
           {!tagLinked ? (
             <p className="shop-desc">Сначала укажите логин или привяжите тег игры (кнопка выше).</p>
-          ) : confirmTon ? (
-            <>
-              <p className="shop-desc">
-                {pkg.label} — ~{pkg.tonAmount} GRAM (TON) ({price} ₽ по текущему курсу).
-                После подтверждения модератор свяжется с вами в личных сообщениях, чтобы уточнить детали и прислать реквизиты. Создать заявку?
-              </p>
-              <button className="quest-btn" disabled={busy} onClick={() => buy('TON')}>
-                {busy ? 'Секунду...' : '✅ Создать заявку'}
-              </button>
-              <button className="quest-btn quest-btn-secondary" style={{ marginTop: 8 }} disabled={busy} onClick={() => setConfirmTon(false)}>
-                Назад
-              </button>
-            </>
           ) : (
             <>
               <p className="shop-desc">
-                Оплата токенами + рублями — в боте (раздел «Магазин» → донат). Здесь доступен 💎 GRAM (TON): перевод вручную, проверка займёт время.
+                Оплата токенами + рублями или звёздами — в боте (раздел «Магазин» → донат). Оплата криптой (GRAM, TON) недоступна.
               </p>
-              <button className="quest-btn" disabled={busy} onClick={() => setConfirmTon(true)}>
-                💎 GRAM (TON) — ~{pkg.tonAmount}
+              <button className="quest-btn" onClick={() => openTelegramUrl('https://t.me/invitetogamebot')}>
+                🤖 Открыть бота
               </button>
             </>
           )}

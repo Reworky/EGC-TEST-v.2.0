@@ -1231,8 +1231,16 @@ public class ChannelContentService {
 
     /** Пруф по одной выплате (текст без ника игрока, чек - как картинка); публикуется в канал выплат после согласования. false - тип выключен или уже создан. */
     public boolean createProofDraft(Long requestId, String text, String receiptFileId) {
+        return createProofDraftWithKey("W:" + requestId, text, receiptFileId);
+    }
+
+    /** Пруф по выданному донату (заявка GemPurchaseRequest): тот же тип черновика и тот же канал, что у выплат, но свой ключ «G:» - номера заявок на донат не совпадают с номерами заявок на вывод. */
+    public boolean createGemProofDraft(Long gemRequestId, String text, String receiptFileId) {
+        return createProofDraftWithKey("G:" + gemRequestId, text, receiptFileId);
+    }
+
+    private boolean createProofDraftWithKey(String key, String text, String receiptFileId) {
         if (!settings(WITHDRAW_PROOF).enabled()) return false;
-        String key = "W:" + requestId;
         if (draftRepository.findAllByType(WITHDRAW_PROOF).stream().anyMatch(d -> key.equals(d.getMeta()))) return false;
         saveDraft(WITHDRAW_PROOF, text, key, receiptFileId);
         return true;

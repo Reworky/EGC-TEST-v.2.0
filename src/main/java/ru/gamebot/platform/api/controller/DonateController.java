@@ -175,16 +175,8 @@ public class DonateController {
                     return ResponseEntity.ok(PurchaseResponse.error("Оплата полностью звёздами недоступна. Оформите покупку в боте: токены + рубли."));
                 }
                 case "TON" -> {
-                    GemPurchaseRequest req = gamePlatformBot.createGemTonRequestForMiniApp(user, body.getGameKey(), pkg);
-                    if (req == null) {
-                        return ResponseEntity.ok(PurchaseResponse.error("Не удалось создать заявку. Мы уже знаем об ошибке — попробуйте позже."));
-                    }
-                    PurchaseResponse r = new PurchaseResponse();
-                    r.setSuccess(true);
-                    r.setRequestDisplayId(req.getDisplayId());
-                    r.setManagerUrl(gamePlatformBot.gemManagerDmLinkFor(req, pkg));
-                    r.setMessage("Заявка Д-" + req.getDisplayId() + " создана. Модератор свяжется с вами в личных сообщениях.");
-                    return ResponseEntity.ok(r);
+                    // оплата доната криптой (GRAM, TON) убрана 09.11.2026 (владелец): ею не пользуются, модераторов путала
+                    return ResponseEntity.ok(PurchaseResponse.error("Оплата в GRAM (TON) больше недоступна. Оформите покупку в боте: токены + рубли."));
                 }
                 default -> {
                     return ResponseEntity.ok(PurchaseResponse.error("Неизвестный способ оплаты."));

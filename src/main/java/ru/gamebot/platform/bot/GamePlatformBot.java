@@ -712,7 +712,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             Long reqId = session.getQuestId();
             boolean isModReceiptFlow = "mod".equals(session.getData().get("receiptFlow"));
             boolean isRewardReceipt = "reward".equals(session.getData().get("receiptType"));
+            boolean isGemReceipt = "gem".equals(session.getData().get("receiptType"));
             session.reset();
+            if (isGemReceipt) {
+                // донат (GemPurchaseRequest): тот же шаг «скриншот подтверждения», что у выводов и наград (09.11.2026)
+                completeGemPurchaseApproval(user, reqId, fileId, receiptCaption);
+                return;
+            }
             RewardRequest req;
             try {
                 req = rewardService.approveRequest(reqId);
@@ -1694,17 +1700,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             HybridQuote gsQuote = hybridQuote(user, gsParts[0], gsPkg);
             long gsPrice = gemPurchasePriceFor(user, gsPkg);
-            java.math.BigDecimal gsTon = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(gsPrice));
             List<List<InlineKeyboardButton>> gsRows = new ArrayList<>();
             if (gsQuote != null) {
                 gsRows.add(List.of(keyboardFactory.callback(fmtExc(gsQuote.exc()) + " EXC + " + gsQuote.stars() + " ⭐", "gemhyb:" + gsParts[0] + ":" + gsParts[1])));
             }
-            gsRows.add(List.of(keyboardFactory.callback("GRAM (TON), через менеджера", "gemdonate:method:TON:" + gsParts[0] + ":" + gsParts[1])));
             gsRows.add(List.of(keyboardFactory.callback("⬅️ Назад", "gemdonate:pkg:" + gsParts[0] + ":" + gsParts[1])));
             sendText(user.getTelegramId(),
                     "⭐ <b>Оплата звёздами</b>\n" + escape(gsPkg.displayLabel()) + " · " + gsPrice + " ₽\n\n"
                             + (gsQuote != null ? "Со скидкой: <b>" + fmtExc(gsQuote.exc()) + " EXC и " + gsQuote.stars() + " ⭐</b>\n" : "")
-                            + "Полностью звёздами оплатить нельзя. GRAM (TON) ~" + gsTon + " TON: менеджер пришлёт реквизиты.",
+                            + (gsQuote != null ? "Полностью звёздами оплатить нельзя: звёзды идут вместе с EXC." : "Для этого пакета оплата звёздами сейчас недоступна, напишите менеджеру."),
                     keyboardFactory.rowsLayout(gsRows));
             return;
         }
@@ -2497,7 +2501,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 String packageKey = rest.substring(sep + 1);
                 gemPurchaseService.findPackage(gameKey, packageKey)
                         .ifPresentOrElse(
-                                pkg -> requestGemPurchaseTon(user, gameKey, pkg),
+                                pkg -> {
+                                    // старая кнопка «Создать заявку» на GRAM (TON): оплата криптой отключена (09.11.2026), заявку не создаём
+                                    sendText(user.getTelegramId(), "ℹ️ Оплата доната в GRAM (TON) больше недоступна. Выберите другой способ.", null);
+                                    sendGemPaymentMethodChoice(user, gameKey, pkg);
+                                },
                                 () -> sendText(user.getTelegramId(), "❌ Пакет не найден, попробуйте выбрать заново.", backMenuKeyboard("shop:donate:" + gameKey)));
             }
             return;
@@ -27788,11 +27796,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  чека (см. sendGemStarsInvoice). */
     private void sendGemPaymentMethodChoice(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg) {
         long price = gemPurchasePriceFor(user, pkg);
-        java.math.BigDecimal tonAmount = exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(price));
-        // Stars первыми (2026-09-25): оплата в один тап, подтверждается автоматически, без переписки с менеджером и
-        // проверки перевода - самый быстрый путь и для игрока, и для менеджера. TON - вторым, через личную переписку.
+        // 09.11.2026 (владелец): оплата доната криптой (GRAM, TON) убрана - ею не пользуются, а модераторов она только путала.
+        // Без EXC-позиции у пакета остаётся только вопрос менеджеру.
+        String helpNoExcText = "Здравствуйте! Вопрос по оплате " + gemLabelWithGame(pkg, gameKey) + ". Мой ID: " + user.getTelegramId();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
-                List.of(keyboardFactory.callback("💎 GRAM (TON) — ~" + tonAmount + " TON (через менеджера)", "gemdonate:method:TON:" + gameKey + ":" + pkg.key())),
+                List.of(keyboardFactory.url("💬 Вопрос менеджеру", "https://t.me/" + appProperties.getSupportUsername() + "?text="
+                        + java.net.URLEncoder.encode(helpNoExcText, StandardCharsets.UTF_8).replace("+", "%20"))),
                 List.of(keyboardFactory.callback("❌ Отмена", gemDonateBackTarget(gameKey, pkg)))
         ));
         // Оплата EXC первой строкой, если у пакета есть EXC-позиция; недоступная (лимит, ранг) ведёт в карточку со статусом
@@ -27832,8 +27841,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + steamLoginLine
                 + (hybrid != null
                         ? "Выберите способ оплаты. Нет возможности платить рублями или звёздами — напишите менеджеру, обсудим другой вариант.\n\n"
-                        : "Выберите способ оплаты:\n\n"
-                                + "💎 <b>GRAM (TON)</b> — перевод вручную: менеджер напишет вам в личные сообщения и пришлёт реквизиты.\n\n")
+                        : "Оплата этого пакета сейчас идёт только через менеджера: напишите ему, и мы подберём вариант.\n\n")
                 + gemPurchaseWarning(gameKey);
         if ("brawl_stars".equals(gameKey) && ("brawlpass".equals(pkg.key()) || "brawlpassplus".equals(pkg.key()))) {
             sendResourceBanner(user.getTelegramId(),
@@ -27866,7 +27874,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         switch (method) {
             // оплата полностью звёздами убрана (07.11.2026, владелец): старые кнопки возвращают к выбору способа
             case "STARS", "STARSOK" -> sendGemPaymentMethodChoice(user, gameKey, pkg);
-            case "TON" -> sendGemPurchaseTonConfirm(user, gameKey, pkg);
+            case "TON" -> {
+                // старые кнопки в чатах: оплата криптой отключена (09.11.2026)
+                sendText(user.getTelegramId(), "ℹ️ Оплата доната в GRAM (TON) больше недоступна. Выберите другой способ.", null);
+                sendGemPaymentMethodChoice(user, gameKey, pkg);
+            }
             default -> sendGemPaymentMethodChoice(user, gameKey, pkg);
         }
     }
@@ -28300,31 +28312,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (parts.length == 3) {
                 sendAdminGemReply(user, parts[1], parseLong(parts[2]));
             }
+        } else if (action.startsWith("approveskip:")) {
+            // «Пропустить»: одобрение без скриншота (как у выводов) - игрок получит текст, пост в канал не создаётся
+            session.reset();
+            completeGemPurchaseApproval(user, Long.parseLong(action.substring("approveskip:".length())), null, null);
         } else if (action.startsWith("approve:")) {
+            // 09.11.2026 (владелец): донат закрывается так же, как вывод - менеджер прикладывает скриншот подтверждения, игрок получает его,
+            // пост без тега игры уходит черновиком в канал выплат/отзывов (@egc_payouts), игрока просим оценить
             long id = Long.parseLong(action.substring("approve:".length()));
-            GemPurchaseRequest req = gemPurchaseService.approve(id);
-            // Игрок мог заблокировать бота — сама заявка при этом уже одобрена (DB-запись выше),
-            // уведомление лишь best-effort. Без try/catch необработанное [403] Forbidden всплывало
-            // как "Что-то пошло не так" у АДМИНА, хотя действие реально прошло успешно — инцидент
-            // 2026-09-22, жалоба "нельзя отменить заявку" (симметричный баг был и в reject-ветке ниже).
-            try {
-                notifyUserGemPurchaseApproved(req);
-            } catch (Exception e) {
-                log.warn("Failed to notify user {} about gem purchase approval", req.getUser().getTelegramId(), e);
-            }
-            // Гибридная покупка «EXC + звёзды»: реальные деньги за выдачу списываются из фонда выплат (владелец 06.11.2026); сбой - алерт админам, одобрение не откатываем
-            String fundNote = "";
-            try {
-                long fundRub = gemPurchaseService.chargeFundForHybrid(req.getId());
-                if (fundRub > 0) fundNote = " Из фонда выплат списано <b>" + fundRub + " ₽</b> (закупка минус доплата звёздами).";
-            } catch (Exception fundError) {
-                log.error("Failed to charge payout fund for hybrid gem purchase {}", req.getId(), fundError);
-                for (Long fundAdmin : adminService.allAdminIds()) {
-                    sendText(fundAdmin, "⚠️ Не удалось списать закупку из фонда выплат по заявке Д-" + req.getDisplayId() + ". Спишите вручную (закупка минус доплата звёздами).", null);
-                }
-            }
-            sendText(user.getTelegramId(), "✅ Заявка Д-" + req.getDisplayId() + " отмечена выполненной, игроку начислен XP-бонус." + fundNote, null);
-            sendModIssueFolder(user);
+            session.reset();
+            session.setQuestId(id);
+            session.getData().put("receiptType", "gem");
+            session.setState(SessionState.WITHDRAWAL_RECEIPT);
+            sendText(user.getTelegramId(),
+                    "🧾 <b>Загрузите скриншот подтверждения доната</b>\n\nОтправьте фото (чек, скрин зачисления гемов или пропуска) - оно будет отправлено игроку и опубликовано в канале выплат и отзывов. "
+                            + "Подпись к фото тоже попадёт в пост. Тег игры в пост не попадает.",
+                    keyboardFactory.rowsLayout(List.of(
+                            List.of(keyboardFactory.callback("⏭️ Пропустить", "admin:gempurchase:approveskip:" + id)),
+                            List.of(keyboardFactory.callback("⬅️ Назад", "admin:gempurchase:view:" + id))
+                    )));
         } else if (action.startsWith("rejectq:")) {
             // "rejectq:<код>:<id>"
             String[] parts = action.split(":");
@@ -28360,8 +28366,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         gemPurchaseService.findById(id).ifPresentOrElse(req -> {
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
             rows.add(List.of(keyboardFactory.callback("📨 Реквизиты и старт", "admin:gempurchase:reply:req:" + id)));
-            rows.add(List.of(keyboardFactory.callback("❓ Как купить TON", "admin:gempurchase:reply:ton:" + id),
-                    keyboardFactory.callback("⭐ Оплатить Stars", "admin:gempurchase:reply:stars:" + id)));
+            // кнопка «Как купить TON» убрана 09.11.2026: оплата доната криптой отключена, модераторов она только путала
+            rows.add(List.of(keyboardFactory.callback("⭐ Оплатить Stars", "admin:gempurchase:reply:stars:" + id)));
             rows.add(List.of(keyboardFactory.callback("🔑 Нужен код", "admin:gempurchase:reply:code:" + id),
                     keyboardFactory.callback("✅ Готово", "admin:gempurchase:reply:done:" + id)));
             rows.add(List.of(keyboardFactory.callback("🔐 Про доступ", "admin:gempurchase:reply:access:" + id),
@@ -28436,21 +28442,112 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         };
     }
 
+    /** Закрытие заявки на донат: одобрение, уведомление игрока (со скриншотом, если он есть), пост-пруф для канала выплат, просьба об отзыве,
+     *  списание закупки гибридной покупки из фонда. receiptFileId/receiptCaption - скриншот и подпись менеджера (null при «Пропустить»). */
+    private void completeGemPurchaseApproval(AppUser user, long id, String receiptFileId, String receiptCaption) {
+        GemPurchaseRequest req;
+        try {
+            req = gemPurchaseService.approve(id);
+        } catch (IllegalArgumentException staleRequest) {
+            sendText(user.getTelegramId(), "⚠️ " + staleRequest.getMessage(), backMenuKeyboard("admin:gempurchase"));
+            return;
+        }
+        // Игрок мог заблокировать бота: заявка уже одобрена, уведомление best-effort (инцидент 2026-09-22).
+        try {
+            notifyUserGemPurchaseApproved(req, receiptFileId, receiptCaption);
+        } catch (Exception e) {
+            log.warn("Failed to notify user {} about gem purchase approval", req.getUser().getTelegramId(), e);
+        }
+        // Гибридная покупка «EXC + звёзды»: реальные деньги за выдачу списываются из фонда выплат (владелец 06.11.2026); сбой - алерт админам
+        String fundNote = "";
+        try {
+            long fundRub = gemPurchaseService.chargeFundForHybrid(req.getId());
+            if (fundRub > 0) fundNote = " Из фонда выплат списано <b>" + fundRub + " ₽</b> (закупка минус доплата звёздами).";
+        } catch (Exception fundError) {
+            log.error("Failed to charge payout fund for hybrid gem purchase {}", req.getId(), fundError);
+            for (Long fundAdmin : adminService.allAdminIds()) {
+                sendText(fundAdmin, "⚠️ Не удалось списать закупку из фонда выплат по заявке Д-" + req.getDisplayId() + ". Спишите вручную (закупка минус доплата звёздами).", null);
+            }
+        }
+        String proofNote = receiptFileId != null ? " Подтверждение отправлено игроку, пост ушёл на согласование в канал выплат." : "";
+        sendText(user.getTelegramId(), "✅ Заявка Д-" + req.getDisplayId() + " отмечена выполненной, игроку начислен XP-бонус." + proofNote + fundNote, null);
+        sendModIssueFolder(user);
+    }
+
     private void notifyUserGemPurchaseApproved(GemPurchaseRequest req) {
+        notifyUserGemPurchaseApproved(req, null, null);
+    }
+
+    /** receiptFileId/receiptCaption - скриншот подтверждения и подпись менеджера (как у выплат и наград): игроку со скриншотом, пост-пруф без тега игры
+     *  на согласование в канал выплат, просьба об отзыве. Без скриншота («Пропустить») - прежний текст, в канал ничего не уходит. */
+    private void notifyUserGemPurchaseApproved(GemPurchaseRequest req, String receiptFileId, String receiptCaption) {
         // Гемы: название игры берём из заявки (раньше было захардкожено «Brawl Stars» - у заявок Clash Royale /
         // Clash of Clans игрок получал сообщение с чужой игрой). Пропуска (itemLabel) уже несут название игры.
         String gameName = req.getGameName() != null && !req.getGameName().isBlank() ? req.getGameName() : "Brawl Stars";
         String itemTitle = req.getItemLabel() != null ? req.displayLabel() : req.displayLabel() + " (" + escape(gameName) + ")";
-        sendText(req.getUser().getTelegramId(),
-                "✅ <b>Покупка зачислена</b>\n\n"
-                        + itemTitle + " на тег " + escape(req.getGameTag()) + " · бонус +" + req.getXpBonus() + " XP",
-                backMenuKeyboard("menu:main"));
+        String approvedText = "✅ <b>Покупка зачислена</b>\n\n"
+                + itemTitle + " на тег " + escape(req.getGameTag()) + " · бонус +" + req.getXpBonus() + " XP";
+        if (receiptFileId != null) {
+            try {
+                SendPhoto photo = new SendPhoto();
+                photo.setChatId(req.getUser().getTelegramId().toString());
+                photo.setPhoto(new InputFile(receiptFileId));
+                photo.setCaption(approvedText);
+                photo.setParseMode("HTML");
+                photo.setReplyMarkup(backMenuKeyboard("menu:main"));
+                execute(photo);
+            } catch (Exception e) {
+                log.warn("Failed to send gem purchase receipt to user {}", req.getUser().getTelegramId(), e);
+                sendText(req.getUser().getTelegramId(), approvedText, backMenuKeyboard("menu:main"));
+            }
+            postGemPurchaseToActivityFeed(req, receiptFileId, receiptCaption);
+            promptGemPurchaseReview(req.getUser());
+        } else {
+            sendText(req.getUser().getTelegramId(), approvedText, backMenuKeyboard("menu:main"));
+        }
         long passPrice = Math.round(req.getPriceRub() / ru.gamebot.platform.service.GemPurchaseService.MARKUP_MULTIPLIER);
         long saving = req.getPriceRub() - passPrice;
         if (saving >= 20) {
             maybeOfferPassAfter(req.getUser(), 2, "FIRST_PURCHASE",
                     "⭐ <b>С EGC Pass эта покупка стоила бы " + passPrice + "₽ вместо " + req.getPriceRub() + "₽</b>: закупочная цена, без наценки клуба (минус " + saving
                             + "₽). К тому же +10% EXC и +5% XP за все квесты, приоритет на вывод и 3 слота квестов.");
+        }
+    }
+
+    /** Пруф по выданному донату: черновик на согласование (тот же тип WITHDRAW_PROOF и тот же канал выплат и отзывов, что у выводов), без тега игры и без цены. */
+    private void postGemPurchaseToActivityFeed(GemPurchaseRequest req, String receiptFileId, String receiptCaption) {
+        AppUser player = req.getUser();
+        String nick = escape(ru.gamebot.platform.service.ChannelContentService.publicNick(player.getNickname()));
+        String username = player.getTelegramUsername();
+        String who = username != null && username.matches("[A-Za-z0-9_]{4,32}")
+                ? "<a href=\"https://t.me/" + username + "\">" + nick + "</a>" : nick;
+        String gameName = req.getGameName() != null && !req.getGameName().isBlank() ? req.getGameName() : "Brawl Stars";
+        String item = req.getItemLabel() != null ? escape(req.displayLabel()) : escape(req.displayLabel()) + " (" + escape(gameName) + ")";
+        String text = "💎 <b>Донат выдан!</b>\n\nИгрок <b>" + who + "</b> получил <b>" + item + "</b> 🔥";
+        if (receiptCaption != null && !receiptCaption.isBlank()) {
+            text += "\n\n" + escape(receiptCaption.trim());
+        }
+        try {
+            channelContentService.createGemProofDraft(req.getId(), text, receiptFileId);
+        } catch (Exception e) {
+            log.error("Failed to create gem purchase proof draft for request {}", req.getId(), e);
+        }
+    }
+
+    /** Просьба оценить выдачу доната 1-5 звёзд: без привязки к заявке на вывод (номера заявок на донат и на вывод разные), дальше обычный флоу отзыва и модерации. */
+    private void promptGemPurchaseReview(AppUser user) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(
+                keyboardFactory.callback("⭐️⭐️⭐️⭐️⭐️", "review:gstars:5"),
+                keyboardFactory.callback("⭐️⭐️⭐️⭐️", "review:gstars:4")));
+        rows.add(List.of(
+                keyboardFactory.callback("⭐️⭐️⭐️", "review:gstars:3"),
+                keyboardFactory.callback("⭐️⭐️", "review:gstars:2"),
+                keyboardFactory.callback("⭐️", "review:gstars:1")));
+        try {
+            sendText(user.getTelegramId(), "🙏 Оцени, пожалуйста, как мы выдали покупку - это необязательно, но очень помогает клубу.", keyboardFactory.rowsLayout(rows));
+        } catch (Exception e) {
+            log.warn("Failed to prompt gem purchase review for user {}", user.getTelegramId(), e);
         }
     }
 
