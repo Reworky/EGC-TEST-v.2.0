@@ -58,6 +58,8 @@ public class OtpMissionReminderService {
         for (QuestSubmission s : open) {
             try {
                 if (s.getUser().isBlocked()) continue;
+                // Квест ведёт менеджер лично (с 09.11.2026: ни даты, ни отчёта в боте) - напоминаний про этапы не шлём
+                if (s.getMissionStep() <= 1 && s.getCardActivatedOn() == null && s.getPurchaseReportedOn() == null) continue;
                 int sent = s.getMissionRemindersSent();
                 if (s.getStatus() == SubmissionStatus.DRAFT) {
                     int step = Math.max(1, s.getMissionStep());

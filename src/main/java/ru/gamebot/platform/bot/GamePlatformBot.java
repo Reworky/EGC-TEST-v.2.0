@@ -2584,6 +2584,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "Файл открыт");
             return;
         }
+        if (data.startsWith("mod:pbonus:") && isEffectiveModerator(user)) {
+            // Банк выплатил: то же, что команда /otpbonus ID (начисление, разовый запас вывода, бейдж); защита от двойной выплаты внутри. Только админ.
+            answerSilently(callbackQuery.getId());
+            if (!isEffectiveAdmin(user)) {
+                sendText(user.getTelegramId(), "⚠️ Бонус после выплаты банка начисляет только админ.", null);
+                return;
+            }
+            Long pbId = parseLong(data.substring("mod:pbonus:".length()));
+            QuestSubmission pbSub = pbId == null ? null : questService.getSubmission(pbId);
+            ru.gamebot.platform.service.PartnerMission pbPm = pbSub == null ? null : ru.gamebot.platform.service.PartnerMissions.forQuest(pbSub.getQuest());
+            if (pbPm == null) {
+                sendText(user.getTelegramId(), "❌ Заявка не найдена.", null);
+                return;
+            }
+            handleOtpBonusCommand(user, "/" + pbPm.bonusCommand() + " " + pbSub.getUser().getTelegramId(), pbPm);
+            return;
+        }
         if (data.startsWith("mod:ok:") && isEffectiveModerator(user)) {
             handleModerationApprove(callbackQuery, parseLong(data.substring("mod:ok:".length())));
             return;
@@ -9117,12 +9134,95 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return d.getDayOfMonth() + " " + RU_MONTHS_GENITIVE[d.getMonthValue() - 1];
     }
 
+    /** С 09.11.2026 (владелец) партнёрские квесты банков ведёт менеджер лично: игрок берёт квест, видит один экран с суммой и кнопкой в личку менеджеру,
+     *  этапов, дат и отчётов со скриншотами в боте нет. Заявка «по-старому» - та, где игрок уже прошёл шаг 1 (оформил карту, указал дату или нажал «Я заплатил(а)»). */
+    private boolean isManagerFlowMission(QuestSubmission sub) {
+        return sub != null && ru.gamebot.platform.service.PartnerMissions.forQuest(sub.getQuest()) != null
+                && sub.getMissionStep() <= 1 && sub.getCardActivatedOn() == null && sub.getPurchaseReportedOn() == null;
+    }
+
+    /** Кнопка «💬 …» в личку менеджеру с готовым сообщением по партнёрскому квесту (с короткой ссылкой на заявку для менеджера). */
+    private InlineKeyboardButton partnerManagerButton(ru.gamebot.platform.service.PartnerMission pm, QuestSubmission sub, String label, String headline, String need) {
+        String text = managerHelpMessage(sub.getUser(), headline, "бот → Квесты → Спонсорские → " + pm.shortTitle(), need, null, requestDeepLink('s', sub.getId()));
+        return keyboardFactory.url(label, ru.gamebot.platform.service.ManagerMessage.link(appProperties.getSupportUsername(), text));
+    }
+
+    /** Экран партнёрской миссии, где всё идёт через менеджера: взят (что получишь и в рублях), первая часть проверена (ждём банк), финал, отказ. */
+    private void sendPartnerManagerMission(AppUser user, ru.gamebot.platform.service.PartnerMission pm, QuestSubmission sub) {
+        SubmissionStatus st = sub.getStatus();
+        boolean bonusPaid = st == SubmissionStatus.APPROVED && sub.getBonusPaidAt() != null;
+        long reward = pm.rewardExc();
+        long bonus = pm.bonusExc();
+        long totalExc = reward + bonus;
+        long excRub = totalExc / 100; // партнёрский курс 100%: 100 EXC = 1 ₽
+        long totalRub = pm.bankRewardRub() + excRub;
+        boolean tomobile = "tmobile".equals(pm.key());
+        String manager = escape(appProperties.getSupportUsername());
+        String missionHead = "Хочу выполнить квест «Миссия: " + pm.missionTitle() + "»";
+        String startNeed = "расскажите, что делать, пришлите ссылку для " + (tomobile ? "заказа SIM" : "оформления карты");
+        StringBuilder sb = new StringBuilder();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        String banner;
+        if (bonusPaid) {
+            sb.append(pm.finalText().replace("{bonus}", fmtExc(bonus)));
+            rows.add(List.of(keyboardFactory.callback("💸 Вывести", "shop:withdraw"), keyboardFactory.callback("🎯 Ещё квесты", "menu:quests")));
+            banner = pm.finalBanner();
+        } else if (st == SubmissionStatus.APPROVED) {
+            sb.append("✅ <b>").append(tomobile ? "Пополнение проверено" : "Первая покупка проверена").append("</b>\n")
+                    .append("🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")
+                    .append("🪙 <b>+").append(fmtExc(reward)).append(" EXC</b> уже у тебя. Ты партнёр клуба: все твои EXC выводятся по курсу 100%.\n\n")
+                    .append("<b>Что дальше?</b>\nБанк выплатит свой бонус не сразу. Когда деньги придут, напиши менеджеру: он проверит и начислит ещё <b>")
+                    .append(fmtExc(bonus)).append(" EXC</b> (≈ ").append(fmtExc(bonus / 100)).append(" ₽).");
+            rows.add(List.of(partnerManagerButton(pm, sub, "💬 Написать менеджеру", "Вопрос по квесту «Миссия: " + pm.missionTitle() + "»",
+                    "банк выплатил бонус, проверьте и начислите EXC")));
+            rows.add(List.of(keyboardFactory.callback("🎯 Пока ждёшь: другие квесты", "menu:quests")));
+            banner = pm.stage4Banner();
+        } else if (st == SubmissionStatus.REJECTED) {
+            sb.append("❌ <b>Квест не засчитан</b>\n")
+                    .append(escape(sub.getModeratorComment() == null ? "" : sub.getModeratorComment()))
+                    .append("\n\nЕсли считаешь это ошибкой, напиши менеджеру.");
+            rows.add(List.of(partnerManagerButton(pm, sub, "💬 Написать менеджеру", "Вопрос по квесту «Миссия: " + pm.missionTitle() + "»", "почему квест не засчитан")));
+            banner = null;
+        } else {
+            sb.append("🚀 <b>Квест взят!</b>\n🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")
+                    .append("<b>Что ты получаешь?</b>\n")
+                    .append(pm.bankRewardLine()).append("\n")
+                    .append("🪙 ").append(fmtExc(totalExc)).append(" EXC ≈ ").append(fmtExc(excRub)).append(" ₽ (")
+                    .append(fmtExc(reward)).append(tomobile ? " после пополнения баланса, " : " после первой покупки, ")
+                    .append(fmtExc(bonus)).append(" после выплаты банка)\n\n")
+                    .append("<b>🏆 Итого ≈ ").append(fmtExc(totalRub)).append(" ₽ в конце выполнения квеста</b>\n\n");
+            if (withdrawalTiersEnabled()) {
+                sb.append(questService.hasApprovedPartnerQuest(user.getId())
+                        ? "💎 Ты уже партнёр: все твои EXC выводятся по курсу 100%.\n\n"
+                        : "💎 Бонус: все твои EXC выводятся по курсу 100% вместо обычных ~" + nonPartnerPercent() + "%.\n\n");
+            }
+            sb.append("⚠️ ").append(escape(pm.managerConditions())).append("\n\n")
+                    .append("Нажми «Начать выполнять квест»: менеджер проведёт по шагам в личке. Ссылки даёт только он, @").append(manager).append(".");
+            rows.add(List.of(partnerManagerButton(pm, sub, "💬 Начать выполнять квест", missionHead, startNeed)));
+            banner = pm.stage1Banner();
+        }
+        if (st == SubmissionStatus.DRAFT || st == SubmissionStatus.PENDING || st == SubmissionStatus.NEEDS_INFO) {
+            rows.add(List.of(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + sub.getId())));
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", currentQuestBackData(user)),
+                keyboardFactory.callback("📂 Мои квесты", "menu:myquests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        if (banner != null && getClass().getResource("/" + banner) != null) {
+            sendResourceBanner(user.getTelegramId(), banner, sb.toString(), keyboardFactory.rowsLayout(rows));
+        } else {
+            sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows), true);
+        }
+    }
+
     /** Экран партнёрской миссии (ОТП Карта, Т-Банк Black, Т-Мобайл SIM; тексты и числа - в {@link ru.gamebot.platform.service.PartnerMissions}): список этапов с прогрессом и одно следующее действие.
      *  Этапы: 1 карта/SIM, 2 первый платёж (сначала дата активации/заявки, потом таймер), 3 отчёт (на проверке - ожидание), 4 банк платит (после одобрения отчёта),
      *  5 финал (после начисления бонуса админом). Дата выплаты банка - по правилу партнёра от нажатия «Я заплатил(а)». Картинки по этапам - из конфига (нет файла - только текст). */
     private void sendOtpMission(AppUser user, Quest quest, QuestSubmission sub, String notice) {
         ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(quest);
         if (pm == null) return;
+        if (isManagerFlowMission(sub)) {
+            sendPartnerManagerMission(user, pm, sub);
+            return;
+        }
         List<String[]> steps = splitQuestBlocks(questService.personalizeInstruction(quest.getInstruction(), user.getTelegramId()));
         SubmissionStatus st = sub.getStatus();
         boolean returned = st == SubmissionStatus.NEEDS_INFO;
@@ -14904,6 +15004,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private List<InlineKeyboardButton> moderationCardButtons(QuestSubmission submission) {
+        if (isManagerFlowMission(submission)) {
+            ru.gamebot.platform.service.PartnerMission mpm = ru.gamebot.platform.service.PartnerMissions.forQuest(submission.getQuest());
+            List<InlineKeyboardButton> mb = new ArrayList<>();
+            if (submission.getStatus() != SubmissionStatus.APPROVED) {
+                mb.add(keyboardFactory.callback("✅ Первая часть проверена (+" + fmtExc(mpm.rewardExc()) + " EXC, партнёр)", "mod:ok:" + submission.getId()));
+                mb.add(keyboardFactory.callback("❌ Отклонить", "mod:no:" + submission.getId()));
+            } else if (submission.getBonusPaidAt() == null) {
+                mb.add(keyboardFactory.callback("💰 Банк выплатил: начислить " + fmtExc(mpm.bonusExc()) + " EXC", "mod:pbonus:" + submission.getId()));
+            }
+            return mb;
+        }
         List<InlineKeyboardButton> buttons = new ArrayList<>(moderationApproveButtons(submission));
         buttons.add(keyboardFactory.callback("❌ Отклонить", "mod:no:" + submission.getId()));
         buttons.add(keyboardFactory.callback("❓ Уточнить", "mod:more:" + submission.getId()));
@@ -15018,7 +15129,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private String moderatorQuestHint(QuestSubmission submission) {
         Quest quest = submission.getQuest();
         StringBuilder sb = new StringBuilder();
-        if (isMissionQuest(quest)) {
+        if (isManagerFlowMission(submission)) {
+            sb.append("🤝 Квест ведёт менеджер лично: игрок в боте ничего не отправляет. Когда проверите первую часть, нажмите «Одобрить» (игрок станет партнёром, курс 100%), а после выплаты банка - «Начислить бонус».\n");
+            if (submission.getCreatedAt() != null) {
+                sb.append("📅 Квест взят ").append(escape(submission.getCreatedAt().format(DATE_TIME_FORMATTER))).append("\n");
+            }
+        } else if (isMissionQuest(quest)) {
             int shots = (submission.getMediaFileId() == null ? 0 : 1)
                     + (submission.getExtraMediaFileIds() == null || submission.getExtraMediaFileIds().isBlank() ? 0 : submission.getExtraMediaFileIds().split("\\|\\|").length);
             sb.append("📍 Этап: игрок дошёл до шага <b>").append(Math.max(1, Math.min(3, submission.getMissionStep()))).append(" из 4</b> (отчёт), скриншотов: <b>")
