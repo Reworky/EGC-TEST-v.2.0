@@ -34,16 +34,9 @@ public final class ManagerMessage {
         return compose(player, headline, where, need, facts, requestLink);
     }
 
-    /** Короткий вид для партнёрских квестов банков (владелец, 09.11): приветствие и суть, строка игрока, пустая строка и просьба с большой буквы; без «Откуда», «Нужно» и ссылки на заявку. */
+    /** Короткий вид без заказа и ссылки на заявку (партнёрские квесты банков): тот же единый шаблон. */
     public static String buildSimple(AppUser user, String headline, String need) {
-        String nick = user.getNickname() == null || user.getNickname().isBlank() ? "без ника" : user.getNickname();
-        String tg = user.getTelegramUsername() != null && !user.getTelegramUsername().isBlank() ? " @" + user.getTelegramUsername() : "";
-        String head = "Здравствуйте! " + headline + ".\nИгрок: " + nick + tg + " · ID " + user.getTelegramId() + " · " + user.getCoins() + " EXC";
-        if (need == null || need.isBlank()) {
-            return head;
-        }
-        String full = head + "\n\n" + Character.toUpperCase(need.charAt(0)) + need.substring(1);
-        return encodedLength(full) <= MAX_ENCODED ? full : head;
+        return build(user, headline, null, need, null, null);
     }
 
     /** Игрок без записи в базе EGC (например, пришёл только в VPN-бот): имя из Telegram и ID. */
@@ -56,19 +49,26 @@ public final class ManagerMessage {
         return compose(player, headline, where, need, facts, requestLink);
     }
 
+    /** Единый вид сообщения менеджеру (владелец, 10.11): приветствие и суть, пустая строка, при необходимости заказ и ссылка на заявку, пустая строка, строка игрока, пустая строка и просьба
+     *  с большой буквы. Откуда игрок пришёл по меню (where) в текст больше не попадает: суть и просьба уже говорят, о чём вопрос. */
     private static String compose(String player, String headline, String where, String need, String facts, String requestLink) {
-        String refLine = requestLink == null || requestLink.isBlank() ? "" : "\nЗаявка: " + requestLink;
-        String head = "Здравствуйте! " + headline + ".\nОткуда: " + where + refLine;
-        String needLine = need == null || need.isBlank() ? "" : "\nНужно: " + need;
-        String factsLine = facts == null || facts.isBlank() ? "" : "\n" + facts;
+        String head = "Здравствуйте! " + headline + ".";
+        StringBuilder details = new StringBuilder();
+        if (facts != null && !facts.isBlank()) details.append(facts);
+        if (requestLink != null && !requestLink.isBlank()) {
+            if (details.length() > 0) details.append("\n");
+            details.append("Заявка: ").append(requestLink);
+        }
+        String detailsBlock = details.length() == 0 ? "" : "\n\n" + details;
+        String needBlock = need == null || need.isBlank() ? "" : "\n\n" + Character.toUpperCase(need.charAt(0)) + need.substring(1);
         List<String> variants = new ArrayList<>();
-        variants.add(head + needLine + factsLine + "\n" + player);
-        variants.add(head + factsLine + "\n" + player);
-        variants.add(head + "\n" + player);
+        variants.add(head + detailsBlock + "\n\n" + player + needBlock);
+        variants.add(head + detailsBlock + "\n\n" + player);
         for (String v : variants) {
             if (encodedLength(v) <= MAX_ENCODED) return v;
         }
-        return "Здравствуйте! " + headline + "." + refLine + "\n" + player;
+        String refOnly = requestLink == null || requestLink.isBlank() ? "" : "\n\nЗаявка: " + requestLink;
+        return head + refOnly + "\n\n" + player;
     }
 
     /** Ссылка на чат менеджера с готовым текстом; пробелы кодируем как %20 (Telegram не разворачивает «+» обратно). */
