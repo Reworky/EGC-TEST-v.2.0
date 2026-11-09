@@ -5500,18 +5500,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendPartnerInfo(AppUser user, String code) {
         ru.gamebot.platform.service.PartnerMission otp = ru.gamebot.platform.service.PartnerMissions.OTP;
         boolean partner = healthRatioService.isPartner(user);
-        long totalExc = otp.rewardExc() + otp.bonusExc();
         StringBuilder sb = new StringBuilder("🤝 <b>Как стать партнёром проекта?</b>\n\n");
         sb.append(partner ? "✅ <b>Вы партнёр: курс вывода 100%.</b>\n\n" : "Партнёр — игрок, у которого одобрен квест «ОТП Карта».\n\n");
-        sb.append("<b>Что получают партнёры:</b>\n")
+        sb.append("<b>Что получают партнёры:</b>\n\n")
                 .append("✅ Вывод по курсу 100%").append(partner ? "" : " вместо обычных ~" + nonPartnerPercent() + "%").append(" — на все EXC, в том числе будущие\n")
                 .append("✅ Партнёрские цены за звёзды и в магазине наград\n")
                 .append("✅ После выплаты банка — вывод всей суммы одной заявкой, сверх месячного лимита\n")
                 .append("✅ Бейдж «Банкир EGC» в профиле\n");
         Quest otpQuest = partner ? null : otpPartnerQuestOrNull();
         if (!partner) {
-            sb.append("\n<b>Как стать:</b>\nвыполни квест «ОТП Карта». Менеджер проведёт по шагам лично.\n")
-                    .append("💳 ").append(otp.bankRewardRub()).append(" ₽ от банка + ").append(fmtExc(totalExc)).append(" EXC");
+            sb.append("\n<b>Как стать партнёром?</b>\n\nВыполни квест «ОТП Карта».\nМенеджер проведёт по шагам лично.");
             if (otpQuest == null) sb.append("\n\nМеста в квесте сейчас закончились, мы сообщим, когда появятся.");
         }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
