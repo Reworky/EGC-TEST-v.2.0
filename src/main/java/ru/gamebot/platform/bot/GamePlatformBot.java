@@ -10719,7 +10719,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("💸 В рублях (СБП, любой банк)", "shop:withdraw:rub")));
         rows.add(List.of(keyboardFactory.callback("💎 В TON (Telegram Wallet)", "shop:withdraw:ton")));
         rows.add(List.of(keyboardFactory.callback(isStarsWithdrawalOpen() ? "⭐ В звёздах Telegram" : "⭐ В звёздах (временно недоступно)", "shop:group:telegram_stars")));
-        rows.add(List.of(keyboardFactory.callback("🆘 Нет подходящего способа?", "shop:withdraw:nobank")));
         addPartnerRow(rows, user, "wd");
         rows.add(List.of(keyboardFactory.callback("📋 Мои заявки на вывод", "menu:my-withdrawals")));
         rows.add(List.of(keyboardFactory.callback("📊 Лимиты по всем рангам", "shop:ranks")));
