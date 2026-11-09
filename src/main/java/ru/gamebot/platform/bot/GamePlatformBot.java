@@ -17533,6 +17533,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .append("Как работает: волна 1 уходит в назначенное время (только 10:00-22:00 МСК и только если связка Влада жива), перед ней бот сам открывается для всех, "
                         + "волна 2 уходит через сутки, если у волны 1 доставлено не меньше 70%. Опоздание больше 12 часов - пропуск. Итоги придут сюда.");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("🚀 Волна 1 прямо сейчас, волна 2 через сутки", "admin:readybc:auto:on:now")));
         rows.add(List.of(keyboardFactory.callback("✅ Волна 1 в ближайшие 19:00 МСК, волна 2 через сутки", "admin:readybc:auto:on:0")));
         rows.add(List.of(keyboardFactory.callback("✅ То же, но начать завтра в 19:00 МСК", "admin:readybc:auto:on:1")));
         if (any) {
@@ -17548,12 +17549,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         switch (step) {
             case "on" -> {
                 int dayOffset = p.length > 3 && "1".equals(p[3]) ? 1 : 0;
+                boolean immediate = p.length > 3 && "now".equals(p[3]); // 09.11.2026 (владелец: «давай разошлём»): волна 1 стартует через минуту, остальные защиты авто-режима те же
                 java.time.Instant now = java.time.Instant.now();
                 java.time.ZonedDateTime start = now.atZone(VPN_AUTO_ZONE).withHour(19).withMinute(0).withSecond(0).withNano(0);
-                if (start.toInstant().isBefore(now.plus(20, java.time.temporal.ChronoUnit.MINUTES))) {
-                    start = start.plusDays(1);
+                if (immediate) {
+                    start = now.plusSeconds(60).atZone(VPN_AUTO_ZONE);
+                } else {
+                    if (start.toInstant().isBefore(now.plus(20, java.time.temporal.ChronoUnit.MINUTES))) {
+                        start = start.plusDays(1);
+                    }
+                    start = start.plusDays(dayOffset);
                 }
-                start = start.plusDays(dayOffset);
                 for (String wave : List.of(READY_BC_W1, READY_BC_W2)) {
                     vpnAutoDelete(VPN_AUTO_DONE_PREFIX + wave);
                 }
