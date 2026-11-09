@@ -16,7 +16,7 @@ import ru.gamebot.platform.domain.enums.BotReviewStatus;
 import ru.gamebot.platform.domain.model.BotReview;
 import ru.gamebot.platform.domain.repository.BotReviewRepository;
 
-/** Отзывы игроков для главной страницы сайта: только опубликованные в канале @egc_payouts (прошли модерацию), 4-5 звёзд, с текстом.
+/** Отзывы игроков для главной страницы сайта: только опубликованные в канале @egc_payouts (прошли модерацию), 4-5 звёзд, с текстом, свежие первыми, до 30 штук, с датой.
  *  Ники замаскированы так же, как в ленте выплат; кэш на 10 минут (эндпоинт публичный). */
 @CrossOrigin(origins = "*")
 @RestController
@@ -24,8 +24,11 @@ import ru.gamebot.platform.domain.repository.BotReviewRepository;
 @RequiredArgsConstructor
 public class PublicReviewsController {
 
-    private static final int LIMIT = 6;
-    private static final int MAX_TEXT = 260;
+    private static final int LIMIT = 30;
+    private static final int MAX_TEXT = 400;
+    private static final int MIN_TEXT = 10;
+    /** Сколько свежих отзывов с текстом смотрим, чтобы после отсева (контакты, ссылки) осталось LIMIT. */
+    private static final int FETCH = 120;
 
     private final BotReviewRepository botReviewRepository;
 
@@ -38,14 +41,18 @@ public class PublicReviewsController {
         if (cached == null || cachedAt == null || Duration.between(cachedAt, now).toMinutes() >= 10) {
             List<Map<String, Object>> out = new ArrayList<>();
             try {
-                for (BotReview r : botReviewRepository.findByStatusAndStarsGreaterThanEqualOrderByCreatedAtDesc(
-                        BotReviewStatus.PUBLISHED, 4, PageRequest.of(0, 40))) {
+                for (BotReview r : botReviewRepository.findPublicWithText(
+                        BotReviewStatus.PUBLISHED, 4, MIN_TEXT, PageRequest.of(0, FETCH))) {
                     String text = r.getText() == null ? "" : r.getText().trim();
-                    if (text.length() < 10) continue;
+                    if (text.length() < MIN_TEXT) continue;
+                    // Отзыв с чужим контактом или ссылкой («пишите в ЛС @ник») на публичную страницу не берём
+                    String lower = text.toLowerCase();
+                    if (text.contains("@") || lower.contains("http") || lower.contains("t.me")) continue;
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("stars", Math.min(5, r.getStars()));
                     m.put("text", text.length() > MAX_TEXT ? text.substring(0, MAX_TEXT).trim() + "…" : text);
                     m.put("name", maskNickname(r.getUser() == null ? null : r.getUser().getNickname()));
+                    if (r.getCreatedAt() != null) m.put("date", r.getCreatedAt().toLocalDate().toString());
                     out.add(m);
                     if (out.size() >= LIMIT) break;
                 }
