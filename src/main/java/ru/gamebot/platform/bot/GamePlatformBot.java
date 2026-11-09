@@ -9141,9 +9141,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 && sub.getMissionStep() <= 1 && sub.getCardActivatedOn() == null && sub.getPurchaseReportedOn() == null;
     }
 
-    /** Кнопка «💬 …» в личку менеджеру с готовым сообщением по партнёрскому квесту (с короткой ссылкой на заявку для менеджера). */
+    /** Кнопка «💬 …» в личку менеджеру с готовым сообщением по партнёрскому квесту (короткий вид: суть, игрок, просьба). */
     private InlineKeyboardButton partnerManagerButton(ru.gamebot.platform.service.PartnerMission pm, QuestSubmission sub, String label, String headline, String need) {
-        String text = managerHelpMessage(sub.getUser(), headline, "бот → Квесты → Спонсорские → " + pm.shortTitle(), need, null, requestDeepLink('s', sub.getId()));
+        String text = ru.gamebot.platform.service.ManagerMessage.buildSimple(sub.getUser(), headline, need); // короткий вид без «Откуда» и ссылки на заявку (владелец, 09.11)
         return keyboardFactory.url(label, ru.gamebot.platform.service.ManagerMessage.link(appProperties.getSupportUsername(), text));
     }
 

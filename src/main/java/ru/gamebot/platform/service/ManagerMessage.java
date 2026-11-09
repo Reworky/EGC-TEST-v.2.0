@@ -34,6 +34,18 @@ public final class ManagerMessage {
         return compose(player, headline, where, need, facts, requestLink);
     }
 
+    /** Короткий вид для партнёрских квестов банков (владелец, 09.11): приветствие и суть, строка игрока, пустая строка и просьба с большой буквы; без «Откуда», «Нужно» и ссылки на заявку. */
+    public static String buildSimple(AppUser user, String headline, String need) {
+        String nick = user.getNickname() == null || user.getNickname().isBlank() ? "без ника" : user.getNickname();
+        String tg = user.getTelegramUsername() != null && !user.getTelegramUsername().isBlank() ? " @" + user.getTelegramUsername() : "";
+        String head = "Здравствуйте! " + headline + ".\nИгрок: " + nick + tg + " · ID " + user.getTelegramId() + " · " + user.getCoins() + " EXC";
+        if (need == null || need.isBlank()) {
+            return head;
+        }
+        String full = head + "\n\n" + Character.toUpperCase(need.charAt(0)) + need.substring(1);
+        return encodedLength(full) <= MAX_ENCODED ? full : head;
+    }
+
     /** Игрок без записи в базе EGC (например, пришёл только в VPN-бот): имя из Telegram и ID. */
     public static String buildForId(Long telegramId, String name, String headline, String where, String need, String facts) {
         return buildForId(telegramId, name, headline, where, need, facts, null);
