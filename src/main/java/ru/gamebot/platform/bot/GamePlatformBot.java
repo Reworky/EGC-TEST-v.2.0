@@ -1655,18 +1655,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 helpTopic = "Помощь с регистрацией на " + exTitle;
                 helpContext = "Игрок хочет вывести в крипте сверх 10 000 EXC: нужно зарегистрироваться на бирже по нашей ссылке и прислать UID. Сумма заявки: "
                         + session.getData().getOrDefault("ton_exc_amount", "не введена") + " EXC.";
-                helpMessage = "Здравствуйте! Мне нужна помощь с регистрацией на " + exTitle + " для вывода. Мой ID: " + user.getTelegramId();
+                helpMessage = managerHelpMessage(user, helpTopic, "бот → Вывод EXC → крипта сверх 10 000 EXC",
+                        "нужна помощь с регистрацией на бирже для вывода, сумма заявки " + session.getData().getOrDefault("ton_exc_amount", "не введена") + " EXC", null);
             } else if (data.startsWith("helpdon:")) {
                 String[] hd = data.substring("helpdon:".length()).split(":", 2);
                 GemPurchaseService.GemPackage hdPkg = hd.length == 2 ? gemPurchaseService.findPackage(hd[0], hd[1]).orElse(null) : null;
                 String hdName = hdPkg == null ? "донат" : gemLabelWithGame(hdPkg, hd[0]);
                 helpTopic = "Вопрос по оплате доната: " + hdName;
                 helpContext = "Игрок смотрит оплату пакета и просит помощь менеджера (нет звёзд или другой вопрос по оплате).";
-                helpMessage = "Здравствуйте! Вопрос по оплате " + hdName + ". Мой ID: " + user.getTelegramId();
+                helpMessage = managerHelpMessage(user, helpTopic, "бот → Магазин наград → Донат → " + hdName, "нет звёзд или другой вопрос по оплате",
+                        hdPkg == null ? null : gemOrderFacts(user, hd[0], hdPkg));
             } else {
                 helpTopic = "Нет подходящего способа вывода";
                 helpContext = "Игрок выводил больше 10 000 EXC: банк ОТП и биржи ему не подходят (карта уже есть или другая причина). Просит подобрать другой банк или способ.";
-                helpMessage = "Здравствуйте! У меня уже есть эти банки, помогите подобрать способ вывода. Мой ID: " + user.getTelegramId() + ", баланс " + user.getCoins() + " EXC";
+                helpMessage = managerHelpMessage(user, helpTopic, "бот → Вывод EXC → банк ОТП и биржи не подошли", "карта банка и биржи мне не подходят, помогите подобрать способ вывода", null);
             }
             sendText(user.getTelegramId(),
                     "💬 <b>Напишите менеджеру</b>\n\nВопрос уйдёт напрямую в личные сообщения менеджеру: сообщение уже готово, останется нажать «Отправить».",
@@ -27810,7 +27812,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long price = gemPurchasePriceFor(user, pkg);
         // 09.11.2026 (владелец): оплата доната криптой (GRAM, TON) убрана - ею не пользуются, а модераторов она только путала.
         // Без EXC-позиции у пакета остаётся только вопрос менеджеру.
-        String helpNoExcText = "Здравствуйте! Вопрос по оплате " + gemLabelWithGame(pkg, gameKey) + ". Мой ID: " + user.getTelegramId();
+        String helpNoExcText = managerHelpMessage(user, "Хочу купить " + gemLabelWithGame(pkg, gameKey) + ", но не вижу способа оплаты",
+                "бот → Магазин наград → Донат → " + gemLabelWithGame(pkg, gameKey),
+                "в боте нет способа оплаты этого товара, подскажите, как оплатить",
+                gemOrderFacts(user, gameKey, pkg));
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.url("💬 Вопрос менеджеру", "https://t.me/" + appProperties.getSupportUsername() + "?text="
                         + java.net.URLEncoder.encode(helpNoExcText, StandardCharsets.UTF_8).replace("+", "%20"))),
@@ -27824,7 +27829,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.clear();
             rows.add(List.of(keyboardFactory.callback(fmtExc(hybrid.exc()) + " EXC + " + hybrid.rub() + " ₽", "gemrub:" + gameKey + ":" + pkg.key())));
             rows.add(List.of(keyboardFactory.callback("⭐ Оплатить звёздами", "gemstars:" + gameKey + ":" + pkg.key())));
-            String helpDonText = "Здравствуйте! Вопрос по оплате " + gemLabelWithGame(pkg, gameKey) + ". Мой ID: " + user.getTelegramId();
+            String helpDonText = managerHelpMessage(user, "Вопрос по оплате " + gemLabelWithGame(pkg, gameKey),
+                    "бот → Магазин наград → Донат → " + gemLabelWithGame(pkg, gameKey) + " → способ оплаты",
+                    "вопрос по оплате («EXC + ₽» или ⭐), уточните, что нужно",
+                    gemOrderFacts(user, gameKey, pkg));
             rows.add(List.of(keyboardFactory.url("💬 Вопрос менеджеру", "https://t.me/" + appProperties.getSupportUsername() + "?text="
                     + java.net.URLEncoder.encode(helpDonText, StandardCharsets.UTF_8).replace("+", "%20"))));
             rows.add(List.of(keyboardFactory.callback("❌ Отмена", gemDonateBackTarget(gameKey, pkg))));
@@ -28215,6 +28223,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         }
         return fresh;
+    }
+
+    /** Готовое сообщение менеджеру (открывается по ссылке t.me/<поддержка>?text=): менеджер видит его в личке как обычное сообщение игрока и ничего больше о нём не знает,
+     *  поэтому в тексте сразу: о чём вопрос, откуда игрок пришёл в боте, что ему нужно, заказ и кто он (ник, @username, ID, баланс).
+     *  Ссылка в кнопке ограничена по длине (~2 000 символов, кириллица в ней раздувается в 6 раз), поэтому при нехватке места по очереди отбрасываем
+     *  заказ и пожелание, а заголовок и строку игрока оставляем всегда. */
+    private String managerHelpMessage(AppUser user, String headline, String where, String need, String facts) {
+        String player = "Игрок: " + (user.getNickname() == null ? "—" : user.getNickname())
+                + (user.getTelegramUsername() != null && !user.getTelegramUsername().isBlank() ? " @" + user.getTelegramUsername() : "")
+                + " · ID " + user.getTelegramId() + " · " + user.getCoins() + " EXC";
+        String head = "Здравствуйте! " + headline + ".\nОткуда: " + where;
+        List<String> variants = new ArrayList<>();
+        variants.add(head + (need == null || need.isBlank() ? "" : "\nНужно: " + need) + (facts == null || facts.isBlank() ? "" : "\n" + facts) + "\n" + player);
+        variants.add(head + (facts == null || facts.isBlank() ? "" : "\n" + facts) + "\n" + player);
+        variants.add(head + "\n" + player);
+        for (String v : variants) {
+            if (java.net.URLEncoder.encode(v, StandardCharsets.UTF_8).replace("+", "%20").length() <= 1750) return v;
+        }
+        return "Здравствуйте! " + headline + ".\n" + player;
+    }
+
+    /** Строка про заказ доната для сообщения менеджеру: цена, вариант «токены + рубли», тег игры. */
+    private String gemOrderFacts(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg) {
+        StringBuilder sb = new StringBuilder("Заказ: ").append(gemPurchasePriceFor(user, pkg)).append(" ₽");
+        HybridQuote hybrid = hybridQuote(user, gameKey, pkg);
+        if (hybrid != null) sb.append(" (или ").append(fmtExc(hybrid.exc())).append(" EXC + ").append(hybrid.rub()).append(" ₽)");
+        String tag = gemPurchaseGameTag(user, gameKey);
+        if (tag != null && !tag.isBlank()) sb.append(" · тег ").append(tag);
+        return sb.toString();
     }
 
     /** Название пакета с игрой без дублей («Пополнение Steam 200 ₽» + «Steam» -> одно). */
