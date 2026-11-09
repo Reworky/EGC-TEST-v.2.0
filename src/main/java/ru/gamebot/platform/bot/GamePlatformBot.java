@@ -9186,9 +9186,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             banner = null;
         } else {
             // Короткий экран после «Взять» (владелец, 09.11): сумма и условия уже на карточке квеста, здесь только что делать дальше.
-            sb.append("🚀 <b>Квест взят!</b>\n🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")
-                    .append("Нажми «Начать выполнять квест» - менеджер проведёт по шагам в личке\n\n")
-                    .append("Ссылки даёт только он, @").append(manager);
+            sb.append("🚀 <b>Квест взят!</b>\n\n🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")
+                    .append("Нажми «Начать выполнять квест» - менеджер @").append(manager).append(" проведёт по шагам в личных сообщениях");
             rows.add(List.of(partnerManagerButton(pm, sub, "💬 Начать выполнять квест", missionHead, startNeed)));
             banner = pm.stage1Banner();
         }
