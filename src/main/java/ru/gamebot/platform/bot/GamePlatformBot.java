@@ -9066,11 +9066,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // «Срок с момента старта» до взятия квеста не показываем (место в подписи под баннером дороже); после взятия - реальный дедлайн
         sb.append(placesLeftLine(quest)).append(activeDeadline.contains("с момента старта") ? "" : activeDeadline).append(statusLine);
         if (quest.getDescription() != null && !quest.getDescription().isBlank()) {
-            sb.append("\n").append(escape(quest.getDescription())).append("\n");
+            // жирными - только заголовки блоков «Что ты получаешь:» и «Как это работает:» (владелец, 09.11)
+            sb.append("\n").append(escape(quest.getDescription()).replaceAll("(?m)^(Что ты получаешь:|Как это работает:)$", "<b>$1</b>")).append("\n");
         }
         List<String[]> steps = splitQuestBlocks(instruction);
         if (!steps.isEmpty()) sb.append("\n");
-        for (String[] step : steps) sb.append("<b>").append(escape(step[0])).append("</b>\n");
+        for (String[] step : steps) sb.append(escape(step[0])).append("\n"); // шаги 1️⃣-4️⃣ обычным текстом (владелец, 09.11)
         for (String[] cond : splitQuestBlocks(quest.getRequirements())) {
             sb.append("\n<blockquote expandable><b>").append(escape(cond[0])).append("</b>");
             if (cond.length > 1) sb.append("\n").append(escape(cond[1]));
