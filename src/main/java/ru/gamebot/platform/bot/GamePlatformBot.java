@@ -5508,13 +5508,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Две строки «Сейчас / Партнёр» для суммы exc (с переводом строки в конце); пусто, если сравнение не применимо или разница меньше 10 ₽. */
     private String partnerCompareLines(AppUser user, long exc) {
+        return partnerCompareLines(user, exc, true);
+    }
+
+    /** showGain=false - без «· +N ₽» в строке партнёра (экран «Баланс», 10.11.2026: разницу игрок и так видит по двум суммам). */
+    private String partnerCompareLines(AppUser user, long exc, boolean showGain) {
         if (exc <= 0 || !partnerCompareApplies(user)) return "";
         long partnerRub = Math.round(exc / 100.0);
         double ratio = withdrawalRatioFor(user, exc, false);
         long ownRub = Math.round(exc * ratio / 100.0);
         if (partnerRub - ownRub < PARTNER_COMPARE_MIN_DIFF_RUB) return "";
         return "💱 Сейчас: ≈ " + fmtExc(ownRub) + " ₽ (курс " + Math.round(ratio * 100) + "%)\n"
-                + "🤝 Партнёр: ≈ " + fmtExc(partnerRub) + " ₽ (курс 100%) · +" + fmtExc(partnerRub - ownRub) + " ₽\n";
+                + "🤝 Партнёр: ≈ " + fmtExc(partnerRub) + " ₽ (курс 100%)" + (showGain ? " · +" + fmtExc(partnerRub - ownRub) + " ₽" : "") + "\n";
     }
 
     private static String rubShort(double rub) {
@@ -7045,10 +7050,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (withdrawalTiersEnabled() && user.getCoins() > 0) {
             long partnerRub = Math.round(user.getCoins() / 100.0);
             long ownRub = Math.round(user.getCoins() * withdrawalRatioFor(user, user.getCoins(), false) / 100.0);
-            String compareLines = partnerCompareLines(user, user.getCoins());
+            String compareLines = partnerCompareLines(user, user.getCoins(), false);
             equivalent = ownRub >= partnerRub
                     ? "🏷 Статус: 🤝 <b>Партнёр</b> · курс 100%\n≈ " + fmtExc(partnerRub) + " ₽\n\n"
-                    : !compareLines.isEmpty() ? "🏷 Статус: Стандарт\n" + compareLines + "\n"
+                    : !compareLines.isEmpty() ? compareLines + "\n🏷 Статус: Стандарт\n\n"
                     : healthRatioService.isPartnerPending(user)
                         ? "🏷 Статус: Стандарт ≈ " + fmtExc(ownRub) + " ₽ (курс " + Math.round(withdrawalRatioFor(user, user.getCoins(), false) * 100) + "%)\n\n"
                     : "≈ " + fmtExc(ownRub) + " ₽ (курс " + Math.round(withdrawalRatioFor(user, user.getCoins(), false) * 100) + "%)\n\n";
