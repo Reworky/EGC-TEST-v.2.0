@@ -360,31 +360,53 @@ public class ChannelContentService {
 
     // ───────────────────────── опросы Telegram (10.11.2026) ─────────────────────────
 
-    /** Ручной пост-опрос: текст черновика начинается с этой метки, дальше вопрос и варианты по строке «• вариант».
-     *  Админам приходит обычная карточка на согласование (текст можно править), по ✅ в канал уходит нативный анонимный опрос Telegram. */
+    /** Пост-опрос: в тексте черновика после обычного поста (название, суть, вопрос, список вариантов) идёт строка-метка и блок опроса:
+     *  вопрос и варианты по строке «• вариант». По ✅ в канал выходит текст, а следом нативный анонимный опрос Telegram (ответом на этот текст). */
     public static final String POLL_MARKER = "[ОПРОС]";
 
-    public record PollSpec(String question, java.util.List<String> options) { }
+    public record PollSpec(String intro, String question, java.util.List<String> options) { }
 
-    public static boolean isPollText(String text) {
-        return text != null && text.startsWith(POLL_MARKER);
+    /** Позиция строки-метки опроса (метка стоит в начале строки) или -1, если это обычный пост. */
+    private static int pollMarkerIndex(String text) {
+        if (text == null) return -1;
+        if (text.startsWith(POLL_MARKER)) return 0;
+        int i = text.indexOf("\n" + POLL_MARKER);
+        return i < 0 ? -1 : i + 1;
     }
 
-    /** Собирает текст черновика опроса и сразу проверяет лимиты Telegram (вопрос до 300 символов, 2-10 вариантов, каждый до 100). */
-    public static String buildPollText(String question, java.util.List<String> options) {
-        StringBuilder sb = new StringBuilder(POLL_MARKER).append('\n').append(question == null ? "" : question.trim());
+    public static boolean isPollText(String text) {
+        return pollMarkerIndex(text) >= 0;
+    }
+
+    private static String htmlEscape(String s) {
+        return s == null ? "" : s.trim().replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
+    /** Собирает текст черновика: пост в формате «название, суть, вопрос, варианты, призыв голосовать» и блок опроса. Лимиты Telegram
+     *  (вопрос до 300 символов, 2-10 вариантов, каждый до 100) и длина черновика проверяются сразу, иначе IllegalArgumentException. */
+    public static String buildPollText(String title, String essence, String question, java.util.List<String> options, String closing) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<b>").append(htmlEscape(title)).append("</b>\n\n");
+        if (essence != null && !essence.isBlank()) sb.append(htmlEscape(essence)).append("\n\n");
+        sb.append("<b>").append(htmlEscape(question)).append("</b>\n\n");
+        for (String o : options) sb.append(htmlEscape(o)).append('\n');
+        sb.append('\n').append(closing == null || closing.isBlank() ? "Голосуйте в опросе ниже 👇" : htmlEscape(closing));
+        sb.append("\n\n").append(POLL_MARKER).append('\n').append(question == null ? "" : question.trim());
         for (String o : options) sb.append("\n• ").append(o == null ? "" : o.trim());
         String text = sb.toString();
+        if (text.length() > 4000) throw new IllegalArgumentException("Пост-опрос длиннее 4000 символов: " + text.length());
         parsePoll(text);
         return text;
     }
 
-    /** Разбирает текст черновика опроса; IllegalArgumentException, если он не проходит лимиты Telegram. */
+    /** Разбирает текст черновика на пост и опрос; IllegalArgumentException, если опрос не проходит лимиты Telegram. */
     public static PollSpec parsePoll(String text) {
-        if (!isPollText(text)) throw new IllegalArgumentException("Это не опрос: нет метки " + POLL_MARKER);
+        int idx = pollMarkerIndex(text);
+        if (idx < 0) throw new IllegalArgumentException("Это не опрос: нет строки " + POLL_MARKER);
+        String intro = text.substring(0, idx).trim();
         StringBuilder question = new StringBuilder();
         java.util.List<String> options = new java.util.ArrayList<>();
-        for (String line : text.substring(POLL_MARKER.length()).split("\\R")) {
+        for (String line : text.substring(idx + POLL_MARKER.length()).split("\\R")) {
             String l = line.trim();
             if (l.isEmpty()) continue;
             if (l.startsWith("•")) {
@@ -409,7 +431,7 @@ public class ChannelContentService {
                 throw new IllegalArgumentException("Вариант опроса: от 1 до 100 символов: " + o);
             }
         }
-        return new PollSpec(question.toString(), java.util.List.copyOf(options));
+        return new PollSpec(intro, question.toString(), java.util.List.copyOf(options));
     }
 
     /** Ставит в очередь ручной пост: карточка админам уйдёт в sendAfter (UTC) через deliverDueCards(). Повторно тот же ключ не создаётся

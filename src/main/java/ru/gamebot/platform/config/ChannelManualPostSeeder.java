@@ -48,13 +48,15 @@ public class ChannelManualPostSeeder implements CommandLineRunner {
             for (JsonNode n : root) {
                 String key = n.path("key").asText("");
                 String text = n.path("text").asText("");
-                // "poll": {"question", "options"[]} - нативный опрос Telegram (текст черновика собирается из него, лимиты Telegram проверяются сразу)
+                // "poll": {"title", "essence", "question", "options"[], "closing"} - пост-опрос: текст (название, суть, вопрос, варианты) + нативный опрос Telegram под ним;
+                // черновик собирается из этих полей, лимиты Telegram проверяются сразу
                 JsonNode poll = n.path("poll");
                 if (poll.isObject() && !n.path("disabled").asBoolean(false)) {
                     try {
                         java.util.List<String> options = new java.util.ArrayList<>();
                         poll.path("options").forEach(o -> options.add(o.asText("")));
-                        text = ChannelContentService.buildPollText(poll.path("question").asText(""), options);
+                        text = ChannelContentService.buildPollText(poll.path("title").asText(""), poll.path("essence").asText(""),
+                                poll.path("question").asText(""), options, poll.path("closing").asText(""));
                     } catch (Exception e) {
                         log.error("[ManualPosts] poll {} skipped: {}", key, e.getMessage());
                         continue;

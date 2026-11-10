@@ -25717,7 +25717,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "approve" -> {
                 try {
                     if (ru.gamebot.platform.service.ChannelContentService.isPollText(d.getPostText())) {
-                        // Опрос: в канал уходит нативный анонимный опрос Telegram (вопрос и варианты разбираются из текста черновика)
+                        // Пост-опрос: сначала текст (название, суть, вопрос, варианты), следом нативный анонимный опрос Telegram ответом на него
                         ru.gamebot.platform.service.ChannelContentService.PollSpec spec;
                         try {
                             spec = ru.gamebot.platform.service.ChannelContentService.parsePoll(d.getPostText());
@@ -25725,14 +25725,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             answer(callbackQuery.getId(), "⚠️ " + e.getMessage());
                             return;
                         }
-                        org.telegram.telegrambots.meta.api.methods.polls.SendPoll poll = new org.telegram.telegrambots.meta.api.methods.polls.SendPoll();
-                        poll.setChatId(channelTargetFor(d.getType()));
-                        poll.setQuestion(spec.question());
-                        poll.setOptions(spec.options());
-                        poll.setIsAnonymous(true);
-                        poll.setType("regular");
-                        poll.setAllowMultipleAnswers(false);
-                        execute(poll);
+                        String pollTarget = channelTargetFor(d.getType());
+                        Integer introId = spec.intro().isBlank() ? null : sendBannerAndTextReturningId(pollTarget, null, spec.intro(), null);
+                        try {
+                            org.telegram.telegrambots.meta.api.methods.polls.SendPoll poll = new org.telegram.telegrambots.meta.api.methods.polls.SendPoll();
+                            poll.setChatId(pollTarget);
+                            poll.setQuestion(spec.question());
+                            poll.setOptions(spec.options());
+                            poll.setIsAnonymous(true);
+                            poll.setType("regular");
+                            poll.setAllowMultipleAnswers(false);
+                            if (introId != null) poll.setReplyToMessageId(introId);
+                            execute(poll);
+                        } catch (Exception e) {
+                            if (introId == null) throw e;
+                            // Текст уже в канале: повторное ✅ продублировало бы его, поэтому закрываем черновик и зовём админов добить опрос вручную
+                            log.error("Poll post {}: intro published, poll failed", draftId, e);
+                            channelContentService.markPublished(draftId);
+                            clearInlineKeyboard(callbackQuery);
+                            alertAdminsPlain("⚠️ Текст поста-опроса опубликован, но сам опрос не вышел: " + e.getMessage() + ". Опубликуйте опрос в канале вручную.");
+                            answer(callbackQuery.getId(), "⚠️ Текст вышел, опрос не вышел, смотрите сообщение");
+                            return;
+                        }
                         channelContentService.markPublished(draftId);
                         clearInlineKeyboard(callbackQuery);
                         answer(callbackQuery.getId(), "✅ Опрос опубликован");
