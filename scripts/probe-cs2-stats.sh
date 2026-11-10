@@ -31,6 +31,7 @@ done
 if [ -z "$STEAM" ]; then echo "Ни у одного из проверенных аккаунтов Steam не отдал статистику (закрытые профили)."; exit 0; fi
 echo "Использован SteamID: $STEAM"
 OUT=/tmp/cs2-stats-$STEAM.txt
+[ -f "$OUT" ] && cp "$OUT" "$OUT.prev"
 echo "$BODY" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
@@ -38,6 +39,21 @@ for s in sorted(d['playerstats']['stats'], key=lambda x: x['name']):
     print(s['name'], s['value'])
 " > "$OUT"
 echo "Всего полей: $(wc -l < "$OUT"). Полный список сохранён: $OUT"
+if [ -f "$OUT.prev" ]; then
+  echo; echo "=== Что изменилось с прошлого запуска (счётчики, которые реально растут) ==="
+  python3 - "$OUT.prev" "$OUT" <<'PY'
+import sys
+def load(p):
+    d = {}
+    for line in open(p):
+        k, _, v = line.strip().rpartition(' ')
+        d[k] = int(v)
+    return d
+a, b = load(sys.argv[1]), load(sys.argv[2])
+ch = [(k, a.get(k, 0), b[k]) for k in sorted(b) if b[k] != a.get(k, 0)]
+print("\n".join(f"{k}: {x} -> {y}" for k, x, y in ch) if ch else "Ничего не изменилось (после прошлого запуска матчей не было).")
+PY
+fi
 echo
 echo "=== last_match_* (последний матч) ==="; grep '^last_match_' "$OUT"
 echo; echo "=== Убийства по оружию (total_kills_*) ==="; grep '^total_kills_' "$OUT" | grep -v 'total_kills_headshot\|total_kills_enemy\|total_kills_against\|total_kills_hip\|total_kills_knife_fight' 
