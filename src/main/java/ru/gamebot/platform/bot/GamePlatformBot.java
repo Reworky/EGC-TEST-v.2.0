@@ -1554,7 +1554,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 answerSilently(callbackQuery.getId());
                 sendText(user.getTelegramId(),
                         "🔞 <b>Квест для тех, кому 18+ и кто живёт в РФ</b>\n\n"
-                                + "Нужен паспорт РФ, и у тебя ещё не должно быть карты ОТП Банка. Подтверди, что это про тебя.",
+                                + "Нужен паспорт РФ, и у тебя ещё не должно быть карты банка-партнёра. Подтверди, что это про тебя.",
                         keyboardFactory.rowsLayout(List.of(
                                 List.of(keyboardFactory.callback("✅ Да, мне 18+", "quest:take18:" + takeQuest.getId())),
                                 List.of(keyboardFactory.callback("⬅️ Назад", "quest:card:" + takeQuest.getId())))));
@@ -1684,8 +1684,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         hdPkg == null ? null : gemOrderFacts(user, hd[0], hdPkg));
             } else {
                 helpTopic = "Нет подходящего способа вывода";
-                helpContext = "Игрок выводил больше 10 000 EXC: банк ОТП и биржи ему не подходят (карта уже есть или другая причина). Просит подобрать другой банк или способ.";
-                helpMessage = managerHelpMessage(user, helpTopic, "бот → Вывод EXC → банк ОТП и биржи не подошли", "карта банка и биржи мне не подходят, помогите подобрать способ вывода", null);
+                helpContext = "Игрок выводил больше 10 000 EXC: банк-партнёр и биржи ему не подходят (карта уже есть или другая причина). Просит подобрать другой банк или способ.";
+                helpMessage = managerHelpMessage(user, helpTopic, "бот → Вывод EXC → банк-партнёр и биржи не подошли", "карта банка и биржи мне не подходят, помогите подобрать способ вывода", null);
             }
             sendText(user.getTelegramId(),
                     "💬 <b>Напишите менеджеру</b>\n\nВопрос уйдёт напрямую в личные сообщения менеджеру: сообщение уже готово, останется нажать «Отправить».",
@@ -5454,7 +5454,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw")));
         sendText(user.getTelegramId(),
-                "💳 <b>Вывести больше лимита: карта ОТП Банка</b>\n\n"
+                "💳 <b>Вывести больше лимита: карта банка-партнёра</b>\n\n"
                         + "Сейчас: лимит <b>" + fmtExc(monthly) + " EXC/мес</b>, осталось <b>" + fmtExc(remaining) + "</b>.\n"
                         + "С картой: <b>до " + fmtExc(remaining + OTP_BONUS_DEFAULT_EXC) + " EXC</b> одной заявкой.\n\n"
                         + "<b>Что ты получаешь:</b>\n"
@@ -5466,7 +5466,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "2️⃣ Потратить 500 ₽ этой картой на любую покупку (они вернутся обратно на твой баланс)\n"
                         + "3️⃣ Прислать подтверждение\n\n"
                         + "⏳ Банк платит с 25-го числа месяца, следующего за покупкой, потом мы начислим EXC.\n"
-                        + "🔒 Паспорт, коды из СМС и номер карты нам не нужны. Подходит, если тебе 18+, ты живёшь в РФ и карты ОТП у тебя ещё нет.\n\n"
+                        + "🔒 Паспорт, коды из СМС и номер карты нам не нужны. Подходит, если тебе 18+, ты живёшь в РФ и карты этого банка у тебя ещё нет.\n\n"
                         + "Мест: " + Math.max(0, (quest.getParticipantLimit() == null ? 0 : quest.getParticipantLimit()) - questService.countApprovedByQuest(quest)),
                 keyboardFactory.rowsLayout(rows));
     }
@@ -5501,7 +5501,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ru.gamebot.platform.service.PartnerMission otp = ru.gamebot.platform.service.PartnerMissions.OTP;
         boolean partner = healthRatioService.isPartner(user);
         StringBuilder sb = new StringBuilder("🤝 <b>Как стать партнёром проекта?</b>\n\n");
-        sb.append(partner ? "✅ <b>Вы партнёр: курс вывода 100%.</b>\n\n" : "Партнёр — игрок, у которого одобрен квест «ОТП Карта».\n\n");
+        sb.append(partner ? "✅ <b>Вы партнёр: курс вывода 100%.</b>\n\n" : "Партнёр — игрок, у которого одобрен спонсорский квест банка-партнёра.\n\n");
         sb.append("<b>Что получают партнёры:</b>\n\n")
                 .append("✅ Вывод по курсу 100%").append(partner ? "" : " вместо обычных ~" + nonPartnerPercent() + "%").append(" — на все EXC, в том числе будущие\n")
                 .append("✅ Партнёрские цены за звёзды и в магазине наград\n")
@@ -5509,12 +5509,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .append("✅ Бейдж «Банкир EGC» в профиле\n");
         Quest otpQuest = partner ? null : otpPartnerQuestOrNull();
         if (!partner) {
-            sb.append("\n<b>Как стать партнёром?</b>\n\nВыполни квест «ОТП Карта».\nМенеджер проведёт по шагам лично.");
+            sb.append("\n<b>Как стать партнёром?</b>\n\nВыполни спонсорский квест банка-партнёра («Квесты → Спонсорские»).\nМенеджер проведёт по шагам лично.");
             if (otpQuest == null) sb.append("\n\nМеста в квесте сейчас закончились, мы сообщим, когда появятся.");
         }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (otpQuest != null) {
-            rows.add(List.of(keyboardFactory.callback("🎯 Открыть квест ОТП", "partner:quest:" + otpQuest.getId() + ":" + code)));
+            rows.add(List.of(keyboardFactory.callback("🎯 Открыть квест банка", "partner:quest:" + otpQuest.getId() + ":" + code)));
         }
         String mText = managerHelpMessage(user, "Вопрос про статус партнёра проекта", "бот → Как стать партнёром?", "расскажите, как стать партнёром и что для этого нужно", null);
         rows.add(List.of(keyboardFactory.url("💬 Вопрос менеджеру", ru.gamebot.platform.service.ManagerMessage.link(appProperties.getSupportUsername(), mText))));
@@ -10869,7 +10869,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         Quest quest = cardOfferQuestFor(user);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (quest != null) {
-            rows.add(List.of(keyboardFactory.callback("🚀 Хочу карту ОТП", "quest:viewwd:" + quest.getId())));
+            rows.add(List.of(keyboardFactory.callback("🚀 Хочу карту банка", "quest:viewwd:" + quest.getId())));
         }
         long needExc = "stars".equals(kind) ? minStarsPriceExc() : ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC;
         if (room >= needExc) {

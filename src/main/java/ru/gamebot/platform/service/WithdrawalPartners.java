@@ -12,7 +12,7 @@ public final class WithdrawalPartners {
     /** Банк-место назначения: миссия партнёра (квест, который делает игрока рефералом) и слова для распознавания названия банка. */
     public record Bank(PartnerMission mission, String title, String genitive, List<String> aliases) {}
 
-    public static final Bank OTP = new Bank(PartnerMissions.OTP, "ОТП Банк", "ОТП Банка", List.of("отп", "otp"));
+    public static final Bank OTP = new Bank(PartnerMissions.OTP, "Банк-партнёр", "банка-партнёра", List.of("отп", "otp"));
     public static final Bank T_BANK = new Bank(PartnerMissions.T_BLACK, "Т-Банк", "Т-Банка",
             List.of("т-банк", "т банк", "тбанк", "т-банка", "тинькофф", "тиньков", "tinkoff", "t-bank", "tbank", "t bank"));
 
