@@ -166,6 +166,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ChannelContentService channelContentService;
     private final ru.gamebot.platform.service.BonusCourseService bonusCourseService;
     private final ru.gamebot.platform.service.EgcPassFunnelService egcPassFunnelService;
+    private final ru.gamebot.platform.service.PartnerQuestFunnelService partnerQuestFunnelService;
     private final ru.gamebot.platform.service.RedButtonService redButtonService;
     private final ru.gamebot.platform.service.FinanceService financeService;
     private final ru.gamebot.platform.service.ExpenseService expenseService;
@@ -1462,6 +1463,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (data.startsWith("partner:info:") || data.equals("partner:info")) {
             answerSilently(callbackQuery.getId());
             sendPartnerInfo(user, data.length() > "partner:info:".length() ? data.substring("partner:info:".length()) : "bl");
+            return;
+        }
+        if (data.startsWith("partner:go:")) {
+            answerSilently(callbackQuery.getId());
+            Long goId = parseLong(data.substring("partner:go:".length()));
+            QuestSubmission goSub = goId == null ? null : questService.getSubmission(goId);
+            ru.gamebot.platform.service.PartnerMission goPm = goSub == null ? null : ru.gamebot.platform.service.PartnerMissions.forQuest(goSub.getQuest());
+            if (goPm == null || goSub.getUser() == null || !goSub.getUser().getTelegramId().equals(user.getTelegramId())) {
+                sendText(user.getTelegramId(), "❌ Квест не найден.", backMenuKeyboard("menu:myquests"));
+                return;
+            }
+            if (ru.gamebot.platform.service.PartnerMissions.grantsPartner(goPm)) partnerQuestFunnelService.startClicked(user.getTelegramId());
+            boolean goTmobile = "tmobile".equals(goPm.key());
+            InlineKeyboardButton goButton = partnerManagerButton(goPm, goSub, "💬 Открыть чат с менеджером",
+                    "Хочу выполнить квест «Миссия: " + goPm.missionTitle() + "»",
+                    "расскажите, что делать, пришлите ссылку для " + (goTmobile ? "заказа SIM" : "оформления карты"));
+            sendText(user.getTelegramId(), "💬 <b>Чат с менеджером</b>\n\nНажми кнопку: сообщение уже готово, останется его отправить.",
+                    keyboardFactory.rowsLayout(List.of(List.of(goButton),
+                            List.of(keyboardFactory.callback("⬅️ Назад", "menu:myquests"), keyboardFactory.callback("🏠 Меню", "menu:main")))));
             return;
         }
         if (data.startsWith("partner:quest:")) {
@@ -8942,6 +8962,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendMissionStep(user, quest, latest, null, notice);
             return;
         }
+        if (ru.gamebot.platform.service.PartnerMissions.grantsPartner(ru.gamebot.platform.service.PartnerMissions.forQuest(quest))) {
+            partnerQuestFunnelService.cardViewed(user.getTelegramId()); // воронка партнёрского квеста: показ карточки (вкладка «Партнёрский квест»)
+        }
         String statusText = latest == null ? "Не начат"
                 : (latestExpired ? "Истёк срок" : humanStatus(latest.getStatus()));
 
@@ -9270,7 +9293,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // Короткий экран после «Взять» (владелец, 09.11): сумма и условия уже на карточке квеста, здесь только что делать дальше.
             sb.append("🚀 <b>Квест взят!</b>\n\n🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")
                     .append("Нажми «Начать выполнять квест» - менеджер @").append(manager).append(" проведёт по шагам в личных сообщениях");
-            rows.add(List.of(partnerManagerButton(pm, sub, "💬 Начать выполнять квест", missionHead, startNeed)));
+            // Нажатие считаем в воронке (URL-кнопка Telegram о нажатии не сообщает): сначала callback с записью, затем сообщение с кнопкой в чат менеджера
+            rows.add(List.of(keyboardFactory.callback("💬 Начать выполнять квест", "partner:go:" + sub.getId())));
             banner = pm.stage1Banner();
         }
         if (st == SubmissionStatus.DRAFT || st == SubmissionStatus.PENDING || st == SubmissionStatus.NEEDS_INFO) {

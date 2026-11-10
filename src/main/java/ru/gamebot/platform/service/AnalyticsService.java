@@ -60,7 +60,8 @@ public class AnalyticsService {
         COURSE("📈", "Курс дня и красная кнопка"),
         KPI("🏪", "Витрина проекта"),
         EGC_PASS("⭐", "EGC Pass: продажи"),
-        VPN("🔐", "EGC VPN");
+        VPN("🔐", "EGC VPN"),
+        PARTNER("💳", "Партнёрский квест");
 
         public final String icon;
         public final String title;
@@ -132,6 +133,7 @@ public class AnalyticsService {
     private final RetentionService retentionService;
     private final CourseAnalyticsService courseAnalytics;
     private final EgcPassFunnelService egcPassFunnel;
+    private final PartnerQuestFunnelService partnerFunnel;
     private final VpnStatsService vpnStats;
     private final PulseService pulseService;
 
@@ -249,6 +251,7 @@ public class AnalyticsService {
                 case KPI -> kpiTab(p, pv, fromDate, lines, extras);
                 case EGC_PASS -> egcPassTab(p, pv, lines, extras);
                 case VPN -> vpnTab(p, pv, lines, extras);
+                case PARTNER -> partnerTab(p, pv, lines, extras);
             }
         } catch (Exception e) {
             log.error("Analytics tab {} failed", tab, e);
@@ -899,6 +902,39 @@ public class AnalyticsService {
         for (Object[] r : f.bySource()) sb.append("• ").append(escape(String.valueOf(r[0]))).append(": ").append(r[1]).append(" (игроков ").append(r[2]).append(")\n");
         extras.add(sb.toString());
         extras.add("<i>Показы и открытия считаются с момента добавления вкладки (23.10.2026); покупки и продления берутся из журнала Stars за весь период.</i>");
+    }
+
+    /** Вкладка «Партнёрский квест» (10.11.2026): воронка квеста банка, который открывает партнёрские привилегии (сейчас ОТП): открыли карточку → взяли → нажали «Начать» → первая часть проверена → банк выплатил.
+     *  Взятия, проверка и выплата считаются по заявкам, взятым в периоде (когорта); показы карточки и нажатия «Начать» пишутся событиями с момента добавления вкладки. */
+    private void partnerTab(Period p, Period pv, List<Line> out, List<String> extras) {
+        String game = PartnerMissions.OTP.gameName();
+        PartnerQuestFunnelService.Funnel f = partnerFunnel.funnel(game, p.from(), p.to());
+        PartnerQuestFunnelService.Funnel q = partnerFunnel.funnel(game, pv.from(), pv.to());
+        out.add(L("pq_views", "Открыли карточку квеста", "", (double) f.viewUsers(), (double) q.viewUsers(), "уникальных игроков", false));
+        out.add(L("pq_taken", "Взяли квест", "", (double) f.taken(), (double) q.taken(),
+                f.viewUsers() == 0 ? null : String.format(RU, "%.0f%% от открывших карточку", pct(f.taken(), f.viewUsers())), false));
+        out.add(L("pq_click", "Нажали «Начать» (открыли чат)", "", (double) f.clickUsers(), (double) q.clickUsers(),
+                f.taken() == 0 ? null : String.format(RU, "%.0f%% от взявших", pct(Math.min(f.clickUsers(), f.taken()), f.taken())), false));
+        out.add(L("pq_verified", "Первая часть проверена", "", (double) f.verified(), (double) q.verified(),
+                f.taken() == 0 ? null : String.format(RU, "%.0f%% от взявших", pct(f.verified(), f.taken())), false));
+        out.add(L("pq_bonus", "Банк выплатил бонус", "", (double) f.bonusPaid(), (double) q.bonusPaid(),
+                f.verified() == 0 ? null : String.format(RU, "%.0f%% от проверенных", pct(f.bonusPaid(), f.verified())), false));
+        out.add(L("pq_work", "Взяли, ещё в работе", "", (double) f.inWork(), (double) q.inWork(), "ждут шага игрока или проверки менеджера", false));
+        out.add(L("pq_lost", "Отменили или отклонены", "", (double) (f.cancelled() + f.rejected()), (double) (q.cancelled() + q.rejected()),
+                "отменили " + f.cancelled() + ", отклонены " + f.rejected(), true));
+        extras.add(breakdownText("По источнику трафика (взяли → проверено → выплата)", f.bySource()));
+        extras.add(breakdownText("По стране (взяли → проверено → выплата)", f.byCountry()));
+        extras.add("<i>Взятия, проверка и выплата считаются по заявкам, взятым в выбранном периоде: недавние заявки ещё не дошли до конца, поэтому конверсии в конце воронки у свежих периодов занижены. "
+                + "Открытия карточки и нажатия «Начать» считаются с момента добавления вкладки (10.11.2026).</i>");
+    }
+
+    private String breakdownText(String title, List<Object[]> rows) {
+        StringBuilder sb = new StringBuilder("<b>").append(escape(title)).append("</b>\n");
+        if (rows.isEmpty()) sb.append("За период заявок нет.\n");
+        for (Object[] r : rows) {
+            sb.append("• ").append(escape(String.valueOf(r[0]))).append(": ").append(r[1]).append(" → ").append(r[2]).append(" → ").append(r[3]).append("\n");
+        }
+        return sb.toString();
     }
 
     /** Вкладка «EGC VPN» (03.11.2026): ключи сейчас, пробные, оплаты по журналу Stars, продления и переход пробный → платный. */
