@@ -6092,15 +6092,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + String.format("%,d", UserService.EGC_PASS_BOOST_MONTHLY_CAP_EXC).replace(',', ' ') + " EXC</b>\n";
         }
 
-        // Недельный ранг
-        String leagueLine;
-        if (user.getWeeklyXp() > 0) {
-            long weeklyRank = userService.getWeeklyRankFast(user);
-            long weeklyTotal = userService.countActiveThisWeek();
-            leagueLine = "🏆 <b>" + league + "</b> · место <b>#" + weeklyRank + " из " + weeklyTotal + "</b>\n";
-        } else {
-            leagueLine = "🏆 <b>" + league + "</b> · заработай XP, чтобы войти в рейтинг\n";
-        }
+        // Строка лиги и места в недельном рейтинге убрана из профиля (владелец, 10.11.2026): она есть в «Рейтинге».
 
         boolean profileIncomplete = user.getAge() == null || user.getCountry() == null;
         String incompleteHint = profileIncomplete ? "\n💡 <i>Заполни профиль полностью — укажи возраст и страну</i>\n" : "";
@@ -6117,15 +6109,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Макет профиля (26.10.2026, утверждён владельцем): без заголовка «Эта неделя» (число квестов общее), подписи сокращены.
         String profileText = "🎮 <b>" + escape(user.getNickname()) + "</b>" + partnerStatusService.mark(user) + "\n"
                 + badgeLine
-                + titleLine
                 + egcPassLine
-                + "Ур. " + levelNum + " «" + levelName + "»\n"
+                + (user.getProfileTitle() != null ? "🏅 " + escape(user.getProfileTitle()) + " - " : "") + "Ур. " + levelNum + " «" + levelName + "»\n"
                 + levelProgressBar(user) + "\n\n"
                 + "💰 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>"
                 + " (+" + excBonus + "% к наградам" + boostNote + ")\n"
                 + (healthRatioService.isPartner(user) ? "🏷 Статус: 🤝 <b>Партнёр</b> · курс 100%\n"
                         : partnerCompareApplies(user) ? "🏷 Статус: Стандарт (курс " + Math.round(withdrawalRatioFor(user, 1, false) * 100) + "%)\n" : "")
-                + leagueLine
+                + "\n"
                 + "✅ <b>" + user.getCompletedQuests() + "</b> " + pluralQuests(user.getCompletedQuests())
                 + " · 🔥 серия <b>" + user.getStreakDays() + "</b> дн."
                 + " · 🎟 <b>" + user.getTickets() + "</b>\n"
