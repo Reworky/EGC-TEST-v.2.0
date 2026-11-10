@@ -695,8 +695,16 @@ public class ChannelContentService {
     public Optional<ChannelPostDraft> createDailyCodeDraft(boolean force) {
         Optional<ChannelPostDraft> latest = draftRepository.findFirstByTypeOrderByIdDesc(DAILY_CODE);
         if (!force && latest.isPresent() && ChannelPostDraft.PENDING.equals(latest.get().getStatus())) {
-            log.info("[ChannelContent] DAILY_CODE skipped: previous draft {} still waits for approval", latest.get().getId());
-            return Optional.empty();
+            // 10.11.2026: неодобренный черновик старше 20 часов не блокирует автопост вечно (код дня теряет смысл за сутки) - закрываем его и делаем новый
+            ChannelPostDraft stale = latest.get();
+            if (stale.getCreatedAt() != null && stale.getCreatedAt().isBefore(LocalDateTime.now().minusHours(20))) {
+                stale.setStatus(ChannelPostDraft.REJECTED);
+                draftRepository.save(stale);
+                log.info("[ChannelContent] DAILY_CODE: stale draft {} (created {}) closed, creating a new one", stale.getId(), stale.getCreatedAt());
+            } else {
+                log.info("[ChannelContent] DAILY_CODE skipped: previous draft {} still waits for approval", stale.getId());
+                return Optional.empty();
+            }
         }
         String code = clubActivityService.generateCode();
         StringBuilder sb = new StringBuilder("🔑 <b>Код дня</b>\n\n");
