@@ -1,27 +1,35 @@
 #!/usr/bin/env bash
 # Живая проверка Steam Web API для CS2: какие поля статистики реально отдаёт аккаунт игрока (оружие, карты, урон, last_match_* и т.д.).
 # Нужна перед новой пачкой квестов: имена полей не гадаем, сверяем с живым ответом. Только чтение. Запускать НА СЕРВЕРЕ:
-#   cd /root/gamebot && git pull && bash scripts/probe-cs2-stats.sh 7656119XXXXXXXXXX      (SteamID64)
-#   cd /root/gamebot && git pull && bash scripts/probe-cs2-stats.sh 123456789              (Telegram ID игрока с привязанным Steam)
+#   cd /root/gamebot && git pull && bash scripts/probe-cs2-stats.sh          (сам найдёт аккаунт с открытым профилем)
+#   ... probe-cs2-stats.sh <SteamID64 из 17 цифр или Telegram ID игрока с привязанным Steam> (подставьте настоящее значение)
 # Ключ берётся из окружения контейнера и никуда не печатается. Профиль Steam и «Статистика игр» игрока должны быть открыты.
 set -u
-ARG="${1:?укажите SteamID64 (17 цифр) или Telegram ID игрока}"
+ARG="${1:-auto}"
 cd "$(dirname "$0")/.."
-if [ "${#ARG}" -ge 16 ]; then
-  STEAM="$ARG"
-else
-  TMP=$(mktemp /tmp/probe-cs2.XXXXXX.sql)
-  trap 'rm -f "$TMP"' EXIT
-  echo "SELECT 'STEAM=' || cs2steam_id64 FROM app_users WHERE telegram_id = $ARG;" > "$TMP"
-  STEAM=$(bash scripts/run-sql.sh "$TMP" | grep -o 'STEAM=[0-9]\+' | head -1 | cut -d= -f2)
-  if [ -z "$STEAM" ]; then echo "У игрока не привязан Steam (или игрок не найден)."; exit 0; fi
-fi
+TMP=$(mktemp /tmp/probe-cs2.XXXXXX.sql)
+trap 'rm -f "$TMP"' EXIT
 KEY=$(docker exec gamebot printenv STEAM_API_KEY 2>/dev/null)
 if [ -z "$KEY" ]; then echo "STEAM_API_KEY в контейнере не найден."; exit 1; fi
-BODY=$(curl -s --max-time 25 "https://api.steampowered.com/ISteamUserStats/GetUserStatsForGame/v2/?appid=730&key=$KEY&steamid=$STEAM")
-if ! echo "$BODY" | grep -q '"stats"'; then
-  echo "Steam не вернул статистику (закрытый профиль или нет игры). Ответ (без ключа):"; echo "$BODY" | head -c 400; echo; exit 0
+fetch() { curl -s --max-time 25 "https://api.steampowered.com/ISteamUserStats/GetUserStatsForGame/v2/?appid=730&key=$KEY&steamid=$1"; }
+# Без аргумента сам берёт привязанные Steam-аккаунты (последние привязанные первыми) и пробует, пока не найдёт открытый профиль со статистикой
+if [ "$ARG" = "auto" ]; then
+  echo "SELECT 'STEAM=' || cs2steam_id64 FROM app_users WHERE cs2steam_id64 IS NOT NULL ORDER BY cs2linked_at DESC LIMIT 12;" > "$TMP"
+  CANDIDATES=$(bash scripts/run-sql.sh "$TMP" | grep -o 'STEAM=[0-9]\+' | cut -d= -f2)
+elif [ "${#ARG}" -ge 16 ]; then
+  CANDIDATES="$ARG"
+else
+  echo "SELECT 'STEAM=' || cs2steam_id64 FROM app_users WHERE telegram_id = $ARG;" > "$TMP"
+  CANDIDATES=$(bash scripts/run-sql.sh "$TMP" | grep -o 'STEAM=[0-9]\+' | head -1 | cut -d= -f2)
 fi
+if [ -z "$CANDIDATES" ]; then echo "Нет привязанных Steam-аккаунтов (или игрок не найден)."; exit 0; fi
+BODY=""; STEAM=""
+for c in $CANDIDATES; do
+  B=$(fetch "$c")
+  if echo "$B" | grep -q '"stats"'; then BODY="$B"; STEAM="$c"; break; fi
+done
+if [ -z "$STEAM" ]; then echo "Ни у одного из проверенных аккаунтов Steam не отдал статистику (закрытые профили)."; exit 0; fi
+echo "Использован SteamID: $STEAM"
 OUT=/tmp/cs2-stats-$STEAM.txt
 echo "$BODY" | python3 -c "
 import sys, json
