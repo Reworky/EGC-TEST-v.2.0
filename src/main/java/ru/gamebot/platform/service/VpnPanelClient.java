@@ -55,6 +55,14 @@ public class VpnPanelClient {
 
     private String csrf = "";
     private boolean loggedIn = false;
+    /** API-токен панели (3x-ui v3, заголовок Authorization: Bearer): с ним логин и CSRF не нужны. Пусто - вход по логину и паролю. */
+    private volatile String apiToken = "";
+
+    /** Войти в панель по API-токену вместо логина и пароля (токен выдаёт владелец панели). Возвращает этот же клиент. */
+    public VpnPanelClient withToken(String token) {
+        this.apiToken = token == null ? "" : token.trim();
+        return this;
+    }
 
     public VpnPanelClient(ObjectMapper objectMapper,
                           @Value("${app.vpn-xui-url:}") String url,
@@ -73,7 +81,7 @@ public class VpnPanelClient {
     }
 
     public boolean isConfigured() {
-        return !baseUrl.isBlank() && !user.isBlank() && !pass.isBlank();
+        return !baseUrl.isBlank() && (!apiToken.isBlank() || (!user.isBlank() && !pass.isBlank()));
     }
 
     /** Клиент по метке (email) вместе со своим числовым id панели и счётчиками трафика; пусто - такого клиента нет. */
@@ -246,12 +254,17 @@ public class VpnPanelClient {
     /** GET при body == null, иначе POST JSON. Ответ не-200 или не-JSON считаем протухшей сессией: логин заново и один повтор. */
     private JsonNode api(String path, String jsonBody) throws PanelException {
         for (int attempt = 0; attempt < 2; attempt++) {
-            if (!loggedIn) {
+            boolean byToken = !apiToken.isBlank();
+            if (!byToken && !loggedIn) {
                 login();
             }
             HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(baseUrl + path))
-                    .header("X-CSRF-Token", csrf)
                     .header("X-Requested-With", "XMLHttpRequest");
+            if (byToken) {
+                b.header("Authorization", "Bearer " + apiToken);
+            } else {
+                b.header("X-CSRF-Token", csrf);
+            }
             if (jsonBody == null) {
                 b.GET();
             } else {

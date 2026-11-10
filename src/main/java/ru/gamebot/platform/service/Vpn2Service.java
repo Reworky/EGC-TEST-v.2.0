@@ -128,6 +128,7 @@ public class Vpn2Service {
                        @Value("${app.vpn2-xui-url:}") String xuiUrl,
                        @Value("${app.vpn2-xui-user:}") String xuiUser,
                        @Value("${app.vpn2-xui-pass:}") String xuiPass,
+                       @Value("${app.vpn2-xui-token:}") String xuiToken,
                        @Value("${app.vpn2-xui-inbound-id:2}") int inboundId,
                        @Value("${app.vpn2-sub-base:}") String subBase,
                        @Value("${app.vpn2-trial-days:7}") int trialDays,
@@ -138,7 +139,7 @@ public class Vpn2Service {
                        @Value("${app.vpn2-cryptobot-token:}") String cryptoToken,
                        @Value("${app.vpn2-card-manager:false}") boolean cardManager,
                        @Value("${app.vpn2-manager-username:}") String managerUsername) {
-        this.panel = new VpnPanelClient(objectMapper, xuiUrl, xuiUser, xuiPass, inboundId);
+        this.panel = new VpnPanelClient(objectMapper, xuiUrl, xuiUser, xuiPass, inboundId).withToken(xuiToken);
         this.accounts = accounts;
         this.users = users;
         this.payments = payments;

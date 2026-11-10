@@ -77,6 +77,8 @@ app:
   vpn2-xui-url: ${VPN2_XUI_URL:}
   vpn2-xui-user: ${VPN2_XUI_USER:}
   vpn2-xui-pass: ${VPN2_XUI_PASS:}
+  # API-токен панели 3x-ui v3 (вместо логина и пароля, если задан): панель Влада на 185.32.84.230
+  vpn2-xui-token: ${VPN2_XUI_TOKEN:}
   vpn2-xui-inbound-id: ${VPN2_XUI_INBOUND_ID:2}
   vpn2-sub-base: ${VPN2_SUB_BASE:}
   vpn2-trial-days: ${VPN2_TRIAL_DAYS:7}
