@@ -10835,16 +10835,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
 
-        // Макет владельца 10.11.2026: баннер «Магазин EGC» и открытый текст (без раскрывающейся цитаты); экран открывается правкой того же сообщения, а не новым постом (sendResourceBanner)
+        // Макет владельца 10.11.2026: баннер «Магазин EGC», баланс открыто, а фонд, курсы, лимит и подсказка про уровень - в раскрывающейся цитате
+        // (вернули её по просьбе владельца в тот же день); экран открывается правкой того же сообщения, а не новым постом (sendResourceBanner)
         String levelHint = withdrawalLevelHint(user).strip();
         sendResourceBanner(user.getTelegramId(), "shop-banner.jpg",
                 "🛍️ <b>Магазин наград</b>\n\n"
                         + "🪙 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>\n\n"
+                        + "<blockquote expandable>"
                         + "📊 Состояние фонда: <b>" + ratioPercent + "%</b>\n"
                         + "💱 Курс вывода: <b>" + playerWithdrawalRateString(user, ratioPercent) + "</b>\n"
                         + (partnerCompareApplies(user) ? "🤝 Партнёр: <b>" + tierRateString(100) + "</b>\n" : "")
                         + "📤 Лимит вывода: <b>" + sinkShopService.getMonthlyLimitShown(user) + " EXC/мес</b> (осталось: " + remaining + " EXC)"
-                        + (levelHint.isEmpty() ? "" : "\n\n" + levelHint),
+                        + (levelHint.isEmpty() ? "" : "\n\n" + levelHint)
+                        + "</blockquote>",
                 keyboardFactory.rowsLayout(rows));
     }
 
