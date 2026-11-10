@@ -12,7 +12,7 @@ if [ "${#ARG}" -ge 16 ]; then
 else
   TMP=$(mktemp /tmp/probe-cs2.XXXXXX.sql)
   trap 'rm -f "$TMP"' EXIT
-  echo "SELECT 'STEAM=' || cs2_steam_id64 FROM app_users WHERE telegram_id = $ARG;" > "$TMP"
+  echo "SELECT 'STEAM=' || cs2steam_id64 FROM app_users WHERE telegram_id = $ARG;" > "$TMP"
   STEAM=$(bash scripts/run-sql.sh "$TMP" | grep -o 'STEAM=[0-9]\+' | head -1 | cut -d= -f2)
   if [ -z "$STEAM" ]; then echo "У игрока не привязан Steam (или игрок не найден)."; exit 0; fi
 fi
