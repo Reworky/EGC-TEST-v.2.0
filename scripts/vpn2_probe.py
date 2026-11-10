@@ -2,7 +2,7 @@
 """Проба EGC VPN из России: сервер Москва раз в 5 минут подключается к связке Влада так же, как это делает игрок (Hysteria2 на узел входа, технический клиент egc_probe
 на его панели, inbound 9) и проверяет: проходит ли трафик, какой адрес выхода, какая скорость (раз в час, ~1 МБ) и сколько дней осталось у сертификата узла.
 Результат уходит в бот (POST heartbeat), раз в сутки с аргументом backup уходит копия базы локальной панели Москвы (резервной цепочки).
-Настройки: /root/vpn-health.env (HEALTH_URL, HEALTH_KEY), /root/vpn-probe.env (PROBE_AUTH; необязательно EXPECT_EXIT_IP, HOST, HY_PORT, SUB_PORT).
+Настройки: /root/vpn-health.env (HEALTH_URL, HEALTH_KEY), /root/vpn-probe.env (PROBE_AUTH; необязательно EXPECT_EXIT_IP, HOST, HY_PORT, SUB_PORT, OBFS_PASSWORD).
 Аргументы: --dry - только печать результата; backup - копия базы панели Москвы."""
 import datetime
 import glob
@@ -63,6 +63,8 @@ def tunnel_probe(details):
                           "streamSettings": {"network": "hysteria", "security": "tls",
                                              "tlsSettings": {"serverName": HOST, "alpn": ["h3"]},
                                              "hysteriaSettings": {"version": 2, "auth": ENV['PROBE_AUTH']}}}]}
+    if ENV.get('OBFS_PASSWORD'):  # узел с обфускацией salamander (новая панель Влада 185.32.84.230): без неё рукопожатие не проходит
+        cfg['outbounds'][0]['streamSettings']['finalmask'] = {"udp": [{"type": "salamander", "settings": {"password": ENV['OBFS_PASSWORD']}}]}
     path = tempfile.mktemp(suffix='.json')
     open(path, 'w').write(json.dumps(cfg))
     proc = subprocess.Popen([xray, '-c', path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

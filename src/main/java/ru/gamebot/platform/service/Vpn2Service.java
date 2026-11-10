@@ -518,6 +518,15 @@ public class Vpn2Service {
         });
     }
 
+    /** Telegram ID всех с работающим ключом (выдан, срок не истёк): им пишем при смене сервера. */
+    public java.util.List<Long> runningKeyHolderIds() {
+        LocalDateTime now = LocalDateTime.now();
+        return accounts.findAll().stream()
+                .filter(a -> Vpn2Account.STATUS_ACTIVE.equals(a.getStatus()) && a.getExpiresAt() != null && a.getExpiresAt().isAfter(now))
+                .map(Vpn2Account::getTelegramId)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
     /** Перенос ключей на новую панель (после смены бэкенда VPN2_XUI_*): для всех работающих ключей создаёт или обновляет клиента с теми же subId и сроком.
      *  Ссылка подписки у игроков меняется вместе с VPN2_SUB_BASE, поэтому после переноса им нужно заново добавить подписку. Возвращает число перенесённых. */
     public synchronized int resyncAll() {

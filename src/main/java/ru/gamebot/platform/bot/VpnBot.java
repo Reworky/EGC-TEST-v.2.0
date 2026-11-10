@@ -730,13 +730,34 @@ public class VpnBot extends TelegramLongPollingBot {
         String[] parts = text.split("\\s+");
         if (parts.length < 2) {
             sendHtml(adminId, "Формат: <code>/vpn2 ID</code> (статус), <code>/vpn2 ID trial</code>, <code>/vpn2 ID m1</code>, <code>m3</code>, <code>m12</code> (выдать срок), <code>/vpn2 ID off</code>.\n"
-                    + "Перенос всех ключей в текущую панель после смены настроек: <code>/vpn2 sync</code>. Статистика: <code>/stats</code>. Состояние: " + (vpn.isEnabled() ? "включён" : "выключен (VPN2_ENABLED и настройки панели)")
+                    + "Перенос всех ключей в текущую панель после смены настроек: <code>/vpn2 sync</code>, затем сообщение игрокам про новую ссылку: <code>/vpn2 notify</code>. Статистика: <code>/stats</code>. Состояние: " + (vpn.isEnabled() ? "включён" : "выключен (VPN2_ENABLED и настройки панели)")
                     + ", " + (vpn.isOpen() ? "открыт всем" : "закрыт (админы и тестеры)"), null);
             return;
         }
         if ("sync".equalsIgnoreCase(parts[1])) {
             int moved = vpn.resyncAll();
             sendHtml(adminId, "🔄 Работающих ключей перенесено в панель: <b>" + moved + "</b>. Игрокам нужно заново добавить подписку по новой ссылке (она в «Моё подключение»).", null);
+            return;
+        }
+        if ("notify".equalsIgnoreCase(parts[1])) {
+            // после переноса на новую панель (/vpn2 sync): всем с работающим ключом - сообщение, что ссылка подписки новая
+            java.util.List<Long> holders = vpn.runningKeyHolderIds();
+            int sent = 0;
+            for (Long holder : holders) {
+                try {
+                    List<List<InlineKeyboardButton>> notifyRows = new ArrayList<>();
+                    notifyRows.add(List.of(keyboardFactory.callback("🔑 Моё подключение", "m:my")));
+                    sendHtml(holder, "🔄 <b>Мы обновили серверы EGC VPN</b>\n\nСтарая ссылка подписки больше не работает. Откройте «Моё подключение», скопируйте новую ссылку и добавьте её в Happ (старую подписку можно удалить). Срок вашего ключа не изменился.", notifyRows);
+                    sent++;
+                    Thread.sleep(60);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                } catch (Exception e) {
+                    log.warn("VPN bot: notify about new servers failed for {}", holder, e);
+                }
+            }
+            sendHtml(adminId, "📨 Сообщение о новой ссылке отправлено: <b>" + sent + "</b> из " + holders.size() + " работающих ключей.", null);
             return;
         }
         long targetId;
