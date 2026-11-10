@@ -255,9 +255,10 @@ public class VpnBot extends TelegramLongPollingBot {
         return adminService.resolvedAdminIds().contains(uid);
     }
 
-    /** Бот включён и открыт для этого человека: всем (VPN2_OPEN), тестерам (VPN2_TEST_IDS) или админам. */
+    /** Бот включён и открыт для этого человека: всем (VPN2_OPEN), тестерам (VPN2_TEST_IDS), админам или тем, у кого уже есть ключ. */
     private boolean allowed(Long uid) {
-        return vpn.isEnabled() && (vpn.isOpen() || vpn.isTester(uid) || isAdmin(uid) || vpn.isTech(uid));
+        // у кого уже есть ключ (пробный или платный), доступ к боту остаётся и при закрытом наборе: ссылку подписки и оплату продления нужно уметь взять всегда
+        return vpn.isEnabled() && (vpn.isOpen() || vpn.isTester(uid) || isAdmin(uid) || vpn.isTech(uid) || vpn.find(uid).isPresent());
     }
 
     // ---------------------------------------------------------------- кнопки
@@ -731,7 +732,7 @@ public class VpnBot extends TelegramLongPollingBot {
         if (parts.length < 2) {
             sendHtml(adminId, "Формат: <code>/vpn2 ID</code> (статус), <code>/vpn2 ID trial</code>, <code>/vpn2 ID m1</code>, <code>m3</code>, <code>m12</code> (выдать срок), <code>/vpn2 ID off</code>.\n"
                     + "Перенос всех ключей в текущую панель после смены настроек: <code>/vpn2 sync</code>, затем сообщение игрокам про новую ссылку: <code>/vpn2 notify</code>. Статистика: <code>/stats</code>. Состояние: " + (vpn.isEnabled() ? "включён" : "выключен (VPN2_ENABLED и настройки панели)")
-                    + ", " + (vpn.isOpen() ? "открыт всем" : "закрыт (админы и тестеры)"), null);
+                    + ", " + (vpn.isOpen() ? "открыт всем" : "закрыт (админы, тестеры и те, у кого уже есть ключ)"), null);
             return;
         }
         if ("sync".equalsIgnoreCase(parts[1])) {
