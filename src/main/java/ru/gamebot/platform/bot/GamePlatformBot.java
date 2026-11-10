@@ -168,6 +168,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.EgcPassFunnelService egcPassFunnelService;
     private final ru.gamebot.platform.service.PartnerQuestFunnelService partnerQuestFunnelService;
     private final ru.gamebot.platform.service.PartnerStatusService partnerStatusService;
+    private final ru.gamebot.platform.service.PartnerQuestNudgeService partnerQuestNudgeService;
     private final ru.gamebot.platform.service.RedButtonService redButtonService;
     private final ru.gamebot.platform.service.FinanceService financeService;
     private final ru.gamebot.platform.service.ExpenseService expenseService;
@@ -568,6 +569,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (text != null && text.startsWith("/clubgoal") && isEffectiveAdmin(user)) {
             handleClubGoalCommand(user, text.trim());
+            return;
+        }
+
+        if (text != null && (text.equals("/partnernudge") || text.startsWith("/partnernudge ")) && isEffectiveAdmin(user)) {
+            handlePartnerNudgeCommand(user, text.trim());
             return;
         }
 
@@ -1475,7 +1481,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(user.getTelegramId(), "❌ Квест не найден.", backMenuKeyboard("menu:myquests"));
                 return;
             }
-            if (ru.gamebot.platform.service.PartnerMissions.grantsPartner(goPm)) partnerQuestFunnelService.startClicked(user.getTelegramId());
+            if (ru.gamebot.platform.service.PartnerMissions.grantsPartner(goPm)) {
+                partnerQuestFunnelService.startClicked(user.getTelegramId());
+                notifyManagersAboutPartnerStart(goSub);
+            }
             boolean goTmobile = "tmobile".equals(goPm.key());
             InlineKeyboardButton goButton = partnerManagerButton(goPm, goSub, "💬 Открыть чат с менеджером",
                     "Хочу выполнить квест «Миссия: " + goPm.missionTitle() + "»",
@@ -6803,6 +6812,114 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Менеджерам: игрок нажал «Начать выполнять квест», сейчас напишет в личку (владелец, 10.11.2026). Отключается /partnernudge manager off. */
+    private void notifyManagersAboutPartnerStart(QuestSubmission sub) {
+        try {
+            if (!partnerQuestNudgeService.managerEnabled()) return;
+            AppUser p = sub.getUser();
+            String who = "<a href=\"tg://user?id=" + p.getTelegramId() + "\">" + escape(String.valueOf(p.getNickname())) + "</a>"
+                    + (p.getTelegramUsername() != null && !p.getTelegramUsername().isBlank() ? " (@" + escape(p.getTelegramUsername()) + ")" : "");
+            String text = "💬 Игрок " + who + " (" + p.getCompletedQuests() + " " + pluralQuests(p.getCompletedQuests()) + ") открыл чат по квесту на карту.\nЖдите сообщение.";
+            InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("📥 Карточка заявки", "mod:view:" + sub.getId()))));
+            for (Long modId : adminService.allModeratorIds()) {
+                try {
+                    sendText(modId, text, markup);
+                } catch (Exception e) {
+                    log.warn("Failed to notify {} about partner quest start", modId, e);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Partner quest start notification failed for submission {}", sub.getId(), e);
+        }
+    }
+
+    /** Напоминания игроку по партнёрскому квесту, который ведёт менеджер (PartnerQuestNudgeService). */
+    @org.springframework.context.event.EventListener
+    public void onPartnerQuestNudge(ru.gamebot.platform.event.PartnerQuestNudgeEvent event) {
+        try {
+            QuestSubmission sub = questService.getSubmission(event.getSubmissionId());
+            ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(sub.getQuest());
+            if (pm == null || sub.getStatus() != SubmissionStatus.DRAFT || !isManagerFlowMission(sub)) return;
+            String reward = "+" + pm.bankRewardRub() + " ₽ и " + fmtExc(pm.bonusExc()) + " EXC";
+            String head = "Хочу выполнить квест «Миссия: " + pm.missionTitle() + "»";
+            String need = "расскажите, что делать, пришлите ссылку для оформления карты";
+            String text;
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            switch (event.getKind()) {
+                case ru.gamebot.platform.event.PartnerQuestNudgeEvent.KIND_ASK -> {
+                    text = "Как дела с картой? 💳\nЕсли что-то не получается или нужна помощь, напиши менеджеру, он подскажет.";
+                    rows.add(List.of(partnerManagerButton(pm, sub, "💬 Написать менеджеру", head, "помогите с квестом на карту, что делать дальше")));
+                }
+                case ru.gamebot.platform.event.PartnerQuestNudgeEvent.KIND_LAST -> {
+                    text = "Квест на карту ещё ждёт тебя: " + reward + ". Продолжим?";
+                    rows.add(List.of(partnerManagerButton(pm, sub, "💬 Продолжить в чате", head, need)));
+                    rows.add(List.of(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + sub.getId())));
+                }
+                default -> {
+                    text = "💳 <b>Ты взял квест на " + reward + "</b>\nОстался один шаг: открой чат с менеджером, он всё объяснит и пришлёт ссылку.";
+                    rows.add(List.of(partnerManagerButton(pm, sub, "💬 Открыть чат с менеджером", head, need)));
+                }
+            }
+            sendText(event.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
+        } catch (Exception e) {
+            log.warn("Failed to send partner quest nudge to {}", event.getTelegramId(), e);
+        }
+    }
+
+    /** Ежедневная сводка менеджерам по партнёрскому квесту (11:00 по Москве). */
+    @org.springframework.context.event.EventListener
+    public void onPartnerQuestDigest(ru.gamebot.platform.event.PartnerQuestDigestEvent event) {
+        for (Long modId : adminService.allModeratorIds()) {
+            try {
+                sendPartnerDigest(modId, event.getDigest());
+            } catch (Exception e) {
+                log.warn("Failed to send partner quest digest to {}", modId, e);
+            }
+        }
+    }
+
+    private void sendPartnerDigest(Long chatId, ru.gamebot.platform.service.PartnerQuestNudgeService.Digest d) {
+        StringBuilder sb = new StringBuilder("💳 <b>Партнёрский квест: ждут вас</b>\n")
+                .append("• Не открыли чат: <b>").append(d.noClick()).append("</b>\n")
+                .append("• Открыли чат, нет проверки больше суток: <b>").append(d.clickedStale()).append("</b>\n")
+                .append("• Ждут выплаты банка: <b>").append(d.waitingBank()).append("</b> (банк мог выплатить: ").append(d.bankDue()).append(")\n");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (!d.rows().isEmpty()) {
+            sb.append("\n");
+            for (ru.gamebot.platform.service.PartnerQuestNudgeService.Row r : d.rows()) {
+                String nick = escape(String.valueOf(r.nickname())) + (r.username() != null && !r.username().isBlank() ? " (@" + escape(r.username()) + ")" : "");
+                sb.append("• ").append(nick).append(" - ").append(r.status()).append(", ").append(r.days()).append(" дн.\n");
+            }
+            for (ru.gamebot.platform.service.PartnerQuestNudgeService.Row r : d.rows().stream().limit(5).toList()) {
+                rows.add(List.of(keyboardFactory.callback("📥 " + trim(String.valueOf(r.nickname()), 24), "mod:view:" + r.submissionId())));
+            }
+        }
+        sendText(chatId, sb.toString(), rows.isEmpty() ? null : keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Админ: /partnernudge status | player on|off | manager on|off | digest - напоминания и сводка по партнёрскому квесту. */
+    private void handlePartnerNudgeCommand(AppUser admin, String text) {
+        String[] p = text.split("\\s+");
+        String sub = p.length > 1 ? p[1].toLowerCase() : "status";
+        try {
+            if (("player".equals(sub) || "manager".equals(sub)) && p.length > 2 && ("on".equalsIgnoreCase(p[2]) || "off".equalsIgnoreCase(p[2]))) {
+                boolean on = "on".equalsIgnoreCase(p[2]);
+                partnerQuestNudgeService.setFlag("player".equals(sub) ? ru.gamebot.platform.service.PartnerQuestNudgeService.PLAYER_KEY
+                        : ru.gamebot.platform.service.PartnerQuestNudgeService.MGR_KEY, on);
+                sendText(admin.getTelegramId(), ("player".equals(sub) ? "Напоминания игрокам: " : "Уведомления и сводка менеджерам: ") + (on ? "🔔 включены" : "🔕 выключены"), null);
+            } else if ("digest".equals(sub)) {
+                sendPartnerDigest(admin.getTelegramId(), partnerQuestNudgeService.buildDigest());
+            } else {
+                sendText(admin.getTelegramId(), "💳 <b>Партнёрский квест: напоминания</b>\n\n"
+                        + "Игрокам (3 ч, 24 ч, 3 дня): " + (partnerQuestNudgeService.playerEnabled() ? "🔔 включены" : "🔕 выключены") + "\n"
+                        + "Менеджерам (при «Начать» и сводка 11:00 МСК): " + (partnerQuestNudgeService.managerEnabled() ? "🔔 включены" : "🔕 выключены") + "\n\n"
+                        + "<code>/partnernudge player on|off</code>\n<code>/partnernudge manager on|off</code>\n<code>/partnernudge digest</code> - сводка сейчас", null);
+            }
+        } catch (Exception e) {
+            sendText(admin.getTelegramId(), "⚠️ " + escape(String.valueOf(e.getMessage())), null);
+        }
+    }
+
     /** Напоминания по миссии «ОТП Карта» (OtpMissionReminderService): «ждёт тебя», «до конца окна на покупку осталось N дн», «банк мог заплатить». Награду и лимиты не меняет. */
     @org.springframework.context.event.EventListener
     public void onOtpMissionReminder(ru.gamebot.platform.event.OtpMissionReminderEvent event) {
@@ -8076,6 +8193,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("vpn", "ID [trial|paid|off]", "EGC VPN (пока без экранов игрока): статус игрока, выдать пробный/оплаченный месяц, отключить"),
             new AdminCommand("push", "status|on NAME|off NAME", "Короткие рассылки игрокам: буст выходных, новые квесты по игре, гонка отрядов, гонка за Зал славы"),
             new AdminCommand("goldenhour", "status|on|off|hour N|percent N|max N|push on|off|pushtest", "Золотой час: окно, бонус, лимит квестов, напоминание игрокам"),
+            new AdminCommand("partnernudge", "status|player on|off|manager on|off|digest", "Партнёрский квест: напоминания игрокам, уведомления и сводка менеджерам"),
             new AdminCommand("dailycode", "now|on|off|hour|dow|status", "Пост «Код дня»: создать сейчас, включить, выключить, состояние"),
             new AdminCommand("redbutton", "status|on|off|now [%]|plan|cancel ID|set КЛЮЧ ЗНАЧЕНИЕ|text post|teaser ТЕКСТ", "«Красная кнопка»: редкий крупный бонус к курсу вывода (расписание, предупреждение, закрытие)"),
             new AdminCommand("course", "status|on|off|now [%]|set КЛЮЧ ЗНАЧЕНИЕ", "«Курс дня»: бонус к курсу вывода (пост с кнопкой, проценты, потолок, бюджет)"),
