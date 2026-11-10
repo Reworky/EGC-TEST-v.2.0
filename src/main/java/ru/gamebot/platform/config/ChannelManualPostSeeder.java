@@ -48,7 +48,19 @@ public class ChannelManualPostSeeder implements CommandLineRunner {
             for (JsonNode n : root) {
                 String key = n.path("key").asText("");
                 String text = n.path("text").asText("");
-                if (key.isBlank() || text.isBlank()) continue;
+                // "poll": {"question", "options"[]} - нативный опрос Telegram (текст черновика собирается из него, лимиты Telegram проверяются сразу)
+                JsonNode poll = n.path("poll");
+                if (poll.isObject() && !n.path("disabled").asBoolean(false)) {
+                    try {
+                        java.util.List<String> options = new java.util.ArrayList<>();
+                        poll.path("options").forEach(o -> options.add(o.asText("")));
+                        text = ChannelContentService.buildPollText(poll.path("question").asText(""), options);
+                    } catch (Exception e) {
+                        log.error("[ManualPosts] poll {} skipped: {}", key, e.getMessage());
+                        continue;
+                    }
+                }
+                if (key.isBlank() || (text.isBlank() && !poll.isObject())) continue;
                 // "disabled": true - пост снят с плана: новый не создаём, а ещё не отправленную админам карточку отклоняем
                 if (n.path("disabled").asBoolean(false)) {
                     int cancelled = channelContentService.cancelManualPost(key);

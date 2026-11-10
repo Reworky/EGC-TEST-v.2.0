@@ -358,6 +358,60 @@ public class ChannelContentService {
         return saveDraft(type, text, meta, photoFileId);
     }
 
+    // ───────────────────────── опросы Telegram (10.11.2026) ─────────────────────────
+
+    /** Ручной пост-опрос: текст черновика начинается с этой метки, дальше вопрос и варианты по строке «• вариант».
+     *  Админам приходит обычная карточка на согласование (текст можно править), по ✅ в канал уходит нативный анонимный опрос Telegram. */
+    public static final String POLL_MARKER = "[ОПРОС]";
+
+    public record PollSpec(String question, java.util.List<String> options) { }
+
+    public static boolean isPollText(String text) {
+        return text != null && text.startsWith(POLL_MARKER);
+    }
+
+    /** Собирает текст черновика опроса и сразу проверяет лимиты Telegram (вопрос до 300 символов, 2-10 вариантов, каждый до 100). */
+    public static String buildPollText(String question, java.util.List<String> options) {
+        StringBuilder sb = new StringBuilder(POLL_MARKER).append('\n').append(question == null ? "" : question.trim());
+        for (String o : options) sb.append("\n• ").append(o == null ? "" : o.trim());
+        String text = sb.toString();
+        parsePoll(text);
+        return text;
+    }
+
+    /** Разбирает текст черновика опроса; IllegalArgumentException, если он не проходит лимиты Telegram. */
+    public static PollSpec parsePoll(String text) {
+        if (!isPollText(text)) throw new IllegalArgumentException("Это не опрос: нет метки " + POLL_MARKER);
+        StringBuilder question = new StringBuilder();
+        java.util.List<String> options = new java.util.ArrayList<>();
+        for (String line : text.substring(POLL_MARKER.length()).split("\\R")) {
+            String l = line.trim();
+            if (l.isEmpty()) continue;
+            if (l.startsWith("•")) {
+                options.add(l.substring(1).trim());
+            } else if (l.startsWith("- ")) {
+                options.add(l.substring(2).trim());
+            } else if (options.isEmpty()) {
+                if (question.length() > 0) question.append(' ');
+                question.append(l);
+            } else {
+                throw new IllegalArgumentException("Строка после вариантов должна начинаться с «• »: " + l);
+            }
+        }
+        if (question.length() < 1 || question.length() > 300) {
+            throw new IllegalArgumentException("Вопрос опроса: от 1 до 300 символов, сейчас " + question.length());
+        }
+        if (options.size() < 2 || options.size() > 10) {
+            throw new IllegalArgumentException("В опросе нужно от 2 до 10 вариантов, сейчас " + options.size());
+        }
+        for (String o : options) {
+            if (o.isEmpty() || o.length() > 100) {
+                throw new IllegalArgumentException("Вариант опроса: от 1 до 100 символов: " + o);
+            }
+        }
+        return new PollSpec(question.toString(), java.util.List.copyOf(options));
+    }
+
     /** Ставит в очередь ручной пост: карточка админам уйдёт в sendAfter (UTC) через deliverDueCards(). Повторно тот же ключ не создаётся
      *  (даже если пост уже опубликован или отклонён). Возвращает true, если черновик создан. */
     public boolean queueManualPost(String key, String rubric, String note, String text, LocalDateTime sendAfter) {

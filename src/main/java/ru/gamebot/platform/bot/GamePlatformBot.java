@@ -25716,6 +25716,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         switch (parts[0]) {
             case "approve" -> {
                 try {
+                    if (ru.gamebot.platform.service.ChannelContentService.isPollText(d.getPostText())) {
+                        // Опрос: в канал уходит нативный анонимный опрос Telegram (вопрос и варианты разбираются из текста черновика)
+                        ru.gamebot.platform.service.ChannelContentService.PollSpec spec;
+                        try {
+                            spec = ru.gamebot.platform.service.ChannelContentService.parsePoll(d.getPostText());
+                        } catch (IllegalArgumentException e) {
+                            answer(callbackQuery.getId(), "⚠️ " + e.getMessage());
+                            return;
+                        }
+                        org.telegram.telegrambots.meta.api.methods.polls.SendPoll poll = new org.telegram.telegrambots.meta.api.methods.polls.SendPoll();
+                        poll.setChatId(channelTargetFor(d.getType()));
+                        poll.setQuestion(spec.question());
+                        poll.setOptions(spec.options());
+                        poll.setIsAnonymous(true);
+                        poll.setType("regular");
+                        poll.setAllowMultipleAnswers(false);
+                        execute(poll);
+                        channelContentService.markPublished(draftId);
+                        clearInlineKeyboard(callbackQuery);
+                        answer(callbackQuery.getId(), "✅ Опрос опубликован");
+                        return;
+                    }
                     boolean isCodePost = ru.gamebot.platform.service.ChannelContentService.DAILY_CODE.equals(d.getType());
                     if (isCodePost && (d.getMeta() == null || !d.getPostText().toUpperCase().contains(d.getMeta().toUpperCase()))) {
                         answer(callbackQuery.getId(), "⚠️ В тексте нет кода " + d.getMeta() + ", верните его или отклоните пост");
