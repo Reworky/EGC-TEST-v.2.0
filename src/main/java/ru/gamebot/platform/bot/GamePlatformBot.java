@@ -5499,6 +5499,48 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Партнёрский квест с картой для предложения в выводе: активный, с местами и ещё не выполненный этим игроком; иначе null. */
+    /** Разница «курс сейчас / курс партнёра» (владелец, 10.11.2026): показывается не-партнёрам при включённых уровнях курса, когда они уже выполнили 3 квеста; новичку цифры без сравнения. */
+    private static final int PARTNER_COMPARE_MIN_QUESTS = 3;
+    private static final long PARTNER_COMPARE_MIN_DIFF_RUB = 10;
+    private final java.util.concurrent.ConcurrentHashMap<Long, java.time.LocalDate> partnerCompareRewardShown = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Для мини-аппа: показывать ли сравнение курсов (то же условие, что в боте). */
+    public boolean partnerCompareShownFor(AppUser user) {
+        return partnerCompareApplies(user);
+    }
+
+    private boolean partnerCompareApplies(AppUser user) {
+        return withdrawalTiersEnabled() && user.getCompletedQuests() >= PARTNER_COMPARE_MIN_QUESTS && !healthRatioService.isPartner(user);
+    }
+
+    /** Две строки «Сейчас / Партнёр» для суммы exc (с переводом строки в конце); пусто, если сравнение не применимо или разница меньше 10 ₽. */
+    private String partnerCompareLines(AppUser user, long exc) {
+        if (exc <= 0 || !partnerCompareApplies(user)) return "";
+        long partnerRub = Math.round(exc / 100.0);
+        double ratio = withdrawalRatioFor(user, exc, false);
+        long ownRub = Math.round(exc * ratio / 100.0);
+        if (partnerRub - ownRub < PARTNER_COMPARE_MIN_DIFF_RUB) return "";
+        return "💱 Сейчас: ≈ " + fmtExc(ownRub) + " ₽ (курс " + Math.round(ratio * 100) + "%)\n"
+                + "🤝 Партнёр: ≈ " + fmtExc(partnerRub) + " ₽ (курс 100%) · +" + fmtExc(partnerRub - ownRub) + " ₽\n";
+    }
+
+    private static String rubShort(double rub) {
+        return rub >= 10 ? String.valueOf(Math.round(rub)) : String.format("%.1f", rub).replace('.', ',');
+    }
+
+    /** Строка под наградой за квест («≈ 1,2 ₽ сейчас · партнёру 3 ₽»): не чаще раза в сутки на игрока (хранится в памяти, после перезапуска покажется снова). Пусто, если не применимо. */
+    private String partnerCompareRewardLine(AppUser user, long grantedExc) {
+        try {
+            if (grantedExc <= 0 || !partnerCompareApplies(user)) return "";
+            java.time.LocalDate today = java.time.LocalDate.now();
+            if (today.equals(partnerCompareRewardShown.put(user.getTelegramId(), today))) return "";
+            double ratio = withdrawalRatioFor(user, grantedExc, false);
+            return "\n💱 ≈ " + rubShort(grantedExc * ratio / 100.0) + " ₽ сейчас · 🤝 партнёру " + rubShort(grantedExc / 100.0) + " ₽";
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     /** Строка с кнопкой «🤝 Как стать партнёром?» для экранов вывода, звёзд, магазина и FAQ (09.11.2026): только тем, кто ещё не партнёр, и когда уровни курса включены.
      *  code - откуда пришли (куда вернёт «Назад»): wd вывод, st звёзды, sh магазин, fq FAQ, bl баланс. */
     private void addPartnerRow(List<List<InlineKeyboardButton>> rows, AppUser user, String code) {
@@ -5511,6 +5553,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "wd" -> "shop:withdraw";
             case "st" -> "shop:group:telegram_stars";
             case "sh" -> "menu:shop";
+            case "pf" -> "menu:profile";
             case "fq" -> "menu:faq";
             default -> "menu:balance";
         };
@@ -6070,6 +6113,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + levelProgressBar(user) + "\n\n"
                 + "💰 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>"
                 + " (+" + excBonus + "% к наградам" + boostNote + ")\n"
+                + (healthRatioService.isPartner(user) ? "🤝 <b>Партнёр</b>: курс вывода 100%\n"
+                        : partnerCompareApplies(user) ? "🤝 Статус: не партнёр (курс " + Math.round(withdrawalRatioFor(user, 1, false) * 100) + "%)\n" : "")
                 + leagueLine
                 + "✅ <b>" + user.getCompletedQuests() + "</b> " + pluralQuests(user.getCompletedQuests())
                 + " · 🔥 серия <b>" + user.getStreakDays() + "</b> дн."
@@ -6092,6 +6137,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (user.getAge() == null || ((user.getCountry() == null || user.getCountry().isBlank()) && user.getPhoneNumber() == null)) {
             profileRows.add(List.of(keyboardFactory.callback("🎁 Расскажи о себе (+" + ABOUT_REWARD_EXC + " EXC)", "about:start")));
         }
+        addPartnerRow(profileRows, user, "pf");
         profileRows.add(List.of(keyboardFactory.callback("📊 Все ранги", "profile:ranks")));
         profileRows.add(List.of(keyboardFactory.callback(avatarBtn, "profile:avatar")));
         profileRows.add(List.of(keyboardFactory.callback("✏️ Редактировать профиль", "profile:edit")));
@@ -6899,9 +6945,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (withdrawalTiersEnabled() && user.getCoins() > 0) {
             long partnerRub = Math.round(user.getCoins() / 100.0);
             long ownRub = Math.round(user.getCoins() * withdrawalRatioFor(user, user.getCoins(), false) / 100.0);
+            String compareLines = partnerCompareLines(user, user.getCoins());
             equivalent = ownRub >= partnerRub
                     ? "≈ " + fmtExc(partnerRub) + " ₽ (курс 100%)\n\n"
-                    : "≈ " + fmtExc(partnerRub) + " ₽ по курсу партнёра (" + fmtExc(ownRub) + " ₽ без партнёра)\n\n";
+                    : !compareLines.isEmpty() ? compareLines + "\n"
+                    : "≈ " + fmtExc(ownRub) + " ₽ (курс " + Math.round(withdrawalRatioFor(user, user.getCoins(), false) * 100) + "%)\n\n";
         }
         // Ежедневный бонус забирается в «Заданиях дня»; на балансе он появляется лишь пока задания выключены (app_settings).
         List<List<InlineKeyboardButton>> balanceRows = new ArrayList<>();
@@ -6912,6 +6960,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             balanceRows.add(List.of(keyboardFactory.callback(dailyBonusWalletLabel(user), "menu:daily")));
         }
         balanceRows.add(List.of(keyboardFactory.callback("🎬 Забери халявные EXC", "wallet:section:ads")));
+        if (!partnerCompareLines(user, user.getCoins()).isEmpty()) addPartnerRow(balanceRows, user, "bl");
         String vpnBotLink = vpnBotLinkFor(user);
         if (vpnBotLink != null) {
             balanceRows.add(List.of(keyboardFactory.url(user.getCoins() >= ru.gamebot.platform.service.Vpn2Service.EXC_DISCOUNT
@@ -10688,6 +10737,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🪙 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>\n\n"
                         + "<blockquote expandable>📊 Состояние фонда: <b>" + ratioPercent + "%</b>\n"
                         + "💱 Курс вывода: <b>" + playerWithdrawalRateString(user, ratioPercent) + "</b>\n"
+                        + (partnerCompareApplies(user) ? "🤝 Партнёр: <b>" + tierRateString(100) + "</b>\n" : "")
                         + "📤 Лимит вывода: <b>" + sinkShopService.getMonthlyLimitShown(user) + " EXC/мес</b> (осталось: " + remaining + " EXC)\n"
                         + withdrawalLevelHint(user).stripTrailing() + "</blockquote>",
                 keyboardFactory.rowsLayout(rows));
@@ -10724,9 +10774,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String lastPayout = withdrawalLastPayoutLine().trim();
         String text = withdrawalTiersEnabled()
                 ? "<b>💸 Вывод EXC</b>\n\n"
-                        + "🪙 " + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC ≈ "
-                        + fmtExc(Math.round(user.getCoins() * withdrawalRatioFor(user, user.getCoins(), false) / 100.0)) + " ₽\n\n"
-                        + withdrawalTierRateBlock(user)
+                        + "🪙 " + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC"
+                        + (partnerCompareLines(user, user.getCoins()).isEmpty()
+                                ? " ≈ " + fmtExc(Math.round(user.getCoins() * withdrawalRatioFor(user, user.getCoins(), false) / 100.0)) + " ₽" : "") + "\n\n"
+                        + (partnerCompareLines(user, user.getCoins()).isEmpty() ? withdrawalTierRateBlock(user) : partnerCompareLines(user, user.getCoins()) + "\n")
                         + "📤 Остаток лимита: " + remaining + " из " + sinkShopService.getMonthlyLimitShown(user) + " EXC/мес"
                         + withdrawalLevelHint(user) + "\n\n"
                         + "Выберите способ получения:"
@@ -15327,7 +15378,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + "🪙 <b>+" + rewardGrant.totalExc() + " EXC</b> · ✨ +" + rewardGrant.xp() + " XP\n"
                             + formatExcBonusLine(rewardGrant)
                             + egcPassBonusLine(submission)
-                            + firstQuestBonus, watchAdForBonusButton(submission.getUser()), referralNudgeButton(submission.getUser(), "quest"), nextQuestSuggestionButton(submission.getUser()), sinkShopSuggestionButton(submission.getUser()),
+                            + firstQuestBonus
+                            + partnerCompareRewardLine(submission.getUser(), rewardGrant.totalExc()), watchAdForBonusButton(submission.getUser()), referralNudgeButton(submission.getUser(), "quest"), nextQuestSuggestionButton(submission.getUser()), sinkShopSuggestionButton(submission.getUser()),
                             squadSuggestionButton(submission.getUser(), isFirstQuest));
         } catch (Exception e) {
             log.warn("Could not notify user {} about quest approval: {}", submission.getUser().getTelegramId(), e.getMessage());
@@ -24616,7 +24668,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return "✅ <b>Квест засчитан</b>\n\n"
                 + "<b>" + escape(approved.getQuest().getTitle()) + "</b>, " + game + "\n"
                 + "🪙 <b>+" + awardedCoinsOf(approved) + " EXC</b> · ✨ +" + awardedXpOf(approved) + " XP"
-                + (pass.isEmpty() ? "" : "\n" + pass);
+                + (pass.isEmpty() ? "" : "\n" + pass)
+                + partnerCompareRewardLine(approved.getUser(), awardedCoinsOf(approved));
     }
 
     @org.springframework.context.event.EventListener
@@ -27559,7 +27612,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🪙 <b>+" + rewardGrant.totalExc() + " EXC</b> · ✨ +" + rewardGrant.xp() + " XP\n"
                         + formatExcBonusLine(rewardGrant)
                         + egcPassBonusLine(approved)
-                        + firstQuestBonus, watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()),
+                        + firstQuestBonus
+                        + partnerCompareRewardLine(approved.getUser(), rewardGrant.totalExc()), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()),
                         squadSuggestionButton(approved.getUser(), isFirstQuest));
             } catch (Exception e) {
                 log.warn("Could not notify user {} about AI approval: {}", approved.getUser().getTelegramId(), e.getMessage());

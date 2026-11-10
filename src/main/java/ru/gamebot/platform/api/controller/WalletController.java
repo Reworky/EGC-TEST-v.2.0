@@ -97,6 +97,7 @@ public class WalletController {
                 .weeklyXp(user.getWeeklyXp())
                 .healthRatioPercent(ratioPercent)
                 .withdrawalRatioPercent(withdrawalRatioPercent)
+                .partnerCompare(gamePlatformBot.partnerCompareShownFor(user))
                 .monthlyWithdrawalLimit(sinkShopService.getMonthlyLimit(user))
                 .remainingWithdrawalLimit(sinkShopService.getRemainingWithdrawalLimit(user))
                 .dailyBonusAvailable(bonusAvailable)

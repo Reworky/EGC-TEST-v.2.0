@@ -389,6 +389,16 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest }) {
         <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>
           ≈ {+(wallet.coins * (wallet.withdrawalRatioPercent ?? wallet.healthRatioPercent) / 100 / 100).toFixed(1)} ₽ · {wallet.withdrawalRatioPercent != null ? `курс вывода ${wallet.withdrawalRatioPercent}%` : `фонд ${wallet.healthRatioPercent}%`}
         </div>
+        {wallet.partnerCompare && wallet.withdrawalRatioPercent != null && (() => {
+          const own = Math.round(wallet.coins * wallet.withdrawalRatioPercent / 100 / 100);
+          const partner = Math.round(wallet.coins / 100);
+          return partner - own >= 10 ? (
+            <div style={{ fontSize: 13, color: '#c4b5fd', marginTop: 6 }}>
+              🤝 Партнёр: ≈ {partner.toLocaleString('ru-RU')} ₽ (курс 100%) · +{(partner - own).toLocaleString('ru-RU')} ₽
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>Как стать партнёром: в боте, «Вывод EXC» → «Как стать партнёром?»</div>
+            </div>
+          ) : null;
+        })()}
         <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
           Звёзды: приблизительный пересчёт по курсу фонда, зачисляется и выводится по нему.
         </div>
@@ -610,7 +620,7 @@ function WithdrawRubForm({ wallet, onDone }) {
   return (
     <div className="ref-link-card">
       <div className="ref-link-label">Вывод в рублях (СБП, любой банк)</div>
-      <p className="shop-desc">Минимум 5 000 EXC. Курс: 1 000 EXC = {+(10 * (wallet.withdrawalRatioPercent ?? wallet.healthRatioPercent) / 100).toFixed(1)} ₽ ({wallet.withdrawalRatioPercent != null ? `курс ${wallet.withdrawalRatioPercent}%` : `фонд ${wallet.healthRatioPercent}%`}). Доступно: {wallet.remainingWithdrawalLimit.toLocaleString()} EXC.</p>
+      <p className="shop-desc">Минимум 5 000 EXC. Курс: 1 000 EXC = {+(10 * (wallet.withdrawalRatioPercent ?? wallet.healthRatioPercent) / 100).toFixed(1)} ₽ ({wallet.withdrawalRatioPercent != null ? `курс ${wallet.withdrawalRatioPercent}%` : `фонд ${wallet.healthRatioPercent}%`}). Доступно: {wallet.remainingWithdrawalLimit.toLocaleString()} EXC. {wallet.partnerCompare && wallet.withdrawalRatioPercent != null && wallet.withdrawalRatioPercent < 100 ? `Партнёр: 1 000 EXC = 10 ₽ (курс 100%).` : ''}</p>
       <input type="number" className="quest-text-input" placeholder="Сумма в EXC" value={amount} onChange={e => setAmount(e.target.value)} style={{ marginTop: 16 }} />
       <input type="text" className="quest-text-input" placeholder="Банк и номер телефона (СБП, любой банк)" value={requisites} onChange={e => setRequisites(e.target.value)} style={{ marginTop: 8 }} />
       <button className="quest-btn" disabled={busy} onClick={handleSubmit} style={{ marginTop: 16 }}>{busy ? 'Секунду...' : 'Отправить заявку'}</button>

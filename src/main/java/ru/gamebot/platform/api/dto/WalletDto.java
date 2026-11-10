@@ -34,4 +34,6 @@ public class WalletDto {
     private int withdrawalDaysLeft;
     /** Часов до открытия вывода (округление вверх); мини-апп показывает часы вместо дней, когда осталось меньше суток. */
     private int withdrawalHoursLeft;
+    /** Показывать сравнение «курс сейчас / курс партнёра» (не партнёр, 3+ квеста, уровни курса включены; 10.11.2026). */
+    private boolean partnerCompare;
 }
