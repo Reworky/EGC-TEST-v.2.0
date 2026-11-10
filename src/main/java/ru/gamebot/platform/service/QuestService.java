@@ -1644,7 +1644,8 @@ public class QuestService {
 
     /** Одобренный партнёрский квест игрока по конкретной миссии (игра gameName): он реферал именно этого банка. */
     public boolean hasApprovedPartnerQuest(Long userId, String gameName) {
-        return !questSubmissionRepository.findApprovedByUserAndGame(userId, gameName).isEmpty();
+        // С 10.11.2026 (владелец): партнёр - игрок, у которого квест одобрен И банк выплатил бонус (начислен /otpbonus или кнопкой «Банк выплатил»); до выплаты банка курс 100% не включается (защита фонда)
+        return questSubmissionRepository.countBonusPaid(userId, gameName) > 0;
     }
 
     /** Бонус по партнёрской миссии игры gameName этому игроку уже начислялся (бейдж, защита от двойной выплаты). */

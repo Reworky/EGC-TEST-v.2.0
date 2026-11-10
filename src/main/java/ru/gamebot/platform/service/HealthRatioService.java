@@ -207,7 +207,17 @@ public class HealthRatioService {
     public boolean isPartner(ru.gamebot.platform.domain.model.AppUser user) {
         if (user == null || user.getId() == null) return false;
         for (WithdrawalPartners.Bank bank : WithdrawalPartners.ALL) {
-            if (!questSubmissionRepository.findApprovedByUserAndGame(user.getId(), bank.mission().gameName()).isEmpty()) return true;
+            // С 10.11.2026: партнёр только после выплаты банка (bonusPaidAt), одобренной первой части недостаточно
+            if (questSubmissionRepository.countBonusPaid(user.getId(), bank.mission().gameName()) > 0) return true;
+        }
+        return false;
+    }
+
+    /** Первая часть партнёрского квеста одобрена, но банк ещё не выплатил бонус: партнёрский статус и курс 100% включатся после выплаты. */
+    public boolean isPartnerPending(ru.gamebot.platform.domain.model.AppUser user) {
+        if (user == null || user.getId() == null || isPartner(user)) return false;
+        for (WithdrawalPartners.Bank bank : WithdrawalPartners.ALL) {
+            if (questSubmissionRepository.findApprovedByUserAndGame(user.getId(), bank.mission().gameName()).stream().anyMatch(s -> s.getBonusPaidAt() == null)) return true;
         }
         return false;
     }
