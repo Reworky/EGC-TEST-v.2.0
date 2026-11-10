@@ -34,6 +34,7 @@ public class PayoutFeedController {
     private static final String REVIEWS_URL = "https://t.me/egc_payouts";
 
     private final RewardService rewardService;
+    private final ru.gamebot.platform.service.PartnerStatusService partnerStatusService;
     private final GemPurchaseService gemPurchaseService;
     private final HealthRatioService healthRatioService;
     private final ExchangeRateService exchangeRateService;
@@ -67,7 +68,7 @@ public class PayoutFeedController {
                     .amountText(reward ? r.getRewardItem().getTitle() : amountText(r))
                     .method(reward ? "reward" : method(r))
                     .minutesAgo(when == null ? -1 : Math.max(0, Duration.between(when, now).toMinutes()))
-                    .name(maskNickname(r.getUser() == null ? null : r.getUser().getNickname()))
+                    .name(partnerPrefix(r.getUser()) + maskNickname(r.getUser() == null ? null : r.getUser().getNickname()))
                     .build()});
         }
         try {
@@ -78,7 +79,7 @@ public class PayoutFeedController {
                         .amountText(gemPurchaseService.feedLabel(g))
                         .method("donat")
                         .minutesAgo(when == null ? -1 : Math.max(0, Duration.between(when, now).toMinutes()))
-                        .name(maskNickname(g.getUser() == null ? null : g.getUser().getNickname()))
+                        .name(partnerPrefix(g.getUser()) + maskNickname(g.getUser() == null ? null : g.getUser().getNickname()))
                         .build()});
             }
         } catch (Exception e) {
@@ -209,6 +210,11 @@ public class PayoutFeedController {
     }
 
     /** Ник без полной деанонимизации: первые 2 и последний символы («Пч…ь»); эмодзи не рвём — по code point. */
+    /** «🤝 » перед ником партнёра в ленте выплат (бот, мини-апп, сайт берут имя из этого поля, 10.11.2026). */
+    private String partnerPrefix(ru.gamebot.platform.domain.model.AppUser user) {
+        return user != null && partnerStatusService.isPartnerUserId(user.getId()) ? "🤝 " : "";
+    }
+
     private static String maskNickname(String nickname) {
         if (nickname == null || nickname.isBlank()) return "Игрок";
         int[] cps = nickname.trim().codePoints().toArray();

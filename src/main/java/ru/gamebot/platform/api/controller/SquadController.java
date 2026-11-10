@@ -20,6 +20,7 @@ public class SquadController {
     private final SquadService squadService;
     private final AppUserRepository appUserRepository;
     private final UserService userService;
+    private final ru.gamebot.platform.service.PartnerStatusService partnerStatusService;
     private final ru.gamebot.platform.service.TelegramFileService telegramFileService;
 
     private AppUser getUser(Long telegramId) {
@@ -101,7 +102,7 @@ public class SquadController {
         List<TopMemberDto> top = members.stream()
                 .sorted(java.util.Comparator.comparingLong(AppUser::getWeeklyXp).reversed())
                 .limit(5)
-                .map(m -> new TopMemberDto(m.getNickname(), userService.getLevelName(m.getXp()), m.getWeeklyXp(),
+                .map(m -> new TopMemberDto(m.getNickname() + partnerStatusService.mark(m), userService.getLevelName(m.getXp()), m.getWeeklyXp(),
                         m.getTelegramId().equals(squad.getCaptainTelegramId())))
                 .toList();
         SquadService.GoalProgress goal = squadService.goalProgress(squad);
@@ -241,7 +242,7 @@ public class SquadController {
         List<MemberDto> memberDtos = members.stream()
                 .map(m -> new MemberDto(
                         m.getTelegramId(),
-                        m.getNickname(),
+                        m.getNickname() + partnerStatusService.mark(m),
                         userService.getLevelName(m.getXp()),
                         m.getWeeklyXp(),
                         m.getTelegramId().equals(squad.getCaptainTelegramId())))

@@ -180,6 +180,21 @@ public class HealthRatioService {
         return Math.round(base * mult / 100.0) * 100;
     }
 
+    /** Цена позиции для партнёра (для показа не-партнёру рядом с его ценой, 10.11.2026); null - уровней нет, игрок уже партнёр, позиция без партнёрской цены или она не ниже цены игрока. */
+    public Long partnerPriceFor(ru.gamebot.platform.domain.model.AppUser user, ru.gamebot.platform.domain.model.RewardItem item) {
+        if (user == null || item == null || !tiersEnabled() || isPartner(user)) return null;
+        if ("avatar_frame".equals(item.getPurchaseGroup()) || "Вывод".equals(item.getCategory())) return null;
+        long own = effectivePriceFor(user, item);
+        long partner;
+        if ("telegram_stars".equals(item.getPurchaseGroup())) {
+            partner = starsPriceFor(user, item, true);
+        } else {
+            double partnerRatio = getCurrentRatio() * PARTNER_SHOP_RATIO_FACTOR;
+            partner = partnerRatio >= 1.0 ? item.getPriceCoins() : Math.round(item.getPriceCoins() / partnerRatio);
+        }
+        return partner < own ? partner : null;
+    }
+
     /** Включены уровни вывода (app_settings 'wd.tiers.enabled', scripts/wd-tiers-on.sql). */
     public boolean tiersEnabled() {
         return appSettingRepository.findById("wd.tiers.enabled")

@@ -167,6 +167,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.BonusCourseService bonusCourseService;
     private final ru.gamebot.platform.service.EgcPassFunnelService egcPassFunnelService;
     private final ru.gamebot.platform.service.PartnerQuestFunnelService partnerQuestFunnelService;
+    private final ru.gamebot.platform.service.PartnerStatusService partnerStatusService;
     private final ru.gamebot.platform.service.RedButtonService redButtonService;
     private final ru.gamebot.platform.service.FinanceService financeService;
     private final ru.gamebot.platform.service.ExpenseService expenseService;
@@ -6105,7 +6106,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "";
 
         // Макет профиля (26.10.2026, утверждён владельцем): без заголовка «Эта неделя» (число квестов общее), подписи сокращены.
-        String profileText = "🎮 <b>" + escape(user.getNickname()) + "</b>\n"
+        String profileText = "🎮 <b>" + escape(user.getNickname()) + "</b>" + partnerStatusService.mark(user) + "\n"
                 + badgeLine
                 + titleLine
                 + egcPassLine
@@ -6113,8 +6114,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + levelProgressBar(user) + "\n\n"
                 + "💰 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>"
                 + " (+" + excBonus + "% к наградам" + boostNote + ")\n"
-                + (healthRatioService.isPartner(user) ? "🤝 <b>Партнёр</b>: курс вывода 100%\n"
-                        : partnerCompareApplies(user) ? "🤝 Статус: не партнёр (курс " + Math.round(withdrawalRatioFor(user, 1, false) * 100) + "%)\n" : "")
+                + (healthRatioService.isPartner(user) ? "🏷 Статус: 🤝 <b>Партнёр</b> · курс 100%\n"
+                        : partnerCompareApplies(user) ? "🏷 Статус: Стандарт (курс " + Math.round(withdrawalRatioFor(user, 1, false) * 100) + "%)\n" : "")
                 + leagueLine
                 + "✅ <b>" + user.getCompletedQuests() + "</b> " + pluralQuests(user.getCompletedQuests())
                 + " · 🔥 серия <b>" + user.getStreakDays() + "</b> дн."
@@ -6947,8 +6948,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             long ownRub = Math.round(user.getCoins() * withdrawalRatioFor(user, user.getCoins(), false) / 100.0);
             String compareLines = partnerCompareLines(user, user.getCoins());
             equivalent = ownRub >= partnerRub
-                    ? "≈ " + fmtExc(partnerRub) + " ₽ (курс 100%)\n\n"
-                    : !compareLines.isEmpty() ? compareLines + "\n"
+                    ? "🏷 Статус: 🤝 <b>Партнёр</b> · курс 100%\n≈ " + fmtExc(partnerRub) + " ₽\n\n"
+                    : !compareLines.isEmpty() ? "🏷 Статус: Стандарт\n" + compareLines + "\n"
                     : "≈ " + fmtExc(ownRub) + " ₽ (курс " + Math.round(withdrawalRatioFor(user, user.getCoins(), false) * 100) + "%)\n\n";
         }
         // Ежедневный бонус забирается в «Заданиях дня»; на балансе он появляется лишь пока задания выключены (app_settings).
@@ -10468,7 +10469,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             AppUser player = players.get(i);
             long xp = weekly ? player.getWeeklyXp() : player.getXp();
             String place = i < 3 ? medals[i] : "<b>" + (i + 1) + ".</b>";
-            builder.append(place).append(" ").append(escape(player.getNickname())).append(userService.isEgcPassActive(player) ? " ⭐" : "");
+            builder.append(place).append(" ").append(escape(player.getNickname())).append(partnerStatusService.mark(player)).append(userService.isEgcPassActive(player) ? " ⭐" : "");
             builder.append(" — <b>").append(xp).append(" XP</b>\n");
         }
 
@@ -12974,7 +12975,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         String footer;
         if (!showOther) {
-            footer = partner ? "Выберите номинал👇" : "С картой банка-партнёра звёзды дешевле.\n\nВыберите номинал👇";
+            Long partnerFirst = partner || !partnerCompareApplies(user) ? null : healthRatioService.partnerPriceFor(user, items.get(0));
+            long ownFirst = partnerFirst == null ? 0 : healthRatioService.effectivePriceFor(user, items.get(0));
+            footer = partner ? "Выберите номинал👇"
+                    : partnerFirst != null && ownFirst > 0
+                        ? "Партнёр платит на ~" + Math.round((1 - partnerFirst / (double) ownFirst) * 100) + "% меньше за те же звёзды.\n\nВыберите номинал👇"
+                        : "С картой банка-партнёра звёзды дешевле.\n\nВыберите номинал👇";
         } else {
             footer = viewPartner ? "Это цены игроков с картой банка-партнёра.\n\nВыберите номинал👇" : "Это цены игроков без партнёрства.\n\nВыберите номинал👇";
         }
@@ -13261,6 +13267,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** «🤝 Партнёру: N EXC (−X%)» под ценой товара: не-партнёрам после 3 квестов, если партнёрская цена ниже (владелец, 10.11.2026). */
+    private String partnerPriceLine(AppUser user, RewardItem reward, long ownPrice) {
+        try {
+            if (!partnerCompareApplies(user) || ownPrice <= 0) return "";
+            Long partner = healthRatioService.partnerPriceFor(user, reward);
+            if (partner == null) return "";
+            long pct = Math.round((1 - partner / (double) ownPrice) * 100);
+            return "🤝 Партнёру: <b>" + fmtExc(partner) + " EXC</b> (−" + pct + "%)\n";
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     private void sendRewardCard(AppUser user, Long rewardId) {
         sendRewardCard(user, rewardId, null);
     }
@@ -13275,6 +13294,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "📦 Категория: <b>" + escape(reward.getCategory()) + "</b>\n"
                 + "📝 " + escape(reward.getDescription()) + "\n\n"
                 + "🪙 Стоимость: <b>" + effectivePrice + " EXC</b>" + priceNote + "\n"
+                + partnerPriceLine(user, reward, effectivePrice)
                 + limitStatus;
         // Рамка аватара открывается только через пикер номиналов Кастомизации (см. sendGroupPicker),
         // не напрямую из Магазина наград — "Назад" должен вести обратно в пикер (2026-09-20).
@@ -13725,7 +13745,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (int i = 0; i < shown; i++) {
             ru.gamebot.platform.domain.model.AppUser m = sortedMembers.get(i);
             String crown = m.getTelegramId().equals(squad.getCaptainTelegramId()) ? " 👑" : "";
-            sb.append("• <b>").append(escape(m.getNickname())).append("</b>")
+            sb.append("• <b>").append(escape(m.getNickname())).append("</b>").append(partnerStatusService.mark(m))
                     .append(userService.isEgcPassActive(m) ? " ⭐" : "")
                     .append(crown)
                     .append(" — ").append(String.format("%,d", m.getWeeklyXp()).replace(',', ' ')).append(" XP\n");
@@ -29760,12 +29780,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             boolean shopReward = !"Вывод".equals(r.getRewardItem().getCategory());
             String method = shopReward ? "" : isStarsWithdrawal(r) ? "⭐ Stars" : isCryptoWithdrawal(r) ? "GRAM" : "СБП";
             lines.add(new PayoutFeedLine(payoutMoment(r), shopReward ? escape(r.getRewardItem().getTitle()) : payoutAmountText(r), method,
-                    maskNickname(r.getUser() == null ? null : r.getUser().getNickname()), 0));
+                    partnerStatusService.mark(r.getUser()).trim() + (partnerStatusService.mark(r.getUser()).isEmpty() ? "" : " ") + maskNickname(r.getUser() == null ? null : r.getUser().getNickname()), 0));
         }
         try {
             for (GemPurchaseRequest g : gemPurchaseService.recentCompleted(8)) {
                 lines.add(new PayoutFeedLine(g.getUpdatedAt() != null ? g.getUpdatedAt() : g.getCreatedAt(), escape(gemPurchaseService.feedLabel(g)), "",
-                        maskNickname(g.getUser() == null ? null : g.getUser().getNickname()), 0));
+                        partnerStatusService.mark(g.getUser()).trim() + (partnerStatusService.mark(g.getUser()).isEmpty() ? "" : " ") + maskNickname(g.getUser() == null ? null : g.getUser().getNickname()), 0));
             }
         } catch (Exception e) {
             log.warn("Failed to load completed donats for payout feed", e);

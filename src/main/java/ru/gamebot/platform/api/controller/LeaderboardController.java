@@ -19,6 +19,7 @@ import ru.gamebot.platform.service.UserService;
 public class LeaderboardController {
 
     private final UserService userService;
+    private final ru.gamebot.platform.service.PartnerStatusService partnerStatusService;
 
     @GetMapping
     public LeaderboardResponseDto leaderboard(
@@ -48,7 +49,7 @@ public class LeaderboardController {
         LeaderboardEntryDto.LeaderboardEntryDtoBuilder builder = LeaderboardEntryDto.builder()
                 .rank(rank)
                 .telegramId(u.getTelegramId())
-                .nickname(u.getNickname())
+                .nickname(u.getNickname() + partnerStatusService.mark(u))
                 .levelName(userService.getLevelName(u.getXp()))
                 .profileTitle(u.getProfileTitle())
                 .xp(weekly ? u.getWeeklyXp() : u.getXp())
