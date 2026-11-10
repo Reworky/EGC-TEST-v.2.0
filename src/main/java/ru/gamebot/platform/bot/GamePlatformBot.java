@@ -4677,48 +4677,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendShopCategory(AppUser user) {
         // Battle Pass и EGC Pass объединены в один продукт (2026-09-24) — в магазине остался один пункт «EGC Pass».
+        // Макет владельца 10.11.2026: «Магазин наград» отдельной широкой кнопкой, «Предметы» и «EGC Pass» парой, VPN в своей строке, «Назад» и «Меню» вместе;
+        // мёртвая кнопка «Ускоритель (скоро)» убрана. Экран открывается правкой того же сообщения (sendResourceBanner).
         String passLabel = sinkShopService.isEgcPassActive(user) ? "⭐ EGC Pass ✅" : "⭐ EGC Pass";
-        // "💎 Донат по играм" убран отсюда как отдельный пункт — объединён с "🛍️ Магазин наград"
-        // в один и тот же пикер номиналов Brawl Stars (см. sendGroupPicker), чтобы для игрока это
-        // выглядело одной и той же игровой валютой с выбором способа оплаты, а не двумя разными
-        // разделами (2026-09-20, запрошено пользователем).
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>(List.of(
-                List.of(keyboardFactory.callback("🛍️ Магазин наград", "menu:shop")),
-                List.of(keyboardFactory.callback("⚡ Предметы", "menu:sink")),
-                List.of(keyboardFactory.callback("🚀 Ускоритель (скоро)", "menu:accelerator")),
-                List.of(keyboardFactory.callback(passLabel, "menu:battlepass")),
-                List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"))
-        ));
-        rows.add(rows.size() - 1, List.of(vpnShopButton(user)));
-        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
-        if (shopBannerFileId != null) {
-            sendPhotoCaption(user.getTelegramId(), shopBannerFileId, "🛍️ <b>Магазин</b>", keyboard);
-            return;
-        }
-        try {
-            byte[] img = loadShopBanner();
-            SendPhoto sendPhoto = new SendPhoto();
-            sendPhoto.setChatId(user.getTelegramId().toString());
-            sendPhoto.setPhoto(new InputFile(new java.io.ByteArrayInputStream(img), "shop-banner.jpg"));
-            sendPhoto.setCaption("🛍️ <b>Магазин</b>");
-            sendPhoto.setParseMode("HTML");
-            sendPhoto.setReplyMarkup(keyboard);
-            org.telegram.telegrambots.meta.api.objects.Message sent = execute(sendPhoto);
-            if (sent.getPhoto() != null && !sent.getPhoto().isEmpty()) {
-                shopBannerFileId = sent.getPhoto().get(sent.getPhoto().size() - 1).getFileId();
-            }
-        } catch (Exception e) {
-            log.warn("Failed to send shop banner", e);
-            List<List<InlineKeyboardButton>> fallbackRows = new ArrayList<>(List.of(
-                    List.of(keyboardFactory.callback("🛍️ Магазин наград", "menu:shop")),
-                    List.of(keyboardFactory.callback("⚡ Предметы", "menu:sink")),
-                    List.of(keyboardFactory.callback("🚀 Ускоритель (скоро)", "menu:accelerator")),
-                    List.of(keyboardFactory.callback(passLabel, "menu:battlepass"))
-            ));
-            fallbackRows.add(List.of(vpnShopButton(user)));
-            sendMenuCategory(user, "🛍️ <b>Магазин</b>", fallbackRows);
-            // "Донат по играм" сюда намеренно не добавлен — см. комментарий в основной ветке выше.
-        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("🛍️ Магазин наград", "menu:shop")));
+        rows.add(List.of(keyboardFactory.callback("⚡ Предметы", "menu:sink"), keyboardFactory.callback(passLabel, "menu:battlepass")));
+        rows.add(List.of(vpnShopButton(user)));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendResourceBanner(user.getTelegramId(), "shop-banner.jpg", "🛍️ <b>Магазин</b>", keyboardFactory.rowsLayout(rows));
     }
 
     private byte[] loadShopBanner() throws Exception {
@@ -10842,14 +10809,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
 
-        sendText(user.getTelegramId(),
-                "🛍️ <b>Магазин наград</b>\n"
+        // Макет владельца 10.11.2026: баннер «Магазин EGC» и открытый текст (без раскрывающейся цитаты); экран открывается правкой того же сообщения, а не новым постом (sendResourceBanner)
+        String levelHint = withdrawalLevelHint(user).strip();
+        sendResourceBanner(user.getTelegramId(), "shop-banner.jpg",
+                "🛍️ <b>Магазин наград</b>\n\n"
                         + "🪙 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>\n\n"
-                        + "<blockquote expandable>📊 Состояние фонда: <b>" + ratioPercent + "%</b>\n"
+                        + "📊 Состояние фонда: <b>" + ratioPercent + "%</b>\n"
                         + "💱 Курс вывода: <b>" + playerWithdrawalRateString(user, ratioPercent) + "</b>\n"
                         + (partnerCompareApplies(user) ? "🤝 Партнёр: <b>" + tierRateString(100) + "</b>\n" : "")
-                        + "📤 Лимит вывода: <b>" + sinkShopService.getMonthlyLimitShown(user) + " EXC/мес</b> (осталось: " + remaining + " EXC)\n"
-                        + withdrawalLevelHint(user).stripTrailing() + "</blockquote>",
+                        + "📤 Лимит вывода: <b>" + sinkShopService.getMonthlyLimitShown(user) + " EXC/мес</b> (осталось: " + remaining + " EXC)"
+                        + (levelHint.isEmpty() ? "" : "\n\n" + levelHint),
                 keyboardFactory.rowsLayout(rows));
     }
 
