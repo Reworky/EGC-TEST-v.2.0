@@ -36,6 +36,7 @@ public final class PartnerMissions {
             .questTitle("Получи 500 ₽ себе на карту + 100 000 EXC 🎁")
             .listLabel("Получи 500 ₽ + 100 000 EXC сверху за банковскую карту")
             .bannerResource("partner_card_banner.jpg")
+            .stage1Banner("partner_card_banner.jpg")
             .shortTitle("Банковская карта")
             .missionTitle("банковская карта")
             .waitingName("Банковская карта")
