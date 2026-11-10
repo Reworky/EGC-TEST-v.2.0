@@ -1648,6 +1648,11 @@ public class QuestService {
         return questSubmissionRepository.countBonusPaid(userId, gameName) > 0;
     }
 
+    /** Последняя одобренная заявка игрока по партнёрской миссии игры gameName (для суммы бонуса по условиям на момент взятия квеста); null - нет. */
+    public QuestSubmission latestApprovedPartnerSubmission(Long userId, String gameName) {
+        return questSubmissionRepository.findApprovedByUserAndGame(userId, gameName).stream().findFirst().orElse(null);
+    }
+
     /** Бонус по партнёрской миссии игры gameName этому игроку уже начислялся (бейдж, защита от двойной выплаты). */
     public boolean isPartnerBonusPaid(Long userId, String gameName) {
         return questSubmissionRepository.countBonusPaid(userId, gameName) > 0;

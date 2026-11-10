@@ -2641,7 +2641,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(user.getTelegramId(), "❌ Заявка не найдена.", null);
                 return;
             }
-            handleOtpBonusCommand(user, "/" + pbPm.bonusCommand() + " " + pbSub.getUser().getTelegramId(), pbPm);
+            handleOtpBonusCommand(user, "/" + pbPm.bonusCommand() + " " + pbSub.getUser().getTelegramId() + " " + bonusFor(pbPm, pbSub), pbPm);
             return;
         }
         if (data.startsWith("mod:ok:") && isEffectiveModerator(user)) {
@@ -5420,6 +5420,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Выплата игроку после платежа банка (/otpbonus): ≈ 430 ₽ реальных при курсе вывода ~43% против 2 000 ₽ от банка (с 01.11.2026 вместо 40 000). */
     private static final long OTP_BONUS_DEFAULT_EXC = ru.gamebot.platform.service.PartnerMissions.OTP.bonusExc();
     /** Награда квестом после проверки скриншотов (должна совпадать с QuestSeeder.OTP_CARD_REWARD_EXC). */
+    /** Награда за выплату банка по квесту «банковская карта» стала 50 000 EXC (10.11.2026); заявки, взятые раньше момента перехода (app_settings otp.bonus50.from), сохраняют 100 000. */
+    private static final long OTP_LEGACY_BONUS_EXC = 100_000L;
+
+    private long bonusFor(ru.gamebot.platform.service.PartnerMission pm, QuestSubmission sub) {
+        try {
+            if (pm != null && sub != null && "otp".equals(pm.key()) && sub.getCreatedAt() != null) {
+                java.util.Optional<AppSetting> mark = appSettingRepository.findById(ru.gamebot.platform.config.QuestSeeder.OTP_BONUS_CHANGE_KEY);
+                if (mark.isPresent() && sub.getCreatedAt().isBefore(LocalDateTime.parse(mark.get().getValue()))) return OTP_LEGACY_BONUS_EXC;
+            }
+        } catch (Exception e) {
+            log.warn("bonusFor failed for submission {}", sub == null ? null : sub.getId(), e);
+        }
+        return pm.bonusExc();
+    }
+
     private static final long OTP_QUEST_REWARD_EXC = ru.gamebot.platform.service.PartnerMissions.OTP.rewardExc();
 
     /** Квест «ОТП Карта», если он активен и в нём ещё есть места; иначе null (тогда предложение в выводе не показываем). */
@@ -5613,7 +5628,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String[] p = text.split("\\s+");
         Long targetId = p.length > 1 ? parseLong(p[1]) : null;
         Long amountArg = p.length > 2 ? parseLong(p[2].replace("_", "")) : null;
-        long amount = amountArg == null ? pm.bonusExc() : amountArg;
+        // Сумма по умолчанию - по условиям заявки игрока (взявшие до 10.11.2026 получают 100 000, остальные 50 000)
+        long defaultAmount = pm.bonusExc();
+        if (targetId != null) {
+            AppUser defTarget = userService.findByTelegramId(targetId).orElse(null);
+            if (defTarget != null) defaultAmount = bonusFor(pm, questService.latestApprovedPartnerSubmission(defTarget.getId(), pm.gameName()));
+        }
+        long amount = amountArg == null ? defaultAmount : amountArg;
         boolean repeatPayout = java.util.Arrays.stream(p).skip(2).anyMatch(w -> w.equalsIgnoreCase("повтор"));
         if (targetId == null || amount <= 0) {
             sendText(admin.getTelegramId(), "⚠️ Формат: <code>/" + pm.bonusCommand() + " ID [сумма EXC]</code>, по умолчанию " + fmtExc(pm.bonusExc()) + " EXC.", null);
@@ -6801,7 +6822,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             QuestSubmission sub = questService.getSubmission(event.getSubmissionId());
             ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(sub.getQuest());
             if (pm == null || sub.getStatus() != SubmissionStatus.DRAFT || !isManagerFlowMission(sub)) return;
-            String reward = "+" + pm.bankRewardRub() + " ₽ и " + fmtExc(pm.bonusExc()) + " EXC";
+            String reward = "+" + pm.bankRewardRub() + " ₽ и " + fmtExc(bonusFor(pm, sub)) + " EXC";
             String head = "Хочу выполнить квест «Миссия: " + pm.missionTitle() + "»";
             String need = "расскажите, что делать, пришлите ссылку для оформления карты";
             String text;
@@ -6885,8 +6906,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     @org.springframework.context.event.EventListener
     public void onOtpMissionReminder(ru.gamebot.platform.event.OtpMissionReminderEvent event) {
         try {
-            ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(
-                    questService.getSubmission(event.getSubmissionId()).getQuest());
+            QuestSubmission remSub = questService.getSubmission(event.getSubmissionId());
+            ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(remSub.getQuest());
             if (pm == null) return;
             String text;
             InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
@@ -6897,11 +6918,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     text = pm.deadlineReminder().replace("{days}", String.valueOf(days)).replace("{win}", ruDayMonth(event.getDate()));
                 }
                 case ru.gamebot.platform.event.OtpMissionReminderEvent.KIND_BANK_DAY -> {
-                    text = "💰 <b>Банк мог уже выплатить бонус.</b> " + pm.bankDayCheck() + "\n\nКогда банк заплатит клубу, мы начислим " + fmtExc(pm.bonusExc()) + " EXC и напишем тебе.";
+                    text = "💰 <b>Банк мог уже выплатить бонус.</b> " + pm.bankDayCheck() + "\n\nКогда банк заплатит клубу, мы начислим " + fmtExc(bonusFor(pm, remSub)) + " EXC и напишем тебе.";
                     keyboard = keyboardFactory.rowsLayout(List.of(
                             List.of(keyboardFactory.callback(pm.bankClaimButton(), "mission:bankpaid:" + event.getSubmissionId() + ":4"))));
                 }
-                default -> text = "🎮 <b>" + escape(pm.waitingName()) + " ждёт тебя:</b> два шага до " + fmtExc(pm.bonusExc()) + " EXC. Продолжим?";
+                default -> text = "🎮 <b>" + escape(pm.waitingName()) + " ждёт тебя:</b> два шага до " + fmtExc(bonusFor(pm, remSub)) + " EXC. Продолжим?";
             }
             sendText(event.getTelegramId(), text, keyboard);
         } catch (Exception e) {
@@ -9388,7 +9409,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         SubmissionStatus st = sub.getStatus();
         boolean bonusPaid = st == SubmissionStatus.APPROVED && sub.getBonusPaidAt() != null;
         long reward = pm.rewardExc();
-        long bonus = pm.bonusExc();
+        long bonus = bonusFor(pm, sub);
         long totalExc = reward + bonus;
         long excRub = totalExc / 100; // партнёрский курс 100%: 100 EXC = 1 ₽
         long totalRub = pm.bankRewardRub() + excRub;
@@ -9478,7 +9499,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (i == 4 && stage == 4) sb.append(": ").append(pm.bankDateWord()).append(" ").append(ruDayMonth(bankDate));
             sb.append("\n");
         }
-        sb.append("🏆 Финал: ").append(fmtExc(pm.bonusExc())).append(bonusPaid ? " EXC получены" : " EXC").append("\n\n");
+        sb.append("🏆 Финал: ").append(fmtExc(bonusFor(pm, sub))).append(bonusPaid ? " EXC получены" : " EXC").append("\n\n");
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         java.util.regex.Pattern urlPattern = java.util.regex.Pattern.compile("https?://\\S+");
@@ -9518,11 +9539,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append(pm.stage3Text());
             rows.add(List.of(questReportOrCheckButton(quest)));
         } else if (bonusPaid) {
-            sb.append(pm.finalText().replace("{bonus}", fmtExc(pm.bonusExc())));
+            sb.append(pm.finalText().replace("{bonus}", fmtExc(bonusFor(pm, sub))));
             rows.add(List.of(keyboardFactory.callback("💸 Вывести", "shop:withdraw"), keyboardFactory.callback("🎯 Ещё квесты", "menu:quests")));
             rows.add(List.of(keyboardFactory.callback("👥 Позвать друга", "menu:referrals")));
         } else {
-            sb.append(pm.stage4Text().replace("{reward}", fmtExc(pm.rewardExc())).replace("{bonus}", fmtExc(pm.bonusExc()))
+            sb.append(pm.stage4Text().replace("{reward}", fmtExc(pm.rewardExc())).replace("{bonus}", fmtExc(bonusFor(pm, sub)))
                     .replace("{date}", ruDayMonth(bankDate)).replace("{date7}", ruDayMonth(bankDate.plusDays(7))));
             boolean claimed = (sub.getMissionRemindersSent() & ru.gamebot.platform.service.OtpMissionReminderService.BIT_BANK_CLAIMED) != 0;
             rows.add(List.of(claimed ? keyboardFactory.callback("✅ Мы проверяем выплату банка", "noop")
@@ -9575,8 +9596,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
             }
             sendText(user.getTelegramId(),
-                    first ? "✅ <b>Спасибо!</b> Проверим выплату банка и начислим " + fmtExc(pm.bonusExc()) + " EXC. Мы напишем тебе."
-                            : "✅ Мы уже проверяем выплату банка. Напишем, как только начислим " + fmtExc(pm.bonusExc()) + " EXC.",
+                    first ? "✅ <b>Спасибо!</b> Проверим выплату банка и начислим " + fmtExc(bonusFor(pm, sub)) + " EXC. Мы напишем тебе."
+                            : "✅ Мы уже проверяем выплату банка. Напишем, как только начислим " + fmtExc(bonusFor(pm, sub)) + " EXC.",
                     keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("▶️ Открыть миссию", "myquest:view:" + submissionId)))));
         } catch (Exception e) {
             log.warn("Partner bank claim failed for submission {}", submissionId, e);
@@ -15264,7 +15285,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 mb.add(keyboardFactory.callback("✅ Первая часть проверена (+" + fmtExc(mpm.rewardExc()) + " EXC)", "mod:ok:" + submission.getId()));
                 mb.add(keyboardFactory.callback("❌ Отклонить", "mod:no:" + submission.getId()));
             } else if (submission.getBonusPaidAt() == null) {
-                mb.add(keyboardFactory.callback("💰 Банк выплатил: начислить " + fmtExc(mpm.bonusExc()) + " EXC и статус партнёра", "mod:pbonus:" + submission.getId()));
+                mb.add(keyboardFactory.callback("💰 Банк выплатил: начислить " + fmtExc(bonusFor(mpm, submission)) + " EXC и статус партнёра", "mod:pbonus:" + submission.getId()));
             }
             return mb;
         }
