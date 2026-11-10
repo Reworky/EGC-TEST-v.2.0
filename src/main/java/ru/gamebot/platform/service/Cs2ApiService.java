@@ -72,7 +72,8 @@ public class Cs2ApiService {
 
     public record PlayerStats(long kills, long wins, long matchesWon, long mvps, long headshots,
                                long bombsPlanted, long bombsDefused, long matchesPlayed,
-                               long lastMatchKills, long lastMatchDeaths, long lastMatchMvps, long lastMatchScore) {}
+                               long lastMatchKills, long lastMatchDeaths, long lastMatchMvps, long lastMatchScore,
+                               long lastMatchDamage, java.util.Map<String, Long> all) {}
 
     /** Пусто — приватная статистика (профиль/раздел "Игровая статистика" не публичны) либо у аккаунта
      *  вовсе нет статистики CS2 (игра не куплена/не запущена ни разу). Steam Web API отличает эти случаи
@@ -133,7 +134,9 @@ public class Cs2ApiService {
                     byName.getOrDefault("last_match_kills", 0L),
                     byName.getOrDefault("last_match_deaths", 0L),
                     byName.getOrDefault("last_match_mvps", 0L),
-                    byName.getOrDefault("last_match_contribution_score", 0L)));
+                    byName.getOrDefault("last_match_contribution_score", 0L),
+                    byName.getOrDefault("last_match_damage", 0L),
+                    byName));
         } catch (Exception e) {
             throw new Cs2ApiTransientException("Failed to parse CS2 stats response", e);
         }

@@ -54,6 +54,7 @@ public class ShooterQuestPackSeeder implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
         seedGame(CS2, cs2PackA(), cs2PackB());
+        seedExtraPack(CS2, "Сезон В", cs2PackC()); // 10.11.2026: третья пачка CS2 (оружие, урон, карты, весёлые) - входит в круг ротации сама
         seedGame(DOTA, dotaPackA(), dotaPackB());
         seedGame(PUBG_PC, pubgPcPackA(), pubgPcPackB());
         seedGame(PUBG_MOBILE, pubgMobilePackA(), pubgMobilePackB());
@@ -66,6 +67,14 @@ public class ShooterQuestPackSeeder implements CommandLineRunner {
             seedPack(game, "Сезон Б", packB);
         } catch (Exception e) {
             log.error("[ShooterQuestPackSeeder] {} failed", game, e);
+        }
+    }
+
+    private void seedExtraPack(String game, String packName, List<Def> defs) {
+        try {
+            seedPack(game, packName, defs);
+        } catch (Exception e) {
+            log.error("[ShooterQuestPackSeeder] {} / {} failed", game, packName, e);
         }
     }
 
@@ -146,6 +155,66 @@ public class ShooterQuestPackSeeder implements CommandLineRunner {
         l.add(cs2("Обезвредь бомбу 4 раза", "4 обезвреживания", Cs2VerifyType.BOMBS_DEFUSED, 4, 7, 3000));
         l.add(cs2("Заверши матч с K/D выше 2.5", "K/D выше 2.5", Cs2VerifyType.LAST_MATCH_KD_RATIO, 250, 7, 2800));
         return l;
+    }
+
+    /** «Сезон В» CS2 (10.11.2026): 16 квестов вперемешку - оружие, урон, карты, тактика и весёлые. Награды и сроки как у текущих (1 500 / 2 500 / 3 000 EXC). Счётчики Steam сверены живым вызовом
+     *  (scripts/probe-cs2-stats.sh): оружие total_kills_*, total_wins_pistolround, total_kills_enemy_blinded, total_kills_against_zoomed_sniper, total_dominations, total_revenges, total_wins_map_de_dust2/inferno
+     *  (раунды, выигранные на карте), last_match_damage. Новых карт (Mirage, Ancient, Overpass) в ответе Steam нет - их не берём. */
+    private List<Def> cs2PackC() {
+        List<Def> l = new ArrayList<>();
+        l.add(cs2Stat("Убей 10 врагов из AK-47", "AK-47 ×10", "total_kills_ak47", 10, 3, 1500,
+                "Убей 10 врагов из AK-47 в CS2 с момента взятия квеста — считаются убийства из разных матчей, прогресс считается автоматически.", "Бери AK-47 и целься в голову. "));
+        l.add(cs2Stat("Убей 10 врагов из M4", "M4 ×10", "total_kills_m4a1", 10, 3, 1500,
+                "Убей 10 врагов из M4 (M4A4 или M4A1-S) в CS2 с момента взятия квеста — считаются убийства из разных матчей, прогресс считается автоматически.", "Играй с M4 за контртеррористов. "));
+        l.add(cs2Stat("Выиграй 3 пистолетных раунда", "Пистолетные ×3", "total_wins_pistolround", 3, 3, 1500,
+                "Выиграй 3 пистолетных раунда (первый раунд половины матча) в CS2 с момента взятия квеста — считаются раунды из разных матчей, прогресс считается автоматически.", "Играй соревновательные матчи и побеждай в первых раундах. "));
+        l.add(cs2Stat("Убей 5 ослеплённых врагов", "Ослеплённые ×5", "total_kills_enemy_blinded", 5, 3, 1500,
+                "Убей 5 врагов, пока они ослеплены вспышкой, в CS2 с момента взятия квеста — прогресс считается автоматически.", "Бросай вспышку и добивай ослеплённых. "));
+        l.add(cs2Stat("Сделай 2 доминирования", "Доминирование ×2", "total_dominations", 2, 3, 1500,
+                "Сделай 2 доминирования (4 убийства одного и того же врага) в CS2 с момента взятия квеста — прогресс считается автоматически.", "Не давай одному и тому же врагу переиграть тебя. "));
+        l.add(cs2Stat("Убей 15 врагов из пистолетов", "Пистолеты ×15", "total_kills_deagle,total_kills_glock,total_kills_hkp2000,total_kills_p250,total_kills_elite,total_kills_fiveseven,total_kills_tec9", 15, 3, 1500,
+                "Убей 15 врагов из любых пистолетов (Desert Eagle, Glock, USP-S, P2000, P250, Dual Berettas, Five-SeveN, Tec-9) в CS2 с момента взятия квеста — прогресс считается автоматически.", "Играй с пистолетом: подойдут любые матчи. "));
+        l.add(cs2Stat("Убей 5 врагов с AWP", "AWP ×5", "total_kills_awp", 5, 5, 2500,
+                "Убей 5 врагов из AWP в CS2 с момента взятия квеста — считаются убийства из разных матчей, прогресс считается автоматически.", "Бери AWP и держи длинные углы. "));
+        l.add(cs2Stat("Убей 3 врагов гранатами", "Гранаты ×3", "total_kills_hegrenade,total_kills_molotov", 3, 5, 2500,
+                "Убей 3 врагов гранатами (осколочной или коктейлем Молотова) в CS2 с момента взятия квеста — прогресс считается автоматически.", "Бросай гранаты в места, где сидят враги. "));
+        l.add(cs2Stat("Убей 3 снайперов в прицеле", "Снайперы ×3", "total_kills_against_zoomed_sniper", 3, 5, 2500,
+                "Убей 3 снайперов, которые целились через оптику, в CS2 с момента взятия квеста — прогресс считается автоматически.", "Заходи так, чтобы застать снайпера врасплох. "));
+        l.add(cs2Stat("Выиграй 12 раундов на Dust2", "Dust2 ×12", "total_wins_map_de_dust2", 12, 5, 2500,
+                "Выиграй 12 раундов на карте Dust2 в CS2 с момента взятия квеста — считаются раунды из разных матчей, прогресс считается автоматически.", "Играй на Dust2 в любом режиме. "));
+        l.add(cs2Stat("Выиграй 10 раундов на Inferno", "Inferno ×10", "total_wins_map_de_inferno", 10, 5, 2500,
+                "Выиграй 10 раундов на карте Inferno в CS2 с момента взятия квеста — считаются раунды из разных матчей, прогресс считается автоматически.", "Играй на Inferno в любом режиме. "));
+        l.add(cs2Stat("Сделай 3 мести", "Месть ×3", "total_revenges", 3, 5, 2500,
+                "Отомсти 3 раза (убей врага, который убил тебя) в CS2 с момента взятия квеста — прогресс считается автоматически.", "Запоминай, кто тебя убил, и находи его в следующем раунде. "));
+        l.add(cs2Damage("Нанеси 2 000 урона за матч", "Урон 2 000", 2000, 5, 2500));
+        l.add(cs2Damage("Нанеси 2 500 урона за матч", "Урон 2 500", 2500, 7, 3000));
+        l.add(cs2Stat("Убей врага ножом", "Нож ×1", "total_kills_knife", 1, 7, 3000,
+                "Убей врага ножом в CS2 с момента взятия квеста — прогресс считается автоматически.", "Подкрадись сзади, пока он не слышит шагов. "));
+        l.add(cs2Stat("Убей врага шокером Zeus", "Zeus ×1", "total_kills_taser", 1, 7, 3000,
+                "Убей врага шокером Zeus x27 в CS2 с момента взятия квеста — прогресс считается автоматически.", "Купи Zeus и подойди вплотную. "));
+        return l;
+    }
+
+    /** CS2: дельта суммы career-счётчиков Steam (STAT_DELTA, имена в cs2StatKeys) с момента взятия квеста. */
+    private static Def cs2Stat(String title, String label, String keys, int target, int days, long coins, String description, String how) {
+        return new Def(title, label, "PC (Steam)", days, coins, description, how + AUTO, CS2_REQ,
+                q -> {
+                    q.setCs2VerifyType(Cs2VerifyType.STAT_DELTA);
+                    q.setCs2TargetCount(target);
+                    q.setCs2StatKeys(keys);
+                });
+    }
+
+    /** CS2: «не менее N урона за один матч» по last_match_damage. */
+    private static Def cs2Damage(String title, String label, int target, int days, long coins) {
+        return new Def(title, label, "PC (Steam)", days, coins,
+                "Нанеси " + fmt(target) + " и более урона за один матч CS2 — прогресс считается автоматически по статистике последнего сыгранного матча.",
+                "Играй активно и стреляй по врагам. " + AUTO_AFTER_MATCH, CS2_REQ,
+                q -> {
+                    q.setCs2VerifyType(Cs2VerifyType.LAST_MATCH_DAMAGE);
+                    q.setCs2TargetCount(target);
+                    q.setCs2StatKeys(null);
+                });
     }
 
     private static Def cs2(String title, String label, Cs2VerifyType type, int target, int days, long coins) {

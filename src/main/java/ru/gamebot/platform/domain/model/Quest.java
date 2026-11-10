@@ -245,6 +245,10 @@ public class Quest {
     /** Целевая дельта с момента взятия квеста — для всех типов CS2 верификации. */
     private Integer cs2TargetCount;
 
+    /** Для cs2VerifyType = STAT_DELTA: имена career-счётчиков Steam через запятую (total_kills_ak47, total_kills_awp ...), сумма которых растёт с момента взятия квеста; иначе null. */
+    @Column(length = 300)
+    private String cs2StatKeys;
+
     /** null = обычный квест — включает авто-верификацию PUBG PC через официальный API (developer.pubg.com,
      *  platform=steam). В отличие от CS2 (кумулятивные career-счётчики) и как у Dota — список последних
      *  матчей игрока + разбор каждого нового по отдельности (у PUBG нет стабильного career-counter'а

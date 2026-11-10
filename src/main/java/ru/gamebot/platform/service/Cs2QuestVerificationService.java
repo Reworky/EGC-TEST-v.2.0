@@ -102,7 +102,8 @@ public class Cs2QuestVerificationService {
 
     private static final java.util.Set<Cs2VerifyType> LAST_MATCH_TYPES = java.util.EnumSet.of(
             Cs2VerifyType.LAST_MATCH_KILLS, Cs2VerifyType.LAST_MATCH_DEATHS_MAX,
-            Cs2VerifyType.LAST_MATCH_MVPS, Cs2VerifyType.LAST_MATCH_SCORE, Cs2VerifyType.LAST_MATCH_KD_RATIO);
+            Cs2VerifyType.LAST_MATCH_MVPS, Cs2VerifyType.LAST_MATCH_SCORE, Cs2VerifyType.LAST_MATCH_KD_RATIO,
+            Cs2VerifyType.LAST_MATCH_DAMAGE);
 
     private void checkOne(QuestSubmission submission) throws Cs2ApiService.Cs2ApiTransientException {
         Quest quest = submission.getQuest();
@@ -130,6 +131,7 @@ public class Cs2QuestVerificationService {
             case BOMBS_PLANTED -> stats.bombsPlanted();
             case BOMBS_DEFUSED -> stats.bombsDefused();
             case MATCHES_PLAYED -> stats.matchesPlayed();
+            case STAT_DELTA -> sumStats(stats, quest.getCs2StatKeys());
             default -> stats.kills(); // KILLS
         };
 
@@ -170,6 +172,7 @@ public class Cs2QuestVerificationService {
             case LAST_MATCH_DEATHS_MAX -> stats.lastMatchDeaths() <= quest.getCs2TargetCount();
             case LAST_MATCH_MVPS -> stats.lastMatchMvps() >= quest.getCs2TargetCount();
             case LAST_MATCH_SCORE -> stats.lastMatchScore() >= quest.getCs2TargetCount();
+            case LAST_MATCH_DAMAGE -> stats.lastMatchDamage() >= quest.getCs2TargetCount();
             // Цель хранится как отношение×100 (200 = K/D 2.0): kills/deaths >= target/100 ⇔ kills*100 >= target*deaths.
             case LAST_MATCH_KD_RATIO -> stats.lastMatchDeaths() == 0
                     ? stats.lastMatchKills() > 0
@@ -187,6 +190,16 @@ public class Cs2QuestVerificationService {
         if (qualifies) {
             completeSubmission(submission);
         }
+    }
+
+    /** Сумма career-счётчиков Steam по именам из Quest.cs2StatKeys (нулевые Steam не отдаёт - считаем 0). */
+    private static long sumStats(Cs2ApiService.PlayerStats stats, String keys) {
+        if (keys == null || keys.isBlank()) return 0;
+        long sum = 0;
+        for (String key : keys.split(",")) {
+            sum += stats.all().getOrDefault(key.trim(), 0L);
+        }
+        return sum;
     }
 
     private void completeSubmission(QuestSubmission submission) {
