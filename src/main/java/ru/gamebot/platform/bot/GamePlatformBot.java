@@ -7029,7 +7029,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     ? "🏷 Статус: 🤝 <b>Партнёр</b> · курс 100%\n≈ " + fmtExc(partnerRub) + " ₽\n\n"
                     : !compareLines.isEmpty() ? "🏷 Статус: Стандарт\n" + compareLines + "\n"
                     : healthRatioService.isPartnerPending(user)
-                        ? "🏷 Статус: Стандарт · партнёрство включится после выплаты банка\n≈ " + fmtExc(ownRub) + " ₽ (курс " + Math.round(withdrawalRatioFor(user, user.getCoins(), false) * 100) + "%)\n\n"
+                        ? "🏷 Статус: Стандарт ≈ " + fmtExc(ownRub) + " ₽ (курс " + Math.round(withdrawalRatioFor(user, user.getCoins(), false) * 100) + "%)\n\n"
                     : "≈ " + fmtExc(ownRub) + " ₽ (курс " + Math.round(withdrawalRatioFor(user, user.getCoins(), false) * 100) + "%)\n\n";
         }
         // Ежедневный бонус забирается в «Заданиях дня»; на балансе он появляется лишь пока задания выключены (app_settings).
