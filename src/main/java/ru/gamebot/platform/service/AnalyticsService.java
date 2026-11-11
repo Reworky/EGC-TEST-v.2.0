@@ -939,16 +939,35 @@ public class AnalyticsService {
 
     /** Вкладка «EGC VPN» (03.11.2026): ключи сейчас, пробные, оплаты по журналу Stars, продления и переход пробный → платный. */
     private void vpnTab(Period p, Period pv, List<Line> out, List<String> extras) {
+        // Новый VPN-бот @egc_vpn_bot (с 08.11.2026 основной); ниже - старый встроенный VPN в игровом боте (пилот)
+        VpnStatsService.BotStats b = vpnStats.botStats(p.from(), p.to(), pv.from(), pv.to());
+        out.add(L("v2_users", "VPN-бот: зашли в бот", "", (double) b.users(), (double) b.usersPrev(), "по рассылке и из игрового бота", false));
+        out.add(L("v2_active", "VPN-бот: рабочих ключей сейчас", "", (double) b.activeNow(), null, "пробных " + b.activeTrial() + ", платных " + b.activePaid(), false));
+        out.add(L("v2_expiring", "VPN-бот: срок истекает в ближайшие 3 дня", "", (double) b.expiringSoon(), null, "кому уйдёт напоминание о продлении", false));
+        out.add(L("v2_trials", "VPN-бот: взяли пробный", "", (double) b.trials(), (double) b.trialsPrev(), null, false));
+        out.add(L("v2_buys", "VPN-бот: оплат за период", "", (double) b.purchases(), (double) b.purchasesPrev(), "звёздами " + b.purchasesStars() + ", за EXC " + b.purchasesExc(), false));
+        out.add(L("v2_stars", "VPN-бот: выручка Stars", "⭐", (double) b.starsRevenue(), (double) b.starsRevenuePrev(), "оплаты за EXC и рубли сюда не входят", false));
+        out.add(L("v2_conv", "VPN-бот: пробный → платный (за всё время)", "%", b.trialUsersAll() == 0 ? null : b.trialUsersPaid() * 100.0 / b.trialUsersAll(), null,
+                b.trialUsersPaid() + " из " + b.trialUsersAll() + " взявших пробный заплатили", false));
+        StringBuilder funnel = new StringBuilder("<b>Рассылка про VPN: воронка по волнам</b>\n");
+        for (Object[] r : vpnStats.broadcastFunnel()) {
+            String wave = "vpnw1".equals(String.valueOf(r[0])) ? "Волна 1" : "vpnw2".equals(String.valueOf(r[0])) ? "Волна 2" : String.valueOf(r[0]);
+            String variant = "-".equals(String.valueOf(r[1])) ? "" : ", вариант " + r[1];
+            funnel.append("• ").append(wave).append(variant).append(": отправлено ").append(r[2]).append(", дошло ").append(r[3])
+                    .append(", зашли в бот ").append(r[4]).append(", взяли пробный ").append(r[5]).append(", оплатили ").append(r[6]).append("\n");
+        }
+        extras.add(funnel.toString());
+        extras.add("<i>VPN-бот: «зашли в бот» по рассылке считает и тех, кто заходил раньше. Ключи, выданные админом вручную, в оплаты не входят. Ниже - старый VPN в игровом боте (пилот).</i>");
         VpnStatsService.Stats s = vpnStats.stats(p.from(), p.to(), pv.from(), pv.to());
-        out.add(L("v_active", "Рабочих ключей сейчас", "", (double) s.activeNow(), null, "пробных " + s.activeTrial() + ", платных " + s.activePaid(), false));
-        out.add(L("v_expiring", "Срок истекает в ближайшие 3 дня", "", (double) s.expiringSoon(), null, "кому уйдёт напоминание о продлении", false));
-        out.add(L("v_trials", "Взяли пробный период", "", (double) s.trialsStarted(), (double) s.trialsStartedPrev(), null, false));
-        out.add(L("v_buys", "Оплат за период", "", (double) s.purchases(), (double) s.purchasesPrev(), "из них со скидкой за EXC: " + s.purchasesWithExc(), false));
-        out.add(L("v_renew", "Из них продлений", "", (double) s.renewals(), null, "покупают ли второй месяц", false));
-        out.add(L("v_stars", "Выручка за период", "⭐", (double) s.starsRevenue(), (double) s.starsRevenuePrev(), null, false));
-        out.add(L("v_conv", "Пробный → платный (за всё время)", "%", s.trialUsersAll() == 0 ? null : s.trialUsersPaid() * 100.0 / s.trialUsersAll(), null,
+        out.add(L("v_active", "Пилот: рабочих ключей сейчас", "", (double) s.activeNow(), null, "пробных " + s.activeTrial() + ", платных " + s.activePaid(), false));
+        out.add(L("v_expiring", "Пилот: срок истекает в ближайшие 3 дня", "", (double) s.expiringSoon(), null, "кому уйдёт напоминание о продлении", false));
+        out.add(L("v_trials", "Пилот: взяли пробный период", "", (double) s.trialsStarted(), (double) s.trialsStartedPrev(), null, false));
+        out.add(L("v_buys", "Пилот: оплат за период", "", (double) s.purchases(), (double) s.purchasesPrev(), "из них со скидкой за EXC: " + s.purchasesWithExc(), false));
+        out.add(L("v_renew", "Пилот: из них продлений", "", (double) s.renewals(), null, "покупают ли второй месяц", false));
+        out.add(L("v_stars", "Пилот: выручка за период", "⭐", (double) s.starsRevenue(), (double) s.starsRevenuePrev(), null, false));
+        out.add(L("v_conv", "Пилот: пробный → платный (за всё время)", "%", s.trialUsersAll() == 0 ? null : s.trialUsersPaid() * 100.0 / s.trialUsersAll(), null,
                 s.trialUsersPaid() + " из " + s.trialUsersAll() + " взявших пробный купили месяц", false));
-        out.add(L("v_pending", "Требуют внимания (оплачено, ключ не выдан)", "", (double) s.pending(), null,
+        out.add(L("v_pending", "Пилот: требуют внимания (оплачено, ключ не выдан)", "", (double) s.pending(), null,
                 "если больше 0, смотрите алерты и повторите /vpn ID paid", true));
         extras.add("<i>Покупки считаются по журналу Stars: ключи, выданные вручную командой /vpn, в оплаты не входят. Ключей выдано всего: " + s.totalKeys() + ".</i>");
     }
