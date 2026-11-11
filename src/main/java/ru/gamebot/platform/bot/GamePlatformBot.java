@@ -4787,6 +4787,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private volatile String clubBannerFileId = null;
 
+    /** Чат игроков (мягкий мост из бота, владелец 11.11.2026): постоянная кнопка в разделе «Клуб», без наград и навязчивых напоминаний. */
+    private static final String COMMUNITY_CHAT_URL = "https://t.me/exgamingchat";
+
     private void sendClubCategory(AppUser user) {
         long activePolls = pollService.findActive().size();
         String pollLabel = activePolls > 0 ? "🗳 Голосования (" + activePolls + ")" : "🗳 Голосования";
@@ -4794,6 +4797,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("🛡️ EGC Council", "menu:council")),
                 List.of(keyboardFactory.callback(pollLabel, "menu:polls")),
                 List.of(keyboardFactory.callback("📰 Новости", "menu:news")),
+                List.of(keyboardFactory.url("💬 Чат игроков", COMMUNITY_CHAT_URL)),
                 backRow("menu:cat:more")
         ));
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(rows);
