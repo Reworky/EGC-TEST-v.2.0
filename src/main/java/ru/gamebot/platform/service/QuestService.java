@@ -1440,6 +1440,12 @@ public class QuestService {
         // Обещанный сообщением «вернись и выполни квест» бонус за возвращение - выдаём здесь, на реальном возврате
         userService.claimDormancyReturnBonus(user);
         user.setCompletedQuests(user.getCompletedQuests() + 1);
+        // Первый одобренный квест: предлагаем ответить на вопросы про возраст и страну за награду (10.11.2026; без возраста нельзя понять, кому показывать партнёрство)
+        if (user.getCompletedQuests() == 1 && user.getAboutPromptedAt() == null
+                && (user.getAge() == null || ((user.getCountry() == null || user.getCountry().isBlank()) && user.getPhoneNumber() == null))) {
+            user.setAboutPromptedAt(LocalDateTime.now());
+            eventPublisher.publishEvent(new ru.gamebot.platform.event.AboutPromptEvent(this, user.getTelegramId(), false));
+        }
         userService.markDailyTask(user, UserService.DAILY_TASK_QUEST);
         user.setFixedRubBalance(user.getFixedRubBalance() + fixedRub);
         submission.setUser(user);

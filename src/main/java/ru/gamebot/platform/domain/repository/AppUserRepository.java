@@ -15,6 +15,18 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     Optional<AppUser> findByTelegramId(Long telegramId);
 
+    /** Игроки, которым вопрос про возраст и страну показали в окне [from, before], без ответа и без напоминания (напоминание одно). */
+    @org.springframework.data.jpa.repository.Query("select u from AppUser u where u.aboutPromptedAt is not null and u.aboutPromptedAt >= :from and u.aboutPromptedAt < :before "
+            + "and u.aboutRemindedAt is null and u.blocked = false and (u.age is null or ((u.country is null or u.country = '') and u.phoneNumber is null))")
+    List<AppUser> findAboutRemindDue(@org.springframework.data.repository.query.Param("from") java.time.LocalDateTime from,
+                                     @org.springframework.data.repository.query.Param("before") java.time.LocalDateTime before);
+
+    /** Точечная отметка «напоминание ушло»: вызывающий планировщик держит «старый» объект игрока, полная запись затёрла бы чужие поля. */
+    @org.springframework.transaction.annotation.Transactional
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("update AppUser u set u.aboutRemindedAt = :at where u.id = :id")
+    void markAboutReminded(@org.springframework.data.repository.query.Param("id") Long id, @org.springframework.data.repository.query.Param("at") java.time.LocalDateTime at);
+
     Optional<AppUser> findByNicknameIgnoreCase(String nickname);
 
     /** Уникальный индекс на nickname регистрозависимый, поэтому «Саша» и «саша» могут жить в базе одновременно —

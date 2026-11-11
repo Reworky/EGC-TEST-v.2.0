@@ -6993,6 +6993,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Вопрос про возраст и страну за награду: первый показ - через несколько секунд после первого одобренного квеста (чтобы не обогнать сообщение о награде), второй - напоминание через двое суток. */
+    @org.springframework.context.event.EventListener
+    public void onAboutPrompt(ru.gamebot.platform.event.AboutPromptEvent event) {
+        Long telegramId = event.getTelegramId();
+        boolean reminder = event.isReminder();
+        chestScheduler.schedule(() -> {
+            try {
+                AppUser user = userService.findByTelegramId(telegramId).orElse(null);
+                if (user == null || user.isBlocked()) return;
+                boolean incomplete = user.getAge() == null || ((user.getCountry() == null || user.getCountry().isBlank()) && user.getPhoneNumber() == null);
+                if (!incomplete) return;
+                if (reminder) {
+                    sendText(telegramId, "👋 Помнишь, мы просили ответить на два коротких вопроса? За них <b>+" + ABOUT_REWARD_EXC + " EXC</b>, это одно нажатие.", null);
+                }
+                sendAboutStep(user, true);
+            } catch (Exception e) {
+                log.warn("[About] Failed to send about prompt to {}", telegramId, e);
+            }
+        }, reminder ? 0 : 6, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
     @org.springframework.context.event.EventListener
     public void onReferralSecondQuestSignal(ru.gamebot.platform.event.ReferralSecondQuestSignalEvent event) {
         try {
@@ -30377,14 +30398,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Анкета «Расскажи о себе» (06.11.2026): возраст и страна кнопками, +100 EXC один раз за ответ. Страна по телефону (если он есть) определяется отдельно и перезаписывает ответ. */
     private void sendAboutStep(AppUser user) {
+        sendAboutStep(user, false);
+    }
+
+    /** prompt=true - вопрос пришёл сам (после первого квеста или напоминанием): сверху «Первый квест засчитан!». Если вопрос игроку уже показывали сами (aboutPromptedAt),
+     *  вместо «Назад в профиль» везде кнопка «Позже» в главное меню. */
+    private void sendAboutStep(AppUser user, boolean prompt) {
+        boolean later = prompt || user.getAboutPromptedAt() != null;
+        String laterText = later ? "⏭ Позже" : "⬅️ Назад";
+        String laterData = later ? "menu:main" : "menu:profile";
         if (user.getAge() == null) {
             sendText(user.getTelegramId(),
-                    "🎁 <b>Расскажи о себе</b>\n\nСколько тебе лет? Это нужно, чтобы показывать подходящие задания. За ответ на оба вопроса: <b>+" + ABOUT_REWARD_EXC + " EXC</b>.",
+                    (prompt ? "✅ <b>Первый квест засчитан!</b>\n\n" : "") + "🎁 <b>Расскажи о себе</b>\n\nСколько тебе лет? Это нужно, чтобы показывать подходящие задания. За ответ на оба вопроса: <b>+" + ABOUT_REWARD_EXC + " EXC</b>.",
                     keyboardFactory.rowsLayout(List.of(
                             List.of(keyboardFactory.callback("до 14", "about:age:13"), keyboardFactory.callback("14–15", "about:age:14")),
                             List.of(keyboardFactory.callback("16–17", "about:age:16"), keyboardFactory.callback("18–24", "about:age:18")),
                             List.of(keyboardFactory.callback("25 и старше", "about:age:25")),
-                            List.of(keyboardFactory.callback("⬅️ Назад", "menu:profile")))));
+                            List.of(keyboardFactory.callback(laterText, laterData)))));
             return;
         }
         if ((user.getCountry() == null || user.getCountry().isBlank()) && user.getPhoneNumber() == null) {
@@ -30395,7 +30425,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             List.of(keyboardFactory.callback("🇰🇿 Казахстан", "about:c:kz"), keyboardFactory.callback("🇧🇾 Беларусь", "about:c:by")),
                             List.of(keyboardFactory.callback("🇺🇿 Узбекистан", "about:c:uz"), keyboardFactory.callback("🇰🇬 Кыргызстан", "about:c:kg")),
                             List.of(keyboardFactory.callback("🌍 Другая страна", "about:c:other")),
-                            List.of(keyboardFactory.callback("⬅️ Назад", "menu:profile")))));
+                            List.of(keyboardFactory.callback(laterText, laterData)))));
             return;
         }
         grantAboutRewardIfDone(user);
@@ -30403,9 +30433,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("👤 Профиль", "menu:profile")))));
     }
 
-    private static final long ABOUT_REWARD_EXC = 100;
+    private static final long ABOUT_REWARD_EXC = 500; // 10.11.2026: было 100, владелец поднял до 500 (без возраста не понять, кому показывать партнёрство)
 
-    /** +100 EXC один раз, когда у игрока заполнены и возраст, и страна (маркер в app_settings, чтобы не начислить дважды). */
+    /** +ABOUT_REWARD_EXC один раз, когда у игрока заполнены и возраст, и страна (маркер в app_settings, чтобы не начислить дважды). */
     private void grantAboutRewardIfDone(AppUser user) {
         if (user.getAge() == null || user.getCountry() == null || user.getCountry().isBlank()) return;
         String key = "about.rewarded." + user.getTelegramId();

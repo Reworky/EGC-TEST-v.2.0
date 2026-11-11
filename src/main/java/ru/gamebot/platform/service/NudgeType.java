@@ -13,6 +13,7 @@ public enum NudgeType {
     SECOND_QUEST(70, false, "🎁 Второй квест"),
     SPONSOR_QUEST(65, false, "💼 Спонсорский квест"),
     OTP_MISSION(66, false, "💳 Миссия «ОТП Карта»"),
+    ABOUT_PROMPT(44, false, "🎁 Анкета: возраст и страна"),
     WITHDRAWAL_OPEN(55, false, "💸 Вывод открыт"),
     WEEKEND_BOOST(58, false, "🔥 Буст выходных"),
     GOLDEN_HOUR(52, false, "⚡ Золотой час"),

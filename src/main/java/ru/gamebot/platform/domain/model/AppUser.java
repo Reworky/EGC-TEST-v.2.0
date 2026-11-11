@@ -127,6 +127,12 @@ public class AppUser {
      * Одно сообщение на человека за всё время - не повторяется при следующих паузах. */
     private LocalDateTime silentGapNudgeSentAt;
 
+    /** Когда после первого одобренного квеста игроку показали вопрос про возраст и страну (10.11.2026); null = не показывали. */
+    private LocalDateTime aboutPromptedAt;
+
+    /** Когда ушло единственное напоминание об этом вопросе (через 2 суток, если игрок не ответил); null = не отправляли. */
+    private LocalDateTime aboutRemindedAt;
+
     /** Когда игроку уходило разовое сообщение про EGC Pass после 10+ квестов (WeeklyResetScheduler.checkEgcPassTeaser); null = не отправляли. */
     private LocalDateTime egcPassTeaserSentAt;
 
