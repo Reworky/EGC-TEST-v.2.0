@@ -5491,9 +5491,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Партнёрский квест с картой для предложения в выводе: активный, с местами и ещё не выполненный этим игроком; иначе null. */
-    /** Разница «курс сейчас / курс партнёра» (владелец, 10.11.2026): показывается не-партнёрам при включённых уровнях курса, когда они уже выполнили 3 квеста; новичку цифры без сравнения. */
-    private static final int PARTNER_COMPARE_MIN_QUESTS = 3;
-    private static final long PARTNER_COMPARE_MIN_DIFF_RUB = 10;
+    /** Разница «курс сейчас / курс партнёра» (владелец, 10.11.2026; с 11.11.2026 - с первого дня, без порога по квестам): показывается всем не-партнёрам при включённых уровнях курса. */
     private final java.util.concurrent.ConcurrentHashMap<Long, java.time.LocalDate> partnerCompareRewardShown = new java.util.concurrent.ConcurrentHashMap<>();
 
     /** Для мини-аппа: показывать ли сравнение курсов (то же условие, что в боте). */
@@ -5502,24 +5500,33 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private boolean partnerCompareApplies(AppUser user) {
-        return withdrawalTiersEnabled() && user.getCompletedQuests() >= PARTNER_COMPARE_MIN_QUESTS && !healthRatioService.isPartner(user)
-                && !healthRatioService.isPartnerPending(user);
+        return withdrawalTiersEnabled() && !healthRatioService.isPartner(user) && !healthRatioService.isPartnerPending(user);
     }
 
-    /** Две строки «Сейчас / Партнёр» для суммы exc (с переводом строки в конце); пусто, если сравнение не применимо или разница меньше 10 ₽. */
+    /** Рубли для строки сравнения: от 10 ₽ целыми с пробелом тысяч, меньше - с одним знаком после запятой. */
+    private String rubCompare(double rub) {
+        return rub >= 10 ? fmtExc(Math.round(rub)) : rubShort(rub);
+    }
+
+    /** Две строки «Сейчас / Партнёр» для суммы exc (с переводом строки в конце); пустые только у партнёров и при выключенных уровнях. */
     private String partnerCompareLines(AppUser user, long exc) {
         return partnerCompareLines(user, exc, true);
     }
 
-    /** showGain=false - без «· +N ₽» в строке партнёра (экран «Баланс», 10.11.2026: разницу игрок и так видит по двум суммам). */
+    /** showGain=false - без «· +N ₽» в строке партнёра (экран «Баланс», 10.11.2026: разницу игрок и так видит по двум суммам).
+     *  Пустой баланс или совсем маленькая разница (меньше 1 ₽) - курс за 1 000 EXC вместо сумм. */
     private String partnerCompareLines(AppUser user, long exc, boolean showGain) {
-        if (exc <= 0 || !partnerCompareApplies(user)) return "";
-        long partnerRub = Math.round(exc / 100.0);
-        double ratio = withdrawalRatioFor(user, exc, false);
-        long ownRub = Math.round(exc * ratio / 100.0);
-        if (partnerRub - ownRub < PARTNER_COMPARE_MIN_DIFF_RUB) return "";
-        return "💱 Сейчас: ≈ " + fmtExc(ownRub) + " ₽ (курс " + Math.round(ratio * 100) + "%)\n"
-                + "🤝 Партнёр: ≈ " + fmtExc(partnerRub) + " ₽ (курс 100%)" + (showGain ? " · +" + fmtExc(partnerRub - ownRub) + " ₽" : "") + "\n";
+        if (!partnerCompareApplies(user)) return "";
+        double ratio = withdrawalRatioFor(user, Math.max(exc, 1), false);
+        if (ratio >= 1.0) return "";
+        double partnerRub = exc / 100.0;
+        double ownRub = exc * ratio / 100.0;
+        if (exc <= 0 || partnerRub - ownRub < 1) {
+            return "💱 Сейчас: " + tierRateString((int) Math.round(ratio * 100)) + "\n"
+                    + "🤝 Партнёр: " + tierRateString(100) + "\n";
+        }
+        return "💱 Сейчас: ≈ " + rubCompare(ownRub) + " ₽ (курс " + Math.round(ratio * 100) + "%)\n"
+                + "🤝 Партнёр: ≈ " + rubCompare(partnerRub) + " ₽ (курс 100%)" + (showGain ? " · +" + rubCompare(partnerRub - ownRub) + " ₽" : "") + "\n";
     }
 
     private static String rubShort(double rub) {
@@ -7068,11 +7075,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String equivalent = user.getCoins() > 0
                 ? healthRatioService.starsApprox(user.getCoins()) + " · ≈ " + fmtExc(rub) + " ₽ (курс фонда " + ratioPercent + "%)\n\n"
                 : "";
-        if (withdrawalTiersEnabled() && user.getCoins() > 0) {
+        if (withdrawalTiersEnabled()) {
             long partnerRub = Math.round(user.getCoins() / 100.0);
             long ownRub = Math.round(user.getCoins() * withdrawalRatioFor(user, user.getCoins(), false) / 100.0);
             String compareLines = partnerCompareLines(user, user.getCoins(), false);
-            equivalent = ownRub >= partnerRub
+            equivalent = withdrawalRatioFor(user, Math.max(1, user.getCoins()), false) >= 1.0
                     ? "🏷 Статус: 🤝 <b>Партнёр</b> · курс 100%\n≈ " + fmtExc(partnerRub) + " ₽\n\n"
                     : !compareLines.isEmpty() ? compareLines + "\n🏷 Статус: Стандарт\n\n"
                     : healthRatioService.isPartnerPending(user)

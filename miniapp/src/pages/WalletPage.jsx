@@ -389,15 +389,18 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest }) {
         <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>
           ≈ {+(wallet.coins * (wallet.withdrawalRatioPercent ?? wallet.healthRatioPercent) / 100 / 100).toFixed(1)} ₽ · {wallet.withdrawalRatioPercent != null ? `курс вывода ${wallet.withdrawalRatioPercent}%` : `фонд ${wallet.healthRatioPercent}%`}
         </div>
-        {wallet.partnerCompare && wallet.withdrawalRatioPercent != null && (() => {
-          const own = Math.round(wallet.coins * wallet.withdrawalRatioPercent / 100 / 100);
-          const partner = Math.round(wallet.coins / 100);
-          return partner - own >= 10 ? (
+        {wallet.partnerCompare && wallet.withdrawalRatioPercent != null && wallet.withdrawalRatioPercent < 100 && (() => {
+          const fmt = (v) => v >= 10 ? Math.round(v).toLocaleString('ru-RU') : (+v.toFixed(1)).toLocaleString('ru-RU');
+          const own = wallet.coins * wallet.withdrawalRatioPercent / 100 / 100;
+          const partner = wallet.coins / 100;
+          return (
             <div style={{ fontSize: 13, color: '#c4b5fd', marginTop: 6 }}>
-              🤝 Партнёр: ≈ {partner.toLocaleString('ru-RU')} ₽ (курс 100%) · +{(partner - own).toLocaleString('ru-RU')} ₽
+              {wallet.coins > 0 && partner - own >= 1
+                ? `🤝 Партнёр: ≈ ${fmt(partner)} ₽ (курс 100%) · +${fmt(partner - own)} ₽`
+                : '🤝 Партнёр: 1 000 EXC = 10 ₽ (курс 100%)'}
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>Как стать партнёром: в боте, «Вывод EXC» → «Как стать партнёром?»</div>
             </div>
-          ) : null;
+          );
         })()}
         <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
           Звёзды: приблизительный пересчёт по курсу фонда, зачисляется и выводится по нему.
