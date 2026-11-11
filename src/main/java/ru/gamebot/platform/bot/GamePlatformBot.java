@@ -7099,7 +7099,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String vpnBotLink = vpnBotLinkFor(user);
         if (vpnBotLink != null) {
             balanceRows.add(List.of(keyboardFactory.url(user.getCoins() >= ru.gamebot.platform.service.Vpn2Service.EXC_DISCOUNT
-                    ? "🔐 Скидка на VPN за EXC: хватает!" : "🔐 Получить VPN, потратив EXC", vpnBotLink)));
+                    ? "🔐 Получить VPN за EXC: хватает!" : "🔐 Получить VPN, потратив EXC", vpnBotLink)));
         }
         balanceRows.add(List.of(keyboardFactory.callback("⬅️ Назад", backData)));
         sendText(user.getTelegramId(),
