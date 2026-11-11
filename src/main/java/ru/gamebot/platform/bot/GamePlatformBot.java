@@ -17968,7 +17968,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (any) {
             rows.add(List.of(keyboardFactory.callback("⛔ Отменить авто-запуск", "admin:readybc:auto:off")));
         }
-        rows.add(List.of(keyboardFactory.callback("🔒 Закрыть VPN-бот", "admin:readybc:auto:close")));
+        rows.add(List.of(vpn2Service.isOpen()
+                ? keyboardFactory.callback("🔒 Закрыть VPN-бот", "admin:readybc:auto:close")
+                : keyboardFactory.callback("🔓 Открыть VPN-бот для всех", "admin:readybc:auto:open")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "admin:readybc")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
@@ -18005,6 +18007,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
                 answer(callbackQuery.getId(), "Авто-запуск отменён");
                 sendText(user.getTelegramId(), "⛔ Авто-запуск отменён. То, что уже ушло, не отзывается.", null);
+            }
+            case "open" -> {
+                vpnAutoPut(VPN_AUTO_OPEN_KEY, "true");
+                vpn2Service.setOpenOverride(true);
+                answer(callbackQuery.getId(), "Открыто");
+                sendText(user.getTelegramId(), "🔓 VPN-бот открыт для всех: новые люди смогут взять пробный и оплатить. Закрыть можно кнопкой «Закрыть VPN-бот» на этом экране.", null);
             }
             case "close" -> {
                 vpnAutoPut(VPN_AUTO_OPEN_KEY, "false");
