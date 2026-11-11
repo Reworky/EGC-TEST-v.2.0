@@ -30409,7 +30409,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String laterData = later ? "menu:main" : "menu:profile";
         if (user.getAge() == null) {
             sendText(user.getTelegramId(),
-                    (prompt ? "✅ <b>Первый квест засчитан!</b>\n\n" : "") + "🎁 <b>Расскажи о себе</b>\n\nСколько тебе лет? Это нужно, чтобы показывать подходящие задания. За ответ на оба вопроса: <b>+" + ABOUT_REWARD_EXC + " EXC</b>.",
+                    (prompt ? "✅ <b>Первый квест засчитан!</b>\n\n" : "") + "🎁 <b>Расскажи о себе</b>\n\nСколько тебе лет? Это нужно, чтобы показывать подходящие задания.\n\nЗа ответ на оба вопроса: <b>+" + ABOUT_REWARD_EXC + " EXC</b>.",
                     keyboardFactory.rowsLayout(List.of(
                             List.of(keyboardFactory.callback("до 14", "about:age:13"), keyboardFactory.callback("14–15", "about:age:14")),
                             List.of(keyboardFactory.callback("16–17", "about:age:16"), keyboardFactory.callback("18–24", "about:age:18")),
