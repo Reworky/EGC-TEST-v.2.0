@@ -8650,11 +8650,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (picks.get(i).key().equals(pickKey)) { idx = i; break; }
         }
         ru.gamebot.platform.service.EksiPicksService.Pick p = picks.get(idx);
-        StringBuilder sb = new StringBuilder("🤝 <b>Экси рекомендует</b>\n\n");
+        StringBuilder sb = new StringBuilder("🎮 <b>").append(escape(p.title())).append("</b>\n")
+                .append(escape(p.description())).append("\n\n");
         sb.append("Это не квесты: EXC за такие переходы не начисляются.\n\n")
-          .append("Экси просто показывает то, что нашёл за пределами игр клуба.\n")
-          .append("Клуб получает комиссию от партнёра, вам это ничего не стоит.\n");
-        sb.append("\n<b>").append(escape(p.title())).append("</b>\n").append(escape(p.description())).append("\n");
+          .append("Экси просто показывает то, что нашёл за пределами игр клуба.\n");
         if (!p.adLabel().isBlank()) sb.append("\n<i>").append(escape(p.adLabel())).append("</i>\n");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.url(trim(p.buttonLabel(), 60), p.url())));
