@@ -4991,7 +4991,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("❓ FAQ — частые вопросы", "menu:faq")),
                 List.of(keyboardFactory.callback("📋 Правила клуба", "menu:rules")),
                 List.of(keyboardFactory.callback("🆘 Поддержка", "menu:support")),
-                List.of(keyboardFactory.url("⭐ Отзывы игроков", "https://t.me/egc_payouts"))
+                List.of(keyboardFactory.url("⭐ Отзывы игроков", "https://t.me/egc_payouts")),
+                List.of(keyboardFactory.url("💬 Узнай мнение игроков", COMMUNITY_CHAT_URL))
         ), "menu:cat:more");
     }
 
