@@ -208,6 +208,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ScheduledBroadcastService scheduledBroadcastService;
     private final ru.gamebot.platform.service.AdsgramBotAdService adsgramBotAdService;
     private final ru.gamebot.platform.service.SocialTaskService socialTaskService;
+    private final ru.gamebot.platform.service.EksiPicksService eksiPicksService;
     private final ru.gamebot.platform.service.SponsorQuestPromoService sponsorPromoService;
     private final GemPurchaseService gemPurchaseService;
     private final ru.gamebot.platform.domain.repository.ChannelJoinRequestRepository channelJoinRequestRepository;
@@ -1399,6 +1400,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if ("quests:section:sponsored".equals(data)) {
             sendSponsoredQuestList(user);
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if ("quests:section:picks".equals(data)) {
+            sendEksiPicks(user);
             answerSilently(callbackQuery.getId());
             return;
         }
@@ -8509,6 +8515,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback(gamesLabel, "quests:section:gaming")));
         rows.add(List.of(keyboardFactory.callback(sponsoredLabel, "quests:section:sponsored")));
+        // «Экси рекомендует»: партнёрские рекомендации без EXC; кнопка только если есть что показать этому игроку
+        if (!eksiPicksService.forUser(user).isEmpty()) {
+            rows.add(List.of(keyboardFactory.callback("🤝  ЭКСИ РЕКОМЕНДУЕТ", "quests:section:picks")));
+        }
         List<InlineKeyboardButton> small = new ArrayList<>();
         small.add(keyboardFactory.callback("📂 Мои" + (inProgress > 0 ? " · " + inProgress : ""), "menu:myquests"));
         small.add(keyboardFactory.callback("🤳 UGC", "quests:section:ugc"));
@@ -8625,6 +8635,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "Чаще заглядывайте сюда и выполняйте задания: чем больше спонсоров мы привлечём вместе, тем выгоднее будет курс.</blockquote>\n\n"
                         + "Выберите задание:" + legend,
                 verticalWithBackMenu(buttons, "⬅️ Назад", "menu:quests"));
+    }
+
+    /** «🤝 Экси рекомендует» (подраздел Квестов): партнёрские рекомендации без наград EXC. Ссылки - в ресурсе eksi_picks.json. */
+    private void sendEksiPicks(AppUser user) {
+        List<ru.gamebot.platform.service.EksiPicksService.Pick> picks = eksiPicksService.forUser(user);
+        if (picks.isEmpty()) {
+            sendText(user.getTelegramId(), "👀 Рекомендации от Экси появятся скоро.", backMenuKeyboard("menu:quests"));
+            return;
+        }
+        StringBuilder sb = new StringBuilder("🤝 <b>Экси рекомендует</b>\n\n");
+        sb.append("Это не квесты: EXC за такие переходы не начисляются. Экси просто показывает то, что нашёл за пределами игр клуба. ")
+          .append("Клуб получает комиссию от партнёра, вам это ничего не стоит.\n");
+        List<InlineKeyboardButton> buttons = new ArrayList<>();
+        for (ru.gamebot.platform.service.EksiPicksService.Pick p : picks) {
+            sb.append("\n<b>").append(escape(p.title())).append("</b>\n").append(escape(p.description())).append("\n");
+            if (!p.adLabel().isBlank()) sb.append("<i>").append(escape(p.adLabel())).append("</i>\n");
+            buttons.add(keyboardFactory.url(trim(p.buttonLabel(), 60), p.url()));
+        }
+        sendText(user.getTelegramId(), sb.toString().trim(), verticalWithBackMenu(buttons, "⬅️ Назад", "menu:quests"));
     }
 
     private void sendUgcQuestList(AppUser user) {
