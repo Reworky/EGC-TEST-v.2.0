@@ -10737,8 +10737,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         Integer nextFriendMilestone = userService.nextInvitedFriendsMilestone(user.getInvitedFriends());
         String friendBadgeProgress = nextFriendMilestone == null
-                ? " · 🏆 все бейджи"
-                : " · 🎖 до бейджа «" + userService.invitedFriendsBadgeName(nextFriendMilestone) + "»: "
+                ? "\n🏆 Все бейджи"
+                : "\n" + userService.invitedFriendsBadgeName(nextFriendMilestone) + ": "
                         + user.getInvitedFriends() + " из " + nextFriendMilestone;
 
         // Баннер «Рефералы» (Экси у портала-приглашения); если подпись длиннее лимита Telegram,
@@ -10746,15 +10746,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendResourceBanner(user.getTelegramId(), "referrals_banner.jpg",
                 "🤝 <b>Рефералы EGC</b>\n"
                         + boostBanner
-                        + referralGoalBlock(user)
-                        + "🔗 " + escape(referralLink) + "\n\n"
-                        + "👥 Друзей: <b>" + user.getInvitedFriends() + "</b> · 💎 <b>" + earned + " EXC</b>"
+                        + "\n🔗 " + escape(referralLink) + "\n\n"
+                        + (referralGoalBlock(user).isEmpty() ? "" : referralGoalBlock(user) + "\n")
+                        + "👥 Друзей: <b>" + user.getInvitedFriends() + "</b>\n"
+                        + "💎 <b>" + earned + " EXC</b>"
                         + friendBadgeProgress + "\n\n"
                         + "<blockquote expandable><b>Как это работает</b>\n"
                         + "1. Друг вступает в клуб: тебе <b>+300 EXC</b>, ему <b>+500 EXC</b>.\n"
                         + "2. Друг выполняет 3 квеста, и проходит 3 дня в клубе: тебе <b>+2 500 EXC</b>, ему <b>+3 000 EXC</b>.\n"
-                        + "3. Дальше ты получаешь <b>10% от его EXC</b>, пока он играет (квест хотя бы раз в 14 дней).\n"
-                        + "Скопируй ссылку и отправь другу, остальное система сделает сама.</blockquote>",
+                        + "3. Дальше ты получаешь <b>10% от его EXC</b>, пока он играет (квест хотя бы раз в 14 дней).</blockquote>",
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.url("🔗 Поделиться", userService.buildShareUrl(user))),
                         List.of(keyboardFactory.callback("🏆 Рейтинг недели", "menu:referral-rating")),
