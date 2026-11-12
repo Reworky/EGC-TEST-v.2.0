@@ -10922,7 +10922,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "🪙 " + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC"
                         + (partnerCompareLines(user, user.getCoins()).isEmpty()
                                 ? " ≈ " + fmtExc(Math.round(user.getCoins() * withdrawalRatioFor(user, user.getCoins(), false) / 100.0)) + " ₽" : "") + "\n\n"
-                        + (partnerCompareLines(user, user.getCoins()).isEmpty() ? withdrawalTierRateBlock(user) : partnerCompareLines(user, user.getCoins()) + "\n")
+                        + (partnerCompareLines(user, user.getCoins()).isEmpty() ? withdrawalTierRateBlock(user) : partnerCompareLines(user, user.getCoins(), false) + "\n")
                         + "📤 Остаток лимита: " + remaining + " из " + sinkShopService.getMonthlyLimitShown(user) + " EXC/мес"
                         + withdrawalLevelHint(user) + "\n\n"
                         + "Выберите способ получения:"
