@@ -48,5 +48,30 @@
       "Туркменистан",
       "Узбекистан"
     ]
+  },
+  {
+    "key": "sacralium",
+    "title": "SACRALIUM",
+    "description": "Новая хардкорная браузерная MMORPG.",
+    "buttonLabel": "🔗 Открыть игру",
+    "url": "https://sgkaa.com/g/nb6mbwl3lke999950e95143ca9ce17/?erid=2bL9aMPo2e49hMef4rqytJKLHd",
+    "adLabel": "Реклама. ООО «Стартдак», ИНН 7203573497, erid: 2bL9aMPo2e49hMef4rqytJKLHd",
+    "image": "eksi_pick_sacralium.jpg",
+    "countries": [
+      "Армения",
+      "Азербайджан",
+      "Беларусь",
+      "Эстония",
+      "Грузия",
+      "Кыргызстан",
+      "Казахстан",
+      "Литва",
+      "Латвия",
+      "Молдова",
+      "Россия",
+      "Таджикистан",
+      "Туркменистан",
+      "Узбекистан"
+    ]
   }
 ]
