@@ -5573,15 +5573,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ru.gamebot.platform.service.PartnerMission otp = ru.gamebot.platform.service.PartnerMissions.OTP;
         boolean partner = healthRatioService.isPartner(user);
         StringBuilder sb = new StringBuilder("🤝 <b>Как стать партнёром проекта?</b>\n\n");
-        sb.append(partner ? "✅ <b>Вы партнёр: курс вывода 100%.</b>\n\n" : "Партнёр — игрок, который выполнил спонсорский квест банка-партнёра, и банк выплатил бонус.\n\n");
-        sb.append("<b>Что получают партнёры:</b>\n\n")
-                .append("✅ Вывод по курсу 100%").append(partner ? "" : " вместо обычных ~" + nonPartnerPercent() + "%").append(" — на все EXC, в том числе будущие\n")
+        sb.append(partner ? "✅ <b>Вы партнёр: курс вывода 100%.</b>\n\n" : "Партнёр - игрок, который выполнил спонсорский квест банка-партнёра\n\n");
+        sb.append("<b>Что получают партнёры:</b>\n")
+                .append("<blockquote expandable>")
+                .append("✅ Вывод по курсу 100%").append(partner ? "" : " вместо обычных ~" + nonPartnerPercent() + "%").append(" - на все EXC, в том числе будущие\n")
                 .append("✅ Партнёрские цены за звёзды и в магазине наград\n")
-                .append("✅ После выплаты банка — вывод всей суммы одной заявкой, сверх месячного лимита\n")
-                .append("✅ Бейдж «Банкир EGC» в профиле\n");
+                .append("✅ После выплаты банка - вывод всей суммы одной заявкой, сверх месячного лимита\n")
+                .append("✅ Бейдж «Банкир EGC» в профиле")
+                .append("</blockquote>\n");
         Quest otpQuest = partner ? null : otpPartnerQuestOrNull();
         if (!partner) {
-            sb.append("\n<b>Как стать партнёром?</b>\n\nВыполни спонсорский квест банка-партнёра («Квесты → Спонсорские»).\nМенеджер проведёт по шагам лично. Статус включается, когда банк выплатит бонус.");
+            sb.append("\n<b>Как стать партнёром?</b>\n\nВыполни спонсорский квест банка-партнёра (карточка квеста ниже).\n\nМенеджер проведёт по шагам лично.");
             if (otpQuest == null) sb.append("\n\nМеста в квесте сейчас закончились, мы сообщим, когда появятся.");
         }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
