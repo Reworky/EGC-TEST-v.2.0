@@ -1403,8 +1403,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
-        if ("quests:section:picks".equals(data)) {
-            sendEksiPicks(user);
+        if ("quests:section:picks".equals(data) || data.startsWith("quests:picks:")) {
+            sendEksiPicks(user, data.startsWith("quests:picks:") ? data.substring("quests:picks:".length()) : null);
             answerSilently(callbackQuery.getId());
             return;
         }
@@ -8637,28 +8637,38 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 verticalWithBackMenu(buttons, "⬅️ Назад", "menu:quests"));
     }
 
-    /** «🤝 Экси рекомендует» (подраздел Квестов): партнёрские рекомендации без наград EXC. Ссылки - в ресурсе eksi_picks.json. */
-    private void sendEksiPicks(AppUser user) {
+    /** «🤝 Экси рекомендует» (подраздел Квестов): партнёрские рекомендации без наград EXC. Ссылки - в ресурсе eksi_picks.json.
+     *  Одна подборка на экран, между ними листание ◀️ ▶️ по кругу (как у игр в квестах); pickKey = null - первая. */
+    private void sendEksiPicks(AppUser user, String pickKey) {
         List<ru.gamebot.platform.service.EksiPicksService.Pick> picks = eksiPicksService.forUser(user);
         if (picks.isEmpty()) {
             sendText(user.getTelegramId(), "👀 Рекомендации от Экси появятся скоро.", backMenuKeyboard("menu:quests"));
             return;
         }
+        int idx = 0;
+        for (int i = 0; i < picks.size(); i++) {
+            if (picks.get(i).key().equals(pickKey)) { idx = i; break; }
+        }
+        ru.gamebot.platform.service.EksiPicksService.Pick p = picks.get(idx);
         StringBuilder sb = new StringBuilder("🤝 <b>Экси рекомендует</b>\n\n");
         sb.append("Это не квесты: EXC за такие переходы не начисляются.\n\n")
           .append("Экси просто показывает то, что нашёл за пределами игр клуба.\n")
           .append("Клуб получает комиссию от партнёра, вам это ничего не стоит.\n");
-        List<InlineKeyboardButton> buttons = new ArrayList<>();
-        for (ru.gamebot.platform.service.EksiPicksService.Pick p : picks) {
-            sb.append("\n<b>").append(escape(p.title())).append("</b>\n").append(escape(p.description())).append("\n");
-            if (!p.adLabel().isBlank()) sb.append("\n<i>").append(escape(p.adLabel())).append("</i>\n");
-            buttons.add(keyboardFactory.url(trim(p.buttonLabel(), 60), p.url()));
+        sb.append("\n<b>").append(escape(p.title())).append("</b>\n").append(escape(p.description())).append("\n");
+        if (!p.adLabel().isBlank()) sb.append("\n<i>").append(escape(p.adLabel())).append("</i>\n");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.url(trim(p.buttonLabel(), 60), p.url())));
+        if (picks.size() > 1) {
+            var prev = picks.get((idx - 1 + picks.size()) % picks.size());
+            var next = picks.get((idx + 1) % picks.size());
+            rows.add(List.of(
+                    keyboardFactory.callback("◀️ " + trim(prev.title(), 16), "quests:picks:" + prev.key()),
+                    keyboardFactory.callback(trim(next.title(), 16) + " ▶️", "quests:picks:" + next.key())));
         }
-        String banner = picks.stream().map(ru.gamebot.platform.service.EksiPicksService.Pick::image)
-                .filter(i -> i != null && !i.isBlank()).findFirst().orElse(null);
-        InlineKeyboardMarkup kb = verticalWithBackMenu(buttons, "⬅️ Назад", "menu:quests");
-        if (banner != null) {
-            sendResourceBanner(user.getTelegramId(), banner, sb.toString().trim(), kb);
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:quests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        InlineKeyboardMarkup kb = keyboardFactory.rowsLayout(rows);
+        if (p.image() != null && !p.image().isBlank()) {
+            sendResourceBanner(user.getTelegramId(), p.image(), sb.toString().trim(), kb);
         } else {
             sendText(user.getTelegramId(), sb.toString().trim(), kb);
         }

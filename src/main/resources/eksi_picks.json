@@ -23,5 +23,30 @@
       "Узбекистан"
     ],
     "image": "eksi_pick_demon_slayer.jpg"
+  },
+  {
+    "key": "forsaken-world-vozrozhdenie",
+    "title": "Forsaken World: Возрождение",
+    "description": "Фэнтезийная игра с эльфами, магами и лучниками. По кнопке откроется страница игры.",
+    "buttonLabel": "🔗 Открыть игру",
+    "url": "https://kjuzv.com/g/qapupq10u5e999950e95b5ba1aa5a8bba53ea407/?erid=2bL9aMPo2e49hMef4rqUKtZBov",
+    "adLabel": "Реклама. ООО «Эсприт Геймс», ИНН 7702839632, erid: 2bL9aMPo2e49hMef4rqUKtZBov",
+    "image": "eksi_pick_forsaken_world.jpg",
+    "countries": [
+      "Армения",
+      "Азербайджан",
+      "Беларусь",
+      "Эстония",
+      "Грузия",
+      "Кыргызстан",
+      "Казахстан",
+      "Литва",
+      "Латвия",
+      "Молдова",
+      "Россия",
+      "Таджикистан",
+      "Туркменистан",
+      "Узбекистан"
+    ]
   }
 ]
