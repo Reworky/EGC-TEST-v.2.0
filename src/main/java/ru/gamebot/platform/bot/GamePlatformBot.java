@@ -8645,15 +8645,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         StringBuilder sb = new StringBuilder("🤝 <b>Экси рекомендует</b>\n\n");
-        sb.append("Это не квесты: EXC за такие переходы не начисляются. Экси просто показывает то, что нашёл за пределами игр клуба. ")
+        sb.append("Это не квесты: EXC за такие переходы не начисляются.\n\n")
+          .append("Экси просто показывает то, что нашёл за пределами игр клуба.\n")
           .append("Клуб получает комиссию от партнёра, вам это ничего не стоит.\n");
         List<InlineKeyboardButton> buttons = new ArrayList<>();
         for (ru.gamebot.platform.service.EksiPicksService.Pick p : picks) {
             sb.append("\n<b>").append(escape(p.title())).append("</b>\n").append(escape(p.description())).append("\n");
-            if (!p.adLabel().isBlank()) sb.append("<i>").append(escape(p.adLabel())).append("</i>\n");
+            if (!p.adLabel().isBlank()) sb.append("\n<i>").append(escape(p.adLabel())).append("</i>\n");
             buttons.add(keyboardFactory.url(trim(p.buttonLabel(), 60), p.url()));
         }
-        sendText(user.getTelegramId(), sb.toString().trim(), verticalWithBackMenu(buttons, "⬅️ Назад", "menu:quests"));
+        String banner = picks.stream().map(ru.gamebot.platform.service.EksiPicksService.Pick::image)
+                .filter(i -> i != null && !i.isBlank()).findFirst().orElse(null);
+        InlineKeyboardMarkup kb = verticalWithBackMenu(buttons, "⬅️ Назад", "menu:quests");
+        if (banner != null) {
+            sendResourceBanner(user.getTelegramId(), banner, sb.toString().trim(), kb);
+        } else {
+            sendText(user.getTelegramId(), sb.toString().trim(), kb);
+        }
     }
 
     private void sendUgcQuestList(AppUser user) {

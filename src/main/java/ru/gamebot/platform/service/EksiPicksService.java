@@ -26,9 +26,9 @@ public class EksiPicksService {
     private final ObjectMapper objectMapper;
 
     /** countries - канонические названия стран (CountryNormalizer), где оффер доступен; пусто - без ограничения.
-     *  adLabel - строка маркировки рекламы («Реклама. Рекламодатель, erid: ...»). */
+     *  adLabel - строка маркировки рекламы («Реклама. Рекламодатель, erid: ...»); image - файл баннера в resources (может быть пустым). */
     public record Pick(String key, String title, String description, String buttonLabel, String url, String adLabel,
-                       Set<String> countries) {}
+                       String image, Set<String> countries) {}
 
     /** Все готовые к показу подборки (с ссылкой, не отключённые). Файл маленький, читаем при каждом обращении - правка JSON подхватывается при деплое. */
     public List<Pick> all() {
@@ -47,7 +47,7 @@ public class EksiPicksService {
                     if (canon != null) countries.add(canon);
                 });
                 result.add(new Pick(key, n.path("title").asText(""), n.path("description").asText(""),
-                        n.path("buttonLabel").asText("🔗 Открыть"), url, n.path("adLabel").asText(""), countries));
+                        n.path("buttonLabel").asText("🔗 Открыть"), url, n.path("adLabel").asText(""), n.path("image").asText(""), countries));
             }
         } catch (Exception e) {
             log.warn("[EksiPicks] failed to read {}: {}", RESOURCE, e.getMessage());

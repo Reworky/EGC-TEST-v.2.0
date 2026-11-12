@@ -5,7 +5,7 @@
     "description": "Браузерная игра: ничего ставить не нужно, открыл в браузере и играешь.",
     "buttonLabel": "🔗 Открыть игру",
     "url": "https://uhtkc.com/g/goluga585be999950e954ab8bfef273cadb080db/?erid=2bL9aMPo2e49hMef4rqU6rRVev",
-    "adLabel": "Реклама. erid: 2bL9aMPo2e49hMef4rqU6rRVev",
+    "adLabel": "Реклама. ООО «Эсприт Геймс», ИНН 7702839632, erid: 2bL9aMPo2e49hMef4rqU6rRVev",
     "countries": [
       "Армения",
       "Азербайджан",
@@ -21,6 +21,7 @@
       "Таджикистан",
       "Туркменистан",
       "Узбекистан"
-    ]
+    ],
+    "image": "eksi_pick_demon_slayer.jpg"
   }
 ]
