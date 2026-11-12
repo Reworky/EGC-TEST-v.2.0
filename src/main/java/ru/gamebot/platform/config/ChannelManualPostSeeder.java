@@ -20,6 +20,7 @@ import ru.gamebot.platform.service.ChannelContentService;
  * Идемпотентно: пост с тем же key повторно не создаётся (даже опубликованный или отклонённый), поэтому сидер безопасно выполнять на
  * каждом старте. Бэклог: если час уже прошёл меньше чем 48 часов назад (деплой позже срока), пост не теряется, а уходит карточкой
  * через 15 минут, следующие просроченные - с шагом 4 часа; старше 48 часов - пропускается с записью в лог.
+ * Необязательные поля записи: "photo" - "resource:имя_файла" (баннер из ресурсов бота, как у турниров и смены пачек; 12.11.2026), токен {{BOT}} в тексте - ссылка на бота.
  * Снять пост с плана: оставить запись в JSON и добавить "disabled": true (удаление записи не отменит уже созданный черновик).
  */
 @Slf4j
@@ -79,7 +80,7 @@ public class ChannelManualPostSeeder implements CommandLineRunner {
                         at = overdueSlot;
                         overdueSlot = overdueSlot.plusHours(4);
                     }
-                    if (channelContentService.queueManualPost(key, n.path("rubric").asText(""), n.path("note").asText(""), text, at)) {
+                    if (channelContentService.queueManualPost(key, n.path("rubric").asText(""), n.path("note").asText(""), text, at, n.path("photo").asText(null))) {
                         created++;
                     }
                 } catch (Exception e) {

@@ -437,6 +437,18 @@ public class ChannelContentService {
     /** Ставит в очередь ручной пост: карточка админам уйдёт в sendAfter (UTC) через deliverDueCards(). Повторно тот же ключ не создаётся
      *  (даже если пост уже опубликован или отклонён). Возвращает true, если черновик создан. */
     public boolean queueManualPost(String key, String rubric, String note, String text, LocalDateTime sendAfter) {
+        return queueManualPost(key, rubric, note, text, sendAfter, null);
+    }
+
+    /** Токен {{BOT}} в тексте ручного поста заменяется ссылкой на бота («@имя» с t.me-ссылкой), а при незаданном имени бота - пустой строкой. */
+    private String botMention() {
+        if (botUsername == null || botUsername.isBlank()) return "";
+        return "<a href=\"https://t.me/" + botUsername + "\">@" + botUsername + "</a>";
+    }
+
+    /** То же, что выше, плюс картинка поста: photo - "resource:имя_файла" (баннер из ресурсов бота) или file_id Telegram; null - без картинки (админ добавит через «Изменить»). */
+    public boolean queueManualPost(String key, String rubric, String note, String text, LocalDateTime sendAfter, String photo) {
+        text = text.replace("{{BOT}}", botMention());
         if (draftRepository.existsByTypeAndMetaStartingWith(MANUAL_POST, key + "|")) {
             // Время в JSON поправили: ещё не отправленной карточке переносим срок (текст не трогаем - его мог отредактировать админ)
             if (sendAfter.isAfter(LocalDateTime.now())) {
@@ -452,6 +464,7 @@ public class ChannelContentService {
         }
         ChannelPostDraft d = new ChannelPostDraft();
         d.setType(MANUAL_POST);
+        if (photo != null && !photo.isBlank()) d.setPhotoFileId(photo);
         d.setPostText(text.length() > 4000 ? text.substring(0, 4000) : text);
         String meta = key + "|" + rubric + "|" + (note == null ? "" : note);
         d.setMeta(meta.length() > 2000 ? meta.substring(0, 2000) : meta);
