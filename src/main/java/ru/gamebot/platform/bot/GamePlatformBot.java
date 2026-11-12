@@ -8583,7 +8583,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("⬅️ Назад", back),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
-        sendText(user.getTelegramId(),
+        // 12.11.2026: общий рекламный баннер со всеми играми (game_quests_banner.jpg)
+        sendResourceBanner(user.getTelegramId(), "game_quests_banner.jpg",
                 "🎮 <b>Игровые квесты</b>\n\nВыберите игру:",
                 keyboardFactory.rowsLayout(rows));
     }
