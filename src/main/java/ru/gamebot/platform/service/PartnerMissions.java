@@ -19,8 +19,14 @@ public final class PartnerMissions {
     private static final String[] FINAL_FAKE = {"🕵️ Скриншоты не подтверждают", "Скриншоты не подтверждают выполнение условий квеста."};
 
     private static final String STAGE4_HEAD = "✅ <b>Отчёт принят, {reward} EXC начислены.</b>\n\n"
-            + "⏳ <b>Квест ещё не закончен: остался финал за {bonus} EXC.</b> Теперь нужно дождаться выплаты банка.\n\n"
+            + "⏳ <b>Квест ещё не закончен: остался финал за {bonusText}.</b> Теперь нужно дождаться выплаты банка.\n\n"
             + "<b>Что дальше:</b>\n";
+    /** Финал ОТП, когда бонус банка - подарок Telegram Premium (с 12.11.2026), а не EXC. */
+    private static final String FINAL_TEXT_PREMIUM = "🏆 <b>Миссия выполнена!</b>\n\n"
+            + "Банк выплатил бонус. Менеджер подарит тебе <b>Telegram Premium на 1 месяц</b>: если подарка нет больше суток, напиши ему.\n\n"
+            + "🤝 Ты теперь партнёр клуба: курс вывода 100% на все твои EXC и партнёрские цены.\n\n"
+            + "Вывод открыт разово: всю накопленную сумму можно вывести одной заявкой, сверх обычного месячного лимита.\n\n"
+            + "🏦 Бейдж «Банкир EGC» уже в твоём профиле.";
     private static final String FINAL_TEXT = "🏆 <b>Миссия выполнена!</b>\n\n"
             + "Банк выплатил бонус, мы начислили тебе {bonus} EXC.\n\n"
             + "🤝 Ты теперь партнёр клуба: курс вывода 100% на все твои EXC и партнёрские цены.\n\n"
@@ -34,15 +40,17 @@ public final class PartnerMissions {
     public static final PartnerMission OTP = PartnerMission.builder()
             .key("otp")
             .gameName("Банк-партнёр")
-            .questTitle("Получи 500 ₽ себе на карту + 50 000 EXC 🎁")
-            .listLabel("Получи 500 ₽ + 50 000 EXC сверху за банковскую карту")
+            .questTitle("Получи 500 ₽ себе на карту + Telegram Premium 🎁")
+            .listLabel("Получи 500 ₽ + Telegram Premium за банковскую карту")
             .bannerResource("partner_card_banner.jpg")
             .stage1Banner("partner_card_banner.jpg")
             .shortTitle("Банковская карта")
             .missionTitle("банковская карта")
             .waitingName("Банковская карта")
             .rewardExc(1_000)
-            .bonusExc(50_000)
+            .bonusExc(0)
+            .bonusItem("Telegram Premium на 1 месяц")
+            .finalTextItem(FINAL_TEXT_PREMIUM)
             .windowDays(30)
             .bankPayDays(0)
             .bonusCommand("otpbonus")
@@ -61,7 +69,7 @@ public final class PartnerMissions {
             .stage4Text(STAGE4_HEAD
                     + "1️⃣ С {date} банк вернёт тебе 500 ₽ на карту. Раньше денег не будет.\n"
                     + "2️⃣ Когда деньги придут, вернись сюда и нажми <b>«💰 Банк вернул мне 500 ₽»</b>. Мы напомним об этом сами.\n"
-                    + "3️⃣ Мы проверим выплату, начислим {bonus} EXC и откроем вывод всей суммы разом.\n"
+                    + "3️⃣ Мы проверим выплату, {bonusGive} и откроем вывод всей суммы разом.\n"
                     + "Если до {date7} денег нет, напиши менеджеру.")
             .finalText(FINAL_TEXT)
             .bankDateWord("с")

@@ -26,8 +26,12 @@ public record PartnerMission(
         String waitingName,
         /** EXC за одобренный отчёт. */
         long rewardExc,
-        /** EXC после выплаты банка (/…bonus). */
+        /** EXC после выплаты банка (/…bonus). 0 - бонус не в EXC, а подарком (см. bonusItem). */
         long bonusExc,
+        /** Подарок вместо EXC после выплаты банка («Telegram Premium на 1 месяц») или null; выдаёт менеджер вручную. */
+        String bonusItem,
+        /** Экран финала, когда бонус - подарок (bonusItem); null - всегда finalText. */
+        String finalTextItem,
         /** Дней на целевое действие (от даты, которую игрок указал на этапе 2). */
         int windowDays,
         /** 0 - банк платит с 25-го числа месяца, следующего за покупкой; N - не позже чем через N дней после покупки/пополнения. */
