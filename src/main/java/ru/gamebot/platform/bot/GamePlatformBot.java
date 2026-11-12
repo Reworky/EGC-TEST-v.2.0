@@ -8654,7 +8654,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .append(escape(p.description())).append("\n\n");
         sb.append("Это не квесты: EXC за такие переходы не начисляются.\n\n")
           .append("Экси просто показывает то, что нашёл за пределами игр клуба.\n");
-        if (!p.adLabel().isBlank()) sb.append("\n<i>").append(escape(p.adLabel())).append("</i>\n");
+        if (!p.adLabel().isBlank()) sb.append("\n<blockquote expandable><i>").append(escape(p.adLabel())).append("</i></blockquote>\n");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.url(trim(p.buttonLabel(), 60), p.url())));
         if (picks.size() > 1) {
