@@ -19341,7 +19341,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             QuestPack pack = questPackService.get(parseLong(action.substring("post:".length())));
             clearInlineKeyboard(callbackQuery);
             answer(cbId, "Готовлю пост");
-            createQuestRotationPostDraft(pack.getGameName(), pack.getName(), questPackService.questsOf(pack));
+            createQuestRotationPostDraft(pack.getGameName(), pack.getName(), questPackService.questsOf(pack), false);
         } else if (action.startsWith("sch:")) {
             sendAdminPackSchedule(user, decodeGameToken(action.substring("sch:".length())));
             answerSilently(cbId);
@@ -19527,13 +19527,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    /** Создаёт черновик поста о смене пачки: карточка с ✅/✏️/❌ уходит админам сама (ChannelPostDraftEvent). */
-    private void createQuestRotationPostDraft(String gameName, String packName, List<Quest> quests) {
+    /** Создаёт черновик поста о смене пачки: карточка с ✅/✏️/❌ уходит админам сама (ChannelPostDraftEvent) в момент смены,
+     *  в канал пост идёт только после ✅ (12.11.2026 возвращён по решению владельца; с 17.10 был снят). При автосмене (push=true)
+     *  игрокам этой игры дополнительно уходит короткая рассылка в бота (PlatformPushService.pushQuestRotation). */
+    private void createQuestRotationPostDraft(String gameName, String packName, List<Quest> quests, boolean push) {
         try {
-            // С 17.10.2026 вместо поста в канал на согласование - короткая рассылка игрокам этой игры (PlatformPushService.pushQuestRotation).
-            platformPushService.pushQuestRotation(gameName, packName, quests);
+            channelContentService.createQuestRotationDraft(gameName, packName, quests);
         } catch (Exception e) {
-            log.error("Failed to create quest rotation post draft for {} / {}", gameName, packName, e);
+            log.error("Failed to create quest rotation channel draft for {} / {}", gameName, packName, e);
             for (Long adminId : adminService.resolvedAdminIds()) {
                 try {
                     sendText(adminId, "⚠️ Не удалось подготовить пост о смене квестов («" + escape(gameName)
@@ -19543,15 +19544,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 }
             }
         }
+        if (!push) return;
+        try {
+            platformPushService.pushQuestRotation(gameName, packName, quests);
+        } catch (Exception e) {
+            log.error("Failed to push quest rotation for {} / {}", gameName, packName, e);
+        }
     }
 
     private void notifyAdminsPackRotated(QuestPackScheduleService.RotationEvent event) {
         String head = "🔄 <b>Сменилась пачка квестов — " + escape(event.gameName()) + "</b>\n"
                 + "Включена «" + escape(event.pack().getName()) + "»: возвращено в работу " + event.result().activated()
                 + ", скрыто " + event.result().hidden() + ".\n\n"
+                + "📝 Пост о новых квестах в канал придёт следующей карточкой ✅/✏️/❌ и выйдет после вашего одобрения.\n"
                 + (platformPushService.enabled("rotation")
-                    ? "📣 Игрокам этой игры уходит короткая рассылка в бота (без согласования). Поста в канал не будет, при желании напишите его сами."
-                    : "📣 Рассылка о смене квестов выключена (/push on rotation), поста в канал тоже не будет.");
+                    ? "📣 Игрокам этой игры также уходит короткая рассылка в бота (без согласования)."
+                    : "📣 Рассылка игрокам в бота выключена (/push on rotation).");
         for (Long adminId : adminService.resolvedAdminIds()) {
             try {
                 sendText(adminId, head, null);
@@ -19559,7 +19567,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 log.warn("Failed to send pack rotation notice to admin {}", adminId, e);
             }
         }
-        createQuestRotationPostDraft(event.gameName(), event.pack().getName(), event.quests());
+        createQuestRotationPostDraft(event.gameName(), event.pack().getName(), event.quests(), true);
     }
 
     private void sendAdminGameQuestTop(AppUser user, String gameName) {

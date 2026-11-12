@@ -1660,6 +1660,10 @@ public class ChannelContentService {
             case "Brawl Stars" -> "resource:quest_pack_brawl_stars.jpg";
             case "Clash Royale" -> "resource:quest_pack_clash_royale.jpg";
             case "Clash of Clans" -> "resource:quest_pack_clash_of_clans.jpg";
+            // 12.11.2026: остальные игры - их обложки из game-covers (отдельных баннеров «Новые квесты» нет); у Dota 2 обложки нет - пост без картинки
+            case "CS2" -> "resource:game-covers/cs2.jpg";
+            case "PUBG Mobile" -> "resource:game-covers/pubg-mobile.jpg";
+            case "PUBG PC" -> "resource:game-covers/pubg-pc.jpg";
             default -> null;
         };
     }
