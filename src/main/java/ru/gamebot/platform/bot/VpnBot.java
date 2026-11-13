@@ -305,6 +305,7 @@ public class VpnBot extends TelegramLongPollingBot {
             case "m:howto" -> showHowto(uid, oldMsgId);
             case "m:ref" -> showReferral(uid, oldMsgId);
             case "m:terms" -> showTerms(uid, oldMsgId);
+            case "m:about" -> showAbout(uid, oldMsgId);
             case "m:trial" -> startTrial(uid, oldMsgId);
             case "h:diag" -> showDiagnosis(uid, oldMsgId);
             case "h:qr" -> sendQr(uid);
@@ -321,8 +322,11 @@ public class VpnBot extends TelegramLongPollingBot {
 
     private void showMain(Long uid, Integer oldMsgId) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.callback("🔑 Моё подключение", "m:my"), keyboardFactory.callback("💳 Тарифы", "m:tariffs")));
+        rows.add(List.of(keyboardFactory.callback("👤 Личный кабинет", "m:my"), keyboardFactory.callback("💳 Тарифы", "m:tariffs")));
         rows.add(List.of(keyboardFactory.callback("📲 Как подключить", "m:howto"), keyboardFactory.callback("🎁 Пригласить друга", "m:ref")));
+        String reviewsUrl = reviewsChannelUrl();
+        rows.add(reviewsUrl == null ? List.of(keyboardFactory.callback("📌 О сервисе", "m:about"))
+                : List.of(keyboardFactory.callback("📌 О сервисе", "m:about"), keyboardFactory.url("📣 Отзывы", reviewsUrl)));
         if (isStaff(uid)) {
             rows.add(List.of(keyboardFactory.callback("🛠 Панель", "p:menu")));
         }
@@ -346,14 +350,14 @@ public class VpnBot extends TelegramLongPollingBot {
             }
             if (Vpn2Account.STATUS_PENDING.equals(a.getStatus()) && Vpn2Account.PLAN_PAID.equals(a.getPlanType())) {
                 List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-                rows.add(List.of(keyboardFactory.url("🆘 Поддержка", supportLink(uid, "VPN-бот → Моё подключение (оплата получена, ключ выдаётся вручную)", "оплата получена, а ключ ещё не выдан"))));
+                rows.add(List.of(keyboardFactory.url("🆘 Поддержка", supportLink(uid, "VPN-бот → Личный кабинет (оплата получена, ключ выдаётся вручную)", "оплата получена, а ключ ещё не выдан"))));
                 rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
                 show(uid, oldMsgId, "💳 <b>Оплата получена</b>\n\nКлюч VPN выдаём вручную, это займёт немного времени. Мы уже знаем и пришлём его сюда.", rows);
                 return;
             }
         }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        StringBuilder sb = new StringBuilder("🔑 <b>Моё подключение</b>\n\n");
+        StringBuilder sb = new StringBuilder("🔑 <b>Личный кабинет</b>\n\n");
         if (vpn.isTrialAvailable(found)) {
             sb.append("Ключа пока нет. Возьмите пробный на ").append(daysText(vpn.getTrialDays())).append(" бесплатно или оформите тариф.");
             rows.add(List.of(keyboardFactory.callback("🎁 " + daysText(vpn.getTrialDays()) + " бесплатно", "m:trial")));
@@ -370,6 +374,8 @@ public class VpnBot extends TelegramLongPollingBot {
         boolean trial = Vpn2Account.PLAN_TRIAL.equals(a.getPlanType());
         StringBuilder sb = new StringBuilder();
         sb.append(headline != null ? headline : (trial ? "✅ <b>Пробный VPN включён</b>" : "✅ <b>EGC VPN активен</b>")).append("\n\n")
+          .append("🆔 Ваш ID: <code>").append(uid).append("</code>\n")
+          .append("💎 Тариф: <b>").append(trial ? "пробный" : "платный").append("</b>\n")
           .append("До: <b>").append(DATE_TIME.format(a.getExpiresAt())).append("</b> · ")
           .append(trial ? "лимит " + vpn.getTrialGb() + " ГБ · 1 устройство" : "безлимит · до 2 устройств").append("\n\n")
           .append(trial && a.getLimitNotifiedAt() != null ? "⚠️ Пробный лимит трафика <b>исчерпан</b>: оформите тариф, чтобы продолжить.\n\n" : "")
@@ -400,11 +406,11 @@ public class VpnBot extends TelegramLongPollingBot {
     private void showHowto(Long uid, Integer oldMsgId) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(installRows());
         rows.add(List.of(keyboardFactory.callback("🛠 Не подключается?", "h:diag"), keyboardFactory.callback("📷 QR-код", "h:qr")));
-        rows.add(List.of(keyboardFactory.callback("🔑 Моё подключение", "m:my")));
+        rows.add(List.of(keyboardFactory.callback("👤 Личный кабинет", "m:my")));
         rows.add(List.of(keyboardFactory.url("🆘 Поддержка", supportLink(uid, "VPN-бот → Как подключить", "не получается подключить VPN"))));
         rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
         show(uid, oldMsgId, "📲 <b>Как подключить</b>\n\n" + connectSteps()
-                + "\n\nСсылку подписки берите в разделе «Моё подключение». Если что-то не получается, напишите в поддержку, поможем.", rows);
+                + "\n\nСсылку подписки берите в разделе «Личный кабинет». Если что-то не получается, напишите в поддержку, поможем.", rows);
     }
 
     /** «7 дней», «1 день», «3 дня»: число с правильным склонением (срок пробного настраивается). */
@@ -482,6 +488,23 @@ public class VpnBot extends TelegramLongPollingBot {
     private static String progressBar(long current, long goal) {
         int filled = (int) Math.max(0, Math.min(10, current * 10 / goal));
         return "▰".repeat(filled) + "▱".repeat(10 - filled);
+    }
+
+    /** Ссылка на канал отзывов для кнопки: только если канал задан публичным именем (@name); для закрытого id ссылки нет. */
+    private String reviewsChannelUrl() {
+        String ch = vpn.getReviewsChannel();
+        return ch != null && ch.startsWith("@") && ch.length() > 1 ? "https://t.me/" + ch.substring(1) : null;
+    }
+
+    private void showAbout(Long uid, Integer oldMsgId) {
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("ℹ️ Условия", "m:terms"), keyboardFactory.url("🆘 Поддержка", supportLink(uid, "VPN-бот → О сервисе", "вопрос про VPN"))));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "m:main")));
+        show(uid, oldMsgId, "📌 <b>О сервисе EGC VPN</b>\n\n"
+                + "🚀 <b>Быстрые серверы</b>\nПодключение идёт через наши серверы, поэтому видео и сайты открываются без задержек.\n\n"
+                + "🛡 <b>Защита данных</b>\nТрафик шифруется. Адреса посещаемых сайтов мы не сохраняем.\n\n"
+                + "🔑 <b>Ваш ключ - ваша безопасность</b>\nКлюч личный: не передавайте его другим, иначе подключение может перестать работать.\n\n"
+                + "🎮 <b>Скидка за игру</b>\nИграйте в EGC, копите EXC и платите за VPN дешевле.", rows);
     }
 
     private void showTerms(Long uid, Integer oldMsgId) {
@@ -737,7 +760,7 @@ public class VpnBot extends TelegramLongPollingBot {
         }
         if ("sync".equalsIgnoreCase(parts[1])) {
             int moved = vpn.resyncAll();
-            sendHtml(adminId, "🔄 Работающих ключей перенесено в панель: <b>" + moved + "</b>. Игрокам нужно заново добавить подписку по новой ссылке (она в «Моё подключение»).", null);
+            sendHtml(adminId, "🔄 Работающих ключей перенесено в панель: <b>" + moved + "</b>. Игрокам нужно заново добавить подписку по новой ссылке (она в «Личный кабинет»).", null);
             return;
         }
         if ("notify".equalsIgnoreCase(parts[1])) {
@@ -747,8 +770,8 @@ public class VpnBot extends TelegramLongPollingBot {
             for (Long holder : holders) {
                 try {
                     List<List<InlineKeyboardButton>> notifyRows = new ArrayList<>();
-                    notifyRows.add(List.of(keyboardFactory.callback("🔑 Моё подключение", "m:my")));
-                    sendHtml(holder, "🔄 <b>Мы обновили серверы EGC VPN</b>\n\nСтарая ссылка подписки больше не работает. Откройте «Моё подключение», скопируйте новую ссылку и добавьте её в Happ (старую подписку можно удалить). Срок вашего ключа не изменился.", notifyRows);
+                    notifyRows.add(List.of(keyboardFactory.callback("👤 Личный кабинет", "m:my")));
+                    sendHtml(holder, "🔄 <b>Мы обновили серверы EGC VPN</b>\n\nСтарая ссылка подписки больше не работает. Откройте «Личный кабинет», скопируйте новую ссылку и добавьте её в Happ (старую подписку можно удалить). Срок вашего ключа не изменился.", notifyRows);
                     sent++;
                     Thread.sleep(60);
                 } catch (InterruptedException ie) {
@@ -1724,7 +1747,7 @@ public class VpnBot extends TelegramLongPollingBot {
             } else if (st.lastSubFetchMs() <= 0 && st.lastOnlineMs() <= 0) {
                 sb.append("Приложение пока ни разу не загружало вашу ссылку. Проверьте:\n")
                   .append("1. Установлено ли приложение Happ (кнопки ниже).\n")
-                  .append("2. Скопирована ли ссылка полностью: откройте «Моё подключение» и нажмите на ссылку.\n")
+                  .append("2. Скопирована ли ссылка полностью: откройте «Личный кабинет» и нажмите на ссылку.\n")
                   .append("3. В Happ добавьте подписку из буфера обмена и нажмите «Обновить».\n\n")
                   .append("Не получается вставить? Нажмите «📷 QR-код» и отсканируйте его с другого устройства.");
             } else if (st.lastOnlineMs() <= 0) {
@@ -1740,7 +1763,7 @@ public class VpnBot extends TelegramLongPollingBot {
             }
         }
         List<List<InlineKeyboardButton>> rows = new ArrayList<>(installRows());
-        rows.add(List.of(keyboardFactory.callback("📷 QR-код", "h:qr"), keyboardFactory.callback("🔑 Моё подключение", "m:my")));
+        rows.add(List.of(keyboardFactory.callback("📷 QR-код", "h:qr"), keyboardFactory.callback("👤 Личный кабинет", "m:my")));
         rows.add(List.of(keyboardFactory.url("🆘 Поддержка", supportLink(uid, "VPN-бот → Не подключается?", "VPN не подключается или сайты не открываются"))));
         rows.add(List.of(keyboardFactory.callback("⬅️ Меню", "m:main")));
         show(uid, oldMsgId, sb.toString(), rows);
@@ -1786,7 +1809,7 @@ public class VpnBot extends TelegramLongPollingBot {
             execute(photo);
         } catch (Exception e) {
             log.warn("VPN bot: QR generation failed for {}", uid, e);
-            sendHtml(uid, "⚠️ Не получилось сделать QR-код. Скопируйте ссылку из «Моё подключение» или напишите в поддержку.", null);
+            sendHtml(uid, "⚠️ Не получилось сделать QR-код. Скопируйте ссылку из «Личный кабинет» или напишите в поддержку.", null);
         }
     }
 
