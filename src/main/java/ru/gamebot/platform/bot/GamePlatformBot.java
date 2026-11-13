@@ -18812,7 +18812,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "Чтобы стать партнёром, выполни квест от банка-партнёра.\n\n"
                     + "Все условия и шаги описаны в его карточке.";
             sendText(u.getTelegramId(), text, keyboardFactory.rowsLayout(List.of(List.of(
-                    keyboardFactory.callback("🤝 Открыть квест", "partner:quest:" + quest.getId() + ":bl"),
+                    keyboardFactory.callback("Подробнее", "partner:info:bl"),
                     keyboardFactory.callback("Не сейчас", "partner:hintclose")))));
         } catch (Exception e) {
             log.warn("First payout partner hint failed for request {}", req.getId(), e);
