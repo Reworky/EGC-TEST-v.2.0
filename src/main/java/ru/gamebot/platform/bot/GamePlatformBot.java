@@ -1545,6 +1545,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             List.of(keyboardFactory.callback("⬅️ Назад", "menu:myquests"), keyboardFactory.callback("🏠 Меню", "menu:main")))));
             return;
         }
+        if ("partner:hintclose".equals(data)) {
+            answerSilently(callbackQuery.getId());
+            try {
+                deleteMessageQuietly(user.getTelegramId(), callbackQuery.getMessage().getMessageId());
+            } catch (Exception ignored) {
+                // сообщение уже удалено или недоступно
+            }
+            return;
+        }
         if (data.startsWith("partner:quest:")) {
             // partner:quest:<id>:<код экрана, откуда пришли> - карточка квеста ОТП, «Назад» возвращает на «Как стать партнёром?»
             answerSilently(callbackQuery.getId());
@@ -18778,8 +18787,36 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 log.warn("Failed to notify user {} about withdrawal approval", req.getUser().getTelegramId(), e);
             }
         }
+        sendFirstPayoutPartnerHint(req, firstPayout);
         postWithdrawalToActivityFeed(req, receiptFileId, receiptCaption);
         promptWithdrawalReview(req);
+    }
+
+    /** Сообщение «Можно получать больше» (владелец, 13.11.2026): один раз, сразу после ПЕРВОЙ выплаты игрока, не-партнёру при включённых уровнях курса и если квест банка ещё доступен.
+     *  Суммы - по EXC этой выплаты: «вывел» по его курсу и «партнёр» по курсу 100%. Шаги и условия в сообщение не входят: они в карточке квеста. */
+    private void sendFirstPayoutPartnerHint(RewardRequest req, boolean firstPayout) {
+        try {
+            AppUser u = req.getUser();
+            if (!firstPayout || !partnerCompareApplies(u)) return;
+            Quest quest = otpPartnerQuestOrNull();
+            if (quest == null) return;
+            long exc = rewardService.actualPaidPrice(req);
+            if (exc <= 0) return;
+            double ratio = withdrawalRatioFor(u, exc, false);
+            long ownRub = Math.round(exc * ratio / 100.0);
+            long partnerRub = Math.round(exc / 100.0);
+            if (ratio >= 1.0 || partnerRub - ownRub < 1) return;
+            String text = "💡 <b>Можно получать больше</b>\n\n"
+                    + "Ты вывел " + fmtExc(ownRub) + " ₽ по курсу " + Math.round(ratio * 100) + "%.\n"
+                    + "Партнёры выводят по курсу 100%: те же EXC дали бы " + fmtExc(partnerRub) + " ₽.\n\n"
+                    + "Чтобы стать партнёром, выполни квест от банка-партнёра.\n\n"
+                    + "Все условия и шаги описаны в его карточке.";
+            sendText(u.getTelegramId(), text, keyboardFactory.rowsLayout(List.of(List.of(
+                    keyboardFactory.callback("🤝 Открыть квест", "partner:quest:" + quest.getId() + ":bl"),
+                    keyboardFactory.callback("Не сейчас", "partner:hintclose")))));
+        } catch (Exception e) {
+            log.warn("First payout partner hint failed for request {}", req.getId(), e);
+        }
     }
 
     /** Публичная лента активности — выводы EXC постятся в канал отзывов и выплат (@egc_payouts),
