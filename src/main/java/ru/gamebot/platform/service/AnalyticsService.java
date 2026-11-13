@@ -134,6 +134,7 @@ public class AnalyticsService {
     private final CourseAnalyticsService courseAnalytics;
     private final EgcPassFunnelService egcPassFunnel;
     private final PartnerQuestFunnelService partnerFunnel;
+    private final TrafficSourceService trafficSourceService;
     private final VpnStatsService vpnStats;
     private final PulseService pulseService;
 
@@ -923,9 +924,42 @@ public class AnalyticsService {
         out.add(L("pq_lost", "Отменили или отклонены", "", (double) (f.cancelled() + f.rejected()), (double) (q.cancelled() + q.rejected()),
                 "отменили " + f.cancelled() + ", отклонены " + f.rejected(), true));
         extras.add(breakdownText("По источнику трафика (взяли → проверено → выплата)", f.bySource()));
+        extras.add(partnerCostBySource(f.bySource()));
         extras.add(breakdownText("По стране (взяли → проверено → выплата)", f.byCountry()));
         extras.add("<i>Взятия, проверка и выплата считаются по заявкам, взятым в выбранном периоде: недавние заявки ещё не дошли до конца, поэтому конверсии в конце воронки у свежих периодов занижены. "
                 + "Открытия карточки и нажатия «Начать» считаются с момента добавления вкладки (10.11.2026).</i>");
+    }
+
+    /** Цена банковского шага по источнику закупа (13.11.2026): расход источника (вносится в «Рекламодателям») делится на взявших, проверенных и выплаченных. */
+    private String partnerCostBySource(List<Object[]> bySource) {
+        StringBuilder sb = new StringBuilder("<b>Цена шага по источникам (расход ÷ игроки)</b>\n");
+        java.util.Map<String, Long> spendByCode = new java.util.HashMap<>();
+        try {
+            for (ru.gamebot.platform.domain.model.TrafficSource ts : trafficSourceService.findAll()) {
+                if (ts.getSpendRub() > 0) spendByCode.put(ts.getCode(), ts.getSpendRub());
+            }
+        } catch (Exception e) {
+            sb.append("Не удалось прочитать расход по источникам.\n");
+        }
+        int shown = 0;
+        for (Object[] r : bySource) {
+            Long spend = spendByCode.get(String.valueOf(r[0]));
+            if (spend == null) continue;
+            long taken = ((Number) r[1]).longValue();
+            long verified = ((Number) r[2]).longValue();
+            long paid = ((Number) r[3]).longValue();
+            sb.append("• ").append(escape(String.valueOf(r[0]))).append(": расход ").append(spend).append(" ₽ · за взявшего ").append(costOrDash(spend, taken))
+                    .append(" · за проверенного ").append(costOrDash(spend, verified)).append(" · за выплаченного ").append(costOrDash(spend, paid)).append("\n");
+            shown++;
+        }
+        if (shown == 0) sb.append("Нет источников с указанным расходом и заявками за период. Расход вносится в «Рекламодателям» → источник.\n");
+        sb.append("<i>Ориентир окупаемости (допущения 13.11.2026: банк 2 000 ₽, Premium 400 ₽, 75% выплат): цена за проверенного ниже ~700 ₽ - можно масштабировать. ")
+                .append("Расход берётся за всё время источника, игроки - за выбранный период: для честной цены выбирайте период закупа.</i>\n");
+        return sb.toString();
+    }
+
+    private static String costOrDash(long spend, long count) {
+        return count <= 0 ? "-" : Math.round((double) spend / count) + " ₽";
     }
 
     private String breakdownText(String title, List<Object[]> rows) {
