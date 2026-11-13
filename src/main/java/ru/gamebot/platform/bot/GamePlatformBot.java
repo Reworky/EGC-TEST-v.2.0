@@ -5679,18 +5679,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean partner = healthRatioService.isPartner(user);
         StringBuilder sb = new StringBuilder("🤝 <b>Как стать партнёром проекта?</b>\n\n");
         sb.append(partner ? "✅ <b>Вы партнёр: курс вывода 100%.</b>\n\n" : "Партнёр - игрок, который выполнил спонсорский квест банка-партнёра\n\n");
+        Quest otpQuest = partner ? null : otpPartnerQuestOrNull();
+        if (!partner) {
+            sb.append("Выполни спонсорский квест банка-партнёра (карточка квеста ниже)\n\nМенеджер проведёт по шагам лично\n\n");
+            if (otpQuest == null) sb.append("Места в квесте сейчас закончились, мы сообщим, когда появятся.\n\n");
+        }
         sb.append("<b>Что получают партнёры:</b>\n")
                 .append("<blockquote expandable>")
                 .append("✅ Вывод по курсу 100%").append(partner ? "" : " вместо обычных ~" + nonPartnerPercent() + "%").append(" - на все EXC, в том числе будущие\n")
                 .append("✅ Партнёрские цены за звёзды и в магазине наград\n")
-                .append("✅ После выплаты банка - вывод всей суммы одной заявкой, сверх месячного лимита\n")
+                .append(partner ? "" : "✅ 500р от банка на вашу карту + Телеграм Премиум (1 месяц)\n")
                 .append("✅ Бейдж «Банкир EGC» в профиле")
-                .append("</blockquote>\n");
-        Quest otpQuest = partner ? null : otpPartnerQuestOrNull();
-        if (!partner) {
-            sb.append("\n<b>Как стать партнёром?</b>\n\nВыполни спонсорский квест банка-партнёра (карточка квеста ниже).\n\nМенеджер проведёт по шагам лично.");
-            if (otpQuest == null) sb.append("\n\nМеста в квесте сейчас закончились, мы сообщим, когда появятся.");
-        }
+                .append("</blockquote>");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (otpQuest != null) {
             rows.add(List.of(keyboardFactory.callback("🎯 Открыть квест банка", "partner:quest:" + otpQuest.getId() + ":" + code)));
