@@ -633,10 +633,14 @@ public class QuestService {
      *  ценных по награде квеста нового набора берут только подписчики. Остальные квесты набора доступны всем сразу, чтобы у игроков
      *  без подписки каталог игры не оказался пустым. */
     public static final int EARLY_ACCESS_HOURS = 24;
+    /** 13.11.2026 (владелец): ранний доступ отключён - у Pass почти нет владельцев, а два лучших квеста нового набора на сутки закрывались для остальных (жалоба игрока «квест не берётся без подписки»).
+     *  Код оставлен под флагом false (включить обратно можно только вместе с возвратом строки про ранний доступ в экране Pass, инвойсе, мини-аппе и автопосте канала). */
+    public static final boolean EARLY_ACCESS_ENABLED = false;
     public static final int EARLY_ACCESS_TOP_QUESTS = 2;
 
     /** Сколько часов (округление вверх) у этого квеста ещё действует ранний доступ для игрока без EGC Pass; 0 = квест доступен. */
     public long earlyAccessHoursLeft(AppUser user, Quest quest) {
+        if (!EARLY_ACCESS_ENABLED) return 0;
         if (quest.getPackId() == null || quest.getPackActivatedAt() == null) return 0;
         LocalDateTime until = quest.getPackActivatedAt().plusHours(EARLY_ACCESS_HOURS);
         LocalDateTime now = LocalDateTime.now();

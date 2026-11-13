@@ -12310,7 +12310,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "Доп. слот квеста — навсегда", PERMANENT_SLOT_STARS_PRICE),
             "starsitem:EGC_PASS", new StarsItemSpec(
                     "EGC Pass — подписка на 30 дней",
-                    "Лимит вывода +10 000 EXC, +10% EXC и +5% XP, 3-й слот, XP-буст +40%, сохранение серии, ранний доступ к квестам, вывод за 12 ч, донат дешевле. Автопродление, отмена в настройках Telegram.",
+                    "Лимит вывода +10 000 EXC, +10% EXC и +5% XP, 3-й слот, XP-буст +40%, сохранение серии, вывод за 12 ч, донат дешевле. Автопродление, отмена в настройках Telegram.",
                     "EGC Pass (30 дней)", EGC_PASS_STARS_PRICE, EGC_PASS_SUBSCRIPTION_PERIOD_SECONDS),
             "starsitem:VPN_MONTH", new StarsItemSpec(
                     "EGC VPN — 30 дней",
@@ -12444,7 +12444,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .append("</blockquote>\n\n")
                 .append("📂 <b>Квесты</b>\n<blockquote>")
                 .append("<b>3-й слот</b> квеста\n")
-                .append("Два лучших квеста нового набора на 24 часа раньше\n")
                 .append("Выше дневные лимиты: кулдаун 4 раза вместо 2, бусты 5 вместо 3\n")
                 .append("Бесплатная страховка провала и сохранение серии раз в месяц")
                 .append("</blockquote>\n\n")
