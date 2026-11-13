@@ -184,6 +184,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ExcTransactionService excTransactionService;
     private final ru.gamebot.platform.service.SquadService squadService;
     private final ru.gamebot.platform.service.WheelService wheelService;
+    private final ru.gamebot.platform.service.ExcWheelService excWheelService;
     private final ru.gamebot.platform.service.PlatformSnapshotService platformSnapshotService;
     private final ru.gamebot.platform.service.ClaudeVisionService claudeVisionService;
     private final ru.gamebot.platform.domain.repository.QuestRepository questRepository;
@@ -565,6 +566,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (text != null && text.startsWith("/goldenhour") && isEffectiveAdmin(user)) {
             handleGoldenHourCommand(user, text.trim());
+            return;
+        }
+
+        if (text != null && text.startsWith("/excwheel") && isEffectiveAdmin(user)) {
+            handleExcWheelCommand(user, text.trim());
             return;
         }
 
@@ -2556,6 +2562,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.startsWith("squad:")) {
             handleSquadAction(callbackQuery, user, session, data.substring("squad:".length()));
+            return;
+        }
+        if (data.startsWith("exwheel:")) {
+            handleExWheelAction(callbackQuery, user, data.substring("exwheel:".length()));
             return;
         }
         if (data.startsWith("wheel:")) {
@@ -5055,6 +5065,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback(chestLabel, "menu:chestopen")),
                 List.of(keyboardFactory.callback(rerollLabel, "menu:chestreroll"))
         ));
+        // «Колесо за EXC» (13.11.2026): кнопка видна только при включённом флаге (/excwheel on)
+        if (excWheelService.isEnabled()) {
+            fortuneRows.add(1, List.of(keyboardFactory.callback("🎰 Колесо за EXC", "exwheel:menu")));
+        }
         fortuneRows.add(backRow("menu:cat:more"));
         // Баннер «Фортуна» (Экси у колеса); при сбое отправки sendResourceBanner шлёт обычный текст с теми же кнопками.
         sendResourceBanner(user.getTelegramId(), "fortune_banner.jpg", "🍀 <b>Фортуна</b>",
@@ -8313,6 +8327,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("pulsethr", "reset|log|КЛЮЧ ЗЕЛЁНЫЙ КРАСНЫЙ", "Пороги вкладки «Пульс проекта»: список, изменить, вернуть стартовые, журнал"),
             new AdminCommand("vpn", "ID [trial|paid|off]", "EGC VPN (пока без экранов игрока): статус игрока, выдать пробный/оплаченный месяц, отключить"),
             new AdminCommand("push", "status|on NAME|off NAME", "Короткие рассылки игрокам: буст выходных, новые квесты по игре, гонка отрядов, гонка за Зал славы"),
+            new AdminCommand("excwheel", "status|on|off|age on|off|stats [дней]", "Колесо за EXC (спин 1 000 EXC, призы без EXC): включить/выключить, возрастное условие 18+, сводка"),
             new AdminCommand("goldenhour", "status|on|off|hour N|percent N|max N|push on|off|pushtest", "Золотой час: окно, бонус, лимит квестов, напоминание игрокам"),
             new AdminCommand("partnernudge", "status|player on|off|manager on|off|digest", "Партнёрский квест: напоминания игрокам, уведомления и сводка менеджерам"),
             new AdminCommand("dailycode", "now|on|off|hour|dow|status", "Пост «Код дня»: создать сейчас, включить, выключить, состояние"),
@@ -14184,6 +14199,103 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             default -> sendWheelMenu(user);
         }
+    }
+
+    private static final String[] EXWHEEL_LABELS = {
+            "🎟 Билет бесплатного колеса", "🏷 Купон −15% на предмет", "🛡 Страховка провала", "⚡ XP-буст на 24 часа", "⏱ Снятие кулдауна", "🔁 Повторный спин"};
+
+    private void sendExWheelMenu(AppUser user) {
+        String block = excWheelService.blockReason(user);
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        StringBuilder sb = new StringBuilder("🎰 <b>Колесо за EXC</b>\n\n");
+        sb.append("🪙 Баланс: <b>").append(fmtExc(user.getCoins())).append(" EXC</b>\n")
+                .append("Цена спина: <b>").append(fmtExc(ru.gamebot.platform.service.ExcWheelService.PRICE)).append(" EXC</b>. Число спинов не ограничено.\n\n");
+        if (block != null) {
+            sb.append("⚠️ ").append(escape(block));
+        } else {
+            sb.append("Призы - предметы клуба, EXC в призах нет.\n\n<blockquote expandable><b>Шансы:</b>\n");
+            int[] w = ru.gamebot.platform.service.ExcWheelService.weights();
+            for (int i = 0; i < w.length; i++) sb.append(EXWHEEL_LABELS[i]).append(" - ").append(w[i]).append("%\n");
+            sb.append("\nКупон действует ").append(ru.gamebot.platform.service.ExcWheelService.COUPON_DAYS).append(" дней на ближайшую покупку в «Предметах клуба». ")
+                    .append("Если выпал предмет, который у тебя уже есть, вместо него даётся билет.</blockquote>");
+            if (user.getCoins() >= ru.gamebot.platform.service.ExcWheelService.PRICE) {
+                rows.add(List.of(keyboardFactory.callback("🎰 Крутить за " + fmtExc(ru.gamebot.platform.service.ExcWheelService.PRICE) + " EXC", "exwheel:spin")));
+            } else {
+                rows.add(List.of(keyboardFactory.callback("🪙 Не хватает EXC", "exwheel:menu")));
+            }
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:cat:fortune"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    private void handleExWheelAction(CallbackQuery callbackQuery, AppUser user, String action) {
+        answerSilently(callbackQuery.getId());
+        if (!"spin".equals(action)) {
+            sendExWheelMenu(user);
+            return;
+        }
+        try {
+            ru.gamebot.platform.service.ExcWheelService.SpinResult result = excWheelService.spin(user.getId());
+            StringBuilder sb = new StringBuilder("🎰 <b>Колесо остановилось на...</b>\n\n");
+            for (ru.gamebot.platform.service.ExcWheelService.Prize prize : result.prizes()) {
+                sb.append("<b>").append(escape(prize.label())).append("</b>\n").append(escape(prize.description())).append("\n\n");
+            }
+            sb.append("🪙 Баланс: <b>").append(fmtExc(result.balanceAfter())).append(" EXC</b>");
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            if (result.balanceAfter() >= ru.gamebot.platform.service.ExcWheelService.PRICE) {
+                rows.add(List.of(keyboardFactory.callback("🎰 Ещё раз (−" + fmtExc(ru.gamebot.platform.service.ExcWheelService.PRICE) + " EXC)", "exwheel:spin")));
+            }
+            rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "exwheel:menu"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+            sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+        } catch (IllegalArgumentException e) {
+            sendText(user.getTelegramId(), "⚠️ " + escape(e.getMessage()), keyboardFactory.rowsLayout(List.of(
+                    List.of(keyboardFactory.callback("⬅️ Назад", "exwheel:menu")))));
+        } catch (Exception e) {
+            log.error("ExcWheel spin failed for {}", user.getTelegramId(), e);
+            sendText(user.getTelegramId(), "⚠️ Не получилось. EXC не списаны, попробуй ещё раз позже.", keyboardFactory.rowsLayout(List.of(
+                    List.of(keyboardFactory.callback("⬅️ Назад", "menu:cat:fortune")))));
+        }
+    }
+
+    /** /excwheel status|on|off|age on|off|stats [дней] - админ. Колесо выключено по умолчанию. */
+    private void handleExcWheelCommand(AppUser admin, String text) {
+        String[] p = text.split("\\s+");
+        String sub = p.length > 1 ? p[1].toLowerCase() : "status";
+        String reply;
+        switch (sub) {
+            case "on" -> {
+                excWheelService.setSetting(ru.gamebot.platform.service.ExcWheelService.KEY_ENABLED, true);
+                reply = "✅ Колесо за EXC включено: кнопка появилась в «Фортуне». Возрастное условие 18+: " + (excWheelService.isAgeGateOn() ? "включено" : "выключено") + ".";
+            }
+            case "off" -> {
+                excWheelService.setSetting(ru.gamebot.platform.service.ExcWheelService.KEY_ENABLED, false);
+                reply = "⏸ Колесо за EXC выключено, кнопка скрыта.";
+            }
+            case "age" -> {
+                if (p.length < 3 || !(p[2].equalsIgnoreCase("on") || p[2].equalsIgnoreCase("off"))) {
+                    reply = "Формат: <code>/excwheel age on|off</code>";
+                } else {
+                    boolean on = p[2].equalsIgnoreCase("on");
+                    excWheelService.setSetting(ru.gamebot.platform.service.ExcWheelService.KEY_AGE18, on);
+                    reply = "Возрастное условие 18+ " + (on ? "включено (нужен указанный возраст ≥ 18)." : "выключено (колесо доступно всем).");
+                }
+            }
+            case "stats" -> {
+                int days = p.length > 2 ? (int) Math.max(1, Math.min(90, parseLongSafe(p[2]))) : 7;
+                StringBuilder sb = new StringBuilder(excWheelService.statsText(days));
+                List<Object[]> top = excWheelService.topPlayers(days, 5);
+                if (!top.isEmpty()) {
+                    sb.append("\n<b>Больше всего спинов:</b>\n");
+                    for (Object[] row : top) sb.append("• ").append(String.valueOf(row[0])).append(": ").append(String.valueOf(row[1])).append("\n");
+                }
+                reply = sb.toString();
+            }
+            default -> reply = "🎰 <b>Колесо за EXC</b>\n\nСтатус: " + (excWheelService.isEnabled() ? "включено" : "выключено")
+                    + "\nВозраст 18+: " + (excWheelService.isAgeGateOn() ? "включено" : "выключено")
+                    + "\nЦена спина: " + fmtExc(ru.gamebot.platform.service.ExcWheelService.PRICE) + " EXC"
+                    + "\n\n<code>/excwheel on|off</code>, <code>/excwheel age on|off</code>, <code>/excwheel stats [дней]</code>";
+        }
+        sendText(admin.getTelegramId(), reply, null);
     }
 
     private void sendWheelMenu(AppUser user) {

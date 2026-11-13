@@ -213,6 +213,14 @@ public class AppUser {
     private LocalDateTime questSlotExtraUntil;
     private String cooldownBypassGame;
 
+    /** Купон из «Колеса за EXC» (13.11.2026): скидка в процентах на ближайшую покупку в «Предметах клуба» до shopCouponUntil. 0 - купона нет. */
+    @Column(columnDefinition = "integer default 0")
+    private int shopCouponPercent;
+    private LocalDateTime shopCouponUntil;
+    /** Снятие кулдауна получено призом колеса (бесплатно): вернуть за него 3 000 EXC нельзя (SinkShopService.refundCooldownRemoval). */
+    @Column(columnDefinition = "boolean default false")
+    private boolean cooldownBypassFree;
+
     // Daily counters (reset by comparing date)
     private int dailyRerollCount;
     private LocalDate dailyRerollDate;

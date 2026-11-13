@@ -2177,6 +2177,9 @@ public class UserService {
         user.setXpBoostActiveUntil(null);
         user.setQuestSlotExtraUntil(null);
         user.setCooldownBypassGame(null);
+        user.setCooldownBypassFree(false);
+        user.setShopCouponPercent(0);
+        user.setShopCouponUntil(null);
         user.setRetryInsuranceActive(false);
         user.setShopCooldownSmallUntil(null);
         user.setShopCooldownMediumUntil(null);

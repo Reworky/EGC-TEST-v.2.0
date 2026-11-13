@@ -191,6 +191,9 @@ public class SinkShopService {
         if (user.getCooldownBypassGame() == null) {
             throw new IllegalArgumentException("Нет купленного и неиспользованного снятия кулдауна.");
         }
+        if (user.isCooldownBypassFree()) {
+            throw new IllegalArgumentException("Это снятие кулдауна выпало на колесе, возврат EXC за него не предусмотрен.");
+        }
         user.setCooldownBypassGame(null);
         excTx.creditExc(user, PRICE_COOLDOWN_REMOVAL, ExcTransactionService.SHOP_REFUND, "Возврат: снятие кулдауна не понадобилось");
         if (user.getDailyCooldownRemovals() > 0 && LocalDate.now().equals(user.getDailyCooldownDate())) {
@@ -211,6 +214,7 @@ public class SinkShopService {
         }
         deductCoins(user, PRICE_COOLDOWN_REMOVAL, "Снятие кулдауна квеста");
         user.setCooldownBypassGame("ANY");
+        user.setCooldownBypassFree(false);
         user.setDailyCooldownRemovals(dailyRemovals + 1);
         user.setDailyCooldownDate(LocalDate.now());
         appUserRepository.save(user);
@@ -329,6 +333,7 @@ public class SinkShopService {
     @Transactional
     public void consumeCooldownBypass(AppUser user, String gameName) {
         user.setCooldownBypassGame(null);
+        user.setCooldownBypassFree(false);
         appUserRepository.save(user);
     }
 
@@ -522,10 +527,23 @@ public class SinkShopService {
     // 2026-10-01) - проверка баланса осталась здесь (бизнес-логика), само изменение coins и запись
     // в exc_transactions теперь одним вызовом вместо setCoins+save+log по отдельности.
     private void deductCoins(AppUser user, long price, String description) {
-        if (user.getCoins() < price) {
-            throw new IllegalArgumentException("Недостаточно EXC. Нужно " + price + ", есть " + user.getCoins() + ".");
+        // Купон из «Колеса за EXC» (13.11.2026): скидка на ближайшую покупку, использованный купон гасится вместе с покупкой (её же save(user) его сохранит)
+        long pay = price;
+        String desc = description;
+        boolean couponUsed = user.getShopCouponPercent() > 0 && user.getShopCouponUntil() != null && LocalDateTime.now().isBefore(user.getShopCouponUntil());
+        if (couponUsed) {
+            pay = price - price * user.getShopCouponPercent() / 100;
+            desc = description + " (купон −" + user.getShopCouponPercent() + "%)";
         }
-        excTx.creditExc(user, -price, ExcTransactionService.SINK, description);
+        if (user.getCoins() < pay) {
+            throw new IllegalArgumentException("Недостаточно EXC. Нужно " + pay + ", есть " + user.getCoins() + ".");
+        }
+        excTx.creditExc(user, -pay, ExcTransactionService.SINK, desc);
+        if (couponUsed) {
+            user.setShopCouponPercent(0);
+            user.setShopCouponUntil(null);
+            appUserRepository.save(user);
+        }
     }
 
     private int getDailyCount(int count, LocalDate date) {
