@@ -963,6 +963,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (openRequestFromDeepLink(user, message.getText())) {
                 return;
             }
+            if (openSectionFromDeepLink(user, session, message.getText())) {
+                return;
+            }
             sendMainMenu(user, roleWelcomeText(user, streakMessage));
             return;
         }
@@ -1098,6 +1101,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        // Ссылка на раздел бота (?start=go_<раздел>): тем, кто уже прошёл регистрацию и онбординг, сразу открываем раздел
+        if (user.isRegistrationCompleted() && user.isOnboardingCompleted() && openSectionFromDeepLink(user, session, message.getText())) {
+            return;
+        }
+
         // Возобновить незавершённый онбординг
         if (!user.isOnboardingCompleted()) {
             resumeOnboarding(user);
@@ -1106,6 +1114,37 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         String intro = roleWelcomeText(user, streakMessage);
         sendMainMenu(user, intro);
+    }
+
+    /** Ссылки на разделы бота для постов канала (12.11.2026): <code>t.me/&lt;бот&gt;?start=go_&lt;раздел&gt;</code>. Разделы: quests, shop, squads,
+     *  referrals, goal, picks, fortune, pass, rating, tournament, vpn. Неизвестный раздел или другая ссылка - false (дальше обычный путь /start).
+     *  Новым игрокам (регистрация или онбординг не пройдены) раздел не открывается: они идут обычным путём, ссылка просто приводит в бота. */
+    private boolean openSectionFromDeepLink(AppUser user, UserSession session, String text) {
+        if (text == null || !text.contains(" ")) return false;
+        String payload = text.substring(text.indexOf(' ') + 1).trim();
+        if (!payload.startsWith("go_")) return false;
+        String section = payload.substring(3).toLowerCase(java.util.Locale.ROOT);
+        try {
+            switch (section) {
+                case "quests" -> sendQuestGames(user, "menu:main");
+                case "shop" -> sendShop(user);
+                case "squads" -> sendSquadMenu(user);
+                case "referrals" -> sendReferrals(user);
+                case "goal" -> sendClubGoalScreen(user);
+                case "picks" -> sendEksiPicks(user, null);
+                case "fortune" -> sendFortuneCategory(user);
+                case "pass" -> sendEgcPassScreen(user);
+                case "rating" -> sendRatingMenu(user);
+                case "tournament" -> sendTournament(user);
+                case "vpn" -> sendVpnScreen(user);
+                default -> { return false; }
+            }
+            session.reset();
+            return true;
+        } catch (Exception e) {
+            log.warn("Failed to open section '{}' from deep link for user {}", section, user.getTelegramId(), e);
+            return false;
+        }
     }
 
     /** Чистка ленты: на навигационных кнопках (меню, каталог магазина) после показа нового экрана удаляем экран, с которого нажали.

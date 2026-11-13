@@ -446,9 +446,17 @@ public class ChannelContentService {
         return "<a href=\"https://t.me/" + botUsername + "\">@" + botUsername + "</a>";
     }
 
+    private String botSectionLink(String section) {
+        if (botUsername == null || botUsername.isBlank()) return "";
+        return java.util.regex.Matcher.quoteReplacement("<a href=\"https://t.me/" + botUsername + "?start=go_" + section + "\">@" + botUsername + "</a>");
+    }
+
     /** То же, что выше, плюс картинка поста: photo - "resource:имя_файла" (баннер из ресурсов бота) или file_id Telegram; null - без картинки (админ добавит через «Изменить»). */
     public boolean queueManualPost(String key, String rubric, String note, String text, LocalDateTime sendAfter, String photo) {
         text = text.replace("{{BOT}}", botMention());
+        // {{BOT:раздел}} - то же, но ссылка ведёт сразу в раздел бота (?start=go_<раздел>, см. openSectionFromDeepLink)
+        java.util.regex.Matcher bm = java.util.regex.Pattern.compile("\\{\\{BOT:([a-z]+)\\}\\}").matcher(text);
+        text = bm.replaceAll(r -> botSectionLink(r.group(1)));
         if (draftRepository.existsByTypeAndMetaStartingWith(MANUAL_POST, key + "|")) {
             // Время в JSON поправили: ещё не отправленной карточке переносим срок (текст не трогаем - его мог отредактировать админ)
             if (sendAfter.isAfter(LocalDateTime.now())) {
