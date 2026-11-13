@@ -14232,12 +14232,59 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback("🪙 Не хватает EXC", "exwheel:menu")));
             }
         }
+        rows.add(List.of(keyboardFactory.callback("📜 Мои призы", "exwheel:prizes")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:cat:fortune"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
+    /** «Мои призы»: что сейчас действует (купон, страховка, XP-буст, кулдаун) и последние призы колеса за EXC. */
+    private void sendExWheelPrizes(AppUser user) {
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm");
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        StringBuilder sb = new StringBuilder("📜 <b>Мои призы</b>\n\n<b>Сейчас действует:</b>\n");
+        boolean any = false;
+        if (user.getShopCouponPercent() > 0 && user.getShopCouponUntil() != null && now.isBefore(user.getShopCouponUntil())) {
+            sb.append("🏷 Купон −").append(user.getShopCouponPercent()).append("% на ближайшую покупку в «Предметах клуба», до ").append(user.getShopCouponUntil().format(fmt)).append("\n");
+            any = true;
+        }
+        if (user.isRetryInsuranceActive()) {
+            sb.append("🛡 Страховка провала: сработает при следующем отклонённом отчёте\n");
+            any = true;
+        }
+        if (user.getXpBoostActiveUntil() != null && now.isBefore(user.getXpBoostActiveUntil())) {
+            sb.append("⚡ XP-буст до ").append(user.getXpBoostActiveUntil().format(fmt)).append("\n");
+            any = true;
+        }
+        if (user.getCooldownBypassGame() != null) {
+            sb.append("⏱ Снятие кулдауна: сработает на ближайшем квесте с ожиданием\n");
+            any = true;
+        }
+        if (user.getTickets() > 0) {
+            sb.append("🎟 Билетов бесплатного колеса: ").append(user.getTickets()).append("\n");
+            any = true;
+        }
+        if (!any) sb.append("Сейчас ничего не действует.\n");
+        ru.gamebot.platform.service.ExcWheelService.MyPrizes mine = excWheelService.myPrizes(user.getId());
+        sb.append("\n<b>Последние призы колеса за EXC:</b>\n");
+        if (mine.last().isEmpty()) {
+            sb.append("Пока нет ни одного спина.\n");
+        } else {
+            for (ru.gamebot.platform.domain.model.ExcWheelSpin row : mine.last()) {
+                sb.append(row.getCreatedAt().format(fmt)).append(" · ").append(escape(String.valueOf(row.getPrizeLabel())))
+                        .append(ru.gamebot.platform.service.ExcWheelService.TICKET_FALLBACK.equals(row.getPrizeType()) ? " (замена: такой предмет уже был)" : "").append("\n");
+            }
+            sb.append("\nВсего спинов: ").append(mine.total()).append(" · потрачено ").append(fmtExc(mine.spent())).append(" EXC");
+        }
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("⬅️ Назад", "exwheel:menu"), keyboardFactory.callback("🏠 Меню", "menu:main")))));
+    }
+
     private void handleExWheelAction(CallbackQuery callbackQuery, AppUser user, String action) {
         answerSilently(callbackQuery.getId());
+        if ("prizes".equals(action)) {
+            sendExWheelPrizes(user);
+            return;
+        }
         if (!"spin".equals(action)) {
             sendExWheelMenu(user);
             return;
@@ -14253,6 +14300,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (result.balanceAfter() >= ru.gamebot.platform.service.ExcWheelService.PRICE) {
                 rows.add(List.of(keyboardFactory.callback("🎰 Ещё раз (−" + fmtExc(ru.gamebot.platform.service.ExcWheelService.PRICE) + " EXC)", "exwheel:spin")));
             }
+            rows.add(List.of(keyboardFactory.callback("📜 Мои призы", "exwheel:prizes")));
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "exwheel:menu"), keyboardFactory.callback("🏠 Меню", "menu:main")));
             sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
         } catch (IllegalArgumentException e) {

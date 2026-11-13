@@ -185,6 +185,14 @@ public class ExcWheelService {
         spinRepository.save(row);
     }
 
+    public record MyPrizes(List<ExcWheelSpin> last, long total, long spent) {}
+
+    /** Для игрока: последние призы колеса (до 20), число спинов и сколько EXC потрачено. */
+    @Transactional(readOnly = true)
+    public MyPrizes myPrizes(Long userId) {
+        return new MyPrizes(spinRepository.findTop20ByUserIdOrderByCreatedAtDescIdDesc(userId), spinRepository.countByUserId(userId), spinRepository.sumCostByUser(userId));
+    }
+
     /** Для админа: сводка за days дней. */
     public String statsText(int days) {
         LocalDateTime since = LocalDateTime.now().minusDays(days);

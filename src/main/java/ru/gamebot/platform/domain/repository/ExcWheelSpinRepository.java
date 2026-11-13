@@ -9,6 +9,13 @@ import ru.gamebot.platform.domain.model.ExcWheelSpin;
 
 public interface ExcWheelSpinRepository extends JpaRepository<ExcWheelSpin, Long> {
 
+    List<ExcWheelSpin> findTop20ByUserIdOrderByCreatedAtDescIdDesc(Long userId);
+
+    long countByUserId(Long userId);
+
+    @Query("SELECT COALESCE(SUM(s.cost), 0) FROM ExcWheelSpin s WHERE s.userId = :userId")
+    long sumCostByUser(@Param("userId") Long userId);
+
     @Query("SELECT COALESCE(SUM(s.cost), 0) FROM ExcWheelSpin s WHERE s.createdAt >= :since")
     long sumCostSince(@Param("since") LocalDateTime since);
 
