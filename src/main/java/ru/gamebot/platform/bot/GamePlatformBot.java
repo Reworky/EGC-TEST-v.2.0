@@ -4470,7 +4470,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     } else {
                         notifyUser(submission.getUser().getTelegramId(),
                                 "⚠️ Отчёт по квесту <b>" + escape(submission.getQuest().getTitle()) + "</b> отклонён.\n\n"
-                                        + escape(submission.getModeratorComment()));
+                                        + escape(submission.getModeratorComment())
+                                        + "\n\nНе получается? Спроси у других игроков в чате или напиши менеджеру.",
+                                chatBridgeButton("💬 Спросить в чате"));
                     }
                     sendText(user.getTelegramId(), "✅ Заявка отклонена, игрок уведомлён с указанной причиной.", null);
                     sendModerationQueue(user.getTelegramId());
@@ -15572,7 +15574,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         QuestSubmission submission = questService.rejectSubmission(submissionId, message, reasonCode, moderator.getTelegramId());
         notifyUser(submission.getUser().getTelegramId(),
                 "⚠️ Отчёт по квесту <b>" + escape(submission.getQuest().getTitle()) + "</b> отклонён.\n\n"
-                        + escape(submission.getModeratorComment()));
+                        + escape(submission.getModeratorComment())
+                        + "\n\nНе получается? Спроси у других игроков в чате или напиши менеджеру.",
+                chatBridgeButton("💬 Спросить в чате"));
         sendModerationQueue(callbackQuery.getFrom().getId());
         answer(callbackQuery.getId(), "Отклонено: " + QUICK_REJECT_LABELS[templateIndex]);
     }
@@ -15685,8 +15689,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             + formatExcBonusLine(rewardGrant)
                             + egcPassBonusLine(submission)
                             + firstQuestBonus
-                            + partnerCompareRewardLine(submission.getUser(), rewardGrant.totalExc()), watchAdForBonusButton(submission.getUser()), referralNudgeButton(submission.getUser(), "quest"), nextQuestSuggestionButton(submission.getUser()), sinkShopSuggestionButton(submission.getUser()),
-                            squadSuggestionButton(submission.getUser(), isFirstQuest));
+                            + partnerCompareRewardLine(submission.getUser(), rewardGrant.totalExc())
+                            + chatBridgeAfterQuestLine(submission.getUser()), watchAdForBonusButton(submission.getUser()), referralNudgeButton(submission.getUser(), "quest"), nextQuestSuggestionButton(submission.getUser()), sinkShopSuggestionButton(submission.getUser()),
+                            squadSuggestionButton(submission.getUser(), isFirstQuest), chatBridgeAfterQuestButton(submission.getUser()));
         } catch (Exception e) {
             log.warn("Could not notify user {} about quest approval: {}", submission.getUser().getTelegramId(), e.getMessage());
         }
@@ -18627,6 +18632,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Один раз: баланс остался выше лимита - подсказка, как в следующий раз вывести больше лимита (картой партнёра)
         boolean cardHint = claimPayoutCardHint(req.getUser());
         if (cardHint) caption += "\n\nВ следующий раз можно вывести больше лимита.";
+        // Мягкий мост в чат (13.11.2026): только после ПЕРВОЙ выплаты игрока (число оплаченных уже включает эту)
+        boolean firstPayout = false;
+        try {
+            firstPayout = rewardService.countPaidWithdrawalsByUser(req.getUser()) <= 1;
+        } catch (Exception e) {
+            log.warn("First payout check failed for {}", req.getUser().getTelegramId(), e);
+        }
         if (receiptFileId != null) {
             SendPhoto photo = new SendPhoto();
             photo.setChatId(req.getUser().getTelegramId().toString());
@@ -18637,6 +18649,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             List<List<InlineKeyboardButton>> payoutRows = new ArrayList<>();
             if (cardHint) payoutRows.add(List.of(keyboardFactory.callback("💳 Как", "shop:withdraw:otp")));
             if (payoutNudge != null) payoutRows.add(List.of(payoutNudge));
+            if (firstPayout) payoutRows.add(List.of(chatBridgeButton("💬 Расскажи в чате, как прошло")));
             if (!payoutRows.isEmpty()) photo.setReplyMarkup(keyboardFactory.rowsLayout(payoutRows));
             try { execute(photo); } catch (TelegramApiException e) { log.error("Failed to send receipt", e); }
         } else {
@@ -18647,6 +18660,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List<List<InlineKeyboardButton>> payoutRows = new ArrayList<>();
                 if (cardHint) payoutRows.add(List.of(keyboardFactory.callback("💳 Как", "shop:withdraw:otp")));
                 if (payoutNudge != null) payoutRows.add(List.of(payoutNudge));
+                if (firstPayout) payoutRows.add(List.of(chatBridgeButton("💬 Расскажи в чате, как прошло")));
                 sendText(req.getUser().getTelegramId(), caption,
                         payoutRows.isEmpty() ? null : keyboardFactory.rowsLayout(payoutRows));
             } catch (Exception e) {
@@ -24991,7 +25005,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "<b>" + escape(approved.getQuest().getTitle()) + "</b>, " + game + "\n"
                 + "🪙 <b>+" + awardedCoinsOf(approved) + " EXC</b> · ✨ +" + awardedXpOf(approved) + " XP"
                 + (pass.isEmpty() ? "" : "\n" + pass)
-                + partnerCompareRewardLine(approved.getUser(), awardedCoinsOf(approved));
+                + partnerCompareRewardLine(approved.getUser(), awardedCoinsOf(approved))
+                + chatBridgeAfterQuestLine(approved.getUser());
     }
 
     @org.springframework.context.event.EventListener
@@ -24999,7 +25014,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             QuestSubmission approved = questService.getSubmission(event.getSubmissionId());
             notifyUser(approved.getUser().getTelegramId(),
-                    autoVerifiedQuestText(approved, "Brawl Stars"), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
+                    autoVerifiedQuestText(approved, "Brawl Stars"), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()), chatBridgeAfterQuestButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Brawl Stars API");
         } catch (Exception e) {
             log.error("[BrawlAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
@@ -25011,7 +25026,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             QuestSubmission approved = questService.getSubmission(event.getSubmissionId());
             notifyUser(approved.getUser().getTelegramId(),
-                    autoVerifiedQuestText(approved, "Clash of Clans"), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
+                    autoVerifiedQuestText(approved, "Clash of Clans"), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()), chatBridgeAfterQuestButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Clash of Clans API");
         } catch (Exception e) {
             log.error("[ClashAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
@@ -25023,7 +25038,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             QuestSubmission approved = questService.getSubmission(event.getSubmissionId());
             notifyUser(approved.getUser().getTelegramId(),
-                    autoVerifiedQuestText(approved, "Clash Royale"), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
+                    autoVerifiedQuestText(approved, "Clash Royale"), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()), chatBridgeAfterQuestButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Clash Royale API");
         } catch (Exception e) {
             log.error("[ClashRoyaleAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
@@ -25035,7 +25050,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             QuestSubmission approved = questService.getSubmission(event.getSubmissionId());
             notifyUser(approved.getUser().getTelegramId(),
-                    autoVerifiedQuestText(approved, "Dota 2"), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
+                    autoVerifiedQuestText(approved, "Dota 2"), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()), chatBridgeAfterQuestButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Steam Web API (Dota 2)");
         } catch (Exception e) {
             log.error("[DotaAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
@@ -25047,7 +25062,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             QuestSubmission approved = questService.getSubmission(event.getSubmissionId());
             notifyUser(approved.getUser().getTelegramId(),
-                    autoVerifiedQuestText(approved, "CS2"), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
+                    autoVerifiedQuestText(approved, "CS2"), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()), chatBridgeAfterQuestButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через Steam Web API (CS2)");
         } catch (Exception e) {
             log.error("[Cs2AutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
@@ -25059,7 +25074,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             QuestSubmission approved = questService.getSubmission(event.getSubmissionId());
             notifyUser(approved.getUser().getTelegramId(),
-                    autoVerifiedQuestText(approved, "PUBG"), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
+                    autoVerifiedQuestText(approved, "PUBG"), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()), chatBridgeAfterQuestButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "проверка через официальный PUBG API");
         } catch (Exception e) {
             log.error("[PubgAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
@@ -25074,7 +25089,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>Квест засчитан</b>\n\n"
                     + "<b>" + escape(approved.getQuest().getTitle()) + "</b>, подтверждено партнёром\n"
                     + "🪙 <b>+" + awardedCoinsOf(approved) + " EXC</b>"
-                    + (egcPassBonusLine(approved).isEmpty() ? "" : "\n" + egcPassBonusLine(approved).trim()), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()));
+                    + (egcPassBonusLine(approved).isEmpty() ? "" : "\n" + egcPassBonusLine(approved).trim())
+                    + chatBridgeAfterQuestLine(approved.getUser()), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()), chatBridgeAfterQuestButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "подтверждено партнёрской сетью");
         } catch (Exception e) {
             log.error("[ActionPay] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
@@ -27971,8 +27987,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + formatExcBonusLine(rewardGrant)
                         + egcPassBonusLine(approved)
                         + firstQuestBonus
-                        + partnerCompareRewardLine(approved.getUser(), rewardGrant.totalExc()), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()),
-                        squadSuggestionButton(approved.getUser(), isFirstQuest));
+                        + partnerCompareRewardLine(approved.getUser(), rewardGrant.totalExc())
+                        + chatBridgeAfterQuestLine(approved.getUser()), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()),
+                        squadSuggestionButton(approved.getUser(), isFirstQuest), chatBridgeAfterQuestButton(approved.getUser()));
             } catch (Exception e) {
                 log.warn("Could not notify user {} about AI approval: {}", approved.getUser().getTelegramId(), e.getMessage());
             }
@@ -29740,6 +29757,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Кнопка рекламы под сообщением «квест выполнен»: если реклама в боте включена и награды остались на сегодня, объявление показывается
      *  прямо в чате одним нажатием; иначе - прежняя ссылка на рекламу в мини-аппе. Новичкам и подписчикам Pass не показываем (null). */
+    /** Мягкий мост в чат игроков (владелец, 13.11.2026): кнопка-ссылка без награды. Тексты и места согласованы: после первой выплаты, после второго квеста, при отклонённом отчёте. */
+    private InlineKeyboardButton chatBridgeButton(String label) {
+        return keyboardFactory.url(label, COMMUNITY_CHAT_URL);
+    }
+
+    /** После ВТОРОГО засчитанного квеста (на первом под сообщением и так много кнопок): один раз на игрока, число уже включает текущий квест. */
+    private boolean chatBridgeAfterQuestApplies(AppUser user) {
+        return user != null && user.getCompletedQuests() == 2;
+    }
+
+    private InlineKeyboardButton chatBridgeAfterQuestButton(AppUser user) {
+        return chatBridgeAfterQuestApplies(user) ? chatBridgeButton("💬 Чат игроков") : null;
+    }
+
+    private String chatBridgeAfterQuestLine(AppUser user) {
+        return chatBridgeAfterQuestApplies(user) ? "\n\n💬 Как тебе квесты? Обсуди с другими игроками в чате." : "";
+    }
+
     private InlineKeyboardButton watchAdForBonusButton(AppUser user) {
         if (!adOffersAllowed(user)) return null;
         InlineKeyboardButton inChat = botAdOfferButton(user);
