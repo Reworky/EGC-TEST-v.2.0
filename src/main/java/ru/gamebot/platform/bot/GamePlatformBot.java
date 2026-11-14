@@ -14238,7 +14238,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private static final String[] EXWHEEL_LABELS = {
-            "🎟 Билет бесплатного колеса", "🏷 Купон −15% на предмет", "🛡 Страховка провала", "⚡ XP-буст на 24 часа", "⏱ Снятие кулдауна", "🔁 Повторный спин"};
+            "🎟 Билет бесплатного колеса", "🏷 Купон −15% на предмет", "⚡ XP-буст на 24 часа", "⏱ Снятие кулдауна", "📂 Дополнительный слот квеста на 48 часов", "🔁 Повторный спин"};
 
     private void sendExWheelMenu(AppUser user) {
         String block = excWheelService.blockReason(user);
@@ -14253,7 +14253,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             int[] w = ru.gamebot.platform.service.ExcWheelService.weights();
             for (int i = 0; i < w.length; i++) sb.append(EXWHEEL_LABELS[i]).append(" - ").append(w[i]).append("%\n");
             sb.append("\nКупон действует ").append(ru.gamebot.platform.service.ExcWheelService.COUPON_DAYS).append(" дней с момента применения на ближайшую покупку в «Предметах клуба». ")
-                    .append("Билет сразу идёт на счёт для бесплатного колеса.</blockquote>");
+                    .append("Билет сразу идёт на счёт для бесплатного колеса. Анимация колеса только показывает результат, а шансы призов указаны выше.</blockquote>");
             if (user.getCoins() >= ru.gamebot.platform.service.ExcWheelService.PRICE) {
                 rows.add(List.of(keyboardFactory.callback("🎰 Крутить за " + fmtExc(ru.gamebot.platform.service.ExcWheelService.PRICE) + " EXC", "exwheel:spin")));
             } else {
@@ -14646,7 +14646,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String finalType = result.prizes().get(result.prizes().size() - 1).type();
             String animKey = switch (finalType) {
                 case ru.gamebot.platform.service.ExcWheelService.COUPON -> "coupon";
-                case ru.gamebot.platform.service.ExcWheelService.INSURANCE -> "insurance";
+                case ru.gamebot.platform.service.ExcWheelService.EXTRA_SLOT -> "extra";
                 case ru.gamebot.platform.service.ExcWheelService.XP_BOOST -> "boost";
                 case ru.gamebot.platform.service.ExcWheelService.COOLDOWN -> "cooldown";
                 default -> "ticket";

@@ -21,9 +21,9 @@ import ru.gamebot.platform.domain.repository.ExcWheelSpinRepository;
  * «Колесо за EXC» (владелец, 13.11.2026): спин стоит {@link #PRICE} EXC, EXC уходят из обращения (тип SINK), призы - только предметы клуба, EXC в призах нет
  * (платный шанс на выводимый выигрыш был бы азартной игрой). Суточного лимита на спины нет: среднее по спину в пользу проекта, число спинов только увеличивает сток.
  *
- * Шансы (сумма 100) и ценность по прайсу магазина: билет бесплатного колеса 61% (300), купон -15% 20% (450), страховка провала 8% (1 500), XP-буст 24 ч 3% (3 000),
- * снятие кулдауна 3% (3 000), повторный спин 5% (бесплатный спин). Среднее около 600 EXC на спин по прайсу (60% цены); реальные расходы проекта - только билеты
- * (~183 EXC эмиссии на спин). Шансы показаны игроку: при правке менять и тексты в боте (GamePlatformBot.sendExWheelMenu).
+ * Шансы (сумма 100) и ценность по прайсу магазина: билет бесплатного колеса 65% (300), купон -15% 20% (450), XP-буст 24 ч 3% (≈4 000), снятие кулдауна 5% (3 000),
+ * дополнительный слот квеста 2% (3 500), повторный спин 5% (бесплатный спин). Страховка провала убрана из призов 14.11.2026 (владелец: людям не нужна). Среднее около 625 EXC на спин
+ * по прайсу (63% цены); реальные расходы проекта - только билеты (~195 EXC эмиссии на спин). Шансы показаны игроку: при правке менять и тексты в боте (GamePlatformBot.sendExWheelMenu).
  *
  * Выключено по умолчанию: app_settings fw.enabled = true включает (команда /excwheel on). fw.age18 (по умолчанию включено): колесо только игрокам, указавшим возраст 18+.
  */
@@ -49,8 +49,9 @@ public class ExcWheelService {
     public static final String RESPIN = "RESPIN";
     public static final String TICKET_FALLBACK = "TICKET_FALLBACK";
 
-    private static final String[] TYPES = {TICKET, COUPON, INSURANCE, XP_BOOST, COOLDOWN, RESPIN};
-    private static final int[] WEIGHTS = {61, 20, 8, 3, 3, 5};
+    public static final String EXTRA_SLOT = "EXTRA_SLOT";
+    private static final String[] TYPES = {TICKET, COUPON, XP_BOOST, COOLDOWN, EXTRA_SLOT, RESPIN};
+    private static final int[] WEIGHTS = {65, 20, 3, 5, 2, 5};
 
     private static final Random RNG = new Random();
 
