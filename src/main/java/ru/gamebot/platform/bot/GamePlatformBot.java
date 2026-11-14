@@ -27685,7 +27685,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private String buildWeeklyReviewSummaryText(List<ru.gamebot.platform.domain.model.BotReview> reviews) {
         int count = reviews.size();
         double avgStars = reviews.stream().mapToInt(ru.gamebot.platform.domain.model.BotReview::getStars).average().orElse(0);
-        StringBuilder sb = new StringBuilder("📊 <b>Итоги недели по отзывам!</b>\n\n");
+        // Макет владельца 14.11.2026: заголовок и финальная фраза жирным, каждый отзыв - в цитате
+        StringBuilder sb = new StringBuilder("💬 <b>Итоги недели по отзывам!</b>\n\n");
         sb.append("За неделю нам написали <b>").append(count).append("</b> ").append(reviewWord(count))
                 .append(", средняя оценка <b>").append(String.format("%.1f", avgStars)).append(" ⭐️</b> 🔥\n\n");
         List<ru.gamebot.platform.domain.model.BotReview> quoted = reviews.stream()
@@ -27694,10 +27695,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .toList();
         for (ru.gamebot.platform.domain.model.BotReview r : quoted) {
             String stars = "⭐️".repeat(Math.max(0, Math.min(5, r.getStars())));
-            sb.append("«").append(escape(r.getText())).append("», ")
-                    .append(escape(r.getUser().getNickname())).append(" ").append(stars).append("\n\n");
+            sb.append("<blockquote>«").append(escape(r.getText())).append("», ")
+                    .append(escape(r.getUser().getNickname())).append(" ").append(stars).append("</blockquote>\n");
         }
-        sb.append("Спасибо всем, кто делится впечатлениями! 🙌");
+        sb.append("\n<b>Спасибо всем, кто делится впечатлениями! 🙌</b>");
         return sb.toString();
     }
 
