@@ -14243,18 +14243,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private static final String[] EXWHEEL_LABELS = {
-            "🎟 Билет бесплатного колеса", "🏷 Купон −15% на предмет", "⚡ XP-буст на 24 часа", "⏱ Снятие кулдауна", "📂 Дополнительный слот квеста на 48 часов", "🔁 Повторный спин"};
+            "🎟 Билет бесплатного колеса", "🏷 Купон −15% на предмет", "⚡ XP-буст на 24 часа", "⏱  Снятие кулдауна", "📂 Дополнительный слот квеста на 48 часов", "🔁 Повторный спин"};
 
     private void sendExWheelMenu(AppUser user) {
         String block = excWheelService.blockReason(user);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         StringBuilder sb = new StringBuilder("🎰 <b>Колесо за EXC</b>\n\n");
-        sb.append("🪙 Баланс: <b>").append(fmtExc(user.getCoins())).append(" EXC</b>\n")
+        sb.append("🪙 Баланс: <b>").append(fmtExc(user.getCoins())).append(" EXC</b>\n\n")
                 .append("Цена спина: <b>").append(fmtExc(ru.gamebot.platform.service.ExcWheelService.PRICE)).append(" EXC</b>. Число спинов не ограничено.\n\n");
         if (block != null) {
             sb.append("⚠️ ").append(escape(block));
         } else {
-            sb.append("Призы - предметы клуба, EXC в призах нет. Выпавший предмет попадает в «Мои призы», и ты сам решаешь, когда его применить.\n\n<blockquote expandable><b>Шансы:</b>\n");
+            sb.append("Выпавший предмет попадает в «Мои призы», и ты сам решаешь, когда его применить.\n\n<blockquote expandable><b>Шансы:</b>\n\n");
             int[] w = ru.gamebot.platform.service.ExcWheelService.weights();
             for (int i = 0; i < w.length; i++) sb.append(EXWHEEL_LABELS[i]).append(" - ").append(w[i]).append("%\n");
             sb.append("\nКупон действует ").append(ru.gamebot.platform.service.ExcWheelService.COUPON_DAYS).append(" дней с момента применения на ближайшую покупку в «Предметах клуба». ")
