@@ -14312,6 +14312,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             "<div style=\"padding:14px;background:#0f1530;color:#fff;font-family:sans-serif\">Тест виджета с allow_queries.</div>", 80, null, true);
                     r.append("1б. С allow_queries: ").append(withQueries.ok() ? "✅ принят" : "⚠️ отклонён\n<code>" + escape(String.valueOf(withQueries.error())) + "</code>").append("\n");
                     if (withQueries.ok()) minimal = withQueries;
+                    // Документация советует всегда указывать подпись (клиенты без виджетов показывают её): проверяем и так
+                    ru.gamebot.platform.service.WidgetService.SendResult withCaption = widgetService.sendDetailed(admin.getTelegramId(),
+                            "<h3>Тест виджета</h3><p>Если вы это видите, метод sendWidget работает.</p>", 120, "Тест виджета", true);
+                    r.append("1в. С подписью (caption): ").append(withCaption.ok() ? "✅ принят" : "⚠️ отклонён\n<code>" + escape(String.valueOf(withCaption.error())) + "</code>").append("\n");
+                    if (withCaption.ok()) minimal = withCaption;
                 }
                 if (minimal.ok()) {
                     long coins = admin.getCoins();
