@@ -11,6 +11,15 @@ public interface ExcWheelSpinRepository extends JpaRepository<ExcWheelSpin, Long
 
     List<ExcWheelSpin> findTop20ByUserIdOrderByCreatedAtDescIdDesc(Long userId);
 
+    List<ExcWheelSpin> findTop20ByUserIdAndPrizeTypeNotOrderByCreatedAtDescIdDesc(Long userId, String prizeType);
+
+    long countByPrizeTypeAndCreatedAtAfter(String prizeType, LocalDateTime since);
+
+    long countByUserIdAndPrizeTypeAndCreatedAtAfter(Long userId, String prizeType, LocalDateTime since);
+
+    @Query("SELECT COALESCE(SUM(s.cost), 0) FROM ExcWheelSpin s WHERE s.prizeType LIKE 'SLOT%' AND s.createdAt >= :since")
+    long sumSlotCostSince(@Param("since") LocalDateTime since);
+
     long countByUserId(Long userId);
 
     @Query("SELECT COALESCE(SUM(s.cost), 0) FROM ExcWheelSpin s WHERE s.userId = :userId")

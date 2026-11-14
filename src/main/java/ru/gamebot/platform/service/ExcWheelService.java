@@ -36,6 +36,7 @@ public class ExcWheelService {
     private static final int MAX_RESPINS = 3;
 
     public static final String KEY_ENABLED = "fw.enabled";
+    public static final String KEY_SLOT = "slot.enabled";
     public static final String KEY_AGE18 = "fw.age18";
 
     public static final String TICKET = "TICKET";
@@ -59,6 +60,99 @@ public class ExcWheelService {
     public record Prize(String type, String label, String description) {}
 
     public record SpinResult(List<Prize> prizes, long spent, long balanceAfter) {}
+
+    // ── Слот «3 катушки» (владелец, 14.11.2026) ─────────────────────────────────────────────────────────────────────────────────────────────
+    // Спин SLOT_PRICE EXC, платит только тройка одинаковых: 🍌 (52%^3 = 14,06%) - XP-буст 24 ч, 🍒 (38%^3 = 5,49%) - снятие кулдауна,
+    // 7️⃣ (10%^3 = 0,1%, 1 из 1 000) - EGC Pass на 7 дней. Разные символы - приза нет. Среднее по спину по прайсу ≈ 590 EXC (буст и кулдаун по 3 000, Pass 7 дн ≈ 2 700).
+    // Расход проекта: буст и кулдаун ≈ 0, Pass 7 дней консервативно ≈ 10 000 EXC (бонус +10% EXC до потолка, лимит вывода, донат по закупочной цене) x 0,001 = ≈ 10 EXC на спин,
+    // то есть ~1% от сожжённых 1 000 EXC (сожжённое в ~100 раз больше). Защита: Pass не чаще раза в 30 дней на игрока и не более SLOT_PASS_PER_DAY в сутки на всех,
+    // сверх этого вместо Pass выдаётся снятие кулдауна (или билет). Призы без EXC и без Stars. Шансы показаны игроку: при правке менять и экран слота в боте.
+    public static final long SLOT_PRICE = 1_000;
+    public static final String[] SLOT_SYMBOLS = {"🍌", "🍒", "7️⃣"};
+    public static final int[] SLOT_WEIGHTS = {52, 38, 10};
+    public static final int SLOT_PASS_DAYS = 7;
+    public static final int SLOT_PASS_PER_DAY = 2;
+    public static final int SLOT_PASS_PLAYER_DAYS = 30;
+    public static final String SLOT_NONE = "SLOT_NONE";
+    public static final String SLOT_XP_BOOST = "SLOT_XP_BOOST";
+    public static final String SLOT_COOLDOWN = "SLOT_COOLDOWN";
+    public static final String SLOT_PASS = "SLOT_PASS";
+    public static final String SLOT_TICKET = "SLOT_TICKET";
+
+    public record SlotResult(String[] reels, Prize prize, String note, long spent, long balanceAfter) {}
+
+    public boolean isSlotEnabled() {
+        return appSettingRepository.findById(KEY_SLOT).map(AppSetting::getValue).map(v -> "true".equalsIgnoreCase(v.trim())).orElse(false);
+    }
+
+    public String slotBlockReason(AppUser user) {
+        if (!isSlotEnabled()) return "Слот сейчас недоступен.";
+        if (isAgeGateOn()) {
+            if (user.getAge() == null) return "Слот доступен с 18 лет. Укажи возраст в профиле («Расскажи о себе»), и он откроется.";
+            if (user.getAge() < 18) return "Слот доступен с 18 лет.";
+        }
+        return null;
+    }
+
+    private int rollReel() {
+        int r = RNG.nextInt(100);
+        int acc = 0;
+        for (int i = 0; i < SLOT_WEIGHTS.length; i++) {
+            acc += SLOT_WEIGHTS[i];
+            if (r < acc) return i;
+        }
+        return 0;
+    }
+
+    private boolean passJackpotAllowed(Long userId) {
+        LocalDateTime dayStart = java.time.LocalDate.now().atStartOfDay();
+        if (spinRepository.countByPrizeTypeAndCreatedAtAfter(SLOT_PASS, dayStart) >= SLOT_PASS_PER_DAY) return false;
+        return spinRepository.countByUserIdAndPrizeTypeAndCreatedAtAfter(userId, SLOT_PASS, LocalDateTime.now().minusDays(SLOT_PASS_PLAYER_DAYS)) == 0;
+    }
+
+    private Prize applyPass(AppUser user) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime cur = user.getEgcPassActiveUntil();
+        user.setEgcPassActiveUntil((cur != null && now.isBefore(cur) ? cur : now).plusDays(SLOT_PASS_DAYS));
+        return new Prize("PASS", "👑 EGC Pass на " + SLOT_PASS_DAYS + " дней", "Все перки Pass: +10% EXC за квесты, лимит вывода +10 000 EXC, 3-й слот и другое.");
+    }
+
+    @Transactional
+    public SlotResult spinSlot(Long userId) {
+        AppUser user = appUserRepository.findByIdForUpdate(userId).orElseThrow(() -> new IllegalArgumentException("Игрок не найден."));
+        String block = slotBlockReason(user);
+        if (block != null) throw new IllegalArgumentException(block);
+        if (user.getCoins() < SLOT_PRICE) {
+            throw new IllegalArgumentException("Недостаточно EXC. Нужно " + SLOT_PRICE + ", есть " + user.getCoins() + ".");
+        }
+        excTx.creditExc(user, -SLOT_PRICE, ExcTransactionService.SINK, "Слот");
+        int a = rollReel(), b = rollReel(), c = rollReel();
+        String[] reels = {SLOT_SYMBOLS[a], SLOT_SYMBOLS[b], SLOT_SYMBOLS[c]};
+        Prize prize = null;
+        String note = null;
+        String recType = SLOT_NONE;
+        if (a == b && b == c) {
+            if (a == 2) {
+                if (passJackpotAllowed(userId)) {
+                    prize = applyPass(user);
+                    recType = SLOT_PASS;
+                } else {
+                    note = "Джекпот на сегодня уже выдан или у тебя он был недавно, поэтому вместо него:";
+                    prize = apply(user, COOLDOWN);
+                    recType = COOLDOWN.equals(prize.type()) ? SLOT_COOLDOWN : SLOT_TICKET;
+                }
+            } else if (a == 1) {
+                prize = apply(user, COOLDOWN);
+                recType = COOLDOWN.equals(prize.type()) ? SLOT_COOLDOWN : SLOT_TICKET;
+            } else {
+                prize = apply(user, XP_BOOST);
+                recType = SLOT_XP_BOOST;
+            }
+        }
+        appUserRepository.save(user);
+        record(userId, new Prize(recType, prize == null ? "Не повезло" : prize.label(), prize == null ? "" : prize.description()), SLOT_PRICE);
+        return new SlotResult(reels, prize, note, SLOT_PRICE, user.getCoins());
+    }
 
     /** Шансы по порядку призов для экрана игрока: {тип, шанс в процентах}. */
     public static int[] weights() {
@@ -190,7 +284,7 @@ public class ExcWheelService {
     /** Для игрока: последние призы колеса (до 20), число спинов и сколько EXC потрачено. */
     @Transactional(readOnly = true)
     public MyPrizes myPrizes(Long userId) {
-        return new MyPrizes(spinRepository.findTop20ByUserIdOrderByCreatedAtDescIdDesc(userId), spinRepository.countByUserId(userId), spinRepository.sumCostByUser(userId));
+        return new MyPrizes(spinRepository.findTop20ByUserIdAndPrizeTypeNotOrderByCreatedAtDescIdDesc(userId, SLOT_NONE), spinRepository.countByUserId(userId), spinRepository.sumCostByUser(userId));
     }
 
     /** Для админа: сводка за days дней. */
@@ -212,6 +306,10 @@ public class ExcWheelService {
             byPrize.append("• ").append(type).append(": ").append(n).append("\n");
         }
         sb.append("Выдано призов: ").append(totalPrizes).append("\n").append(byPrize);
+        long slotSpent = spinRepository.sumSlotCostSince(since);
+        long slotPass = spinRepository.countByPrizeTypeAndCreatedAtAfter(SLOT_PASS, since);
+        sb.append("\n🎰 Слот: сожжено ").append(String.format("%,d", slotSpent).replace(',', ' ')).append(" EXC, Pass выдан ").append(slotPass)
+                .append(" раз (оценка расхода ≈ ").append(String.format("%,d", slotPass * 10_000).replace(',', ' ')).append(" EXC)\n");
         sb.append("\nБилетов выдано: ").append(tickets).append(" (оценка эмиссии при средней награде колеса 300 EXC: ≈ ")
                 .append(String.format("%,d", tickets * 300).replace(',', ' ')).append(" EXC)\n");
         return sb.toString();
