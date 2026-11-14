@@ -233,6 +233,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ScheduledExecutorService slotScheduler = Executors.newSingleThreadScheduledExecutor();
     /** До какого момента (мс) у игрока крутится слот: повторное нажатие «Крутить» во время анимации игнорируется (двойной тап не списывает EXC дважды). */
     private final ConcurrentHashMap<Long, Long> slotBusyUntil = new ConcurrentHashMap<>();
+    /** file_id отправленных анимаций слота (ключ - комбинация символов, например «012»): после первой отправки Telegram отдаёт их из кэша, ресурс заново не грузим. */
+    private final ConcurrentHashMap<String, String> slotAnimFileIds = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ScheduledFuture<?>> albumTimers = new ConcurrentHashMap<>();
     // telegramId → timestamp of last successful subscription check (ms); re-check after 1 hour
     private final ConcurrentHashMap<Long, Long> subscriptionCheckCache = new ConcurrentHashMap<>();
@@ -14299,6 +14301,46 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return pct >= 1 ? String.format("%.1f", pct).replace('.', ',') + "%" : "1 из " + Math.round(100 / pct);
     }
 
+    /** Анимация «автомат» (src/main/resources/slot/slot_ABC.gif, 27 вариантов по трём катушкам): отправляет GIF с подписью без кнопок и возвращает id сообщения; null - файла нет или не отправилось. */
+    private Integer sendSlotAnimation(Long chatId, String key, String caption) {
+        try {
+            org.telegram.telegrambots.meta.api.methods.send.SendAnimation anim = new org.telegram.telegrambots.meta.api.methods.send.SendAnimation();
+            anim.setChatId(chatId.toString());
+            anim.setCaption(caption);
+            anim.setParseMode("HTML");
+            String cached = slotAnimFileIds.get(key);
+            if (cached != null) {
+                anim.setAnimation(new InputFile(cached));
+            } else {
+                java.io.InputStream is = getClass().getResourceAsStream("/slot/slot_" + key + ".gif");
+                if (is == null) return null;
+                anim.setAnimation(new InputFile(is, "slot_" + key + ".gif"));
+            }
+            org.telegram.telegrambots.meta.api.objects.Message sent = execute(anim);
+            if (cached == null && sent.getAnimation() != null) slotAnimFileIds.put(key, sent.getAnimation().getFileId());
+            return sent.getMessageId();
+        } catch (Exception e) {
+            log.warn("Slot animation {} failed for {}", key, chatId, e);
+            return null;
+        }
+    }
+
+    private boolean editSlotCaption(Long chatId, Integer messageId, String caption, InlineKeyboardMarkup keyboard) {
+        try {
+            org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageCaption edit = new org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageCaption();
+            edit.setChatId(chatId.toString());
+            edit.setMessageId(messageId);
+            edit.setCaption(caption);
+            edit.setParseMode("HTML");
+            edit.setReplyMarkup(keyboard);
+            execute(edit);
+            return true;
+        } catch (Exception e) {
+            log.warn("Slot caption edit failed for {}", chatId, e);
+            return false;
+        }
+    }
+
     private void sendSlotMenu(AppUser user) {
         String block = excWheelService.slotBlockReason(user);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
@@ -14311,8 +14353,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("⚠️ ").append(escape(block));
         } else {
             sb.append("Призы - предметы клуба, EXC в призах нет. Приз даёт тройка одинаковых символов.\n\n<blockquote expandable><b>Комбинации:</b>\n")
-                    .append(sym[0].repeat(3)).append(" - XP-буст на 24 часа (").append(slotPercent(w[0])).append(")\n")
-                    .append(sym[1].repeat(3)).append(" - снятие кулдауна (").append(slotPercent(w[1])).append(")\n")
+                    .append(sym[0].repeat(3)).append(" - снятие кулдауна (").append(slotPercent(w[0])).append(")\n")
+                    .append(sym[1].repeat(3)).append(" - дополнительный слот квеста на 48 часов (").append(slotPercent(w[1])).append(")\n")
                     .append(sym[2].repeat(3)).append(" - джекпот: EGC Pass на ").append(ru.gamebot.platform.service.ExcWheelService.SLOT_PASS_DAYS).append(" дней (").append(slotPercent(w[2])).append(")\n\n")
                     .append("Если символы разные, приза нет. Pass выдаётся не чаще раза в ").append(ru.gamebot.platform.service.ExcWheelService.SLOT_PASS_PLAYER_DAYS)
                     .append(" дней на игрока и не более ").append(ru.gamebot.platform.service.ExcWheelService.SLOT_PASS_PER_DAY).append(" раз в сутки на всех. ")
@@ -14330,18 +14372,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleSlotAction(CallbackQuery callbackQuery, AppUser user, String action) {
         answerSilently(callbackQuery.getId());
+        Integer sourceMessageId = callbackQuery.getMessage() != null ? callbackQuery.getMessage().getMessageId() : null;
         if ("prizes".equals(action)) {
             sendExWheelPrizes(user, "slot:menu");
+            if (sourceMessageId != null) deleteMessageQuietly(user.getTelegramId(), sourceMessageId);
             return;
         }
         if (!"spin".equals(action)) {
             sendSlotMenu(user);
+            if (sourceMessageId != null) deleteMessageQuietly(user.getTelegramId(), sourceMessageId);
             return;
         }
         long nowMs = System.currentTimeMillis();
         Long busy = slotBusyUntil.get(user.getTelegramId());
         if (busy != null && busy > nowMs) return;
-        slotBusyUntil.put(user.getTelegramId(), nowMs + 4000);
+        slotBusyUntil.put(user.getTelegramId(), nowMs + 4800);
         try {
             ru.gamebot.platform.service.ExcWheelService.SlotResult result = excWheelService.spinSlot(user.getId());
             String[] r = result.reels();
@@ -14368,6 +14413,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             Integer messageId = callbackQuery.getMessage() != null ? callbackQuery.getMessage().getMessageId() : null;
             String fin2 = fin.toString();
             String[] sym = ru.gamebot.platform.service.ExcWheelService.SLOT_SYMBOLS;
+            // Красивая анимация автомата (GIF под выпавшую комбинацию); нет файла или не отправился - запасной вариант: тот же экран по кадрам
+            StringBuilder animKey = new StringBuilder();
+            for (String reel : r) animKey.append(java.util.Arrays.asList(sym).indexOf(reel));
+            Integer animMsg = sendSlotAnimation(chatId, animKey.toString(), "🎰 <b>Слот</b>\n\nКрутим…");
+            if (animMsg != null) {
+                if (messageId != null) deleteMessageQuietly(chatId, messageId);
+                slotScheduler.schedule(() -> {
+                    if (!editSlotCaption(chatId, animMsg, fin2, finalKb)) {
+                        try {
+                            sendText(chatId, fin2, finalKb);
+                        } catch (Exception e) {
+                            log.warn("Slot final caption failed for {}", chatId, e);
+                        }
+                    }
+                }, result.prize() == null ? 3700 : 4200, java.util.concurrent.TimeUnit.MILLISECONDS);
+                return;
+            }
             if (messageId == null || !editHtmlMessage(chatId, messageId, "🎰 <b>Слот</b>\n\n<b>[ 🎰 | 🎰 | 🎰 ]</b>\n\nКрутим…", null)) {
                 sendText(chatId, fin2, finalKb);
                 return;
