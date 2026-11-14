@@ -14354,7 +14354,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else {
             sb.append("Призы - предметы клуба, EXC в призах нет. Приз даёт тройка одинаковых символов.\n\n<blockquote expandable><b>Комбинации:</b>\n")
                     .append(sym[0].repeat(3)).append(" - снятие кулдауна (").append(slotPercent(w[0])).append(")\n")
-                    .append(sym[1].repeat(3)).append(" - дополнительный слот квеста на 48 часов (").append(slotPercent(w[1])).append(")\n")
+                    .append(sym[1].repeat(3)).append(" - дополнительный слот квеста на 48 часов или XP-буст на 24 часа (").append(slotPercent(w[1])).append(")\n")
                     .append(sym[2].repeat(3)).append(" - джекпот: EGC Pass на ").append(ru.gamebot.platform.service.ExcWheelService.SLOT_PASS_DAYS).append(" дней (").append(slotPercent(w[2])).append(")\n\n")
                     .append("Если символы разные, приза нет. Pass выдаётся не чаще раза в ").append(ru.gamebot.platform.service.ExcWheelService.SLOT_PASS_PLAYER_DAYS)
                     .append(" дней на игрока и не более ").append(ru.gamebot.platform.service.ExcWheelService.SLOT_PASS_PER_DAY).append(" раз в сутки на всех. ")

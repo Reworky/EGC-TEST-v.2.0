@@ -62,9 +62,9 @@ public class ExcWheelService {
     public record SpinResult(List<Prize> prizes, long spent, long balanceAfter) {}
 
     // ── Слот «3 катушки» (владелец, 14.11.2026) ─────────────────────────────────────────────────────────────────────────────────────────────
-    // Спин SLOT_PRICE EXC, платит только тройка одинаковых: 🍌 (52%^3 = 14,06%) - снятие кулдауна (самая частая покупка в «Предметах»: 95 за 90 дн., 26 игроков),
-    // 🍒 (38%^3 = 5,49%) - дополнительный слот квеста на 48 ч (вторая по частоте: 34 покупки, 18 игроков), 7️⃣ (10%^3 = 0,1%, 1 из 1 000) - EGC Pass на 7 дней.
-    // Разные символы - приза нет. Среднее по спину по прайсу ≈ 617 EXC (кулдаун 3 000, слот 3 500, Pass 7 дн ≈ 2 700). Данные популярности - stats-shop-usage.sql (07.10.2026), обновлять.
+    // Спин SLOT_PRICE EXC, платит только тройка одинаковых: 🍌 (52%^3 = 14,06%) - снятие кулдауна (самая частая покупка в «Предметах»: 258 за 30 дн., 62 игрока),
+    // 🍒 (38%^3 = 5,49%) - дополнительный слот квеста на 48 ч (55%) или XP-буст 24 ч (45%) (2-е и 3-е места: 24 и 20 покупок за 30 дн.), 7️⃣ (10%^3 = 0,1%, 1 из 1 000) - EGC Pass на 7 дней.
+    // Разные символы - приза нет. Среднее по спину по прайсу ≈ 630 EXC (кулдаун 3 000, слот 3 500, XP-буст ≈ 4 000, Pass 7 дн ≈ 2 700). Данные - check-sink-popularity.sql (14.11.2026), обновлять.
     // Расход проекта: буст и кулдаун ≈ 0, Pass 7 дней консервативно ≈ 10 000 EXC (бонус +10% EXC до потолка, лимит вывода, донат по закупочной цене) x 0,001 = ≈ 10 EXC на спин,
     // то есть ~1% от сожжённых 1 000 EXC (сожжённое в ~100 раз больше). Защита: Pass не чаще раза в 30 дней на игрока и не более SLOT_PASS_PER_DAY в сутки на всех,
     // сверх этого вместо Pass выдаётся снятие кулдауна (или билет). Призы без EXC и без Stars. Шансы показаны игроку: при правке менять и экран слота в боте.
@@ -76,6 +76,9 @@ public class ExcWheelService {
     public static final int SLOT_PASS_PLAYER_DAYS = 30;
     public static final String SLOT_NONE = "SLOT_NONE";
     public static final String SLOT_EXTRA_SLOT = "SLOT_EXTRA_SLOT";
+    public static final String SLOT_XP_BOOST = "SLOT_XP_BOOST";
+    /** Доля дополнительного слота среди призов 🍒🍒🍒 (остальное - XP-буст 24 ч), по числу покупок за 30 дней: 24 против 20. */
+    public static final int SLOT_CHERRY_SLOT_PERCENT = 55;
     public static final String SLOT_COOLDOWN = "SLOT_COOLDOWN";
     public static final String SLOT_PASS = "SLOT_PASS";
     public static final String SLOT_TICKET = "SLOT_TICKET";
@@ -154,8 +157,13 @@ public class ExcWheelService {
                     recType = COOLDOWN.equals(prize.type()) ? SLOT_COOLDOWN : SLOT_TICKET;
                 }
             } else if (a == 1) {
-                prize = applyExtraSlot(user);
-                recType = "EXTRA_SLOT".equals(prize.type()) ? SLOT_EXTRA_SLOT : SLOT_TICKET;
+                if (RNG.nextInt(100) < SLOT_CHERRY_SLOT_PERCENT) {
+                    prize = applyExtraSlot(user);
+                    recType = "EXTRA_SLOT".equals(prize.type()) ? SLOT_EXTRA_SLOT : SLOT_TICKET;
+                } else {
+                    prize = apply(user, XP_BOOST);
+                    recType = SLOT_XP_BOOST;
+                }
             } else {
                 prize = apply(user, COOLDOWN);
                 recType = COOLDOWN.equals(prize.type()) ? SLOT_COOLDOWN : SLOT_TICKET;
