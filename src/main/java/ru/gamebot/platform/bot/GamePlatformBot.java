@@ -14387,6 +14387,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Анимация «автомат» (src/main/resources/slot/slot_ABC.gif, 27 вариантов по трём катушкам): отправляет GIF с подписью без кнопок и возвращает id сообщения; null - файла нет или не отправилось. */
     private Integer sendSlotAnimation(Long chatId, String key, String caption) {
+        return sendResourceAnimation(chatId, "/slot/slot_" + key + ".gif", "slot_" + key, caption);
+    }
+
+    /** GIF из ресурсов бота с подписью без кнопок; file_id кэшируется по cacheKey. Возвращает id сообщения или null. */
+    private Integer sendResourceAnimation(Long chatId, String resource, String key, String caption) {
         try {
             org.telegram.telegrambots.meta.api.methods.send.SendAnimation anim = new org.telegram.telegrambots.meta.api.methods.send.SendAnimation();
             anim.setChatId(chatId.toString());
@@ -14396,9 +14401,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (cached != null) {
                 anim.setAnimation(new InputFile(cached));
             } else {
-                java.io.InputStream is = getClass().getResourceAsStream("/slot/slot_" + key + ".gif");
+                java.io.InputStream is = getClass().getResourceAsStream(resource);
                 if (is == null) return null;
-                anim.setAnimation(new InputFile(is, "slot_" + key + ".gif"));
+                anim.setAnimation(new InputFile(is, key + ".gif"));
             }
             org.telegram.telegrambots.meta.api.objects.Message sent = execute(anim);
             if (cached == null && sent.getAnimation() != null) slotAnimFileIds.put(key, sent.getAnimation().getFileId());
@@ -14548,14 +14553,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void handleExWheelAction(CallbackQuery callbackQuery, AppUser user, String action) {
         answerSilently(callbackQuery.getId());
+        Integer exSourceId = callbackQuery.getMessage() != null ? callbackQuery.getMessage().getMessageId() : null;
         if ("prizes".equals(action)) {
             sendExWheelPrizes(user);
+            if (exSourceId != null) deleteMessageQuietly(user.getTelegramId(), exSourceId);
             return;
         }
         if (!"spin".equals(action)) {
             sendExWheelMenu(user);
+            if (exSourceId != null) deleteMessageQuietly(user.getTelegramId(), exSourceId);
             return;
         }
+        long nowMs = System.currentTimeMillis();
+        Long busy = slotBusyUntil.get(user.getTelegramId());
+        if (busy != null && busy > nowMs) return;
+        slotBusyUntil.put(user.getTelegramId(), nowMs + 5600);
         try {
             ru.gamebot.platform.service.ExcWheelService.SpinResult result = excWheelService.spin(user.getId());
             StringBuilder sb = new StringBuilder("🎰 <b>Колесо остановилось на...</b>\n\n");
@@ -14569,11 +14581,40 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             rows.add(List.of(keyboardFactory.callback("📜 Мои призы", "exwheel:prizes")));
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "exwheel:menu"), keyboardFactory.callback("🏠 Меню", "menu:main")));
-            sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+            InlineKeyboardMarkup finalKb = keyboardFactory.rowsLayout(rows);
+            String finalText = sb.toString();
+            Long chatId = user.getTelegramId();
+            Integer sourceMessageId = callbackQuery.getMessage() != null ? callbackQuery.getMessage().getMessageId() : null;
+            // Анимация колеса (GIF под итоговый приз): крутится, замедляется и останавливается на выпавшем секторе; потом подпись заменяется итогом с кнопками
+            String finalType = result.prizes().get(result.prizes().size() - 1).type();
+            String animKey = switch (finalType) {
+                case ru.gamebot.platform.service.ExcWheelService.COUPON -> "coupon";
+                case ru.gamebot.platform.service.ExcWheelService.INSURANCE -> "insurance";
+                case ru.gamebot.platform.service.ExcWheelService.XP_BOOST -> "boost";
+                case ru.gamebot.platform.service.ExcWheelService.COOLDOWN -> "cooldown";
+                default -> "ticket";
+            };
+            Integer animMsg = sendResourceAnimation(chatId, "/wheel/wheel_" + animKey + ".gif", "wheel_" + animKey, "🎰 <b>Колесо за EXC</b>\n\nКрутим…");
+            if (animMsg != null) {
+                if (sourceMessageId != null) deleteMessageQuietly(chatId, sourceMessageId);
+                slotScheduler.schedule(() -> {
+                    if (!editSlotCaption(chatId, animMsg, finalText, finalKb)) {
+                        try {
+                            sendText(chatId, finalText, finalKb);
+                        } catch (Exception e) {
+                            log.warn("Wheel final caption failed for {}", chatId, e);
+                        }
+                    }
+                }, 5100, java.util.concurrent.TimeUnit.MILLISECONDS);
+                return;
+            }
+            sendText(chatId, finalText, finalKb);
         } catch (IllegalArgumentException e) {
+            slotBusyUntil.remove(user.getTelegramId());
             sendText(user.getTelegramId(), "⚠️ " + escape(e.getMessage()), keyboardFactory.rowsLayout(List.of(
                     List.of(keyboardFactory.callback("⬅️ Назад", "exwheel:menu")))));
         } catch (Exception e) {
+            slotBusyUntil.remove(user.getTelegramId());
             log.error("ExcWheel spin failed for {}", user.getTelegramId(), e);
             sendText(user.getTelegramId(), "⚠️ Не получилось. EXC не списаны, попробуй ещё раз позже.", keyboardFactory.rowsLayout(List.of(
                     List.of(keyboardFactory.callback("⬅️ Назад", "menu:cat:fortune")))));
