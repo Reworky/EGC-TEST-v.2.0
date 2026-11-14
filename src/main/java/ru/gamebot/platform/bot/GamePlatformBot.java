@@ -1215,6 +1215,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return ctx.sourceMessageId;
     }
 
+    /** Удаляет сообщение, на котором нажали кнопку, ТОЛЬКО если новый экран показан отдельным сообщением. Если навигация переписала это же сообщение на месте
+     *  (текст -> текст, sourceUsed), удалять нельзя: исчезнет только что показанный экран (баг «Мои призы» 14.11.2026). */
+    private void deleteSourceUnlessEdited(Long chatId, Integer sourceMessageId) {
+        NavCtx ctx = navCtx.get();
+        if (ctx != null && ctx.sourceUsed) return;
+        if (sourceMessageId != null) deleteMessageQuietly(chatId, sourceMessageId);
+    }
+
     private void navEdited() {
         NavCtx ctx = navCtx.get();
         if (ctx != null) ctx.sourceUsed = true;
@@ -5087,13 +5095,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String chestLabel = userService.isChestAvailable(user)
                 ? (egcPass ? "🎁 Улучшенный сундук дня ⭐ 🔔" : "🎁 Сундук дня 🔔")
                 : "✅ Сундук сегодня открыт";
-        String rerollLabel = egcPass
-                ? "🔁 Ещё один улучшенный сундук — " + CHEST_REROLL_STARS_PRICE + " ⭐"
-                : "🔁 Улучшенный сундук дня — " + CHEST_REROLL_STARS_PRICE + " ⭐";
+        // 14.11.2026 (владелец): платный «улучшенный сундук за Stars» убран из «Фортуны» и из экранов сундука; бесплатный улучшенный сундук подписчикам EGC Pass остался
         List<List<InlineKeyboardButton>> fortuneRows = new ArrayList<>(List.of(
                 List.of(keyboardFactory.callback(wheelLabel, "wheel:menu")),
-                List.of(keyboardFactory.callback(chestLabel, "menu:chestopen")),
-                List.of(keyboardFactory.callback(rerollLabel, "menu:chestreroll"))
+                List.of(keyboardFactory.callback(chestLabel, "menu:chestopen"))
         ));
         // «Колесо за EXC» (13.11.2026): кнопка видна только при включённом флаге (/excwheel on)
         if (excWheelService.isEnabled()) {
@@ -6559,15 +6564,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             text.append("✅ <b>Сундук сегодня открыт</b>\nНовый бесплатный сундук будет завтра.\n\n");
             text.append("<blockquote expandable><b>Призы бесплатного сундука:</b>\n").append(chestPoolLines(egcPass));
         }
-        if (!egcPass) {
-            text.append("\n\n🔁 <b>Улучшенный сундук за ").append(CHEST_REROLL_STARS_PRICE).append(" ⭐</b> щедрее (можно сколько угодно раз):\n")
-                    .append(chestPoolLines(true));
-        }
         text.append("</blockquote>");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (available) rows.add(List.of(keyboardFactory.callback("🎁 Открыть сундук", "menu:chestgo")));
-        rows.add(List.of(keyboardFactory.callback("🔁 " + (egcPass ? "Ещё один улучшенный сундук — " : "Улучшенный сундук — ")
-                + CHEST_REROLL_STARS_PRICE + " ⭐", "menu:chestreroll")));
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", peekBackTo(user, "menu:cat:fortune")),
                 keyboardFactory.callback("🏠 Меню", "menu:main")));
@@ -6648,7 +6647,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private InlineKeyboardMarkup chestResultKeyboard(AppUser user) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.callback("🔁 Ещё один сундук — " + CHEST_REROLL_STARS_PRICE + " ⭐", "menu:chestreroll")));
         // Игрок только что получил приз - хороший момент предложить рекламу за EXC (по желанию, не навязчиво)
         InlineKeyboardButton adButton = adOffersAllowed(user) ? botAdOfferButton(user) : null;
         if (adButton != null) rows.add(List.of(adButton));
@@ -6666,9 +6664,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "📋 <b>Призы сундука дня</b>\n\n"
                         + "<blockquote expandable><b>Бесплатно (раз в сутки):</b>\n"
-                        + chestPoolLines(false) + "\n\n"
-                        + "<b>Реролл за " + CHEST_REROLL_STARS_PRICE + " ⭐ (можно сколько угодно раз):</b>\n"
-                        + chestPoolLines(true) + "</blockquote>",
+                        + chestPoolLines(false) + "</blockquote>",
                 backMenuKeyboard("menu:balance"));
     }
 
@@ -14431,7 +14427,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), "⚠️ Не получилось применить предмет, он остался в запасе. Попробуй позже.", keyboardFactory.rowsLayout(List.of(
                     List.of(keyboardFactory.callback("📜 Мои призы", prizesCb)))));
         }
-        if (sourceId != null) deleteMessageQuietly(user.getTelegramId(), sourceId);
+        if (sourceId != null) deleteSourceUnlessEdited(user.getTelegramId(), sourceId);
     }
 
     private static String slotPercent(int weight) {
@@ -14517,12 +14513,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         Integer sourceMessageId = callbackQuery.getMessage() != null ? callbackQuery.getMessage().getMessageId() : null;
         if ("prizes".equals(action)) {
             sendExWheelPrizes(user, "slot:menu");
-            if (sourceMessageId != null) deleteMessageQuietly(user.getTelegramId(), sourceMessageId);
+            if (sourceMessageId != null) deleteSourceUnlessEdited(user.getTelegramId(), sourceMessageId);
             return;
         }
         if (!"spin".equals(action)) {
             sendSlotMenu(user);
-            if (sourceMessageId != null) deleteMessageQuietly(user.getTelegramId(), sourceMessageId);
+            if (sourceMessageId != null) deleteSourceUnlessEdited(user.getTelegramId(), sourceMessageId);
             return;
         }
         long nowMs = System.currentTimeMillis();
@@ -14560,7 +14556,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             for (String reel : r) animKey.append(java.util.Arrays.asList(sym).indexOf(reel));
             Integer animMsg = sendSlotAnimation(chatId, animKey.toString(), "🎰 <b>Слот</b>\n\nКрутим…");
             if (animMsg != null) {
-                if (messageId != null) deleteMessageQuietly(chatId, messageId);
+                if (messageId != null) deleteSourceUnlessEdited(chatId, messageId);
                 slotScheduler.schedule(() -> {
                     if (!editSlotCaption(chatId, animMsg, fin2, finalKb)) {
                         try {
@@ -14613,12 +14609,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if ("prizes".equals(action)) {
             sendExWheelPrizes(user);
-            if (exSourceId != null) deleteMessageQuietly(user.getTelegramId(), exSourceId);
+            if (exSourceId != null) deleteSourceUnlessEdited(user.getTelegramId(), exSourceId);
             return;
         }
         if (!"spin".equals(action)) {
             sendExWheelMenu(user);
-            if (exSourceId != null) deleteMessageQuietly(user.getTelegramId(), exSourceId);
+            if (exSourceId != null) deleteSourceUnlessEdited(user.getTelegramId(), exSourceId);
             return;
         }
         long nowMs = System.currentTimeMillis();
@@ -14653,7 +14649,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             };
             Integer animMsg = sendResourceAnimation(chatId, "/wheel/wheel_" + animKey + ".gif", "wheel_" + animKey, "🎰 <b>Колесо за EXC</b>\n\nКрутим…");
             if (animMsg != null) {
-                if (sourceMessageId != null) deleteMessageQuietly(chatId, sourceMessageId);
+                if (sourceMessageId != null) deleteSourceUnlessEdited(chatId, sourceMessageId);
                 slotScheduler.schedule(() -> {
                     if (!editSlotCaption(chatId, animMsg, finalText, finalKb)) {
                         try {
