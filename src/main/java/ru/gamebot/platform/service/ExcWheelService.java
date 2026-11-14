@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 import ru.gamebot.platform.domain.model.AppSetting;
 import ru.gamebot.platform.domain.model.AppUser;
 import ru.gamebot.platform.domain.model.ExcWheelSpin;
+import ru.gamebot.platform.domain.model.UserPrize;
+import ru.gamebot.platform.domain.repository.UserPrizeRepository;
 import ru.gamebot.platform.domain.repository.AppSettingRepository;
 import ru.gamebot.platform.domain.repository.AppUserRepository;
 import ru.gamebot.platform.domain.repository.ExcWheelSpinRepository;
@@ -56,6 +58,7 @@ public class ExcWheelService {
     private final ExcTransactionService excTx;
     private final ExcWheelSpinRepository spinRepository;
     private final AppSettingRepository appSettingRepository;
+    private final UserPrizeRepository prizeRepository;
 
     public record Prize(String type, String label, String description) {}
 
@@ -116,20 +119,106 @@ public class ExcWheelService {
 
     /** Дополнительный слот квеста на 48 ч (как покупка в «Предметах»); если слот и так есть (навсегда, Pass или уже активен) - вместо него билет. */
     private Prize applyExtraSlot(AppUser user) {
-        LocalDateTime now = LocalDateTime.now();
-        boolean has = user.isPermanentExtraSlot()
-                || (user.getEgcPassActiveUntil() != null && now.isBefore(user.getEgcPassActiveUntil()))
-                || (user.getQuestSlotExtraUntil() != null && now.isBefore(user.getQuestSlotExtraUntil()));
-        if (has) return ticketFallback(user);
-        user.setQuestSlotExtraUntil(now.plusHours(48));
-        return new Prize("EXTRA_SLOT", "📂 Дополнительный слот квеста на 48 часов", "Можно вести два квеста одновременно.");
+        return grant(user, "EXTRA_SLOT", "SLOT");
     }
 
     private Prize applyPass(AppUser user) {
+        return grant(user, "PASS", "SLOT");
+    }
+
+    // ── Запас предметов (14.11.2026, владелец): выпавший предмет не включается сам, а падает в «Мои призы»; игрок сам нажимает «Применить» ──────────────────
+
+    /** Описание предмета: что даёт (до применения), что делать после и куда ведёт ссылка. */
+    public record ItemInfo(String type, String label, String what, String linkLabel, String linkCallback) {}
+
+    public static ItemInfo itemInfo(String type) {
+        return switch (type) {
+            case COUPON -> new ItemInfo(COUPON, "🏷 Купон −" + COUPON_PERCENT + "%", "Скидка " + COUPON_PERCENT + "% на ближайшую покупку в «Предметах клуба». Действует " + COUPON_DAYS + " дней после применения.",
+                    "🛍 Открыть «Предметы клуба»", "menu:sink");
+            case INSURANCE -> new ItemInfo(INSURANCE, "🛡 Страховка провала", "Если отчёт по следующему квесту отклонят, его можно отправить повторно без штрафа.", "🗺 Квесты", "menu:quests");
+            case XP_BOOST -> new ItemInfo(XP_BOOST, "⚡ XP-буст на 24 часа", "Больше опыта за квесты в течение 24 часов после применения.", "🗺 Квесты", "menu:quests");
+            case COOLDOWN -> new ItemInfo(COOLDOWN, "⏱ Снятие кулдауна", "Ближайший квест, на который действует ожидание, можно взять без ожидания.", "🗺 Квесты", "menu:quests");
+            case "EXTRA_SLOT" -> new ItemInfo("EXTRA_SLOT", "📂 Дополнительный слот квеста (48 ч)", "Можно вести два квеста одновременно 48 часов после применения.", "🗺 Квесты", "menu:quests");
+            default -> new ItemInfo("PASS", "👑 EGC Pass на " + SLOT_PASS_DAYS + " дней", "Все перки Pass на " + SLOT_PASS_DAYS + " дней: +10% EXC за квесты, лимит вывода +10 000 EXC, 3-й слот и другое.",
+                    "⭐ EGC Pass", "sink:egc_pass");
+        };
+    }
+
+    /** Кладёт предмет в запас игрока и возвращает «приз» для экрана результата. */
+    private Prize grant(AppUser user, String itemType, String source) {
+        UserPrize item = new UserPrize();
+        item.setUserId(user.getId());
+        item.setItemType(itemType);
+        item.setSource(source);
+        prizeRepository.save(item);
+        ItemInfo info = itemInfo(itemType);
+        return new Prize(itemType, info.label(), "Предмет добавлен в «Мои призы»: примени его, когда он понадобится.");
+    }
+
+    public record ApplyResult(String label, String message, ItemInfo info) {}
+
+    @Transactional(readOnly = true)
+    public List<UserPrize> inventory(Long userId) {
+        return prizeRepository.findByUserIdAndStatusOrderByCreatedAtAscIdAsc(userId, UserPrize.AVAILABLE);
+    }
+
+    /** Применяет предмет из запаса. Отказ (например, такой же эффект уже действует) - IllegalArgumentException с пояснением, предмет остаётся в запасе. */
+    @Transactional
+    public ApplyResult applyItem(Long userId, Long prizeId) {
+        AppUser user = appUserRepository.findByIdForUpdate(userId).orElseThrow(() -> new IllegalArgumentException("Игрок не найден."));
+        UserPrize item = prizeRepository.findByIdAndUserId(prizeId, userId).orElseThrow(() -> new IllegalArgumentException("Предмет не найден."));
+        if (!UserPrize.AVAILABLE.equals(item.getStatus())) throw new IllegalArgumentException("Этот предмет уже применён.");
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime cur = user.getEgcPassActiveUntil();
-        user.setEgcPassActiveUntil((cur != null && now.isBefore(cur) ? cur : now).plusDays(SLOT_PASS_DAYS));
-        return new Prize("PASS", "👑 EGC Pass на " + SLOT_PASS_DAYS + " дней", "Все перки Pass: +10% EXC за квесты, лимит вывода +10 000 EXC, 3-й слот и другое.");
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm");
+        ItemInfo info = itemInfo(item.getItemType());
+        String message;
+        switch (item.getItemType()) {
+            case COUPON -> {
+                if (user.getShopCouponPercent() > 0 && user.getShopCouponUntil() != null && now.isBefore(user.getShopCouponUntil())) {
+                    throw new IllegalArgumentException("Купон уже активен до " + user.getShopCouponUntil().format(fmt) + ". Примени новый после того, как используешь этот.");
+                }
+                user.setShopCouponPercent(COUPON_PERCENT);
+                user.setShopCouponUntil(now.plusDays(COUPON_DAYS));
+                message = "Купон активен до " + user.getShopCouponUntil().format(fmt) + ". Он применится к ближайшей покупке в «Предметах клуба».";
+            }
+            case INSURANCE -> {
+                if (user.isRetryInsuranceActive()) throw new IllegalArgumentException("Страховка уже активна. Примени новую после того, как она сработает.");
+                user.setRetryInsuranceActive(true);
+                message = "Страховка активна: сработает, если ближайший отчёт по квесту отклонят. Квесты берёшь как обычно.";
+            }
+            case XP_BOOST -> {
+                LocalDateTime cur = user.getXpBoostActiveUntil();
+                LocalDateTime from = cur != null && now.isBefore(cur) ? cur : now;
+                user.setXpBoostActiveUntil(from.plusHours(24));
+                message = "XP-буст активен до " + user.getXpBoostActiveUntil().format(fmt) + ". Выполняй квесты, пока он идёт.";
+            }
+            case COOLDOWN -> {
+                if (user.getCooldownBypassGame() != null) throw new IllegalArgumentException("Снятие кулдауна уже включено и ждёт квеста с ожиданием. Примени новое после того, как оно сработает.");
+                user.setCooldownBypassGame("ANY");
+                user.setCooldownBypassFree(true);
+                message = "Снятие кулдауна включено: открой «Квесты» и возьми тот, на который действовало ожидание.";
+            }
+            case "EXTRA_SLOT" -> {
+                if (user.isPermanentExtraSlot() || (user.getEgcPassActiveUntil() != null && now.isBefore(user.getEgcPassActiveUntil()))) {
+                    throw new IllegalArgumentException("Дополнительный слот у тебя уже есть (навсегда или с EGC Pass). Этот предмет можно применить позже.");
+                }
+                if (user.getQuestSlotExtraUntil() != null && now.isBefore(user.getQuestSlotExtraUntil())) {
+                    throw new IllegalArgumentException("Дополнительный слот уже активен до " + user.getQuestSlotExtraUntil().format(fmt) + ". Примени новый после окончания.");
+                }
+                user.setQuestSlotExtraUntil(now.plusHours(48));
+                message = "Слот активен до " + user.getQuestSlotExtraUntil().format(fmt) + ": можно вести два квеста одновременно.";
+            }
+            default -> {
+                LocalDateTime cur = user.getEgcPassActiveUntil();
+                user.setEgcPassActiveUntil((cur != null && now.isBefore(cur) ? cur : now).plusDays(SLOT_PASS_DAYS));
+                message = "EGC Pass активен до " + user.getEgcPassActiveUntil().format(fmt) + ": бонусы к наградам, лимит вывода и другие перки уже работают.";
+            }
+        }
+        item.setStatus(UserPrize.USED);
+        item.setUsedAt(now);
+        prizeRepository.save(item);
+        appUserRepository.save(user);
+        return new ApplyResult(info.label(), message, info);
     }
 
     @Transactional
@@ -249,45 +338,13 @@ public class ExcWheelService {
         return TICKET;
     }
 
+    /** Выпавший приз колеса/слота: билет сразу идёт на счёт (это не предмет, а валюта бесплатного колеса), остальное - в запас «Мои призы» без активации. */
     private Prize apply(AppUser user, String type) {
-        LocalDateTime now = LocalDateTime.now();
-        switch (type) {
-            case COUPON -> {
-                boolean has = user.getShopCouponPercent() > 0 && user.getShopCouponUntil() != null && now.isBefore(user.getShopCouponUntil());
-                if (has) return ticketFallback(user);
-                user.setShopCouponPercent(COUPON_PERCENT);
-                user.setShopCouponUntil(now.plusDays(COUPON_DAYS));
-                return new Prize(COUPON, "🏷 Купон −" + COUPON_PERCENT + "%",
-                        "Скидка " + COUPON_PERCENT + "% на ближайшую покупку в «Предметах клуба». Действует " + COUPON_DAYS + " дней.");
-            }
-            case INSURANCE -> {
-                if (user.isRetryInsuranceActive()) return ticketFallback(user);
-                user.setRetryInsuranceActive(true);
-                return new Prize(INSURANCE, "🛡 Страховка провала", "Если следующий отчёт отклонят, его можно отправить повторно без штрафа.");
-            }
-            case XP_BOOST -> {
-                LocalDateTime cur = user.getXpBoostActiveUntil();
-                LocalDateTime from = cur != null && now.isBefore(cur) ? cur : now;
-                user.setXpBoostActiveUntil(from.plusHours(24));
-                return new Prize(XP_BOOST, "⚡ XP-буст на 24 часа", "Повышенный опыт за квесты в ближайшие сутки.");
-            }
-            case COOLDOWN -> {
-                if (user.getCooldownBypassGame() != null) return ticketFallback(user);
-                user.setCooldownBypassGame("ANY");
-                user.setCooldownBypassFree(true);
-                return new Prize(COOLDOWN, "⏱ Снятие кулдауна", "Ближайший квест можно взять без ожидания.");
-            }
-            default -> {
-                user.setTickets(user.getTickets() + 1);
-                return new Prize(TICKET, "🎟 Билет бесплатного колеса", "Можно крутить обычное колесо фортуны.");
-            }
+        if (TICKET.equals(type)) {
+            user.setTickets(user.getTickets() + 1);
+            return new Prize(TICKET, "🎟 Билет бесплатного колеса", "Билет добавлен на счёт: им можно крутить обычное колесо фортуны.");
         }
-    }
-
-    /** Приз, который у игрока уже есть и не складывается (купон, страховка, кулдаун): вместо него билет, чтобы выпадение не пропадало впустую. */
-    private Prize ticketFallback(AppUser user) {
-        user.setTickets(user.getTickets() + 1);
-        return new Prize(TICKET_FALLBACK, "🎟 Билет бесплатного колеса", "Выпал предмет, который у тебя уже есть, поэтому вместо него билет.");
+        return grant(user, type, "WHEEL");
     }
 
     private void record(Long userId, Prize prize, long cost) {

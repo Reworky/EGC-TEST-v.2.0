@@ -14249,11 +14249,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (block != null) {
             sb.append("⚠️ ").append(escape(block));
         } else {
-            sb.append("Призы - предметы клуба, EXC в призах нет.\n\n<blockquote expandable><b>Шансы:</b>\n");
+            sb.append("Призы - предметы клуба, EXC в призах нет. Выпавший предмет попадает в «Мои призы», и ты сам решаешь, когда его применить.\n\n<blockquote expandable><b>Шансы:</b>\n");
             int[] w = ru.gamebot.platform.service.ExcWheelService.weights();
             for (int i = 0; i < w.length; i++) sb.append(EXWHEEL_LABELS[i]).append(" - ").append(w[i]).append("%\n");
-            sb.append("\nКупон действует ").append(ru.gamebot.platform.service.ExcWheelService.COUPON_DAYS).append(" дней на ближайшую покупку в «Предметах клуба». ")
-                    .append("Если выпал предмет, который у тебя уже есть, вместо него даётся билет.</blockquote>");
+            sb.append("\nКупон действует ").append(ru.gamebot.platform.service.ExcWheelService.COUPON_DAYS).append(" дней с момента применения на ближайшую покупку в «Предметах клуба». ")
+                    .append("Билет сразу идёт на счёт для бесплатного колеса.</blockquote>");
             if (user.getCoins() >= ru.gamebot.platform.service.ExcWheelService.PRICE) {
                 rows.add(List.of(keyboardFactory.callback("🎰 Крутить за " + fmtExc(ru.gamebot.platform.service.ExcWheelService.PRICE) + " EXC", "exwheel:spin")));
             } else {
@@ -14342,7 +14342,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendExWheelPrizes(AppUser user, String backData) {
         java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm");
         java.time.LocalDateTime now = java.time.LocalDateTime.now();
-        StringBuilder sb = new StringBuilder("📜 <b>Мои призы</b>\n\n<b>Сейчас действует:</b>\n");
+        String origin = backData.startsWith("slot") ? "s" : "w";
+        StringBuilder sb = new StringBuilder("📜 <b>Мои призы</b>\n\n");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        // 1) Запас: выпавшие предметы ждут, пока игрок сам нажмёт «Применить»
+        java.util.List<ru.gamebot.platform.domain.model.UserPrize> stock = excWheelService.inventory(user.getId());
+        sb.append("🎒 <b>В запасе</b> (ничего не включается само: применяй, когда нужно)\n");
+        if (stock.isEmpty()) {
+            sb.append("Пока пусто. Предметы из колеса и слота попадают сюда.\n");
+        } else {
+            java.util.Map<String, java.util.List<ru.gamebot.platform.domain.model.UserPrize>> byType = new java.util.LinkedHashMap<>();
+            for (ru.gamebot.platform.domain.model.UserPrize it : stock) byType.computeIfAbsent(it.getItemType(), k -> new ArrayList<>()).add(it);
+            for (java.util.Map.Entry<String, java.util.List<ru.gamebot.platform.domain.model.UserPrize>> e : byType.entrySet()) {
+                ru.gamebot.platform.service.ExcWheelService.ItemInfo info = ru.gamebot.platform.service.ExcWheelService.itemInfo(e.getKey());
+                int count = e.getValue().size();
+                sb.append("\n<b>").append(info.label()).append(count > 1 ? " ×" + count : "").append("</b>\n").append(escape(info.what())).append("\n");
+                rows.add(List.of(keyboardFactory.callback("✅ Применить: " + info.label(), "exwheel:apply:" + e.getValue().get(0).getId() + ":" + origin)));
+            }
+        }
+        // 2) Что действует сейчас
+        sb.append("\n<b>Сейчас действует:</b>\n");
         boolean any = false;
         if (user.getShopCouponPercent() > 0 && user.getShopCouponUntil() != null && now.isBefore(user.getShopCouponUntil())) {
             sb.append("🏷 Купон −").append(user.getShopCouponPercent()).append("% на ближайшую покупку в «Предметах клуба», до ").append(user.getShopCouponUntil().format(fmt)).append("\n");
@@ -14360,24 +14379,59 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("⏱ Снятие кулдауна: сработает на ближайшем квесте с ожиданием\n");
             any = true;
         }
-        if (user.getTickets() > 0) {
-            sb.append("🎟 Билетов бесплатного колеса: ").append(user.getTickets()).append("\n");
+        if (user.getQuestSlotExtraUntil() != null && now.isBefore(user.getQuestSlotExtraUntil())) {
+            sb.append("📂 Дополнительный слот квеста до ").append(user.getQuestSlotExtraUntil().format(fmt)).append("\n");
+            any = true;
+        }
+        if (user.getEgcPassActiveUntil() != null && now.isBefore(user.getEgcPassActiveUntil())) {
+            sb.append("👑 EGC Pass до ").append(user.getEgcPassActiveUntil().format(fmt)).append("\n");
             any = true;
         }
         if (!any) sb.append("Сейчас ничего не действует.\n");
+        if (user.getTickets() > 0) {
+            sb.append("\n🎟 Билетов бесплатного колеса: <b>").append(user.getTickets()).append("</b>\n");
+            rows.add(List.of(keyboardFactory.callback("🎡 Крутить бесплатное колесо", "wheel:menu")));
+        }
+        // 3) История
         ru.gamebot.platform.service.ExcWheelService.MyPrizes mine = excWheelService.myPrizes(user.getId());
-        sb.append("\n<b>Последние призы колеса за EXC:</b>\n");
+        sb.append("\n<b>Последние выпадения:</b>\n");
         if (mine.last().isEmpty()) {
             sb.append("Пока нет ни одного спина.\n");
         } else {
+            int shown = 0;
             for (ru.gamebot.platform.domain.model.ExcWheelSpin row : mine.last()) {
-                sb.append(row.getCreatedAt().format(fmt)).append(" · ").append(escape(String.valueOf(row.getPrizeLabel())))
-                        .append(ru.gamebot.platform.service.ExcWheelService.TICKET_FALLBACK.equals(row.getPrizeType()) ? " (замена: такой предмет уже был)" : "").append("\n");
+                if (shown++ >= 10) break;
+                sb.append(row.getCreatedAt().format(fmt)).append(" · ").append(escape(String.valueOf(row.getPrizeLabel()))).append("\n");
             }
             sb.append("\nВсего спинов: ").append(mine.total()).append(" · потрачено ").append(fmtExc(mine.spent())).append(" EXC");
         }
-        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(List.of(
-                List.of(keyboardFactory.callback("⬅️ Назад", backData), keyboardFactory.callback("🏠 Меню", "menu:main")))));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", backData), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Нажатие «Применить» на предмете из запаса: включает его и показывает, что делать дальше (инструкция и ссылка на нужный раздел). origin: w - колесо, s - слот (для «Назад»). */
+    private void handleApplyPrize(CallbackQuery callbackQuery, AppUser user, String payload) {
+        String[] p = payload.split(":");
+        Long prizeId = p.length > 0 ? parseLong(p[0]) : null;
+        String origin = p.length > 1 && "s".equals(p[1]) ? "s" : "w";
+        String prizesCb = "s".equals(origin) ? "slot:prizes" : "exwheel:prizes";
+        Integer sourceId = callbackQuery.getMessage() != null ? callbackQuery.getMessage().getMessageId() : null;
+        try {
+            if (prizeId == null) throw new IllegalArgumentException("Предмет не найден.");
+            ru.gamebot.platform.service.ExcWheelService.ApplyResult res = excWheelService.applyItem(user.getId(), prizeId);
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            rows.add(List.of(keyboardFactory.callback(res.info().linkLabel(), res.info().linkCallback())));
+            rows.add(List.of(keyboardFactory.callback("📜 Мои призы", prizesCb), keyboardFactory.callback("🏠 Меню", "menu:main")));
+            sendText(user.getTelegramId(), "✅ <b>" + res.label() + " применён</b>\n\n" + escape(res.message()), keyboardFactory.rowsLayout(rows));
+        } catch (IllegalArgumentException e) {
+            sendText(user.getTelegramId(), "⚠️ " + escape(e.getMessage()), keyboardFactory.rowsLayout(List.of(
+                    List.of(keyboardFactory.callback("📜 Мои призы", prizesCb), keyboardFactory.callback("🏠 Меню", "menu:main")))));
+        } catch (Exception e) {
+            log.error("Apply prize failed for {}", user.getTelegramId(), e);
+            sendText(user.getTelegramId(), "⚠️ Не получилось применить предмет, он остался в запасе. Попробуй позже.", keyboardFactory.rowsLayout(List.of(
+                    List.of(keyboardFactory.callback("📜 Мои призы", prizesCb)))));
+        }
+        if (sourceId != null) deleteMessageQuietly(user.getTelegramId(), sourceId);
     }
 
     private static String slotPercent(int weight) {
@@ -14441,13 +14495,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (block != null) {
             sb.append("⚠️ ").append(escape(block));
         } else {
-            sb.append("Призы - предметы клуба, EXC в призах нет. Приз даёт тройка одинаковых символов.\n\n<blockquote expandable><b>Комбинации:</b>\n")
+            sb.append("Призы - предметы клуба, EXC в призах нет. Приз даёт тройка одинаковых символов и попадает в «Мои призы»: применить его можно, когда нужно.\n\n<blockquote expandable><b>Комбинации:</b>\n")
                     .append(sym[0].repeat(3)).append(" - снятие кулдауна (").append(slotPercent(w[0])).append(")\n")
                     .append(sym[1].repeat(3)).append(" - дополнительный слот квеста на 48 часов или XP-буст на 24 часа (").append(slotPercent(w[1])).append(")\n")
                     .append(sym[2].repeat(3)).append(" - джекпот: EGC Pass на ").append(ru.gamebot.platform.service.ExcWheelService.SLOT_PASS_DAYS).append(" дней (").append(slotPercent(w[2])).append(")\n\n")
                     .append("Если символы разные, приза нет. Pass выдаётся не чаще раза в ").append(ru.gamebot.platform.service.ExcWheelService.SLOT_PASS_PLAYER_DAYS)
-                    .append(" дней на игрока и не более ").append(ru.gamebot.platform.service.ExcWheelService.SLOT_PASS_PER_DAY).append(" раз в сутки на всех. ")
-                    .append("Если выпал предмет, который у тебя уже есть, вместо него даётся билет.</blockquote>");
+                    .append(" дней на игрока и не более ").append(ru.gamebot.platform.service.ExcWheelService.SLOT_PASS_PER_DAY).append(" раз в сутки на всех.</blockquote>");
             if (user.getCoins() >= ru.gamebot.platform.service.ExcWheelService.SLOT_PRICE) {
                 rows.add(List.of(keyboardFactory.callback("🎰 Крутить за " + fmtExc(ru.gamebot.platform.service.ExcWheelService.SLOT_PRICE) + " EXC", "slot:spin")));
             } else {
@@ -14494,7 +14547,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (result.balanceAfter() >= ru.gamebot.platform.service.ExcWheelService.SLOT_PRICE) {
                 rows.add(List.of(keyboardFactory.callback("🎰 Ещё раз (−" + fmtExc(ru.gamebot.platform.service.ExcWheelService.SLOT_PRICE) + " EXC)", "slot:spin")));
             }
-            rows.add(List.of(keyboardFactory.callback("📜 Мои призы", "slot:prizes")));
+            rows.add(List.of(keyboardFactory.callback("📜 Мои призы: применить", "slot:prizes")));
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "slot:menu"), keyboardFactory.callback("🏠 Меню", "menu:main")));
             InlineKeyboardMarkup finalKb = keyboardFactory.rowsLayout(rows);
             // Анимация: тот же экран по кадрам (крутится -> первая катушка -> вторая -> итог), кнопок до конца нет, чтобы не нажали «Ещё раз» посреди вращения
@@ -14554,6 +14607,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void handleExWheelAction(CallbackQuery callbackQuery, AppUser user, String action) {
         answerSilently(callbackQuery.getId());
         Integer exSourceId = callbackQuery.getMessage() != null ? callbackQuery.getMessage().getMessageId() : null;
+        if (action.startsWith("apply:")) {
+            handleApplyPrize(callbackQuery, user, action.substring("apply:".length()));
+            return;
+        }
         if ("prizes".equals(action)) {
             sendExWheelPrizes(user);
             if (exSourceId != null) deleteMessageQuietly(user.getTelegramId(), exSourceId);
@@ -14579,7 +14636,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (result.balanceAfter() >= ru.gamebot.platform.service.ExcWheelService.PRICE) {
                 rows.add(List.of(keyboardFactory.callback("🎰 Ещё раз (−" + fmtExc(ru.gamebot.platform.service.ExcWheelService.PRICE) + " EXC)", "exwheel:spin")));
             }
-            rows.add(List.of(keyboardFactory.callback("📜 Мои призы", "exwheel:prizes")));
+            rows.add(List.of(keyboardFactory.callback("📜 Мои призы: применить", "exwheel:prizes")));
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "exwheel:menu"), keyboardFactory.callback("🏠 Меню", "menu:main")));
             InlineKeyboardMarkup finalKb = keyboardFactory.rowsLayout(rows);
             String finalText = sb.toString();
