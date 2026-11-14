@@ -185,6 +185,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.SquadService squadService;
     private final ru.gamebot.platform.service.WheelService wheelService;
     private final ru.gamebot.platform.service.ExcWheelService excWheelService;
+    private final ru.gamebot.platform.service.WidgetService widgetService;
     private final ru.gamebot.platform.service.PlatformSnapshotService platformSnapshotService;
     private final ru.gamebot.platform.service.ClaudeVisionService claudeVisionService;
     private final ru.gamebot.platform.domain.repository.QuestRepository questRepository;
@@ -572,6 +573,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (text != null && text.startsWith("/goldenhour") && isEffectiveAdmin(user)) {
             handleGoldenHourCommand(user, text.trim());
+            return;
+        }
+
+        if (text != null && text.startsWith("/widget") && isEffectiveAdmin(user)) {
+            handleWidgetCommand(user, text.trim());
             return;
         }
 
@@ -1549,6 +1555,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), "💬 <b>Чат с менеджером</b>\n\nНажми кнопку: сообщение уже готово, останется его отправить.",
                     keyboardFactory.rowsLayout(List.of(List.of(goButton),
                             List.of(keyboardFactory.callback("⬅️ Назад", "menu:myquests"), keyboardFactory.callback("🏠 Меню", "menu:main")))));
+            return;
+        }
+        if ("widget:calc".equals(data)) {
+            answerSilently(callbackQuery.getId());
+            sendRateCalculator(user, false);
             return;
         }
         if ("partner:hintclose".equals(data)) {
@@ -5708,6 +5719,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (otpQuest != null) {
             rows.add(List.of(keyboardFactory.callback("🎯 Открыть квест банка", "partner:quest:" + otpQuest.getId() + ":" + code)));
         }
+        if (!partner && withdrawalTiersEnabled() && widgetService.isEnabled()) {
+            rows.add(List.of(keyboardFactory.callback("🧮 Калькулятор курса", "widget:calc")));
+        }
         String mText = managerHelpMessage(user, "Вопрос про статус партнёра проекта", "бот → Как стать партнёром?", "расскажите, как стать партнёром и что для этого нужно", null);
         rows.add(List.of(keyboardFactory.url("💬 Вопрос менеджеру", ru.gamebot.platform.service.ManagerMessage.link(appProperties.getSupportUsername(), mText))));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", partnerInfoBack(code)), keyboardFactory.callback("🏠 Меню", "menu:main")));
@@ -8349,6 +8363,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("pulsethr", "reset|log|КЛЮЧ ЗЕЛЁНЫЙ КРАСНЫЙ", "Пороги вкладки «Пульс проекта»: список, изменить, вернуть стартовые, журнал"),
             new AdminCommand("vpn", "ID [trial|paid|off]", "EGC VPN (пока без экранов игрока): статус игрока, выдать пробный/оплаченный месяц, отключить"),
             new AdminCommand("push", "status|on NAME|off NAME", "Короткие рассылки игрокам: буст выходных, новые квесты по игре, гонка отрядов, гонка за Зал славы"),
+            new AdminCommand("widget", "status|on|off|test", "HTML-виджеты в сообщениях (Bot API 10.4): калькулятор курса на экране «Как стать партнёром». test - прислать виджет себе"),
             new AdminCommand("excwheel", "status|on|off|slot on|off|age on|off|stats [дней]", "Колесо за EXC (спин 1 000 EXC, призы без EXC): включить/выключить, возрастное условие 18+, сводка"),
             new AdminCommand("goldenhour", "status|on|off|hour N|percent N|max N|push on|off|pushtest", "Золотой час: окно, бонус, лимит квестов, напоминание игрокам"),
             new AdminCommand("partnernudge", "status|player on|off|manager on|off|digest", "Партнёрский квест: напоминания игрокам, уведомления и сводка менеджерам"),
@@ -14251,6 +14266,51 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** «Мои призы»: что сейчас действует (купон, страховка, XP-буст, кулдаун) и последние призы колеса за EXC. */
+    /** Виджет «Сколько ты получишь» (калькулятор курса); не получилось отправить - обычный текст с тремя примерами. Возвращает true, если Bot API принял виджет. */
+    private boolean sendRateCalculator(AppUser user, boolean testOnly) {
+        long coins = user.getCoins();
+        double ratio = withdrawalRatioFor(user, Math.max(1, coins), false);
+        int ownPercent = (int) Math.round(ratio * 100);
+        String html = ru.gamebot.platform.service.WidgetService.rateCalculatorHtml(Math.max(10_000, coins), ownPercent);
+        boolean ok = widgetService.send(user.getTelegramId(), html, 380, null);
+        if (ok || testOnly) return ok;
+        StringBuilder sb = new StringBuilder("🧮 <b>Сколько ты получишь</b>\n\n");
+        for (long exc : new long[]{1_000, 10_000, 100_000}) {
+            sb.append(fmtExc(exc)).append(" EXC: ≈ ").append(rubCompare(exc * ratio / 100.0)).append(" ₽ сейчас · ≈ ").append(rubCompare(exc / 100.0)).append(" ₽ партнёр\n");
+        }
+        if (coins > 0) {
+            sb.append("\nТвои ").append(fmtExc(coins)).append(" EXC: ≈ ").append(rubCompare(coins * ratio / 100.0)).append(" ₽ сейчас · ≈ ").append(rubCompare(coins / 100.0)).append(" ₽ партнёр");
+        }
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("⬅️ Назад", "partner:info:bl"), keyboardFactory.callback("🏠 Меню", "menu:main")))));
+        return false;
+    }
+
+    /** /widget status|on|off|test - админ. Виджеты выключены по умолчанию. */
+    private void handleWidgetCommand(AppUser admin, String text) {
+        String[] p = text.split("\\s+");
+        String sub = p.length > 1 ? p[1].toLowerCase() : "status";
+        String reply;
+        switch (sub) {
+            case "on" -> {
+                widgetService.setEnabled(true);
+                reply = "✅ Виджеты включены: на экране «Как стать партнёром» у не-партнёров появилась кнопка «🧮 Калькулятор курса». Рекомендую сначала проверить /widget test.";
+            }
+            case "off" -> {
+                widgetService.setEnabled(false);
+                reply = "⏸ Виджеты выключены, кнопка скрыта.";
+            }
+            case "test" -> {
+                boolean ok = sendRateCalculator(admin, true);
+                reply = ok ? "✅ Bot API принял виджет (калькулятор курса выше). Если он не отобразился или не двигается ползунок, обновите Telegram."
+                        : "⚠️ Bot API не принял виджет: метод может быть недоступен для бота или клиента. Причина в логах бота (строка sendWidget rejected).";
+            }
+            default -> reply = "🧩 <b>HTML-виджеты</b>\n\nСтатус: " + (widgetService.isEnabled() ? "включены" : "выключены")
+                    + "\n\n<code>/widget test</code> - прислать калькулятор курса себе\n<code>/widget on|off</code> - показать или скрыть кнопку игрокам";
+        }
+        sendText(admin.getTelegramId(), reply, null);
+    }
+
     private void sendExWheelPrizes(AppUser user) {
         sendExWheelPrizes(user, "exwheel:menu");
     }
