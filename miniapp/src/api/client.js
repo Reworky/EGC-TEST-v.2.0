@@ -130,6 +130,11 @@ export async function submitQuestReport(id, { photo, externalLink, comment }) {
   return data;
 }
 
+export async function getQuestSlots() {
+  const { data } = await api.get('/api/quests/slots');
+  return data;
+}
+
 export async function getMyQuests() {
   const { data } = await api.get('/api/quests/mine');
   return data;

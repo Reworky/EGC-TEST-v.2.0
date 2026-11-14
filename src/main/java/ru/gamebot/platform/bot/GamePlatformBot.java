@@ -9171,7 +9171,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String body = useLabels
                 ? "Нажмите на квест, чтобы увидеть награду и условия прохождения." + legend
                 : "Откройте карточку по номеру, чтобы увидеть награду и условия прохождения.\n\n" + listBuilder + legend;
-        String listText = "<b>" + escape(title) + "</b>\n\n" + body;
+        String slotsLine = questSlotsLine(user);
+        String listText = "<b>" + escape(title) + "</b>\n" + (slotsLine.isEmpty() ? "" : slotsLine + "\n") + "\n" + body;
         if (photoFileId.isPresent()) {
             if (listText.length() <= 1000) {
                 sendPhotoCaption(user.getTelegramId(), photoFileId.get(), listText, keyboard);
@@ -10673,16 +10674,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Строка «📂 Слоты квестов: 1 из 2 · доп. слот до 15.11 18:16» (14.11.2026: игрок не видел, что у него есть второй слот). Спонсорские и партнёрские квесты слотов не занимают. */
+    private String questSlotsLine(AppUser user) {
+        try {
+            long used = questService.countActiveDrafts(user);
+            long max = sinkShopService.getMaxQuestSlots(user);
+            StringBuilder sb = new StringBuilder("📂 Слоты квестов: <b>").append(used).append(" из ").append(max).append("</b>");
+            if (sinkShopService.isEgcPassActive(user)) {
+                sb.append(" · 3-й слот по EGC Pass");
+            } else if (user.isPermanentExtraSlot()) {
+                sb.append(" · доп. слот навсегда");
+            } else if (sinkShopService.hasExtraSlot(user)) {
+                sb.append(" · доп. слот до ").append(user.getQuestSlotExtraUntil().format(java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm")));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     private void sendMySubmissions(AppUser user) {
         List<QuestSubmission> submissions = questService.getUserSubmissions(user);
         if (submissions.isEmpty()) {
             sendText(user.getTelegramId(),
-                    "📭 У вас нет квестов в работе.\n\nОткройте раздел квестов и возьмите первое задание.",
+                    "📭 У вас нет квестов в работе.\n" + questSlotsLine(user) + "\n\nОткройте раздел квестов и возьмите первое задание.",
                     backMenuKeyboard("menu:quests"));
             return;
         }
 
-        StringBuilder builder = new StringBuilder("📂 <b>Мои квесты</b>\n\n");
+        StringBuilder builder = new StringBuilder("📂 <b>Мои квесты</b>\n").append(questSlotsLine(user)).append("\n\n");
         submissions.stream().limit(10).forEach(submission -> builder
                 .append("🎯 <b>").append(escape(submission.getQuest().getTitle())).append("</b>\n")
                 .append("📌 Статус: <b>").append(escape(humanStatus(submission.getStatus()))).append("</b>\n")

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getQuests, getSponsoredQuests, channelCheckQuest, getGames, getGamePhotoUrl, getQuestBoost, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard, getTournamentPhotoUrl, getRecommendedQuest } from '../api/client';
+import { getQuests, getSponsoredQuests, channelCheckQuest, getGames, getGamePhotoUrl, getQuestBoost, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, getQuestSlots, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard, getTournamentPhotoUrl, getRecommendedQuest } from '../api/client';
 import { useLottie } from '../components/LottieContext';
 import { useParticles } from '../components/ParticlesContext';
 import AdRewardCard from '../components/AdRewardCard';
@@ -994,6 +994,15 @@ export default function QuestsPage() {
   const [view, setView] = useState('all');
   const [expanded, setExpanded] = useState(null);
   const [details, setDetails] = useState({});
+  // Слоты квестов (14.11.2026): игрок не видел, что у него есть второй слот. Обновляем при смене вкладки и раз в 20 секунд.
+  const [slots, setSlots] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => getQuestSlots().then(s => { if (!cancelled) setSlots(s); }).catch(() => {});
+    load();
+    const t = setInterval(load, 20000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [view]);
 
   function loadDetail(id) {
     getQuestDetail(id).then(d => setDetails(prev => ({ ...prev, [id]: d })));
@@ -1026,6 +1035,13 @@ export default function QuestsPage() {
           Турнир
         </button>
       </div>
+
+      {slots && view !== 'tournament' && (
+        <div className="slots-line">
+          📂 Слоты квестов: <b>{slots.used} из {slots.max}</b>
+          {slots.fromPass ? ' · 3-й слот по EGC Pass' : slots.permanent ? ' · доп. слот навсегда' : slots.extraUntil ? ` · доп. слот до ${slots.extraUntil}` : ''}
+        </div>
+      )}
 
       {view === 'all' && <AllQuestsView expanded={expanded} details={details} onToggle={toggleExpand} onDetailChanged={loadDetail} initialSection={initialSection} />}
       {view === 'mine' && <MyQuestsView expanded={expanded} details={details} onToggle={toggleExpand} onDetailChanged={loadDetail} />}

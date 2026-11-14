@@ -54,6 +54,7 @@ public class QuestController {
     private final ru.gamebot.platform.service.GameCatalogService gameCatalogService;
     private final ru.gamebot.platform.service.GameCoverService gameCoverService;
     private final ru.gamebot.platform.service.UserService userService;
+    private final ru.gamebot.platform.service.SinkShopService sinkShopService;
 
     /** Награда для списка «Мои квесты» — там вперемешку активные и уже закрытые заявки, поэтому недельное
      *  снижение (правило 3.4) сюда НЕ подмешиваем: для уже одобренного квеста цифра «как если бы брали
@@ -617,6 +618,23 @@ public class QuestController {
         QuestService.QuestActionResult result = questService.submitReportChecked(
                 user, quest, mediaType, fileId, photoUniqueIds, externalLink, comment);
         return ResponseEntity.ok(toResponse(result));
+    }
+
+    /** Слоты квестов для строки «Слоты квестов: 1 из 2» в мини-аппе (14.11.2026): занято, всего, откуда третий/доп. слот и до какого времени. */
+    @GetMapping("/slots")
+    public ResponseEntity<Map<String, Object>> slots(@AuthenticationPrincipal Long telegramId) {
+        AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("used", questService.countActiveDrafts(user));
+        body.put("max", sinkShopService.getMaxQuestSlots(user));
+        body.put("fromPass", sinkShopService.isEgcPassActive(user));
+        body.put("permanent", user.isPermanentExtraSlot());
+        body.put("extraUntil", sinkShopService.hasExtraSlot(user) && user.getQuestSlotExtraUntil() != null
+                ? user.getQuestSlotExtraUntil().format(DateTimeFormatter.ofPattern("dd.MM HH:mm")) : null);
+        return ResponseEntity.ok(body);
     }
 
     @GetMapping("/mine")

@@ -598,3 +598,6 @@
   text-align: right;
   margin-top: 2px;
 }
+
+.slots-line { margin: 8px 0 4px; padding: 7px 12px; border-radius: 10px; background: rgba(255,255,255,0.06); font-size: 13px; color: rgba(255,255,255,0.8); }
+.slots-line b { color: #ffd76a; }
