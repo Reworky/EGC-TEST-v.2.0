@@ -2265,14 +2265,14 @@ public class QuestSeeder implements CommandLineRunner {
         // Переименование и новые тексты один раз: квест под любым из прежних названий (после переименования старых названий в базе нет, повторов не будет).
         // 01.11.2026 (первый замер: из 20 приглашённых квест взяли 2): подача «бесплатный донат», награда частями (1 000 EXC за проверенные скриншоты, 100 000 EXC
         // после выплаты банка), мест 50. Квест под прежним названием переименовывается и получает новую награду/лимит один раз.
-        for (String legacyTitle : new String[]{OTP_CARD_OLD_TITLE, OTP_CARD_PREV_TITLE, OTP_CARD_PREV2_TITLE, OTP_CARD_PREV3_TITLE, OTP_CARD_PREV4_TITLE, OTP_CARD_PREV5_TITLE, OTP_CARD_PREV6_TITLE, OTP_CARD_PREV7_TITLE, OTP_CARD_PREV8_TITLE, OTP_CARD_TITLE}) {
+        for (String legacyTitle : new String[]{OTP_CARD_OLD_TITLE, OTP_CARD_PREV_TITLE, OTP_CARD_PREV2_TITLE, OTP_CARD_PREV3_TITLE, OTP_CARD_PREV4_TITLE, OTP_CARD_PREV5_TITLE, OTP_CARD_PREV6_TITLE, OTP_CARD_PREV7_TITLE, OTP_CARD_PREV8_TITLE, OTP_CARD_PREV9_TITLE, OTP_CARD_TITLE}) {
             questRepository.findFirstByTitleAndGameName(legacyTitle, OTP_GAME_LEGACY).ifPresent(q -> {
                 q.setGameName(OTP_GAME);
                 questRepository.save(q);
                 log.info("[QuestSeeder] Renamed game of partner quest (bank name hidden): {} -> {}", OTP_GAME_LEGACY, OTP_GAME);
             });
         }
-        for (String otpTitle : new String[]{OTP_CARD_OLD_TITLE, OTP_CARD_PREV_TITLE, OTP_CARD_PREV2_TITLE, OTP_CARD_PREV3_TITLE, OTP_CARD_PREV4_TITLE, OTP_CARD_PREV5_TITLE, OTP_CARD_PREV6_TITLE, OTP_CARD_PREV7_TITLE, OTP_CARD_PREV8_TITLE}) {
+        for (String otpTitle : new String[]{OTP_CARD_OLD_TITLE, OTP_CARD_PREV_TITLE, OTP_CARD_PREV2_TITLE, OTP_CARD_PREV3_TITLE, OTP_CARD_PREV4_TITLE, OTP_CARD_PREV5_TITLE, OTP_CARD_PREV6_TITLE, OTP_CARD_PREV7_TITLE, OTP_CARD_PREV8_TITLE, OTP_CARD_PREV9_TITLE}) {
             questRepository.findFirstByTitleAndGameName(otpTitle, OTP_GAME).ifPresent(q -> {
                 // 10.11.2026: награда за выплату банка стала 50 000 EXC вместо 100 000. Момент перехода пишем один раз: заявки, взятые раньше, сохраняют 100 000 (обещание дано)
                 if (OTP_CARD_PREV7_TITLE.equals(otpTitle) && appSettingRepository.findById(OTP_BONUS_CHANGE_KEY).isEmpty()) {
@@ -2322,16 +2322,6 @@ public class QuestSeeder implements CommandLineRunner {
                     questRepository.save(q);
                     log.info("[QuestSeeder] Updated sponsored quest card text: ОТП Карта");
                 });
-        // 10.11.2026: название банка убрано из карточки, инструкции и условий - обновляем тексты один раз у квеста, где оно ещё есть
-        questRepository.findFirstByTitleAndGameName(OTP_CARD_TITLE, OTP_GAME)
-                .filter(q -> (q.getDescription() != null && q.getDescription().contains("ОТП"))
-                        || (q.getInstruction() != null && (q.getInstruction().contains("ОТП") || q.getInstruction().contains("otpbank")))
-                        || (q.getRequirements() != null && q.getRequirements().contains("ОТП")))
-                .ifPresent(q -> {
-                    applyOtpCardContent(q);
-                    questRepository.save(q);
-                    log.info("[QuestSeeder] Anonymized partner quest card text");
-                });
         // 13.11.2026: правки текста карточки (шаг 2 «Выполни условие банка», шаг 4 «Получи 500 ₽ и Telegram Premium», без абзаца про вывод всей суммы разом): обновляем один раз
         // у квеста, где ещё стоит прежний заголовок шага 2 (после обновления его там нет, правки из админки не затираются)
         questRepository.findFirstByTitleAndGameName(OTP_CARD_TITLE, OTP_GAME)
@@ -2340,6 +2330,16 @@ public class QuestSeeder implements CommandLineRunner {
                     applyOtpCardContent(q);
                     questRepository.save(q);
                     log.info("[QuestSeeder] Updated partner quest card text (step 2 and requirements, 13.11.2026)");
+                });
+        // 14.11.2026: оффер банка - 1 000 ₽ (было 500 ₽), онлайн-заявка с доставкой курьером, покупка от 100 ₽ за 30 дней, без EXC за квест: обновляем один раз у квеста,
+        // где ещё стоит строка про 500 ₽ от банка (после обновления её там нет, правки из админки не затираются)
+        questRepository.findFirstByTitleAndGameName(OTP_CARD_TITLE, OTP_GAME)
+                .filter(q -> q.getDescription() != null && q.getDescription().contains("500 ₽ от банка на твою карту"))
+                .ifPresent(q -> {
+                    applyOtpCardContent(q);
+                    q.setRewardCoins(OTP_CARD_REWARD_EXC);
+                    questRepository.save(q);
+                    log.info("[QuestSeeder] Updated partner quest card (1000 rub, courier, purchase from 100 rub, 14.11.2026)");
                 });
         // Памятка модератору (что проверять в отчёте) - квесту, созданному до её появления, ставим один раз
         questRepository.findFirstByTitleAndGameName(OTP_CARD_TITLE, OTP_GAME)
@@ -2837,14 +2837,13 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String OTP_CARD_PREV2_TITLE = "Потрать 500 ₽ в своей любимой игре — получи их назад + 40 000 EXC 🎁";
     private static final String OTP_CARD_PREV3_TITLE = "Получи 500 ₽, донат для своей любимой игры + 40 000 EXC 🎁";
     /** Награда квестом после проверки скриншотов и число мест. 100 000 EXC после выплаты банка - /otpbonus (OTP_BONUS_DEFAULT_EXC в боте). */
-    private static final int OTP_CARD_REWARD_EXC = 1_000;
+    private static final int OTP_CARD_REWARD_EXC = 0;
     private static final int OTP_CARD_PLACES = 50;
-    private static final String OTP_CARD_CHECKLIST = "1️⃣ Скриншот 1: карта в приложении банка, новая и активная.\n"
-            + "2️⃣ Скриншот 2: «Детали операции»: любой продавец, сумма от 500 ₽, это именно покупка (не перевод и пополнение кошелька, не снятие наличных, не связь/интернет, ЖКХ, страховка, налоги и госуслуги, благотворительность, азартные игры, брокер, ломбард: такие МСС банк не засчитывает), статус не «В обработке». Донат на donatov.net подходит (PAW*donatov.net, МСС 5816).\n"
-            + "3️⃣ Дата покупки: после активации карты, не позже 30 дней.\n"
-            + "4️⃣ Номер счёта и карты закрыты.\n"
-            + "Скриншот не по делу - «Уточнить» и объяснить, что нужно прислать.\n"
-            + "Случайные, чужие или не относящиеся к карте картинки - «Отклонить»: награду получают только за настоящие скриншоты.";
+    private static final String OTP_CARD_CHECKLIST = "1️⃣ Заявка оформлена онлайн по нашей ссылке, выбрана доставка курьером.\n"
+            + "2️⃣ Игрок 18+, РФ (кроме Крыма, ДНР и ЛНР), паспорт РФ, не было действующих продуктов банка последние 2 года.\n"
+            + "3️⃣ Покупка от 100 ₽ одной операцией в течение 30 дней после активации карты, это именно покупка (не перевод и пополнение кошелька, не снятие наличных, не связь/интернет, ЖКХ, страховка, налоги и госуслуги, благотворительность, азартные игры, брокер, ломбард: такие МСС банк не засчитывает), статус не «В обработке». Донат на donatov.net подходит (PAW*donatov.net, МСС 5816).\n"
+            + "4️⃣ Номер счёта и карты на скриншотах закрыты.\n"
+            + "Случайные, чужие или не относящиеся к карте картинки - не засчитывать.";
     private static final String OTP_CARD_PREV4_TITLE = "Бесплатный донат: 500 ₽ вернёт банк + 100 000 EXC 🎁";
     private static final String OTP_CARD_PREV5_TITLE = "Забери бесплатный донат в свою игру + 500 ₽ на карту + 100 000 EXC 🎁";
     private static final String OTP_CARD_PREV6_TITLE = "Забери донат в свою игру бесплатно: банк вернёт 500 ₽ + 100 000 EXC 🎁";
@@ -2852,7 +2851,9 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String OTP_CARD_PREV7_TITLE = "Получи 500 ₽ себе на карту + 100 000 EXC 🎁";
     /** Прежнее название (награда 50 000 EXC), с 10.11.2026 до 12.11.2026; переименовывается в OTP_CARD_TITLE. */
     private static final String OTP_CARD_PREV8_TITLE = "Получи 500 ₽ себе на карту + 50 000 EXC 🎁";
-    private static final String OTP_CARD_TITLE = "Получи 500 ₽ себе на карту + Telegram Premium 🎁";
+    /** Прежнее название (500 ₽ от банка), до 14.11.2026; переименовывается в OTP_CARD_TITLE. */
+    private static final String OTP_CARD_PREV9_TITLE = "Получи 500 ₽ себе на карту + Telegram Premium 🎁";
+    private static final String OTP_CARD_TITLE = "Получи 1 000 ₽ себе на карту + Telegram Premium 🎁";
     /** Ключ app_settings: момент перехода на награду Telegram Premium вместо 50 000 EXC (заявки, взятые раньше, получают 50 000 или 100 000 EXC). */
     public static final String OTP_PREMIUM_CHANGE_KEY = "otp.premium.from";
     /** Ключ app_settings: момент перехода на награду 50 000 EXC (заявки, взятые раньше, получают 100 000). */
@@ -2867,33 +2868,31 @@ public class QuestSeeder implements CommandLineRunner {
     private void applyOtpCardContent(Quest q) {
         q.setTitle(OTP_CARD_TITLE);
         q.setModeratorChecklist(OTP_CARD_CHECKLIST);
-        // 01.11.2026: первое касание для новичка - сначала что человек получает (три плюса), потом короткий список «Как это работает» (заголовки шагов ниже)
+        // 14.11.2026 (текст владельца): строка про курс вывода 100% вставляется ботом на втором месте списка (процент считается из настроек), строки «Итого» нет
         q.setDescription("Что ты получаешь:\n"
-                + "✅ 500 ₽ от банка на твою карту\n"
-                + "✅ 1 000 EXC после выполнения задания\n"
-                + "✅ Telegram Premium на 1 месяц, когда банк выплатит бонус: и вывод всей суммы разом\n\n"
+                + "✅ 1 000 ₽ за оформление карты\n"
+                + "✅ Telegram Premium на 1 месяц, когда банк выплатит бонус\n"
+                + "✅ Оформление, обслуживание и доставка бесплатно\n"
+                + "✅ И многие другие бонусы от банка\n\n"
                 + "🔒 Паспорт, коды из СМС и номер карты нам не нужны.\n\n"
                 + "Как это работает:");
-        q.setInstruction("1️⃣ Закажи бесплатную карту банка\n"
-                + "Менеджер пришлёт ссылку для оформления дебетовой карты в личных сообщениях.\n"
-                + "Карта должна быть новой и оформленной именно по этой ссылке, иначе банк не выплатит бонус. Оформление, обслуживание и доставка бесплатные. "
-                + "Подходит, если тебе 18+, ты живёшь в России и у тебя ещё нет карты этого банка. Нужен паспорт РФ.\n\n"
+        q.setInstruction("1️⃣ Оформи заявку на бесплатную карту онлайн\n"
+                + "Нажми «Начать выполнять квест»: менеджер пришлёт ссылку для оформления дебетовой карты в личных сообщениях.\n"
+                + "Заявка должна быть оформлена именно по этой ссылке, иначе банк не выплатит бонус. В заявке выбери доставку курьером. "
+                + "Подходит, если тебе 18+, ты живёшь в России (кроме Крыма, ДНР и ЛНР), у тебя паспорт РФ и у тебя не было действующих продуктов ОТП Банка последние 2 года.\n\n"
                 + "2️⃣ Выполни условие банка\n"
-                + "Когда карта придёт, активируй её в приложении банка и пополни на 500 ₽.\n\n"
-                + "В течение 30 дней после активации оплати этой картой любую покупку от 500 ₽ одной операцией: игра, магазин, подписка, как удобно.\n\n"
+                + "Когда курьер привезёт карту, активируй её в приложении банка. В течение 30 дней после активации оплати этой картой любую покупку от 100 ₽ одной операцией: игра, магазин, подписка, как удобно.\n\n"
                 + "Совет: донат в свою игру на donatov.net, он останется у тебя: https://donatov.net/inv/3958022\n\n"
                 + "Не засчитывается банком: переводы и пополнение кошельков, снятие наличных, связь и интернет, ЖКХ, страховки, налоги и госуслуги, благотворительность, "
                 + "азартные игры, брокеры и ломбарды.\n\n"
-                + "3️⃣ Пришли подтверждение.\n"
-                + "Когда покупка перестанет быть «В обработке» (обычно 1–3 дня), нажми «Отправить отчёт» на этом экране и пришли два скриншота: 1) твоя карта в приложении банка, "
-                + "2) «Детали операции» покупки (продавец, сумма, дата; открой операцию в истории). Номер счёта и номер карты закрой. "
-                + "Модератор проверит отчёт (случайные или чужие картинки не засчитываются), и 1 000 EXC придут на баланс.\n\n"
-                + "4️⃣ Получи 500 ₽ и Telegram Premium.\n"
-                + "Банк отправит 500 ₽ на твою карту с 25-го числа месяца, следующего за покупкой. Когда банк заплатит клубу, мы подарим тебе Telegram Premium на 1 месяц "
+                + "3️⃣ Пришли подтверждение\n"
+                + "Когда покупка перестанет быть «В обработке» (обычно 1–3 дня), напиши менеджеру: он проверит покупку.\n\n"
+                + "4️⃣ Получи 1000 ₽ и Telegram Premium.\n"
+                + "Банк отправит 1 000 ₽ на твою карту с 25-го числа месяца, следующего за покупкой. Когда банк заплатит клубу, мы подарим тебе Telegram Premium на 1 месяц "
                 + "и откроем вывод всей накопленной суммы разом, одной заявкой: лимит вывода для этого расширяется.");
         q.setRequirements("ℹ️ Кому подходит\n"
-                + "Тебе 18+, ты живёшь в России, у тебя паспорт РФ и ещё нет карты этого банка. Один раз на аккаунт. "
-                + "500 ₽ отправляет банк по правилам своей акции «Приведи друга», взяв квест, ты с ними согласен.");
+                + "Тебе 18+, ты живёшь в России (кроме Крыма, ДНР и ЛНР), у тебя паспорт РФ, и у тебя не было действующих продуктов ОТП Банка последние 2 года. "
+                + "Условия и бонусы определяет банк, оформив карту, ты с ними согласен.");
     }
 
     /**

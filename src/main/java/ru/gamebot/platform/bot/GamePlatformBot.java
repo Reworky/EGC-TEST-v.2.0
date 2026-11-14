@@ -5608,12 +5608,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "Сейчас: лимит <b>" + fmtExc(monthly) + " EXC/мес</b>, осталось <b>" + fmtExc(remaining) + "</b>.\n"
                         + "С картой: <b>до " + fmtExc(remaining + OTP_PARTNER_ALLOWANCE_EXC) + " EXC</b> одной заявкой.\n\n"
                         + "<b>Что ты получаешь:</b>\n"
-                        + "✅ 500 ₽ от банка на твою карту\n"
-                        + "✅ " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC после проверки\n"
+                        + "✅ " + ru.gamebot.platform.service.PartnerMissions.OTP.bankRewardRub() + " ₽ от банка на твою карту\n"
+                        + (OTP_QUEST_REWARD_EXC > 0 ? "✅ " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC после проверки\n" : "")
                         + "✅ " + ru.gamebot.platform.service.PartnerMissions.OTP.bonusItem() + ", когда банк выплатит бонус, и вывод всей суммы разом\n\n"
                         + "<b>Что нужно сделать:</b>\n"
                         + "1️⃣ Оформить бесплатную карту по нашей ссылке\n"
-                        + "2️⃣ Потратить 500 ₽ этой картой на любую покупку (они вернутся обратно на твой баланс)\n"
+                        + "2️⃣ Выбрать доставку курьером и оплатить картой любую покупку от 100 ₽\n"
                         + "3️⃣ Прислать подтверждение\n\n"
                         + "⏳ Банк платит с 25-го числа месяца, следующего за покупкой, потом мы отправим подарок.\n"
                         + "🔒 Паспорт, коды из СМС и номер карты нам не нужны. Подходит, если тебе 18+, ты живёшь в РФ и карты этого банка у тебя ещё нет.\n\n"
@@ -9548,7 +9548,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             ru.gamebot.platform.service.PartnerMission descMission = ru.gamebot.platform.service.PartnerMissions.forQuest(quest);
             int listStart = desc.indexOf("Что ты получаешь:");
             int listEnd = listStart < 0 ? -1 : desc.indexOf("\n\n", listStart);
-            if (descMission != null && listEnd > 0 && ru.gamebot.platform.service.PartnerMissions.grantsPartner(descMission)) {
+            if (descMission != null && "otp".equals(descMission.key())) {
+                // 14.11.2026 (владелец): у карточки банка строка про курс вывода стоит третьей в списке (после 1 000 ₽ и Premium), строки «Итого» нет
+                if (withdrawalTiersEnabled()) {
+                    String rateLine = "✅ После выплаты банка все твои EXC выводятся по курсу 100% вместо обычных ~" + nonPartnerPercent() + "%.\n";
+                    int premiumLine = desc.indexOf("✅ Telegram Premium");
+                    int premiumEnd = premiumLine < 0 ? -1 : desc.indexOf('\n', premiumLine);
+                    if (premiumEnd > 0) desc = desc.substring(0, premiumEnd + 1) + rateLine + desc.substring(premiumEnd + 1);
+                }
+            } else if (descMission != null && listEnd > 0 && ru.gamebot.platform.service.PartnerMissions.grantsPartner(descMission)) {
                 StringBuilder extra = new StringBuilder();
                 if (withdrawalTiersEnabled()) {
                     extra.append("\n✅ Бонус: после выплаты банка все твои EXC выводятся по курсу 100% вместо обычных ~").append(nonPartnerPercent()).append("%.");
@@ -9665,8 +9673,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else if (st == SubmissionStatus.APPROVED) {
             sb.append("✅ <b>").append(tomobile ? "Пополнение проверено" : "Первая покупка проверена").append("</b>\n")
                     .append("🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")
-                    .append("🪙 <b>+").append(fmtExc(reward)).append(" EXC</b> уже у тебя.")
-                    .append(ru.gamebot.platform.service.PartnerMissions.grantsPartner(pm) ? " Партнёрский статус и курс вывода 100% на все твои EXC включатся, когда банк выплатит бонус." : "").append("\n\n")
+                    .append(reward > 0 ? "🪙 <b>+" + fmtExc(reward) + " EXC</b> уже у тебя." : "")
+                    .append(ru.gamebot.platform.service.PartnerMissions.grantsPartner(pm) ? (reward > 0 ? " " : "") + "Партнёрский статус и курс вывода 100% на все твои EXC включатся, когда банк выплатит бонус." : "").append("\n\n")
                     .append("<b>Что дальше?</b>\nБанк выплатит свой бонус не сразу. Когда деньги придут, напиши менеджеру: он проверит и ")
                     .append(bonusItem ? "подарит <b>" + escape(pm.bonusItem()) + "</b>."
                             : "начислит ещё <b>" + fmtExc(bonus) + " EXC</b> (≈ " + fmtExc(bonus / 100) + " ₽).");
@@ -9773,7 +9781,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     .append("\n\nНаграда не начисляется. Если считаешь это ошибкой, напиши менеджеру.");
             rows.add(List.of(otpManagerButton(pm, sub, 3)));
         } else if (stage == 3 && st == SubmissionStatus.PENDING) {
-            sb.append("⏳ <b>Отчёт на проверке.</b> Модератор ответит сообщением, " + fmtExc(pm.rewardExc()) + " EXC придут после одобрения.");
+            sb.append("⏳ <b>Отчёт на проверке.</b> Модератор ответит сообщением" + (pm.rewardExc() > 0 ? ", " + fmtExc(pm.rewardExc()) + " EXC придут после одобрения." : "."));
         } else if (stage == 3) {
             sb.append(pm.stage3Text());
             rows.add(List.of(questReportOrCheckButton(quest)));
@@ -9782,7 +9790,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("💸 Вывести", "shop:withdraw"), keyboardFactory.callback("🎯 Ещё квесты", "menu:quests")));
             rows.add(List.of(keyboardFactory.callback("👥 Позвать друга", "menu:referrals")));
         } else {
-            sb.append(pm.stage4Text().replace("{reward}", fmtExc(pm.rewardExc())).replace("{bonus}", fmtExc(bonusFor(pm, sub))).replace("{bonusText}", bonusText(pm, sub)).replace("{bonusGive}", bonusGive(pm, sub))
+            sb.append(pm.stage4Text().replace("Отчёт принят, {reward} EXC начислены.", pm.rewardExc() > 0 ? "Отчёт принят, {reward} EXC начислены." : "Отчёт принят.").replace("{reward}", fmtExc(pm.rewardExc())).replace("{bonus}", fmtExc(bonusFor(pm, sub))).replace("{bonusText}", bonusText(pm, sub)).replace("{bonusGive}", bonusGive(pm, sub))
                     .replace("{date}", ruDayMonth(bankDate)).replace("{date7}", ruDayMonth(bankDate.plusDays(7))));
             boolean claimed = (sub.getMissionRemindersSent() & ru.gamebot.platform.service.OtpMissionReminderService.BIT_BANK_CLAIMED) != 0;
             rows.add(List.of(claimed ? keyboardFactory.callback("✅ Мы проверяем выплату банка", "noop")
@@ -9914,9 +9922,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("💎 <b>Миссия</b> · шаг ").append(view).append(" из ").append(total).append("\n")
                 .append("▰".repeat(view)).append("▱".repeat(total - view)).append("\n\n");
         if (st == SubmissionStatus.PENDING && view == reached) {
-            sb.append("⏳ <b>Отчёт на проверке.</b> Модератор ответит сообщением, " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC придут после одобрения.\n\n");
+            sb.append("⏳ <b>Отчёт на проверке.</b> Модератор ответит сообщением" + (OTP_QUEST_REWARD_EXC > 0 ? ", " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC придут после одобрения." : ".") + "\n\n");
         } else if (st == SubmissionStatus.APPROVED && view == total) {
-            sb.append("✅ <b>Отчёт принят, " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC начислены.</b>\n\n");
+            sb.append("✅ <b>Отчёт принят" + (OTP_QUEST_REWARD_EXC > 0 ? ", " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC начислены." : ".") + "</b>\n\n");
         }
         sb.append("<b>").append(escape(step[0])).append("</b>");
         if (step.length > 1) sb.append("\n").append(escape(step[1]));
@@ -16042,7 +16050,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             ru.gamebot.platform.service.PartnerMission mpm = ru.gamebot.platform.service.PartnerMissions.forQuest(submission.getQuest());
             List<InlineKeyboardButton> mb = new ArrayList<>();
             if (submission.getStatus() != SubmissionStatus.APPROVED) {
-                mb.add(keyboardFactory.callback("✅ Первая часть проверена (+" + fmtExc(mpm.rewardExc()) + " EXC)", "mod:ok:" + submission.getId()));
+                mb.add(keyboardFactory.callback("✅ Первая часть проверена" + (mpm.rewardExc() > 0 ? " (+" + fmtExc(mpm.rewardExc()) + " EXC)" : ""), "mod:ok:" + submission.getId()));
                 mb.add(keyboardFactory.callback("❌ Отклонить", "mod:no:" + submission.getId()));
             } else if (submission.getBonusPaidAt() == null) {
                 mb.add(keyboardFactory.callback("💰 Банк выплатил: " + (bonusIsItem(mpm, submission) ? "статус партнёра + подарок" : "начислить " + fmtExc(bonusFor(mpm, submission)) + " EXC и статус партнёра"), "mod:pbonus:" + submission.getId()));
@@ -16167,7 +16175,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         StringBuilder sb = new StringBuilder();
         if (isManagerFlowMission(submission)) {
             sb.append("🤝 Квест ведёт менеджер лично: игрок в боте ничего не отправляет. Когда проверите первую часть, нажмите «Одобрить»"
-                    + (ru.gamebot.platform.service.PartnerMissions.grantsPartner(ru.gamebot.platform.service.PartnerMissions.forQuest(quest)) ? " (+награда за первую часть; партнёром игрок станет после выплаты банка)" : " (только награда, статус партнёра не даётся)")
+                    + (ru.gamebot.platform.service.PartnerMissions.grantsPartner(ru.gamebot.platform.service.PartnerMissions.forQuest(quest)) ? (ru.gamebot.platform.service.PartnerMissions.forQuest(quest).rewardExc() > 0 ? " (+награда за первую часть; партнёром игрок станет после выплаты банка)" : " (EXC за первую часть нет; партнёром игрок станет после выплаты банка)") : " (только награда, статус партнёра не даётся)")
                     + ", а после выплаты банка - «Начислить бонус».\n");
             if (submission.getCreatedAt() != null) {
                 sb.append("📅 Квест взят ").append(escape(submission.getCreatedAt().format(DATE_TIME_FORMATTER))).append("\n");
@@ -16248,7 +16256,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (isOtpMissionQuest(submission.getQuest())) {
             try {
                 sendOtpMission(submission.getUser(), submission.getQuest(), submission,
-                        "🪙 <b>+" + rewardGrant.totalExc() + " EXC</b> · ✨ +" + rewardGrant.xp() + " XP");
+                        rewardGrant.totalExc() > 0 || rewardGrant.xp() > 0
+                                ? "🪙 <b>+" + rewardGrant.totalExc() + " EXC</b> · ✨ +" + rewardGrant.xp() + " XP" : null);
                 sendModerationQueue(callbackQuery.getFrom().getId());
                 answer(callbackQuery.getId(), "Заявка одобрена");
                 return;

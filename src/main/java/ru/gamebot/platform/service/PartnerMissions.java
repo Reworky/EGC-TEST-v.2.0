@@ -40,14 +40,14 @@ public final class PartnerMissions {
     public static final PartnerMission OTP = PartnerMission.builder()
             .key("otp")
             .gameName("Банк-партнёр")
-            .questTitle("Получи 500 ₽ себе на карту + Telegram Premium 🎁")
-            .listLabel("Получи 500 ₽ + Telegram Premium за банковскую карту")
+            .questTitle("Получи 1 000 ₽ себе на карту + Telegram Premium 🎁")
+            .listLabel("Получи 1 000 ₽ + Telegram Premium за банковскую карту")
             .bannerResource("partner_card_banner.jpg")
             .stage1Banner("partner_card_banner.jpg")
             .shortTitle("Банковская карта")
             .missionTitle("банковская карта")
             .waitingName("Банковская карта")
-            .rewardExc(1_000)
+            .rewardExc(0)
             .bonusExc(0)
             .bonusItem("Telegram Premium на 1 месяц")
             .finalTextItem(FINAL_TEXT_PREMIUM)
@@ -88,9 +88,9 @@ public final class PartnerMissions {
             .finalReasons(new String[][]{
                     FINAL_FAKE,
                     {"📛 Условия акции не выполнены", "Условия акции банка не выполнены: карта не новая или оформлена не по ссылке, либо покупка сделана вне 30 дней после активации."}})
-            .bankRewardLine("💳 500 ₽ от банка на карту")
-            .bankRewardRub(500)
-            .managerConditions("Нужна новая банковская карта (18+, РФ). Одна покупка от 500 ₽ в течение 30 дней.")
+            .bankRewardLine("💳 1 000 ₽ от банка на карту")
+            .bankRewardRub(1000)
+            .managerConditions("Нужна новая банковская карта (18+, РФ, доставка курьером). Одна покупка от 100 ₽ в течение 30 дней.")
             .build();
 
     /** Т-Банк Black (приведи друга; правила «октябрь 2026 2.0», ноябрьскую версию сверить): окно 90 дней от даты заявки, бонус банка до 30 дней после покупки. Квест создаётся неактивным. */
