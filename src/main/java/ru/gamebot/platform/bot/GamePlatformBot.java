@@ -14352,10 +14352,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         // 1) Запас: выпавшие предметы ждут, пока игрок сам нажмёт «Применить»
         java.util.List<ru.gamebot.platform.domain.model.UserPrize> stock = excWheelService.inventory(user.getId());
-        sb.append("🎒 <b>В запасе</b> (ничего не включается само: применяй, когда нужно)\n");
         if (stock.isEmpty()) {
-            sb.append("Пока пусто. Предметы из колеса и слота попадают сюда.\n");
+            sb.append("🎒 <b>В запасе:</b> Пока пусто. Предметы из колеса и слота попадают сюда.\n");
         } else {
+            sb.append("🎒 <b>В запасе:</b>\n");
             java.util.Map<String, java.util.List<ru.gamebot.platform.domain.model.UserPrize>> byType = new java.util.LinkedHashMap<>();
             for (ru.gamebot.platform.domain.model.UserPrize it : stock) byType.computeIfAbsent(it.getItemType(), k -> new ArrayList<>()).add(it);
             for (java.util.Map.Entry<String, java.util.List<ru.gamebot.platform.domain.model.UserPrize>> e : byType.entrySet()) {
