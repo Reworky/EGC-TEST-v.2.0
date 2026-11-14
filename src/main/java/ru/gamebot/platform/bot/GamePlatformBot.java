@@ -5717,7 +5717,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .append("<blockquote expandable>")
                 .append("✅ Вывод по курсу 100%").append(partner ? "" : " вместо обычных ~" + nonPartnerPercent() + "%").append(" - на все EXC, в том числе будущие\n")
                 .append("✅ Партнёрские цены за звёзды и в магазине наград\n")
-                .append(partner ? "" : "✅ 500р от банка на вашу карту + Телеграм Премиум (1 месяц)\n")
+                .append(partner ? "" : "✅ 1000р от банка на вашу карту + Телеграм Премиум (1 месяц)\n")
                 .append("✅ Бейдж «Банкир EGC» в профиле")
                 .append("</blockquote>");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
