@@ -229,6 +229,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ScheduledExecutorService albumScheduler = Executors.newSingleThreadScheduledExecutor();
     /** Кадры анимации открытия сундука (sendChestOpenAnimated): приз уже выдан, задержки только косметика, поэтому не блокируем обработку апдейтов. */
     private final ScheduledExecutorService chestScheduler = Executors.newSingleThreadScheduledExecutor();
+    /** Кадры анимации слота (handleSlotAction): результат уже посчитан и EXC списаны, задержки только косметика. */
+    private final ScheduledExecutorService slotScheduler = Executors.newSingleThreadScheduledExecutor();
+    /** До какого момента (мс) у игрока крутится слот: повторное нажатие «Крутить» во время анимации игнорируется (двойной тап не списывает EXC дважды). */
+    private final ConcurrentHashMap<Long, Long> slotBusyUntil = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ScheduledFuture<?>> albumTimers = new ConcurrentHashMap<>();
     // telegramId → timestamp of last successful subscription check (ms); re-check after 1 hour
     private final ConcurrentHashMap<Long, Long> subscriptionCheckCache = new ConcurrentHashMap<>();
@@ -14334,28 +14338,62 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendSlotMenu(user);
             return;
         }
+        long nowMs = System.currentTimeMillis();
+        Long busy = slotBusyUntil.get(user.getTelegramId());
+        if (busy != null && busy > nowMs) return;
+        slotBusyUntil.put(user.getTelegramId(), nowMs + 4000);
         try {
             ru.gamebot.platform.service.ExcWheelService.SlotResult result = excWheelService.spinSlot(user.getId());
-            StringBuilder sb = new StringBuilder("🎰 <b>Слот</b>\n\n<b>[ ").append(String.join(" | ", result.reels())).append(" ]</b>\n\n");
+            String[] r = result.reels();
+            boolean jackpot = result.prize() != null && "PASS".equals(result.prize().type());
+            // Итоговый экран
+            StringBuilder fin = new StringBuilder("🎰 <b>Слот</b>\n\n<b>[ ").append(String.join(" | ", r)).append(" ]</b>\n\n");
             if (result.prize() == null) {
-                sb.append("Три разных символа, приза нет.\n");
+                fin.append("Три разных символа, приза нет. Попробуй ещё раз!\n");
             } else {
-                sb.append("🎉 <b>Тройка!</b>\n");
-                if (result.note() != null) sb.append(escape(result.note())).append("\n");
-                sb.append("<b>").append(escape(result.prize().label())).append("</b>\n").append(escape(result.prize().description())).append("\n");
+                fin.append(jackpot ? "💥🎊 <b>ДЖЕКПОТ!</b> 🎊💥\n" : "🎉 <b>Тройка!</b> ✨\n");
+                if (result.note() != null) fin.append(escape(result.note())).append("\n");
+                fin.append("<b>").append(escape(result.prize().label())).append("</b>\n").append(escape(result.prize().description())).append("\n");
             }
-            sb.append("\n🪙 Баланс: <b>").append(fmtExc(result.balanceAfter())).append(" EXC</b>");
+            fin.append("\n🪙 Баланс: <b>").append(fmtExc(result.balanceAfter())).append(" EXC</b>");
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
             if (result.balanceAfter() >= ru.gamebot.platform.service.ExcWheelService.SLOT_PRICE) {
                 rows.add(List.of(keyboardFactory.callback("🎰 Ещё раз (−" + fmtExc(ru.gamebot.platform.service.ExcWheelService.SLOT_PRICE) + " EXC)", "slot:spin")));
             }
             rows.add(List.of(keyboardFactory.callback("📜 Мои призы", "slot:prizes")));
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "slot:menu"), keyboardFactory.callback("🏠 Меню", "menu:main")));
-            sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+            InlineKeyboardMarkup finalKb = keyboardFactory.rowsLayout(rows);
+            // Анимация: тот же экран по кадрам (крутится -> первая катушка -> вторая -> итог), кнопок до конца нет, чтобы не нажали «Ещё раз» посреди вращения
+            Long chatId = user.getTelegramId();
+            Integer messageId = callbackQuery.getMessage() != null ? callbackQuery.getMessage().getMessageId() : null;
+            String fin2 = fin.toString();
+            String[] sym = ru.gamebot.platform.service.ExcWheelService.SLOT_SYMBOLS;
+            if (messageId == null || !editHtmlMessage(chatId, messageId, "🎰 <b>Слот</b>\n\n<b>[ 🎰 | 🎰 | 🎰 ]</b>\n\nКрутим…", null)) {
+                sendText(chatId, fin2, finalKb);
+                return;
+            }
+            String spinFrame = "🎰 <b>Слот</b>\n\n<b>[ " + sym[1] + " | " + sym[2] + " | " + sym[0] + " ]</b>\n\n🌀 Крутится…";
+            String reel1 = "🎰 <b>Слот</b>\n\n<b>[ " + r[0] + " | 🎰 | 🎰 ]</b>\n\nПервая остановилась…";
+            String reel2 = "🎰 <b>Слот</b>\n\n<b>[ " + r[0] + " | " + r[1] + " | 🎰 ]</b>\n\n"
+                    + (r[0].equals(r[1]) ? "Два одинаковых… ✨ Что будет на третьем?" : "Последняя катушка…");
+            slotScheduler.schedule(() -> editHtmlMessage(chatId, messageId, spinFrame, null), 400, java.util.concurrent.TimeUnit.MILLISECONDS);
+            slotScheduler.schedule(() -> editHtmlMessage(chatId, messageId, reel1, null), 1100, java.util.concurrent.TimeUnit.MILLISECONDS);
+            slotScheduler.schedule(() -> editHtmlMessage(chatId, messageId, reel2, null), 1900, java.util.concurrent.TimeUnit.MILLISECONDS);
+            slotScheduler.schedule(() -> {
+                if (!editHtmlMessage(chatId, messageId, fin2, finalKb)) {
+                    try {
+                        sendText(chatId, fin2, finalKb);
+                    } catch (Exception e) {
+                        log.warn("Slot final frame failed for {}", chatId, e);
+                    }
+                }
+            }, r[0].equals(r[1]) ? 3200 : 2700, java.util.concurrent.TimeUnit.MILLISECONDS);
         } catch (IllegalArgumentException e) {
+            slotBusyUntil.remove(user.getTelegramId());
             sendText(user.getTelegramId(), "⚠️ " + escape(e.getMessage()), keyboardFactory.rowsLayout(List.of(
                     List.of(keyboardFactory.callback("⬅️ Назад", "slot:menu")))));
         } catch (Exception e) {
+            slotBusyUntil.remove(user.getTelegramId());
             log.error("Slot spin failed for {}", user.getTelegramId(), e);
             sendText(user.getTelegramId(), "⚠️ Не получилось. EXC не списаны, попробуй ещё раз позже.", keyboardFactory.rowsLayout(List.of(
                     List.of(keyboardFactory.callback("⬅️ Назад", "menu:cat:fortune")))));
