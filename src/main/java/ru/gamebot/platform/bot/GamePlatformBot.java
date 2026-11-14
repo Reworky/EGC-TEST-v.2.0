@@ -25841,11 +25841,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     : switch (event.getNotificationNumber()) {
                 case 1 -> "🎮 <b>У тебя уже 200 EXC</b>\n\n"
                         + "Первый квест займёт около 5 минут." + (game == null ? "" : " Сейчас чаще всего берут <b>" + escape(game) + "</b>.");
-                case 2 -> "💡 <b>Скриншоты нужны не всегда</b>\n\n"
-                        + "В Brawl Stars, Clash Royale, Clash of Clans и других играх прогресс считается сам: привяжи тег, сыграй и получи EXC.";
+                case 2 -> null; // 14.11.2026 (владелец): напоминание «Скриншоты нужны не всегда» убрано совсем
                 default -> "🔔 <b>Последнее напоминание</b>\n\n"
                         + "Квесты никуда не денутся, но проще начать сразу. Выбери игру и возьми первый квест.";
             };
+            if (msg == null) return;
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
             if (game != null) {
                 rows.add(List.of(keyboardFactory.callback("🎮 Квесты: " + trim(game, 24), "quests:game:" + encodeGameToken(game))));

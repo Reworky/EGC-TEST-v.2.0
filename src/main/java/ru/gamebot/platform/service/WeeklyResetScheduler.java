@@ -451,6 +451,14 @@ public class WeeklyResetScheduler {
                     shouldSend = true;
                 }
 
+                // 14.11.2026 (владелец): второе напоминание «Скриншоты нужны не всегда» убрано. Тем, кто уже прошёл регистрацию, счётчик двигаем без отправки и без шлюза
+                // уведомлений (третье напоминание придёт в те же сроки); не прошедшие регистрацию по-прежнему получают призыв завершить её.
+                if (shouldSend && sent == 1 && user.isRegistrationCompleted()) {
+                    user.setOnboardingNotificationsSent(sent + 1);
+                    user.setLastOnboardingNotification(now);
+                    appUserRepository.save(user);
+                    continue;
+                }
                 if (shouldSend) {
                     if (!notificationGate.tryAcquire(user, NudgeType.ONBOARDING)) continue; // до отметки счётчика - повтор на следующем часовом тике
                     user.setOnboardingNotificationsSent(sent + 1);
