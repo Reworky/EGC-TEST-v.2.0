@@ -14301,9 +14301,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 reply = "⏸ Виджеты выключены, кнопка скрыта.";
             }
             case "test" -> {
-                boolean ok = sendRateCalculator(admin, true);
-                reply = ok ? "✅ Bot API принял виджет (калькулятор курса выше). Если он не отобразился или не двигается ползунок, обновите Telegram."
-                        : "⚠️ Bot API не принял виджет: метод может быть недоступен для бота или клиента. Причина в логах бота (строка sendWidget rejected).";
+                // Два шага: минимальный виджет (проверка самого метода) и калькулятор (проверка нашего HTML). Ответ Bot API показываем прямо здесь.
+                ru.gamebot.platform.service.WidgetService.SendResult minimal = widgetService.sendDetailed(admin.getTelegramId(),
+                        "<div style=\"padding:14px;background:#0f1530;color:#fff;font-family:sans-serif\">Тест виджета: если вы это видите, метод sendWidget работает.</div>", 80, null);
+                StringBuilder r = new StringBuilder("🧩 <b>Проверка виджетов</b>\n\n");
+                r.append("1. Минимальный виджет: ").append(minimal.ok() ? "✅ принят" : "⚠️ отклонён\n<code>" + escape(String.valueOf(minimal.error())) + "</code>").append("\n");
+                if (minimal.ok()) {
+                    long coins = admin.getCoins();
+                    double ratio = withdrawalRatioFor(admin, Math.max(1, coins), false);
+                    ru.gamebot.platform.service.WidgetService.SendResult calc = widgetService.sendDetailed(admin.getTelegramId(),
+                            ru.gamebot.platform.service.WidgetService.rateCalculatorHtml(Math.max(10_000, coins), (int) Math.round(ratio * 100)), 380, null);
+                    r.append("2. Калькулятор курса: ").append(calc.ok() ? "✅ принят (виджет выше)" : "⚠️ отклонён\n<code>" + escape(String.valueOf(calc.error())) + "</code>");
+                } else {
+                    r.append("2. Калькулятор: не проверялся, пока не принимается минимальный виджет.");
+                }
+                reply = r.toString();
             }
             default -> reply = "🧩 <b>HTML-виджеты</b>\n\nСтатус: " + (widgetService.isEnabled() ? "включены" : "выключены")
                     + "\n\n<code>/widget test</code> - прислать калькулятор курса себе\n<code>/widget on|off</code> - показать или скрыть кнопку игрокам";

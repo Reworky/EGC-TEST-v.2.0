@@ -45,12 +45,19 @@ public class WidgetService {
         appSettingRepository.save(s);
     }
 
+    /** Результат отправки: ok - Bot API принял; error - ответ Bot API (или исключение) для админской диагностики. */
+    public record SendResult(boolean ok, String error) {}
+
     /** Отправляет виджет в личный чат. true - Bot API принял; false - не получилось (в лог пишется причина), вызывающий показывает запасной вариант. */
     public boolean send(Long chatId, String html, int height, String caption) {
+        return sendDetailed(chatId, html, height, caption).ok();
+    }
+
+    public SendResult sendDetailed(Long chatId, String html, int height, String caption) {
         try {
             if (html == null || html.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_HTML_BYTES) {
                 log.warn("Widget html is empty or too large");
-                return false;
+                return new SendResult(false, "html пустой или больше 32 КБ");
             }
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("chat_id", chatId);
@@ -71,10 +78,10 @@ public class WidgetService {
             if (!ok) {
                 log.warn("sendWidget rejected for chat {}: HTTP {} {}", chatId, response.statusCode(), response.body());
             }
-            return ok;
+            return new SendResult(ok, ok ? null : "HTTP " + response.statusCode() + ": " + response.body());
         } catch (Exception e) {
             log.warn("sendWidget failed for chat {}", chatId, e);
-            return false;
+            return new SendResult(false, "исключение: " + e.getClass().getSimpleName() + " " + e.getMessage());
         }
     }
 
