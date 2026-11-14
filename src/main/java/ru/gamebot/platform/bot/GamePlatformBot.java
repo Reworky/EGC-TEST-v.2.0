@@ -14352,7 +14352,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         // 1) Запас: выпавшие предметы ждут, пока игрок сам нажмёт «Применить»
         java.util.List<ru.gamebot.platform.domain.model.UserPrize> stock = excWheelService.inventory(user.getId());
-        if (stock.isEmpty()) {
+        if (stock.isEmpty() && user.getTickets() <= 0) {
             sb.append("🎒 <b>В запасе:</b> Пока пусто. Предметы из колеса и слота попадают сюда.\n");
         } else {
             sb.append("🎒 <b>В запасе:</b>\n");
@@ -14363,6 +14363,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 int count = e.getValue().size();
                 sb.append("\n<b>").append(info.label()).append(count > 1 ? " ×" + count : "").append("</b>\n").append(escape(info.what())).append("\n");
                 rows.add(List.of(keyboardFactory.callback("✅ Применить: " + info.label(), "exwheel:apply:" + e.getValue().get(0).getId() + ":" + origin)));
+            }
+            if (user.getTickets() > 0) {
+                sb.append("\n<b>🎟 Билеты бесплатного колеса ×").append(user.getTickets()).append("</b>\nКаждый билет - один спин бесплатного колеса фортуны. Билет тратится, только когда ты крутишь.\n");
+                rows.add(List.of(keyboardFactory.callback("🎡 Использовать билет: крутить бесплатное колесо", "wheel:menu")));
             }
         }
         // 2) Что действует сейчас
@@ -14393,10 +14397,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             any = true;
         }
         if (!any) sb.append("Сейчас ничего не действует.\n");
-        if (user.getTickets() > 0) {
-            sb.append("\n🎟 Билетов бесплатного колеса: <b>").append(user.getTickets()).append("</b>\n");
-            rows.add(List.of(keyboardFactory.callback("🎡 Крутить бесплатное колесо", "wheel:menu")));
-        }
         // 3) История
         ru.gamebot.platform.service.ExcWheelService.MyPrizes mine = excWheelService.myPrizes(user.getId());
         sb.append("\n<b>Последние выпадения:</b>\n");
@@ -14552,7 +14552,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (result.balanceAfter() >= ru.gamebot.platform.service.ExcWheelService.SLOT_PRICE) {
                 rows.add(List.of(keyboardFactory.callback("🎰 Ещё раз (−" + fmtExc(ru.gamebot.platform.service.ExcWheelService.SLOT_PRICE) + " EXC)", "slot:spin")));
             }
-            rows.add(List.of(keyboardFactory.callback("📜 Мои призы: применить", "slot:prizes")));
+            if (result.prize() != null && result.prize().itemId() != null) {
+                rows.add(0, List.of(keyboardFactory.callback("✅ Применить сейчас: " + result.prize().label(), "exwheel:apply:" + result.prize().itemId() + ":s")));
+            }
+            rows.add(List.of(keyboardFactory.callback("📜 Мои призы", "slot:prizes")));
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "slot:menu"), keyboardFactory.callback("🏠 Меню", "menu:main")));
             InlineKeyboardMarkup finalKb = keyboardFactory.rowsLayout(rows);
             // Анимация: тот же экран по кадрам (крутится -> первая катушка -> вторая -> итог), кнопок до конца нет, чтобы не нажали «Ещё раз» посреди вращения
@@ -14641,7 +14644,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (result.balanceAfter() >= ru.gamebot.platform.service.ExcWheelService.PRICE) {
                 rows.add(List.of(keyboardFactory.callback("🎰 Ещё раз (−" + fmtExc(ru.gamebot.platform.service.ExcWheelService.PRICE) + " EXC)", "exwheel:spin")));
             }
-            rows.add(List.of(keyboardFactory.callback("📜 Мои призы: применить", "exwheel:prizes")));
+            for (ru.gamebot.platform.service.ExcWheelService.Prize won : result.prizes()) {
+                if (won.itemId() != null) rows.add(0, List.of(keyboardFactory.callback("✅ Применить сейчас: " + won.label(), "exwheel:apply:" + won.itemId() + ":w")));
+            }
+            rows.add(List.of(keyboardFactory.callback("📜 Мои призы", "exwheel:prizes")));
             rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "exwheel:menu"), keyboardFactory.callback("🏠 Меню", "menu:main")));
             InlineKeyboardMarkup finalKb = keyboardFactory.rowsLayout(rows);
             String finalText = sb.toString();

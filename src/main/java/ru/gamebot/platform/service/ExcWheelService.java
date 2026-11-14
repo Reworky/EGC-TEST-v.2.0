@@ -61,7 +61,12 @@ public class ExcWheelService {
     private final AppSettingRepository appSettingRepository;
     private final UserPrizeRepository prizeRepository;
 
-    public record Prize(String type, String label, String description) {}
+    /** itemId - id предмета в запасе (для кнопки «Применить» на экране результата); у билета и пустого результата null. */
+    public record Prize(String type, String label, String description, Long itemId) {
+        public Prize(String type, String label, String description) {
+            this(type, label, description, null);
+        }
+    }
 
     public record SpinResult(List<Prize> prizes, long spent, long balanceAfter) {}
 
@@ -151,9 +156,9 @@ public class ExcWheelService {
         item.setUserId(user.getId());
         item.setItemType(itemType);
         item.setSource(source);
-        prizeRepository.save(item);
+        item = prizeRepository.save(item);
         ItemInfo info = itemInfo(itemType);
-        return new Prize(itemType, info.label(), "Предмет добавлен в «Мои призы»: примени его, когда он понадобится.");
+        return new Prize(itemType, info.label(), "Предмет добавлен в «Мои призы»: он не включается сам, примени его кнопкой, когда понадобится.", item.getId());
     }
 
     public record ApplyResult(String label, String message, ItemInfo info) {}
