@@ -54,6 +54,11 @@ public class WidgetService {
     }
 
     public SendResult sendDetailed(Long chatId, String html, int height, String caption) {
+        return sendDetailed(chatId, html, height, caption, false);
+    }
+
+    /** allowQueries - разрешить виджету запросы к боту (в документации: без этого флага все запросы виджета отклоняются). */
+    public SendResult sendDetailed(Long chatId, String html, int height, String caption, boolean allowQueries) {
         try {
             if (html == null || html.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_HTML_BYTES) {
                 log.warn("Widget html is empty or too large");
@@ -63,6 +68,7 @@ public class WidgetService {
             body.put("chat_id", chatId);
             body.put("html", html);
             body.put("height", Math.max(50, Math.min(600, height)));
+            if (allowQueries) body.put("allow_queries", true);
             if (caption != null && !caption.isBlank()) {
                 body.put("caption", caption);
                 body.put("parse_mode", "HTML");

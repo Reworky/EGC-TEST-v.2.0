@@ -14306,6 +14306,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         "<div style=\"padding:14px;background:#0f1530;color:#fff;font-family:sans-serif\">Тест виджета: если вы это видите, метод sendWidget работает.</div>", 80, null);
                 StringBuilder r = new StringBuilder("🧩 <b>Проверка виджетов</b>\n\n");
                 r.append("1. Минимальный виджет: ").append(minimal.ok() ? "✅ принят" : "⚠️ отклонён\n<code>" + escape(String.valueOf(minimal.error())) + "</code>").append("\n");
+                if (!minimal.ok()) {
+                    // Повтор с allow_queries: в документации этот флаг влияет на запросы виджета, возможно и на допуск
+                    ru.gamebot.platform.service.WidgetService.SendResult withQueries = widgetService.sendDetailed(admin.getTelegramId(),
+                            "<div style=\"padding:14px;background:#0f1530;color:#fff;font-family:sans-serif\">Тест виджета с allow_queries.</div>", 80, null, true);
+                    r.append("1б. С allow_queries: ").append(withQueries.ok() ? "✅ принят" : "⚠️ отклонён\n<code>" + escape(String.valueOf(withQueries.error())) + "</code>").append("\n");
+                    if (withQueries.ok()) minimal = withQueries;
+                }
                 if (minimal.ok()) {
                     long coins = admin.getCoins();
                     double ratio = withdrawalRatioFor(admin, Math.max(1, coins), false);
