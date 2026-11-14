@@ -93,7 +93,7 @@ public class PerksController {
                 }
                 case "extraslot" -> {
                     sinkShopService.purchaseExtraSlot(user);
-                    yield "Доп. слот активирован! Теперь можно вести на один квест больше в течение 48 часов. Третий слот открывает EGC Pass.";
+                    yield "Доп. слот активирован! Между взятием квестов всегда действует пауза в 1 час: слот и снятие кулдауна её не отменяют. Теперь можно вести на один квест больше в течение 48 часов. Третий слот открывает EGC Pass.";
                 }
                 case "cooldownrefund" -> {
                     sinkShopService.refundCooldownRemoval(user);

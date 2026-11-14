@@ -10411,7 +10411,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "⏳ Кулдаун активен. Повторный квест в этой игре доступен через " + DurationFormatter.formatExact(result.minutesLeft())
                             + ".\n\n💡 Можно снять кулдаун за 3 000 EXC в разделе Предметы клуба.";
             // Без фиксированного "раз в час" в тексте — порог для новичка короче (15 мин), не всегда час.
-            case TAKE_COOLDOWN -> "⏳ Новый квест можно будет взять чуть позже. Подождите ещё <b>" + result.minutesLeft() + " мин.</b>";
+            case TAKE_COOLDOWN -> "⏳ Новый квест можно будет взять чуть позже. Подождите ещё <b>" + result.minutesLeft() + " мин.</b>\nПауза между взятием квестов действует всегда: слот и снятие кулдауна её не отменяют.";
             case PARTICIPANT_LIMIT_REACHED ->
                     "🔒 Квест закрыт — набор участников завершён (" + quest.getParticipantLimit() + "/" + quest.getParticipantLimit() + "). Попробуйте другой квест.";
             case QUEST_INACTIVE -> quest.getChannelCheckChatId() != null && questService.isChannelCampaignClosed(quest)
@@ -11981,6 +11981,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         info.append("🪙 Баланс: <b>").append(user.getCoins()).append(" EXC</b>\n");
         if (slotFromPass) info.append("📂 Доп. слот квеста: <b>включён в EGC Pass</b>\n");
         else if (slotActive) info.append("📂 Доп. слот активен до: <b>").append(user.getQuestSlotExtraUntil().format(dtFmt)).append("</b>\n");
+        info.append("ℹ️ Слот позволяет вести два квеста одновременно. Между взятием квестов всегда действует пауза в 1 час: слот и снятие кулдауна её не отменяют.\n");
         info.append(slotFromPass
                 ? "⭐ EGC Pass: 3-й слот, снятие кулдауна до <b>"
                         + SinkShopService.PASS_MAX_DAILY_COOLDOWN_REMOVALS + "</b> в сутки, бесплатная страховка раз в месяц\n"
@@ -12074,7 +12075,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 try {
                     sinkShopService.purchaseExtraSlot(user);
                     sendText(user.getTelegramId(),
-                        "📂 <b>Доп. слот активирован!</b>\n\nТеперь вы можете вести на один квест больше в течение 48 часов (третий слот открывает только EGC Pass).\nСписано 3 500 EXC.",
+                        "📂 <b>Доп. слот активирован!</b>\n\nМежду взятием квестов всегда действует пауза в 1 час: слот и снятие кулдауна её не отменяют.\n\nТеперь вы можете вести на один квест больше в течение 48 часов (третий слот открывает только EGC Pass).\nСписано 3 500 EXC.",
                         backMenuKeyboard("menu:sink"));
                 } catch (IllegalArgumentException e) {
                     sendText(user.getTelegramId(), "⚠️ " + e.getMessage(), sinkErrorKeyboard(user, e.getMessage()));

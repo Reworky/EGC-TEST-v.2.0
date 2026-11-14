@@ -24,7 +24,7 @@ const PERK_CATEGORIES = [
     items: [
       { key: 'insurance', title: '🛡️ Страховка провала', price: 1500, blockedBy: 'insuranceActive', description: 'Если следующий отчёт отклонят — сможете отправить его повторно без штрафа.' },
       { key: 'passinsurance', title: '🛡️ Страховка по EGC Pass', price: 0, blockedBy: 'passInsuranceUsed', activeLabel: 'Уже взята в этом месяце', hideIf: s => !s.egcPass, description: 'Бесплатная страховка провала раз в месяц для подписчиков EGC Pass.' },
-      { key: 'extraslot', title: '📂 Доп. слот квеста 48ч', price: 3500, blockedBy: 'extraSlotActive', activeUntilField: 'extraSlotUntil', description: 'На 48 часов на один одновременный квест больше. Третий слот открывает только EGC Pass.' },
+      { key: 'extraslot', title: '📂 Доп. слот квеста 48ч', price: 3500, blockedBy: 'extraSlotActive', activeUntilField: 'extraSlotUntil', description: 'На 48 часов на один одновременный квест больше. Между взятием квестов всегда пауза 1 час: слот её не отменяет. Третий слот открывает только EGC Pass.' },
       { key: 'cooldown', title: '⏱️ Снятие кулдауна', price: 3000, blockedBy: 'cooldownBypassActive', activeLabel: 'Ждёт квест с кулдауном', description: 'Снимает кулдаун для следующего квеста в любой игре. Применится автоматически при взятии квеста с кулдауном. Не снимает отдельный лимит «1 квест в час» между любыми квестами. Лимит: 2 раза в сутки, с EGC Pass — 4. Если ни на одном квесте нет кулдауна, купить нельзя; купленное и неиспользованное можно отменить с возвратом EXC.' },
     ],
   },

@@ -705,7 +705,7 @@ public class QuestController {
             case SAME_QUEST_COOLDOWN -> "Этот квест можно выполнять не чаще 1 раза в " + DurationFormatter.format(result.minutesLeft()) + ".";
             case GAME_COOLDOWN -> "Кулдаун по этой игре: ещё " + DurationFormatter.formatExact(result.minutesLeft()) + ".";
             // Без фиксированного "час" — порог для новичка короче (15 мин), не всегда час.
-            case TAKE_COOLDOWN -> "Новый квест можно будет взять чуть позже. Осталось " + result.minutesLeft() + " мин.";
+            case TAKE_COOLDOWN -> "Новый квест можно будет взять чуть позже. Осталось " + result.minutesLeft() + " мин. Пауза между взятием квестов действует всегда: слот и снятие кулдауна её не отменяют.";
             case REJECT_COOLDOWN -> "После отклонения повторный отчёт можно отправить через " + result.minutesLeft() + " мин.";
             case HAS_PENDING_REPORT -> "У вас уже есть отчёт на проверке у модератора — дождитесь решения, прежде чем отправлять следующий.";
             case EXPIRED -> "Срок выполнения этого квеста истёк.";
