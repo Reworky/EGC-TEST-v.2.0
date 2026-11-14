@@ -6564,9 +6564,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             text.append("✅ <b>Сундук сегодня открыт</b>\nНовый бесплатный сундук будет завтра.\n\n");
             text.append("<blockquote expandable><b>Призы бесплатного сундука:</b>\n").append(chestPoolLines(egcPass));
         }
+        if (!egcPass) {
+            text.append("\n\n🔁 <b>Улучшенный сундук за ").append(CHEST_REROLL_STARS_PRICE).append(" ⭐</b> щедрее (можно сколько угодно раз):\n")
+                    .append(chestPoolLines(true));
+        }
         text.append("</blockquote>");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (available) rows.add(List.of(keyboardFactory.callback("🎁 Открыть сундук", "menu:chestgo")));
+        rows.add(List.of(keyboardFactory.callback("🔁 " + (egcPass ? "Ещё один улучшенный сундук — " : "Улучшенный сундук — ")
+                + CHEST_REROLL_STARS_PRICE + " ⭐", "menu:chestreroll")));
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", peekBackTo(user, "menu:cat:fortune")),
                 keyboardFactory.callback("🏠 Меню", "menu:main")));
@@ -6647,6 +6653,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private InlineKeyboardMarkup chestResultKeyboard(AppUser user) {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("🔁 Ещё один сундук — " + CHEST_REROLL_STARS_PRICE + " ⭐", "menu:chestreroll")));
         // Игрок только что получил приз - хороший момент предложить рекламу за EXC (по желанию, не навязчиво)
         InlineKeyboardButton adButton = adOffersAllowed(user) ? botAdOfferButton(user) : null;
         if (adButton != null) rows.add(List.of(adButton));
@@ -6664,7 +6671,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "📋 <b>Призы сундука дня</b>\n\n"
                         + "<blockquote expandable><b>Бесплатно (раз в сутки):</b>\n"
-                        + chestPoolLines(false) + "</blockquote>",
+                        + chestPoolLines(false) + "\n\n"
+                        + "<b>Реролл за " + CHEST_REROLL_STARS_PRICE + " ⭐ (можно сколько угодно раз):</b>\n"
+                        + chestPoolLines(true) + "</blockquote>",
                 backMenuKeyboard("menu:balance"));
     }
 
