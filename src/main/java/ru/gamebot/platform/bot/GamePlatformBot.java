@@ -1441,6 +1441,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleOnboardingCallback(callbackQuery, user, data.substring("onboarding:".length()));
             return;
         }
+        if (data.startsWith("welcome:")) {
+            handleWelcomeStoriesCallback(user, data.substring("welcome:".length()));
+            return;
+        }
 
         if (data.startsWith("menu:")) {
             handleMenuAction(callbackQuery, user, data.substring("menu:".length()));
@@ -5087,6 +5091,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendHelpCategory(AppUser user) {
         sendMenuCategory(user, "🆘 <b>Помощь</b>", List.of(
                 List.of(keyboardFactory.callback("💡 Откуда берутся деньги", "menu:moneyloop")),
+                List.of(keyboardFactory.callback("🎬 Как это работает", "welcome:r:1")),
                 List.of(keyboardFactory.callback("❓ FAQ — частые вопросы", "menu:faq")),
                 List.of(keyboardFactory.callback("📋 Правила клуба", "menu:rules")),
                 List.of(keyboardFactory.callback("🆘 Поддержка", "menu:support")),
@@ -5412,6 +5417,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         user.setOnboardingNotificationsSent(0);
         userService.save(user);
 
+        // Welcome stories сразу после /start (15.11.2026, владелец): три слайда, дальше - прежний первый экран (выбор игры). Выключатель: app_settings 'onboarding.welcome_stories.enabled' = false
+        if (settingEnabled(WELCOME_STORIES_SETTING)) {
+            welcomeStat("shown");
+            sendWelcomeSlide(user, "f", 1);
+            return;
+        }
+        continueOnboarding(user);
+    }
+
+    /** Первый экран после приветственных слайдов (или сразу после регистрации, если слайды выключены): выбор игры или прежнее приветствие. */
+    private void continueOnboarding(AppUser user) {
         if (settingEnabled(ONBOARDING_V2_SETTING)) {
             sendStarterPicker(user, true);
             return;
@@ -5422,6 +5438,85 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.rowsLayout(List.of(
                         List.of(keyboardFactory.callback("Отлично, что дальше? →", "onboarding:guide"))
                 )));
+    }
+
+    // ─── Welcome stories: три слайда сразу после /start (15.11.2026, тексты утверждены владельцем) ───────────────
+    // Один экран, который листается кнопками (картинка и текст меняются на месте). Баннеры - ресурсы welcome_1.jpg ... welcome_3.jpg: нет файла - слайд идёт текстом.
+    // Режим f - первый показ при регистрации (после слайдов идёт выбор игры), r - повтор из «Помощи» (после слайдов - главное меню).
+
+    private static final String WELCOME_STORIES_SETTING = "onboarding.welcome_stories.enabled";
+
+    private static final String[][] WELCOME_SLIDES = {
+            {"🎮 <b>Играй и получай EXC</b>\n\n"
+                    + "Бери квесты по своим играм: Brawl Stars, Clash Royale, CS2 и другим.\n\n"
+                    + "За каждый засчитанный квест приходят EXC и опыт."},
+            {"💸 <b>EXC превращаются в реальные вещи</b>\n\n"
+                    + "Выводи на карту, в звёзды Telegram или трать в магазине наград на донат для своей игры."},
+            {"💎 <b>Спонсорские квесты</b>\n\n"
+                    + "Есть и особые квесты от партнёров: за простые действия там платят реальными деньгами, в разы больше, чем за игровые.\n\n"
+                    + "Раздел «Спонсорские квесты» в главном меню.\n\n"
+                    + "Заглядывай, новые задания появляются часто."}};
+
+    /** Счётчики воронки слайдов в app_settings (welcome.stat.shown / s2 / s3 / done / skip): сколько новичков дошло до какого слайда. Читать: scripts/check-welcome-stories.sql. */
+    private void welcomeStat(String name) {
+        try {
+            String key = "welcome.stat." + name;
+            AppSetting st = appSettingRepository.findById(key).orElseGet(() -> {
+                AppSetting n = new AppSetting();
+                n.setKey(key);
+                n.setValue("0");
+                return n;
+            });
+            st.setValue(String.valueOf(Long.parseLong(st.getValue().trim()) + 1));
+            appSettingRepository.save(st);
+        } catch (Exception e) {
+            log.warn("welcomeStat {} failed", name, e);
+        }
+    }
+
+    private void sendWelcomeSlide(AppUser user, String mode, int n) {
+        int total = WELCOME_SLIDES.length;
+        n = Math.max(1, Math.min(total, n));
+        StringBuilder dots = new StringBuilder();
+        for (int i = 1; i <= total; i++) dots.append(i == n ? "●" : "○").append(i < total ? " " : "");
+        String text = WELCOME_SLIDES[n - 1][0] + "\n\n" + dots;
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (n < total) {
+            List<InlineKeyboardButton> navRow = new ArrayList<>();
+            if (n > 1) navRow.add(keyboardFactory.callback("◀️", "welcome:" + mode + ":" + (n - 1)));
+            navRow.add(keyboardFactory.callback("Далее ▶️", "welcome:" + mode + ":" + (n + 1)));
+            rows.add(navRow);
+            rows.add(List.of(keyboardFactory.callback("Пропустить", "welcome:" + mode + ":skip")));
+        } else {
+            rows.add(List.of(keyboardFactory.callback("🚀 Начать играть", "welcome:" + mode + ":done")));
+        }
+        String banner = "welcome_" + n + ".jpg";
+        if (getClass().getResource("/" + banner) != null) {
+            sendResourceBanner(user.getTelegramId(), banner, text, keyboardFactory.rowsLayout(rows));
+        } else {
+            sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
+        }
+    }
+
+    /** welcome:<режим>:<номер|skip|done>. */
+    private void handleWelcomeStoriesCallback(AppUser user, String payload) {
+        String[] p = payload.split(":");
+        if (p.length != 2) return;
+        String mode = "r".equals(p[0]) ? "r" : "f";
+        String action = p[1];
+        if ("skip".equals(action) || "done".equals(action)) {
+            if ("f".equals(mode)) {
+                welcomeStat(action);
+                continueOnboarding(user);
+            } else {
+                sendMainMenu(user, null);
+            }
+            return;
+        }
+        Long n = parseLong(action);
+        if (n == null) return;
+        if ("f".equals(mode) && n >= 2) welcomeStat("s" + n);
+        sendWelcomeSlide(user, mode, n.intValue());
     }
 
     // ─── Онбординг v2: цель + выбор игры + один стартовый квест (2026-10-10) ──────────────────
