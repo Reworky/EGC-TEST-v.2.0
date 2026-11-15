@@ -2620,7 +2620,29 @@ public class QuestSeeder implements CommandLineRunner {
         clearRepeatableNoCooldown("Сыграй 3 матча в любом режиме", "CS2");
         clearRepeatableNoCooldown("Сыграй 5 боёв", "Clash Royale");
         clearRepeatableNoCooldown("Сыграй 3 матча подряд", "PUBG PC");
+
+        // 15.11.2026 (владелец): пока для игроков работает только квест банка ОТП; все остальные спонсорские и внешние квесты скрыты: выключены, но остаются в базе и в админке
+        // («Управление квестами» → «Включить»). Делается один раз (ключ в app_settings), иначе каждый старт снова выключал бы то, что админ включил.
+        if (appSettingRepository.findById(SPONSORED_HIDE_KEY).isEmpty()) {
+            List<String> hiddenTitles = new java.util.ArrayList<>();
+            for (Quest hq : questRepository.findAll()) {
+                if (!(hq.isSponsored() || hq.isExternalAutoApprove()) || !hq.isActive()) continue;
+                ru.gamebot.platform.service.PartnerMission hpm = ru.gamebot.platform.service.PartnerMissions.forQuest(hq);
+                if (hpm != null && "otp".equals(hpm.key())) continue;
+                hq.setActive(false);
+                questRepository.save(hq);
+                hiddenTitles.add(hq.getTitle());
+            }
+            ru.gamebot.platform.domain.model.AppSetting hideMark = new ru.gamebot.platform.domain.model.AppSetting();
+            hideMark.setKey(SPONSORED_HIDE_KEY);
+            hideMark.setValue(LocalDateTime.now().toString());
+            appSettingRepository.save(hideMark);
+            log.info("[QuestSeeder] Hidden sponsored/external quests except OTP bank ({}): {}", hiddenTitles.size(), hiddenTitles);
+        }
     }
+
+    /** Ключ app_settings: скрытие всех спонсорских квестов, кроме банка ОТП, выполнено (15.11.2026). */
+    private static final String SPONSORED_HIDE_KEY = "sponsored.hide.except.otp.done";
 
     /**
      * Хэллоуин-2026 (ТЗ «Хэллоуинское обновление», пункт 2): шесть квестов по уже работающим типам авто-проверки, окно 28.10 00:00 - 01.11 23:59 МСК
