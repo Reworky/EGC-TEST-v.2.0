@@ -8848,7 +8848,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + (sponsoredHasPremium(all) ? (sum > 0 ? " и " : "") + "Telegram Premium" : "")
                         + ". Каждый квест один раз на аккаунт.\n\n"
                 : "";
-        sendText(user.getTelegramId(),
+        // 15.11.2026: баннер раздела (золотой билет с алмазом, пушистый Экси, вариант 1, одобрен владельцем)
+        sendResourceBanner(user.getTelegramId(), "sponsored_quests_banner.jpg",
                 "💼 <b>Спонсорские квесты</b>\n\n"
                         + prize
                         + "🤝 Деньги спонсоров идут в фонд выплат, а от его размера зависит курс вывода для всех игроков.\n\n"
