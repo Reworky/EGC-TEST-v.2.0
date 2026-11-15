@@ -8812,7 +8812,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String head = "💼 <b>Спонсорские квесты · " + cat[2] + "</b>\n\n";
         if (quests.isEmpty()) {
             sendText(user.getTelegramId(),
-                    head + "👀 Задания в этом разделе появятся скоро.",
+                    head + "👀 Скоро здесь появятся новые задания.",
                     backMenuKeyboard("quests:section:sponsored"));
             return;
         }
