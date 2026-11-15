@@ -5697,8 +5697,34 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Строка с кнопкой «🤝 Как стать партнёром?» для экранов вывода, звёзд, магазина и FAQ (09.11.2026): только тем, кто ещё не партнёр, и когда уровни курса включены.
      *  code - откуда пришли (куда вернёт «Назад»): wd вывод, st звёзды, sh магазин, fq FAQ, bl баланс. */
     private void addPartnerRow(List<List<InlineKeyboardButton>> rows, AppUser user, String code) {
+        if ("wd".equals(code)) addSponsoredPrizeRow(rows, user); // экраны вывода: сначала «Получить до N ₽»
         if (!withdrawalTiersEnabled() || healthRatioService.isPartner(user)) return;
         rows.add(List.of(keyboardFactory.callback("🤝 Как стать партнёром?", "partner:info:" + code)));
+    }
+
+    /** Сумма «до N ₽» от банков и операторов по всем активным спонсорским квестам (0 - показывать нечего). */
+    private long sponsoredPrizeRub() {
+        try {
+            return sponsoredBankRub(activeSponsoredQuests());
+        } catch (Exception e) {
+            log.warn("sponsoredPrizeRub failed", e);
+            return 0;
+        }
+    }
+
+    /** «💎 Получить до N ₽» (15.11.2026, владелец): на экранах вывода тем, кто не партнёр - сумма, которую можно получить, выполнив все спонсорские квесты; ведёт в «Спонсорские квесты». */
+    private void addSponsoredPrizeRow(List<List<InlineKeyboardButton>> rows, AppUser user) {
+        if (healthRatioService.isPartner(user)) return;
+        long sum = sponsoredPrizeRub();
+        if (sum <= 0) return;
+        rows.add(List.of(keyboardFactory.callback("💎 Получить до " + fmtExc(sum) + " ₽", "quests:section:sponsored")));
+    }
+
+    /** Строка над кнопкой: «💎 Выполни спонсорские квесты и получи до N ₽ на карту.» (только не-партнёрам). */
+    private String sponsoredPrizeLine(AppUser user) {
+        if (healthRatioService.isPartner(user)) return "";
+        long sum = sponsoredPrizeRub();
+        return sum > 0 ? "💎 Выполни спонсорские квесты и получи до <b>" + fmtExc(sum) + " ₽</b> на карту.\n\n" : "";
     }
 
     private static String partnerInfoBack(String code) {
@@ -7241,13 +7267,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? "Баланса уже хватает на минимум для вывода."
                 : "Минимум для вывода - " + fmtExc(min) + " EXC, осталось " + fmtExc(min - coins) + " EXC.";
         List<List<InlineKeyboardButton>> lockedRows = new ArrayList<>();
+        addSponsoredPrizeRow(lockedRows, user);
         lockedRows.add(List.of(keyboardFactory.callback("🎯 Играть", "quest:recommend")));
         lockedRows.add(List.of(keyboardFactory.callback("🛍️ Магазин", "menu:shop")));
         addPartnerRow(lockedRows, user, "bl");
         lockedRows.add(List.of(keyboardFactory.callback("⬅️ Назад", backData), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(),
                 "🔒 <b>Вывод пока недоступен</b>\n\n" + escape(block) + "\n\n"
-                        + "💰 У вас " + fmtExc(coins) + " EXC ≈ " + fmtExc(rub) + " ₽ (курс фонда " + ratioPercent + "%). " + minLine + "\n"
+                        + "💰 У вас " + fmtExc(coins) + " EXC ≈ " + fmtExc(rub) + " ₽ (курс фонда " + ratioPercent + "%). " + minLine + "\n\n"
+                        + sponsoredPrizeLine(user)
                         + "🛍 А пока можно потратить EXC в магазине проекта.",
                 keyboardFactory.rowsLayout(lockedRows));
     }
@@ -11371,6 +11399,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + (partnerCompareLines(user, user.getCoins()).isEmpty() ? withdrawalTierRateBlock(user) : partnerCompareLines(user, user.getCoins(), false) + "\n")
                         + "📤 Остаток лимита: " + remaining + " из " + sinkShopService.getMonthlyLimitShown(user) + " EXC/мес"
                         + withdrawalLevelHint(user) + "\n\n"
+                        + sponsoredPrizeLine(user)
                         + "Выберите способ получения:"
                 : "💸 <b>Вывод EXC</b>\n"
                 + "🪙 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b> · минимум 5 000\n"
@@ -11378,6 +11407,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "<blockquote expandable>📤 Остаток лимита: <b>" + remaining + " из " + sinkShopService.getMonthlyLimitShown(user) + " EXC/мес</b>"
                 + withdrawalLevelHint(user)
                 + (lastPayout.isEmpty() ? "" : "\n" + lastPayout) + "</blockquote>\n\n"
+                + sponsoredPrizeLine(user)
                 + "Выберите способ получения:";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("💸 В рублях (СБП, любой банк)", "shop:withdraw:rub")));
