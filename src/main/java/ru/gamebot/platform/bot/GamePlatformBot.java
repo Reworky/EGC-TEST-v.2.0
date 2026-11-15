@@ -1642,7 +1642,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             try {
                 QuestSubmission cancelled = questService.cancelSubmission(submissionId, user);
                 log.info("[QuestCancel] done: submission={}, status now={}", submissionId, cancelled.getStatus());
-                sendMySubmissions(user);
+                sendMySubmissions(user, cancelled.getQuest() != null && isSponsoredKind(cancelled.getQuest()) ? "sponsored" : null);
                 sendText(user.getTelegramId(), "✅ Квест отменён.", null);
             } catch (Exception e) {
                 log.error("Failed to cancel submission {}", submissionId, e);
@@ -9870,7 +9870,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + sub.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", currentQuestBackData(user)),
-                keyboardFactory.callback("📂 Мои квесты", "menu:myquests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+                keyboardFactory.callback("📂 Мои квесты", myQuestsCallbackFor(sub.getQuest())), keyboardFactory.callback("🏠 Меню", "menu:main")));
         if (banner != null && getClass().getResource("/" + banner) != null) {
             sendResourceBanner(user.getTelegramId(), banner, sb.toString(), keyboardFactory.rowsLayout(rows));
         } else {
@@ -9973,7 +9973,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + sub.getId())));
         }
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", currentQuestBackData(user)),
-                keyboardFactory.callback("📂 Мои", "menu:myquests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+                keyboardFactory.callback("📂 Мои", myQuestsCallbackFor(quest)), keyboardFactory.callback("🏠 Меню", "menu:main")));
         // Картинка этапа (если задана в конфиге и файл есть): 1 заказ; 2 до даты / покупка; 3 пора слать отчёт (без проверки и возврата); 4 банк платит; 5 финал
         boolean sendReportScreen = stage == 3 && !returned && !rejectedFinal && st != SubmissionStatus.PENDING;
         String stageBanner = stage == 1 ? pm.stage1Banner() : stage == 2 ? (activated == null ? pm.stage2WaitBanner() : pm.stage2PayBanner())
@@ -10120,7 +10120,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         // «Назад» - туда, откуда открыли квест (список спонсорских, «Мои квесты» или раздел «Квесты»); без неё с шага нельзя было выйти к списку
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", currentQuestBackData(user)),
-                keyboardFactory.callback("📂 Мои", "menu:myquests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+                keyboardFactory.callback("📂 Мои", myQuestsCallbackFor(quest)), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows), true);
     }
 
@@ -10485,7 +10485,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (freshQuest.getChannelCheckUrl() != null) {
             buttons.add(keyboardFactory.url("📢 Открыть канал", freshQuest.getChannelCheckUrl()));
         }
-        buttons.add(keyboardFactory.callback("📂 Мои квесты", "menu:myquests"));
+        buttons.add(keyboardFactory.callback("📂 Мои квесты", myQuestsCallbackFor(freshQuest)));
         buttons.add(keyboardFactory.callback("🏠 Меню", "menu:main"));
         if (isEffectiveAdmin(user)) {
             buttons.add(keyboardFactory.callback("✏️ Правка", "admin:quest:" + questId));
@@ -10915,6 +10915,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Строка «Слоты квестов» только там, где слоты действуют: у спонсорских квестов нет слотов и лимитов (15.11.2026, владелец). */
     private String slotsLineFor(AppUser user, String kind) {
         return "sponsored".equals(kind) ? "" : questSlotsLine(user);
+    }
+
+    /** Куда ведёт «📂 Мои квесты» с экрана конкретного квеста: у спонсорского - список спонсорских (без слотов), у остальных - общий. */
+    private String myQuestsCallbackFor(Quest quest) {
+        return quest != null && isSponsoredKind(quest) ? "myquests:list:sponsored" : "menu:myquests";
     }
 
     /** Подпись кнопки «📂 Мои игровые квесты» / «📂 Мои спонсорские квесты» с числом квестов в работе. */
