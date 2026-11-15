@@ -8796,6 +8796,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return healthRatioService.isPartner(user) ? 0 : sponsoredPrizeRub(user);
     }
 
+    /** Квесты, которые игрок ещё не выполнил (последняя заявка не одобрена): суммы «до N ₽» считаются только по ним и уменьшаются по мере выполнения (15.11.2026, владелец). */
+    private List<Quest> sponsoredNotDone(AppUser user, List<Quest> quests) {
+        List<Quest> out = new ArrayList<>();
+        for (Quest q : quests) {
+            QuestSubmission latest = questService.getLatestSubmission(user, q);
+            if (latest != null && latest.getStatus() == SubmissionStatus.APPROVED) continue;
+            out.add(q);
+        }
+        return out;
+    }
+
     /** Сумма рублей от банков и операторов по партнёрским миссиям среди квестов (bankRewardRub): «до N ₽». */
     private long sponsoredBankRub(List<Quest> quests) {
         long sum = 0;
