@@ -5587,12 +5587,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? "<b>Добро пожаловать в EGC!</b>\n\n"
                         + "✅ Тебе начислено <b>" + WELCOME_BONUS_EXC + " EXC</b> — это твой стартовый капитал.\n\n"
                 : "🎮 <b>Давай начнём с первого квеста</b>\n\n";
-        sendText(user.getTelegramId(),
-                head
-                        + "🎯 <b>Цель — первый вывод: " + fmtExc(FIRST_WITHDRAWAL_EXC) + " EXC</b>\n"
-                        + progressBar(coins, FIRST_WITHDRAWAL_EXC) + " " + fmtExc(Math.min(coins, FIRST_WITHDRAWAL_EXC)) + " / " + fmtExc(FIRST_WITHDRAWAL_EXC) + "\n\n"
-                        + "<b>Для какой игры хочешь взять квест?👇</b>",
-                keyboardFactory.rowsLayout(rows));
+        String pickerText = head
+                + "🎯 <b>Цель — первый вывод: " + fmtExc(FIRST_WITHDRAWAL_EXC) + " EXC</b>\n"
+                + progressBar(coins, FIRST_WITHDRAWAL_EXC) + " " + fmtExc(Math.min(coins, FIRST_WITHDRAWAL_EXC)) + " / " + fmtExc(FIRST_WITHDRAWAL_EXC) + "\n\n"
+                + "<b>Для какой игры хочешь взять квест?👇</b>";
+        if (fresh) {
+            // 15.11.2026 (владелец): у приветствия после регистрации - свой баннер «Добро пожаловать в EGC» (Экси у входа в игровую комнату); повторный показ - прежним текстом
+            sendResourceBanner(user.getTelegramId(), "welcome_start_banner.jpg", pickerText, keyboardFactory.rowsLayout(rows));
+        } else {
+            sendText(user.getTelegramId(), pickerText, keyboardFactory.rowsLayout(rows));
+        }
     }
 
     private List<String> starterTitles(StarterGame g) {
