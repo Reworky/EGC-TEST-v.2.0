@@ -2639,6 +2639,34 @@ public class QuestSeeder implements CommandLineRunner {
             appSettingRepository.save(hideMark);
             log.info("[QuestSeeder] Hidden sponsored/external quests except OTP bank ({}): {}", hiddenTitles.size(), hiddenTitles);
         }
+        switchOffStarsTyn0xQuest();
+    }
+
+    /** Ключ app_settings: квест «Подписаться на канал - t.me/stars_tyn0x» выключен (15.11.2026, владелец: «должен быть выключен везде в проекте»). */
+    private static final String STARS_TYN0X_OFF_KEY = "quest.off.stars_tyn0x.done";
+
+    /** Один раз выключает квест(ы) подписки на канал stars_tyn0x (по ссылке в названии) и закрывает по ним открытые заявки, чтобы они не держали слоты у игроков.
+     *  Квест остаётся в базе и в админке; сидер при следующих запусках его не включает (проверяет только существование). */
+    private void switchOffStarsTyn0xQuest() {
+        if (appSettingRepository.findById(STARS_TYN0X_OFF_KEY).isPresent()) return;
+        List<String> offTitles = new java.util.ArrayList<>();
+        for (Quest oq : questRepository.findAll()) {
+            String title = oq.getTitle() == null ? "" : oq.getTitle().toLowerCase(java.util.Locale.ROOT);
+            if (!title.contains("stars_tyn0x")) continue;
+            oq.setActive(false);
+            questRepository.save(oq);
+            for (ru.gamebot.platform.domain.model.QuestSubmission d : questSubmissionRepository.findAllByQuestAndStatusOrderByUpdatedAtAsc(oq, ru.gamebot.platform.domain.enums.SubmissionStatus.DRAFT)) {
+                d.setStatus(ru.gamebot.platform.domain.enums.SubmissionStatus.CANCELLED);
+                d.setUpdatedAt(LocalDateTime.now());
+                questSubmissionRepository.save(d);
+            }
+            offTitles.add(oq.getTitle());
+        }
+        ru.gamebot.platform.domain.model.AppSetting mark = new ru.gamebot.platform.domain.model.AppSetting();
+        mark.setKey(STARS_TYN0X_OFF_KEY);
+        mark.setValue(LocalDateTime.now().toString());
+        appSettingRepository.save(mark);
+        log.info("[QuestSeeder] Switched off stars_tyn0x subscription quests ({}): {}", offTitles.size(), offTitles);
     }
 
     /** Ключ app_settings: скрытие всех спонсорских квестов, кроме банка ОТП, выполнено (15.11.2026). */
