@@ -8776,6 +8776,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return "games";
     }
 
+    /** Все активные спонсорские квесты в порядке листания карточек: по разделам (как кнопки на экране разделов), внутри раздела - как в списке. */
+    private List<Quest> sponsoredQuestsInDisplayOrder() {
+        List<Quest> all = activeSponsoredQuests();
+        List<Quest> out = new ArrayList<>();
+        for (String[] c : SPONSOR_CATEGORIES) {
+            for (Quest q : all) if (c[0].equals(sponsoredCategory(q))) out.add(q);
+        }
+        return out;
+    }
+
     private List<Quest> activeSponsoredQuests() {
         // Только активные квесты (решение владельца 23.10.2026): когда кампания завершена и квест выключен, он пропадает из списка у ВСЕХ, в том числе
         // у тех, кто его выполнил (раньше у выполнивших оставалась «✅»).
@@ -9561,6 +9571,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + questRewardLineCompact(user, quest) + "\n\n"
                 + body;
         InlineKeyboardMarkup cardKeyboard = verticalWithBackMenu(buttons, backText, backData);
+        // 15.11.2026: у карточки спонсорского квеста - листание по всем спонсорским квестам (как у кейсов: ◀️ | N / M | ▶️ по кругу)
+        if (backData != null && backData.startsWith("quests:sponsored:cat:")) {
+            List<Quest> sponsoredFlip = sponsoredQuestsInDisplayOrder();
+            int flipN = sponsoredFlip.size();
+            int flipIdx = -1;
+            for (int i = 0; i < flipN; i++) if (sponsoredFlip.get(i).getId().equals(questId)) { flipIdx = i; break; }
+            if (flipN > 1 && flipIdx >= 0) {
+                List<List<InlineKeyboardButton>> flipRows = new ArrayList<>();
+                flipRows.add(List.of(
+                        keyboardFactory.callback("◀️", "quest:view:sponsored:all:" + sponsoredFlip.get((flipIdx - 1 + flipN) % flipN).getId()),
+                        keyboardFactory.callback((flipIdx + 1) + " / " + flipN, "noop"),
+                        keyboardFactory.callback("▶️", "quest:view:sponsored:all:" + sponsoredFlip.get((flipIdx + 1) % flipN).getId())));
+                flipRows.addAll(cardKeyboard.getKeyboard());
+                cardKeyboard = keyboardFactory.rowsLayout(flipRows);
+            }
+        }
         String cardBanner = questCardBanner(quest);
         if (cardBanner != null) {
             sendResourceBanner(user.getTelegramId(), cardBanner, cardText, cardKeyboard);
