@@ -39,6 +39,7 @@ public class SponsoredQuestsService {
     }
 
     private final QuestService questService;
+    private final EksiPicksService eksiPicksService;
 
     public List<Quest> activeQuests() {
         return questService.findAllSponsored().stream().filter(Quest::isActive).toList();
@@ -79,7 +80,10 @@ public class SponsoredQuestsService {
 
     public record CategoryView(String key, String label, String title, int count, long prizeRub, boolean premium) { }
 
-    public record Overview(long prizeRub, List<CategoryView> categories) { }
+    /** «🤝 Экси рекомендует»: партнёрские рекомендации без наград EXC. */
+    public record PickView(String key, String title, String description, String buttonLabel, String url, String adLabel) { }
+
+    public record Overview(long prizeRub, List<CategoryView> categories, List<PickView> picks) { }
 
     public Overview overview(AppUser user) {
         List<Quest> active = activeQuests();
@@ -89,6 +93,16 @@ public class SponsoredQuestsService {
             List<Quest> left = notDone(user, inside);
             cats.add(new CategoryView(c.key(), c.label(), c.title(), inside.size(), bankRub(left), hasPremium(left)));
         }
-        return new Overview(bankRub(notDone(user, active)), cats);
+        List<PickView> picks = new ArrayList<>();
+        if (user != null) {
+            try {
+                for (EksiPicksService.Pick p : eksiPicksService.forUser(user)) {
+                    picks.add(new PickView(p.key(), p.title(), p.description(), p.buttonLabel(), p.url(), p.adLabel()));
+                }
+            } catch (Exception e) {
+                // рекомендации не критичны для экрана разделов
+            }
+        }
+        return new Overview(bankRub(notDone(user, active)), cats, picks);
     }
 }

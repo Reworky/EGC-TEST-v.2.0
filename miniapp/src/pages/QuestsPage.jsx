@@ -39,6 +39,81 @@ function weeklyLimitText(q, d) {
   return `⚠️ Награда EXC снижена вдвое: за последние 7 дней вы уже выполнили ${already} такого типа (полная награда — за первые ${limit}). Вернётся к полной, когда самые старые из них выйдут из 7-дневного окна.`;
 }
 
+function openUrl(url) {
+  const tg = window.Telegram?.WebApp;
+  if (tg) {
+    url.includes('t.me/') ? tg.openTelegramLink(url) : tg.openLink(url);
+  } else {
+    window.open(url, '_blank', 'noopener');
+  }
+}
+
+// Блоки текста через пустую строку (как splitQuestBlocks в боте): если текст начинается с номера шага (1️⃣), блок начинается только с номера.
+function splitQuestBlocks(text) {
+  if (!text || !text.trim()) return [];
+  const numbered = /^\d\uFE0F?\u20E3/.test(text.trim());
+  const parts = text.split(numbered ? /\n\s*\n(?=\d\uFE0F?\u20E3)/ : /\n\s*\n/);
+  return parts.map(b => b.trim()).filter(Boolean).map(b => {
+    const i = b.indexOf('\n');
+    return i < 0 ? { head: b, body: '' } : { head: b.slice(0, i), body: b.slice(i + 1) };
+  });
+}
+
+// Раскрывающаяся цитата, как в Telegram: свёрнута до первых строк, нажатие раскрывает.
+function ExpandableQuote({ title, children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={`sp-quote ${open ? 'open' : ''}`} onClick={e => { e.stopPropagation(); setOpen(o => !o); }}>
+      <div className="sp-quote-title">{title}</div>
+      <div className="sp-quote-body">{children}</div>
+    </div>
+  );
+}
+
+const SPONSOR_HEADINGS = ['Что ты получаешь:', 'Награда за квест:', 'Как это работает:'];
+
+// Описание спонсорского квеста: блоки «Что ты получаешь» / «Награда за квест» / «Как это работает» - раскрывающиеся цитаты (как в карточке бота).
+// У партнёрского квеста с шагами (miss) пустой хвостовой заголовок «Как это работает:» убираем: вместо него цитата с заголовками шагов (extra).
+function SponsorDescription({ text, mission, instruction, requirements }) {
+  const lines = (text || '').split('\n');
+  const nodes = [];
+  let plain = [];
+  const flush = () => { if (plain.join('').trim()) nodes.push({ t: 'p', text: plain.join('\n').trim() }); plain = []; };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (SPONSOR_HEADINGS.includes(line)) {
+      flush();
+      const body = [];
+      let j = i + 1;
+      while (j < lines.length && lines[j].trim() !== '') { body.push(lines[j]); j++; }
+      if (!(mission && body.length === 0 && line === 'Как это работает:')) nodes.push({ t: 'q', title: line, text: body.join('\n') });
+      i = j - 1;
+    } else {
+      plain.push(lines[i]);
+    }
+  }
+  flush();
+  const steps = mission ? splitQuestBlocks(instruction) : [];
+  const conds = mission ? splitQuestBlocks(requirements) : [];
+  return (
+    <div className="sp-desc">
+      {nodes.map((n, i) => n.t === 'p'
+        ? <p key={i} className="quest-desc" style={{ whiteSpace: 'pre-line' }}>{renderTextWithLinks(n.text)}</p>
+        : n.text
+          ? <ExpandableQuote key={i} title={n.title}>{renderTextWithLinks(n.text)}</ExpandableQuote>
+          : null)}
+      {steps.length > 0 && (
+        <ExpandableQuote title="Как это работает:">{steps.map(b => b.head).join('\n')}</ExpandableQuote>
+      )}
+      {conds.map((c, i) => (
+        <ExpandableQuote key={'c' + i} title={c.head}>{renderTextWithLinks(c.body)}</ExpandableQuote>
+      ))}
+    </div>
+  );
+}
+
+const PARTNER_BANNERS = { otp: '/sponsored/otp.jpg', tblack: '/sponsored/tblack.jpg', tmobile: '/sponsored/tmobile.jpg' };
+
 function LinkPill({ url }) {
   const [copied, setCopied] = useState(false);
 
@@ -454,7 +529,7 @@ function QuestActions({ quest, detail, onChanged }) {
     <div>
       {seatsLine}
       <button className="quest-btn" disabled={busy} onClick={handleTake}>
-        {busy ? 'Секунду...' : 'Взять квест'}
+        {busy ? 'Секунду...' : detail.missionQuest ? '🚀 Взять: мне 18+, я из РФ' : 'Взять квест'}
       </button>
       {message && (
         <div className="quest-message">
@@ -550,16 +625,28 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
                 : simplifyAutoInstruction(details[q.id]?.instruction)}{' '}
               Прогресс засчитывается сам, ничего отправлять не нужно.
             </p>
+          ) : (q.sponsored || details[q.id]?.sponsored) ? (
+            <>
+              {PARTNER_BANNERS[details[q.id]?.partnerKey ?? q.partnerKey] && (
+                <img className="sponsor-banner" src={PARTNER_BANNERS[details[q.id]?.partnerKey ?? q.partnerKey]} alt="" />
+              )}
+              <SponsorDescription
+                text={details[q.id]?.description ?? q.description}
+                mission={!!details[q.id]?.missionQuest}
+                instruction={details[q.id]?.instruction}
+                requirements={details[q.id]?.requirements}
+              />
+            </>
           ) : (
             <p className="quest-desc">{renderTextWithLinks(details[q.id]?.description ?? q.description)}</p>
           )}
-          {!(brawlAutoVerify && !externalAutoApprove) && details[q.id]?.instruction && (
+          {!(brawlAutoVerify && !externalAutoApprove) && !details[q.id]?.missionQuest && details[q.id]?.instruction && (
             <>
               <div className="quest-section-title">Как выполнить</div>
               <p className="quest-instruction">{renderTextWithLinks(details[q.id].instruction)}</p>
             </>
           )}
-          {!(brawlAutoVerify && !externalAutoApprove) && details[q.id]?.requirements && (
+          {!(brawlAutoVerify && !externalAutoApprove) && !details[q.id]?.missionQuest && details[q.id]?.requirements && (
             <>
               <div className="quest-section-title">
                 {(details[q.id]?.brawlAutoVerify || details[q.id]?.externalAutoApprove) ? 'ℹ️ Информация' : 'Требования'}
@@ -648,7 +735,7 @@ function GameCard({ name, active, onClick }) {
   );
 }
 
-function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSection }) {
+function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSection, onSectionChange }) {
   const [games, setGames] = useState([]);
   const [selectedGame, setSelectedGame] = useState(null);
   const [quests, setQuests] = useState([]);
@@ -659,6 +746,7 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
   const [sponsoredLoading, setSponsoredLoading] = useState(false);
   const [activeSection, setActiveSection] = useState(initialSection === 'ads' ? 'ads' : initialSection === 'sponsored' ? 'sponsored' : 'gaming');
   const [sponsorOverview, setSponsorOverview] = useState(null);
+  useEffect(() => { onSectionChange?.(activeSection); }, [activeSection]);
   const [sponsorCategory, setSponsorCategory] = useState(null);
   const [recommended, setRecommended] = useState(null);
   const questListRef = useRef(null);
@@ -813,9 +901,27 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
                   {c.label} · {c.count}
                 </button>
               ))}
+              {sponsorOverview.picks?.length > 0 && (
+                <button className="sponsor-cat-btn" onClick={() => setSponsorCategory('picks')}>🤝 Экси рекомендует</button>
+              )}
             </div>
           )}
-          {sponsorCategory && sponsorOverview && (() => {
+          {sponsorCategory === 'picks' && sponsorOverview && (
+            <div className="category-section">
+              <button className="sponsor-back" onClick={() => setSponsorCategory(null)}>← Разделы</button>
+              <div className="sponsor-title">🤝 Экси рекомендует</div>
+              <div className="sponsor-prize-note" style={{ marginBottom: 10 }}>Это не квесты: EXC за такие переходы не начисляются. Экси просто показывает то, что нашёл за пределами игр клуба.</div>
+              {sponsorOverview.picks.map(p => (
+                <div key={p.key} className="quest-card" style={{ cursor: 'default' }}>
+                  <div className="quest-title">🎮 {p.title}</div>
+                  <p className="quest-desc" style={{ whiteSpace: 'pre-line' }}>{p.description}</p>
+                  {p.adLabel && <ExpandableQuote title="Реклама"><i>{p.adLabel}</i></ExpandableQuote>}
+                  <button className="quest-btn" onClick={() => openUrl(p.url)}>{p.buttonLabel}</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {sponsorCategory && sponsorCategory !== 'picks' && sponsorOverview && (() => {
             const cat = sponsorOverview.categories.find(c => c.key === sponsorCategory);
             const list = sponsoredQuests.filter(q => q.sponsorCategory === sponsorCategory);
             return (
@@ -874,7 +980,7 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
   );
 }
 
-function MyQuestsView({ expanded, details, onToggle, onDetailChanged }) {
+function MyQuestsView({ expanded, details, onToggle, onDetailChanged, kind, onKindChange }) {
   const fundRatio = useFundRatio();
   const [myQuests, setMyQuests] = useState(null);
   const [error, setError] = useState(null);
@@ -937,19 +1043,44 @@ function MyQuestsView({ expanded, details, onToggle, onDetailChanged }) {
     return <div className="page-center">Загрузка...</div>;
   }
 
-  if (myQuests.length === 0) {
-    return <div className="page-center">📭 У вас нет квестов в работе. Откройте «Все квесты» и возьмите первое задание.</div>;
+  const gameCount = myQuests.filter(m => !m.sponsoredKind).length;
+  const sponsorCount = myQuests.filter(m => m.sponsoredKind).length;
+  const shownQuests = myQuests.filter(m => !!m.sponsoredKind === (kind === 'sponsored'));
+  const kindToggle = (
+    <div className="view-toggle" style={{ padding: '8px 0 0' }}>
+      <button className={`view-tab ${kind !== 'sponsored' ? 'active' : ''}`} onClick={() => onKindChange('game')}>🎮 Мои игровые{gameCount > 0 ? ` · ${gameCount}` : ''}</button>
+      <button className={`view-tab ${kind === 'sponsored' ? 'active' : ''}`} onClick={() => onKindChange('sponsored')}>💼 Мои спонсорские{sponsorCount > 0 ? ` · ${sponsorCount}` : ''}</button>
+    </div>
+  );
+
+  if (shownQuests.length === 0) {
+    return (
+      <div>
+        {kindToggle}
+        <div className="page-center">
+          📭 {kind === 'sponsored'
+            ? 'У вас нет спонсорских квестов в работе. Откройте «Все квесты» → «Спонсоры» и возьмите первое задание.'
+            : 'У вас нет игровых квестов в работе. Откройте «Все квесты» и возьмите первое задание.'}
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="category-section" style={{ marginTop: 12 }}>
-      {myQuests.map(m => (
+      {kindToggle}
+      {shownQuests.map(m => (
         <div key={m.submissionId} className="quest-card" onClick={() => onToggle(m.questId)}>
           <div className="quest-top">
             <div className="quest-title">{m.title}</div>
             <div className="quest-rewards">
-              <span className="reward-exc"><i className="ti ti-coin"></i> {m.rewardCoins.toLocaleString()} EXC{fundRatio != null && <> ({starsApprox(m.rewardCoins, fundRatio)})</>}</span>
-              <span className="reward-xp"><i className="ti ti-star"></i> {m.rewardXp} XP</span>
+              {m.bankRewardRub > 0 && <span className="reward-exc">💳 {m.bankRewardRub.toLocaleString('ru-RU')} ₽ от банка</span>}
+              {!(m.rewardCoins === 0 && m.bankRewardRub > 0) && (
+                <span className="reward-exc"><i className="ti ti-coin"></i> {m.rewardCoins.toLocaleString()} EXC{fundRatio != null && <> ({starsApprox(m.rewardCoins, fundRatio)})</>}</span>
+              )}
+              {!(m.rewardXp === 0 && m.bankRewardRub > 0) && (
+                <span className="reward-xp"><i className="ti ti-star"></i> {m.rewardXp} XP</span>
+              )}
             </div>
           </div>
           <div className="quest-meta">
@@ -1103,6 +1234,10 @@ export default function QuestsPage() {
   const [details, setDetails] = useState({});
   // Слоты квестов (14.11.2026): игрок не видел, что у него есть второй слот. Обновляем при смене вкладки и раз в 20 секунд.
   const [slots, setSlots] = useState(null);
+  const [allSection, setAllSection] = useState('gaming');
+  const [myKind, setMyKind] = useState('game');
+  // У спонсорских квестов нет слотов и лимитов (как в боте): строку слотов там не показываем
+  const hideSlots = (view === 'all' && allSection === 'sponsored') || (view === 'mine' && myKind === 'sponsored');
   useEffect(() => {
     let cancelled = false;
     const load = () => getQuestSlots().then(s => { if (!cancelled) setSlots(s); }).catch(() => {});
@@ -1143,15 +1278,15 @@ export default function QuestsPage() {
         </button>
       </div>
 
-      {slots && view !== 'tournament' && (
+      {slots && view !== 'tournament' && !hideSlots && (
         <div className="slots-line">
           📂 Слоты квестов: <b>{slots.used} из {slots.max}</b>
           {slots.fromPass ? ' · 3-й слот по EGC Pass' : slots.permanent ? ' · доп. слот навсегда' : slots.extraUntil ? ` · доп. слот до ${slots.extraUntil}` : ''}
         </div>
       )}
 
-      {view === 'all' && <AllQuestsView expanded={expanded} details={details} onToggle={toggleExpand} onDetailChanged={loadDetail} initialSection={initialSection} />}
-      {view === 'mine' && <MyQuestsView expanded={expanded} details={details} onToggle={toggleExpand} onDetailChanged={loadDetail} />}
+      {view === 'all' && <AllQuestsView expanded={expanded} details={details} onToggle={toggleExpand} onDetailChanged={loadDetail} initialSection={initialSection} onSectionChange={setAllSection} />}
+      {view === 'mine' && <MyQuestsView expanded={expanded} details={details} onToggle={toggleExpand} onDetailChanged={loadDetail} kind={myKind} onKindChange={setMyKind} />}
       {view === 'tournament' && <TournamentView />}
     </div>
   );

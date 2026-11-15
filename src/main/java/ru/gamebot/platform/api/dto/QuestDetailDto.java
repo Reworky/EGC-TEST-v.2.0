@@ -66,6 +66,9 @@ public class QuestDetailDto {
     private boolean sponsored;
     private long bankRewardRub;
     private String bonusItem;
+    private String partnerKey;
+    /** Партнёрский квест с шагами (миссия): кнопка взятия подтверждает «мне 18+, я из РФ», в карточке - заголовки шагов и условия цитатами (как в боте). */
+    private boolean missionQuest;
     /** Партнёрский квест банка, где всё ведёт менеджер (после «Взять» нет отчётов): ссылка на онлайн-заявку (только ОТП) и чат менеджера с готовым текстом. */
     private boolean partnerManagerFlow;
     private String partnerApplyUrl;

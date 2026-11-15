@@ -152,6 +152,8 @@ public class QuestController {
         AppUser currentUser = telegramId != null ? appUserRepository.findByTelegramId(telegramId).orElse(null) : null;
         if (currentUser != null) {
             for (QuestSubmission s : questService.getUserSubmissions(currentUser)) {
+                // Отменённая заявка = «не брал» (как в боте): статус «Отменён» на карточке сбивал с толку
+                if (s.getStatus() == ru.gamebot.platform.domain.enums.SubmissionStatus.CANCELLED) continue;
                 statusByQuestId.putIfAbsent(s.getQuest().getId(), s.getStatus().name());
             }
         }
@@ -311,14 +313,17 @@ public class QuestController {
         Map<Long, String> statusByQuestId = new java.util.HashMap<>();
         if (currentUser != null) {
             for (var q : quests) {
+                // Отменённая и просроченная заявка = «не брал» (как sponsoredQuestTag в боте)
                 java.util.Optional.ofNullable(questService.getLatestSubmission(currentUser, q))
+                        .filter(s -> s.getStatus() != ru.gamebot.platform.domain.enums.SubmissionStatus.CANCELLED)
+                        .filter(s -> !(s.getStatus() == ru.gamebot.platform.domain.enums.SubmissionStatus.DRAFT && questService.isExpired(s)))
                         .ifPresent(s -> statusByQuestId.put(q.getId(), s.getStatus().name()));
             }
         }
         Map<String, Boolean> flatByGame = new HashMap<>();
         Map<String, QuestService.WeeklyLimitStatus> weeklyCache = new HashMap<>();
         return quests.stream().map(q -> QuestDto.builder()
-                .id(q.getId()).title(q.getTitle()).description(q.getDescription())
+                .id(q.getId()).title(q.getTitle()).description(gamePlatformBot.sponsoredCardDescription(q))
                 .gameName(q.getGameName())
                 .category(flatByGame.computeIfAbsent(q.getGameName(), gameCatalogService::isFlat) ? null : q.getCategory())
                 .platform(q.getPlatform())
@@ -327,6 +332,7 @@ public class QuestController {
                 .rewardDiminished(weeklyStatus(weeklyCache, currentUser, q).reached())
                 .weeklyLimit(weeklyStatus(weeklyCache, currentUser, q).limit())
                 .ticketReward(q.getTicketReward())
+                .partnerKey(java.util.Optional.ofNullable(ru.gamebot.platform.service.PartnerMissions.forQuest(q)).map(ru.gamebot.platform.service.PartnerMission::key).orElse(null))
                 .councilOnly(q.isCouncilOnly()).sponsored(true)
                 .sponsorCategory(ru.gamebot.platform.service.SponsoredQuestsService.categoryOf(q))
                 .bankRewardRub(java.util.Optional.ofNullable(ru.gamebot.platform.service.PartnerMissions.forQuest(q)).map(ru.gamebot.platform.service.PartnerMission::bankRewardRub).orElse(0))
@@ -383,7 +389,7 @@ public class QuestController {
         QuestDetailDto.QuestDetailDtoBuilder builder = QuestDetailDto.builder()
                 .id(quest.getId())
                 .title(quest.getTitle())
-                .description(quest.getDescription())
+                .description(quest.isSponsored() ? gamePlatformBot.sponsoredCardDescription(quest) : quest.getDescription())
                 .instruction(instruction)
                 .requirements(quest.getRequirements())
                 .gameName(quest.getGameName())
@@ -406,7 +412,8 @@ public class QuestController {
 
         ru.gamebot.platform.service.PartnerMission detailPm = ru.gamebot.platform.service.PartnerMissions.forQuest(quest);
         if (detailPm != null) {
-            builder.bankRewardRub(detailPm.bankRewardRub()).bonusItem(detailPm.bonusItem());
+            builder.bankRewardRub(detailPm.bankRewardRub()).bonusItem(detailPm.bonusItem()).partnerKey(detailPm.key());
+            builder.missionQuest(QuestService.isPartnerSponsored(quest) && quest.getInstruction() != null && !quest.getInstruction().isBlank());
         }
 
         if (telegramId != null) {
@@ -692,6 +699,8 @@ public class QuestController {
                         .gameName(s.getQuest().getGameName())
                         .category(flatByGame.computeIfAbsent(s.getQuest().getGameName(), gameCatalogService::isFlat) ? null : s.getQuest().getCategory())
                         .externalAutoApprove(s.getQuest().isExternalAutoApprove())
+                        .sponsoredKind(s.getQuest().isSponsored() || s.getQuest().isExternalAutoApprove())
+                        .bankRewardRub(java.util.Optional.ofNullable(ru.gamebot.platform.service.PartnerMissions.forQuest(s.getQuest())).map(ru.gamebot.platform.service.PartnerMission::bankRewardRub).orElse(0))
                         .brawlAutoVerify(s.getQuest().getBrawlVerifyType() != null || s.getQuest().getClashVerifyType() != null || s.getQuest().getClashRoyaleVerifyType() != null || s.getQuest().getDotaVerifyType() != null || s.getQuest().getCs2VerifyType() != null || s.getQuest().getPubgVerifyType() != null)
                         .autoVerifyProgress(progress.progress())
                         .autoVerifyTarget(progress.target())

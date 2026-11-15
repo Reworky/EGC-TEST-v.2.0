@@ -29,6 +29,8 @@ public class QuestDto {
     /** Рубли от банка по партнёрской миссии (0 - нет) и подарок (Telegram Premium и т.п.): вместо «0 EXC» на карточке. */
     private long bankRewardRub;
     private String bonusItem;
+    /** Ключ партнёрской миссии банка (otp, tblack, tmobile) - по нему мини-апп показывает баннер карточки; null - не партнёрский. */
+    private String partnerKey;
 
     /** См. Quest.isEffectivelyNew — карточка подсвечивается как новая в Mini App (парность с sendQuestList
      * в боте): квест создан в последние 7 дней ИЛИ ещё не истёк редакторский буст highlightNewUntil. */

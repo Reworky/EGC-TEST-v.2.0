@@ -12,6 +12,10 @@ public class MyQuestDto {
     private String gameName;
     private String category;
     private boolean externalAutoApprove;
+    /** Спонсорский или внешний квест: в «Мои квесты» мини-аппа и бота они в отдельном списке «Мои спонсорские», без слотов. */
+    private boolean sponsoredKind;
+    /** Рубли от банка по партнёрской миссии (0 - нет): на карточке вместо «0 EXC». */
+    private long bankRewardRub;
     private boolean brawlAutoVerify;
 
     /** Только для авто-верифицируемых квестов. null = ещё не авто-квест, либо (если target тоже null)

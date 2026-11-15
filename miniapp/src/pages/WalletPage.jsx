@@ -124,6 +124,7 @@ function RanksModal({ currentXp, onClose }) {
 }
 
 function BalanceView({ wallet, onChanged, onRefresh, highlightChest }) {
+  const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshFailed, setRefreshFailed] = useState(false);
@@ -398,7 +399,18 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest }) {
               {wallet.coins > 0 && partner - own >= 1
                 ? `🤝 Партнёр: ≈ ${fmt(partner)} ₽ (курс 100%) · +${fmt(partner - own)} ₽`
                 : '🤝 Партнёр: 1 000 EXC = 10 ₽ (курс 100%)'}
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>Как стать партнёром: в боте, «Вывод EXC» → «Как стать партнёром?»</div>
+              <details style={{ marginTop: 6 }}>
+                <summary style={{ cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>🤝 Как стать партнёром проекта?</summary>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 6, lineHeight: 1.5 }}>
+                  Партнёр — игрок, который выполнил спонсорский квест банка-партнёра. Менеджер проведёт по шагам лично.
+                  <div style={{ marginTop: 6, fontWeight: 600, color: '#fff' }}>Что получают партнёры:</div>
+                  ✅ Вывод по курсу 100% вместо обычных ~{wallet.withdrawalRatioPercent}% — на все EXC, в том числе будущие<br />
+                  ✅ Партнёрские цены за звёзды и в магазине наград<br />
+                  ✅ 1000р от банка на вашу карту + Телеграм Премиум (1 месяц)<br />
+                  ✅ Бейдж «Банкир EGC» в профиле
+                  <button className="quest-btn" style={{ marginTop: 8 }} onClick={() => navigate('/quests?section=sponsored')}>🎯 Открыть квест банка</button>
+                </div>
+              </details>
             </div>
           );
         })()}
