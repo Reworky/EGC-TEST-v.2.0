@@ -8876,7 +8876,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             head += "🎁 В этом разделе: " + (catSum > 0 ? "до " + fmtExc(catSum) + " ₽" : "") + (catPremium ? (catSum > 0 ? " и " : "") + "Telegram Premium" : "") + "\n\n";
         }
         if (quests.isEmpty()) {
-            sendText(user.getTelegramId(),
+            sendSponsorCategoryScreen(user.getTelegramId(), key,
                     head + "👀 Скоро здесь появятся новые задания.",
                     backMenuKeyboard("quests:section:sponsored"));
             return;
@@ -8896,9 +8896,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String legend = (anyInProgress || anyDone)
                 ? "\n\n" + (anyDone ? "✅ — выполнен" : "") + (anyDone && anyInProgress ? " · " : "") + (anyInProgress ? "⏳ — в процессе" : "")
                 : "";
-        sendText(user.getTelegramId(),
+        sendSponsorCategoryScreen(user.getTelegramId(), key,
                 head + "Выберите задание:" + legend,
                 verticalWithBackMenu(buttons, "⬅️ Назад", "quests:section:sponsored"));
+    }
+
+    /** Экран раздела спонсорских квестов: у «Дебетовых карт» есть свой баннер (15.11.2026, вариант А, одобрен владельцем), у остальных - обычный текст. */
+    private void sendSponsorCategoryScreen(Long chatId, String categoryKey, String text, InlineKeyboardMarkup keyboard) {
+        if ("debit".equals(categoryKey)) {
+            sendResourceBanner(chatId, "sponsored_debit_banner.jpg", text, keyboard);
+        } else {
+            sendText(chatId, text, keyboard);
+        }
     }
 
     /** «🤝 Экси рекомендует» (подраздел Квестов): партнёрские рекомендации без наград EXC. Ссылки - в ресурсе eksi_picks.json.
