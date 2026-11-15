@@ -1464,7 +1464,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if ("quests:section:sponsored".equals(data)) {
-            sendSponsoredQuestList(user);
+            sendSponsoredCategories(user);
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if (data.startsWith("quests:sponsored:cat:")) {
+            sendSponsoredQuestList(user, data.substring("quests:sponsored:cat:".length()));
             answerSilently(callbackQuery.getId());
             return;
         }
@@ -8750,16 +8755,65 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         };
     }
 
-    private void sendSponsoredQuestList(AppUser user) {
+    /** Разделы спонсорских квестов (владелец, 15.11.2026): ключ, подпись кнопки, название в заголовке списка. Порядок - как на экране. */
+    private static final String[][] SPONSOR_CATEGORIES = {
+            {"debit", "💳 Дебетовые карты", "Дебетовые карты"},
+            {"games", "🎮 Игровые партнёры", "Игровые партнёры"},
+            {"credit", "🏦 Кредитные карты", "Кредитные карты"},
+            {"mobile", "📱 Мобильная связь", "Мобильная связь"},
+            {"gigs", "💼 Подработка", "Подработка"}};
+
+    /** Раздел спонсорского квеста: партнёрские миссии банка - по ключу (Т-Мобайл - связь, остальные - дебетовые карты); остальные - по словам в названии
+     *  («кредит», «подработ», «связь»/«SIM»/«тариф», «дебетов»); всё прочее (CPI-офферы, приложения, игры) - «Игровые партнёры». */
+    private String sponsoredCategory(Quest q) {
+        ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(q);
+        if (pm != null) return "tmobile".equals(pm.key()) ? "mobile" : "debit";
+        String t = ((q.getTitle() == null ? "" : q.getTitle()) + " " + (q.getGameName() == null ? "" : q.getGameName())).toLowerCase(java.util.Locale.ROOT);
+        if (t.contains("кредит")) return "credit";
+        if (t.contains("подработ")) return "gigs";
+        if (t.contains("связь") || t.contains("тариф") || t.matches("(?s).*\\bsim\\b.*")) return "mobile";
+        if (t.contains("дебетов")) return "debit";
+        return "games";
+    }
+
+    private List<Quest> activeSponsoredQuests() {
         // Только активные квесты (решение владельца 23.10.2026): когда кампания завершена и квест выключен, он пропадает из списка у ВСЕХ, в том числе
         // у тех, кто его выполнил (раньше у выполнивших оставалась «✅»).
-        List<Quest> quests = questService.findAllSponsored().stream()
+        return questService.findAllSponsored().stream()
                 .filter(Quest::isActive)
                 .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+    }
+
+    /** Первый экран «Спонсорских квестов»: выбор раздела (15.11.2026). Пустые разделы тоже показываем: внутри сообщение «скоро». */
+    private void sendSponsoredCategories(AppUser user) {
+        List<InlineKeyboardButton> rows = new ArrayList<>();
+        for (String[] c : SPONSOR_CATEGORIES) {
+            rows.add(keyboardFactory.callback(c[1], "quests:sponsored:cat:" + c[0]));
+        }
+        sendText(user.getTelegramId(),
+                "💼 <b>Спонсорские квесты</b>\n\n"
+                        + "🤝 Деньги спонсоров идут в фонд выплат, а от его размера зависит курс вывода для всех игроков.\n\n"
+                        + "<blockquote expandable>Спонсоры — одна из причин, по которой проект работает и платит вам реальные деньги. "
+                        + "Чем лояльнее вы относитесь к таким квестам, тем стабильнее проект может выплачивать вам дальше. "
+                        + "Чаще заглядывайте сюда и выполняйте задания: чем больше спонсоров мы привлечём вместе, тем выгоднее будет курс.</blockquote>\n\n"
+                        + "Выберите тип задания:",
+                verticalWithBackMenu(rows, "⬅️ Назад", "menu:quests"));
+    }
+
+    private void sendSponsoredQuestList(AppUser user, String categoryKey) {
+        String[] cat = null;
+        for (String[] c : SPONSOR_CATEGORIES) if (c[0].equals(categoryKey)) cat = c;
+        if (cat == null) {
+            sendSponsoredCategories(user);
+            return;
+        }
+        final String key = cat[0];
+        List<Quest> quests = activeSponsoredQuests().stream().filter(q -> key.equals(sponsoredCategory(q))).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        String head = "💼 <b>Спонсорские квесты · " + cat[2] + "</b>\n\n";
         if (quests.isEmpty()) {
             sendText(user.getTelegramId(),
-                    "👀 Спонсорские квесты появятся скоро.",
-                    backMenuKeyboard("menu:quests"));
+                    head + "👀 Задания в этом разделе появятся скоро.",
+                    backMenuKeyboard("quests:section:sponsored"));
             return;
         }
         List<InlineKeyboardButton> buttons = new ArrayList<>();
@@ -8769,7 +8823,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String tag = sponsoredQuestTag(user, q);
             if ("✅ ".equals(tag)) anyDone = true;
             if ("⏳ ".equals(tag)) anyInProgress = true;
-            // У партнёрского квеста «ОТП Карта» в списке своя подпись кнопки (как в рекламе банка: «получи 500 ₽»), название квеста длиннее и обрезалось на 60 символах
+            // У партнёрского квеста «ОТП Карта» в списке своя подпись кнопки (как в рекламе банка: «получи 1 000 ₽»), название квеста длиннее и обрезалось на 60 символах
             ru.gamebot.platform.service.PartnerMission listPm = ru.gamebot.platform.service.PartnerMissions.forQuest(q);
             String listLabel = listPm != null ? listPm.listLabel() : trim(q.getTitle(), 60);
             buttons.add(keyboardFactory.callback(tag + listLabel, "quest:view:sponsored:all:" + q.getId()));
@@ -8778,13 +8832,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? "\n\n" + (anyDone ? "✅ — выполнен" : "") + (anyDone && anyInProgress ? " · " : "") + (anyInProgress ? "⏳ — в процессе" : "")
                 : "";
         sendText(user.getTelegramId(),
-                "💼 <b>Спонсорские квесты</b>\n\n"
-                        + "🤝 Деньги спонсоров идут в фонд выплат, а от его размера зависит курс вывода для всех игроков.\n\n"
-                        + "<blockquote expandable>Спонсоры — одна из причин, по которой проект работает и платит вам реальные деньги. "
-                        + "Чем лояльнее вы относитесь к таким квестам, тем стабильнее проект может выплачивать вам дальше. "
-                        + "Чаще заглядывайте сюда и выполняйте задания: чем больше спонсоров мы привлечём вместе, тем выгоднее будет курс.</blockquote>\n\n"
-                        + "Выберите задание:" + legend,
-                verticalWithBackMenu(buttons, "⬅️ Назад", "menu:quests"));
+                head + "Выберите задание:" + legend,
+                verticalWithBackMenu(buttons, "⬅️ Назад", "quests:section:sponsored"));
     }
 
     /** «🤝 Экси рекомендует» (подраздел Квестов): партнёрские рекомендации без наград EXC. Ссылки - в ресурсе eksi_picks.json.
@@ -31475,6 +31524,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private String backDataFromQuestViewToken(String[] parts) {
         // Карточка открыта из списка спонсорских квестов (quest:view:sponsored:all:ID) - «Назад» возвращает в этот список
         if (parts.length > 0 && "sponsored".equals(parts[0])) {
+            // 15.11.2026: список теперь по разделам - «Назад» ведёт в раздел этого квеста
+            try {
+                Long sid = parseLong(parts[parts.length - 1]);
+                if (sid != null) return "quests:sponsored:cat:" + sponsoredCategory(questService.getQuest(sid));
+            } catch (Exception ignored) {
+                // квест не найден - общий экран разделов
+            }
             return "quests:section:sponsored";
         }
         if (parts.length == 3) {
