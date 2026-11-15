@@ -9483,7 +9483,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (ru.gamebot.platform.service.PartnerMissions.grantsPartner(ru.gamebot.platform.service.PartnerMissions.forQuest(quest))) {
             partnerQuestFunnelService.cardViewed(user.getTelegramId()); // воронка партнёрского квеста: показ карточки (вкладка «Партнёрский квест»)
         }
-        String statusText = latest == null ? "Не начат"
+        // Отменённая заявка - то же, что «не брал»: статус «Отменён» в карточке навсегда сбивал с толку (15.11.2026, замечание владельца)
+        boolean latestCancelled = latest != null && latest.getStatus() == SubmissionStatus.CANCELLED;
+        String statusText = latest == null || latestCancelled ? "Не начат"
                 : (latestExpired ? "Истёк срок" : humanStatus(latest.getStatus()));
 
         String deadlineLine = "";
@@ -9493,7 +9495,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             } else {
                 deadlineLine = formatDeadlineLine(latest.getExpiresAt());
             }
-        } else if (quest.getDurationDays() > 0 && (latest == null || latest.getStatus() == SubmissionStatus.REJECTED || latestExpired)) {
+        } else if (quest.getDurationDays() > 0 && (latest == null || latestCancelled || latest.getStatus() == SubmissionStatus.REJECTED || latestExpired)) {
             deadlineLine = "⏳ Срок: <b>" + quest.getDurationText() + "</b> с момента старта\n";
         }
 
@@ -9585,13 +9587,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         // Упрощённая карточка (05.10.2026, вариант 1 владельца): заголовок, «игра · платформа · срок», награда одной строкой, описание.
         boolean autoVerified = isAutoVerifiedQuest(quest);
-        boolean notStarted = latest == null || latest.getStatus() == SubmissionStatus.REJECTED || latestExpired;
+        boolean notStarted = latest == null || latestCancelled || latest.getStatus() == SubmissionStatus.REJECTED || latestExpired;
         String metaLine = questMetaLine(quest)
                 + (notStarted && quest.getDurationDays() > 0 && !quest.isSponsored() ? " · " + quest.getDurationText() : "");
         String activeDeadline = (latest != null && latest.getStatus() == SubmissionStatus.DRAFT && latest.getExpiresAt() != null && !latestExpired)
                 ? deadlineLine : (notStarted && quest.getDurationDays() > 0 && quest.isSponsored()
                         ? "⏳ Срок: <b>" + quest.getDurationText() + "</b> с момента старта\n" : "");
-        String statusLine = (latest != null || cooldownLeft > 0) ? "📌 Статус: <b>" + escape(displayStatus) + "</b>\n" : "";
+        String statusLine = ((latest != null && !latestCancelled) || cooldownLeft > 0) ? "📌 Статус: <b>" + escape(displayStatus) + "</b>\n" : "";
         String details = "";
         String body;
         if (autoVerified) {
