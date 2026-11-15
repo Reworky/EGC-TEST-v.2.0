@@ -5720,11 +5720,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("💎 Получить до " + fmtExc(sum) + " ₽", "quests:section:sponsored")));
     }
 
-    /** Строка над кнопкой: «💎 Выполни спонсорские квесты и получи до N ₽ на карту.» (только не-партнёрам). */
+    /** Строка над кнопкой: «💎 Получи до N ₽ за спонсорские квесты.» (только не-партнёрам). */
     private String sponsoredPrizeLine(AppUser user) {
         if (healthRatioService.isPartner(user)) return "";
         long sum = sponsoredPrizeRub();
-        return sum > 0 ? "💎 Выполни спонсорские квесты и получи до <b>" + fmtExc(sum) + " ₽</b> на карту.\n\n" : "";
+        return sum > 0 ? "💎 Получи до <b>" + fmtExc(sum) + " ₽</b> за спонсорские квесты.\n\n" : "";
     }
 
     private static String partnerInfoBack(String code) {
