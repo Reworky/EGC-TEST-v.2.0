@@ -2341,6 +2341,14 @@ public class QuestSeeder implements CommandLineRunner {
                     questRepository.save(q);
                     log.info("[QuestSeeder] Updated partner quest card (1000 rub, courier, purchase from 100 rub, 14.11.2026)");
                 });
+        // 15.11.2026: ссылка на оформление - сразу после «Взять» (кнопка «Оформить карту»), а не через чат менеджера: обновляем текст шага 1 один раз
+        questRepository.findFirstByTitleAndGameName(OTP_CARD_TITLE, OTP_GAME)
+                .filter(q -> q.getInstruction() != null && q.getInstruction().contains("менеджер пришлёт ссылку"))
+                .ifPresent(q -> {
+                    applyOtpCardContent(q);
+                    questRepository.save(q);
+                    log.info("[QuestSeeder] Updated partner quest step 1 (apply link right after take, 15.11.2026)");
+                });
         // Памятка модератору (что проверять в отчёте) - квесту, созданному до её появления, ставим один раз
         questRepository.findFirstByTitleAndGameName(OTP_CARD_TITLE, OTP_GAME)
                 .filter(q -> q.getModeratorChecklist() == null || q.getModeratorChecklist().isBlank())
@@ -2877,7 +2885,7 @@ public class QuestSeeder implements CommandLineRunner {
                 + "🔒 Паспорт, коды из СМС и номер карты нам не нужны.\n\n"
                 + "Как это работает:");
         q.setInstruction("1️⃣ Оформи заявку на бесплатную карту онлайн\n"
-                + "Нажми «Начать выполнять квест»: менеджер пришлёт ссылку для оформления дебетовой карты в личных сообщениях.\n"
+                + "После «Взять» появится кнопка «Оформить карту» со ссылкой на онлайн-заявку.\n"
                 + "Заявка должна быть оформлена именно по этой ссылке, иначе банк не выплатит бонус. В заявке выбери доставку курьером. "
                 + "Подходит, если тебе 18+, ты живёшь в России (кроме Крыма, ДНР и ЛНР), у тебя паспорт РФ и у тебя не было действующих продуктов ОТП Банка последние 2 года.\n\n"
                 + "2️⃣ Выполни условие банка\n"

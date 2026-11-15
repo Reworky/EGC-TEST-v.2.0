@@ -7001,8 +7001,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String reward = "+" + pm.bankRewardRub() + " ₽ и " + bonusText(pm, sub);
             String head = "Хочу выполнить квест «Миссия: " + pm.missionTitle() + "»";
             String need = "расскажите, что делать, пришлите ссылку для оформления карты";
+            boolean otpNudge = "otp".equals(pm.key());
+            if (otpNudge) {
+                head = "Вопрос по квесту «Миссия: " + pm.missionTitle() + "»";
+                need = "помогите с оформлением карты";
+            }
             String text;
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            if (otpNudge) {
+                // 15.11.2026: у ОТП в каждом напоминании - ссылка на оформление и вопрос менеджеру
+                text = switch (event.getKind()) {
+                    case ru.gamebot.platform.event.PartnerQuestNudgeEvent.KIND_ASK -> "Как дела с картой? 💳\nОформи заявку по ссылке, если ещё не сделал(а). Если что-то не получается, напиши менеджеру, он подскажет.";
+                    case ru.gamebot.platform.event.PartnerQuestNudgeEvent.KIND_LAST -> "Квест на карту ещё ждёт тебя: " + reward + ". Оформим заявку?";
+                    default -> "💳 <b>Ты взял квест на " + reward + "</b>\nОстался один шаг: оформи заявку на карту по ссылке и выбери доставку курьером.";
+                };
+                rows.add(List.of(keyboardFactory.url("💳 Оформить карту", ru.gamebot.platform.service.PartnerMissions.OTP_APPLY_LINK)));
+                rows.add(List.of(partnerManagerButton(pm, sub, "💬 Вопрос менеджеру", head, need)));
+                if (event.getKind() == ru.gamebot.platform.event.PartnerQuestNudgeEvent.KIND_LAST) {
+                    rows.add(List.of(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + sub.getId())));
+                }
+                sendText(event.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
+                return;
+            }
             switch (event.getKind()) {
                 case ru.gamebot.platform.event.PartnerQuestNudgeEvent.KIND_ASK -> {
                     text = "Как дела с картой? 💳\nЕсли что-то не получается или нужна помощь, напиши менеджеру, он подскажет.";
@@ -9765,10 +9785,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             banner = null;
         } else {
             // Короткий экран после «Взять» (владелец, 09.11): сумма и условия уже на карточке квеста, здесь только что делать дальше.
-            sb.append("🚀 <b>Квест взят!</b>\n\n🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")
-                    .append("Нажми «Начать выполнять квест» - менеджер @").append(manager).append(" проведёт по шагам в личных сообщениях");
-            // Нажатие считаем в воронке (URL-кнопка Telegram о нажатии не сообщает): сначала callback с записью, затем сообщение с кнопкой в чат менеджера
-            rows.add(List.of(keyboardFactory.callback("💬 Начать выполнять квест", "partner:go:" + sub.getId())));
+            if ("otp".equals(pm.key())) {
+                // 15.11.2026 (владелец): у квеста ОТП ссылка на оформление - сразу здесь (без ожидания менеджера); менеджер - для вопросов
+                sb.append("🚀 <b>Квест взят!</b>\n\n🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")
+                        .append("Нажми «💳 Оформить карту»: откроется страница с онлайн-заявкой. В заявке выбери доставку курьером.\n\n")
+                        .append("Если что-то непонятно, напиши менеджеру @").append(manager).append(".");
+                rows.add(List.of(keyboardFactory.url("💳 Оформить карту", ru.gamebot.platform.service.PartnerMissions.OTP_APPLY_LINK)));
+                rows.add(List.of(partnerManagerButton(pm, sub, "💬 Вопрос менеджеру", "Вопрос по квесту «Миссия: " + pm.missionTitle() + "»", "помогите с оформлением карты")));
+            } else {
+                sb.append("🚀 <b>Квест взят!</b>\n\n🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")
+                        .append("Нажми «Начать выполнять квест» - менеджер @").append(manager).append(" проведёт по шагам в личных сообщениях");
+                // Нажатие считаем в воронке (URL-кнопка Telegram о нажатии не сообщает): сначала callback с записью, затем сообщение с кнопкой в чат менеджера
+                rows.add(List.of(keyboardFactory.callback("💬 Начать выполнять квест", "partner:go:" + sub.getId())));
+            }
             banner = pm.stage1Banner();
         }
         if (st == SubmissionStatus.DRAFT || st == SubmissionStatus.PENDING || st == SubmissionStatus.NEEDS_INFO) {
@@ -10368,6 +10397,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (quest.getBrawlVerifyType() != null) {
             brawlQuestVerificationService.primeBaseline(result.submission().getId(), quest.getBrawlVerifyType(), user.getBrawlStarsTag());
         }
+        // 15.11.2026: у квеста ОТП ссылка на оформление показывается сразу при взятии (URL-кнопка о нажатии не сообщает), поэтому «начал» в воронке и в напоминаниях = взял квест
+        ru.gamebot.platform.service.PartnerMission takenPm = ru.gamebot.platform.service.PartnerMissions.forQuest(quest);
+        if (takenPm != null && "otp".equals(takenPm.key())) partnerQuestFunnelService.startClicked(user.getTelegramId());
 
         // Заголовок «Квест активен! Теперь заходите в игру...» собирается ниже (nextStep) одной строкой для всех обычных квестов;
         // здесь остаётся только текст партнёрских квестов со своей ссылкой.

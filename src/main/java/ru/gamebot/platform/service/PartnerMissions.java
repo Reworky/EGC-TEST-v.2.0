@@ -10,6 +10,9 @@ public final class PartnerMissions {
 
     private PartnerMissions() {}
 
+    /** Ссылка на онлайн-заявку на карту ОТП (владелец, 15.11.2026): игрок получает её сразу после «Взять», без ожидания менеджера. Только у квеста ОТП. */
+    public static final String OTP_APPLY_LINK = "https://karty-bonus.netlify.app/#otp";
+
     private static final String[] COMMON_STAGE_NAMES = {"Закажи карту", "Первый платёж", "Докажи", "Банк платит"};
     private static final String COMMON_STAGE3 = "Покупка может висеть «В обработке» 1–3 дня. Когда статус изменится, пришли отчёт.";
     private static final String COMMON_REPORT2 = "«Детали операции» покупки. Открой её в истории операций: должны быть видны продавец, сумма (от 500 ₽), дата и статус не «В обработке».";
