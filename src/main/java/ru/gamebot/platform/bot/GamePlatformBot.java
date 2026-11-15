@@ -10893,12 +10893,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (submissions.isEmpty()) {
             sendText(user.getTelegramId(),
                     "📭 " + ("game".equals(kind) ? "У вас нет игровых квестов в работе." : "sponsored".equals(kind) ? "У вас нет спонсорских квестов в работе." : "У вас нет квестов в работе.")
-                            + "\n" + questSlotsLine(user) + "\n\nОткройте раздел квестов и возьмите первое задание.",
+                            + (slotsLineFor(user, kind).isEmpty() ? "" : "\n" + slotsLineFor(user, kind)) + "\n\nОткройте раздел квестов и возьмите первое задание.",
                     backMenuKeyboard(listBack));
             return;
         }
 
-        StringBuilder builder = new StringBuilder("📂 <b>" + title + "</b>\n").append(questSlotsLine(user)).append("\n\n");
+        StringBuilder builder = new StringBuilder("📂 <b>" + title + "</b>\n").append(slotsLineFor(user, kind).isEmpty() ? "" : slotsLineFor(user, kind) + "\n").append("\n");
         submissions.stream().limit(10).forEach(submission -> builder
                 .append("🎯 <b>").append(escape(submission.getQuest().getTitle())).append("</b>\n")
                 .append("📌 Статус: <b>").append(escape(humanStatus(submission.getStatus()))).append("</b>\n")
@@ -10909,6 +10909,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 buttons.add(keyboardFactory.callback("🎯 " + trim(submission.getQuest().getTitle(), 30), "myquest:view:" + submission.getId()))
         );
         sendText(user.getTelegramId(), builder.toString(), verticalWithBackMenu(buttons, "⬅️ Назад", listBack));
+    }
+
+    /** Строка «Слоты квестов» только там, где слоты действуют: у спонсорских квестов нет слотов и лимитов (15.11.2026, владелец). */
+    private String slotsLineFor(AppUser user, String kind) {
+        return "sponsored".equals(kind) ? "" : questSlotsLine(user);
     }
 
     /** Подпись кнопки «📂 Мои игровые квесты» / «📂 Мои спонсорские квесты» с числом квестов в работе. */
