@@ -5703,9 +5703,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Сумма «до N ₽» от банков и операторов по всем активным спонсорским квестам (0 - показывать нечего). */
-    private long sponsoredPrizeRub() {
+    private long sponsoredPrizeRub(AppUser user) {
         try {
-            return sponsoredBankRub(activeSponsoredQuests());
+            return sponsoredBankRub(sponsoredNotDone(user, activeSponsoredQuests()));
         } catch (Exception e) {
             log.warn("sponsoredPrizeRub failed", e);
             return 0;
@@ -5715,7 +5715,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** «💎 Получить до N ₽» (15.11.2026, владелец): на экранах вывода тем, кто не партнёр - сумма, которую можно получить, выполнив все спонсорские квесты; ведёт в «Спонсорские квесты». */
     private void addSponsoredPrizeRow(List<List<InlineKeyboardButton>> rows, AppUser user) {
         if (healthRatioService.isPartner(user)) return;
-        long sum = sponsoredPrizeRub();
+        long sum = sponsoredPrizeRub(user);
         if (sum <= 0) return;
         rows.add(List.of(keyboardFactory.callback("💎 Получить до " + fmtExc(sum) + " ₽", "quests:section:sponsored")));
     }
@@ -5723,7 +5723,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Строка над кнопкой: «💎 Получи до N ₽ за спонсорские квесты.» (только не-партнёрам). */
     private String sponsoredPrizeLine(AppUser user) {
         if (healthRatioService.isPartner(user)) return "";
-        long sum = sponsoredPrizeRub();
+        long sum = sponsoredPrizeRub(user);
         return sum > 0 ? "💎 Получи до <b>" + fmtExc(sum) + " ₽</b> за спонсорские квесты.\n\n" : "";
     }
 
@@ -8803,6 +8803,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return "games";
     }
 
+    /** Квесты, которые игрок ещё не выполнил (последняя заявка не одобрена): суммы «до N ₽» считаются только по ним и уменьшаются по мере выполнения (15.11.2026, владелец). */
+    private List<Quest> sponsoredNotDone(AppUser user, List<Quest> quests) {
+        List<Quest> out = new ArrayList<>();
+        for (Quest q : quests) {
+            QuestSubmission latest = questService.getLatestSubmission(user, q);
+            if (latest != null && latest.getStatus() == ru.gamebot.platform.domain.enums.SubmissionStatus.APPROVED) continue;
+            out.add(q);
+        }
+        return out;
+    }
+
     /** Сумма рублей от банков и операторов по партнёрским миссиям среди квестов (bankRewardRub): «до N ₽». */
     private long sponsoredBankRub(List<Quest> quests) {
         long sum = 0;
@@ -8822,22 +8833,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return false;
     }
 
-    private volatile String sponsoredMenuLabelCached = "💎 Спонсорские квесты";
-    private volatile long sponsoredMenuLabelAt = 0;
+    private volatile List<Quest> sponsoredMenuQuestsCached = List.of();
+    private volatile long sponsoredMenuQuestsAt = 0;
 
-    /** Подпись кнопки главного меню: «💎 Спонсорские квесты · до 2 000 ₽» (сумма рублей от банков по активным квестам, кэш на минуту). */
-    private String sponsoredMenuLabel() {
-        long now = System.currentTimeMillis();
-        if (now - sponsoredMenuLabelAt > 60_000) {
-            try {
-                long sum = sponsoredBankRub(activeSponsoredQuests());
-                sponsoredMenuLabelCached = "💎 Спонсорские квесты" + (sum > 0 ? " · до " + fmtExc(sum) + " ₽" : "");
-            } catch (Exception e) {
-                log.warn("Failed to build sponsored menu label", e);
+    /** Подпись кнопки главного меню: «💎 Спонсорские квесты · до 2 000 ₽» - сумма по активным квестам, которые игрок ещё не выполнил (список квестов в кэше на минуту). */
+    private String sponsoredMenuLabel(AppUser user) {
+        String base = "💎 Спонсорские квесты";
+        try {
+            long now = System.currentTimeMillis();
+            if (now - sponsoredMenuQuestsAt > 60_000) {
+                sponsoredMenuQuestsCached = activeSponsoredQuests();
+                sponsoredMenuQuestsAt = now;
             }
-            sponsoredMenuLabelAt = now;
+            long sum = sponsoredBankRub(sponsoredNotDone(user, sponsoredMenuQuestsCached));
+            return base + (sum > 0 ? " · до " + fmtExc(sum) + " ₽" : "");
+        } catch (Exception e) {
+            log.warn("Failed to build sponsored menu label", e);
+            return base;
         }
-        return sponsoredMenuLabelCached;
     }
 
     /** Все активные спонсорские квесты в порядке листания карточек: по разделам (как кнопки на экране разделов), внутри раздела - как в списке. */
@@ -8872,8 +8885,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!eksiPicksService.forUser(user).isEmpty()) {
             rows.add(keyboardFactory.callback("🤝 Экси рекомендует", "quests:section:picks"));
         }
-        List<Quest> all = activeSponsoredQuests();
-        long sum = sponsoredBankRub(all);
+        long sum = sponsoredBankRub(sponsoredNotDone(user, activeNow));
         // 15.11.2026 (текст владельца): «суммарно более N ₽ на карту», «Каждый квест один раз на аккаунт» отдельным абзацем
         String prize = sum > 0
                 ? "🎁 Выполни все квесты из этого раздела и получи суммарно более " + fmtExc(sum) + " ₽ на карту.\n\nКаждый квест доступен один раз на аккаунт.\n\n"
@@ -8900,8 +8912,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         final String key = cat[0];
         List<Quest> quests = activeSponsoredQuests().stream().filter(q -> key.equals(sponsoredCategory(q))).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         String head = "💼 <b>Спонсорские квесты · " + cat[2] + "</b>\n\n";
-        long catSum = sponsoredBankRub(quests);
-        boolean catPremium = sponsoredHasPremium(quests);
+        List<Quest> catLeft = sponsoredNotDone(user, quests);
+        long catSum = sponsoredBankRub(catLeft);
+        boolean catPremium = sponsoredHasPremium(catLeft);
         if (catSum > 0 || catPremium) {
             head += "🎁 В этом разделе: " + (catSum > 0 ? "до " + fmtExc(catSum) + " ₽" : "") + (catPremium ? (catSum > 0 ? " и " : "") + "Telegram Premium" : "") + "\n\n";
         }
@@ -30747,7 +30760,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // с наградой, деньги, люди, а всё остальное — в «⋯ Ещё» (см. sendMoreCategory).
         // 15.11.2026 (владелец): вместо «🎯 Играть» - сразу «Игровые квесты» и «Спонсорские квесты» (с суммой), затем «Задания дня»; кнопка «Квест от спонсора» стала лишней
         rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "quests:section:gaming")));
-        rows.add(List.of(keyboardFactory.callback(sponsoredMenuLabel(), "quests:section:sponsored")));
+        rows.add(List.of(keyboardFactory.callback(sponsoredMenuLabel(user), "quests:section:sponsored")));
         if (userService.dailyTasksEnabled()) {
             rows.add(List.of(keyboardFactory.callback(dailyTasksMenuLabel(user), "menu:dtasks")));
         }
