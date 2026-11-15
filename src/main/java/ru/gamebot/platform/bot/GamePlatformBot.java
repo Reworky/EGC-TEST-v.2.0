@@ -9611,6 +9611,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             details = d.toString();
         }
+        if (quest.isSponsored() || quest.isExternalAutoApprove()) body = collapseSponsorSections(body);
         if (!details.isBlank()) body += "\n\n<blockquote expandable>" + details + "</blockquote>";
         String cardText = isManualPartnerSponsored(quest)
                 ? partnerQuestCardText(quest, personalizedInstruction, notice, activeDeadline, statusLine)
@@ -9696,19 +9697,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         .append(descMission.bonusItem() != null ? " и " + escape(descMission.bonusItem()) : "").append(" в конце выполнения квеста");
                 desc = desc.substring(0, listEnd) + extra + desc.substring(listEnd);
             }
-            desc = desc.replace("Что ты получаешь:\n", "Что ты получаешь:\n\n")
-                    .replaceAll("(?m)^(Что ты получаешь:|Как это работает:)$", "<b>$1</b>");
+            // 15.11.2026 (владелец): «Что ты получаешь» и «Как это работает» - раскрывающиеся цитаты. Заголовок «Как это работает:» из конца описания уходит в цитату с шагами ниже.
+            desc = desc.replaceAll("(?s)\\n*Как это работает:[ \\t]*\\n*$", "");
+            desc = collapseSponsorSections(desc);
             sb.append("\n").append(desc).append("\n");
         }
         List<String[]> steps = splitQuestBlocks(instruction);
-        if (!steps.isEmpty()) sb.append("\n");
-        for (String[] step : steps) sb.append(escape(step[0])).append("\n"); // шаги 1️⃣-4️⃣ обычным текстом (владелец, 09.11)
+        if (!steps.isEmpty()) {
+            List<String> stepLines = new ArrayList<>();
+            for (String[] step : steps) stepLines.add(escape(step[0])); // заголовки шагов 1️⃣-4️⃣
+            sb.append("\n<blockquote expandable><b>Как это работает:</b>\n").append(String.join("\n", stepLines)).append("</blockquote>\n");
+        }
         for (String[] cond : splitQuestBlocks(quest.getRequirements())) {
             sb.append("\n<blockquote expandable><b>").append(escape(cond[0])).append("</b>");
             if (cond.length > 1) sb.append("\n").append(escape(cond[1]));
             sb.append("</blockquote>");
         }
         return sb.toString().trim();
+    }
+
+    /** Блоки «Что ты получаешь:» и «Как это работает:» (заголовок и текст до пустой строки) в раскрывающуюся цитату Telegram: на виду заголовок и первые строки (15.11.2026, владелец).
+     *  Применяется к уже экранированному тексту во всех спонсорских карточках. */
+    private static String collapseSponsorSections(String escaped) {
+        if (escaped == null || escaped.isBlank()) return escaped;
+        return escaped.replaceAll("(?ms)^(Что ты получаешь:|Как это работает:)[ \\t]*\\n(.*?)(?=\\n[ \\t]*\\n|\\z)",
+                "<blockquote expandable><b>$1</b>\n$2</blockquote>");
     }
 
     private boolean isMissionQuest(Quest quest) {
