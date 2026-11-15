@@ -24,9 +24,9 @@ public final class PartnerMissions {
     private static final String STAGE4_HEAD = "✅ <b>Отчёт принят, {reward} EXC начислены.</b>\n\n"
             + "⏳ <b>Квест ещё не закончен: остался финал за {bonusText}.</b> Теперь нужно дождаться выплаты банка.\n\n"
             + "<b>Что дальше:</b>\n";
-    /** Финал ОТП без бонуса EXC и без подарка (с 15.11.2026 владелец отказался от Telegram Premium): банк выплатил деньги игроку, клуб включает партнёрский статус. */
-    private static final String FINAL_TEXT_STATUS = "🏆 <b>Миссия выполнена!</b>\n\n"
-            + "Банк выплатил деньги на твою карту.\n\n"
+    /** Финал ОТП, когда бонус банка - подарок Telegram Premium (с 12.11.2026), а не EXC. */
+    private static final String FINAL_TEXT_PREMIUM = "🏆 <b>Миссия выполнена!</b>\n\n"
+            + "Банк выплатил бонус. Менеджер подарит тебе <b>Telegram Premium на 1 месяц</b>: если подарка нет больше суток, напиши ему.\n\n"
             + "🤝 Ты теперь партнёр клуба: курс вывода 100% на все твои EXC и партнёрские цены.\n\n"
             + "Вывод открыт разово: всю накопленную сумму можно вывести одной заявкой, сверх обычного месячного лимита.\n\n"
             + "🏦 Бейдж «Банкир EGC» уже в твоём профиле.";
@@ -43,7 +43,7 @@ public final class PartnerMissions {
     public static final PartnerMission OTP = PartnerMission.builder()
             .key("otp")
             .gameName("Банк-партнёр")
-            .questTitle("Оформи карту ОТП банка и получи 1000 руб. на баланс")
+            .questTitle("Оформи бесплатную карту ОТП банка")
             .listLabel("ОТП Банк")
             .bannerResource("partner_card_banner.jpg")
             .stage1Banner("partner_card_banner.jpg")
@@ -52,8 +52,8 @@ public final class PartnerMissions {
             .waitingName("Банковская карта")
             .rewardExc(0)
             .bonusExc(0)
-            .bonusItem(null)
-            .finalTextItem(FINAL_TEXT_STATUS)
+            .bonusItem("Telegram Premium на 1 месяц")
+            .finalTextItem(FINAL_TEXT_PREMIUM)
             .windowDays(30)
             .bankPayDays(0)
             .bonusCommand("otpbonus")

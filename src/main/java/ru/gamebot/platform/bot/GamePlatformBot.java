@@ -5560,9 +5560,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (pm != null && sub != null && "otp".equals(pm.key()) && sub.getCreatedAt() != null) {
                 java.time.LocalDateTime legacyFrom = settingTime(ru.gamebot.platform.config.QuestSeeder.OTP_BONUS_CHANGE_KEY);
                 if (legacyFrom != null && sub.getCreatedAt().isBefore(legacyFrom)) return OTP_LEGACY_BONUS_EXC;
-                // До 12.11.2026 бонус банка был 50 000 EXC; с 12.11.2026 Premium, с 15.11.2026 бонуса нет вовсе (только деньги и партнёрский статус)
-                java.time.LocalDateTime premiumFrom = settingTime(ru.gamebot.platform.config.QuestSeeder.OTP_PREMIUM_CHANGE_KEY);
-                if (premiumFrom != null && sub.getCreatedAt().isBefore(premiumFrom)) return OTP_PREV_BONUS_EXC;
+                if (!bonusIsItem(pm, sub)) return OTP_PREV_BONUS_EXC;
             }
         } catch (Exception e) {
             log.warn("bonusFor failed for submission {}", sub == null ? null : sub.getId(), e);
@@ -5570,25 +5568,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return pm.bonusExc();
     }
 
-    /** Бонуса банка по заявке нет ни в EXC, ни подарком (заявки с 15.11.2026): игрок получает деньги от банка и партнёрский статус. */
-    private boolean noBonus(ru.gamebot.platform.service.PartnerMission pm, QuestSubmission sub) {
-        return !bonusIsItem(pm, sub) && bonusFor(pm, sub) <= 0;
-    }
-
-    /** «50 000 EXC» или подарок, а если бонуса нет - «статус партнёра»: что игрок получит после выплаты банка. */
+    /** «50 000 EXC» или «Telegram Premium на 1 месяц» - что игрок получит после выплаты банка. */
     private String bonusText(ru.gamebot.platform.service.PartnerMission pm, QuestSubmission sub) {
-        if (noBonus(pm, sub)) return "статус партнёра";
         return bonusIsItem(pm, sub) ? pm.bonusItem() : fmtExc(bonusFor(pm, sub)) + " EXC";
     }
 
-    /** «начислим 50 000 EXC», «пришлём подарок» или «включим партнёрский статус». */
+    /** «начислим 50 000 EXC» или «пришлём Telegram Premium на 1 месяц». */
     private String bonusGive(ru.gamebot.platform.service.PartnerMission pm, QuestSubmission sub) {
-        if (noBonus(pm, sub)) return "включим партнёрский статус";
         return bonusIsItem(pm, sub) ? "пришлём " + pm.bonusItem() : "начислим " + fmtExc(bonusFor(pm, sub)) + " EXC";
     }
 
     private String finalTextFor(ru.gamebot.platform.service.PartnerMission pm, QuestSubmission sub) {
-        return (bonusIsItem(pm, sub) || noBonus(pm, sub)) && pm.finalTextItem() != null ? pm.finalTextItem() : pm.finalText().replace("{bonus}", fmtExc(bonusFor(pm, sub)));
+        return bonusIsItem(pm, sub) && pm.finalTextItem() != null ? pm.finalTextItem() : pm.finalText().replace("{bonus}", fmtExc(bonusFor(pm, sub)));
     }
 
     /** Награда квестом после проверки скриншотов (должна совпадать с QuestSeeder.OTP_CARD_REWARD_EXC). */
@@ -5629,7 +5620,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "<b>Что ты получаешь:</b>\n"
                         + "✅ " + ru.gamebot.platform.service.PartnerMissions.OTP.bankRewardRub() + " ₽ от банка на твою карту\n"
                         + (OTP_QUEST_REWARD_EXC > 0 ? "✅ " + fmtExc(OTP_QUEST_REWARD_EXC) + " EXC после проверки\n" : "")
-                        + "✅ Статус партнёра, когда банк выплатит деньги: курс вывода 100% и вывод всей суммы разом\n\n"
+                        + "✅ " + ru.gamebot.platform.service.PartnerMissions.OTP.bonusItem() + ", когда банк выплатит бонус, и вывод всей суммы разом\n\n"
                         + "<b>Что нужно сделать:</b>\n"
                         + "1️⃣ Оформить бесплатную карту по нашей ссылке\n"
                         + "2️⃣ Выбрать доставку курьером и оплатить картой любую покупку от 100 ₽\n"
@@ -5736,7 +5727,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .append("<blockquote expandable>")
                 .append("✅ Вывод по курсу 100%").append(partner ? "" : " вместо обычных ~" + nonPartnerPercent() + "%").append(" - на все EXC, в том числе будущие\n")
                 .append("✅ Партнёрские цены за звёзды и в магазине наград\n")
-                .append(partner ? "" : "✅ 1000р от банка на вашу карту\n")
+                .append(partner ? "" : "✅ 1000р от банка на вашу карту + Телеграм Премиум (1 месяц)\n")
                 .append("✅ Бейдж «Банкир EGC» в профиле")
                 .append("</blockquote>");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
@@ -5815,13 +5806,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         long amount = amountArg == null ? defaultAmount : amountArg;
         boolean itemPayout = pm.bonusItem() != null && amount == 0 && (amountArg != null ? amountArg == 0 : itemDefault || pm.bonusExc() == 0);
-        // С 15.11.2026 у ОТП нет ни EXC, ни подарка: выплата банка = партнёрский статус и разовый запас вывода
-        boolean statusOnly = !itemPayout && pm.bonusItem() == null && amount == 0 && ru.gamebot.platform.service.PartnerMissions.grantsPartner(pm) && (amountArg == null || amountArg == 0);
-        boolean zeroPayout = itemPayout || statusOnly;
         boolean repeatPayout = java.util.Arrays.stream(p).skip(2).anyMatch(w -> w.equalsIgnoreCase("повтор"));
-        if (targetId == null || (amount <= 0 && !zeroPayout)) {
+        if (targetId == null || (amount <= 0 && !itemPayout)) {
             sendText(admin.getTelegramId(), "⚠️ Формат: <code>/" + pm.bonusCommand() + " ID [сумма EXC]</code>, по умолчанию "
-                    + (pm.bonusItem() != null ? escape(pm.bonusItem()) + " (EXC не начисляются)" : pm.bonusExc() == 0 && ru.gamebot.platform.service.PartnerMissions.grantsPartner(pm) ? "только партнёрский статус и разовый запас вывода (EXC не начисляются)" : fmtExc(pm.bonusExc()) + " EXC") + ".", null);
+                    + (pm.bonusItem() != null ? escape(pm.bonusItem()) + " (EXC не начисляются)" : fmtExc(pm.bonusExc()) + " EXC") + ".", null);
             return;
         }
         AppUser target = userService.findByTelegramId(targetId).orElse(null);
@@ -5838,12 +5826,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean missionMarked;
         boolean grantsPartner = ru.gamebot.platform.service.PartnerMissions.grantsPartner(pm); // привилегии (запас вывода, бейдж) - только у ОТП
         try {
-            if (!zeroPayout) {
+            if (!itemPayout) {
                 userService.addReward(target, 0, amount, ru.gamebot.platform.service.ExcTransactionService.BONUS, "Партнёрская выплата: " + pm.shortTitle());
             }
             if (grantsPartner) {
                 // Подарок вместо EXC: разовое расширение лимита вывода остаётся прежним (OTP_PARTNER_ALLOWANCE_EXC)
-                sinkShopService.grantPartnerWithdrawalAllowance(target, zeroPayout ? OTP_PARTNER_ALLOWANCE_EXC : amount);
+                sinkShopService.grantPartnerWithdrawalAllowance(target, itemPayout ? OTP_PARTNER_ALLOWANCE_EXC : amount);
             }
             missionMarked = questService.markPartnerBonusPaid(target.getId(), pm.gameName());
         } catch (Exception e) {
@@ -5854,9 +5842,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             sendText(target.getTelegramId(),
                     "🏆 <b>Миссия выполнена!</b>\n\n"
-                            + (statusOnly
-                            ? "Банк выплатил деньги на твою карту.\n\n"
-                            : itemPayout
+                            + (itemPayout
                             ? "Банк выплатил бонус. Менеджер подарит тебе <b>" + escape(pm.bonusItem()) + "</b>: если подарка нет больше суток, напиши ему.\n\n"
                             : "Банк выплатил бонус, мы начислили тебе <b>" + fmtExc(amount) + " EXC</b>.\n\n")
                             + (grantsPartner ? "🤝 Ты теперь партнёр клуба: курс вывода 100% на все твои EXC и партнёрские цены.\n\n" : "")
@@ -5869,10 +5855,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             log.warn("Partner bonus ({}) notice failed for {}", pm.key(), targetId, e);
         }
         String adminWho = escape(String.valueOf(target.getNickname())) + (target.getTelegramUsername() == null || target.getTelegramUsername().isBlank() ? "" : " @" + escape(target.getTelegramUsername().replace("@", ""))) + " (" + targetId + ")";
-        sendText(admin.getTelegramId(), statusOnly
-                ? "✅ Игроку " + adminWho + " включён партнёрский статус и разово открыт вывод. EXC не начислялись."
-                    + (!grantsPartner || missionMarked ? "" : "\n⚠️ Одобренной заявки по «" + escape(pm.shortTitle()) + "» у игрока нет: бейдж и «финал» миссии не отмечены.")
-                : itemPayout
+        sendText(admin.getTelegramId(), itemPayout
                 ? "✅ Игроку " + adminWho + " включён партнёрский статус и разово открыт вывод.\n\n🎁 <b>Не забудьте отправить ему " + escape(pm.bonusItem()) + "</b>: EXC не начислялись."
                     + (!grantsPartner || missionMarked ? "" : "\n⚠️ Одобренной заявки по «" + escape(pm.shortTitle()) + "» у игрока нет: бейдж и «финал» миссии не отмечены.")
                 : "✅ Игроку " + adminWho + " начислено " + fmtExc(amount)
@@ -5907,8 +5890,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         .thenComparing(java.util.Comparator.comparingLong(AppUser::getWeeklyXp).reversed()))
                 .limit(pilotSize)
                 .toList();
-        String invite = "💎 <b>Получи 1 000 ₽ от банка на карту</b>\n\n"
-                + "Мы нашли способ, как это сделать: деньги придут на твою карту, тратить их можно куда хочешь.\n\n"
+        String invite = "💎 <b>Получи 500 ₽ от банка + " + ru.gamebot.platform.service.PartnerMissions.OTP.bonusItem() + "</b>\n\n"
+                + "Мы нашли способ, как это сделать: 500 ₽ вернутся, тратить их можно куда хочешь, и ты заодно получишь подарок.\n\n"
                 + "Мест ограниченное число.\n\n"
                 + "Открой карточку, и мы покажем, как 👇";
         boolean send = text.matches("(?i)/otppilot\\s+send(?:\\s+\\d{1,4})?");
@@ -7140,7 +7123,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboard = keyboardFactory.rowsLayout(List.of(
                             List.of(keyboardFactory.callback(pm.bankClaimButton(), "mission:bankpaid:" + event.getSubmissionId() + ":4"))));
                 }
-                default -> text = "🎮 <b>" + escape(pm.waitingName()) + " ждёт тебя:</b> два шага до " + (noBonus(pm, remSub) ? "статуса партнёра" : bonusText(pm, remSub)) + ". Продолжим?";
+                default -> text = "🎮 <b>" + escape(pm.waitingName()) + " ждёт тебя:</b> два шага до " + bonusText(pm, remSub) + ". Продолжим?";
             }
             sendText(event.getTelegramId(), text, keyboard);
         } catch (Exception e) {
@@ -8802,6 +8785,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return sum;
     }
 
+    /** Есть ли среди квестов партнёрская миссия с подарком Telegram Premium. */
+    private boolean sponsoredHasPremium(List<Quest> quests) {
+        for (Quest q : quests) {
+            ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(q);
+            if (pm != null && pm.bonusItem() != null && pm.bonusItem().contains("Premium")) return true;
+        }
+        return false;
+    }
+
     private volatile String sponsoredMenuLabelCached = "💎 Спонсорские квесты";
     private volatile long sponsoredMenuLabelAt = 0;
 
@@ -8878,8 +8870,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<Quest> quests = activeSponsoredQuests().stream().filter(q -> key.equals(sponsoredCategory(q))).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         String head = "💼 <b>Спонсорские квесты · " + cat[2] + "</b>\n\n";
         long catSum = sponsoredBankRub(quests);
-        if (catSum > 0) {
-            head += "🎁 В этом разделе: до " + fmtExc(catSum) + " ₽\n\n";
+        boolean catPremium = sponsoredHasPremium(quests);
+        if (catSum > 0 || catPremium) {
+            head += "🎁 В этом разделе: " + (catSum > 0 ? "до " + fmtExc(catSum) + " ₽" : "") + (catPremium ? (catSum > 0 ? " и " : "") + "Telegram Premium" : "") + "\n\n";
         }
         if (quests.isEmpty()) {
             sendSponsorCategoryScreen(user.getTelegramId(), key,
@@ -9703,9 +9696,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             int listStart = desc.indexOf("Что ты получаешь:");
             int listEnd = listStart < 0 ? -1 : desc.indexOf("\n\n", listStart);
             if (descMission != null && "otp".equals(descMission.key())) {
-                // 14.11.2026 (владелец): у карточки банка строка про курс вывода стоит третьей в списке (после 1 000 ₽ и Premium), строки «Итого» нет
+                // 15.11.2026 (текст владельца): у карточки банка строка про курс партнёра стоит второй в списке (после «1 000 ₽ за оформление карты»), строки «Итого» нет
                 if (withdrawalTiersEnabled()) {
-                    String rateLine = "✅ После выплаты банка все твои EXC выводятся по курсу 100% вместо обычных ~" + nonPartnerPercent() + "%.\n";
+                    String rateLine = "✅ Курс партнёра для EXC (твои EXC выводятся по курсу 100% вместо обычных ~" + nonPartnerPercent() + "%)\n";
                     int firstLine = desc.indexOf("✅ ");
                     int firstEnd = firstLine < 0 ? -1 : desc.indexOf('\n', firstLine);
                     if (firstEnd > 0) desc = desc.substring(0, firstEnd + 1) + rateLine + desc.substring(firstEnd + 1);
@@ -9743,7 +9736,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  Применяется к уже экранированному тексту во всех спонсорских карточках. */
     private static String collapseSponsorSections(String escaped) {
         if (escaped == null || escaped.isBlank()) return escaped;
-        return escaped.replaceAll("(?ms)^(Что ты получаешь:|Как это работает:)[ \\t]*\\n(.*?)(?=\\n[ \\t]*\\n|\\z)",
+        return escaped.replaceAll("(?ms)^(Что ты получаешь:|Награда за квест:|Как это работает:)[ \\t]*\\n(.*?)(?=\\n[ \\t]*\\n|\\z)",
                 "<blockquote expandable><b>$1</b>\n$2</blockquote>");
     }
 
@@ -9842,11 +9835,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     .append(reward > 0 ? "🪙 <b>+" + fmtExc(reward) + " EXC</b> уже у тебя." : "")
                     .append(ru.gamebot.platform.service.PartnerMissions.grantsPartner(pm) ? (reward > 0 ? " " : "") + "Партнёрский статус и курс вывода 100% на все твои EXC включатся, когда банк выплатит бонус." : "").append("\n\n")
                     .append("<b>Что дальше?</b>\nБанк выплатит свой бонус не сразу. Когда деньги придут, напиши менеджеру: он проверит и ")
-                    .append(noBonus(pm, sub) ? "включит партнёрский статус и откроет вывод всей суммы разом."
-                            : bonusItem ? "подарит <b>" + escape(pm.bonusItem()) + "</b>."
+                    .append(bonusItem ? "подарит <b>" + escape(pm.bonusItem()) + "</b>."
                             : "начислит ещё <b>" + fmtExc(bonus) + " EXC</b> (≈ " + fmtExc(bonus / 100) + " ₽).");
             rows.add(List.of(partnerManagerButton(pm, sub, "💬 Написать менеджеру", "Вопрос по квесту «Миссия: " + pm.missionTitle() + "»",
-                    "банк выплатил деньги, проверьте" + (noBonus(pm, sub) ? " и включите партнёрский статус" : bonusItem ? " и подарите " + pm.bonusItem() : " и начислите EXC"))));
+                    "банк выплатил бонус, проверьте" + (bonusItem ? " и подарите " + pm.bonusItem() : " и начислите EXC"))));
             rows.add(List.of(keyboardFactory.callback("🎯 Пока ждёшь: другие квесты", "menu:quests")));
             banner = pm.stage4Banner();
         } else if (st == SubmissionStatus.REJECTED) {
@@ -9922,7 +9914,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (i == 4 && stage == 4) sb.append(": ").append(pm.bankDateWord()).append(" ").append(ruDayMonth(bankDate));
             sb.append("\n");
         }
-        sb.append("🏆 Финал: ").append(bonusText(pm, sub)).append(bonusPaid ? (bonusIsItem(pm, sub) ? " (подарок отправлен)" : noBonus(pm, sub) ? " получен" : " получены") : "").append("\n\n");
+        sb.append("🏆 Финал: ").append(bonusText(pm, sub)).append(bonusPaid ? (bonusIsItem(pm, sub) ? " (подарок отправлен)" : " получены") : "").append("\n\n");
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         java.util.regex.Pattern urlPattern = java.util.regex.Pattern.compile("https?://\\S+");
@@ -10020,7 +10012,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             sendText(user.getTelegramId(),
                     first ? "✅ <b>Спасибо!</b> Проверим выплату банка и " + bonusGive(pm, sub) + ". Мы напишем тебе."
-                            : "✅ Мы уже проверяем выплату банка. Напишем, как только " + (noBonus(pm, sub) ? "включим партнёрский статус." : bonusIsItem(pm, sub) ? "отправим подарок." : "начислим " + fmtExc(bonusFor(pm, sub)) + " EXC."),
+                            : "✅ Мы уже проверяем выплату банка. Напишем, как только " + (bonusIsItem(pm, sub) ? "отправим подарок." : "начислим " + fmtExc(bonusFor(pm, sub)) + " EXC."),
                     keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("▶️ Открыть миссию", "myquest:view:" + submissionId)))));
         } catch (Exception e) {
             log.warn("Partner bank claim failed for submission {}", submissionId, e);
@@ -16271,7 +16263,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 mb.add(keyboardFactory.callback("✅ Первая часть проверена" + (mpm.rewardExc() > 0 ? " (+" + fmtExc(mpm.rewardExc()) + " EXC)" : ""), "mod:ok:" + submission.getId()));
                 mb.add(keyboardFactory.callback("❌ Отклонить", "mod:no:" + submission.getId()));
             } else if (submission.getBonusPaidAt() == null) {
-                mb.add(keyboardFactory.callback("💰 Банк выплатил: " + (noBonus(mpm, submission) ? "включить статус партнёра" : bonusIsItem(mpm, submission) ? "статус партнёра + подарок" : "начислить " + fmtExc(bonusFor(mpm, submission)) + " EXC и статус партнёра"), "mod:pbonus:" + submission.getId()));
+                mb.add(keyboardFactory.callback("💰 Банк выплатил: " + (bonusIsItem(mpm, submission) ? "статус партнёра + подарок" : "начислить " + fmtExc(bonusFor(mpm, submission)) + " EXC и статус партнёра"), "mod:pbonus:" + submission.getId()));
             }
             return mb;
         }
