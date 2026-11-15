@@ -1468,6 +1468,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if (data.startsWith("myquests:list:")) {
+            sendMySubmissions(user, data.substring("myquests:list:".length()));
+            answerSilently(callbackQuery.getId());
+            return;
+        }
         if (data.startsWith("quests:sponsored:cat:")) {
             sendSponsoredQuestList(user, data.substring("quests:sponsored:cat:".length()));
             answerSilently(callbackQuery.getId());
@@ -8675,51 +8680,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendQuestGames(user, "menu:main");
     }
 
-    /** backData != null - экран открыт из другого раздела (например «Задания дня»): добавляем «Назад» туда. */
+    /** С 15.11.2026 (владелец) общего экрана «Квесты» нет: «Играть»/«Квесты» ведут в «Игровые квесты». Код дня, Цель клуба, Соцсети и UGC - в «Ещё»,
+     *  «Мои» - внутри игровых и спонсорских квестов, «Экси рекомендует» - внутри спонсорских. backData - куда ведёт «Назад» (например «Задания дня»). */
     private void sendQuestGames(AppUser user, String backData) {
         clearOnboardingBrowseBack(user);
-        // Два главных раздела (игровые и спонсорские) - широкие кнопки одного вида, остальное мелко в одну-две строки (макет владельца 30.10.2026).
-        int gamesCount = questService.findActiveGameNames().size();
-        List<Quest> sponsored = questService.findAllSponsored().stream().filter(Quest::isActive).toList();
-        long sponsoredNew = sponsored.stream().filter(Quest::isEffectivelyNew).count();
-        long inProgress = questService.countAllActiveDrafts(user);
-        String gamesLabel = "🎮  ИГРОВЫЕ КВЕСТЫ" + (gamesCount > 0 ? " · " + gamesCount : "");
-        String sponsoredLabel = "💎  СПОНСОРСКИЕ КВЕСТЫ"
-                + (sponsoredNew > 0 ? " · 🆕 " + sponsoredNew : (sponsored.isEmpty() ? "" : " · " + sponsored.size()));
-        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.callback(gamesLabel, "quests:section:gaming")));
-        rows.add(List.of(keyboardFactory.callback(sponsoredLabel, "quests:section:sponsored")));
-        // «Экси рекомендует»: партнёрские рекомендации без EXC; кнопка только если есть что показать этому игроку
-        if (!eksiPicksService.forUser(user).isEmpty()) {
-            rows.add(List.of(keyboardFactory.callback("🤝  ЭКСИ РЕКОМЕНДУЕТ", "quests:section:picks")));
-        }
-        List<InlineKeyboardButton> small = new ArrayList<>();
-        small.add(keyboardFactory.callback("📂 Мои" + (inProgress > 0 ? " · " + inProgress : ""), "menu:myquests"));
-        small.add(keyboardFactory.callback("🤳 UGC", "quests:section:ugc"));
-        if (socialTaskService.enabled() && !socialTaskService.tasks().isEmpty()) {
-            small.add(keyboardFactory.callback("🌐 Соцсети", "quests:section:social"));
-        }
-        rows.add(small);
-        rows.add(List.of(keyboardFactory.callback("🔑 Код дня", "club:code"), keyboardFactory.callback("🎯 Цель клуба", "club:goal")));
-        if (backData != null) {
-            rows.add(List.of(keyboardFactory.callback("⬅️ Назад", backData), keyboardFactory.callback("🏠 Меню", "menu:main")));
-        } else {
-            rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
-        }
-        // Событие и золотой час - каждый с новой строки: «🎃 Хэллоуин в EGC: осталось 2д 05:04» / «⚡ Золотой час в 19:00 МСК»
-        List<String> info = new ArrayList<>();
-        String ev = eventCompactLine();
-        if (!ev.isEmpty()) info.add(ev);
-        try {
-            String gh = goldenHourService.compactLine();
-            if (gh != null && !gh.isEmpty()) info.add(gh);
-        } catch (Exception e) {
-            log.warn("Golden hour compact line failed", e);
-        }
-        // Баннер «Квесты» (Экси у доски заданий) — тот же файл, что на экране «Квесты и рейтинг».
-        sendResourceBanner(user.getTelegramId(), "quest_banner.png",
-                "🗺️ <b>Квесты</b>" + (info.isEmpty() ? "" : "\n\n" + String.join("\n", info)),
-                keyboardFactory.rowsLayout(rows));
+        sendGamingQuestGames(user, backData == null ? "menu:main" : backData);
     }
 
     /** «🎃 Хэллоуин в EGC: осталось 2д 05:04» одной строкой без переноса; пусто, если сезонного события нет. */
@@ -8740,7 +8705,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendGamingQuestGames(AppUser user) {
-        String back = sessionService.get(user.getTelegramId()).getData().getOrDefault(ONBOARDING_BROWSE_BACK_KEY, "menu:quests");
+        sendGamingQuestGames(user, sessionService.get(user.getTelegramId()).getData().getOrDefault(ONBOARDING_BROWSE_BACK_KEY, "menu:main"));
+    }
+
+    private void sendGamingQuestGames(AppUser user, String back) {
         List<String> games = questService.findActiveGameNames();
         if (games.isEmpty()) {
             sendText(user.getTelegramId(),
@@ -8753,13 +8721,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (String game : games) {
             rows.add(List.of(keyboardFactory.callback(trim(game, 28), "quests:game:" + encodeGameToken(game))));
         }
+        rows.add(List.of(keyboardFactory.callback(myQuestsLabel(user, "game"), "myquests:list:game")));
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", back),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
+        // Событие и золотой час (раньше были на экране «Квесты») - здесь: «🎃 Хэллоуин в EGC: осталось 2д 05:04» / «⚡ Золотой час в 19:00 МСК»
+        List<String> info = new ArrayList<>();
+        String ev = eventCompactLine();
+        if (!ev.isEmpty()) info.add(ev);
+        try {
+            String gh = goldenHourService.compactLine();
+            if (gh != null && !gh.isEmpty()) info.add(gh);
+        } catch (Exception e) {
+            log.warn("Golden hour compact line failed", e);
+        }
         // 12.11.2026: общий рекламный баннер со всеми играми (game_quests_banner.jpg)
         sendResourceBanner(user.getTelegramId(), "game_quests_banner.jpg",
-                "🎮 <b>Игровые квесты</b>\n\nВыберите игру:",
+                "🎮 <b>Игровые квесты</b>" + (info.isEmpty() ? "" : "\n\n" + String.join("\n", info)) + "\n\nВыберите игру:",
                 keyboardFactory.rowsLayout(rows));
     }
 
@@ -8796,6 +8775,43 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return "games";
     }
 
+    /** Сумма рублей от банков и операторов по партнёрским миссиям среди квестов (bankRewardRub): «до N ₽». */
+    private long sponsoredBankRub(List<Quest> quests) {
+        long sum = 0;
+        for (Quest q : quests) {
+            ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(q);
+            if (pm != null) sum += pm.bankRewardRub();
+        }
+        return sum;
+    }
+
+    /** Есть ли среди квестов партнёрская миссия с подарком Telegram Premium. */
+    private boolean sponsoredHasPremium(List<Quest> quests) {
+        for (Quest q : quests) {
+            ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(q);
+            if (pm != null && pm.bonusItem() != null && pm.bonusItem().contains("Premium")) return true;
+        }
+        return false;
+    }
+
+    private volatile String sponsoredMenuLabelCached = "💎 Спонсорские квесты";
+    private volatile long sponsoredMenuLabelAt = 0;
+
+    /** Подпись кнопки главного меню: «💎 Спонсорские квесты · до 2 000 ₽» (сумма рублей от банков по активным квестам, кэш на минуту). */
+    private String sponsoredMenuLabel() {
+        long now = System.currentTimeMillis();
+        if (now - sponsoredMenuLabelAt > 60_000) {
+            try {
+                long sum = sponsoredBankRub(activeSponsoredQuests());
+                sponsoredMenuLabelCached = "💎 Спонсорские квесты" + (sum > 0 ? " · до " + fmtExc(sum) + " ₽" : "");
+            } catch (Exception e) {
+                log.warn("Failed to build sponsored menu label", e);
+            }
+            sponsoredMenuLabelAt = now;
+        }
+        return sponsoredMenuLabelCached;
+    }
+
     /** Все активные спонсорские квесты в порядке листания карточек: по разделам (как кнопки на экране разделов), внутри раздела - как в списке. */
     private List<Quest> sponsoredQuestsInDisplayOrder() {
         List<Quest> all = activeSponsoredQuests();
@@ -8820,14 +8836,27 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (String[] c : SPONSOR_CATEGORIES) {
             rows.add(keyboardFactory.callback(c[1], "quests:sponsored:cat:" + c[0]));
         }
+        rows.add(keyboardFactory.callback(myQuestsLabel(user, "sponsored"), "myquests:list:sponsored"));
+        // «Экси рекомендует»: партнёрские рекомендации без EXC; кнопка только если есть что показать этому игроку
+        if (!eksiPicksService.forUser(user).isEmpty()) {
+            rows.add(keyboardFactory.callback("🤝 Экси рекомендует", "quests:section:picks"));
+        }
+        List<Quest> all = activeSponsoredQuests();
+        long sum = sponsoredBankRub(all);
+        String prize = sum > 0 || sponsoredHasPremium(all)
+                ? "🎁 Выполни все и получи " + (sum > 0 ? "до " + fmtExc(sum) + " ₽ на карту" : "")
+                        + (sponsoredHasPremium(all) ? (sum > 0 ? " и " : "") + "Telegram Premium" : "")
+                        + ". Каждый квест один раз на аккаунт.\n\n"
+                : "";
         sendText(user.getTelegramId(),
                 "💼 <b>Спонсорские квесты</b>\n\n"
+                        + prize
                         + "🤝 Деньги спонсоров идут в фонд выплат, а от его размера зависит курс вывода для всех игроков.\n\n"
                         + "<blockquote expandable>Спонсоры — одна из причин, по которой проект работает и платит вам реальные деньги. "
                         + "Чем лояльнее вы относитесь к таким квестам, тем стабильнее проект может выплачивать вам дальше. "
                         + "Чаще заглядывайте сюда и выполняйте задания: чем больше спонсоров мы привлечём вместе, тем выгоднее будет курс.</blockquote>\n\n"
                         + "Выберите тип задания:",
-                verticalWithBackMenu(rows, "⬅️ Назад", "menu:quests"));
+                verticalWithBackMenu(rows, "⬅️ Назад", "menu:main"));
     }
 
     private void sendSponsoredQuestList(AppUser user, String categoryKey) {
@@ -8840,6 +8869,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         final String key = cat[0];
         List<Quest> quests = activeSponsoredQuests().stream().filter(q -> key.equals(sponsoredCategory(q))).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         String head = "💼 <b>Спонсорские квесты · " + cat[2] + "</b>\n\n";
+        long catSum = sponsoredBankRub(quests);
+        boolean catPremium = sponsoredHasPremium(quests);
+        if (catSum > 0 || catPremium) {
+            head += "🎁 В этом разделе: " + (catSum > 0 ? "до " + fmtExc(catSum) + " ₽" : "") + (catPremium ? (catSum > 0 ? " и " : "") + "Telegram Premium" : "") + "\n\n";
+        }
         if (quests.isEmpty()) {
             sendText(user.getTelegramId(),
                     head + "👀 Скоро здесь появятся новые задания.",
@@ -8871,7 +8905,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendEksiPicks(AppUser user, String pickKey) {
         List<ru.gamebot.platform.service.EksiPicksService.Pick> picks = eksiPicksService.forUser(user);
         if (picks.isEmpty()) {
-            sendText(user.getTelegramId(), "👀 Рекомендации от Экси появятся скоро.", backMenuKeyboard("menu:quests"));
+            sendText(user.getTelegramId(), "👀 Рекомендации от Экси появятся скоро.", backMenuKeyboard("quests:section:sponsored"));
             return;
         }
         int idx = 0;
@@ -8893,7 +8927,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.callback("◀️ " + trim(prev.title(), 16), "quests:picks:" + prev.key()),
                     keyboardFactory.callback(trim(next.title(), 16) + " ▶️", "quests:picks:" + next.key())));
         }
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:quests"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "quests:section:sponsored"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         InlineKeyboardMarkup kb = keyboardFactory.rowsLayout(rows);
         if (p.image() != null && !p.image().isBlank()) {
             sendResourceBanner(user.getTelegramId(), p.image(), sb.toString().trim(), kb);
@@ -8903,7 +8937,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendUgcQuestList(AppUser user) {
-        sendQuestList(user, "UGC", null, "menu:quests");
+        sendQuestList(user, "UGC", null, "menu:cat:more");
     }
 
     // ── Подраздел «🌐 Соцсети» в Квестах: разовая награда за подписку на наши каналы (SocialTaskService) ──
@@ -8913,7 +8947,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendSocialTasksList(AppUser user) {
         List<ru.gamebot.platform.service.SocialTaskService.SocialTask> tasks = socialTaskService.tasks();
         if (!socialTaskService.enabled() || tasks.isEmpty()) {
-            sendText(user.getTelegramId(), "🌐 Задания по соцсетям сейчас недоступны.", backMenuKeyboard("menu:quests"));
+            sendText(user.getTelegramId(), "🌐 Задания по соцсетям сейчас недоступны.", backMenuKeyboard("menu:cat:more"));
             return;
         }
         java.util.Set<String> claimed = socialTaskService.claimedCodes(user);
@@ -10809,15 +10843,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendMySubmissions(AppUser user) {
-        List<QuestSubmission> submissions = questService.getUserSubmissions(user);
+        sendMySubmissions(user, null);
+    }
+
+    /** Квест спонсорский (в разделе «Спонсорские квесты»), а не игровой. */
+    private static boolean isSponsoredKind(Quest q) {
+        return q.isSponsored() || q.isExternalAutoApprove();
+    }
+
+    /** «Мои квесты»: kind = null - все, "game" - только игровые, "sponsored" - только спонсорские (15.11.2026, владелец). */
+    private void sendMySubmissions(AppUser user, String kind) {
+        List<QuestSubmission> submissions = questService.getUserSubmissions(user).stream()
+                .filter(sb -> kind == null || ("sponsored".equals(kind) == isSponsoredKind(sb.getQuest())))
+                .toList();
+        sessionService.get(user.getTelegramId()).getData().put("myquests_kind", kind == null ? "" : kind);
+        String listBack = "game".equals(kind) ? "quests:section:gaming" : "sponsored".equals(kind) ? "quests:section:sponsored" : "menu:main";
+        String title = "game".equals(kind) ? "Мои игровые квесты" : "sponsored".equals(kind) ? "Мои спонсорские квесты" : "Мои квесты";
         if (submissions.isEmpty()) {
             sendText(user.getTelegramId(),
-                    "📭 У вас нет квестов в работе.\n" + questSlotsLine(user) + "\n\nОткройте раздел квестов и возьмите первое задание.",
-                    backMenuKeyboard("menu:quests"));
+                    "📭 " + ("game".equals(kind) ? "У вас нет игровых квестов в работе." : "sponsored".equals(kind) ? "У вас нет спонсорских квестов в работе." : "У вас нет квестов в работе.")
+                            + "\n" + questSlotsLine(user) + "\n\nОткройте раздел квестов и возьмите первое задание.",
+                    backMenuKeyboard(listBack));
             return;
         }
 
-        StringBuilder builder = new StringBuilder("📂 <b>Мои квесты</b>\n").append(questSlotsLine(user)).append("\n\n");
+        StringBuilder builder = new StringBuilder("📂 <b>" + title + "</b>\n").append(questSlotsLine(user)).append("\n\n");
         submissions.stream().limit(10).forEach(submission -> builder
                 .append("🎯 <b>").append(escape(submission.getQuest().getTitle())).append("</b>\n")
                 .append("📌 Статус: <b>").append(escape(humanStatus(submission.getStatus()))).append("</b>\n")
@@ -10827,7 +10877,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         submissions.stream().limit(10).forEach(submission ->
                 buttons.add(keyboardFactory.callback("🎯 " + trim(submission.getQuest().getTitle(), 30), "myquest:view:" + submission.getId()))
         );
-        sendText(user.getTelegramId(), builder.toString(), verticalWithBackMenu(buttons, "⬅️ Назад", "menu:quests"));
+        sendText(user.getTelegramId(), builder.toString(), verticalWithBackMenu(buttons, "⬅️ Назад", listBack));
+    }
+
+    /** Подпись кнопки «📂 Мои игровые квесты» / «📂 Мои спонсорские квесты» с числом квестов в работе. */
+    private String myQuestsLabel(AppUser user, String kind) {
+        long n = 0;
+        try {
+            n = questService.getUserSubmissions(user).stream()
+                    .filter(sb -> "sponsored".equals(kind) == isSponsoredKind(sb.getQuest())).count();
+        } catch (Exception e) {
+            log.warn("myQuestsLabel failed", e);
+        }
+        return "📂 " + ("game".equals(kind) ? "Мои игровые квесты" : "Мои спонсорские квесты") + (n > 0 ? " · " + n : "");
     }
 
     private void sendMyQuestCard(AppUser user, Long submissionId) {
@@ -10900,7 +10962,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + weeklyNote + "\n"
                         + (heldNote.isEmpty() ? "" : heldNote)
                         + "\n" + escape(quest.getDescription()) + moderatorComment,
-                verticalWithBackMenu(buttons, "⬅️ Назад", "menu:myquests"));
+                verticalWithBackMenu(buttons, "⬅️ Назад", myQuestsListData(user)));
+    }
+
+    /** Куда возвращает «Назад» из карточки «моего квеста»: в тот же список (все / игровые / спонсорские). */
+    private String myQuestsListData(AppUser user) {
+        String kind = sessionService.get(user.getTelegramId()).getData().getOrDefault("myquests_kind", "");
+        return kind.isEmpty() ? "menu:myquests" : "myquests:list:" + kind;
     }
 
     private void sendRatingMenu(AppUser user) {
@@ -30594,14 +30662,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         // Главное меню игрока — «одна цель + 4 кнопки» (2026-10-10, по образцу Mistplay): главное действие, задания дня
         // с наградой, деньги, люди, а всё остальное — в «⋯ Ещё» (см. sendMoreCategory).
-        rows.add(List.of(keyboardFactory.callback("🎯 Играть", "quest:recommend")));
+        // 15.11.2026 (владелец): вместо «🎯 Играть» - сразу «Игровые квесты» и «Спонсорские квесты» (с суммой), затем «Задания дня»; кнопка «Квест от спонсора» стала лишней
+        rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "quests:section:gaming")));
+        rows.add(List.of(keyboardFactory.callback(sponsoredMenuLabel(), "quests:section:sponsored")));
         if (userService.dailyTasksEnabled()) {
             rows.add(List.of(keyboardFactory.callback(dailyTasksMenuLabel(user), "menu:dtasks")));
-        }
-        // Пока есть открытый спонсорский квест, который игрок ещё не выполнил, - заметная кнопка в меню (иначе он лежит на третьем уровне).
-        // Стоимость на кнопке не пишем: акцент на том, что спонсоры - причина, по которой проект работает и платит игрокам.
-        if (hasOpenSponsorQuestFor(user)) {
-            rows.add(List.of(keyboardFactory.callback("💼 Квест от спонсора", "quests:section:sponsored")));
         }
         // 🔔 про ежедневный бонус теперь на «Заданиях дня»; в кошельке он лишь когда задания выключены.
         String walletLabel = !userService.dailyTasksEnabled() && userService.isDailyBonusAvailable(user) ? "💰 Кошелёк 🔔" : "💰 Кошелёк";
@@ -30981,6 +31046,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback(tournamentLabel, "menu:tournament")),
                 List.of(keyboardFactory.callback(fortuneLabel, "menu:cat:fortune")),
                 List.of(keyboardFactory.callback(clubLabel, "menu:cat:club")),
+                // 15.11.2026 (владелец): бывшие кнопки экрана «Квесты» - в «Ещё»
+                List.of(keyboardFactory.callback("🔑 Код дня", "club:code"), keyboardFactory.callback("🎯 Цель клуба", "club:goal")),
+                socialTaskService.enabled() && !socialTaskService.tasks().isEmpty()
+                        ? List.of(keyboardFactory.callback("🌐 Соцсети", "quests:section:social"), keyboardFactory.callback("🤳 UGC", "quests:section:ugc"))
+                        : List.of(keyboardFactory.callback("🤳 UGC", "quests:section:ugc")),
                 List.of(keyboardFactory.callback("🆘 Помощь", "menu:cat:help")),
                 List.of(keyboardFactory.webApp("🌐 Открыть Mini App", "https://experience-gaming-club.pages.dev"))
         ));
