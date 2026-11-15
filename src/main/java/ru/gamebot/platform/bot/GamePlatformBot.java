@@ -8901,10 +8901,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 verticalWithBackMenu(buttons, "⬅️ Назад", "quests:section:sponsored"));
     }
 
-    /** Экран раздела спонсорских квестов: у «Дебетовых карт» есть свой баннер (15.11.2026, вариант А, одобрен владельцем), у остальных - обычный текст. */
+    /** Экран раздела спонсорских квестов: у «Дебетовых карт», «Кредитных карт» и «Подработки» свой баннер (15.11.2026, одобрены владельцем), у остальных - обычный текст. */
     private void sendSponsorCategoryScreen(Long chatId, String categoryKey, String text, InlineKeyboardMarkup keyboard) {
-        if ("debit".equals(categoryKey)) {
-            sendResourceBanner(chatId, "sponsored_debit_banner.jpg", text, keyboard);
+        String banner = switch (categoryKey) {
+            case "debit" -> "sponsored_debit_banner.jpg";
+            case "credit" -> "sponsored_credit_banner.jpg";
+            case "gigs" -> "sponsored_gigs_banner.jpg";
+            default -> null; // «Игровые партнёры» и «Мобильная связь» - баннеры в работе
+        };
+        if (banner != null) {
+            sendResourceBanner(chatId, banner, text, keyboard);
         } else {
             sendText(chatId, text, keyboard);
         }
