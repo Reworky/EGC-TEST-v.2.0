@@ -8764,14 +8764,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             {"gigs", "💼 Подработка", "Подработка"}};
 
     /** Раздел спонсорского квеста: партнёрские миссии банка - по ключу (Т-Мобайл - связь, остальные - дебетовые карты); остальные - по словам в названии
-     *  («кредит», «подработ», «связь»/«SIM»/«тариф», «дебетов»); всё прочее (CPI-офферы, приложения, игры) - «Игровые партнёры». */
+     *  («кредит», «подработ», «связь»/«SIM»/«тариф»/«Мегафон», «дебетов»); всё прочее (CPI-офферы, приложения, игры) - «Игровые партнёры». */
     private String sponsoredCategory(Quest q) {
         ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(q);
         if (pm != null) return "tmobile".equals(pm.key()) ? "mobile" : "debit";
         String t = ((q.getTitle() == null ? "" : q.getTitle()) + " " + (q.getGameName() == null ? "" : q.getGameName())).toLowerCase(java.util.Locale.ROOT);
         if (t.contains("кредит")) return "credit";
         if (t.contains("подработ")) return "gigs";
-        if (t.contains("связь") || t.contains("тариф") || t.matches("(?s).*\\bsim\\b.*")) return "mobile";
+        if (t.contains("связь") || t.contains("тариф") || t.contains("мегафон") || t.contains("оператор") || t.matches("(?s).*\\bsim\\b.*")) return "mobile";
         if (t.contains("дебетов")) return "debit";
         return "games";
     }
