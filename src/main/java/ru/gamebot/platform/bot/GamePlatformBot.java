@@ -8861,8 +8861,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Первый экран «Спонсорских квестов»: выбор раздела (15.11.2026). Пустые разделы тоже показываем: внутри сообщение «скоро». */
     private void sendSponsoredCategories(AppUser user) {
         List<InlineKeyboardButton> rows = new ArrayList<>();
+        // На кнопке разделов - число активных квестов внутри (15.11.2026, просьба владельца)
+        List<Quest> activeNow = activeSponsoredQuests();
         for (String[] c : SPONSOR_CATEGORIES) {
-            rows.add(keyboardFactory.callback(c[1], "quests:sponsored:cat:" + c[0]));
+            long inside = activeNow.stream().filter(q -> c[0].equals(sponsoredCategory(q))).count();
+            rows.add(keyboardFactory.callback(c[1] + " · " + inside, "quests:sponsored:cat:" + c[0]));
         }
         rows.add(keyboardFactory.callback(myQuestsLabel(user, "sponsored"), "myquests:list:sponsored"));
         // «Экси рекомендует»: партнёрские рекомендации без EXC; кнопка только если есть что показать этому игроку
