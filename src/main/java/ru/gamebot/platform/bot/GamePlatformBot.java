@@ -7418,7 +7418,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     ? "🔐 Получить VPN за EXC: хватает!" : "🔐 Получить VPN, потратив EXC", vpnBotLink)));
         }
         balanceRows.add(List.of(keyboardFactory.callback("⬅️ Назад", backData)));
-        sendText(user.getTelegramId(),
+        // 15.11.2026 (владелец): у экрана баланса свой баннер «Кошелёк» (фон как у баннера магазина); длинный текст уходит под фото отдельным сообщением
+        sendResourceBanner(user.getTelegramId(), "wallet_banner.jpg",
                 "💰 <b>Баланс</b>\n\n"
                         + "🪙 <b>" + fmtExc(user.getCoins()) + " EXC</b>\n\n"
                         + equivalent
