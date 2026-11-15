@@ -13412,8 +13412,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendExcDenominationPicker(user, purchaseGroup);
     }
 
-    /** Список не-валютных донат-позиций (например, Brawl Pass/Pass Royale) — только донат за реальные
-     *  деньги, EXC-варианта нет. Переиспользует тот же callback "gemdonate:pkg:" и весь дальнейший
+    /** Список не-валютных донат-позиций (например, Brawl Pass/Pass Royale): за реальные деньги; у Brawl Pass и +Plus с 15.11.2026 есть и EXC-вариант (токены + рубли, как у гемов). Переиспользует тот же callback "gemdonate:pkg:" и весь дальнейший
      *  флоу (метод оплаты, подтверждение, модератор), что и валюта — startGemPurchase работает по
      *  ключу пакета вне зависимости от того, gems>0 или это label-товар (2026-09-20, генерализовано). */
     private void sendPassDonateList(AppUser user, String gameKey) {
@@ -13425,8 +13424,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (GemPurchaseService.GemPackage pkg : passes) {
             long price = gemPurchasePriceFor(user, pkg);
             String priceLabel = passActive ? price + "₽ (закупка, EGC Pass)" : price + "₽";
+            // Где у пропуска есть EXC-позиция (Brawl Pass): цена «токены + рубли», как у гемов (15.11.2026)
+            HybridQuote passQuote = hybridQuote(user, gameKey, pkg);
             rows.add(List.of(keyboardFactory.callback(
-                    pkg.displayLabel() + " — " + priceLabel + " (+" + pkg.xpBonus() + " XP)",
+                    pkg.displayLabel() + " — " + (passQuote != null ? fmtExc(passQuote.exc()) + " EXC + " + passQuote.rub() + " ₽" : priceLabel + " (+" + pkg.xpBonus() + " XP)"),
                     "gemdonate:pkg:" + gameKey + ":" + pkg.key())));
         }
         rows.add(List.of(
@@ -13440,9 +13441,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String passNote = passActive
                 ? "\n⭐ Вы EGC Pass — цены ниже, без наценки клуба.\n"
                 : "";
+        boolean hasExcPass = passes.stream().anyMatch(p -> findExcItemForPackage(gameKey, p) != null);
         String passesText = "🎫 <b>Пропуски " + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\n"
                 + "Выберите товар" + accountLine + passNote + "\n\n"
-                + "К каждой покупке — бонус XP\n\n"
+                + (hasExcPass ? "Пропуск можно оплатить токенами: в каждой строке цена в EXC и в рублях.\n\n" : "К каждой покупке — бонус XP\n\n")
                 + "⚠️ Заявка обрабатывается вручную, зачисление может занять время.\n\n"
                 + gemPurchaseWarning(gameKey);
         if ("brawl_stars".equals(gameKey)) {
@@ -29210,7 +29212,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Позиция магазина за EXC, соответствующая донат-пакету (по числу в конце названия: «Brawl Stars - Gems 30» = пакет на 30); null - EXC-варианта нет. */
     private RewardItem findExcItemForPackage(String gameKey, GemPurchaseService.GemPackage pkg) {
-        if (pkg.gems() <= 0) return null;
+        if (pkg.gems() <= 0) {
+            // Пропуски: позиция называется «<Игра> - <название пакета>» (с 15.11.2026 есть у Brawl Pass и +Plus); у остальных пропусков EXC-позиции нет
+            String want = GemPurchaseService.gameName(gameKey) + " - " + pkg.displayLabel();
+            return rewardService.findByPurchaseGroup(gameKey).stream()
+                    .filter(i -> i.getTitle() != null && want.equalsIgnoreCase(i.getTitle().trim()))
+                    .findFirst().orElse(null);
+        }
         for (RewardItem item : rewardService.findByPurchaseGroup(gameKey)) {
             java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)\\s*$").matcher(item.getTitle() == null ? "" : item.getTitle());
             if (!m.find()) continue;
