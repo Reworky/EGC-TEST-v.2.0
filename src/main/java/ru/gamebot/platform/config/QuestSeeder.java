@@ -2265,14 +2265,14 @@ public class QuestSeeder implements CommandLineRunner {
         // Переименование и новые тексты один раз: квест под любым из прежних названий (после переименования старых названий в базе нет, повторов не будет).
         // 01.11.2026 (первый замер: из 20 приглашённых квест взяли 2): подача «бесплатный донат», награда частями (1 000 EXC за проверенные скриншоты, 100 000 EXC
         // после выплаты банка), мест 50. Квест под прежним названием переименовывается и получает новую награду/лимит один раз.
-        for (String legacyTitle : new String[]{OTP_CARD_OLD_TITLE, OTP_CARD_PREV_TITLE, OTP_CARD_PREV2_TITLE, OTP_CARD_PREV3_TITLE, OTP_CARD_PREV4_TITLE, OTP_CARD_PREV5_TITLE, OTP_CARD_PREV6_TITLE, OTP_CARD_PREV7_TITLE, OTP_CARD_PREV8_TITLE, OTP_CARD_PREV9_TITLE, OTP_CARD_PREV10_TITLE, OTP_CARD_TITLE}) {
+        for (String legacyTitle : new String[]{OTP_CARD_OLD_TITLE, OTP_CARD_PREV_TITLE, OTP_CARD_PREV2_TITLE, OTP_CARD_PREV3_TITLE, OTP_CARD_PREV4_TITLE, OTP_CARD_PREV5_TITLE, OTP_CARD_PREV6_TITLE, OTP_CARD_PREV7_TITLE, OTP_CARD_PREV8_TITLE, OTP_CARD_PREV9_TITLE, OTP_CARD_PREV10_TITLE, OTP_CARD_PREV11_TITLE, OTP_CARD_TITLE}) {
             questRepository.findFirstByTitleAndGameName(legacyTitle, OTP_GAME_LEGACY).ifPresent(q -> {
                 q.setGameName(OTP_GAME);
                 questRepository.save(q);
                 log.info("[QuestSeeder] Renamed game of partner quest (bank name hidden): {} -> {}", OTP_GAME_LEGACY, OTP_GAME);
             });
         }
-        for (String otpTitle : new String[]{OTP_CARD_OLD_TITLE, OTP_CARD_PREV_TITLE, OTP_CARD_PREV2_TITLE, OTP_CARD_PREV3_TITLE, OTP_CARD_PREV4_TITLE, OTP_CARD_PREV5_TITLE, OTP_CARD_PREV6_TITLE, OTP_CARD_PREV7_TITLE, OTP_CARD_PREV8_TITLE, OTP_CARD_PREV9_TITLE, OTP_CARD_PREV10_TITLE}) {
+        for (String otpTitle : new String[]{OTP_CARD_OLD_TITLE, OTP_CARD_PREV_TITLE, OTP_CARD_PREV2_TITLE, OTP_CARD_PREV3_TITLE, OTP_CARD_PREV4_TITLE, OTP_CARD_PREV5_TITLE, OTP_CARD_PREV6_TITLE, OTP_CARD_PREV7_TITLE, OTP_CARD_PREV8_TITLE, OTP_CARD_PREV9_TITLE, OTP_CARD_PREV10_TITLE, OTP_CARD_PREV11_TITLE}) {
             questRepository.findFirstByTitleAndGameName(otpTitle, OTP_GAME).ifPresent(q -> {
                 // 10.11.2026: награда за выплату банка стала 50 000 EXC вместо 100 000. Момент перехода пишем один раз: заявки, взятые раньше, сохраняют 100 000 (обещание дано)
                 if (OTP_CARD_PREV7_TITLE.equals(otpTitle) && appSettingRepository.findById(OTP_BONUS_CHANGE_KEY).isEmpty()) {
@@ -2872,7 +2872,9 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String OTP_CARD_PREV9_TITLE = "Получи 500 ₽ себе на карту + Telegram Premium 🎁";
     /** Прежнее название (с Telegram Premium), до 15.11.2026: от Premium владелец отказался; переименовывается в OTP_CARD_TITLE. */
     private static final String OTP_CARD_PREV10_TITLE = "Получи 1 000 ₽ себе на карту + Telegram Premium 🎁";
-    private static final String OTP_CARD_TITLE = "Получи 1 000 ₽ себе на карту 🎁";
+    /** Прежнее название (15.11.2026, до решения владельца назвать квест с банком); переименовывается в OTP_CARD_TITLE. */
+    private static final String OTP_CARD_PREV11_TITLE = "Получи 1 000 ₽ себе на карту 🎁";
+    private static final String OTP_CARD_TITLE = "Оформи карту ОТП банка и получи 1000 руб. на баланс";
     /** Ключ app_settings: момент перехода на награду Telegram Premium вместо 50 000 EXC (заявки, взятые раньше, получают 50 000 или 100 000 EXC). */
     public static final String OTP_PREMIUM_CHANGE_KEY = "otp.premium.from";
     /** Ключ app_settings: момент перехода на награду 50 000 EXC (заявки, взятые раньше, получают 100 000). */
