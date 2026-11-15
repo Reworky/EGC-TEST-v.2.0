@@ -8783,35 +8783,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Разделы спонсорских квестов (владелец, 15.11.2026): ключ, подпись кнопки, название в заголовке списка. Порядок - как на экране. */
-    private static final String[][] SPONSOR_CATEGORIES = {
-            {"debit", "💳 Дебетовые карты", "Дебетовые карты"},
-            {"games", "🎮 Игровые партнёры", "Игровые партнёры"},
-            {"credit", "🏦 Кредитные карты", "Кредитные карты"},
-            {"mobile", "📱 Мобильная связь", "Мобильная связь"},
-            {"gigs", "💼 Подработка", "Подработка"}};
+    private static final String[][] SPONSOR_CATEGORIES = ru.gamebot.platform.service.SponsoredQuestsService.CATEGORIES.stream()
+            .map(c -> new String[]{c.key(), c.label(), c.title()}).toArray(String[][]::new);
 
-    /** Раздел спонсорского квеста: партнёрские миссии банка - по ключу (Т-Мобайл - связь, остальные - дебетовые карты); остальные - по словам в названии
-     *  («кредит», «подработ», «связь»/«SIM»/«тариф»/«Мегафон», «дебетов»); всё прочее (CPI-офферы, приложения, игры) - «Игровые партнёры». */
+    /** Раздел спонсорского квеста (правило - в SponsoredQuestsService, общее с мини-аппом). */
     private String sponsoredCategory(Quest q) {
-        ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(q);
-        if (pm != null) return "tmobile".equals(pm.key()) ? "mobile" : "debit";
-        String t = ((q.getTitle() == null ? "" : q.getTitle()) + " " + (q.getGameName() == null ? "" : q.getGameName())).toLowerCase(java.util.Locale.ROOT);
-        if (t.contains("кредит")) return "credit";
-        if (t.contains("подработ")) return "gigs";
-        if (t.contains("связь") || t.contains("тариф") || t.contains("мегафон") || t.contains("оператор") || t.matches("(?s).*\\bsim\\b.*")) return "mobile";
-        if (t.contains("дебетов")) return "debit";
-        return "games";
+        return ru.gamebot.platform.service.SponsoredQuestsService.categoryOf(q);
     }
 
-    /** Квесты, которые игрок ещё не выполнил (последняя заявка не одобрена): суммы «до N ₽» считаются только по ним и уменьшаются по мере выполнения (15.11.2026, владелец). */
-    private List<Quest> sponsoredNotDone(AppUser user, List<Quest> quests) {
-        List<Quest> out = new ArrayList<>();
-        for (Quest q : quests) {
-            QuestSubmission latest = questService.getLatestSubmission(user, q);
-            if (latest != null && latest.getStatus() == ru.gamebot.platform.domain.enums.SubmissionStatus.APPROVED) continue;
-            out.add(q);
-        }
-        return out;
+    /** Для мини-аппа (экран вывода): «до N ₽» по ещё не выполненным игроком спонсорским квестам; партнёрам 0 (как в боте). */
+    public long sponsoredPrizeForWithdrawal(AppUser user) {
+        return healthRatioService.isPartner(user) ? 0 : sponsoredPrizeRub(user);
     }
 
     /** Сумма рублей от банков и операторов по партнёрским миссиям среди квестов (bankRewardRub): «до N ₽». */
@@ -29214,6 +29196,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         int stars = Math.max(1, gemPurchaseStarsPrice(realRub));
         long rubPart = Math.max(5, Math.round(realRub / 5.0) * 5); // рублёвая доплата округляется до 5 ₽ (06.11.2026)
         return new HybridQuote(item, exc, stars, rubPart);
+    }
+
+    /** Для мини-аппа: {EXC-часть, рублёвая доплата} гибридной оплаты пакета токенами; null - у пакета нет EXC-позиции. */
+    public long[] gemPurchaseHybridFor(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg) {
+        try {
+            HybridQuote q = hybridQuote(user, gameKey, pkg);
+            return q == null ? null : new long[]{q.exc(), q.rub()};
+        } catch (Exception e) {
+            log.warn("gemPurchaseHybridFor failed", e);
+            return null;
+        }
     }
 
     /** Stars-инвойс на звёздную часть гибридной оплаты; EXC-часть зашита в payload и спишется после оплаты. */

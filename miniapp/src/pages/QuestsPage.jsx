@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getQuests, getSponsoredQuests, channelCheckQuest, getGames, getGamePhotoUrl, getQuestBoost, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, getQuestSlots, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard, getTournamentPhotoUrl, getRecommendedQuest } from '../api/client';
+import { getQuests, getSponsoredQuests, getSponsoredOverview, channelCheckQuest, getGames, getGamePhotoUrl, getQuestBoost, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, getQuestSlots, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard, getTournamentPhotoUrl, getRecommendedQuest } from '../api/client';
 import { useLottie } from '../components/LottieContext';
 import { useParticles } from '../components/ParticlesContext';
 import AdRewardCard from '../components/AdRewardCard';
@@ -295,6 +295,52 @@ function QuestActions({ quest, detail, onChanged }) {
     }
   }
 
+  // Партнёрский квест банка (ОТП и др.): всё ведёт менеджер, отчётов нет (как в боте, sendPartnerManagerMission).
+  if (detail.bankRewardRub > 0) {
+    if (status === 'DRAFT' && detail.partnerManagerFlow) {
+      return (
+        <div className="quest-submit-form">
+          <div className="quest-go-hint">
+            <div className="quest-go-hint-title">🚀 Квест взят!</div>
+            <div className="quest-go-hint-text">
+              {detail.partnerApplyUrl
+                ? 'Нажми «Оформить карту»: откроется страница с онлайн-заявкой. В заявке выбери доставку курьером. Если что-то непонятно, напиши менеджеру.'
+                : 'Напиши менеджеру: он проведёт по шагам в личных сообщениях.'}
+            </div>
+          </div>
+          {detail.partnerApplyUrl && (
+            <button className="quest-btn" onClick={() => openChannel(detail.partnerApplyUrl)}>💳 Оформить карту</button>
+          )}
+          {detail.partnerManagerUrl && (
+            <button className="quest-btn quest-btn-outline" onClick={() => openChannel(detail.partnerManagerUrl)}>
+              {detail.partnerApplyUrl ? '💬 Вопрос менеджеру' : '💬 Начать выполнять квест'}
+            </button>
+          )}
+        </div>
+      );
+    }
+    if (status === 'APPROVED') {
+      return (
+        <div>
+          <div className="quest-status quest-status-approved"><i className="ti ti-circle-check"></i> Квест засчитан. Когда банк выплатит бонус, напиши менеджеру: он проверит и выдаст награду.</div>
+          {detail.partnerManagerUrl && (
+            <button className="quest-btn quest-btn-outline" style={{ marginTop: 8 }} onClick={() => openChannel(detail.partnerManagerUrl)}>💬 Написать менеджеру</button>
+          )}
+        </div>
+      );
+    }
+    if (status === 'REJECTED') {
+      return (
+        <div>
+          <div className="quest-status quest-status-pending">❌ Квест не засчитан{detail.moderatorComment ? `: ${detail.moderatorComment}` : ''}. Если считаешь это ошибкой, напиши менеджеру.</div>
+          {detail.partnerManagerUrl && (
+            <button className="quest-btn quest-btn-outline" style={{ marginTop: 8 }} onClick={() => openChannel(detail.partnerManagerUrl)}>💬 Написать менеджеру</button>
+          )}
+        </div>
+      );
+    }
+  }
+
   // Квест-веха (oneTimePerAccount) и внешние партнёрские авто-квесты — единственные случаи, где
   // повтор в принципе невозможен, поэтому только для них тупиковое сообщение навсегда. Для всех
   // остальных APPROVED-квестов (обычных с суточным кулдауном и decay-пилота без кулдауна вовсе)
@@ -471,11 +517,17 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
       <div className="quest-top">
         <div className="quest-title">{q.title}</div>
         <div className="quest-rewards">
+          {q.bankRewardRub > 0 && <span className="reward-exc">💳 {q.bankRewardRub.toLocaleString('ru-RU')} ₽ от банка</span>}
+          {q.bonusItem && <span className="reward-xp">🎁 {q.bonusItem.replace(' на 1 месяц', '')}</span>}
+          {!(q.rewardCoins === 0 && q.bankRewardRub > 0) && (
           <span className="reward-exc"><i className="ti ti-coin"></i> {q.rewardCoins.toLocaleString()} EXC{fundRatio != null && <> ({starsApprox(q.rewardCoins, fundRatio)})</>}</span>
+          )}
           {(details[q.id]?.rewardDiminished ?? q.rewardDiminished) && (
             <span className="reward-diminished">×½ лимит недели</span>
           )}
+          {!(q.rewardXp === 0 && q.bankRewardRub > 0) && (
           <span className="reward-xp"><i className="ti ti-star"></i> {q.rewardXp} XP</span>
+          )}
           {!q.sponsored && q.gameName !== 'UGC' && (q.ticketReward > 0 || CATEGORY_TICKETS[q.category]) && (
             <span className="reward-ticket">🎟 +{q.ticketReward > 0 ? q.ticketReward : CATEGORY_TICKETS[q.category]}</span>
           )}
@@ -605,7 +657,9 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
   const [ugcLoading, setUgcLoading] = useState(false);
   const [sponsoredQuests, setSponsoredQuests] = useState([]);
   const [sponsoredLoading, setSponsoredLoading] = useState(false);
-  const [activeSection, setActiveSection] = useState(initialSection === 'ads' ? 'ads' : 'gaming');
+  const [activeSection, setActiveSection] = useState(initialSection === 'ads' ? 'ads' : initialSection === 'sponsored' ? 'sponsored' : 'gaming');
+  const [sponsorOverview, setSponsorOverview] = useState(null);
+  const [sponsorCategory, setSponsorCategory] = useState(null);
   const [recommended, setRecommended] = useState(null);
   const questListRef = useRef(null);
 
@@ -620,7 +674,15 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
     getQuests('UGC').then(setUgcQuests).finally(() => setUgcLoading(false));
     setSponsoredLoading(true);
     getSponsoredQuests().then(setSponsoredQuests).catch(() => setSponsoredQuests([])).finally(() => setSponsoredLoading(false));
+    getSponsoredOverview().then(setSponsorOverview).catch(() => setSponsorOverview(null));
   }, []);
+
+  // После выполнения квеста суммы «до N ₽» пересчитываем (выполненные в них не входят)
+  function handleSponsorDetailChanged(id) {
+    onDetailChanged(id);
+    getSponsoredOverview().then(setSponsorOverview).catch(() => {});
+    getSponsoredQuests().then(setSponsoredQuests).catch(() => {});
+  }
 
   useEffect(() => {
     if (!selectedGame) return;
@@ -725,17 +787,62 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
 
       {activeSection === 'sponsored' && (
         <>
-          {sponsoredLoading && <div className="page-center">Загрузка...</div>}
-          {!sponsoredLoading && sponsoredQuests.length === 0 && (
+          {sponsoredLoading && !sponsorOverview && <div className="page-center">Загрузка...</div>}
+          {!sponsorCategory && sponsorOverview && (
+            <div className="category-section">
+              <img className="sponsor-banner" src="/sponsored/quests.jpg" alt="" />
+              <div className="sponsor-title">💼 Спонсорские квесты</div>
+              {sponsorOverview.prizeRub > 0 && (
+                <div className="sponsor-prize">
+                  🎁 Выполни все квесты из этого раздела и получи суммарно более <b>{sponsorOverview.prizeRub.toLocaleString('ru-RU')} ₽</b> на карту.
+                  <div className="sponsor-prize-note">Каждый квест доступен один раз на аккаунт.</div>
+                </div>
+              )}
+              <div className="sponsor-intro">
+                🤝 Деньги спонсоров идут в фонд выплат, а от его размера зависит курс вывода для всех игроков.
+                <details style={{ marginTop: 6 }}>
+                  <summary style={{ cursor: 'pointer' }}>Подробнее</summary>
+                  <div style={{ marginTop: 6 }}>
+                    Спонсоры — одна из причин, по которой проект работает и платит вам реальные деньги. Чем лояльнее вы относитесь к таким квестам, тем стабильнее проект может выплачивать вам дальше. Чаще заглядывайте сюда и выполняйте задания: чем больше спонсоров мы привлечём вместе, тем выгоднее будет курс.
+                  </div>
+                </details>
+              </div>
+              <div className="sponsor-pick">Выберите тип задания:</div>
+              {sponsorOverview.categories.map(c => (
+                <button key={c.key} className="sponsor-cat-btn" onClick={() => setSponsorCategory(c.key)}>
+                  {c.label} · {c.count}
+                </button>
+              ))}
+            </div>
+          )}
+          {sponsorCategory && sponsorOverview && (() => {
+            const cat = sponsorOverview.categories.find(c => c.key === sponsorCategory);
+            const list = sponsoredQuests.filter(q => q.sponsorCategory === sponsorCategory);
+            return (
+              <div className="category-section">
+                <button className="sponsor-back" onClick={() => setSponsorCategory(null)}>← Разделы</button>
+                <img className="sponsor-banner" src={`/sponsored/${sponsorCategory}.jpg`} alt="" />
+                <div className="sponsor-title">💼 Спонсорские квесты · {cat?.title}</div>
+                {cat && (cat.prizeRub > 0 || cat.premium) && (
+                  <div className="sponsor-prize">
+                    🎁 В этом разделе: {cat.prizeRub > 0 ? `до ${cat.prizeRub.toLocaleString('ru-RU')} ₽` : ''}{cat.premium ? `${cat.prizeRub > 0 ? ' и ' : ''}Telegram Premium` : ''}
+                  </div>
+                )}
+                {list.length === 0 && <div className="quest-empty-section">👀 Скоро здесь появятся новые задания.</div>}
+                {list.map(q => (
+                  <QuestCard key={q.id} q={q} expanded={expanded} onToggle={onToggle} details={details} onDetailChanged={handleSponsorDetailChanged} />
+                ))}
+              </div>
+            );
+          })()}
+          {/* Запасной вид, пока бэкенд без разделов (старая версия): плоский список, как раньше */}
+          {!sponsorOverview && !sponsoredLoading && sponsoredQuests.length === 0 && (
             <div className="quest-empty-section">👀 Спонсорские квесты появятся скоро</div>
           )}
-          {!sponsoredLoading && sponsoredQuests.length > 0 && (
+          {!sponsorOverview && !sponsoredLoading && sponsoredQuests.length > 0 && (
             <div className="category-section">
-              <div className="sponsor-intro">
-                🤝 Спонсоры — одна из причин, по которой проект работает и платит реальные деньги. Деньги спонсоров идут в фонд выплат, а от его размера зависит курс вывода для всех игроков: чем больше спонсоров мы привлечём вместе, тем выгоднее курс.
-              </div>
               {sponsoredQuests.map(q => (
-                <QuestCard key={q.id} q={q} expanded={expanded} onToggle={onToggle} details={details} onDetailChanged={onDetailChanged} />
+                <QuestCard key={q.id} q={q} expanded={expanded} onToggle={onToggle} details={details} onDetailChanged={handleSponsorDetailChanged} />
               ))}
             </div>
           )}

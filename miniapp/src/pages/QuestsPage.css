@@ -601,3 +601,19 @@
 
 .slots-line { margin: 8px 0 4px; padding: 7px 12px; border-radius: 10px; background: rgba(255,255,255,0.06); font-size: 13px; color: rgba(255,255,255,0.8); }
 .slots-line b { color: #ffd76a; }
+
+/* Спонсорские квесты: разделы (как в боте) */
+.sponsor-banner { width: 100%; border-radius: 14px; margin: 0 0 10px; display: block; }
+.sponsor-title { font-size: 16px; font-weight: 700; margin: 0 0 8px; }
+.sponsor-prize { margin: 0 0 10px; font-size: 13px; line-height: 1.4; color: rgba(255,255,255,0.85); }
+.sponsor-prize-note { margin-top: 6px; font-size: 12px; color: rgba(255,255,255,0.55); }
+.sponsor-pick { font-size: 13px; color: rgba(255,255,255,0.6); margin: 4px 0 8px; }
+.sponsor-cat-btn {
+  display: block; width: 100%; text-align: left; margin: 0 0 8px; padding: 13px 14px;
+  border-radius: 12px; font-size: 14px; font-weight: 600; color: #fff; cursor: pointer;
+  background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.25);
+}
+.sponsor-back {
+  margin: 0 0 10px; padding: 6px 12px; border-radius: 10px; font-size: 13px; color: #fff; cursor: pointer;
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+}

@@ -51,6 +51,12 @@ export async function getAvatarUrl() {
   return URL.createObjectURL(data);
 }
 
+// Разделы спонсорских квестов: число квестов и сумма «до N ₽» персонально (как в боте).
+export async function getSponsoredOverview() {
+  const { data } = await api.get('/api/quests/sponsored/overview');
+  return data;
+}
+
 export async function getSponsoredQuests() {
   const { data } = await api.get('/api/quests/sponsored');
   return data;

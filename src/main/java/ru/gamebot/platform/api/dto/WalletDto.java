@@ -36,4 +36,6 @@ public class WalletDto {
     private int withdrawalHoursLeft;
     /** Показывать сравнение «курс сейчас / курс партнёра» (не партнёр, 3+ квеста, уровни курса включены; 10.11.2026). */
     private boolean partnerCompare;
+    /** «Получить до N ₽» за спонсорские квесты (не партнёрам; уже выполненные игроком не входят; 0 - блок не показывать). Как на экранах вывода в боте. */
+    private long sponsoredPrizeRub;
 }

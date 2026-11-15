@@ -24,6 +24,11 @@ public class QuestDto {
     private int ticketReward;
     private boolean councilOnly;
     private boolean sponsored;
+    /** Раздел спонсорского квеста (debit/games/credit/mobile/gigs); null - не спонсорский. */
+    private String sponsorCategory;
+    /** Рубли от банка по партнёрской миссии (0 - нет) и подарок (Telegram Premium и т.п.): вместо «0 EXC» на карточке. */
+    private long bankRewardRub;
+    private String bonusItem;
 
     /** См. Quest.isEffectivelyNew — карточка подсвечивается как новая в Mini App (парность с sendQuestList
      * в боте): квест создан в последние 7 дней ИЛИ ещё не истёк редакторский буст highlightNewUntil. */

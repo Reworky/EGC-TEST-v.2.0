@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { starsApprox } from '../utils/fundStars';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { getWallet, claimDailyBonus, openChest, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone, invalidateCache, getStarsWithdrawItems, purchaseItem, getStarsInvoiceLink, getStarsPrices, requestAdWatch, restoreStreakByAd } from '../api/client';
 import { openStarsInvoice } from '../utils/stars';
 import chestRegularImg from '../assets/chests/regular.png';
@@ -812,6 +812,7 @@ function PhoneGate({ onConfirmed }) {
 }
 
 function WithdrawView({ wallet, onChanged }) {
+  const navigate = useNavigate();
   const [method, setMethod] = useState('rub');
   const [phoneConfirmed, setPhoneConfirmed] = useState(wallet.phoneConfirmed);
 
@@ -821,6 +822,16 @@ function WithdrawView({ wallet, onChanged }) {
 
   return (
     <>
+      {wallet.sponsoredPrizeRub > 0 && (
+        <div style={{ padding: '10px 16px 0' }}>
+          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>
+            💎 Получи до <b>{wallet.sponsoredPrizeRub.toLocaleString('ru-RU')} ₽</b> за спонсорские квесты.
+          </div>
+          <button className="quest-btn" onClick={() => navigate('/quests?section=sponsored')}>
+            💎 Получить до {wallet.sponsoredPrizeRub.toLocaleString('ru-RU')} ₽
+          </button>
+        </div>
+      )}
       <div className="view-toggle" style={{ padding: '10px 16px 12px' }}>
         <button className={`view-tab ${method === 'rub' ? 'active' : ''}`} onClick={() => setMethod('rub')}>💸 Рубли</button>
         <button className={`view-tab ${method === 'ton' ? 'active' : ''}`} onClick={() => setMethod('ton')}>💎 GRAM (TON)</button>

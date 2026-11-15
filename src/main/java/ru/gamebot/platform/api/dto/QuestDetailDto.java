@@ -64,6 +64,12 @@ public class QuestDetailDto {
 
     /** Спонсорская подписка на канал (сдача кнопкой «Я подписался»), счётчик мест и признак закрытой кампании. */
     private boolean sponsored;
+    private long bankRewardRub;
+    private String bonusItem;
+    /** Партнёрский квест банка, где всё ведёт менеджер (после «Взять» нет отчётов): ссылка на онлайн-заявку (только ОТП) и чат менеджера с готовым текстом. */
+    private boolean partnerManagerFlow;
+    private String partnerApplyUrl;
+    private String partnerManagerUrl;
     private boolean channelCheck;
     private Integer seatsLeft;
     private Integer seatsTotal;

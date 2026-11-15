@@ -61,6 +61,9 @@ public class DonateController {
         private long xpBonus;
         private int starsPrice;
         private BigDecimal tonAmount;
+        /** Оплата токенами (гибрид): EXC-часть и рублёвая доплата; 0 - у пакета нет EXC-позиции. Как в боте. */
+        private long excPrice;
+        private long excRub;
     }
 
     @Data
@@ -142,6 +145,11 @@ public class DonateController {
                 p.setXpBonus(pkg.xpBonus());
                 p.setStarsPrice(gamePlatformBot.gemPurchaseStarsPrice(price));
                 p.setTonAmount(exchangeRateService.rubToTon(BigDecimal.valueOf(price)));
+                long[] hybrid = gamePlatformBot.gemPurchaseHybridFor(user, gameKey, pkg);
+                if (hybrid != null) {
+                    p.setExcPrice(hybrid[0]);
+                    p.setExcRub(hybrid[1]);
+                }
                 game.getPackages().add(p);
             }
             dto.getGames().add(game);

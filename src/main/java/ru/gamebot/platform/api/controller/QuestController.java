@@ -55,6 +55,9 @@ public class QuestController {
     private final ru.gamebot.platform.service.GameCoverService gameCoverService;
     private final ru.gamebot.platform.service.UserService userService;
     private final ru.gamebot.platform.service.SinkShopService sinkShopService;
+    private final ru.gamebot.platform.service.SponsoredQuestsService sponsoredQuestsService;
+    private final ru.gamebot.platform.service.PartnerQuestFunnelService partnerQuestFunnelService;
+    private final ru.gamebot.platform.config.AppProperties appProperties;
 
     /** Награда для списка «Мои квесты» — там вперемешку активные и уже закрытые заявки, поэтому недельное
      *  снижение (правило 3.4) сюда НЕ подмешиваем: для уже одобренного квеста цифра «как если бы брали
@@ -291,6 +294,13 @@ public class QuestController {
                 .build();
     }
 
+    /** Разделы спонсорских квестов с числом квестов и суммой «до N ₽» - персонально (выполненные игроком не входят), как в боте. */
+    @GetMapping("/sponsored/overview")
+    public ru.gamebot.platform.service.SponsoredQuestsService.Overview sponsoredOverview(@AuthenticationPrincipal Long telegramId) {
+        AppUser user = telegramId != null ? appUserRepository.findByTelegramId(telegramId).orElse(null) : null;
+        return sponsoredQuestsService.overview(user);
+    }
+
     @GetMapping("/sponsored")
     public List<QuestDto> sponsored(@AuthenticationPrincipal Long telegramId) {
         AppUser currentUser = telegramId != null ? appUserRepository.findByTelegramId(telegramId).orElse(null) : null;
@@ -318,6 +328,9 @@ public class QuestController {
                 .weeklyLimit(weeklyStatus(weeklyCache, currentUser, q).limit())
                 .ticketReward(q.getTicketReward())
                 .councilOnly(q.isCouncilOnly()).sponsored(true)
+                .sponsorCategory(ru.gamebot.platform.service.SponsoredQuestsService.categoryOf(q))
+                .bankRewardRub(java.util.Optional.ofNullable(ru.gamebot.platform.service.PartnerMissions.forQuest(q)).map(ru.gamebot.platform.service.PartnerMission::bankRewardRub).orElse(0))
+                .bonusItem(java.util.Optional.ofNullable(ru.gamebot.platform.service.PartnerMissions.forQuest(q)).map(ru.gamebot.platform.service.PartnerMission::bonusItem).orElse(null))
                 .externalAutoApprove(q.isExternalAutoApprove())
                 .brawlAutoVerify(q.getBrawlVerifyType() != null || q.getClashVerifyType() != null || q.getClashRoyaleVerifyType() != null || q.getDotaVerifyType() != null || q.getCs2VerifyType() != null || q.getPubgVerifyType() != null)
                 .highlightNew(q.isEffectivelyNew())
@@ -391,6 +404,11 @@ public class QuestController {
                 .seatsTotal(seatsTotal(quest))
                 .campaignClosed(quest.getChannelCheckChatId() != null && questService.isChannelCampaignClosed(quest));
 
+        ru.gamebot.platform.service.PartnerMission detailPm = ru.gamebot.platform.service.PartnerMissions.forQuest(quest);
+        if (detailPm != null) {
+            builder.bankRewardRub(detailPm.bankRewardRub()).bonusItem(detailPm.bonusItem());
+        }
+
         if (telegramId != null) {
             appUserRepository.findByTelegramId(telegramId).ifPresent(user -> {
                 QuestService.WeeklyLimitStatus weekly = weeklyStatus(new HashMap<>(), user, quest);
@@ -407,6 +425,14 @@ public class QuestController {
                 }
                 QuestSubmission latest = questService.getLatestSubmission(user, quest);
                 if (latest != null && latest.getStatus() != ru.gamebot.platform.domain.enums.SubmissionStatus.CANCELLED) {
+                    // Квест банка у менеджера (как GamePlatformBot.isManagerFlowMission): без отчётов, у ОТП сразу ссылка на заявку и кнопка менеджеру
+                    if (detailPm != null && latest.getMissionStep() <= 1 && latest.getCardActivatedOn() == null && latest.getPurchaseReportedOn() == null) {
+                        builder.partnerManagerFlow(true);
+                        if ("otp".equals(detailPm.key())) builder.partnerApplyUrl(ru.gamebot.platform.service.PartnerMissions.OTP_APPLY_LINK);
+                        String need = "otp".equals(detailPm.key()) ? "помогите с оформлением карты" : "расскажите, что делать, пришлите ссылку";
+                        String text = ru.gamebot.platform.service.ManagerMessage.buildSimple(user, "Вопрос по квесту «Миссия: " + detailPm.missionTitle() + "»", need);
+                        builder.partnerManagerUrl(ru.gamebot.platform.service.ManagerMessage.link(appProperties.getSupportUsername(), text));
+                    }
                     builder.submissionStatus(latest.getStatus().name());
                     builder.moderatorComment(latest.getModeratorComment());
                     if (latest.getExpiresAt() != null) {
@@ -478,6 +504,17 @@ public class QuestController {
         QuestService.QuestActionResult result = questService.takeQuestChecked(user, quest);
         if (result.status() == QuestActionStatus.OK && quest.getBrawlVerifyType() != null) {
             brawlQuestVerificationService.primeBaseline(result.submission().getId(), quest.getBrawlVerifyType(), user.getBrawlStarsTag());
+        }
+        if (result.status() == QuestActionStatus.OK) {
+            // Как в боте: у квеста ОТП ссылка на оформление показывается сразу, поэтому «начал» в воронке = взял квест
+            ru.gamebot.platform.service.PartnerMission takenPm = ru.gamebot.platform.service.PartnerMissions.forQuest(quest);
+            if (takenPm != null && "otp".equals(takenPm.key())) {
+                try {
+                    partnerQuestFunnelService.startClicked(user.getTelegramId());
+                } catch (Exception e) {
+                    log.warn("OTP funnel startClicked failed for {}", user.getTelegramId(), e);
+                }
+            }
         }
         QuestActionResponseDto response = toResponse(result);
         if (result.status() == QuestActionStatus.SLOTS_FULL && !userService.isEgcPassActive(user)) {
