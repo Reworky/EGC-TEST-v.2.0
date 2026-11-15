@@ -8907,7 +8907,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "debit" -> "sponsored_debit_banner.jpg";
             case "credit" -> "sponsored_credit_banner.jpg";
             case "gigs" -> "sponsored_gigs_banner.jpg";
-            default -> null; // «Игровые партнёры» и «Мобильная связь» - баннеры в работе
+            case "mobile" -> "sponsored_mobile_banner.jpg";
+            default -> null; // «Игровые партнёры» - баннер в работе
         };
         if (banner != null) {
             sendResourceBanner(chatId, banner, text, keyboard);
