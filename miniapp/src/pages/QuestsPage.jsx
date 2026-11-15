@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getQuests, getSponsoredQuests, getSponsoredOverview, channelCheckQuest, getGames, getGamePhotoUrl, getQuestBoost, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, getQuestSlots, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard, getTournamentPhotoUrl, getRecommendedQuest } from '../api/client';
+import { getQuests, getSponsoredQuests, getSponsoredOverview, channelCheckQuest, getGames, getGamePhotoUrl, getQuestBoost, getQuestDetail, takeQuest, submitQuestReport, getMyQuests, getQuestSlots, cancelMyQuest, getTournament, joinTournament, getTournamentLeaderboard, getTournamentPhotoUrl } from '../api/client';
 import { useLottie } from '../components/LottieContext';
 import { useParticles } from '../components/ParticlesContext';
 import AdRewardCard from '../components/AdRewardCard';
@@ -748,11 +748,9 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
   const [sponsorOverview, setSponsorOverview] = useState(null);
   useEffect(() => { onSectionChange?.(activeSection); }, [activeSection]);
   const [sponsorCategory, setSponsorCategory] = useState(null);
-  const [recommended, setRecommended] = useState(null);
   const questListRef = useRef(null);
 
   useEffect(() => {
-    getRecommendedQuest().then(setRecommended).catch(() => setRecommended(null));
     getGames().then(g => {
       const gameOnly = g.filter(name => name !== 'UGC');
       setGames(gameOnly);
@@ -816,14 +814,6 @@ function AllQuestsView({ expanded, details, onToggle, onDetailChanged, initialSe
 
       {activeSection === 'gaming' && (
         <>
-          {recommended && (
-            <div className="game-section">
-              <div className="game-section-title">🎯 Твой квест сейчас</div>
-              <div className="category-section">
-                <QuestCard q={recommended} expanded={expanded} onToggle={onToggle} details={details} onDetailChanged={onDetailChanged} />
-              </div>
-            </div>
-          )}
           {topGames.length > 0 && (
             <div className="game-section">
               <div className="game-section-title">🔥 Лучшие игры</div>
