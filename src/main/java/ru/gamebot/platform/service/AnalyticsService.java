@@ -61,7 +61,8 @@ public class AnalyticsService {
         KPI("🏪", "Витрина проекта"),
         EGC_PASS("⭐", "EGC Pass: продажи"),
         VPN("🔐", "EGC VPN"),
-        PARTNER("💳", "Партнёрский квест");
+        PARTNER("💳", "Партнёрский квест"),
+        NEWBIE("🧭", "Воронка новичка");
 
         public final String icon;
         public final String title;
@@ -134,6 +135,7 @@ public class AnalyticsService {
     private final CourseAnalyticsService courseAnalytics;
     private final EgcPassFunnelService egcPassFunnel;
     private final PartnerQuestFunnelService partnerFunnel;
+    private final NewbieFunnelService newbieFunnel;
     private final TrafficSourceService trafficSourceService;
     private final VpnStatsService vpnStats;
     private final PulseService pulseService;
@@ -253,6 +255,7 @@ public class AnalyticsService {
                 case EGC_PASS -> egcPassTab(p, pv, lines, extras);
                 case VPN -> vpnTab(p, pv, lines, extras);
                 case PARTNER -> partnerTab(p, pv, lines, extras);
+                case NEWBIE -> newbieTab(p, lines, extras);
             }
         } catch (Exception e) {
             log.error("Analytics tab {} failed", tab, e);
@@ -907,6 +910,87 @@ public class AnalyticsService {
 
     /** Вкладка «Партнёрский квест» (10.11.2026): воронка квеста банка, который открывает партнёрские привилегии (сейчас ОТП): открыли карточку → взяли → нажали «Начать» → первая часть проверена → банк выплатил.
      *  Взятия, проверка и выплата считаются по заявкам, взятым в периоде (когорта); показы карточки и нажатия «Начать» пишутся событиями с момента добавления вкладки. */
+    /** Вкладка «Воронка новичка» (17.11.2026): когорта = игроки, зарегистрированные в периоде; у каждого шага - сколько людей дошло, доля от старта и от предыдущего шага. */
+    private void newbieTab(Period p, List<Line> out, List<String> extras) {
+        NewbieFunnelService.Report r = newbieFunnel.report(p.from(), p.to());
+        java.util.Map<String, Long> c = r.counts();
+        long started = c.get("started");
+        out.add(L("nb_started", "Пришли в бота (когорта)", "", (double) started, null));
+        out.add(L("nb_choice", "Дошли до экрана выбора пути", "%", started == 0 ? null : pct(c.get("choice"), started), null, "от пришедших", false));
+        out.add(L("nb_cards", "Выбрали «Спонсорские квесты»", "%", c.get("choice") == 0 ? null : pct(c.get("cards"), c.get("choice")), null, "от увидевших выбор", false));
+        out.add(L("nb_bank", "Взяли квест банка", "%", started == 0 ? null : pct(c.get("bank_taken"), started), null, "от пришедших", false));
+        out.add(L("nb_game", "Взяли игровой квест", "%", started == 0 ? null : pct(c.get("game_taken"), started), null, "от пришедших", false));
+        out.add(L("nb_d1", "Вернулись на следующий день", "%", c.get("d1_base") == 0 ? null : pct(c.get("d1"), c.get("d1_base")), null,
+                "из " + c.get("d1_base") + " игроков, у которых день уже прошёл", false));
+
+        StringBuilder t = new StringBuilder("<b>Воронка новичка</b>\n<i>Когорта: пришли " + DateTimeFormatter.ofPattern("dd.MM HH:mm").format(r.from()) + " - "
+                + DateTimeFormatter.ofPattern("dd.MM HH:mm").format(r.to()) + ", всего " + started + ". Шаг считается, если игрок дошёл до него когда-либо.</i>\n\n");
+        if (!r.hasEvents()) {
+            t.append("⚠️ События воронки ещё не записывались: цифры слайдов, выбора пути и карточек появятся после выкладки и первых новичков. Шаги по базе (подписка, квесты, возврат) ниже уже считаются.\n\n");
+        } else if (r.clamped()) {
+            t.append("ℹ️ События пишутся с ").append(DateTimeFormatter.ofPattern("dd.MM HH:mm").format(r.from())).append(": период обрезан по этому времени, чтобы шаги были сопоставимы.\n\n");
+        }
+        t.append("<pre>");
+        funnelRow(t, "Пришли (/start)", started, started, null);
+        funnelRow(t, "Слайд 1", c.get("w1"), started, started);
+        funnelRow(t, "Слайд 2", c.get("w2"), started, c.get("w1"));
+        funnelRow(t, "Слайд 3", c.get("w3"), started, c.get("w2"));
+        funnelRow(t, "Нажали «Пропустить»", c.get("wskip"), started, null);
+        funnelRow(t, "Экран выбора пути", c.get("choice"), started, started);
+        funnelRow(t, "  выбрали Карты", c.get("cards"), started, c.get("choice"));
+        funnelRow(t, "  выбрали Игры", c.get("games"), started, c.get("choice"));
+        long stuck = Math.max(0, c.get("choice") - c.get("cards") - c.get("games"));
+        funnelRow(t, "  ушли с экрана", stuck, started, c.get("choice"));
+        funnelRow(t, "Открыли гл. меню", c.get("menu"), started, null);
+        t.append("\n💳 Путь карты\n");
+        funnelRow(t, "Раздел спонсорских", c.get("sp_section"), started, c.get("cards"));
+        funnelRow(t, "Дебетовые карты", c.get("sp_debit"), started, c.get("sp_section"));
+        funnelRow(t, "Карточка банка", c.get("bank_card"), started, c.get("sp_debit"));
+        funnelRow(t, "Нажали «Взять»", c.get("take18"), started, c.get("bank_card"));
+        funnelRow(t, "Запрос подписки", c.get("sub_prompt"), started, c.get("take18"));
+        funnelRow(t, "  подписались", c.get("sub_after"), started, c.get("sub_prompt"));
+        funnelRow(t, "Взяли квест банка", c.get("bank_taken"), started, c.get("take18"));
+        funnelRow(t, "Экран «Оформить»", c.get("apply"), started, c.get("bank_taken"));
+        funnelRow(t, "Отправили отчёт", c.get("bank_report"), started, c.get("bank_taken"));
+        funnelRow(t, "Отчёт одобрен", c.get("bank_ok"), started, c.get("bank_report"));
+        funnelRow(t, "Банк выплатил", c.get("bank_paid"), started, c.get("bank_ok"));
+        t.append("\n🎮 Путь игр\n");
+        funnelRow(t, "Экран выбора игры", c.get("picker"), started, c.get("games"));
+        funnelRow(t, "Выбрали игру", c.get("pick"), started, c.get("picker"));
+        funnelRow(t, "Стартовая карточка", c.get("starter"), started, c.get("picker"));
+        funnelRow(t, "Взяли квест", c.get("game_taken"), started, c.get("picker"));
+        funnelRow(t, "Квест выполнен", c.get("game_ok"), started, c.get("game_taken"));
+        t.append("\n⚙️ Общее\n");
+        funnelRow(t, "Подписались на канал", c.get("activated"), started, started);
+        funnelRow(t, "Ввели код дня", c.get("code"), started, c.get("activated"));
+        funnelRow(t, "Вернулись на др. день", c.get("d1"), c.get("d1_base"), null);
+        t.append("</pre>");
+        extras.add(t.toString());
+
+        StringBuilder src = new StringBuilder("<b>По источникам трафика</b>\n<pre>источник        приш  карт  банк  выпл  игры  квест\n");
+        for (Object[] row : r.bySource()) {
+            src.append(String.format(RU, "%-14s %5d %5d %5d %5d %5d %5d%n", cut(String.valueOf(row[0]), 14),
+                    ((Number) row[1]).longValue(), ((Number) row[2]).longValue(), ((Number) row[3]).longValue(),
+                    ((Number) row[4]).longValue(), ((Number) row[5]).longValue(), ((Number) row[6]).longValue()));
+        }
+        if (r.bySource().isEmpty()) src.append("нет данных\n");
+        src.append("</pre><i>приш - пришли; карт - выбрали «Спонсорские квесты»; банк - взяли квест банка; выпл - банк выплатил; игры - выбрали «Игры»; квест - взяли игровой квест.</i>");
+        extras.add(src.toString());
+        extras.add("<i>Как читать: «от пред.» - доля от шага, из которого человек должен был прийти; именно там, где она резко падает, и теряются люди. "
+                + "Нажатие «Оформить карту» не видно: кнопка уходит на сайт мимо бота, дальше виден только возврат игрока с отчётом. "
+                + "Банк платит через 30+ дней, поэтому «Банк выплатил» у свежих когорт ещё пусто. Возврат на следующий день считается по журналу активности.</i>");
+    }
+
+    private static void funnelRow(StringBuilder sb, String label, long value, long baseStart, Long prev) {
+        String ofStart = baseStart <= 0 ? "  -" : String.format(RU, "%3.0f%%", pct(value, baseStart));
+        String ofPrev = prev == null ? "" : (prev <= 0 ? "   -" : String.format(RU, "%4.0f%%", pct(value, prev)));
+        sb.append(String.format(RU, "%-20s %5d %s %s%n", label, value, ofStart, ofPrev));
+    }
+
+    private static String cut(String v, int n) {
+        return v.length() <= n ? v : v.substring(0, n - 1) + "…";
+    }
+
     private void partnerTab(Period p, Period pv, List<Line> out, List<String> extras) {
         String game = PartnerMissions.OTP.gameName();
         PartnerQuestFunnelService.Funnel f = partnerFunnel.funnel(game, p.from(), p.to());

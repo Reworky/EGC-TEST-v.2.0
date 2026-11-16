@@ -167,6 +167,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.BonusCourseService bonusCourseService;
     private final ru.gamebot.platform.service.EgcPassFunnelService egcPassFunnelService;
     private final ru.gamebot.platform.service.PartnerQuestFunnelService partnerQuestFunnelService;
+    private final ru.gamebot.platform.service.NewbieFunnelService newbieFunnel;
     private final ru.gamebot.platform.service.PartnerStatusService partnerStatusService;
     private final ru.gamebot.platform.service.PartnerQuestNudgeService partnerQuestNudgeService;
     private final ru.gamebot.platform.service.RedButtonService redButtonService;
@@ -1690,6 +1691,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if (data.startsWith("quest:take18:")) {
+            fn(user, ru.gamebot.platform.service.NewbieFunnelService.BANK_TAKE);
             // «Да, мне 18+» подтверждено - дальше обычное взятие квеста
             handleTakeQuest(callbackQuery, user, session, parseLong(data.substring("quest:take18:".length())));
             return;
@@ -4722,6 +4724,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendModerationHub(user);
             return;
         }
+        fn(user, ru.gamebot.platform.service.NewbieFunnelService.MENU);
         if (user.isRegistrationCompleted() && !isEffectiveModerator(user) && !isSubscriptionCacheValid(user.getTelegramId())) {
             if (!isRequiredChannelMember(user.getTelegramId())) {
                 sendCommunityActivationPrompt(user,
@@ -5488,6 +5491,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + "Заглядывай, новые задания появляются часто."}};
 
     /** Счётчики воронки слайдов в app_settings (welcome.stat.shown / s2 / s3 / done / skip): сколько новичков дошло до какого слайда. Читать: scripts/check-welcome-stories.sql. */
+    /** Воронка новичка: игрок первый раз дошёл до шага (вкладка «🧭 Воронка новичка» в Аналитике). Никогда не мешает боту. */
+    private void fn(AppUser user, String step) {
+        if (user != null) newbieFunnel.log(user.getTelegramId(), step);
+    }
+
     private void welcomeStat(String name) {
         try {
             String key = "welcome.stat." + name;
@@ -5507,6 +5515,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendWelcomeSlide(AppUser user, String mode, int n) {
         int total = WELCOME_SLIDES.length;
         n = Math.max(1, Math.min(total, n));
+        if ("f".equals(mode)) fn(user, "welcome_" + n);
         StringBuilder dots = new StringBuilder();
         for (int i = 1; i <= total; i++) dots.append(i == n ? "●" : "○").append(i < total ? " " : "");
         String text = WELCOME_SLIDES[n - 1][0] + "\n\n" + dots;
@@ -5537,6 +5546,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if ("skip".equals(action) || "done".equals(action)) {
             if ("f".equals(mode)) {
                 welcomeStat(action);
+                fn(user, "skip".equals(action) ? ru.gamebot.platform.service.NewbieFunnelService.W_SKIP : ru.gamebot.platform.service.NewbieFunnelService.W_DONE);
                 continueOnboarding(user);
             } else {
                 sendMainMenu(user, null);
@@ -5596,6 +5606,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendOnboardingChoice(AppUser user, boolean fresh) {
         clearOnboardingBrowseBack(user);
         welcomeStat("choice_shown");
+        fn(user, ru.gamebot.platform.service.NewbieFunnelService.CHOICE_SHOWN);
         long sum = 0;
         try {
             sum = sponsoredBankRub(sponsoredNotDone(user, activeSponsoredQuests()));
@@ -5626,6 +5637,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
      *  (старый игрок, жмущий /start): без «тебе начислено», шкала по реальному балансу. */
     private void sendStarterPicker(AppUser user, boolean fresh) {
         clearOnboardingBrowseBack(user);
+        fn(user, ru.gamebot.platform.service.NewbieFunnelService.GAMES_PICKER);
         long coins = fresh ? WELCOME_BONUS_EXC : user.getCoins();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         // Все игры с активными квестами сразу на первом экране, без эмодзи; три стартовые идут первыми.
@@ -6234,6 +6246,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendStarterQuestCard(AppUser user, Quest quest) {
         clearOnboardingBrowseBack(user);
+        fn(user, ru.gamebot.platform.service.NewbieFunnelService.STARTER_CARD);
         long reward = quest.getRewardCoins();
         String description = quest.getDescription() == null ? "" : escape(trim(quest.getDescription(), 300)) + "\n\n";
         String duration = quest.getDurationText() == null || quest.getDurationText().isBlank() ? "" : "⏱ Срок: " + escape(quest.getDurationText()) + "\n";
@@ -6345,10 +6358,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendOnboardingChoice(user, user.getCompletedQuests() == 0 && user.getCoins() <= WELCOME_BONUS_EXC); // при возврате «Назад» приветствие повторяется, пока игрок не двигался дальше (баланс = стартовый бонус, квестов нет)
         } else if ("games".equals(sub)) {
             welcomeStat("choice_games");
+            fn(user, ru.gamebot.platform.service.NewbieFunnelService.CHOICE_GAMES);
             answerSilently(callbackQuery.getId());
             sendStarterPicker(user, false);
         } else if ("cards".equals(sub)) {
             welcomeStat("choice_cards");
+            fn(user, ru.gamebot.platform.service.NewbieFunnelService.CHOICE_CARDS);
             completeOnboarding(user);
             answerSilently(callbackQuery.getId());
             // «Назад» с экрана спонсорских квестов ведёт на экран выбора пути, а не в главное меню (сбрасывается на главном меню, см. sendMainMenu)
@@ -6362,6 +6377,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             handleStarterGamePick(user, sub.substring("game:".length()));
         } else if (sub.startsWith("pick:")) {
+            fn(user, ru.gamebot.platform.service.NewbieFunnelService.GAME_PICK);
             completeOnboarding(user);
             answerSilently(callbackQuery.getId());
             String game = decodeGameToken(sub.substring("pick:".length()));
@@ -9191,6 +9207,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Первый экран «Спонсорских квестов»: выбор раздела (15.11.2026). Пустые разделы тоже показываем: внутри сообщение «скоро». */
     private void sendSponsoredCategories(AppUser user) {
+        fn(user, ru.gamebot.platform.service.NewbieFunnelService.SP_SECTION);
         List<InlineKeyboardButton> rows = new ArrayList<>();
         // На кнопке разделов - число активных квестов внутри (15.11.2026, просьба владельца)
         List<Quest> activeNow = activeSponsoredQuests();
@@ -9228,6 +9245,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         final String key = cat[0];
+        if ("debit".equals(key)) fn(user, ru.gamebot.platform.service.NewbieFunnelService.SP_DEBIT);
         List<Quest> quests = activeSponsoredQuests().stream().filter(q -> key.equals(sponsoredCategory(q))).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         String head = "💼 <b>Спонсорские квесты · " + cat[2] + "</b>\n\n";
         List<Quest> catLeft = sponsoredNotDone(user, quests);
@@ -9847,6 +9865,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendMissionStep(user, quest, latest, null, notice);
             return;
         }
+        if (isMissionQuest(quest)) fn(user, ru.gamebot.platform.service.NewbieFunnelService.BANK_CARD);
         if (ru.gamebot.platform.service.PartnerMissions.grantsPartner(ru.gamebot.platform.service.PartnerMissions.forQuest(quest))) {
             partnerQuestFunnelService.cardViewed(user.getTelegramId()); // воронка партнёрского квеста: показ карточки (вкладка «Партнёрский квест»)
         }
@@ -10220,6 +10239,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         .append(pm.applyHint() != null ? escape(pm.applyHint()) + "\n\n" : "")
                         .append("Если что-то непонятно или ты уже выполнил все условия, напиши менеджеру @").append(manager);
                 rows.add(List.of(keyboardFactory.url("💳 Оформить карту", pm.applyLink())));
+                fn(user, ru.gamebot.platform.service.NewbieFunnelService.APPLY_SHOWN);
                 rows.add(List.of(partnerManagerButton(pm, sub, "💬 Вопрос менеджеру", "Вопрос по квесту «Миссия: " + pm.missionTitle() + "»", "помогите с оформлением карты")));
             } else {
                 sb.append("🚀 <b>Квест взят!</b>\n\n🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")
@@ -10644,6 +10664,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } catch (Exception ignored) {
             // квест не нашёлся - обычный текст
         }
+        if (bankQuest) fn(user, ru.gamebot.platform.service.NewbieFunnelService.SUB_PROMPT);
         String notice = bankQuest
                 ? "🎯 Чтобы взять этот квест и получить деньги на карту, сначала подпишись на канал — это займёт 10 секунд."
                 : user.isRegistrationCompleted()
