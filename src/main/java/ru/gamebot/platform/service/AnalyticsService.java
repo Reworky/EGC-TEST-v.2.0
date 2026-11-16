@@ -951,9 +951,8 @@ public class AnalyticsService {
         funnelRow(t, "  подписались", c.get("sub_after"), started, c.get("sub_prompt"));
         funnelRow(t, "Взяли квест банка", c.get("bank_taken"), started, c.get("take18"));
         funnelRow(t, "Экран «Оформить»", c.get("apply"), started, c.get("bank_taken"));
-        funnelRow(t, "Отправили отчёт", c.get("bank_report"), started, c.get("bank_taken"));
-        funnelRow(t, "Отчёт одобрен", c.get("bank_ok"), started, c.get("bank_report"));
-        funnelRow(t, "Банк выплатил", c.get("bank_paid"), started, c.get("bank_ok"));
+        funnelRow(t, "Менеджер проверил", c.get("bank_ok"), started, c.get("bank_taken"));
+        funnelRow(t, "Выплата отмечена", c.get("bank_paid"), started, c.get("bank_ok"));
         t.append("\n🎮 Путь игр\n");
         funnelRow(t, "Экран выбора игры", c.get("picker"), started, c.get("games"));
         funnelRow(t, "Выбрали игру", c.get("pick"), started, c.get("picker"));
@@ -974,11 +973,13 @@ public class AnalyticsService {
                     ((Number) row[4]).longValue(), ((Number) row[5]).longValue(), ((Number) row[6]).longValue()));
         }
         if (r.bySource().isEmpty()) src.append("нет данных\n");
-        src.append("</pre><i>приш - пришли; карт - выбрали «Спонсорские квесты»; банк - взяли квест банка; выпл - банк выплатил; игры - выбрали «Игры»; квест - взяли игровой квест.</i>");
+        src.append("</pre><i>приш - пришли; карт - выбрали «Спонсорские квесты»; банк - взяли квест банка; выпл - выплата отмечена менеджером; игры - выбрали «Игры»; квест - взяли игровой квест.</i>");
         extras.add(src.toString());
         extras.add("<i>Как читать: «от пред.» - доля от шага, из которого человек должен был прийти; именно там, где она резко падает, и теряются люди. "
-                + "Нажатие «Оформить карту» не видно: кнопка уходит на сайт мимо бота, дальше виден только возврат игрока с отчётом. "
-                + "Банк платит через 30+ дней, поэтому «Банк выплатил» у свежих когорт ещё пусто. Возврат на следующий день считается по журналу активности.</i>");
+                + "Нажатие «Оформить карту» не видно: кнопка уходит на сайт мимо бота. После «Взять» квест банка идёт в личке с менеджером (отчётов в боте нет), "
+                + "поэтому «Менеджер проверил» и «Выплата отмечена» заполняются только тогда, когда менеджер отметил проверку заявки или выплату в боте "
+                + "(команды /otpbonus, /vtbbonus, /alfabonus, /forabonus и т.д.); если не отмечает, строки останутся пустыми. "
+                + "Банк платит через 30+ дней, у свежих когорт выплаты ещё нет. Возврат на следующий день считается по журналу активности.</i>");
     }
 
     private static void funnelRow(StringBuilder sb, String label, long value, long baseStart, Long prev) {
