@@ -6348,7 +6348,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendOnboardingGuide(user);
         } else if ("choice".equals(sub)) {
             answerSilently(callbackQuery.getId());
-            sendOnboardingChoice(user, user.getCompletedQuests() == 0 && user.getCoins() <= WELCOME_BONUS_EXC);
+            sendOnboardingChoice(user, false); // приветствие и баннер - только при первом показе (после слайдов), при возврате «Назад» их нет
         } else if ("games".equals(sub)) {
             welcomeStat("choice_games");
             answerSilently(callbackQuery.getId());
