@@ -378,9 +378,13 @@ function QuestActions({ quest, detail, onChanged }) {
           <div className="quest-go-hint">
             <div className="quest-go-hint-title">🚀 Квест взят!</div>
             <div className="quest-go-hint-text">
-              {detail.partnerApplyUrl
-                ? 'Нажми «Оформить карту»: откроется страница с онлайн-заявкой. В заявке выбери доставку курьером. Если что-то непонятно, напиши менеджеру.'
-                : 'Напиши менеджеру: он проведёт по шагам в личных сообщениях.'}
+              {detail.partnerApplyUrl ? (
+                <>
+                  <p>Нажми «Оформить карту»: откроется страница с онлайн-заявкой.</p>
+                  {detail.partnerApplyHint && <p>{detail.partnerApplyHint}</p>}
+                  <p>Если что-то непонятно или ты уже выполнил все условия, напиши менеджеру.</p>
+                </>
+              ) : 'Напиши менеджеру: он проведёт по шагам в личных сообщениях.'}
             </div>
           </div>
           {detail.partnerApplyUrl && (

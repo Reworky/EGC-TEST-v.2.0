@@ -72,6 +72,8 @@ public class QuestDetailDto {
     /** Партнёрский квест банка, где всё ведёт менеджер (после «Взять» нет отчётов): ссылка на онлайн-заявку (только ОТП) и чат менеджера с готовым текстом. */
     private boolean partnerManagerFlow;
     private String partnerApplyUrl;
+    /** Фраза про оформление на экране «Квест взят» (например, «В заявке выбери доставку курьером.») или null. */
+    private String partnerApplyHint;
     private String partnerManagerUrl;
     private boolean channelCheck;
     private Integer seatsLeft;

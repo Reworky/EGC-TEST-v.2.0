@@ -10134,9 +10134,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (pm.applyLink() != null) {
                 // 15.11.2026 (владелец): у квеста ОТП (и ВТБ, 16.11.2026) ссылка на оформление - сразу здесь (без ожидания менеджера); менеджер - для вопросов
                 sb.append("🚀 <b>Квест взят!</b>\n\n🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")
-                        .append("Нажми «💳 Оформить карту»: откроется страница с онлайн-заявкой.")
-                        .append(pm.applyHint() != null ? " " + pm.applyHint() : "").append("\n\n")
-                        .append("Если что-то непонятно, напиши менеджеру @").append(manager).append(".");
+                        .append("Нажми «💳 Оформить карту»: откроется страница с онлайн-заявкой.\n\n")
+                        .append(pm.applyHint() != null ? escape(pm.applyHint()) + "\n\n" : "")
+                        .append("Если что-то непонятно или ты уже выполнил все условия, напиши менеджеру @").append(manager);
                 rows.add(List.of(keyboardFactory.url("💳 Оформить карту", pm.applyLink())));
                 rows.add(List.of(partnerManagerButton(pm, sub, "💬 Вопрос менеджеру", "Вопрос по квесту «Миссия: " + pm.missionTitle() + "»", "помогите с оформлением карты")));
             } else {

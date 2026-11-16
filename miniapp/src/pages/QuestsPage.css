@@ -547,6 +547,8 @@
   color: rgba(255,255,255,0.6);
   margin-top: 3px;
 }
+.quest-go-hint-text p { margin: 0 0 6px; }
+.quest-go-hint-text p:last-child { margin-bottom: 0; }
 
 /* ── Спонсорская подписка на канал: места, пояснение раздела, вторая кнопка ── */
 .quest-seats {
