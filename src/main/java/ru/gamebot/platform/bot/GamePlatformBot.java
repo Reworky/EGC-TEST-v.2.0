@@ -5618,11 +5618,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("💳 Спонсорские квесты · мне 18+, я из РФ", "onboarding:cards")),
                 List.of(keyboardFactory.callback("🎮 Играть и копить EXC", "onboarding:games"))));
-        if (fresh) {
-            sendResourceBanner(user.getTelegramId(), "welcome_start_banner.jpg", text, keyboard);
-        } else {
-            sendText(user.getTelegramId(), text, keyboard);
-        }
+        // Всегда с баннером (и при возврате): экраны выбора пути, игр и спонсорских квестов - картинки, поэтому между ними правка на месте, а не новое сообщение
+        sendResourceBanner(user.getTelegramId(), "welcome_start_banner.jpg", text, keyboard);
     }
 
     /** fresh=true - сразу после регистрации (приветствие + стартовый бонус); false - возврат к незавершённому онбордингу
@@ -5657,12 +5654,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🎯 <b>Цель — первый вывод: " + fmtExc(FIRST_WITHDRAWAL_EXC) + " EXC</b>\n"
                 + progressBar(coins, FIRST_WITHDRAWAL_EXC) + " " + fmtExc(Math.min(coins, FIRST_WITHDRAWAL_EXC)) + " / " + fmtExc(FIRST_WITHDRAWAL_EXC) + "\n\n"
                 + "<b>Для какой игры хочешь взять квест?👇</b>";
-        if (fresh) {
-            // 15.11.2026 (владелец): у приветствия после регистрации - свой баннер «Добро пожаловать в EGC» (Экси у входа в игровую комнату); повторный показ - прежним текстом
-            sendResourceBanner(user.getTelegramId(), "welcome_start_banner.jpg", pickerText, keyboardFactory.rowsLayout(rows));
-        } else {
-            sendText(user.getTelegramId(), pickerText, keyboardFactory.rowsLayout(rows));
-        }
+        // 15.11.2026 (владелец): у приветствия после регистрации - свой баннер «Добро пожаловать в EGC» (Экси у входа в игровую комнату).
+        // С 17.11.2026 баннер и при возврате (не только fresh): экран выбора пути <-> выбор игры правятся на месте
+        sendResourceBanner(user.getTelegramId(), "welcome_start_banner.jpg", pickerText, keyboardFactory.rowsLayout(rows));
     }
 
     private List<String> starterTitles(StarterGame g) {
@@ -14128,7 +14122,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         return data.startsWith("admin") || data.startsWith("mod:") || data.startsWith("revmod:") || data.startsWith("brawl:")
                 || data.startsWith("reward_create") || data.startsWith("tournament_create") || data.startsWith("qc:") || data.startsWith("qe:")
-                || data.startsWith("quest_type") || data.startsWith("onboarding:")
+                || data.startsWith("quest_type")
+                // onboarding:choice|games|cards (17.11.2026) - обычная навигация между экранами-баннерами: правим на месте; остальные onboarding:* по-прежнему вне учёта экранов
+                || (data.startsWith("onboarding:") && !data.equals("onboarding:choice") && !data.equals("onboarding:games") && !data.equals("onboarding:cards"))
                 || data.startsWith("dtasks:go") || data.startsWith("battlepass:buy:") || data.startsWith("redbtn:") || data.startsWith("nudgefb:")
                 || data.startsWith("report:submit:") || data.startsWith("review:") || data.startsWith("gemdonate:confirmton:")
                 || data.startsWith("council:") || data.startsWith("case:") || data.equals("noop");
