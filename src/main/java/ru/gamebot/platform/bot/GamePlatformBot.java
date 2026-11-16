@@ -414,6 +414,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        // Горячая клавиша модератора «Центр модерации» (нижняя клавиатура в роли модератора)
+        if (text != null && user.isProfileCompleted() && HK_MODERATION.equals(text.trim()) && isModeratorRoleActive(user)) {
+            session.reset();
+            try {
+                sendModerationHub(user);
+            } catch (Exception e) {
+                log.error("Moderator hotkey failed for {}", user.getTelegramId(), e);
+                sendText(user.getTelegramId(), "⚠️ Не открылось, попробуйте через /menu", null);
+            }
+            return;
+        }
+
         // Кнопки нижней клавиатуры (см. ensureQuickKeyboard): работают из любого шага, как /menu
         if (text != null && user.isProfileCompleted() && QUICK_KEYBOARD_BUTTONS.contains(text.trim())) {
             session.reset();
@@ -573,7 +585,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
-        if (text != null && (text.equals("/keys") || text.startsWith("/keys ")) && isEffectiveAdmin(user)) {
+        if (text != null && (text.equals("/keys") || text.startsWith("/keys ")) && (isEffectiveAdmin(user) || isModeratorRoleActive(user))) {
             handleAdminHotkeysCommand(user, text.trim());
             return;
         }
@@ -8534,7 +8546,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("moder", "", "Включить роль модератора"),
             new AdminCommand("user", "", "Посмотреть бота глазами игрока"),
             new AdminCommand("commands", "", "Список админ-команд"),
-            new AdminCommand("keys", "[off]", "Горячие клавиши админ-панели: показать нижнюю клавиатуру (Аналитика, Деньги, Квесты, Игроки, Коммуникации, Админ-панель) или убрать её"),
+            new AdminCommand("keys", "[off]", "Горячие клавиши: показать нижнюю клавиатуру (админ: Аналитика, Деньги, Квесты, Игроки, Коммуникации, Админ-панель; модератор: Центр модерации) или убрать её"),
             new AdminCommand("wdnudge", "test|send|stats", "Рассылка «вывод открыт» (A/B)"),
             new AdminCommand("pulsethr", "reset|log|КЛЮЧ ЗЕЛЁНЫЙ КРАСНЫЙ", "Пороги вкладки «Пульс проекта»: список, изменить, вернуть стартовые, журнал"),
             new AdminCommand("vpn", "ID [trial|paid|off]", "EGC VPN (пока без экранов игрока): статус игрока, выдать пробный/оплаченный месяц, отключить"),
@@ -8596,6 +8608,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             ensureAdminHotkeys(user);
             return;
         }
+        if (user.isProfileCompleted() && isModeratorRoleActive(user)) {
+            ensureAdminHotkeys(user);
+            return;
+        }
         if (user.isQuickKeyboardShown() || !user.isProfileCompleted() || isEffectiveAdmin(user) || isEffectiveModerator(user)) return;
         try {
             SendMessage message = new SendMessage();
@@ -8628,6 +8644,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private static final String HK_COMM = "📣 Коммуникации";
     private static final String HK_PANEL = "🛠 Админ-панель";
     private static final java.util.Set<String> ADMIN_HOTKEY_BUTTONS = java.util.Set.of(HK_ANALYTICS, HK_MONEY, HK_QUESTS, HK_PLAYERS, HK_COMM, HK_PANEL);
+
+    private static final String HK_MODERATION = "🛡 Центр модерации";
+
+    /** Активна роль модератора (настоящий модератор или админ, включивший /moder): для неё своя нижняя клавиатура из одной кнопки. */
+    private boolean isModeratorRoleActive(AppUser user) {
+        return ROLE_MODER.equals(resolveMenuRole(user, sessionService.get(user.getTelegramId())));
+    }
+
+    private ReplyKeyboardMarkup moderatorHotkeysKeyboard() {
+        KeyboardRow r1 = new KeyboardRow();
+        r1.add(new KeyboardButton(HK_MODERATION));
+        return ReplyKeyboardMarkup.builder().keyboardRow(r1).resizeKeyboard(true).build();
+    }
 
     /** Нижняя клавиатура админа («горячие клавиши»): те же экраны, что кнопки админ-меню, но в один тап из любого места. */
     private ReplyKeyboardMarkup adminHotkeysKeyboard() {
@@ -8662,7 +8691,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Один раз для каждого админа сообщает про горячие клавиши и показывает клавиатуру (флаг в app_settings); дальше - только по /keys. */
     private void ensureAdminHotkeys(AppUser admin) {
         try {
-            String key = "admin.hotkeys.shown." + admin.getTelegramId();
+            String key = (isModeratorRoleActive(admin) ? "mod.hotkeys.shown." : "admin.hotkeys.shown.") + admin.getTelegramId();
             if (appSettingRepository.findById(key).isPresent()) return;
             sendAdminHotkeysKeyboard(admin);
             AppSetting flag = new AppSetting();
@@ -8677,8 +8706,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendAdminHotkeysKeyboard(AppUser admin) {
         SendMessage message = new SendMessage();
         message.setChatId(admin.getTelegramId().toString());
-        message.setText("⌨️ Горячие клавиши админ-панели включены: значок рядом с полем ввода открывает Аналитику, Деньги, Квесты, Игроков, Коммуникации и Админ-панель. Убрать: /keys off");
-        message.setReplyMarkup(adminHotkeysKeyboard());
+        if (isModeratorRoleActive(admin)) {
+            message.setText("⌨️ Горячая клавиша включена: значок рядом с полем ввода открывает Центр модерации. Убрать: /keys off");
+            message.setReplyMarkup(moderatorHotkeysKeyboard());
+        } else {
+            message.setText("⌨️ Горячие клавиши админ-панели включены: значок рядом с полем ввода открывает Аналитику, Деньги, Квесты, Игроков, Коммуникации и Админ-панель. Убрать: /keys off");
+            message.setReplyMarkup(adminHotkeysKeyboard());
+        }
         try {
             execute(message);
         } catch (Exception e) {
