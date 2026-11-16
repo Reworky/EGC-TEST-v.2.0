@@ -5618,8 +5618,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "Второй путь всегда доступен в меню.";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("💳 Спонсорские квесты · мне 18+, я из РФ", "onboarding:cards")),
-                List.of(keyboardFactory.callback("🎮 Играть и копить EXC", "onboarding:games")),
-                List.of(keyboardFactory.callback("❓ Как это работает", "onboarding:guide"))));
+                List.of(keyboardFactory.callback("🎮 Играть и копить EXC", "onboarding:games"))));
         if (fresh) {
             sendResourceBanner(user.getTelegramId(), "welcome_start_banner.jpg", text, keyboard);
         } else {
