@@ -8534,7 +8534,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("moder", "", "Включить роль модератора"),
             new AdminCommand("user", "", "Посмотреть бота глазами игрока"),
             new AdminCommand("commands", "", "Список админ-команд"),
-            new AdminCommand("keys", "[off]", "Горячие клавиши админ-панели: показать нижнюю клавиатуру (Аналитика, Выводы, Регистрации, Квесты, Игроки, Админ-панель) или убрать её"),
+            new AdminCommand("keys", "[off]", "Горячие клавиши админ-панели: показать нижнюю клавиатуру (Аналитика, Деньги, Квесты, Игроки, Коммуникации, Админ-панель) или убрать её"),
             new AdminCommand("wdnudge", "test|send|stats", "Рассылка «вывод открыт» (A/B)"),
             new AdminCommand("pulsethr", "reset|log|КЛЮЧ ЗЕЛЁНЫЙ КРАСНЫЙ", "Пороги вкладки «Пульс проекта»: список, изменить, вернуть стартовые, журнал"),
             new AdminCommand("vpn", "ID [trial|paid|off]", "EGC VPN (пока без экранов игрока): статус игрока, выдать пробный/оплаченный месяц, отключить"),
@@ -8622,23 +8622,23 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private static final String HK_ANALYTICS = "📊 Аналитика";
-    private static final String HK_WITHDRAWALS = "💸 Выводы";
-    private static final String HK_REGS = "🆕 Регистрации";
+    private static final String HK_MONEY = "💰 Деньги";
     private static final String HK_QUESTS = "🎯 Квесты";
     private static final String HK_PLAYERS = "👥 Игроки";
+    private static final String HK_COMM = "📣 Коммуникации";
     private static final String HK_PANEL = "🛠 Админ-панель";
-    private static final java.util.Set<String> ADMIN_HOTKEY_BUTTONS = java.util.Set.of(HK_ANALYTICS, HK_WITHDRAWALS, HK_REGS, HK_QUESTS, HK_PLAYERS, HK_PANEL);
+    private static final java.util.Set<String> ADMIN_HOTKEY_BUTTONS = java.util.Set.of(HK_ANALYTICS, HK_MONEY, HK_QUESTS, HK_PLAYERS, HK_COMM, HK_PANEL);
 
     /** Нижняя клавиатура админа («горячие клавиши»): те же экраны, что кнопки админ-меню, но в один тап из любого места. */
     private ReplyKeyboardMarkup adminHotkeysKeyboard() {
         KeyboardRow r1 = new KeyboardRow();
         r1.add(new KeyboardButton(HK_ANALYTICS));
-        r1.add(new KeyboardButton(HK_WITHDRAWALS));
+        r1.add(new KeyboardButton(HK_MONEY));
         KeyboardRow r2 = new KeyboardRow();
-        r2.add(new KeyboardButton(HK_REGS));
         r2.add(new KeyboardButton(HK_QUESTS));
+        r2.add(new KeyboardButton(HK_PLAYERS));
         KeyboardRow r3 = new KeyboardRow();
-        r3.add(new KeyboardButton(HK_PLAYERS));
+        r3.add(new KeyboardButton(HK_COMM));
         r3.add(new KeyboardButton(HK_PANEL));
         return ReplyKeyboardMarkup.builder().keyboardRow(r1).keyboardRow(r2).keyboardRow(r3).resizeKeyboard(true).build();
     }
@@ -8647,10 +8647,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             switch (label) {
                 case HK_ANALYTICS -> sendAnalyticsHome(admin);
-                case HK_WITHDRAWALS -> sendAdminWithdrawals(admin);
-                case HK_REGS -> sendAdminRegistrations(admin);
+                case HK_MONEY -> sendAdminGroup(admin, "money");
                 case HK_QUESTS -> sendAdminGroup(admin, "quests");
                 case HK_PLAYERS -> sendAdminGroup(admin, "players");
+                case HK_COMM -> sendAdminGroup(admin, "comm");
                 default -> sendAdminPanel(admin);
             }
         } catch (Exception e) {
@@ -8677,7 +8677,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendAdminHotkeysKeyboard(AppUser admin) {
         SendMessage message = new SendMessage();
         message.setChatId(admin.getTelegramId().toString());
-        message.setText("⌨️ Горячие клавиши админ-панели включены: значок рядом с полем ввода открывает Аналитику, Выводы, Регистрации, Квесты, Игроков и Админ-панель. Убрать: /keys off");
+        message.setText("⌨️ Горячие клавиши админ-панели включены: значок рядом с полем ввода открывает Аналитику, Деньги, Квесты, Игроков, Коммуникации и Админ-панель. Убрать: /keys off");
         message.setReplyMarkup(adminHotkeysKeyboard());
         try {
             execute(message);
