@@ -121,6 +121,8 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
      *  активации дня 0 был виден только частично, учитывая людей, уже прошедших эту подписку. */
     long countByCreatedAtLessThanEqual(LocalDateTime cutoff);
 
+    long countByCreatedAtAfter(LocalDateTime since);
+
     long countByProfileCompletedTrueAndCreatedAtLessThanEqual(LocalDateTime cutoff);
 
     long countByProfileCompletedTrueAndRegistrationCompletedFalseAndCreatedAtLessThanEqual(LocalDateTime cutoff);

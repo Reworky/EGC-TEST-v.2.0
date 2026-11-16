@@ -197,6 +197,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ModeratorBonusService moderatorBonusService;
     private final ru.gamebot.platform.service.WeeklyGoalService weeklyGoalService;
     private final ru.gamebot.platform.service.DailyCodeGateService dailyCodeGate;
+    private final ru.gamebot.platform.service.NewPlayersBadgeService newPlayersBadge;
     private final ru.gamebot.platform.service.GoldenHourService goldenHourService;
     private final ru.gamebot.platform.service.SeasonalEventService seasonalEventService;
     private final ru.gamebot.platform.service.PlatformPushService platformPushService;
@@ -21630,7 +21631,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "players" -> {
                 title = "👥 <b>Игроки</b>";
                 rows.add(List.of(keyboardFactory.callback("👥 Пользователи", "admin:users:0")));
-                rows.add(List.of(keyboardFactory.callback("🆕 Новые игроки", "admin:users:new:1")));
+                long unseenNew = newPlayersBadge.unseenCount();
+                rows.add(List.of(keyboardFactory.callback(unseenNew > 0 ? "🆕 Новые игроки (" + unseenNew + ")" : "🆕 Новые игроки", "admin:users:new:1")));
                 rows.add(List.of(keyboardFactory.callback("📡 Сейчас на платформе", "admin:live")));
                 rows.add(List.of(keyboardFactory.callback("⚔️ Состав отряда", "admin:squads:search")));
                 rows.add(List.of(keyboardFactory.callback("🏷️ Теги CoC/Clash Royale", "admin:clashtags")));
@@ -24921,13 +24923,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .filter(u -> u.getCreatedAt() != null && !u.getCreatedAt().isBefore(since))
                 .collect(java.util.stream.Collectors.toList());
         long finished = fresh.stream().filter(AppUser::isRegistrationCompleted).count();
+        long unseenBefore = newPlayersBadge.unseenCount();
+        newPlayersBadge.markSeen();
 
         String period = days == 1 ? "за 24 часа" : (days == 7 ? "за 7 дней" : "за 30 дней");
         StringBuilder sb = new StringBuilder("🆕 <b>Новые игроки</b> " + period + "\n\n");
         sb.append("За 24 часа: <b>").append(d1).append("</b> · за 7 дней: <b>").append(d7)
                 .append("</b> · за 30 дней: <b>").append(d30).append("</b>\n");
         sb.append("В выбранном периоде: <b>").append(fresh.size()).append("</b>, прошли регистрацию: <b>")
-                .append(finished).append("</b>\n\n");
+                .append(finished).append("</b>\n");
+        sb.append("Новых с прошлого просмотра: <b>").append(unseenBefore).append("</b> (счётчик на кнопке сброшен)\n\n");
         if (fresh.isEmpty()) {
             sb.append("Новых игроков за этот период нет.");
         } else {
@@ -31073,8 +31078,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("📣 Рекламодателям", "admin:adv")));
             long newRegs = registrationNoticeRepository.countBySeenFalse();
             rows.add(List.of(keyboardFactory.callback(newRegs > 0 ? "🆕 Регистрации (" + newRegs + ")" : "🆕 Регистрации", "admin:regs")));
+            long newPlayers = newPlayersBadge.unseenCount();
             rows.add(List.of(
-                    keyboardFactory.callback("👥 Игроки", "admin:grp:players"),
+                    keyboardFactory.callback(newPlayers > 0 ? "👥 Игроки (" + newPlayers + ")" : "👥 Игроки", "admin:grp:players"),
                     keyboardFactory.callback("🎯 Квесты", "admin:grp:quests")
             ));
             long pendingW = rewardService.findPendingWithdrawals().size() + rewardService.findPendingRequests().size();
