@@ -17289,7 +17289,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         backOrCancelKeyboard("admin:fin:add:" + finOrigin));
             }
             default -> {
-                if (action.startsWith("club:link:")) {
+                if (action.startsWith("regs:page:")) {
+                    Integer regsPage = parseInteger(action.substring("regs:page:".length()));
+                    sendAdminRegistrations(user, regsPage == null ? 0 : regsPage);
+                    answerSilently(callbackQuery.getId());
+                } else if (action.startsWith("club:link:")) {
                     Long questId = parseLong(action.substring("club:link:".length()));
                     try {
                         Quest linked = questService.getQuest(questId);
@@ -30807,34 +30811,52 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    /** Раздел «🆕 Регистрации»: последние 30 регистраций, новые (непрочитанные) помечены 🆕. */
+    private static final int REGISTRATIONS_PAGE_SIZE = 15;
+
+    /** Раздел «🆕 Регистрации»: список по 15 записей на странице (время, ник, TG ID), новые (непрочитанные) помечены 🆕. */
     private void sendAdminRegistrations(AppUser admin) {
+        sendAdminRegistrations(admin, 0);
+    }
+
+    private void sendAdminRegistrations(AppUser admin, int requestedPage) {
+        long total = registrationNoticeRepository.count();
+        int totalPages = Math.max(1, (int) Math.ceil(total / (double) REGISTRATIONS_PAGE_SIZE));
+        int page = Math.max(0, Math.min(requestedPage, totalPages - 1));
         List<ru.gamebot.platform.domain.model.RegistrationNotice> notices =
-                registrationNoticeRepository.findTop30ByOrderByCreatedAtDescIdDesc();
+                registrationNoticeRepository.findAllByOrderByCreatedAtDescIdDesc(
+                        org.springframework.data.domain.PageRequest.of(page, REGISTRATIONS_PAGE_SIZE)).getContent();
         long unseen = registrationNoticeRepository.countBySeenFalse();
         StringBuilder sb = new StringBuilder("🆕 <b>Регистрации</b>\n");
         sb.append("<i>Новых: ").append(unseen).append(" · всего игроков: ")
-                .append(userService.totalRegisteredUsers()).append("</i>\n\n");
+                .append(userService.totalRegisteredUsers()).append("</i>\n");
+        sb.append("Страница <b>").append(page + 1).append(" / ").append(totalPages).append("</b>\n\n");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (notices.isEmpty()) {
             sb.append("Пока никто не регистрировался с момента включения этого раздела.");
         }
         java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm");
         for (ru.gamebot.platform.domain.model.RegistrationNotice n : notices) {
-            String nick = n.getNickname() != null ? n.getNickname() : ("ID:" + n.getTelegramId());
+            String nick = n.getNickname() != null ? n.getNickname() : "—";
             sb.append(n.isSeen() ? "▫️ " : "🆕 ")
                     .append(n.getCreatedAt() != null ? n.getCreatedAt().format(fmt) : "—")
                     .append(" · <b>").append(escape(nick)).append("</b>")
-                    .append(" · ").append(escape(n.getCountry() != null ? n.getCountry() : "—"))
-                    .append(" · ").append(escape(n.getInterests() != null ? trim(n.getInterests(), 40) : "—"))
+                    .append(" · <code>").append(n.getTelegramId()).append("</code>")
                     .append("\n");
-            rows.add(List.of(keyboardFactory.callback(
-                    "👤 " + trim(nick, 28), "admin:user:view:" + n.getTelegramId() + ":0")));
         }
         if (unseen > 0) {
-            rows.add(0, List.of(keyboardFactory.callback("✅ Отметить прочитанными (" + unseen + ")", "admin:regs:read")));
+            rows.add(List.of(keyboardFactory.callback("✅ Отметить прочитанными (" + unseen + ")", "admin:regs:read")));
         }
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        List<InlineKeyboardButton> pagination = new ArrayList<>();
+        if (page > 0) {
+            pagination.add(keyboardFactory.callback("⬅️ Назад", "admin:regs:page:" + (page - 1)));
+        }
+        if (page < totalPages - 1) {
+            pagination.add(keyboardFactory.callback("➡️ Далее", "admin:regs:page:" + (page + 1)));
+        }
+        if (!pagination.isEmpty()) {
+            rows.add(pagination);
+        }
+        rows.add(List.of(keyboardFactory.callback("⬅️ В админку", "menu:admin"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(admin.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 

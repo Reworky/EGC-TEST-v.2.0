@@ -12,6 +12,8 @@ public interface RegistrationNoticeRepository extends JpaRepository<Registration
 
     List<RegistrationNotice> findTop30ByOrderByCreatedAtDescIdDesc();
 
+    org.springframework.data.domain.Page<RegistrationNotice> findAllByOrderByCreatedAtDescIdDesc(org.springframework.data.domain.Pageable pageable);
+
     @org.springframework.transaction.annotation.Transactional
     @Modifying
     @Query("update RegistrationNotice n set n.seen = true where n.seen = false")
