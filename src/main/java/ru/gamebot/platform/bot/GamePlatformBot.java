@@ -9167,8 +9167,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendResourceBanner(user.getTelegramId(), "sponsored_quests_banner.jpg",
                 "💼 <b>Спонсорские квесты</b>\n\n"
                         + prize
-                        + "🤝 Деньги спонсоров идут в фонд выплат, а от его размера зависит курс вывода для всех игроков.\n\n"
-                        + "<blockquote expandable>Спонсоры — одна из причин, по которой проект работает и платит вам реальные деньги. "
+                        + "<blockquote expandable>🤝 Деньги спонсоров идут в фонд выплат, а от его размера зависит курс вывода для всех игроков.\n\n"
+                        + "Спонсоры — одна из причин, по которой проект работает и платит вам реальные деньги. "
                         + "Чем лояльнее вы относитесь к таким квестам, тем стабильнее проект может выплачивать вам дальше. "
                         + "Чаще заглядывайте сюда и выполняйте задания: чем больше спонсоров мы привлечём вместе, тем выгоднее будет курс.</blockquote>\n\n"
                         + "Выберите тип задания:",
@@ -9207,6 +9207,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // У партнёрского квеста «ОТП Карта» в списке своя подпись кнопки (как в рекламе банка: «получи 1 000 ₽»), название квеста длиннее и обрезалось на 60 символах
             ru.gamebot.platform.service.PartnerMission listPm = ru.gamebot.platform.service.PartnerMissions.forQuest(q);
             String listLabel = listPm != null ? listPm.listLabel() : trim(q.getTitle(), 60);
+            // 17.11.2026 (владелец): на кнопке банка - итоговая сумма одним числом («ВТБ Киберкарта · 1 500 ₽»), без разбивки по частям. Т-Мобайл (бонусы на связь, не рубли) не трогаем
+            if (listPm != null && !"tmobile".equals(listPm.key())) {
+                long listSum = listPm.bankRewardRub() + listPm.clubRewardRub();
+                if (listSum > 0) listLabel = listLabel + " · " + fmtExc(listSum) + " ₽";
+            }
             buttons.add(keyboardFactory.callback(tag + listLabel, "quest:view:sponsored:all:" + q.getId()));
         }
         String legend = (anyInProgress || anyDone)
@@ -10588,7 +10593,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } else {
             session.getData().remove("pendingQuestTakePartnerId");
         }
-        String notice = user.isRegistrationCompleted()
+        boolean bankQuest = false;
+        try {
+            bankQuest = isMissionQuest(questService.getQuest(questId));
+        } catch (Exception ignored) {
+            // квест не нашёлся - обычный текст
+        }
+        String notice = bankQuest
+                ? "🎯 Чтобы взять этот квест и получить деньги на карту, сначала подпишись на канал — это займёт 10 секунд."
+                : user.isRegistrationCompleted()
                 ? "⚠️ Похоже, вы отписались от канала. Подпишитесь снова, чтобы продолжить брать квесты."
                 : user.getCompletedQuests() > 0
                 ? "🎉 <b>Первая награда твоя!</b> Чтобы брать следующие квесты, подпишись на канал — это займёт 10 секунд."
