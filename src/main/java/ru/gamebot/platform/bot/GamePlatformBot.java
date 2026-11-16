@@ -20045,6 +20045,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     msg.setChatId(requiredChannelChatId());
                     msg.setText(text);
                     msg.setParseMode("HTML");
+                    InlineKeyboardMarkup summaryKeyboard = startEarningKeyboard();
+                    if (summaryKeyboard != null) msg.setReplyMarkup(summaryKeyboard);
                     execute(msg);
                 } catch (Exception e) {
                     log.error("Failed to post approved weekly review summary to channel", e);
@@ -20125,6 +20127,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
+    /** Кнопка «Начать зарабатывать с EGC» -> бот, под отзывами и сводкой отзывов в канале; null, если имя бота не задано. */
+    private InlineKeyboardMarkup startEarningKeyboard() {
+        String botUsername = appProperties.getBotUsername();
+        if (botUsername == null || botUsername.isBlank()) return null;
+        return keyboardFactory.rowsLayout(List.of(List.of(
+                keyboardFactory.url("Начать зарабатывать с EGC", "https://t.me/" + botUsername.replace("@", "").trim()))));
+    }
+
     private void publishReviewToChannel(BotReview review) {
         String channel = appProperties.getPayoutChannelUsername();
         if (channel == null || channel.isBlank()) return;
@@ -20144,12 +20154,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         String text = sb.toString();
         // Кнопка под каждым опубликованным отзывом: «Начать зарабатывать с EGC» -> бот (16.11.2026, владелец)
-        InlineKeyboardMarkup reviewKeyboard = null;
-        String botUsername = appProperties.getBotUsername();
-        if (botUsername != null && !botUsername.isBlank()) {
-            reviewKeyboard = keyboardFactory.rowsLayout(List.of(List.of(
-                    keyboardFactory.url("Начать зарабатывать с EGC", "https://t.me/" + botUsername.replace("@", "").trim()))));
-        }
+        InlineKeyboardMarkup reviewKeyboard = startEarningKeyboard();
         try {
             org.telegram.telegrambots.meta.api.objects.Message sent;
             if (review.getPhotoFileId() != null) {
