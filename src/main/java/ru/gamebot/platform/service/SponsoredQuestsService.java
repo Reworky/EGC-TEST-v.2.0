@@ -60,7 +60,7 @@ public class SponsoredQuestsService {
         long sum = 0;
         for (Quest q : quests) {
             PartnerMission pm = PartnerMissions.forQuest(q);
-            if (pm != null) sum += pm.bankRewardRub();
+            if (pm != null) sum += pm.bankRewardRub() + pm.clubRewardRub();
         }
         return sum;
     }

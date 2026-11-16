@@ -435,8 +435,8 @@ public class QuestController {
                     // Квест банка у менеджера (как GamePlatformBot.isManagerFlowMission): без отчётов, у ОТП сразу ссылка на заявку и кнопка менеджеру
                     if (detailPm != null && latest.getMissionStep() <= 1 && latest.getCardActivatedOn() == null && latest.getPurchaseReportedOn() == null) {
                         builder.partnerManagerFlow(true);
-                        if ("otp".equals(detailPm.key())) builder.partnerApplyUrl(ru.gamebot.platform.service.PartnerMissions.OTP_APPLY_LINK);
-                        String need = "otp".equals(detailPm.key()) ? "помогите с оформлением карты" : "расскажите, что делать, пришлите ссылку";
+                        if (detailPm.applyLink() != null) builder.partnerApplyUrl(detailPm.applyLink());
+                        String need = detailPm.applyLink() != null ? "помогите с оформлением карты" : "расскажите, что делать, пришлите ссылку";
                         String text = ru.gamebot.platform.service.ManagerMessage.buildSimple(user, "Вопрос по квесту «Миссия: " + detailPm.missionTitle() + "»", need);
                         builder.partnerManagerUrl(ru.gamebot.platform.service.ManagerMessage.link(appProperties.getSupportUsername(), text));
                     }

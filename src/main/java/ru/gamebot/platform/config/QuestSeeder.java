@@ -2375,6 +2375,55 @@ public class QuestSeeder implements CommandLineRunner {
             questRepository.save(otpCard);
             log.info("[QuestSeeder] Created sponsored quest: ОТП Карта, places {}", OTP_CARD_PLACES);
         }
+        // ── Партнёрская миссия «ВТБ Киберкарта», 16.11.2026 (владелец): дебетовая карта, банк платит 1 000 ₽ после трат на 1 000 ₽, клуб добавляет 500 ₽ на карту лично (вручную менеджером); 50 мест;
+        // без статуса партнёра; активна сразу. Тексты и числа миссии - в PartnerMissions.VTB. Создаётся один раз (дальше правки только из админки).
+        ru.gamebot.platform.service.PartnerMission vtb = ru.gamebot.platform.service.PartnerMissions.VTB;
+        if (questRepository.findFirstByTitleAndGameName(vtb.questTitle(), vtb.gameName()).isEmpty()) {
+            Quest vtbQuest = new Quest();
+            vtbQuest.setGameName(vtb.gameName());
+            vtbQuest.setTitle(vtb.questTitle());
+            vtbQuest.setPlatform("Онлайн");
+            vtbQuest.setDurationDays(60);
+            vtbQuest.setDurationText("60 дней");
+            vtbQuest.setRewardXp(0);
+            vtbQuest.setRewardCoins((int) vtb.rewardExc());
+            vtbQuest.setDescription("Награда за квест:\n"
+                    + "✅ 1 000 ₽ от банка за оформление карты\n"
+                    + "✅ 500 ₽ на карту лично от клуба\n"
+                    + "✅ И множество других бонусов от банка\n\n"
+                    + "🔒 Паспорт, коды из СМС и номер карты нам не нужны.\n\n"
+                    + "Как это работает:");
+            vtbQuest.setInstruction("1️⃣ Оформи заявку на бесплатную карту онлайн\n"
+                    + "После «Взять» появится кнопка «Оформить карту» со ссылкой на онлайн-заявку.\n"
+                    + "Заявка должна быть оформлена именно по этой ссылке, иначе банк не выплатит бонус. Перед заявкой отключи VPN и прокси: с ними банк может не засчитать заявку. "
+                    + "Оформление, обслуживание и доставка карты курьером бесплатные, доставка работает в регионах присутствия банка. "
+                    + "Подходит, если тебе 18+, ты живёшь в России, у тебя паспорт РФ и ты ещё не был клиентом Банка ВТБ.\n\n"
+                    + "2️⃣ Потрать картой 1 000 ₽\n"
+                    + "Когда курьер привезёт карту, активируй её в приложении банка. В течение 30 дней после активации оплати картой покупки на 1 000 ₽ в сумме: хватит одной покупки или нескольких, как удобно.\n\n"
+                    + "Не засчитывается банком: переводы и пополнение кошельков, снятие наличных, связь и интернет, ЖКХ, страховки, налоги и госуслуги, благотворительность, азартные игры, брокеры и ломбарды.\n\n"
+                    + "3️⃣ Получи 1 000 ₽ от банка\n"
+                    + "Банк отправит бонус на твою карту в течение 30 дней после трат.\n\n"
+                    + "4️⃣ Пришли подтверждение нашему менеджеру\n"
+                    + "Когда деньги придут, напиши менеджеру: он проверит выплату.\n\n"
+                    + "5️⃣ Получи 500 ₽ от клуба\n"
+                    + "После проверки менеджер переведёт тебе 500 ₽ на карту лично от клуба.");
+            vtbQuest.setRequirements("ℹ️ Кому подходит\n"
+                    + "Тебе 18+, ты живёшь в России, у тебя паспорт РФ, и ты ещё не был клиентом Банка ВТБ. Карту привозит курьер в регионах присутствия банка. "
+                    + "Условия и бонусы определяет банк, оформив карту, ты с ними согласен.");
+            vtbQuest.setModeratorChecklist("1️⃣ Скриншот 1: Киберкарта в приложении ВТБ, оформлена недавно, номера закрыты.\n"
+                    + "2️⃣ Скриншот 2: «Детали операции»: покупки в сумме от 1 000 ₽ (не переводы, не пополнение кошельков, не снятие наличных, не связь/ЖКХ/брокеры/азартные игры), статус не «В обработке».\n"
+                    + "3️⃣ Траты сделаны в течение 30 дней после активации карты.\n"
+                    + "4️⃣ Номер счёта и карты закрыты.\n"
+                    + "Скриншот не по делу - «Вернуть на доработку». Чужие или случайные картинки - «Отклонить».");
+            vtbQuest.setParticipantLimit(50);
+            vtbQuest.setOneTimePerAccount(true);
+            vtbQuest.setSponsored(true);
+            vtbQuest.setActive(true);
+            vtbQuest.setCouncilOnly(false);
+            vtbQuest.setCreatedAt(LocalDateTime.now());
+            questRepository.save(vtbQuest);
+            log.info("[QuestSeeder] Created partner quest: ВТБ Киберкарта");
+        }
         // ── Партнёрская миссия «Т-Банк Black» (приведи друга на Black), 04.11.2026 ──
         // Владелец 04.11.2026 решил запускать сразу (по правилам, присланным поддержкой банка; ноябрьскую версию PDF не искали): квест создаётся активным. Тексты и числа миссии - в PartnerMissions.T_BLACK.
         ru.gamebot.platform.service.PartnerMission tBlack = ru.gamebot.platform.service.PartnerMissions.T_BLACK;
@@ -2628,7 +2677,7 @@ public class QuestSeeder implements CommandLineRunner {
             for (Quest hq : questRepository.findAll()) {
                 if (!(hq.isSponsored() || hq.isExternalAutoApprove()) || !hq.isActive()) continue;
                 ru.gamebot.platform.service.PartnerMission hpm = ru.gamebot.platform.service.PartnerMissions.forQuest(hq);
-                if (hpm != null && "otp".equals(hpm.key())) continue;
+                if (hpm != null && ("otp".equals(hpm.key()) || "vtb".equals(hpm.key()))) continue;
                 hq.setActive(false);
                 questRepository.save(hq);
                 hiddenTitles.add(hq.getTitle());

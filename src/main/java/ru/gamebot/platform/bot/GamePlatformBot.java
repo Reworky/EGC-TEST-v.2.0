@@ -6005,7 +6005,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         String adminWho = escape(String.valueOf(target.getNickname())) + (target.getTelegramUsername() == null || target.getTelegramUsername().isBlank() ? "" : " @" + escape(target.getTelegramUsername().replace("@", ""))) + " (" + targetId + ")";
         sendText(admin.getTelegramId(), itemPayout
-                ? "✅ Игроку " + adminWho + " включён партнёрский статус и разово открыт вывод.\n\n🎁 <b>Не забудьте отправить ему " + escape(pm.bonusItem()) + "</b>: EXC не начислялись."
+                ? "✅ Игроку " + adminWho + (grantsPartner ? " включён партнёрский статус и разово открыт вывод." : " отмечена выплата банка.") + "\n\n🎁 <b>Не забудьте отправить ему " + escape(pm.bonusItem()) + "</b>: EXC не начислялись."
                     + (!grantsPartner || missionMarked ? "" : "\n⚠️ Одобренной заявки по «" + escape(pm.shortTitle()) + "» у игрока нет: бейдж и «финал» миссии не отмечены.")
                 : "✅ Игроку " + adminWho + " начислено " + fmtExc(amount)
                 + (grantsPartner ? " EXC и разово открыт вывод на эту сумму." : " EXC (квест не даёт партнёрских привилегий: запас вывода и бейдж не выдаются).")
@@ -7155,7 +7155,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String reward = "+" + pm.bankRewardRub() + " ₽ и " + bonusText(pm, sub);
             String head = "Хочу выполнить квест «Миссия: " + pm.missionTitle() + "»";
             String need = "расскажите, что делать, пришлите ссылку для оформления карты";
-            boolean otpNudge = "otp".equals(pm.key());
+            boolean otpNudge = pm.applyLink() != null;
             if (otpNudge) {
                 head = "Вопрос по квесту «Миссия: " + pm.missionTitle() + "»";
                 need = "помогите с оформлением карты";
@@ -7167,9 +7167,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 text = switch (event.getKind()) {
                     case ru.gamebot.platform.event.PartnerQuestNudgeEvent.KIND_ASK -> "Как дела с картой? 💳\nОформи заявку по ссылке, если ещё не сделал(а). Если что-то не получается, напиши менеджеру, он подскажет.";
                     case ru.gamebot.platform.event.PartnerQuestNudgeEvent.KIND_LAST -> "Квест на карту ещё ждёт тебя: " + reward + ". Оформим заявку?";
-                    default -> "💳 <b>Ты взял квест на " + reward + "</b>\nОстался один шаг: оформи заявку на карту по ссылке и выбери доставку курьером.";
+                    default -> "💳 <b>Ты взял квест на " + reward + "</b>\nОстался один шаг: оформи заявку на карту по ссылке" + ("otp".equals(pm.key()) ? " и выбери доставку курьером." : ".");
                 };
-                rows.add(List.of(keyboardFactory.url("💳 Оформить карту", ru.gamebot.platform.service.PartnerMissions.OTP_APPLY_LINK)));
+                rows.add(List.of(keyboardFactory.url("💳 Оформить карту", pm.applyLink())));
                 rows.add(List.of(partnerManagerButton(pm, sub, "💬 Вопрос менеджеру", head, need)));
                 if (event.getKind() == ru.gamebot.platform.event.PartnerQuestNudgeEvent.KIND_LAST) {
                     rows.add(List.of(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + sub.getId())));
@@ -8563,6 +8563,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("wdrecreate", "[go]", "Вернуть EXC по всем висящим (ожидающим) заявкам на вывод и попросить игроков создать заявку заново (технический сбой). Без go - только предпросмотр"),
             new AdminCommand("otpbonus", "ID [сумма EXC] [повтор]", "Партнёрская выплата ОТП Карта: включить статус партнёра, один раз открыть вывод, отметить миссию выполненной (бейдж). Взявшим с 12.11.2026 EXC не начисляются (подарок Telegram Premium отправить вручную); взявшим раньше - по умолчанию 50 000 или 100 000 EXC. Повторно только со словом «повтор»"),
             new AdminCommand("tbbonus", "ID [сумма EXC] [повтор]", "Партнёрская выплата Т-Банк Black: начислить EXC (по умолчанию 25 000), открыть вывод на сумму, отметить миссию выполненной (бейдж). Повторно только со словом «повтор»"),
+            new AdminCommand("vtbbonus", "ID [повтор]", "Партнёрская выплата ВТБ Киберкарта: отметить, что банк выплатил, и напомнить отправить игроку 500 ₽ на карту от клуба (EXC не начисляются). Повторно только со словом «повтор»"),
             new AdminCommand("tmbonus", "ID [сумма EXC] [повтор]", "Партнёрская выплата Т-Мобайл SIM: начислить EXC (по умолчанию 100 000), открыть вывод на сумму, отметить миссию выполненной (бейдж). Повторно только со словом «повтор»"),
             new AdminCommand("otppilot", "[send] [N]", "«ОТП Карта»: показать игроков из России: сначала выводившие, затем активные за неделю (по умолчанию 20, до 1000) и текст приглашения; send - разослать им (один раз каждому)"),
             new AdminCommand("otpwait", "", "ОТП Карта: кто ждёт выплаты банка и кто нажал «Банк вернул мне 500 ₽» (видят и модераторы)"),
@@ -9055,7 +9056,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long sum = 0;
         for (Quest q : quests) {
             ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(q);
-            if (pm != null) sum += pm.bankRewardRub();
+            if (pm != null) sum += pm.bankRewardRub() + pm.clubRewardRub();
         }
         return sum;
     }
@@ -10126,12 +10127,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             banner = null;
         } else {
             // Короткий экран после «Взять» (владелец, 09.11): сумма и условия уже на карточке квеста, здесь только что делать дальше.
-            if ("otp".equals(pm.key())) {
-                // 15.11.2026 (владелец): у квеста ОТП ссылка на оформление - сразу здесь (без ожидания менеджера); менеджер - для вопросов
+            if (pm.applyLink() != null) {
+                // 15.11.2026 (владелец): у квеста ОТП (и ВТБ, 16.11.2026) ссылка на оформление - сразу здесь (без ожидания менеджера); менеджер - для вопросов
                 sb.append("🚀 <b>Квест взят!</b>\n\n🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")
-                        .append("Нажми «💳 Оформить карту»: откроется страница с онлайн-заявкой. В заявке выбери доставку курьером.\n\n")
+                        .append("Нажми «💳 Оформить карту»: откроется страница с онлайн-заявкой.")
+                        .append(pm.applyHint() != null ? " " + pm.applyHint() : "").append("\n\n")
                         .append("Если что-то непонятно, напиши менеджеру @").append(manager).append(".");
-                rows.add(List.of(keyboardFactory.url("💳 Оформить карту", ru.gamebot.platform.service.PartnerMissions.OTP_APPLY_LINK)));
+                rows.add(List.of(keyboardFactory.url("💳 Оформить карту", pm.applyLink())));
                 rows.add(List.of(partnerManagerButton(pm, sub, "💬 Вопрос менеджеру", "Вопрос по квесту «Миссия: " + pm.missionTitle() + "»", "помогите с оформлением карты")));
             } else {
                 sb.append("🚀 <b>Квест взят!</b>\n\n🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")

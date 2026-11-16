@@ -112,7 +112,7 @@ function SponsorDescription({ text, mission, instruction, requirements }) {
   );
 }
 
-const PARTNER_BANNERS = { otp: '/sponsored/otp.jpg', tblack: '/sponsored/tblack.jpg', tmobile: '/sponsored/tmobile.jpg' };
+const PARTNER_BANNERS = { otp: '/sponsored/otp.jpg', vtb: '/sponsored/vtb.jpg', tblack: '/sponsored/tblack.jpg', tmobile: '/sponsored/tmobile.jpg' };
 
 function LinkPill({ url }) {
   const [copied, setCopied] = useState(false);
