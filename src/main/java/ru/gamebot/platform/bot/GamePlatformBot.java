@@ -5656,7 +5656,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "<b>Для какой игры хочешь взять квест?👇</b>";
         // 15.11.2026 (владелец): у приветствия после регистрации - свой баннер «Добро пожаловать в EGC» (Экси у входа в игровую комнату).
         // С 17.11.2026 баннер и при возврате (не только fresh): экран выбора пути <-> выбор игры правятся на месте
-        sendResourceBanner(user.getTelegramId(), "welcome_start_banner.jpg", pickerText, keyboardFactory.rowsLayout(rows));
+        // Картинка раздела «Игровые квесты» (все игры веером): экран «Играть» - это тот же выбор игры (владелец 17.11.2026)
+        sendResourceBanner(user.getTelegramId(), "game_quests_banner.jpg", pickerText, keyboardFactory.rowsLayout(rows));
     }
 
     private List<String> starterTitles(StarterGame g) {
