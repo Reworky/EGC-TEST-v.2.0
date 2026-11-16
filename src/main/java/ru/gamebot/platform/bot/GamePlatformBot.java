@@ -7268,7 +7268,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     text = pm.deadlineReminder().replace("{days}", String.valueOf(days)).replace("{win}", ruDayMonth(event.getDate()));
                 }
                 case ru.gamebot.platform.event.OtpMissionReminderEvent.KIND_BANK_DAY -> {
-                    text = "💰 <b>Банк мог уже выплатить бонус.</b> " + pm.bankDayCheck() + "\n\nКогда банк заплатит клубу, мы " + bonusGive(pm, remSub) + " и напишем тебе.";
+                    text = pm.bankDayReminder() != null
+                            ? pm.bankDayReminder().replace("{bonusGive}", bonusGive(pm, remSub))
+                            : "💰 <b>Банк мог уже выплатить бонус.</b> " + pm.bankDayCheck() + "\n\nКогда банк заплатит клубу, мы " + bonusGive(pm, remSub) + " и напишем тебе.";
                     keyboard = keyboardFactory.rowsLayout(List.of(
                             List.of(keyboardFactory.callback(pm.bankClaimButton(), "mission:bankpaid:" + event.getSubmissionId() + ":4"))));
                 }
@@ -8564,6 +8566,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("otpbonus", "ID [сумма EXC] [повтор]", "Партнёрская выплата ОТП Карта: включить статус партнёра, один раз открыть вывод, отметить миссию выполненной (бейдж). Взявшим с 12.11.2026 EXC не начисляются (подарок Telegram Premium отправить вручную); взявшим раньше - по умолчанию 50 000 или 100 000 EXC. Повторно только со словом «повтор»"),
             new AdminCommand("tbbonus", "ID [сумма EXC] [повтор]", "Партнёрская выплата Т-Банк Black: начислить EXC (по умолчанию 25 000), открыть вывод на сумму, отметить миссию выполненной (бейдж). Повторно только со словом «повтор»"),
             new AdminCommand("vtbbonus", "ID [повтор]", "Партнёрская выплата ВТБ Киберкарта: отметить, что банк выплатил, и напомнить отправить игроку 500 ₽ на карту от клуба (EXC не начисляются). Повторно только со словом «повтор»"),
+            new AdminCommand("alfabonus", "ID [повтор]", "Выплата Альфа-Банк (Апельсиновая карта): отметить, что банк подтвердил карту, и напомнить отправить игроку 300 ₽ на карту от клуба (EXC не начисляются). Повторно только со словом «повтор»"),
             new AdminCommand("tmbonus", "ID [сумма EXC] [повтор]", "Партнёрская выплата Т-Мобайл SIM: начислить EXC (по умолчанию 100 000), открыть вывод на сумму, отметить миссию выполненной (бейдж). Повторно только со словом «повтор»"),
             new AdminCommand("otppilot", "[send] [N]", "«ОТП Карта»: показать игроков из России: сначала выводившие, затем активные за неделю (по умолчанию 20, до 1000) и текст приглашения; send - разослать им (один раз каждому)"),
             new AdminCommand("otpwait", "", "ОТП Карта: кто ждёт выплаты банка и кто нажал «Банк вернул мне 500 ₽» (видят и модераторы)"),

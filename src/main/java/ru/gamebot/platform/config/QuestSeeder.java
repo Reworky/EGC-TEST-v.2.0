@@ -2424,6 +2424,53 @@ public class QuestSeeder implements CommandLineRunner {
             questRepository.save(vtbQuest);
             log.info("[QuestSeeder] Created partner quest: ВТБ Киберкарта");
         }
+        // ── Партнёрская миссия «Альфа-Банк Апельсиновая карта», 16.11.2026 (владелец): банк клиенту не платит, клуб платит 300 ₽ на карту лично (вручную менеджером) после подтверждения банка;
+        // 50 мест; без статуса партнёра; активна сразу. Тексты и числа миссии - в PartnerMissions.ALFA. Создаётся один раз (дальше правки только из админки).
+        ru.gamebot.platform.service.PartnerMission alfa = ru.gamebot.platform.service.PartnerMissions.ALFA;
+        if (questRepository.findFirstByTitleAndGameName(alfa.questTitle(), alfa.gameName()).isEmpty()) {
+            Quest alfaQuest = new Quest();
+            alfaQuest.setGameName(alfa.gameName());
+            alfaQuest.setTitle(alfa.questTitle());
+            alfaQuest.setPlatform("Онлайн");
+            alfaQuest.setDurationDays(60);
+            alfaQuest.setDurationText("60 дней");
+            alfaQuest.setRewardXp(0);
+            alfaQuest.setRewardCoins((int) alfa.rewardExc());
+            alfaQuest.setDescription("Награда за квест:\n"
+                    + "✅ 300 ₽ на карту лично от клуба\n"
+                    + "✅ Кэшбэк до 7% Апельсинками в Пятёрочке и Перекрёстке\n"
+                    + "✅ Карта бесплатная\n\n"
+                    + "🔒 Паспорт, коды из СМС и номер карты нам не нужны.\n\n"
+                    + "Как это работает:");
+            alfaQuest.setInstruction("1️⃣ Оформи заявку на бесплатную карту онлайн\n"
+                    + "После «Взять» появится кнопка «Оформить карту» со ссылкой на онлайн-заявку.\n"
+                    + "Заявка должна быть оформлена именно по этой ссылке, иначе банк не засчитает карту. Перед заявкой отключи VPN и прокси: с ними заявка может не засчитаться. "
+                    + "Подходит, если тебе 18+, ты гражданин РФ, у тебя есть телефон и у тебя не было счёта в Альфа-Банке последние 90 дней.\n\n"
+                    + "2️⃣ Оплати картой любую покупку\n"
+                    + "Когда получишь карту, в течение 30 дней оплати ею любую покупку: магазин, кафе, маркетплейс.\n\n"
+                    + "Не засчитывается банком: пополнение карты, снятие наличных, переводы (в том числе на электронные кошельки), оплата связи и коммунальных услуг, казино, ставки, лотереи, "
+                    + "драгоценные металлы, коммерческие операции и возвраты.\n\n"
+                    + "3️⃣ Пришли подтверждение менеджеру\n"
+                    + "После покупки напиши менеджеру: он проверит карту и покупку.\n\n"
+                    + "4️⃣ Получи 300 ₽ от клуба\n"
+                    + "Банк подтверждает карту в течение 30 дней после покупки. После подтверждения менеджер переведёт тебе 300 ₽ на карту лично от клуба.");
+            alfaQuest.setRequirements("ℹ️ Кому подходит\n"
+                    + "Тебе 18+, ты гражданин РФ, у тебя есть телефон и не было счёта в Альфа-Банке последние 90 дней. "
+                    + "Банк клиенту денег за карту не платит: 300 ₽ платит клуб. Условия карты определяет банк, оформив карту, ты с ними согласен.");
+            alfaQuest.setModeratorChecklist("1️⃣ Скриншот 1: Апельсиновая карта в приложении Альфа-Банка, оформлена недавно, номера закрыты.\n"
+                    + "2️⃣ Скриншот 2: «Детали операции»: обычная покупка (не пополнение, не снятие наличных, не перевод/кошелёк, не связь/ЖКХ, не казино/ставки/лотерея), статус не «В обработке».\n"
+                    + "3️⃣ Покупка сделана в течение 30 дней после получения карты.\n"
+                    + "4️⃣ Номер счёта и карты закрыты.\n"
+                    + "Скриншот не по делу - «Вернуть на доработку». Чужие или случайные картинки - «Отклонить».");
+            alfaQuest.setParticipantLimit(50);
+            alfaQuest.setOneTimePerAccount(true);
+            alfaQuest.setSponsored(true);
+            alfaQuest.setActive(true);
+            alfaQuest.setCouncilOnly(false);
+            alfaQuest.setCreatedAt(LocalDateTime.now());
+            questRepository.save(alfaQuest);
+            log.info("[QuestSeeder] Created partner quest: Альфа-Банк Апельсиновая карта");
+        }
         // ── Партнёрская миссия «Т-Банк Black» (приведи друга на Black), 04.11.2026 ──
         // Владелец 04.11.2026 решил запускать сразу (по правилам, присланным поддержкой банка; ноябрьскую версию PDF не искали): квест создаётся активным. Тексты и числа миссии - в PartnerMissions.T_BLACK.
         ru.gamebot.platform.service.PartnerMission tBlack = ru.gamebot.platform.service.PartnerMissions.T_BLACK;
@@ -2677,7 +2724,7 @@ public class QuestSeeder implements CommandLineRunner {
             for (Quest hq : questRepository.findAll()) {
                 if (!(hq.isSponsored() || hq.isExternalAutoApprove()) || !hq.isActive()) continue;
                 ru.gamebot.platform.service.PartnerMission hpm = ru.gamebot.platform.service.PartnerMissions.forQuest(hq);
-                if (hpm != null && ("otp".equals(hpm.key()) || "vtb".equals(hpm.key()))) continue;
+                if (hpm != null && ("otp".equals(hpm.key()) || "vtb".equals(hpm.key()) || "alfa".equals(hpm.key()))) continue;
                 hq.setActive(false);
                 questRepository.save(hq);
                 hiddenTitles.add(hq.getTitle());
