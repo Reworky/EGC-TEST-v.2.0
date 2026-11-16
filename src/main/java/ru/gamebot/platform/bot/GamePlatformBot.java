@@ -20143,6 +20143,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("\n\n\"").append(escape(reviewText)).append("\"");
         }
         String text = sb.toString();
+        // Кнопка под каждым опубликованным отзывом: «Начать зарабатывать с EGC» -> бот (16.11.2026, владелец)
+        InlineKeyboardMarkup reviewKeyboard = null;
+        String botUsername = appProperties.getBotUsername();
+        if (botUsername != null && !botUsername.isBlank()) {
+            reviewKeyboard = keyboardFactory.rowsLayout(List.of(List.of(
+                    keyboardFactory.url("Начать зарабатывать с EGC", "https://t.me/" + botUsername.replace("@", "").trim()))));
+        }
         try {
             org.telegram.telegrambots.meta.api.objects.Message sent;
             if (review.getPhotoFileId() != null) {
@@ -20151,12 +20158,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 photo.setPhoto(new InputFile(review.getPhotoFileId()));
                 photo.setCaption(text);
                 photo.setParseMode("HTML");
+                if (reviewKeyboard != null) photo.setReplyMarkup(reviewKeyboard);
                 sent = execute(photo);
             } else {
                 SendMessage msg = new SendMessage();
                 msg.setChatId(channel);
                 msg.setText(text);
                 msg.setParseMode("HTML");
+                if (reviewKeyboard != null) msg.setReplyMarkup(reviewKeyboard);
                 sent = execute(msg);
             }
             review.setPublishedMessageId(sent.getMessageId());
