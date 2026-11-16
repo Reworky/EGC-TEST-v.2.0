@@ -204,10 +204,10 @@ public class GemPurchaseService {
      *  XP = round(цена × 0.68) - те же формулы, что у игровой валюты. Ключ пакета = сумма пополнения в рублях (gems = та же сумма, label - название);
      *  реселлер принимает любую сумму от 100 до 12 000 ₽, в каталоге только ходовые номиналы. costRub() = закупка (EGC Pass). Нужен только логин Steam. */
     public static final List<GemPackage> STEAM_TOPUP_PACKAGES = List.of(
-            new GemPackage("100", 100, 127, 86, "Пополнение Steam 100 ₽"),
-            new GemPackage("200", 200, 255, 173, "Пополнение Steam 200 ₽"),
-            new GemPackage("500", 500, 637, 433, "Пополнение Steam 500 ₽"),
-            new GemPackage("1000", 1_000, 1_274, 866, "Пополнение Steam 1000 ₽")
+            new GemPackage("100", 100, 127, 86, "Steam 100 ₽"),
+            new GemPackage("200", 200, 255, 173, "Steam 200 ₽"),
+            new GemPackage("500", 500, 637, 433, "Steam 500 ₽"),
+            new GemPackage("1000", 1_000, 1_274, 866, "Steam 1000 ₽")
     );
 
     /** gameKey (purchaseGroup, например "brawl_stars"/"clash_royale") -> (отображаемое имя игры,
