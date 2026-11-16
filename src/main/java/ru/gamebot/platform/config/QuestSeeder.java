@@ -2471,6 +2471,51 @@ public class QuestSeeder implements CommandLineRunner {
             questRepository.save(alfaQuest);
             log.info("[QuestSeeder] Created partner quest: Альфа-Банк Апельсиновая карта");
         }
+        // ── Партнёрская миссия «Фора-Банк Все включено», 16.11.2026 (владелец): банк клиенту не платит, клуб платит 400 ₽ на карту лично (вручную менеджером) после подтверждения банка;
+        // 50 мест; без статуса партнёра; активна сразу. Тексты и числа миссии - в PartnerMissions.FORA. Создаётся один раз (дальше правки только из админки).
+        ru.gamebot.platform.service.PartnerMission fora = ru.gamebot.platform.service.PartnerMissions.FORA;
+        if (questRepository.findFirstByTitleAndGameName(fora.questTitle(), fora.gameName()).isEmpty()) {
+            Quest foraQuest = new Quest();
+            foraQuest.setGameName(fora.gameName());
+            foraQuest.setTitle(fora.questTitle());
+            foraQuest.setPlatform("Онлайн");
+            foraQuest.setDurationDays(60);
+            foraQuest.setDurationText("60 дней");
+            foraQuest.setRewardXp(0);
+            foraQuest.setRewardCoins((int) fora.rewardExc());
+            foraQuest.setDescription("Награда за квест:\n"
+                    + "✅ 400 ₽ на карту лично от клуба\n"
+                    + "✅ Кэшбэк рублями от банка до 10 000 ₽ в месяц\n"
+                    + "✅ Первый месяц обслуживания бесплатно\n\n"
+                    + "🔒 Паспорт, коды из СМС и номер карты нам не нужны.\n\n"
+                    + "Как это работает:");
+            foraQuest.setInstruction("1️⃣ Оформи заявку на карту онлайн\n"
+                    + "После «Взять» появится кнопка «Оформить карту» со ссылкой на онлайн-заявку.\n"
+                    + "Заявка должна быть оформлена именно по этой ссылке, иначе банк не засчитает карту. Перед заявкой отключи VPN и прокси: с ними заявка может не засчитаться. "
+                    + "Карту можно получить в офисе банка или курьером, где доставка доступна. Подходит, если тебе 18+ и у тебя паспорт РФ.\n\n"
+                    + "2️⃣ Активируй карту и оплати покупку от 500 ₽\n"
+                    + "В течение 30 дней после активации оплати картой одну покупку от 500 ₽. Переводы, снятие наличных и пополнение кошельков не считаем.\n\n"
+                    + "3️⃣ Пришли подтверждение менеджеру\n"
+                    + "После покупки напиши менеджеру: он проверит карту и покупку.\n\n"
+                    + "4️⃣ Получи 400 ₽ от клуба\n"
+                    + "Банк подтверждает карту в течение 30 дней после покупки. Потом менеджер переведёт 400 ₽ на карту.");
+            foraQuest.setRequirements("ℹ️ Кому подходит\n"
+                    + "Тебе 18+ и у тебя паспорт РФ. Карту выдают в офисе банка или курьером, где доставка доступна. "
+                    + "Банк клиенту денег за карту не платит: 400 ₽ платит клуб. Условия обслуживания и кэшбэка определяет банк, оформив карту, ты с ними согласен.");
+            foraQuest.setModeratorChecklist("1️⃣ Скриншот 1: карта «Все включено» в приложении Фора-Банка, оформлена недавно и активна, номера закрыты.\n"
+                    + "2️⃣ Скриншот 2: «Детали операции»: покупка от 500 ₽ (не перевод, не снятие наличных, не пополнение кошелька), статус не «В обработке».\n"
+                    + "3️⃣ Покупка сделана в течение 30 дней после активации карты.\n"
+                    + "4️⃣ Номер счёта и карты закрыты.\n"
+                    + "Скриншот не по делу - «Вернуть на доработку». Чужие или случайные картинки - «Отклонить».");
+            foraQuest.setParticipantLimit(50);
+            foraQuest.setOneTimePerAccount(true);
+            foraQuest.setSponsored(true);
+            foraQuest.setActive(true);
+            foraQuest.setCouncilOnly(false);
+            foraQuest.setCreatedAt(LocalDateTime.now());
+            questRepository.save(foraQuest);
+            log.info("[QuestSeeder] Created partner quest: Фора-Банк Все включено");
+        }
         // ── Партнёрская миссия «Т-Банк Black» (приведи друга на Black), 04.11.2026 ──
         // Владелец 04.11.2026 решил запускать сразу (по правилам, присланным поддержкой банка; ноябрьскую версию PDF не искали): квест создаётся активным. Тексты и числа миссии - в PartnerMissions.T_BLACK.
         ru.gamebot.platform.service.PartnerMission tBlack = ru.gamebot.platform.service.PartnerMissions.T_BLACK;
@@ -2724,7 +2769,7 @@ public class QuestSeeder implements CommandLineRunner {
             for (Quest hq : questRepository.findAll()) {
                 if (!(hq.isSponsored() || hq.isExternalAutoApprove()) || !hq.isActive()) continue;
                 ru.gamebot.platform.service.PartnerMission hpm = ru.gamebot.platform.service.PartnerMissions.forQuest(hq);
-                if (hpm != null && ("otp".equals(hpm.key()) || "vtb".equals(hpm.key()) || "alfa".equals(hpm.key()))) continue;
+                if (hpm != null && ("otp".equals(hpm.key()) || "vtb".equals(hpm.key()) || "alfa".equals(hpm.key()) || "fora".equals(hpm.key()))) continue;
                 hq.setActive(false);
                 questRepository.save(hq);
                 hiddenTitles.add(hq.getTitle());
