@@ -424,6 +424,11 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest }) {
               : `🔓 Квесты уже выполнены, осталось подождать ${withdrawalWaitText(wallet)}. Вывод откроется автоматически.`}
           </div>
         )}
+        {wallet.withdrawalCodesNeed > 0 && wallet.withdrawalCodesHave < wallet.withdrawalCodesNeed && (
+          <div style={{ fontSize: 12, color: '#c4b5fd', marginTop: 10 }}>
+            🔑 Для вывода нужны коды дня: {wallet.withdrawalCodesHave} из {wallet.withdrawalCodesNeed} за последние 30 дней. Код выходит в канале, вводится в боте кнопкой «Код дня».
+          </div>
+        )}
         {wallet.coins < 5000 && (
           <div style={{ marginTop: 10 }}>
             <div style={{ fontSize: 12, color: '#c4b5fd', marginBottom: 4 }}>

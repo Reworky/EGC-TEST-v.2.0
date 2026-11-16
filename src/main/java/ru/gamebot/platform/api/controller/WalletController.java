@@ -44,6 +44,7 @@ public class WalletController {
     private final HealthRatioService healthRatioService;
     private final ExchangeRateService exchangeRateService;
     private final RewardService rewardService;
+    private final ru.gamebot.platform.service.DailyCodeGateService dailyCodeGate;
     private final GamePlatformBot gamePlatformBot;
 
     @Data
@@ -114,6 +115,8 @@ public class WalletController {
                 .withdrawalQuestsLeft(withdrawalProgress.questsLeft())
                 .withdrawalDaysLeft(withdrawalProgress.daysLeft())
                 .withdrawalHoursLeft(withdrawalProgress.hoursLeft())
+                .withdrawalCodesNeed(dailyCodeGate.required())
+                .withdrawalCodesHave((int) dailyCodeGate.codesInWindow(user.getId()))
                 .build());
     }
 

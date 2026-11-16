@@ -196,6 +196,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ClubActivityService clubActivityService;
     private final ru.gamebot.platform.service.ModeratorBonusService moderatorBonusService;
     private final ru.gamebot.platform.service.WeeklyGoalService weeklyGoalService;
+    private final ru.gamebot.platform.service.DailyCodeGateService dailyCodeGate;
     private final ru.gamebot.platform.service.GoldenHourService goldenHourService;
     private final ru.gamebot.platform.service.SeasonalEventService seasonalEventService;
     private final ru.gamebot.platform.service.PlatformPushService platformPushService;
@@ -582,6 +583,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (text != null && text.equals("/commands") && isEffectiveAdmin(user)) {
             sendAdminCommands(user);
+            return;
+        }
+
+        if (text != null && (text.equals("/codegate") || text.startsWith("/codegate ")) && isEffectiveAdmin(user)) {
+            handleCodeGateCommand(user, text.trim());
             return;
         }
 
@@ -7393,6 +7399,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "Минимум для вывода - " + fmtExc(min) + " EXC, осталось " + fmtExc(min - coins) + " EXC.";
         List<List<InlineKeyboardButton>> lockedRows = new ArrayList<>();
         addSponsoredPrizeRow(lockedRows, user);
+        if (dailyCodeGate.block(user) != null) {
+            lockedRows.add(List.of(keyboardFactory.callback("🔑 Код дня", "club:code")));
+        }
         lockedRows.add(List.of(keyboardFactory.callback("🎯 Играть", "quest:recommend")));
         lockedRows.add(List.of(keyboardFactory.callback("🛍️ Магазин", "menu:shop")));
         addPartnerRow(lockedRows, user, "bl");
@@ -8548,6 +8557,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("moder", "", "Включить роль модератора"),
             new AdminCommand("user", "", "Посмотреть бота глазами игрока"),
             new AdminCommand("commands", "", "Список админ-команд"),
+            new AdminCommand("codegate", "[N|0]", "Условие вывода: сколько кодов дня за 30 дней нужно игроку (по умолчанию 3; 0 - выключить). Без числа - показать текущее"),
             new AdminCommand("keys", "[off]", "Горячие клавиши: показать нижнюю клавиатуру (админ: Админ-панель; модератор: Центр модерации) или убрать её"),
             new AdminCommand("wdnudge", "test|send|stats", "Рассылка «вывод открыт» (A/B)"),
             new AdminCommand("pulsethr", "reset|log|КЛЮЧ ЗЕЛЁНЫЙ КРАСНЫЙ", "Пороги вкладки «Пульс проекта»: список, изменить, вернуть стартовые, журнал"),
@@ -8717,6 +8727,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    /** /codegate [N]: условие вывода «N кодов дня за 30 дней» (DailyCodeGateService). Без числа - текущее значение, 0 - выключить. */
+    private void handleCodeGateCommand(AppUser admin, String text) {
+        String[] p = text.split("\\s+");
+        StringBuilder sb = new StringBuilder("🔑 <b>Условие вывода: коды дня</b>\n\n");
+        if (p.length > 1) {
+            Long n = parseLong(p[1]);
+            if (n == null) {
+                sendText(admin.getTelegramId(), "⚠️ Формат: <code>/codegate 5</code> (0 - выключить)", null);
+                return;
+            }
+            int v = dailyCodeGate.setRequired(n.intValue());
+            sb.append("Установлено: <b>").append(v == 0 ? "условие выключено" : v + " за " + ru.gamebot.platform.service.DailyCodeGateService.WINDOW_DAYS + " дней").append("</b>.\n\n");
+        }
+        int need = dailyCodeGate.required();
+        sb.append("Сейчас: ").append(need == 0 ? "условие выключено" : "нужно <b>" + need + "</b> кодов дня за последние " + ru.gamebot.platform.service.DailyCodeGateService.WINDOW_DAYS + " дней")
+                .append(".\nЕсли без кодов: вывод закрыт любым способом (бот, мини-апп); экран «Вывод» показывает, сколько кодов уже есть.\n")
+                .append("Мой прогресс: ").append(dailyCodeGate.codesInWindow(admin.getId())).append(".\n")
+                .append("Изменить: <code>/codegate 5</code>, выключить: <code>/codegate 0</code>. Код дня выходит раз в ")
+                .append(ru.gamebot.platform.service.ClubActivityService.CODE_EVERY_DAYS).append(" дня после твоего одобрения черновика.");
+        sendText(admin.getTelegramId(), sb.toString(), null);
     }
 
     private void handleAdminHotkeysCommand(AppUser admin, String text) {

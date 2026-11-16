@@ -35,6 +35,7 @@ public class RewardService {
     private final AppUserRepository appUserRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final BonusCourseService bonusCourseService;
+    private final DailyCodeGateService dailyCodeGate;
 
     // ── Защита вывода от мультиаккаунтов (решение владельца 2026-10-03) ──
     /** Вывод открывается не раньше, чем через столько дней после регистрации... */
@@ -61,9 +62,12 @@ public class RewardService {
             int questsLeft = WITHDRAWAL_MIN_APPROVED_QUESTS - user.getCompletedQuests();
             missing.append("выполнить ещё ").append(questsLeft).append(" ").append(questsWord(questsLeft));
         }
-        if (missing.length() == 0) return null;
+        // 16.11.2026 (владелец): вывод открыт только при N кодах дня за 30 дней (DailyCodeGateService, N в настройке)
+        String codeBlock = dailyCodeGate.block(user);
+        if (missing.length() == 0) return codeBlock;
         return "Вывод открывается через " + WITHDRAWAL_MIN_ACCOUNT_AGE_DAYS + " дня после регистрации и после "
-                + WITHDRAWAL_MIN_APPROVED_QUESTS + " одобренных квестов.\nВам нужно: " + missing + ".";
+                + WITHDRAWAL_MIN_APPROVED_QUESTS + " одобренных квестов.\nВам нужно: " + missing + "."
+                + (codeBlock == null ? "" : "\n\n" + codeBlock);
     }
 
     /** Сколько осталось до открытия вывода по условиям «3 квеста и 3 дня»; 0/0 - условия выполнены (или вывод заморожен: подсказка про условия тогда не нужна). */
