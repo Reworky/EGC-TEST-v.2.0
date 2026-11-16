@@ -17289,18 +17289,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         backOrCancelKeyboard("admin:fin:add:" + finOrigin));
             }
             default -> {
-                if ("regs:clear".equals(action)) {
-                    registrationNoticeRepository.deleteAllInBatch();
-                    answer(callbackQuery.getId(), "Уведомления удалены");
-                    sendAdminRegistrations(user);
-                } else if (action.startsWith("regs:del:")) {
-                    Long noticeId = parseLong(action.substring("regs:del:".length()));
-                    if (noticeId != null) {
-                        registrationNoticeRepository.deleteById(noticeId);
-                    }
-                    answer(callbackQuery.getId(), "Удалено");
-                    sendAdminRegistrations(user);
-                } else if (action.startsWith("club:link:")) {
+                if (action.startsWith("club:link:")) {
                     Long questId = parseLong(action.substring("club:link:".length()));
                     try {
                         Quest linked = questService.getQuest(questId);
@@ -21638,8 +21627,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "players" -> {
                 title = "👥 <b>Игроки</b>";
                 rows.add(List.of(keyboardFactory.callback("👥 Пользователи", "admin:users:0")));
-                long unseenNew = registrationNoticeRepository.countBySeenFalse();
-                rows.add(List.of(keyboardFactory.callback(unseenNew > 0 ? "🆕 Новые игроки (" + unseenNew + ")" : "🆕 Новые игроки", "admin:regs")));
                 rows.add(List.of(keyboardFactory.callback("📡 Сейчас на платформе", "admin:live")));
                 rows.add(List.of(keyboardFactory.callback("⚔️ Состав отряда", "admin:squads:search")));
                 rows.add(List.of(keyboardFactory.callback("🏷️ Теги CoC/Clash Royale", "admin:clashtags")));
@@ -30825,7 +30812,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<ru.gamebot.platform.domain.model.RegistrationNotice> notices =
                 registrationNoticeRepository.findTop30ByOrderByCreatedAtDescIdDesc();
         long unseen = registrationNoticeRepository.countBySeenFalse();
-        StringBuilder sb = new StringBuilder("🆕 <b>Новые игроки</b> (уведомления о регистрации)\n");
+        StringBuilder sb = new StringBuilder("🆕 <b>Регистрации</b>\n");
         sb.append("<i>Новых: ").append(unseen).append(" · всего игроков: ")
                 .append(userService.totalRegisteredUsers()).append("</i>\n\n");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
@@ -30841,17 +30828,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     .append(" · ").append(escape(n.getCountry() != null ? n.getCountry() : "—"))
                     .append(" · ").append(escape(n.getInterests() != null ? trim(n.getInterests(), 40) : "—"))
                     .append("\n");
-            rows.add(List.of(
-                    keyboardFactory.callback("👤 " + trim(nick, 24), "admin:user:view:" + n.getTelegramId() + ":0"),
-                    keyboardFactory.callback("🗑", "admin:regs:del:" + n.getId())));
+            rows.add(List.of(keyboardFactory.callback(
+                    "👤 " + trim(nick, 28), "admin:user:view:" + n.getTelegramId() + ":0")));
         }
         if (unseen > 0) {
             rows.add(0, List.of(keyboardFactory.callback("✅ Отметить прочитанными (" + unseen + ")", "admin:regs:read")));
         }
-        if (!notices.isEmpty()) {
-            rows.add(List.of(keyboardFactory.callback("🗑 Удалить все уведомления", "admin:regs:clear")));
-        }
-        rows.add(List.of(keyboardFactory.callback("⬅️ К игрокам", "admin:grp:players"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:admin"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(admin.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
@@ -31033,7 +31016,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             long newRegs = registrationNoticeRepository.countBySeenFalse();
             rows.add(List.of(keyboardFactory.callback(newRegs > 0 ? "🆕 Регистрации (" + newRegs + ")" : "🆕 Регистрации", "admin:regs")));
             rows.add(List.of(
-                    keyboardFactory.callback(newRegs > 0 ? "👥 Игроки (" + newRegs + ")" : "👥 Игроки", "admin:grp:players"),
+                    keyboardFactory.callback("👥 Игроки", "admin:grp:players"),
                     keyboardFactory.callback("🎯 Квесты", "admin:grp:quests")
             ));
             long pendingW = rewardService.findPendingWithdrawals().size() + rewardService.findPendingRequests().size();
