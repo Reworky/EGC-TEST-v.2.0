@@ -17330,6 +17330,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     sendText(user.getTelegramId(), "🔍 <b>Поиск пользователя</b>\n\nВведите Telegram ID или никнейм:", cancelKeyboard());
                 } else if ("users:post".equals(action)) {
                     sendAdminUsersPostCard(user);
+                } else if (action.startsWith("users:new:")) {
+                    sendAdminNewUsers(user, parseInteger(action.substring("users:new:".length())));
+                    answerSilently(callbackQuery.getId());
                 } else if (action.startsWith("users:")) {
                     sendAdminUsersPage(user, parseInteger(action.substring("users:".length())));
                 } else if ("bonussearch".equals(action)) {
@@ -21627,6 +21630,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case "players" -> {
                 title = "👥 <b>Игроки</b>";
                 rows.add(List.of(keyboardFactory.callback("👥 Пользователи", "admin:users:0")));
+                rows.add(List.of(keyboardFactory.callback("🆕 Новые игроки", "admin:users:new:1")));
                 rows.add(List.of(keyboardFactory.callback("📡 Сейчас на платформе", "admin:live")));
                 rows.add(List.of(keyboardFactory.callback("⚔️ Состав отряда", "admin:squads:search")));
                 rows.add(List.of(keyboardFactory.callback("🏷️ Теги CoC/Clash Royale", "admin:clashtags")));
@@ -24902,6 +24906,60 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("📸 Для постов", "admin:users:post")));
         rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(admin.getTelegramId(), builder.toString(), keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Админка → Игроки → «Новые игроки»: кто пришёл в бота за последние сутки / 7 / 30 дней. */
+    private void sendAdminNewUsers(AppUser admin, Integer requestedDays) {
+        int days = requestedDays != null && (requestedDays == 1 || requestedDays == 7 || requestedDays == 30) ? requestedDays : 1;
+        LocalDateTime now = LocalDateTime.now();
+        List<AppUser> all = userService.allUsersSorted();
+        long d1 = all.stream().filter(u -> u.getCreatedAt() != null && !u.getCreatedAt().isBefore(now.minusDays(1))).count();
+        long d7 = all.stream().filter(u -> u.getCreatedAt() != null && !u.getCreatedAt().isBefore(now.minusDays(7))).count();
+        long d30 = all.stream().filter(u -> u.getCreatedAt() != null && !u.getCreatedAt().isBefore(now.minusDays(30))).count();
+        LocalDateTime since = now.minusDays(days);
+        List<AppUser> fresh = all.stream()
+                .filter(u -> u.getCreatedAt() != null && !u.getCreatedAt().isBefore(since))
+                .collect(java.util.stream.Collectors.toList());
+        long finished = fresh.stream().filter(AppUser::isRegistrationCompleted).count();
+
+        String period = days == 1 ? "за 24 часа" : (days == 7 ? "за 7 дней" : "за 30 дней");
+        StringBuilder sb = new StringBuilder("🆕 <b>Новые игроки</b> " + period + "\n\n");
+        sb.append("За 24 часа: <b>").append(d1).append("</b> · за 7 дней: <b>").append(d7)
+                .append("</b> · за 30 дней: <b>").append(d30).append("</b>\n");
+        sb.append("В выбранном периоде: <b>").append(fresh.size()).append("</b>, прошли регистрацию: <b>")
+                .append(finished).append("</b>\n\n");
+        if (fresh.isEmpty()) {
+            sb.append("Новых игроков за этот период нет.");
+        } else {
+            int shown = Math.min(fresh.size(), 25);
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd.MM HH:mm");
+            for (int i = 0; i < shown; i++) {
+                AppUser u = fresh.get(i);
+                sb.append("• <b>").append(escape(trim(displayUserName(u), 24))).append("</b> · ")
+                        .append(u.getTelegramId()).append(" · ").append(u.getCreatedAt().format(fmt));
+                if (!u.isRegistrationCompleted()) {
+                    sb.append(" · не завершил регистрацию");
+                }
+                String src = u.getTrafficSourceCode();
+                if (src != null && !src.isBlank()) {
+                    sb.append(" · ист.: ").append(escape(trim(src, 20)));
+                } else if (u.getReferredByTelegramId() != null) {
+                    sb.append(" · от друга ").append(u.getReferredByTelegramId());
+                }
+                sb.append("\n");
+            }
+            if (fresh.size() > shown) {
+                sb.append("\n…и ещё ").append(fresh.size() - shown).append(". Полный список: «Пользователи» (новые сверху).");
+            }
+        }
+
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(
+                keyboardFactory.callback((days == 1 ? "✅ " : "") + "24 часа", "admin:users:new:1"),
+                keyboardFactory.callback((days == 7 ? "✅ " : "") + "7 дней", "admin:users:new:7"),
+                keyboardFactory.callback((days == 30 ? "✅ " : "") + "30 дней", "admin:users:new:30")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ К игрокам", "admin:grp:players")));
+        sendText(admin.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
     }
 
     private static final String[] LEVEL_NAMES = {
