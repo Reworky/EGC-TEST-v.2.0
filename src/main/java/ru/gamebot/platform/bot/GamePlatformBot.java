@@ -5606,15 +5606,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? "Можно получить до " + fmtExc(sum) + " ₽ на карту за выполнение бесплатных заданий."
                 : "Можно получить деньги на карту за выполнение бесплатных заданий.";
         String text = (fresh
-                ? "<b>Добро пожаловать в EGC!</b>\n"
-                        + "✅ Тебе начислено " + WELCOME_BONUS_EXC + " EXC.\n\n"
+                ? "<b>Добро пожаловать в EGC!</b>\n\n"
+                        + "🎉 Тебе начислено " + WELCOME_BONUS_EXC + " EXC.\n\n"
                 : "")
                 + "<b>Как хочешь зарабатывать?</b>\n\n"
                 + "<b>💳 Спонсорские квесты</b>\n"
                 + moneyLine + "\n\n"
                 + "<b>🎮 Игры</b>\n"
-                + "Квесты по твоей игре, EXC копятся и меняются на донат или вывод.\n"
-                + "Минимальный вывод: от " + fmtExc(FIRST_WITHDRAWAL_EXC) + " EXC (≈ " + fmtExc(FIRST_WITHDRAWAL_EXC / 100) + " ₽).\n\n"
+                + "Квесты по твоей игре, EXC копятся и меняются на донат или вывод.\n\n"
                 + "Второй путь всегда доступен в меню.";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("💳 Спонсорские квесты · мне 18+, я из РФ", "onboarding:cards")),
