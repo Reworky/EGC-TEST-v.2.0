@@ -5459,7 +5459,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Первый экран после приветственных слайдов (или сразу после регистрации, если слайды выключены): выбор игры или прежнее приветствие. */
     private void continueOnboarding(AppUser user) {
         if (settingEnabled(ONBOARDING_V2_SETTING)) {
-            sendStarterPicker(user, true);
+            sendOnboardingChoice(user, true);
             return;
         }
         sendText(user.getTelegramId(),
@@ -5589,6 +5589,44 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return "▰".repeat(filled) + "▱".repeat(10 - filled);
     }
 
+    /** Единая точка входа для новичков (17.11.2026, текст владельца): после welcome-слайдов человек сам выбирает, как зарабатывать:
+     *  «Спонсорские квесты» (деньги на карту, сумма - по реально доступным квестам) или «Игры» (прежний выбор игры).
+     *  fresh=true - сразу после регистрации (с приветствием и стартовым бонусом); false - возврат к незавершённому онбордингу.
+     *  Счётчики воронки - welcome.stat.choice_shown / choice_cards / choice_games (scripts/check-welcome-stories.sql). */
+    private void sendOnboardingChoice(AppUser user, boolean fresh) {
+        clearOnboardingBrowseBack(user);
+        welcomeStat("choice_shown");
+        long sum = 0;
+        try {
+            sum = sponsoredBankRub(sponsoredNotDone(user, activeSponsoredQuests()));
+        } catch (Exception e) {
+            log.warn("Failed to compute sponsored sum for onboarding choice", e);
+        }
+        String moneyLine = sum > 0
+                ? "Можно получить до " + fmtExc(sum) + " ₽ на карту за выполнение бесплатных заданий."
+                : "Можно получить деньги на карту за выполнение бесплатных заданий.";
+        String text = (fresh
+                ? "<b>Добро пожаловать в EGC!</b>\n"
+                        + "✅ Тебе начислено " + WELCOME_BONUS_EXC + " EXC.\n\n"
+                : "")
+                + "<b>Как хочешь зарабатывать?</b>\n\n"
+                + "<b>💳 Спонсорские квесты</b>\n"
+                + moneyLine + "\n\n"
+                + "<b>🎮 Игры</b>\n"
+                + "Квесты по твоей игре, EXC копятся и меняются на донат или вывод.\n"
+                + "Минимальный вывод: от " + fmtExc(FIRST_WITHDRAWAL_EXC) + " EXC (≈ " + fmtExc(FIRST_WITHDRAWAL_EXC / 100) + " ₽).\n\n"
+                + "Второй путь всегда доступен в меню.";
+        InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
+                List.of(keyboardFactory.callback("💳 Спонсорские квесты · мне 18+, я из РФ", "onboarding:cards")),
+                List.of(keyboardFactory.callback("🎮 Играть и копить EXC", "onboarding:games")),
+                List.of(keyboardFactory.callback("❓ Как это работает", "onboarding:guide"))));
+        if (fresh) {
+            sendResourceBanner(user.getTelegramId(), "welcome_start_banner.jpg", text, keyboard);
+        } else {
+            sendText(user.getTelegramId(), text, keyboard);
+        }
+    }
+
     /** fresh=true - сразу после регистрации (приветствие + стартовый бонус); false - возврат к незавершённому онбордингу
      *  (старый игрок, жмущий /start): без «тебе начислено», шкала по реальному балансу. */
     private void sendStarterPicker(AppUser user, boolean fresh) {
@@ -5612,7 +5650,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback(trim(game, 28), data)));
         }
         rows.add(List.of(keyboardFactory.callback("❓ Как это работает", "onboarding:guide")));
-        rows.add(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "onboarding:choice"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         String head = fresh
                 ? "<b>Добро пожаловать в EGC!</b>\n\n"
                         + "✅ Тебе начислено <b>" + WELCOME_BONUS_EXC + " EXC</b> — это твой стартовый капитал.\n\n"
@@ -6299,7 +6337,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void resumeOnboarding(AppUser user) {
         if (settingEnabled(ONBOARDING_V2_SETTING)) {
-            sendStarterPicker(user, false);
+            sendOnboardingChoice(user, false);
             return;
         }
         sendOnboardingGuide(user);
@@ -6309,6 +6347,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if ("guide".equals(sub)) {
             answerSilently(callbackQuery.getId());
             sendOnboardingGuide(user);
+        } else if ("choice".equals(sub)) {
+            answerSilently(callbackQuery.getId());
+            sendOnboardingChoice(user, user.getCompletedQuests() == 0 && user.getCoins() <= WELCOME_BONUS_EXC);
+        } else if ("games".equals(sub)) {
+            welcomeStat("choice_games");
+            answerSilently(callbackQuery.getId());
+            sendStarterPicker(user, false);
+        } else if ("cards".equals(sub)) {
+            welcomeStat("choice_cards");
+            completeOnboarding(user);
+            answerSilently(callbackQuery.getId());
+            // «Назад» с экрана спонсорских квестов ведёт на экран выбора пути, а не в главное меню (сбрасывается на главном меню, см. sendMainMenu)
+            sessionService.get(user.getTelegramId()).getData().put(ONBOARDING_BROWSE_BACK_KEY, "onboarding:choice");
+            sendSponsoredCategories(user);
         } else if ("back".equals(sub)) {
             answerSilently(callbackQuery.getId());
             // Назад из инструкции - на экран выбора игры; приветствие «начислено 200» только пока игрок не двигался дальше
@@ -9172,7 +9224,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "Чем лояльнее вы относитесь к таким квестам, тем стабильнее проект может выплачивать вам дальше. "
                         + "Чаще заглядывайте сюда и выполняйте задания: чем больше спонсоров мы привлечём вместе, тем выгоднее будет курс.</blockquote>\n\n"
                         + "Выберите тип задания:",
-                verticalWithBackMenu(rows, "⬅️ Назад", "menu:main"));
+                verticalWithBackMenu(rows, "⬅️ Назад", "onboarding:choice".equals(sessionService.get(user.getTelegramId()).getData().get(ONBOARDING_BROWSE_BACK_KEY)) ? "onboarding:choice" : "menu:main"));
     }
 
     private void sendSponsoredQuestList(AppUser user, String categoryKey) {
