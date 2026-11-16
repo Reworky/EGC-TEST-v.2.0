@@ -407,6 +407,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        // Горячие клавиши админ-панели (нижняя клавиатура админа, см. adminHotkeysKeyboard): работают из любого шага, как /menu
+        if (text != null && user.isProfileCompleted() && ADMIN_HOTKEY_BUTTONS.contains(text.trim()) && isEffectiveAdmin(user)) {
+            session.reset();
+            handleAdminHotkey(user, text.trim());
+            return;
+        }
+
         // Кнопки нижней клавиатуры (см. ensureQuickKeyboard): работают из любого шага, как /menu
         if (text != null && user.isProfileCompleted() && QUICK_KEYBOARD_BUTTONS.contains(text.trim())) {
             session.reset();
@@ -563,6 +570,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (text != null && text.equals("/commands") && isEffectiveAdmin(user)) {
             sendAdminCommands(user);
+            return;
+        }
+
+        if (text != null && (text.equals("/keys") || text.startsWith("/keys ")) && isEffectiveAdmin(user)) {
+            handleAdminHotkeysCommand(user, text.trim());
             return;
         }
 
@@ -8522,6 +8534,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("moder", "", "Включить роль модератора"),
             new AdminCommand("user", "", "Посмотреть бота глазами игрока"),
             new AdminCommand("commands", "", "Список админ-команд"),
+            new AdminCommand("keys", "[off]", "Горячие клавиши админ-панели: показать нижнюю клавиатуру (Аналитика, Выводы, Регистрации, Квесты, Игроки, Админ-панель) или убрать её"),
             new AdminCommand("wdnudge", "test|send|stats", "Рассылка «вывод открыт» (A/B)"),
             new AdminCommand("pulsethr", "reset|log|КЛЮЧ ЗЕЛЁНЫЙ КРАСНЫЙ", "Пороги вкладки «Пульс проекта»: список, изменить, вернуть стартовые, журнал"),
             new AdminCommand("vpn", "ID [trial|paid|off]", "EGC VPN (пока без экранов игрока): статус игрока, выдать пробный/оплаченный месяц, отключить"),
@@ -8579,6 +8592,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Один раз за жизнь аккаунта шлёт игроку короткое сообщение с нижней клавиатурой (Telegram не умеет подставлять её молча). Только игрокам:
      *  у админов и менеджеров свои меню. Ошибка отправки не должна ломать главное меню. */
     private void ensureQuickKeyboard(AppUser user) {
+        if (user.isProfileCompleted() && isEffectiveAdmin(user)) {
+            ensureAdminHotkeys(user);
+            return;
+        }
         if (user.isQuickKeyboardShown() || !user.isProfileCompleted() || isEffectiveAdmin(user) || isEffectiveModerator(user)) return;
         try {
             SendMessage message = new SendMessage();
@@ -8601,6 +8618,91 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case QK_FRIENDS -> sendReferrals(user);
             case QK_HELP -> sendHelpCategory(user);
             default -> sendMainMenu(user, mainMenuText(user));
+        }
+    }
+
+    private static final String HK_ANALYTICS = "📊 Аналитика";
+    private static final String HK_WITHDRAWALS = "💸 Выводы";
+    private static final String HK_REGS = "🆕 Регистрации";
+    private static final String HK_QUESTS = "🎯 Квесты";
+    private static final String HK_PLAYERS = "👥 Игроки";
+    private static final String HK_PANEL = "🛠 Админ-панель";
+    private static final java.util.Set<String> ADMIN_HOTKEY_BUTTONS = java.util.Set.of(HK_ANALYTICS, HK_WITHDRAWALS, HK_REGS, HK_QUESTS, HK_PLAYERS, HK_PANEL);
+
+    /** Нижняя клавиатура админа («горячие клавиши»): те же экраны, что кнопки админ-меню, но в один тап из любого места. */
+    private ReplyKeyboardMarkup adminHotkeysKeyboard() {
+        KeyboardRow r1 = new KeyboardRow();
+        r1.add(new KeyboardButton(HK_ANALYTICS));
+        r1.add(new KeyboardButton(HK_WITHDRAWALS));
+        KeyboardRow r2 = new KeyboardRow();
+        r2.add(new KeyboardButton(HK_REGS));
+        r2.add(new KeyboardButton(HK_QUESTS));
+        KeyboardRow r3 = new KeyboardRow();
+        r3.add(new KeyboardButton(HK_PLAYERS));
+        r3.add(new KeyboardButton(HK_PANEL));
+        return ReplyKeyboardMarkup.builder().keyboardRow(r1).keyboardRow(r2).keyboardRow(r3).resizeKeyboard(true).build();
+    }
+
+    private void handleAdminHotkey(AppUser admin, String label) {
+        try {
+            switch (label) {
+                case HK_ANALYTICS -> sendAnalyticsHome(admin);
+                case HK_WITHDRAWALS -> sendAdminWithdrawals(admin);
+                case HK_REGS -> sendAdminRegistrations(admin);
+                case HK_QUESTS -> sendAdminGroup(admin, "quests");
+                case HK_PLAYERS -> sendAdminGroup(admin, "players");
+                default -> sendAdminPanel(admin);
+            }
+        } catch (Exception e) {
+            log.error("Admin hotkey {} failed for {}", label, admin.getTelegramId(), e);
+            sendText(admin.getTelegramId(), "⚠️ Не открылось, попробуйте через /menu", null);
+        }
+    }
+
+    /** Один раз для каждого админа сообщает про горячие клавиши и показывает клавиатуру (флаг в app_settings); дальше - только по /keys. */
+    private void ensureAdminHotkeys(AppUser admin) {
+        try {
+            String key = "admin.hotkeys.shown." + admin.getTelegramId();
+            if (appSettingRepository.findById(key).isPresent()) return;
+            sendAdminHotkeysKeyboard(admin);
+            AppSetting flag = new AppSetting();
+            flag.setKey(key);
+            flag.setValue("1");
+            appSettingRepository.save(flag);
+        } catch (Exception e) {
+            log.warn("Admin hotkeys not sent to {}: {}", admin.getTelegramId(), e.getMessage());
+        }
+    }
+
+    private void sendAdminHotkeysKeyboard(AppUser admin) {
+        SendMessage message = new SendMessage();
+        message.setChatId(admin.getTelegramId().toString());
+        message.setText("⌨️ Горячие клавиши админ-панели включены: значок рядом с полем ввода открывает Аналитику, Выводы, Регистрации, Квесты, Игроков и Админ-панель. Убрать: /keys off");
+        message.setReplyMarkup(adminHotkeysKeyboard());
+        try {
+            execute(message);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private void handleAdminHotkeysCommand(AppUser admin, String text) {
+        if (text.toLowerCase().endsWith(" off")) {
+            SendMessage message = new SendMessage();
+            message.setChatId(admin.getTelegramId().toString());
+            message.setText("⌨️ Горячие клавиши убраны. Вернуть: /keys");
+            message.setReplyMarkup(ReplyKeyboardRemove.builder().removeKeyboard(true).build());
+            try {
+                execute(message);
+            } catch (Exception e) {
+                log.warn("Admin hotkeys removal failed for {}: {}", admin.getTelegramId(), e.getMessage());
+            }
+            return;
+        }
+        try {
+            sendAdminHotkeysKeyboard(admin);
+        } catch (Exception e) {
+            log.warn("Admin hotkeys not sent to {}: {}", admin.getTelegramId(), e.getMessage());
         }
     }
 
