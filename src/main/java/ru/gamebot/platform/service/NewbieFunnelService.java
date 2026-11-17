@@ -111,7 +111,7 @@ public class NewbieFunnelService {
         m.put("apply", ev(APPLY_SHOWN));
         m.put("bank_report", bankSub(" AND s.status IN ('PENDING','APPROVED','REJECTED','NEEDS_INFO')"));
         m.put("bank_ok", bankSub(" AND s.status = 'APPROVED'"));
-        m.put("bank_paid", bankSub(" AND s.status = 'APPROVED' AND s.bonus_paid_at IS NOT NULL"));
+        m.put("bank_paid", bankSub(" AND s.bonus_paid_at IS NOT NULL"));
         m.put("picker", ev(GAMES_PICKER));
         m.put("pick", ev(GAME_PICK));
         m.put("starter", ev(STARTER_CARD));

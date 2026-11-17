@@ -1672,7 +1672,17 @@ public class QuestService {
     @Transactional
     public boolean markPartnerBonusPaid(Long userId, String gameName) {
         List<QuestSubmission> approved = questSubmissionRepository.findApprovedByUserAndGame(userId, gameName);
-        if (approved.isEmpty()) return false;
+        if (approved.isEmpty()) {
+            // С 09.11.2026 банковские квесты ведёт менеджер в личке, одобренной заявки может не быть. Выплату всё равно фиксируем на последней неотменённой заявке
+            // (17.11.2026): иначе от неё не остаётся следа ни в воронке, ни в защите от повторной выплаты (hasBonusPaid). Возвращаем false: «одобренной заявки нет» (бейдж не отмечен).
+            List<QuestSubmission> any = questSubmissionRepository.findNotCancelledByUserAndGame(userId, gameName);
+            if (!any.isEmpty()) {
+                QuestSubmission last = any.get(0);
+                last.setBonusPaidAt(LocalDateTime.now());
+                questSubmissionRepository.save(last);
+            }
+            return false;
+        }
         QuestSubmission sub = approved.get(0);
         sub.setBonusPaidAt(LocalDateTime.now());
         questSubmissionRepository.save(sub);

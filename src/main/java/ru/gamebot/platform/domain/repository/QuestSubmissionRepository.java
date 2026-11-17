@@ -284,6 +284,11 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT s FROM QuestSubmission s WHERE s.user.id = :userId AND s.quest.gameName = :gameName AND s.status = 'APPROVED' ORDER BY s.updatedAt DESC")
     List<QuestSubmission> findApprovedByUserAndGame(@Param("userId") Long userId, @Param("gameName") String gameName);
 
+    /** Заявки игрока по партнёрской миссии игры gameName кроме отменённых, новые первыми (запасной путь отметки «бонус выплачен», когда одобренной заявки нет). */
+    @EntityGraph(attributePaths = {"user", "quest"})
+    @Query("SELECT s FROM QuestSubmission s WHERE s.user.id = :userId AND s.quest.gameName = :gameName AND s.status <> 'CANCELLED' ORDER BY s.createdAt DESC")
+    List<QuestSubmission> findNotCancelledByUserAndGame(@Param("userId") Long userId, @Param("gameName") String gameName);
+
     /** id игроков (AppUser.id) с одобренной заявкой по партнёрской миссии игры gameName, по которой банк уже выплатил бонус: для метки «🤝» в рейтинге, отрядах и ленте выплат. */
     @Query("SELECT DISTINCT s.user.id FROM QuestSubmission s WHERE s.quest.gameName = :gameName AND s.status = 'APPROVED' AND s.bonusPaidAt IS NOT NULL")
     List<Long> findApprovedUserIdsByGame(@Param("gameName") String gameName);

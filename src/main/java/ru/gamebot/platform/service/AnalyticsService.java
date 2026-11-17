@@ -952,7 +952,7 @@ public class AnalyticsService {
         funnelRow(t, "Взяли квест банка", c.get("bank_taken"), started, c.get("take18"));
         funnelRow(t, "Экран «Оформить»", c.get("apply"), started, c.get("bank_taken"));
         funnelRow(t, "Менеджер проверил", c.get("bank_ok"), started, c.get("bank_taken"));
-        funnelRow(t, "Выплата отмечена", c.get("bank_paid"), started, c.get("bank_ok"));
+        funnelRow(t, "Выплата отмечена", c.get("bank_paid"), started, c.get("bank_taken"));
         t.append("\n🎮 Путь игр\n");
         funnelRow(t, "Экран выбора игры", c.get("picker"), started, c.get("games"));
         funnelRow(t, "Выбрали игру", c.get("pick"), started, c.get("picker"));
