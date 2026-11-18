@@ -1809,7 +1809,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (user.getSponsorCoins() <= 0) {
                 // Кнопка видна всем (владелец 18.11.2026): при нуле объясняем, откуда берётся EXCASH
                 sendText(user.getTelegramId(),
-                        "💎 <b>Вывод EXCASH</b>\n\nНа балансе пока <b>0 EXCASH</b>.\n"
+                        "💎 <b>Вывод EXCASH</b>\n\nНа балансе пока <b>0 EXCASH</b>.\n\n"
                                 + "EXCASH копится за спонсорские квесты банков и партнёров: выполни квест, и награда придёт на этот баланс.",
                         keyboardFactory.rowsLayout(List.of(
                                 List.of(keyboardFactory.callback("🎯 Спонсорские квесты", "quests:section:sponsored")),
