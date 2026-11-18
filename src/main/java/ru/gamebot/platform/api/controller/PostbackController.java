@@ -65,7 +65,13 @@ public class PostbackController {
             @RequestParam(required = false) String event,
             @RequestParam(required = false) String uniqueid,
             @RequestParam(required = false) String offer,
-            @RequestParam(required = false) String payment) {
+            @RequestParam(required = false) String payment,
+            @RequestParam(required = false) String apid,
+            @RequestParam(required = false) String appayment) {
+        // ActionPay сам дописывает в вызов параметры по умолчанию apid (ID действия) и appayment (выплата), если их нет в макросах URL:
+        // берём их, когда payment/uniqueid в URL не заданы
+        if (payment == null || payment.isBlank()) payment = appayment;
+        if (uniqueid == null || uniqueid.isBlank()) uniqueid = apid;
 
         if (!isValidToken(token, actionpayToken)) {
             log.warn("[ActionPay] Postback rejected: bad token");
