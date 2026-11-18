@@ -1697,7 +1697,7 @@ public class QuestService {
                 .toList();
     }
 
-    /** Партнёрская миссия: игрок нажал «Банк вернул мне 500 ₽». true - отметили первый раз (админам шлём уведомление), false - уже нажимал или заявка не одобрена. */
+    /** Партнёрская миссия: игрок нажал «Банк отправил мне 1 000 ₽» (ОТП). true - отметили первый раз (админам шлём уведомление), false - уже нажимал или заявка не одобрена. */
     @Transactional
     public boolean markBankPaidClaimed(Long submissionId, Long telegramId) {
         QuestSubmission sub = getSubmission(submissionId);
