@@ -387,11 +387,11 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest, onSponsorWi
           <AnimatedNumber value={wallet.coins} flashColor="#F5A623" /> EXC
         </div>
         <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>
-          ≈ {+(wallet.coins * (wallet.withdrawalRatioPercent ?? wallet.healthRatioPercent) / 100 / 100).toFixed(1)} ₽ · {wallet.withdrawalRatioPercent != null ? `курс вывода ${wallet.withdrawalRatioPercent}%` : `фонд ${wallet.healthRatioPercent}%`}
+          Ваш курс: {wallet.withdrawalRatioPercent ?? wallet.healthRatioPercent}% → ≈ {+(wallet.coins * (wallet.withdrawalRatioPercent ?? wallet.healthRatioPercent) / 100 / 100).toFixed(1)} ₽
         </div>
-        {wallet.partnerCompare && wallet.withdrawalRatioPercent != null && wallet.withdrawalRatioPercent < 100 && wallet.coins * (100 - wallet.withdrawalRatioPercent) / 100 / 100 >= 1 && (
+        {wallet.partnerCompare && wallet.withdrawalRatioPercent != null && wallet.withdrawalRatioPercent < 100 && (
           <div style={{ fontSize: 13, color: '#c4b5fd', marginTop: 6 }}>
-            🤝 Партнёр: +{Math.round(wallet.coins * (100 - wallet.withdrawalRatioPercent) / 100 / 100).toLocaleString('ru-RU')} ₽ (курс 100%)
+            🤝 Партнёр: 100%{wallet.coins * (100 - wallet.withdrawalRatioPercent) / 100 / 100 >= 1 ? ` → ≈ ${Math.round(wallet.coins / 100).toLocaleString('ru-RU')} ₽` : ''}
           </div>
         )}
         {(wallet.withdrawalQuestsLeft > 0 || wallet.withdrawalDaysLeft > 0) && (
@@ -429,7 +429,7 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest, onSponsorWi
             <AnimatedNumber value={wallet.sponsorCoins} flashColor="#c4b5fd" /> EXCASH
           </div>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
-            ≈ {Math.round(wallet.sponsorCoins / 100).toLocaleString('ru-RU')} ₽
+            Ваш курс: 100% → ≈ {Math.round(wallet.sponsorCoins / 100).toLocaleString('ru-RU')} ₽
           </div>
           {wallet.sponsorCoins > 0
             ? <button className="quest-btn" style={{ marginTop: 10 }} onClick={onSponsorWithdraw}>💸 Вывести EXCASH</button>

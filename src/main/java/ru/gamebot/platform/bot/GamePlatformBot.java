@@ -7595,6 +7595,35 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return "💎 <b>" + fmtExc(sp) + " EXCASH</b> (≈ " + fmtExc(Math.round(sp / 100.0)) + " ₽)\n\n";
     }
 
+    /** Отступ строк курса под балансом на экране «Баланс» (неразрывные пробелы: Telegram не схлопывает). */
+    private static final String BALANCE_INDENT = "\u00A0\u00A0\u00A0";
+
+    /** Блок EXCASH для экрана «Баланс» (макет владельца 19.11.2026): «💎 EXCASH: N» и строка «Ваш курс: 100% → ≈ M ₽»; пусто, если выключатель выключен. */
+    private String sponsorBalanceBlock(AppUser user) {
+        if (!sponsorBalanceService.enabled()) return "";
+        long sp = Math.max(0, user.getSponsorCoins());
+        return "💎 <b>EXCASH: " + fmtExc(sp) + "</b>\n\n"
+                + BALANCE_INDENT + "Ваш курс: 100% → ≈ " + fmtExc(Math.round(sp / 100.0)) + " ₽\n\n";
+    }
+
+    /** Строка «Статус» в раскрывающемся блоке «Баланса» (только при включённых уровнях вывода). */
+    private String balanceStatusLine(AppUser user) {
+        if (!withdrawalTiersEnabled()) return "";
+        return healthRatioService.isPartner(user) ? "🏷 Статус: 🤝 <b>Партнёр</b>\n" : "🏷 Статус: Стандарт\n";
+    }
+
+    /** Курсы вывода EXC в конце раскрывающегося блока: «1 000 EXC = 3,6 ₽ (стандарт)» и «… = 10 ₽ (партнёр)»; при выключенных уровнях - прежнее объяснение. */
+    private String balanceRatesLines(int ratioPercent, long effectiveRewardPer100) {
+        if (!withdrawalTiersEnabled()) return hrExplanationLine(ratioPercent, effectiveRewardPer100).stripTrailing();
+        int lowPercent = (int) Math.round(NONPARTNER_RATE * Math.min(1.0, ratioPercent / 100.0 / NONPARTNER_RATE_REF) * 100);
+        return "1 000 EXC = " + rubPer1000(lowPercent) + " ₽ (стандарт)\n1 000 EXC = " + rubPer1000(100) + " ₽ (партнёр)";
+    }
+
+    private static String rubPer1000(int percent) {
+        double v = 10.0 * percent / 100.0;
+        return v == Math.floor(v) ? String.valueOf((long) v) : String.format("%.1f", v).replace('.', ',');
+    }
+
     private void sendBalance(AppUser user, String backData) {
         double ratio = healthRatioService.getCurrentRatio();
         int ratioPercent = (int) Math.round(ratio * 100);
@@ -7604,15 +7633,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? healthRatioService.starsApprox(user.getCoins()) + " · ≈ " + fmtExc(rub) + " ₽ (курс фонда " + ratioPercent + "%)\n\n"
                 : "";
         if (withdrawalTiersEnabled()) {
+            // 19.11.2026 (макет владельца): под каждым балансом - его курс. У EXC: «Ваш курс» и (только не партнёрам) «Партнёр: 100%»
+            double ownRatio = withdrawalRatioFor(user, Math.max(1, user.getCoins()), false);
             long partnerRub = Math.round(user.getCoins() / 100.0);
-            long ownRub = Math.round(user.getCoins() * withdrawalRatioFor(user, user.getCoins(), false) / 100.0);
-            String compareLines = partnerCompareLines(user, user.getCoins(), false);
-            equivalent = withdrawalRatioFor(user, Math.max(1, user.getCoins()), false) >= 1.0
-                    ? "🏷 Статус: 🤝 <b>Партнёр</b> · курс 100%\n≈ " + fmtExc(partnerRub) + " ₽\n\n"
-                    : !compareLines.isEmpty() ? compareLines + "\n🏷 Статус: Стандарт\n\n"
-                    : healthRatioService.isPartnerPending(user)
-                        ? "🏷 Статус: Стандарт ≈ " + fmtExc(ownRub) + " ₽ (курс " + Math.round(withdrawalRatioFor(user, user.getCoins(), false) * 100) + "%)\n\n"
-                    : "≈ " + fmtExc(ownRub) + " ₽ (курс " + Math.round(withdrawalRatioFor(user, user.getCoins(), false) * 100) + "%)\n\n";
+            long ownRub = Math.round(user.getCoins() * ownRatio / 100.0);
+            StringBuilder el = new StringBuilder(BALANCE_INDENT + "Ваш курс: " + Math.round(ownRatio * 100) + "%");
+            if (user.getCoins() > 0) el.append(" → ≈ ").append(fmtExc(ownRub)).append(" ₽");
+            el.append("\n");
+            if (ownRatio < 1.0 && partnerCompareApplies(user)) {
+                el.append(BALANCE_INDENT).append("Партнёр: 100%");
+                if (user.getCoins() > 0 && partnerRub - ownRub >= 1) el.append(" → ≈ ").append(fmtExc(partnerRub)).append(" ₽");
+                el.append("\n");
+            }
+            equivalent = el.toString() + "\n";
+        } else {
+            equivalent = equivalent.isBlank() ? "" : BALANCE_INDENT + equivalent.stripTrailing() + "\n\n";
         }
         // Ежедневный бонус забирается в «Заданиях дня»; на балансе он появляется лишь пока задания выключены (app_settings).
         List<List<InlineKeyboardButton>> balanceRows = new ArrayList<>();
@@ -7640,14 +7675,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // 15.11.2026 (владелец): у экрана баланса свой баннер «Кошелёк» (фон как у баннера магазина); длинный текст уходит под фото отдельным сообщением
         sendResourceBanner(user.getTelegramId(), "wallet_banner.jpg",
                 "💰 <b>Баланс</b>\n\n"
-                        + "🪙 <b>" + fmtExc(user.getCoins()) + " EXC</b>\n\n"
-                        + sponsorBalanceLine(user)
+                        + "🪙 <b>EXC: " + fmtExc(user.getCoins()) + "</b>\n\n"
                         + equivalent
-                        + "<blockquote expandable>💠 Бонус к EXC: <b>+" + userService.getExcBonusPercent(user.getXp()) + "%</b>\n"
+                        + sponsorBalanceBlock(user)
+                        + "<blockquote expandable>" + balanceStatusLine(user)
+                        + "💠 Бонус к EXC: <b>+" + userService.getExcBonusPercent(user.getXp()) + "%</b>\n"
                         + "🎟️ Билеты сезона: <b>" + user.getTickets() + "</b>\n"
                         + "✨ XP: <b>" + user.getXp() + "</b> · за неделю: <b>" + user.getWeeklyXp() + "</b>\n\n"
                         + "📊 Фонд клуба: <b>" + ratioPercent + "%</b>\n"
-                        + hrExplanationLine(ratioPercent, effectiveQuestReward).stripTrailing() + "</blockquote>\n"
+                        + balanceRatesLines(ratioPercent, effectiveQuestReward) + "</blockquote>\n"
                         + withdrawalProgressBlock(user),
                 keyboardFactory.rowsLayout(balanceRows));
     }
