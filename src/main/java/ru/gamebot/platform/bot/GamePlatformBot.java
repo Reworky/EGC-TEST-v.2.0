@@ -1808,7 +1808,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
             String spBlock = rewardService.withdrawalEligibilityBlock(user);
             if (spBlock != null) {
-                sendWithdrawalLocked(user, spBlock, "menu:balance");
+                sendWithdrawalLocked(user, spBlock, "menu:balance", true);
                 return;
             }
             if (user.getCountry() == null || user.getCountry().isBlank() || user.getAge() == null) {
@@ -7542,6 +7542,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** «Вывод пока недоступен»: условия + сколько у игрока сейчас в рублях по курсу фонда и сколько осталось до минимума + подсказка про магазин. Текст утверждён владельцем 2026-10-12. */
     private void sendWithdrawalLocked(AppUser user, String block, String backData) {
+        sendWithdrawalLocked(user, block, backData, false);
+    }
+
+    /** sponsor = true: экран открыт из «Вывести EXCASH» - вместо строки про EXC показываем баланс EXCASH (курс 100%, минимум в EXCASH). */
+    private void sendWithdrawalLocked(AppUser user, String block, String backData, boolean sponsor) {
         double ratio = healthRatioService.getCurrentRatio();
         int ratioPercent = (int) Math.round(ratio * 100);
         long coins = user.getCoins();
@@ -7549,6 +7554,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long min = ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC;
         // Текст по правке владельца 18.11.2026: фраза «Баланса уже хватает на минимум» убрана; про минимум пишем, только если EXC не хватает
         String minLine = coins >= min ? "" : " Минимум для вывода - " + fmtExc(min) + " EXC, осталось " + fmtExc(min - coins) + " EXC.";
+        long spCoins = Math.max(0, user.getSponsorCoins());
+        String balanceLine = sponsor
+                ? "💎 У вас " + fmtExc(spCoins) + " EXCASH ≈ " + fmtExc(Math.round(spCoins / 100.0)) + " ₽ (курс 100%)."
+                        + (spCoins >= min ? "" : " Минимум для вывода - " + fmtExc(min) + " EXCASH, осталось " + fmtExc(min - spCoins) + " EXCASH.")
+                : "💰 У вас " + fmtExc(coins) + " EXC ≈ " + fmtExc(rub) + " ₽ (курс фонда " + ratioPercent + "%)." + minLine;
         List<List<InlineKeyboardButton>> lockedRows = new ArrayList<>();
         addSponsoredPrizeRow(lockedRows, user);
         if (dailyCodeGate.block(user) != null) {
@@ -7559,7 +7569,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         lockedRows.add(List.of(keyboardFactory.callback("⬅️ Назад", backData), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(),
                 "🔒 <b>Вывод пока недоступен</b>\n\n" + escape(block) + "\n\n"
-                        + "💰 У вас " + fmtExc(coins) + " EXC ≈ " + fmtExc(rub) + " ₽ (курс фонда " + ratioPercent + "%)." + minLine + "\n\n"
+                        + balanceLine + "\n\n"
                         + sponsoredPrizeLine(user).stripTrailing(),
                 keyboardFactory.rowsLayout(lockedRows));
     }
