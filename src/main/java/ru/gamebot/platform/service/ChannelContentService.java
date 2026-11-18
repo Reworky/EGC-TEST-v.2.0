@@ -970,7 +970,7 @@ public class ChannelContentService {
 
     /** Декоративный баннер «Гонка отрядов» - один и тот же на каждый пост, зашит в ресурсы бота (не Telegram file_id),
      *  см. GamePlatformBot.RESOURCE_BANNER_PREFIX/sendBannerAndText. */
-    private static final String SQUAD_MIDWEEK_BANNER = "resource:squad_race_banner.png";
+    private static final String SQUAD_MIDWEEK_BANNER = "resource:squad_race_midweek_fluffy.jpg"; // 18.11.2026: пушистый Экси, «Гонка отрядов / Экватор недели»
 
     /** Баннер поста «новые квесты» (клуб в янтарно-фиолетовой палитре, 04.10.2026); лежит в ресурсах бота, как и баннер гонки отрядов. */
     private static final String NEW_QUESTS_BANNER = "resource:new_quests_banner.png";
@@ -1015,11 +1015,13 @@ public class ChannelContentService {
         // Сколько полных суток до финиша (понедельник 00:00 UTC): в среду 4, в четверг 3 и т. д.
         LocalDateTime nowUtc = LocalDateTime.now(java.time.ZoneOffset.UTC);
         long daysLeft = Duration.between(nowUtc, nowUtc.toLocalDate().with(java.time.temporal.TemporalAdjusters.next(DayOfWeek.MONDAY)).atStartOfDay()).toDays();
-        sb.append("🏆 Приз победителю - <b>").append(num(seasonalEventService.squadPoolNow())).append(" EXC</b>: ")
+        // 18.11.2026: текст и баннер (пушистый Экси) утверждены владельцем: 🤩 вместо 🏆, без финальной реплики, ссылка-текст «Отряды EGC» ведёт в раздел отрядов
+        sb.append("🤩 Приз победителю - <b>").append(num(seasonalEventService.squadPoolNow())).append(" EXC</b>: ")
           .append(daysLeft >= 1 ? "до финиша ещё <b>" + daysLeft + " " + plural((int) daysLeft, "день", "дня", "дней") + "</b>.\n\n" : "до финиша меньше суток.\n\n")
-          .append("Неделя закончится в понедельник в 00:00 UTC.\n\n");
-        sb.append(squadLink());
-        sb.append("\n\n").append(ending(top.get(0).weeklyXp(), "Кто успеет подтянуться?", "Ставь ⚔️, если твой отряд в гонке.", "Ещё есть время подняться выше."));
+          .append("Неделя закончится в понедельник в 00:00 UTC.");
+        if (botUsername != null && !botUsername.isBlank()) {
+            sb.append("\n\n📲 Отряды в нашем боте ➡️ <a href=\"https://t.me/").append(botUsername).append("?start=go_squads\">Отряды EGC</a>");
+        }
         return Optional.of(saveDraft(SQUAD_MIDWEEK, sb.toString(), null, SQUAD_MIDWEEK_BANNER));
     }
 
