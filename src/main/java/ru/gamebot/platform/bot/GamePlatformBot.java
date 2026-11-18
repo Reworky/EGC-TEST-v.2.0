@@ -577,6 +577,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleGameOfferPayCommand(user, text.trim());
             return;
         }
+        if (text != null && (text.equals("/excash") || text.startsWith("/excash ") || text.equals("/tocash") || text.startsWith("/tocash ")) && isEffectiveAdmin(user)) {
+            handleExcashAdminCommand(user, text.trim());
+            return;
+        }
 
         if (text != null && text.trim().equalsIgnoreCase("/otpwait") && isEffectiveModerator(user)) {
             sendOtpWaitingList(user);
@@ -8737,6 +8741,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("vtbbonus", "ID [повтор]", "Партнёрская выплата ВТБ Киберкарта: отметить, что банк выплатил, и напомнить отправить игроку 500 ₽ на карту от клуба (EXC не начисляются). Повторно только со словом «повтор»"),
             new AdminCommand("alfabonus", "ID [повтор]", "Выплата Альфа-Банк (Апельсиновая карта): отметить, что банк подтвердил карту, и напомнить отправить игроку 300 ₽ на карту от клуба (EXC не начисляются). Повторно только со словом «повтор»"),
             new AdminCommand("forabonus", "ID [повтор]", "Выплата Фора-Банк (карта «Все включено»): отметить, что банк подтвердил карту, и напомнить отправить игроку 400 ₽ на карту от клуба; на баланс сам начисляется 10 000 EXC компенсации траты (при «повтор» не начисляется). Повторно только со словом «повтор»"),
+            new AdminCommand("excash", "ID [±сумма] [уведомить] [причина]", "Спонсорский баланс EXCASH: без суммы - показать игровой и спонсорский баланс игрока; +сумма - начислить EXCASH, -сумма - списать (ниже нуля нельзя); слово «уведомить» отправляет игроку сообщение о начислении"),
+            new AdminCommand("tocash", "ID сумма", "Перенести EXC с игрового баланса на спонсорский (EXCASH) 1 к 1, для игроков, которые просят перенести старые спонсорские заработки. Одна транзакция, оба баланса показываются в ответе"),
             new AdminCommand("wowpay", "ID", "Награда за квест World of Warships: игрок есть в списке конверсий лендинга (партнёр подтвердил игру). Начисляет награду квеста и уведомляет игрока; повторно тому же игроку не начисляет"),
             new AdminCommand("psbbonus", "ID [повтор]", "Выплата ПСБ (карта «Твой кэшбэк»): отметить, что банк подтвердил карту, и напомнить отправить игроку 500 ₽ на карту от клуба; на баланс сам начисляется 50 000 EXC компенсации траты (при «повтор» не начисляется). Повторно только со словом «повтор»"),
             new AdminCommand("ubrrbonus", "ID [повтор]", "Выплата УБРиР (карта «Моя Жизнь»): отметить, что банк подтвердил карту, и напомнить отправить игроку 500 ₽ на карту от клуба; на баланс сам начисляется 50 000 EXC компенсации траты (при «повтор» не начисляется). Повторно только со словом «повтор»"),
@@ -10656,6 +10662,64 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("\n").append(escape(quest.getRequirements()));
         }
         return sb.toString().trim();
+    }
+
+    /** Админ-команды спонсорского баланса EXCASH (18.11.2026): /excash ID - показать оба баланса; /excash ID ±сумма [уведомить] [причина] - начислить (+) или списать (-) EXCASH;
+     *  /tocash ID сумма - перенести EXC с игрового баланса на спонсорский 1 к 1 (для игроков, просящих перенести старые спонсорские заработки). */
+    private void handleExcashAdminCommand(AppUser admin, String text) {
+        try {
+            String[] p = text.split("\\s+");
+            boolean move = p[0].equalsIgnoreCase("/tocash");
+            Long targetId = p.length > 1 ? parseLong(p[1]) : null;
+            if (targetId == null) {
+                sendText(admin.getTelegramId(), "⚠️ Формат:\n<code>/excash ID</code> - показать балансы\n<code>/excash ID +5000 [уведомить] [причина]</code> - начислить EXCASH\n"
+                        + "<code>/excash ID -5000 [причина]</code> - списать EXCASH\n<code>/tocash ID 5000</code> - перенести 5 000 EXC с игрового баланса на EXCASH", null);
+                return;
+            }
+            AppUser target = userService.findByTelegramId(targetId).orElse(null);
+            if (target == null) {
+                sendText(admin.getTelegramId(), "⚠️ Игрок с ID " + targetId + " не найден.", null);
+                return;
+            }
+            String who = escape(String.valueOf(target.getNickname())) + " (" + targetId + ")";
+            Long amount = p.length > 2 ? parseLong(p[2].replace("+", "").replace("_", "")) : null;
+            if (p.length <= 2) {
+                sendText(admin.getTelegramId(), "💎 <b>" + who + "</b>\n🪙 Игровой: <b>" + fmtExc(target.getCoins()) + " EXC</b>\n💎 Спонсорский: <b>" + fmtExc(target.getSponsorCoins()) + " EXCASH</b>", null);
+                return;
+            }
+            if (amount == null || amount == 0) {
+                sendText(admin.getTelegramId(), "⚠️ Сумма должна быть числом, например <code>+5000</code> или <code>-5000</code>.", null);
+                return;
+            }
+            if (move) {
+                ru.gamebot.platform.service.SponsorBalanceService.AdminOpResult r = sponsorBalanceService.adminMoveToSponsor(targetId, Math.abs(amount));
+                sendText(admin.getTelegramId(), "✅ " + who + ": перенесено <b>" + fmtExc(Math.abs(amount)) + "</b> с игрового баланса на EXCASH.\n🪙 Игровой: <b>"
+                        + fmtExc(r.gameCoins()) + " EXC</b>\n💎 Спонсорский: <b>" + fmtExc(r.sponsorCoins()) + " EXCASH</b>", null);
+                return;
+            }
+            boolean notify = false;
+            StringBuilder reason = new StringBuilder();
+            for (int i = 3; i < p.length; i++) {
+                if (p[i].equalsIgnoreCase("уведомить")) notify = true;
+                else reason.append(reason.length() > 0 ? " " : "").append(p[i]);
+            }
+            ru.gamebot.platform.service.SponsorBalanceService.AdminOpResult r = sponsorBalanceService.adminAdjust(targetId, amount, reason.toString());
+            sendText(admin.getTelegramId(), "✅ " + who + ": " + (amount > 0 ? "начислено " : "списано ") + "<b>" + fmtExc(Math.abs(amount)) + " EXCASH</b>.\n💎 Спонсорский баланс: <b>"
+                    + fmtExc(r.sponsorCoins()) + " EXCASH</b>", null);
+            if (notify && amount > 0) {
+                try {
+                    sendText(targetId, "💎 <b>Тебе начислено " + fmtExc(amount) + " EXCASH</b>\n\nEXCASH - спонсорский баланс: выводится по курсу 100% без лимитов. Открой «Баланс».",
+                            keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("💰 Баланс", "menu:balance")))));
+                } catch (Exception e) {
+                    log.warn("EXCASH notice failed for {}", targetId, e);
+                }
+            }
+        } catch (IllegalArgumentException e) {
+            sendText(admin.getTelegramId(), "⚠️ " + escape(String.valueOf(e.getMessage())), null);
+        } catch (Exception e) {
+            log.error("[Excash] admin command failed: {}", text, e);
+            sendText(admin.getTelegramId(), "❌ Не получилось: " + escape(String.valueOf(e.getMessage())) + ". Проверьте логи.", null);
+        }
     }
 
     /** /wowpay ID: админ начисляет награду за игровой оффер (World of Warships) игроку из списка подтверждённых конверсий лендинга. Идёт через обычное одобрение квеста
