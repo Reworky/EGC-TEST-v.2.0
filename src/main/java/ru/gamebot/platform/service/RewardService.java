@@ -271,9 +271,23 @@ public class RewardService {
         return createRewardRequest(user, rewardItem, null);
     }
 
-    /** userData - то, что игрок ввёл при покупке (для вывода в Stars это юзернейм получателя): проверяется ДО списания EXC. */
-    @Transactional
     public RewardRequest createRewardRequest(AppUser user, RewardItem rewardItem, String userData) {
+        return createRewardRequest(user, rewardItem, userData, false);
+    }
+
+    /** Цена позиции в токенах СПОНСОРСКОГО баланса (18.11.2026, решение владельца): обычная цена магазина (effectivePrice, без партнёрского коэффициента - выгоднее клубу);
+     *  звёзды - по цене партнёра (курс 100%, как у вывода спонсорского баланса). */
+    public long sponsorPriceFor(AppUser user, RewardItem item) {
+        long price = "telegram_stars".equals(item.getPurchaseGroup())
+                ? healthRatioService.starsPriceFor(user, item, true)
+                : healthRatioService.effectivePrice(item);
+        return price < 5_000 ? item.getPriceCoins() : price;   // как у игрового баланса: мелкие позиции - по номиналу каталога
+    }
+
+    /** userData - то, что игрок ввёл при покупке (для вывода в Stars это юзернейм получателя): проверяется ДО списания EXC.
+     *  fromSponsor: оплата токенами спонсорского баланса (18.11.2026): без месячных лимитов трат и вывода и проверок ценовых слоёв магазина; проверки аккаунта и «1 заявка вывода в сутки» остаются. */
+    @Transactional
+    public RewardRequest createRewardRequest(AppUser user, RewardItem rewardItem, String userData, boolean fromSponsor) {
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
 
@@ -300,8 +314,10 @@ public class RewardService {
             }
         }
 
-        // 4-layer shop limits check (throws IllegalArgumentException on violation)
-        shopLimitService.checkAllLimits(lockedUser, rewardItem);
+        // 4-layer shop limits check (throws IllegalArgumentException on violation); токены спонсорского баланса уже оплачены спонсором, лимитов нет
+        if (!fromSponsor) {
+            shopLimitService.checkAllLimits(lockedUser, rewardItem);
+        }
 
         boolean isAvatarFrame = "avatar_frame".equals(rewardItem.getPurchaseGroup());
 
@@ -314,19 +330,23 @@ public class RewardService {
             throw new IllegalArgumentException("Эта рамка уже в вашей коллекции. Переключитесь бесплатно в профиле.");
         }
 
-        long price = healthRatioService.effectivePriceFor(lockedUser, rewardItem);
+        long price = fromSponsor ? sponsorPriceFor(lockedUser, rewardItem) : healthRatioService.effectivePriceFor(lockedUser, rewardItem);
 
         // 3.3 Withdrawal limit check (min 5000 EXC per model)
         if (price < 5_000) {
             price = rewardItem.getPriceCoins(); // small items bypass withdrawal tracking
         }
 
-        if (lockedUser.getCoins() < price) {
+        if (fromSponsor) {
+            if (lockedUser.getSponsorCoins() < price) {
+                throw new IllegalArgumentException("Недостаточно токенов на спонсорском балансе. Нужно " + price + ".");
+            }
+        } else if (lockedUser.getCoins() < price) {
             throw new IllegalArgumentException("Недостаточно EXC. Нужно " + price + " EXC.");
         }
 
         boolean isWithdrawalItem = WITHDRAWAL_CATEGORY.equals(rewardItem.getCategory());
-        if (!isAvatarFrame) {
+        if (!isAvatarFrame && !fromSponsor) {
             // Звёзды (категория «Вывод») идут в лимит вывода, остальные товары - в отдельный лимит трат в магазине (5 x лимит вывода)
             long remaining = isWithdrawalItem ? sinkShopService.getRemainingWithdrawalLimit(lockedUser) : sinkShopService.getRemainingShopLimit(lockedUser);
             if (price > remaining) {
@@ -335,8 +355,12 @@ public class RewardService {
             }
         }
 
-        excTx.creditExc(lockedUser, -price, ExcTransactionService.SHOP_BUY, "Покупка: " + rewardItem.getTitle());
-        if (!isAvatarFrame) {
+        if (fromSponsor) {
+            excTx.creditSponsor(lockedUser, -price, ExcTransactionService.SHOP_BUY, "Покупка (спонсорский баланс): " + rewardItem.getTitle());
+        } else {
+            excTx.creditExc(lockedUser, -price, ExcTransactionService.SHOP_BUY, "Покупка: " + rewardItem.getTitle());
+        }
+        if (!isAvatarFrame && !fromSponsor) {
             // Рамки не учитываются в месячном лимите трат и не ставят cooldown — по требованию пользователя,
             // они полностью без ограничений и не должны мешать другим покупкам в магазине.
             if (isWithdrawalItem) {
@@ -350,6 +374,7 @@ public class RewardService {
         }
 
         RewardRequest request = new RewardRequest();
+        request.setFromSponsor(fromSponsor);
         request.setUser(lockedUser);
         request.setRewardItem(rewardItem);
         request.setCreatedAt(LocalDateTime.now());

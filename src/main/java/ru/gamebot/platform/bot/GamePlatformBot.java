@@ -1910,6 +1910,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                             List.of(keyboardFactory.callback("⬅️ Назад", "menu:shop")))));
             return;
         }
+        if (data.startsWith("shop:confirmsp:")) {
+            answerSilently(callbackQuery.getId());
+            Long confirmSpId = parseLong(data.substring("shop:confirmsp:".length()));
+            String savedSpId = session.getData().get("confirmRewardId");
+            String savedSpData = session.getData().get("confirmRewardData");
+            if (confirmSpId == null || savedSpId == null || !savedSpId.equals(String.valueOf(confirmSpId))) {
+                if (confirmSpId != null) sendRewardCard(user, confirmSpId, "⚠️ Оформите заявку заново.");
+                return;
+            }
+            session.getData().remove("confirmRewardId");
+            session.getData().remove("confirmRewardData");
+            completePurchase(callbackQuery, user, rewardService.getRewardItem(confirmSpId), savedSpData == null || savedSpData.isBlank() ? null : savedSpData, true);
+            return;
+        }
         if (data.startsWith("shop:confirm:")) {
             answerSilently(callbackQuery.getId());
             Long confirmId = parseLong(data.substring("shop:confirm:".length()));
@@ -11929,12 +11943,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("💳 В рублях (СБП, любой банк)", "spwd:rub")));
         rows.add(List.of(keyboardFactory.callback("💎 В TON (Telegram Wallet)", "spwd:ton")));
+        rows.add(List.of(keyboardFactory.callback(isStarsWithdrawalOpen() ? "⭐ В звёздах Telegram" : "⭐ В звёздах (временно недоступно)", "shop:group:telegram_stars")));
+        rows.add(List.of(keyboardFactory.callback("🛍️ Потратить в магазине наград", "menu:shop")));
         rows.add(List.of(keyboardFactory.callback("📋 Мои заявки на вывод", "menu:my-withdrawals")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:balance")));
         sendText(user.getTelegramId(),
                 "💎 <b>Вывод спонсорского баланса</b>\n\n"
                         + "Доступно: <b>" + fmtExc(bal) + "</b> · ≈ " + fmtExc(Math.round(bal / 100.0)) + " ₽\n"
-                        + "Курс 100%, лимитов нет. Минимум " + fmtExc(ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) + ".\n\n"
+                        + "Курс 100%, лимитов нет. Минимум " + fmtExc(ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) + ".\n"
+                        + "Звёзды и магазин: при оформлении выберите «💎 Спонсорскими».\n\n"
                         + "Куда выводим?",
                 keyboardFactory.rowsLayout(rows));
     }
@@ -14536,8 +14553,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         session.getData().put("confirmRewardData", data == null ? "" : data);
         long price = healthRatioService.effectivePriceFor(user, reward);
         boolean instant = reward.getAvatarFrameColor() != null;
+        // Спонсорский баланс (18.11.2026): если хватает токенов, предлагаем выбор, чем платить (цена - обычная цена магазина, звёзды - цена партнёра)
+        long sponsorPrice = sponsorPayAvailable(user, reward) ? rewardService.sponsorPriceFor(user, reward) : 0;
+        boolean sponsorChoice = sponsorPrice > 0 && user.getSponsorCoins() >= sponsorPrice;
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        rows.add(List.of(keyboardFactory.callback(instant ? "✅ Купить" : "✅ Оформить заявку", "shop:confirm:" + reward.getId())));
+        if (sponsorChoice) {
+            rows.add(List.of(
+                    keyboardFactory.callback("🪙 Игровыми: " + fmtExc(price), "shop:confirm:" + reward.getId()),
+                    keyboardFactory.callback("💎 Спонсорскими: " + fmtExc(sponsorPrice), "shop:confirmsp:" + reward.getId())));
+        } else {
+            rows.add(List.of(keyboardFactory.callback(instant ? "✅ Купить" : "✅ Оформить заявку", "shop:confirm:" + reward.getId())));
+        }
         if (data != null && !data.isBlank()) {
             rows.add(List.of(keyboardFactory.callback("✏️ Изменить данные", "shop:buyother:" + reward.getId())));
         }
@@ -14546,12 +14572,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "📝 <b>Проверьте заявку</b>\n\n"
                         + "🎁 " + escape(reward.getTitle()) + "\n"
                         + "🪙 Цена: <b>" + fmtExc(price) + " EXC</b>\n"
+                        + (sponsorChoice ? "💎 Или спонсорскими: <b>" + fmtExc(sponsorPrice) + "</b> (на балансе " + fmtExc(user.getSponsorCoins()) + ")\n" : "")
                         + (data != null && !data.isBlank() ? "📋 Данные для выдачи: <code>" + escape(data) + "</code>\n" : "")
                         + "\n"
                         + (instant
                                 ? "После нажатия «Купить» EXC спишутся, и покупка применится сразу."
                                 : "После нажатия «Оформить заявку» EXC спишутся и заявка уйдёт модератору. Выдача вручную, мы пришлём уведомление."),
                 keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Можно ли предложить оплату спонсорскими токенами: выключатель включён, токены есть, позиция обычная или звёзды (донат-игры за «токены + звёзды» идут своим путём). */
+    private boolean sponsorPayAvailable(AppUser user, RewardItem reward) {
+        if (!sponsorBalanceService.enabled() || user.getSponsorCoins() <= 0) return false;
+        return reward.getPurchaseGroup() == null || ru.gamebot.platform.service.GemPurchaseService.packagesFor(reward.getPurchaseGroup()).isEmpty();
     }
 
     /** Просит игрока ввести данные для выдачи (email/ID) и ждёт текст (SHOP_GAME_DATA_INPUT). */
@@ -14663,10 +14696,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void completePurchase(CallbackQuery callbackQuery, AppUser user, RewardItem reward, String userGameData) {
-        long effectivePrice = healthRatioService.effectivePriceFor(user, reward);
+        completePurchase(callbackQuery, user, reward, userGameData, false);
+    }
+
+    /** fromSponsor: оплата токенами спонсорского баланса (18.11.2026). */
+    private void completePurchase(CallbackQuery callbackQuery, AppUser user, RewardItem reward, String userGameData, boolean fromSponsor) {
+        long effectivePrice = fromSponsor ? rewardService.sponsorPriceFor(user, reward) : healthRatioService.effectivePriceFor(user, reward);
         RewardRequest req;
         try {
-            req = rewardService.createRewardRequest(user, reward, userGameData);
+            req = rewardService.createRewardRequest(user, reward, userGameData, fromSponsor);
         } catch (IllegalArgumentException exception) {
             if (callbackQuery != null) answerSilently(callbackQuery.getId());
             sendRewardCard(user, reward.getId(), "⚠️ " + exception.getMessage());
@@ -14681,7 +14719,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(),
                     "✅ <b>Рамка аватара применена!</b>\n\n"
                             + "🎁 " + escape(reward.getTitle()) + "\n"
-                            + "🪙 Списано: <b>" + effectivePrice + " EXC</b>\n\n"
+                            + (fromSponsor ? "💎 Списано со спонсорского баланса: <b>" + fmtExc(effectivePrice) + "</b>\n\n" : "🪙 Списано: <b>" + effectivePrice + " EXC</b>\n\n")
                             + "Открой мини-апп → Профиль, чтобы увидеть новую рамку вокруг аватара.",
                     backMenuKeyboard("sink:cat:customization"));
             if (callbackQuery != null) answerSilently(callbackQuery.getId());
@@ -14698,7 +14736,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "✅ <b>Заявка на награду отправлена</b>\n\n"
                         + "🎁 Награда: <b>" + escape(reward.getTitle()) + "</b>\n"
-                        + "🪙 Списано: <b>" + effectivePrice + " EXC</b>\n\n"
+                        + (fromSponsor ? "💎 Списано со спонсорского баланса: <b>" + fmtExc(effectivePrice) + "</b>\n\n" : "🪙 Списано: <b>" + effectivePrice + " EXC</b>\n\n")
                         + "Как только выдача будет подтверждена, вы получите отдельное уведомление."
                         + ("Вывод".equals(reward.getCategory()) && !rewardService.withdrawalPriorityNote(user).isEmpty()
                                 ? "\n\n" + rewardService.withdrawalPriorityNote(user).trim() : ""),
@@ -31086,7 +31124,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback("📥 Открыть заявку", "admin:reward:req:" + req.getId())),
                 List.of(writeToPlayerButton(user))
         ));
-        String rich = "🛍️ <b>Новая заявка на выдачу награды</b>\n\n" + rewardRequestInfo(req, user);
+        String rich = "🛍️ <b>Новая заявка на выдачу награды</b>\n\n" + rewardRequestInfo(req, user)
+                + (req.isFromSponsor() ? "\n\n💎 <b>Оплачено токенами спонсорского баланса</b>" : "");
         for (Long adminId : adminService.allModeratorIds()) {
             sendText(adminId, rich, richMarkup);
         }
