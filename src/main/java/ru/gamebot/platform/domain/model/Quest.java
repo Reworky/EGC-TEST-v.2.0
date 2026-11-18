@@ -70,6 +70,18 @@ public class Quest {
 
     @Column(columnDefinition = "integer default 0")
     private int durationDays;
+
+    /** Срок квеста в днях. У внешних партнёрских квестов (externalAutoApprove) срока нет: подтверждение сети приходит от нескольких дней до 50,
+     *  поэтому они бессрочные (решение владельца 18.11.2026, действует и для будущих квестов, что бы ни записано в базе). 0 = без дедлайна у заявки.
+     *  Поле в базе не меняется: доступ к полям через поля сущности, этот геттер на сохранение не влияет. */
+    public int getDurationDays() {
+        return externalAutoApprove ? 0 : durationDays;
+    }
+
+    /** Подпись срока: у внешних партнёрских квестов всегда «Бессрочно» (см. getDurationDays). */
+    public String getDurationText() {
+        return externalAutoApprove ? "Бессрочно" : durationText;
+    }
     private Integer participantLimit;
 
     @Column(length = 2000)

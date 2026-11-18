@@ -2148,6 +2148,27 @@ public class QuestSeeder implements CommandLineRunner {
                     wowCreated ? "Created" : "Updated", WOW_REWARD_EXC);
         }
 
+        // Партнёрские (внешние) квесты бессрочные (решение владельца 18.11.2026): срок задаёт Quest.getDurationDays() (0 у всех externalAutoApprove),
+        // здесь один раз снимаем дедлайны с уже взятых заявок, иначе они бы отменились старым сроком (WeeklyResetScheduler.cancelExpiredSubmissions)
+        if (appSettingRepository.findById(EXTERNAL_UNLIMITED_KEY).isEmpty()) {
+            int cleared = 0;
+            for (Quest extQuest : questRepository.findAll()) {
+                if (!extQuest.isExternalAutoApprove()) continue;
+                for (ru.gamebot.platform.domain.model.QuestSubmission extSub : questSubmissionRepository.findActiveByQuest(extQuest)) {
+                    if (extSub.getExpiresAt() != null) {
+                        extSub.setExpiresAt(null);
+                        questSubmissionRepository.save(extSub);
+                        cleared++;
+                    }
+                }
+            }
+            ru.gamebot.platform.domain.model.AppSetting extMark = new ru.gamebot.platform.domain.model.AppSetting();
+            extMark.setKey(EXTERNAL_UNLIMITED_KEY);
+            extMark.setValue(LocalDateTime.now().toString());
+            appSettingRepository.save(extMark);
+            log.info("[QuestSeeder] External partner quests made unlimited, cleared {} submission deadlines", cleared);
+        }
+
         // ── Внешний CPA-квест: Skyeng (actionpay) ───────────────────────────────────
         gameCatalogService.setDifficultyMode("Skyeng", "FLAT", 2000L, 0);
         if (questRepository.findFirstByTitleAndGameName("Пройди вводный урок в Skyeng", "Skyeng").isEmpty()) {
@@ -2921,6 +2942,8 @@ public class QuestSeeder implements CommandLineRunner {
     }
 
     /** World of Warships (actionpay 14951): новое и прежнее название квеста, награда (EXC), ключ app_settings одноразового обновления текстов (18.11.2026). */
+    /** Ключ app_settings: у заявок внешних партнёрских квестов сняты дедлайны (18.11.2026). */
+    private static final String EXTERNAL_UNLIMITED_KEY = "external.quests.unlimited.done";
     private static final String WOW_TITLE = "World of Warships: установи и поиграй";
     private static final String WOW_TITLE_OLD = "Зарегистрируйся в World of Warships";
     private static final long WOW_REWARD_EXC = 7800L;
