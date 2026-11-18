@@ -10954,7 +10954,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Заголовок «Квест активен! Теперь заходите в игру...» собирается ниже (nextStep) одной строкой для всех обычных квестов;
         // здесь остаётся только текст партнёрских квестов со своей ссылкой.
         String notice = isGameOfferQuest(quest)
-                ? "🚀 Квест активен! Открой страницу игры кнопкой ниже — отчёт отправлять не нужно, EXC начислим после подтверждения партнёра."
+                ? "🚀 Квест активен! Открой страницу игры кнопкой ниже — EXC начислим после подтверждения партнёра."
                 : quest.isExternalAutoApprove()
                 ? "🚀 Квест активен! Перейди по своей ссылке ниже — отчёт отправлять не нужно, EXC начислится автоматически."
                 : "";
@@ -11035,6 +11035,25 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (isManualPartnerSponsored(freshQuest) && freshQuest.getInstruction() != null && !freshQuest.getInstruction().isBlank()) {
             // Партнёрский квест (ОТП Карта): вместо общего «заходите в игру» - подробные шаги, каждый отдельной цитатой
             sendMissionStep(user, freshQuest, submission, 1, "🚀 <b>Квест взят!</b>");
+            return;
+        }
+        if (isGameOfferQuest(freshQuest)) {
+            // Игровой оффер (шаблон владельца 18.11.2026): баннер, платформа без названия игры, ссылка только кнопкой (из текста убрана)
+            String gameSteps = questService.personalizeInstruction(freshQuest.getInstruction(), user.getTelegramId());
+            gameSteps = (gameSteps == null ? "" : gameSteps).replaceAll("https?://\\S+", "").replaceAll("\\n{3,}", "\n\n").trim();
+            String gameText = (notice.isEmpty() ? "" : notice + "\n\n")
+                    + "🎯 <b>" + escape(freshQuest.getTitle()) + "</b>\n"
+                    + (freshQuest.getPlatform() == null || freshQuest.getPlatform().isBlank() ? "" : escape(freshQuest.getPlatform()) + "\n")
+                    + deadlineLine
+                    + "\n"
+                    + questRewardLine(user, freshQuest)
+                    + "\n\n📎 <b>Что нужно сделать:</b>\n" + escape(gameSteps);
+            String gameBanner = questCardBanner(freshQuest);
+            if (gameBanner != null) {
+                sendResourceBanner(user.getTelegramId(), gameBanner, gameText, keyboardFactory.smartLayout(buttons));
+            } else {
+                sendText(user.getTelegramId(), gameText, keyboardFactory.smartLayout(buttons));
+            }
             return;
         }
         sendText(user.getTelegramId(),

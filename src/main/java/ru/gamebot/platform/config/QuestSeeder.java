@@ -2113,8 +2113,8 @@ public class QuestSeeder implements CommandLineRunner {
         if (wowCreated || appSettingRepository.findById(WOW_CARD_V2_KEY).isEmpty()) {
             wowQuest.setTitle(WOW_TITLE);
             wowQuest.setPlatform("ПК · Россия и Беларусь");
-            wowQuest.setDurationDays(50);
-            wowQuest.setDurationText("50 дней");
+            wowQuest.setDurationDays(0);   // бессрочный (решение владельца 18.11.2026): 0 = у заявки нет дедлайна
+            wowQuest.setDurationText("Бессрочно");
             wowQuest.setRewardXp(0);
             wowQuest.setRewardCoins(WOW_REWARD_EXC);
             wowQuest.setDescription("Бесплатная онлайн-игра про морские бои. Открой страницу игры, установи её и поиграй не меньше 30 минут: награду начислим после подтверждения партнёра.");
@@ -2133,6 +2133,13 @@ public class QuestSeeder implements CommandLineRunner {
             wowQuest.setExternalTargetType("REGISTRATION");
             wowQuest.setExternalMinPaymentRub(null);
             questRepository.save(wowQuest);
+            // уже взятые заявки (в работе) тоже без дедлайна
+            for (ru.gamebot.platform.domain.model.QuestSubmission wowSub : questSubmissionRepository.findActiveByQuest(wowQuest)) {
+                if (wowSub.getExpiresAt() != null) {
+                    wowSub.setExpiresAt(null);
+                    questSubmissionRepository.save(wowSub);
+                }
+            }
             ru.gamebot.platform.domain.model.AppSetting wowMark = new ru.gamebot.platform.domain.model.AppSetting();
             wowMark.setKey(WOW_CARD_V2_KEY);
             wowMark.setValue(LocalDateTime.now().toString());
@@ -2917,7 +2924,7 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String WOW_TITLE = "World of Warships: установи и поиграй";
     private static final String WOW_TITLE_OLD = "Зарегистрируйся в World of Warships";
     private static final long WOW_REWARD_EXC = 7800L;
-    private static final String WOW_CARD_V2_KEY = "wows.card.v3.done";   // v3 (18.11.2026): из условий убрана фраза про отчёт
+    private static final String WOW_CARD_V2_KEY = "wows.card.v4.done";   // v3: из условий убрана фраза про отчёт; v4 (18.11.2026): квест бессрочный, у взятых заявок сняты дедлайны
 
     /** Ключ app_settings: скрытие всех спонсорских квестов, кроме банка ОТП, выполнено (15.11.2026). */
     private static final String SPONSORED_HIDE_KEY = "sponsored.hide.except.otp.done";
