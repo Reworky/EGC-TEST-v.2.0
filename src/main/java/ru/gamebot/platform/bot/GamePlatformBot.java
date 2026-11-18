@@ -32414,10 +32414,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // Макет главного меню (26.10.2026, утверждён владельцем): ник и уровень строкой, баланс отдельно, «До вывода» на виду,
             // остальное («Сегодня») в раскрывающейся цитате; «Забери награду недели» остаётся на виду, это действие.
             return "<b>" + escape(user.getNickname()) + "</b> · Ур. " + userService.getLevelNumber(user.getXp())
-                    + " «" + escape(userService.getLevelName(user.getXp())) + "»\n"
+                    + " «" + escape(userService.getLevelName(user.getXp())) + "»\n\n"
                     + "💰 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>"
-                    + (sponsorBalanceService.enabled() ? " · 💎 <b>" + String.format("%,d", Math.max(0, user.getSponsorCoins())).replace(',', ' ') + " EXCASH</b>" : "")
-                    + firstWithdrawalProgressLine(user) + mainMenuStatusLines(user);
+                    + firstWithdrawalProgressLine(user)
+                    + (sponsorBalanceService.enabled() ? "\n\n💎 <b>" + String.format("%,d", Math.max(0, user.getSponsorCoins())).replace(',', ' ') + " EXCASH</b>" : "")
+                    + mainMenuStatusLines(user);
         }
         String title = switch (role) {
             case ROLE_ADMIN -> "🛠️ <b>Административный контур активен</b>";
