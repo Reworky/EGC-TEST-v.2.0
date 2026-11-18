@@ -828,9 +828,11 @@ function PhoneGate({ onConfirmed }) {
 function WithdrawView({ wallet, onChanged, initialSponsor }) {
   const navigate = useNavigate();
   const [method, setMethod] = useState('rub');
-  const canSponsor = sponsorUiOn(wallet) && wallet.sponsorCoins > 0;
+  const uiOn = sponsorUiOn(wallet);
+  const canSponsor = uiOn && wallet.sponsorCoins > 0;
   const [source, setSource] = useState(initialSponsor && canSponsor ? 'sponsor' : 'game');
   const sponsor = canSponsor && source === 'sponsor';
+  const sponsorEmpty = uiOn && !canSponsor && source === 'sponsor';
   const [phoneConfirmed, setPhoneConfirmed] = useState(wallet.phoneConfirmed);
 
   if (!phoneConfirmed) {
@@ -849,12 +851,23 @@ function WithdrawView({ wallet, onChanged, initialSponsor }) {
           </button>
         </div>
       )}
-      {canSponsor && (
+      {uiOn && (
         <div className="view-toggle" style={{ padding: '10px 16px 0' }}>
           <button className={`view-tab ${source === 'game' ? 'active' : ''}`} onClick={() => setSource('game')}>🪙 EXC</button>
           <button className={`view-tab ${source === 'sponsor' ? 'active' : ''}`} onClick={() => setSource('sponsor')}>💎 EXCASH</button>
         </div>
       )}
+      {sponsorEmpty && (
+        <div style={{ margin: '12px 16px', padding: '14px 16px', borderRadius: 16, textAlign: 'center',
+          background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(168,85,247,0.45)' }}>
+          <div style={{ fontSize: 14, marginBottom: 6 }}>💎 У тебя пока 0 EXCASH</div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 10 }}>
+            EXCASH начисляется за спонсорские квесты и выводится по курсу 100% без лимитов.
+          </div>
+          <button className="quest-btn" onClick={() => navigate('/quests?section=sponsored')}>🎯 Спонсорские квесты</button>
+        </div>
+      )}
+      {!sponsorEmpty && (<>
       <div className="view-toggle" style={{ padding: '10px 16px 12px' }}>
         <button className={`view-tab ${method === 'rub' ? 'active' : ''}`} onClick={() => setMethod('rub')}>💸 Рубли</button>
         <button className={`view-tab ${method === 'ton' ? 'active' : ''}`} onClick={() => setMethod('ton')}>💎 GRAM (TON)</button>
@@ -863,6 +876,7 @@ function WithdrawView({ wallet, onChanged, initialSponsor }) {
       {method === 'rub' && <WithdrawRubForm wallet={wallet} onDone={onChanged} sponsor={sponsor} />}
       {method === 'ton' && <WithdrawTonForm wallet={wallet} onDone={onChanged} sponsor={sponsor} />}
       {method === 'stars' && <WithdrawStarsForm wallet={wallet} onDone={onChanged} sponsor={sponsor} />}
+      </>)}
       <PayoutFeedCard />
     </>
   );
