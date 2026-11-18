@@ -10,6 +10,8 @@ public class WalletDto {
     /** Спонсорский баланс (токены с банковских миссий и партнёрских квестов, вывод по курсу 100% без лимитов); показывается, когда sponsorBalanceEnabled. */
     private long sponsorCoins;
     private boolean sponsorBalanceEnabled;
+    /** Версия API спонсорского баланса (1 - вывод/покупки по флагу sponsor): мини-апп показывает спонсорские элементы только если сервер её отдаёт (защита от деплоя интерфейса раньше бота). */
+    private int sponsorApi;
     private int excBonusPercent;
     private long tickets;
     private long xp;

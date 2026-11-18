@@ -123,7 +123,12 @@ function RanksModal({ currentXp, onClose }) {
   );
 }
 
-function BalanceView({ wallet, onChanged, onRefresh, highlightChest }) {
+// Спонсорский баланс показываем только когда он включён и сервер новой версии (sponsorApi): иначе старый бот проигнорировал бы флаг sponsor и вывел с игрового баланса
+function sponsorUiOn(wallet) {
+  return !!wallet && wallet.sponsorBalanceEnabled === true && (wallet.sponsorApi || 0) >= 1;
+}
+
+function BalanceView({ wallet, onChanged, onRefresh, highlightChest, onSponsorWithdraw }) {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -444,6 +449,20 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest }) {
         )}
       </BorderBeamCard>
 
+      {sponsorUiOn(wallet) && wallet.sponsorCoins > 0 && (
+        <div style={{ margin: '0 16px 12px', padding: '14px 16px', borderRadius: 16, textAlign: 'center',
+          background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(168,85,247,0.45)' }}>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginBottom: 4 }}>💎 Спонсорский баланс</div>
+          <div style={{ fontSize: 26, fontWeight: 600, color: '#c4b5fd' }}>
+            <AnimatedNumber value={wallet.sponsorCoins} flashColor="#c4b5fd" /> токенов
+          </div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
+            ≈ {Math.round(wallet.sponsorCoins / 100).toLocaleString('ru-RU')} ₽ · курс 100%, без лимитов
+          </div>
+          <button className="quest-btn" style={{ marginTop: 10 }} onClick={onSponsorWithdraw}>💸 Вывести спонсорские</button>
+        </div>
+      )}
+
       <DailyTasksCard
         refreshKey={`${wallet.coins}-${wallet.dailyBonusAvailable}-${wallet.chestAvailable}`}
         onClaimed={onChanged}
@@ -610,7 +629,7 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest }) {
   );
 }
 
-function WithdrawRubForm({ wallet, onDone }) {
+function WithdrawRubForm({ wallet, onDone, sponsor }) {
   const [amount, setAmount] = useState('');
   const [requisites, setRequisites] = useState('');
   const [busy, setBusy] = useState(false);
@@ -625,7 +644,7 @@ function WithdrawRubForm({ wallet, onDone }) {
     setBusy(true);
     setMessage(null);
     try {
-      const res = await withdrawRub(amt, requisites);
+      const res = await withdrawRub(amt, requisites, !!sponsor);
       setMessage(res.message);
       if (res.success) {
         setAmount('');
@@ -640,8 +659,10 @@ function WithdrawRubForm({ wallet, onDone }) {
   return (
     <div className="ref-link-card">
       <div className="ref-link-label">Вывод в рублях (СБП, любой банк)</div>
-      <p className="shop-desc">Минимум 5 000 EXC. Курс: 1 000 EXC = {+(10 * (wallet.withdrawalRatioPercent ?? wallet.healthRatioPercent) / 100).toFixed(1)} ₽ ({wallet.withdrawalRatioPercent != null ? `курс ${wallet.withdrawalRatioPercent}%` : `фонд ${wallet.healthRatioPercent}%`}). Доступно: {wallet.remainingWithdrawalLimit.toLocaleString()} EXC. {wallet.partnerCompare && wallet.withdrawalRatioPercent != null && wallet.withdrawalRatioPercent < 100 ? `Партнёр: 1 000 EXC = 10 ₽ (курс 100%).` : ''}</p>
-      <input type="number" className="quest-text-input" placeholder="Сумма в EXC" value={amount} onChange={e => setAmount(e.target.value)} style={{ marginTop: 16 }} />
+      {sponsor ? (
+        <p className="shop-desc">💎 Минимум 5 000. Курс 100%: 1 000 токенов = 10 ₽, лимитов нет. Доступно: {wallet.sponsorCoins.toLocaleString()}.</p>
+      ) : <p className="shop-desc">Минимум 5 000 EXC. Курс: 1 000 EXC = {+(10 * (wallet.withdrawalRatioPercent ?? wallet.healthRatioPercent) / 100).toFixed(1)} ₽ ({wallet.withdrawalRatioPercent != null ? `курс ${wallet.withdrawalRatioPercent}%` : `фонд ${wallet.healthRatioPercent}%`}). Доступно: {wallet.remainingWithdrawalLimit.toLocaleString()} EXC. {wallet.partnerCompare && wallet.withdrawalRatioPercent != null && wallet.withdrawalRatioPercent < 100 ? `Партнёр: 1 000 EXC = 10 ₽ (курс 100%).` : ''}</p>}
+      <input type="number" className="quest-text-input" placeholder={sponsor ? 'Сумма в токенах' : 'Сумма в EXC'} value={amount} onChange={e => setAmount(e.target.value)} style={{ marginTop: 16 }} />
       <input type="text" className="quest-text-input" placeholder="Банк и номер телефона (СБП, любой банк)" value={requisites} onChange={e => setRequisites(e.target.value)} style={{ marginTop: 8 }} />
       <button className="quest-btn" disabled={busy} onClick={handleSubmit} style={{ marginTop: 16 }}>{busy ? 'Секунду...' : 'Отправить заявку'}</button>
       {message && <div className="quest-message">{message}</div>}
@@ -649,7 +670,7 @@ function WithdrawRubForm({ wallet, onDone }) {
   );
 }
 
-function WithdrawTonForm({ wallet, onDone }) {
+function WithdrawTonForm({ wallet, onDone, sponsor }) {
   const [amount, setAmount] = useState('');
   const [wallet_, setWallet] = useState('');
   const [quote, setQuote] = useState(null);
@@ -663,10 +684,10 @@ function WithdrawTonForm({ wallet, onDone }) {
       return;
     }
     const timer = setTimeout(() => {
-      getTonQuote(amt).then(setQuote).catch(() => setQuote(null));
+      getTonQuote(amt, !!sponsor).then(setQuote).catch(() => setQuote(null));
     }, 400);
     return () => clearTimeout(timer);
-  }, [amount]);
+  }, [amount, sponsor]);
 
   async function handleSubmit() {
     const amt = parseInt(amount, 10);
@@ -677,7 +698,7 @@ function WithdrawTonForm({ wallet, onDone }) {
     setBusy(true);
     setMessage(null);
     try {
-      const res = await withdrawTon(amt, wallet_);
+      const res = await withdrawTon(amt, wallet_, !!sponsor);
       setMessage(res.message);
       if (res.success) {
         setAmount('');
@@ -693,8 +714,10 @@ function WithdrawTonForm({ wallet, onDone }) {
   return (
     <div className="ref-link-card">
       <div className="ref-link-label">Вывод в GRAM (TON)</div>
-      <p className="shop-desc">Минимум 5 000 EXC. Доступно: {wallet.remainingWithdrawalLimit.toLocaleString()} EXC.</p>
-      <input type="number" className="quest-text-input" placeholder="Сумма в EXC" value={amount} onChange={e => setAmount(e.target.value)} />
+      <p className="shop-desc">{sponsor
+        ? `💎 Минимум 5 000. Курс 100%, лимитов нет. Доступно: ${wallet.sponsorCoins.toLocaleString()}.`
+        : `Минимум 5 000 EXC. Доступно: ${wallet.remainingWithdrawalLimit.toLocaleString()} EXC.`}</p>
+      <input type="number" className="quest-text-input" placeholder={sponsor ? 'Сумма в токенах' : 'Сумма в EXC'} value={amount} onChange={e => setAmount(e.target.value)} />
       {quote && (
         <div className="shop-status" style={{ marginTop: 6 }}>
           ≈ {quote.rubles.toLocaleString()} ₽ → ≈ {quote.tonAmount} GRAM
@@ -712,7 +735,7 @@ function WithdrawTonForm({ wallet, onDone }) {
   );
 }
 
-function WithdrawStarsForm({ wallet, onDone }) {
+function WithdrawStarsForm({ wallet, onDone, sponsor }) {
   const [items, setItems] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [username, setUsername] = useState('');
@@ -729,7 +752,7 @@ function WithdrawStarsForm({ wallet, onDone }) {
     setBusy(true);
     setMessage(null);
     try {
-      const res = await purchaseItem(selectedId, username.trim().replace(/^@/, ''));
+      const res = await purchaseItem(selectedId, username.trim().replace(/^@/, ''), !!sponsor);
       setMessage(res.message);
       if (res.success) {
         setSelectedId(null);
@@ -745,7 +768,7 @@ function WithdrawStarsForm({ wallet, onDone }) {
   return (
     <div className="ref-link-card">
       <div className="ref-link-label">Вывод в звёздах Telegram</div>
-      <p className="shop-desc">Доступно: {wallet.remainingWithdrawalLimit.toLocaleString()} EXC. Отправляется вручную по юзернейму, в течение 24 ч.</p>
+      <p className="shop-desc">{sponsor ? `💎 Доступно: ${wallet.sponsorCoins.toLocaleString()} токенов, лимитов нет.` : `Доступно: ${wallet.remainingWithdrawalLimit.toLocaleString()} EXC.`} Отправляется вручную по юзернейму, в течение 24 ч.</p>
       {items === null ? (
         <p className="shop-desc">Загрузка...</p>
       ) : (
@@ -754,11 +777,11 @@ function WithdrawStarsForm({ wallet, onDone }) {
             <button
               key={item.id}
               className={`quest-btn ${selectedId === item.id ? '' : 'quest-btn-secondary'}`}
-              disabled={item.locked}
+              disabled={sponsor ? !(item.sponsorPrice > 0) : item.locked}
               onClick={() => setSelectedId(item.id)}
-              style={{ fontSize: 12, lineHeight: 1.5, padding: '8px 6px', opacity: item.locked ? 0.5 : 1 }}
+              style={{ fontSize: 12, lineHeight: 1.5, padding: '8px 6px', opacity: (sponsor ? !(item.sponsorPrice > 0) : item.locked) ? 0.5 : 1 }}
             >
-              {denom(item.title)}<br />{item.effectivePrice.toLocaleString()} EXC
+              {denom(item.title)}<br />{sponsor ? `💎 ${item.sponsorPrice > 0 ? item.sponsorPrice.toLocaleString() : '-'}` : `${item.effectivePrice.toLocaleString()} EXC`}
             </button>
           ))}
         </div>
@@ -828,9 +851,12 @@ function PhoneGate({ onConfirmed }) {
   );
 }
 
-function WithdrawView({ wallet, onChanged }) {
+function WithdrawView({ wallet, onChanged, initialSponsor }) {
   const navigate = useNavigate();
   const [method, setMethod] = useState('rub');
+  const canSponsor = sponsorUiOn(wallet) && wallet.sponsorCoins > 0;
+  const [source, setSource] = useState(initialSponsor && canSponsor ? 'sponsor' : 'game');
+  const sponsor = canSponsor && source === 'sponsor';
   const [phoneConfirmed, setPhoneConfirmed] = useState(wallet.phoneConfirmed);
 
   if (!phoneConfirmed) {
@@ -849,14 +875,20 @@ function WithdrawView({ wallet, onChanged }) {
           </button>
         </div>
       )}
+      {canSponsor && (
+        <div className="view-toggle" style={{ padding: '10px 16px 0' }}>
+          <button className={`view-tab ${source === 'game' ? 'active' : ''}`} onClick={() => setSource('game')}>🪙 Игровой</button>
+          <button className={`view-tab ${source === 'sponsor' ? 'active' : ''}`} onClick={() => setSource('sponsor')}>💎 Спонсорский</button>
+        </div>
+      )}
       <div className="view-toggle" style={{ padding: '10px 16px 12px' }}>
         <button className={`view-tab ${method === 'rub' ? 'active' : ''}`} onClick={() => setMethod('rub')}>💸 Рубли</button>
         <button className={`view-tab ${method === 'ton' ? 'active' : ''}`} onClick={() => setMethod('ton')}>💎 GRAM (TON)</button>
         <button className={`view-tab ${method === 'stars' ? 'active' : ''}`} onClick={() => setMethod('stars')}>⭐ Stars</button>
       </div>
-      {method === 'rub' && <WithdrawRubForm wallet={wallet} onDone={onChanged} />}
-      {method === 'ton' && <WithdrawTonForm wallet={wallet} onDone={onChanged} />}
-      {method === 'stars' && <WithdrawStarsForm wallet={wallet} onDone={onChanged} />}
+      {method === 'rub' && <WithdrawRubForm wallet={wallet} onDone={onChanged} sponsor={sponsor} />}
+      {method === 'ton' && <WithdrawTonForm wallet={wallet} onDone={onChanged} sponsor={sponsor} />}
+      {method === 'stars' && <WithdrawStarsForm wallet={wallet} onDone={onChanged} sponsor={sponsor} />}
       <PayoutFeedCard />
     </>
   );
@@ -894,8 +926,8 @@ function MyWithdrawalsView({ onWalletChanged }) {
       {items.map(r => (
         <div key={r.id} className="shop-card">
           <div className="shop-top">
-            <div className="shop-title">В-{r.displayId} · {r.method}</div>
-            <div className="shop-price">{r.amountExc.toLocaleString()} EXC</div>
+            <div className="shop-title">{r.fromSponsor ? '💎 ' : ''}В-{r.displayId} · {r.method}</div>
+            <div className="shop-price">{r.amountExc.toLocaleString()} {r.fromSponsor ? 'токенов' : 'EXC'}</div>
           </div>
           <div className="shop-meta">
             <span>{STATUS_LABELS[r.status] || r.status}</span>
@@ -917,6 +949,7 @@ function MyWithdrawalsView({ onWalletChanged }) {
 
 export default function WalletPage() {
   const [view, setView] = useState('balance');
+  const [sponsorFirst, setSponsorFirst] = useState(false);
   const [wallet, setWallet] = useState(null);
   const [error, setError] = useState(null);
   const [searchParams] = useSearchParams();
@@ -954,8 +987,8 @@ export default function WalletPage() {
 
       {error && <div className="page-center error-msg">{error}</div>}
       {!error && view !== 'mine' && wallet === null && <div className="page-center">Загрузка...</div>}
-      {!error && view === 'balance' && wallet && <BalanceView wallet={wallet} onChanged={reload} onRefresh={refresh} highlightChest={highlightChest} />}
-      {!error && view === 'withdraw' && wallet && <WithdrawView wallet={wallet} onChanged={reload} />}
+      {!error && view === 'balance' && wallet && <BalanceView wallet={wallet} onChanged={reload} onRefresh={refresh} highlightChest={highlightChest} onSponsorWithdraw={() => { setSponsorFirst(true); switchTab('withdraw'); }} />}
+      {!error && view === 'withdraw' && wallet && <WithdrawView wallet={wallet} onChanged={reload} initialSponsor={sponsorFirst} />}
       {view === 'mine' && <MyWithdrawalsView onWalletChanged={reload} />}
     </div>
   );

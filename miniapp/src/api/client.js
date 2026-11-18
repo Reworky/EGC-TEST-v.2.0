@@ -168,8 +168,8 @@ export async function getShopStats() {
   return cached('shopStats', async () => { const { data } = await api.get('/api/shop/stats'); return data; });
 }
 
-export async function purchaseItem(id, userData) {
-  const { data } = await api.post(`/api/shop/items/${id}/purchase`, { userData });
+export async function purchaseItem(id, userData, sponsor = false) {
+  const { data } = await api.post(`/api/shop/items/${id}/purchase`, { userData, sponsor });
   invalidateCache('shopItems', 'shopStats', 'profile', 'wallet', 'starsWithdrawItems');
   return data;
 }
@@ -309,19 +309,19 @@ export async function openChest() {
   return data;
 }
 
-export async function getTonQuote(amount) {
-  const { data } = await api.get('/api/wallet/ton-quote', { params: { amount } });
+export async function getTonQuote(amount, sponsor = false) {
+  const { data } = await api.get('/api/wallet/ton-quote', { params: { amount, sponsor } });
   return data;
 }
 
-export async function withdrawRub(amount, requisites) {
-  const { data } = await api.post('/api/wallet/withdraw/rub', { amount, requisites });
+export async function withdrawRub(amount, requisites, sponsor = false) {
+  const { data } = await api.post('/api/wallet/withdraw/rub', { amount, requisites, sponsor });
   invalidateCache('wallet', 'profile');
   return data;
 }
 
-export async function withdrawTon(amount, walletAddress) {
-  const { data } = await api.post('/api/wallet/withdraw/ton', { amount, walletAddress });
+export async function withdrawTon(amount, walletAddress, sponsor = false) {
+  const { data } = await api.post('/api/wallet/withdraw/ton', { amount, walletAddress, sponsor });
   invalidateCache('wallet', 'profile');
   return data;
 }

@@ -16,4 +16,6 @@ public class WithdrawalRequestDto {
     private String method;
     /** Адрес TON-кошелька или банковские реквизиты — в зависимости от method. */
     private String details;
+    /** Заявка оплачена со спонсорского баланса (значок 💎 в «Мои заявки»). */
+    private boolean fromSponsor;
 }

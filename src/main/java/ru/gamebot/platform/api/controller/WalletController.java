@@ -98,6 +98,7 @@ public class WalletController {
                 .coins(user.getCoins())
                 .sponsorCoins(user.getSponsorCoins())
                 .sponsorBalanceEnabled(sponsorBalanceService.enabled())
+                .sponsorApi(1)
                 .excBonusPercent(userService.getExcBonusPercent(user.getXp()))
                 .tickets(user.getTickets())
                 .xp(user.getXp())
@@ -375,6 +376,7 @@ public class WalletController {
                 .createdAt(r.getCreatedAt() != null ? r.getCreatedAt().format(FMT) : null)
                 .method(method)
                 .details(details)
+                .fromSponsor(r.isFromSponsor())
                 .build();
     }
 

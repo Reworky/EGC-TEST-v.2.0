@@ -85,7 +85,7 @@ function ShopItemCard({ item, expanded, onToggle, onPurchased, ownedFrames, acti
   const isOwned = isFrame && ownedFrames?.includes(frameKey);
   const isActive = isFrame && activeFrame === frameKey;
 
-  async function handleBuy() {
+  async function handleBuy(sponsor = false) {
     if (item.userDataPrompt && !userData.trim()) {
       setMessage('Заполните поле выше.');
       return;
@@ -93,7 +93,7 @@ function ShopItemCard({ item, expanded, onToggle, onPurchased, ownedFrames, acti
     setBusy(true);
     setMessage(null);
     try {
-      const res = await purchaseItem(item.id, userData.trim() || null);
+      const res = await purchaseItem(item.id, userData.trim() || null, sponsor === true);
       setMessage(res.message);
       if (res.success) {
         setUserData('');
@@ -127,6 +127,9 @@ function ShopItemCard({ item, expanded, onToggle, onPurchased, ownedFrames, acti
           : <div className="shop-price">{item.effectivePrice.toLocaleString()} EXC</div>
         }
       </div>
+      {!isOwned && item.sponsorPrice > 0 && (
+        <div className="shop-status" style={{ color: '#c4b5fd' }}>💎 Или спонсорскими: {item.sponsorPrice.toLocaleString()}</div>
+      )}
       {item.statusNote && <div className="shop-status">{item.statusNote}</div>}
       {expanded && (
         <div className="shop-detail" onClick={e => e.stopPropagation()}>
@@ -149,9 +152,20 @@ function ShopItemCard({ item, expanded, onToggle, onPurchased, ownedFrames, acti
               {busy ? 'Секунду...' : isActive ? 'Уже надета' : 'Надеть'}
             </button>
           ) : (
-            <button className="quest-btn" disabled={busy || item.locked} onClick={handleBuy}>
-              {busy ? 'Секунду...' : item.locked ? 'Недоступно' : 'Купить'}
-            </button>
+            item.sponsorPrice > 0 ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="quest-btn" style={{ flex: 1 }} disabled={busy || item.locked} onClick={() => handleBuy(false)}>
+                  {busy ? 'Секунду...' : item.locked ? 'Недоступно' : `Купить за 🪙 ${item.effectivePrice.toLocaleString()}`}
+                </button>
+                <button className="quest-btn quest-btn-secondary" style={{ flex: 1 }} disabled={busy} onClick={() => handleBuy(true)}>
+                  {busy ? 'Секунду...' : `Купить за 💎 ${item.sponsorPrice.toLocaleString()}`}
+                </button>
+              </div>
+            ) : (
+              <button className="quest-btn" disabled={busy || item.locked} onClick={() => handleBuy(false)}>
+                {busy ? 'Секунду...' : item.locked ? 'Недоступно' : 'Купить'}
+              </button>
+            )
           )}
           {message && <div className="quest-message">{message}</div>}
         </div>
