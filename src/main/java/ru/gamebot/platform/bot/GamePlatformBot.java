@@ -7581,7 +7581,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Строка спонсорского баланса для экрана «Баланс» (только при включённом выключателе и ненулевом балансе): «💎 N · ≈ M ₽ (курс 100%)». Пусто иначе. */
     private String sponsorBalanceLine(AppUser user) {
         if (!sponsorBalanceService.enabled()) return "";
-        return "💎 <b>" + fmtExc(Math.max(0, user.getSponsorCoins())) + " EXCASH</b>\n\n";
+        long sp = Math.max(0, user.getSponsorCoins());
+        return "💎 <b>" + fmtExc(sp) + " EXCASH</b> (≈ " + fmtExc(Math.round(sp / 100.0)) + " ₽)\n\n";
     }
 
     private void sendBalance(AppUser user, String backData) {
