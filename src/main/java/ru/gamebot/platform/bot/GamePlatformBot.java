@@ -10685,7 +10685,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("\n").append(escape(quest.getDescription())).append("\n");
         }
         if (quest.getRequirements() != null && !quest.getRequirements().isBlank()) {
-            sb.append("\n").append(escape(quest.getRequirements()));
+            // Оформление по тексту владельца 18.11.2026: блок «📎 Как получить» - цитатой, строка «Реклама · erid» - курсивом
+            for (String block : quest.getRequirements().trim().split("\\n\\s*\\n")) {
+                if (block.isBlank()) continue;
+                sb.append("\n");
+                if (block.trim().startsWith("📎")) {
+                    sb.append("<blockquote>").append(escape(block.trim())).append("</blockquote>\n");
+                } else {
+                    List<String> lines = new ArrayList<>();
+                    for (String line : block.trim().split("\\n")) {
+                        lines.add(line.trim().startsWith("Реклама") ? "<i>" + escape(line.trim()) + "</i>" : escape(line));
+                    }
+                    sb.append(String.join("\n", lines)).append("\n");
+                }
+            }
         }
         return sb.toString().trim();
     }
