@@ -132,6 +132,13 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     long countByRegistrationCompletedTrue();
 
+    /** Сумма токенов на спонсорских балансах всех игроков (18.11.2026). */
+    @Query("SELECT COALESCE(SUM(u.sponsorCoins), 0) FROM AppUser u")
+    long sumSponsorCoins();
+
+    /** Сколько игроков держат токены на спонсорском балансе. */
+    long countBySponsorCoinsGreaterThan(long amount);
+
     @Query("SELECT COALESCE(SUM(u.coins), 0) FROM AppUser u")
     long sumAllCoins();
 

@@ -155,6 +155,16 @@ public class ExcTransactionService {
         return repo.sumEarnedSince(since);
     }
 
+    /** Начислено на спонсорские балансы в окне [from, to) (аналитика, 18.11.2026). */
+    public long sumSponsorEarnedBetween(LocalDateTime from, LocalDateTime to) {
+        return repo.sumSponsorEarnedBetween(from, to);
+    }
+
+    /** Потрачено токенов спонсорского баланса в магазине в окне [from, to) (≤ 0). */
+    public long sumSponsorShopSpentBetween(LocalDateTime from, LocalDateTime to) {
+        return repo.sumSponsorShopSpentBetween(from, to);
+    }
+
     public List<Object[]> findReferralEarningsRankingBetween(LocalDateTime from, LocalDateTime to) {
         return repo.findReferralEarningsRankingBetween(from, to);
     }

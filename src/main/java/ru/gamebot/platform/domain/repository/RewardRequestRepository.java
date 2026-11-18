@@ -42,7 +42,7 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
     List<String> findRecentPayoutDetails(@Param("user") AppUser user, @Param("group") String group, Pageable pageable);
 
     /** Сколько EXC игрок вывел за всё время любым способом (рубли, TON, звёзды): заявки на вывод, кроме отклонённых и отменённых. Порог 10 000 EXC для рублей на карту партнёра (05.11.2026). */
-    @Query("SELECT COALESCE(SUM(COALESCE(r.paidPriceCoins, r.rewardItem.priceCoins)), 0) FROM RewardRequest r WHERE r.user = :user AND r.rewardItem.category = 'Вывод' AND r.status <> 'REJECTED' AND r.status <> 'CANCELLED'")
+    @Query("SELECT COALESCE(SUM(COALESCE(r.paidPriceCoins, r.rewardItem.priceCoins)), 0) FROM RewardRequest r WHERE r.user = :user AND r.rewardItem.category = 'Вывод' AND r.fromSponsor = false AND r.status <> 'REJECTED' AND r.status <> 'CANCELLED'")
     long sumActiveWithdrawalExcByUser(@Param("user") AppUser user);
 
     /** Живые заявки на вывод ДРУГИХ игроков с реквизитами — для проверки «реквизиты уже используются другим аккаунтом». */
@@ -156,4 +156,13 @@ public interface RewardRequestRepository extends JpaRepository<RewardRequest, Lo
     /** Популярное в магазине: число заказов по товарам каталога (без вывода и отменённых) с даты. Строки: [id товара, число заказов], от большего к меньшему. */
     @Query("SELECT r.rewardItem.id, COUNT(r) FROM RewardRequest r WHERE r.rewardItem.category <> 'Вывод' AND r.status IN ('APPROVED','PENDING','IN_PROGRESS') AND r.createdAt >= :since GROUP BY r.rewardItem.id ORDER BY COUNT(r) DESC")
     List<Object[]> countShopOrdersByItemSince(@Param("since") LocalDateTime since);
+
+    // ── Спонсорский баланс (18.11.2026): вывод и траты токенов, оплаченных со спонсорского баланса
+    /** Выплаченные заявки вывода со спонсорского баланса в окне [from, to) (по дате создания, как остальная аналитика вывода). */
+    @Query("SELECT r FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.fromSponsor = true AND r.status = 'APPROVED' AND r.createdAt >= :from AND r.createdAt < :to")
+    List<RewardRequest> findApprovedSponsorWithdrawalsBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /** Заявки вывода со спонсорского баланса, ждущие выплаты. */
+    @Query("SELECT r FROM RewardRequest r WHERE r.rewardItem.category = 'Вывод' AND r.fromSponsor = true AND r.status IN ('PENDING', 'IN_PROGRESS')")
+    List<RewardRequest> findPendingSponsorWithdrawals();
 }

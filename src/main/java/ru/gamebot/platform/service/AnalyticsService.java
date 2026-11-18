@@ -62,7 +62,8 @@ public class AnalyticsService {
         EGC_PASS("⭐", "EGC Pass: продажи"),
         VPN("🔐", "EGC VPN"),
         PARTNER("💳", "Партнёрский квест"),
-        NEWBIE("🧭", "Воронка новичка");
+        NEWBIE("🧭", "Воронка новичка"),
+        SPONSOR("💎", "Спонсорский баланс");
 
         public final String icon;
         public final String title;
@@ -256,6 +257,7 @@ public class AnalyticsService {
                 case VPN -> vpnTab(p, pv, lines, extras);
                 case PARTNER -> partnerTab(p, pv, lines, extras);
                 case NEWBIE -> newbieTab(p, lines, extras);
+                case SPONSOR -> sponsorTab(p, pv, lines, extras);
             }
         } catch (Exception e) {
             log.error("Analytics tab {} failed", tab, e);
@@ -678,6 +680,31 @@ public class AnalyticsService {
         RewardService.WithdrawalPeriodStats b = rewardService.withdrawalStatsSince(to);
         return new RewardService.WithdrawalPeriodStats(a.count() - b.count(), a.totalExc() - b.totalExc(),
                 a.totalRub() - b.totalRub(), a.totalTonRub() - b.totalTonRub(), a.totalStars() - b.totalStars());
+    }
+
+    /** Вкладка «Спонсорский баланс» (18.11.2026): токены с банковских миссий и внешних партнёрских квестов, оплаченные спонсором; вывод по курсу 100% без лимитов.
+     *  Отдельно от «Экономики и выплат»: эти токены не входят в фонд клуба и в «EXC на счетах». */
+    private void sponsorTab(Period p, Period pv, List<Line> out, List<String> extras) {
+        long balances = userRepo.sumSponsorCoins();
+        out.add(L("sp_balance", "Токенов на спонсорских балансах", "токенов", (double) balances, null, "накоплено и ещё не выведено", false));
+        out.add(L("sp_holders", "  игроков с токенами", "", (double) userRepo.countBySponsorCoinsGreaterThan(0), null));
+        long earned = excService.sumSponsorEarnedBetween(p.from(), p.to());
+        long earnedPrev = excService.sumSponsorEarnedBetween(pv.from(), pv.to());
+        out.add(L("sp_earned", "Начислено за период", "токенов", (double) earned, (double) earnedPrev, "награды банковских и партнёрских квестов", false));
+        long shop = -excService.sumSponsorShopSpentBetween(p.from(), p.to());
+        long shopPrev = -excService.sumSponsorShopSpentBetween(pv.from(), pv.to());
+        out.add(L("sp_shop", "Потрачено в магазине наград", "токенов", (double) shop, (double) shopPrev));
+        RewardService.SponsorWithdrawalStats cur = rewardService.sponsorWithdrawalStats(p.from(), p.to());
+        RewardService.SponsorWithdrawalStats prev = rewardService.sponsorWithdrawalStats(pv.from(), pv.to());
+        out.add(L("sp_paid_cnt", "Выплачено заявок за период", "", (double) cur.paid().count(), (double) prev.paid().count()));
+        out.add(L("sp_paid_exc", "  токенов выведено", "токенов", (double) cur.paid().totalExc(), (double) prev.paid().totalExc()));
+        out.add(L("sp_paid_rub", "  рублями", "₽", (double) cur.paid().totalRub(), (double) prev.paid().totalRub()));
+        out.add(L("sp_paid_ton", "  GRAM/TON (эквивалент)", "₽", (double) cur.paid().totalTonRub(), (double) prev.paid().totalTonRub()));
+        out.add(L("sp_paid_stars", "  звёздами Telegram", "⭐", (double) cur.paid().totalStars(), (double) prev.paid().totalStars()));
+        out.add(L("sp_queue", "Заявок в очереди (спонсорский вывод)", "", (double) cur.pendingCount(), null, "ждут выплаты", true));
+        out.add(L("sp_queue_exc", "  токенов в очереди", "токенов", (double) cur.pendingExc(), null, null, true));
+        extras.add("💎 Спонсорские токены оплачены спонсорами (банки, партнёрские офферы): вывод по курсу 100% без лимитов, "
+                + "поэтому они не входят в фонд и в «EXC на счетах». Накопленное в токенах ≈ " + (balances / 100) + " ₽ к выплате в будущем.");
     }
 
     private void referralTab(Period p, Period pv, LocalDate fromDate, List<Line> out) {

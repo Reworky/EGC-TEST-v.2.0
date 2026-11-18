@@ -680,6 +680,18 @@ public class RewardService {
         return new WithdrawalPeriodStats(requests.size(), totalExc, rubAndTon[0], rubAndTon[1], rubAndTon[2]);
     }
 
+    /** Вывод со спонсорского баланса за окно [from, to): выплаченное (число, токены, ₽, TON в ₽, звёзды) и очередь (число заявок и токены). Аналитика, 18.11.2026. */
+    public record SponsorWithdrawalStats(WithdrawalPeriodStats paid, long pendingCount, long pendingExc) {}
+
+    public SponsorWithdrawalStats sponsorWithdrawalStats(java.time.LocalDateTime from, java.time.LocalDateTime to) {
+        List<RewardRequest> paid = rewardRequestRepository.findApprovedSponsorWithdrawalsBetween(from, to);
+        long[] rubAndTon = rubAndTonRubOf(paid);
+        WithdrawalPeriodStats stats = new WithdrawalPeriodStats(paid.size(), paid.stream().mapToLong(this::actualPaidPrice).sum(),
+                rubAndTon[0], rubAndTon[1], rubAndTon[2]);
+        List<RewardRequest> pending = rewardRequestRepository.findPendingSponsorWithdrawals();
+        return new SponsorWithdrawalStats(stats, pending.size(), pending.stream().mapToLong(this::actualPaidPrice).sum());
+    }
+
     public RewardRequest getRequest(Long requestId) {
         return rewardRequestRepository.findWithUserAndRewardItemById(requestId)
                 .orElseThrow(() -> new IllegalArgumentException("Заявка не найдена."));

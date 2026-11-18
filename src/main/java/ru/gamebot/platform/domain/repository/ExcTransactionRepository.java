@@ -61,4 +61,12 @@ public interface ExcTransactionRepository extends JpaRepository<ExcTransaction, 
     @Query("SELECT COALESCE(SUM(t.amount), 0) FROM ExcTransaction t WHERE t.amount < 0 AND t.sponsor = false AND t.createdAt >= :since "
             + "AND t.type NOT IN ('WITHDRAWAL', 'DEBIT', 'CONFISCATE')")
     long sumNegativeSince(@Param("since") LocalDateTime since);
+
+    /** Начислено на спонсорские балансы в окне [from, to) (положительные операции, токены). */
+    @Query("SELECT COALESCE(SUM(t.amount), 0) FROM ExcTransaction t WHERE t.sponsor = true AND t.amount > 0 AND t.createdAt >= :from AND t.createdAt < :to")
+    long sumSponsorEarnedBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /** Потрачено токенов спонсорского баланса в магазине наград в окне [from, to) (результат ≤ 0). */
+    @Query("SELECT COALESCE(SUM(t.amount), 0) FROM ExcTransaction t WHERE t.sponsor = true AND t.type = 'SHOP_BUY' AND t.createdAt >= :from AND t.createdAt < :to")
+    long sumSponsorShopSpentBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }
