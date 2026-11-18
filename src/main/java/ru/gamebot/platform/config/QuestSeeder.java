@@ -2090,15 +2090,14 @@ public class QuestSeeder implements CommandLineRunner {
         deactivateGame("Mobile Legends: Bang Bang");
         deactivateGame("GTA V");
 
-        // ── Внешний CPA-квест: World of Warships (actionpay, оффер 14951) ───────────
-        // Авто-одобрение через постбек actionpay (см. PostbackController), без ручной проверки скриншота.
-        // {TG_ID} в ссылке подставляется на telegram_id игрока при показе карточки квеста (personalizeInstruction).
-        // 18.11.2026: мотивированный трафик по офферу одобрен ActionPay (со слов владельца); квест переделан по макету владельца
-        // (баннер, шаги, «Реклама · erid»). Награда считается от цели Active_player2 «более 15 минут в игре» = 261 ₽: 7 800 EXC = 78 ₽ ≈ 30% выплаты
-        // (по практике проекта 20-35%, не больше половины). Остальные цели оффера (Old_player 66 ₽, Active_player1 173 ₽) не засчитываются:
-        // externalTargetType=PURCHASE + externalMinPaymentRub=250 сверяют сумму выплаты из постбека (параметр payment), для 261 ₽ запас на копейки.
-        // Если в постбеке нет payment, EXC не начисляется совсем (безопасная сторона). Для игроков условие «30+ минут» - с запасом над целью сети.
-        // Создаётся и остаётся НЕАКТИВНЫМ до включения владельцем («Управление квестами → Включить»); одноразовая миграция текстов существующей записи - по ключу WOW_CARD_V2_KEY.
+        // ── Игровой оффер: World of Warships (страница-лендинг партнёра) ─────────────
+        // 18.11.2026 (решение владельца): все постбеки, ключи и API ActionPay стоят ТОЛЬКО на лендинге igry-afisha.pages.dev; бот про сеть ничего не знает.
+        // Квест в боте - карточка, описание и ссылка на лендинг (с меткой игрока ?tg={TG_ID}). Подтверждённых игроков админ видит в списке конверсий лендинга и
+        // начисляет награду командой /wowpay ID (обычное одобрение квеста, GamePlatformBot.handleGameOfferPayCommand). externalNetwork="landing" и offerId="wows"
+        // намеренно НЕ совпадают ни с одной сетью, поэтому PostbackController этот квест не находит.
+        // Мотивированный трафик по офферу одобрен ActionPay (со слов владельца). Награда считается от цели Active_player2 «более 15 минут в игре» = 261 ₽:
+        // 7 800 EXC = 78 ₽ ≈ 30% выплаты (практика проекта 20-35%, не больше половины). Для игроков условие «30+ минут» - с запасом над целью сети.
+        // Создаётся и остаётся НЕАКТИВНЫМ до включения владельцем («Управление квестами → Включить»); одноразовая миграция записи - по ключу WOW_CARD_V2_KEY.
         gameCatalogService.setDifficultyMode("World of Warships", "FLAT", WOW_REWARD_EXC, 0);
         Quest wowQuest = questRepository.findFirstByTitleAndGameName(WOW_TITLE, "World of Warships")
                 .or(() -> questRepository.findFirstByTitleAndGameName(WOW_TITLE_OLD, "World of Warships"))
@@ -2118,28 +2117,28 @@ public class QuestSeeder implements CommandLineRunner {
             wowQuest.setDurationText("50 дней");
             wowQuest.setRewardXp(0);
             wowQuest.setRewardCoins(WOW_REWARD_EXC);
-            wowQuest.setDescription("Бесплатная онлайн-игра про морские бои. Установи по своей ссылке и поиграй не меньше 30 минут: награда придёт сама, когда партнёр подтвердит.");
-            wowQuest.setInstruction("Скачай игру по своей персональной ссылке и зарегистрируйся:\n"
-                    + "https://apygame.com/click/6a8ea0d42bfa81706f3e7f55/179724/360227/{TG_ID}?erid=LatgBuBKy\n\n"
+            wowQuest.setDescription("Бесплатная онлайн-игра про морские бои. Открой страницу игры, установи её и поиграй не меньше 30 минут: награду начислим после подтверждения партнёра.");
+            wowQuest.setInstruction("Открой страницу игры, скачай её и зарегистрируйся:\n"
+                    + "https://igry-afisha.pages.dev/?tg={TG_ID}\n\n"
                     + "Запусти игру и поиграй не меньше 30 минут: если игру не запускали, партнёр не подтвердит.");
             wowQuest.setRequirements("📎 Как получить\n"
-                    + "1. Нажми «Взять»: пришлю твою персональную ссылку.\n"
+                    + "1. Нажми «Взять» и открой страницу игры.\n"
                     + "2. Скачай игру на ПК и зарегистрируйся.\n"
                     + "3. Запусти игру и поиграй 30+ минут.\n\n"
-                    + "⏳ Подтверждение приходит от нескольких дней до 30. Отчёт отправлять не нужно.\n"
+                    + "⏳ Подтверждение от партнёра приходит от нескольких дней до 30, после него мы начисляем EXC. Отчёт отправлять не нужно.\n"
                     + "Реклама · erid: LatgBuBKy");
             wowQuest.setExternalAutoApprove(true);
-            wowQuest.setExternalOfferId("14951");
-            wowQuest.setExternalNetwork("actionpay");
-            wowQuest.setExternalTargetType("PURCHASE");
-            wowQuest.setExternalMinPaymentRub(250L);
+            wowQuest.setExternalOfferId("wows");
+            wowQuest.setExternalNetwork("landing");
+            wowQuest.setExternalTargetType("REGISTRATION");
+            wowQuest.setExternalMinPaymentRub(null);
             questRepository.save(wowQuest);
             ru.gamebot.platform.domain.model.AppSetting wowMark = new ru.gamebot.platform.domain.model.AppSetting();
             wowMark.setKey(WOW_CARD_V2_KEY);
             wowMark.setValue(LocalDateTime.now().toString());
             appSettingRepository.save(wowMark);
-            log.info("[QuestSeeder] {} external quest: World of Warships (actionpay 14951), reward {} EXC, min payout {} RUB",
-                    wowCreated ? "Created" : "Updated", WOW_REWARD_EXC, 250);
+            log.info("[QuestSeeder] {} game offer quest: World of Warships (landing), reward {} EXC",
+                    wowCreated ? "Created" : "Updated", WOW_REWARD_EXC);
         }
 
         // ── Внешний CPA-квест: Skyeng (actionpay) ───────────────────────────────────

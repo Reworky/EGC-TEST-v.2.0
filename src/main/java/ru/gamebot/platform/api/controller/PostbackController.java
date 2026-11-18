@@ -65,13 +65,7 @@ public class PostbackController {
             @RequestParam(required = false) String event,
             @RequestParam(required = false) String uniqueid,
             @RequestParam(required = false) String offer,
-            @RequestParam(required = false) String payment,
-            @RequestParam(required = false) String apid,
-            @RequestParam(required = false) String appayment) {
-        // ActionPay сам дописывает в вызов параметры по умолчанию apid (ID действия) и appayment (выплата), если их нет в макросах URL:
-        // берём их, когда payment/uniqueid в URL не заданы
-        if (payment == null || payment.isBlank()) payment = appayment;
-        if (uniqueid == null || uniqueid.isBlank()) uniqueid = apid;
+            @RequestParam(required = false) String payment) {
 
         if (!isValidToken(token, actionpayToken)) {
             log.warn("[ActionPay] Postback rejected: bad token");
@@ -272,11 +266,6 @@ public class PostbackController {
 
         QuestSubmission submission = questService.approveExternalConversion(user, quest, paymentRub);
         if (submission == null) {
-            if (paymentRub == null) {
-                // У квеста задан порог суммы выплаты, а в постбеке суммы нет: награда не начислена. Проверить макрос payment в URL постбека партнёрской сети.
-                log.warn("[{}] Postback has NO payment amount, quest threshold not checked, reward NOT granted: telegramId={}, offer={}, externalId={}. Check the payment macro in the network postback URL",
-                        network, telegramId, offer, externalId);
-            }
             log.info("[{}] Postback below minimum payment threshold, telegramId={}, offer={}, payment={}",
                     network, telegramId, offer, paymentRaw);
             return ResponseEntity.ok("below minimum payment");

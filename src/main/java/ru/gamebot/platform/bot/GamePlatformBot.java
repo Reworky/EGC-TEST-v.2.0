@@ -572,6 +572,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         }
 
+        if (text != null && (text.equals("/wowpay") || text.startsWith("/wowpay ")) && isEffectiveAdmin(user)) {
+            handleGameOfferPayCommand(user, text.trim());
+            return;
+        }
+
         if (text != null && text.trim().equalsIgnoreCase("/otpwait") && isEffectiveModerator(user)) {
             sendOtpWaitingList(user);
             return;
@@ -8647,6 +8652,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("vtbbonus", "ID [повтор]", "Партнёрская выплата ВТБ Киберкарта: отметить, что банк выплатил, и напомнить отправить игроку 500 ₽ на карту от клуба (EXC не начисляются). Повторно только со словом «повтор»"),
             new AdminCommand("alfabonus", "ID [повтор]", "Выплата Альфа-Банк (Апельсиновая карта): отметить, что банк подтвердил карту, и напомнить отправить игроку 300 ₽ на карту от клуба (EXC не начисляются). Повторно только со словом «повтор»"),
             new AdminCommand("forabonus", "ID [повтор]", "Выплата Фора-Банк (карта «Все включено»): отметить, что банк подтвердил карту, и напомнить отправить игроку 400 ₽ на карту от клуба; на баланс сам начисляется 10 000 EXC компенсации траты (при «повтор» не начисляется). Повторно только со словом «повтор»"),
+            new AdminCommand("wowpay", "ID", "Награда за квест World of Warships: игрок есть в списке конверсий лендинга (партнёр подтвердил игру). Начисляет награду квеста и уведомляет игрока; повторно тому же игроку не начисляет"),
             new AdminCommand("psbbonus", "ID [повтор]", "Выплата ПСБ (карта «Твой кэшбэк»): отметить, что банк подтвердил карту, и напомнить отправить игроку 500 ₽ на карту от клуба; на баланс сам начисляется 50 000 EXC компенсации траты (при «повтор» не начисляется). Повторно только со словом «повтор»"),
             new AdminCommand("ubrrbonus", "ID [повтор]", "Выплата УБРиР (карта «Моя Жизнь»): отметить, что банк подтвердил карту, и напомнить отправить игроку 500 ₽ на карту от клуба; на баланс сам начисляется 50 000 EXC компенсации траты (при «повтор» не начисляется). Повторно только со словом «повтор»"),
             new AdminCommand("tmbonus", "ID [сумма EXC] [повтор]", "Партнёрская выплата Т-Мобайл SIM: начислить EXC (по умолчанию 100 000), открыть вывод на сумму, отметить миссию выполненной (бейдж). Повторно только со словом «повтор»"),
@@ -9956,7 +9962,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (hasActiveSubmission && !questClosed && isGameOfferQuest(quest)) {
             // Игровой оффер: персональная ссылка кнопкой (после «Взять»)
             String gameLink = firstUrl(questService.personalizeInstruction(quest.getInstruction(), user.getTelegramId()));
-            if (gameLink != null) buttons.add(keyboardFactory.url("🔗 Скачать игру", gameLink));
+            if (gameLink != null) buttons.add(keyboardFactory.url("🔗 Открыть страницу игры", gameLink));
         }
         if (hasActiveSubmission && !questClosed) {
             buttons.add(quest.isExternalAutoApprove()
@@ -10534,10 +10540,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private static final String OTP_CARD_QUEST_TITLE = ru.gamebot.platform.service.PartnerMissions.OTP.questTitle();
 
     /** Игровой оффер ActionPay (World of Warships, оффер 14951): своя карточка по макету владельца 18.11.2026 - баннер, суть, шаги, метка «Реклама», ссылка кнопкой. */
-    private static final String GAME_OFFER_ID = "14951";
+    private static final String GAME_OFFER_ID = "wows";
 
+    /** Квест ведёт на страницу-лендинг партнёра; постбеков и ключей сети в боте нет: награду начисляет админ командой /wowpay ID по списку конверсий лендинга. */
     private boolean isGameOfferQuest(Quest quest) {
-        return quest != null && quest.isExternalAutoApprove() && "actionpay".equals(quest.getExternalNetwork())
+        return quest != null && quest.isExternalAutoApprove() && "landing".equals(quest.getExternalNetwork())
                 && GAME_OFFER_ID.equals(quest.getExternalOfferId());
     }
 
@@ -10564,6 +10571,40 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("\n").append(escape(quest.getRequirements()));
         }
         return sb.toString().trim();
+    }
+
+    /** /wowpay ID: админ начисляет награду за игровой оффер (World of Warships) игроку из списка подтверждённых конверсий лендинга. Идёт через обычное одобрение квеста
+     *  (EXC, XP, уведомление игроку); повторно тому же игроку награда не начисляется. */
+    private void handleGameOfferPayCommand(AppUser admin, String text) {
+        try {
+            String[] p = text.split("\\s+");
+            Long targetId = p.length > 1 ? parseLong(p[1]) : null;
+            if (targetId == null) {
+                sendText(admin.getTelegramId(), "⚠️ Формат: <code>/wowpay ID</code>, где ID - Telegram ID игрока из списка конверсий лендинга.", null);
+                return;
+            }
+            AppUser target = userService.findByTelegramId(targetId).orElse(null);
+            if (target == null) {
+                sendText(admin.getTelegramId(), "⚠️ Игрок с ID " + targetId + " не найден.", null);
+                return;
+            }
+            Quest gameQuest = questService.findAllSponsored().stream().filter(this::isGameOfferQuest).findFirst().orElse(null);
+            if (gameQuest == null) {
+                sendText(admin.getTelegramId(), "⚠️ Квест игрового оффера не найден.", null);
+                return;
+            }
+            QuestSubmission before = questService.getLatestSubmission(target, gameQuest);
+            if (before != null && before.getStatus() == SubmissionStatus.APPROVED) {
+                sendText(admin.getTelegramId(), "ℹ️ Игроку " + targetId + " награда за «" + escape(gameQuest.getTitle()) + "» уже начислена, повторно не начисляю.", null);
+                return;
+            }
+            QuestSubmission approved = questService.approveExternalConversion(target, gameQuest);
+            onExternalQuestApproved(new ru.gamebot.platform.event.ExternalQuestApprovedEvent(this, approved.getId()));
+            sendText(admin.getTelegramId(), "✅ Награда за «" + escape(gameQuest.getTitle()) + "» начислена игроку " + targetId + ": +" + fmtExc(awardedCoinsOf(approved)) + " EXC. Игрок получил уведомление.", null);
+        } catch (Exception e) {
+            log.error("[GameOffer] /wowpay failed: {}", text, e);
+            sendText(admin.getTelegramId(), "❌ Не удалось начислить награду: " + escape(String.valueOf(e.getMessage())) + ". Проверьте логи.", null);
+        }
     }
 
     private String questCardBanner(Quest quest) {
@@ -10912,7 +10953,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         // Заголовок «Квест активен! Теперь заходите в игру...» собирается ниже (nextStep) одной строкой для всех обычных квестов;
         // здесь остаётся только текст партнёрских квестов со своей ссылкой.
-        String notice = quest.isExternalAutoApprove()
+        String notice = isGameOfferQuest(quest)
+                ? "🚀 Квест активен! Открой страницу игры кнопкой ниже — отчёт отправлять не нужно, EXC начислим после подтверждения партнёра."
+                : quest.isExternalAutoApprove()
                 ? "🚀 Квест активен! Перейди по своей ссылке ниже — отчёт отправлять не нужно, EXC начислится автоматически."
                 : "";
         // Предупреждение о недельном снижении награды теперь живёт в самой карточке (строка награды ниже,
@@ -10924,7 +10967,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (isGameOfferQuest(freshQuest)) {
             // Игровой оффер: сразу после «Взять» - персональная ссылка кнопкой первой строкой
             String gameLink = firstUrl(questService.personalizeInstruction(freshQuest.getInstruction(), user.getTelegramId()));
-            if (gameLink != null) buttons.add(keyboardFactory.url("🔗 Скачать игру", gameLink));
+            if (gameLink != null) buttons.add(keyboardFactory.url("🔗 Открыть страницу игры", gameLink));
         }
         boolean freshQuestAutoVerified = freshQuest.getBrawlVerifyType() != null || freshQuest.getClashVerifyType() != null || freshQuest.getClashRoyaleVerifyType() != null || freshQuest.getDotaVerifyType() != null || freshQuest.getCs2VerifyType() != null || freshQuest.getPubgVerifyType() != null;
         buttons.add(freshQuest.isExternalAutoApprove() || freshQuestAutoVerified
