@@ -9953,6 +9953,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 && !quest.isSponsored() && !quest.isExternalAutoApprove() && !quest.isRepeatableNoCooldownEligible()) {
             buttons.add(keyboardFactory.callback("⏱️ Снять кулдаун — " + SinkShopService.PRICE_COOLDOWN_REMOVAL + " EXC", "sink:cooldown_info"));
         }
+        if (hasActiveSubmission && !questClosed && isGameOfferQuest(quest)) {
+            // Игровой оффер: персональная ссылка кнопкой (после «Взять»)
+            String gameLink = firstUrl(questService.personalizeInstruction(quest.getInstruction(), user.getTelegramId()));
+            if (gameLink != null) buttons.add(keyboardFactory.url("🔗 Скачать игру", gameLink));
+        }
         if (hasActiveSubmission && !questClosed) {
             buttons.add(quest.isExternalAutoApprove()
                     ? keyboardFactory.callback("⏳ Ждём подтверждения от партнёра", "noop")
@@ -10027,7 +10032,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (quest.isSponsored() || quest.isExternalAutoApprove()) body = collapseSponsorSections(body);
         if (!details.isBlank()) body += "\n\n<blockquote expandable>" + details + "</blockquote>";
-        String cardText = isManualPartnerSponsored(quest)
+        String cardText = isGameOfferQuest(quest)
+                ? gameOfferCardText(user, quest, notice, activeDeadline, statusLine)
+                : isManualPartnerSponsored(quest)
                 ? partnerQuestCardText(quest, personalizedInstruction, notice, activeDeadline, statusLine)
                 : (notice == null ? "" : notice + "\n\n")
                 + sponsorBadge
@@ -10526,7 +10533,41 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Баннер карточки квеста (картинка в ресурсах бота) - пока только у партнёрского квеста «ОТП Карта». */
     private static final String OTP_CARD_QUEST_TITLE = ru.gamebot.platform.service.PartnerMissions.OTP.questTitle();
 
+    /** Игровой оффер ActionPay (World of Warships, оффер 14951): своя карточка по макету владельца 18.11.2026 - баннер, суть, шаги, метка «Реклама», ссылка кнопкой. */
+    private static final String GAME_OFFER_ID = "14951";
+
+    private boolean isGameOfferQuest(Quest quest) {
+        return quest != null && quest.isExternalAutoApprove() && "actionpay".equals(quest.getExternalNetwork())
+                && GAME_OFFER_ID.equals(quest.getExternalOfferId());
+    }
+
+    /** Первая ссылка http(s) из текста (персональная ссылка игрока из инструкции) или null. */
+    private static String firstUrl(String text) {
+        if (text == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("https?://\\S+").matcher(text);
+        return m.find() ? m.group() : null;
+    }
+
+    /** Текст карточки игрового оффера (под баннером, подпись фото до 1024 символов): заголовок, «игра · платформа · география», награда без XP, суть и шаги из условий квеста. */
+    private String gameOfferCardText(AppUser user, Quest quest, String notice, String activeDeadline, String statusLine) {
+        long coins = displayRewardCoins(user, quest);
+        StringBuilder sb = new StringBuilder();
+        if (notice != null && !notice.isBlank()) sb.append(notice).append("\n\n");
+        sb.append("🎯 <b>").append(escape(quest.getTitle())).append("</b>\n");
+        sb.append(questMetaLine(quest)).append("\n");
+        sb.append(activeDeadline.contains("с момента старта") ? "" : activeDeadline).append(statusLine);
+        sb.append("\n🏆 <b>+").append(fmtExc(coins)).append(" EXC</b>").append(starsNote(coins)).append("\n");
+        if (quest.getDescription() != null && !quest.getDescription().isBlank()) {
+            sb.append("\n").append(escape(quest.getDescription())).append("\n");
+        }
+        if (quest.getRequirements() != null && !quest.getRequirements().isBlank()) {
+            sb.append("\n").append(escape(quest.getRequirements()));
+        }
+        return sb.toString().trim();
+    }
+
     private String questCardBanner(Quest quest) {
+        if (isGameOfferQuest(quest) && getClass().getResource("/wows_quest_banner.jpg") != null) return "wows_quest_banner.jpg";
         ru.gamebot.platform.service.PartnerMission bannerPm = ru.gamebot.platform.service.PartnerMissions.forQuest(quest);
         return bannerPm != null && bannerPm.bannerResource() != null && getClass().getResource("/" + bannerPm.bannerResource()) != null ? bannerPm.bannerResource() : null;
     }
@@ -10880,6 +10921,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         Quest freshQuest = questService.getQuest(questId);
         QuestSubmission submission = result.submission();
         List<InlineKeyboardButton> buttons = new ArrayList<>();
+        if (isGameOfferQuest(freshQuest)) {
+            // Игровой оффер: сразу после «Взять» - персональная ссылка кнопкой первой строкой
+            String gameLink = firstUrl(questService.personalizeInstruction(freshQuest.getInstruction(), user.getTelegramId()));
+            if (gameLink != null) buttons.add(keyboardFactory.url("🔗 Скачать игру", gameLink));
+        }
         boolean freshQuestAutoVerified = freshQuest.getBrawlVerifyType() != null || freshQuest.getClashVerifyType() != null || freshQuest.getClashRoyaleVerifyType() != null || freshQuest.getDotaVerifyType() != null || freshQuest.getCs2VerifyType() != null || freshQuest.getPubgVerifyType() != null;
         buttons.add(freshQuest.isExternalAutoApprove() || freshQuestAutoVerified
                 ? keyboardFactory.callback(freshQuestAutoVerified ? autoVerifyProgressLabel(freshQuest, submission) : "⏳ Ждём подтверждения от партнёра", "noop")

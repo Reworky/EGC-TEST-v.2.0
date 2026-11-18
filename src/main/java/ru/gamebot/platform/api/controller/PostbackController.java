@@ -266,6 +266,11 @@ public class PostbackController {
 
         QuestSubmission submission = questService.approveExternalConversion(user, quest, paymentRub);
         if (submission == null) {
+            if (paymentRub == null) {
+                // У квеста задан порог суммы выплаты, а в постбеке суммы нет: награда не начислена. Проверить макрос payment в URL постбека партнёрской сети.
+                log.warn("[{}] Postback has NO payment amount, quest threshold not checked, reward NOT granted: telegramId={}, offer={}, externalId={}. Check the payment macro in the network postback URL",
+                        network, telegramId, offer, externalId);
+            }
             log.info("[{}] Postback below minimum payment threshold, telegramId={}, offer={}, payment={}",
                     network, telegramId, offer, paymentRaw);
             return ResponseEntity.ok("below minimum payment");

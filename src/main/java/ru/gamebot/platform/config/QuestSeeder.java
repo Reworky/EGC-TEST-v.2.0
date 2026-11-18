@@ -2090,44 +2090,56 @@ public class QuestSeeder implements CommandLineRunner {
         deactivateGame("Mobile Legends: Bang Bang");
         deactivateGame("GTA V");
 
-        // ── Внешний CPA-квест: World of Warships (actionpay) ───────────────────────
+        // ── Внешний CPA-квест: World of Warships (actionpay, оффер 14951) ───────────
         // Авто-одобрение через постбек actionpay (см. PostbackController), без ручной проверки скриншота.
         // {TG_ID} в ссылке подставляется на telegram_id игрока при показе карточки квеста (personalizeInstruction).
-        gameCatalogService.setDifficultyMode("World of Warships", "FLAT", 3000L, 0);
-        if (questRepository.findFirstByTitleAndGameName("Зарегистрируйся в World of Warships", "World of Warships").isEmpty()) {
-            Quest wowQuest = new Quest();
-            wowQuest.setTitle("Зарегистрируйся в World of Warships");
+        // 18.11.2026: мотивированный трафик по офферу одобрен ActionPay (со слов владельца); квест переделан по макету владельца
+        // (баннер, шаги, «Реклама · erid»). Награда считается от цели Active_player2 «более 15 минут в игре» = 261 ₽: 7 800 EXC = 78 ₽ ≈ 30% выплаты
+        // (по практике проекта 20-35%, не больше половины). Остальные цели оффера (Old_player 66 ₽, Active_player1 173 ₽) не засчитываются:
+        // externalTargetType=PURCHASE + externalMinPaymentRub=250 сверяют сумму выплаты из постбека (параметр payment), для 261 ₽ запас на копейки.
+        // Если в постбеке нет payment, EXC не начисляется совсем (безопасная сторона). Для игроков условие «30+ минут» - с запасом над целью сети.
+        // Создаётся и остаётся НЕАКТИВНЫМ до включения владельцем («Управление квестами → Включить»); одноразовая миграция текстов существующей записи - по ключу WOW_CARD_V2_KEY.
+        gameCatalogService.setDifficultyMode("World of Warships", "FLAT", WOW_REWARD_EXC, 0);
+        Quest wowQuest = questRepository.findFirstByTitleAndGameName(WOW_TITLE, "World of Warships")
+                .or(() -> questRepository.findFirstByTitleAndGameName(WOW_TITLE_OLD, "World of Warships"))
+                .orElse(null);
+        boolean wowCreated = wowQuest == null;
+        if (wowCreated) {
+            wowQuest = new Quest();
             wowQuest.setGameName("World of Warships");
-            wowQuest.setPlatform("PC");
-            wowQuest.setDurationDays(45);
-            wowQuest.setDurationText("45 дней");
-            wowQuest.setRewardXp(0);
-            wowQuest.setRewardCoins(3000);
-            wowQuest.setDescription("Скачай и зарегистрируйся в World of Warships по своей персональной ссылке.");
-            wowQuest.setInstruction("🔗 Перейди по своей персональной ссылке, скачай игру и зарегистрируйся:\n"
-                    + "https://apygame.com/click/6a8ea0d42bfa81706f3e7f55/179724/360227/{TG_ID}?erid=LatgBuBKy\n\n"
-                    + "Важно: нужна не просто регистрация, а реальный запуск игры — иначе партнёр не подтвердит выполнение.");
-            wowQuest.setRequirements("Подтверждение приходит от партнёра автоматически — обычно за несколько дней, иногда до 30. "
-                    + "Отчёт отправлять не нужно, EXC начислится сам, как только придёт подтверждение.");
             wowQuest.setParticipantLimit(1000);
-            wowQuest.setActive(true);
+            wowQuest.setActive(false);
+            wowQuest.setCreatedAt(LocalDateTime.now());
+        }
+        if (wowCreated || appSettingRepository.findById(WOW_CARD_V2_KEY).isEmpty()) {
+            wowQuest.setTitle(WOW_TITLE);
+            wowQuest.setPlatform("ПК · Россия и Беларусь");
+            wowQuest.setDurationDays(50);
+            wowQuest.setDurationText("50 дней");
+            wowQuest.setRewardXp(0);
+            wowQuest.setRewardCoins(WOW_REWARD_EXC);
+            wowQuest.setDescription("Бесплатная онлайн-игра про морские бои. Установи по своей ссылке и поиграй не меньше 30 минут: награда придёт сама, когда партнёр подтвердит.");
+            wowQuest.setInstruction("Скачай игру по своей персональной ссылке и зарегистрируйся:\n"
+                    + "https://apygame.com/click/6a8ea0d42bfa81706f3e7f55/179724/360227/{TG_ID}?erid=LatgBuBKy\n\n"
+                    + "Запусти игру и поиграй не меньше 30 минут: если игру не запускали, партнёр не подтвердит.");
+            wowQuest.setRequirements("📎 Как получить\n"
+                    + "1. Нажми «Взять»: пришлю твою персональную ссылку.\n"
+                    + "2. Скачай игру на ПК и зарегистрируйся.\n"
+                    + "3. Запусти игру и поиграй 30+ минут.\n\n"
+                    + "⏳ Подтверждение приходит от нескольких дней до 30. Отчёт отправлять не нужно.\n"
+                    + "Реклама · erid: LatgBuBKy");
             wowQuest.setExternalAutoApprove(true);
             wowQuest.setExternalOfferId("14951");
             wowQuest.setExternalNetwork("actionpay");
-            wowQuest.setExternalTargetType("REGISTRATION");
-            wowQuest.setCreatedAt(LocalDateTime.now());
+            wowQuest.setExternalTargetType("PURCHASE");
+            wowQuest.setExternalMinPaymentRub(250L);
             questRepository.save(wowQuest);
-            log.info("[QuestSeeder] Created external quest: World of Warships (actionpay)");
-        } else {
-            // Бэкафилл полей для уже созданных ранее записей (до появления externalNetwork/externalTargetType)
-            questRepository.findFirstByTitleAndGameName("Зарегистрируйся в World of Warships", "World of Warships")
-                    .filter(q -> q.getExternalNetwork() == null)
-                    .ifPresent(q -> {
-                        q.setExternalOfferId("14951");
-                        q.setExternalNetwork("actionpay");
-                        q.setExternalTargetType("REGISTRATION");
-                        questRepository.save(q);
-                    });
+            ru.gamebot.platform.domain.model.AppSetting wowMark = new ru.gamebot.platform.domain.model.AppSetting();
+            wowMark.setKey(WOW_CARD_V2_KEY);
+            wowMark.setValue(LocalDateTime.now().toString());
+            appSettingRepository.save(wowMark);
+            log.info("[QuestSeeder] {} external quest: World of Warships (actionpay 14951), reward {} EXC, min payout {} RUB",
+                    wowCreated ? "Created" : "Updated", WOW_REWARD_EXC, 250);
         }
 
         // ── Внешний CPA-квест: Skyeng (actionpay) ───────────────────────────────────
@@ -2901,6 +2913,12 @@ public class QuestSeeder implements CommandLineRunner {
         appSettingRepository.save(mark);
         log.info("[QuestSeeder] Switched off stars_tyn0x subscription quests ({}): {}", offTitles.size(), offTitles);
     }
+
+    /** World of Warships (actionpay 14951): новое и прежнее название квеста, награда (EXC), ключ app_settings одноразового обновления текстов (18.11.2026). */
+    private static final String WOW_TITLE = "World of Warships: установи и поиграй";
+    private static final String WOW_TITLE_OLD = "Зарегистрируйся в World of Warships";
+    private static final long WOW_REWARD_EXC = 7800L;
+    private static final String WOW_CARD_V2_KEY = "wows.card.v2.done";
 
     /** Ключ app_settings: скрытие всех спонсорских квестов, кроме банка ОТП, выполнено (15.11.2026). */
     private static final String SPONSORED_HIDE_KEY = "sponsored.hide.except.otp.done";
