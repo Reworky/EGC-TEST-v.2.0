@@ -32416,6 +32416,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return "<b>" + escape(user.getNickname()) + "</b> · Ур. " + userService.getLevelNumber(user.getXp())
                     + " «" + escape(userService.getLevelName(user.getXp())) + "»\n"
                     + "💰 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>"
+                    + (sponsorBalanceService.enabled() ? " · 💎 <b>" + String.format("%,d", Math.max(0, user.getSponsorCoins())).replace(',', ' ') + " EXCASH</b>" : "")
                     + firstWithdrawalProgressLine(user) + mainMenuStatusLines(user);
         }
         String title = switch (role) {
