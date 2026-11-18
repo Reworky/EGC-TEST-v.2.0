@@ -73,4 +73,8 @@ public class RewardRequest {
 
     @Column(columnDefinition = "bigint default 0")
     private long bonusAmountRub;
+
+    /** Заявка оплачена со СПОНСОРСКОГО баланса (18.11.2026): отмена и отклонение возвращают токены на спонсорский баланс, месячные счётчики вывода не трогают. */
+    @Column(columnDefinition = "boolean default false")
+    private boolean fromSponsor;
 }

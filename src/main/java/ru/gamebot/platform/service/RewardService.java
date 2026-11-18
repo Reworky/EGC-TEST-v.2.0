@@ -745,6 +745,11 @@ public class RewardService {
         }
         req.setStatus(RewardRequestStatus.CANCELLED);
         long price = actualPaidPrice(req);
+        if (req.isFromSponsor()) {
+            // Заявка со спонсорского баланса: токены возвращаются туда же, месячные счётчики вывода и трат не затрагиваются (их при создании не трогали)
+            excTx.creditSponsor(requester, price, ExcTransactionService.SHOP_REFUND, "Отмена заявки: " + req.getRewardItem().getTitle());
+            return rewardRequestRepository.save(req);
+        }
         excTx.creditExc(requester, price, ExcTransactionService.SHOP_REFUND, "Отмена заявки: " + req.getRewardItem().getTitle());
         // звёзды (категория «Вывод») возвращаются в лимит вывода, остальные товары - в лимит трат магазина (с 05.11.2026)
         // 09.11.2026: лимит возвращаем только если заявка создана в ЭТОМ месяце. Заявка прошлого месяца уже не лежит в счётчике (он обнулился),
@@ -776,6 +781,10 @@ public class RewardService {
         AppUser user = req.getUser();
         boolean isWithdrawal = "Вывод".equals(req.getRewardItem().getCategory());
         long price = actualPaidPrice(req);
+        if (req.isFromSponsor()) {
+            excTx.creditSponsor(user, price, ExcTransactionService.SHOP_REFUND, "Возврат (отклонение): " + req.getRewardItem().getTitle());
+            return rewardRequestRepository.save(req);
+        }
         excTx.creditExc(user, price, ExcTransactionService.SHOP_REFUND, "Возврат (отклонение): " + req.getRewardItem().getTitle());
         if (createdInCurrentMonth(req)) { // см. cancelRequest: заявка прошлого месяца месячный счётчик не трогает
             if (isWithdrawal) {
@@ -838,6 +847,12 @@ public class RewardService {
      * та же защита от гонки состояний, что и в {@link #createRewardRequest}. */
     @Transactional
     public RewardRequest createTonWithdrawalRequest(AppUser user, long excAmount, long rubles, long fixedRubUsed, String tonWallet) {
+        return createTonWithdrawalRequest(user, excAmount, rubles, fixedRubUsed, tonWallet, false);
+    }
+
+    /** fromSponsor: оплата со спонсорского баланса (18.11.2026): без месячного лимита, порога и «курса дня»; проверки аккаунта (телефон, возраст, квесты, заморозка, 1 заявка в сутки, общий адрес) остаются. */
+    @Transactional
+    public RewardRequest createTonWithdrawalRequest(AppUser user, long excAmount, long rubles, long fixedRubUsed, String tonWallet, boolean fromSponsor) {
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
 
@@ -850,16 +865,22 @@ public class RewardService {
         }
         checkDestinationNotShared(lockedUser, "TON:" + tonWallet);
 
-        long remaining = sinkShopService.getRemainingWithdrawalLimit(lockedUser);
-        if (excAmount > remaining) {
-            throw new IllegalArgumentException("Превышен месячный лимит вывода. Доступно ещё: " + remaining + " EXC.");
-        }
-        if (excAmount > lockedUser.getCoins()) {
-            throw new IllegalArgumentException("Недостаточно EXC. Ваш баланс: " + lockedUser.getCoins() + " EXC.");
+        if (fromSponsor) {
+            if (excAmount > lockedUser.getSponsorCoins()) {
+                throw new IllegalArgumentException("Недостаточно токенов на спонсорском балансе. Баланс: " + lockedUser.getSponsorCoins() + ".");
+            }
+        } else {
+            long remaining = sinkShopService.getRemainingWithdrawalLimit(lockedUser);
+            if (excAmount > remaining) {
+                throw new IllegalArgumentException("Превышен месячный лимит вывода. Доступно ещё: " + remaining + " EXC.");
+            }
+            if (excAmount > lockedUser.getCoins()) {
+                throw new IllegalArgumentException("Недостаточно EXC. Ваш баланс: " + lockedUser.getCoins() + " EXC.");
+            }
         }
 
-        // «Курс дня»: бонус к сумме в рублях (резерв бюджета под той же блокировкой игрока); итог входит в fixedRubValue, название заявки и сумму в TON
-        BonusCourseService.Applied bonus = bonusCourseService.applyToWithdrawal(lockedUser, rubles);
+        // «Курс дня»: бонус к сумме в рублях (резерв бюджета под той же блокировкой игрока); итог входит в fixedRubValue, название заявки и сумму в TON. Со спонсорского баланса бонуса нет
+        BonusCourseService.Applied bonus = fromSponsor ? null : bonusCourseService.applyToWithdrawal(lockedUser, rubles);
         long bonusRub = bonus == null ? 0 : bonus.bonusRub();
         rubles += bonusRub;
 
@@ -872,13 +893,18 @@ public class RewardService {
         withdrawItem.setCreatedAt(LocalDateTime.now());
         RewardItem saved = rewardItemRepository.save(withdrawItem);
 
-        sinkShopService.recordWithdrawal(lockedUser, excAmount);
-        if (fixedRubUsed > 0) {
-            lockedUser.setFixedRubBalance(Math.max(0, lockedUser.getFixedRubBalance() - fixedRubUsed));
+        if (fromSponsor) {
+            excTx.creditSponsor(lockedUser, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод со спонсорского баланса → TON");
+        } else {
+            sinkShopService.recordWithdrawal(lockedUser, excAmount);
+            if (fixedRubUsed > 0) {
+                lockedUser.setFixedRubBalance(Math.max(0, lockedUser.getFixedRubBalance() - fixedRubUsed));
+            }
+            excTx.creditExc(lockedUser, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод → TON");
         }
-        excTx.creditExc(lockedUser, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод → TON");
 
         RewardRequest request = new RewardRequest();
+        request.setFromSponsor(fromSponsor);
         request.setUser(lockedUser);
         request.setRewardItem(saved);
         request.setStatus(RewardRequestStatus.PENDING);
@@ -918,6 +944,12 @@ public class RewardService {
      * повторно (defense-in-depth) — раньше единственная проверка была на шаге ввода суммы, ДО этого метода. */
     @Transactional
     public RewardRequest createWithdrawalRequestWithDetails(AppUser user, long excAmount, long rubles, long fixedRubUsed, String payoutDetails) {
+        return createWithdrawalRequestWithDetails(user, excAmount, rubles, fixedRubUsed, payoutDetails, false);
+    }
+
+    /** fromSponsor: оплата со спонсорского баланса (18.11.2026), см. createTonWithdrawalRequest. */
+    @Transactional
+    public RewardRequest createWithdrawalRequestWithDetails(AppUser user, long excAmount, long rubles, long fixedRubUsed, String payoutDetails, boolean fromSponsor) {
         AppUser lockedUser = appUserRepository.findByIdForUpdate(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден."));
 
@@ -930,16 +962,22 @@ public class RewardService {
         }
         checkDestinationNotShared(lockedUser, payoutDetails);
 
-        long remaining = sinkShopService.getRemainingWithdrawalLimit(lockedUser);
-        if (excAmount > remaining) {
-            throw new IllegalArgumentException("Превышен месячный лимит вывода. Доступно ещё: " + remaining + " EXC.");
-        }
-        if (excAmount > lockedUser.getCoins()) {
-            throw new IllegalArgumentException("Недостаточно EXC. Ваш баланс: " + lockedUser.getCoins() + " EXC.");
+        if (fromSponsor) {
+            if (excAmount > lockedUser.getSponsorCoins()) {
+                throw new IllegalArgumentException("Недостаточно токенов на спонсорском балансе. Баланс: " + lockedUser.getSponsorCoins() + ".");
+            }
+        } else {
+            long remaining = sinkShopService.getRemainingWithdrawalLimit(lockedUser);
+            if (excAmount > remaining) {
+                throw new IllegalArgumentException("Превышен месячный лимит вывода. Доступно ещё: " + remaining + " EXC.");
+            }
+            if (excAmount > lockedUser.getCoins()) {
+                throw new IllegalArgumentException("Недостаточно EXC. Ваш баланс: " + lockedUser.getCoins() + " EXC.");
+            }
         }
 
         // «Курс дня»: см. createTonWithdrawalRequest
-        BonusCourseService.Applied bonus = bonusCourseService.applyToWithdrawal(lockedUser, rubles);
+        BonusCourseService.Applied bonus = fromSponsor ? null : bonusCourseService.applyToWithdrawal(lockedUser, rubles);
         long bonusRub = bonus == null ? 0 : bonus.bonusRub();
         rubles += bonusRub;
 
@@ -952,13 +990,18 @@ public class RewardService {
         withdrawItem.setCreatedAt(LocalDateTime.now());
         RewardItem saved = rewardItemRepository.save(withdrawItem);
 
-        sinkShopService.recordWithdrawal(lockedUser, excAmount);
-        if (fixedRubUsed > 0) {
-            lockedUser.setFixedRubBalance(Math.max(0, lockedUser.getFixedRubBalance() - fixedRubUsed));
+        if (fromSponsor) {
+            excTx.creditSponsor(lockedUser, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод со спонсорского баланса → " + rubles + " ₽");
+        } else {
+            sinkShopService.recordWithdrawal(lockedUser, excAmount);
+            if (fixedRubUsed > 0) {
+                lockedUser.setFixedRubBalance(Math.max(0, lockedUser.getFixedRubBalance() - fixedRubUsed));
+            }
+            excTx.creditExc(lockedUser, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод → " + rubles + " ₽");
         }
-        excTx.creditExc(lockedUser, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод → " + rubles + " ₽");
 
         RewardRequest request = new RewardRequest();
+        request.setFromSponsor(fromSponsor);
         request.setUser(lockedUser);
         request.setRewardItem(saved);
         request.setStatus(RewardRequestStatus.PENDING);

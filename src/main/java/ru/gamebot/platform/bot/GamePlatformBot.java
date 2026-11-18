@@ -1793,8 +1793,56 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendRanksTable(user, "shop:withdraw");
             return;
         }
+        if (data.equals("spwd:start") || data.equals("spwd:menu")) {
+            // Вывод со спонсорского баланса (18.11.2026): вход с экрана «Баланс» и «Назад» с ввода суммы
+            answerSilently(callbackQuery.getId());
+            session.reset();
+            session.getData().put(WITHDRAWAL_ORIGIN_KEY, "balance");
+            if (!sponsorBalanceService.enabled() || user.getSponsorCoins() <= 0) {
+                sendBalance(user);
+                return;
+            }
+            String spBlock = rewardService.withdrawalEligibilityBlock(user);
+            if (spBlock != null) {
+                sendWithdrawalLocked(user, spBlock, "menu:balance");
+                return;
+            }
+            if (user.getCountry() == null || user.getCountry().isBlank() || user.getAge() == null) {
+                sendWithdrawalMethodChoice(user); // покажет «укажите страну и возраст»
+                return;
+            }
+            if (rewardService.hasWithdrawalTodayOrPending(user)) {
+                sendText(user.getTelegramId(),
+                    "⚠️ <b>Лимит: 1 заявка на вывод в сутки.</b>\n\n"
+                        + "Следующую заявку можно создать через 24 часа после предыдущей.",
+                    withdrawalRequestsKeyboard("menu:balance"));
+                return;
+            }
+            sendSponsorWithdrawalMethodChoice(user);
+            return;
+        }
+        if (data.equals("spwd:rub") || data.equals("spwd:ton")) {
+            answerSilently(callbackQuery.getId());
+            if (!sponsorBalanceService.enabled() || user.getSponsorCoins() <= 0) {
+                sendBalance(user);
+                return;
+            }
+            session.getData().put(SPONSOR_WD_KEY, "1");
+            if (data.endsWith(":rub")) {
+                startRubWithdrawal(user, session);
+            } else if (user.getPhoneNumber() == null) {
+                session.setState(SessionState.AWAITING_PHONE_SHARE);
+                session.getData().put("pendingWithdrawal", "ton");
+                sendPhoneShareRequest(user.getTelegramId());
+            } else {
+                session.setState(SessionState.WITHDRAWAL_TON_AMOUNT);
+                sendWithdrawalTonAmountScreen(user);
+            }
+            return;
+        }
         if (data.equals("shop:withdraw") || data.equals("shop:withdraw:feed")) {
             answerSilently(callbackQuery.getId());
+            session.getData().remove(SPONSOR_WD_KEY);
             // «Назад» с экрана «вывод недоступен» ведёт туда, откуда пришли: на «Баланс» или в ленту выплат
             String lockedBack = data.endsWith(":feed") ? "menu:payouts" : "menu:balance";
             // Откуда открыли «Вывод EXC»: из ленты выплат «Отмена» ведёт в главное меню (жалоба владельца 2026-10-18), из «Баланса» - на «Баланс»
@@ -2043,6 +2091,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.equals("shop:withdraw:rub")) {
             answerSilently(callbackQuery.getId());
+            session.getData().remove(SPONSOR_WD_KEY);
             // Промежуточный экран «На балансе N EXC, по лимиту сейчас можно M» убран совсем (07.11.2026, владелец): сразу ввод суммы
             startRubWithdrawal(user, session);
             return;
@@ -2112,11 +2161,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.equals("shop:withdraw:rubgo")) {
             answerSilently(callbackQuery.getId());
+            session.getData().remove(SPONSOR_WD_KEY);
             startRubWithdrawal(user, session);
             return;
         }
         if (data.equals("shop:withdraw:ton")) {
             answerSilently(callbackQuery.getId());
+            session.getData().remove(SPONSOR_WD_KEY);
             if (user.getPhoneNumber() == null) {
                 session.setState(SessionState.AWAITING_PHONE_SHARE);
                 session.getData().put("pendingWithdrawal", "ton");
@@ -7532,6 +7583,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         balanceRows.add(List.of(
                 keyboardFactory.callback("💸 Вывести EXC", "shop:withdraw"),
                 keyboardFactory.callback("📜 История операций", "myexc:0")));
+        if (sponsorBalanceService.enabled() && user.getSponsorCoins() > 0) {
+            balanceRows.add(List.of(keyboardFactory.callback("💎 Вывести спонсорские", "spwd:start")));
+        }
         if (!userService.dailyTasksEnabled()) {
             balanceRows.add(List.of(keyboardFactory.callback(dailyBonusWalletLabel(user), "menu:daily")));
         }
@@ -11862,6 +11916,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Обычный вывод рублями (СБП): запрос номера телефона, если его нет, иначе экран суммы. */
+    /** Ключ сессии: игрок сейчас выводит со СПОНСОРСКОГО баланса (ставят только кнопки spwd:*, любая кнопка обычного вывода его снимает). */
+    private static final String SPONSOR_WD_KEY = "wdsp";
+
+    private boolean sponsorWd(AppUser user) {
+        return "1".equals(sessionService.get(user.getTelegramId()).getData().get(SPONSOR_WD_KEY));
+    }
+
+    /** Экран выбора способа вывода спонсорского баланса (макет согласован с владельцем 18.11.2026): рубли и TON, курс 100%, без лимитов, минимум 5 000. */
+    private void sendSponsorWithdrawalMethodChoice(AppUser user) {
+        long bal = user.getSponsorCoins();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        rows.add(List.of(keyboardFactory.callback("💳 В рублях (СБП, любой банк)", "spwd:rub")));
+        rows.add(List.of(keyboardFactory.callback("💎 В TON (Telegram Wallet)", "spwd:ton")));
+        rows.add(List.of(keyboardFactory.callback("📋 Мои заявки на вывод", "menu:my-withdrawals")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:balance")));
+        sendText(user.getTelegramId(),
+                "💎 <b>Вывод спонсорского баланса</b>\n\n"
+                        + "Доступно: <b>" + fmtExc(bal) + "</b> · ≈ " + fmtExc(Math.round(bal / 100.0)) + " ₽\n"
+                        + "Курс 100%, лимитов нет. Минимум " + fmtExc(ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) + ".\n\n"
+                        + "Куда выводим?",
+                keyboardFactory.rowsLayout(rows));
+    }
+
     private void startRubWithdrawal(AppUser user, UserSession session) {
         if (user.getPhoneNumber() == null) {
             session.setState(SessionState.AWAITING_PHONE_SHARE);
@@ -12116,8 +12193,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendWithdrawalTonAmountScreen(AppUser user) {
         sendText(user.getTelegramId(),
-                "💎 <b>Вывод в TON</b>\n\n" + withdrawalAmountInfo(user) + "Введите сумму в EXC, которую хотите вывести.",
-                withdrawalAmountBackKeyboard());
+                (sponsorWd(user) ? "💎 <b>Вывод в TON (спонсорский баланс)</b>" : "💎 <b>Вывод в TON</b>") + "\n\n" + withdrawalAmountInfo(user) + "Введите сумму, которую хотите вывести.",
+                withdrawalAmountBackKeyboard(user));
     }
 
     private void handleWithdrawalTonAmount(AppUser user, UserSession session, String text) {
@@ -12132,16 +12209,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), "⚠️ Минимальная сумма вывода — <b>5 000 EXC</b>.", cancelKeyboard());
             return;
         }
-        long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
+        boolean spTon = "1".equals(session.getData().get(SPONSOR_WD_KEY));
+        long remaining = spTon ? Long.MAX_VALUE : sinkShopService.getRemainingWithdrawalLimit(user);
         if (amount > remaining) {
             sendWithdrawalOverLimit(user, remaining, "ton");
             return;
         }
-        if (amount > user.getCoins()) {
-            sendText(user.getTelegramId(), "⚠️ Недостаточно EXC. Баланс: <b>" + user.getCoins() + " EXC</b>.", cancelKeyboard());
+        if (spTon ? amount > user.getSponsorCoins() : amount > user.getCoins()) {
+            sendText(user.getTelegramId(), spTon
+                    ? "⚠️ Недостаточно токенов. Спонсорский баланс: <b>" + fmtExc(user.getSponsorCoins()) + "</b>."
+                    : "⚠️ Недостаточно EXC. Баланс: <b>" + user.getCoins() + " EXC</b>.", cancelKeyboard());
             return;
         }
-        double ratio = withdrawalRatioFor(user, amount, false);
+        double ratio = spTon ? 1.0 : withdrawalRatioFor(user, amount, false);
         long rubles = Math.round(amount * ratio / 100.0);
         java.math.BigDecimal rublesDecimal = java.math.BigDecimal.valueOf(rubles);
         java.math.BigDecimal tonRate = exchangeRateService.getTonRubRate();
@@ -12154,7 +12234,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         session.getData().put("ton_quote_at", String.valueOf(System.currentTimeMillis()));
         session.setState(SessionState.WITHDRAWAL_TON_ADDRESS);
         // Сверх порога 10 000 EXC (за всё время, все способы) крипта только на биржу Pionex по UID и только для наших рефералов (решение владельца 05.11.2026)
-        boolean pionexOnly = !withdrawalTiersEnabled() && rewardService.totalWithdrawnExc(user) + amount > RUB_FREE_WITHDRAWAL_EXC;
+        boolean pionexOnly = !spTon && !withdrawalTiersEnabled() && rewardService.totalWithdrawnExc(user) + amount > RUB_FREE_WITHDRAWAL_EXC;
         session.getData().put("ton_pionex", pionexOnly ? "1" : "0");
         if (pionexOnly) {
             List<List<InlineKeyboardButton>> xchRows = new ArrayList<>();
@@ -12170,7 +12250,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     keyboardFactory.rowsLayout(xchRows));
             return;
         }
-        if (withdrawalTiersEnabled() && !healthRatioService.isPartner(user)
+        if (!spTon && withdrawalTiersEnabled() && !healthRatioService.isPartner(user)
                 && rewardService.totalWithdrawnExc(user) + amount > RUB_FREE_WITHDRAWAL_EXC) {
             sendTonCardChoice(user, amount, rubles);
             return;
@@ -12304,8 +12384,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long excAmount = Long.parseLong(session.getData().getOrDefault("ton_exc_amount", "0"));
         long rubles = Long.parseLong(session.getData().getOrDefault("ton_rubles", "0"));
         java.math.BigDecimal tonRate2 = exchangeRateService.getTonRubRate();
+        boolean spTonAddr = "1".equals(session.getData().get(SPONSOR_WD_KEY));
         try {
-            RewardRequest tonReq = rewardService.createTonWithdrawalRequest(user, excAmount, rubles, 0, wallet);
+            RewardRequest tonReq = rewardService.createTonWithdrawalRequest(user, excAmount, rubles, 0, wallet, spTonAddr);
             session.reset();
             if (pionex) {
                 sendText(user.getTelegramId(),
@@ -12349,8 +12430,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendWithdrawalScreen(AppUser user) {
         sendText(user.getTelegramId(),
-                "💸 <b>Вывод в рублях</b>\n\n" + withdrawalAmountInfo(user) + "Введите сумму в EXC, которую хотите вывести.",
-                withdrawalAmountBackKeyboard());
+                (sponsorWd(user) ? "💎 <b>Вывод в рублях (спонсорский баланс)</b>" : "💸 <b>Вывод в рублях</b>") + "\n\n" + withdrawalAmountInfo(user) + "Введите сумму, которую хотите вывести.",
+                withdrawalAmountBackKeyboard(user));
     }
 
     /** «Назад» с ввода суммы вывода ведёт на выбор способа получения (жалоба владельца 2026-10-28: «Отмена» уводила в главное меню). */
@@ -12358,8 +12439,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw:back"))));
     }
 
+    private InlineKeyboardMarkup withdrawalAmountBackKeyboard(AppUser user) {
+        return sponsorWd(user)
+                ? keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("⬅️ Назад", "spwd:menu"))))
+                : withdrawalAmountBackKeyboard();
+    }
+
     /** Блок над вводом суммы вывода: баланс, сколько можно вывести сейчас (меньшее из баланса и остатка месячного лимита), минимум. */
     private String withdrawalAmountInfo(AppUser user) {
+        if (sponsorWd(user)) {
+            return "💎 Спонсорский баланс: <b>" + fmtExc(user.getSponsorCoins()) + "</b>\n"
+                    + "✅ Можно вывести всё, лимитов нет · курс 100% · минимум "
+                    + fmtExc(ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) + "\n\n";
+        }
         long balance = user.getCoins();
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
         long available = Math.max(0, Math.min(balance, remaining));
@@ -28650,23 +28742,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(), "⚠️ Минимальная сумма вывода — <b>5 000 EXC</b>.", cancelKeyboard());
             return;
         }
-        long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
+        boolean spRub = "1".equals(session.getData().get(SPONSOR_WD_KEY));
+        long remaining = spRub ? Long.MAX_VALUE : sinkShopService.getRemainingWithdrawalLimit(user);
         if (amount > remaining) {
             sendWithdrawalOverLimit(user, remaining, "rub");
             return;
         }
-        if (amount > user.getCoins()) {
-            sendText(user.getTelegramId(), "⚠️ Недостаточно EXC. Баланс: <b>" + user.getCoins() + " EXC</b>.", cancelKeyboard());
+        if (spRub ? amount > user.getSponsorCoins() : amount > user.getCoins()) {
+            sendText(user.getTelegramId(), spRub
+                    ? "⚠️ Недостаточно токенов. Спонсорский баланс: <b>" + fmtExc(user.getSponsorCoins()) + "</b>."
+                    : "⚠️ Недостаточно EXC. Баланс: <b>" + user.getCoins() + " EXC</b>.", cancelKeyboard());
             return;
         }
-        double ratio = withdrawalRatioFor(user, amount, false);
+        double ratio = spRub ? 1.0 : withdrawalRatioFor(user, amount, false);
         int ratioPercent = (int) Math.round(ratio * 100);
         long rubles = Math.round(amount * ratio / 100.0);
         session.getData().put("withdrawAmount", String.valueOf(amount));
         session.getData().put("withdrawRubles", String.valueOf(rubles));
         session.getData().put("withdrawQuoteAt", String.valueOf(System.currentTimeMillis()));
         session.setState(SessionState.WITHDRAWAL_BANK);
-        if (withdrawalTiersEnabled() && !healthRatioService.isPartner(user)
+        if (!spRub && withdrawalTiersEnabled() && !healthRatioService.isPartner(user)
                 && rewardService.totalWithdrawnExc(user) + amount > RUB_FREE_WITHDRAWAL_EXC) {
             sendWithdrawalCardChoice(user, amount, rubles, ratioPercent);
             return;
@@ -28802,13 +28897,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         long amount = Long.parseLong(session.getData().get("withdrawAmount"));
         long rubles = Long.parseLong(session.getData().get("withdrawRubles"));
+        boolean spDetails = "1".equals(session.getData().get(SPONSOR_WD_KEY));
         if (rubDestinationBlocked(user, amount, bank)) {
             session.reset();
             sendWithdrawalDestinationGate(user, bank);
             return;
         }
         try {
-            RewardRequest withdrawalReq = rewardService.createWithdrawalRequestWithDetails(user, amount, rubles, 0, details);
+            RewardRequest withdrawalReq = rewardService.createWithdrawalRequestWithDetails(user, amount, rubles, 0, details, spDetails);
             session.reset();
             sendText(user.getTelegramId(),
                 "✅ <b>Заявка на вывод принята!</b>\n\n"
@@ -29433,6 +29529,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + playerHeader(user) + "\n"
                 + "🪙 Сумма: <b>" + rewardService.actualPaidPrice(req) + " EXC</b>\n"
                 + "📦 Тип: <b>" + escape(req.getRewardItem().getTitle()) + "</b>"
+                + (req.isFromSponsor() ? "\n💎 <b>Со спонсорского баланса</b> (курс 100%, без лимитов)" : "")
                 + (req.getBonusAmountRub() > 0
                     ? "\n🎁 Бонус курса дня: <b>+" + req.getBonusAmountRub() + " ₽</b> (+" + req.getBonusPercent() + "%), итого к выплате <b>"
                         + fixedOrCurrentRub(req) + " ₽</b>"
