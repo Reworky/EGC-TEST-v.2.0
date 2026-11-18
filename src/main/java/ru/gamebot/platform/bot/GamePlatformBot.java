@@ -7547,23 +7547,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long coins = user.getCoins();
         long rub = Math.round(coins * ratio / 100.0);
         long min = ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC;
-        String minLine = coins >= min
-                ? "Баланса уже хватает на минимум для вывода."
-                : "Минимум для вывода - " + fmtExc(min) + " EXC, осталось " + fmtExc(min - coins) + " EXC.";
+        // Текст по правке владельца 18.11.2026: фраза «Баланса уже хватает на минимум» убрана; про минимум пишем, только если EXC не хватает
+        String minLine = coins >= min ? "" : " Минимум для вывода - " + fmtExc(min) + " EXC, осталось " + fmtExc(min - coins) + " EXC.";
         List<List<InlineKeyboardButton>> lockedRows = new ArrayList<>();
         addSponsoredPrizeRow(lockedRows, user);
         if (dailyCodeGate.block(user) != null) {
             lockedRows.add(List.of(keyboardFactory.callback("🔑 Код дня", "club:code")));
         }
         lockedRows.add(List.of(keyboardFactory.callback("🎯 Играть", "quest:recommend")));
-        lockedRows.add(List.of(keyboardFactory.callback("🛍️ Магазин", "menu:shop")));
         addPartnerRow(lockedRows, user, "bl");
         lockedRows.add(List.of(keyboardFactory.callback("⬅️ Назад", backData), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(),
                 "🔒 <b>Вывод пока недоступен</b>\n\n" + escape(block) + "\n\n"
-                        + "💰 У вас " + fmtExc(coins) + " EXC ≈ " + fmtExc(rub) + " ₽ (курс фонда " + ratioPercent + "%). " + minLine + "\n\n"
-                        + sponsoredPrizeLine(user)
-                        + "🛍 А пока можно потратить EXC в магазине проекта.",
+                        + "💰 У вас " + fmtExc(coins) + " EXC ≈ " + fmtExc(rub) + " ₽ (курс фонда " + ratioPercent + "%)." + minLine + "\n\n"
+                        + sponsoredPrizeLine(user).stripTrailing(),
                 keyboardFactory.rowsLayout(lockedRows));
     }
 
