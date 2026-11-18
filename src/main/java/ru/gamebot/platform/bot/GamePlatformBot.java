@@ -1802,8 +1802,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             session.reset();
             session.getData().put(WITHDRAWAL_ORIGIN_KEY, "balance");
-            if (!sponsorBalanceService.enabled() || user.getSponsorCoins() <= 0) {
+            if (!sponsorBalanceService.enabled()) {
                 sendBalance(user);
+                return;
+            }
+            if (user.getSponsorCoins() <= 0) {
+                // Кнопка видна всем (владелец 18.11.2026): при нуле объясняем, откуда берётся EXCASH
+                sendText(user.getTelegramId(),
+                        "💎 <b>Вывод EXCASH</b>\n\nНа балансе пока <b>0 EXCASH</b>.\n"
+                                + "EXCASH копится за спонсорские квесты банков и партнёров: выполни квест, и награда придёт на этот баланс.",
+                        keyboardFactory.rowsLayout(List.of(
+                                List.of(keyboardFactory.callback("🎯 Спонсорские квесты", "quests:section:sponsored")),
+                                List.of(keyboardFactory.callback("⬅️ Назад", "menu:balance")))));
                 return;
             }
             String spBlock = rewardService.withdrawalEligibilityBlock(user);
@@ -7606,7 +7616,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         // Ежедневный бонус забирается в «Заданиях дня»; на балансе он появляется лишь пока задания выключены (app_settings).
         List<List<InlineKeyboardButton>> balanceRows = new ArrayList<>();
-        if (sponsorBalanceService.enabled() && user.getSponsorCoins() > 0) {
+        if (sponsorBalanceService.enabled()) {
             balanceRows.add(List.of(
                     keyboardFactory.callback("💸 Вывести EXC", "shop:withdraw"),
                     keyboardFactory.callback("💎 Вывести EXCASH", "spwd:start")));
