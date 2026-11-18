@@ -2091,7 +2091,7 @@ public class QuestSeeder implements CommandLineRunner {
         deactivateGame("GTA V");
 
         // ── Игровой оффер: World of Warships (страница-лендинг партнёра) ─────────────
-        // 18.11.2026 (решение владельца): все постбеки, ключи и API ActionPay стоят ТОЛЬКО на лендинге igry-afisha.pages.dev; бот про сеть ничего не знает.
+        // 18.11.2026 (решение владельца): все постбеки, ключи и API ActionPay стоят ТОЛЬКО на лендинге igry-afisha-5z1.pages.dev (19.11.2026 перенесён в аккаунт danilov.spm, прежний igry-afisha.pages.dev); бот про сеть ничего не знает.
         // Квест в боте - карточка, описание и ссылка на лендинг (с меткой игрока ?tg={TG_ID}). Подтверждённых игроков админ видит в списке конверсий лендинга и
         // начисляет награду командой /wowpay ID (обычное одобрение квеста, GamePlatformBot.handleGameOfferPayCommand). externalNetwork="landing" и offerId="wows"
         // намеренно НЕ совпадают ни с одной сетью, поэтому PostbackController этот квест не находит.
@@ -2119,7 +2119,7 @@ public class QuestSeeder implements CommandLineRunner {
             wowQuest.setRewardCoins(WOW_REWARD_EXC);
             wowQuest.setDescription("Бесплатная онлайн-игра про морские бои. Открой страницу игры, установи её и поиграй не меньше 30 минут: награду начислим после подтверждения партнёра.");
             wowQuest.setInstruction("Открой страницу игры, скачай её и зарегистрируйся:\n"
-                    + "https://igry-afisha.pages.dev/?tg={TG_ID}\n\n"
+                    + "https://igry-afisha-5z1.pages.dev/?tg={TG_ID}\n\n"
                     + "Запусти игру и поиграй не меньше 30 минут: если игру не запускали, партнёр не подтвердит.");
             wowQuest.setRequirements("📎 Как получить\n"
                     + "1. Нажми «Взять» и открой страницу игры.\n"
@@ -2947,7 +2947,7 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String WOW_TITLE = "World of Warships: установи и поиграй";
     private static final String WOW_TITLE_OLD = "Зарегистрируйся в World of Warships";
     private static final long WOW_REWARD_EXC = 7800L;
-    private static final String WOW_CARD_V2_KEY = "wows.card.v5.done";   // v3: из условий убрана фраза про отчёт; v4 (18.11.2026): квест бессрочный, у взятых заявок сняты дедлайны
+    private static final String WOW_CARD_V2_KEY = "wows.card.v6.done";   // v6 (19.11.2026): ссылка на лендинг igry-afisha-5z1.pages.dev; v3: из условий убрана фраза про отчёт; v4 (18.11.2026): квест бессрочный, у взятых заявок сняты дедлайны
 
     /** Ключ app_settings: скрытие всех спонсорских квестов, кроме банка ОТП, выполнено (15.11.2026). */
     private static final String SPONSORED_HIDE_KEY = "sponsored.hide.except.otp.done";
