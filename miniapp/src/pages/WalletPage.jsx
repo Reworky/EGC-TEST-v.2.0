@@ -449,7 +449,7 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest, onSponsorWi
         )}
       </BorderBeamCard>
 
-      {sponsorUiOn(wallet) && wallet.sponsorCoins > 0 && (
+      {sponsorUiOn(wallet) && (
         <div style={{ margin: '0 16px 12px', padding: '14px 16px', borderRadius: 16, textAlign: 'center',
           background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(168,85,247,0.45)' }}>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginBottom: 4 }}>💎 EXCASH</div>
@@ -459,7 +459,12 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest, onSponsorWi
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
             ≈ {Math.round(wallet.sponsorCoins / 100).toLocaleString('ru-RU')} ₽ · курс 100%, без лимитов
           </div>
-          <button className="quest-btn" style={{ marginTop: 10 }} onClick={onSponsorWithdraw}>💸 Вывести EXCASH</button>
+          {wallet.sponsorCoins > 0
+            ? <button className="quest-btn" style={{ marginTop: 10 }} onClick={onSponsorWithdraw}>💸 Вывести EXCASH</button>
+            : <>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 8 }}>Сюда копятся награды спонсорских квестов банков и партнёров.</div>
+                <button className="quest-btn" style={{ marginTop: 10 }} onClick={() => navigate('/quests?section=sponsored')}>🎯 Спонсорские квесты</button>
+              </>}
         </div>
       )}
 
