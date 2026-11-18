@@ -2125,7 +2125,7 @@ public class QuestSeeder implements CommandLineRunner {
                     + "1. Нажми «Взять» и открой страницу игры.\n"
                     + "2. Скачай игру на ПК и зарегистрируйся.\n"
                     + "3. Запусти игру и поиграй 30+ минут.\n\n"
-                    + "⏳ Подтверждение от партнёра приходит от нескольких дней до 30, после него мы начисляем EXC. Отчёт отправлять не нужно.\n"
+                    + "⏳ Подтверждение от партнёра приходит от нескольких дней до 30, после него мы начисляем EXC.\n"
                     + "Реклама · erid: LatgBuBKy");
             wowQuest.setExternalAutoApprove(true);
             wowQuest.setExternalOfferId("wows");
@@ -2917,7 +2917,7 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String WOW_TITLE = "World of Warships: установи и поиграй";
     private static final String WOW_TITLE_OLD = "Зарегистрируйся в World of Warships";
     private static final long WOW_REWARD_EXC = 7800L;
-    private static final String WOW_CARD_V2_KEY = "wows.card.v2.done";
+    private static final String WOW_CARD_V2_KEY = "wows.card.v3.done";   // v3 (18.11.2026): из условий убрана фраза про отчёт
 
     /** Ключ app_settings: скрытие всех спонсорских квестов, кроме банка ОТП, выполнено (15.11.2026). */
     private static final String SPONSORED_HIDE_KEY = "sponsored.hide.except.otp.done";
