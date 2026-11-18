@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { starsApprox } from '../utils/fundStars';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { getWallet, claimDailyBonus, openChest, getTonQuote, withdrawRub, withdrawTon, getWithdrawals, cancelReward, confirmPhone, invalidateCache, getStarsWithdrawItems, purchaseItem, getStarsInvoiceLink, getStarsPrices, requestAdWatch, restoreStreakByAd } from '../api/client';
 import { openStarsInvoice } from '../utils/stars';
@@ -387,41 +386,14 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest, onSponsorWi
           <i className="ti ti-coin" style={{ marginRight: 4 }} />
           <AnimatedNumber value={wallet.coins} flashColor="#F5A623" /> EXC
         </div>
-        {wallet.coins > 0 && (
-          <div style={{ fontSize: 18, fontWeight: 600, color: '#FFD76A', marginTop: 4 }}>
-            {starsApprox(wallet.coins, wallet.healthRatioPercent)}
-          </div>
-        )}
         <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>
           ≈ {+(wallet.coins * (wallet.withdrawalRatioPercent ?? wallet.healthRatioPercent) / 100 / 100).toFixed(1)} ₽ · {wallet.withdrawalRatioPercent != null ? `курс вывода ${wallet.withdrawalRatioPercent}%` : `фонд ${wallet.healthRatioPercent}%`}
         </div>
-        {wallet.partnerCompare && wallet.withdrawalRatioPercent != null && wallet.withdrawalRatioPercent < 100 && (() => {
-          const fmt = (v) => v >= 10 ? Math.round(v).toLocaleString('ru-RU') : (+v.toFixed(1)).toLocaleString('ru-RU');
-          const own = wallet.coins * wallet.withdrawalRatioPercent / 100 / 100;
-          const partner = wallet.coins / 100;
-          return (
-            <div style={{ fontSize: 13, color: '#c4b5fd', marginTop: 6 }}>
-              {wallet.coins > 0 && partner - own >= 1
-                ? `🤝 Партнёр: ≈ ${fmt(partner)} ₽ (курс 100%) · +${fmt(partner - own)} ₽`
-                : '🤝 Партнёр: 1 000 EXC = 10 ₽ (курс 100%)'}
-              <details style={{ marginTop: 6 }}>
-                <summary style={{ cursor: 'pointer', fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>🤝 Как стать партнёром проекта?</summary>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 6, lineHeight: 1.5 }}>
-                  Партнёр — игрок, который выполнил спонсорский квест банка-партнёра. Менеджер проведёт по шагам лично.
-                  <div style={{ marginTop: 6, fontWeight: 600, color: '#fff' }}>Что получают партнёры:</div>
-                  ✅ Вывод по курсу 100% вместо обычных ~{wallet.withdrawalRatioPercent}% — на все EXC, в том числе будущие<br />
-                  ✅ Партнёрские цены за звёзды и в магазине наград<br />
-                  ✅ 1000р от банка на вашу карту + Телеграм Премиум (1 месяц)<br />
-                  ✅ Бейдж «Банкир EGC» в профиле
-                  <button className="quest-btn" style={{ marginTop: 8 }} onClick={() => navigate('/quests?section=sponsored')}>🎯 Открыть квест банка</button>
-                </div>
-              </details>
-            </div>
-          );
-        })()}
-        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
-          Звёзды: приблизительный пересчёт по курсу фонда, зачисляется и выводится по нему.
-        </div>
+        {wallet.partnerCompare && wallet.withdrawalRatioPercent != null && wallet.withdrawalRatioPercent < 100 && wallet.coins * (100 - wallet.withdrawalRatioPercent) / 100 / 100 >= 1 && (
+          <div style={{ fontSize: 13, color: '#c4b5fd', marginTop: 6 }}>
+            🤝 Партнёр: +{Math.round(wallet.coins * (100 - wallet.withdrawalRatioPercent) / 100 / 100).toLocaleString('ru-RU')} ₽ (курс 100%)
+          </div>
+        )}
         {(wallet.withdrawalQuestsLeft > 0 || wallet.withdrawalDaysLeft > 0) && (
           <div style={{ fontSize: 12, color: '#c4b5fd', marginTop: 10 }}>
             {wallet.withdrawalQuestsLeft > 0
@@ -431,7 +403,7 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest, onSponsorWi
         )}
         {wallet.withdrawalCodesNeed > 0 && wallet.withdrawalCodesHave < wallet.withdrawalCodesNeed && (
           <div style={{ fontSize: 12, color: '#c4b5fd', marginTop: 10 }}>
-            🔑 Для вывода нужны коды дня: {wallet.withdrawalCodesHave} из {wallet.withdrawalCodesNeed} за последние 30 дней. Код выходит в канале, вводится в боте кнопкой «Код дня».
+            🔑 Для вывода нужны коды дня: {wallet.withdrawalCodesHave} из {wallet.withdrawalCodesNeed}
           </div>
         )}
         {wallet.coins < 5000 && (
@@ -457,14 +429,11 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest, onSponsorWi
             <AnimatedNumber value={wallet.sponsorCoins} flashColor="#c4b5fd" /> EXCASH
           </div>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
-            ≈ {Math.round(wallet.sponsorCoins / 100).toLocaleString('ru-RU')} ₽ · курс 100%, без лимитов
+            ≈ {Math.round(wallet.sponsorCoins / 100).toLocaleString('ru-RU')} ₽
           </div>
           {wallet.sponsorCoins > 0
             ? <button className="quest-btn" style={{ marginTop: 10 }} onClick={onSponsorWithdraw}>💸 Вывести EXCASH</button>
-            : <>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginTop: 8 }}>Сюда копятся награды спонсорских квестов банков и партнёров.</div>
-                <button className="quest-btn" style={{ marginTop: 10 }} onClick={() => navigate('/quests?section=sponsored')}>🎯 Спонсорские квесты</button>
-              </>}
+            : <button className="quest-btn" style={{ marginTop: 10 }} onClick={() => navigate('/quests?section=sponsored')}>🎯 Спонсорские квесты</button>}
         </div>
       )}
 
