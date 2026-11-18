@@ -452,14 +452,14 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest, onSponsorWi
       {sponsorUiOn(wallet) && wallet.sponsorCoins > 0 && (
         <div style={{ margin: '0 16px 12px', padding: '14px 16px', borderRadius: 16, textAlign: 'center',
           background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(168,85,247,0.45)' }}>
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginBottom: 4 }}>💎 Спонсорский баланс</div>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', marginBottom: 4 }}>💎 EXCASH</div>
           <div style={{ fontSize: 26, fontWeight: 600, color: '#c4b5fd' }}>
-            <AnimatedNumber value={wallet.sponsorCoins} flashColor="#c4b5fd" /> токенов
+            <AnimatedNumber value={wallet.sponsorCoins} flashColor="#c4b5fd" /> EXCASH
           </div>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
             ≈ {Math.round(wallet.sponsorCoins / 100).toLocaleString('ru-RU')} ₽ · курс 100%, без лимитов
           </div>
-          <button className="quest-btn" style={{ marginTop: 10 }} onClick={onSponsorWithdraw}>💸 Вывести спонсорские</button>
+          <button className="quest-btn" style={{ marginTop: 10 }} onClick={onSponsorWithdraw}>💸 Вывести EXCASH</button>
         </div>
       )}
 
@@ -660,9 +660,9 @@ function WithdrawRubForm({ wallet, onDone, sponsor }) {
     <div className="ref-link-card">
       <div className="ref-link-label">Вывод в рублях (СБП, любой банк)</div>
       {sponsor ? (
-        <p className="shop-desc">💎 Минимум 5 000. Курс 100%: 1 000 токенов = 10 ₽, лимитов нет. Доступно: {wallet.sponsorCoins.toLocaleString()}.</p>
+        <p className="shop-desc">💎 Минимум 5 000. Курс 100%: 1 000 EXCASH = 10 ₽, лимитов нет. Доступно: {wallet.sponsorCoins.toLocaleString()} EXCASH.</p>
       ) : <p className="shop-desc">Минимум 5 000 EXC. Курс: 1 000 EXC = {+(10 * (wallet.withdrawalRatioPercent ?? wallet.healthRatioPercent) / 100).toFixed(1)} ₽ ({wallet.withdrawalRatioPercent != null ? `курс ${wallet.withdrawalRatioPercent}%` : `фонд ${wallet.healthRatioPercent}%`}). Доступно: {wallet.remainingWithdrawalLimit.toLocaleString()} EXC. {wallet.partnerCompare && wallet.withdrawalRatioPercent != null && wallet.withdrawalRatioPercent < 100 ? `Партнёр: 1 000 EXC = 10 ₽ (курс 100%).` : ''}</p>}
-      <input type="number" className="quest-text-input" placeholder={sponsor ? 'Сумма в токенах' : 'Сумма в EXC'} value={amount} onChange={e => setAmount(e.target.value)} style={{ marginTop: 16 }} />
+      <input type="number" className="quest-text-input" placeholder={sponsor ? 'Сумма в EXCASH' : 'Сумма в EXC'} value={amount} onChange={e => setAmount(e.target.value)} style={{ marginTop: 16 }} />
       <input type="text" className="quest-text-input" placeholder="Банк и номер телефона (СБП, любой банк)" value={requisites} onChange={e => setRequisites(e.target.value)} style={{ marginTop: 8 }} />
       <button className="quest-btn" disabled={busy} onClick={handleSubmit} style={{ marginTop: 16 }}>{busy ? 'Секунду...' : 'Отправить заявку'}</button>
       {message && <div className="quest-message">{message}</div>}
@@ -715,9 +715,9 @@ function WithdrawTonForm({ wallet, onDone, sponsor }) {
     <div className="ref-link-card">
       <div className="ref-link-label">Вывод в GRAM (TON)</div>
       <p className="shop-desc">{sponsor
-        ? `💎 Минимум 5 000. Курс 100%, лимитов нет. Доступно: ${wallet.sponsorCoins.toLocaleString()}.`
+        ? `💎 Минимум 5 000. Курс 100%, лимитов нет. Доступно: ${wallet.sponsorCoins.toLocaleString()} EXCASH.`
         : `Минимум 5 000 EXC. Доступно: ${wallet.remainingWithdrawalLimit.toLocaleString()} EXC.`}</p>
-      <input type="number" className="quest-text-input" placeholder={sponsor ? 'Сумма в токенах' : 'Сумма в EXC'} value={amount} onChange={e => setAmount(e.target.value)} />
+      <input type="number" className="quest-text-input" placeholder={sponsor ? 'Сумма в EXCASH' : 'Сумма в EXC'} value={amount} onChange={e => setAmount(e.target.value)} />
       {quote && (
         <div className="shop-status" style={{ marginTop: 6 }}>
           ≈ {quote.rubles.toLocaleString()} ₽ → ≈ {quote.tonAmount} GRAM
@@ -768,7 +768,7 @@ function WithdrawStarsForm({ wallet, onDone, sponsor }) {
   return (
     <div className="ref-link-card">
       <div className="ref-link-label">Вывод в звёздах Telegram</div>
-      <p className="shop-desc">{sponsor ? `💎 Доступно: ${wallet.sponsorCoins.toLocaleString()} токенов, лимитов нет.` : `Доступно: ${wallet.remainingWithdrawalLimit.toLocaleString()} EXC.`} Отправляется вручную по юзернейму, в течение 24 ч.</p>
+      <p className="shop-desc">{sponsor ? `💎 Доступно: ${wallet.sponsorCoins.toLocaleString()} EXCASH, лимитов нет.` : `Доступно: ${wallet.remainingWithdrawalLimit.toLocaleString()} EXC.`} Отправляется вручную по юзернейму, в течение 24 ч.</p>
       {items === null ? (
         <p className="shop-desc">Загрузка...</p>
       ) : (
@@ -781,7 +781,7 @@ function WithdrawStarsForm({ wallet, onDone, sponsor }) {
               onClick={() => setSelectedId(item.id)}
               style={{ fontSize: 12, lineHeight: 1.5, padding: '8px 6px', opacity: (sponsor ? !(item.sponsorPrice > 0) : item.locked) ? 0.5 : 1 }}
             >
-              {denom(item.title)}<br />{sponsor ? `💎 ${item.sponsorPrice > 0 ? item.sponsorPrice.toLocaleString() : '-'}` : `${item.effectivePrice.toLocaleString()} EXC`}
+              {denom(item.title)}<br />{sponsor ? `💎 ${item.sponsorPrice > 0 ? item.sponsorPrice.toLocaleString() : '-'} EXCASH` : `${item.effectivePrice.toLocaleString()} EXC`}
             </button>
           ))}
         </div>
@@ -877,8 +877,8 @@ function WithdrawView({ wallet, onChanged, initialSponsor }) {
       )}
       {canSponsor && (
         <div className="view-toggle" style={{ padding: '10px 16px 0' }}>
-          <button className={`view-tab ${source === 'game' ? 'active' : ''}`} onClick={() => setSource('game')}>🪙 Игровой</button>
-          <button className={`view-tab ${source === 'sponsor' ? 'active' : ''}`} onClick={() => setSource('sponsor')}>💎 Спонсорский</button>
+          <button className={`view-tab ${source === 'game' ? 'active' : ''}`} onClick={() => setSource('game')}>🪙 EXC</button>
+          <button className={`view-tab ${source === 'sponsor' ? 'active' : ''}`} onClick={() => setSource('sponsor')}>💎 EXCASH</button>
         </div>
       )}
       <div className="view-toggle" style={{ padding: '10px 16px 12px' }}>
@@ -927,7 +927,7 @@ function MyWithdrawalsView({ onWalletChanged }) {
         <div key={r.id} className="shop-card">
           <div className="shop-top">
             <div className="shop-title">{r.fromSponsor ? '💎 ' : ''}В-{r.displayId} · {r.method}</div>
-            <div className="shop-price">{r.amountExc.toLocaleString()} {r.fromSponsor ? 'токенов' : 'EXC'}</div>
+            <div className="shop-price">{r.amountExc.toLocaleString()} {r.fromSponsor ? 'EXCASH' : 'EXC'}</div>
           </div>
           <div className="shop-meta">
             <span>{STATUS_LABELS[r.status] || r.status}</span>

@@ -392,11 +392,11 @@ public class WalletController {
         }
         if (sponsor) {
             if (!sponsorBalanceService.enabled()) {
-                return ShopActionResponseDto.builder().success(false).message("Спонсорский баланс сейчас недоступен.").build();
+                return ShopActionResponseDto.builder().success(false).message("EXCASH сейчас недоступен.").build();
             }
             if (amount > user.getSponsorCoins()) {
                 return ShopActionResponseDto.builder().success(false)
-                        .message("Недостаточно токенов. Спонсорский баланс: " + user.getSponsorCoins() + ".").build();
+                        .message("Недостаточно EXCASH. На балансе: " + user.getSponsorCoins() + ".").build();
             }
             return null; // лимитов нет
         }

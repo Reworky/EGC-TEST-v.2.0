@@ -29,4 +29,5 @@ public class MyQuestDto {
     private String moderatorComment;
     private long rewardXp;
     private long rewardCoins;
+    private boolean sponsorReward;
 }

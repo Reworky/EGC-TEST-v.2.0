@@ -339,7 +339,7 @@ public class RewardService {
 
         if (fromSponsor) {
             if (lockedUser.getSponsorCoins() < price) {
-                throw new IllegalArgumentException("Недостаточно токенов на спонсорском балансе. Нужно " + price + ".");
+                throw new IllegalArgumentException("Недостаточно EXCASH. Нужно " + price + ".");
             }
         } else if (lockedUser.getCoins() < price) {
             throw new IllegalArgumentException("Недостаточно EXC. Нужно " + price + " EXC.");
@@ -356,7 +356,7 @@ public class RewardService {
         }
 
         if (fromSponsor) {
-            excTx.creditSponsor(lockedUser, -price, ExcTransactionService.SHOP_BUY, "Покупка (спонсорский баланс): " + rewardItem.getTitle());
+            excTx.creditSponsor(lockedUser, -price, ExcTransactionService.SHOP_BUY, "Покупка за EXCASH: " + rewardItem.getTitle());
         } else {
             excTx.creditExc(lockedUser, -price, ExcTransactionService.SHOP_BUY, "Покупка: " + rewardItem.getTitle());
         }
@@ -904,7 +904,7 @@ public class RewardService {
 
         if (fromSponsor) {
             if (excAmount > lockedUser.getSponsorCoins()) {
-                throw new IllegalArgumentException("Недостаточно токенов на спонсорском балансе. Баланс: " + lockedUser.getSponsorCoins() + ".");
+                throw new IllegalArgumentException("Недостаточно EXCASH. На балансе: " + lockedUser.getSponsorCoins() + ".");
             }
         } else {
             long remaining = sinkShopService.getRemainingWithdrawalLimit(lockedUser);
@@ -931,7 +931,7 @@ public class RewardService {
         RewardItem saved = rewardItemRepository.save(withdrawItem);
 
         if (fromSponsor) {
-            excTx.creditSponsor(lockedUser, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод со спонсорского баланса → TON");
+            excTx.creditSponsor(lockedUser, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод EXCASH → TON");
         } else {
             sinkShopService.recordWithdrawal(lockedUser, excAmount);
             if (fixedRubUsed > 0) {
@@ -1001,7 +1001,7 @@ public class RewardService {
 
         if (fromSponsor) {
             if (excAmount > lockedUser.getSponsorCoins()) {
-                throw new IllegalArgumentException("Недостаточно токенов на спонсорском балансе. Баланс: " + lockedUser.getSponsorCoins() + ".");
+                throw new IllegalArgumentException("Недостаточно EXCASH. На балансе: " + lockedUser.getSponsorCoins() + ".");
             }
         } else {
             long remaining = sinkShopService.getRemainingWithdrawalLimit(lockedUser);
@@ -1028,7 +1028,7 @@ public class RewardService {
         RewardItem saved = rewardItemRepository.save(withdrawItem);
 
         if (fromSponsor) {
-            excTx.creditSponsor(lockedUser, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод со спонсорского баланса → " + rubles + " ₽");
+            excTx.creditSponsor(lockedUser, -excAmount, ExcTransactionService.WITHDRAWAL, "Вывод EXCASH → " + rubles + " ₽");
         } else {
             sinkShopService.recordWithdrawal(lockedUser, excAmount);
             if (fixedRubUsed > 0) {

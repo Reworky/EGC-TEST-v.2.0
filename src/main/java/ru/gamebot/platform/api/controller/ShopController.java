@@ -140,7 +140,7 @@ public class ShopController {
         if (paySponsor && !sponsorPayAvailable(user, item)) {
             return ResponseEntity.ok(ShopActionResponseDto.builder()
                     .success(false)
-                    .message("Оплата спонсорскими токенами для этой позиции недоступна.")
+                    .message("Оплата EXCASH для этой позиции недоступна.")
                     .build());
         }
         RewardRequest req;

@@ -58,6 +58,7 @@ public class QuestController {
     private final ru.gamebot.platform.service.SponsoredQuestsService sponsoredQuestsService;
     private final ru.gamebot.platform.service.PartnerQuestFunnelService partnerQuestFunnelService;
     private final ru.gamebot.platform.config.AppProperties appProperties;
+    private final ru.gamebot.platform.service.SponsorBalanceService sponsorBalanceService;
 
     /** Награда для списка «Мои квесты» — там вперемешку активные и уже закрытые заявки, поэтому недельное
      *  снижение (правило 3.4) сюда НЕ подмешиваем: для уже одобренного квеста цифра «как если бы брали
@@ -174,6 +175,7 @@ public class QuestController {
                 .durationDays(q.getDurationDays())
                 .rewardXp(q.getRewardXp())
                 .rewardCoins(displayRewardCoins(currentUser, q, weeklyStatus(weeklyCache, currentUser, q)))
+                .sponsorReward(sponsorBalanceService.applies(q))
                 .rewardDiminished(weeklyStatus(weeklyCache, currentUser, q).reached())
                 .weeklyLimit(weeklyStatus(weeklyCache, currentUser, q).limit())
                 .ticketReward(q.getTicketReward())
@@ -269,6 +271,7 @@ public class QuestController {
                         .durationDays(q.getDurationDays())
                         .rewardXp(q.getRewardXp())
                         .rewardCoins(displayRewardCoins(user, q, weeklyStatus(weeklyCache, user, q)))
+                        .sponsorReward(sponsorBalanceService.applies(q))
                         .rewardDiminished(weeklyStatus(weeklyCache, user, q).reached())
                         .weeklyLimit(weeklyStatus(weeklyCache, user, q).limit())
                         .ticketReward(q.getTicketReward())
@@ -329,6 +332,7 @@ public class QuestController {
                 .platform(q.getPlatform())
                 .durationDays(q.getDurationDays()).rewardXp(q.getRewardXp())
                 .rewardCoins(displayRewardCoins(currentUser, q, weeklyStatus(weeklyCache, currentUser, q)))
+                .sponsorReward(sponsorBalanceService.applies(q))
                 .rewardDiminished(weeklyStatus(weeklyCache, currentUser, q).reached())
                 .weeklyLimit(weeklyStatus(weeklyCache, currentUser, q).limit())
                 .ticketReward(q.getTicketReward())
@@ -398,6 +402,7 @@ public class QuestController {
                 .durationDays(quest.getDurationDays())
                 .rewardXp(quest.getRewardXp())
                 .rewardCoins(quest.getRewardCoins())
+                .sponsorReward(sponsorBalanceService.applies(quest))
                 .ticketReward(quest.getTicketReward())
                 .councilOnly(quest.isCouncilOnly())
                 .externalAutoApprove(quest.isExternalAutoApprove())
@@ -710,6 +715,7 @@ public class QuestController {
                         .moderatorComment(s.getModeratorComment())
                         .rewardXp(s.getQuest().getRewardXp())
                         .rewardCoins(historyRewardCoins(user, s.getQuest()))
+                        .sponsorReward(sponsorBalanceService.applies(s.getQuest()))
                         .build();
                 })
                 .toList();

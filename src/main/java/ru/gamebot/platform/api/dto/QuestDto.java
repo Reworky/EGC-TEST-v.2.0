@@ -15,6 +15,8 @@ public class QuestDto {
     private int durationDays;
     private long rewardXp;
     private long rewardCoins;
+    /** Награда идёт на спонсорский баланс EXCASH (банковская миссия или партнёрский квест, выключатель включён): мини-апп показывает «💎 N EXCASH» вместо «N EXC». */
+    private boolean sponsorReward;
 
     /** Недельный лимит (правило 3.4) по этой игре+категории уже исчерпан — rewardCoins здесь уже
      *  вдвое меньше номинала, фронтенд показывает пометку, чтобы игрок видел причину до взятия квеста. */

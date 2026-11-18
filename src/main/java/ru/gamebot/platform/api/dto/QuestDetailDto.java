@@ -17,6 +17,7 @@ public class QuestDetailDto {
     private int durationDays;
     private long rewardXp;
     private long rewardCoins;
+    private boolean sponsorReward;
 
     /** См. QuestDto.rewardDiminished — то же для детальной карточки. weeklyCompleted — сколько квестов
      *  этой игры+категории игрок одобрил за последние 7 дней (для текста "уже N"). */

@@ -599,7 +599,9 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
           {q.bankRewardRub > 0 && <span className="reward-exc">💳 {q.bankRewardRub.toLocaleString('ru-RU')} ₽ от банка</span>}
           {q.bonusItem && <span className="reward-xp">🎁 {q.bonusItem.replace(' на 1 месяц', '')}</span>}
           {!(q.rewardCoins === 0 && q.bankRewardRub > 0) && (
-          <span className="reward-exc"><i className="ti ti-coin"></i> {q.rewardCoins.toLocaleString()} EXC{fundRatio != null && <> ({starsApprox(q.rewardCoins, fundRatio)})</>}</span>
+          q.sponsorReward
+            ? <span className="reward-exc">💎 {q.rewardCoins.toLocaleString()} EXCASH <span style={{ opacity: 0.7 }}>(≈ {Math.round(q.rewardCoins / 100).toLocaleString('ru-RU')} ₽)</span></span>
+            : <span className="reward-exc"><i className="ti ti-coin"></i> {q.rewardCoins.toLocaleString()} EXC{fundRatio != null && <> ({starsApprox(q.rewardCoins, fundRatio)})</>}</span>
           )}
           {(details[q.id]?.rewardDiminished ?? q.rewardDiminished) && (
             <span className="reward-diminished">×½ лимит недели</span>
@@ -1070,7 +1072,9 @@ function MyQuestsView({ expanded, details, onToggle, onDetailChanged, kind, onKi
             <div className="quest-rewards">
               {m.bankRewardRub > 0 && <span className="reward-exc">💳 {m.bankRewardRub.toLocaleString('ru-RU')} ₽ от банка</span>}
               {!(m.rewardCoins === 0 && m.bankRewardRub > 0) && (
-                <span className="reward-exc"><i className="ti ti-coin"></i> {m.rewardCoins.toLocaleString()} EXC{fundRatio != null && <> ({starsApprox(m.rewardCoins, fundRatio)})</>}</span>
+                m.sponsorReward
+                  ? <span className="reward-exc">💎 {m.rewardCoins.toLocaleString()} EXCASH <span style={{ opacity: 0.7 }}>(≈ {Math.round(m.rewardCoins / 100).toLocaleString('ru-RU')} ₽)</span></span>
+                  : <span className="reward-exc"><i className="ti ti-coin"></i> {m.rewardCoins.toLocaleString()} EXC{fundRatio != null && <> ({starsApprox(m.rewardCoins, fundRatio)})</>}</span>
               )}
               {!(m.rewardXp === 0 && m.bankRewardRub > 0) && (
                 <span className="reward-xp"><i className="ti ti-star"></i> {m.rewardXp} XP</span>

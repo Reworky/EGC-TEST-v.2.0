@@ -7574,7 +7574,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Строка спонсорского баланса для экрана «Баланс» (только при включённом выключателе и ненулевом балансе): «💎 N · ≈ M ₽ (курс 100%)». Пусто иначе. */
     private String sponsorBalanceLine(AppUser user) {
         if (!sponsorBalanceService.enabled() || user.getSponsorCoins() <= 0) return "";
-        return "💎 <b>" + fmtExc(user.getSponsorCoins()) + "</b> спонсорский баланс · ≈ " + fmtExc(Math.round(user.getSponsorCoins() / 100.0)) + " ₽ (курс 100%, без лимитов)\n\n";
+        return "💎 <b>" + fmtExc(user.getSponsorCoins()) + " EXCASH</b>\n\n";
     }
 
     private void sendBalance(AppUser user, String backData) {
@@ -7598,11 +7598,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         // Ежедневный бонус забирается в «Заданиях дня»; на балансе он появляется лишь пока задания выключены (app_settings).
         List<List<InlineKeyboardButton>> balanceRows = new ArrayList<>();
-        balanceRows.add(List.of(
-                keyboardFactory.callback("💸 Вывести EXC", "shop:withdraw"),
-                keyboardFactory.callback("📜 История операций", "myexc:0")));
         if (sponsorBalanceService.enabled() && user.getSponsorCoins() > 0) {
-            balanceRows.add(List.of(keyboardFactory.callback("💎 Вывести спонсорские", "spwd:start")));
+            balanceRows.add(List.of(
+                    keyboardFactory.callback("💸 Вывести EXC", "shop:withdraw"),
+                    keyboardFactory.callback("💎 Вывести EXCASH", "spwd:start")));
+            balanceRows.add(List.of(keyboardFactory.callback("📜 История операций", "myexc:0")));
+        } else {
+            balanceRows.add(List.of(
+                    keyboardFactory.callback("💸 Вывести EXC", "shop:withdraw"),
+                    keyboardFactory.callback("📜 История операций", "myexc:0")));
         }
         if (!userService.dailyTasksEnabled()) {
             balanceRows.add(List.of(keyboardFactory.callback(dailyBonusWalletLabel(user), "menu:daily")));
@@ -10654,7 +10658,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("🎯 <b>").append(escape(quest.getTitle())).append("</b>\n");
         sb.append(questMetaLine(quest)).append("\n");
         sb.append(activeDeadline.contains("с момента старта") ? "" : activeDeadline).append(statusLine);
-        sb.append("\n🏆 <b>+").append(fmtExc(coins)).append(" EXC</b>").append(starsNote(coins)).append("\n");
+        if (sponsorBalanceService.applies(quest)) {
+            sb.append("\n💎 <b>+").append(fmtExc(coins)).append(" EXCASH</b> (≈ ").append(fmtExc(Math.round(coins / 100.0))).append(" ₽)\n");
+        } else {
+            sb.append("\n🏆 <b>+").append(fmtExc(coins)).append(" EXC</b>").append(starsNote(coins)).append("\n");
+        }
         if (quest.getDescription() != null && !quest.getDescription().isBlank()) {
             sb.append("\n").append(escape(quest.getDescription())).append("\n");
         }
@@ -10805,7 +10813,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? " (за 1-е сегодня, дальше меньше)"
                 : weeklyLimitNote(questService.weeklyLimitStatus(user, quest));
         boolean tickets = !quest.isSponsored() && !"UGC".equalsIgnoreCase(quest.getGameName()) && quest.getTicketReward() > 0;
-        return "🏆 <b>+" + fmtExc(coins) + " EXC</b>" + starsNote(coins) + " · +" + quest.getRewardXp() + " XP"
+        String rewardHead = sponsorBalanceService.applies(quest)
+                ? "💎 <b>+" + fmtExc(coins) + " EXCASH</b> (≈ " + fmtExc(Math.round(coins / 100.0)) + " ₽)"
+                : "🏆 <b>+" + fmtExc(coins) + " EXC</b>" + starsNote(coins);
+        return rewardHead + " · +" + quest.getRewardXp() + " XP"
                 + (tickets ? " · 🎟 +" + quest.getTicketReward() + " " + ticketsWord(quest.getTicketReward()) : "")
                 + rewardNote + egcPassRewardNote(user, quest);
     }
@@ -11103,7 +11114,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Заголовок «Квест активен! Теперь заходите в игру...» собирается ниже (nextStep) одной строкой для всех обычных квестов;
         // здесь остаётся только текст партнёрских квестов со своей ссылкой.
         String notice = isGameOfferQuest(quest)
-                ? "🚀 Квест активен! Открой страницу игры кнопкой ниже — EXC начислим после подтверждения партнёра."
+                ? "🚀 Квест активен! Открой страницу игры кнопкой ниже — EXCASH начислим после подтверждения партнёра."
                 : quest.isExternalAutoApprove()
                 ? "🚀 Квест активен! Перейди по своей ссылке ниже — отчёт отправлять не нужно, EXC начислится автоматически."
                 : "";
@@ -12012,10 +12023,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("📋 Мои заявки на вывод", "menu:my-withdrawals")));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:balance")));
         sendText(user.getTelegramId(),
-                "💎 <b>Вывод спонсорского баланса</b>\n\n"
-                        + "Доступно: <b>" + fmtExc(bal) + "</b> · ≈ " + fmtExc(Math.round(bal / 100.0)) + " ₽\n"
-                        + "Курс 100%, лимитов нет. Минимум " + fmtExc(ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) + ".\n"
-                        + "Звёзды и магазин: при оформлении выберите «💎 Спонсорскими».\n\n"
+                "💎 <b>Вывод EXCASH</b>\n\n"
+                        + "Доступно: <b>" + fmtExc(bal) + " EXCASH</b> (≈ " + fmtExc(Math.round(bal / 100.0)) + " ₽)\n"
+                        + "Курс 100%, лимитов нет. Минимум " + fmtExc(ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) + ".\n\n"
+                        + "Звёзды и магазин: при оформлении выберите «💎 За EXCASH».\n\n"
                         + "Куда выводим?",
                 keyboardFactory.rowsLayout(rows));
     }
@@ -12274,7 +12285,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendWithdrawalTonAmountScreen(AppUser user) {
         sendText(user.getTelegramId(),
-                (sponsorWd(user) ? "💎 <b>Вывод в TON (спонсорский баланс)</b>" : "💎 <b>Вывод в TON</b>") + "\n\n" + withdrawalAmountInfo(user) + "Введите сумму, которую хотите вывести.",
+                (sponsorWd(user) ? "💎 <b>Вывод в TON (EXCASH)</b>" : "💎 <b>Вывод в TON</b>") + "\n\n" + withdrawalAmountInfo(user) + "Введите сумму, которую хотите вывести.",
                 withdrawalAmountBackKeyboard(user));
     }
 
@@ -12298,7 +12309,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (spTon ? amount > user.getSponsorCoins() : amount > user.getCoins()) {
             sendText(user.getTelegramId(), spTon
-                    ? "⚠️ Недостаточно токенов. Спонсорский баланс: <b>" + fmtExc(user.getSponsorCoins()) + "</b>."
+                    ? "⚠️ Недостаточно EXCASH. На балансе: <b>" + fmtExc(user.getSponsorCoins()) + "</b>."
                     : "⚠️ Недостаточно EXC. Баланс: <b>" + user.getCoins() + " EXC</b>.", cancelKeyboard());
             return;
         }
@@ -12494,14 +12505,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(),
                     "✅ <b>Заявка на вывод в TON принята!</b>\n\n"
                     + "🔢 Номер заявки: <b>В-" + reqDisplayId(tonReq) + "</b>\n"
-                    + "💸 Сумма: <b>" + excAmount + " EXC</b>\n"
+                    + "💸 Сумма: <b>" + excAmount + (spTonAddr ? " EXCASH" : " EXC") + "</b>\n"
                     + "💵 Эквивалент: <b>" + tonReq.getFixedRubValue() + " ₽</b>" + bonusNote(tonReq) + " → ~<b>" + exchangeRateService.rubToTon(java.math.BigDecimal.valueOf(tonReq.getFixedRubValue())) + " TON</b>\n"
                     + "📈 Курс: 1 TON = " + tonRate2.setScale(2, java.math.RoundingMode.HALF_DOWN) + " ₽\n"
                     + "💎 Способ: <b>GRAM (TON)</b>\n"
                     + "📬 Кошелёк: <code>" + escape(wallet) + "</code>\n\n"
                     + "⚠️ Комиссия сети (~0.01 TON) вычитается из суммы — на кошелёк придёт чуть меньше.\n\n"
                     + "Администратор обработает заявку в течение 24 часов.\n\n"
-                    + "↩️ Пока заявка в статусе «⏳ Ожидает», её можно отменить в «Мои заявки на вывод»: EXC вернутся на баланс.",
+                    + "↩️ Пока заявка в статусе «⏳ Ожидает», её можно отменить в «Мои заявки на вывод»: " + (spTonAddr ? "EXCASH" : "EXC") + " вернутся на баланс.",
                     withdrawalRequestsKeyboard());
             notifyAdminsAboutWithdrawal(user, tonReq);
         } catch (IllegalArgumentException e) {
@@ -12511,7 +12522,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private void sendWithdrawalScreen(AppUser user) {
         sendText(user.getTelegramId(),
-                (sponsorWd(user) ? "💎 <b>Вывод в рублях (спонсорский баланс)</b>" : "💸 <b>Вывод в рублях</b>") + "\n\n" + withdrawalAmountInfo(user) + "Введите сумму, которую хотите вывести.",
+                (sponsorWd(user) ? "💎 <b>Вывод в рублях (EXCASH)</b>" : "💸 <b>Вывод в рублях</b>") + "\n\n" + withdrawalAmountInfo(user) + "Введите сумму, которую хотите вывести.",
                 withdrawalAmountBackKeyboard(user));
     }
 
@@ -12529,7 +12540,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Блок над вводом суммы вывода: баланс, сколько можно вывести сейчас (меньшее из баланса и остатка месячного лимита), минимум. */
     private String withdrawalAmountInfo(AppUser user) {
         if (sponsorWd(user)) {
-            return "💎 Спонсорский баланс: <b>" + fmtExc(user.getSponsorCoins()) + "</b>\n"
+            return "💎 Баланс EXCASH: <b>" + fmtExc(user.getSponsorCoins()) + "</b>\n"
                     + "✅ Можно вывести всё, лимитов нет · курс 100% · минимум "
                     + fmtExc(ru.gamebot.platform.service.RewardService.MIN_WITHDRAWAL_EXC) + "\n\n";
         }
@@ -14623,8 +14634,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (sponsorChoice) {
             rows.add(List.of(
-                    keyboardFactory.callback("🪙 Игровыми: " + fmtExc(price), "shop:confirm:" + reward.getId()),
-                    keyboardFactory.callback("💎 Спонсорскими: " + fmtExc(sponsorPrice), "shop:confirmsp:" + reward.getId())));
+                    keyboardFactory.callback("🪙 За EXC: " + fmtExc(price), "shop:confirm:" + reward.getId()),
+                    keyboardFactory.callback("💎 За EXCASH: " + fmtExc(sponsorPrice), "shop:confirmsp:" + reward.getId())));
         } else {
             rows.add(List.of(keyboardFactory.callback(instant ? "✅ Купить" : "✅ Оформить заявку", "shop:confirm:" + reward.getId())));
         }
@@ -14636,10 +14647,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "📝 <b>Проверьте заявку</b>\n\n"
                         + "🎁 " + escape(reward.getTitle()) + "\n"
                         + "🪙 Цена: <b>" + fmtExc(price) + " EXC</b>\n"
-                        + (sponsorChoice ? "💎 Или спонсорскими: <b>" + fmtExc(sponsorPrice) + "</b> (на балансе " + fmtExc(user.getSponsorCoins()) + ")\n" : "")
+                        + (sponsorChoice ? "💎 Или за EXCASH: <b>" + fmtExc(sponsorPrice) + "</b> (на балансе " + fmtExc(user.getSponsorCoins()) + ")\n" : "")
                         + (data != null && !data.isBlank() ? "📋 Данные для выдачи: <code>" + escape(data) + "</code>\n" : "")
                         + "\n"
-                        + (instant
+                        + (sponsorChoice
+                                ? (instant
+                                    ? "После нажатия кнопки оплата спишется, и покупка применится сразу."
+                                    : "После нажатия «Оформить заявку» оплата спишется и заявка уйдёт модератору.")
+                                : instant
                                 ? "После нажатия «Купить» EXC спишутся, и покупка применится сразу."
                                 : "После нажатия «Оформить заявку» EXC спишутся и заявка уйдёт модератору. Выдача вручную, мы пришлём уведомление."),
                 keyboardFactory.rowsLayout(rows));
@@ -14783,7 +14798,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(),
                     "✅ <b>Рамка аватара применена!</b>\n\n"
                             + "🎁 " + escape(reward.getTitle()) + "\n"
-                            + (fromSponsor ? "💎 Списано со спонсорского баланса: <b>" + fmtExc(effectivePrice) + "</b>\n\n" : "🪙 Списано: <b>" + effectivePrice + " EXC</b>\n\n")
+                            + (fromSponsor ? "💎 Списано: <b>" + fmtExc(effectivePrice) + " EXCASH</b>\n\n" : "🪙 Списано: <b>" + effectivePrice + " EXC</b>\n\n")
                             + "Открой мини-апп → Профиль, чтобы увидеть новую рамку вокруг аватара.",
                     backMenuKeyboard("sink:cat:customization"));
             if (callbackQuery != null) answerSilently(callbackQuery.getId());
@@ -14800,7 +14815,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(),
                 "✅ <b>Заявка на награду отправлена</b>\n\n"
                         + "🎁 Награда: <b>" + escape(reward.getTitle()) + "</b>\n"
-                        + (fromSponsor ? "💎 Списано со спонсорского баланса: <b>" + fmtExc(effectivePrice) + "</b>\n\n" : "🪙 Списано: <b>" + effectivePrice + " EXC</b>\n\n")
+                        + (fromSponsor ? "💎 Списано: <b>" + fmtExc(effectivePrice) + " EXCASH</b>\n\n" : "🪙 Списано: <b>" + effectivePrice + " EXC</b>\n\n")
                         + "Как только выдача будет подтверждена, вы получите отдельное уведомление."
                         + ("Вывод".equals(reward.getCategory()) && !rewardService.withdrawalPriorityNote(user).isEmpty()
                                 ? "\n\n" + rewardService.withdrawalPriorityNote(user).trim() : ""),
@@ -25901,16 +25916,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             Long after = tx.getBalanceAfter();
             if (after != null) {
                 long before = after - tx.getAmount();
-                sb.append("💸 Было <b>").append(before).append(" EXC</b>\n")
+                sb.append("💸 Было <b>").append(before).append(tx.isSponsor() ? " EXCASH" : " EXC").append("</b>\n")
                   .append(tx.isSponsor() ? "💎 " : "")
                   .append(ru.gamebot.platform.service.ExcTransactionService.typeLabel(tx.getType()))
-                  .append("  <b>").append(sign).append(tx.getAmount()).append(" EXC</b>")
+                  .append("  <b>").append(sign).append(tx.getAmount()).append(tx.isSponsor() ? " EXCASH" : " EXC").append("</b>")
                   .append(" (").append(meta).append(")\n")
-                  .append("💸 Стало <b>").append(after).append(" EXC</b>\n\n");
+                  .append("💸 Стало <b>").append(after).append(tx.isSponsor() ? " EXCASH" : " EXC").append("</b>\n\n");
             } else {
                 // Старая запись без сохранённого баланса после операции — показываем как раньше
                 sb.append(tx.isSponsor() ? "💎 " : "").append(ru.gamebot.platform.service.ExcTransactionService.typeLabel(tx.getType()))
-                  .append("  <b>").append(sign).append(tx.getAmount()).append(" EXC</b>")
+                  .append("  <b>").append(sign).append(tx.getAmount()).append(tx.isSponsor() ? " EXCASH" : " EXC").append("</b>")
                   .append(" (").append(meta).append(")\n\n");
             }
         }
@@ -25963,15 +25978,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             Long after = tx.getBalanceAfter();
             if (after != null) {
                 long before = after - tx.getAmount();
-                sb.append("💸 Было <b>").append(before).append(" EXC</b>\n")
+                sb.append("💸 Было <b>").append(before).append(tx.isSponsor() ? " EXCASH" : " EXC").append("</b>\n")
                   .append(tx.isSponsor() ? "💎 " : "")
                   .append(ru.gamebot.platform.service.ExcTransactionService.typeLabel(tx.getType()))
-                  .append("  <b>").append(sign).append(tx.getAmount()).append(" EXC</b>")
+                  .append("  <b>").append(sign).append(tx.getAmount()).append(tx.isSponsor() ? " EXCASH" : " EXC").append("</b>")
                   .append(" (").append(meta).append(")\n")
-                  .append("💸 Стало <b>").append(after).append(" EXC</b>\n\n");
+                  .append("💸 Стало <b>").append(after).append(tx.isSponsor() ? " EXCASH" : " EXC").append("</b>\n\n");
             } else {
                 sb.append(tx.isSponsor() ? "💎 " : "").append(ru.gamebot.platform.service.ExcTransactionService.typeLabel(tx.getType()))
-                  .append("  <b>").append(sign).append(tx.getAmount()).append(" EXC</b>")
+                  .append("  <b>").append(sign).append(tx.getAmount()).append(tx.isSponsor() ? " EXCASH" : " EXC").append("</b>")
                   .append(" (").append(meta).append(")\n\n");
             }
         }
@@ -26666,7 +26681,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     "✅ <b>Квест засчитан</b>\n\n"
                     + "<b>" + escape(approved.getQuest().getTitle()) + "</b>, подтверждено партнёром\n"
                     + (sponsorBalanceService.applies(approved.getQuest())
-                        ? "💎 <b>+" + fmtExc(awardedCoinsOf(approved)) + "</b> на спонсорский баланс"
+                        ? "💎 <b>+" + fmtExc(awardedCoinsOf(approved)) + " EXCASH</b> на баланс (≈ " + fmtExc(Math.round(awardedCoinsOf(approved) / 100.0)) + " ₽)"
                         : "🪙 <b>+" + awardedCoinsOf(approved) + " EXC</b>")
                     + (egcPassBonusLine(approved).isEmpty() ? "" : "\n" + egcPassBonusLine(approved).trim())
                     + chatBridgeAfterQuestLine(approved.getUser()), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()), chatBridgeAfterQuestButton(approved.getUser()));
@@ -28852,7 +28867,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (spRub ? amount > user.getSponsorCoins() : amount > user.getCoins()) {
             sendText(user.getTelegramId(), spRub
-                    ? "⚠️ Недостаточно токенов. Спонсорский баланс: <b>" + fmtExc(user.getSponsorCoins()) + "</b>."
+                    ? "⚠️ Недостаточно EXCASH. На балансе: <b>" + fmtExc(user.getSponsorCoins()) + "</b>."
                     : "⚠️ Недостаточно EXC. Баланс: <b>" + user.getCoins() + " EXC</b>.", cancelKeyboard());
             return;
         }
@@ -29011,10 +29026,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendText(user.getTelegramId(),
                 "✅ <b>Заявка на вывод принята!</b>\n\n"
                     + "🔢 Номер заявки: <b>В-" + reqDisplayId(withdrawalReq) + "</b>\n"
-                    + "💸 Сумма: <b>" + amount + " EXC</b>\n"
+                    + "💸 Сумма: <b>" + amount + (spDetails ? " EXCASH" : " EXC") + "</b>\n"
                     + "💵 К выплате: <b>~" + withdrawalReq.getFixedRubValue() + " ₽</b>" + bonusNote(withdrawalReq) + "\n\n"
                     + "Ожидайте, в течение 24 часов администратор выполнит перевод!\n\n"
-                    + "↩️ Пока заявка в статусе «⏳ Ожидает», её можно отменить в «Мои заявки на вывод»: EXC вернутся на баланс."
+                    + "↩️ Пока заявка в статусе «⏳ Ожидает», её можно отменить в «Мои заявки на вывод»: " + (spDetails ? "EXCASH" : "EXC") + " вернутся на баланс."
                     + (rewardService.withdrawalPriorityNote(user).isEmpty() ? "" : "\n\n" + rewardService.withdrawalPriorityNote(user).trim()),
                 withdrawalRequestsKeyboard());
             notifyAdminsAboutWithdrawal(user, withdrawalReq);
@@ -29631,7 +29646,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + playerHeader(user) + "\n"
                 + "🪙 Сумма: <b>" + rewardService.actualPaidPrice(req) + " EXC</b>\n"
                 + "📦 Тип: <b>" + escape(req.getRewardItem().getTitle()) + "</b>"
-                + (req.isFromSponsor() ? "\n💎 <b>Со спонсорского баланса</b> (курс 100%, без лимитов)" : "")
+                + (req.isFromSponsor() ? "\n💎 <b>Вывод EXCASH</b> (курс 100%, без лимитов)" : "")
                 + (req.getBonusAmountRub() > 0
                     ? "\n🎁 Бонус курса дня: <b>+" + req.getBonusAmountRub() + " ₽</b> (+" + req.getBonusPercent() + "%), итого к выплате <b>"
                         + fixedOrCurrentRub(req) + " ₽</b>"
@@ -31189,7 +31204,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(writeToPlayerButton(user))
         ));
         String rich = "🛍️ <b>Новая заявка на выдачу награды</b>\n\n" + rewardRequestInfo(req, user)
-                + (req.isFromSponsor() ? "\n\n💎 <b>Оплачено токенами спонсорского баланса</b>" : "");
+                + (req.isFromSponsor() ? "\n\n💎 <b>Оплачено EXCASH</b>" : "");
         for (Long adminId : adminService.allModeratorIds()) {
             sendText(adminId, rich, richMarkup);
         }

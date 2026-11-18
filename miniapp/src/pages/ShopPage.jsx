@@ -128,7 +128,7 @@ function ShopItemCard({ item, expanded, onToggle, onPurchased, ownedFrames, acti
         }
       </div>
       {!isOwned && item.sponsorPrice > 0 && (
-        <div className="shop-status" style={{ color: '#c4b5fd' }}>💎 Или спонсорскими: {item.sponsorPrice.toLocaleString()}</div>
+        <div className="shop-status" style={{ color: '#c4b5fd' }}>💎 Или за EXCASH: {item.sponsorPrice.toLocaleString()}</div>
       )}
       {item.statusNote && <div className="shop-status">{item.statusNote}</div>}
       {expanded && (
@@ -155,10 +155,10 @@ function ShopItemCard({ item, expanded, onToggle, onPurchased, ownedFrames, acti
             item.sponsorPrice > 0 ? (
               <div style={{ display: 'flex', gap: 8 }}>
                 <button className="quest-btn" style={{ flex: 1 }} disabled={busy || item.locked} onClick={() => handleBuy(false)}>
-                  {busy ? 'Секунду...' : item.locked ? 'Недоступно' : `Купить за 🪙 ${item.effectivePrice.toLocaleString()}`}
+                  {busy ? 'Секунду...' : item.locked ? 'Недоступно' : `Купить за ${item.effectivePrice.toLocaleString()} EXC`}
                 </button>
                 <button className="quest-btn quest-btn-secondary" style={{ flex: 1 }} disabled={busy} onClick={() => handleBuy(true)}>
-                  {busy ? 'Секунду...' : `Купить за 💎 ${item.sponsorPrice.toLocaleString()}`}
+                  {busy ? 'Секунду...' : `Купить за ${item.sponsorPrice.toLocaleString()} EXCASH`}
                 </button>
               </div>
             ) : (
