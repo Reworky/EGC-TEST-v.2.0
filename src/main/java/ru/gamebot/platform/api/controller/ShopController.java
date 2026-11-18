@@ -36,6 +36,7 @@ public class ShopController {
     private final AppUserRepository appUserRepository;
     private final GamePlatformBot gamePlatformBot;
     private final Cs2CaseCatalog cs2CaseCatalog;
+    private final ru.gamebot.platform.service.SponsorBalanceService sponsorBalanceService;
 
     @GetMapping("/items")
     public List<RewardItemDto> items(@AuthenticationPrincipal Long telegramId) {
@@ -65,6 +66,12 @@ public class ShopController {
         return rewardService.findByPurchaseGroup("telegram_stars").stream().map(item -> toDto(item, user)).toList();
     }
 
+    /** Оплата токенами спонсорского баланса доступна: выключатель включён, у игрока есть токены, позиция обычная или звёзды (донат-игры «токены + звёзды» нет). */
+    private boolean sponsorPayAvailable(AppUser user, RewardItem item) {
+        if (user == null || !sponsorBalanceService.enabled() || user.getSponsorCoins() <= 0) return false;
+        return item.getPurchaseGroup() == null || ru.gamebot.platform.service.GemPurchaseService.packagesFor(item.getPurchaseGroup()).isEmpty();
+    }
+
     private RewardItemDto toDto(RewardItem item, AppUser user) {
         String statusNote = user != null ? shopLimitService.getItemStatus(user, item) : null;
         boolean locked = statusNote != null
@@ -76,6 +83,7 @@ public class ShopController {
                 .category(item.getCategory())
                 .priceCoins(item.getPriceCoins())
                 .effectivePrice(healthRatioService.effectivePriceFor(user, item))
+                .sponsorPrice(sponsorPayAvailable(user, item) ? rewardService.sponsorPriceFor(user, item) : 0)
                 .statusNote(statusNote)
                 .locked(locked)
                 .userDataPrompt(item.getUserDataPrompt())
@@ -128,9 +136,16 @@ public class ShopController {
                     .build());
         }
 
+        boolean paySponsor = body != null && body.isSponsor();
+        if (paySponsor && !sponsorPayAvailable(user, item)) {
+            return ResponseEntity.ok(ShopActionResponseDto.builder()
+                    .success(false)
+                    .message("Оплата спонсорскими токенами для этой позиции недоступна.")
+                    .build());
+        }
         RewardRequest req;
         try {
-            req = rewardService.createRewardRequest(user, item, userData);
+            req = rewardService.createRewardRequest(user, item, userData, paySponsor);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.ok(ShopActionResponseDto.builder()
                     .success(false)

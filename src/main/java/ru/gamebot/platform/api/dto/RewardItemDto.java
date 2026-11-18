@@ -12,6 +12,8 @@ public class RewardItemDto {
     private String category;
     private long priceCoins;
     private long effectivePrice;
+    /** Цена в токенах спонсорского баланса; 0 - оплата спонсорскими недоступна (выключатель, нет токенов, донат-игры). */
+    private long sponsorPrice;
     /** Человекочитаемый статус доступности (уровень/cooldown/лимиты) — уже готовая строка для отображения. */
     private String statusNote;
     /** true, если товар сейчас нельзя купить (статус начинается с 🔒/⏳/🚫). */

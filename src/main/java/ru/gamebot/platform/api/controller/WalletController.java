@@ -52,12 +52,15 @@ public class WalletController {
     public static class WithdrawRubRequest {
         private long amount;
         private String requisites;
+        /** Вывод со спонсорского баланса (18.11.2026): курс 100%, без месячного лимита. */
+        private boolean sponsor;
     }
 
     @Data
     public static class WithdrawTonRequest {
         private long amount;
         private String walletAddress;
+        private boolean sponsor;
     }
 
     @Data
@@ -221,12 +224,13 @@ public class WalletController {
     }
 
     @GetMapping("/ton-quote")
-    public ResponseEntity<TonQuoteDto> tonQuote(@RequestParam long amount, @AuthenticationPrincipal Long telegramId) {
+    public ResponseEntity<TonQuoteDto> tonQuote(@RequestParam long amount, @RequestParam(defaultValue = "false") boolean sponsor,
+                                                @AuthenticationPrincipal Long telegramId) {
         AppUser user = appUserRepository.findByTelegramId(telegramId).orElse(null);
         if (user == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
-        long rubles = resolveRubValue(user, amount).rubles();
+        long rubles = sponsor ? Math.round(amount / 100.0) : resolveRubValue(user, amount).rubles();
         BigDecimal rublesDecimal = BigDecimal.valueOf(rubles);
         BigDecimal tonRate = exchangeRateService.getTonRubRate();
         BigDecimal tonAmount = exchangeRateService.rubToTon(rublesDecimal);
@@ -252,18 +256,18 @@ public class WalletController {
         if (requisites.length() < 6) {
             return errorResponse("Реквизиты слишком короткие. Укажите банк и номер телефона.");
         }
-        ShopActionResponseDto validation = validateAmount(user, body.getAmount());
+        ShopActionResponseDto validation = validateAmount(user, body.getAmount(), body.isSponsor());
         if (validation != null) return ResponseEntity.ok(validation);
-        if (gamePlatformBot.rubDestinationBlocked(user, body.getAmount(), requisites)) {
+        if (!body.isSponsor() && gamePlatformBot.rubDestinationBlocked(user, body.getAmount(), requisites)) {
             return errorResponse("Вы уже вывели максимум, доступный без карты (10 000 EXC). Дальше вывод на карту банка-партнёра, оформленную по нашей ссылке (после выплаты банка и разового вывода откроется любая карта): откройте «Вывод EXC» в боте.");
         }
         if (rewardService.hasWithdrawalTodayOrPending(user)) {
             return errorResponse("Лимит: 1 заявка на вывод в сутки. Следующую можно создать через 24 часа после предыдущей.");
         }
-        RubResolution resolution = resolveRubValue(user, body.getAmount());
+        RubResolution resolution = body.isSponsor() ? new RubResolution(Math.round(body.getAmount() / 100.0), 0) : resolveRubValue(user, body.getAmount());
         long rubles = resolution.rubles();
         try {
-            RewardRequest req = rewardService.createWithdrawalRequestWithDetails(user, body.getAmount(), rubles, resolution.fixedRubUsed(), requisites);
+            RewardRequest req = rewardService.createWithdrawalRequestWithDetails(user, body.getAmount(), rubles, resolution.fixedRubUsed(), requisites, body.isSponsor());
             gamePlatformBot.notifyAdminsAboutWithdrawal(user, req);
             return ResponseEntity.ok(ShopActionResponseDto.builder()
                     .success(true)
@@ -292,18 +296,18 @@ public class WalletController {
         if (wallet.length() < 20 || wallet.contains(" ")) {
             return errorResponse("Некорректный адрес кошелька. Адрес TON должен начинаться с UQ... или EQ... и содержать 48 символов.");
         }
-        ShopActionResponseDto validation = validateAmount(user, body.getAmount());
+        ShopActionResponseDto validation = validateAmount(user, body.getAmount(), body.isSponsor());
         if (validation != null) return ResponseEntity.ok(validation);
-        if (gamePlatformBot.cryptoPionexRequired(user, body.getAmount())) {
+        if (!body.isSponsor() && gamePlatformBot.cryptoPionexRequired(user, body.getAmount())) {
             return errorResponse("Сверх первых 10 000 EXC вывод в крипте идёт только на биржу Pionex для наших рефералов: откройте «Вывод EXC» в боте.");
         }
         if (rewardService.hasWithdrawalTodayOrPending(user)) {
             return errorResponse("Лимит: 1 заявка на вывод в сутки. Следующую можно создать через 24 часа после предыдущей.");
         }
-        RubResolution resolution = resolveRubValue(user, body.getAmount());
+        RubResolution resolution = body.isSponsor() ? new RubResolution(Math.round(body.getAmount() / 100.0), 0) : resolveRubValue(user, body.getAmount());
         long rubles = resolution.rubles();
         try {
-            RewardRequest req = rewardService.createTonWithdrawalRequest(user, body.getAmount(), rubles, resolution.fixedRubUsed(), wallet);
+            RewardRequest req = rewardService.createTonWithdrawalRequest(user, body.getAmount(), rubles, resolution.fixedRubUsed(), wallet, body.isSponsor());
             gamePlatformBot.notifyAdminsAboutWithdrawal(user, req);
             long finalRubles = req.getFixedRubValue() != null ? req.getFixedRubValue() : rubles;
             BigDecimal tonAmount = exchangeRateService.rubToTon(BigDecimal.valueOf(finalRubles));
@@ -376,9 +380,23 @@ public class WalletController {
 
     /** Возвращает ответ с ошибкой, если сумма не проходит проверки, иначе null. */
     private ShopActionResponseDto validateAmount(AppUser user, long amount) {
+        return validateAmount(user, amount, false);
+    }
+
+    private ShopActionResponseDto validateAmount(AppUser user, long amount, boolean sponsor) {
         if (amount < MIN_WITHDRAWAL) {
             return ShopActionResponseDto.builder().success(false)
-                    .message("Минимальная сумма вывода — 5 000 EXC.").build();
+                    .message("Минимальная сумма вывода — 5 000" + (sponsor ? "." : " EXC.")).build();
+        }
+        if (sponsor) {
+            if (!sponsorBalanceService.enabled()) {
+                return ShopActionResponseDto.builder().success(false).message("Спонсорский баланс сейчас недоступен.").build();
+            }
+            if (amount > user.getSponsorCoins()) {
+                return ShopActionResponseDto.builder().success(false)
+                        .message("Недостаточно токенов. Спонсорский баланс: " + user.getSponsorCoins() + ".").build();
+            }
+            return null; // лимитов нет
         }
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
         if (amount > remaining) {
