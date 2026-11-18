@@ -10169,7 +10169,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         InlineKeyboardMarkup cardKeyboard = verticalWithBackMenu(buttons, backText, backData);
         // 15.11.2026: у карточки спонсорского квеста - листание по всем спонсорским квестам (как у кейсов: ◀️ | N / M | ▶️ по кругу)
         if (backData != null && backData.startsWith("quests:sponsored:cat:")) {
-            List<Quest> sponsoredFlip = sponsoredQuestsInDisplayOrder();
+            // Листание только внутри раздела, который открыл игрок (владелец 18.11.2026): из «Дебетовых карт» - только дебетовые, а не все спонсорские квесты
+            final String flipCategory = backData.substring("quests:sponsored:cat:".length());
+            List<Quest> sponsoredFlip = sponsoredQuestsInDisplayOrder().stream()
+                    .filter(fq -> flipCategory.equals(sponsoredCategory(fq))).toList();
             int flipN = sponsoredFlip.size();
             int flipIdx = -1;
             for (int i = 0; i < flipN; i++) if (sponsoredFlip.get(i).getId().equals(questId)) { flipIdx = i; break; }
