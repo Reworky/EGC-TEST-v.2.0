@@ -104,7 +104,10 @@ public class ExcTransactionService {
     @Transactional(propagation = Propagation.REQUIRED)
     public void refreshCoins(AppUser user) {
         if (user.getId() == null) return;
-        appUserRepository.findByIdForUpdate(user.getId()).ifPresent(fresh -> user.setCoins(fresh.getCoins()));
+        appUserRepository.findByIdForUpdate(user.getId()).ifPresent(fresh -> {
+            user.setCoins(fresh.getCoins());
+            user.setSponsorCoins(fresh.getSponsorCoins());
+        });
     }
 
     /** Единая точка изменения баланса EXC (ТЗ "Единая точка начисления EXC и XP", 2026-10-01) -
@@ -121,6 +124,23 @@ public class ExcTransactionService {
         user.setCoins(user.getCoins() + amount);
         appUserRepository.save(user);
         log(user, amount, type, description);
+    }
+
+    /** Начисление/списание на СПОНСОРСКОМ балансе (18.11.2026): тот же паттерн, что creditExc, но меняет sponsorCoins; запись истории помечена sponsor=true,
+     *  balanceAfter - спонсорский баланс после операции. Проверка «хватает ли токенов» остаётся на вызывающем коде. */
+    @Transactional(propagation = Propagation.REQUIRED)
+    public void creditSponsor(AppUser user, long amount, String type, String description) {
+        refreshCoins(user);
+        user.setSponsorCoins(user.getSponsorCoins() + amount);
+        appUserRepository.save(user);
+        ExcTransaction tx = new ExcTransaction();
+        tx.setUser(user);
+        tx.setAmount(amount);
+        tx.setType(type);
+        tx.setDescription(description);
+        tx.setSponsor(true);
+        tx.setBalanceAfter(user.getSponsorCoins());
+        repo.save(tx);
     }
 
     public List<ExcTransaction> getHistory(AppUser user, int page, int pageSize) {

@@ -46,6 +46,7 @@ public class WalletController {
     private final RewardService rewardService;
     private final ru.gamebot.platform.service.DailyCodeGateService dailyCodeGate;
     private final GamePlatformBot gamePlatformBot;
+    private final ru.gamebot.platform.service.SponsorBalanceService sponsorBalanceService;
 
     @Data
     public static class WithdrawRubRequest {
@@ -92,6 +93,8 @@ public class WalletController {
         RewardService.WithdrawalProgress withdrawalProgress = rewardService.withdrawalProgress(user);
         return ResponseEntity.ok(WalletDto.builder()
                 .coins(user.getCoins())
+                .sponsorCoins(user.getSponsorCoins())
+                .sponsorBalanceEnabled(sponsorBalanceService.enabled())
                 .excBonusPercent(userService.getExcBonusPercent(user.getXp()))
                 .tickets(user.getTickets())
                 .xp(user.getXp())

@@ -183,6 +183,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.ReferralBoostService referralBoostService;
     private final ru.gamebot.platform.service.SponsorService sponsorService;
     private final ru.gamebot.platform.service.ExcTransactionService excTransactionService;
+    private final ru.gamebot.platform.service.SponsorBalanceService sponsorBalanceService;
     private final ru.gamebot.platform.service.SquadService squadService;
     private final ru.gamebot.platform.service.WheelService wheelService;
     private final ru.gamebot.platform.service.ExcWheelService excWheelService;
@@ -6031,11 +6032,20 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean grantsPartner = ru.gamebot.platform.service.PartnerMissions.grantsPartner(pm); // привилегии (запас вывода, бейдж) - только у ОТП
         try {
             if (!itemPayout) {
-                userService.addReward(target, 0, amount, ru.gamebot.platform.service.ExcTransactionService.BONUS, "Партнёрская выплата: " + pm.shortTitle());
+                if (sponsorBalanceService.enabled()) {
+                    // Спонсорский баланс (18.11.2026): выплата банка оплачена спонсором, идёт на спонсорский баланс без бонуса уровня
+                    excTransactionService.creditSponsor(target, amount, ru.gamebot.platform.service.ExcTransactionService.BONUS, "Партнёрская выплата: " + pm.shortTitle());
+                } else {
+                    userService.addReward(target, 0, amount, ru.gamebot.platform.service.ExcTransactionService.BONUS, "Партнёрская выплата: " + pm.shortTitle());
+                }
             }
             // Компенсация траты игрока (правило владельца 17.11.2026): один раз вместе с выплатой, при «повтор» не начисляем (защита от двойной компенсации)
             if (pm.compensationExc() > 0 && !repeatPayout) {
-                userService.addReward(target, 0, pm.compensationExc(), ru.gamebot.platform.service.ExcTransactionService.BONUS, "Компенсация траты по квесту: " + pm.shortTitle());
+                if (sponsorBalanceService.enabled()) {
+                    excTransactionService.creditSponsor(target, pm.compensationExc(), ru.gamebot.platform.service.ExcTransactionService.BONUS, "Компенсация траты по квесту: " + pm.shortTitle());
+                } else {
+                    userService.addReward(target, 0, pm.compensationExc(), ru.gamebot.platform.service.ExcTransactionService.BONUS, "Компенсация траты по квесту: " + pm.shortTitle());
+                }
                 compensated = pm.compensationExc();
             }
             if (grantsPartner) {
@@ -7492,6 +7502,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendBalance(user, "menu:main");
     }
 
+    /** Строка спонсорского баланса для экрана «Баланс» (только при включённом выключателе и ненулевом балансе): «💎 N · ≈ M ₽ (курс 100%)». Пусто иначе. */
+    private String sponsorBalanceLine(AppUser user) {
+        if (!sponsorBalanceService.enabled() || user.getSponsorCoins() <= 0) return "";
+        return "💎 <b>" + fmtExc(user.getSponsorCoins()) + "</b> спонсорский баланс · ≈ " + fmtExc(Math.round(user.getSponsorCoins() / 100.0)) + " ₽ (курс 100%, без лимитов)\n\n";
+    }
+
     private void sendBalance(AppUser user, String backData) {
         double ratio = healthRatioService.getCurrentRatio();
         int ratioPercent = (int) Math.round(ratio * 100);
@@ -7531,6 +7547,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendResourceBanner(user.getTelegramId(), "wallet_banner.jpg",
                 "💰 <b>Баланс</b>\n\n"
                         + "🪙 <b>" + fmtExc(user.getCoins()) + " EXC</b>\n\n"
+                        + sponsorBalanceLine(user)
                         + equivalent
                         + "<blockquote expandable>💠 Бонус к EXC: <b>+" + userService.getExcBonusPercent(user.getXp()) + "%</b>\n"
                         + "🎟️ Билеты сезона: <b>" + user.getTickets() + "</b>\n"
@@ -25691,13 +25708,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (after != null) {
                 long before = after - tx.getAmount();
                 sb.append("💸 Было <b>").append(before).append(" EXC</b>\n")
+                  .append(tx.isSponsor() ? "💎 " : "")
                   .append(ru.gamebot.platform.service.ExcTransactionService.typeLabel(tx.getType()))
                   .append("  <b>").append(sign).append(tx.getAmount()).append(" EXC</b>")
                   .append(" (").append(meta).append(")\n")
                   .append("💸 Стало <b>").append(after).append(" EXC</b>\n\n");
             } else {
                 // Старая запись без сохранённого баланса после операции — показываем как раньше
-                sb.append(ru.gamebot.platform.service.ExcTransactionService.typeLabel(tx.getType()))
+                sb.append(tx.isSponsor() ? "💎 " : "").append(ru.gamebot.platform.service.ExcTransactionService.typeLabel(tx.getType()))
                   .append("  <b>").append(sign).append(tx.getAmount()).append(" EXC</b>")
                   .append(" (").append(meta).append(")\n\n");
             }
@@ -25752,12 +25770,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (after != null) {
                 long before = after - tx.getAmount();
                 sb.append("💸 Было <b>").append(before).append(" EXC</b>\n")
+                  .append(tx.isSponsor() ? "💎 " : "")
                   .append(ru.gamebot.platform.service.ExcTransactionService.typeLabel(tx.getType()))
                   .append("  <b>").append(sign).append(tx.getAmount()).append(" EXC</b>")
                   .append(" (").append(meta).append(")\n")
                   .append("💸 Стало <b>").append(after).append(" EXC</b>\n\n");
             } else {
-                sb.append(ru.gamebot.platform.service.ExcTransactionService.typeLabel(tx.getType()))
+                sb.append(tx.isSponsor() ? "💎 " : "").append(ru.gamebot.platform.service.ExcTransactionService.typeLabel(tx.getType()))
                   .append("  <b>").append(sign).append(tx.getAmount()).append(" EXC</b>")
                   .append(" (").append(meta).append(")\n\n");
             }
@@ -26452,7 +26471,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyUser(approved.getUser().getTelegramId(),
                     "✅ <b>Квест засчитан</b>\n\n"
                     + "<b>" + escape(approved.getQuest().getTitle()) + "</b>, подтверждено партнёром\n"
-                    + "🪙 <b>+" + awardedCoinsOf(approved) + " EXC</b>"
+                    + (sponsorBalanceService.applies(approved.getQuest())
+                        ? "💎 <b>+" + fmtExc(awardedCoinsOf(approved)) + "</b> на спонсорский баланс"
+                        : "🪙 <b>+" + awardedCoinsOf(approved) + " EXC</b>")
                     + (egcPassBonusLine(approved).isEmpty() ? "" : "\n" + egcPassBonusLine(approved).trim())
                     + chatBridgeAfterQuestLine(approved.getUser()), watchAdForBonusButton(approved.getUser()), referralNudgeButton(approved.getUser(), "quest"), nextQuestSuggestionButton(approved.getUser()), sinkShopSuggestionButton(approved.getUser()), chatBridgeAfterQuestButton(approved.getUser()));
             notifyModeratorsAboutAutoApproval(approved, "подтверждено партнёрской сетью");

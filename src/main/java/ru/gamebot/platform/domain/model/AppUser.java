@@ -54,6 +54,10 @@ public class AppUser {
     private long xp;
     private long weeklyXp;
     private long coins;
+    /** Спонсорский баланс (18.11.2026): токены с банковских миссий и внешних партнёрских квестов. Они уже оплачены спонсором, поэтому выводятся по курсу 100% без лимитов
+     *  (SponsorBalanceService). Отдельно от игрового баланса coins. */
+    @Column(columnDefinition = "bigint default 0")
+    private long sponsorCoins;
     private long tickets;
     private int completedQuests;
     private int invitedFriends;

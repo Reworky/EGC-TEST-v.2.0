@@ -7,6 +7,9 @@ import lombok.Data;
 @Builder
 public class WalletDto {
     private long coins;
+    /** Спонсорский баланс (токены с банковских миссий и партнёрских квестов, вывод по курсу 100% без лимитов); показывается, когда sponsorBalanceEnabled. */
+    private long sponsorCoins;
+    private boolean sponsorBalanceEnabled;
     private int excBonusPercent;
     private long tickets;
     private long xp;

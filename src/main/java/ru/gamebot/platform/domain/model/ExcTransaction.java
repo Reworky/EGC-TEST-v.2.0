@@ -33,4 +33,8 @@ public class ExcTransaction {
 
     /** Баланс пользователя сразу после операции. Null для записей, созданных до введения этого поля. */
     private Long balanceAfter;
+
+    /** true - операция по спонсорскому балансу (balanceAfter тогда - спонсорский баланс), false - по игровому (18.11.2026). */
+    @Column(columnDefinition = "boolean default false")
+    private boolean sponsor;
 }

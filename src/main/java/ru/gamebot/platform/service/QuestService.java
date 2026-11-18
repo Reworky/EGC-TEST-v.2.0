@@ -102,6 +102,8 @@ public class QuestService {
     private final ApplicationEventPublisher eventPublisher;
     private final WheelService wheelService;
     private final SeasonalEventService seasonalEventService;
+    private final SponsorBalanceService sponsorBalanceService;
+    private final ExcTransactionService sponsorExcTx;
 
     public List<Quest> findActiveQuests() {
         return questRepository.findAllByActiveTrueOrderByCreatedAtDesc().stream()
@@ -1429,8 +1431,14 @@ public class QuestService {
         // 3.5 3000 EXC bonus on first quest (before completedQuests increment)
         userService.grantFirstQuestReferralBonus(user);
 
-        userService.addReward(user, adjustedXp, adjustedCoins, ExcTransactionService.QUEST,
+        // Спонсорский баланс (18.11.2026, за выключателем): награда банковской миссии и внешнего партнёрского квеста, оплаченная спонсором, идёт на спонсорский баланс
+        // без бонуса уровня; бонусы EGC Pass и бусты (платит клуб) - на игровой баланс, как раньше. Квесты с удержанием части награды (подписки на каналы) сюда не относятся.
+        long sponsorCredit = (heldCoins == 0 && sponsorBalanceService.applies(quest)) ? Math.max(0, Math.min(adjustedCoins, sponsorShare)) : 0;
+        userService.addReward(user, adjustedXp, adjustedCoins - sponsorCredit, ExcTransactionService.QUEST,
                 quest.getTitle() + " (" + quest.getGameName() + ")");
+        if (sponsorCredit > 0) {
+            sponsorExcTx.creditSponsor(user, sponsorCredit, ExcTransactionService.QUEST, quest.getTitle() + " (" + quest.getGameName() + ")");
+        }
 
         // Колесо фортуны: берём ticketReward из квеста, если задан; иначе по категории
         int tickets = quest.getTicketReward() > 0 ? quest.getTicketReward()

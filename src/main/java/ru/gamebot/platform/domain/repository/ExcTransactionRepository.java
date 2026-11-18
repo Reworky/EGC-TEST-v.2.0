@@ -20,7 +20,7 @@ public interface ExcTransactionRepository extends JpaRepository<ExcTransaction, 
     /** Сколько раз с указанного момента встретилась запись с точно таким описанием (лимит джекпотов рекламного колеса в сутки). */
     long countByDescriptionAndCreatedAtGreaterThanEqual(String description, LocalDateTime since);
 
-    @Query("SELECT COALESCE(SUM(t.amount), 0) FROM ExcTransaction t WHERE t.amount > 0 AND t.createdAt >= :since")
+    @Query("SELECT COALESCE(SUM(t.amount), 0) FROM ExcTransaction t WHERE t.amount > 0 AND t.sponsor = false AND t.createdAt >= :since")
     long sumEarnedSince(@Param("since") LocalDateTime since);
 
     /** Сумма операций одного типа с момента since (суточный потолок «Сундука заданий» считается по типу DAILY_TASKS). */
@@ -58,7 +58,7 @@ public interface ExcTransactionRepository extends JpaRepository<ExcTransaction, 
 
     /** Сумма отрицательных операций EXC внутри платформы с момента since (магазин, предметы, взносы и т.п.; результат ≤ 0): выводы,
      *  списания админом и конфискации не считаются. Для «потрачено» берите модуль. */
-    @Query("SELECT COALESCE(SUM(t.amount), 0) FROM ExcTransaction t WHERE t.amount < 0 AND t.createdAt >= :since "
+    @Query("SELECT COALESCE(SUM(t.amount), 0) FROM ExcTransaction t WHERE t.amount < 0 AND t.sponsor = false AND t.createdAt >= :since "
             + "AND t.type NOT IN ('WITHDRAWAL', 'DEBIT', 'CONFISCATE')")
     long sumNegativeSince(@Param("since") LocalDateTime since);
 }
