@@ -9887,6 +9887,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sendPhotoCaption(user.getTelegramId(), photoFileId.get(), "<b>" + escape(title) + "</b>", null);
             listText = body;
         }
+        // 19.11.2026: у раздела видео-квестов (UGC) свой баннер из ресурсов (Экси за монтажом, заголовок UGC, хром; одобрен владельцем)
+        if ("UGC".equalsIgnoreCase(gameName) && withPhoto && category == null) {
+            sendResourceBanner(user.getTelegramId(), "ugc_banner.jpg", listText, keyboard);
+            return;
+        }
         sendText(user.getTelegramId(), listText, keyboard);
     }
 
