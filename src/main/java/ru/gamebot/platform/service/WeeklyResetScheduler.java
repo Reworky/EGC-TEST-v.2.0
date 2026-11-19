@@ -195,11 +195,25 @@ public class WeeklyResetScheduler {
         // остальные его просроченные квесты получат напоминание в следующих прогонах (раз в 30 минут),
         // а не все разом. Множество uniqueUsersNotifiedThisRun — не БД-состояние, только на этот прогон.
         java.util.Set<Long> notifiedThisRun = new java.util.HashSet<>();
+        int markedInactiveThisRun = 0;
         for (QuestSubmission s : questSubmissionRepository.findApprovedNeedingCooldownReminder(cutoff)) {
             Long telegramId = s.getUser().getTelegramId();
             // Общий кулдаун игры от другого квеста мог ещё идти (заявка #240): не пишем «кулдаун снят», пока квест реально не доступен;
             // отметку не ставим - напоминание придёт на одном из следующих тиков, когда кулдаун закончится
             if (!questService.isCooldownFree(s.getUser(), s.getQuest())) continue;
+            // Квест выведен из игры (смена пачки, выключен): напоминать не о чем; метку ставим, чтобы не разбирать его на каждом проходе
+            if (!s.getQuest().isActive()) {
+                // не больше 300 отметок за проход: накопленный бэклог таких заявок разбирается постепенно, без длинной записи в БД за один тик
+                if (markedInactiveThisRun++ < 300) {
+                    try {
+                        s.setCooldownReminderSentAt(now);
+                        questSubmissionRepository.save(s);
+                    } catch (Exception e) {
+                        log.warn("Failed to mark cooldown reminder for inactive quest of user {}", telegramId, e);
+                    }
+                }
+                continue;
+            }
             if (!notifiedThisRun.add(telegramId)) continue;
             // Лимит частоты ДО отметки cooldownReminderSentAt: отклонённое напоминание не «сгорает», а повторится на следующем тике
             if (!notificationGate.tryAcquire(s.getUser(), NudgeType.COOLDOWN_REMINDER)) continue;
@@ -827,7 +841,9 @@ public class WeeklyResetScheduler {
                 // (до лимита частоты, чтобы не тратить окно); игрок получит повторное напоминание, когда квест действительно освободится
                 Quest expiredQuest = questRepository.findFirstByTitleAndGameName(questTitle, gameName).orElse(null);
                 // Окно этого прохода подходит только тем, у кого кулдаун на этот квест именно столько часов; квест не нашёлся - по старому правилу 24 ч
-                if (expiredQuest == null ? windowHours != 24 : questService.cooldownHoursFor(target, expiredQuest) != windowHours) continue;
+                // 19.11.2026 (жалоба игрока 7646226814): квест мог выйти из игры при смене пачки или быть выключен - «снова доступен» про него неправда
+                if (expiredQuest == null || !expiredQuest.isActive()) continue;
+                if (questService.cooldownHoursFor(target, expiredQuest) != windowHours) continue;
                 if (expiredQuest != null && !questService.isCooldownFree(target, expiredQuest)) continue;
                 if (!notificationGate.tryAcquire(target, NudgeType.COOLDOWN_EXPIRED)) continue;
                 eventPublisher.publishEvent(new CooldownExpiredEvent(this, telegramId, gameName, questTitle));
