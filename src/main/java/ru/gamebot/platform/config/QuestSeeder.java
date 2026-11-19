@@ -2656,8 +2656,8 @@ public class QuestSeeder implements CommandLineRunner {
             log.info("[QuestSeeder] Created partner quest: УБРиР Моя Жизнь");
         }
         // ── Партнёрская миссия «Совкомбанк, кредитная карта 180 дней без %», 19.11.2026 (владелец: 1 500 ₽): банк клиенту не платит, клуб платит 1 500 ₽ на карту лично (вручную менеджером)
-        // после подтверждения банком выдачи карты (покупка не нужна). 30 мест; без статуса партнёра. СОЗДАЁТСЯ ВЫКЛЮЧЕННОЙ: включает владелец в «Управление квестами» после ответа менеджера LeadGid
-        // (правила трафика оффера 7487) и после баннера. Тексты и числа миссии - в PartnerMissions.SOVCOM; в карточке квеста нет рекламных данных (erid, ПСК): они на витрине.
+        // после подтверждения банком выдачи карты (покупка не нужна). 30 мест; без статуса партнёра. Включается сразу при деплое (решение владельца 19.11.2026).
+        // Правила трафика оффера 7487 менеджер LeadGid пока не подтвердил: допущение владельца. Тексты и числа миссии - в PartnerMissions.SOVCOM; в карточке квеста нет рекламных данных (erid, ПСК): они на витрине.
         ru.gamebot.platform.service.PartnerMission sovcom = ru.gamebot.platform.service.PartnerMissions.SOVCOM;
         if (questRepository.findFirstByTitleAndGameName(sovcom.questTitle(), sovcom.gameName()).isEmpty()) {
             Quest sovcomQuest = new Quest();
@@ -2694,11 +2694,26 @@ public class QuestSeeder implements CommandLineRunner {
             sovcomQuest.setParticipantLimit(30);
             sovcomQuest.setOneTimePerAccount(true);
             sovcomQuest.setSponsored(true);
-            sovcomQuest.setActive(false);
+            sovcomQuest.setActive(true);
             sovcomQuest.setCouncilOnly(false);
             sovcomQuest.setCreatedAt(LocalDateTime.now());
             questRepository.save(sovcomQuest);
-            log.info("[QuestSeeder] Created partner quest (inactive): Совкомбанк 180 дней");
+            log.info("[QuestSeeder] Created partner quest: Совкомбанк 180 дней");
+        }
+        // 19.11.2026 (владелец: «включи квест в момент деплоя»): один раз включаем уже созданный выключенным квест; после этого админ вправе выключать/включать сам, сидер его состояние не трогает.
+        final String sovcomActivatedKey = "sovcom.quest.activated";
+        if (appSettingRepository.findById(sovcomActivatedKey).isEmpty()) {
+            questRepository.findFirstByTitleAndGameName(sovcom.questTitle(), sovcom.gameName()).ifPresent(sq -> {
+                if (!sq.isActive()) {
+                    sq.setActive(true);
+                    questRepository.save(sq);
+                    log.info("[QuestSeeder] Activated partner quest once: Совкомбанк 180 дней");
+                }
+            });
+            ru.gamebot.platform.domain.model.AppSetting sovcomMark = new ru.gamebot.platform.domain.model.AppSetting();
+            sovcomMark.setKey(sovcomActivatedKey);
+            sovcomMark.setValue(LocalDateTime.now().toString());
+            appSettingRepository.save(sovcomMark);
         }
         // ── Партнёрская миссия «Т-Банк Black» (приведи друга на Black), 04.11.2026 ──
         // Владелец 04.11.2026 решил запускать сразу (по правилам, присланным поддержкой банка; ноябрьскую версию PDF не искали): квест создаётся активным. Тексты и числа миссии - в PartnerMissions.T_BLACK.
