@@ -2980,6 +2980,7 @@ public class QuestSeeder implements CommandLineRunner {
             log.info("[QuestSeeder] Hidden sponsored/external quests except OTP bank ({}): {}", hiddenTitles.size(), hiddenTitles);
         }
         applyClubExcashTexts();
+        applyManagerProofTexts();
         switchOffStarsTyn0xQuest();
     }
 
@@ -3746,6 +3747,35 @@ public class QuestSeeder implements CommandLineRunner {
                 log.info("[QuestSeeder] Club EXCASH texts applied: '{}'", pm.questTitle());
             } catch (Exception e) {
                 log.warn("[QuestSeeder] Club EXCASH texts failed for {}", pm.key(), e);
+            }
+        }
+    }
+
+    /** 19.11.2026 (владелец): шаг «Пришли подтверждение менеджеру» в свёрнутой цитате карточки называет, что именно прислать и куда (в личку). Один раз на квест (ключ в app_settings). */
+    private void applyManagerProofTexts() {
+        for (ru.gamebot.platform.service.PartnerMission pm : List.of(ru.gamebot.platform.service.PartnerMissions.VTB, ru.gamebot.platform.service.PartnerMissions.ALFA,
+                ru.gamebot.platform.service.PartnerMissions.FORA, ru.gamebot.platform.service.PartnerMissions.PSB, ru.gamebot.platform.service.PartnerMissions.UBRR,
+                ru.gamebot.platform.service.PartnerMissions.SOVCOM)) {
+            try {
+                String key = "quest.managerproof.v1." + pm.key();
+                if (appSettingRepository.findById(key).isPresent()) continue;
+                Quest q = questRepository.findFirstByTitleAndGameName(pm.questTitle(), pm.gameName()).orElse(null);
+                if (q == null || q.getInstruction() == null) continue;
+                String ins = q.getInstruction()
+                        .replace("После покупки напиши менеджеру: он проверит карту и покупку.",
+                                "Пришли менеджеру в личку два скриншота: карта в приложении банка и «Детали операции» покупки (номера карты и счёта закрой). Он проверит карту и покупку.")
+                        .replace("Когда деньги придут, напиши менеджеру: он проверит выплату.",
+                                "Когда деньги придут, пришли менеджеру в личку скриншоты: карта, «Детали операции» покупок и поступление 1 000 ₽ от банка (номера закрой). Он проверит выплату.")
+                        .replace("Скриншот новой карты в приложении банка.", "Пришли менеджеру в личку скриншот новой карты в приложении банка.");
+                q.setInstruction(ins);
+                questRepository.save(q);
+                ru.gamebot.platform.domain.model.AppSetting done = new ru.gamebot.platform.domain.model.AppSetting();
+                done.setKey(key);
+                done.setValue(LocalDateTime.now().toString());
+                appSettingRepository.save(done);
+                log.info("[QuestSeeder] Manager proof texts applied: '{}'", pm.questTitle());
+            } catch (Exception e) {
+                log.warn("[QuestSeeder] Manager proof texts failed for {}", pm.key(), e);
             }
         }
     }
