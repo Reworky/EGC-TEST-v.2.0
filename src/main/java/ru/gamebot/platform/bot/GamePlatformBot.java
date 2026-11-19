@@ -1353,6 +1353,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleActivationCheck(callbackQuery, user);
             return;
         }
+        if ("ugc:banner".equals(data)) {
+            answerSilently(callbackQuery.getId());
+            sendUgcBanner(user.getTelegramId());
+            return;
+        }
         if (data.startsWith("dtasks:go:")) {
             handleDailyTasksGo(callbackQuery, user, data.substring("dtasks:go:".length()));
             return;
@@ -10128,6 +10133,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (quest.getChannelCheckUrl() != null && quest.getChannelCheckChatId() != null && hasActiveSubmission && !questClosed) {
             buttons.add(keyboardFactory.url("📢 Открыть канал", quest.getChannelCheckUrl()));
         }
+        // UGC (19.11.2026, владелец): видео-баннер EGC, который нужно вставить в ролик, игрок получает файлом по кнопке (пока файла в ресурсах нет, кнопки нет)
+        if ("UGC".equalsIgnoreCase(quest.getGameName()) && ugcBannerAvailable()) {
+            buttons.add(keyboardFactory.callback("🎬 Скачать баннер", "ugc:banner"));
+        }
         if (nextQuestData != null) {
             buttons.add(keyboardFactory.callback("➡️ Следующий квест", nextQuestData));
         }
@@ -14282,6 +14291,39 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Сообщение с картинкой из ресурсов бота; при сбое (нет файла, ошибка Telegram) - тот же текст без картинки.
      *  Подпись к фото в Telegram ограничена 1024 символами: если текст длиннее, картинка уходит отдельно, а текст с кнопками - следом. */
+    /** Видео-баннер EGC для UGC-квестов (файл src/main/resources/ugc_banner.mp4): игрок вставляет его в свой ролик на 6-й секунде. */
+    private static final String UGC_BANNER_RESOURCE = "ugc_banner.mp4";
+    private volatile String ugcBannerFileId;
+
+    private boolean ugcBannerAvailable() {
+        return getClass().getResource("/" + UGC_BANNER_RESOURCE) != null;
+    }
+
+    /** Присылает игроку видео-баннер файлом (первая отправка грузит файл, дальше - по file_id из Telegram). */
+    private void sendUgcBanner(Long chatId) {
+        try {
+            SendVideo video = new SendVideo();
+            video.setChatId(chatId.toString());
+            String cached = ugcBannerFileId;
+            if (cached != null) {
+                video.setVideo(new InputFile(cached));
+            } else {
+                try (java.io.InputStream is = getClass().getResourceAsStream("/" + UGC_BANNER_RESOURCE)) {
+                    if (is == null) throw new java.io.IOException(UGC_BANNER_RESOURCE + " not found");
+                    video.setVideo(new InputFile(new java.io.ByteArrayInputStream(is.readAllBytes()), UGC_BANNER_RESOURCE));
+                }
+            }
+            video.setCaption("🎬 <b>Баннер EGC для твоего ролика</b>\n\nСохрани видео и вставь его в свой ролик так, чтобы оно начиналось на 6-й секунде: целиком, без обрезки и ускорения.");
+            video.setParseMode("HTML");
+            video.setSupportsStreaming(true);
+            org.telegram.telegrambots.meta.api.objects.Message sent = execute(video);
+            if (cached == null && sent.getVideo() != null) ugcBannerFileId = sent.getVideo().getFileId();
+        } catch (Exception e) {
+            log.warn("Failed to send UGC banner", e);
+            sendText(chatId, "⚠️ Не получилось прислать баннер. Попробуй ещё раз чуть позже или напиши в поддержку.", null);
+        }
+    }
+
     private void sendResourceBanner(Long chatId, String resource, String text, InlineKeyboardMarkup keyboard) {
         // Лимит подписи фото (1024) считается по видимому тексту, без HTML-тегов
         boolean captionFits = text.replaceAll("<[^>]+>", "").length() <= 1000;
@@ -14542,7 +14584,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 || (data.startsWith("onboarding:") && !data.equals("onboarding:choice") && !data.equals("onboarding:games") && !data.equals("onboarding:cards"))
                 || data.startsWith("dtasks:go") || data.startsWith("battlepass:buy:") || data.startsWith("redbtn:") || data.startsWith("nudgefb:")
                 || data.startsWith("report:submit:") || data.startsWith("review:") || data.startsWith("gemdonate:confirmton:")
-                || data.startsWith("council:") || data.startsWith("case:") || data.equals("noop");
+                || data.startsWith("council:") || data.startsWith("case:") || data.equals("noop") || data.equals("ugc:banner");
     }
 
     /** Метка в navScreens: экран с картинкой. Такие сообщения чистка ленты НЕ удаляет: после удаления клиент Telegram сбрасывает кэш картинки,
