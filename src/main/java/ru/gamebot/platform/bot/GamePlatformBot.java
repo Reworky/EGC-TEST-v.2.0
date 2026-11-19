@@ -5848,11 +5848,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** «50 000 EXC» или «Telegram Premium на 1 месяц» - что игрок получит после выплаты банка. */
     private String bonusText(ru.gamebot.platform.service.PartnerMission pm, QuestSubmission sub) {
+        if (pm.clubExcash() && pm.clubRewardRub() > 0 && sponsorBalanceService.enabled()) return "💎 " + fmtExc(pm.clubRewardRub() * 100L) + " EXCASH";
         return bonusIsItem(pm, sub) ? pm.bonusItem() : fmtExc(bonusFor(pm, sub)) + " EXC";
     }
 
     /** «начислим 50 000 EXC» или «пришлём Telegram Premium на 1 месяц». */
     private String bonusGive(ru.gamebot.platform.service.PartnerMission pm, QuestSubmission sub) {
+        if (pm.clubExcash() && pm.clubRewardRub() > 0 && sponsorBalanceService.enabled()) return "начислим 💎 " + fmtExc(pm.clubRewardRub() * 100L) + " EXCASH";
         return bonusIsItem(pm, sub) ? "пришлём " + pm.bonusItem() : "начислим " + fmtExc(bonusFor(pm, sub)) + " EXC";
     }
 
@@ -7382,7 +7384,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             QuestSubmission sub = questService.getSubmission(event.getSubmissionId());
             ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(sub.getQuest());
             if (pm == null || sub.getStatus() != SubmissionStatus.DRAFT || !isManagerFlowMission(sub)) return;
-            String reward = "+" + pm.bankRewardRub() + " ₽ и " + bonusText(pm, sub);
+            String reward = (pm.bankRewardRub() > 0 ? "+" + pm.bankRewardRub() + " ₽ и " : "") + bonusText(pm, sub);
             String head = "Хочу выполнить квест «Миссия: " + pm.missionTitle() + "»";
             String need = "расскажите, что делать, пришлите ссылку для оформления карты";
             boolean otpNudge = pm.applyLink() != null;
@@ -7401,6 +7403,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 };
                 rows.add(List.of(keyboardFactory.url("💳 Оформить карту", pm.applyLink())));
                 rows.add(List.of(partnerManagerButton(pm, sub, "💬 Вопрос менеджеру", head, need)));
+                if (event.getKind() == ru.gamebot.platform.event.PartnerQuestNudgeEvent.KIND_ASK && pm.managerProofText() != null) {
+                    // 19.11.2026: напоминаем, что подтверждение нужно прислать менеджеру в личку
+                    text += "\n\n" + pm.managerProofText().replace("{manager}", escape(appProperties.getSupportUsername()));
+                }
                 if (event.getKind() == ru.gamebot.platform.event.PartnerQuestNudgeEvent.KIND_LAST) {
                     rows.add(List.of(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + sub.getId())));
                 }
@@ -10509,12 +10515,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // Короткий экран после «Взять» (владелец, 09.11): сумма и условия уже на карточке квеста, здесь только что делать дальше.
             if (pm.applyLink() != null) {
                 // 15.11.2026 (владелец): у квеста ОТП (и ВТБ, 16.11.2026) ссылка на оформление - сразу здесь (без ожидания менеджера); менеджер - для вопросов
+                // 19.11.2026 (владелец): игроку прямо сказано, что делать по шагам и что прислать менеджеру в личку (раньше это было только в свёрнутой цитате карточки)
+                String proof = pm.managerProofText() != null ? pm.managerProofText().replace("{manager}", manager)
+                        : "Когда выполнишь все условия, пришли менеджеру @" + manager + " подтверждение: скриншоты карты и покупки (номера карты и счёта закрой).";
                 sb.append("🚀 <b>Квест взят!</b>\n\n🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")
-                        .append("Нажми «💳 Оформить карту»: откроется страница с онлайн-заявкой.\n\n")
-                        .append(pm.applyHint() != null ? escape(pm.applyHint()) + "\n\n" : "")
-                        .append("Если что-то непонятно или ты уже выполнил все условия, напиши менеджеру @").append(manager);
+                        .append("<b>Что нужно сделать:</b>\n")
+                        .append("1️⃣ Нажми «💳 Оформить карту»: откроется страница с онлайн-заявкой.")
+                        .append(pm.applyHint() != null ? " " + escape(pm.applyHint()) : "").append("\n")
+                        .append("2️⃣ ").append(proof).append("\n")
+                        .append("3️⃣ Менеджер проверит, и награда будет ждать подтверждения банка.\n\n")
+                        .append("Если что-то непонятно, напиши менеджеру @").append(manager);
                 rows.add(List.of(keyboardFactory.url("💳 Оформить карту", pm.applyLink())));
                 fn(user, ru.gamebot.platform.service.NewbieFunnelService.APPLY_SHOWN);
+                rows.add(List.of(partnerManagerButton(pm, sub, "📩 Отправить подтверждение менеджеру", "Подтверждение по квесту «Миссия: " + pm.missionTitle() + "»", "высылаю скриншоты: карта и покупка")));
                 rows.add(List.of(partnerManagerButton(pm, sub, "💬 Вопрос менеджеру", "Вопрос по квесту «Миссия: " + pm.missionTitle() + "»", "помогите с оформлением карты")));
             } else {
                 sb.append("🚀 <b>Квест взят!</b>\n\n🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")
