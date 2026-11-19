@@ -2700,6 +2700,51 @@ public class QuestSeeder implements CommandLineRunner {
             questRepository.save(sovcomQuest);
             log.info("[QuestSeeder] Created partner quest: Совкомбанк 180 дней");
         }
+        // ── Партнёрская миссия «ОТП Банк, кредитная карта 120 дней без %», 19.11.2026 (владелец: награда 1 500 ₽ = 150 000 EXCASH): банк клиенту не платит, клуб начисляет EXCASH после подтверждения банка.
+        // 30 мест; без статуса партнёра; активна сразу (в момент деплоя). Тексты и числа миссии - в PartnerMissions.OTPCREDIT; в карточке нет рекламных данных (erid, лицензия): они на витрине.
+        // Тексты написаны с «₽ на карту», как у остальных банковских квестов: миграция EXCASH (clubExcash) заменит их на EXCASH при старте.
+        ru.gamebot.platform.service.PartnerMission otpCredit = ru.gamebot.platform.service.PartnerMissions.OTPCREDIT;
+        if (questRepository.findFirstByTitleAndGameName(otpCredit.questTitle(), otpCredit.gameName()).isEmpty()) {
+            Quest otpCreditQuest = new Quest();
+            otpCreditQuest.setGameName(otpCredit.gameName());
+            otpCreditQuest.setTitle(otpCredit.questTitle());
+            otpCreditQuest.setPlatform("Онлайн");
+            otpCreditQuest.setDurationDays(120);
+            otpCreditQuest.setDurationText("120 дней");
+            otpCreditQuest.setRewardXp(0);
+            otpCreditQuest.setRewardCoins((int) otpCredit.rewardExc());
+            otpCreditQuest.setDescription("Награда за квест:\n"
+                    + "✅ 1 500 ₽ на карту лично от клуба\n"
+                    + "✅ Кредитная карта с льготным периодом и рассрочкой\n"
+                    + "✅ Выпуск и доставка бесплатно\n\n"
+                    + "🔒 Паспорт, коды из СМС и номер карты нам не нужны.\n\n"
+                    + "Как это работает:");
+            otpCreditQuest.setInstruction("1️⃣ Оформи заявку на кредитную карту\n"
+                    + "После «Взять» появится кнопка «Оформить карту» со ссылкой на заявку.\n"
+                    + "Заявка должна быть оформлена именно по этой ссылке, иначе банк не засчитает карту. Перед заявкой отключи VPN и прокси. Оформить можно онлайн или в отделении банка.\n\n"
+                    + "2️⃣ Получи карту и оплати покупку от 1 000 ₽\n"
+                    + "В течение 90 дней после заявки оплати картой любую покупку от 1 000 ₽ (снятие наличных, переводы и пополнение кошельков не считаем). Карта без покупки банку не засчитывается.\n\n"
+                    + "3️⃣ Пришли менеджеру в личку скриншоты карты и покупки\n"
+                    + "Пришли менеджеру в личку два скриншота: карта в приложении банка и «Детали операции» покупки. Номер карты и данные договора закрой.\n\n"
+                    + "4️⃣ Получи 1 500 ₽ от клуба\n"
+                    + "Банк подтверждает карту в течение 30 дней после покупки. После этого менеджер переведёт 1 500 ₽ на карту.");
+            otpCreditQuest.setRequirements("ℹ️ Кому подходит\n"
+                    + "Тебе 21+, у тебя паспорт РФ, и за последние 60 дней у тебя не было кредитной карты ОТП Банка. Заявки из ЛНР, ДНР и Крыма банк не засчитывает. "
+                    + "Банк клиенту денег за карту не платит: 1 500 ₽ платит клуб. Условия кредита определяет банк, оформив карту, ты с ними согласен.");
+            otpCreditQuest.setModeratorChecklist("1️⃣ Скриншот 1: новая кредитная карта ОТП Банка в приложении банка, номер карты и договора закрыты.\n"
+                    + "2️⃣ Скриншот 2: «Детали операции»: покупка от 1 000 ₽ (не снятие наличных, не перевод, не пополнение кошелька), статус не «В обработке».\n"
+                    + "3️⃣ Покупка сделана в течение 90 дней после заявки по нашей ссылке.\n"
+                    + "4️⃣ Номер карты и договора закрыты.\n"
+                    + "Скриншот не по делу - «Вернуть на доработку». Чужие или случайные картинки - «Отклонить».");
+            otpCreditQuest.setParticipantLimit(30);
+            otpCreditQuest.setOneTimePerAccount(true);
+            otpCreditQuest.setSponsored(true);
+            otpCreditQuest.setActive(true);
+            otpCreditQuest.setCouncilOnly(false);
+            otpCreditQuest.setCreatedAt(LocalDateTime.now());
+            questRepository.save(otpCreditQuest);
+            log.info("[QuestSeeder] Created partner quest: ОТП кредитка 120 дней");
+        }
         // 19.11.2026 (владелец: «включи квест в момент деплоя»): один раз включаем уже созданный выключенным квест; после этого админ вправе выключать/включать сам, сидер его состояние не трогает.
         final String sovcomActivatedKey = "sovcom.quest.activated";
         if (appSettingRepository.findById(sovcomActivatedKey).isEmpty()) {
@@ -3728,7 +3773,7 @@ public class QuestSeeder implements CommandLineRunner {
     private void applyClubExcashTexts() {
         for (ru.gamebot.platform.service.PartnerMission pm : List.of(ru.gamebot.platform.service.PartnerMissions.VTB, ru.gamebot.platform.service.PartnerMissions.ALFA,
                 ru.gamebot.platform.service.PartnerMissions.FORA, ru.gamebot.platform.service.PartnerMissions.PSB, ru.gamebot.platform.service.PartnerMissions.UBRR,
-                ru.gamebot.platform.service.PartnerMissions.SOVCOM)) {
+                ru.gamebot.platform.service.PartnerMissions.SOVCOM, ru.gamebot.platform.service.PartnerMissions.OTPCREDIT)) {
             try {
                 if (!pm.clubExcash() || pm.clubRewardRub() <= 0) continue;
                 String key = "quest.clubexcash.v1." + pm.key();
@@ -3756,7 +3801,7 @@ public class QuestSeeder implements CommandLineRunner {
     private void applyManagerProofTexts() {
         for (ru.gamebot.platform.service.PartnerMission pm : List.of(ru.gamebot.platform.service.PartnerMissions.VTB, ru.gamebot.platform.service.PartnerMissions.ALFA,
                 ru.gamebot.platform.service.PartnerMissions.FORA, ru.gamebot.platform.service.PartnerMissions.PSB, ru.gamebot.platform.service.PartnerMissions.UBRR,
-                ru.gamebot.platform.service.PartnerMissions.SOVCOM)) {
+                ru.gamebot.platform.service.PartnerMissions.SOVCOM, ru.gamebot.platform.service.PartnerMissions.OTPCREDIT)) {
             try {
                 String key = "quest.managerproof.v1." + pm.key();
                 if (appSettingRepository.findById(key).isPresent()) continue;
@@ -3786,7 +3831,7 @@ public class QuestSeeder implements CommandLineRunner {
     private void applyManagerProofHeaders() {
         for (ru.gamebot.platform.service.PartnerMission pm : List.of(ru.gamebot.platform.service.PartnerMissions.VTB, ru.gamebot.platform.service.PartnerMissions.ALFA,
                 ru.gamebot.platform.service.PartnerMissions.FORA, ru.gamebot.platform.service.PartnerMissions.PSB, ru.gamebot.platform.service.PartnerMissions.UBRR,
-                ru.gamebot.platform.service.PartnerMissions.SOVCOM)) {
+                ru.gamebot.platform.service.PartnerMissions.SOVCOM, ru.gamebot.platform.service.PartnerMissions.OTPCREDIT)) {
             try {
                 String key = "quest.managerproof.headers.v1." + pm.key();
                 if (appSettingRepository.findById(key).isPresent()) continue;
