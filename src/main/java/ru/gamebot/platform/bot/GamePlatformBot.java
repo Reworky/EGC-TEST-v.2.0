@@ -9313,12 +9313,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return out;
     }
 
-    /** Сумма рублей от банков и операторов по партнёрским миссиям среди квестов (bankRewardRub): «до N ₽». */
+    /** Сумма рублей «до N ₽»: банковские миссии (bankRewardRub + clubRewardRub) и внешние партнёрские квесты (награда в EXCASH, 100 EXC = 1 ₽). */
     private long sponsoredBankRub(List<Quest> quests) {
         long sum = 0;
         for (Quest q : quests) {
             ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.forQuest(q);
             if (pm != null) sum += pm.bankRewardRub() + pm.clubRewardRub();
+            // 19.11.2026 (владелец): считаем и внешние партнёрские квесты (игровые партнёры, установки): их награда идёт в EXCASH по курсу 100%
+            else if (ru.gamebot.platform.service.SponsorBalanceService.isSponsorBalanceQuest(q)) sum += Math.round(q.getRewardCoins() / 100.0);
         }
         return sum;
     }
