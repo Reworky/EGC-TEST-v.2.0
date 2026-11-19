@@ -10116,6 +10116,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (quest.isSponsored() && quest.getChannelCheckChatId() != null) {
             sponsorPromoService.recordViewedOnce(questId, user.getId());
         }
+        if (quest.isSponsored() || quest.isExternalAutoApprove()) partnerQuestFunnelService.sponsorViewed(user.getTelegramId(), questId); // вкладка аналитики «Спонсорские квесты» (19.11.2026)
         QuestSubmission latest = questService.getLatestSubmission(user, quest);
         boolean latestExpired = latest != null && questService.isExpired(latest);
         // Партнёрская «миссия» (ОТП Карта): взятый квест открывается на том шаге, где игрок остановился

@@ -33,6 +33,54 @@ public class PartnerQuestFunnelService {
 
     public void startClicked(Long telegramId) { record(telegramId, PartnerQuestEvent.START_CLICKED); }
 
+    /** Открытие карточки спонсорского квеста (19.11.2026): для вкладки аналитики «Спонсорские квесты». */
+    public void sponsorViewed(Long telegramId, Long questId) {
+        try {
+            PartnerQuestEvent e = new PartnerQuestEvent();
+            e.setTelegramId(telegramId);
+            e.setType(PartnerQuestEvent.SPONSOR_VIEWED);
+            e.setQuestId(questId);
+            eventRepository.save(e);
+        } catch (Exception ex) {
+            log.warn("[PartnerQuestFunnel] failed to record sponsor view {} for {}", questId, telegramId, ex);
+        }
+    }
+
+    /** questId -> уникальных игроков, открывших карточку за период. */
+    public java.util.Map<Long, Long> viewersByQuest(LocalDateTime from, LocalDateTime to) {
+        java.util.Map<Long, Long> out = new java.util.HashMap<>();
+        for (Object[] r : eventRepository.countViewersByQuest(from, to)) out.put(((Number) r[0]).longValue(), ((Number) r[1]).longValue());
+        return out;
+    }
+
+    /** Уникальных игроков, открывших карточку любого спонсорского квеста за период. */
+    public long sponsorViewUsers(LocalDateTime from, LocalDateTime to) {
+        return eventRepository.countUsersByType(PartnerQuestEvent.SPONSOR_VIEWED, from, to);
+    }
+
+    /** Уникальных игроков, взявших любой спонсорский квест за период (заявки, созданные в периоде). */
+    public long sponsorTakenUsers(LocalDateTime from, LocalDateTime to) {
+        return num("SELECT COUNT(DISTINCT s.user_id) FROM quest_submissions s JOIN quests q ON q.id = s.quest_id "
+                + "WHERE (q.sponsored = TRUE OR q.external_auto_approve = TRUE) AND s.created_at >= ?1 AND s.created_at < ?2", from, to);
+    }
+
+    /** questId -> {взяли, одобрено, банк выплатил}: игроки по заявкам, созданным в периоде. */
+    @SuppressWarnings("unchecked")
+    public java.util.Map<Long, long[]> submissionStatsByQuest(LocalDateTime from, LocalDateTime to) {
+        jakarta.persistence.Query q = entityManager.createNativeQuery(
+                "SELECT s.quest_id, COUNT(DISTINCT s.user_id), COUNT(DISTINCT CASE WHEN s.status = 'APPROVED' THEN s.user_id END), "
+                        + "COUNT(DISTINCT CASE WHEN s.status = 'APPROVED' AND s.bonus_paid_at IS NOT NULL THEN s.user_id END) "
+                        + "FROM quest_submissions s JOIN quests q ON q.id = s.quest_id "
+                        + "WHERE (q.sponsored = TRUE OR q.external_auto_approve = TRUE) AND s.created_at >= ?1 AND s.created_at < ?2 GROUP BY s.quest_id");
+        q.setParameter(1, from);
+        q.setParameter(2, to);
+        java.util.Map<Long, long[]> out = new java.util.HashMap<>();
+        for (Object[] r : (List<Object[]>) q.getResultList()) {
+            out.put(((Number) r[0]).longValue(), new long[]{((Number) r[1]).longValue(), ((Number) r[2]).longValue(), ((Number) r[3]).longValue()});
+        }
+        return out;
+    }
+
     /** bySource, byCountry: [название, взяли, проверено, выплата банка] (игроков). */
     public record Funnel(long viewUsers, long taken, long clickUsers, long verified, long bonusPaid, long cancelled, long rejected, long inWork,
                          List<Object[]> bySource, List<Object[]> byCountry) { }

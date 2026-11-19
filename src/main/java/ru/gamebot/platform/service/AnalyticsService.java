@@ -63,7 +63,8 @@ public class AnalyticsService {
         VPN("🔐", "EGC VPN"),
         PARTNER("💳", "Партнёрский квест"),
         NEWBIE("🧭", "Воронка новичка"),
-        SPONSOR("💎", "EXCASH");
+        SPONSOR("💎", "EXCASH"),
+        SPONSOR_QUESTS("🎯", "Спонсорские квесты");
 
         public final String icon;
         public final String title;
@@ -258,6 +259,7 @@ public class AnalyticsService {
                 case PARTNER -> partnerTab(p, pv, lines, extras);
                 case NEWBIE -> newbieTab(p, lines, extras);
                 case SPONSOR -> sponsorTab(p, pv, lines, extras);
+                case SPONSOR_QUESTS -> sponsorQuestsTab(p, pv, lines, extras);
             }
         } catch (Exception e) {
             log.error("Analytics tab {} failed", tab, e);
@@ -680,6 +682,60 @@ public class AnalyticsService {
         RewardService.WithdrawalPeriodStats b = rewardService.withdrawalStatsSince(to);
         return new RewardService.WithdrawalPeriodStats(a.count() - b.count(), a.totalExc() - b.totalExc(),
                 a.totalRub() - b.totalRub(), a.totalTonRub() - b.totalTonRub(), a.totalStars() - b.totalStars());
+    }
+
+    /** Вкладка «Спонсорские квесты» (19.11.2026, владелец: проверить интерес игроков к спонсорским квестам): по каждому квесту открыли карточку (в боте) → взяли → одобрено → банк выплатил.
+     *  Открытия пишутся с момента выкладки (событие SPONSOR_VIEWED с questId), открытия в мини-аппе не считаются. Взятия и проверки - по заявкам, созданным в периоде. */
+    private void sponsorQuestsTab(Period p, Period pv, List<Line> out, List<String> extras) {
+        long viewU = partnerFunnel.sponsorViewUsers(p.from(), p.to());
+        long viewUPrev = partnerFunnel.sponsorViewUsers(pv.from(), pv.to());
+        long takenU = partnerFunnel.sponsorTakenUsers(p.from(), p.to());
+        long takenUPrev = partnerFunnel.sponsorTakenUsers(pv.from(), pv.to());
+        out.add(L("sq_views", "Открыли карточку спонсорского квеста", "", (double) viewU, (double) viewUPrev, "уникальных игроков (в боте)", false));
+        out.add(L("sq_taken", "Взяли спонсорский квест", "", (double) takenU, (double) takenUPrev,
+                viewU == 0 ? null : String.format(RU, "%.0f%% от открывших карточку", pct(Math.min(takenU, viewU), viewU)), false));
+
+        java.util.Map<Long, Long> views = partnerFunnel.viewersByQuest(p.from(), p.to());
+        java.util.Map<Long, long[]> subs = partnerFunnel.submissionStatsByQuest(p.from(), p.to());
+        List<ru.gamebot.platform.domain.model.Quest> quests = new ArrayList<>();
+        for (ru.gamebot.platform.domain.model.Quest q : questRepo.findAll()) {
+            if (!(q.isSponsored() || q.isExternalAutoApprove())) continue;
+            if (q.isActive() || views.containsKey(q.getId()) || subs.containsKey(q.getId())) quests.add(q);
+        }
+        quests.sort((x, y) -> {
+            int c = Long.compare(views.getOrDefault(y.getId(), 0L), views.getOrDefault(x.getId(), 0L));
+            return c != 0 ? c : Long.compare(subs.getOrDefault(y.getId(), new long[3])[0], subs.getOrDefault(x.getId(), new long[3])[0]);
+        });
+
+        StringBuilder sec = new StringBuilder("<b>По разделам</b>\n<pre>раздел            откр взяли  конв\n");
+        for (SponsoredQuestsService.Category cat : SponsoredQuestsService.CATEGORIES) {
+            long v = 0, t = 0;
+            for (ru.gamebot.platform.domain.model.Quest q : quests) {
+                if (!cat.key().equals(SponsoredQuestsService.categoryOf(q))) continue;
+                v += views.getOrDefault(q.getId(), 0L);
+                t += subs.getOrDefault(q.getId(), new long[3])[0];
+            }
+            sec.append(String.format(RU, "%-17s %5d %5d %5s%n", cut(cat.title(), 17), v, t, v == 0 ? "-" : String.format(RU, "%.0f%%", pct(Math.min(t, v), v))));
+        }
+        sec.append("</pre><i>Суммы по квестам: один игрок, открывший два квеста раздела, считается дважды.</i>");
+        extras.add(sec.toString());
+
+        StringBuilder t = new StringBuilder("<b>По квестам</b>\n<pre>квест                 откр взяли  конв пров выпл\n");
+        int shown = 0;
+        for (ru.gamebot.platform.domain.model.Quest q : quests) {
+            if (shown++ >= 30) break;
+            PartnerMission pm = PartnerMissions.forQuest(q);
+            String label = pm != null ? pm.listLabel() : (q.getGameName() != null && !q.getGameName().isBlank() ? q.getGameName() : q.getTitle());
+            if (!q.isActive()) label = label + " (выкл)";
+            long v = views.getOrDefault(q.getId(), 0L);
+            long[] s = subs.getOrDefault(q.getId(), new long[3]);
+            t.append(String.format(RU, "%-21s %5d %5d %5s %4d %4d%n", cut(label, 21), v, s[0], v == 0 ? "-" : String.format(RU, "%.0f%%", pct(Math.min(s[0], v), v)), s[1], s[2]));
+        }
+        if (quests.isEmpty()) t.append("нет данных\n");
+        t.append("</pre><i>откр - открыли карточку (уникальные игроки, только в боте); взяли - взяли квест в периоде; конв - доля взявших от открывших; пров - заявка одобрена; выпл - банк выплатил и менеджер отметил. "
+                + "Открытия считаются с 19.11.2026 (момент добавления вкладки): у старых квестов за более ранние даты откр = 0, а взяли считается по заявкам всегда. "
+                + "Недавние заявки ещё не дошли до проверки и выплаты, поэтому пров и выпл у свежих квестов занижены.</i>");
+        extras.add(t.toString());
     }
 
     /** Вкладка «Спонсорский баланс» (18.11.2026): токены с банковских миссий и внешних партнёрских квестов, оплаченные спонсором; вывод по курсу 100% без лимитов.
