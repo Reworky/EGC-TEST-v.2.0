@@ -10084,7 +10084,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         // Спонсорские, партнёрские и «без стен» квесты кулдауна не имеют (см. takeQuestChecked): раньше после выполнения карточка показывала
         // «Кулдаун (3 ч 58 мин)» по общему расчёту игры, хотя повторно такой квест взять нельзя вовсе.
-        boolean noCooldownQuest = quest.isSponsored() || quest.isExternalAutoApprove() || quest.isRepeatableNoCooldownEligible();
+        boolean noCooldownQuest = quest.isSponsored() || quest.isExternalAutoApprove() || quest.isRepeatableNoCooldownEligible() || QuestService.isUgcQuest(quest); // UGC - без лимитов (19.11.2026)
         long cooldownLeft = noCooldownQuest ? 0 : questService.getCooldownHoursLeft(user, quest);
         String cooldownExact = cooldownLeft > 0 ? DurationFormatter.formatExact(questService.getCooldownMinutesLeft(user, quest)) : "";
         String displayStatus = cooldownLeft > 0
@@ -10106,8 +10106,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 && (quest.isOneTimePerAccount() || quest.isExternalAutoApprove());
         // Общий лимит «1 квест в час» (15 мин у новичка) - раньше карточка показывала активную «Взять», а нажатие
         // отвечало «подождите N мин». Спонсорские/внешние/no-cooldown квесты лимит не касается (см. takeQuestChecked).
-        long takeCooldownLeft = (hasActiveSubmission || quest.isSponsored() || quest.isExternalAutoApprove()
-                || quest.isRepeatableNoCooldownEligible()) ? 0 : questService.getTakeCooldownMinutesLeft(user);
+        long takeCooldownLeft = (hasActiveSubmission || noCooldownQuest) ? 0 : questService.getTakeCooldownMinutesLeft(user);
         // Куплено «Снятие кулдауна» (3 000 EXC): оно списывается на самом взятии квеста (takeQuestChecked), поэтому карточка обязана
         // показать активную «Взять», а не серую кнопку кулдауна - иначе игрок платит и не может воспользоваться (заявка поддержки #279, 2026-10-10).
         boolean cooldownBypassed = !hasActiveSubmission && (cooldownLeft > 0 || gameCooldown)

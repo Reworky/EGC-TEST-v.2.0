@@ -560,7 +560,7 @@ public class QuestService {
         }
         // Спонсорские/внешние авто-квесты/repeatableNoCooldownEligible не участвуют в слотах и
         // кулдаунах (см. takeQuestChecked) — для них статус всегда "доступен".
-        if (quest.isSponsored() || quest.isExternalAutoApprove() || quest.isRepeatableNoCooldownEligible()) {
+        if (quest.isSponsored() || quest.isExternalAutoApprove() || quest.isRepeatableNoCooldownEligible() || isUgcQuest(quest)) {
             return QuestListState.AVAILABLE;
         }
         // Купленное снятие кулдауна открывает квест с кулдауном: оно списывается на самом взятии (takeQuestChecked).
@@ -760,7 +760,7 @@ public class QuestService {
         // Спонсорские, внешние (auto-approve через постбек) и repeatableNoCooldownEligible-квесты
         // (пилот "квесты без стен" — вместо кулдауна цену сдерживает кривая убывания в computeReward):
         // никаких кулдаунов и ограничений по слотам
-        if (!quest.isSponsored() && !quest.isExternalAutoApprove() && !quest.isRepeatableNoCooldownEligible()) {
+        if (!quest.isSponsored() && !quest.isExternalAutoApprove() && !quest.isRepeatableNoCooldownEligible() && !isUgcQuest(quest)) {
             long activeSlots = countActiveDrafts(lockedUser);
             long maxSlots = sinkShopService.getMaxQuestSlots(lockedUser);
             if (activeSlots >= maxSlots && !isSlotFreeQuest(quest)) {
@@ -1076,6 +1076,10 @@ public class QuestService {
      *  не применяется вообще — там своя кривая убывания. */
     public WeeklyLimitStatus weeklyLimitStatus(AppUser user, Quest quest) {
         int limit = weeklyQuestTypeLimit(user);
+        // UGC: награда и так растёт по просмотрам (ступени), недельного снижения вдвое нет
+        if (isUgcQuest(quest) && !quest.isSponsored()) {
+            return new WeeklyLimitStatus(0, limit, false);
+        }
         if (quest.isRepeatableNoCooldownEligible() && quest.getTargetPeriodCeiling() != null) {
             return new WeeklyLimitStatus(0, limit, false);
         }
@@ -1943,7 +1947,8 @@ public class QuestService {
 
     /** Спонсорские и партнёрские (внешние) квесты слотов не занимают и в лимитах не участвуют (решение владельца 30.10.2026): берутся и выполняются в любом количестве. */
     public static boolean ignoresQuestLimits(Quest quest) {
-        return quest.isSponsored() || quest.isExternalAutoApprove();
+        // UGC (19.11.2026, владелец): ролики без лимитов абсолютно - ни слотов, ни лимита отчётов на проверке
+        return quest.isSponsored() || quest.isExternalAutoApprove() || isUgcQuest(quest);
     }
 
     /** Занятые слоты квестов: спонсорские и партнёрские квесты (ignoresQuestLimits) не считаются, иначе открытый на недели квест блокировал бы игроку обычные. */
