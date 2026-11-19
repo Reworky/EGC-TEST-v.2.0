@@ -2981,6 +2981,7 @@ public class QuestSeeder implements CommandLineRunner {
         }
         applyClubExcashTexts();
         applyManagerProofTexts();
+        applyManagerProofHeaders();
         switchOffStarsTyn0xQuest();
     }
 
@@ -3776,6 +3777,34 @@ public class QuestSeeder implements CommandLineRunner {
                 log.info("[QuestSeeder] Manager proof texts applied: '{}'", pm.questTitle());
             } catch (Exception e) {
                 log.warn("[QuestSeeder] Manager proof texts failed for {}", pm.key(), e);
+            }
+        }
+    }
+
+    /** 19.11.2026: на карточке банковского квеста игрок видит только заголовки шагов (подробности - после «Взять»), поэтому заголовок шага с подтверждением должен сам говорить, что и куда прислать.
+     *  Один раз на квест (ключ в app_settings). */
+    private void applyManagerProofHeaders() {
+        for (ru.gamebot.platform.service.PartnerMission pm : List.of(ru.gamebot.platform.service.PartnerMissions.VTB, ru.gamebot.platform.service.PartnerMissions.ALFA,
+                ru.gamebot.platform.service.PartnerMissions.FORA, ru.gamebot.platform.service.PartnerMissions.PSB, ru.gamebot.platform.service.PartnerMissions.UBRR,
+                ru.gamebot.platform.service.PartnerMissions.SOVCOM)) {
+            try {
+                String key = "quest.managerproof.headers.v1." + pm.key();
+                if (appSettingRepository.findById(key).isPresent()) continue;
+                Quest q = questRepository.findFirstByTitleAndGameName(pm.questTitle(), pm.gameName()).orElse(null);
+                if (q == null || q.getInstruction() == null) continue;
+                String ins = q.getInstruction()
+                        .replace("3️⃣ Пришли подтверждение менеджеру\n", "3️⃣ Пришли менеджеру в личку скриншоты карты и покупки\n")
+                        .replace("4️⃣ Пришли подтверждение нашему менеджеру\n", "4️⃣ Пришли менеджеру в личку скриншоты карты, покупок и выплаты банка\n")
+                        .replace("3️⃣ Пришли подтверждение нашему менеджеру\n", "3️⃣ Пришли менеджеру в личку скриншот новой карты\n");
+                q.setInstruction(ins);
+                questRepository.save(q);
+                ru.gamebot.platform.domain.model.AppSetting done = new ru.gamebot.platform.domain.model.AppSetting();
+                done.setKey(key);
+                done.setValue(LocalDateTime.now().toString());
+                appSettingRepository.save(done);
+                log.info("[QuestSeeder] Manager proof headers applied: '{}'", pm.questTitle());
+            } catch (Exception e) {
+                log.warn("[QuestSeeder] Manager proof headers failed for {}", pm.key(), e);
             }
         }
     }
