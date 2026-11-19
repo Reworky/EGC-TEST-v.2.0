@@ -9,6 +9,8 @@ public class WalletDto {
     private long coins;
     /** Спонсорский баланс (токены с банковских миссий и партнёрских квестов, вывод по курсу 100% без лимитов); показывается, когда sponsorBalanceEnabled. */
     private long sponsorCoins;
+    /** Сколько EXCASH ждёт подтверждения банка (банковские квесты с клубной наградой в EXCASH; в баланс не входит). */
+    private long sponsorPendingExcash;
     private boolean sponsorBalanceEnabled;
     /** Версия API спонсорского баланса (1 - вывод/покупки по флагу sponsor): мини-апп показывает спонсорские элементы только если сервер её отдаёт (защита от деплоя интерфейса раньше бота). */
     private int sponsorApi;

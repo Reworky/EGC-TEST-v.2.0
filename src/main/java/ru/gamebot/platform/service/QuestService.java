@@ -1675,6 +1675,34 @@ public class QuestService {
         return questSubmissionRepository.findApprovedByUserAndGame(userId, gameName).stream().findFirst().orElse(null);
     }
 
+    /** Отказ банка (19.11.2026): отмечает последнюю одобренную (иначе последнюю неотменённую) заявку игрока по миссии игры gameName как «банк не подтвердил». false - заявки нет. */
+    @Transactional
+    public boolean markBankDeclined(Long userId, String gameName) {
+        List<QuestSubmission> list = questSubmissionRepository.findApprovedByUserAndGame(userId, gameName);
+        if (list.isEmpty()) list = questSubmissionRepository.findNotCancelledByUserAndGame(userId, gameName);
+        if (list.isEmpty()) return false;
+        QuestSubmission sub = list.get(0);
+        sub.setBankDeclinedAt(LocalDateTime.now());
+        questSubmissionRepository.save(sub);
+        return true;
+    }
+
+    /** Сколько EXCASH игрок получит после подтверждения банка: заявки банковских миссий с клубной наградой в EXCASH, где менеджер уже проверил первую часть (APPROVED),
+     *  а выплата ещё не отмечена и отказа банка нет. По одной заявке на квест (последняя). Строка «⏳ Ждёт подтверждения банка» на экране «Баланс». */
+    public long pendingClubExcash(AppUser user) {
+        long sum = 0;
+        java.util.Set<Long> seen = new java.util.HashSet<>();
+        for (QuestSubmission sb : questSubmissionRepository.findAllByUserOrderByCreatedAtDesc(user)) {
+            Quest q = sb.getQuest();
+            if (q == null || !seen.add(q.getId())) continue;
+            PartnerMission pm = PartnerMissions.forQuest(q);
+            if (pm == null || !pm.clubExcash() || pm.clubRewardRub() <= 0) continue;
+            if (sb.getStatus() != SubmissionStatus.APPROVED || sb.getBonusPaidAt() != null || sb.getBankDeclinedAt() != null) continue;
+            sum += pm.clubRewardRub() * 100L + Math.max(0, pm.compensationExc());
+        }
+        return sum;
+    }
+
     /** Бонус по партнёрской миссии игры gameName этому игроку уже начислялся (бейдж, защита от двойной выплаты). */
     public boolean isPartnerBonusPaid(Long userId, String gameName) {
         return questSubmissionRepository.countBonusPaid(userId, gameName) > 0;

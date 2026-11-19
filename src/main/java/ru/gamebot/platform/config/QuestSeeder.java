@@ -2979,6 +2979,7 @@ public class QuestSeeder implements CommandLineRunner {
             appSettingRepository.save(hideMark);
             log.info("[QuestSeeder] Hidden sponsored/external quests except OTP bank ({}): {}", hiddenTitles.size(), hiddenTitles);
         }
+        applyClubExcashTexts();
         switchOffStarsTyn0xQuest();
     }
 
@@ -3718,6 +3719,48 @@ public class QuestSeeder implements CommandLineRunner {
             questRepository.save(q);
             log.info("[QuestSeeder] UGC views scale added: '{}'", title);
         });
+    }
+
+    /** 19.11.2026 (владелец): клубная часть награды банковских квестов выдаётся в EXCASH после подтверждения банка, а не переводом на карту. Один раз на квест (ключ в app_settings)
+     *  заменяет в описании, инструкции и условиях фразы про «N ₽ на карту от клуба» на EXCASH; квест ещё не создан - попробует на следующем старте. */
+    private void applyClubExcashTexts() {
+        for (ru.gamebot.platform.service.PartnerMission pm : List.of(ru.gamebot.platform.service.PartnerMissions.VTB, ru.gamebot.platform.service.PartnerMissions.ALFA,
+                ru.gamebot.platform.service.PartnerMissions.FORA, ru.gamebot.platform.service.PartnerMissions.PSB, ru.gamebot.platform.service.PartnerMissions.UBRR,
+                ru.gamebot.platform.service.PartnerMissions.SOVCOM)) {
+            try {
+                if (!pm.clubExcash() || pm.clubRewardRub() <= 0) continue;
+                String key = "quest.clubexcash.v1." + pm.key();
+                if (appSettingRepository.findById(key).isPresent()) continue;
+                Quest q = questRepository.findFirstByTitleAndGameName(pm.questTitle(), pm.gameName()).orElse(null);
+                if (q == null) continue;
+                String excS = String.format("%,d", pm.clubRewardRub() * 100L).replace(',', ' ');
+                String rubS = String.format("%,d", pm.clubRewardRub()).replace(',', ' ');
+                q.setDescription(clubExcashText(q.getDescription(), excS, rubS));
+                q.setInstruction(clubExcashText(q.getInstruction(), excS, rubS));
+                q.setRequirements(clubExcashText(q.getRequirements(), excS, rubS));
+                questRepository.save(q);
+                ru.gamebot.platform.domain.model.AppSetting done = new ru.gamebot.platform.domain.model.AppSetting();
+                done.setKey(key);
+                done.setValue(LocalDateTime.now().toString());
+                appSettingRepository.save(done);
+                log.info("[QuestSeeder] Club EXCASH texts applied: '{}'", pm.questTitle());
+            } catch (Exception e) {
+                log.warn("[QuestSeeder] Club EXCASH texts failed for {}", pm.key(), e);
+            }
+        }
+    }
+
+    private static String clubExcashText(String text, String excS, String rubS) {
+        if (text == null) return null;
+        String num = "[\\d\\s\u00A0]+";
+        String r = text;
+        r = r.replaceAll("✅ " + num + "₽ на карту лично от клуба", "✅ 💎 +" + excS + " EXCASH (≈ " + rubS + " ₽) после подтверждения банка");
+        r = r.replaceAll("менеджер переведёт( тебе)? " + num + "₽ на карту( лично от клуба)?", "мы начислим 💎 +" + excS + " EXCASH (≈ " + rubS + " ₽): выводи на карту или по СБП по курсу 100%");
+        r = r.replaceAll("Получи " + num + "₽ от клуба", "Получи 💎 +" + excS + " EXCASH (≈ " + rubS + " ₽)");
+        r = r.replaceAll(": " + num + "₽ платит клуб", ": награду платит клуб в EXCASH");
+        r = r.replace(", а на баланс придёт ещё 50 000 EXC", ", плюс ещё 💎 +50 000 EXCASH");
+        r = r.replace("✅ +50 000 EXC на баланс: компенсация", "✅ 💎 +50 000 EXCASH: компенсация");
+        return r;
     }
 
     private static final String UGC_BANNER_MARKER = "видео-баннер EGC";

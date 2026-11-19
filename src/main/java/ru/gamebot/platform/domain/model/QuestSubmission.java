@@ -184,6 +184,9 @@ public class QuestSubmission {
     /** Партнёрская миссия «ОТП Карта»: когда админ начислил бонус после выплаты банка (/otpbonus). null - ещё не начислен. По нему экран миссии показывает финал, ставится бейдж и блокируется двойная выплата. */
     private java.time.LocalDateTime bonusPaidAt;
 
+    /** Банк не подтвердил карту (админ: /…bonus ID отказ): награда не начисляется, заявка снимается из «ждёт подтверждения банка». null - нет отказа. */
+    private java.time.LocalDateTime bankDeclinedAt;
+
     /** Какие напоминания миссии уже отправлены (битовая маска OtpMissionReminderService: 1 - «ждёт тебя», 2 - «3 дня до конца окна», 4 - «банк мог заплатить»). */
     @Column(columnDefinition = "integer default 0")
     private int missionRemindersSent;

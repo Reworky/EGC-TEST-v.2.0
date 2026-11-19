@@ -47,6 +47,15 @@ public class WalletController {
     private final ru.gamebot.platform.service.DailyCodeGateService dailyCodeGate;
     private final GamePlatformBot gamePlatformBot;
     private final ru.gamebot.platform.service.SponsorBalanceService sponsorBalanceService;
+    private final ru.gamebot.platform.service.QuestService questService;
+
+    private long safePendingClubExcash(AppUser user) {
+        try {
+            return sponsorBalanceService.enabled() ? questService.pendingClubExcash(user) : 0;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
 
     @Data
     public static class WithdrawRubRequest {
@@ -97,6 +106,7 @@ public class WalletController {
         return ResponseEntity.ok(WalletDto.builder()
                 .coins(user.getCoins())
                 .sponsorCoins(user.getSponsorCoins())
+                .sponsorPendingExcash(safePendingClubExcash(user))
                 .sponsorBalanceEnabled(sponsorBalanceService.enabled())
                 .sponsorApi(1)
                 .excBonusPercent(userService.getExcBonusPercent(user.getXp()))

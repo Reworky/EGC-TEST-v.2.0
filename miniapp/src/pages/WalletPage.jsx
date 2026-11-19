@@ -431,6 +431,11 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest, onSponsorWi
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
             Ваш курс: 100% → ≈ {Math.round(wallet.sponsorCoins / 100).toLocaleString('ru-RU')} ₽
           </div>
+          {wallet.sponsorPendingExcash > 0 && (
+            <div style={{ fontSize: 12, color: '#c4b5fd', marginTop: 4 }}>
+              ⏳ Ждёт подтверждения банка: +{wallet.sponsorPendingExcash.toLocaleString('ru-RU')} EXCASH
+            </div>
+          )}
           {wallet.sponsorCoins > 0
             ? <button className="quest-btn" style={{ marginTop: 10 }} onClick={onSponsorWithdraw}>💸 Вывести EXCASH</button>
             : <button className="quest-btn" style={{ marginTop: 10 }} onClick={() => navigate('/quests?section=sponsored')}>🎯 Спонсорские квесты</button>}

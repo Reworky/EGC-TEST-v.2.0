@@ -6111,8 +6111,29 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long amount = amountArg == null ? defaultAmount : amountArg;
         boolean itemPayout = pm.bonusItem() != null && amount == 0 && (amountArg != null ? amountArg == 0 : itemDefault || pm.bonusExc() == 0);
         boolean repeatPayout = java.util.Arrays.stream(p).skip(2).anyMatch(w -> w.equalsIgnoreCase("повтор"));
+        boolean declineBank = java.util.Arrays.stream(p).skip(2).anyMatch(w -> w.equalsIgnoreCase("отказ"));
+        boolean cardWord = java.util.Arrays.stream(p).skip(2).anyMatch(w -> w.equalsIgnoreCase("карта"));
+        // Отказ банка (19.11.2026): /…bonus ID отказ - награда не начисляется, заявка снимается из «ждёт подтверждения банка», игроку уходит сообщение
+        if (declineBank && targetId != null) {
+            AppUser declined = userService.findByTelegramId(targetId).orElse(null);
+            if (declined == null) {
+                sendText(admin.getTelegramId(), "⚠️ Игрок с таким ID не найден.", null);
+                return;
+            }
+            boolean marked = questService.markBankDeclined(declined.getId(), pm.gameName());
+            try {
+                sendText(declined.getTelegramId(), "❌ <b>Банк не подтвердил карту</b> по квесту «" + escape(pm.shortTitle()) + "», поэтому награда не начислена.\n\n"
+                        + "Если считаешь, что это ошибка, напиши менеджеру.",
+                        keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
+            } catch (Exception e) {
+                log.warn("Bank decline notice failed for {}", targetId, e);
+            }
+            sendText(admin.getTelegramId(), "✅ Отказ банка отмечен: " + escape(String.valueOf(declined.getNickname())) + " (" + targetId + "), «" + escape(pm.shortTitle()) + "». Игроку отправлено сообщение"
+                    + (marked ? "." : ", но заявки по этому квесту у него нет (в ожидании ничего не было)."), null);
+            return;
+        }
         if (targetId == null || (amount <= 0 && !itemPayout)) {
-            sendText(admin.getTelegramId(), "⚠️ Формат: <code>/" + pm.bonusCommand() + " ID [сумма EXC]</code>, по умолчанию "
+            sendText(admin.getTelegramId(), "⚠️ Формат: <code>/" + pm.bonusCommand() + " ID [сумма EXC]</code> (слова: повтор, карта - вручную рублями вместо EXCASH, отказ - банк не подтвердил), по умолчанию "
                     + (pm.bonusItem() != null ? escape(pm.bonusItem()) + " (EXC не начисляются)" : fmtExc(pm.bonusExc()) + " EXC") + ".", null);
             return;
         }
@@ -6130,6 +6151,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean missionMarked;
         long compensated = 0;
         boolean grantsPartner = ru.gamebot.platform.service.PartnerMissions.grantsPartner(pm); // привилегии (запас вывода, бейдж) - только у ОТП
+        // Клубная часть награды в EXCASH (19.11.2026, владелец): после подтверждения банка, 100 EXCASH = 1 ₽; слово «карта» - прежний ручной перевод рублями
+        boolean clubExcashPay = itemPayout && pm.clubExcash() && pm.clubRewardRub() > 0 && sponsorBalanceService.enabled() && !cardWord;
+        long clubExcashAmount = clubExcashPay ? pm.clubRewardRub() * 100L : 0;
         try {
             if (!itemPayout) {
                 if (sponsorBalanceService.enabled()) {
@@ -6138,6 +6162,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 } else {
                     userService.addReward(target, 0, amount, ru.gamebot.platform.service.ExcTransactionService.BONUS, "Партнёрская выплата: " + pm.shortTitle());
                 }
+            }
+            if (clubExcashPay) {
+                excTransactionService.creditSponsor(target, clubExcashAmount, ru.gamebot.platform.service.ExcTransactionService.BONUS, "Выплата клуба: " + pm.shortTitle());
             }
             // Компенсация траты игрока (правило владельца 17.11.2026): один раз вместе с выплатой, при «повтор» не начисляем (защита от двойной компенсации)
             if (pm.compensationExc() > 0 && !repeatPayout) {
@@ -6161,23 +6188,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             sendText(target.getTelegramId(),
                     "🏆 <b>Миссия выполнена!</b>\n\n"
-                            + (itemPayout
+                            + (clubExcashPay
+                            ? "Банк подтвердил карту. Мы начислили тебе 💎 <b>+" + fmtExc(clubExcashAmount) + " EXCASH</b> (≈ " + fmtExc(clubExcashAmount / 100) + " ₽): выводи на карту или по СБП по курсу 100%, без лимитов.\n\n"
+                            : itemPayout
                             ? "Банк выплатил бонус. Менеджер подарит тебе <b>" + escape(pm.bonusItem()) + "</b>: если подарка нет больше суток, напиши ему.\n\n"
                             : "Банк выплатил бонус, мы начислили тебе <b>" + fmtExc(amount) + " EXC</b>.\n\n")
-                            + (compensated > 0 ? "💸 Ты потратил(а) деньги на активацию карты, поэтому клуб добавил тебе ещё <b>" + fmtExc(compensated) + " EXC</b> в компенсацию.\n\n" : "")
+                            + (compensated > 0 ? "💸 Ты потратил(а) деньги на активацию карты, поэтому клуб добавил тебе ещё <b>" + fmtExc(compensated) + (sponsorBalanceService.enabled() ? " EXCASH" : " EXC") + "</b> в компенсацию.\n\n" : "")
                             + (grantsPartner ? "🤝 Ты теперь партнёр клуба: курс вывода 100% на все твои EXC и партнёрские цены.\n\n" : "")
                             + (grantsPartner ? "Вывод открыт разово: всю накопленную сумму можно вывести одной заявкой, сверх обычного месячного лимита."
                             + (missionMarked ? "\n\n🏦 Бейдж «Банкир EGC» уже в твоём профиле." : "") : ""),
                     keyboardFactory.rowsLayout(List.of(
-                            List.of(keyboardFactory.callback("💸 Вывести", "shop:withdraw")),
+                            List.of(clubExcashPay || (compensated > 0 && sponsorBalanceService.enabled())
+                                    ? keyboardFactory.callback("💎 Вывести EXCASH", "spwd:start")
+                                    : keyboardFactory.callback("💸 Вывести", "shop:withdraw")),
                             List.of(keyboardFactory.callback("🏠 Меню", "menu:main")))));
         } catch (Exception e) {
             log.warn("Partner bonus ({}) notice failed for {}", pm.key(), targetId, e);
         }
         String adminWho = escape(String.valueOf(target.getNickname())) + (target.getTelegramUsername() == null || target.getTelegramUsername().isBlank() ? "" : " @" + escape(target.getTelegramUsername().replace("@", ""))) + " (" + targetId + ")";
-        sendText(admin.getTelegramId(), itemPayout
+        sendText(admin.getTelegramId(), clubExcashPay
+                ? "✅ Игроку " + adminWho + " отмечена выплата банка и начислено 💎 <b>" + fmtExc(clubExcashAmount) + " EXCASH</b> (≈ " + fmtExc(clubExcashAmount / 100) + " ₽) награды клуба"
+                    + (compensated > 0 ? " + " + fmtExc(compensated) + " EXCASH компенсации траты" : "") + ". Переводить деньги на карту не нужно: игрок выведет EXCASH сам."
+                    + (!grantsPartner || missionMarked ? "" : "\n⚠️ Одобренной заявки по «" + escape(pm.shortTitle()) + "» у игрока нет: бейдж и «финал» миссии не отмечены.")
+                : itemPayout
                 ? "✅ Игроку " + adminWho + (grantsPartner ? " включён партнёрский статус и разово открыт вывод." : " отмечена выплата банка.") + "\n\n🎁 <b>Не забудьте отправить ему " + escape(pm.bonusItem()) + "</b>: "
-                    + (compensated > 0 ? "на баланс уже добавлено " + fmtExc(compensated) + " EXC компенсации траты." : "EXC не начислялись.")
+                    + (compensated > 0 ? "на баланс уже добавлено " + fmtExc(compensated) + (sponsorBalanceService.enabled() ? " EXCASH" : " EXC") + " компенсации траты." : "EXC не начислялись.")
                     + (!grantsPartner || missionMarked ? "" : "\n⚠️ Одобренной заявки по «" + escape(pm.shortTitle()) + "» у игрока нет: бейдж и «финал» миссии не отмечены.")
                 : "✅ Игроку " + adminWho + " начислено " + fmtExc(amount)
                 + (grantsPartner ? " EXC и разово открыт вывод на эту сумму." : " EXC (квест не даёт партнёрских привилегий: запас вывода и бейдж не выдаются).")
@@ -7623,8 +7658,17 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private String sponsorBalanceBlock(AppUser user) {
         if (!sponsorBalanceService.enabled()) return "";
         long sp = Math.max(0, user.getSponsorCoins());
+        // «⏳ Ждёт подтверждения банка» (19.11.2026): сколько EXCASH придёт по банковским квестам, где менеджер уже проверил первую часть; на баланс это не входит
+        long pending = 0;
+        try {
+            pending = questService.pendingClubExcash(user);
+        } catch (Exception e) {
+            log.warn("pendingClubExcash failed", e);
+        }
         return "💎 <b>EXCASH: " + fmtExc(sp) + "</b>\n\n"
-                + BALANCE_INDENT + "Ваш курс: 100% → ≈ " + fmtExc(Math.round(sp / 100.0)) + " ₽\n\n";
+                + BALANCE_INDENT + "Ваш курс: 100% → ≈ " + fmtExc(Math.round(sp / 100.0)) + " ₽\n"
+                + (pending > 0 ? BALANCE_INDENT + "⏳ Ждёт подтверждения банка: +" + fmtExc(pending) + " EXCASH\n" : "")
+                + "\n";
     }
 
     /** Строка «Статус» в раскрывающемся блоке «Баланса» (только при включённых уровнях вывода). */
@@ -8819,15 +8863,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("wdrecreate", "[go]", "Вернуть EXC по всем висящим (ожидающим) заявкам на вывод и попросить игроков создать заявку заново (технический сбой). Без go - только предпросмотр"),
             new AdminCommand("otpbonus", "ID [сумма EXC] [повтор]", "Партнёрская выплата ОТП Карта: включить статус партнёра, один раз открыть вывод, отметить миссию выполненной (бейдж). Взявшим с 12.11.2026 EXC не начисляются (подарок Telegram Premium отправить вручную); взявшим раньше - по умолчанию 50 000 или 100 000 EXC. Повторно только со словом «повтор»"),
             new AdminCommand("tbbonus", "ID [сумма EXC] [повтор]", "Партнёрская выплата Т-Банк Black: начислить EXC (по умолчанию 25 000), открыть вывод на сумму, отметить миссию выполненной (бейдж). Повторно только со словом «повтор»"),
-            new AdminCommand("vtbbonus", "ID [повтор]", "Партнёрская выплата ВТБ Киберкарта: отметить, что банк выплатил, и напомнить отправить игроку 500 ₽ на карту от клуба (EXC не начисляются). Повторно только со словом «повтор»"),
-            new AdminCommand("alfabonus", "ID [повтор]", "Выплата Альфа-Банк (Апельсиновая карта): отметить, что банк подтвердил карту, и напомнить отправить игроку 300 ₽ на карту от клуба (EXC не начисляются). Повторно только со словом «повтор»"),
-            new AdminCommand("forabonus", "ID [повтор]", "Выплата Фора-Банк (карта «Все включено»): отметить, что банк подтвердил карту, и напомнить отправить игроку 400 ₽ на карту от клуба; на баланс сам начисляется 10 000 EXC компенсации траты (при «повтор» не начисляется). Повторно только со словом «повтор»"),
+            new AdminCommand("vtbbonus", "ID [повтор|карта|отказ]", "Выплата ВТБ Киберкарта после подтверждения банка: начисляет игроку 💎 50 000 EXCASH (≈ 500 ₽, награда клуба; плюс компенсация траты, если она есть), переводить деньги не нужно. Слово «карта» - прежний ручной перевод рублями без EXCASH, «отказ» - банк не подтвердил карту (игроку уйдёт сообщение, ожидание снимется), «повтор» - повторная выплата"),
+            new AdminCommand("alfabonus", "ID [повтор|карта|отказ]", "Выплата Альфа-Банк (Апельсиновая карта) после подтверждения банка: начисляет игроку 💎 30 000 EXCASH (≈ 300 ₽, награда клуба; плюс компенсация траты, если она есть), переводить деньги не нужно. Слово «карта» - прежний ручной перевод рублями без EXCASH, «отказ» - банк не подтвердил карту (игроку уйдёт сообщение, ожидание снимется), «повтор» - повторная выплата"),
+            new AdminCommand("forabonus", "ID [повтор|карта|отказ]", "Выплата Фора-Банк (карта «Все включено») после подтверждения банка: начисляет игроку 💎 40 000 EXCASH (≈ 400 ₽, награда клуба; плюс компенсация траты, если она есть), переводить деньги не нужно. Слово «карта» - прежний ручной перевод рублями без EXCASH, «отказ» - банк не подтвердил карту (игроку уйдёт сообщение, ожидание снимется), «повтор» - повторная выплата"),
             new AdminCommand("excash", "ID [±сумма] [уведомить] [причина]", "Спонсорский баланс EXCASH: без суммы - показать игровой и спонсорский баланс игрока; +сумма - начислить EXCASH, -сумма - списать (ниже нуля нельзя); слово «уведомить» отправляет игроку сообщение о начислении"),
             new AdminCommand("tocash", "ID сумма", "Перенести EXC с игрового баланса на спонсорский (EXCASH) 1 к 1, для игроков, которые просят перенести старые спонсорские заработки. Одна транзакция, оба баланса показываются в ответе"),
             new AdminCommand("wowpay", "ID", "Награда за квест World of Warships: игрок есть в списке конверсий лендинга (партнёр подтвердил игру). Начисляет награду квеста и уведомляет игрока; повторно тому же игроку не начисляет"),
-            new AdminCommand("psbbonus", "ID [повтор]", "Выплата ПСБ (карта «Твой кэшбэк»): отметить, что банк подтвердил карту, и напомнить отправить игроку 500 ₽ на карту от клуба; на баланс сам начисляется 50 000 EXC компенсации траты (при «повтор» не начисляется). Повторно только со словом «повтор»"),
-            new AdminCommand("ubrrbonus", "ID [повтор]", "Выплата УБРиР (карта «Моя Жизнь»): отметить, что банк подтвердил карту, и напомнить отправить игроку 500 ₽ на карту от клуба; на баланс сам начисляется 50 000 EXC компенсации траты (при «повтор» не начисляется). Повторно только со словом «повтор»"),
-            new AdminCommand("sovcombonus", "ID [повтор]", "Выплата Совкомбанка (кредитная карта «180 дней без %»): отметить, что банк подтвердил выдачу карты, и напомнить отправить игроку 1 500 ₽ на карту от клуба; EXC на баланс не начисляется. Повторно только со словом «повтор»"),
+            new AdminCommand("psbbonus", "ID [повтор|карта|отказ]", "Выплата ПСБ (карта «Твой кэшбэк») после подтверждения банка: начисляет игроку 💎 50 000 EXCASH (≈ 500 ₽, награда клуба; плюс компенсация траты, если она есть), переводить деньги не нужно. Слово «карта» - прежний ручной перевод рублями без EXCASH, «отказ» - банк не подтвердил карту (игроку уйдёт сообщение, ожидание снимется), «повтор» - повторная выплата"),
+            new AdminCommand("ubrrbonus", "ID [повтор|карта|отказ]", "Выплата УБРиР (карта «Моя Жизнь») после подтверждения банка: начисляет игроку 💎 50 000 EXCASH (≈ 500 ₽, награда клуба; плюс компенсация траты, если она есть), переводить деньги не нужно. Слово «карта» - прежний ручной перевод рублями без EXCASH, «отказ» - банк не подтвердил карту (игроку уйдёт сообщение, ожидание снимется), «повтор» - повторная выплата"),
+            new AdminCommand("sovcombonus", "ID [повтор|карта|отказ]", "Выплата Совкомбанк (кредитная карта 180 дней без %) после подтверждения банка: начисляет игроку 💎 150 000 EXCASH (≈ 1500 ₽, награда клуба; плюс компенсация траты, если она есть), переводить деньги не нужно. Слово «карта» - прежний ручной перевод рублями без EXCASH, «отказ» - банк не подтвердил карту (игроку уйдёт сообщение, ожидание снимется), «повтор» - повторная выплата"),
             new AdminCommand("tmbonus", "ID [сумма EXC] [повтор]", "Партнёрская выплата Т-Мобайл SIM: начислить EXC (по умолчанию 100 000), открыть вывод на сумму, отметить миссию выполненной (бейдж). Повторно только со словом «повтор»"),
             new AdminCommand("otppilot", "[send] [N]", "«ОТП Карта»: показать игроков из России: сначала выводившие, затем активные за неделю (по умолчанию 20, до 1000) и текст приглашения; send - разослать им (один раз каждому)"),
             new AdminCommand("otpwait", "", "ОТП Карта: кто ждёт выплаты банка и кто нажал «Банк отправил мне 1 000 ₽» (видят и модераторы)"),
