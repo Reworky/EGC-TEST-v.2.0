@@ -9529,7 +9529,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendUgcQuestList(AppUser user) {
-        sendQuestList(user, "UGC", null, "menu:cat:more");
+        sendQuestList(user, "UGC", null, "menu:main");
     }
 
     // ── Подраздел «🌐 Соцсети» в Квестах: разовая награда за подписку на наши каналы (SocialTaskService) ──
@@ -9762,7 +9762,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Кнопка «Назад» списка квестов игры: зависит только от игры и категории, поэтому её можно восстановить из callback листания. */
     private String questListBackData(String gameName, String category) {
-        if ("UGC".equalsIgnoreCase(gameName)) return "menu:quests";
+        // Список UGC открывается с главного меню (sendUgcQuestList, с 19.11.2026): «Назад» после просмотра карточек ведёт туда же, а не в «Игровые квесты» (жалоба владельца)
+        if ("UGC".equalsIgnoreCase(gameName)) return "menu:main";
         if (category == null && gameCatalogService.isFlat(gameName)) return "quests:section:gaming";
         return "quests:game:" + encodeGameToken(gameName);
     }
@@ -31660,6 +31661,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // 15.11.2026 (владелец): вместо «🎯 Играть» - сразу «Игровые квесты» и «Спонсорские квесты» (с суммой), затем «Задания дня»; кнопка «Квест от спонсора» стала лишней
         rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "quests:section:gaming")));
         rows.add(List.of(keyboardFactory.callback(sponsoredMenuLabel(user), "quests:section:sponsored")));
+        // 19.11.2026 (владелец): UGC перенесён из «Ещё» на главное меню, под «Спонсорские квесты»
+        rows.add(List.of(keyboardFactory.callback("🤳 UGC", "quests:section:ugc")));
         if (userService.dailyTasksEnabled()) {
             rows.add(List.of(keyboardFactory.callback(dailyTasksMenuLabel(user), "menu:dtasks")));
         }
@@ -32043,10 +32046,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 List.of(keyboardFactory.callback(clubLabel, "menu:cat:club")),
                 // 15.11.2026 (владелец): бывшие кнопки экрана «Квесты» - в «Ещё»
                 List.of(keyboardFactory.callback("🔑 Код дня", "club:code"), keyboardFactory.callback("🎯 Цель клуба", "club:goal")),
+                // UGC с 19.11.2026 на главном меню (под «Спонсорскими квестами»); здесь «Соцсети» (если включены) делят ряд с «Помощью»
                 socialTaskService.enabled() && !socialTaskService.tasks().isEmpty()
-                        ? List.of(keyboardFactory.callback("🌐 Соцсети", "quests:section:social"), keyboardFactory.callback("🤳 UGC", "quests:section:ugc"))
-                        : List.of(keyboardFactory.callback("🤳 UGC", "quests:section:ugc")),
-                List.of(keyboardFactory.callback("🆘 Помощь", "menu:cat:help")),
+                        ? List.of(keyboardFactory.callback("🌐 Соцсети", "quests:section:social"), keyboardFactory.callback("🆘 Помощь", "menu:cat:help"))
+                        : List.of(keyboardFactory.callback("🆘 Помощь", "menu:cat:help")),
                 List.of(keyboardFactory.webApp("🌐 Открыть Mini App", "https://experience-gaming-club.pages.dev"))
         ));
     }
