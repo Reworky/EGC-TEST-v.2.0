@@ -3648,7 +3648,8 @@ public class QuestSeeder implements CommandLineRunner {
     private void appendUgcViewsScale(String title) {
         questRepository.findFirstByTitleAndGameName(title, "UGC").ifPresent(q -> {
             String description = q.getDescription() == null ? "" : q.getDescription();
-            if (description.contains(UGC_SCALE_MARKER)) return;
+            // У карточек с видео-баннером (applyUgcBannerRules) шкала уже в тексте: дописывать её нельзя, иначе описание удваивалось на каждом старте и карточка не влезала в подпись фото
+            if (description.contains(UGC_SCALE_MARKER) || description.contains(UGC_BANNER_MARKER)) return;
             q.setDescription(description + " Чем больше просмотров, тем выше награда: от 3 000 до 25 000 EXC.");
             String instruction = q.getInstruction() == null ? "" : q.getInstruction();
             q.setInstruction(instruction + " Награда зависит от просмотров: до 500 просмотров - 3 000 EXC, от 500 - 5 000, от 2 000 - 8 000, "
@@ -3660,7 +3661,7 @@ public class QuestSeeder implements CommandLineRunner {
     }
 
     private static final String UGC_BANNER_MARKER = "видео-баннер EGC";
-    private static final String UGC_BANNER_RULES_KEY = "ugc.banner.rules.v2.";
+    private static final String UGC_BANNER_RULES_KEY = "ugc.banner.rules.v3.";
 
     /** Переписывает карточку UGC-квеста под правило «любой ролик на свою тему + видео-баннер EGC на 6-й секунде + реферальная ссылка где угодно».
      *  Один раз на квест (ключ в app_settings; v2 - компактные тексты 19.11.2026: вся карточка вместе с раскрывающейся цитатой должна укладываться в подпись фото, 1000 знаков,
@@ -3669,7 +3670,7 @@ public class QuestSeeder implements CommandLineRunner {
         questRepository.findFirstByTitleAndGameName(title, "UGC").ifPresent(q -> {
             String key = UGC_BANNER_RULES_KEY + title;
             if (appSettingRepository.findById(key).isPresent()) return;
-            q.setDescription("Сними любое видео на свою тему, вставь в него наш " + UGC_BANNER_MARKER + " и размести реферальную ссылку. Набери " + minViews + "+ просмотров, чем больше, тем выше награда.");
+            q.setDescription("Сними любое видео на свою тему, вставь в него наш " + UGC_BANNER_MARKER + " и размести реферальную ссылку. Набери " + minViews + "+ просмотров: чем больше просмотров, тем выше награда, от 3 000 до 25 000 EXC.");
             q.setInstruction("1️⃣ Скачай баннер: кнопка «🎬 Скачать баннер».\n"
                     + "2️⃣ Вставь его в видео на 6-й секунде, целиком, без обрезки и ускорения.\n"
                     + "3️⃣ Опубликуй видео " + where + ".\n"
