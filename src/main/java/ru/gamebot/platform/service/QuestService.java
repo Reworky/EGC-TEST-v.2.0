@@ -565,7 +565,7 @@ public class QuestService {
         }
         // Купленное снятие кулдауна открывает квест с кулдауном: оно списывается на самом взятии (takeQuestChecked).
         boolean cooldownBlocks = getCooldownHoursLeft(user, quest) > 0 && !sinkShopService.hasCooldownBypass(user, quest.getGameName());
-        if ((activeSlots >= maxSlots && !isCumulativeQuest(quest)) || cooldownBlocks) {
+        if ((activeSlots >= maxSlots && !isSlotFreeQuest(quest)) || cooldownBlocks) {
             return QuestListState.BLOCKED;
         }
         if (getTakeCooldownMinutesLeft(user) > 0) {
@@ -763,7 +763,7 @@ public class QuestService {
         if (!quest.isSponsored() && !quest.isExternalAutoApprove() && !quest.isRepeatableNoCooldownEligible()) {
             long activeSlots = countActiveDrafts(lockedUser);
             long maxSlots = sinkShopService.getMaxQuestSlots(lockedUser);
-            if (activeSlots >= maxSlots && !isCumulativeQuest(quest)) {
+            if (activeSlots >= maxSlots && !isSlotFreeQuest(quest)) {
                 return QuestActionResult.of(QuestActionStatus.SLOTS_FULL, 0);
             }
 
@@ -1949,8 +1949,13 @@ public class QuestService {
     /** Занятые слоты квестов: спонсорские и партнёрские квесты (ignoresQuestLimits) не считаются, иначе открытый на недели квест блокировал бы игроку обычные. */
     public long countActiveDrafts(AppUser user) {
         return activeDraftSubmissions(user)
-                .filter(s -> s.getQuest() == null || (!ignoresQuestLimits(s.getQuest()) && !isCumulativeQuest(s.getQuest())))
+                .filter(s -> s.getQuest() == null || (!ignoresQuestLimits(s.getQuest()) && !isSlotFreeQuest(s.getQuest())))
                 .count();
+    }
+
+    /** Квест без слота: накопительные и UGC-квесты (19.11.2026, владелец: «у квестов UGC не должно быть слотов»). Паузу между взятиями и кулдауны они не отменяет. */
+    public static boolean isSlotFreeQuest(Quest quest) {
+        return quest != null && (isCumulativeQuest(quest) || (isUgcQuest(quest) && !quest.isSponsored()));
     }
 
     /** Накопительный квест (19.11.2026, владелец): прогресс копится днями по счётчику игры (дельта с момента взятия: убийства, победы, донаты, число боёв...) и проверяется автоматически.
