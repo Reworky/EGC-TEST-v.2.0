@@ -32578,6 +32578,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + fmtExc(Math.max(coins, 0)) + " / " + fmtExc(FIRST_WITHDRAWAL_EXC);
     }
 
+    /** « (~1 164 ₽)» рядом с балансом EXC в главном меню (19.11.2026, макет владельца): по текущему курсу вывода игрока (как на экране «Баланс»). */
+    private String approxRubExc(AppUser user) {
+        try {
+            long coins = Math.max(0, user.getCoins());
+            double ratio = withdrawalTiersEnabled() ? withdrawalRatioFor(user, Math.max(1, coins), false) : healthRatioService.getCurrentRatio();
+            double rub = coins * ratio / 100.0;
+            return " (~" + (rub <= 0 ? "0" : rubCompare(rub)) + " ₽)";
+        } catch (Exception e) {
+            log.warn("approxRubExc failed", e);
+            return "";
+        }
+    }
+
+    /** « (~850 ₽)» рядом с EXCASH: курс всегда 100%, 100 EXCASH = 1 ₽. */
+    private String approxRubExcash(AppUser user) {
+        return " (~" + fmtExc(Math.round(Math.max(0, user.getSponsorCoins()) / 100.0)) + " ₽)";
+    }
+
     private String mainMenuText(AppUser user) {
         String role = resolveMenuRole(user, sessionService.get(user.getTelegramId()));
         if (ROLE_USER.equals(role)) {
@@ -32585,9 +32603,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // остальное («Сегодня») в раскрывающейся цитате; «Забери награду недели» остаётся на виду, это действие.
             return "<b>" + escape(user.getNickname()) + "</b> · Ур. " + userService.getLevelNumber(user.getXp())
                     + " «" + escape(userService.getLevelName(user.getXp())) + "»\n\n"
-                    + "💰 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>"
+                    + "💰 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>" + approxRubExc(user)
                     + firstWithdrawalProgressLine(user)
-                    + (sponsorBalanceService.enabled() ? "\n\n💎 <b>" + String.format("%,d", Math.max(0, user.getSponsorCoins())).replace(',', ' ') + " EXCASH</b>" : "")
+                    + (sponsorBalanceService.enabled() ? "\n\n💎 <b>" + String.format("%,d", Math.max(0, user.getSponsorCoins())).replace(',', ' ') + " EXCASH</b>" + approxRubExcash(user) : "")
                     + mainMenuStatusLines(user);
         }
         String title = switch (role) {
