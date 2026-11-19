@@ -2655,6 +2655,51 @@ public class QuestSeeder implements CommandLineRunner {
             questRepository.save(ubrrQuest);
             log.info("[QuestSeeder] Created partner quest: УБРиР Моя Жизнь");
         }
+        // ── Партнёрская миссия «Совкомбанк, кредитная карта 180 дней без %», 19.11.2026 (владелец: 1 500 ₽): банк клиенту не платит, клуб платит 1 500 ₽ на карту лично (вручную менеджером)
+        // после подтверждения банком выдачи карты (покупка не нужна). 30 мест; без статуса партнёра. СОЗДАЁТСЯ ВЫКЛЮЧЕННОЙ: включает владелец в «Управление квестами» после ответа менеджера LeadGid
+        // (правила трафика оффера 7487) и после баннера. Тексты и числа миссии - в PartnerMissions.SOVCOM; в карточке квеста нет рекламных данных (erid, ПСК): они на витрине.
+        ru.gamebot.platform.service.PartnerMission sovcom = ru.gamebot.platform.service.PartnerMissions.SOVCOM;
+        if (questRepository.findFirstByTitleAndGameName(sovcom.questTitle(), sovcom.gameName()).isEmpty()) {
+            Quest sovcomQuest = new Quest();
+            sovcomQuest.setGameName(sovcom.gameName());
+            sovcomQuest.setTitle(sovcom.questTitle());
+            sovcomQuest.setPlatform("Онлайн");
+            sovcomQuest.setDurationDays(90);
+            sovcomQuest.setDurationText("90 дней");
+            sovcomQuest.setRewardXp(0);
+            sovcomQuest.setRewardCoins((int) sovcom.rewardExc());
+            sovcomQuest.setDescription("Награда за квест:\n"
+                    + "✅ 1 500 ₽ на карту лично от клуба\n"
+                    + "✅ Кредитная карта с беспроцентным периодом\n"
+                    + "✅ Выпуск и обслуживание бесплатно\n\n"
+                    + "🔒 Паспорт, коды из СМС и номер карты нам не нужны.\n\n"
+                    + "Как это работает:");
+            sovcomQuest.setInstruction("1️⃣ Оформи заявку на кредитную карту онлайн\n"
+                    + "После «Взять» появится кнопка «Оформить карту» со ссылкой на онлайн-заявку.\n"
+                    + "Заявка должна быть оформлена именно по этой ссылке, иначе банк не засчитает карту. Перед заявкой отключи VPN и прокси. Решение о выдаче карты принимает банк.\n\n"
+                    + "2️⃣ Получи карту\n"
+                    + "Карту выдадут в офисе банка или привезёт курьер. Если банк откажет, награда не положена: она только за выданную карту.\n\n"
+                    + "3️⃣ Пришли подтверждение нашему менеджеру\n"
+                    + "Скриншот новой карты в приложении банка. Номер карты и данные договора закрой.\n\n"
+                    + "4️⃣ Получи 1 500 ₽ от клуба\n"
+                    + "Банк подтверждает выдачу карты в течение 30 дней. После этого менеджер переведёт 1 500 ₽ на карту.");
+            sovcomQuest.setRequirements("ℹ️ Кому подходит\n"
+                    + "Тебе от 20 до 75 лет, ты гражданин РФ, официально работаешь не меньше 4 месяцев на последнем месте, у тебя есть постоянная регистрация не меньше 4 месяцев, "
+                    + "и ты живёшь в городе, где есть отделение банка, или не дальше 70 км от него. Банк клиенту денег за карту не платит: 1 500 ₽ платит клуб. "
+                    + "Условия кредита определяет банк, оформив карту, ты с ними согласен.");
+            sovcomQuest.setModeratorChecklist("1️⃣ Скриншот 1: новая кредитная карта Совкомбанка в приложении банка, номер карты и договора закрыты.\n"
+                    + "2️⃣ Скриншот 2: подтверждение выдачи, на экране видна дата выдачи карты, личные данные закрыты.\n"
+                    + "3️⃣ Карта выдана после заявки по нашей ссылке; подтверждение прислано в течение 30 дней после выдачи.\n"
+                    + "Скриншот не по делу - «Вернуть на доработку». Чужие или случайные картинки - «Отклонить».");
+            sovcomQuest.setParticipantLimit(30);
+            sovcomQuest.setOneTimePerAccount(true);
+            sovcomQuest.setSponsored(true);
+            sovcomQuest.setActive(false);
+            sovcomQuest.setCouncilOnly(false);
+            sovcomQuest.setCreatedAt(LocalDateTime.now());
+            questRepository.save(sovcomQuest);
+            log.info("[QuestSeeder] Created partner quest (inactive): Совкомбанк 180 дней");
+        }
         // ── Партнёрская миссия «Т-Банк Black» (приведи друга на Black), 04.11.2026 ──
         // Владелец 04.11.2026 решил запускать сразу (по правилам, присланным поддержкой банка; ноябрьскую версию PDF не искали): квест создаётся активным. Тексты и числа миссии - в PartnerMissions.T_BLACK.
         ru.gamebot.platform.service.PartnerMission tBlack = ru.gamebot.platform.service.PartnerMissions.T_BLACK;
