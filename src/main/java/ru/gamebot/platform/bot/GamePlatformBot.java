@@ -1176,7 +1176,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Ссылки на разделы бота для постов канала (12.11.2026): <code>t.me/&lt;бот&gt;?start=go_&lt;раздел&gt;</code>. Разделы: quests, shop, squads,
-     *  referrals, goal, picks, fortune, pass, rating, tournament, vpn. Неизвестный раздел или другая ссылка - false (дальше обычный путь /start).
+     *  referrals, goal, picks, fortune, pass, rating, tournament, vpn, ugc (видео-квесты, 19.11.2026). Неизвестный раздел или другая ссылка - false (дальше обычный путь /start).
      *  Новым игрокам (регистрация или онбординг не пройдены) раздел не открывается: они идут обычным путём, ссылка просто приводит в бота. */
     private boolean openSectionFromDeepLink(AppUser user, UserSession session, String text) {
         if (text == null || !text.contains(" ")) return false;
@@ -1196,6 +1196,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 case "rating" -> sendRatingMenu(user);
                 case "tournament" -> sendTournament(user);
                 case "vpn" -> sendVpnScreen(user);
+                case "ugc" -> sendUgcQuestList(user);
                 default -> { return false; }
             }
             session.reset();
