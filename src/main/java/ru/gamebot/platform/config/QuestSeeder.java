@@ -2704,6 +2704,12 @@ public class QuestSeeder implements CommandLineRunner {
         // 30 мест; без статуса партнёра; активна сразу (в момент деплоя). Тексты и числа миссии - в PartnerMissions.OTPCREDIT; в карточке нет рекламных данных (erid, лицензия): они на витрине.
         // Тексты написаны с «₽ на карту», как у остальных банковских квестов: миграция EXCASH (clubExcash) заменит их на EXCASH при старте.
         ru.gamebot.platform.service.PartnerMission otpCredit = ru.gamebot.platform.service.PartnerMissions.OTPCREDIT;
+        // Название квеста изменено с «…150 000 EXCASH» на «…1 500 ₽» (19.11.2026): уже созданный деплоем квест переименовываем, чтобы не плодить дубль и сохранить заявки.
+        questRepository.findFirstByTitleAndGameName("Оформи кредитную карту ОТП Банка и получи 150 000 EXCASH 🎁", otpCredit.gameName()).ifPresent(oq -> {
+            oq.setTitle(otpCredit.questTitle());
+            questRepository.save(oq);
+            log.info("[QuestSeeder] Renamed partner quest: ОТП кредитка 120 дней -> {}", otpCredit.questTitle());
+        });
         if (questRepository.findFirstByTitleAndGameName(otpCredit.questTitle(), otpCredit.gameName()).isEmpty()) {
             Quest otpCreditQuest = new Quest();
             otpCreditQuest.setGameName(otpCredit.gameName());
