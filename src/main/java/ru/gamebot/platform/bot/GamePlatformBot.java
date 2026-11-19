@@ -10848,6 +10848,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private String questCardBanner(Quest quest) {
+        // UGC (19.11.2026, владелец): у каждого видео-квеста свой баннер по площадке; файлов нет - карточка без картинки, как раньше
+        if (QuestService.isUgcQuest(quest) && !quest.isSponsored()) {
+            String title = quest.getTitle() == null ? "" : quest.getTitle().toLowerCase(java.util.Locale.ROOT);
+            String ugcBanner = title.contains("youtube") ? "ugc_youtube_banner.jpg"
+                    : title.contains("tiktok") ? "ugc_tiktok_banner.jpg"
+                    : title.contains("instagram") ? "ugc_instagram_banner.jpg" : null;
+            if (ugcBanner != null && getClass().getResource("/" + ugcBanner) != null) return ugcBanner;
+        }
         if (isGameOfferQuest(quest) && getClass().getResource("/wows_quest_banner.jpg") != null) return "wows_quest_banner.jpg";
         ru.gamebot.platform.service.PartnerMission bannerPm = ru.gamebot.platform.service.PartnerMissions.forQuest(quest);
         return bannerPm != null && bannerPm.bannerResource() != null && getClass().getResource("/" + bannerPm.bannerResource()) != null ? bannerPm.bannerResource() : null;
@@ -10896,8 +10904,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? " (за 1-е сегодня, дальше меньше)"
                 : weeklyLimitNote(questService.weeklyLimitStatus(user, quest));
         boolean tickets = !quest.isSponsored() && !"UGC".equalsIgnoreCase(quest.getGameName()) && quest.getTicketReward() > 0;
+        // UGC (19.11.2026, владелец): на карточке показываем максимальную награду по просмотрам (25 000), а не базовую ступень; реальная выплата - по ступени просмотров, модератором
+        boolean ugcMax = QuestService.isUgcQuest(quest) && !quest.isSponsored();
+        long ugcMaxCoins = QuestService.UGC_VIEW_TIER_COINS[QuestService.UGC_VIEW_TIER_COINS.length - 1];
         String rewardHead = sponsorBalanceService.applies(quest)
                 ? "💎 <b>+" + fmtExc(coins) + " EXCASH</b> (≈ " + fmtExc(Math.round(coins / 100.0)) + " ₽)"
+                : ugcMax
+                ? "🏆 <b>до +" + fmtExc(ugcMaxCoins) + " EXC</b>" + starsNote(ugcMaxCoins)
                 : "🏆 <b>+" + fmtExc(coins) + " EXC</b>" + starsNote(coins);
         return rewardHead + " · +" + quest.getRewardXp() + " XP"
                 + (tickets ? " · 🎟 +" + quest.getTicketReward() + " " + ticketsWord(quest.getTicketReward()) : "")

@@ -112,6 +112,8 @@ function SponsorDescription({ text, mission, instruction, requirements }) {
   );
 }
 
+// Баннеры UGC-квестов по площадке (quest.platform): youtube есть, tiktok и instagram появятся с одобрением картинок (onError прячет отсутствующий файл)
+const UGC_BANNERS = { youtube: '/ugc/youtube.jpg', tiktok: '/ugc/tiktok.jpg', instagram: '/ugc/instagram.jpg' };
 const PARTNER_BANNERS = { otp: '/sponsored/otp.jpg', vtb: '/sponsored/vtb.jpg', alfa: '/sponsored/alfa.jpg', fora: '/sponsored/fora.jpg', psb: '/sponsored/psb.jpg', ubrr: '/sponsored/ubrr.jpg', tblack: '/sponsored/tblack.jpg', tmobile: '/sponsored/tmobile.jpg' };
 
 function LinkPill({ url }) {
@@ -601,7 +603,7 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
           {!(q.rewardCoins === 0 && q.bankRewardRub > 0) && (
           q.sponsorReward
             ? <span className="reward-exc">💎 {q.rewardCoins.toLocaleString()} EXCASH <span style={{ opacity: 0.7 }}>(≈ {Math.round(q.rewardCoins / 100).toLocaleString('ru-RU')} ₽)</span></span>
-            : <span className="reward-exc"><i className="ti ti-coin"></i> {q.rewardCoins.toLocaleString()} EXC{fundRatio != null && <> ({starsApprox(q.rewardCoins, fundRatio)})</>}</span>
+            : <span className="reward-exc"><i className="ti ti-coin"></i> {q.gameName === 'UGC' && !q.sponsored ? 'до 25 000' : q.rewardCoins.toLocaleString()} EXC{fundRatio != null && <> ({starsApprox(q.gameName === 'UGC' && !q.sponsored ? 25000 : q.rewardCoins, fundRatio)})</>}</span>
           )}
           {(details[q.id]?.rewardDiminished ?? q.rewardDiminished) && (
             <span className="reward-diminished">×½ лимит недели</span>
@@ -644,7 +646,12 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
               />
             </>
           ) : (
-            <p className="quest-desc">{renderTextWithLinks(details[q.id]?.description ?? q.description)}</p>
+            <>
+              {q.gameName === 'UGC' && UGC_BANNERS[String(q.platform || '').toLowerCase()] && (
+                <img className="sponsor-banner" src={UGC_BANNERS[String(q.platform).toLowerCase()]} alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+              )}
+              <p className="quest-desc">{renderTextWithLinks(details[q.id]?.description ?? q.description)}</p>
+            </>
           )}
           {!(brawlAutoVerify && !externalAutoApprove) && !details[q.id]?.missionQuest && details[q.id]?.instruction && (
             <>
