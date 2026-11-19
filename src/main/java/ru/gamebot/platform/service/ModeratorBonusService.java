@@ -28,15 +28,22 @@ public class ModeratorBonusService {
         public boolean ok() { return error == null; }
     }
 
+    /** Обычное начисление модератором: с лимитами. */
     @Transactional
     public Result grant(AppUser moderator, Long targetTelegramId, long xp, long exc, long tickets, String comment) {
+        return grant(moderator, targetTelegramId, xp, exc, tickets, comment, false);
+    }
+
+    /** unlimitedForAdmin = true (19.11.2026, владелец): админ, начисляющий через экран «Бонус игроку», лимитов не имеет, как в админском «🎁 Бонус»; причина и журнал остаются. */
+    @Transactional
+    public Result grant(AppUser moderator, Long targetTelegramId, long xp, long exc, long tickets, String comment, boolean unlimitedForAdmin) {
         if (targetTelegramId == null || targetTelegramId.equals(moderator.getTelegramId())) {
             return new Result("Нельзя начислять бонус самому себе.", null);
         }
         Optional<AppUser> target = userService.findByTelegramId(targetTelegramId);
         if (target.isEmpty()) return new Result("Игрок не найден.", null);
         if (xp < 0 || exc < 0 || tickets < 0 || xp + exc + tickets == 0) return new Result("Укажите, что начислить: XP, EXC или билеты.", null);
-        if (xp > MAX_XP_PER_GRANT || exc > MAX_EXC_PER_GRANT || tickets > MAX_TICKETS_PER_GRANT) {
+        if (!unlimitedForAdmin && (xp > MAX_XP_PER_GRANT || exc > MAX_EXC_PER_GRANT || tickets > MAX_TICKETS_PER_GRANT)) {
             return new Result("За одно начисление не больше " + MAX_XP_PER_GRANT + " XP, " + MAX_EXC_PER_GRANT + " EXC и " + MAX_TICKETS_PER_GRANT + " билетов.", null);
         }
         String reason = comment == null ? "" : comment.trim();
@@ -46,7 +53,7 @@ public class ModeratorBonusService {
         LocalDateTime since = LocalDateTime.now().minusHours(24);
         long usedExc = logRepository.sumExcSince(moderator.getTelegramId(), since);
         long usedXp = logRepository.sumXpSince(moderator.getTelegramId(), since);
-        if (usedExc + exc > MAX_EXC_PER_DAY || usedXp + xp > MAX_XP_PER_DAY) {
+        if (!unlimitedForAdmin && (usedExc + exc > MAX_EXC_PER_DAY || usedXp + xp > MAX_XP_PER_DAY)) {
             return new Result("Суточный лимит исчерпан: за 24 часа не больше " + MAX_EXC_PER_DAY + " EXC и " + MAX_XP_PER_DAY
                     + " XP (уже выдано " + usedExc + " EXC и " + usedXp + " XP). Остальное может начислить админ.", null);
         }

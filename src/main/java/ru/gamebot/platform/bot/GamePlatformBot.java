@@ -8602,11 +8602,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "Игрок: <b>" + escape(displayUserName(target)) + "</b> • " + escape(displayTag(target)) + " • ID <code>" + target.getTelegramId() + "</code>\n\n"
                         + "Отправьте одним сообщением: <code>XP EXC БИЛЕТЫ причина</code>\n"
                         + "Пример: <code>50 100 1 Помог в поддержке</code>\n\n"
-                        + "Лимиты: за раз до " + ru.gamebot.platform.service.ModeratorBonusService.MAX_XP_PER_GRANT + " XP, "
+                        + (adminService.isAdmin(mod.getTelegramId())
+                        ? "Лимитов для админа нет. Причина обязательна, админы видят каждое начисление."
+                        : "Лимиты: за раз до " + ru.gamebot.platform.service.ModeratorBonusService.MAX_XP_PER_GRANT + " XP, "
                         + ru.gamebot.platform.service.ModeratorBonusService.MAX_EXC_PER_GRANT + " EXC, "
                         + ru.gamebot.platform.service.ModeratorBonusService.MAX_TICKETS_PER_GRANT + " 🎟; за 24 часа до "
                         + ru.gamebot.platform.service.ModeratorBonusService.MAX_XP_PER_DAY + " XP и "
-                        + ru.gamebot.platform.service.ModeratorBonusService.MAX_EXC_PER_DAY + " EXC. Причина обязательна, админы видят каждое начисление.",
+                        + ru.gamebot.platform.service.ModeratorBonusService.MAX_EXC_PER_DAY + " EXC. Причина обязательна, админы видят каждое начисление."),
                 cancelKeyboard());
     }
 
@@ -8622,7 +8624,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         ru.gamebot.platform.service.ModeratorBonusService.Result r;
         try {
-            r = moderatorBonusService.grant(mod, targetId, xp, exc, tickets, parts[3]);
+            r = moderatorBonusService.grant(mod, targetId, xp, exc, tickets, parts[3], adminService.isAdmin(mod.getTelegramId()));
         } catch (Exception e) {
             log.error("Moderator bonus failed: moderator {} target {}", mod.getTelegramId(), targetId, e);
             alertAdminsPlain("⚠️ Ошибка начисления бонуса модератором " + mod.getTelegramId() + " игроку " + targetId + ": " + escape(String.valueOf(e.getMessage())));
