@@ -1353,9 +1353,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleActivationCheck(callbackQuery, user);
             return;
         }
-        if ("ugc:banner".equals(data)) {
+        if (data.startsWith("ugc:banner")) {
             answerSilently(callbackQuery.getId());
-            sendUgcBanner(user.getTelegramId());
+            sendUgcBanner(user.getTelegramId(), data.startsWith("ugc:banner:") ? parseLong(data.substring("ugc:banner:".length())) : null);
+            return;
+        }
+        // «⬅️ Назад» под видео-баннером (19.11.2026, владелец): снова открывает карточку квеста, сообщение с видео убирается
+        if (data.startsWith("ugc:back:")) {
+            Long backQuestId = parseLong(data.substring("ugc:back:".length()));
+            Quest backQuest = backQuestId == null ? null : questService.getQuest(backQuestId);
+            if (backQuest == null) {
+                answerSilently(callbackQuery.getId());
+            } else {
+                handleQuestView(callbackQuery, user, session,
+                        encodeGameToken(backQuest.getGameName()) + ":" + categoryToken(backQuest.getCategory()) + ":" + backQuest.getId());
+            }
+            if (callbackQuery.getMessage() != null) {
+                deleteMessageQuietly(callbackQuery.getMessage().getChatId(), callbackQuery.getMessage().getMessageId());
+            }
             return;
         }
         if (data.startsWith("dtasks:go:")) {
@@ -10135,7 +10150,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         // UGC (19.11.2026, владелец): видео-баннер EGC, который нужно вставить в ролик, игрок получает файлом по кнопке (пока файла в ресурсах нет, кнопки нет)
         if ("UGC".equalsIgnoreCase(quest.getGameName()) && ugcBannerAvailable()) {
-            buttons.add(keyboardFactory.callback("🎬 Скачать баннер", "ugc:banner"));
+            buttons.add(keyboardFactory.callback("🎬 Скачать баннер", "ugc:banner:" + quest.getId()));
         }
         if (nextQuestData != null) {
             buttons.add(keyboardFactory.callback("➡️ Следующий квест", nextQuestData));
@@ -14313,7 +14328,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Присылает игроку видео-баннер файлом (первая отправка грузит файл, дальше - по file_id из Telegram). */
-    private void sendUgcBanner(Long chatId) {
+    private void sendUgcBanner(Long chatId, Long questId) {
         try {
             SendVideo video = new SendVideo();
             video.setChatId(chatId.toString());
@@ -14329,6 +14344,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             video.setCaption("🎬 <b>Баннер EGC для твоего ролика</b>\n\nСохрани видео и вставь его в свой ролик так, чтобы оно начиналось на 6-й секунде: целиком, без обрезки и ускорения.");
             video.setParseMode("HTML");
             video.setSupportsStreaming(true);
+            if (questId != null) {
+                video.setReplyMarkup(keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("⬅️ Назад", "ugc:back:" + questId)))));
+            }
             org.telegram.telegrambots.meta.api.objects.Message sent = execute(video);
             if (cached == null && sent.getVideo() != null) ugcBannerFileId = sent.getVideo().getFileId();
         } catch (Exception e) {
@@ -14597,7 +14615,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 || (data.startsWith("onboarding:") && !data.equals("onboarding:choice") && !data.equals("onboarding:games") && !data.equals("onboarding:cards"))
                 || data.startsWith("dtasks:go") || data.startsWith("battlepass:buy:") || data.startsWith("redbtn:") || data.startsWith("nudgefb:")
                 || data.startsWith("report:submit:") || data.startsWith("review:") || data.startsWith("gemdonate:confirmton:")
-                || data.startsWith("council:") || data.startsWith("case:") || data.equals("noop") || data.equals("ugc:banner");
+                || data.startsWith("council:") || data.startsWith("case:") || data.equals("noop") || data.startsWith("ugc:");
     }
 
     /** Метка в navScreens: экран с картинкой. Такие сообщения чистка ленты НЕ удаляет: после удаления клиент Telegram сбрасывает кэш картинки,
