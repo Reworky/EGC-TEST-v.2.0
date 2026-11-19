@@ -293,6 +293,7 @@
   color: rgba(255,255,255,0.75);
   line-height: 1.55;
   margin: 4px 0 12px;
+  white-space: pre-line;
 }
 
 .quest-link-pill {

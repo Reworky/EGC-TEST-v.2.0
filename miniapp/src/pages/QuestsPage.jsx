@@ -652,6 +652,12 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
               <p className="quest-instruction">{renderTextWithLinks(details[q.id].instruction)}</p>
             </>
           )}
+          {q.gameName === 'UGC' && (
+            <a className="quest-btn" style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 8 }}
+              href="/ugc/egc-banner.mp4" download="EGC-banner.mp4" target="_blank" rel="noopener noreferrer">
+              🎬 Скачать баннер
+            </a>
+          )}
           {!(brawlAutoVerify && !externalAutoApprove) && !details[q.id]?.missionQuest && details[q.id]?.requirements && (
             <>
               <div className="quest-section-title">
