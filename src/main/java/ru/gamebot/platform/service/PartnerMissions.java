@@ -11,17 +11,17 @@ public final class PartnerMissions {
     private PartnerMissions() {}
 
     /** Ссылка на онлайн-заявку на карту ОТП (владелец, 15.11.2026): игрок получает её сразу после «Взять», без ожидания менеджера. Только у квеста ОТП. */
-    public static final String OTP_APPLY_LINK = "https://karty-bonus.netlify.app/#otp";
+    public static final String OTP_APPLY_LINK = "https://karty-bonus.pages.dev/#otp";
     /** Ссылка на заявку Киберкарты ВТБ (витрина cards-landing, карточка vtb; оффер LeadGid 7040). */
-    public static final String VTB_APPLY_LINK = "https://karty-bonus.netlify.app/#vtb";
+    public static final String VTB_APPLY_LINK = "https://karty-bonus.pages.dev/#vtb";
     /** Ссылка на заявку Апельсиновой карты Альфа-Банка (витрина cards-landing, карточка alfa; оффер LeadGid 7049). */
-    public static final String ALFA_APPLY_LINK = "https://karty-bonus.netlify.app/#alfa";
+    public static final String ALFA_APPLY_LINK = "https://karty-bonus.pages.dev/#alfa";
     /** Ссылка на заявку карты «Все включено» Фора-Банка (витрина cards-landing, карточка fora; оффер LeadGid 6236). */
-    public static final String FORA_APPLY_LINK = "https://karty-bonus.netlify.app/#fora";
+    public static final String FORA_APPLY_LINK = "https://karty-bonus.pages.dev/#fora";
     /** Ссылка на заявку карты «Твой кэшбэк» ПСБ (витрина cards-landing, карточка psb; оффер LeadGid 7249). */
-    public static final String PSB_APPLY_LINK = "https://karty-bonus.netlify.app/#psb";
+    public static final String PSB_APPLY_LINK = "https://karty-bonus.pages.dev/#psb";
     /** Ссылка на заявку карты «Моя Жизнь» УБРиР (витрина cards-landing, карточка ubrir; оффер LeadGid 5393). */
-    public static final String UBRR_APPLY_LINK = "https://karty-bonus.netlify.app/#ubrir";
+    public static final String UBRR_APPLY_LINK = "https://karty-bonus.pages.dev/#ubrir";
 
     private static final String[] COMMON_STAGE_NAMES = {"Закажи карту", "Первый платёж", "Докажи", "Банк платит"};
     private static final String COMMON_STAGE3 = "Покупка может висеть «В обработке» 1–3 дня. Когда статус изменится, пришли отчёт.";
