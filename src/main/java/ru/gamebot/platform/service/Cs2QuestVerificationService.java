@@ -81,9 +81,21 @@ public class Cs2QuestVerificationService {
 
     @Transactional
     public void linkAccount(AppUser user, long steamId64) {
+        Long previous = user.getCs2SteamId64();
         user.setCs2SteamId64(steamId64);
         user.setCs2LinkedAt(LocalDateTime.now());
         appUserRepository.save(user);
+        // Другой Steam-аккаунт (19.11.2026, жалоба игрока 1459489472: база 124 матча от старого аккаунта, у нового ~1 - матч «25 убийств» не засчитывался, а при более сильном новом аккаунте
+        // накопительные квесты засчитались бы сразу): базу открытых заявок CS2 сбрасываем - следующий опрос снимет её заново уже по новому аккаунту.
+        if (previous != null && !previous.equals(steamId64) && user.getId() != null) {
+            for (QuestSubmission s : questSubmissionRepository.findInProgressCs2AutoVerify()) {
+                if (s.getUser() != null && user.getId().equals(s.getUser().getId())) {
+                    s.setCs2BaselineValue(null);
+                    s.setCs2ProgressCount(0);
+                    questSubmissionRepository.save(s);
+                }
+            }
+        }
     }
 
     /** Точка входа шедулера. Не @Transactional — последовательные сетевые вызовы, как у остальных Steam/Clash-сервисов. */
