@@ -25,11 +25,11 @@ public class SponsoredQuestsService {
             new Category("mobile", "📱 Мобильная связь", "Мобильная связь"),
             new Category("gigs", "💼 Подработка", "Подработка"));
 
-    /** Раздел спонсорского квеста: партнёрские миссии банка - по ключу (Т-Мобайл - связь, остальные - дебетовые карты); остальные - по словам в названии
+    /** Раздел спонсорского квеста: партнёрские миссии банка - по ключу (Т-Мобайл - связь, Совкомбанк - кредитные карты, остальные - дебетовые карты); остальные - по словам в названии
      *  («кредит», «подработ», «связь»/«SIM»/«тариф»/«Мегафон», «дебетов»); всё прочее (CPI-офферы, приложения, игры) - «Игровые партнёры». */
     public static String categoryOf(Quest q) {
         PartnerMission pm = PartnerMissions.forQuest(q);
-        if (pm != null) return "tmobile".equals(pm.key()) ? "mobile" : "debit";
+        if (pm != null) return "tmobile".equals(pm.key()) ? "mobile" : "sovcom".equals(pm.key()) ? "credit" : "debit";
         String t = ((q.getTitle() == null ? "" : q.getTitle()) + " " + (q.getGameName() == null ? "" : q.getGameName())).toLowerCase(java.util.Locale.ROOT);
         if (t.contains("кредит")) return "credit";
         if (t.contains("подработ")) return "gigs";
