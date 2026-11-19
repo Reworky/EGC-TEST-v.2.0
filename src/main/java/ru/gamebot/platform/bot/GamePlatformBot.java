@@ -5857,6 +5857,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private String finalTextFor(ru.gamebot.platform.service.PartnerMission pm, QuestSubmission sub) {
+        if (pm.clubExcash() && pm.clubRewardRub() > 0 && sponsorBalanceService.enabled()) {
+            long ex = pm.clubRewardRub() * 100L;
+            return "🏆 <b>Миссия выполнена!</b>\n\nБанк подтвердил карту. Мы начислили тебе 💎 <b>+" + fmtExc(ex) + " EXCASH</b> (≈ " + fmtExc(pm.clubRewardRub())
+                    + " ₽): выводи на карту или по СБП по курсу 100%, без лимитов.";
+        }
         return bonusIsItem(pm, sub) && pm.finalTextItem() != null ? pm.finalTextItem() : pm.finalText().replace("{bonus}", fmtExc(bonusFor(pm, sub)));
     }
 
@@ -10467,20 +10472,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         StringBuilder sb = new StringBuilder();
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         String banner;
+        boolean clubExcashShown = pm.clubExcash() && pm.clubRewardRub() > 0 && sponsorBalanceService.enabled();
+        long clubExcashAmt = pm.clubRewardRub() * 100L;
         if (bonusPaid) {
             sb.append(finalTextFor(pm, sub));
-            rows.add(List.of(keyboardFactory.callback("💸 Вывести", "shop:withdraw"), keyboardFactory.callback("🎯 Ещё квесты", "menu:quests")));
+            rows.add(List.of(clubExcashShown ? keyboardFactory.callback("💎 Вывести EXCASH", "spwd:start") : keyboardFactory.callback("💸 Вывести", "shop:withdraw"),
+                    keyboardFactory.callback("🎯 Ещё квесты", "menu:quests")));
             banner = pm.finalBanner();
+        } else if (st == SubmissionStatus.APPROVED && sub.getBankDeclinedAt() != null) {
+            sb.append("❌ <b>Банк не подтвердил карту</b>\n🎮 Миссия: ").append(pm.missionTitle()).append("\n\nНаграда не начислена. Если считаешь, что это ошибка, напиши менеджеру.");
+            rows.add(List.of(partnerManagerButton(pm, sub, "💬 Написать менеджеру", "Вопрос по квесту «Миссия: " + pm.missionTitle() + "»", "почему банк не подтвердил карту")));
+            banner = null;
         } else if (st == SubmissionStatus.APPROVED) {
             sb.append("✅ <b>").append(tomobile ? "Пополнение проверено" : "Первая покупка проверена").append("</b>\n")
                     .append("🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")
                     .append(reward > 0 ? "🪙 <b>+" + fmtExc(reward) + " EXC</b> уже у тебя." : "")
                     .append(ru.gamebot.platform.service.PartnerMissions.grantsPartner(pm) ? (reward > 0 ? " " : "") + "Партнёрский статус и курс вывода 100% на все твои EXC включатся, когда банк выплатит бонус." : "").append("\n\n")
-                    .append("<b>Что дальше?</b>\nБанк выплатит свой бонус не сразу. Когда деньги придут, напиши менеджеру: он проверит и ")
-                    .append(bonusItem ? "подарит <b>" + escape(pm.bonusItem()) + "</b>."
+                    .append(clubExcashShown
+                            ? "<b>Что дальше?</b>\nБанк подтверждает карту не сразу (обычно до 30 дней). Когда подтвердит, менеджер начислит тебе 💎 <b>+" + fmtExc(clubExcashAmt) + " EXCASH</b> (≈ " + fmtExc(pm.clubRewardRub())
+                                + " ₽): их можно вывести на карту или по СБП по курсу 100%. Пока награда ждёт на экране «Баланс»."
+                            : "<b>Что дальше?</b>\nБанк выплатит свой бонус не сразу. Когда деньги придут, напиши менеджеру: он проверит и ")
+                    .append(clubExcashShown ? "" : bonusItem ? "подарит <b>" + escape(pm.bonusItem()) + "</b>."
                             : "начислит ещё <b>" + fmtExc(bonus) + " EXC</b> (≈ " + fmtExc(bonus / 100) + " ₽).");
             rows.add(List.of(partnerManagerButton(pm, sub, "💬 Написать менеджеру", "Вопрос по квесту «Миссия: " + pm.missionTitle() + "»",
-                    "банк выплатил бонус, проверьте" + (bonusItem ? " и подарите " + pm.bonusItem() : " и начислите EXC"))));
+                    clubExcashShown ? "банк подтвердил карту, проверьте и начислите EXCASH"
+                            : "банк выплатил бонус, проверьте" + (bonusItem ? " и подарите " + pm.bonusItem() : " и начислите EXC"))));
             rows.add(List.of(keyboardFactory.callback("🎯 Пока ждёшь: другие квесты", "menu:quests")));
             banner = pm.stage4Banner();
         } else if (st == SubmissionStatus.REJECTED) {
