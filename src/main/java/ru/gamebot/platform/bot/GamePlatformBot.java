@@ -9863,6 +9863,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         keyboardFactory.callback(trim(nextGame, 16) + " ▶️", "quests:flip:" + encodeGameToken(nextGame))));
             }
         }
+        // UGC (19.11.2026, владелец): «Мои UGC-квесты» - проверить взятые ролики и их статус
+        if ("UGC".equalsIgnoreCase(gameName)) {
+            keyboardRows.add(List.of(keyboardFactory.callback(myQuestsLabel(user, "ugc"), "myquests:list:ugc")));
+        }
         keyboardRows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", backData),
                 keyboardFactory.callback("🏠 Меню", "menu:main")));
@@ -11671,17 +11675,26 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return q.isSponsored() || q.isExternalAutoApprove();
     }
 
-    /** «Мои квесты»: kind = null - все, "game" - только игровые, "sponsored" - только спонсорские (15.11.2026, владелец). */
+    /** Подходит ли квест под раздел «Мои квесты»: null - любой, "ugc" - UGC-квесты (ролики), "sponsored" - спонсорские, иначе игровые (без UGC). */
+    private static boolean matchesMyQuestsKind(String kind, Quest q) {
+        if (kind == null) return true;
+        boolean ugc = QuestService.isUgcQuest(q) && !q.isSponsored();
+        if ("ugc".equals(kind)) return ugc;
+        if ("sponsored".equals(kind)) return isSponsoredKind(q);
+        return !isSponsoredKind(q) && !ugc;
+    }
+
+    /** «Мои квесты»: kind = null - все, "game" - только игровые, "sponsored" - только спонсорские (15.11.2026, владелец), "ugc" - только UGC (19.11.2026). */
     private void sendMySubmissions(AppUser user, String kind) {
         List<QuestSubmission> submissions = questService.getUserSubmissions(user).stream()
-                .filter(sb -> kind == null || ("sponsored".equals(kind) == isSponsoredKind(sb.getQuest())))
+                .filter(sb -> matchesMyQuestsKind(kind, sb.getQuest()))
                 .toList();
         sessionService.get(user.getTelegramId()).getData().put("myquests_kind", kind == null ? "" : kind);
-        String listBack = "game".equals(kind) ? "quests:section:gaming" : "sponsored".equals(kind) ? "quests:section:sponsored" : "menu:main";
-        String title = "game".equals(kind) ? "Мои игровые квесты" : "sponsored".equals(kind) ? "Мои спонсорские квесты" : "Мои квесты";
+        String listBack = "game".equals(kind) ? "quests:section:gaming" : "sponsored".equals(kind) ? "quests:section:sponsored" : "ugc".equals(kind) ? "quests:section:ugc" : "menu:main";
+        String title = "game".equals(kind) ? "Мои игровые квесты" : "sponsored".equals(kind) ? "Мои спонсорские квесты" : "ugc".equals(kind) ? "Мои UGC-квесты" : "Мои квесты";
         if (submissions.isEmpty()) {
             sendText(user.getTelegramId(),
-                    "📭 " + ("game".equals(kind) ? "У вас нет игровых квестов в работе." : "sponsored".equals(kind) ? "У вас нет спонсорских квестов в работе." : "У вас нет квестов в работе.")
+                    "📭 " + ("game".equals(kind) ? "У вас нет игровых квестов в работе." : "sponsored".equals(kind) ? "У вас нет спонсорских квестов в работе." : "ugc".equals(kind) ? "У вас нет UGC-квестов: ни в работе, ни на проверке." : "У вас нет квестов в работе.")
                             + (slotsLineFor(user, kind).isEmpty() ? "" : "\n" + slotsLineFor(user, kind)) + "\n\nОткройте раздел квестов и возьмите первое задание.",
                     backMenuKeyboard(listBack));
             return;
@@ -11702,12 +11715,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Строка «Слоты квестов» только там, где слоты действуют: у спонсорских квестов нет слотов и лимитов (15.11.2026, владелец). */
     private String slotsLineFor(AppUser user, String kind) {
-        return "sponsored".equals(kind) ? "" : questSlotsLine(user);
+        return "sponsored".equals(kind) || "ugc".equals(kind) ? "" : questSlotsLine(user);
     }
 
     /** Куда ведёт «📂 Мои квесты» с экрана конкретного квеста: у спонсорского - список спонсорских (без слотов), у остальных - общий. */
     private String myQuestsCallbackFor(Quest quest) {
-        return quest != null && isSponsoredKind(quest) ? "myquests:list:sponsored" : "menu:myquests";
+        return quest != null && isSponsoredKind(quest) ? "myquests:list:sponsored"
+                : quest != null && QuestService.isUgcQuest(quest) ? "myquests:list:ugc" : "menu:myquests";
     }
 
     /** Подпись кнопки «📂 Мои игровые квесты» / «📂 Мои спонсорские квесты» с числом квестов в работе. */
@@ -11715,11 +11729,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long n = 0;
         try {
             n = questService.getUserSubmissions(user).stream()
-                    .filter(sb -> "sponsored".equals(kind) == isSponsoredKind(sb.getQuest())).count();
+                    .filter(sb -> matchesMyQuestsKind(kind, sb.getQuest())).count();
         } catch (Exception e) {
             log.warn("myQuestsLabel failed", e);
         }
-        return "📂 " + ("game".equals(kind) ? "Мои игровые квесты" : "Мои спонсорские квесты") + (n > 0 ? " · " + n : "");
+        return "📂 " + ("game".equals(kind) ? "Мои игровые квесты" : "ugc".equals(kind) ? "Мои UGC-квесты" : "Мои спонсорские квесты") + (n > 0 ? " · " + n : "");
     }
 
     private void sendMyQuestCard(AppUser user, Long submissionId) {
