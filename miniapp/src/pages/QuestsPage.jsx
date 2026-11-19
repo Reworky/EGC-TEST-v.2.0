@@ -114,7 +114,7 @@ function SponsorDescription({ text, mission, instruction, requirements }) {
 
 // Баннеры UGC-квестов по площадке (quest.platform): youtube есть, tiktok и instagram появятся с одобрением картинок (onError прячет отсутствующий файл)
 const UGC_BANNERS = { youtube: '/ugc/youtube.jpg', tiktok: '/ugc/tiktok.jpg', instagram: '/ugc/instagram.jpg' };
-const PARTNER_BANNERS = { otp: '/sponsored/otp.jpg', vtb: '/sponsored/vtb.jpg', alfa: '/sponsored/alfa.jpg', fora: '/sponsored/fora.jpg', psb: '/sponsored/psb.jpg', ubrr: '/sponsored/ubrr.jpg', tblack: '/sponsored/tblack.jpg', tmobile: '/sponsored/tmobile.jpg' };
+const PARTNER_BANNERS = { otp: '/sponsored/otp.jpg', vtb: '/sponsored/vtb.jpg', alfa: '/sponsored/alfa.jpg', fora: '/sponsored/fora.jpg', psb: '/sponsored/psb.jpg', ubrr: '/sponsored/ubrr.jpg', sovcom: '/sponsored/sovcom.jpg', tblack: '/sponsored/tblack.jpg', tmobile: '/sponsored/tmobile.jpg' };
 
 function LinkPill({ url }) {
   const [copied, setCopied] = useState(false);
