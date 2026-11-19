@@ -565,7 +565,7 @@ public class QuestService {
         }
         // Купленное снятие кулдауна открывает квест с кулдауном: оно списывается на самом взятии (takeQuestChecked).
         boolean cooldownBlocks = getCooldownHoursLeft(user, quest) > 0 && !sinkShopService.hasCooldownBypass(user, quest.getGameName());
-        if (activeSlots >= maxSlots || cooldownBlocks) {
+        if ((activeSlots >= maxSlots && !isCumulativeQuest(quest)) || cooldownBlocks) {
             return QuestListState.BLOCKED;
         }
         if (getTakeCooldownMinutesLeft(user) > 0) {
@@ -763,7 +763,7 @@ public class QuestService {
         if (!quest.isSponsored() && !quest.isExternalAutoApprove() && !quest.isRepeatableNoCooldownEligible()) {
             long activeSlots = countActiveDrafts(lockedUser);
             long maxSlots = sinkShopService.getMaxQuestSlots(lockedUser);
-            if (activeSlots >= maxSlots) {
+            if (activeSlots >= maxSlots && !isCumulativeQuest(quest)) {
                 return QuestActionResult.of(QuestActionStatus.SLOTS_FULL, 0);
             }
 
@@ -1949,8 +1949,34 @@ public class QuestService {
     /** Занятые слоты квестов: спонсорские и партнёрские квесты (ignoresQuestLimits) не считаются, иначе открытый на недели квест блокировал бы игроку обычные. */
     public long countActiveDrafts(AppUser user) {
         return activeDraftSubmissions(user)
-                .filter(s -> s.getQuest() == null || !ignoresQuestLimits(s.getQuest()))
+                .filter(s -> s.getQuest() == null || (!ignoresQuestLimits(s.getQuest()) && !isCumulativeQuest(s.getQuest())))
                 .count();
+    }
+
+    /** Накопительный квест (19.11.2026, владелец): прогресс копится днями по счётчику игры (дельта с момента взятия: убийства, победы, донаты, число боёв...) и проверяется автоматически.
+     *  Слот он не занимает и для взятия свободный слот не нужен: иначе один такой квест на 5 дней оставлял игроку с единственным слотом без других квестов (жалоба игрока 7646226814).
+     *  Кулдаун игры и пауза «1 квест в час» на него по-прежнему действуют. Квесты «за один матч» и «достигни уровня/ранга» сюда не входят. */
+    public static boolean isCumulativeQuest(Quest quest) {
+        if (quest == null) return false;
+        if (quest.getCs2VerifyType() != null) {
+            return switch (quest.getCs2VerifyType()) {
+                case KILLS, WINS, MVPS, HEADSHOTS, BOMBS_PLANTED, BOMBS_DEFUSED, MATCHES_PLAYED, STAT_DELTA -> true;
+                default -> false;
+            };
+        }
+        if (quest.getClashRoyaleVerifyType() != null) {
+            return switch (quest.getClashRoyaleVerifyType()) {
+                case WINS, THREE_CROWN_WINS, WAR_DAY_WINS, DONATIONS, BATTLE_COUNT -> true;
+                default -> false;
+            };
+        }
+        if (quest.getClashVerifyType() != null) {
+            return switch (quest.getClashVerifyType()) {
+                case ATTACK_WINS, DEFENSE_WINS, WAR_STARS, DONATIONS -> true;
+                default -> false;
+            };
+        }
+        return quest.getBrawlVerifyType() == ru.gamebot.platform.domain.enums.BrawlVerifyType.BATTLES;
     }
 
     /** Все квесты игрока в работе (и партнёрские): для счётчика «Мои». */

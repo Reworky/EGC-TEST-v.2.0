@@ -10069,7 +10069,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 && !latestExpired;
         long activeSlots = questService.countActiveDrafts(user);
         long maxSlots = sinkShopService.getMaxQuestSlots(user);
-        boolean slotsFull = !noCooldownQuest && activeSlots >= maxSlots && !hasActiveSubmission;
+        boolean slotsFull = !noCooldownQuest && activeSlots >= maxSlots && !hasActiveSubmission && !QuestService.isCumulativeQuest(quest);
         boolean gameCooldown = !noCooldownQuest && !hasActiveSubmission && cooldownLeft == 0 && questService.isCooldownActive(user, quest);
         // Разовый квест уже выполнен: честно «Выполнено» вместо кнопки «Взять» (повторно взять нельзя - ALREADY_APPROVED)
         boolean doneOnce = latest != null && latest.getStatus() == SubmissionStatus.APPROVED
