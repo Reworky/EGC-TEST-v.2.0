@@ -9750,7 +9750,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             .thenComparing(Quest::getTitle, String.CASE_INSENSITIVE_ORDER);
 
     private void sendQuestList(AppUser user, String gameName, String category) {
-        sendQuestList(user, gameName, category, "quests:game:" + encodeGameToken(gameName));
+        // UGC (19.11.2026): список открывается с главного меню; «Назад» из карточки ведёт в него, а не на «игру UGC» (оттуда выбрасывало в «Игровые квесты»)
+        sendQuestList(user, gameName, category, "UGC".equalsIgnoreCase(gameName) ? "menu:main" : "quests:game:" + encodeGameToken(gameName));
     }
 
     /** Квестов на странице списка игры (27.10.2026): длинные списки Brawl Stars и др. не помещались на экран. */
