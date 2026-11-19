@@ -31662,7 +31662,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "quests:section:gaming")));
         rows.add(List.of(keyboardFactory.callback(sponsoredMenuLabel(user), "quests:section:sponsored")));
         // 19.11.2026 (владелец): UGC перенесён из «Ещё» на главное меню, под «Спонсорские квесты»
-        rows.add(List.of(keyboardFactory.callback("🤳 UGC", "quests:section:ugc")));
+        rows.add(List.of(keyboardFactory.callback("🤳 UGC · до 25 000 EXC", "quests:section:ugc")));
         if (userService.dailyTasksEnabled()) {
             rows.add(List.of(keyboardFactory.callback(dailyTasksMenuLabel(user), "menu:dtasks")));
         }
