@@ -36,7 +36,8 @@ public class SponsorBalanceService {
 
     /** Награда этого квеста идёт на спонсорский баланс: банковская миссия партнёра или внешний партнёрский квест (подтверждает сеть/партнёр). */
     public static boolean isSponsorBalanceQuest(Quest quest) {
-        return quest != null && (quest.isExternalAutoApprove() || PartnerMissions.forQuest(quest) != null);
+        // UGC (20.11.2026, владелец): награда за ролики идёт в EXCASH как зарплата, выводится сразу и без лимитов; начисляет модератор при одобрении по ступени просмотров
+        return quest != null && (quest.isExternalAutoApprove() || PartnerMissions.forQuest(quest) != null || (QuestService.isUgcQuest(quest) && !quest.isSponsored()));
     }
 
     /** Результат ручной операции админа: игрок и балансы после неё (игровой EXC и спонсорский EXCASH). */

@@ -11025,10 +11025,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // UGC (19.11.2026, владелец): на карточке показываем максимальную награду по просмотрам (25 000), а не базовую ступень; реальная выплата - по ступени просмотров, модератором
         boolean ugcMax = QuestService.isUgcQuest(quest) && !quest.isSponsored();
         long ugcMaxCoins = QuestService.UGC_VIEW_TIER_COINS[QuestService.UGC_VIEW_TIER_COINS.length - 1];
-        String rewardHead = sponsorBalanceService.applies(quest)
+        String rewardHead = ugcMax
+                ? (sponsorBalanceService.applies(quest)
+                        ? "💎 <b>до +" + fmtExc(ugcMaxCoins) + " EXCASH</b> (≈ " + fmtExc(Math.round(ugcMaxCoins / 100.0)) + " ₽)"
+                        : "🏆 <b>до +" + fmtExc(ugcMaxCoins) + " EXC</b>" + starsNote(ugcMaxCoins))
+                : sponsorBalanceService.applies(quest)
                 ? "💎 <b>+" + fmtExc(coins) + " EXCASH</b> (≈ " + fmtExc(Math.round(coins / 100.0)) + " ₽)"
-                : ugcMax
-                ? "🏆 <b>до +" + fmtExc(ugcMaxCoins) + " EXC</b>" + starsNote(ugcMaxCoins)
                 : "🏆 <b>+" + fmtExc(coins) + " EXC</b>" + starsNote(coins);
         return rewardHead + " · +" + quest.getRewardXp() + " XP"
                 + (tickets ? " · 🎟 +" + quest.getTicketReward() + " " + ticketsWord(quest.getTicketReward()) : "")
@@ -31773,7 +31775,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("🎮 Игровые квесты", "quests:section:gaming")));
         rows.add(List.of(keyboardFactory.callback(sponsoredMenuLabel(user), "quests:section:sponsored")));
         // 19.11.2026 (владелец): UGC перенесён из «Ещё» на главное меню, под «Спонсорские квесты»
-        rows.add(List.of(keyboardFactory.callback("🤳 UGC · до 25 000 EXC", "quests:section:ugc")));
+        rows.add(List.of(keyboardFactory.callback(sponsorBalanceService.enabled() ? "🤳 UGC · до 25 000 EXCASH" : "🤳 UGC · до 25 000 EXC", "quests:section:ugc")));
         if (userService.dailyTasksEnabled()) {
             rows.add(List.of(keyboardFactory.callback(dailyTasksMenuLabel(user), "menu:dtasks")));
         }

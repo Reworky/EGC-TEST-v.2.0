@@ -3033,6 +3033,7 @@ public class QuestSeeder implements CommandLineRunner {
         applyClubExcashTexts();
         applyManagerProofTexts();
         applyManagerProofHeaders();
+        applyUgcExcashTexts();
         switchOffStarsTyn0xQuest();
     }
 
@@ -3856,6 +3857,34 @@ public class QuestSeeder implements CommandLineRunner {
                 log.info("[QuestSeeder] Manager proof headers applied: '{}'", pm.questTitle());
             } catch (Exception e) {
                 log.warn("[QuestSeeder] Manager proof headers failed for {}", pm.key(), e);
+            }
+        }
+    }
+
+    /** 20.11.2026 (владелец): награда UGC в EXCASH, выводится сразу. В описании и шкале награды «EXC» меняется на «EXCASH». Один раз на квест (ключ в app_settings). */
+    private void applyUgcExcashTexts() {
+        for (String title : List.of("Instagram Reels про EGC", "TikTok видео про EGC", "YouTube Shorts про EGC")) {
+            try {
+                String key = "quest.ugcexcash.v1." + title;
+                if (appSettingRepository.findById(key).isPresent()) continue;
+                Quest q = questRepository.findFirstByTitleAndGameName(title, "UGC").orElse(null);
+                if (q == null) continue;
+                if (q.getDescription() != null) {
+                    q.setDescription(q.getDescription().replace("от 3 000 до 25 000 EXC", "от 3 000 до 25 000 EXCASH"));
+                }
+                if (q.getInstruction() != null) {
+                    q.setInstruction(q.getInstruction()
+                            .replace("5️⃣ Награда: до 500 просмотров - 3 000 EXC,", "5️⃣ Награда в EXCASH (выводится сразу, 100 EXCASH = 1 ₽): до 500 просмотров - 3 000,")
+                            .replace("от 50 000 - 25 000 EXC", "от 50 000 - 25 000 EXCASH"));
+                }
+                questRepository.save(q);
+                ru.gamebot.platform.domain.model.AppSetting done = new ru.gamebot.platform.domain.model.AppSetting();
+                done.setKey(key);
+                done.setValue(LocalDateTime.now().toString());
+                appSettingRepository.save(done);
+                log.info("[QuestSeeder] UGC EXCASH texts applied: '{}'", title);
+            } catch (Exception e) {
+                log.warn("[QuestSeeder] UGC EXCASH texts failed for {}", title, e);
             }
         }
     }

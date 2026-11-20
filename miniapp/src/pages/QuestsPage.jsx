@@ -602,7 +602,9 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
           {q.bonusItem && <span className="reward-xp">🎁 {q.bonusItem.replace(' на 1 месяц', '')}</span>}
           {!(q.rewardCoins === 0 && q.bankRewardRub > 0) && (
           q.sponsorReward
-            ? <span className="reward-exc">💎 {q.rewardCoins.toLocaleString()} EXCASH <span style={{ opacity: 0.7 }}>(≈ {Math.round(q.rewardCoins / 100).toLocaleString('ru-RU')} ₽)</span></span>
+            ? (q.gameName === 'UGC' && !q.sponsored
+                ? <span className="reward-exc">💎 до 25 000 EXCASH <span style={{ opacity: 0.7 }}>(≈ 250 ₽)</span></span>
+                : <span className="reward-exc">💎 {q.rewardCoins.toLocaleString()} EXCASH <span style={{ opacity: 0.7 }}>(≈ {Math.round(q.rewardCoins / 100).toLocaleString('ru-RU')} ₽)</span></span>)
             : <span className="reward-exc"><i className="ti ti-coin"></i> {q.gameName === 'UGC' && !q.sponsored ? 'до 25 000' : q.rewardCoins.toLocaleString()} EXC{fundRatio != null && <> ({starsApprox(q.gameName === 'UGC' && !q.sponsored ? 25000 : q.rewardCoins, fundRatio)})</>}</span>
           )}
           {(details[q.id]?.rewardDiminished ?? q.rewardDiminished) && (
