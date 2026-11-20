@@ -8909,17 +8909,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private static final java.util.Set<String> QUICK_KEYBOARD_BUTTONS = java.util.Set.of(QK_QUESTS, QK_WALLET, QK_SHOP, QK_FRIENDS, QK_HELP, QK_MAIN);
 
     /** Нижняя клавиатура игрока: значок-квадратик рядом с полем ввода раскрывает кнопки. Каждая ведёт на тот же экран, что и кнопка главного меню. */
+    /** 20.11.2026 (владелец): в нижних кнопках игрока осталась одна «🏠 Главное меню». Остальные подписи (QK_*) остаются в QUICK_KEYBOARD_BUTTONS: у игроков со старой клавиатурой нажатия работают до её обновления. */
+    private static final int QUICK_KEYBOARD_VERSION = 2;
+
     private ReplyKeyboardMarkup quickKeyboard() {
         KeyboardRow r1 = new KeyboardRow();
-        r1.add(new KeyboardButton(QK_QUESTS));
-        r1.add(new KeyboardButton(QK_WALLET));
-        KeyboardRow r2 = new KeyboardRow();
-        r2.add(new KeyboardButton(QK_SHOP));
-        r2.add(new KeyboardButton(QK_FRIENDS));
-        KeyboardRow r3 = new KeyboardRow();
-        r3.add(new KeyboardButton(QK_HELP));
-        r3.add(new KeyboardButton(QK_MAIN));
-        return ReplyKeyboardMarkup.builder().keyboardRow(r1).keyboardRow(r2).keyboardRow(r3).resizeKeyboard(true).build();
+        r1.add(new KeyboardButton(QK_MAIN));
+        return ReplyKeyboardMarkup.builder().keyboardRow(r1).resizeKeyboard(true).build();
     }
 
     /** Один раз за жизнь аккаунта шлёт игроку короткое сообщение с нижней клавиатурой (Telegram не умеет подставлять её молча). Только игрокам:
@@ -8933,14 +8929,15 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             ensureAdminHotkeys(user);
             return;
         }
-        if (user.isQuickKeyboardShown() || !user.isProfileCompleted() || isEffectiveAdmin(user) || isEffectiveModerator(user)) return;
+        if ((user.isQuickKeyboardShown() && user.getQuickKeyboardVersion() >= QUICK_KEYBOARD_VERSION) || !user.isProfileCompleted() || isEffectiveAdmin(user) || isEffectiveModerator(user)) return;
         try {
             SendMessage message = new SendMessage();
             message.setChatId(user.getTelegramId().toString());
-            message.setText("⌨️ Быстрые кнопки включены: нажми на значок рядом с полем ввода, чтобы открыть Квесты, Кошелёк, Магазин, Друзей или Помощь.");
+            message.setText("⌨️ Внизу осталась одна кнопка «🏠 Главное меню»: она откроет меню в любой момент (значок рядом с полем ввода).");
             message.setReplyMarkup(quickKeyboard());
             execute(message);
             user.setQuickKeyboardShown(true);
+            user.setQuickKeyboardVersion(QUICK_KEYBOARD_VERSION);
             userService.save(user);
         } catch (Exception e) {
             log.warn("Quick keyboard not sent to {}: {}", user.getTelegramId(), e.getMessage());

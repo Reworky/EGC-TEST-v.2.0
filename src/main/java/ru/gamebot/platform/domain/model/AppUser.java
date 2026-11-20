@@ -170,6 +170,10 @@ public class AppUser {
     @Column(columnDefinition = "boolean default false")
     private boolean quickKeyboardShown;
 
+    /** Версия нижней клавиатуры, которую игрок уже получил (2 - одна кнопка «Главное меню», 20.11.2026): у тех, у кого меньше, клавиатура один раз обновляется при ближайшем показе меню. */
+    @Column(columnDefinition = "integer default 0")
+    private int quickKeyboardVersion;
+
     /** Вывод заморожен на проверку (2026-10-16, мультиаккаунты с общим игровым тегом): заявки на вывод любым способом не принимаются. Админ: /wdfreeze ID on|off. */
     @Column(columnDefinition = "boolean default false")
     private boolean withdrawalFrozen;
