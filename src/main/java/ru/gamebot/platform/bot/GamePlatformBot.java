@@ -9452,6 +9452,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Первый экран «Спонсорских квестов»: выбор раздела (15.11.2026). Пустые разделы тоже показываем: внутри сообщение «скоро». */
+    /** Строка баланса EXCASH на экране «Спонсорские квесты» (20.11.2026, владелец): «💎 Твой баланс: N EXCASH (≈ R ₽)» и, если есть, «⏳ Ждёт подтверждения банка». Пусто при выключенном EXCASH. */
+    private String sponsorBalanceMiniLine(AppUser user) {
+        if (!sponsorBalanceService.enabled()) return "";
+        long sp = Math.max(0, user.getSponsorCoins());
+        long pending = 0;
+        try {
+            pending = questService.pendingClubExcash(user);
+        } catch (Exception e) {
+            log.warn("pendingClubExcash failed", e);
+        }
+        return "💎 Твой баланс: <b>" + fmtExc(sp) + " EXCASH</b> (≈ " + fmtExc(Math.round(sp / 100.0)) + " ₽)\n"
+                + (pending > 0 ? "⏳ Ждёт подтверждения банка: <b>+" + fmtExc(pending) + " EXCASH</b>\n" : "")
+                + "\n";
+    }
+
     private void sendSponsoredCategories(AppUser user) {
         fn(user, ru.gamebot.platform.service.NewbieFunnelService.SP_SECTION);
         List<InlineKeyboardButton> rows = new ArrayList<>();
@@ -9475,6 +9490,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendResourceBanner(user.getTelegramId(), "sponsored_quests_banner.jpg",
                 "💼 <b>Спонсорские квесты</b>\n\n"
                         + prize
+                        + sponsorBalanceMiniLine(user)
                         + "<blockquote expandable>🤝 Деньги спонсоров идут в фонд выплат, а от его размера зависит курс вывода для всех игроков.\n\n"
                         + "Спонсоры — одна из причин, по которой проект работает и платит вам реальные деньги. "
                         + "Чем лояльнее вы относитесь к таким квестам, тем стабильнее проект может выплачивать вам дальше. "
