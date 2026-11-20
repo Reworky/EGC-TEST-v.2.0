@@ -8933,9 +8933,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         try {
             SendMessage message = new SendMessage();
             message.setChatId(user.getTelegramId().toString());
-            message.setText("⌨️ Внизу осталась одна кнопка «🏠 Главное меню»: она откроет меню в любой момент (значок рядом с полем ввода).");
+            // 20.11.2026 (владелец): пояснительного сообщения нет. Клавиатуру Telegram ставит только вместе с сообщением, поэтому шлём служебный значок и сразу удаляем его: клавиатура остаётся.
+            message.setText("🏠");
             message.setReplyMarkup(quickKeyboard());
-            execute(message);
+            org.telegram.telegrambots.meta.api.objects.Message kbMsg = execute(message);
+            if (kbMsg != null) deleteMessageQuietly(user.getTelegramId(), kbMsg.getMessageId());
             user.setQuickKeyboardShown(true);
             user.setQuickKeyboardVersion(QUICK_KEYBOARD_VERSION);
             userService.save(user);
