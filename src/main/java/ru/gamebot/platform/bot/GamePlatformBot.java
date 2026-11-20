@@ -9939,7 +9939,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String body = useLabels
                 ? "Нажмите на квест, чтобы увидеть награду и условия прохождения." + legend
                 : "Откройте карточку по номеру, чтобы увидеть награду и условия прохождения.\n\n" + listBuilder + legend;
-        String slotsLine = questSlotsLine(user);
+        // UGC без слотов (владелец, 19.11.2026): строки «Слоты квестов» в списке видео-квестов нет
+        String slotsLine = "UGC".equalsIgnoreCase(gameName) ? "" : questSlotsLine(user);
         String listText = "<b>" + escape(title) + "</b>\n" + (slotsLine.isEmpty() ? "" : slotsLine + "\n") + "\n" + body;
         if (photoFileId.isPresent()) {
             if (listText.length() <= 1000) {
