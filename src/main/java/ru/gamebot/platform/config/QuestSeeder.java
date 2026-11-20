@@ -3033,6 +3033,7 @@ public class QuestSeeder implements CommandLineRunner {
         applyClubExcashTexts();
         applyManagerProofTexts();
         applyManagerProofHeaders();
+        applyStepsTemplate();
         switchOffStarsTyn0xQuest();
     }
 
@@ -3339,22 +3340,7 @@ public class QuestSeeder implements CommandLineRunner {
                 + "✅ И множество других бонусов от банка\n\n"
                 + "🔒 Паспорт, коды из СМС и номер карты нам не нужны.\n\n"
                 + "Как это работает:");
-        q.setInstruction("1️⃣ Оформи заявку на бесплатную карту онлайн\n"
-                + "После «Взять» появится кнопка «Оформить карту» со ссылкой на онлайн-заявку.\n"
-                + "Заявка должна быть оформлена именно по этой ссылке, иначе банк не выплатит бонус. В заявке выбери доставку курьером. "
-                + "Оформление, обслуживание и доставка бесплатные. "
-                + "Подходит, если тебе 18+, ты живёшь в России (кроме Крыма, ДНР и ЛНР), у тебя паспорт РФ и у тебя не было действующих продуктов ОТП Банка последние 2 года.\n\n"
-                + "2️⃣ Выполни условие банка\n"
-                + "Когда курьер привезёт карту, активируй её в приложении банка. В течение 30 дней после активации оплати этой картой любую покупку от 100 ₽ одной операцией: игра, магазин, подписка, как удобно.\n\n"
-                + "Совет: донат в свою игру на donatov.net, он останется у тебя: https://donatov.net/inv/3958022\n\n"
-                + "Не засчитывается банком: переводы и пополнение кошельков, снятие наличных, связь и интернет, ЖКХ, страховки, налоги и госуслуги, благотворительность, "
-                + "азартные игры, брокеры и ломбарды.\n\n"
-                + "3️⃣ Получи 1000 ₽ от банка\n"
-                + "Банк отправит 1 000 ₽ на твою карту с 25-го числа месяца, следующего за покупкой.\n\n"
-                + "4️⃣ Пришли подтверждение нашему менеджеру\n"
-                + "Когда деньги придут, напиши менеджеру: он проверит выплату.\n\n"
-                + "5️⃣ Получи Telegram Premium на 1 месяц\n"
-                + "После проверки менеджер подарит Premium, а мы откроем вывод всей накопленной суммы разом, одной заявкой: лимит вывода для этого расширяется.");
+        q.setInstruction(stepsTemplate("1️⃣ Оформи заявку на бесплатную карту онлайн", "Совершите покупку на сумму 100р", "Получи 1 000 ₽ от банка")); // шаблон владельца 20.11.2026
         q.setRequirements("ℹ️ Кому подходит\n"
                 + "Тебе 18+, ты живёшь в России (кроме Крыма, ДНР и ЛНР), у тебя паспорт РФ, и у тебя не было действующих продуктов ОТП Банка последние 2 года. "
                 + "Условия и бонусы определяет банк, оформив карту, ты с ними согласен.");
@@ -3856,6 +3842,46 @@ public class QuestSeeder implements CommandLineRunner {
                 log.info("[QuestSeeder] Manager proof headers applied: '{}'", pm.questTitle());
             } catch (Exception e) {
                 log.warn("[QuestSeeder] Manager proof headers failed for {}", pm.key(), e);
+            }
+        }
+    }
+
+    /** Шаблон блока «Как это работает» на карточках спонсорских банковских квестов (текст владельца 20.11.2026): четыре шага, меняются только сумма покупки и что получает игрок. */
+    private static String stepsTemplate(String step1, String purchase, String receive) {
+        return step1 + "\n\n"
+                + "2️⃣ " + purchase + "\n\n"
+                + "3️⃣ " + receive + "\n\n"
+                + "4️⃣ Награда придёт автоматически после подтверждения банком. Проверка занимает до 30–60 дней — это нормально, просто дождитесь.";
+    }
+
+    /** Один раз на квест (ключ в app_settings) ставит шаблон шагов всем спонсорским миссиям, кроме ОТП (у него шаги задаёт applyOtpCardContent при каждом старте). */
+    private void applyStepsTemplate() {
+        String[][] rows = {
+                {"tblack", "1️⃣ Оформи заявку на бесплатную карту онлайн", "Совершите покупку на сумму 500р", "Получи 500 ₽ от банка"},
+                {"tmobile", "1️⃣ Оформи заявку на SIM-карту онлайн", "Пополните баланс SIM на 500р", "Получи 500 бонусов на связь от банка"},
+                {"vtb", "1️⃣ Оформи заявку на бесплатную карту онлайн", "Совершите покупки на сумму 1000р", "Получи 1 000 ₽ от банка"},
+                {"alfa", "1️⃣ Оформи заявку на бесплатную карту онлайн", "Совершите любую покупку", "Получи 300 ₽ от клуба"},
+                {"fora", "1️⃣ Оформи заявку на бесплатную карту онлайн", "Совершите покупку на сумму 500р", "Получи 400 ₽ от клуба"},
+                {"psb", "1️⃣ Оформи заявку на бесплатную карту онлайн", "Совершите покупку на сумму 1000р", "Получи 500 ₽ от клуба"},
+                {"ubrr", "1️⃣ Оформи заявку на бесплатную карту онлайн", "Совершите покупку на сумму 1000р", "Получи 500 ₽ от клуба"},
+                {"sovcom", "1️⃣ Оформи заявку на бесплатную кредитную карту онлайн", "Дождитесь выдачи карты банком", "Получи 1 500 ₽ от клуба"}};
+        for (String[] r : rows) {
+            try {
+                ru.gamebot.platform.service.PartnerMission pm = ru.gamebot.platform.service.PartnerMissions.ALL.stream().filter(m -> m.key().equals(r[0])).findFirst().orElse(null);
+                if (pm == null) continue;
+                String key = "quest.steps4.v1." + pm.key();
+                if (appSettingRepository.findById(key).isPresent()) continue;
+                Quest q = questRepository.findFirstByTitleAndGameName(pm.questTitle(), pm.gameName()).orElse(null);
+                if (q == null) continue;
+                q.setInstruction(stepsTemplate(r[1], r[2], r[3]));
+                questRepository.save(q);
+                ru.gamebot.platform.domain.model.AppSetting done = new ru.gamebot.platform.domain.model.AppSetting();
+                done.setKey(key);
+                done.setValue(LocalDateTime.now().toString());
+                appSettingRepository.save(done);
+                log.info("[QuestSeeder] Steps template applied: '{}'", pm.questTitle());
+            } catch (Exception e) {
+                log.warn("[QuestSeeder] Steps template failed for {}", r[0], e);
             }
         }
     }
