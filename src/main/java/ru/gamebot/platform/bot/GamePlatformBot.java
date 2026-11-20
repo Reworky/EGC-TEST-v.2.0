@@ -7403,10 +7403,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 };
                 rows.add(List.of(keyboardFactory.url("💳 Оформить карту", pm.applyLink())));
                 rows.add(List.of(partnerManagerButton(pm, sub, "💬 Вопрос менеджеру", head, need)));
-                if (event.getKind() == ru.gamebot.platform.event.PartnerQuestNudgeEvent.KIND_ASK && pm.managerProofText() != null) {
-                    // 19.11.2026: напоминаем, что подтверждение нужно прислать менеджеру в личку
-                    text += "\n\n" + pm.managerProofText().replace("{manager}", escape(appProperties.getSupportUsername()));
-                }
                 if (event.getKind() == ru.gamebot.platform.event.PartnerQuestNudgeEvent.KIND_LAST) {
                     rows.add(List.of(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + sub.getId())));
                 }
@@ -10533,23 +10529,31 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             // Короткий экран после «Взять» (владелец, 09.11): сумма и условия уже на карточке квеста, здесь только что делать дальше.
             if (pm.applyLink() != null) {
                 // 15.11.2026 (владелец): у квеста ОТП (и ВТБ, 16.11.2026) ссылка на оформление - сразу здесь (без ожидания менеджера); менеджер - для вопросов
-                // 19.11.2026 (владелец): игроку прямо сказано, что делать по шагам и что прислать менеджеру в личку (раньше это было только в свёрнутой цитате карточки)
-                String proof = pm.managerProofText() != null ? pm.managerProofText().replace("{manager}", manager)
-                        : "Когда выполнишь все условия, пришли менеджеру @" + manager + " подтверждение: скриншоты карты и покупки (номера карты и счёта закрой).";
+                // 20.11.2026 (текст владельца): два шага, без пересылки скриншотов менеджеру: после выполнения условий остаётся ждать, награда приходит автоматически после одобрения банком
+                String hint = pm.applyHint() == null ? "" : pm.applyHint().trim();
+                String step1Tail = hint.isEmpty() ? "выбери карту." : Character.toLowerCase(hint.charAt(0)) + hint.substring(1);
+                String clause = "Когда выполнишь условия квеста";
+                if (pm.managerProofText() != null && pm.managerProofText().contains(", пришли менеджеру")) {
+                    clause = pm.managerProofText().substring(0, pm.managerProofText().indexOf(", пришли менеджеру"));
+                }
                 sb.append("🚀 <b>Квест взят!</b>\n\n🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")
                         .append("<b>Что нужно сделать:</b>\n")
-                        .append("1️⃣ Нажми «💳 Оформить карту»: откроется страница с онлайн-заявкой.")
-                        .append(pm.applyHint() != null ? " " + escape(pm.applyHint()) : "").append("\n")
-                        .append("2️⃣ ").append(proof).append("\n")
-                        .append("3️⃣ Менеджер проверит, и награда будет ждать подтверждения банка.\n\n")
+                        .append("1️⃣ Нажми «💳 Оформить карту»: откроется страница с выбором, ").append(escape(step1Tail)).append("\n\n")
+                        .append("2️⃣ ").append(escape(clause)).append(", останется только ждать, награда придёт автоматически после одобрения банком\n\n")
                         .append("Если что-то непонятно, напиши менеджеру @").append(manager);
                 rows.add(List.of(keyboardFactory.url("💳 Оформить карту", pm.applyLink())));
                 fn(user, ru.gamebot.platform.service.NewbieFunnelService.APPLY_SHOWN);
-                rows.add(List.of(partnerManagerButton(pm, sub, "📩 Отправить подтверждение менеджеру", "Подтверждение по квесту «Миссия: " + pm.missionTitle() + "»", "высылаю скриншоты: карта и покупка")));
                 rows.add(List.of(partnerManagerButton(pm, sub, "💬 Вопрос менеджеру", "Вопрос по квесту «Миссия: " + pm.missionTitle() + "»", "помогите с оформлением карты")));
             } else {
+                // 20.11.2026 (владелец: «для каждого спонсорского квеста»): тот же вид из двух шагов у квестов без онлайн-заявки (Т-Банк, Т-Мобайл): ссылку на оформление присылает менеджер
+                String startClause = "Когда выполнишь условия квеста";
+                if (pm.managerProofText() != null && pm.managerProofText().contains(", пришли менеджеру")) {
+                    startClause = pm.managerProofText().substring(0, pm.managerProofText().indexOf(", пришли менеджеру"));
+                }
                 sb.append("🚀 <b>Квест взят!</b>\n\n🎮 Миссия: ").append(pm.missionTitle()).append("\n\n")
-                        .append("Нажми «Начать выполнять квест» - менеджер @").append(manager).append(" проведёт по шагам в личных сообщениях");
+                        .append("<b>Что нужно сделать:</b>\n")
+                        .append("1️⃣ Нажми «💬 Начать выполнять квест»: менеджер @").append(manager).append(" пришлёт ссылку для ").append(tomobile ? "заказа SIM" : "оформления карты").append("\n\n")
+                        .append("2️⃣ ").append(escape(startClause)).append(", останется только ждать, награда придёт автоматически после одобрения банком");
                 // Нажатие считаем в воронке (URL-кнопка Telegram о нажатии не сообщает): сначала callback с записью, затем сообщение с кнопкой в чат менеджера
                 rows.add(List.of(keyboardFactory.callback("💬 Начать выполнять квест", "partner:go:" + sub.getId())));
             }
