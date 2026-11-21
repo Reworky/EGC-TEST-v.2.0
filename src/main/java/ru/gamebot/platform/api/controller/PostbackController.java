@@ -155,7 +155,7 @@ public class PostbackController {
             String statusRaw = firstNonBlank(params, "status", "conversion_status", "state", "goal_status");
             String norm = normalizeLeadgidStatus(statusRaw);
             String sub = firstNonBlank(params, "aff_sub4", "sub4", "subid4", "sub_id4", "sub_id_4", "aff_sub_4", "subid_4", "s4");
-            String externalId = firstNonBlank(params, "conversion_id", "conversion", "transaction_id", "order_id", "id", "tid");
+            String externalId = firstNonBlank(params, "lead_id", "conversion_id", "conversion", "transaction_id", "order_id", "id", "tid");
             if (externalId != null && leadgidConversionRepository.existsByExternalIdAndStatusNorm(externalId, norm)) {
                 return ResponseEntity.ok("duplicate");
             }
@@ -186,13 +186,16 @@ public class PostbackController {
     private static String normalizeLeadgidStatus(String raw) {
         if (raw == null) return ru.gamebot.platform.domain.model.LeadgidConversion.UNKNOWN;
         String s = raw.trim().toLowerCase();
-        if (s.contains("reject") || s.contains("declin") || s.contains("cancel") || s.contains("fraud") || s.contains("trash") || s.contains("отклон")) {
+        if (s.contains("reject") || s.contains("declin") || s.contains("cancel") || s.contains("fraud") || s.contains("trash") || s.contains("denied") || s.contains("refus") || s.contains("отклон")) {
             return ru.gamebot.platform.domain.model.LeadgidConversion.REJECTED;
         }
-        if (s.contains("approv") || s.contains("confirm") || s.contains("accept") || s.contains("paid") || s.contains("подтверж") || s.contains("одобр")) {
+        // «Подлежит оплате» в кабинете LeadGid = банк подтвердил: payable / approved / confirmed / paid
+        if (s.contains("approv") || s.contains("confirm") || s.contains("accept") || s.contains("paid") || s.contains("payable") || s.contains("success") || s.contains("complet")
+                || s.contains("подтверж") || s.contains("одобр") || s.contains("оплат")) {
             return ru.gamebot.platform.domain.model.LeadgidConversion.APPROVED;
         }
-        if (s.contains("hold") || s.contains("pend") || s.contains("wait") || s.contains("review") || s.contains("new") || s.contains("провер") || s.contains("ожид")) {
+        if (s.contains("hold") || s.contains("pend") || s.contains("wait") || s.contains("review") || s.contains("moder") || s.contains("check") || s.contains("new")
+                || s.contains("провер") || s.contains("ожид")) {
             return ru.gamebot.platform.domain.model.LeadgidConversion.PENDING;
         }
         return ru.gamebot.platform.domain.model.LeadgidConversion.UNKNOWN;
