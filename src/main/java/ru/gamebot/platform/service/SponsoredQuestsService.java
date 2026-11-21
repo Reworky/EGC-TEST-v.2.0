@@ -29,7 +29,7 @@ public class SponsoredQuestsService {
      *  («кредит», «подработ», «связь»/«SIM»/«тариф»/«Мегафон», «дебетов»); всё прочее (CPI-офферы, приложения, игры) - «Игровые партнёры». */
     public static String categoryOf(Quest q) {
         PartnerMission pm = PartnerMissions.forQuest(q);
-        if (pm != null) return "tmobile".equals(pm.key()) ? "mobile" : ("sovcom".equals(pm.key()) || "otpcredit".equals(pm.key())) ? "credit" : "debit";
+        if (pm != null) return "tmobile".equals(pm.key()) ? "mobile" : ("sovcom".equals(pm.key()) || "otpcredit".equals(pm.key()) || "tbankcredit".equals(pm.key())) ? "credit" : "debit";
         String t = ((q.getTitle() == null ? "" : q.getTitle()) + " " + (q.getGameName() == null ? "" : q.getGameName())).toLowerCase(java.util.Locale.ROOT);
         if (t.contains("кредит")) return "credit";
         if (t.contains("подработ")) return "gigs";
