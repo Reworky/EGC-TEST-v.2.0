@@ -52,6 +52,11 @@ public class PostbackController {
     @Value("${app.mobidea-postback-token:}")
     private String mobideaToken;
 
+    @Value("${app.leadgid-postback-token:}")
+    private String leadgidToken;
+
+    private final ru.gamebot.platform.domain.repository.LeadgidConversionRepository leadgidConversionRepository;
+
     @Value("${app.adsgram-reward-token:}")
     private String adsgramRewardToken;
 
@@ -131,6 +136,83 @@ public class PostbackController {
                 firstNonBlank(params, "offer_id", "offerid", "offer"),
                 firstNonBlank(params, "transaction_id", "conversion_id", "txid", "order_id"),
                 firstNonBlank(params, "payout", "revenue", "commission", "amount"));
+    }
+
+    /**
+     * Постбек LeadGid (20.11.2026): конверсия по офферам банков (ОТП, ВТБ, Альфа, Фора, ПСБ, УБРиР, Совкомбанк). Метка заявки приходит в SubID 4 (ссылка бота ведёт на витрину с ?sid=номер заявки,
+     * витрина кладёт его в aff_sub4). Имена макросов LeadGid неизвестны наверняка, поэтому читаем несколько вероятных вариантов каждого параметра и сохраняем ВСЕ параметры запроса
+     * (поле raw), чтобы свериться с кабинетом по первой реальной конверсии. Ничего не начисляется автоматически: модераторам и админам уходит сообщение (кнопка «Начислить» - существующий mod:pbonus).
+     * Повтор того же статуса той же конверсии игнорируется. Эндпоинт без токена (LEADGID_POSTBACK_TOKEN) отвечает 403.
+     */
+    @GetMapping("/leadgid")
+    public ResponseEntity<String> leadgid(@RequestParam Map<String, String> params) {
+        if (!isValidToken(params.get("token"), leadgidToken)) {
+            log.warn("[LeadGid] Postback rejected: bad token");
+            return ResponseEntity.status(403).body("forbidden");
+        }
+        try {
+            log.info("[LeadGid] incoming params: {}", params);
+            String statusRaw = firstNonBlank(params, "status", "conversion_status", "state", "goal_status");
+            String norm = normalizeLeadgidStatus(statusRaw);
+            String sub = firstNonBlank(params, "aff_sub4", "sub4", "subid4", "sub_id4", "sub_id_4", "aff_sub_4", "subid_4", "s4");
+            String externalId = firstNonBlank(params, "conversion_id", "conversion", "transaction_id", "order_id", "id", "tid");
+            if (externalId != null && leadgidConversionRepository.existsByExternalIdAndStatusNorm(externalId, norm)) {
+                return ResponseEntity.ok("duplicate");
+            }
+            ru.gamebot.platform.domain.model.LeadgidConversion c = new ru.gamebot.platform.domain.model.LeadgidConversion();
+            c.setStatus(cutTo(statusRaw, 40));
+            c.setStatusNorm(norm);
+            c.setOfferId(cutTo(firstNonBlank(params, "offer_id", "offerid", "offer"), 32));
+            c.setPayout(cutTo(firstNonBlank(params, "payout", "amount", "revenue", "sum", "commission"), 32));
+            c.setExternalId(cutTo(externalId, 64));
+            c.setSubmissionId(digitsToLong(sub));
+            StringBuilder raw = new StringBuilder();
+            for (Map.Entry<String, String> e : params.entrySet()) {
+                if ("token".equals(e.getKey())) continue;
+                if (raw.length() > 0) raw.append('&');
+                raw.append(e.getKey()).append('=').append(e.getValue());
+            }
+            c.setRaw(cutTo(raw.toString(), 2000));
+            leadgidConversionRepository.save(c);
+            eventPublisher.publishEvent(new ru.gamebot.platform.event.LeadgidConversionEvent(this, c.getId()));
+            return ResponseEntity.ok("ok");
+        } catch (Exception e) {
+            log.error("[LeadGid] Postback processing failed, params={}", params, e);
+            return ResponseEntity.ok("error");
+        }
+    }
+
+    /** Статус LeadGid (английский или русский) к одному из PENDING / APPROVED / REJECTED / UNKNOWN. */
+    private static String normalizeLeadgidStatus(String raw) {
+        if (raw == null) return ru.gamebot.platform.domain.model.LeadgidConversion.UNKNOWN;
+        String s = raw.trim().toLowerCase();
+        if (s.contains("reject") || s.contains("declin") || s.contains("cancel") || s.contains("fraud") || s.contains("trash") || s.contains("отклон")) {
+            return ru.gamebot.platform.domain.model.LeadgidConversion.REJECTED;
+        }
+        if (s.contains("approv") || s.contains("confirm") || s.contains("accept") || s.contains("paid") || s.contains("подтверж") || s.contains("одобр")) {
+            return ru.gamebot.platform.domain.model.LeadgidConversion.APPROVED;
+        }
+        if (s.contains("hold") || s.contains("pend") || s.contains("wait") || s.contains("review") || s.contains("new") || s.contains("провер") || s.contains("ожид")) {
+            return ru.gamebot.platform.domain.model.LeadgidConversion.PENDING;
+        }
+        return ru.gamebot.platform.domain.model.LeadgidConversion.UNKNOWN;
+    }
+
+    private static String cutTo(String v, int n) {
+        if (v == null) return null;
+        return v.length() <= n ? v : v.substring(0, n);
+    }
+
+    /** Первые цифры строки как число («10106» или «S10106»); null, если цифр нет. */
+    private static Long digitsToLong(String v) {
+        if (v == null) return null;
+        String d = v.replaceAll("[^0-9]", "");
+        if (d.isEmpty() || d.length() > 18) return null;
+        try {
+            return Long.parseLong(d);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private String firstNonBlank(Map<String, String> params, String... keys) {

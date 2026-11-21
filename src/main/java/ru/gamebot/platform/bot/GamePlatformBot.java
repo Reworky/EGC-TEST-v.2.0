@@ -167,6 +167,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.BonusCourseService bonusCourseService;
     private final ru.gamebot.platform.service.EgcPassFunnelService egcPassFunnelService;
     private final ru.gamebot.platform.service.PartnerQuestFunnelService partnerQuestFunnelService;
+    private final ru.gamebot.platform.domain.repository.LeadgidConversionRepository leadgidConversionRepository;
     private final ru.gamebot.platform.service.NewbieFunnelService newbieFunnel;
     private final ru.gamebot.platform.service.PartnerStatusService partnerStatusService;
     private final ru.gamebot.platform.service.PartnerQuestNudgeService partnerQuestNudgeService;
@@ -7401,7 +7402,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     case ru.gamebot.platform.event.PartnerQuestNudgeEvent.KIND_LAST -> "Квест на карту ещё ждёт тебя: " + reward + ". Оформим заявку?";
                     default -> "💳 <b>Ты взял квест на " + reward + "</b>\nОстался один шаг: оформи заявку на карту по ссылке" + ("otp".equals(pm.key()) ? " и выбери доставку курьером." : ".");
                 };
-                rows.add(List.of(keyboardFactory.url("💳 Оформить карту", pm.applyLink())));
+                rows.add(List.of(keyboardFactory.url("💳 Оформить карту", ru.gamebot.platform.service.PartnerMissions.applyLinkFor(pm, sub.getId()))));
                 rows.add(List.of(partnerManagerButton(pm, sub, "💬 Вопрос менеджеру", head, need)));
                 if (event.getKind() == ru.gamebot.platform.event.PartnerQuestNudgeEvent.KIND_LAST) {
                     rows.add(List.of(keyboardFactory.callback("❌ Отменить квест", "myquest:cancel:" + sub.getId())));
@@ -10541,7 +10542,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         .append("1️⃣ Нажми «💳 Оформить карту»: откроется страница с выбором, ").append(escape(step1Tail)).append("\n\n")
                         .append("2️⃣ ").append(escape(clause)).append(", останется только ждать, награда придёт автоматически после одобрения банком\n\n")
                         .append("Если что-то непонятно, напиши менеджеру @").append(manager);
-                rows.add(List.of(keyboardFactory.url("💳 Оформить карту", pm.applyLink())));
+                rows.add(List.of(keyboardFactory.url("💳 Оформить карту", ru.gamebot.platform.service.PartnerMissions.applyLinkFor(pm, sub.getId()))));
                 fn(user, ru.gamebot.platform.service.NewbieFunnelService.APPLY_SHOWN);
                 rows.add(List.of(partnerManagerButton(pm, sub, "💬 Вопрос менеджеру", "Вопрос по квесту «Миссия: " + pm.missionTitle() + "»", "помогите с оформлением карты")));
             } else {
@@ -26934,6 +26935,64 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             notifyModeratorsAboutAutoApproval(approved, "проверка через официальный PUBG API");
         } catch (Exception e) {
             log.error("[PubgAutoVerify] Failed to notify user about approved submission {}", event.getSubmissionId(), e);
+        }
+    }
+
+    /** Постбек LeadGid (20.11.2026): модераторам и админам - кто из игроков (по номеру заявки из SubID 4), по какому офферу и в каком статусе конверсия. При статусе «подтверждена» кнопка «Начислить»
+     *  (существующий mod:pbonus: та же выплата, что команда /…bonus, с защитой от двойной выплаты). Игроку ничего не отправляется (текст для игрока - после одобрения владельцем). */
+    @org.springframework.context.event.EventListener
+    public void onLeadgidConversion(ru.gamebot.platform.event.LeadgidConversionEvent event) {
+        try {
+            ru.gamebot.platform.domain.model.LeadgidConversion c = leadgidConversionRepository.findById(event.getConversionId()).orElse(null);
+            if (c == null) return;
+            QuestSubmission sub = null;
+            if (c.getSubmissionId() != null) {
+                try {
+                    sub = questService.getSubmission(c.getSubmissionId());
+                } catch (Exception ignored) {
+                    // заявки с таким номером нет: метка пришла чужая или битая
+                }
+            }
+            String norm = c.getStatusNorm() == null ? "UNKNOWN" : c.getStatusNorm();
+            String statusText = switch (norm) {
+                case "APPROVED" -> "✅ подтверждена банком";
+                case "PENDING" -> "⏳ на проверке у банка";
+                case "REJECTED" -> "❌ отклонена";
+                default -> "статус не распознан («" + escape(String.valueOf(c.getStatus())) + "»)";
+            };
+            StringBuilder sb = new StringBuilder("🔔 <b>Конверсия LeadGid</b>: ").append(statusText).append("\n");
+            ru.gamebot.platform.service.PartnerMission pm = sub == null ? null : ru.gamebot.platform.service.PartnerMissions.forQuest(sub.getQuest());
+            if (sub != null) {
+                AppUser p = sub.getUser();
+                sb.append("👤 <a href=\"tg://user?id=").append(p.getTelegramId()).append("\">").append(escape(String.valueOf(p.getNickname()))).append("</a>")
+                        .append(p.getTelegramUsername() != null && !p.getTelegramUsername().isBlank() ? " (@" + escape(p.getTelegramUsername()) + ")" : "")
+                        .append(", ID ").append(p.getTelegramId()).append("\n")
+                        .append("📋 Заявка №").append(sub.getId()).append(": ").append(escape(sub.getQuest().getTitle())).append("\n");
+            } else {
+                sb.append("⚠️ Игрока по метке найти не удалось (SubID 4 пуст или заявки с таким номером нет): ").append(c.getSubmissionId() == null ? "метки нет" : "заявка №" + c.getSubmissionId() + " не найдена").append("\n");
+            }
+            sb.append("🏦 Оффер LeadGid: ").append(escape(String.valueOf(c.getOfferId())));
+            if (c.getPayout() != null) sb.append(", выплата нам: ").append(escape(c.getPayout())).append(" ₽");
+            if (c.getExternalId() != null) sb.append("\n🆔 Конверсия: ").append(escape(c.getExternalId()));
+            if ("UNKNOWN".equals(norm) || sub == null) sb.append("\n\n<i>Параметры постбека:</i> <code>").append(escape(String.valueOf(c.getRaw()))).append("</code>");
+            if ("APPROVED".equals(norm) && pm != null) sb.append("\n\nМожно начислить награду игроку кнопкой ниже.");
+            if ("PENDING".equals(norm)) sb.append("\n\nБанк ещё проверяет: награду начислять рано.");
+            if ("REJECTED".equals(norm) && pm != null) sb.append("\n\nНаграду не начислять. Игроку об отказе можно сообщить командой /").append(pm.bonusCommand()).append(" ").append(sub.getUser().getTelegramId()).append(" отказ");
+            List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+            if (sub != null) {
+                if ("APPROVED".equals(norm) && pm != null) rows.add(List.of(keyboardFactory.callback("💎 Начислить награду", "mod:pbonus:" + sub.getId())));
+                rows.add(List.of(keyboardFactory.callback("📥 Карточка заявки", "mod:view:" + sub.getId())));
+            }
+            InlineKeyboardMarkup markup = rows.isEmpty() ? null : keyboardFactory.rowsLayout(rows);
+            for (Long modId : adminService.allModeratorIds()) {
+                try {
+                    sendText(modId, sb.toString(), markup);
+                } catch (Exception e) {
+                    log.warn("LeadGid conversion notice failed for {}", modId, e);
+                }
+            }
+        } catch (Exception e) {
+            log.error("[LeadGid] Failed to notify about conversion {}", event.getConversionId(), e);
         }
     }
 

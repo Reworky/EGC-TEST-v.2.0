@@ -737,6 +737,17 @@ public final class PartnerMissions {
         return null;
     }
 
+    /** Ссылка на заявку с номером заявки игрока на квест (?sid=N перед #карточкой): витрина кладёт его в SubID 4 ссылки LeadGid, по нему постбек находит игрока. Без номера - обычная ссылка. */
+    public static String applyLinkFor(PartnerMission pm, Long submissionId) {
+        if (pm == null || pm.applyLink() == null) return null;
+        String link = pm.applyLink();
+        if (submissionId == null) return link;
+        int hash = link.indexOf('#');
+        String base = hash < 0 ? link : link.substring(0, hash);
+        String tail = hash < 0 ? "" : link.substring(hash);
+        return base + (base.contains("?") ? "&" : "?") + "sid=" + submissionId + tail;
+    }
+
     public static Optional<PartnerMission> forGame(String gameName) {
         return ALL.stream().filter(pm -> pm.gameName().equals(gameName)).findFirst();
     }
