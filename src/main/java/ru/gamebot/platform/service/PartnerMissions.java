@@ -28,6 +28,8 @@ public final class PartnerMissions {
     public static final String OTPCREDIT_APPLY_LINK = "https://karty-bonus.pages.dev/#otpcredit";
     /** Ссылка на заявку кредитной карты Т-Банка (витрина cards-landing, карточка tbankcredit, раздел «Кредитные карты»; оффер LeadGid 5642). */
     public static final String TBANKCREDIT_APPLY_LINK = "https://karty-bonus.pages.dev/#tbankcredit";
+    /** Ссылка на заявку дебетовой карты Т-Банка Black (витрина cards-landing, карточка tbank, раздел «Дебетовые карты»). */
+    public static final String TBANKBLACK_APPLY_LINK = "https://karty-bonus.pages.dev/#tbank";
 
     private static final String[] COMMON_STAGE_NAMES = {"Закажи карту", "Первый платёж", "Докажи", "Банк платит"};
     private static final String COMMON_STAGE3 = "Покупка может висеть «В обработке» 1–3 дня. Когда статус изменится, пришли отчёт.";
@@ -785,7 +787,69 @@ public final class PartnerMissions {
             .applyHint("Выбери кредитную карту Т-Банка.")
             .build();
 
-    public static final List<PartnerMission> ALL = List.of(OTP, T_BLACK, T_MOBILE, VTB, ALFA, FORA, PSB, UBRR, SOVCOM, OTPCREDIT, TBANKCREDIT);
+    /** Т-Банк, дебетовая карта Black (21.11.2026, владелец: награда 400 ₽ = 40 000 EXCASH, 30 мест, старый квест T_BLACK выключить): банк клиенту денег не платит, клуб начисляет EXCASH после
+     *  подтверждения банка (clubExcash, /tbankblackbonus). Оффер LeadGid 4001: цель «Активация + транзакция» (выплата нам 1 311 ₽, автоподтверждение, апрув ~6 дней), заявка из РФ, карту передаёт
+     *  представитель банка. В тексте квеста НЕТ шага про скриншоты: подтверждение - постбеком LeadGid. РИСК: в правилах оффера запрещены мотивированный трафик, соцсети и мессенджеры. Баннер
+     *  tbankblack_card_banner.jpg ждёт одобрения владельцем (пока файла нет, карточка текстовая). */
+    public static final PartnerMission TBANKBLACK = PartnerMission.builder()
+            .key("tbankblack")
+            .gameName("Т-Банк Black (дебетовая)")
+            .questTitle("Оформи дебетовую карту Т-Банка Black и получи 400 ₽ 🎁")
+            .listLabel("Т-Банк Black")
+            .bannerResource("tbankblack_card_banner.jpg")
+            .stage1Banner("tbankblack_card_banner.jpg")
+            .shortTitle("Карта Т-Банка Black")
+            .missionTitle("карта Т-Банка Black")
+            .waitingName("Карта Т-Банка Black")
+            .rewardExc(0)
+            .bonusExc(0)
+            .bonusItem("400 ₽ на карту от клуба")
+            .finalTextItem("🏆 <b>Миссия выполнена!</b>\n\nБанк подтвердил карту. Менеджер переведёт тебе <b>400 ₽ на карту</b> от клуба: если денег нет больше суток, напиши ему.")
+            .windowDays(30)
+            .bankPayDays(14)
+            .bonusCommand("tbankblackbonus")
+            .stageNames(new String[]{"Закажи карту", "Активация", "Подтверждение", "Награда"})
+            .stage1Text("Оформи дебетовую карту Black по нашей ссылке. Именно по ней, иначе банк не засчитает карту. Перед заявкой отключи VPN. Карту передаст представитель банка при личной встрече.")
+            .stage2WaitText("Когда получишь карту, укажи дату её получения: от неё считаем срок на активацию.")
+            .stage2WaitButton("📅 Указать дату получения")
+            .dateQuestion("📅 <b>Когда ты получил(а) карту?</b>")
+            .dateHint("Нужно, чтобы посчитать срок: активировать карту и сделать по ней первую операцию можно в течение 30 дней с получения.")
+            .stage2Text("Активируй карту в приложении Т-Банка и сделай по ней первую операцию на любую сумму: банк засчитывает только активированную карту.")
+            .stage2LinkLabel(null)
+            .paidButton("✅ Я активировал(а) карту и сделал(а) операцию")
+            .stage3Text("Подтверждение придёт от банка, ничего присылать не нужно.")
+            .stage4Text("⏳ <b>Квест ещё не закончен: остался финал за {bonusText}.</b> Банку нужно подтвердить твою карту.\n\n"
+                    + "<b>Что дальше:</b>\n"
+                    + "1️⃣ Банк подтверждает карту обычно в течение 14 дней (до {date}). Раньше награды не будет.\n"
+                    + "2️⃣ Когда банк подтвердит, мы {bonusGive}.\n"
+                    + "Если до {date7} награды нет, напиши менеджеру.")
+            .finalText(FINAL_TEXT_PLAIN)
+            .bankDateWord("до")
+            .bankClaimButton("💰 Спросить про 400 ₽")
+            .bankDayCheck("Проверь карту.")
+            .bankDayReminder("💰 <b>Банк мог уже подтвердить твою карту.</b>\n\nЕсли 400 ₽ от клуба ещё нет, нажми кнопку: мы проверим подтверждение банка и {bonusGive}. Напишем тебе.")
+            .deadlineReminder("⏰ <b>Осталось {days} дн., чтобы активировать карту и сделать по ней операцию</b> (до {win}).\n\nПотом банк не засчитает карту.")
+            .report1Prompt("Подтверждение из приложения банка.\n🔒 Личные данные закрой.")
+            .report2Prompt("Дополнительное подтверждение из приложения банка.\n🔒 Личные данные закрой.")
+            .stage3Banner("otp_step3_banner.jpg")
+            .stage4Banner("otp_step4_banner.jpg")
+            .finalBanner("otp_step5_banner.jpg")
+            .returnReasons(new String[][]{RET_MASK, RET_BLUR})
+            .finalReasons(new String[][]{
+                    FINAL_FAKE,
+                    {"📛 Условия банка не выполнены", "Условия банка не выполнены: заявка оформлена не по нашей ссылке (или при включённом VPN), либо банк не подтвердил карту."}})
+            .bankRewardLine("🎁 400 ₽ на карту от клуба")
+            .bankRewardRub(0)
+            .clubRewardRub(400)
+            .clubExcash(true)
+            .compensationExc(0)
+            .managerProofText("Когда получишь карту, активируешь её и сделаешь по ней операцию, пришли менеджеру")
+            .managerConditions("Нужна новая карта Т-Банка Black (заявка из РФ). Банк должен подтвердить активацию карты и первую операцию.")
+            .applyLink(TBANKBLACK_APPLY_LINK)
+            .applyHint("Выбери карту Т-Банка Black.")
+            .build();
+
+    public static final List<PartnerMission> ALL = List.of(OTP, T_BLACK, T_MOBILE, VTB, ALFA, FORA, PSB, UBRR, SOVCOM, OTPCREDIT, TBANKCREDIT, TBANKBLACK);
 
     /** Партнёрские привилегии (статус партнёра, курс вывода 100%, разовый запас вывода, бейдж «Банкир EGC») даёт только квест из WithdrawalPartners.ALL (сейчас ОТП, решение
      *  владельца 09.11.2026); остальные квесты банков и операторов только платят награду. */

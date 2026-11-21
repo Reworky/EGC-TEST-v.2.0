@@ -2790,6 +2790,45 @@ public class QuestSeeder implements CommandLineRunner {
             questRepository.save(tbankCreditQuest);
             log.info("[QuestSeeder] Created partner quest: Т-Банк кредитная карта");
         }
+        // ── Партнёрская миссия «Т-Банк Black (дебетовая)», 21.11.2026 (владелец: награда 400 ₽ = 40 000 EXCASH, 30 мест, старый квест «Т-Банк Black» выключить): банк клиенту не платит, клуб начисляет
+        // EXCASH после подтверждения банка (постбек LeadGid -> сообщение админу -> кнопка «Начислить»). Шага про скриншоты нет; активна сразу. Тексты и числа - в PartnerMissions.TBANKBLACK.
+        // Тексты написаны с «₽ на карту», как у остальных: миграция EXCASH (clubExcash) заменит их на EXCASH при старте.
+        ru.gamebot.platform.service.PartnerMission tbankBlack = ru.gamebot.platform.service.PartnerMissions.TBANKBLACK;
+        if (questRepository.findFirstByTitleAndGameName(tbankBlack.questTitle(), tbankBlack.gameName()).isEmpty()) {
+            Quest tbankBlackQuest = new Quest();
+            tbankBlackQuest.setGameName(tbankBlack.gameName());
+            tbankBlackQuest.setTitle(tbankBlack.questTitle());
+            tbankBlackQuest.setPlatform("Онлайн");
+            tbankBlackQuest.setDurationDays(120);
+            tbankBlackQuest.setDurationText("120 дней");
+            tbankBlackQuest.setRewardXp(0);
+            tbankBlackQuest.setRewardCoins((int) tbankBlack.rewardExc());
+            tbankBlackQuest.setDescription("Награда за квест:\n"
+                    + "✅ 400 ₽ на карту лично от клуба\n"
+                    + "✅ Дебетовая карта Black: кэшбэк, бесплатные переводы и снятие наличных\n"
+                    + "✅ Карту передаёт представитель банка\n\n"
+                    + "🔒 Паспорт, коды из СМС и номер карты нам не нужны.\n\n"
+                    + "Как это работает:");
+            tbankBlackQuest.setInstruction("1️⃣ Оформи заявку на карту Black\n"
+                    + "После «Взять» появится кнопка «Оформить карту» со ссылкой на заявку.\n"
+                    + "Заявка должна быть оформлена именно по этой ссылке, иначе банк не засчитает карту. Перед заявкой отключи VPN и прокси.\n\n"
+                    + "2️⃣ Получи карту и активируй её\n"
+                    + "Карту передаст представитель банка при личной встрече. Активируй её в приложении Т-Банка и сделай по ней первую операцию на любую сумму: банк засчитывает только активированную карту.\n\n"
+                    + "3️⃣ Получи 400 ₽ от клуба\n"
+                    + "Банк подтверждает карту обычно в течение 14 дней. После подтверждения награда придёт на твой баланс.");
+            tbankBlackQuest.setRequirements("ℹ️ Кому подходит\n"
+                    + "Заявка из России, нужны документы по требованиям банка. Карта должна быть новой, один раз на аккаунт. "
+                    + "Банк клиенту денег за карту не платит: 400 ₽ платит клуб. Условия обслуживания определяет банк, оформив карту, ты с ними согласен.");
+            tbankBlackQuest.setModeratorChecklist("Заявка подтверждается постбеком LeadGid (сообщение админу, кнопка «Начислить»). Скриншоты у игрока не запрашиваются.");
+            tbankBlackQuest.setParticipantLimit(30);
+            tbankBlackQuest.setOneTimePerAccount(true);
+            tbankBlackQuest.setSponsored(true);
+            tbankBlackQuest.setActive(true);
+            tbankBlackQuest.setCouncilOnly(false);
+            tbankBlackQuest.setCreatedAt(LocalDateTime.now());
+            questRepository.save(tbankBlackQuest);
+            log.info("[QuestSeeder] Created partner quest: Т-Банк Black (дебетовая)");
+        }
         // 19.11.2026 (владелец: «включи квест в момент деплоя»): один раз включаем уже созданный выключенным квест; после этого админ вправе выключать/включать сам, сидер его состояние не трогает.
         final String sovcomActivatedKey = "sovcom.quest.activated";
         if (appSettingRepository.findById(sovcomActivatedKey).isEmpty()) {
@@ -2854,6 +2893,22 @@ public class QuestSeeder implements CommandLineRunner {
             black.setCreatedAt(LocalDateTime.now());
             questRepository.save(black);
             log.info("[QuestSeeder] Created partner quest: Т-Банк Black");
+        }
+        // 21.11.2026 (владелец: «старый выключить»): один раз выключаем прежний квест «Т-Банк Black» (500 ₽ от банка по акции «Приведи друга»), чтобы не конкурировал с новым. Выключается только
+        // для новых игроков; тех, кто уже взял квест, это не трогает. После этого админ вправе включить его сам, сидер состояние не трогает (ключ в app_settings).
+        final String tBlackOffKey = "tblack.quest.disabled.v1";
+        if (appSettingRepository.findById(tBlackOffKey).isEmpty()) {
+            questRepository.findFirstByTitleAndGameName(tBlack.questTitle(), tBlack.gameName()).ifPresent(oq -> {
+                if (oq.isActive()) {
+                    oq.setActive(false);
+                    questRepository.save(oq);
+                    log.info("[QuestSeeder] Disabled old partner quest once: Т-Банк Black (500 ₽ от банка)");
+                }
+            });
+            ru.gamebot.platform.domain.model.AppSetting tBlackOffMark = new ru.gamebot.platform.domain.model.AppSetting();
+            tBlackOffMark.setKey(tBlackOffKey);
+            tBlackOffMark.setValue(LocalDateTime.now().toString());
+            appSettingRepository.save(tBlackOffMark);
         }
         // ── Партнёрская миссия «Т-Мобайл SIM» (приведи друга в Т-Мобайл), 04.11.2026 ──
         // Создаётся активным (решение владельца 04.11.2026). Реферальная ссылка - T_MOBILE_LINK.
@@ -3804,7 +3859,8 @@ public class QuestSeeder implements CommandLineRunner {
     private void applyClubExcashTexts() {
         for (ru.gamebot.platform.service.PartnerMission pm : List.of(ru.gamebot.platform.service.PartnerMissions.VTB, ru.gamebot.platform.service.PartnerMissions.ALFA,
                 ru.gamebot.platform.service.PartnerMissions.FORA, ru.gamebot.platform.service.PartnerMissions.PSB, ru.gamebot.platform.service.PartnerMissions.UBRR,
-                ru.gamebot.platform.service.PartnerMissions.SOVCOM, ru.gamebot.platform.service.PartnerMissions.OTPCREDIT, ru.gamebot.platform.service.PartnerMissions.TBANKCREDIT)) {
+                ru.gamebot.platform.service.PartnerMissions.SOVCOM, ru.gamebot.platform.service.PartnerMissions.OTPCREDIT, ru.gamebot.platform.service.PartnerMissions.TBANKCREDIT,
+                ru.gamebot.platform.service.PartnerMissions.TBANKBLACK)) {
             try {
                 if (!pm.clubExcash() || pm.clubRewardRub() <= 0) continue;
                 String key = "quest.clubexcash.v1." + pm.key();
