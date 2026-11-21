@@ -2895,8 +2895,7 @@ public class QuestSeeder implements CommandLineRunner {
             log.info("[QuestSeeder] Created partner quest: Т-Банк Black");
         }
         // ── Партнёрская миссия «ВТБ, кредитная карта», 21.11.2026 (владелец: «1200 платим» = 120 000 EXCASH, 30 мест): банк клиенту не платит, клуб начисляет EXCASH после подтверждения банка
-        // (постбек LeadGid -> сообщение админу -> кнопка «Начислить»). Шага про скриншоты нет. Создаётся ВЫКЛЮЧЕННЫМ: карточка витрины vtbcredit - черновик, пока нет erid; админ включает квест, когда
-        // карточка опубликована. Тексты и числа миссии - в PartnerMissions.VTBCREDIT; ₽ заменит на EXCASH миграция при старте.
+        // (постбек LeadGid -> сообщение админу -> кнопка «Начислить»). Шага про скриншоты нет. Создаётся выключенным и один раз включается ниже (карточка витрины опубликована 21.11.2026). Тексты и числа миссии - в PartnerMissions.VTBCREDIT; ₽ заменит на EXCASH миграция при старте.
         ru.gamebot.platform.service.PartnerMission vtbCredit = ru.gamebot.platform.service.PartnerMissions.VTBCREDIT;
         if (questRepository.findFirstByTitleAndGameName(vtbCredit.questTitle(), vtbCredit.gameName()).isEmpty()) {
             Quest vtbCreditQuest = new Quest();
@@ -2932,6 +2931,21 @@ public class QuestSeeder implements CommandLineRunner {
             vtbCreditQuest.setCreatedAt(LocalDateTime.now());
             questRepository.save(vtbCreditQuest);
             log.info("[QuestSeeder] Created partner quest (inactive): ВТБ кредитная карта");
+        }
+        // 21.11.2026: карточка витрины vtbcredit опубликована (erid получен) - один раз включаем созданный выключенным квест при деплое; после этого админ вправе выключать/включать сам (ключ в app_settings).
+        final String vtbCreditActivatedKey = "vtbcredit.quest.activated";
+        if (appSettingRepository.findById(vtbCreditActivatedKey).isEmpty()) {
+            questRepository.findFirstByTitleAndGameName(vtbCredit.questTitle(), vtbCredit.gameName()).ifPresent(vq -> {
+                if (!vq.isActive()) {
+                    vq.setActive(true);
+                    questRepository.save(vq);
+                    log.info("[QuestSeeder] Activated partner quest once: ВТБ кредитная карта");
+                }
+            });
+            ru.gamebot.platform.domain.model.AppSetting vtbCreditMark = new ru.gamebot.platform.domain.model.AppSetting();
+            vtbCreditMark.setKey(vtbCreditActivatedKey);
+            vtbCreditMark.setValue(LocalDateTime.now().toString());
+            appSettingRepository.save(vtbCreditMark);
         }
         // 21.11.2026 (владелец: «старый выключить»): один раз выключаем прежний квест «Т-Банк Black» (500 ₽ от банка по акции «Приведи друга»), чтобы не конкурировал с новым. Выключается только
         // для новых игроков; тех, кто уже взял квест, это не трогает. После этого админ вправе включить его сам, сидер состояние не трогает (ключ в app_settings).
