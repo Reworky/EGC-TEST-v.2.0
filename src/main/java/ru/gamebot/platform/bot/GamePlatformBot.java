@@ -537,6 +537,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (text != null && (text.equals("/journey") || text.startsWith("/journey ")) && isEffectiveAdmin(user)) {
+            handleJourneyCommand(user, text.trim());
+            return;
+        }
+
         if (text != null && text.startsWith("/wdfreeze") && isEffectiveAdmin(user)) {
             String[] fz = text.trim().split("\\s+");
             if (fz.length != 3 || (!"on".equalsIgnoreCase(fz[2]) && !"off".equalsIgnoreCase(fz[2]))) {
@@ -1535,6 +1540,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if ("myquests:list:sponsored".equals(data)) fn(user, ru.gamebot.platform.service.NewbieFunnelService.SP_MYQ);
         if (data.startsWith("myquests:list:")) {
             sendMySubmissions(user, data.substring("myquests:list:".length()));
             answerSilently(callbackQuery.getId());
@@ -1545,6 +1551,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answerSilently(callbackQuery.getId());
             return;
         }
+        if ("quests:section:picks".equals(data)) fn(user, ru.gamebot.platform.service.NewbieFunnelService.SP_PICKS);
         if ("quests:section:picks".equals(data) || data.startsWith("quests:picks:")) {
             sendEksiPicks(user, data.startsWith("quests:picks:") ? data.substring("quests:picks:".length()) : null);
             answerSilently(callbackQuery.getId());
@@ -6355,6 +6362,38 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(admin.getTelegramId(), sb.toString(), null);
     }
 
+    /** Админ: /journey TelegramID - путь игрока по шагам воронки со временем (слайды, выбор пути, карточки, квесты, выплата, код дня). */
+    private void handleJourneyCommand(AppUser admin, String text) {
+        String[] p = text.split("\\s+");
+        if (p.length != 2) {
+            sendText(admin.getTelegramId(), "Формат: <code>/journey TelegramID</code> - путь игрока по шагам со временем.", null);
+            return;
+        }
+        try {
+            AppUser target = userService.findByTelegramId(Long.parseLong(p[1])).orElse(null);
+            if (target == null) {
+                sendText(admin.getTelegramId(), "⚠️ Игрок с таким Telegram ID не найден.", null);
+                return;
+            }
+            List<String[]> rows = newbieFunnel.timeline(target.getTelegramId(), target.getId(), target.getCreatedAt());
+            StringBuilder sb = new StringBuilder("🧭 <b>Путь игрока</b> ").append(escape(String.valueOf(target.getNickname()))).append(" (").append(target.getTelegramId()).append(")\n");
+            String src = target.getTrafficSourceCode();
+            sb.append("Источник: ").append(src == null || src.isBlank() ? "органика" : escape(src)).append("\n\n");
+            if (rows.isEmpty()) {
+                sb.append("Шагов нет: события пишутся только с 16.11.2026.");
+            } else {
+                sb.append("<pre>");
+                for (String[] r : rows) sb.append(r[0]).append("  ").append(escape(r[1])).append("\n");
+                sb.append("</pre>\nШаги воронки до 16.11 не записывались; квесты и код дня видны всегда.");
+            }
+            sendText(admin.getTelegramId(), sb.toString(), null);
+        } catch (NumberFormatException e) {
+            sendText(admin.getTelegramId(), "⚠️ Telegram ID - это число. Формат: <code>/journey TelegramID</code>.", null);
+        } catch (Exception e) {
+            sendText(admin.getTelegramId(), "⚠️ " + escape(String.valueOf(e.getMessage())), null);
+        }
+    }
+
     /** Админ: /firstquest - списки стартовых квестов по играм и какие из них сейчас активны; /firstquest bs А;Б - задать; /firstquest bs default - вернуть по умолчанию. */
     private void handleStarterCommand(AppUser admin, String text) {
         String[] p = text.split("\\s+", 3);
@@ -6544,6 +6583,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleStarterGamePick(user, sub.substring("game:".length()));
         } else if (sub.startsWith("pick:")) {
             fn(user, ru.gamebot.platform.service.NewbieFunnelService.GAME_PICK);
+            fn(user, ru.gamebot.platform.service.NewbieFunnelService.GAME_LIST);
             completeOnboarding(user);
             answerSilently(callbackQuery.getId());
             String game = decodeGameToken(sub.substring("pick:".length()));
@@ -8867,6 +8907,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("redbutton", "status|on|off|now [%]|plan|cancel ID|set КЛЮЧ ЗНАЧЕНИЕ|text post|teaser ТЕКСТ", "«Красная кнопка»: редкий крупный бонус к курсу вывода (расписание, предупреждение, закрытие)"),
             new AdminCommand("course", "status|on|off|now [%]|set КЛЮЧ ЗНАЧЕНИЕ", "«Курс дня»: бонус к курсу вывода (пост с кнопкой, проценты, потолок, бюджет)"),
             new AdminCommand("clubgoal", "status|link ID текст|off", "Цель клуба: состояние, кнопка-портал в квест, выключить портал"),
+            new AdminCommand("journey", "ID", "Путь игрока по шагам воронки со временем (слайды, выбор пути, карточки, квесты, выплата)"),
             new AdminCommand("wdfreeze", "ID on|off", "Заморозить или разморозить вывод игрока"),
             new AdminCommand("wdrecreate", "[go]", "Вернуть EXC по всем висящим (ожидающим) заявкам на вывод и попросить игроков создать заявку заново (технический сбой). Без go - только предпросмотр"),
             new AdminCommand("otpbonus", "ID [сумма EXC] [повтор]", "Партнёрская выплата ОТП Карта: включить статус партнёра, один раз открыть вывод, отметить миссию выполненной (бейдж). Взявшим с 12.11.2026 EXC не начисляются (подарок Telegram Premium отправить вручную); взявшим раньше - по умолчанию 50 000 или 100 000 EXC. Повторно только со словом «повтор»"),
@@ -9505,6 +9546,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         final String key = cat[0];
         if ("debit".equals(key)) fn(user, ru.gamebot.platform.service.NewbieFunnelService.SP_DEBIT);
+        else fn(user, ru.gamebot.platform.service.NewbieFunnelService.SP_OTHER);
         List<Quest> quests = activeSponsoredQuests().stream().filter(q -> key.equals(sponsoredCategory(q))).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         String head = "💼 <b>Спонсорские квесты · " + cat[2] + "</b>\n\n";
         List<Quest> catLeft = sponsoredNotDone(user, quests);
@@ -10129,6 +10171,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (quest.isSponsored() && quest.getChannelCheckChatId() != null) {
             sponsorPromoService.recordViewedOnce(questId, user.getId());
         }
+        if (quest.isSponsored() || quest.isExternalAutoApprove()) fn(user, ru.gamebot.platform.service.NewbieFunnelService.SP_ANY_CARD);
+        else if (!isMissionQuest(quest)) fn(user, ru.gamebot.platform.service.NewbieFunnelService.GAME_CARD);
         if (quest.isSponsored() || quest.isExternalAutoApprove()) partnerQuestFunnelService.sponsorViewed(user.getTelegramId(), questId); // вкладка аналитики «Спонсорские квесты» (19.11.2026)
         QuestSubmission latest = questService.getLatestSubmission(user, quest);
         boolean latestExpired = latest != null && questService.isExpired(latest);

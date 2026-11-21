@@ -1013,6 +1013,11 @@ public class AnalyticsService {
         } else if (r.clamped()) {
             t.append("ℹ️ События пишутся с ").append(DateTimeFormatter.ofPattern("dd.MM HH:mm").format(r.from())).append(": период обрезан по этому времени, чтобы шаги были сопоставимы.\n\n");
         }
+        if (r.newStepsSince() == null || r.from().isBefore(r.newStepsSince())) {
+            t.append("ℹ️ Шаги «Другой раздел», «Экси рекомендует», «Мои квесты», «Любая карточка», «Список квестов игры» и «Карточка квеста» пишутся с ")
+                    .append(r.newStepsSince() == null ? "момента выкладки" : DateTimeFormatter.ofPattern("dd.MM HH:mm").format(r.newStepsSince()))
+                    .append(": у пришедших раньше они пустые, а строка «Ни во что не нажали» скрыта до появления полной когорты.\n\n");
+        }
         t.append("<pre>");
         funnelRow(t, "Пришли (/start)", started, started, null);
         funnelRow(t, "Слайд 1", c.get("w1"), started, started);
@@ -1026,21 +1031,32 @@ public class AnalyticsService {
         funnelRow(t, "  ушли с экрана", stuck, started, c.get("choice"));
         funnelRow(t, "Открыли гл. меню", c.get("menu"), started, null);
         t.append("\n💳 Путь карты\n");
-        funnelRow(t, "Раздел спонсорских", c.get("sp_section"), started, c.get("cards"));
-        funnelRow(t, "Дебетовые карты", c.get("sp_debit"), started, c.get("sp_section"));
+        funnelRow(t, "Раздел спонсорских", c.get("sp_section"), started, null); // заходят и из главного меню, поэтому доля от «выбрали Карты» может быть больше 100%
+        funnelRow(t, "  Дебетовые карты", c.get("sp_debit"), started, c.get("sp_section"));
+        funnelRow(t, "  Другой раздел", c.get("sp_other"), started, c.get("sp_section"));
+        funnelRow(t, "  «Экси рекоменд.»", c.get("sp_picks"), started, c.get("sp_section"));
+        funnelRow(t, "  «Мои квесты»", c.get("sp_myq"), started, c.get("sp_section"));
+        funnelRow(t, "  Любая карточка", c.get("sp_any_card"), started, c.get("sp_section"));
+        // Новые шаги пишутся с момента выкладки: пока когорта целиком не новее их, «ни во что не нажали» было бы завышено у прежних игроков
+        boolean newStepsComplete = r.newStepsSince() != null && !r.from().isBefore(r.newStepsSince());
+        if (newStepsComplete) funnelRow(t, "  Ничего не нажали", Math.max(0, c.get("sp_section") - c.get("sp_acted")), started, c.get("sp_section"));
         funnelRow(t, "Карточка банка", c.get("bank_card"), started, c.get("sp_debit"));
         funnelRow(t, "Нажали «Взять»", c.get("take18"), started, c.get("bank_card"));
         funnelRow(t, "Запрос подписки", c.get("sub_prompt"), started, c.get("take18"));
         funnelRow(t, "  подписались", c.get("sub_after"), started, c.get("sub_prompt"));
         funnelRow(t, "Взяли квест банка", c.get("bank_taken"), started, c.get("take18"));
         funnelRow(t, "Экран «Оформить»", c.get("apply"), started, c.get("bank_taken"));
+        funnelRow(t, "Лид у банка (постб.)", c.get("lg_lead"), started, c.get("bank_taken"));
+        funnelRow(t, "  банк одобрил", c.get("lg_ok"), started, c.get("lg_lead"));
+        funnelRow(t, "  банк отклонил", c.get("lg_rej"), started, c.get("lg_lead"));
         funnelRow(t, "Менеджер проверил", c.get("bank_ok"), started, c.get("bank_taken"));
         funnelRow(t, "Выплата отмечена", c.get("bank_paid"), started, c.get("bank_taken"));
         t.append("\n🎮 Путь игр\n");
         funnelRow(t, "Экран выбора игры", c.get("picker"), started, c.get("games"));
         funnelRow(t, "Выбрали игру", c.get("pick"), started, c.get("picker"));
-        funnelRow(t, "Стартовая карточка", c.get("starter"), started, c.get("picker"));
-        funnelRow(t, "Взяли квест", c.get("game_taken"), started, c.get("picker"));
+        funnelRow(t, "Список квестов игры", c.get("game_list"), started, c.get("pick"));
+        funnelRow(t, "Карточка квеста", c.get("game_card"), started, c.get("game_list"));
+        funnelRow(t, "Взяли квест", c.get("game_taken"), started, c.get("game_card"));
         funnelRow(t, "Квест выполнен", c.get("game_ok"), started, c.get("game_taken"));
         t.append("\n⚙️ Общее\n");
         funnelRow(t, "Подписались на канал", c.get("activated"), started, started);
@@ -1049,26 +1065,46 @@ public class AnalyticsService {
         t.append("</pre>");
         extras.add(t.toString());
 
-        StringBuilder src = new StringBuilder("<b>По источникам трафика</b>\n<pre>источник        приш  карт  банк  выпл  игры  квест\n");
-        for (Object[] row : r.bySource()) {
-            src.append(String.format(RU, "%-14s %5d %5d %5d %5d %5d %5d%n", cut(String.valueOf(row[0]), 14),
-                    ((Number) row[1]).longValue(), ((Number) row[2]).longValue(), ((Number) row[3]).longValue(),
-                    ((Number) row[4]).longValue(), ((Number) row[5]).longValue(), ((Number) row[6]).longValue()));
-        }
-        if (r.bySource().isEmpty()) src.append("нет данных\n");
-        src.append("</pre><i>приш - пришли; карт - выбрали «Спонсорские квесты»; банк - взяли квест банка; выпл - выплата отмечена менеджером; игры - выбрали «Игры»; квест - взяли игровой квест.</i>");
-        extras.add(src.toString());
+        extras.add(sourceTable("По источникам: старт и выбор пути", r, new String[]{"приш", "сл.3", "выбор", "карты", "игры", "меню"},
+                new String[]{"", "w3", "choice", "cards", "games", "menu"}));
+        extras.add(sourceTable("По источникам: путь карты до «Взять»", r, new String[]{"карты", "разд", "дебет", "карт.б", "взять", "взяли"},
+                new String[]{"cards", "sp_section", "sp_debit", "bank_card", "take18", "bank_taken"}));
+        extras.add(sourceTable("По источникам: после «Взять» (лид у банка - по постбеку LeadGid)", r, new String[]{"взяли", "оформ", "лид", "одобр", "откл", "выпл"},
+                new String[]{"bank_taken", "apply", "lg_lead", "lg_ok", "lg_rej", "bank_paid"}));
+        extras.add(sourceTable("По источникам: путь игр", r, new String[]{"игры", "выбор", "спис", "карт", "взяли", "вып"},
+                new String[]{"games", "picker", "game_list", "game_card", "game_taken", "game_ok"}));
         extras.add("<i>Как читать: «от пред.» - доля от шага, из которого человек должен был прийти; именно там, где она резко падает, и теряются люди. "
-                + "Нажатие «Оформить карту» не видно: кнопка уходит на сайт мимо бота. После «Взять» квест банка идёт в личке с менеджером (отчётов в боте нет), "
-                + "поэтому «Менеджер проверил» и «Выплата отмечена» заполняются только тогда, когда менеджер отметил проверку заявки или выплату в боте "
+                + "Нажатие «Оформить карту» не видно: кнопка уходит на сайт мимо бота, но о реально оформленной заявке сообщает постбек LeadGid («Лид у банка», решение банка - «одобрил / отклонил»; "
+                + "связь с игроком по номеру заявки в SubID 4, если метка не дошла, лид не засчитается игроку). «Менеджер проверил» и «Выплата отмечена» заполняются только тогда, когда менеджер отметил проверку заявки или выплату в боте "
                 + "(команды /otpbonus, /vtbbonus, /alfabonus, /forabonus, /psbbonus, /ubrrbonus и т.д.); если не отмечает, строки останутся пустыми. "
-                + "Банк платит через 30+ дней, у свежих когорт выплаты ещё нет. Возврат на следующий день считается по журналу активности.</i>");
+                + "Банк платит через 30+ дней, у свежих когорт выплаты ещё нет. Возврат на следующий день считается по журналу активности. "
+                + "Путь одного игрока по шагам со временем: команда /journey TelegramID.</i>");
     }
 
     private static void funnelRow(StringBuilder sb, String label, long value, long baseStart, Long prev) {
         String ofStart = baseStart <= 0 ? "  -" : String.format(RU, "%3.0f%%", pct(value, baseStart));
         String ofPrev = prev == null ? "" : (prev <= 0 ? "   -" : String.format(RU, "%4.0f%%", pct(value, prev)));
         sb.append(String.format(RU, "%-20s %5d %s %s%n", label, value, ofStart, ofPrev));
+    }
+
+    /** Таблица «источник × шаги»: heads - подписи колонок, keys - ключи метрик (пустой ключ - число пришедших). Каждая колонка - число людей, дошедших до шага. */
+    private static String sourceTable(String title, NewbieFunnelService.Report r, String[] heads, String[] keys) {
+        StringBuilder sb = new StringBuilder("<b>" + title + "</b>\n<pre>");
+        sb.append(String.format(RU, "%-10s", "источник"));
+        for (String h : heads) sb.append(String.format(RU, " %6s", h));
+        sb.append("\n");
+        for (Object[] row : r.bySource()) {
+            sb.append(String.format(RU, "%-10s", cut(String.valueOf(row[0]), 10)));
+            for (String k : keys) {
+                int idx = k.isEmpty() ? 1 : r.sourceKeys().indexOf(k) + 2; // [0] источник, [1] пришли, дальше по порядку sourceKeys
+                long v = (!k.isEmpty() && idx < 2) || idx >= row.length ? 0 : ((Number) row[idx]).longValue();
+                sb.append(String.format(RU, " %6d", v));
+            }
+            sb.append("\n");
+        }
+        if (r.bySource().isEmpty()) sb.append("нет данных\n");
+        sb.append("</pre>");
+        return sb.toString();
     }
 
     private static String cut(String v, int n) {

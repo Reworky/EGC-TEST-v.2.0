@@ -31,7 +31,10 @@ public class NewbieFunnelService {
             CHOICE_SHOWN = "choice_shown", CHOICE_CARDS = "choice_cards", CHOICE_GAMES = "choice_games",
             MENU = "menu_shown", SP_SECTION = "sp_section", SP_DEBIT = "sp_debit", BANK_CARD = "bank_card", SUB_PROMPT = "sub_prompt",
             BANK_TAKE = "bank_take18", APPLY_SHOWN = "apply_shown",
-            GAMES_PICKER = "games_picker", GAME_PICK = "game_pick", STARTER_CARD = "starter_card";
+            GAMES_PICKER = "games_picker", GAME_PICK = "game_pick", STARTER_CARD = "starter_card",
+            // 21.11.2026 (просьба владельца: видеть каждый шаг): список квестов игры и карточка игрового квеста (старая «стартовая карточка» после смены сценария не показывается),
+            // куда ещё нажимали в разделе спонсорских квестов и просмотр карточки любого спонсорского квеста
+            GAME_LIST = "game_list", GAME_CARD = "game_card", SP_OTHER = "sp_other", SP_PICKS = "sp_picks", SP_MYQ = "sp_myq", SP_ANY_CARD = "sp_any_card";
 
     private static final int CACHE_LIMIT = 300_000;
 
@@ -67,6 +70,17 @@ public class NewbieFunnelService {
         }
     }
 
+    /** С какого момента пишутся шаги, добавленные 21.11.2026 (список квестов игры, карточки, разделы спонсорских); null - ещё не писались. */
+    public LocalDateTime newStepsSince() {
+        try {
+            Object r = entityManager.createNativeQuery("SELECT MIN(created_at) FROM funnel_events WHERE step IN ('" + GAME_LIST + "','" + GAME_CARD + "','"
+                    + SP_OTHER + "','" + SP_PICKS + "','" + SP_MYQ + "','" + SP_ANY_CARD + "')").getSingleResult();
+            return r == null ? null : (r instanceof java.sql.Timestamp t ? t.toLocalDateTime() : (LocalDateTime) r);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private String ev(String step) {
         return "EXISTS(SELECT 1 FROM funnel_events e WHERE e.telegram_id = u.telegram_id AND e.step = '" + step + "')";
     }
@@ -82,6 +96,10 @@ public class NewbieFunnelService {
 
     private String bankSub(String cond) {
         return "EXISTS(SELECT 1 FROM quest_submissions s JOIN quests q ON q.id = s.quest_id WHERE s.user_id = u.id AND q.game_name IN (" + bankNames() + ")" + cond + ")";
+    }
+
+    private String lgConv(String cond) {
+        return "EXISTS(SELECT 1 FROM leadgid_conversions l JOIN quest_submissions s ON s.id = l.submission_id WHERE s.user_id = u.id" + cond + ")";
     }
 
     private String gameSub(String cond) {
@@ -109,12 +127,23 @@ public class NewbieFunnelService {
         m.put("take18", ev(BANK_TAKE));
         m.put("bank_taken", bankSub(""));
         m.put("apply", ev(APPLY_SHOWN));
+        // Постбек LeadGid (21.11.2026): лид у банка появляется, когда игрок реально оформил заявку по ссылке; статус - решение банка. Связь с игроком - по номеру заявки из SubID 4
+        m.put("lg_lead", lgConv(""));
+        m.put("lg_ok", lgConv(" AND l.status_norm = 'APPROVED'"));
+        m.put("lg_rej", lgConv(" AND l.status_norm = 'REJECTED'"));
         m.put("bank_report", bankSub(" AND s.status IN ('PENDING','APPROVED','REJECTED','NEEDS_INFO')"));
         m.put("bank_ok", bankSub(" AND s.status = 'APPROVED'"));
         m.put("bank_paid", bankSub(" AND s.bonus_paid_at IS NOT NULL"));
         m.put("picker", ev(GAMES_PICKER));
         m.put("pick", ev(GAME_PICK));
         m.put("starter", ev(STARTER_CARD));
+        m.put("game_list", ev(GAME_LIST));
+        m.put("game_card", ev(GAME_CARD));
+        m.put("sp_other", ev(SP_OTHER));
+        m.put("sp_picks", ev(SP_PICKS));
+        m.put("sp_myq", ev(SP_MYQ));
+        m.put("sp_any_card", ev(SP_ANY_CARD));
+        m.put("sp_acted", "(" + ev(SP_DEBIT) + " OR " + ev(SP_OTHER) + " OR " + ev(SP_PICKS) + " OR " + ev(SP_MYQ) + " OR " + ev(SP_ANY_CARD) + ")");
         m.put("game_taken", gameSub(""));
         m.put("game_ok", gameSub(" AND s.status = 'APPROVED'"));
         m.put("activated", "u.registration_completed = TRUE");
@@ -125,7 +154,13 @@ public class NewbieFunnelService {
         return m;
     }
 
-    public record Report(LocalDateTime from, LocalDateTime to, boolean clamped, boolean hasEvents, Map<String, Long> counts, List<Object[]> bySource) { }
+    /** Колонки таблиц «по источникам» (после источника и числа пришедших): ключи метрик без параметра ?3. */
+    public static final List<String> SOURCE_KEYS = List.of("w3", "choice", "cards", "games", "menu",
+            "sp_section", "sp_debit", "bank_card", "take18", "bank_taken", "apply", "lg_lead", "lg_ok", "lg_rej", "bank_ok", "bank_paid",
+            "picker", "game_list", "game_card", "game_taken", "game_ok");
+
+    /** bySource: строки [источник, пришли, по одному числу на каждый ключ из sourceKeys]. */
+    public record Report(LocalDateTime from, LocalDateTime to, boolean clamped, boolean hasEvents, LocalDateTime newStepsSince, Map<String, Long> counts, List<String> sourceKeys, List<Object[]> bySource) { }
 
     /** from/to - окно регистрации когорты. Если событий ещё нет, считаются только шаги по базе (hasEvents = false). */
     public Report report(LocalDateTime from, LocalDateTime to) {
@@ -157,22 +192,20 @@ public class NewbieFunnelService {
             Object v = row[i++];
             counts.put(k, v == null ? 0L : ((Number) v).longValue());
         }
-        return new Report(f, to, clamped, since != null, counts, bySource(f, to, mature, m));
+        return new Report(f, to, clamped, since != null, newStepsSince(), counts, SOURCE_KEYS, bySource(f, to, m));
     }
 
-    /** По источникам: [источник, пришли, выбрали карты, взяли квест банка, банк выплатил, выбрали игры, взяли игровой квест]. */
+    /** По источникам: [источник, пришли, и по одному числу на каждый ключ из SOURCE_KEYS]. */
     @SuppressWarnings("unchecked")
-    private List<Object[]> bySource(LocalDateTime f, LocalDateTime to, LocalDateTime mature, Map<String, String> m) {
+    private List<Object[]> bySource(LocalDateTime f, LocalDateTime to, Map<String, String> m) {
         try {
-            String sql = "SELECT COALESCE(NULLIF(u.traffic_source_code, ''), 'органика') AS grp, COUNT(*), "
-                    + "COALESCE(SUM(CASE WHEN " + m.get("cards") + " THEN 1 ELSE 0 END), 0), "
-                    + "COALESCE(SUM(CASE WHEN " + m.get("bank_taken") + " THEN 1 ELSE 0 END), 0), "
-                    + "COALESCE(SUM(CASE WHEN " + m.get("bank_paid") + " THEN 1 ELSE 0 END), 0), "
-                    + "COALESCE(SUM(CASE WHEN " + m.get("games") + " THEN 1 ELSE 0 END), 0), "
-                    + "COALESCE(SUM(CASE WHEN " + m.get("game_taken") + " THEN 1 ELSE 0 END), 0) "
-                    + "FROM app_users u WHERE u.created_at >= ?1 AND u.created_at < ?2 "
-                    + "GROUP BY COALESCE(NULLIF(u.traffic_source_code, ''), 'органика') ORDER BY COUNT(*) DESC LIMIT 8";
-            jakarta.persistence.Query q = entityManager.createNativeQuery(sql);
+            StringBuilder sql = new StringBuilder("SELECT COALESCE(NULLIF(u.traffic_source_code, ''), 'органика') AS grp, COUNT(*)");
+            for (String k : SOURCE_KEYS) {
+                sql.append(", COALESCE(SUM(CASE WHEN ").append(m.get(k)).append(" THEN 1 ELSE 0 END), 0)");
+            }
+            sql.append(" FROM app_users u WHERE u.created_at >= ?1 AND u.created_at < ?2 "
+                    + "GROUP BY COALESCE(NULLIF(u.traffic_source_code, ''), 'органика') ORDER BY COUNT(*) DESC LIMIT 8");
+            jakarta.persistence.Query q = entityManager.createNativeQuery(sql.toString());
             q.setParameter(1, f);
             q.setParameter(2, to);
             return q.getResultList();
@@ -180,5 +213,81 @@ public class NewbieFunnelService {
             log.warn("[NewbieFunnel] by-source query failed", e);
             return List.of();
         }
+    }
+
+    private static final Map<String, String> STEP_LABELS = new LinkedHashMap<>();
+    static {
+        STEP_LABELS.put(W1, "Слайд 1");
+        STEP_LABELS.put(W2, "Слайд 2");
+        STEP_LABELS.put(W3, "Слайд 3");
+        STEP_LABELS.put(W_SKIP, "Нажал «Пропустить»");
+        STEP_LABELS.put(W_DONE, "Дошёл до конца слайдов");
+        STEP_LABELS.put(CHOICE_SHOWN, "Экран выбора пути");
+        STEP_LABELS.put(CHOICE_CARDS, "Выбрал «Спонсорские квесты»");
+        STEP_LABELS.put(CHOICE_GAMES, "Выбрал «Игры»");
+        STEP_LABELS.put(MENU, "Открыл главное меню");
+        STEP_LABELS.put(SP_SECTION, "Раздел спонсорских квестов");
+        STEP_LABELS.put(SP_DEBIT, "Открыл «Дебетовые карты»");
+        STEP_LABELS.put(SP_OTHER, "Открыл другой раздел спонсорских");
+        STEP_LABELS.put(SP_PICKS, "Открыл «Экси рекомендует»");
+        STEP_LABELS.put(SP_MYQ, "Открыл «Мои квесты» спонсорских");
+        STEP_LABELS.put(SP_ANY_CARD, "Открыл карточку спонсорского квеста");
+        STEP_LABELS.put(BANK_CARD, "Открыл карточку банка");
+        STEP_LABELS.put(BANK_TAKE, "Нажал «Взять» (банк)");
+        STEP_LABELS.put(SUB_PROMPT, "Ему показан запрос подписки");
+        STEP_LABELS.put(APPLY_SHOWN, "Экран «Оформить карту»");
+        STEP_LABELS.put(GAMES_PICKER, "Экран выбора игры");
+        STEP_LABELS.put(GAME_PICK, "Выбрал игру");
+        STEP_LABELS.put(GAME_LIST, "Список квестов игры");
+        STEP_LABELS.put(GAME_CARD, "Карточка игрового квеста");
+        STEP_LABELS.put(STARTER_CARD, "Стартовая карточка (старый сценарий)");
+    }
+
+    /** Путь одного игрока (команда /journey): шаги воронки со временем, квесты и статусы заявок. Строки уже без HTML-экранирования - экранирует вызывающий. */
+    @SuppressWarnings("unchecked")
+    public List<String[]> timeline(Long telegramId, Long userId, LocalDateTime registeredAt) {
+        List<Object[]> rows = new java.util.ArrayList<>(); // [время, текст]
+        try {
+            if (registeredAt != null) rows.add(new Object[]{registeredAt, "Пришёл в бота"});
+            for (Object[] r : (List<Object[]>) entityManager.createNativeQuery(
+                    "SELECT step, created_at FROM funnel_events WHERE telegram_id = ?1 ORDER BY created_at").setParameter(1, telegramId).getResultList()) {
+                String step = String.valueOf(r[0]);
+                rows.add(new Object[]{toTime(r[1]), STEP_LABELS.getOrDefault(step, step)});
+            }
+            if (userId != null) {
+                for (Object[] r : (List<Object[]>) entityManager.createNativeQuery(
+                        "SELECT q.title, s.status, s.created_at, s.bonus_paid_at FROM quest_submissions s JOIN quests q ON q.id = s.quest_id "
+                                + "WHERE s.user_id = ?1 ORDER BY s.created_at").setParameter(1, userId).getResultList()) {
+                    String title = String.valueOf(r[0]);
+                    rows.add(new Object[]{toTime(r[2]), "Взял квест «" + title + "» (сейчас: " + r[1] + ")"});
+                    if (r[3] != null) rows.add(new Object[]{toTime(r[3]), "Выплата отмечена по квесту «" + title + "»"});
+                }
+                for (Object[] r : (List<Object[]>) entityManager.createNativeQuery(
+                        "SELECT l.created_at, l.status_norm, q.title FROM leadgid_conversions l JOIN quest_submissions s ON s.id = l.submission_id "
+                                + "JOIN quests q ON q.id = s.quest_id WHERE s.user_id = ?1 ORDER BY l.created_at").setParameter(1, userId).getResultList()) {
+                    String st = String.valueOf(r[1]);
+                    String human = "APPROVED".equals(st) ? "банк одобрил" : "REJECTED".equals(st) ? "банк отклонил" : "PENDING".equals(st) ? "лид на проверке у банка" : "статус не распознан";
+                    rows.add(new Object[]{toTime(r[0]), "LeadGid по «" + r[2] + "»: " + human});
+                }
+                for (Object r : (List<Object>) entityManager.createNativeQuery(
+                        "SELECT claimed_at FROM daily_code_claims WHERE user_id = ?1 ORDER BY claimed_at LIMIT 1").setParameter(1, userId).getResultList()) {
+                    rows.add(new Object[]{toTime(r), "Ввёл код дня (первый раз)"});
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[NewbieFunnel] timeline failed for {}", telegramId, e);
+        }
+        rows.removeIf(r -> r[0] == null);
+        rows.sort(java.util.Comparator.comparing((Object[] r) -> (LocalDateTime) r[0]));
+        List<String[]> out = new java.util.ArrayList<>();
+        for (Object[] r : rows) out.add(new String[]{java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm").format((LocalDateTime) r[0]), (String) r[1]});
+        return out;
+    }
+
+    private static LocalDateTime toTime(Object o) {
+        if (o == null) return null;
+        if (o instanceof java.sql.Timestamp t) return t.toLocalDateTime();
+        if (o instanceof LocalDateTime l) return l;
+        return null;
     }
 }
