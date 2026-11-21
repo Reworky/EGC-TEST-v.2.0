@@ -29,6 +29,8 @@ public final class PartnerMissions {
     /** Ссылка на заявку кредитной карты Т-Банка (витрина cards-landing, карточка tbankcredit, раздел «Кредитные карты»; оффер LeadGid 5642). */
     public static final String TBANKCREDIT_APPLY_LINK = "https://karty-bonus.pages.dev/#tbankcredit";
     /** Ссылка на заявку дебетовой карты Т-Банка Black (витрина cards-landing, карточка tbank, раздел «Дебетовые карты»). */
+    /** Ссылка на заявку кредитной карты ВТБ (витрина cards-landing, карточка vtbcredit, раздел «Кредитные карты»). */
+    public static final String VTBCREDIT_APPLY_LINK = "https://karty-bonus.pages.dev/#vtbcredit";
     public static final String TBANKBLACK_APPLY_LINK = "https://karty-bonus.pages.dev/#tbank";
 
     private static final String[] COMMON_STAGE_NAMES = {"Закажи карту", "Первый платёж", "Докажи", "Банк платит"};
@@ -787,6 +789,68 @@ public final class PartnerMissions {
             .applyHint("Выбери кредитную карту Т-Банка.")
             .build();
 
+    /** ВТБ, кредитная карта (21.11.2026, владелец: «1200 платим»): банк клиенту денег не платит, клуб начисляет EXCASH после подтверждения банка (clubExcash, /vtbcreditbonus). Оффер LeadGid 1967:
+     *  цель «Кредитная карта - выдача + транзакция» (выплата нам 3 206 ₽, холд 30 дней): выдача и расходная операция из кредитного лимита от 2 000 ₽; РФ, регистрация в регионе банка, доход от 5 000 ₽.
+     *  Шага про скриншоты нет: подтверждение - постбеком LeadGid. Квест создаётся ВЫКЛЮЧЕННЫМ: карточка витрины vtbcredit - черновик, пока нет erid. РИСК: разрешённые источники оффера
+     *  (классифайды, SEO, баннер, контекст, ретаргетинг) не включают наш способ. Баннер vtbcredit_card_banner.jpg ждёт одобрения владельцем. */
+    public static final PartnerMission VTBCREDIT = PartnerMission.builder()
+            .key("vtbcredit")
+            .gameName("ВТБ кредитная карта")
+            .questTitle("Оформи кредитную карту ВТБ и получи 1 200 ₽ 🎁")
+            .listLabel("ВТБ кредитка")
+            .bannerResource("vtbcredit_card_banner.jpg")
+            .stage1Banner("vtbcredit_card_banner.jpg")
+            .shortTitle("Кредитная карта ВТБ")
+            .missionTitle("кредитная карта ВТБ")
+            .waitingName("Кредитка ВТБ")
+            .rewardExc(0)
+            .bonusExc(0)
+            .bonusItem("1 200 ₽ на карту от клуба")
+            .finalTextItem("🏆 <b>Миссия выполнена!</b>\n\nБанк подтвердил карту. Менеджер переведёт тебе <b>1 200 ₽ на карту</b> от клуба: если денег нет больше суток, напиши ему.")
+            .windowDays(30)
+            .bankPayDays(30)
+            .bonusCommand("vtbcreditbonus")
+            .stageNames(new String[]{"Закажи карту", "Активация", "Подтверждение", "Награда"})
+            .stage1Text("Оформи кредитную карту ВТБ по нашей ссылке. Именно по ней, иначе банк не засчитает карту. Перед заявкой отключи VPN. Нужны гражданство РФ, постоянная регистрация в регионе присутствия банка и официальный доход от 5 000 ₽ в месяц. Карту привезёт курьер.")
+            .stage2WaitText("Когда получишь карту, укажи дату её получения: от неё считаем срок на активацию.")
+            .stage2WaitButton("📅 Указать дату получения")
+            .dateQuestion("📅 <b>Когда ты получил(а) карту?</b>")
+            .dateHint("Нужно, чтобы посчитать срок: сделать по карте расходную операцию из кредитного лимита от 2 000 ₽ можно в течение 30 дней с получения.")
+            .stage2Text("Сделай по карте расходную операцию из кредитного лимита от 2 000 ₽: покупку, перевод или снятие наличных. Банк засчитывает только карту с операцией.")
+            .stage2LinkLabel(null)
+            .paidButton("✅ Я сделал(а) операцию по карте")
+            .stage3Text("Подтверждение придёт от банка, ничего присылать не нужно.")
+            .stage4Text("⏳ <b>Квест ещё не закончен: остался финал за {bonusText}.</b> Банку нужно подтвердить твою карту.\n\n"
+                    + "<b>Что дальше:</b>\n"
+                    + "1️⃣ Банк подтверждает карту обычно в течение 30 дней (до {date}). Раньше награды не будет.\n"
+                    + "2️⃣ Когда банк подтвердит, мы {bonusGive}.\n"
+                    + "Если до {date7} награды нет, напиши менеджеру.")
+            .finalText(FINAL_TEXT_PLAIN)
+            .bankDateWord("до")
+            .bankClaimButton("💰 Спросить про 1 200 ₽")
+            .bankDayCheck("Проверь карту.")
+            .bankDayReminder("💰 <b>Банк мог уже подтвердить твою карту.</b>\n\nЕсли 1 200 ₽ от клуба ещё нет, нажми кнопку: мы проверим подтверждение банка и {bonusGive}. Напишем тебе.")
+            .deadlineReminder("⏰ <b>Осталось {days} дн., чтобы сделать по карте операцию</b> (до {win}).\n\nПотом банк не засчитает карту.")
+            .report1Prompt("Подтверждение из приложения банка.\n🔒 Личные данные закрой.")
+            .report2Prompt("Дополнительное подтверждение из приложения банка.\n🔒 Личные данные закрой.")
+            .stage3Banner("otp_step3_banner.jpg")
+            .stage4Banner("otp_step4_banner.jpg")
+            .finalBanner("otp_step5_banner.jpg")
+            .returnReasons(new String[][]{RET_MASK, RET_BLUR})
+            .finalReasons(new String[][]{
+                    FINAL_FAKE,
+                    {"📛 Условия банка не выполнены", "Условия банка не выполнены: заявка оформлена не по нашей ссылке (или при включённом VPN), либо банк не подтвердил карту."}})
+            .bankRewardLine("🎁 1 200 ₽ на карту от клуба")
+            .bankRewardRub(0)
+            .clubRewardRub(1200)
+            .clubExcash(true)
+            .compensationExc(0)
+            .managerProofText("Когда получишь карту и сделаешь по ней операцию, пришли менеджеру")
+            .managerConditions("Нужна новая кредитная карта ВТБ (РФ, доход от 5 000 ₽). Банк должен подтвердить выдачу карты и расходную операцию от 2 000 ₽.")
+            .applyLink(VTBCREDIT_APPLY_LINK)
+            .applyHint("Выбери кредитную карту ВТБ.")
+            .build();
+
     /** Т-Банк, дебетовая карта Black (21.11.2026, владелец: награда 400 ₽ = 40 000 EXCASH, 30 мест, старый квест T_BLACK выключить): банк клиенту денег не платит, клуб начисляет EXCASH после
      *  подтверждения банка (clubExcash, /tbankblackbonus). Оффер LeadGid 4001: цель «Активация + транзакция» (выплата нам 1 311 ₽, автоподтверждение, апрув ~6 дней), заявка из РФ, карту передаёт
      *  представитель банка. В тексте квеста НЕТ шага про скриншоты: подтверждение - постбеком LeadGid. РИСК: в правилах оффера запрещены мотивированный трафик, соцсети и мессенджеры. Баннер
@@ -849,7 +913,7 @@ public final class PartnerMissions {
             .applyHint("Выбери карту Т-Банка Black.")
             .build();
 
-    public static final List<PartnerMission> ALL = List.of(OTP, T_BLACK, T_MOBILE, VTB, ALFA, FORA, PSB, UBRR, SOVCOM, OTPCREDIT, TBANKCREDIT, TBANKBLACK);
+    public static final List<PartnerMission> ALL = List.of(OTP, T_BLACK, T_MOBILE, VTB, ALFA, FORA, PSB, UBRR, SOVCOM, OTPCREDIT, TBANKCREDIT, TBANKBLACK, VTBCREDIT);
 
     /** Партнёрские привилегии (статус партнёра, курс вывода 100%, разовый запас вывода, бейдж «Банкир EGC») даёт только квест из WithdrawalPartners.ALL (сейчас ОТП, решение
      *  владельца 09.11.2026); остальные квесты банков и операторов только платят награду. */

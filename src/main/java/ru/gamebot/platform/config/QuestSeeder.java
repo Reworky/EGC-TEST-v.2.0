@@ -2894,6 +2894,45 @@ public class QuestSeeder implements CommandLineRunner {
             questRepository.save(black);
             log.info("[QuestSeeder] Created partner quest: Т-Банк Black");
         }
+        // ── Партнёрская миссия «ВТБ, кредитная карта», 21.11.2026 (владелец: «1200 платим» = 120 000 EXCASH, 30 мест): банк клиенту не платит, клуб начисляет EXCASH после подтверждения банка
+        // (постбек LeadGid -> сообщение админу -> кнопка «Начислить»). Шага про скриншоты нет. Создаётся ВЫКЛЮЧЕННЫМ: карточка витрины vtbcredit - черновик, пока нет erid; админ включает квест, когда
+        // карточка опубликована. Тексты и числа миссии - в PartnerMissions.VTBCREDIT; ₽ заменит на EXCASH миграция при старте.
+        ru.gamebot.platform.service.PartnerMission vtbCredit = ru.gamebot.platform.service.PartnerMissions.VTBCREDIT;
+        if (questRepository.findFirstByTitleAndGameName(vtbCredit.questTitle(), vtbCredit.gameName()).isEmpty()) {
+            Quest vtbCreditQuest = new Quest();
+            vtbCreditQuest.setGameName(vtbCredit.gameName());
+            vtbCreditQuest.setTitle(vtbCredit.questTitle());
+            vtbCreditQuest.setPlatform("Онлайн");
+            vtbCreditQuest.setDurationDays(120);
+            vtbCreditQuest.setDurationText("120 дней");
+            vtbCreditQuest.setRewardXp(0);
+            vtbCreditQuest.setRewardCoins((int) vtbCredit.rewardExc());
+            vtbCreditQuest.setDescription("Награда за квест:\n"
+                    + "✅ 1 200 ₽ на карту лично от клуба\n"
+                    + "✅ Кредитная карта ВТБ с льготным периодом и кэшбэком\n"
+                    + "✅ Доставка карты курьером\n\n"
+                    + "🔒 Паспорт, коды из СМС и номер карты нам не нужны.\n\n"
+                    + "Как это работает:");
+            vtbCreditQuest.setInstruction("1️⃣ Оформи заявку на кредитную карту\n"
+                    + "После «Взять» появится кнопка «Оформить карту» со ссылкой на заявку.\n"
+                    + "Заявка должна быть оформлена именно по этой ссылке, иначе банк не засчитает карту. Перед заявкой отключи VPN и прокси.\n\n"
+                    + "2️⃣ Получи карту и сделай операцию\n"
+                    + "Карту привезёт курьер. Сделай по ней расходную операцию из кредитного лимита от 2 000 ₽: покупку, перевод или снятие наличных. Банк засчитывает только карту с операцией.\n\n"
+                    + "3️⃣ Получи 1 200 ₽ от клуба\n"
+                    + "Банк подтверждает карту в течение 30 дней. После подтверждения награда придёт на твой баланс.");
+            vtbCreditQuest.setRequirements("ℹ️ Кому подходит\n"
+                    + "Ты гражданин РФ, у тебя постоянная регистрация в регионе присутствия банка и официальный доход от 5 000 ₽ в месяц. "
+                    + "Банк клиенту денег за карту не платит: 1 200 ₽ платит клуб. Условия кредита определяет банк, оформив карту, ты с ними согласен.");
+            vtbCreditQuest.setModeratorChecklist("Заявка подтверждается постбеком LeadGid (сообщение админу, кнопка «Начислить»). Скриншоты у игрока не запрашиваются.");
+            vtbCreditQuest.setParticipantLimit(30);
+            vtbCreditQuest.setOneTimePerAccount(true);
+            vtbCreditQuest.setSponsored(true);
+            vtbCreditQuest.setActive(false);
+            vtbCreditQuest.setCouncilOnly(false);
+            vtbCreditQuest.setCreatedAt(LocalDateTime.now());
+            questRepository.save(vtbCreditQuest);
+            log.info("[QuestSeeder] Created partner quest (inactive): ВТБ кредитная карта");
+        }
         // 21.11.2026 (владелец: «старый выключить»): один раз выключаем прежний квест «Т-Банк Black» (500 ₽ от банка по акции «Приведи друга»), чтобы не конкурировал с новым. Выключается только
         // для новых игроков; тех, кто уже взял квест, это не трогает. После этого админ вправе включить его сам, сидер состояние не трогает (ключ в app_settings).
         final String tBlackOffKey = "tblack.quest.disabled.v1";
@@ -3860,7 +3899,8 @@ public class QuestSeeder implements CommandLineRunner {
         for (ru.gamebot.platform.service.PartnerMission pm : List.of(ru.gamebot.platform.service.PartnerMissions.VTB, ru.gamebot.platform.service.PartnerMissions.ALFA,
                 ru.gamebot.platform.service.PartnerMissions.FORA, ru.gamebot.platform.service.PartnerMissions.PSB, ru.gamebot.platform.service.PartnerMissions.UBRR,
                 ru.gamebot.platform.service.PartnerMissions.SOVCOM, ru.gamebot.platform.service.PartnerMissions.OTPCREDIT, ru.gamebot.platform.service.PartnerMissions.TBANKCREDIT,
-                ru.gamebot.platform.service.PartnerMissions.TBANKBLACK)) {
+                ru.gamebot.platform.service.PartnerMissions.TBANKBLACK,
+                ru.gamebot.platform.service.PartnerMissions.VTBCREDIT)) {
             try {
                 if (!pm.clubExcash() || pm.clubRewardRub() <= 0) continue;
                 String key = "quest.clubexcash.v1." + pm.key();
