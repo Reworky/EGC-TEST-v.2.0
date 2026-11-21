@@ -26938,7 +26938,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
     }
 
-    /** Постбек LeadGid (20.11.2026): модераторам и админам - кто из игроков (по номеру заявки из SubID 4), по какому офферу и в каком статусе конверсия. При статусе «подтверждена» кнопка «Начислить»
+    /** Постбек LeadGid (20.11.2026): только админам - кто из игроков (по номеру заявки из SubID 4), по какому офферу и в каком статусе конверсия. При статусе «подтверждена» кнопка «Начислить»
      *  (существующий mod:pbonus: та же выплата, что команда /…bonus, с защитой от двойной выплаты). Игроку ничего не отправляется (текст для игрока - после одобрения владельцем). */
     @org.springframework.context.event.EventListener
     public void onLeadgidConversion(ru.gamebot.platform.event.LeadgidConversionEvent event) {
@@ -26984,11 +26984,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 rows.add(List.of(keyboardFactory.callback("📥 Карточка заявки", "mod:view:" + sub.getId())));
             }
             InlineKeyboardMarkup markup = rows.isEmpty() ? null : keyboardFactory.rowsLayout(rows);
-            for (Long modId : adminService.allModeratorIds()) {
+            // Только админам (владелец, 21.11.2026): модераторам сообщения о конверсиях LeadGid не уходят
+            for (Long adminId : adminService.allAdminIds()) {
                 try {
-                    sendText(modId, sb.toString(), markup);
+                    sendText(adminId, sb.toString(), markup);
                 } catch (Exception e) {
-                    log.warn("LeadGid conversion notice failed for {}", modId, e);
+                    log.warn("LeadGid conversion notice failed for {}", adminId, e);
                 }
             }
         } catch (Exception e) {
