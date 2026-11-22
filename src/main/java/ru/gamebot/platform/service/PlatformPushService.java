@@ -174,9 +174,8 @@ public class PlatformPushService {
                 int rank = i + 1;
                 String html = "🏁 <b>Гонка за Зал славы</b>\n\n"
                         + (rank <= 3
-                        ? "Ты сейчас в тройке: " + rank + "-е место, " + num(u.getWeeklyXp()) + " XP\n\nДержи отрыв до конца недели."
-                        : "Ты на " + rank + "-м месте с " + num(u.getWeeklyXp()) + " XP\n\nЧтобы попасть в тройку, нужно больше " + num(thirdXp) + " XP")
-                        + "\n\nНеделя закончится в понедельник в 03:00 по Москве.";
+                        ? "Ты сейчас в тройке: " + rank + "-е место, " + num(u.getWeeklyXp()) + " XP\n\nДержи отрыв до конца недели.\n\nНеделя закончится в понедельник в 03:00 по Москве."
+                        : "Ты на " + rank + "-м месте с " + num(u.getWeeklyXp()) + " XP\n\nЧтобы попасть в тройку, тебе нужно больше " + num(thirdXp) + " XP!\n\nУспевай! неделя закончится в понедельник в 03:00 по Москве.");
                 if (send(u, NudgeType.HALL_RACE, html, "🎯 Квесты", "menu:quests", null)) sent++;
             }
             log.info("[PlatformPush] hall race sent to {} player(s)", sent);
