@@ -14583,10 +14583,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long[] tiers = QuestService.UGC_VIEW_TIER_COINS;
         String[] labels = QuestService.UGC_VIEW_TIER_LABELS;
         StringBuilder scale = new StringBuilder();
+        boolean pilotOn = ugcPilotService.isActive();
         for (int i = 0; i < tiers.length && i < labels.length; i++) {
             long coins = i == 0 ? baseCoins : tiers[i];
             if (i > 0) scale.append("\n");
-            scale.append(i == 0 ? labels[i] + " просмотров" : labels[i]).append(": ").append(ugcNum(coins)).append(" EXC");
+            // Пилот «UGC в EXCASH»: ступени от 500 просмотров платятся в EXCASH, «до 500» остаётся в EXC
+            String unit = pilotOn && i >= ru.gamebot.platform.service.UgcPilotService.MIN_TIER ? "EXCASH" : "EXC";
+            scale.append(i == 0 ? labels[i] + " просмотров" : labels[i]).append(": ").append(ugcNum(coins)).append(" ").append(unit);
         }
         long maxCoins = tiers.length == 0 ? 25_000L : tiers[tiers.length - 1];
 
@@ -14594,8 +14597,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("Сними видео про клуб, вставь наш баннер и получи EXC за просмотры.\n");
         sb.append("До <b>").append(ugcNum(maxCoins)).append(" EXC</b> за ролик.\n\n");
         sb.append("<b>Сколько платим?</b>\n<blockquote>").append(scale).append("</blockquote>\n");
-        if (ugcPilotService.isActive()) {
-            sb.append("💎 От 500 просмотров платим в EXCASH: выводится без лимитов (100 EXCASH = 1 ₽), зачисление через ")
+        if (pilotOn) {
+            sb.append("\n💎 От 500 просмотров платим в EXCASH: выводится без лимитов (100 EXCASH = 1 ₽), зачисление через ")
                     .append(ru.gamebot.platform.service.UgcPilotService.HOLD_DAYS).append(" дня после проверки. До 500 просмотров: EXC.\n");
         }
 
