@@ -1109,6 +1109,13 @@ public class QuestService {
         return p.contains("instagram") || p.contains("tiktok") || p.contains("youtube");
     }
 
+    /** Горизонтальный UGC-квест (обычное видео YouTube 16:9): ему нужен горизонтальный баннер, остальным (Reels, TikTok, Shorts) - вертикальный. */
+    public static boolean isUgcHorizontalQuest(Quest quest) {
+        if (!isUgcLinkQuest(quest)) return false;
+        String title = quest.getTitle() == null ? "" : quest.getTitle().toLowerCase(java.util.Locale.ROOT);
+        return quest.getPlatform().toLowerCase(java.util.Locale.ROOT).contains("youtube") && !title.contains("shorts");
+    }
+
     private static final java.util.regex.Pattern UGC_INSTAGRAM = java.util.regex.Pattern.compile(
             "^https?://(?:www\\.)?instagram\\.com/(?:[A-Za-z0-9_.]+/)?(?:reels?|p|tv)/([A-Za-z0-9_-]{5,})", java.util.regex.Pattern.CASE_INSENSITIVE);
     private static final java.util.regex.Pattern UGC_TIKTOK_FULL = java.util.regex.Pattern.compile(

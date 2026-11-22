@@ -660,10 +660,17 @@ function QuestCard({ q, expanded, onToggle, details, onDetailChanged }) {
             </>
           )}
           {q.gameName === 'UGC' && (
-            <a className="quest-btn" style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 8 }}
-              href="/ugc/egc-banner.mp4" download="EGC-banner.mp4" target="_blank" rel="noopener noreferrer">
-              🎬 Скачать баннер
-            </a>
+            (() => {
+              // Горизонтальный баннер - только для обычного видео YouTube, для Reels, TikTok и Shorts - вертикальный
+              const horizontal = String(q.platform || '').toLowerCase() === 'youtube' && !/shorts/i.test(q.title || '');
+              return (
+                <a className="quest-btn" style={{ display: 'block', textAlign: 'center', textDecoration: 'none', marginTop: 8 }}
+                  href={horizontal ? '/ugc/egc-banner.mp4' : '/ugc/egc-banner-vertical.mp4'}
+                  download={horizontal ? 'EGC-banner-horizontal.mp4' : 'EGC-banner-vertical.mp4'} target="_blank" rel="noopener noreferrer">
+                  {horizontal ? '🎬 Скачать баннер (горизонтальный)' : '🎬 Скачать баннер (вертикальный)'}
+                </a>
+              );
+            })()
           )}
           {!(brawlAutoVerify && !externalAutoApprove) && !details[q.id]?.missionQuest && details[q.id]?.requirements && (
             <>

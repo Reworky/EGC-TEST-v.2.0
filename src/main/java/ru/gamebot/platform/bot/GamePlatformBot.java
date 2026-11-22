@@ -1372,7 +1372,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.startsWith("ugc:banner")) {
             answerSilently(callbackQuery.getId());
-            sendUgcBanner(user.getTelegramId(), data.startsWith("ugc:banner:") ? parseLong(data.substring("ugc:banner:".length())) : null);
+            if ("ugc:banner:v".equals(data) || "ugc:banner:h".equals(data)) {
+                sendUgcBanner(user.getTelegramId(), null, "ugc:banner:h".equals(data));
+            } else {
+                Long bannerQuestId = data.startsWith("ugc:banner:") ? parseLong(data.substring("ugc:banner:".length())) : null;
+                sendUgcBanner(user.getTelegramId(), bannerQuestId, null);
+            }
             return;
         }
         // «⬅️ Назад» под видео-баннером (19.11.2026, владелец): снова открывает карточку квеста, сообщение с видео убирается
@@ -9992,9 +9997,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             keyboardRows.add(List.of(
                     keyboardFactory.callback("📖 Как это работает", "ugc:how"),
                     keyboardFactory.callback("🔒 Идеи и примеры", "ugc:ideas")));
-            if (ugcBannerAvailable()) {
-                keyboardRows.add(List.of(keyboardFactory.callback("🎬 Скачать баннер", "ugc:banner")));
-            }
+            keyboardRows.addAll(ugcBannerButtonRows());
             keyboardRows.add(List.of(keyboardFactory.callback(myQuestsLabel(user, "ugc"), "myquests:list:ugc")));
         }
         keyboardRows.add(List.of(
@@ -10297,7 +10300,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             buttons.add(keyboardFactory.url("📢 Открыть канал", quest.getChannelCheckUrl()));
         }
         // UGC (19.11.2026, владелец): видео-баннер EGC, который нужно вставить в ролик, игрок получает файлом по кнопке (пока файла в ресурсах нет, кнопки нет)
-        if ("UGC".equalsIgnoreCase(quest.getGameName()) && ugcBannerAvailable()) {
+        if ("UGC".equalsIgnoreCase(quest.getGameName()) && (ugcBannerAvailable() || ugcBannerVerticalAvailable())) {
             buttons.add(keyboardFactory.callback("🎬 Скачать баннер", "ugc:banner:" + quest.getId()));
         }
         if (nextQuestData != null) {
@@ -14523,6 +14526,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Видео-баннер EGC для UGC-квестов (файл src/main/resources/ugc_banner.mp4): игрок вставляет его в свой ролик на 6-й секунде. */
     private static final String UGC_BANNER_RESOURCE = "ugc_banner.mp4";
     private volatile String ugcBannerFileId;
+    /** Вертикальный видео-баннер (480x854) для Reels, TikTok и YouTube Shorts; горизонтальный (854x480) - для обычного видео YouTube. */
+    private static final String UGC_BANNER_VERTICAL_RESOURCE = "ugc_banner_vertical.mp4";
+    private volatile String ugcBannerVerticalFileId;
+
+    private boolean ugcBannerVerticalAvailable() {
+        return getClass().getResource("/" + UGC_BANNER_VERTICAL_RESOURCE) != null;
+    }
+
+    /** Кнопки скачивания баннера: оба формата, если оба файла лежат в ресурсах. */
+    private List<List<InlineKeyboardButton>> ugcBannerButtonRows() {
+        List<InlineKeyboardButton> row = new ArrayList<>();
+        if (ugcBannerVerticalAvailable()) row.add(keyboardFactory.callback("📱 Баннер вертикальный", "ugc:banner:v"));
+        if (ugcBannerAvailable()) row.add(keyboardFactory.callback("🖥 Баннер горизонтальный", "ugc:banner:h"));
+        return row.isEmpty() ? List.of() : List.of(row);
+    }
 
     private boolean ugcBannerAvailable() {
         return getClass().getResource("/" + UGC_BANNER_RESOURCE) != null;
@@ -14588,7 +14606,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** «Как это работает» раздела UGC: четыре шага, правила и разница между вертикальными и горизонтальными роликами. */
     private void sendUgcHowItWorks(AppUser user) {
         String text = "📖 <b>Как это работает</b>\n\n"
-                + "1️⃣ Скачай баннер: кнопка «🎬 Скачать баннер».\n"
+                + "1️⃣ Скачай баннер: вертикальный для Reels, TikTok и Shorts, горизонтальный для обычного видео на YouTube.\n"
                 + "2️⃣ Вставь его в своё видео на 6-й секунде, целиком, без обрезки и ускорения.\n"
                 + "3️⃣ Опубликуй видео и размести реферальную ссылку в описании, комментарии или в самом видео. Ссылка лежит в разделе «Реферальная программа».\n"
                 + "4️⃣ Возьми квест нужной площадки и пришли ссылку на ролик. Отправляй, когда ролик уже набрал просмотры: считаем один раз, в момент проверки.\n\n"
@@ -14596,7 +14614,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "🖥 Горизонтальные ролики: отдельный квест «Видео на YouTube».\n\n"
                 + "<b>Не засчитаем:</b> нет баннера или ссылки, закрытый аккаунт, чужое видео, накрутка просмотров.";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        if (ugcBannerAvailable()) rows.add(List.of(keyboardFactory.callback("🎬 Скачать баннер", "ugc:banner")));
+        rows.addAll(ugcBannerButtonRows());
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "quests:section:ugc"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
     }
@@ -14632,27 +14650,44 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     /** Присылает игроку видео-баннер файлом (первая отправка грузит файл, дальше - по file_id из Telegram). */
-    private void sendUgcBanner(Long chatId, Long questId) {
+    private void sendUgcBanner(Long chatId, Long questId, Boolean horizontalChoice) {
         try {
+            // Формат: явный выбор на экране раздела; с карточки квеста - по квесту (горизонтальный только у обычного видео YouTube); иначе вертикальный
+            boolean horizontal;
+            if (horizontalChoice != null) {
+                horizontal = horizontalChoice;
+            } else if (questId != null) {
+                Quest bannerQuest = questService.getQuest(questId);
+                horizontal = QuestService.isUgcHorizontalQuest(bannerQuest);
+            } else {
+                horizontal = false;
+            }
+            // Нужного файла нет в ресурсах - отдаём тот, что есть
+            if (horizontal && !ugcBannerAvailable() && ugcBannerVerticalAvailable()) horizontal = false;
+            if (!horizontal && !ugcBannerVerticalAvailable() && ugcBannerAvailable()) horizontal = true;
+            String resource = horizontal ? UGC_BANNER_RESOURCE : UGC_BANNER_VERTICAL_RESOURCE;
             SendVideo video = new SendVideo();
             video.setChatId(chatId.toString());
-            String cached = ugcBannerFileId;
+            String cached = horizontal ? ugcBannerFileId : ugcBannerVerticalFileId;
             if (cached != null) {
                 video.setVideo(new InputFile(cached));
             } else {
-                try (java.io.InputStream is = getClass().getResourceAsStream("/" + UGC_BANNER_RESOURCE)) {
-                    if (is == null) throw new java.io.IOException(UGC_BANNER_RESOURCE + " not found");
-                    video.setVideo(new InputFile(new java.io.ByteArrayInputStream(is.readAllBytes()), UGC_BANNER_RESOURCE));
+                try (java.io.InputStream is = getClass().getResourceAsStream("/" + resource)) {
+                    if (is == null) throw new java.io.IOException(resource + " not found");
+                    video.setVideo(new InputFile(new java.io.ByteArrayInputStream(is.readAllBytes()), resource));
                 }
             }
-            video.setCaption("🎬 <b>Баннер EGC для твоего ролика</b>\n\nСохрани видео и вставь его в свой ролик так, чтобы оно начиналось на 6-й секунде: целиком, без обрезки и ускорения.");
+            video.setCaption("🎬 <b>Баннер EGC для твоего ролика</b> · " + (horizontal ? "🖥 горизонтальный" : "📱 вертикальный") + "\n\nСохрани видео и вставь его в свой ролик так, чтобы оно начиналось на 6-й секунде: целиком, без обрезки и ускорения.");
             video.setParseMode("HTML");
             video.setSupportsStreaming(true);
             if (questId != null) {
                 video.setReplyMarkup(keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("⬅️ Назад", "ugc:back:" + questId)))));
             }
             org.telegram.telegrambots.meta.api.objects.Message sent = execute(video);
-            if (cached == null && sent.getVideo() != null) ugcBannerFileId = sent.getVideo().getFileId();
+            if (cached == null && sent.getVideo() != null) {
+                if (horizontal) ugcBannerFileId = sent.getVideo().getFileId();
+                else ugcBannerVerticalFileId = sent.getVideo().getFileId();
+            }
         } catch (Exception e) {
             log.warn("Failed to send UGC banner", e);
             sendText(chatId, "⚠️ Не получилось прислать баннер. Попробуй ещё раз чуть позже или напиши в поддержку.", null);
