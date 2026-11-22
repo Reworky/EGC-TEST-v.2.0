@@ -429,7 +429,7 @@ function BalanceView({ wallet, onChanged, onRefresh, highlightChest, onSponsorWi
             <AnimatedNumber value={wallet.sponsorCoins} flashColor="#c4b5fd" /> EXCASH
           </div>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
-            Ваш курс: 100% → ≈ {Math.round(wallet.sponsorCoins / 100).toLocaleString('ru-RU')} ₽
+            Ваш курс: 1 000 EXCASH = 10 ₽ (≈ {Math.round(wallet.sponsorCoins / 100).toLocaleString('ru-RU')} ₽)
           </div>
           {wallet.sponsorPendingExcash > 0 && (
             <div style={{ fontSize: 12, color: '#c4b5fd', marginTop: 4 }}>

@@ -7728,7 +7728,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** Отступ строк курса под балансом на экране «Баланс» (неразрывные пробелы: Telegram не схлопывает). */
     private static final String BALANCE_INDENT = "\u00A0\u00A0\u00A0";
 
-    /** Блок EXCASH для экрана «Баланс» (макет владельца 19.11.2026): «💎 EXCASH: N» и строка «Ваш курс: 100% → ≈ M ₽»; пусто, если выключатель выключен. */
+    /** Блок EXCASH для экрана «Баланс» (макет владельца 19.11.2026): «💎 EXCASH: N» и строка «Ваш курс: 1 000 EXCASH = 10 ₽ (≈ M ₽)»; пусто, если выключатель выключен. */
     private String sponsorBalanceBlock(AppUser user) {
         if (!sponsorBalanceService.enabled()) return "";
         long sp = Math.max(0, user.getSponsorCoins());
@@ -7740,7 +7740,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             log.warn("pendingClubExcash failed", e);
         }
         return "💎 <b>EXCASH: " + fmtExc(sp) + "</b>\n\n"
-                + BALANCE_INDENT + "Ваш курс: 100% → ≈ " + fmtExc(Math.round(sp / 100.0)) + " ₽\n"
+                + BALANCE_INDENT + "Ваш курс: 1 000 EXCASH = 10 ₽ (≈ " + fmtExc(Math.round(sp / 100.0)) + " ₽)\n"
                 + (pending > 0 ? BALANCE_INDENT + "⏳ Ждёт подтверждения банка: +" + fmtExc(pending) + " EXCASH\n" : "")
                 + "\n";
     }
