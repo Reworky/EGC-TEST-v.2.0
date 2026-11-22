@@ -47,6 +47,17 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.quest = :quest AND s.heldStatus = :heldStatus")
     long countByQuestAndHeldStatus(@Param("quest") Quest quest, @Param("heldStatus") String heldStatus);
 
+    /** UGC: сколько заявок на проверке или одобренных уже содержат этот ключ ролика (код Reels/TikTok id/YouTube id) в ссылке - защита от повторной сдачи того же ролика. */
+    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE LOWER(s.quest.gameName) = 'ugc' AND (s.status = 'PENDING' OR s.status = 'APPROVED') AND s.externalLink IS NOT NULL AND LOWER(s.externalLink) LIKE LOWER(CONCAT('%', :key, '%'))")
+    long countUgcWithLinkKey(@Param("key") String key);
+
+    /** UGC: сколько роликов уже оплачено (одобрено с начисленной наградой) - строка «Уже выплачено за UGC» на экране раздела. */
+    @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE LOWER(s.quest.gameName) = 'ugc' AND s.status = 'APPROVED' AND s.awardedCoins IS NOT NULL AND s.awardedCoins > 0")
+    long countPaidUgc();
+
+    @Query("SELECT COALESCE(SUM(s.awardedCoins), 0) FROM QuestSubmission s WHERE LOWER(s.quest.gameName) = 'ugc' AND s.status = 'APPROVED' AND s.awardedCoins IS NOT NULL AND s.awardedCoins > 0")
+    long sumPaidUgcCoins();
+
     long countByQuest(Quest quest);
 
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.quest = :quest AND s.status = 'APPROVED'")

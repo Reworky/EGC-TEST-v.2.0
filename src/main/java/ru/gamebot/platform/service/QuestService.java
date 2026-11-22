@@ -1102,6 +1102,96 @@ public class QuestService {
         return quest != null && "UGC".equalsIgnoreCase(quest.getGameName());
     }
 
+    /** UGC-квест, который сдаётся ссылкой на опубликованный ролик (Instagram / TikTok / YouTube), а не скриншотом. */
+    public static boolean isUgcLinkQuest(Quest quest) {
+        if (!isUgcQuest(quest) || quest.isSponsored() || quest.getPlatform() == null) return false;
+        String p = quest.getPlatform().toLowerCase(java.util.Locale.ROOT);
+        return p.contains("instagram") || p.contains("tiktok") || p.contains("youtube");
+    }
+
+    private static final java.util.regex.Pattern UGC_INSTAGRAM = java.util.regex.Pattern.compile(
+            "^https?://(?:www\\.)?instagram\\.com/(?:[A-Za-z0-9_.]+/)?(?:reels?|p|tv)/([A-Za-z0-9_-]{5,})", java.util.regex.Pattern.CASE_INSENSITIVE);
+    private static final java.util.regex.Pattern UGC_TIKTOK_FULL = java.util.regex.Pattern.compile(
+            "^https?://(?:www\\.|m\\.)?tiktok\\.com/.+/video/(\\d{8,})", java.util.regex.Pattern.CASE_INSENSITIVE);
+    private static final java.util.regex.Pattern UGC_TIKTOK_SHORT = java.util.regex.Pattern.compile(
+            "^https?://(?:(?:vm|vt)\\.tiktok\\.com|(?:www\\.)?tiktok\\.com/t)/([A-Za-z0-9]{5,})", java.util.regex.Pattern.CASE_INSENSITIVE);
+    private static final java.util.regex.Pattern UGC_YT_SHORTS = java.util.regex.Pattern.compile(
+            "^https?://(?:www\\.|m\\.)?youtube\\.com/shorts/([A-Za-z0-9_-]{6,})", java.util.regex.Pattern.CASE_INSENSITIVE);
+    private static final java.util.regex.Pattern UGC_YT_WATCH = java.util.regex.Pattern.compile(
+            "^https?://(?:www\\.|m\\.)?youtube\\.com/watch\\?(?:[^\\s#]*&)?v=([A-Za-z0-9_-]{6,})", java.util.regex.Pattern.CASE_INSENSITIVE);
+    private static final java.util.regex.Pattern UGC_YT_SHORT_URL = java.util.regex.Pattern.compile(
+            "^https?://youtu\\.be/([A-Za-z0-9_-]{6,})", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /** Проверка ссылки UGC-квеста до модератора (без захода на сами площадки - парсить соцсети рискованно по их правилам).
+     *  Возвращает текст для игрока, если ссылка не подходит (не та площадка, формат, уже сдавалась), иначе null. */
+    public String ugcLinkProblem(Quest quest, String link) {
+        if (!isUgcLinkQuest(quest)) return null;
+        if (link == null || link.isBlank()) {
+            return "Пришли ссылку на опубликованный ролик одним сообщением. Скриншот для этого квеста не подойдёт.";
+        }
+        String url = link.trim();
+        String platform = quest.getPlatform().toLowerCase(java.util.Locale.ROOT);
+        boolean shortsQuest = quest.getTitle() != null && quest.getTitle().toLowerCase(java.util.Locale.ROOT).contains("shorts");
+        String key = null;
+        String expected;
+        if (platform.contains("instagram")) {
+            expected = "ссылку на Reels вида instagram.com/reel/…";
+            java.util.regex.Matcher m = UGC_INSTAGRAM.matcher(url);
+            if (m.find()) key = m.group(1);
+        } else if (platform.contains("tiktok")) {
+            expected = "ссылку на видео TikTok вида tiktok.com/@ник/video/… или vm.tiktok.com/…";
+            java.util.regex.Matcher m = UGC_TIKTOK_FULL.matcher(url);
+            if (m.find()) {
+                key = m.group(1);
+            } else {
+                m = UGC_TIKTOK_SHORT.matcher(url);
+                if (m.find()) key = m.group(1);
+            }
+        } else if (shortsQuest) {
+            expected = "ссылку на YouTube Shorts вида youtube.com/shorts/…";
+            java.util.regex.Matcher m = UGC_YT_SHORTS.matcher(url);
+            if (m.find()) key = m.group(1);
+        } else {
+            expected = "ссылку на обычное (горизонтальное) видео YouTube вида youtube.com/watch?v=… или youtu.be/…";
+            if (UGC_YT_SHORTS.matcher(url).find()) {
+                return "Это ссылка на Shorts. Для горизонтального видео пришли обычную ссылку на видео (youtube.com/watch?v=… или youtu.be/…), а Shorts сдаётся в квесте «Shorts на YouTube».";
+            }
+            java.util.regex.Matcher m = UGC_YT_WATCH.matcher(url);
+            if (m.find()) {
+                key = m.group(1);
+            } else {
+                m = UGC_YT_SHORT_URL.matcher(url);
+                if (m.find()) key = m.group(1);
+            }
+        }
+        if (key == null) {
+            return "Не похоже на " + expected + ". Пришли ссылку на опубликованный ролик.";
+        }
+        if (questSubmissionRepository.countUgcWithLinkKey(key) > 0) {
+            return "Этот ролик уже отправлен на проверку. Один ролик можно сдать только один раз.";
+        }
+        return null;
+    }
+
+    private volatile long ugcPaidCount;
+    private volatile long ugcPaidCoins;
+    private volatile long ugcPaidLoadedAt;
+
+    /** Сколько UGC-роликов уже оплачено и на какую сумму EXC (кэш 10 минут): {количество, сумма}. */
+    public long[] ugcPaidTotals() {
+        long now = System.currentTimeMillis();
+        if (now - ugcPaidLoadedAt > 10 * 60 * 1000L) {
+            try {
+                ugcPaidCount = questSubmissionRepository.countPaidUgc();
+                ugcPaidCoins = questSubmissionRepository.sumPaidUgcCoins();
+                ugcPaidLoadedAt = now;
+            } catch (Exception e) {
+                log.warn("ugcPaidTotals failed", e);
+            }
+        }
+        return new long[] {ugcPaidCount, ugcPaidCoins};
+    }
+
     /** Базовая награда за ступень: для не-UGC квеста, пустой или неизвестной ступени - обычная награда квеста; для UGC не ниже неё. */
     public static long ugcTierCoins(Quest quest, Integer tier) {
         if (!isUgcQuest(quest) || tier == null || tier <= 0 || tier >= UGC_VIEW_TIER_COINS.length) {

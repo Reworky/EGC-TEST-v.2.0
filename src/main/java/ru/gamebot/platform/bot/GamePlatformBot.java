@@ -1360,6 +1360,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             handleActivationCheck(callbackQuery, user);
             return;
         }
+        if ("ugc:how".equals(data)) {
+            answerSilently(callbackQuery.getId());
+            sendUgcHowItWorks(user);
+            return;
+        }
+        if ("ugc:ideas".equals(data)) {
+            // Раздел «Идеи и примеры» пока закрыт для всех (владелец, 21.11.2026)
+            answer(callbackQuery.getId(), "💡 Идеи и примеры скоро откроются");
+            return;
+        }
         if (data.startsWith("ugc:banner")) {
             answerSilently(callbackQuery.getId());
             sendUgcBanner(user.getTelegramId(), data.startsWith("ugc:banner:") ? parseLong(data.substring("ugc:banner:".length())) : null);
@@ -9979,6 +9989,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         // UGC (19.11.2026, владелец): «Мои UGC-квесты» - проверить взятые ролики и их статус
         if ("UGC".equalsIgnoreCase(gameName)) {
+            keyboardRows.add(List.of(
+                    keyboardFactory.callback("📖 Как это работает", "ugc:how"),
+                    keyboardFactory.callback("🔒 Идеи и примеры", "ugc:ideas")));
+            if (ugcBannerAvailable()) {
+                keyboardRows.add(List.of(keyboardFactory.callback("🎬 Скачать баннер", "ugc:banner")));
+            }
             keyboardRows.add(List.of(keyboardFactory.callback(myQuestsLabel(user, "ugc"), "myquests:list:ugc")));
         }
         keyboardRows.add(List.of(
@@ -9999,6 +10015,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // UGC без слотов (владелец, 19.11.2026): строки «Слоты квестов» в списке видео-квестов нет
         String slotsLine = "UGC".equalsIgnoreCase(gameName) ? "" : questSlotsLine(user);
         String listText = "<b>" + escape(title) + "</b>\n" + (slotsLine.isEmpty() ? "" : slotsLine + "\n") + "\n" + body;
+        if ("UGC".equalsIgnoreCase(gameName) && category == null) {
+            listText = ugcEntryText(user, quests);
+        }
         if (photoFileId.isPresent()) {
             if (listText.length() <= 1000) {
                 sendPhotoCaption(user.getTelegramId(), photoFileId.get(), listText, keyboard);
@@ -11629,6 +11648,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "Жду скриншот 1");
             return;
         }
+        if (QuestService.isUgcLinkQuest(quest)) {
+            sendText(user.getTelegramId(),
+                    "🔗 <b>Сдать ролик</b>\n\n"
+                            + "Пришли ссылку на опубликованный ролик одним сообщением. Скриншот не нужен.\n"
+                            + "Ролик должен быть публичным, с нашим баннером на 6-й секунде и реферальной ссылкой.\n\n"
+                            + "🎯 Квест: <b>" + escape(quest.getTitle()) + "</b>",
+                    keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("❌ Отмена", "myquests:list:ugc")))));
+            answer(callbackQuery.getId(), "Жду ссылку");
+            return;
+        }
         sendText(user.getTelegramId(),
                 "📤 <b>Отчёт по квесту</b>\n\n"
                         + "Отправьте скриншот(ы), видео, файл или ссылку.\n"
@@ -11708,6 +11737,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void handleReportCollecting(AppUser user, UserSession session, Message message) {
+        if (session.getSubmissionId() != null) {
+            QuestSubmission ugcSubmission = questService.getSubmission(session.getSubmissionId());
+            if (QuestService.isUgcLinkQuest(ugcSubmission.getQuest())) {
+                handleUgcLinkReport(user, session, message, ugcSubmission);
+                return;
+            }
+        }
         String photos = session.getData().getOrDefault("report_photos", "");
         String uniqueIds = session.getData().getOrDefault("report_photo_unique_ids", "");
         String comment = session.getData().getOrDefault("report_comment", "");
@@ -11847,7 +11883,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         StringBuilder builder = new StringBuilder("📂 <b>" + title + "</b>\n").append(slotsLineFor(user, kind).isEmpty() ? "" : slotsLineFor(user, kind) + "\n").append("\n");
         submissions.stream().limit(10).forEach(submission -> builder
                 .append("🎯 <b>").append(escape(submission.getQuest().getTitle())).append("</b>\n")
-                .append("📌 Статус: <b>").append(escape(humanStatus(submission.getStatus()))).append("</b>\n")
+                .append("📌 Статус: <b>").append("ugc".equals(kind) ? ugcStatusIcon(submission.getStatus()) : "").append(escape(humanStatus(submission.getStatus()))).append("</b>\n")
                 .append("🕒 Обновлено: <b>").append(escape(submission.getUpdatedAt().format(DATE_TIME_FORMATTER))).append("</b>\n\n"));
 
         List<InlineKeyboardButton> buttons = new ArrayList<>();
@@ -14490,6 +14526,109 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     private boolean ugcBannerAvailable() {
         return getClass().getResource("/" + UGC_BANNER_RESOURCE) != null;
+    }
+
+    private static String ugcNum(long n) {
+        return String.format(java.util.Locale.US, "%,d", n).replace(',', ' ');
+    }
+
+    private static String ugcRoliks(long n) {
+        long m10 = n % 10, m100 = n % 100;
+        if (m10 == 1 && m100 != 11) return "ролик";
+        if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return "ролика";
+        return "роликов";
+    }
+
+    /** Подпись главного экрана раздела UGC (21.11.2026, текст владельца): обещание, шкала наград, прогресс игрока, оплачено всего, срок проверки. */
+    private String ugcEntryText(AppUser user, List<Quest> quests) {
+        long baseCoins = quests.stream().mapToLong(Quest::getRewardCoins).filter(c -> c > 0).min().orElse(3000L);
+        long[] tiers = QuestService.UGC_VIEW_TIER_COINS;
+        String[] labels = QuestService.UGC_VIEW_TIER_LABELS;
+        StringBuilder scale = new StringBuilder();
+        for (int i = 0; i < tiers.length && i < labels.length; i++) {
+            long coins = i == 0 ? baseCoins : tiers[i];
+            if (i > 0) scale.append("\n");
+            scale.append(i == 0 ? labels[i] + " просмотров" : labels[i]).append(": ").append(ugcNum(coins)).append(" EXC");
+        }
+        long maxCoins = tiers.length == 0 ? 25_000L : tiers[tiers.length - 1];
+
+        StringBuilder sb = new StringBuilder("🎬 <b>UGC · видео-квесты</b>\n\n");
+        sb.append("Сними видео про клуб, вставь наш баннер и получи EXC за просмотры.\n");
+        sb.append("До <b>").append(ugcNum(maxCoins)).append(" EXC</b> за ролик.\n\n");
+        sb.append("<b>Сколько платим?</b>\n<blockquote>").append(scale).append("</blockquote>\n");
+
+        StringBuilder stats = new StringBuilder();
+        try {
+            long pending = 0, approved = 0, earned = 0;
+            for (QuestSubmission sub : questService.getUserSubmissions(user)) {
+                if (!matchesMyQuestsKind("ugc", sub.getQuest())) continue;
+                if (sub.getStatus() == SubmissionStatus.PENDING) pending++;
+                if (sub.getStatus() == SubmissionStatus.APPROVED) {
+                    approved++;
+                    if (sub.getAwardedCoins() != null) earned += sub.getAwardedCoins();
+                }
+            }
+            if (pending + approved > 0) {
+                stats.append("📊 Твои ролики: на проверке ").append(pending).append(" · одобрено ").append(approved)
+                        .append(" · заработано ").append(ugcNum(earned)).append(" EXC\n");
+            }
+            long[] paid = questService.ugcPaidTotals();
+            if (paid[0] >= 5) {
+                stats.append("✅ Уже выплачено за UGC: ").append(paid[0]).append(" ").append(ugcRoliks(paid[0]))
+                        .append(" на ").append(ugcNum(paid[1])).append(" EXC\n");
+            }
+        } catch (Exception e) {
+            log.warn("ugcEntryText stats failed", e);
+        }
+        if (stats.length() > 0) sb.append("\n").append(stats);
+        sb.append("\n⏱ Проверяем ролик в течение 15 минут.\n\nПросмотры считаются один раз, в момент проверки.");
+        return sb.toString();
+    }
+
+    /** «Как это работает» раздела UGC: четыре шага, правила и разница между вертикальными и горизонтальными роликами. */
+    private void sendUgcHowItWorks(AppUser user) {
+        String text = "📖 <b>Как это работает</b>\n\n"
+                + "1️⃣ Скачай баннер: кнопка «🎬 Скачать баннер».\n"
+                + "2️⃣ Вставь его в своё видео на 6-й секунде, целиком, без обрезки и ускорения.\n"
+                + "3️⃣ Опубликуй видео и размести реферальную ссылку в описании, комментарии или в самом видео. Ссылка лежит в разделе «Реферальная программа».\n"
+                + "4️⃣ Возьми квест нужной площадки и пришли ссылку на ролик. Отправляй, когда ролик уже набрал просмотры: считаем один раз, в момент проверки.\n\n"
+                + "📱 Вертикальные ролики: Reels, TikTok, YouTube Shorts.\n"
+                + "🖥 Горизонтальные ролики: отдельный квест «Видео на YouTube».\n\n"
+                + "<b>Не засчитаем:</b> нет баннера или ссылки, закрытый аккаунт, чужое видео, накрутка просмотров.";
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (ugcBannerAvailable()) rows.add(List.of(keyboardFactory.callback("🎬 Скачать баннер", "ugc:banner")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "quests:section:ugc"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), text, keyboardFactory.rowsLayout(rows));
+    }
+
+    /** Сдача ролика UGC-квеста ссылкой (21.11.2026): ссылка проверяется до модератора (площадка, формат, дубли), скриншот не нужен. */
+    private void handleUgcLinkReport(AppUser user, UserSession session, Message message, QuestSubmission submission) {
+        if (message.hasPhoto() || message.hasVideo() || message.hasDocument()) {
+            sendText(user.getTelegramId(), "⚠️ Для этого квеста нужна ссылка на опубликованный ролик, а не файл. Пришли ссылку текстом.",
+                    keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("❌ Отмена", "myquests:list:ugc")))));
+            return;
+        }
+        String text = message.hasText() ? message.getText() : message.getCaption();
+        String link = extractUrl(text);
+        String problem = questService.ugcLinkProblem(submission.getQuest(), link);
+        if (problem != null) {
+            sendText(user.getTelegramId(), "⚠️ " + escape(problem),
+                    keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("❌ Отмена", "myquests:list:ugc")))));
+            return;
+        }
+        try {
+            questService.submitReport(submission, "text", null, null, link, text == null ? "Без комментария" : text);
+        } catch (IllegalStateException e) {
+            sendText(user.getTelegramId(), reportSubmitErrorMessage(e), backMenuKeyboard("myquests:list:ugc"));
+            return;
+        }
+        session.reset();
+        notifyModeratorsAboutSubmission(submission.getId());
+        sendText(user.getTelegramId(),
+                "📨 <b>Ролик принят</b>\n\n"
+                        + "Проверим в течение 15 минут. Статус смотри в «Мои UGC-квесты».\n"
+                        + "После одобрения награда по ступени просмотров начислится автоматически.",
+                backMenuKeyboard("myquests:list:ugc"));
     }
 
     /** Присылает игроку видео-баннер файлом (первая отправка грузит файл, дальше - по file_id из Telegram). */
@@ -34327,6 +34466,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return update.getCallbackQuery().getMessage().getChatId();
         }
         return null;
+    }
+
+    /** Значок статуса ролика в «Мои UGC-квесты». */
+    private static String ugcStatusIcon(SubmissionStatus status) {
+        return switch (status) {
+            case DRAFT -> "📝 ";
+            case PENDING -> "⏳ ";
+            case APPROVED -> "✅ ";
+            case REJECTED -> "❌ ";
+            case NEEDS_INFO -> "↩️ ";
+            case CANCELLED -> "🚫 ";
+        };
     }
 
     private String humanStatus(SubmissionStatus status) {

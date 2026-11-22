@@ -664,6 +664,16 @@ public class QuestController {
             }
         }
 
+        // UGC (21.11.2026): ссылка на ролик проверяется до модератора - площадка, формат, повторная сдача того же ролика
+        String ugcLinkProblem = questService.ugcLinkProblem(quest, externalLink);
+        if (ugcLinkProblem != null) {
+            return ResponseEntity.ok(QuestActionResponseDto.builder()
+                    .success(false)
+                    .status("INVALID_LINK")
+                    .message(ugcLinkProblem)
+                    .build());
+        }
+
         QuestService.QuestActionResult result = questService.submitReportChecked(
                 user, quest, mediaType, fileId, photoUniqueIds, externalLink, comment);
         return ResponseEntity.ok(toResponse(result));

@@ -1859,6 +1859,13 @@ public class QuestSeeder implements CommandLineRunner {
                 "Опубликуй Shorts на YouTube (видео должно быть публичным). Упомяни клуб или свою реферальную ссылку в описании. Дождись минимум 100 просмотров.",
                 "Ссылка на опубликованный Shorts в разделе для ссылки на подтверждение — видео должно быть публичным, чтобы модератор мог посмотреть ролик и счётчик просмотров.");
 
+        // Горизонтальные ролики YouTube (21.11.2026, владелец): Shorts - только вертикальные, обычное видео 16:9 сдаётся отдельным квестом
+        seed("YouTube видео про EGC", "UGC",
+                "Средние", "YouTube", 14, "14 дней", 0, 3000,
+                "Сними обычное (горизонтальное) видео на YouTube про EXPERIENCE GAMING CLUB, набери 100+ просмотров.",
+                "Опубликуй обычное горизонтальное видео на YouTube (видео должно быть публичным). Упомяни клуб или свою реферальную ссылку в описании. Дождись минимум 100 просмотров.",
+                "Ссылка на опубликованное видео в разделе для ссылки на подтверждение — видео должно быть публичным, чтобы модератор мог посмотреть ролик и счётчик просмотров.");
+
         seed("Telegram Stories про EGC", "UGC",
                 "Средние", "Telegram", 3, "3 дня", 0, 3000,
                 "Опубликуй Историю (Story) в личном Telegram с упоминанием EGC и своей реферальной ссылкой, продержи её 24 часа.",
@@ -1869,13 +1876,14 @@ public class QuestSeeder implements CommandLineRunner {
         setShortLabel("Instagram Reels про EGC", "UGC", "Reels в Instagram");
         setShortLabel("TikTok видео про EGC", "UGC", "Видео в TikTok");
         setShortLabel("YouTube Shorts про EGC", "UGC", "Shorts на YouTube");
+        setShortLabel("YouTube видео про EGC", "UGC", "Видео на YouTube (горизонтальное)");
         setShortLabel("Telegram Stories про EGC", "UGC", "Stories в Telegram");
 
         // Telegram Stories убран из UGC-квестов по решению пользователя (2026-09-12).
         deactivateQuests("UGC", Set.of("Telegram Stories про EGC"));
 
         // Оплата по просмотрам (27.10.2026): шкала в описании и инструкции. seed() существующие квесты не обновляет, поэтому дописываем здесь.
-        for (String ugcTitle : List.of("Instagram Reels про EGC", "TikTok видео про EGC", "YouTube Shorts про EGC")) {
+        for (String ugcTitle : List.of("Instagram Reels про EGC", "TikTok видео про EGC", "YouTube Shorts про EGC", "YouTube видео про EGC")) {
             appendUgcViewsScale(ugcTitle);
         }
 
@@ -1885,6 +1893,7 @@ public class QuestSeeder implements CommandLineRunner {
             applyUgcBannerRules("Instagram Reels про EGC", "в Instagram Reels (аккаунт открытый)", 30);
             applyUgcBannerRules("TikTok видео про EGC", "в TikTok (аккаунт открытый)", 50);
             applyUgcBannerRules("YouTube Shorts про EGC", "на YouTube Shorts (публично)", 100);
+            applyUgcBannerRules("YouTube видео про EGC", "на YouTube обычным горизонтальным видео (публично)", 100);
         }
 
         // ── Dota 2: FLAT-режим — единый список без выбора категории, по образцу Brawl Stars/Clash of Clans/Clash Royale ──
