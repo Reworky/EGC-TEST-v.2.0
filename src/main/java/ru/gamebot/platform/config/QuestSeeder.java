@@ -1895,6 +1895,9 @@ public class QuestSeeder implements CommandLineRunner {
             applyUgcBannerRules("YouTube Shorts про EGC", "на YouTube Shorts (публично)", 100);
             applyUgcBannerRules("YouTube видео про EGC", "на YouTube обычным горизонтальным видео (публично)", 100);
         }
+        for (String ugcTitle : List.of("Instagram Reels про EGC", "TikTok видео про EGC", "YouTube Shorts про EGC", "YouTube видео про EGC")) {
+            updateUgcBannerSteps(ugcTitle);
+        }
 
         // ── Dota 2: FLAT-режим — единый список без выбора категории, по образцу Brawl Stars/Clash of Clans/Clash Royale ──
         gameCatalogService.setDifficultyMode("Dota 2", "FLAT", 2000L, 50);
@@ -4058,6 +4061,34 @@ public class QuestSeeder implements CommandLineRunner {
     }
 
     private static final String UGC_BANNER_MARKER = "видео-баннер EGC";
+    /** Шаги 1-2 инструкции UGC-квестов (21.11.2026, владелец): любой из двух баннеров, на весь экран или поверх ролика. */
+    private static final String UGC_STEP1_OLD = "1️⃣ Скачай баннер: кнопка «🎬 Скачать баннер».";
+    private static final String UGC_STEP1_NEW = "1️⃣ Скачай баннер: вертикальный или горизонтальный, любой подойдёт.";
+    private static final String UGC_STEP2_OLD = "2️⃣ Вставь его в видео на 6-й секунде, целиком, без обрезки и ускорения.";
+    private static final String UGC_STEP2_NEW = "2️⃣ Вставь баннер в видео на 6-й секунде на все 10 секунд: на весь экран или поверх своего ролика, сверху или по центру. Главное, чтобы он был виден целиком, не обрезан и не ускорен.";
+    private static final String UGC_CHECK_OLD = "не обрезан, не ускорен, не перекрыт.";
+    private static final String UGC_CHECK_NEW = "не обрезан, не ускорен, не перекрыт. Подойдёт и на весь экран, и поверх ролика (сверху или по центру).";
+
+    /** Переносит уже созданные UGC-квесты на новые шаги 1-2 и чек-лист модератора. Идемпотентно: если старой строки нет, ничего не меняет. */
+    private void updateUgcBannerSteps(String title) {
+        questRepository.findFirstByTitleAndGameName(title, "UGC").ifPresent(q -> {
+            boolean changed = false;
+            String instruction = q.getInstruction();
+            if (instruction != null && (instruction.contains(UGC_STEP1_OLD) || instruction.contains(UGC_STEP2_OLD))) {
+                q.setInstruction(instruction.replace(UGC_STEP1_OLD, UGC_STEP1_NEW).replace(UGC_STEP2_OLD, UGC_STEP2_NEW));
+                changed = true;
+            }
+            String checklist = q.getModeratorChecklist();
+            if (checklist != null && checklist.contains(UGC_CHECK_OLD) && !checklist.contains(UGC_CHECK_NEW)) {
+                q.setModeratorChecklist(checklist.replace(UGC_CHECK_OLD, UGC_CHECK_NEW));
+                changed = true;
+            }
+            if (changed) {
+                questRepository.save(q);
+                log.info("[QuestSeeder] UGC banner steps updated: '{}'", title);
+            }
+        });
+    }
     private static final String UGC_BANNER_RULES_KEY = "ugc.banner.rules.v3.";
 
     /** Переписывает карточку UGC-квеста под правило «любой ролик на свою тему + видео-баннер EGC на 6-й секунде + реферальная ссылка где угодно».
@@ -4068,8 +4099,8 @@ public class QuestSeeder implements CommandLineRunner {
             String key = UGC_BANNER_RULES_KEY + title;
             if (appSettingRepository.findById(key).isPresent()) return;
             q.setDescription("Сними любое видео на свою тему, вставь в него наш " + UGC_BANNER_MARKER + " и размести реферальную ссылку. Набери " + minViews + "+ просмотров: чем больше просмотров, тем выше награда, от 3 000 до 25 000 EXC.");
-            q.setInstruction("1️⃣ Скачай баннер: кнопка «🎬 Скачать баннер».\n"
-                    + "2️⃣ Вставь его в видео на 6-й секунде, целиком, без обрезки и ускорения.\n"
+            q.setInstruction(UGC_STEP1_NEW + "\n"
+                    + UGC_STEP2_NEW + "\n"
                     + "3️⃣ Опубликуй видео " + where + ".\n"
                     + "4️⃣ Размести реферальную ссылку в описании, комментарии или в самом видео.\n"
                     + "5️⃣ Награда: до 500 просмотров - 3 000 EXC, от 500 - 5 000, от 2 000 - 8 000, от 10 000 - 15 000, от 50 000 - 25 000. Ссылку отправляй, когда ролик набрал нужное число.");

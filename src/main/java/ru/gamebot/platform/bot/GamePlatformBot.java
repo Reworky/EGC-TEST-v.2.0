@@ -1372,8 +1372,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.startsWith("ugc:banner")) {
             answerSilently(callbackQuery.getId());
-            if ("ugc:banner:v".equals(data) || "ugc:banner:h".equals(data)) {
-                sendUgcBanner(user.getTelegramId(), null, "ugc:banner:h".equals(data));
+            if (data.startsWith("ugc:banner:v") || data.startsWith("ugc:banner:h")) {
+                // ugc:banner:v|h[:id квеста] - игрок сам выбирает формат баннера; id нужен для кнопки «Назад» под видео
+                String[] bannerParts = data.split(":");
+                Long bannerQuestId = bannerParts.length > 3 ? parseLong(bannerParts[3]) : null;
+                sendUgcBanner(user.getTelegramId(), bannerQuestId, "h".equals(bannerParts[2]));
             } else {
                 Long bannerQuestId = data.startsWith("ugc:banner:") ? parseLong(data.substring("ugc:banner:".length())) : null;
                 sendUgcBanner(user.getTelegramId(), bannerQuestId, null);
@@ -10301,7 +10304,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         // UGC (19.11.2026, владелец): видео-баннер EGC, который нужно вставить в ролик, игрок получает файлом по кнопке (пока файла в ресурсах нет, кнопки нет)
         if ("UGC".equalsIgnoreCase(quest.getGameName()) && (ugcBannerAvailable() || ugcBannerVerticalAvailable())) {
-            buttons.add(keyboardFactory.callback("🎬 Скачать баннер", "ugc:banner:" + quest.getId()));
+            if (ugcBannerVerticalAvailable()) buttons.add(keyboardFactory.callback("📱 Скачать баннер: вертикальный", "ugc:banner:v:" + quest.getId()));
+            if (ugcBannerAvailable()) buttons.add(keyboardFactory.callback("🖥 Скачать баннер: горизонтальный", "ugc:banner:h:" + quest.getId()));
         }
         if (nextQuestData != null) {
             buttons.add(keyboardFactory.callback("➡️ Следующий квест", nextQuestData));
@@ -14606,8 +14610,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     /** «Как это работает» раздела UGC: четыре шага, правила и разница между вертикальными и горизонтальными роликами. */
     private void sendUgcHowItWorks(AppUser user) {
         String text = "📖 <b>Как это работает</b>\n\n"
-                + "1️⃣ Скачай баннер: вертикальный для Reels, TikTok и Shorts, горизонтальный для обычного видео на YouTube.\n"
-                + "2️⃣ Вставь его в своё видео на 6-й секунде, целиком, без обрезки и ускорения.\n"
+                + "1️⃣ Скачай баннер: вертикальный или горизонтальный, любой подойдёт.\n"
+                + "2️⃣ Вставь баннер в видео на 6-й секунде на все 10 секунд: на весь экран или поверх своего ролика, сверху или по центру. Главное, чтобы он был виден целиком, не обрезан и не ускорен.\n"
                 + "3️⃣ Опубликуй видео и размести реферальную ссылку в описании, комментарии или в самом видео. Ссылка лежит в разделе «Реферальная программа».\n"
                 + "4️⃣ Возьми квест нужной площадки и пришли ссылку на ролик. Отправляй, когда ролик уже набрал просмотры: считаем один раз, в момент проверки.\n\n"
                 + "📱 Вертикальные ролики: Reels, TikTok, YouTube Shorts.\n"
