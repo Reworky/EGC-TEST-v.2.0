@@ -1221,6 +1221,9 @@ public class ChannelContentService {
     private static final long[] COUNT_MILESTONES = {10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000};
     private static final long[] RUB_MILESTONES = {10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000, 2_500_000, 5_000_000, 10_000_000};
 
+    /** Чат игроков клуба (тот же, что COMMUNITY_CHAT_URL в боте). */
+    private static final String PLAYERS_CHAT_URL = "https://t.me/exgamingchat";
+
     private String payoutsLink() {
         return payoutsLink("Как вывести в нашем боте:");
     }
@@ -1255,16 +1258,20 @@ public class ChannelContentService {
         if (st.totalStars() > 0) sb.append("Звёздами Telegram <b>").append(num(st.totalStars())).append(" ⭐</b>\n");
         List<Long> minutes = reqs.stream().filter(r -> r.getPaidAt() != null && r.getCreatedAt() != null)
                 .map(r -> Duration.between(r.getCreatedAt(), r.getPaidAt()).toMinutes()).sorted().toList();
+        String receipts = "чеки публикуем в канале выплат";
+        boolean speedShown = false;
         if (minutes.size() >= 5) {
             long median = minutes.get(minutes.size() / 2);
             if (median <= 24 * 60) {
-                sb.append("От заявки до выплаты в среднем <b>").append(median < 60 ? "меньше часа" : "около " + Math.round(median / 60.0) + " ч").append("</b> (медиана)\n");
+                sb.append("От заявки до выплаты в среднем <b>").append(median < 60 ? "меньше часа" : "около " + Math.round(median / 60.0) + " ч").append("</b>, ").append(receipts).append("\n");
+                speedShown = true;
             }
         }
-        sb.append("\nЧеки публикуем в канале выплат.\n\n");
+        if (!speedShown) sb.append("Чеки публикуем в канале выплат\n");
+        sb.append("\n💬 Вступить в чат к игрокам: <a href=\"").append(PLAYERS_CHAT_URL).append("\">наш чат</a>\n");
         String link = payoutsLink("Вывод можно оформить в нашем боте:").stripLeading();
-        if (!link.isEmpty()) sb.append(link).append("\n\n");
-        sb.append("Если заработал конечно))");
+        if (!link.isEmpty()) sb.append(link).append("\n");
+        sb.append("\nЕсли заработал конечно))");
         return Optional.of(saveDraft(WITHDRAW_SUMMARY, sb.toString(), null));
     }
 
