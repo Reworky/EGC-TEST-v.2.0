@@ -1222,8 +1222,12 @@ public class ChannelContentService {
     private static final long[] RUB_MILESTONES = {10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000, 2_500_000, 5_000_000, 10_000_000};
 
     private String payoutsLink() {
+        return payoutsLink("Как вывести в нашем боте:");
+    }
+
+    private String payoutsLink(String lead) {
         if (botUsername == null || botUsername.isBlank()) return "";
-        return "\n\n💸 Как вывести в нашем боте: <a href=\"https://t.me/" + botUsername + "\">@" + botUsername + "</a>";
+        return "\n\n💸 " + lead + " <a href=\"https://t.me/" + botUsername + "\">@" + botUsername + "</a>";
     }
 
     /** «Пруф от Экси»: сводка выплат за 2 недели (при малом числе - за месяц), без имён игроков, только цифры; скорость выплаты - если данных достаточно и она честная. */
@@ -1243,8 +1247,8 @@ public class ChannelContentService {
         long players = rewardRequestRepository.countDistinctWithdrawalUsersSince(now.minusDays(days));
         String period = days == 14 ? "две недели" : "месяц";
         StringBuilder sb = new StringBuilder("💸 <b>Пруф от Экси: выплаты за " + period + "!</b>\n\n");
-        sb.append("Выплатили <b>").append(st.count()).append("</b> ").append(plural((int) st.count(), "заявку", "заявки", "заявок")).append(" на вывод, ")
-          .append("деньги получили <b>").append(players).append("</b> ").append(plural((int) players, "игрок", "игрока", "игроков")).append(" 🔥\n");
+        sb.append("На текущий момент выплатили <b>").append(st.count()).append("</b> ").append(plural((int) st.count(), "заявку", "заявки", "заявок")).append(" на вывод, ")
+          .append("деньги получили <b>").append(players).append("</b> ").append(plural((int) players, "игрок", "игрока", "игроков")).append(" 🤩\n");
         sb.append("Всего выведено <b>").append(num(st.totalExc())).append(" EXC</b>.\n");
         if (st.totalRub() > 0) sb.append("Рублями <b>").append(num(st.totalRub())).append(" ₽</b>\n");
         if (st.totalTonRub() > 0) sb.append("В GRAM (TON) на сумму около <b>").append(num(st.totalTonRub())).append(" ₽</b>\n");
@@ -1258,9 +1262,9 @@ public class ChannelContentService {
             }
         }
         sb.append("\nЧеки публикуем в канале выплат.\n\n");
-        String link = payoutsLink().stripLeading();
+        String link = payoutsLink("Вывод можно оформить в нашем боте:").stripLeading();
         if (!link.isEmpty()) sb.append(link).append("\n\n");
-        sb.append(ending(st.count(), "Уже подал заявку?", "Ставь 💸, если ждёшь свою", "Каждая заявка обрабатывается в течение 24 часов"));
+        sb.append("Если заработал конечно))");
         return Optional.of(saveDraft(WITHDRAW_SUMMARY, sb.toString(), null));
     }
 
