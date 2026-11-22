@@ -22727,8 +22727,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         ru.gamebot.platform.service.AnalyticsService.Period period = analyticsPeriod(session);
         boolean compare = "1".equals(session.getData().get("an_cmp"));
         String retSeg = session.getData().getOrDefault("an_seg", "src");
-        String text = analyticsService.format(tab == ru.gamebot.platform.service.AnalyticsService.Tab.RETENTION
+        // 22.11.2026: длинная вкладка уходит несколькими сообщениями, клавиатура - под последним (раньше текст резался по 3890 знакам прямо внутри тега, Telegram отвергал сообщение)
+        List<String> textParts = analyticsService.formatParts(tab == ru.gamebot.platform.service.AnalyticsService.Tab.RETENTION
                 ? analyticsService.computeRetention(retSeg) : analyticsService.compute(tab, period), compare);
+        String text = textParts.get(textParts.size() - 1);
+        for (int i = 0; i < textParts.size() - 1; i++) {
+            sendText(user.getTelegramId(), textParts.get(i), null);
+        }
         if (text.length() > 3900) text = text.substring(0, 3890) + "…";
         String cur = session.getData().getOrDefault("an_p", "7");
         String t = tab.name();

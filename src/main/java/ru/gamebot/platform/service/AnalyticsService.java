@@ -1408,6 +1408,33 @@ public class AnalyticsService {
 
     public String format(TabData d, boolean compare) {
         if (d.tab() == Tab.PULSE) return String.join("\n", d.extras());
+        StringBuilder sb = new StringBuilder(formatHead(d, compare));
+        for (String e : d.extras()) sb.append("\n").append(e).append("\n");
+        return sb.toString();
+    }
+
+    /** Лимит Telegram - 4096 знаков на сообщение; запас под клавиатуру и служебные символы. */
+    private static final int PART_LIMIT = 3800;
+
+    /** Вкладка одним или несколькими сообщениями (22.11.2026): длинный текст раньше резался по 3890 знакам и обрез попадал внутрь тега (<pre>, <b>) - Telegram отвергал
+     *  сообщение, и вкладка «Воронка новичка» не открывалась. Теперь блоки extras (каждый - законченный HTML) переносятся целиком, обрезки нет. */
+    public List<String> formatParts(TabData d, boolean compare) {
+        if (d.tab() == Tab.PULSE) return List.of(format(d, compare));
+        List<String> parts = new ArrayList<>();
+        StringBuilder cur = new StringBuilder(formatHead(d, compare));
+        for (String e : d.extras()) {
+            String block = "\n" + e + "\n";
+            if (cur.length() > 0 && cur.length() + block.length() > PART_LIMIT) {
+                parts.add(cur.toString());
+                cur = new StringBuilder();
+            }
+            cur.append(cur.length() == 0 ? block.substring(1) : block);
+        }
+        if (cur.length() > 0) parts.add(cur.toString());
+        return parts;
+    }
+
+    private String formatHead(TabData d, boolean compare) {
         StringBuilder sb = new StringBuilder();
         sb.append(d.tab().icon).append(" <b>").append(d.tab().title).append("</b>\n");
         DateTimeFormatter f = DateTimeFormatter.ofPattern("dd.MM HH:mm");
@@ -1425,7 +1452,6 @@ public class AnalyticsService {
             sb.append("\n");
             if (l.note() != null) sb.append("   <i>").append(l.note()).append("</i>\n");
         }
-        for (String e : d.extras()) sb.append("\n").append(e).append("\n");
         return sb.toString();
     }
 
