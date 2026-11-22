@@ -1893,7 +1893,7 @@ public class QuestSeeder implements CommandLineRunner {
             applyUgcBannerRules("Instagram Reels про EGC", "в Instagram Reels (аккаунт открытый)", 30);
             applyUgcBannerRules("TikTok видео про EGC", "в TikTok (аккаунт открытый)", 50);
             applyUgcBannerRules("YouTube Shorts про EGC", "на YouTube Shorts (публично)", 100);
-            applyUgcBannerRules("YouTube видео про EGC", "на YouTube обычным горизонтальным видео (публично)", 100);
+            applyUgcBannerRules("YouTube видео про EGC", "на YouTube обычным видео (публично)", 100);
         }
         for (String ugcTitle : List.of("Instagram Reels про EGC", "TikTok видео про EGC", "YouTube Shorts про EGC", "YouTube видео про EGC")) {
             updateUgcBannerSteps(ugcTitle);
@@ -4066,6 +4066,11 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String UGC_STEP1_NEW = "1️⃣ Скачай баннер: вертикальный или горизонтальный, любой подойдёт.";
     private static final String UGC_STEP2_OLD = "2️⃣ Вставь его в видео на 6-й секунде, целиком, без обрезки и ускорения.";
     private static final String UGC_STEP2_NEW = "2️⃣ Вставь баннер в видео на 6-й секунде на все 10 секунд: на весь экран или поверх своего ролика, сверху или по центру. Главное, чтобы он был виден целиком, не обрезан и не ускорен.";
+    /** Карточка с баннером обязана укладываться в подпись фото (1000 знаков): шкала наград осталась только в шаге 5, описание и условия сжаты (21.11.2026). */
+    private static final String UGC_DESC_OLD = " просмотров: чем больше просмотров, тем выше награда, от 3 000 до 25 000 EXC.";
+    private static final String UGC_DESC_NEW = " просмотров.";
+    private static final String UGC_REQ_OLD = "Видео публичное, баннер на 6-й секунде (±1 с) виден целиком, реферальная ссылка есть. Без баннера или ссылки квест не засчитывается.";
+    private static final String UGC_REQ_NEW = "Видео публичное, баннер виден целиком, реферальная ссылка есть. Без них квест не засчитывается.";
     private static final String UGC_CHECK_OLD = "не обрезан, не ускорен, не перекрыт.";
     private static final String UGC_CHECK_NEW = "не обрезан, не ускорен, не перекрыт. Подойдёт и на весь экран, и поверх ролика (сверху или по центру).";
 
@@ -4076,6 +4081,16 @@ public class QuestSeeder implements CommandLineRunner {
             String instruction = q.getInstruction();
             if (instruction != null && (instruction.contains(UGC_STEP1_OLD) || instruction.contains(UGC_STEP2_OLD))) {
                 q.setInstruction(instruction.replace(UGC_STEP1_OLD, UGC_STEP1_NEW).replace(UGC_STEP2_OLD, UGC_STEP2_NEW));
+                changed = true;
+            }
+            String description = q.getDescription();
+            if (description != null && description.contains(UGC_BANNER_MARKER) && description.contains(UGC_DESC_OLD)) {
+                q.setDescription(description.replace(UGC_DESC_OLD, UGC_DESC_NEW));
+                changed = true;
+            }
+            String requirements = q.getRequirements();
+            if (requirements != null && requirements.contains(UGC_REQ_OLD)) {
+                q.setRequirements(requirements.replace(UGC_REQ_OLD, UGC_REQ_NEW));
                 changed = true;
             }
             String checklist = q.getModeratorChecklist();
@@ -4098,13 +4113,13 @@ public class QuestSeeder implements CommandLineRunner {
         questRepository.findFirstByTitleAndGameName(title, "UGC").ifPresent(q -> {
             String key = UGC_BANNER_RULES_KEY + title;
             if (appSettingRepository.findById(key).isPresent()) return;
-            q.setDescription("Сними любое видео на свою тему, вставь в него наш " + UGC_BANNER_MARKER + " и размести реферальную ссылку. Набери " + minViews + "+ просмотров: чем больше просмотров, тем выше награда, от 3 000 до 25 000 EXC.");
+            q.setDescription("Сними любое видео на свою тему, вставь в него наш " + UGC_BANNER_MARKER + " и размести реферальную ссылку. Набери " + minViews + "+ просмотров.");
             q.setInstruction(UGC_STEP1_NEW + "\n"
                     + UGC_STEP2_NEW + "\n"
                     + "3️⃣ Опубликуй видео " + where + ".\n"
                     + "4️⃣ Размести реферальную ссылку в описании, комментарии или в самом видео.\n"
                     + "5️⃣ Награда: до 500 просмотров - 3 000 EXC, от 500 - 5 000, от 2 000 - 8 000, от 10 000 - 15 000, от 50 000 - 25 000. Ссылку отправляй, когда ролик набрал нужное число.");
-            q.setRequirements("Видео публичное, баннер на 6-й секунде (±1 с) виден целиком, реферальная ссылка есть. Без баннера или ссылки квест не засчитывается.");
+            q.setRequirements(UGC_REQ_NEW);
             q.setModeratorChecklist("1️⃣ Видео публичное и открывается.\n"
                     + "2️⃣ Баннер EGC вставлен: начинается примерно на 6-й секунде (допуск ±1 с), виден целиком, не обрезан, не ускорен, не перекрыт.\n"
                     + "3️⃣ Реферальная ссылка игрока есть где-то: описание, закреплённый комментарий или само видео.\n"
