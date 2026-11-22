@@ -58,6 +58,18 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT COALESCE(SUM(s.awardedCoins), 0) FROM QuestSubmission s WHERE LOWER(s.quest.gameName) = 'ugc' AND s.status = 'APPROVED' AND s.awardedCoins IS NOT NULL AND s.awardedCoins > 0")
     long sumPaidUgcCoins();
 
+    /** Пилот UGC в EXCASH (UgcPilotService): удержанные и уже зачисленные суммы, число заявок, лимит игрока за сутки. */
+    @Query("SELECT COALESCE(SUM(s.heldCoins), 0) FROM QuestSubmission s WHERE s.heldStatus = :status")
+    long sumHeldCoinsByStatus(@Param("status") String status);
+
+    long countByHeldStatus(String heldStatus);
+
+    @Query("SELECT COALESCE(SUM(s.heldCoins), 0) FROM QuestSubmission s WHERE s.user = :user AND (s.heldStatus = 'UGC_HOLD' OR s.heldStatus = 'UGC_RELEASED') AND s.heldReleaseAt >= :since")
+    long sumUgcPilotHeldByUserSince(@Param("user") AppUser user, @Param("since") LocalDateTime since);
+
+    @Query("SELECT COUNT(DISTINCT s.user.id) FROM QuestSubmission s WHERE s.heldStatus = 'UGC_HOLD' OR s.heldStatus = 'UGC_RELEASED'")
+    long countUgcPilotPlayers();
+
     long countByQuest(Quest quest);
 
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.quest = :quest AND s.status = 'APPROVED'")

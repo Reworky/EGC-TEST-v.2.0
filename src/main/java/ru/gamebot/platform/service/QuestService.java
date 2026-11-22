@@ -104,6 +104,7 @@ public class QuestService {
     private final SeasonalEventService seasonalEventService;
     private final SponsorBalanceService sponsorBalanceService;
     private final ExcTransactionService sponsorExcTx;
+    private final UgcPilotService ugcPilotService;
 
     public List<Quest> findActiveQuests() {
         return questRepository.findAllByActiveTrueOrderByCreatedAtDesc().stream()
@@ -1504,6 +1505,17 @@ public class QuestService {
         // это бы задвоило счётчик).
         userService.recordEgcPassBoost(user, reward.egcPassBonusCoins());
 
+        // Пилот «UGC в EXCASH» (21.11.2026): от 500 просмотров часть награды, оплачиваемую клубом, уходит в EXCASH с удержанием 3 дня; ошибка пилота не должна ломать начисление
+        long ugcExcash = 0;
+        if (heldCoins == 0 && isUgcQuest(quest) && !quest.isSponsored() && viewsTier != null) {
+            try {
+                ugcExcash = ugcPilotService.planExcash(user, quest, viewsTier,
+                        Math.max(0, grossCoins - reward.egcPassBonusCoins() - reward.boostBonusCoins()));
+            } catch (Exception e) {
+                log.warn("UGC pilot planExcash failed for submission {}, paying in EXC", submissionId, e);
+                ugcExcash = 0;
+            }
+        }
         if (isUgcQuest(quest) && viewsTier != null) {
             submission.setViewsTier(viewsTier);
         }
@@ -1514,7 +1526,7 @@ public class QuestService {
 
         // Фиксируем рублёвый эквивалент по HR на момент одобрения
         double currentHR = healthRatioService.getCurrentRatio();
-        long fixedRub = Math.round(adjustedCoins * currentHR / 100.0);
+        long fixedRub = Math.round((adjustedCoins - ugcExcash) * currentHR / 100.0);
         submission.setFixedRubValue(fixedRub);
         submission.setAwardedCoins(adjustedCoins);
         submission.setAwardedXp(adjustedXp);
@@ -1529,13 +1541,20 @@ public class QuestService {
             submission.setHeldReleaseAt(LocalDateTime.now().plusDays(holdDays));
         }
 
+        if (ugcExcash > 0) {
+            submission.setHeldCoins(ugcExcash);
+            submission.setHeldSponsorExc(0L);
+            submission.setHeldStatus(UgcPilotService.HELD);
+            submission.setHeldReleaseAt(LocalDateTime.now().plusDays(UgcPilotService.HOLD_DAYS));
+        }
+
         // 3.5 3000 EXC bonus on first quest (before completedQuests increment)
         userService.grantFirstQuestReferralBonus(user);
 
         // Спонсорский баланс (18.11.2026, за выключателем): награда банковской миссии и внешнего партнёрского квеста, оплаченная спонсором, идёт на спонсорский баланс
         // без бонуса уровня; бонусы EGC Pass и бусты (платит клуб) - на игровой баланс, как раньше. Квесты с удержанием части награды (подписки на каналы) сюда не относятся.
         long sponsorCredit = (heldCoins == 0 && sponsorBalanceService.applies(quest)) ? Math.max(0, Math.min(adjustedCoins, sponsorShare)) : 0;
-        userService.addReward(user, adjustedXp, adjustedCoins - sponsorCredit, ExcTransactionService.QUEST,
+        userService.addReward(user, adjustedXp, adjustedCoins - sponsorCredit - ugcExcash, ExcTransactionService.QUEST,
                 quest.getTitle() + " (" + quest.getGameName() + ")");
         if (sponsorCredit > 0) {
             sponsorExcTx.creditSponsor(user, sponsorCredit, ExcTransactionService.QUEST, quest.getTitle() + " (" + quest.getGameName() + ")");
@@ -1581,7 +1600,7 @@ public class QuestService {
         }
 
         // 3.5 Referral bonus: 10% of EXC earned by referred in first 30 days
-        grantReferralBonus(user, adjustedCoins);
+        grantReferralBonus(user, adjustedCoins - ugcExcash);
         notifyReferrerSecondQuestSignal(user);
 
         // Квест сезонного события: проверка порогов 80%/100% потолка затрат (ошибка здесь не должна ломать начисление).

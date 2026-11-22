@@ -185,6 +185,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private final ru.gamebot.platform.service.SponsorService sponsorService;
     private final ru.gamebot.platform.service.ExcTransactionService excTransactionService;
     private final ru.gamebot.platform.service.SponsorBalanceService sponsorBalanceService;
+    private final ru.gamebot.platform.service.UgcPilotService ugcPilotService;
     private final ru.gamebot.platform.service.SquadService squadService;
     private final ru.gamebot.platform.service.WheelService wheelService;
     private final ru.gamebot.platform.service.ExcWheelService excWheelService;
@@ -581,6 +582,13 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
         if (text != null && (text.equals("/wowpay") || text.startsWith("/wowpay ")) && isEffectiveAdmin(user)) {
             handleGameOfferPayCommand(user, text.trim());
+            return;
+        }
+        if (text != null && (text.equals("/ugcpilot") || text.startsWith("/ugcpilot ")) && isEffectiveAdmin(user)) {
+            String[] pilotParts = text.trim().split("\\s+");
+            String pilotSub = pilotParts.length > 1 ? pilotParts[1].toLowerCase() : "status";
+            String pilotReply = "start".equals(pilotSub) ? ugcPilotService.start() : "stop".equals(pilotSub) ? ugcPilotService.stop() : ugcPilotService.statusHtml();
+            sendText(user.getTelegramId(), pilotReply, null);
             return;
         }
         if (text != null && (text.equals("/excash") || text.startsWith("/excash ") || text.equals("/tocash") || text.startsWith("/tocash ")) && isEffectiveAdmin(user)) {
@@ -8934,6 +8942,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("alfabonus", "ID [повтор|карта|отказ]", "Выплата Альфа-Банк (Апельсиновая карта) после подтверждения банка: начисляет игроку 💎 30 000 EXCASH (≈ 300 ₽, награда клуба; плюс компенсация траты, если она есть), переводить деньги не нужно. Слово «карта» - прежний ручной перевод рублями без EXCASH, «отказ» - банк не подтвердил карту (игроку уйдёт сообщение, ожидание снимется), «повтор» - повторная выплата"),
             new AdminCommand("forabonus", "ID [повтор|карта|отказ]", "Выплата Фора-Банк (карта «Все включено») после подтверждения банка: начисляет игроку 💎 40 000 EXCASH (≈ 400 ₽, награда клуба; плюс компенсация траты, если она есть), переводить деньги не нужно. Слово «карта» - прежний ручной перевод рублями без EXCASH, «отказ» - банк не подтвердил карту (игроку уйдёт сообщение, ожидание снимется), «повтор» - повторная выплата"),
             new AdminCommand("excash", "ID [±сумма] [уведомить] [причина]", "Спонсорский баланс EXCASH: без суммы - показать игровой и спонсорский баланс игрока; +сумма - начислить EXCASH, -сумма - списать (ниже нуля нельзя); слово «уведомить» отправляет игроку сообщение о начислении"),
+            new AdminCommand("ugcpilot", "status|start|stop", "Пилот «UGC в EXCASH»: от 500 просмотров платим EXCASH с удержанием 3 дня, бюджет 300 000 EXCASH (3 000 ₽), граница 100 000 EXCASH в сутки на игрока, срок 14 дней; status - расход и остаток, start - запустить, stop - остановить"),
             new AdminCommand("tocash", "ID сумма", "Перенести EXC с игрового баланса на спонсорский (EXCASH) 1 к 1, для игроков, которые просят перенести старые спонсорские заработки. Одна транзакция, оба баланса показываются в ответе"),
             new AdminCommand("wowpay", "ID", "Награда за квест World of Warships: игрок есть в списке конверсий лендинга (партнёр подтвердил игру). Начисляет награду квеста и уведомляет игрока; повторно тому же игроку не начисляет"),
             new AdminCommand("psbbonus", "ID [повтор|карта|отказ]", "Выплата ПСБ (карта «Твой кэшбэк») после подтверждения банка: начисляет игроку 💎 50 000 EXCASH (≈ 500 ₽, награда клуба; плюс компенсация траты, если она есть), переводить деньги не нужно. Слово «карта» - прежний ручной перевод рублями без EXCASH, «отказ» - банк не подтвердил карту (игроку уйдёт сообщение, ожидание снимется), «повтор» - повторная выплата"),
@@ -11973,6 +11982,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if ("PENDING".equals(submission.getHeldStatus()) && submission.getHeldCoins() != null && submission.getHeldReleaseAt() != null) {
             heldNote = "🔒 Ещё <b>+" + fmtExc(submission.getHeldCoins()) + " EXC</b> придёт "
                     + submission.getHeldReleaseAt().format(DATE_TIME_FORMATTER).substring(0, 10) + ", если останешься в канале\n";
+        } else if (ru.gamebot.platform.service.UgcPilotService.HELD.equals(submission.getHeldStatus()) && submission.getHeldCoins() != null && submission.getHeldReleaseAt() != null) {
+            heldNote = "💎 <b>+" + ugcNum(submission.getHeldCoins()) + " EXCASH</b> придут "
+                    + submission.getHeldReleaseAt().format(DATE_TIME_FORMATTER).substring(0, 10) + " (проверка от накрутки)\n";
+        } else if (ru.gamebot.platform.service.UgcPilotService.RELEASED.equals(submission.getHeldStatus())) {
+            heldNote = "💎 EXCASH за этот ролик уже зачислены на спонсорский баланс\n";
         } else if ("RELEASED".equals(submission.getHeldStatus())) {
             heldNote = "✅ Вторая часть награды выплачена за верность каналу\n";
         } else if ("FORFEITED".equals(submission.getHeldStatus())) {
@@ -14578,6 +14592,10 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sb.append("Сними видео про клуб, вставь наш баннер и получи EXC за просмотры.\n");
         sb.append("До <b>").append(ugcNum(maxCoins)).append(" EXC</b> за ролик.\n\n");
         sb.append("<b>Сколько платим?</b>\n<blockquote>").append(scale).append("</blockquote>\n");
+        if (ugcPilotService.isActive()) {
+            sb.append("💎 От 500 просмотров платим в EXCASH: выводится без лимитов (100 EXCASH = 1 ₽), зачисление через ")
+                    .append(ru.gamebot.platform.service.UgcPilotService.HOLD_DAYS).append(" дня после проверки. До 500 просмотров: EXC.\n");
+        }
 
         StringBuilder stats = new StringBuilder();
         try {
@@ -17486,9 +17504,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return List.of(keyboardFactory.callback("✅ Одобрить", "mod:ok:" + submission.getId()));
         }
         List<InlineKeyboardButton> buttons = new ArrayList<>();
+        boolean pilotOn = ugcPilotService.isActive();
         for (int tier = 0; tier < QuestService.UGC_VIEW_TIER_LABELS.length; tier++) {
             long coins = QuestService.ugcTierCoins(submission.getQuest(), tier);
-            buttons.add(keyboardFactory.callback("✅ " + QuestService.UGC_VIEW_TIER_LABELS[tier] + " просм. · " + String.format(java.util.Locale.US, "%,d", coins).replace(',', ' ') + " EXC",
+            // Пилот «UGC в EXCASH»: от 500 просмотров награда идёт в EXCASH (зачисление через 3 дня), до 500 - в EXC
+            String unit = pilotOn && tier >= ru.gamebot.platform.service.UgcPilotService.MIN_TIER ? "EXCASH" : "EXC";
+            buttons.add(keyboardFactory.callback("✅ " + QuestService.UGC_VIEW_TIER_LABELS[tier] + " просм. · " + String.format(java.util.Locale.US, "%,d", coins).replace(',', ' ') + " " + unit,
                     "mod:okv:" + submission.getId() + ":" + tier));
         }
         return buttons;
@@ -17714,12 +17735,19 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 log.warn("Could not send OTP mission stage 4 to user {}, falling back to generic notice: {}", submission.getUser().getTelegramId(), e.getMessage());
             }
         }
+        // Пилот «UGC в EXCASH»: часть награды лежит в удержании и придёт на спонсорский баланс через 3 дня
+        long pilotExcash = ru.gamebot.platform.service.UgcPilotService.HELD.equals(submission.getHeldStatus()) && submission.getHeldCoins() != null ? submission.getHeldCoins() : 0L;
+        String pilotLine = pilotExcash > 0
+                ? "💎 <b>+" + ugcNum(pilotExcash) + " EXCASH</b> придут через " + ru.gamebot.platform.service.UgcPilotService.HOLD_DAYS
+                        + " дня (проверка от накрутки). Их можно вывести без лимитов, 100 EXCASH = 1 ₽\n" : "";
+        long excNow = Math.max(0, rewardGrant.totalExc() - pilotExcash);
         try {
             notifyUser(submission.getUser().getTelegramId(),
                     "✅ <b>Квест засчитан</b>\n\n"
                             + "<b>" + escape(submission.getQuest().getTitle()) + "</b>, одобрено модератором\n"
                             + viewsLine
-                            + "🪙 <b>+" + rewardGrant.totalExc() + " EXC</b> · ✨ +" + rewardGrant.xp() + " XP\n"
+                            + pilotLine
+                            + "🪙 <b>+" + excNow + " EXC</b> · ✨ +" + rewardGrant.xp() + " XP\n"
                             + formatExcBonusLine(rewardGrant)
                             + egcPassBonusLine(submission)
                             + firstQuestBonus
