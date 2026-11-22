@@ -4063,14 +4063,16 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String UGC_BANNER_MARKER = "видео-баннер EGC";
     /** Шаги 1-2 инструкции UGC-квестов (21.11.2026, владелец): любой из двух баннеров, на весь экран или поверх ролика. */
     private static final String UGC_STEP1_OLD = "1️⃣ Скачай баннер: кнопка «🎬 Скачать баннер».";
-    private static final String UGC_STEP1_NEW = "1️⃣ Скачай баннер: вертикальный или горизонтальный, любой подойдёт.";
+    private static final String UGC_STEP1_PREV = "1️⃣ Скачай баннер: вертикальный или горизонтальный, любой подойдёт.";
+    private static final String UGC_STEP1_NEW = "1️⃣ Скачай баннер: вертикальный или горизонтальный.";
     private static final String UGC_STEP2_OLD = "2️⃣ Вставь его в видео на 6-й секунде, целиком, без обрезки и ускорения.";
     private static final String UGC_STEP2_NEW = "2️⃣ Вставь баннер в видео на 6-й секунде на все 10 секунд: на весь экран или поверх своего ролика, сверху или по центру. Главное, чтобы он был виден целиком, не обрезан и не ускорен.";
     /** Карточка с баннером обязана укладываться в подпись фото (1000 знаков): шкала наград осталась только в шаге 5, описание и условия сжаты (21.11.2026). */
     private static final String UGC_DESC_OLD = " просмотров: чем больше просмотров, тем выше награда, от 3 000 до 25 000 EXC.";
     private static final String UGC_DESC_NEW = " просмотров.";
     private static final String UGC_REQ_OLD = "Видео публичное, баннер на 6-й секунде (±1 с) виден целиком, реферальная ссылка есть. Без баннера или ссылки квест не засчитывается.";
-    private static final String UGC_REQ_NEW = "Видео публичное, баннер виден целиком, реферальная ссылка есть. Без них квест не засчитывается.";
+    private static final String UGC_REQ_PREV = "Видео публичное, баннер виден целиком, реферальная ссылка есть. Без них квест не засчитывается.";
+    private static final String UGC_REQ_NEW = "Видео публичное, баннер виден целиком, есть реферальная ссылка.";
     private static final String UGC_CHECK_OLD = "не обрезан, не ускорен, не перекрыт.";
     private static final String UGC_CHECK_NEW = "не обрезан, не ускорен, не перекрыт. Подойдёт и на весь экран, и поверх ролика (сверху или по центру).";
 
@@ -4079,8 +4081,8 @@ public class QuestSeeder implements CommandLineRunner {
         questRepository.findFirstByTitleAndGameName(title, "UGC").ifPresent(q -> {
             boolean changed = false;
             String instruction = q.getInstruction();
-            if (instruction != null && (instruction.contains(UGC_STEP1_OLD) || instruction.contains(UGC_STEP2_OLD))) {
-                q.setInstruction(instruction.replace(UGC_STEP1_OLD, UGC_STEP1_NEW).replace(UGC_STEP2_OLD, UGC_STEP2_NEW));
+            if (instruction != null && (instruction.contains(UGC_STEP1_OLD) || instruction.contains(UGC_STEP1_PREV) || instruction.contains(UGC_STEP2_OLD))) {
+                q.setInstruction(instruction.replace(UGC_STEP1_OLD, UGC_STEP1_NEW).replace(UGC_STEP1_PREV, UGC_STEP1_NEW).replace(UGC_STEP2_OLD, UGC_STEP2_NEW));
                 changed = true;
             }
             String description = q.getDescription();
@@ -4089,8 +4091,8 @@ public class QuestSeeder implements CommandLineRunner {
                 changed = true;
             }
             String requirements = q.getRequirements();
-            if (requirements != null && requirements.contains(UGC_REQ_OLD)) {
-                q.setRequirements(requirements.replace(UGC_REQ_OLD, UGC_REQ_NEW));
+            if (requirements != null && (requirements.contains(UGC_REQ_OLD) || requirements.contains(UGC_REQ_PREV))) {
+                q.setRequirements(requirements.replace(UGC_REQ_OLD, UGC_REQ_NEW).replace(UGC_REQ_PREV, UGC_REQ_NEW));
                 changed = true;
             }
             String checklist = q.getModeratorChecklist();
