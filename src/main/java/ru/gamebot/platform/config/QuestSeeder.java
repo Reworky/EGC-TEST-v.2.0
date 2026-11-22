@@ -1893,7 +1893,7 @@ public class QuestSeeder implements CommandLineRunner {
             applyUgcBannerRules("Instagram Reels про EGC", "в Instagram Reels (аккаунт открытый)", 30);
             applyUgcBannerRules("TikTok видео про EGC", "в TikTok (аккаунт открытый)", 50);
             applyUgcBannerRules("YouTube Shorts про EGC", "на YouTube Shorts (публично)", 100);
-            applyUgcBannerRules("YouTube видео про EGC", "на YouTube обычным видео (публично)", 100);
+            applyUgcBannerRules("YouTube видео про EGC", "на YouTube (обычное, не Shorts, публично)", 100);
         }
         for (String ugcTitle : List.of("Instagram Reels про EGC", "TikTok видео про EGC", "YouTube Shorts про EGC", "YouTube видео про EGC")) {
             updateUgcBannerSteps(ugcTitle);
@@ -4073,6 +4073,8 @@ public class QuestSeeder implements CommandLineRunner {
     private static final String UGC_REQ_OLD = "Видео публичное, баннер на 6-й секунде (±1 с) виден целиком, реферальная ссылка есть. Без баннера или ссылки квест не засчитывается.";
     private static final String UGC_REQ_PREV = "Видео публичное, баннер виден целиком, реферальная ссылка есть. Без них квест не засчитывается.";
     private static final String UGC_REQ_NEW = "Видео публичное, баннер виден целиком, есть реферальная ссылка.";
+    private static final String UGC_YT_STEP3_OLD = "3️⃣ Опубликуй видео на YouTube обычным видео (публично).";
+    private static final String UGC_YT_STEP3_NEW = "3️⃣ Опубликуй видео на YouTube (обычное, не Shorts, публично).";
     private static final String UGC_CHECK_OLD = "не обрезан, не ускорен, не перекрыт.";
     private static final String UGC_CHECK_NEW = "не обрезан, не ускорен, не перекрыт. Подойдёт и на весь экран, и поверх ролика (сверху или по центру).";
 
@@ -4083,6 +4085,11 @@ public class QuestSeeder implements CommandLineRunner {
             String instruction = q.getInstruction();
             if (instruction != null && (instruction.contains(UGC_STEP1_OLD) || instruction.contains(UGC_STEP1_PREV) || instruction.contains(UGC_STEP2_OLD))) {
                 q.setInstruction(instruction.replace(UGC_STEP1_OLD, UGC_STEP1_NEW).replace(UGC_STEP1_PREV, UGC_STEP1_NEW).replace(UGC_STEP2_OLD, UGC_STEP2_NEW));
+                changed = true;
+            }
+            String instructionNow = q.getInstruction();
+            if (instructionNow != null && instructionNow.contains(UGC_YT_STEP3_OLD)) {
+                q.setInstruction(instructionNow.replace(UGC_YT_STEP3_OLD, UGC_YT_STEP3_NEW));
                 changed = true;
             }
             String description = q.getDescription();

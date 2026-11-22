@@ -11119,7 +11119,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : ugcMax
                 ? "🏆 <b>до +" + fmtExc(ugcMaxCoins) + " EXC</b>" + starsNote(ugcMaxCoins)
                 : "🏆 <b>+" + fmtExc(coins) + " EXC</b>" + starsNote(coins);
-        return rewardHead + " · +" + quest.getRewardXp() + " XP"
+        // У UGC-квестов XP нет: строку «+0 XP» не показываем
+        return rewardHead + (ugcMax && quest.getRewardXp() <= 0 ? "" : " · +" + quest.getRewardXp() + " XP")
                 + (tickets ? " · 🎟 +" + quest.getTicketReward() + " " + ticketsWord(quest.getTicketReward()) : "")
                 + rewardNote + egcPassRewardNote(user, quest);
     }
@@ -12004,7 +12005,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 "🎯 <b>" + escape(quest.getTitle()) + "</b>\n"
                         + "📌 Статус: <b>" + escape(humanStatus(submission.getStatus())) + "</b> · "
                         + escape(submission.getUpdatedAt().format(DATE_TIME_FORMATTER)) + "\n\n"
-                        + "🏆 <b>+" + fmtExc(shownCoins) + " EXC</b>" + starsNote(shownCoins) + " · +" + quest.getRewardXp() + " XP"
+                        + (QuestService.isUgcQuest(quest) && !quest.isSponsored()
+                                ? ugcMyCardRewardLine(submission)
+                                : "🏆 <b>+" + fmtExc(shownCoins) + " EXC</b>" + starsNote(shownCoins) + " · +" + quest.getRewardXp() + " XP")
                         + (quest.getTicketReward() > 0 ? " · 🎟 +" + quest.getTicketReward() + " " + ticketsWord(quest.getTicketReward()) : "")
                         + weeklyNote + "\n"
                         + (heldNote.isEmpty() ? "" : heldNote)
@@ -34539,6 +34542,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return update.getCallbackQuery().getMessage().getChatId();
         }
         return null;
+    }
+
+    /** Строка награды в карточке ролика («Мои UGC-квесты»): у одобренного - сколько реально начислено (EXC и EXCASH пилота), у остальных - потолок «до 25 000» по просмотрам. XP у UGC нет. */
+    private String ugcMyCardRewardLine(QuestSubmission submission) {
+        if (submission.getStatus() == SubmissionStatus.APPROVED && submission.getAwardedCoins() != null && submission.getAwardedCoins() > 0) {
+            boolean pilotPaid = ru.gamebot.platform.service.UgcPilotService.HELD.equals(submission.getHeldStatus())
+                    || ru.gamebot.platform.service.UgcPilotService.RELEASED.equals(submission.getHeldStatus());
+            long excash = pilotPaid && submission.getHeldCoins() != null ? submission.getHeldCoins() : 0L;
+            long exc = Math.max(0L, submission.getAwardedCoins() - excash);
+            StringBuilder sb = new StringBuilder();
+            if (excash > 0) sb.append("💎 <b>+").append(ugcNum(excash)).append(" EXCASH</b>");
+            if (exc > 0) sb.append(excash > 0 ? " · " : "").append("🏆 <b>+").append(ugcNum(exc)).append(" EXC</b>");
+            return sb.toString();
+        }
+        long max = QuestService.UGC_VIEW_TIER_COINS[QuestService.UGC_VIEW_TIER_COINS.length - 1];
+        return ugcPilotService.isActive()
+                ? "💎 <b>до +" + ugcNum(max) + " EXCASH</b> (≈ " + ugcNum(Math.round(max / 100.0)) + " ₽)"
+                : "🏆 <b>до +" + ugcNum(max) + " EXC</b>";
     }
 
     /** Значок статуса ролика в «Мои UGC-квесты». */
