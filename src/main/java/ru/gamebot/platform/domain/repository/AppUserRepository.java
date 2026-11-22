@@ -373,6 +373,13 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
 
     long countByReferredByTelegramIdIsNotNull();
 
+    /** Вкладка аналитики UGC: приход по реферальной ссылке автора с момента, когда он взял первый UGC-квест. */
+    long countByReferredByTelegramIdAndCreatedAtGreaterThanEqual(Long referrerTelegramId, LocalDateTime since);
+
+    long countByReferredByTelegramIdAndCreatedAtGreaterThanEqualAndRegistrationCompletedTrue(Long referrerTelegramId, LocalDateTime since);
+
+    long countByReferredByTelegramIdAndCreatedAtGreaterThanEqualAndCompletedQuestsGreaterThan(Long referrerTelegramId, LocalDateTime since, int completedQuests);
+
     long countByReferredByTelegramIdIsNotNullAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(LocalDateTime from, LocalDateTime to);
 
     long countByTrafficSourceCodeIsNotNullAndCreatedAtGreaterThanEqualAndCreatedAtLessThan(LocalDateTime from, LocalDateTime to);

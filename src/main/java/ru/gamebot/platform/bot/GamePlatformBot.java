@@ -22631,6 +22631,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 title = "🏆 <b>События и рост</b>";
                 rows.add(List.of(keyboardFactory.callback("🏆 Турниры", "admin:tournaments")));
                 rows.add(List.of(keyboardFactory.callback("👨‍👩‍👧‍👦 Отряды: аналитика", "admin:an:tab:SQUADS")));
+                rows.add(List.of(keyboardFactory.callback("🎬 UGC: приход с роликов", "admin:an:tab:UGC")));
                 rows.add(List.of(keyboardFactory.callback("🎫 Battle Pass", "admin:seasons")));
                 rows.add(List.of(keyboardFactory.callback("🚀 Буст рефералки", "admin:refboost")));
                 rows.add(List.of(keyboardFactory.callback("📈 Трафик и закупы", "admin:traffic")));

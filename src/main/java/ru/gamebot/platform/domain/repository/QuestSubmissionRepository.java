@@ -70,6 +70,16 @@ public interface QuestSubmissionRepository extends JpaRepository<QuestSubmission
     @Query("SELECT COUNT(DISTINCT s.user.id) FROM QuestSubmission s WHERE s.heldStatus = 'UGC_HOLD' OR s.heldStatus = 'UGC_RELEASED'")
     long countUgcPilotPlayers();
 
+    /** Вкладка аналитики UGC (UgcAnalyticsService): заявки UGC-квестов, взятые или одобренные в окне, и дата первого взятого автором одобренного UGC-квеста. */
+    @Query("SELECT s FROM QuestSubmission s JOIN FETCH s.quest q JOIN FETCH s.user u WHERE LOWER(q.gameName) = 'ugc' AND s.createdAt >= :from AND s.createdAt < :to")
+    List<QuestSubmission> findUgcCreatedBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query("SELECT s FROM QuestSubmission s JOIN FETCH s.quest q JOIN FETCH s.user u WHERE LOWER(q.gameName) = 'ugc' AND s.status = 'APPROVED' AND s.updatedAt >= :from AND s.updatedAt < :to")
+    List<QuestSubmission> findUgcApprovedBetween(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    @Query("SELECT MIN(s.createdAt) FROM QuestSubmission s WHERE s.user = :user AND LOWER(s.quest.gameName) = 'ugc' AND s.status = 'APPROVED'")
+    Optional<LocalDateTime> findFirstUgcApprovedTakenAt(@Param("user") AppUser user);
+
     long countByQuest(Quest quest);
 
     @Query("SELECT COUNT(s) FROM QuestSubmission s WHERE s.quest = :quest AND s.status = 'APPROVED'")

@@ -64,7 +64,8 @@ public class AnalyticsService {
         PARTNER("💳", "Партнёрский квест"),
         NEWBIE("🧭", "Воронка новичка"),
         SPONSOR("💎", "EXCASH"),
-        SPONSOR_QUESTS("🎯", "Спонсорские квесты");
+        SPONSOR_QUESTS("🎯", "Спонсорские квесты"),
+        UGC("🎬", "UGC и приход с роликов");
 
         public final String icon;
         public final String title;
@@ -141,6 +142,7 @@ public class AnalyticsService {
     private final TrafficSourceService trafficSourceService;
     private final VpnStatsService vpnStats;
     private final PulseService pulseService;
+    private final UgcAnalyticsService ugcAnalytics;
 
     // ───────────────────────── снимок: дополнительные поля для трендов ─────────────────────────
 
@@ -260,6 +262,7 @@ public class AnalyticsService {
                 case NEWBIE -> newbieTab(p, lines, extras);
                 case SPONSOR -> sponsorTab(p, pv, lines, extras);
                 case SPONSOR_QUESTS -> sponsorQuestsTab(p, pv, lines, extras);
+                case UGC -> ugcAnalytics.fill(p, pv, lines, extras);
             }
         } catch (Exception e) {
             log.error("Analytics tab {} failed", tab, e);
