@@ -72,8 +72,20 @@ public class ShopController {
         return item.getPurchaseGroup() == null || ru.gamebot.platform.service.GemPurchaseService.packagesFor(item.getPurchaseGroup()).isEmpty();
     }
 
+    /** Текст «прежде чем платить EXC, нужно…» с отметками выполненного (то же, что экран бота showShopRequirementsIfBlocked). */
+    private String requirementsMessage(AppUser user, String eligibility) {
+        if (user.isBlocked() || user.isWithdrawalFrozen()) return eligibility;
+        StringBuilder sb = new StringBuilder("Прежде чем платить EXC, нужно:");
+        for (ShopLimitService.Requirement step : shopLimitService.shopRequirements(user)) {
+            sb.append('\n').append(step.done() ? "✅ " : "⬜ ").append(step.text());
+        }
+        return sb.toString();
+    }
+
     private RewardItemDto toDto(RewardItem item, AppUser user) {
         String statusNote = user != null ? shopLimitService.getItemStatus(user, item) : null;
+        // 23.11.2026 (владелец): замки допуска («🔒 нужен телефон/квесты…») в списке не показываем - причину называем при попытке купить (см. purchase)
+        if (statusNote != null && statusNote.startsWith("🔒")) statusNote = null;
         boolean locked = statusNote != null
                 && (statusNote.startsWith("🔒") || statusNote.startsWith("⏳") || statusNote.startsWith("🚫"));
         return RewardItemDto.builder()
@@ -142,6 +154,15 @@ public class ShopController {
                     .success(false)
                     .message("Оплата EXCASH для этой позиции недоступна.")
                     .build());
+        }
+        if (!"Вывод".equals(item.getCategory()) && !"avatar_frame".equals(item.getPurchaseGroup())) {
+            String eligibility = shopLimitService.shopEligibilityBlock(user);
+            if (eligibility != null) {
+                return ResponseEntity.ok(ShopActionResponseDto.builder()
+                        .success(false)
+                        .message(requirementsMessage(user, eligibility))
+                        .build());
+            }
         }
         RewardRequest req;
         try {

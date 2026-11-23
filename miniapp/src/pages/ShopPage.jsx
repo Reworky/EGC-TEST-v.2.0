@@ -167,7 +167,7 @@ function ShopItemCard({ item, expanded, onToggle, onPurchased, ownedFrames, acti
               </button>
             )
           )}
-          {message && <div className="quest-message">{message}</div>}
+          {message && <div className="quest-message" style={{ whiteSpace: 'pre-line' }}>{message}</div>}
         </div>
       )}
     </div>
@@ -451,7 +451,7 @@ function PerkCard({ item, state, expanded, onToggle, onPurchased }) {
               ↩️ Отменить и вернуть EXC
             </button>
           )}
-          {message && <div className="quest-message">{message}</div>}
+          {message && <div className="quest-message" style={{ whiteSpace: 'pre-line' }}>{message}</div>}
           <PassUpsell message={message} hide={!!state.egcPass} />
         </div>
       )}
@@ -583,7 +583,7 @@ function GiftCard({ expanded, onToggle }) {
           <button className="quest-btn" disabled={busy} onClick={handleSend}>
             {busy ? 'Секунду...' : 'Отправить'}
           </button>
-          {message && <div className="quest-message">{message}</div>}
+          {message && <div className="quest-message" style={{ whiteSpace: 'pre-line' }}>{message}</div>}
         </div>
       )}
     </div>
@@ -637,7 +637,7 @@ function StarsShopCard({ itemType, icon, title, description, price, onPurchased,
           <button className="quest-btn" disabled={busy} onClick={handleBuy}>
             {busy ? 'Секунду...' : 'Купить'}
           </button>
-          {message && <div className="quest-message">{message}</div>}
+          {message && <div className="quest-message" style={{ whiteSpace: 'pre-line' }}>{message}</div>}
         </div>
       )}
     </div>

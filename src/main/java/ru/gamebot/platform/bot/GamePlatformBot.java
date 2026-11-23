@@ -2100,7 +2100,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(user.getTelegramId(), "❌ Пакет не найден, попробуйте выбрать заново.", backMenuKeyboard("menu:shop"));
                 return;
             }
-            if (showShopRequirementsIfBlocked(user, "gemdonate:pkg:" + grParts[0] + ":" + grParts[1])) return;
+            if (showShopRequirementsIfBlocked(user, "gemdonate:pkg:" + grParts[0] + ":" + grParts[1], true)) return;
             String grBlock = rewardService.hybridPurchaseBlock(user, grQuote.item(), grQuote.exc());
             if (grBlock != null) {
                 sendText(user.getTelegramId(), "⚠️ " + escape(grBlock), backMenuKeyboard("shop:donate:" + grParts[0]));
@@ -2139,7 +2139,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(user.getTelegramId(), "❌ Пакет не найден, попробуйте выбрать заново.", backMenuKeyboard("menu:shop"));
                 return;
             }
-            if (showShopRequirementsIfBlocked(user, "gemdonate:pkg:" + hybParts[0] + ":" + hybParts[1])) return;
+            if (showShopRequirementsIfBlocked(user, "gemdonate:pkg:" + hybParts[0] + ":" + hybParts[1], true)) return;
             String hybBlock = rewardService.hybridPurchaseBlock(user, hybQuote.item(), hybQuote.exc());
             if (hybBlock != null) {
                 sendText(user.getTelegramId(), "⚠️ " + escape(hybBlock), backMenuKeyboard("shop:donate:" + hybParts[0]));
@@ -12425,7 +12425,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
 
     /** Экран «прежде чем купить» (23.11.2026, владелец): замки в меню убраны, причина закрытой покупки за EXC называется только в момент попытки купить.
      *  true - покупка за EXC пока недоступна, экран с чек-листом уже показан; false - допуск есть, можно продолжать. Оплата звёздами и рублями этим не ограничена. */
-    private boolean showShopRequirementsIfBlocked(AppUser user, String backTarget) {
+    private boolean showShopRequirementsIfBlocked(AppUser user, String backTarget, boolean moneyAlternative) {
         String block = shopLimitService.shopEligibilityBlock(user);
         if (block == null) return false;
         if (user.isBlocked() || user.isWithdrawalFrozen()) {
@@ -12437,7 +12437,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (ru.gamebot.platform.service.ShopLimitService.Requirement step : steps) {
             sb.append(step.done() ? "✅ " : "⬜ ").append(escape(step.text())).append("\n");
         }
-        sb.append("\nОплата звёздами или рублями через менеджера этих шагов не требует.");
+        if (moneyAlternative) sb.append("\nОплата звёздами или рублями через менеджера этих шагов не требует.");
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         if (!steps.get(0).done()) rows.add(List.of(keyboardFactory.callback("📞 Подтвердить телефон", "shop:withdraw")));
         if (!steps.get(1).done() || !steps.get(2).done()) rows.add(List.of(keyboardFactory.callback("👤 Заполнить профиль", "menu:profile")));
@@ -15357,7 +15357,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
         if (!"Вывод".equals(reward.getCategory()) && !"avatar_frame".equals(reward.getPurchaseGroup())
-                && showShopRequirementsIfBlocked(user, "shop:view:" + rewardId)) {
+                && showShopRequirementsIfBlocked(user, "shop:view:" + rewardId, false)) {
             answerSilently(callbackQuery.getId());
             return;
         }
