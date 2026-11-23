@@ -11496,11 +11496,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void renderTakeQuestResult(AppUser user, Long questId, Quest quest, QuestService.QuestActionResult result) {
         if (result.status() != QuestActionStatus.OK) {
             sendQuestCard(user, questId, currentQuestBackData(user), "⬅️ Назад", takeQuestErrorMessage(user, quest, result));
-            if (result.status() == QuestActionStatus.EARLY_ACCESS_LOCKED) {
-                sendText(user.getTelegramId(),
-                        "⭐ <b>Возьми его сразу с EGC Pass</b>\n\nПодписчики получают лучшие квесты нового набора на сутки раньше.",
-                        keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("⭐ Оформить EGC Pass", "sink:egc_pass")))));
-            }
             if (result.status() == QuestActionStatus.SLOTS_FULL && !sinkShopService.isEgcPassActive(user)) {
                 sendText(user.getTelegramId(),
                         "⭐ <b>С EGC Pass у вас 3 слота квеста</b>\n\nМожно вести до трёх квестов одновременно, пока подписка активна.",
@@ -11658,10 +11653,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             case HAS_REJECTED_REPORT ->
                     "❌ Ваш отчёт по этому квесту был отклонён. Нажмите «📤 Отчёт», чтобы исправить ошибки и переотправить.";
             case EARLY_ACCESS_LOCKED ->
-                    "🔒 <b>Ранний доступ EGC Pass</b>\n\nЭтот квест нового набора ещё около " + (result.minutesLeft() / 60)
-                            + " ч доступен только подписчикам. Остальные квесты набора можно брать уже сейчас, а этот откроется для всех позже.";
+                    "🔒 Этот квест пока недоступен. Попробуйте другой квест."; // ранний доступ EGC Pass выключен (EARLY_ACCESS_ENABLED=false), владелец 23.11.2026: обещаний подписчикам нет
             case SLOTS_FULL ->
-                    "📂 У вас уже есть активные квесты. Завершите или отмените один из них, либо купите доп. слот (3 500 EXC) в разделе Предметы клуба. С EGC Pass у вас будет 3 слота.";
+                    "📂 У вас уже есть активные квесты. Завершите или отмените один из них, либо купите доп. слот (3 500 EXC) в разделе «Бусты». С EGC Pass у вас будет 3 слота.";
             case SAME_QUEST_COOLDOWN ->
                     "⏳ Этот квест можно выполнять не чаще 1 раза в " + DurationFormatter.format(result.minutesLeft()) + ".";
             case GAME_COOLDOWN ->
