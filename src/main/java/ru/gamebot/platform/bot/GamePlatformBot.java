@@ -30891,7 +30891,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             rows.add(List.of(keyboardFactory.callback("🪙 Да, со скидкой: " + hybrid.stars() + " ⭐ + " + fmtExc(hybrid.exc()) + " EXC", "gemhyb:" + gameKey + ":" + pkg.key())));
             rows.add(List.of(keyboardFactory.callback("⭐ Нет, без скидки: " + fullStars + " ⭐", "gemstarsfull:" + gameKey + ":" + pkg.key())));
             if (!questService.hasApprovedPartnerQuest(user.getId())) {
-                hybridHeadline += "💡 Через карту банка-партнёра эти же токены принесут больше: вывод всей суммы разом и бонус сверху.\n\n";
+                hybridHeadline += "<blockquote>💡 Через карту банка-партнёра эти же токены принесут больше.</blockquote>\n\n";
             }
         } else {
             if (hybrid != null) {
@@ -30922,10 +30922,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             steamLoginLine = "🎮 Логин Steam: <code>" + escape(steamLogin == null ? "" : steamLogin) + "</code>\n\n";
             rows.add(rows.size() - 1, List.of(keyboardFactory.callback("✏️ Изменить логин", "gemdonate:steamlogin:" + pkg.key())));
         }
-        String methodText = "💎 <b>" + pkg.displayLabel() + " — " + fullStars + " ⭐</b> (≈ " + price + " ₽)" + passNote + "\n\n"
+        String methodText = "💎 <b>" + pkg.displayLabel() + " — " + fullStars + " ⭐ (≈ " + price + " ₽)</b>" + passNote + "\n\n"
                 + hybridHeadline
                 + steamLoginLine
-                + "Выберите способ оплаты: звёзды Telegram или рубли через менеджера (карта или СБП). Не получается — напишите менеджеру, обсудим другой вариант.\n\n"
                 + gemPurchaseWarning(gameKey);
         if ("brawl_stars".equals(gameKey) && ("brawlpass".equals(pkg.key()) || "brawlpassplus".equals(pkg.key()))) {
             sendResourceBanner(user.getTelegramId(),
@@ -30943,6 +30942,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if ("steam_topup".equals(gameKey)) { // пополнение баланса Steam
             sendResourceBanner(user.getTelegramId(), "steam_balance_banner.jpg", methodText, keyboardFactory.rowsLayout(rows));
+            return;
+        }
+        // 23.11.2026 (владелец): у карточки пакета гемов/валюты - тот же баннер игры, что и у списка пакетов (гемы Brawl Stars и т.д.)
+        String gemsBanner = pkg.gems() > 0 ? gameBannerResource(gameKey) : null;
+        if (gemsBanner != null) {
+            sendResourceBanner(user.getTelegramId(), gemsBanner, methodText, keyboardFactory.rowsLayout(rows));
             return;
         }
         sendText(user.getTelegramId(), methodText, keyboardFactory.rowsLayout(rows));
