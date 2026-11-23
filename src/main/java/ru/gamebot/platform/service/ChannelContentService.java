@@ -169,6 +169,13 @@ public class ChannelContentService {
     @Value("${app.bot-username:}")
     private String botUsername;
 
+    /** Username VPN-бота (VPN2_BOT_USERNAME): для строки «Обменивай токены на VPN» в двух автопостах. Пусто - строки нет. */
+    @Value("${app.vpn2-bot-username:}")
+    private String vpnBotUsername;
+
+    /** Выключатель строки про VPN в автопостах (app_settings): значение «false» отключает без деплоя, по умолчанию включена. */
+    private static final String VPN_LINE_KEY = "cc.vpnline.enabled";
+
     public record TypeSettings(boolean enabled, int hour, int dayOfWeek, String lastRun) {}
 
     // ───────────────────────── настройки ─────────────────────────
@@ -1022,6 +1029,8 @@ public class ChannelContentService {
         if (botUsername != null && !botUsername.isBlank()) {
             sb.append("\n\n📲 Отряды в нашем боте ➡️ <a href=\"https://t.me/").append(botUsername).append("?start=go_squads\">Отряды EGC</a>");
         }
+        String vpnLine = vpnLine();
+        if (!vpnLine.isEmpty()) sb.append("\n\n").append(vpnLine);
         return Optional.of(saveDraft(SQUAD_MIDWEEK, sb.toString(), null, SQUAD_MIDWEEK_BANNER));
     }
 
@@ -1602,6 +1611,8 @@ public class ChannelContentService {
         sb.append("⏱ Снятие кулдауна квеста - ").append(num(SinkShopService.PRICE_COOLDOWN_REMOVAL)).append(" EXC\n");
         sb.append("🛡 Страховка повторной попытки - ").append(num(SinkShopService.PRICE_INSURANCE)).append(" EXC\n\n");
         sb.append("Всё это в разделе магазина в боте.\n\n");
+        String vpnLine = vpnLine();
+        if (!vpnLine.isEmpty()) sb.append(vpnLine).append("\n\n");
         long seed = draftRepository.findAllByType(SHOP_ITEMS).size();
         String link = botLink().stripLeading();
         if (!link.isEmpty()) sb.append(link).append("\n\n");
@@ -1704,6 +1715,14 @@ public class ChannelContentService {
     private String botLink() {
         if (botUsername == null || botUsername.isBlank()) return "";
         return "\n\n🎮 Все квесты ждут в боте: <a href=\"https://t.me/" + botUsername + "\">@" + botUsername + "</a>";
+    }
+
+    /** 22.11.2026 (текст одобрен владельцем): строка про VPN в конце поста «На что потратить EXC» и «Гонки недели». Только два типа, строка стоит
+     *  отдельным абзацем; выключатель cc.vpnline.enabled=false в app_settings убирает её без деплоя. Пустая строка, если имя VPN-бота не задано. */
+    private String vpnLine() {
+        if (vpnBotUsername == null || vpnBotUsername.isBlank()) return "";
+        if ("false".equalsIgnoreCase(get(VPN_LINE_KEY))) return "";
+        return "<b>🔐 Обменивай токены на VPN:</b> <a href=\"https://t.me/" + vpnBotUsername + "\">@" + vpnBotUsername + "</a>";
     }
 
     private static String num(long v) {
