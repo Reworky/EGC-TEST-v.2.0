@@ -24942,7 +24942,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String conv = clicks > 0 ? String.format("%.1f%%", activated * 100.0 / clicks) : "—";
             sb.append("👆 Кликов по ссылке: <b>").append(clicks).append("</b>\n");
             sb.append("🚀 Зашли в бот: <b>").append(started).append("</b>\n");
-            sb.append("📝 Прошли онбординг: <b>").append(registered).append("</b>\n");
+            sb.append("📝 Прошли онбординг (выбрали путь): <b>").append(registered).append("</b>\n");
             sb.append("✅ Активировали аккаунт: <b>").append(activated).append("</b>\n");
             sb.append("📊 Конверсия (клик→акт.): <b>").append(conv).append("</b>\n");
             ru.gamebot.platform.service.TrafficFunnelService.SourceFunnel fun = trafficFunnelService.forSource(ts);
