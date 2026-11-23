@@ -44,6 +44,8 @@ public class RewardSeeder implements CommandLineRunner {
         // ── Удаление устаревших товаров ─────────────────────────────────────────
         deleteObsoleteItem("🔥 Анимированная огненная рамка аватара");
         deleteObsoleteItem("🔥 Рамка аватара");
+        // 23.11.2026 (владелец): футболки EGC нет и не было - убрана из проекта (позиция была скрыта с 07.10, заказов не было)
+        deleteObsoleteItem("Футболка EGC — брендированная");
 
         // ── Подарочные карты ────────────────────────────────────────────────────
 
@@ -77,11 +79,6 @@ public class RewardSeeder implements CommandLineRunner {
                 "Эксклюзивный цифровой значок в профиле EGC — «Ветеран клуба». "
                         + "Подтверждает участие в клубе на ранних этапах. Выдаётся вручную.",
                 "EGC Эксклюзив", 20_000, null, 5_000, "badge_egc");
-
-        seed("Футболка EGC — брендированная",
-                "Брендированная футболка EXPERIENCE GAMING CLUB. "
-                        + "Доставка по России. Уточнение размера и адреса — через поддержку.",
-                "EGC Эксклюзив", 75_000, null, 35_000, "tshirt_egc");
 
         seed("EGC Council — статус на 1 месяц",
                 "Доступ к закрытым Council-квестам с повышенными наградами на 30 дней. "
@@ -518,7 +515,7 @@ public class RewardSeeder implements CommandLineRunner {
 
     private void seed(String title, String description, String category, long priceCoins,
                       String userDataPrompt, int minLevelXpSeed, String purchaseGroup) {
-        boolean prestige = "badge_egc".equals(purchaseGroup) || "tshirt_egc".equals(purchaseGroup) || "council_egc".equals(purchaseGroup);
+        boolean prestige = "badge_egc".equals(purchaseGroup) || "council_egc".equals(purchaseGroup);
         int minLevelXp = !prestige && priceCoins <= RANK_GATE_REMOVED_MAX_PRICE ? 0 : minLevelXpSeed;
         rewardItemRepository.findByTitle(title).ifPresentOrElse(
                 existing -> {

@@ -129,12 +129,6 @@ public class ShopLimitService {
                     throw new IllegalArgumentException("🚫 Значок EGC можно получить только 1 раз.");
                 }
             }
-            case "tshirt_egc" -> {
-                long count = rewardRequestRepository.countActiveByUserAndGroupAllTime(user, "tshirt_egc");
-                if (count > 0) {
-                    throw new IllegalArgumentException("🚫 Футболку EGC можно заказать только 1 раз.");
-                }
-            }
             case "council_egc" -> {
                 LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
                 long count = rewardRequestRepository.countActiveCouncilSince(user, thirtyDaysAgo);
@@ -251,12 +245,11 @@ public class ShopLimitService {
             boolean blocked = switch (group) {
                 case "gift_card" -> rewardRequestRepository.countActiveByUserAndGroupSince(user, "gift_card", monthStart) > 0;
                 case "badge_egc" -> rewardRequestRepository.countActiveByUserAndGroupAllTime(user, "badge_egc") > 0;
-                case "tshirt_egc" -> rewardRequestRepository.countActiveByUserAndGroupAllTime(user, "tshirt_egc") > 0;
                 case "council_egc" -> rewardRequestRepository.countActiveCouncilSince(user, now.minusDays(30)) > 0;
                 default -> false;
             };
             if (blocked) {
-                if ("badge_egc".equals(group) || "tshirt_egc".equals(group)) {
+                if ("badge_egc".equals(group)) {
                     return "🚫 Уже получено";
                 }
                 return "🚫 Лимит месяца исчерпан";
