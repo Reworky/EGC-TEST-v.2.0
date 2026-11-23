@@ -452,7 +452,7 @@ public class VpnBot extends TelegramLongPollingBot {
                 }
                 String link = invoiceLink(t, true);
                 if (link != null) {
-                    rows.add(List.of(keyboardFactory.url("🪙 −50 ₽ за EXC: " + t.getTitle() + ", " + t.getExcStars() + " ⭐", link)));
+                    rows.add(List.of(keyboardFactory.url("🪙 " + t.getTitle() + ": " + t.getExcStars() + " ⭐ + " + formatExc(Vpn2Service.EXC_DISCOUNT) + " EXC", link)));
                 }
             }
         } else {
@@ -474,15 +474,15 @@ public class VpnBot extends TelegramLongPollingBot {
     private static String excCard(long coins) {
         long goal = Vpn2Service.EXC_DISCOUNT;
         if (coins >= goal) {
-            return "🪙 <b>Скидка за EXC доступна</b>\nУ вас " + formatExc(coins) + " EXC: платите на 50 ₽ меньше за любой срок (кнопки ниже).";
+            return "🪙 <b>Скидка за EXC</b>\nУ вас " + formatExc(coins) + " EXC. Можно заплатить на 50 ₽ меньше: спишем " + formatExc(goal) + " EXC. Скидка есть на тарифы от месяца (кнопки ниже).";
         }
         if (coins >= 0) {
             long pct = Math.min(100, coins * 100 / goal);
             return "🪙 <b>Скидка за EXC</b>\nУ вас " + formatExc(coins) + " из " + formatExc(goal) + " EXC\n"
                     + progressBar(coins, goal) + " " + pct + "%\n"
-                    + "Ещё " + formatExc(goal - coins) + " EXC, и −50 ₽ на любой срок.";
+                    + "Когда наберёте " + formatExc(goal) + " EXC, сможете заплатить на 50 ₽ меньше (тарифы от месяца).";
         }
-        return "🪙 <b>Скидка за EXC</b>\nEXC копятся за игры и задания в EGC: " + formatExc(goal) + " EXC = −50 ₽ на любой срок.";
+        return "🪙 <b>Скидка за EXC</b>\nEXC можно заработать в играх и заданиях EGC. За " + formatExc(goal) + " EXC скидка 50 ₽ (тарифы от месяца).";
     }
 
     private static String progressBar(long current, long goal) {
@@ -863,9 +863,9 @@ public class VpnBot extends TelegramLongPollingBot {
             accountRepository.save(a); // сначала отметка: при сбое отправки лучше пропустить напоминание, чем слать его каждый час
             long coins = excBalance(a.getTelegramId());
             String excLine = coins >= Vpn2Service.EXC_DISCOUNT
-                    ? "\n\n🪙 У вас " + formatExc(coins) + " EXC: продлите со скидкой 50 ₽."
+                    ? "\n\n🪙 У вас " + formatExc(coins) + " EXC. Можно продлить на 50 ₽ дешевле: спишем " + formatExc(Vpn2Service.EXC_DISCOUNT) + " EXC."
                     : coins >= 0
-                            ? "\n\n🪙 До скидки 50 ₽ не хватает " + formatExc(Vpn2Service.EXC_DISCOUNT - coins) + " EXC."
+                            ? "\n\n🪙 Ещё " + formatExc(Vpn2Service.EXC_DISCOUNT - coins) + " EXC, и можно будет продлить на 50 ₽ дешевле."
                             : "";
             List<List<InlineKeyboardButton>> rows = new ArrayList<>();
             rows.add(List.of(keyboardFactory.callback(button, "m:tariffs")));
