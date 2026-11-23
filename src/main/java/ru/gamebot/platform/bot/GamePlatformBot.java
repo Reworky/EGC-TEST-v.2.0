@@ -1705,8 +1705,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (data.startsWith("quest:viewwd:")) {
             // Квест открыт из экрана «Вывод на карту ОТП» (Кошелёк → Вывод EXC): «Назад» возвращает на этот экран, а не в общий список квестов
             answerSilently(callbackQuery.getId());
-            Long wdQuestId = parseLong(data.substring("quest:viewwd:".length()));
-            if (wdQuestId != null) sendQuestCard(user, wdQuestId, "shop:withdraw:otp", "⬅️ Назад", null);
+            String wdRest = data.substring("quest:viewwd:".length());
+            // суффикс :st - квест открыт из экрана цен партнёра в «Выводе в звёздах»: «Назад» возвращает туда
+            boolean wdFromStars = wdRest.endsWith(":st");
+            Long wdQuestId = parseLong(wdFromStars ? wdRest.substring(0, wdRest.length() - 3) : wdRest);
+            if (wdQuestId != null) sendQuestCard(user, wdQuestId, wdFromStars ? "stars:tier:other" : "shop:withdraw:otp", "⬅️ Назад", null);
             return;
         }
         if (data.startsWith("quest:steps:")) {
@@ -14974,7 +14977,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 showOther ? "stars:tier:mine" : "stars:tier:other")));
         if (showOther && viewPartner) {
             Quest cardQuest = cardOfferQuestFor(user);
-            if (cardQuest != null) rows.add(List.of(keyboardFactory.callback("🏦 Заказать карту партнёра", "quest:viewwd:" + cardQuest.getId())));
+            if (cardQuest != null) rows.add(List.of(keyboardFactory.callback("🏦 Заказать карту партнёра", "quest:viewwd:" + cardQuest.getId() + ":st")));
         }
         addPartnerRow(rows, user, "st");
         if (!showOther && !partner && healthRatioService.starsMarkupApplies(user, items.get(0))) {
