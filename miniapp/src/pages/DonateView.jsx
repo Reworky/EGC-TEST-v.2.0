@@ -78,9 +78,6 @@ function PackageCard({ pkg, egcPass, coins, tagLinked, expanded, onToggle, onDon
       ) : (
         <div className="shop-status">🪙 Скидка за EXC: {pkg.excStars.toLocaleString('ru-RU')} ⭐ + {pkg.excPrice.toLocaleString('ru-RU')} EXC (не хватает {(pkg.excPrice - coins).toLocaleString('ru-RU')} EXC)</div>
       ))}
-      {!egcPass && pkg.passPriceRub > 0 && pkg.regularPriceRub - pkg.passPriceRub >= 20 && (
-        <div className="shop-status">⭐ С EGC Pass: {pkg.passPriceRub.toLocaleString()} ₽, экономия {(pkg.regularPriceRub - pkg.passPriceRub).toLocaleString()} ₽</div>
-      )}
       {expanded && (
         <div className="shop-detail" onClick={e => e.stopPropagation()}>
           {!tagLinked ? (
