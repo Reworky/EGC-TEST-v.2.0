@@ -2100,6 +2100,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(user.getTelegramId(), "❌ Пакет не найден, попробуйте выбрать заново.", backMenuKeyboard("menu:shop"));
                 return;
             }
+            if (showShopRequirementsIfBlocked(user, "gemdonate:pkg:" + grParts[0] + ":" + grParts[1])) return;
             String grBlock = rewardService.hybridPurchaseBlock(user, grQuote.item(), grQuote.exc());
             if (grBlock != null) {
                 sendText(user.getTelegramId(), "⚠️ " + escape(grBlock), backMenuKeyboard("shop:donate:" + grParts[0]));
@@ -2138,6 +2139,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 sendText(user.getTelegramId(), "❌ Пакет не найден, попробуйте выбрать заново.", backMenuKeyboard("menu:shop"));
                 return;
             }
+            if (showShopRequirementsIfBlocked(user, "gemdonate:pkg:" + hybParts[0] + ":" + hybParts[1])) return;
             String hybBlock = rewardService.hybridPurchaseBlock(user, hybQuote.item(), hybQuote.exc());
             if (hybBlock != null) {
                 sendText(user.getTelegramId(), "⚠️ " + escape(hybBlock), backMenuKeyboard("shop:donate:" + hybParts[0]));
@@ -12421,6 +12423,30 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.rowsLayout(rows));
     }
 
+    /** Экран «прежде чем купить» (23.11.2026, владелец): замки в меню убраны, причина закрытой покупки за EXC называется только в момент попытки купить.
+     *  true - покупка за EXC пока недоступна, экран с чек-листом уже показан; false - допуск есть, можно продолжать. Оплата звёздами и рублями этим не ограничена. */
+    private boolean showShopRequirementsIfBlocked(AppUser user, String backTarget) {
+        String block = shopLimitService.shopEligibilityBlock(user);
+        if (block == null) return false;
+        if (user.isBlocked() || user.isWithdrawalFrozen()) {
+            sendText(user.getTelegramId(), escape(block), backMenuKeyboard(backTarget));
+            return true;
+        }
+        StringBuilder sb = new StringBuilder("🔐 <b>Прежде чем платить EXC, нужно:</b>\n\n");
+        List<ru.gamebot.platform.service.ShopLimitService.Requirement> steps = shopLimitService.shopRequirements(user);
+        for (ru.gamebot.platform.service.ShopLimitService.Requirement step : steps) {
+            sb.append(step.done() ? "✅ " : "⬜ ").append(escape(step.text())).append("\n");
+        }
+        sb.append("\nОплата звёздами или рублями через менеджера этих шагов не требует.");
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        if (!steps.get(0).done()) rows.add(List.of(keyboardFactory.callback("📞 Подтвердить телефон", "shop:withdraw")));
+        if (!steps.get(1).done() || !steps.get(2).done()) rows.add(List.of(keyboardFactory.callback("👤 Заполнить профиль", "menu:profile")));
+        if (!steps.get(3).done()) rows.add(List.of(keyboardFactory.callback("🎯 К квестам", "menu:cat:quests")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", backTarget), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        sendText(user.getTelegramId(), sb.toString(), keyboardFactory.rowsLayout(rows));
+        return true;
+    }
+
     /** «Донат в игры»: список игр с донатом (две кнопки в ряд). Раньше эти кнопки стояли прямо на экране магазина наград (23.11.2026). */
     private void sendDonateMenu(AppUser user) {
         List<RewardItem> rewards = rewardService.findAvailableRewards().stream().filter(this::isDonateShopItem).toList();
@@ -12448,15 +12474,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 if (groupItems.size() > 1) {
                     RewardItem first = groupItems.get(0);
                     String groupLabel = byGroup.size() == 1 ? entry.getKey() : groupItemLabel(first.getTitle());
-                    boolean anyAvailable = groupItems.stream().anyMatch(r -> !shopLimitService.getItemStatus(user, r).startsWith("🔒"));
                     boolean multipleTypes = hasMultipleDonationProductTypes(groupEntry.getKey());
-                    buttons.add(keyboardFactory.callback((anyAvailable ? "🎁 " : "🔒 ") + trim(groupLabel, 20),
+                    buttons.add(keyboardFactory.callback("🎁 " + trim(groupLabel, 20),
                             (multipleTypes ? "shop:gamecat:" : "shop:group:") + groupEntry.getKey()));
                 } else {
                     RewardItem reward = groupItems.get(0);
-                    String status = shopLimitService.getItemStatus(user, reward);
-                    String icon = status.startsWith("🔒") ? "🔒" : status.startsWith("⏳") ? "⏳" : status.startsWith("🚫") ? "🚫" : "🎁";
-                    buttons.add(keyboardFactory.callback(icon + " " + trim(reward.getTitle(), 20), "shop:view:" + reward.getId()));
+                    buttons.add(keyboardFactory.callback("🎁 " + trim(reward.getTitle(), 20), "shop:view:" + reward.getId()));
                 }
             }
         }
@@ -14624,8 +14647,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (RewardItem item : items) {
             long price = healthRatioService.effectivePriceFor(user, item);
-            String status = shopLimitService.getItemStatus(user, item);
-            String icon = status.startsWith("🔒") ? "🔒" : status.startsWith("⏳") ? "⏳" : "🎁";
+            String icon = "🎁"; // замки в меню убраны (23.11.2026): причину закрытой покупки называем в момент попытки (showShopRequirementsIfBlocked)
             // Extract denomination part: everything after last space-dash-space
             String denom = item.getTitle().replaceAll(".*- ", "");
             rows.add(List.of(keyboardFactory.callback(icon + " " + denom + " — " + price + " EXC", "shop:view:" + item.getId())));
@@ -15243,6 +15265,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long effectivePrice = healthRatioService.effectivePriceFor(user, reward);
         String priceNote = "";
         String limitStatus = shopLimitService.getItemStatus(user, reward);
+        if (limitStatus.startsWith("🔒")) limitStatus = ""; // причина закрытой покупки - на экране «прежде чем купить», в момент попытки (23.11.2026)
         String text = (notice == null ? "" : notice + "\n\n")
                 + "🎁 <b>" + escape(reward.getTitle()) + "</b>\n\n"
                 + "📦 Категория: <b>" + escape(reward.getCategory()) + "</b>\n"
@@ -15331,6 +15354,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if ("telegram_stars".equals(reward.getPurchaseGroup()) && !isStarsWithdrawalOpen()) {
             answerSilently(callbackQuery.getId());
             sendStarsWithdrawalClosed(user);
+            return;
+        }
+        if (!"Вывод".equals(reward.getCategory()) && !"avatar_frame".equals(reward.getPurchaseGroup())
+                && showShopRequirementsIfBlocked(user, "shop:view:" + rewardId)) {
+            answerSilently(callbackQuery.getId());
             return;
         }
         if (reward.getUserDataPrompt() != null && !reward.getUserDataPrompt().isBlank()) {
@@ -30836,8 +30864,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         long coins = user.getCoins();
         String hybridHeadline = "";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        String hybridBlock = hybrid == null ? null : rewardService.hybridPurchaseBlock(user, hybrid.item(), hybrid.exc());
-        if (hybrid != null && hybridBlock == null && coins >= hybrid.exc()) {
+        // допуск к тратам EXC (телефон, профиль, квесты) проверяется на попытке нажать «Да, со скидкой»: до неё всё открыто (23.11.2026)
+        if (hybrid != null && coins >= hybrid.exc()) {
             hybridHeadline = "🪙 У вас <b>" + fmtExc(coins) + " EXC</b>.\n\nМожно заплатить дешевле: <b>" + hybrid.stars()
                     + " ⭐</b>, и спишем <b>" + fmtExc(hybrid.exc()) + " EXC</b>.\n\n<b>Применить скидку?</b>\n\n";
             rows.add(List.of(keyboardFactory.callback("🪙 Да, со скидкой: " + hybrid.stars() + " ⭐ + " + fmtExc(hybrid.exc()) + " EXC", "gemhyb:" + gameKey + ":" + pkg.key())));
@@ -30846,7 +30874,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 hybridHeadline += "💡 Через карту банка-партнёра эти же токены принесут больше: вывод всей суммы разом и бонус сверху.\n\n";
             }
         } else {
-            if (hybrid != null && hybridBlock == null) {
+            if (hybrid != null) {
                 hybridHeadline = "🪙 Скидка за EXC: чтобы заплатить <b>" + hybrid.stars() + " ⭐</b>, нужно <b>" + fmtExc(hybrid.exc())
                         + " EXC</b> (у вас " + fmtExc(coins) + ", не хватает " + fmtExc(hybrid.exc() - coins) + ").\n\n";
             }

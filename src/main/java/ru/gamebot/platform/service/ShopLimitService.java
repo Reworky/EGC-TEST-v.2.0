@@ -60,6 +60,29 @@ public class ShopLimitService {
         return null;
     }
 
+    /** Шаг допуска к покупкам за EXC: done - уже выполнен, text - что сделать (для экрана «прежде чем купить», 23.11.2026). */
+    public record Requirement(boolean done, String text) {}
+
+    /** Те же условия, что в shopEligibilityBlock (телефон, страна, возраст, 3 квеста, 3 дня с регистрации), но списком с отметками выполненного. */
+    public java.util.List<Requirement> shopRequirements(AppUser user) {
+        java.util.List<Requirement> list = new java.util.ArrayList<>();
+        boolean phone = user.getPhoneNumber() != null && !user.getPhoneNumber().isBlank();
+        list.add(new Requirement(phone, "Подтвердить номер телефона"));
+        list.add(new Requirement(user.getCountry() != null && !user.getCountry().isBlank(), "Указать страну в профиле"));
+        list.add(new Requirement(user.getAge() != null, "Указать возраст в профиле"));
+        int quests = user.getCompletedQuests();
+        list.add(new Requirement(quests >= SHOP_MIN_QUESTS, "Выполнить " + SHOP_MIN_QUESTS + " квеста (сейчас " + quests + ")"));
+        LocalDateTime openAt = user.getCreatedAt() == null ? null : user.getCreatedAt().plusDays(SHOP_MIN_ACCOUNT_AGE_DAYS);
+        boolean tooYoung = openAt != null && openAt.isAfter(LocalDateTime.now());
+        String wait = "Подождать " + SHOP_MIN_ACCOUNT_AGE_DAYS + " дня после регистрации";
+        if (tooYoung) {
+            long hoursLeft = java.time.Duration.between(LocalDateTime.now(), openAt).toHours();
+            wait += hoursLeft >= 24 ? " (осталось ещё " + (hoursLeft / 24 + 1) + " дн.)" : " (осталось несколько часов)";
+        }
+        list.add(new Requirement(!tooYoung, wait));
+        return list;
+    }
+
     private final RewardRequestRepository rewardRequestRepository;
     private final AppUserRepository appUserRepository;
     private final UserService userService;
