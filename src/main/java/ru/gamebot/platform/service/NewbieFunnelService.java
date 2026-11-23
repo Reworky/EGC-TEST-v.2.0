@@ -81,6 +81,21 @@ public class NewbieFunnelService {
         }
     }
 
+    /** Сколько игроков источника трафика прошли онбординг: на экране выбора пути нажали «Спонсорские квесты» или «Игры» (решение владельца 23.11.2026).
+     *  События пишутся с момента выкладки воронки: у игроков, выбравших путь раньше, события нет, поэтому у старых источников цифра может быть занижена. */
+    public long countChosePathByTrafficSource(String code) {
+        if (code == null || code.isBlank()) return 0;
+        try {
+            jakarta.persistence.Query q = entityManager.createNativeQuery(
+                    "SELECT COUNT(*) FROM app_users u WHERE u.traffic_source_code = ?1 AND (" + ev(CHOICE_CARDS) + " OR " + ev(CHOICE_GAMES) + ")");
+            q.setParameter(1, code);
+            return ((Number) q.getSingleResult()).longValue();
+        } catch (Exception e) {
+            log.warn("[NewbieFunnel] chose-path count failed for {}", code, e);
+            return 0;
+        }
+    }
+
     private String ev(String step) {
         return "EXISTS(SELECT 1 FROM funnel_events e WHERE e.telegram_id = u.telegram_id AND e.step = '" + step + "')";
     }

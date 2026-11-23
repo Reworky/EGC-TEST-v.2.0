@@ -24936,7 +24936,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             sb.append("🔗 <code>").append(link).append("</code>\n");
             long clicks = ts.getClicks();
             long started = users.size();
-            long registered = userService.countRegisteredByTrafficSource(ts.getCode());
+            // «Прошли онбординг» (владелец, 23.11.2026): человек выбрал любой из двух путей на экране «Как хочешь зарабатывать?» (Спонсорские квесты или Игры)
+            long registered = newbieFunnel.countChosePathByTrafficSource(ts.getCode());
             long activated = userService.countActivatedByTrafficSource(ts.getCode());
             String conv = clicks > 0 ? String.format("%.1f%%", activated * 100.0 / clicks) : "—";
             sb.append("👆 Кликов по ссылке: <b>").append(clicks).append("</b>\n");
