@@ -30890,9 +30890,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                     + " EXC</b>, и тогда к оплате будет <b>" + hybrid.stars() + " ⭐</b>.\n\n<b>Применить скидку?</b>\n\n";
             rows.add(List.of(keyboardFactory.callback("🪙 Да, со скидкой: " + hybrid.stars() + " ⭐ + " + fmtExc(hybrid.exc()) + " EXC", "gemhyb:" + gameKey + ":" + pkg.key())));
             rows.add(List.of(keyboardFactory.callback("⭐ Нет, без скидки: " + fullStars + " ⭐", "gemstarsfull:" + gameKey + ":" + pkg.key())));
-            if (!questService.hasApprovedPartnerQuest(user.getId())) {
-                hybridHeadline += "<blockquote>💡 Через карту банка-партнёра эти же токены принесут больше.</blockquote>\n\n";
-            }
         } else {
             if (hybrid != null) {
                 hybridHeadline = "🪙 У вас <b>" + fmtExc(coins) + " EXC</b>.\n\nЧтобы заплатить со скидкой <b>" + hybrid.stars() + " ⭐</b>, нужно списать <b>"
@@ -30909,13 +30906,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + java.net.URLEncoder.encode(helpDonText, StandardCharsets.UTF_8).replace("+", "%20"))));
         rows.add(List.of(keyboardFactory.callback("❌ Отмена", gemDonateBackTarget(gameKey, pkg))));
         String passNote = price < pkg.priceRub() ? " <i>(закупочная цена, EGC Pass)</i>" : "";
-        // Продажа EGC Pass тем, у кого его нет: честная экономия на ЭТОЙ покупке (цифры реальные: закупка поставщика без наценки клуба)
-        long passSaving = pkg.priceRub() - pkg.costRub();
-        boolean passUpsell = !sinkShopService.isEgcPassActive(user) && passSaving >= 20;
-        if (passUpsell) {
-            passNote += "\n⭐ <i>С EGC Pass этот пакет стоил бы " + pkg.costRub() + "₽ вместо " + pkg.priceRub() + "₽: экономия " + passSaving + "₽ за одну покупку.</i>";
-            egcPassFunnelService.offerSent(user.getTelegramId(), "DONATE_HINT");
-        }
+        // 23.11.2026 (владелец): строка про экономию с EGC Pass убрана из карточки пакета
         String steamLoginLine = "";
         if ("steam_topup".equals(gameKey)) {
             String steamLogin = gemPurchaseGameTag(user, gameKey);
@@ -30924,8 +30915,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         String methodText = "💎 <b>" + pkg.displayLabel() + " — " + fullStars + " ⭐ (≈ " + price + " ₽)</b>" + passNote + "\n\n"
                 + hybridHeadline
-                + steamLoginLine
-                + gemPurchaseWarning(gameKey);
+                + steamLoginLine;
         if ("brawl_stars".equals(gameKey) && ("brawlpass".equals(pkg.key()) || "brawlpassplus".equals(pkg.key()))) {
             sendResourceBanner(user.getTelegramId(),
                     "brawlpassplus".equals(pkg.key()) ? "brawl_pass_plus_banner.png" : "brawl_pass_banner.png",
