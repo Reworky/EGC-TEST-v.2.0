@@ -580,6 +580,12 @@ public class AnalyticsService {
         out.add(L("tickets", "Билетов в обороте", "", (double) userService.sumAllTickets(), snapVal(fromDate, PlatformSnapshot::getTotalTickets)));
         out.add(L("queue", "Заявок на награды в очереди", "", (double) rewardService.countPendingRequests(), null, null, true));
         out.add(L("queue_w", "Заявок на вывод в очереди", "", (double) rewardService.findPendingWithdrawals().size(), null, null, true));
+        // Магазин наград (23.11.2026): сколько игроков открывает экран магазина; события пишутся с момента выкладки, до неё цифры нет
+        long shopUsers = partnerFunnel.shopOpenUsers(p.from(), p.to());
+        long shopUsersPrev = partnerFunnel.shopOpenUsers(pv.from(), pv.to());
+        out.add(L("shop_users", "Открыли магазин наград", "", (double) shopUsers, (double) shopUsersPrev, "уникальных игроков, считается с момента выкладки", false));
+        out.add(L("shop_opens", "  заходов в магазин", "", (double) partnerFunnel.shopOpenCount(p.from(), p.to()), (double) partnerFunnel.shopOpenCount(pv.from(), pv.to()),
+                "повторы одним игроком чаще раза в 5 минут не считаются", false));
     }
 
     /** Вкладка «Выводы игроков» (2026-10-04): сколько и как выводят — за период, в среднем за месяц, по месяцам и способам,

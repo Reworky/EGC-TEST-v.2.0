@@ -33,6 +33,29 @@ public class PartnerQuestFunnelService {
 
     public void startClicked(Long telegramId) { record(telegramId, PartnerQuestEvent.START_CLICKED); }
 
+    private final java.util.Map<Long, Long> lastShopOpenMs = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Открытие экрана «Магазин наград» (23.11.2026). Повторные открытия одним игроком чаще раза в 5 минут (обновление экрана, «Назад») не пишутся: «открытий» ближе к числу заходов. */
+    public void shopOpened(Long telegramId) {
+        if (telegramId == null) return;
+        long now = System.currentTimeMillis();
+        Long last = lastShopOpenMs.get(telegramId);
+        if (last != null && now - last < 5 * 60 * 1000L) return;
+        if (lastShopOpenMs.size() > 100_000) lastShopOpenMs.clear();
+        lastShopOpenMs.put(telegramId, now);
+        record(telegramId, PartnerQuestEvent.SHOP_OPENED);
+    }
+
+    /** Уникальных игроков, открывших магазин наград за период. */
+    public long shopOpenUsers(LocalDateTime from, LocalDateTime to) {
+        return eventRepository.countUsersByType(PartnerQuestEvent.SHOP_OPENED, from, to);
+    }
+
+    /** Заходов в магазин наград за период (с учётом паузы 5 минут на игрока). */
+    public long shopOpenCount(LocalDateTime from, LocalDateTime to) {
+        return eventRepository.countByTypeBetween(PartnerQuestEvent.SHOP_OPENED, from, to);
+    }
+
     /** Открытие карточки спонсорского квеста (19.11.2026): для вкладки аналитики «Спонсорские квесты». */
     public void sponsorViewed(Long telegramId, Long questId) {
         try {

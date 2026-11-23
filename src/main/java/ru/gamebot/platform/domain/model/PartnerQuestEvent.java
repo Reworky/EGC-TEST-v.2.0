@@ -21,6 +21,8 @@ public class PartnerQuestEvent {
     public static final String START_CLICKED = "START_CLICKED";
     /** Открытие карточки любого спонсорского квеста (19.11.2026, вкладка «Спонсорские квесты»): с полем questId. Отдельный тип, чтобы не смешивать с CARD_VIEWED партнёрского квеста ОТП. */
     public static final String SPONSOR_VIEWED = "SPONSOR_VIEWED";
+    /** Открытие экрана «Магазин наград» (23.11.2026, вкладка «Экономика и выплаты»): сколько игроков заходит в магазин. */
+    public static final String SHOP_OPENED = "SHOP_OPENED";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

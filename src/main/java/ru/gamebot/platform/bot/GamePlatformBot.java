@@ -12278,6 +12278,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendShop(AppUser user) {
+        partnerQuestFunnelService.shopOpened(user.getTelegramId()); // вкладка аналитики «Экономика и выплаты»: сколько игроков открывают магазин (23.11.2026)
         List<RewardItem> rewards = rewardService.findAvailableRewards();
         int ratioPercent = (int) Math.round(healthRatioService.getCurrentRatio() * 100);
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
