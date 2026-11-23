@@ -56,6 +56,8 @@ public class PostbackController {
     private String leadgidToken;
 
     private final ru.gamebot.platform.domain.repository.LeadgidConversionRepository leadgidConversionRepository;
+    private final ru.gamebot.platform.domain.repository.QuestSubmissionRepository questSubmissionRepository;
+    private final ru.gamebot.platform.service.NewbieFunnelService newbieFunnelService;
 
     @Value("${app.adsgram-reward-token:}")
     private String adsgramRewardToken;
@@ -178,6 +180,35 @@ public class PostbackController {
             return ResponseEntity.ok("ok");
         } catch (Exception e) {
             log.error("[LeadGid] Postback processing failed, params={}", params, e);
+            return ResponseEntity.ok("error");
+        }
+    }
+
+    /**
+     * Сигналы витрины банков (23.11.2026): страница karty-bonus.pages.dev по ссылке из бота (?sid=номер заявки) сообщает, что человек открыл страницу (e=view), раскрыл карточку (e=card)
+     * или нажал на оффер (e=click). Витрина пересылает это сюда через свою функцию (токен лежит у неё в настройках, у посетителя его нет). В воронку новичка пишется один шаг на игрока;
+     * ничего не начисляется и игроку не отправляется. Неизвестные заявки и значения игнорируются.
+     */
+    @GetMapping("/landing")
+    public ResponseEntity<String> landing(@RequestParam Map<String, String> params) {
+        if (!isValidToken(params.get("token"), leadgidToken)) {
+            return ResponseEntity.status(403).body("forbidden");
+        }
+        try {
+            Long sid = digitsToLong(params.get("sid"));
+            String step = switch (String.valueOf(params.get("e"))) {
+                case "view" -> ru.gamebot.platform.service.NewbieFunnelService.LP_VIEW;
+                case "card" -> ru.gamebot.platform.service.NewbieFunnelService.LP_CARD;
+                case "click" -> ru.gamebot.platform.service.NewbieFunnelService.LP_CLICK;
+                default -> null;
+            };
+            if (sid == null || step == null) return ResponseEntity.ok("ignored");
+            QuestSubmission sub = questSubmissionRepository.findById(sid).orElse(null);
+            if (sub == null || sub.getUser() == null) return ResponseEntity.ok("ignored");
+            newbieFunnelService.log(sub.getUser().getTelegramId(), step);
+            return ResponseEntity.ok("ok");
+        } catch (Exception e) {
+            log.warn("[Landing] signal failed, params={}: {}", params, e.getMessage());
             return ResponseEntity.ok("error");
         }
     }

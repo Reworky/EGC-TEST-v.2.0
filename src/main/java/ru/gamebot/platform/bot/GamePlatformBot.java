@@ -1783,6 +1783,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             if (takeQuest != null && isMissionQuest(takeQuest)) {
                 // Партнёрский квест с банком: сначала подтверждение «мне 18+ и я живу в РФ» (условие акции банка и защита от случайного взятия)
                 answerSilently(callbackQuery.getId());
+                fn(user, ru.gamebot.platform.service.NewbieFunnelService.BANK_TAKE_TAP);
                 sendText(user.getTelegramId(),
                         "🔞 <b>Квест для тех, кому 18+ и кто живёт в РФ</b>\n\n"
                                 + "Нужен паспорт РФ, и у тебя ещё не должно быть карты банка-партнёра. Подтверди, что это про тебя.",

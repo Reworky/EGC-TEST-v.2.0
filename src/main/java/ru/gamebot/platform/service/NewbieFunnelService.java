@@ -20,7 +20,8 @@ import ru.gamebot.platform.domain.repository.FunnelEventRepository;
  *  взял и выполнил игровой квест, ввёл код дня, вернулся на следующий день.
  *  Когорта = игроки, зарегистрированные в выбранном периоде; шаг считается, если игрок дошёл до него когда-либо (поэтому свежие когорты «дозреют»).
  *  События пишутся только с момента выкладки: период обрезается по первому событию, чтобы шаги были сопоставимы.
- *  Не видно: нажатие «Оформить карту» (кнопка-ссылка уходит мимо бота) - дальнейшие шаги банка видны только по возврату игрока с отчётом. */
+ *  Кнопка «Оформить карту» уходит мимо бота, поэтому с 23.11.2026 о шагах на витрине (открыла, раскрыла карточку, нажала на оффер) сообщает сама витрина по номеру заявки
+ *  ({@code /api/postback/landing}); о заявке в банке - постбек LeadGid. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -34,7 +35,9 @@ public class NewbieFunnelService {
             GAMES_PICKER = "games_picker", GAME_PICK = "game_pick", STARTER_CARD = "starter_card",
             // 21.11.2026 (просьба владельца: видеть каждый шаг): список квестов игры и карточка игрового квеста (старая «стартовая карточка» после смены сценария не показывается),
             // куда ещё нажимали в разделе спонсорских квестов и просмотр карточки любого спонсорского квеста
-            GAME_LIST = "game_list", GAME_CARD = "game_card", SP_OTHER = "sp_other", SP_PICKS = "sp_picks", SP_MYQ = "sp_myq", SP_ANY_CARD = "sp_any_card";
+            GAME_LIST = "game_list", GAME_CARD = "game_card", SP_OTHER = "sp_other", SP_PICKS = "sp_picks", SP_MYQ = "sp_myq", SP_ANY_CARD = "sp_any_card",
+            // 23.11.2026: нажатие «Взять» ДО подтверждения «мне 18+» и сигналы витрины банков (открыла страницу, раскрыла карточку, нажала на оффер) - приходят с витрины по номеру заявки (?sid=)
+            BANK_TAKE_TAP = "bank_take_tap", LP_VIEW = "lp_view", LP_CARD = "lp_card", LP_CLICK = "lp_click";
 
     private static final int CACHE_LIMIT = 300_000;
 
@@ -75,6 +78,25 @@ public class NewbieFunnelService {
         try {
             Object r = entityManager.createNativeQuery("SELECT MIN(created_at) FROM funnel_events WHERE step IN ('" + GAME_LIST + "','" + GAME_CARD + "','"
                     + SP_OTHER + "','" + SP_PICKS + "','" + SP_MYQ + "','" + SP_ANY_CARD + "')").getSingleResult();
+            return r == null ? null : (r instanceof java.sql.Timestamp t ? t.toLocalDateTime() : (LocalDateTime) r);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** С какого момента пишется шаг «Взять» до подтверждения 18+ (23.11.2026); null - ещё не писался. */
+    public LocalDateTime tapStepsSince() {
+        return firstEventSince("'" + BANK_TAKE_TAP + "'");
+    }
+
+    /** С какого момента приходят сигналы витрины банков (открыла страницу, раскрыла карточку, нажала на оффер); null - ещё не приходили. */
+    public LocalDateTime lpStepsSince() {
+        return firstEventSince("'" + LP_VIEW + "','" + LP_CARD + "','" + LP_CLICK + "'");
+    }
+
+    private LocalDateTime firstEventSince(String quotedSteps) {
+        try {
+            Object r = entityManager.createNativeQuery("SELECT MIN(created_at) FROM funnel_events WHERE step IN (" + quotedSteps + ")").getSingleResult();
             return r == null ? null : (r instanceof java.sql.Timestamp t ? t.toLocalDateTime() : (LocalDateTime) r);
         } catch (Exception e) {
             return null;
@@ -140,6 +162,10 @@ public class NewbieFunnelService {
         m.put("sub_prompt", ev(SUB_PROMPT));
         m.put("sub_after", ev(SUB_PROMPT) + " AND u.registration_completed = TRUE");
         m.put("take18", ev(BANK_TAKE));
+        m.put("take_tap", ev(BANK_TAKE_TAP));
+        m.put("lp_view", ev(LP_VIEW));
+        m.put("lp_card", ev(LP_CARD));
+        m.put("lp_click", ev(LP_CLICK));
         m.put("bank_taken", bankSub(""));
         m.put("apply", ev(APPLY_SHOWN));
         // Постбек LeadGid (21.11.2026): лид у банка появляется, когда игрок реально оформил заявку по ссылке; статус - решение банка. Связь с игроком - по номеру заявки из SubID 4
@@ -171,11 +197,11 @@ public class NewbieFunnelService {
 
     /** Колонки таблиц «по источникам» (после источника и числа пришедших): ключи метрик без параметра ?3. */
     public static final List<String> SOURCE_KEYS = List.of("w3", "choice", "cards", "games", "menu",
-            "sp_section", "sp_debit", "bank_card", "take18", "bank_taken", "apply", "lg_lead", "lg_ok", "lg_rej", "bank_ok", "bank_paid",
+            "sp_section", "sp_debit", "bank_card", "take_tap", "take18", "bank_taken", "apply", "lp_view", "lp_card", "lp_click", "lg_lead", "lg_ok", "lg_rej", "bank_ok", "bank_paid",
             "picker", "game_list", "game_card", "game_taken", "game_ok");
 
     /** bySource: строки [источник, пришли, по одному числу на каждый ключ из sourceKeys]. */
-    public record Report(LocalDateTime from, LocalDateTime to, boolean clamped, boolean hasEvents, LocalDateTime newStepsSince, Map<String, Long> counts, List<String> sourceKeys, List<Object[]> bySource) { }
+    public record Report(LocalDateTime from, LocalDateTime to, boolean clamped, boolean hasEvents, LocalDateTime newStepsSince, LocalDateTime tapSince, LocalDateTime lpSince, Map<String, Long> counts, List<String> sourceKeys, List<Object[]> bySource) { }
 
     /** from/to - окно регистрации когорты. Если событий ещё нет, считаются только шаги по базе (hasEvents = false). */
     public Report report(LocalDateTime from, LocalDateTime to) {
@@ -207,7 +233,7 @@ public class NewbieFunnelService {
             Object v = row[i++];
             counts.put(k, v == null ? 0L : ((Number) v).longValue());
         }
-        return new Report(f, to, clamped, since != null, newStepsSince(), counts, SOURCE_KEYS, bySource(f, to, m));
+        return new Report(f, to, clamped, since != null, newStepsSince(), tapStepsSince(), lpStepsSince(), counts, SOURCE_KEYS, bySource(f, to, m));
     }
 
     /** По источникам: [источник, пришли, и по одному числу на каждый ключ из SOURCE_KEYS]. */
@@ -248,7 +274,11 @@ public class NewbieFunnelService {
         STEP_LABELS.put(SP_MYQ, "Открыл «Мои квесты» спонсорских");
         STEP_LABELS.put(SP_ANY_CARD, "Открыл карточку спонсорского квеста");
         STEP_LABELS.put(BANK_CARD, "Открыл карточку банка");
-        STEP_LABELS.put(BANK_TAKE, "Нажал «Взять» (банк)");
+        STEP_LABELS.put(BANK_TAKE_TAP, "Нажал «Взять» (банк, до подтверждения 18+)");
+        STEP_LABELS.put(BANK_TAKE, "Подтвердил «мне 18+» и взял (банк)");
+        STEP_LABELS.put(LP_VIEW, "Открыл витрину банков (по ссылке из бота)");
+        STEP_LABELS.put(LP_CARD, "Раскрыл карточку банка на витрине");
+        STEP_LABELS.put(LP_CLICK, "Нажал на оффер банка на витрине");
         STEP_LABELS.put(SUB_PROMPT, "Ему показан запрос подписки");
         STEP_LABELS.put(APPLY_SHOWN, "Экран «Оформить карту»");
         STEP_LABELS.put(GAMES_PICKER, "Экран выбора игры");

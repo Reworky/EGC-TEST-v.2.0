@@ -1044,12 +1044,26 @@ public class AnalyticsService {
         boolean newStepsComplete = r.newStepsSince() != null && !r.from().isBefore(r.newStepsSince());
         if (newStepsComplete) funnelRow(t, "  Ничего не нажали", Math.max(0, c.get("sp_section") - c.get("sp_acted")), started, c.get("sp_section"));
         funnelRow(t, "Карточка банка", c.get("bank_card"), started, c.get("sp_debit"));
-        funnelRow(t, "Нажали «Взять»", c.get("take18"), started, c.get("bank_card"));
+        // «Взять» до подтверждения 18+ пишется с 23.11: пока когорта не новее, показываем прежнюю строку (нажатие вместе с подтверждением)
+        boolean tapComplete = r.tapSince() != null && !r.from().isBefore(r.tapSince());
+        if (tapComplete) {
+            funnelRow(t, "Нажали «Взять»", c.get("take_tap"), started, c.get("bank_card"));
+            funnelRow(t, "  подтвердили 18+", c.get("take18"), started, c.get("take_tap"));
+        } else {
+            funnelRow(t, "Нажали «Взять»", c.get("take18"), started, c.get("bank_card"));
+        }
         funnelRow(t, "Запрос подписки", c.get("sub_prompt"), started, c.get("take18"));
         funnelRow(t, "  подписались", c.get("sub_after"), started, c.get("sub_prompt"));
         funnelRow(t, "Взяли квест банка", c.get("bank_taken"), started, c.get("take18"));
         funnelRow(t, "Экран «Оформить»", c.get("apply"), started, c.get("bank_taken"));
-        funnelRow(t, "Лид у банка (постб.)", c.get("lg_lead"), started, c.get("bank_taken"));
+        // Сигналы витрины (с 23.11): открыла страницу -> раскрыла карточку -> нажала на оффер; лид у банка считается от последнего видимого шага
+        boolean lpComplete = r.lpSince() != null && !r.from().isBefore(r.lpSince());
+        if (lpComplete) {
+            funnelRow(t, "Открыли витрину", c.get("lp_view"), started, c.get("apply"));
+            funnelRow(t, "  раскрыли карточку", c.get("lp_card"), started, c.get("lp_view"));
+            funnelRow(t, "  нажали на оффер", c.get("lp_click"), started, c.get("lp_card"));
+        }
+        funnelRow(t, "Лид у банка (постб.)", c.get("lg_lead"), started, lpComplete ? c.get("lp_click") : c.get("bank_taken"));
         funnelRow(t, "  банк одобрил", c.get("lg_ok"), started, c.get("lg_lead"));
         funnelRow(t, "  банк отклонил", c.get("lg_rej"), started, c.get("lg_lead"));
         funnelRow(t, "Менеджер проверил", c.get("bank_ok"), started, c.get("bank_taken"));
@@ -1072,12 +1086,14 @@ public class AnalyticsService {
                 new String[]{"", "w3", "choice", "cards", "games", "menu"}));
         extras.add(sourceTable("По источникам: путь карты до «Взять»", r, new String[]{"карты", "разд", "дебет", "карт.б", "взять", "взяли"},
                 new String[]{"cards", "sp_section", "sp_debit", "bank_card", "take18", "bank_taken"}));
-        extras.add(sourceTable("По источникам: после «Взять» (лид у банка - по постбеку LeadGid)", r, new String[]{"взяли", "оформ", "лид", "одобр", "откл", "выпл"},
-                new String[]{"bank_taken", "apply", "lg_lead", "lg_ok", "lg_rej", "bank_paid"}));
+        extras.add(sourceTable("По источникам: от «Взять» до заявки в банке (витрина и постбек LeadGid)", r, new String[]{"взяли", "витр", "карт", "оффер", "лид", "одобр"},
+                new String[]{"bank_taken", "lp_view", "lp_card", "lp_click", "lg_lead", "lg_ok"}));
+        extras.add(sourceTable("По источникам: итог по банку", r, new String[]{"лид", "одобр", "откл", "выпл"},
+                new String[]{"lg_lead", "lg_ok", "lg_rej", "bank_paid"}));
         extras.add(sourceTable("По источникам: путь игр", r, new String[]{"игры", "выбор", "спис", "карт", "взяли", "вып"},
                 new String[]{"games", "picker", "game_list", "game_card", "game_taken", "game_ok"}));
         extras.add("<i>Как читать: «от пред.» - доля от шага, из которого человек должен был прийти; именно там, где она резко падает, и теряются люди. "
-                + "Нажатие «Оформить карту» не видно: кнопка уходит на сайт мимо бота, но о реально оформленной заявке сообщает постбек LeadGid («Лид у банка», решение банка - «одобрил / отклонил»; "
+                + "Что человек делает на витрине, видно по сигналам страницы (открыл, раскрыл карточку, нажал на оффер; с 23.11, нужна ссылка с ?sid= из бота), а о реально оформленной заявке сообщает постбек LeadGid («Лид у банка», решение банка - «одобрил / отклонил»; "
                 + "связь с игроком по номеру заявки в SubID 4, если метка не дошла, лид не засчитается игроку). «Менеджер проверил» и «Выплата отмечена» заполняются только тогда, когда менеджер отметил проверку заявки или выплату в боте "
                 + "(команды /otpbonus, /vtbbonus, /alfabonus, /forabonus, /psbbonus, /ubrrbonus и т.д.); если не отмечает, строки останутся пустыми. "
                 + "Банк платит через 30+ дней, у свежих когорт выплаты ещё нет. Возврат на следующий день считается по журналу активности. "
