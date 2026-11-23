@@ -30886,8 +30886,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         // допуск к тратам EXC (телефон, профиль, квесты) проверяется на попытке нажать «Да, со скидкой»: до неё всё открыто (23.11.2026)
         if (hybrid != null && coins >= hybrid.exc()) {
-            hybridHeadline = "🪙 У вас <b>" + fmtExc(coins) + " EXC</b>.\n\nМожно заплатить дешевле: <b>" + hybrid.stars()
-                    + " ⭐</b>, и спишем <b>" + fmtExc(hybrid.exc()) + " EXC</b>.\n\n<b>Применить скидку?</b>\n\n";
+            hybridHeadline = "🪙 У вас <b>" + fmtExc(coins) + " EXC</b>.\n\nМожем списать <b>" + fmtExc(hybrid.exc())
+                    + " EXC</b>, и тогда к оплате будет <b>" + hybrid.stars() + " ⭐</b>.\n\n<b>Применить скидку?</b>\n\n";
             rows.add(List.of(keyboardFactory.callback("🪙 Да, со скидкой: " + hybrid.stars() + " ⭐ + " + fmtExc(hybrid.exc()) + " EXC", "gemhyb:" + gameKey + ":" + pkg.key())));
             rows.add(List.of(keyboardFactory.callback("⭐ Нет, без скидки: " + fullStars + " ⭐", "gemstarsfull:" + gameKey + ":" + pkg.key())));
             if (!questService.hasApprovedPartnerQuest(user.getId())) {
@@ -30895,8 +30895,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         } else {
             if (hybrid != null) {
-                hybridHeadline = "🪙 Скидка за EXC: чтобы заплатить <b>" + hybrid.stars() + " ⭐</b>, нужно <b>" + fmtExc(hybrid.exc())
-                        + " EXC</b> (у вас " + fmtExc(coins) + ", не хватает " + fmtExc(hybrid.exc() - coins) + ").\n\n";
+                hybridHeadline = "🪙 У вас <b>" + fmtExc(coins) + " EXC</b>.\n\nЧтобы заплатить со скидкой <b>" + hybrid.stars() + " ⭐</b>, нужно списать <b>"
+                        + fmtExc(hybrid.exc()) + " EXC</b> (не хватает " + fmtExc(hybrid.exc() - coins) + ").\n\n";
             }
             rows.add(List.of(keyboardFactory.callback("⭐ Оплатить звёздами: " + fullStars + " ⭐", "gemstarsfull:" + gameKey + ":" + pkg.key())));
         }
