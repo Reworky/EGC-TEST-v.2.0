@@ -5764,7 +5764,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 + "Квесты по твоей игре. EXC можно потратить на донат или вывести.\n\n"
                 + "Второй путь можно всегда выбрать в меню 😉";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
-                List.of(keyboardFactory.callback("💳 Спонсорские квесты · мне 18+, я из РФ", "onboarding:cards")),
+                List.of(keyboardFactory.callback("💳 Спонсорские квесты", "onboarding:cards")),
                 List.of(keyboardFactory.callback("🎮 Играть и копить EXC", "onboarding:games")),
                 List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))));
         // Всегда с баннером (и при возврате): экраны выбора пути, игр и спонсорских квестов - картинки, поэтому между ними правка на месте, а не новое сообщение
