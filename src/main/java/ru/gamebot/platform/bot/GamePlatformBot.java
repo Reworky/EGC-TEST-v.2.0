@@ -12404,17 +12404,16 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             goal.append("🎯 Баланса хватает на все ближайшие цели. Выбирай награду ниже.\n\n");
         }
 
-        String levelHint = withdrawalLevelHint(user).strip();
+        // 23.11.2026 (владелец): в цитате магазина нет состояния фонда и курса вывода - только лимит трат и вывода, подсказка про уровень и курс партнёра
+        String limitHint = shopLimitHintLine(user);
         sendResourceBanner(user.getTelegramId(), "shop-banner.jpg",
                 "🛍️ <b>Магазин наград</b>\n\n"
                         + "🪙 <b>" + String.format("%,d", balance).replace(',', ' ') + " EXC</b>\n\n"
                         + goal
                         + "<blockquote expandable>"
-                        + "📊 Состояние фонда: <b>" + ratioPercent + "%</b>\n"
-                        + "💱 Курс вывода: <b>" + playerWithdrawalRateString(user, ratioPercent) + "</b>\n"
-                        + (partnerCompareApplies(user) ? "🤝 Партнёр: <b>" + tierRateString(100) + "</b>\n" : "")
-                        + "📤 Лимит вывода: <b>" + sinkShopService.getMonthlyLimitShown(user) + " EXC/мес</b> (осталось: " + remaining + " EXC)"
-                        + (levelHint.isEmpty() ? "" : "\n\n" + levelHint)
+                        + "📤 Лимит трат и вывода: <b>" + fmtExc(sinkShopService.getMonthlyLimitShown(user)) + " EXC/мес</b> (осталось: " + fmtExc(remaining) + ")"
+                        + (limitHint.isEmpty() ? "" : "\n\n" + limitHint)
+                        + (partnerCompareApplies(user) ? "\n\n🤝 Партнёр: <b>1 000 EXC = 10 ₽</b>" : "")
                         + "</blockquote>",
                 keyboardFactory.rowsLayout(rows));
     }
@@ -13054,6 +13053,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         else return "";
         long xpNeeded = nextXp - xp;
         return "\n💡 До уровня <b>" + nextLevel + "</b> ещё <b>" + xpNeeded + " XP</b> → лимит вывода вырастет до <b>" + nextLimit + " EXC/мес</b>";
+    }
+
+    /** Подсказка про следующий уровень для магазина: «Лимит вырастет до N EXC/мес при получении уровня «X» - ещё M XP» (формулировка владельца 23.11.2026); пусто на максимальном уровне. */
+    private String shopLimitHintLine(AppUser user) {
+        long xp = user.getXp();
+        long nextXp;
+        long nextLimit;
+        String nextLevel;
+        if (xp < 1_000)       { nextXp = 1_000;   nextLimit = 25_000;  nextLevel = "Игрок"; }
+        else if (xp < 5_000)  { nextXp = 5_000;   nextLimit = 50_000;  nextLevel = "Ветеран"; }
+        else if (xp < 15_000) { nextXp = 15_000;  nextLimit = 80_000;  nextLevel = "Элита"; }
+        else if (xp < 35_000) { nextXp = 35_000;  nextLimit = 100_000; nextLevel = "Легенда"; }
+        else if (xp < 75_000) { nextXp = 75_000;  nextLimit = 150_000; nextLevel = "Герой EXPERIENCE"; }
+        else return "";
+        return "💡 Лимит вырастет до <b>" + fmtExc(nextLimit) + " EXC/мес</b> при получении уровня «" + nextLevel + "» — ещё <b>" + fmtExc(nextXp - xp) + " XP</b>";
     }
 
     private void sendUserRewardRequests(AppUser user) {
