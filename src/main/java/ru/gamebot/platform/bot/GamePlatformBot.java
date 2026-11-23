@@ -2310,22 +2310,28 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             answer(callbackQuery.getId(), "Карточка награды");
             return;
         }
-        if (data.startsWith("shop:group:")) {
+        if (data.startsWith("shop:group:") || data.equals("shop:stars")) {
+            // shop:stars - вход в выбор звёзд из магазина наград (23.11.2026): запоминаем, откуда пришёл игрок, чтобы «Назад» вернул в магазин; из вывода флаг снимается
+            String groupKey = data.equals("shop:stars") ? "telegram_stars" : data.substring("shop:group:".length());
+            if ("telegram_stars".equals(groupKey)) {
+                if (data.equals("shop:stars")) session.getData().put(STARS_FROM_KEY, "shop");
+                else session.getData().remove(STARS_FROM_KEY);
+            }
             // Вывод звёздами, как рубли и TON, требует подтверждённого номера телефона (иначе обход защиты от мультиаккаунтов)
-            if ("telegram_stars".equals(data.substring("shop:group:".length())) && !isStarsWithdrawalOpen()) {
+            if ("telegram_stars".equals(groupKey) && !isStarsWithdrawalOpen()) {
                 answerSilently(callbackQuery.getId());
                 sendStarsWithdrawalClosed(user);
                 return;
             }
             // 07.11.2026 (владелец): вывод звёздами без порога 10 000 EXC и партнёрского квеста - только баланс и месячный лимит ранга
-            if ("telegram_stars".equals(data.substring("shop:group:".length())) && user.getPhoneNumber() == null) {
+            if ("telegram_stars".equals(groupKey) && user.getPhoneNumber() == null) {
                 answerSilently(callbackQuery.getId());
                 session.setState(SessionState.AWAITING_PHONE_SHARE);
                 session.getData().put("pendingWithdrawal", "stars");
                 sendPhoneShareRequest(user.getTelegramId());
                 return;
             }
-            sendGroupPicker(user, data.substring("shop:group:".length()));
+            sendGroupPicker(user, groupKey);
             answerSilently(callbackQuery.getId());
             return;
         }
@@ -2346,6 +2352,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         if (data.equals("shop:cs2")) {
             sendCs2Menu(user);
+            answerSilently(callbackQuery.getId());
+            return;
+        }
+        if (data.equals("shop:donate")) {
+            sendDonateMenu(user);
             answerSilently(callbackQuery.getId());
             return;
         }
@@ -4964,16 +4975,22 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     }
 
     private void sendShopCategory(AppUser user) {
-        // Battle Pass и EGC Pass объединены в один продукт (2026-09-24) — в магазине остался один пункт «EGC Pass».
-        // Макет владельца 10.11.2026: «Магазин наград» отдельной широкой кнопкой, «Предметы» и «EGC Pass» парой, VPN в своей строке, «Назад» и «Меню» вместе;
-        // мёртвая кнопка «Ускоритель (скоро)» убрана. Экран открывается правкой того же сообщения (sendResourceBanner).
+        // Макет владельца 23.11.2026: «Магазин EGC», баланс, строки «что где», четыре кнопки столбиком; «Предметы» переименованы в «Бусты».
+        // Battle Pass и EGC Pass объединены в один продукт (2026-09-24) - один пункт «EGC Pass». Экран открывается правкой того же сообщения (sendResourceBanner).
         String passLabel = sinkShopService.isEgcPassActive(user) ? "⭐ EGC Pass ✅" : "⭐ EGC Pass";
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         rows.add(List.of(keyboardFactory.callback("🛍️ Магазин наград", "menu:shop")));
-        rows.add(List.of(keyboardFactory.callback("⚡ Предметы", "menu:sink"), keyboardFactory.callback(passLabel, "menu:battlepass")));
+        rows.add(List.of(keyboardFactory.callback("⚡ Бусты", "menu:sink")));
+        rows.add(List.of(keyboardFactory.callback(passLabel, "menu:battlepass")));
         rows.add(List.of(vpnShopButton(user)));
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"), keyboardFactory.callback("🏠 Меню", "menu:main")));
-        sendResourceBanner(user.getTelegramId(), "shop-banner.jpg", "🛍️ <b>Магазин</b>", keyboardFactory.rowsLayout(rows));
+        String text = "🛍️ <b>Магазин EGC</b>\n\n"
+                + "🪙 Баланс: <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>\n\n"
+                + "🛍️ <b>Награды</b> — донат в игры, Steam, звёзды Telegram и многое другое\n"
+                + "⚡ <b>Бусты</b> — ускорители и усиления в клубе\n"
+                + "⭐ <b>EGC Pass</b> — постоянные перки\n"
+                + "🔐 <b>VPN</b> — оплата со скидкой за EXC";
+        sendResourceBanner(user.getTelegramId(), "shop-banner.jpg", text, keyboardFactory.rowsLayout(rows));
     }
 
     private byte[] loadShopBanner() throws Exception {
@@ -12277,103 +12294,63 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(user.getTelegramId(), sb.toString(), backMenuKeyboard("menu:referrals"));
     }
 
+    /** Ключ сессии: игрок открыл выбор звёзд Telegram из магазина наград (а не из вывода) - от него зависит, куда ведёт «Назад» (23.11.2026). */
+    private static final String STARS_FROM_KEY = "starsFrom";
+
+    private String starsBackTarget(AppUser user) {
+        return "shop".equals(sessionService.get(user.getTelegramId()).getData().get(STARS_FROM_KEY)) ? "menu:shop" : "shop:withdraw";
+    }
+
+    private boolean isCs2ShopItem(RewardItem r) {
+        return "CS2".equals(r.getCategory()) || ru.gamebot.platform.service.Cs2CaseCatalog.CATEGORY.equals(r.getCategory());
+    }
+
+    /** Позиции для раздела «Донат в игры»: всё, кроме CS2 (свой раздел), кастомизации (живёт в «Бустах») и выключенного «EGC Эксклюзив». */
+    private boolean isDonateShopItem(RewardItem r) {
+        String cat = r.getCategory() != null ? r.getCategory() : "Другое";
+        return !isCs2ShopItem(r) && !"Кастомизация".equals(cat) && !"EGC Эксклюзив".equals(cat);
+    }
+
+    private long minShopPrice(AppUser user, List<RewardItem> items) {
+        long min = -1;
+        for (RewardItem r : items) {
+            long price = healthRatioService.effectivePriceFor(user, r);
+            if (min < 0 || price < min) min = price;
+        }
+        return min;
+    }
+
+    private String shopTail(long balance, long price) {
+        return balance >= price ? "доступно" : "не хватает " + fmtExc(price - balance);
+    }
+
+    /** «Магазин наград» (макет согласован с владельцем 23.11.2026): цель с полоской, четыре раздела с пометкой «доступно / не хватает», заявки.
+     *  Звёзды Telegram - вход в тот же экран выбора номинала, что и в выводе (shop:stars помнит, что игрок пришёл из магазина). */
     private void sendShop(AppUser user) {
-        partnerQuestFunnelService.shopOpened(user.getTelegramId()); // вкладка аналитики «Экономика и выплаты»: сколько игроков открывают магазин (23.11.2026)
+        partnerQuestFunnelService.shopOpened(user.getTelegramId()); // вкладка аналитики «Экономика и выплаты»: сколько игроков открывают магазин
         List<RewardItem> rewards = rewardService.findAvailableRewards();
         int ratioPercent = (int) Math.round(healthRatioService.getCurrentRatio() * 100);
         long remaining = sinkShopService.getRemainingWithdrawalLimit(user);
+        long balance = user.getCoins();
+
+        List<RewardItem> starsItems = rewardService.findByPurchaseGroup("telegram_stars");
+        List<RewardItem> donateItems = rewards.stream().filter(this::isDonateShopItem).toList();
+        List<RewardItem> steamItems = rewards.stream().filter(this::isCs2ShopItem).toList();
+        long starsMin = minShopPrice(user, starsItems);
+        long donateMin = minShopPrice(user, donateItems);
+        long steamMin = minShopPrice(user, steamItems);
 
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
-        boolean cs2EntryAdded = false;
-
-        if (!rewards.isEmpty()) {
-            java.util.LinkedHashMap<String, List<RewardItem>> byCategory = new java.util.LinkedHashMap<>();
-            for (RewardItem reward : rewards) {
-                String cat = reward.getCategory() != null ? reward.getCategory() : "Другое";
-                byCategory.computeIfAbsent(cat, k -> new ArrayList<>()).add(reward);
-            }
-            // Порядок игр в списке иначе определялся ценой самого дешёвого товара в категории (сортировка
-            // findAvailableRewards() по priceCoins) — непредсказуемо для пользователя. Brawl
-            // Stars/Clash Royale/Clash of Clans (донат-игры) закреплены наверху списка в этом порядке
-            // (запрошено 2026-09-20), остальные категории идут следом в прежнем порядке.
-            List<String> priorityCategories = List.of("Brawl Stars", "Clash Royale", "Clash of Clans", "CS2", ru.gamebot.platform.service.Cs2CaseCatalog.CATEGORY);
-            java.util.LinkedHashMap<String, List<RewardItem>> orderedByCategory = new java.util.LinkedHashMap<>();
-            for (String cat : priorityCategories) {
-                List<RewardItem> items = byCategory.remove(cat);
-                if (items != null) orderedByCategory.put(cat, items);
-            }
-            orderedByCategory.putAll(byCategory);
-            byCategory = orderedByCategory;
-            for (Map.Entry<String, List<RewardItem>> entry : byCategory.entrySet()) {
-                // CS2: одна общая точка входа (пополнение Steam и кейсы) - разделы выбираются уже внутри (sendCs2Menu)
-                if ("CS2".equals(entry.getKey()) || ru.gamebot.platform.service.Cs2CaseCatalog.CATEGORY.equals(entry.getKey())) {
-                    if (!cs2EntryAdded) {
-                        rows.add(List.of(keyboardFactory.callback("🎁 CS2 — выбор раздела", "shop:cs2")));
-                        cs2EntryAdded = true;
-                    }
-                    continue;
-                }
-                // Кастомизация (рамка аватара, титулы) перенесена в ⚙️ Предметы клуба (2026-09-15) —
-                // здесь остаётся только игровая валюта, см. addCustomizationSection/sendSinkShop.
-                if ("Кастомизация".equals(entry.getKey())) continue;
-                // Group items by purchaseGroup; groups with >1 item shown as single entry
-                java.util.LinkedHashMap<String, List<RewardItem>> byGroup = new java.util.LinkedHashMap<>();
-                for (RewardItem reward : entry.getValue()) {
-                    String group = reward.getPurchaseGroup() != null ? reward.getPurchaseGroup() : reward.getId().toString();
-                    byGroup.computeIfAbsent(group, k -> new ArrayList<>()).add(reward);
-                }
-                // Заголовок-разделитель некликабелен (noop) — показываем его только когда под ним
-                // реально несколько пунктов, иначе это просто мёртвая полоса над единственной кнопкой,
-                // название которой и так содержит имя игры (см. groupItemLabel/reward.getTitle()).
-                if (byGroup.size() > 1) {
-                    rows.add(List.of(keyboardFactory.callback("── " + entry.getKey() + " ──", "noop")));
-                }
-                for (Map.Entry<String, List<RewardItem>> groupEntry : byGroup.entrySet()) {
-                    List<RewardItem> groupItems = groupEntry.getValue();
-                    if (groupItems.size() > 1) {
-                        // Show as single entry leading to denomination picker — если в категории
-                        // (игре) всего одна группа валюты, на верхнем уровне показываем просто
-                        // название игры (entry.getKey(), = category), а название валюты/номинал —
-                        // уже внутри, на экране пикера (см. sendGroupPicker). Если групп несколько
-                        // (несколько разных валют под одной игрой) — оставляем полную метку с
-                        // названием валюты, иначе кнопки было бы не различить (запрошено 2026-09-20).
-                        RewardItem first = groupItems.get(0);
-                        String groupLabel = "avatar_frame".equals(groupEntry.getKey())
-                                ? "Рамка аватара"
-                                : byGroup.size() == 1 ? entry.getKey() : groupItemLabel(first.getTitle());
-                        boolean anyAvailable = groupItems.stream().anyMatch(r ->
-                                !shopLimitService.getItemStatus(user, r).startsWith("🔒"));
-                        String icon = anyAvailable ? "🎁" : "🔒";
-                        // Игры с несколькими ТИПАМИ товара (не номиналами одной валюты, а разными
-                        // видами покупки — например, гемы И сезонные пропуски) сначала ведут в выбор
-                        // типа (sendGameCategoryPicker), а не сразу в номиналы одной валюты — иначе
-                        // второй тип товара просто негде показать (2026-09-20, генерализовано под любую
-                        // игру, см. hasMultipleDonationProductTypes — было хардкожено только под Brawl
-                        // Stars, расширено на Clash Royale тем же вечером).
-                        boolean hasMultipleProductTypes = hasMultipleDonationProductTypes(groupEntry.getKey());
-                        String label = hasMultipleProductTypes ? " — выбор товара" : " — выбор номинала";
-                        String callback = (hasMultipleProductTypes ? "shop:gamecat:" : "shop:group:") + groupEntry.getKey();
-                        rows.add(List.of(keyboardFactory.callback(icon + " " + groupLabel + label, callback)));
-                    } else {
-                        RewardItem reward = groupItems.get(0);
-                        long price = healthRatioService.effectivePriceFor(user, reward);
-                        String status = shopLimitService.getItemStatus(user, reward);
-                        String icon = status.startsWith("🔒") ? "🔒"
-                                : status.startsWith("⏳") ? "⏳"
-                                : status.startsWith("🚫") ? "🚫"
-                                : "🎁";
-                        rows.add(List.of(keyboardFactory.callback(
-                                icon + " " + trim(reward.getTitle(), 22) + " — " + price + " EXC",
-                                "shop:view:" + reward.getId())));
-                    }
-                }
-            }
+        if (starsMin >= 0) {
+            String tail = isStarsWithdrawalOpen() ? shopTail(balance, starsMin) : "временно недоступно";
+            rows.add(List.of(keyboardFactory.callback("⭐ Telegram Stars · " + tail, "shop:stars")));
         }
-
+        if (donateMin >= 0) {
+            rows.add(List.of(keyboardFactory.callback("💎 Донат в игры · " + shopTail(balance, donateMin), "shop:donate")));
+        }
         // Кейсы CS2 видны всем даже при выключенном обмене (items неактивны) - вход в них через единый раздел CS2
-        if (!cs2EntryAdded && !cs2CaseCatalog.all().isEmpty()) {
-            rows.add(List.of(keyboardFactory.callback("🎁 CS2 — выбор раздела", "shop:cs2")));
-        }
+        rows.add(List.of(keyboardFactory.callback(steamMin >= 0 ? "🎮 Steam и CS2 · " + shopTail(balance, steamMin) : "🎮 Steam и CS2", "shop:cs2")));
+        rows.add(List.of(keyboardFactory.callback("⚡ Бусты · " + shopTail(balance, ru.gamebot.platform.service.SinkShopService.PRICE_INSURANCE), "menu:sink")));
         addPartnerRow(rows, user, "sh");
         rows.add(List.of(keyboardFactory.callback("📋 Мои заявки", "menu:my-rewards")));
         rows.add(List.of(
@@ -12381,12 +12358,33 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
 
-        // Макет владельца 10.11.2026: баннер «Магазин EGC», баланс открыто, а фонд, курсы, лимит и подсказка про уровень - в раскрывающейся цитате
-        // (вернули её по просьбе владельца в тот же день); экран открывается правкой того же сообщения, а не новым постом (sendResourceBanner)
+        // Цель: самая дешёвая награда из разделов, на которую игроку ещё не хватает
+        long[] prices = {starsMin, donateMin, steamMin};
+        String[] names = {"вывод в Telegram Stars", "донат в игру", "пополнение Steam"};
+        long best = -1;
+        String bestName = null;
+        for (int i = 0; i < prices.length; i++) {
+            if (prices[i] > balance && (best < 0 || prices[i] < best)) {
+                best = prices[i];
+                bestName = names[i];
+            }
+        }
+        StringBuilder goal = new StringBuilder();
+        if (best >= 0) {
+            int pct = (int) Math.min(100, Math.round(100.0 * Math.max(balance, 0) / best));
+            int filled = Math.min(10, pct / 10);
+            goal.append("🎯 Ближайшая награда: <b>").append(bestName).append("</b>\n")
+                    .append("▰".repeat(filled)).append("▱".repeat(10 - filled)).append(" ").append(pct).append("%\n")
+                    .append("Осталось <b>").append(fmtExc(best - balance)).append(" EXC</b> из ").append(fmtExc(best)).append("\n\n");
+        } else if (starsMin >= 0 || donateMin >= 0 || steamMin >= 0) {
+            goal.append("🎯 Баланса хватает на все ближайшие цели. Выбирай награду ниже.\n\n");
+        }
+
         String levelHint = withdrawalLevelHint(user).strip();
         sendResourceBanner(user.getTelegramId(), "shop-banner.jpg",
                 "🛍️ <b>Магазин наград</b>\n\n"
-                        + "🪙 <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>\n\n"
+                        + "🪙 <b>" + String.format("%,d", balance).replace(',', ' ') + " EXC</b>\n\n"
+                        + goal
                         + "<blockquote expandable>"
                         + "📊 Состояние фонда: <b>" + ratioPercent + "%</b>\n"
                         + "💱 Курс вывода: <b>" + playerWithdrawalRateString(user, ratioPercent) + "</b>\n"
@@ -12394,6 +12392,58 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "📤 Лимит вывода: <b>" + sinkShopService.getMonthlyLimitShown(user) + " EXC/мес</b> (осталось: " + remaining + " EXC)"
                         + (levelHint.isEmpty() ? "" : "\n\n" + levelHint)
                         + "</blockquote>",
+                keyboardFactory.rowsLayout(rows));
+    }
+
+    /** «Донат в игры»: список игр с донатом (две кнопки в ряд). Раньше эти кнопки стояли прямо на экране магазина наград (23.11.2026). */
+    private void sendDonateMenu(AppUser user) {
+        List<RewardItem> rewards = rewardService.findAvailableRewards().stream().filter(this::isDonateShopItem).toList();
+        java.util.LinkedHashMap<String, List<RewardItem>> byCategory = new java.util.LinkedHashMap<>();
+        for (RewardItem reward : rewards) {
+            String cat = reward.getCategory() != null ? reward.getCategory() : "Другое";
+            byCategory.computeIfAbsent(cat, k -> new ArrayList<>()).add(reward);
+        }
+        java.util.LinkedHashMap<String, List<RewardItem>> ordered = new java.util.LinkedHashMap<>();
+        for (String cat : List.of("Brawl Stars", "Clash Royale", "Clash of Clans")) {
+            List<RewardItem> items = byCategory.remove(cat);
+            if (items != null) ordered.put(cat, items);
+        }
+        ordered.putAll(byCategory);
+
+        List<InlineKeyboardButton> buttons = new ArrayList<>();
+        for (Map.Entry<String, List<RewardItem>> entry : ordered.entrySet()) {
+            java.util.LinkedHashMap<String, List<RewardItem>> byGroup = new java.util.LinkedHashMap<>();
+            for (RewardItem reward : entry.getValue()) {
+                String group = reward.getPurchaseGroup() != null ? reward.getPurchaseGroup() : reward.getId().toString();
+                byGroup.computeIfAbsent(group, k -> new ArrayList<>()).add(reward);
+            }
+            for (Map.Entry<String, List<RewardItem>> groupEntry : byGroup.entrySet()) {
+                List<RewardItem> groupItems = groupEntry.getValue();
+                if (groupItems.size() > 1) {
+                    RewardItem first = groupItems.get(0);
+                    String groupLabel = byGroup.size() == 1 ? entry.getKey() : groupItemLabel(first.getTitle());
+                    boolean anyAvailable = groupItems.stream().anyMatch(r -> !shopLimitService.getItemStatus(user, r).startsWith("🔒"));
+                    boolean multipleTypes = hasMultipleDonationProductTypes(groupEntry.getKey());
+                    buttons.add(keyboardFactory.callback((anyAvailable ? "🎁 " : "🔒 ") + trim(groupLabel, 20),
+                            (multipleTypes ? "shop:gamecat:" : "shop:group:") + groupEntry.getKey()));
+                } else {
+                    RewardItem reward = groupItems.get(0);
+                    String status = shopLimitService.getItemStatus(user, reward);
+                    String icon = status.startsWith("🔒") ? "🔒" : status.startsWith("⏳") ? "⏳" : status.startsWith("🚫") ? "🚫" : "🎁";
+                    buttons.add(keyboardFactory.callback(icon + " " + trim(reward.getTitle(), 20), "shop:view:" + reward.getId()));
+                }
+            }
+        }
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+        for (int i = 0; i < buttons.size(); i += 2) {
+            rows.add(i + 1 < buttons.size() ? List.of(buttons.get(i), buttons.get(i + 1)) : List.of(buttons.get(i)));
+        }
+        rows.add(List.of(
+                keyboardFactory.callback("⬅️ Назад", "menu:shop"),
+                keyboardFactory.callback("🏠 Меню", "menu:main")
+        ));
+        sendResourceBanner(user.getTelegramId(), "shop-banner.jpg",
+                "💎 <b>Донат в игры</b>\n\nВыберите игру.",
                 keyboardFactory.rowsLayout(rows));
     }
 
@@ -13176,7 +13226,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
     private void sendSinkShop(AppUser user) {
         String titleLine = user.getProfileTitle() != null ? "🏅 Текущий титул: <b>" + escape(user.getProfileTitle()) + "</b>\n" : "";
         StringBuilder info = new StringBuilder();
-        info.append("⚡ <b>Предметы клуба</b>\n\n");
+        info.append("⚡ <b>Бусты</b>\n\n");
         if (!titleLine.isEmpty()) info.append(titleLine);
 
         // EGC Pass отсюда убран (2026-09-24, по решению владельца) — подписка живёт в своём разделе магазина
@@ -14451,7 +14501,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = List.of(
                 List.of(keyboardFactory.callback("🪙 Гемы", "shop:group:" + gameKey)),
                 List.of(keyboardFactory.callback("🎫 Пропуски", "shop:passgroup:" + gameKey)),
-                List.of(keyboardFactory.callback("⬅️ Назад", "menu:shop"), keyboardFactory.callback("🏠 Меню", "menu:main"))
+                List.of(keyboardFactory.callback("⬅️ Назад", "shop:donate"), keyboardFactory.callback("🏠 Меню", "menu:main"))
         );
         String pickerText = "🎮 <b>" + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\nЧто хотите купить?";
         if ("brawl_stars".equals(gameKey)) {
@@ -14560,8 +14610,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // Кастомизация (рамка аватара) открывает этот же пикер из "⚙️ Предметы клуба" — тоже своя цель.
         // Звёзды Telegram - способ вывода EXC, открываются только с экрана «Вывод EXC» (shop:withdraw), туда и возвращаемся.
         String backTarget = !GemPurchaseService.packagesFor(purchaseGroup).isEmpty() ? "shop:group:" + purchaseGroup
-                : "telegram_stars".equals(purchaseGroup) ? "shop:withdraw"
-                : "Кастомизация".equals(items.get(0).getCategory()) ? "sink:cat:customization" : "menu:shop";
+                : "telegram_stars".equals(purchaseGroup) ? starsBackTarget(user)
+                : "Кастомизация".equals(items.get(0).getCategory()) ? "sink:cat:customization"
+                : isDonateShopItem(items.get(0)) ? "shop:donate" : "menu:shop";
         String vpnBot = appProperties.getVpn2BotUsername() == null ? "" : appProperties.getVpn2BotUsername().trim().replaceFirst("^@", "");
         boolean vpnHint = "telegram_stars".equals(purchaseGroup) && !vpnBot.isEmpty();
         boolean starsPassHint = "telegram_stars".equals(purchaseGroup) && healthRatioService.starsMarkupApplies(user, items.get(0));
@@ -14870,7 +14921,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         if (!showOther && !partner && healthRatioService.starsMarkupApplies(user, items.get(0))) {
             rows.add(List.of(keyboardFactory.callback("🎫 Оформить EGC Pass: звёзды дешевле", "sink:egc_pass")));
         }
-        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "shop:withdraw"), keyboardFactory.callback("🏠 Меню", "menu:main")));
+        rows.add(List.of(keyboardFactory.callback("⬅️ Назад", starsBackTarget(user)), keyboardFactory.callback("🏠 Меню", "menu:main")));
         String text = header + footer;
         InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(rows);
         if (callback == null || callback.getMessage() == null) {
@@ -15178,7 +15229,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // не напрямую из Магазина наград — "Назад" должен вести обратно в пикер (2026-09-20).
         String backTarget = ("Кастомизация".equals(reward.getCategory()) || "telegram_stars".equals(reward.getPurchaseGroup())) && reward.getPurchaseGroup() != null
                 ? "shop:group:" + reward.getPurchaseGroup()
-                : "menu:shop";
+                : isDonateShopItem(reward) ? "shop:donate" : "menu:shop";
         InlineKeyboardMarkup keyboard = verticalWithBackMenu(
                 List.of(keyboardFactory.callback("🛒 Обменять", "shop:buy:" + rewardId)),
                 "⬅️ Назад",
@@ -30392,7 +30443,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         }
         rows.add(List.of(
                 keyboardFactory.callback("⬅️ Назад", hasMultipleDonationProductTypes(gameKey) ? "shop:gamecat:" + gameKey
-                        : "steam_topup".equals(gameKey) ? "shop:cs2" : "menu:shop"),
+                        : "steam_topup".equals(gameKey) ? "shop:cs2" : "shop:donate"),
                 keyboardFactory.callback("🏠 Меню", "menu:main")
         ));
         String tag = gemPurchaseGameTag(user, gameKey);
