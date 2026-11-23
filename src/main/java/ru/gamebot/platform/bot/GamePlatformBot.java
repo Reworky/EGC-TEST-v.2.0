@@ -14578,7 +14578,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             String priceLabel = passActive ? price + "₽ (закупка, EGC Pass)" : price + "₽";
             // 23.11.2026 (владелец): полная цена в рублях и звёздах, скидка за EXC - в карточке пропуска
             rows.add(List.of(keyboardFactory.callback(
-                    pkg.displayLabel() + " — " + price + " ₽ ≈ " + gemPurchaseStarsPrice(price) + " ⭐",
+                    pkg.displayLabel() + " — " + gemPurchaseStarsPrice(price) + " ⭐ (≈ " + price + " ₽)",
                     "gemdonate:pkg:" + gameKey + ":" + pkg.key())));
         }
         rows.add(List.of(
@@ -14595,7 +14595,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean hasExcPass = passes.stream().anyMatch(p -> findExcItemForPackage(gameKey, p) != null);
         String passesText = "🎫 <b>Пропуски " + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\n"
                 + "Выберите товар" + accountLine + passNote + "\n\n"
-                + (hasExcPass ? "В каждой строке полная цена в рублях и звёздах. Если на балансе хватает EXC, предложим скидку.\n\n" : "К каждой покупке — бонус XP\n\n")
+                + (hasExcPass ? "В каждой строке полная цена в звёздах, в скобках примерно в рублях. Если на балансе хватает EXC, предложим скидку.\n\n" : "К каждой покупке — бонус XP\n\n")
                 + "⚠️ Заявка обрабатывается вручную, зачисление может занять время.\n\n"
                 + gemPurchaseWarning(gameKey);
         if ("brawl_stars".equals(gameKey)) {
@@ -30459,9 +30459,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         for (GemPurchaseService.GemPackage pkg : currency) {
             long price = gemPurchasePriceFor(user, pkg);
             String priceLabel = passActive ? price + "₽ (закупка, EGC Pass)" : price + "₽";
-            // 23.11.2026 (владелец): в списке всегда полная цена в рублях и звёздах; скидка за EXC предлагается уже в карточке пакета (как в VPN-боте)
+            // 23.11.2026 (владелец): в списке всегда полная цена в звёздах и в скобках примерно в рублях; скидка за EXC предлагается уже в карточке пакета (как в VPN-боте)
             rows.add(List.of(keyboardFactory.callback(
-                    pkg.displayLabel() + " — " + price + " ₽ ≈ " + gemPurchaseStarsPrice(price) + " ⭐",
+                    pkg.displayLabel() + " — " + gemPurchaseStarsPrice(price) + " ⭐ (≈ " + price + " ₽)",
                     "gemdonate:pkg:" + gameKey + ":" + pkg.key())));
         }
         rows.add(List.of(
@@ -30481,7 +30481,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 : "";
         String listText = "🎁 <b>" + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\n"
                         + (steam ? "Выберите сумму пополнения баланса Steam" : "Выберите пакет " + ("pubg_pc".equals(gameKey) ? "G-Coins" : pubg ? "UC" : "гемов")) + accountLine + passNote + "\n\n"
-                        + "В каждой строке полная цена в рублях и звёздах. Если на балансе хватает EXC, на следующем шаге предложим скидку. За покупку — бонус XP.\n\n"
+                        + "В каждой строке полная цена в звёздах, в скобках примерно в рублях. Если на балансе хватает EXC, на следующем шаге предложим скидку. За покупку — бонус XP.\n\n"
                         + "⚠️ Заявка обрабатывается вручную, зачисление может занять время.\n\n"
                         + gemPurchaseWarning(gameKey);
         String listBanner = gameBannerResource(gameKey);
@@ -30874,7 +30874,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             steamLoginLine = "🎮 Логин Steam: <code>" + escape(steamLogin == null ? "" : steamLogin) + "</code>\n\n";
             rows.add(rows.size() - 1, List.of(keyboardFactory.callback("✏️ Изменить логин", "gemdonate:steamlogin:" + pkg.key())));
         }
-        String methodText = "💎 <b>" + pkg.displayLabel() + " — " + price + " ₽ ≈ " + fullStars + " ⭐</b>" + passNote + "\n\n"
+        String methodText = "💎 <b>" + pkg.displayLabel() + " — " + fullStars + " ⭐</b> (≈ " + price + " ₽)" + passNote + "\n\n"
                 + hybridHeadline
                 + steamLoginLine
                 + "Выберите способ оплаты: звёзды Telegram или рубли через менеджера (карта или СБП). Не получается — напишите менеджеру, обсудим другой вариант.\n\n"

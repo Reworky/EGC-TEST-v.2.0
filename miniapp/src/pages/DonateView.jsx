@@ -5,7 +5,7 @@ import BackButton from '../components/BackButton';
 import './QuestsPage.css';
 import './ShopPage.css';
 
-// Донат по играм (Купикод) — зеркало флоу из бота: список пакетов (гемы / пропуски) с полной ценой в рублях и звёздах →
+// Донат по играм (Купикод) — зеркало флоу из бота: список пакетов (гемы / пропуски) с полной ценой в звёздах и примерно в рублях →
 // оплата полной ценой звёздами прямо здесь, скидка за EXC и рубли через менеджера — в боте (23.11.2026, владелец; GRAM (TON) убран 09.11.2026).
 // Тег игры привязывается только в боте, как у квестов: без тега показываем кнопку «Открыть бота и привязать тег».
 
@@ -64,10 +64,12 @@ function PackageCard({ pkg, egcPass, coins, tagLinked, expanded, onToggle, onDon
       <div className="shop-top">
         <div className="shop-title">{pkg.label}</div>
         <div className="shop-price">
-          {egcPass && pkg.regularPriceRub > pkg.priceRub && (
-            <span style={{ textDecoration: 'line-through', opacity: 0.5, marginRight: 6, fontSize: 12 }}>{pkg.regularPriceRub.toLocaleString()}</span>
-          )}
-          {price} ₽ <span style={{ fontSize: 12, opacity: 0.7 }}>≈ {pkg.starsPrice} ⭐</span>
+          {pkg.starsPrice.toLocaleString('ru-RU')} ⭐{' '}
+          <span style={{ fontSize: 12, opacity: 0.7 }}>
+            (≈ {egcPass && pkg.regularPriceRub > pkg.priceRub && (
+              <span style={{ textDecoration: 'line-through', opacity: 0.6, marginRight: 4 }}>{pkg.regularPriceRub.toLocaleString()}</span>
+            )}{price} ₽)
+          </span>
         </div>
       </div>
       <div className="shop-status">+{pkg.xpBonus.toLocaleString()} XP к покупке{egcPass ? ' · закупочная цена EGC Pass' : ''}</div>
