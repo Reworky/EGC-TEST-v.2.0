@@ -5752,28 +5752,21 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         clearOnboardingBrowseBack(user);
         welcomeStat("choice_shown");
         fn(user, ru.gamebot.platform.service.NewbieFunnelService.CHOICE_SHOWN);
-        long sum = 0;
-        try {
-            sum = sponsoredBankRub(sponsoredNotDone(user, activeSponsoredQuests()));
-        } catch (Exception e) {
-            log.warn("Failed to compute sponsored sum for onboarding choice", e);
-        }
-        String moneyLine = sum > 0
-                ? "Можно получить до " + fmtExc(sum) + " ₽ на карту за выполнение бесплатных заданий."
-                : "Можно получить деньги на карту за выполнение бесплатных заданий.";
+        // Текст владельца 23.11.2026 (голос Экси); сумма «до N ₽» с этого экрана убрана
         String text = (fresh
-                ? "<b>Добро пожаловать в EGC!</b>\n\n"
-                        + "🎉 Тебе начислено " + WELCOME_BONUS_EXC + " EXC.\n\n"
+                ? "<b>👋 Привет, я Экси! Добро пожаловать в EGC.</b>\n\n"
+                        + "Держи подарок! <b>" + WELCOME_BONUS_EXC + " EXC</b> уже у тебя на балансе 🎁\n\n"
                 : "")
-                + "<b>Как хочешь зарабатывать?</b>\n\n"
-                + "<b>💳 Спонсорские квесты</b>\n"
-                + moneyLine + "\n\n"
-                + "<b>🎮 Игры</b>\n"
-                + "Квесты по твоей игре, EXC копятся и меняются на донат или вывод.\n\n"
-                + "Второй путь всегда доступен в меню.";
+                + "<b>Выбери, с чего начнём:</b>\n\n"
+                + "<b>💳 Деньги на карту</b>\n"
+                + "Спонсорские квесты: бесплатные задания от банков и не только.\n\n"
+                + "<b>🎮 Играть и копить</b>\n"
+                + "Квесты по твоей игре. EXC можно потратить на донат или вывести.\n\n"
+                + "Второй путь можно всегда выбрать в меню 😉";
         InlineKeyboardMarkup keyboard = keyboardFactory.rowsLayout(List.of(
                 List.of(keyboardFactory.callback("💳 Спонсорские квесты · мне 18+, я из РФ", "onboarding:cards")),
-                List.of(keyboardFactory.callback("🎮 Играть и копить EXC", "onboarding:games"))));
+                List.of(keyboardFactory.callback("🎮 Играть и копить EXC", "onboarding:games")),
+                List.of(keyboardFactory.callback("🏠 Меню", "menu:main"))));
         // Всегда с баннером (и при возврате): экраны выбора пути, игр и спонсорских квестов - картинки, поэтому между ними правка на месте, а не новое сообщение
         sendResourceBanner(user.getTelegramId(), "welcome_start_banner.jpg", text, keyboard);
     }
