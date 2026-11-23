@@ -14634,7 +14634,9 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean hasExcPass = passes.stream().anyMatch(p -> findExcItemForPackage(gameKey, p) != null);
         String passesText = "🎫 <b>Пропуски " + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\n"
                 + "Выберите товар" + accountLine + passNote + "\n\n"
-                + (hasExcPass ? "В каждой строке полная цена в звёздах, в скобках примерно в рублях. Если на балансе хватает EXC, предложим скидку.\n\n" : "К каждой покупке — бонус XP\n\n")
+                + (hasExcPass ? "В каждой строке полная цена в звёздах, в скобках примерно в рублях. Если на балансе хватает EXC, предложим скидку.\n"
+                        : "В каждой строке полная цена в звёздах, в скобках примерно в рублях. К каждой покупке — бонус XP.\n")
+                + "💬 Оплатить можно и рублями через менеджера (карта или СБП): выберите товар и нажмите «Оплатить рублями через менеджера».\n\n"
                 + "⚠️ Заявка обрабатывается вручную, зачисление может занять время.\n\n"
                 + gemPurchaseWarning(gameKey);
         if ("brawl_stars".equals(gameKey)) {
@@ -30526,6 +30528,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String listText = "🎁 <b>" + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\n"
                         + (steam ? "Выберите сумму пополнения баланса Steam" : "Выберите пакет " + ("pubg_pc".equals(gameKey) ? "G-Coins" : pubg ? "UC" : "гемов")) + accountLine + passNote + "\n\n"
                         + "В каждой строке полная цена в звёздах, в скобках примерно в рублях. Если на балансе хватает EXC, на следующем шаге предложим скидку. За покупку — бонус XP.\n\n"
+                        + "💬 Оплатить можно и рублями через менеджера (карта или СБП): выберите пакет и нажмите «Оплатить рублями через менеджера».\n\n"
                         + "⚠️ Заявка обрабатывается вручную, зачисление может занять время.\n\n"
                         + gemPurchaseWarning(gameKey);
         String listBanner = gameBannerResource(gameKey);
