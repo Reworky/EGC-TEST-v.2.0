@@ -14629,14 +14629,14 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 ? " который хотите получить на свой аккаунт " + escape(tag)
                 : " который хотите получить";
         String passNote = passActive
-                ? "\n⭐ Вы EGC Pass — цены ниже, без наценки клуба.\n"
+                ? "⭐ Вы EGC Pass — цены ниже, без наценки клуба.\n\n"
                 : "";
         boolean hasExcPass = passes.stream().anyMatch(p -> findExcItemForPackage(gameKey, p) != null);
         String passesText = "🎫 <b>Пропуски " + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\n"
-                + "Выберите товар" + accountLine + passNote + "\n\n"
-                + (hasExcPass ? "В каждой строке полная цена в звёздах, в скобках примерно в рублях. Если на балансе хватает EXC, предложим скидку.\n"
-                        : "В каждой строке полная цена в звёздах, в скобках примерно в рублях. К каждой покупке — бонус XP.\n")
-                + "💬 Оплатить можно и рублями через менеджера (карта или СБП): выберите товар и нажмите «Оплатить рублями через менеджера».\n\n"
+                + (tag != null && !tag.isBlank() ? "🏷 Аккаунт: <code>" + escape(tag) + "</code>\n\n" : "")
+                + passNote
+                + (hasExcPass ? "После выбора товара, на следующем шаге предложим скидку за EXC. За покупку — бонус XP.\n\n" : "К каждой покупке — бонус XP.\n\n")
+                + "💬 Возможна оплата рублями, уточняйте у менеджера\n\n"
                 + "⚠️ Заявка обрабатывается вручную, зачисление может занять время.\n\n"
                 + gemPurchaseWarning(gameKey);
         if ("brawl_stars".equals(gameKey)) {
@@ -30518,17 +30518,18 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         String tag = gemPurchaseGameTag(user, gameKey);
         boolean pubg = "pubg_pc".equals(gameKey) || "pubg_mobile".equals(gameKey);
         boolean steam = "steam_topup".equals(gameKey);
-        String accountLine = steam ? (tag != null && !tag.isBlank() ? " для логина Steam " + escape(tag) : "")
-                : !pubg && tag != null && !tag.isBlank()
-                ? " который хотите получить на свой аккаунт " + escape(tag)
-                : " который хотите получить";
+        // 23.11.2026 (владелец): текст списка короткий: куда зачислим (если известно), про скидку за EXC и бонус XP, про оплату рублями, предупреждение
+        boolean hasTag = tag != null && !tag.isBlank();
+        String accountInfo = steam ? (hasTag ? "🎮 Логин Steam: <code>" + escape(tag) + "</code>\n\n" : "")
+                : !pubg && hasTag ? "🏷 Аккаунт: <code>" + escape(tag) + "</code>\n\n"
+                : "";
         String passNote = passActive
-                ? "\n⭐ Вы EGC Pass — цены ниже, без наценки клуба.\n"
+                ? "⭐ Вы EGC Pass — цены ниже, без наценки клуба.\n\n"
                 : "";
         String listText = "🎁 <b>" + escape(GemPurchaseService.gameName(gameKey)) + "</b>\n\n"
-                        + (steam ? "Выберите сумму пополнения баланса Steam" : "Выберите пакет " + ("pubg_pc".equals(gameKey) ? "G-Coins" : pubg ? "UC" : "гемов")) + accountLine + passNote + "\n\n"
-                        + "В каждой строке полная цена в звёздах, в скобках примерно в рублях. Если на балансе хватает EXC, на следующем шаге предложим скидку. За покупку — бонус XP.\n\n"
-                        + "💬 Оплатить можно и рублями через менеджера (карта или СБП): выберите пакет и нажмите «Оплатить рублями через менеджера».\n\n"
+                        + accountInfo + passNote
+                        + "После выбора позиции, на следующем шаге предложим скидку за EXC. За покупку — бонус XP.\n\n"
+                        + "💬 Возможна оплата рублями, уточняйте у менеджера\n\n"
                         + "⚠️ Заявка обрабатывается вручную, зачисление может занять время.\n\n"
                         + gemPurchaseWarning(gameKey);
         String listBanner = gameBannerResource(gameKey);
