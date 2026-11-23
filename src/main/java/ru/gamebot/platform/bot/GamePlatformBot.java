@@ -12404,7 +12404,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             goal.append("🎯 Баланса хватает на все ближайшие цели. Выбирай награду ниже.\n\n");
         }
 
-        // 23.11.2026 (владелец): в цитате магазина нет состояния фонда и курса вывода - только лимит трат и вывода, подсказка про уровень и курс партнёра
+        // 23.11.2026 (владелец): в цитате магазина нет состояния фонда, курса вывода и курса партнёра - только лимит трат и вывода и подсказка про уровень
         String limitHint = shopLimitHintLine(user);
         sendResourceBanner(user.getTelegramId(), "shop-banner.jpg",
                 "🛍️ <b>Магазин наград</b>\n\n"
@@ -12413,7 +12413,6 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                         + "<blockquote expandable>"
                         + "📤 Лимит трат и вывода: <b>" + fmtExc(sinkShopService.getMonthlyLimitShown(user)) + " EXC/мес</b> (осталось: " + fmtExc(remaining) + ")"
                         + (limitHint.isEmpty() ? "" : "\n\n" + limitHint)
-                        + (partnerCompareApplies(user) ? "\n\n🤝 Партнёр: <b>1 000 EXC = 10 ₽</b>" : "")
                         + "</blockquote>",
                 keyboardFactory.rowsLayout(rows));
     }
