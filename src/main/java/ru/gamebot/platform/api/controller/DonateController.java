@@ -64,6 +64,8 @@ public class DonateController {
         /** Оплата токенами (гибрид): EXC-часть и рублёвая доплата; 0 - у пакета нет EXC-позиции. Как в боте. */
         private long excPrice;
         private long excRub;
+        /** Звёзды при скидке за EXC (вместо starsPrice); 0 - скидки нет. */
+        private int excStars;
     }
 
     @Data
@@ -80,6 +82,8 @@ public class DonateController {
     @Data
     public static class CatalogDto {
         private boolean egcPass;
+        /** Баланс EXC игрока: мини-апп показывает, хватает ли на скидку. */
+        private long coins;
         private String warning;
         private List<GameDto> games = new ArrayList<>();
     }
@@ -118,6 +122,7 @@ public class DonateController {
         }
         CatalogDto dto = new CatalogDto();
         dto.setEgcPass(sinkShopService.isEgcPassActive(user));
+        dto.setCoins(user.getCoins());
         dto.setWarning(ACCOUNT_ACCESS_WARNING);
         // LinkedHashMap-порядок каталога = порядок в боте (Brawl Stars → Clash Royale → Clash of Clans).
         for (String gameKey : GemPurchaseService.donationGameKeys()) {
@@ -149,6 +154,7 @@ public class DonateController {
                 if (hybrid != null) {
                     p.setExcPrice(hybrid[0]);
                     p.setExcRub(hybrid[1]);
+                    p.setExcStars((int) hybrid[2]);
                 }
                 game.getPackages().add(p);
             }
@@ -179,12 +185,19 @@ public class DonateController {
         try {
             switch (body.getMethod()) {
                 case "STARS" -> {
-                    // оплата полностью звёздами убрана (07.11.2026, владелец): токены + рубли или звёзды - в боте
-                    return ResponseEntity.ok(PurchaseResponse.error("Оплата полностью звёздами недоступна. Оформите покупку в боте: токены + рубли."));
+                    // 23.11.2026 (владелец): оплата полной ценой в звёздах вернулась (без скидки за EXC); со скидкой - в боте
+                    String invoiceUrl = gamePlatformBot.createGemStarsInvoiceLink(user, body.getGameKey(), pkg);
+                    if (invoiceUrl == null) {
+                        return ResponseEntity.ok(PurchaseResponse.error("Не удалось создать счёт. Попробуйте ещё раз или оформите покупку в боте."));
+                    }
+                    PurchaseResponse ok = new PurchaseResponse();
+                    ok.setSuccess(true);
+                    ok.setInvoiceUrl(invoiceUrl);
+                    return ResponseEntity.ok(ok);
                 }
                 case "TON" -> {
                     // оплата доната криптой (GRAM, TON) убрана 09.11.2026 (владелец): ею не пользуются, модераторов путала
-                    return ResponseEntity.ok(PurchaseResponse.error("Оплата в GRAM (TON) больше недоступна. Оформите покупку в боте: токены + рубли."));
+                    return ResponseEntity.ok(PurchaseResponse.error("Оплата в GRAM (TON) больше недоступна. Оформите покупку в боте."));
                 }
                 default -> {
                     return ResponseEntity.ok(PurchaseResponse.error("Неизвестный способ оплаты."));

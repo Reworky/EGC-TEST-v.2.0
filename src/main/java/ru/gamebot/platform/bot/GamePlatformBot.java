@@ -30658,11 +30658,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         return new HybridQuote(item, exc, stars, rubPart);
     }
 
-    /** Для мини-аппа: {EXC-часть, рублёвая доплата} гибридной оплаты пакета токенами; null - у пакета нет EXC-позиции. */
+    /** Для мини-аппа: {EXC-часть, рублёвая доплата, звёзды} скидки за EXC (гибридной оплаты) пакета; null - у пакета нет EXC-позиции или покупка за EXC сейчас заблокирована (лимит, возраст). */
     public long[] gemPurchaseHybridFor(AppUser user, String gameKey, GemPurchaseService.GemPackage pkg) {
         try {
             HybridQuote q = hybridQuote(user, gameKey, pkg);
-            return q == null ? null : new long[]{q.exc(), q.rub()};
+            if (q == null || rewardService.hybridPurchaseBlock(user, q.item(), q.exc()) != null) return null;
+            return new long[]{q.exc(), q.rub(), q.stars()};
         } catch (Exception e) {
             log.warn("gemPurchaseHybridFor failed", e);
             return null;

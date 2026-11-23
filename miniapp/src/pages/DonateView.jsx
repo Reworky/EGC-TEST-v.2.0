@@ -5,9 +5,9 @@ import BackButton from '../components/BackButton';
 import './QuestsPage.css';
 import './ShopPage.css';
 
-// Донат по играм (Купикод) — зеркало флоу из бота: список пакетов (гемы / пропуски) → способ оплаты
-// (оплата идёт в боте: токены + рубли или звёзды; GRAM (TON) убран 09.11.2026) → результат. Тег игры привязывается
-// только в боте, как у квестов: без тега показываем кнопку «Открыть бота и привязать тег».
+// Донат по играм (Купикод) — зеркало флоу из бота: список пакетов (гемы / пропуски) с полной ценой в рублях и звёздах →
+// оплата полной ценой звёздами прямо здесь, скидка за EXC и рубли через менеджера — в боте (23.11.2026, владелец; GRAM (TON) убран 09.11.2026).
+// Тег игры привязывается только в боте, как у квестов: без тега показываем кнопку «Открыть бота и привязать тег».
 
 function openBotForTag(startParam) {
   const tg = window.Telegram?.WebApp;
@@ -20,7 +20,7 @@ function openTelegramUrl(url) {
   if (tg && /^https:\/\/t\.me\//.test(url)) tg.openTelegramLink(url); else window.open(url, '_blank', 'noopener');
 }
 
-function PackageCard({ pkg, egcPass, tagLinked, expanded, onToggle, onDone }) {
+function PackageCard({ pkg, egcPass, coins, tagLinked, expanded, onToggle, onDone }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const [messageOk, setMessageOk] = useState(false);
@@ -67,13 +67,15 @@ function PackageCard({ pkg, egcPass, tagLinked, expanded, onToggle, onDone }) {
           {egcPass && pkg.regularPriceRub > pkg.priceRub && (
             <span style={{ textDecoration: 'line-through', opacity: 0.5, marginRight: 6, fontSize: 12 }}>{pkg.regularPriceRub.toLocaleString()}</span>
           )}
-          {price} ₽
+          {price} ₽ <span style={{ fontSize: 12, opacity: 0.7 }}>≈ {pkg.starsPrice} ⭐</span>
         </div>
       </div>
       <div className="shop-status">+{pkg.xpBonus.toLocaleString()} XP к покупке{egcPass ? ' · закупочная цена EGC Pass' : ''}</div>
-      {pkg.excPrice > 0 && (
-        <div className="shop-status">🪙 Или токенами: {pkg.excPrice.toLocaleString('ru-RU')} EXC + {pkg.excRub.toLocaleString('ru-RU')} ₽</div>
-      )}
+      {pkg.excStars > 0 && (coins >= pkg.excPrice ? (
+        <div className="shop-status">🪙 Со скидкой за EXC: {pkg.excStars.toLocaleString('ru-RU')} ⭐ + {pkg.excPrice.toLocaleString('ru-RU')} EXC вместо {pkg.starsPrice.toLocaleString('ru-RU')} ⭐</div>
+      ) : (
+        <div className="shop-status">🪙 Скидка за EXC: {pkg.excStars.toLocaleString('ru-RU')} ⭐ + {pkg.excPrice.toLocaleString('ru-RU')} EXC (не хватает {(pkg.excPrice - coins).toLocaleString('ru-RU')} EXC)</div>
+      ))}
       {!egcPass && pkg.passPriceRub > 0 && pkg.regularPriceRub - pkg.passPriceRub >= 20 && (
         <div className="shop-status">⭐ С EGC Pass: {pkg.passPriceRub.toLocaleString()} ₽, экономия {(pkg.regularPriceRub - pkg.passPriceRub).toLocaleString()} ₽</div>
       )}
@@ -84,10 +86,13 @@ function PackageCard({ pkg, egcPass, tagLinked, expanded, onToggle, onDone }) {
           ) : (
             <>
               <p className="shop-desc">
-                Оплата токенами + рублями или звёздами — в боте (раздел «Магазин» → донат). Оплата криптой (GRAM, TON) недоступна.
+                Оплатите звёздами Telegram прямо здесь. {pkg.excStars > 0 && coins >= pkg.excPrice ? 'Скидку за EXC и оплату рублями через менеджера оформите в боте (раздел «Магазин» → донат).' : 'Оплата рублями через менеджера — в боте (раздел «Магазин» → донат).'}
               </p>
-              <button className="quest-btn" onClick={() => openTelegramUrl('https://t.me/invitetogamebot')}>
-                🤖 Открыть бота
+              <button className="quest-btn" disabled={busy} onClick={() => buy('STARS')}>
+                ⭐ Оплатить {pkg.starsPrice.toLocaleString('ru-RU')} ⭐
+              </button>
+              <button className="quest-btn quest-btn-secondary" style={{ marginTop: 8 }} onClick={() => openTelegramUrl('https://t.me/invitetogamebot')}>
+                🤖 {pkg.excStars > 0 && coins >= pkg.excPrice ? 'Со скидкой за EXC — в боте' : 'Открыть бота'}
               </button>
             </>
           )}
@@ -172,6 +177,7 @@ export default function DonateView({ gameKey, onBack }) {
           key={pkg.key}
           pkg={pkg}
           egcPass={catalog.egcPass}
+          coins={catalog.coins || 0}
           tagLinked={game.tagLinked}
           expanded={expanded === pkg.key}
           onToggle={k => setExpanded(prev => (prev === k ? null : k))}
