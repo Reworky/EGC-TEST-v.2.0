@@ -5014,10 +5014,12 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         rows.add(List.of(keyboardFactory.callback("⬅️ Назад", "menu:main"), keyboardFactory.callback("🏠 Меню", "menu:main")));
         String text = "🛍️ <b>Магазин EGC</b>\n\n"
                 + "🪙 Баланс: <b>" + String.format("%,d", user.getCoins()).replace(',', ' ') + " EXC</b>\n\n"
+                + "<blockquote expandable>"
                 + "🛍️ <b>Награды</b> — донат в игры, Steam, звёзды Telegram и многое другое\n"
                 + "⚡ <b>Бусты</b> — ускорители и усиления в клубе\n"
                 + "⭐ <b>EGC Pass</b> — постоянные перки\n"
-                + "🔐 <b>VPN</b> — оплата со скидкой за EXC";
+                + "🔐 <b>VPN</b> — оплата со скидкой за EXC"
+                + "</blockquote>";
         sendResourceBanner(user.getTelegramId(), "shop-banner.jpg", text, keyboardFactory.rowsLayout(rows));
     }
 
