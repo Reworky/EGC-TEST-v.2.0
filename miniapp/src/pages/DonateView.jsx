@@ -155,7 +155,7 @@ export default function DonateView({ gameKey, onBack }) {
         <p className="shop-desc">Пополнение работает только для аккаунтов Steam из стран: Россия, Беларусь, Казахстан, Узбекистан, Армения, Киргизия, Молдова, Таджикистан, Туркменистан. Нужен только логин Steam (не ник и не email), пароль не нужен.</p>
       )}
       {game.tagLinked ? (
-        <p className="shop-desc">{game.gameKey === 'steam_topup' ? 'Зачисление на логин Steam' : 'Зачисление на аккаунт'} <b>{game.tag}</b>. К каждой покупке — бонус XP.</p>
+        <p className="shop-desc">{game.gameKey === 'steam_topup' ? 'Зачисление на логин Steam' : 'Зачисление на аккаунт'} <b>{game.tag}</b>.</p>
       ) : (
         <div className="shop-card" style={{ marginBottom: 12 }}>
           <p className="shop-desc">{game.gameKey === 'steam_topup' ? '🎮 Чтобы купить, сначала укажите логин Steam — это делается один раз в боте.' : `🏷️ Чтобы купить, сначала привяжите тег ${game.name} — это делается один раз в боте.`}</p>
@@ -164,6 +164,8 @@ export default function DonateView({ gameKey, onBack }) {
       )}
 
       {catalog.egcPass && <p className="shop-desc">⭐ У вас EGC Pass — цены ниже, без наценки клуба.</p>}
+      <p className="shop-desc">После выбора позиции покажем скидку за EXC, если хватает токенов. За покупку — бонус XP.</p>
+      <p className="shop-desc">💬 Возможна оплата рублями, уточняйте у менеджера</p>
       <p className="shop-desc">⚠️ Заявка обрабатывается вручную, зачисление может занять время.</p>
       <p className="shop-desc">⚠️ <b>Важно перед покупкой:</b> {catalog.warning}</p>
 
