@@ -373,27 +373,29 @@ function QuestActions({ quest, detail, onChanged }) {
   }
 
   // Партнёрский квест банка (ОТП и др.): всё ведёт менеджер, отчётов нет (как в боте, sendPartnerManagerMission).
-  if (detail.bankRewardRub > 0) {
+  // Признак - сам партнёр (как в боте), а не сумма от банка: у большинства партнёров bankRewardRub = 0
+  if (detail.partnerKey) {
     if (status === 'DRAFT' && detail.partnerManagerFlow) {
       return (
         <div className="quest-submit-form">
           <div className="quest-go-hint">
             <div className="quest-go-hint-title">🚀 Квест взят!</div>
             <div className="quest-go-hint-text">
+              <p><b>Что нужно сделать:</b></p>
               {detail.partnerApplyUrl ? (
-                <>
-                  <p>Нажми «Оформить карту»: откроется страница с онлайн-заявкой.</p>
-                  {detail.partnerApplyHint && <p>{detail.partnerApplyHint}</p>}
-                  <p>Если что-то непонятно или ты уже выполнил все условия, напиши менеджеру.</p>
-                </>
-              ) : 'Напиши менеджеру: он проведёт по шагам в личных сообщениях.'}
+                <p>1️⃣ Нажми «Оформить карту»: откроется страница с онлайн-заявкой.{detail.partnerApplyHint ? ` ${detail.partnerApplyHint}` : ''}</p>
+              ) : (
+                <p>1️⃣ Нажми «Начать выполнять квест»: менеджер пришлёт ссылку для оформления.</p>
+              )}
+              <p>2️⃣ Когда выполнишь условия квеста, останется только ждать: награда придёт автоматически после одобрения банком.</p>
+              {detail.partnerApplyUrl && <p>Если что-то непонятно, напиши менеджеру.</p>}
             </div>
           </div>
           {detail.partnerApplyUrl && (
             <button className="quest-btn" onClick={() => openChannel(detail.partnerApplyUrl)}>💳 Оформить карту</button>
           )}
           {detail.partnerManagerUrl && (
-            <button className="quest-btn quest-btn-outline" onClick={() => openChannel(detail.partnerManagerUrl)}>
+            <button className={detail.partnerApplyUrl ? 'quest-btn quest-btn-outline' : 'quest-btn'} onClick={() => openChannel(detail.partnerManagerUrl)}>
               {detail.partnerApplyUrl ? '💬 Вопрос менеджеру' : '💬 Начать выполнять квест'}
             </button>
           )}
