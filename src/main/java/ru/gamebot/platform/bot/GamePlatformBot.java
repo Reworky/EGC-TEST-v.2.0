@@ -13907,29 +13907,37 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         boolean active = sinkShopService.isEgcPassActive(user);
         if (!active && !showAll) egcPassFunnelService.screenOpened(user.getTelegramId());
         java.time.format.DateTimeFormatter dateFmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy");
-        StringBuilder sb = new StringBuilder("⭐ <b>EGC Pass</b>\n");
-        if (!active && !showAll) sb.append("<i>Донат дешевле, вывод быстрее, больше слотов</i>\n");
-        sb.append("\n");
+        // 23.11.2026 (владелец): экран читается блоками «заголовок + короткие строки», донат - в процентах без примера позиции, «лучшие квесты на 24 часа раньше» убрано
+        StringBuilder sb = new StringBuilder("⭐ <b>EGC Pass</b>");
+        if (!active && !showAll) sb.append("\n<i>Донат дешевле, вывод быстрее, больше слотов</i>");
+        if (!active && showAll) sb.append(" · все перки");
+        sb.append("\n\n");
+        // Насколько Pass удешевляет донат: наценка клуба на Brawl Pass (цена -> закупка), в процентах от цены
+        java.util.Optional<GemPurchaseService.GemPackage> brawlPassPkg = gemPurchaseService.findPackage("brawl_stars", "brawlpass");
+        String donateLine = brawlPassPkg.isPresent() && brawlPassPkg.get().priceRub() - brawlPassPkg.get().costRub() >= 20
+                ? "Примерно на <b>" + Math.round(100.0 * (brawlPassPkg.get().priceRub() - brawlPassPkg.get().costRub()) / brawlPassPkg.get().priceRub())
+                        + "%</b> дешевле: гемы и пропуска Brawl Stars и Clash"
+                : "Донат по закупочной цене, без наценки клуба";
         if (active) {
             sb.append("✅ <b>Подписка активна</b> до <b>").append(user.getEgcPassActiveUntil().format(dateFmt)).append("</b>\n")
                     .append("<i>Продлится автоматически, отменить можно в настройках платежей Telegram.</i>\n\n");
             long passBonusUsed = UserService.EGC_PASS_BOOST_MONTHLY_CAP_EXC - userService.egcPassBoostRemainingThisMonth(user);
             sb.append("📊 <b>Что Pass дал в этом месяце</b>\n<blockquote>")
                     .append(passBonusUsed > 0
-                            ? "+" + passBonusUsed + " EXC к наградам" + starsNote(passBonusUsed)
+                            ? "<b>+" + passBonusUsed + " EXC</b> к наградам" + starsNote(passBonusUsed)
                             : "Бонус к наградам появится после ближайших квестов")
                     .append("\n3-й слот квеста и повышенные лимиты\nБесплатная страховка: ")
                     .append(sinkShopService.passInsuranceAvailable(user) ? "доступна" : "уже использована в этом месяце")
                     .append("</blockquote>\n\n");
         } else {
-            sb.append("<b>").append(EGC_PASS_STARS_PRICE).append(" ⭐ / 30 дней</b> · автопродление\n\n");
+            sb.append("💳 <b>").append(EGC_PASS_STARS_PRICE).append(" ⭐ в месяц</b> · автопродление\n\n");
         }
         if (active || showAll) {
             String limitBonus = String.format("%,d", SinkShopService.PASS_WITHDRAWAL_LIMIT_BONUS_EXC).replace(',', ' ');
             sb.append("💰 <b>Деньги и вывод</b>\n<blockquote>")
-                .append("Лимит вывода <b>+").append(limitBonus).append(" EXC</b> в месяц (например, 10 000 → 20 000)\n")
-                .append("Вывод в приоритете: заявка за <b>").append(ru.gamebot.platform.service.PassPayoutSlaService.SLA_HOURS).append(" часов</b>\n")
-                .append("Донат по закупочной цене: гемы Brawl Stars, Clash Royale, Clash of Clans и пропуска без наценки клуба")
+                .append("Лимит вывода <b>+").append(limitBonus).append(" EXC</b> в месяц\n")
+                .append("Заявка за <b>").append(ru.gamebot.platform.service.PassPayoutSlaService.SLA_HOURS).append(" часов</b>, в приоритете\n")
+                .append(donateLine)
                 .append("</blockquote>\n\n")
                 .append("🎮 <b>Награды</b>\n<blockquote>")
                 .append("<b>+10% EXC</b> за все квесты (до 10 000 EXC в месяц)\n")
@@ -13947,29 +13955,24 @@ public class GamePlatformBot extends TelegramLongPollingBot {
                 .append("Без рекламных вставок")
                 .append("</blockquote>\n");
         } else {
-            // Короткий оффер: главная выгода в заголовке, цифры на живых данных, остальное - по кнопке «Все перки»
+            // Короткий оффер: четыре блока, цифры на живых данных, остальное - по кнопке «Все перки»
             java.time.LocalDateTime nowDt = java.time.LocalDateTime.now();
             long earned7 = questService.approvedCoinsBetween(user, nowDt.minusDays(7), nowDt);
             long wouldAdd = Math.min(earned7 / 10, UserService.EGC_PASS_BOOST_MONTHLY_CAP_EXC);
             if (wouldAdd >= 50) {
                 sb.append("За 7 дней с Pass вы получили бы ещё <b>+").append(wouldAdd).append(" EXC</b> к наградам за квесты\n\n");
             }
-            java.util.Optional<GemPurchaseService.GemPackage> brawlPassPkg = gemPurchaseService.findPackage("brawl_stars", "brawlpass");
-            sb.append("<b>Главное</b>\n<blockquote>");
-            if (brawlPassPkg.isPresent() && brawlPassPkg.get().priceRub() - brawlPassPkg.get().costRub() >= 20) {
-                GemPurchaseService.GemPackage pk = brawlPassPkg.get();
-                sb.append("Донат дешевле: Brawl Pass <s>").append(pk.priceRub()).append(" ₽</s> → <b>").append(pk.costRub())
-                        .append(" ₽</b> (−").append(pk.priceRub() - pk.costRub()).append(" ₽ с покупки), так же гемы и пропуска Clash\n");
-            } else {
-                sb.append("Донат по закупочной цене, без наценки клуба\n");
-            }
             long baseLimit = sinkShopService.getMonthlyLimit(user.getXp());
-            sb.append("Лимит вывода <b>+").append(String.format("%,d", SinkShopService.PASS_WITHDRAWAL_LIMIT_BONUS_EXC).replace(',', ' ')).append("</b>: ").append(String.format("%,d", baseLimit).replace(',', ' '))
-                    .append(" → ").append(String.format("%,d", baseLimit + SinkShopService.PASS_WITHDRAWAL_LIMIT_BONUS_EXC).replace(',', ' ')).append(" EXC в месяц\n");
-            sb.append("Вывод в приоритете: за <b>")
-                    .append(ru.gamebot.platform.service.PassPayoutSlaService.SLA_HOURS).append(" часов</b>\n")
-                    .append("<b>3 слота квестов</b> и лучшие квесты на 24 часа раньше</blockquote>\n\n")
-                    .append("А ещё: <b>+10% EXC</b>, <b>+5% XP</b>, улучшенный сундук каждый день и другие перки\n");
+            sb.append("💰 <b>Донат дешевле</b>\n<blockquote>").append(donateLine).append("</blockquote>\n\n")
+                    .append("📤 <b>Вывод больше и быстрее</b>\n<blockquote>")
+                    .append("Лимит <b>+").append(String.format("%,d", SinkShopService.PASS_WITHDRAWAL_LIMIT_BONUS_EXC).replace(',', ' ')).append("</b>: ")
+                    .append(String.format("%,d", baseLimit).replace(',', ' ')).append(" → ")
+                    .append(String.format("%,d", baseLimit + SinkShopService.PASS_WITHDRAWAL_LIMIT_BONUS_EXC).replace(',', ' ')).append(" EXC в месяц\n")
+                    .append("Заявка за <b>").append(ru.gamebot.platform.service.PassPayoutSlaService.SLA_HOURS).append(" часов</b>, в приоритете")
+                    .append("</blockquote>\n\n")
+                    .append("📂 <b>Квесты</b>\n<blockquote><b>3 слота</b> квестов</blockquote>\n\n")
+                    .append("🎁 <b>А ещё</b>\n<blockquote><b>+10% EXC</b> и <b>+5% XP</b> за квесты\nУлучшенный сундук каждый день\n")
+                    .append("<i>и другие перки: кнопка «Все перки»</i></blockquote>\n");
             long holders = userService.countEgcPassActiveNow();
             if (holders >= 20) {
                 sb.append("\n👥 Pass уже у <b>").append(holders).append("</b> игроков клуба\n");
