@@ -538,6 +538,11 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             return;
         }
 
+        if (text != null && (text.equals("/banktake") || text.startsWith("/banktake ")) && isEffectiveAdmin(user)) {
+            handleBankTakeAlertCommand(user, text.trim());
+            return;
+        }
+
         if (text != null && (text.equals("/journey") || text.startsWith("/journey ")) && isEffectiveAdmin(user)) {
             handleJourneyCommand(user, text.trim());
             return;
@@ -6388,6 +6393,59 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         sendText(admin.getTelegramId(), sb.toString(), null);
     }
 
+    /** Ключ выключателя уведомления админам о взятии банковского квеста (22.11.2026, владелец). Нет записи = включено. */
+    private static final String BANK_TAKE_ALERT_KEY = "notify.bank_take";
+
+    private boolean bankTakeAlertEnabled() {
+        try {
+            return appSettingRepository.findById(BANK_TAKE_ALERT_KEY).map(a -> !"false".equalsIgnoreCase(a.getValue())).orElse(true);
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    /** Админам: игрок взял банковский (партнёрский) квест - кто, какой банк, источник трафика. Выключатель /banktake. Любая ошибка глотается: взятие квеста не должно из-за этого ломаться. */
+    private void notifyAdminsBankQuestTaken(AppUser player, Quest quest, QuestSubmission submission) {
+        try {
+            if (!bankTakeAlertEnabled()) return;
+            String src = player.getTrafficSourceCode() == null || player.getTrafficSourceCode().isBlank() ? "органика" : player.getTrafficSourceCode();
+            String who = "<a href=\"tg://user?id=" + player.getTelegramId() + "\">" + escape(String.valueOf(player.getNickname())) + "</a>"
+                    + (player.getTelegramUsername() != null && !player.getTelegramUsername().isBlank() ? " (@" + escape(player.getTelegramUsername()) + ")" : "")
+                    + ", ID " + player.getTelegramId();
+            String text = "🆕 <b>Взят банковский квест</b>\n"
+                    + "🎯 " + escape(quest.getTitle()) + "\n"
+                    + "👤 " + who + "\n"
+                    + "📍 Источник: " + escape(src) + "\n"
+                    + "📋 Заявка №" + submission.getId() + "\n\n"
+                    + "<i>Следующий сигнал - «Конверсия LeadGid», когда игрок оформит карту. Отключить: /banktake off</i>";
+            InlineKeyboardMarkup markup = keyboardFactory.rowsLayout(List.of(List.of(keyboardFactory.callback("📥 Карточка заявки", "mod:view:" + submission.getId()))));
+            for (Long adminId : adminService.allAdminIds()) {
+                try {
+                    sendText(adminId, text, markup);
+                } catch (Exception e) {
+                    log.warn("Bank quest taken notice failed for {}", adminId, e);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Bank quest taken notification failed", e);
+        }
+    }
+
+    /** Админ: /banktake [status|on|off] - уведомление о том, что игрок взял банковский квест. */
+    private void handleBankTakeAlertCommand(AppUser admin, String text) {
+        String[] p = text.split("\\s+");
+        String sub = p.length > 1 ? p[1].toLowerCase() : "status";
+        if ("on".equals(sub) || "off".equals(sub)) {
+            ru.gamebot.platform.domain.model.AppSetting s = appSettingRepository.findById(BANK_TAKE_ALERT_KEY).orElseGet(ru.gamebot.platform.domain.model.AppSetting::new);
+            s.setKey(BANK_TAKE_ALERT_KEY);
+            s.setValue("on".equals(sub) ? "true" : "false");
+            appSettingRepository.save(s);
+        }
+        sendText(admin.getTelegramId(), "🆕 <b>Уведомление о взятии банковского квеста</b>\n\nСейчас: " + (bankTakeAlertEnabled() ? "🔔 включено" : "🔕 выключено")
+                + "\nПриходит админам, когда игрок взял банковский квест (кто, какой банк, источник, номер заявки).\n\n"
+                + "<code>/banktake on</code> / <code>/banktake off</code>", null);
+    }
+
     /** Админ: /journey TelegramID - путь игрока по шагам воронки со временем (слайды, выбор пути, карточки, квесты, выплата, код дня). */
     private void handleJourneyCommand(AppUser admin, String text) {
         String[] p = text.split("\\s+");
@@ -8933,6 +8991,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             new AdminCommand("redbutton", "status|on|off|now [%]|plan|cancel ID|set КЛЮЧ ЗНАЧЕНИЕ|text post|teaser ТЕКСТ", "«Красная кнопка»: редкий крупный бонус к курсу вывода (расписание, предупреждение, закрытие)"),
             new AdminCommand("course", "status|on|off|now [%]|set КЛЮЧ ЗНАЧЕНИЕ", "«Курс дня»: бонус к курсу вывода (пост с кнопкой, проценты, потолок, бюджет)"),
             new AdminCommand("clubgoal", "status|link ID текст|off", "Цель клуба: состояние, кнопка-портал в квест, выключить портал"),
+            new AdminCommand("banktake", "status|on|off", "Уведомление админам, когда игрок взял банковский квест (кто, банк, источник, заявка)"),
             new AdminCommand("journey", "ID", "Путь игрока по шагам воронки со временем (слайды, выбор пути, карточки, квесты, выплата)"),
             new AdminCommand("wdfreeze", "ID on|off", "Заморозить или разморозить вывод игрока"),
             new AdminCommand("wdrecreate", "[go]", "Вернуть EXC по всем висящим (ожидающим) заявкам на вывод и попросить игроков создать заявку заново (технический сбой). Без go - только предпросмотр"),
@@ -11414,6 +11473,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         // 15.11.2026: у квеста ОТП ссылка на оформление показывается сразу при взятии (URL-кнопка о нажатии не сообщает), поэтому «начал» в воронке и в напоминаниях = взял квест
         ru.gamebot.platform.service.PartnerMission takenPm = ru.gamebot.platform.service.PartnerMissions.forQuest(quest);
         if (takenPm != null && "otp".equals(takenPm.key())) partnerQuestFunnelService.startClicked(user.getTelegramId());
+        if (takenPm != null) notifyAdminsBankQuestTaken(user, quest, result.submission());
 
         // Заголовок «Квест активен! Теперь заходите в игру...» собирается ниже (nextStep) одной строкой для всех обычных квестов;
         // здесь остаётся только текст партнёрских квестов со своей ссылкой.
