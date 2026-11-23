@@ -74,7 +74,7 @@ function PackageCard({ pkg, egcPass, coins, tagLinked, expanded, onToggle, onDon
       </div>
       <div className="shop-status">+{pkg.xpBonus.toLocaleString()} XP к покупке{egcPass ? ' · закупочная цена EGC Pass' : ''}</div>
       {pkg.excStars > 0 && (coins >= pkg.excPrice ? (
-        <div className="shop-status">🪙 Со скидкой за EXC: {pkg.excStars.toLocaleString('ru-RU')} ⭐ + {pkg.excPrice.toLocaleString('ru-RU')} EXC вместо {pkg.starsPrice.toLocaleString('ru-RU')} ⭐</div>
+        <div className="shop-status">🪙 Со скидкой за EXC: {pkg.excStars.toLocaleString('ru-RU')} ⭐ + {pkg.excPrice.toLocaleString('ru-RU')} EXC</div>
       ) : (
         <div className="shop-status">🪙 Скидка за EXC: {pkg.excStars.toLocaleString('ru-RU')} ⭐ + {pkg.excPrice.toLocaleString('ru-RU')} EXC (не хватает {(pkg.excPrice - coins).toLocaleString('ru-RU')} EXC)</div>
       ))}

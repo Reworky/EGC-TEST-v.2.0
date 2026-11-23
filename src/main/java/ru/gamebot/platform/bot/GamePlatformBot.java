@@ -30838,8 +30838,8 @@ public class GamePlatformBot extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         String hybridBlock = hybrid == null ? null : rewardService.hybridPurchaseBlock(user, hybrid.item(), hybrid.exc());
         if (hybrid != null && hybridBlock == null && coins >= hybrid.exc()) {
-            hybridHeadline = "🪙 У вас <b>" + fmtExc(coins) + " EXC</b>. Можно заплатить дешевле: <b>" + hybrid.stars() + " ⭐</b> вместо " + fullStars
-                    + " ⭐, и спишем <b>" + fmtExc(hybrid.exc()) + " EXC</b>.\n\n<b>Применить скидку?</b>\n\n";
+            hybridHeadline = "🪙 У вас <b>" + fmtExc(coins) + " EXC</b>.\n\nМожно заплатить дешевле: <b>" + hybrid.stars()
+                    + " ⭐</b>, и спишем <b>" + fmtExc(hybrid.exc()) + " EXC</b>.\n\n<b>Применить скидку?</b>\n\n";
             rows.add(List.of(keyboardFactory.callback("🪙 Да, со скидкой: " + hybrid.stars() + " ⭐ + " + fmtExc(hybrid.exc()) + " EXC", "gemhyb:" + gameKey + ":" + pkg.key())));
             rows.add(List.of(keyboardFactory.callback("⭐ Нет, без скидки: " + fullStars + " ⭐", "gemstarsfull:" + gameKey + ":" + pkg.key())));
             if (!questService.hasApprovedPartnerQuest(user.getId())) {
@@ -30847,7 +30847,7 @@ public class GamePlatformBot extends TelegramLongPollingBot {
             }
         } else {
             if (hybrid != null && hybridBlock == null) {
-                hybridHeadline = "🪙 Скидка за EXC: чтобы заплатить <b>" + hybrid.stars() + " ⭐</b> вместо " + fullStars + " ⭐, нужно <b>" + fmtExc(hybrid.exc())
+                hybridHeadline = "🪙 Скидка за EXC: чтобы заплатить <b>" + hybrid.stars() + " ⭐</b>, нужно <b>" + fmtExc(hybrid.exc())
                         + " EXC</b> (у вас " + fmtExc(coins) + ", не хватает " + fmtExc(hybrid.exc() - coins) + ").\n\n";
             }
             rows.add(List.of(keyboardFactory.callback("⭐ Оплатить звёздами: " + fullStars + " ⭐", "gemstarsfull:" + gameKey + ":" + pkg.key())));
